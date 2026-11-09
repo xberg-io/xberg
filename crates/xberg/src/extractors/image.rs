@@ -3030,7 +3030,8 @@ fn apply_numeric_repair_to_standalone_image_ocr(
 /// - the image is a TIFF (single or multi-frame);
 /// - a VLM fallback or an explicit pipeline is configured;
 /// - document structure or layout detection is requested;
-/// - the first pass found a table, whose detectors already certified the rows;
+/// - the first pass found a table whose column rows do not hold misread dot leaders, whose detectors
+///   already certified the rows;
 /// - the first pass shows no column structure in its word boxes.
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 fn single_block_table_config(
@@ -3057,7 +3058,9 @@ fn single_block_table_config(
     if config.layout.is_some() {
         return None;
     }
-    if !first.tables.is_empty() || !image_table_reread::shows_column_structure(first) {
+    if !(first.tables.is_empty() || image_table_reread::first_read_is_garbled(first))
+        || !image_table_reread::shows_column_structure(first)
+    {
         return None;
     }
     enable_image_ocr_elements(&mut ocr, true);

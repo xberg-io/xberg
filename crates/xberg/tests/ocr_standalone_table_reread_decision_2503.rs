@@ -15,6 +15,8 @@ use tracing_subscriber::layer::SubscriberExt as _;
 use xberg::{ExtractionConfig, OcrConfig, OutputFormat};
 
 const LEADER_TABLE: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/20.png");
+const CLEAN_TABLE: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/clean_table.png");
+const GARBLED_14PX: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/14.png");
 const TWO_COLUMN_PROSE: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/two_column.png");
 const UPSIDE_DOWN_TABLE: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/upside_down_table.png");
 
@@ -107,4 +109,20 @@ fn a_leader_table_is_adopted_and_two_column_prose_is_never_read_again() {
         !upside_down.iter().any(|event| event.contains("adopted")),
         "{upside_down:?}"
     );
+
+    events.0.lock().unwrap().clear();
+    assert_eq!(psm(CLEAN_TABLE), "11", "a correct first-read table is kept");
+    let clean = std::mem::take(&mut *events.0.lock().unwrap());
+    assert!(
+        !clean.iter().any(|event| event.contains("reading the picture again")),
+        "a correct first-read table must not be read twice: {clean:?}"
+    );
+
+    assert_eq!(psm(GARBLED_14PX), "6", "a garbled first-read table is replaced");
+    let garbled = events.0.lock().unwrap().clone();
+    assert!(
+        garbled.iter().any(|event| event.contains("reading the picture again")),
+        "{garbled:?}"
+    );
+    assert!(garbled.iter().any(|event| event.contains("adopted")), "{garbled:?}");
 }
