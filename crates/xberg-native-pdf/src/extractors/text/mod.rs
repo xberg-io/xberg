@@ -1874,9 +1874,8 @@ enum PenSeam {
 /// The identity of a span before the merge: its sequence number and the bits of its x and y coordinates.
 ///
 /// Sequence numbers are unique within one extraction, but a cached form XObject replays spans with
-/// the sequence numbers of an earlier extraction, so the key holds the position too. A script snap
-/// that moves the y of a raised glyph before the merge drops its mark, which is the safe side: the
-/// gap is then read through the fallback-width correction, as before. ~keep
+/// the sequence numbers of an earlier extraction, so the key holds the position too. The script snap
+/// moves the mark of a span it rewrites to the span's snapped y. ~keep
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct SpanKey {
     sequence: usize,

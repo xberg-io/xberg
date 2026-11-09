@@ -37,9 +37,11 @@ impl<'doc> TextExtractor<'doc> {
 
         let total_width = buffer.accumulated_width * buffer.user_h_scale;
         if buffer.pen_continuation {
-            let at = (buffer.user_pos_x, buffer.user_pos_y);
-            self.pen_continuations
-                .insert(SpanKey::at(self.span_sequence_counter, at.0, at.1));
+            self.pen_continuations.insert(SpanKey::at(
+                self.span_sequence_counter,
+                buffer.user_pos_x,
+                buffer.user_pos_y,
+            ));
         }
 
         // Use pre-computed values from buffer creation (avoids

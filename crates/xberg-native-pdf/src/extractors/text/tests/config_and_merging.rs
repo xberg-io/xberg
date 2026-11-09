@@ -907,6 +907,45 @@ fn span_key_tells_two_spans_apart_that_differ_only_in_y() {
     );
 }
 
+fn merged_text_with_a_slight_overlap(marked: bool) -> String {
+    let mut extractor = TextExtractor::new();
+    extractor.add_font("F1".to_string(), create_test_font());
+    let first = snap_span("Plan", 100.0, 700.0, 20.0, 10.0, 0);
+    let second = snap_span("area", 119.9, 700.0, 20.0, 10.0, 1);
+    if marked {
+        extractor.pen_continuations.insert(SpanKey::of(&second));
+    }
+    extractor.spans = vec![first, second];
+    extractor.merge_adjacent_spans();
+    extractor
+        .spans
+        .iter()
+        .map(|s| s.text.as_str())
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
+#[test]
+fn a_marked_pen_continuation_merges_with_the_raw_gap_and_an_unmarked_span_takes_the_width_fallback() {
+    assert_eq!(merged_text_with_a_slight_overlap(true), "Planarea");
+    assert_eq!(merged_text_with_a_slight_overlap(false), "Plan area");
+}
+
+#[test]
+fn the_script_snap_carries_the_pen_mark_to_the_snapped_span() {
+    let mut extractor = TextExtractor::new();
+    let raised = snap_span("2", 130.0, 704.0, 4.0, 6.0, 1);
+    extractor.pen_continuations.insert(SpanKey::of(&raised));
+    extractor.spans = vec![snap_span("x", 100.0, 700.0, 30.0, 12.0, 0), raised];
+    extractor.snap_superscript_baselines();
+    assert_eq!(extractor.spans[1].bbox.y, 700.0, "the raised glyph snaps to its base");
+    assert!(
+        extractor.pen_continuations.contains(&SpanKey::of(&extractor.spans[1])),
+        "the snapped span lost its pen mark"
+    );
+    assert_eq!(extractor.pen_continuations.len(), 1);
+}
+
 #[test]
 fn test_extractor_get_font_set() {
     let mut extractor = TextExtractor::new();
