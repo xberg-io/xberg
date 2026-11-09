@@ -138,3 +138,53 @@ fn chars_keep_a_pulled_back_space_that_stands_on_another_baseline() {
     let line = tail_chars("(The \\001) Tj 1 0 0 1 94.23 667 Tm ( eld was open.) Tj");
     assert!(line.contains("The fi") && line.contains(" eld was open."), "{line:?}");
 }
+
+/// The baseline of the fixture's last line, in points: four body lines of 14 points under y = 720.
+const LAST_LINE_Y: f32 = 664.0;
+/// Where the pen stands after `The \001` in the 10 point font: T 611, h 556, e 556, space 278 and the
+/// ligature 500 thousandths. A space that pulls back over its whole width starts 2.78 points before it.
+const PEN_AFTER_LIGATURE: f32 = 72.0 + 25.01;
+const SPACE_WIDTH: f32 = 2.78;
+
+/// The number of space characters the last line of the fixture keeps. The character list is in reading
+/// order, so the test counts the spaces and does not read the line. The four body lines hold ten each.
+fn spaces_in_the_last_line(show: &str) -> usize {
+    let document = PdfDocument::from_bytes(build_pdf(show)).expect("open the fixture");
+    let chars = document.extract_chars(0).expect("extract the characters");
+    let body = "The committee reviewed every proposal and decided that funding should continue.";
+    assert!(
+        chars.len() > 4 * body.chars().count(),
+        "the fixture's last line did not extract"
+    );
+    chars.iter().filter(|c| c.char == ' ').count() - 4 * body.matches(' ').count()
+}
+
+#[test]
+fn chars_drop_a_pulled_back_space_on_a_baseline_a_half_point_off() {
+    // 0.5 points is under a tenth of the 10 point font size: the space still sits on the ligature's line.
+    let x = PEN_AFTER_LIGATURE - SPACE_WIDTH;
+    let show = format!(
+        "(The \\001) Tj 1 0 0 1 {x} {} Tm ( eld was open.) Tj",
+        LAST_LINE_Y + 0.5
+    );
+    assert_eq!(spaces_in_the_last_line(&show), 3);
+}
+
+#[test]
+fn chars_keep_a_pulled_back_space_in_a_run_turned_90_degrees() {
+    // Two spaces: the one after `The` and the rotated one. The upright ligature does not take the rotated space.
+    let x = PEN_AFTER_LIGATURE - SPACE_WIDTH;
+    let show = format!("(The \\001) Tj 0 1 -1 0 {x} {LAST_LINE_Y} Tm ( eld) Tj");
+    assert_eq!(spaces_in_the_last_line(&show), 2);
+}
+
+#[test]
+fn chars_keep_a_pulled_back_space_after_a_ligature_in_a_run_turned_90_degrees() {
+    // The letters of a ligature in a run turned 90 degrees report an advance of 0 at x = 100, so the
+    // upright space must start 2.78 points before x = 100 to lie over the glyph.
+    let show = format!(
+        "0 1 -1 0 100 {LAST_LINE_Y} Tm (\\001) Tj 1 0 0 1 {} {LAST_LINE_Y} Tm ( eld) Tj",
+        100.0 - SPACE_WIDTH
+    );
+    assert_eq!(spaces_in_the_last_line(&show), 1);
+}
