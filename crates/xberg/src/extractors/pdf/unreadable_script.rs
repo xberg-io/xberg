@@ -1065,6 +1065,26 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_lost_glyph_of_either_kind_is_no_letter_of_any_script() {
+        let greek = "αβχδ εφγη ικλμ νοπθ ρστυ ωξψ ".repeat(2);
+        let letters = greek.chars().filter(|c| c.is_alphabetic()).count();
+        let expected = Some(vec![(Script::Greek, letters)]);
+        assert_eq!(
+            uncovered_script_counts(&greek, &langs(&["eng"])),
+            expected,
+            "control: the letters alone"
+        );
+        for marker in ['\u{FFFD}', '\u{FFFF}'] {
+            let padded = format!("{greek}{}", marker.to_string().repeat(letters));
+            assert_eq!(
+                uncovered_script_counts(&padded, &langs(&["eng"])),
+                expected,
+                "a run of {marker:?} as long as the text adds no letter to any script"
+            );
+        }
+    }
+
     const KHMER_UNMARKED: &str = "ខ្ញុំ ស្រលាញ់ ប្រទេស កម្ពុជា សួស្តី ភ្នំពេញ ក្រុង សៀវភៅ សាលារៀន";
 
     #[test]
