@@ -65,7 +65,6 @@ fn freeze_and_validate_bind_actual_files_and_refuse_overwrite_or_wrong_digest() 
         .unwrap();
     assert!(!output.status.success());
     assert!(String::from_utf8(output.stderr).unwrap().contains("plan digest"));
-    cli_refuses_empty_truncated_and_duplicate_key_plan_and_report_files();
 }
 
 #[test]
@@ -112,6 +111,7 @@ fn validate_refuses_each_tampered_report_through_the_public_cli() {
     }
 }
 
+#[test]
 fn cli_refuses_empty_truncated_and_duplicate_key_plan_and_report_files() {
     let directory = tempfile::tempdir().unwrap();
     let plan = common::plan();
