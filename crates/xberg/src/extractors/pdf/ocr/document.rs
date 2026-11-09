@@ -477,8 +477,9 @@ pub(super) fn ocr_page_only_segments_text_and_tables_with(
     ocr_page_matches_read_text_and_tables(doc, read, is_private_metadata, true)
 }
 
-/// For a completely ink-certified read, dictionary filtering may omit words from its structure.
-/// Every remaining occurrence must still belong to that read, and no rich payload may be lost. ~keep
+/// A nonempty structure may omit any certified read words, including body text or table rows.
+/// The complete clean native page carries those words; retained occurrences and rich payload
+/// must still be accounted for. The caller must establish that native-page ink ownership. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 pub(super) fn ocr_page_uses_only_read_text_and_tables_with(
     doc: &crate::types::internal::InternalDocument,

@@ -305,9 +305,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Avoid repeating readable PDF table pages when OCR structure omits header words already present in the native text
-  (#2534).
-
+- **(pdf): Preserve ink-certified native table pages when their OCR structure omits words.** (Refs #2534)
 - **(ocr): Print each row of a dot-leader table picture once when the block read keeps a line the table already holds.** (#2783)
   The PSM 6 read's hOCR grouped some rows into one multi-line paragraph, and a line is dropped as claimed only on an exact token match with a table row. A leader token or a stray `=` the table cell lacks kept the line, so the row appeared as text and in the table. Standalone dot-leader reads now compare a line with a table row without its leader tokens (dots, `=`, `_`); every other route still matches exactly.
 - **(pdf): Keep a word joined after a ligature that the font decodes to letters.** (GH#2718)

@@ -652,6 +652,20 @@ pub(super) fn uses_only_certified_tesseract_text_and_tables(doc: &InternalDocume
         && super::document::ocr_page_uses_only_read_text_and_tables_with(doc, read, is_hocr_bookkeeping_with_tables)
 }
 
+/// Only an admission with a complete native layer may omit words from the final structure.
+/// Marker-bearing layers and later ink-only admissions retain exact matching. ~keep
+pub(super) fn ink_owned_table_structure_can_yield_to_native(
+    doc: &InternalDocument,
+    read: &str,
+    original_native_layer: Option<&str>,
+) -> bool {
+    if original_native_layer.is_some_and(|layer| !layer.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER)) {
+        uses_only_certified_tesseract_text_and_tables(doc, read)
+    } else {
+        only_segments_certified_tesseract_text_and_tables(doc, read)
+    }
+}
+
 fn is_hocr_bookkeeping_with_tables(key: &str, value: &serde_json::Value) -> bool {
     match key {
         "tables_detected" | "table_count" | "table_rows" | "table_cols" => value.as_u64().is_some(),

@@ -74,3 +74,45 @@ fn ink_certified_table_structure_still_rejects_extra_payload() {
         CERTIFIED_READ
     ));
 }
+
+#[test]
+fn clean_native_ink_accepts_structural_body_word_omissions() {
+    let mut doc = operand_table_page();
+    doc.elements[0].kind = ElementKind::Paragraph;
+    doc.elements[0].text = "The paragraph".into();
+    let read = "The body paragraph | Operand | 1 |";
+    assert!(!only_segments_certified_tesseract_text_and_tables(&doc, read));
+    // The full read's ink proof covers these body words; the native page is the output. ~keep
+    assert!(ink_owned_table_structure_can_yield_to_native(&doc, read, Some(read)));
+    let mut uncertified_body = doc;
+    uncertified_body
+        .elements
+        .push(InternalElement::text(ElementKind::Paragraph, "Uncertified", 0));
+    assert!(!ink_owned_table_structure_can_yield_to_native(
+        &uncertified_body,
+        read,
+        Some(read)
+    ));
+}
+
+#[test]
+fn lost_glyph_or_late_only_ink_ownership_cannot_omit_a_body_word() {
+    let mut doc = operand_table_page();
+    doc.elements[0].kind = ElementKind::Paragraph;
+    doc.elements[0].text = "The paragraph".into();
+    let read = "The body paragraph | Operand | 1 |";
+    let lost_layer = format!("{read}{}", crate::extractors::pdf::unmapped_glyphs::LOST_GLYPH_MARKER);
+    assert!(!ink_owned_table_structure_can_yield_to_native(
+        &doc,
+        read,
+        Some(&lost_layer)
+    ));
+    assert!(!ink_owned_table_structure_can_yield_to_native(&doc, read, None));
+    let exact_read = "The paragraph | Operand | 1 |";
+    assert!(ink_owned_table_structure_can_yield_to_native(
+        &doc,
+        exact_read,
+        Some(&lost_layer)
+    ));
+    assert!(ink_owned_table_structure_can_yield_to_native(&doc, exact_read, None));
+}

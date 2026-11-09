@@ -278,7 +278,7 @@ const NON_TEXT_BLOCK_PAGES: [u32; 2] = [4420, 4422];
 const NATIVE_COMPANION_PAGE: u32 = 4410;
 
 #[tokio::test]
-async fn automatic_ocr_returns_intel_table_page_1306_once_without_dropping_words() {
+async fn automatic_ocr_preserves_native_intel_table_page_1306_once() {
     assert!(
         !helpers::skip_if_missing(SDM),
         "the corpus manual {SDM} is required for the public duplicate regression"
@@ -299,7 +299,7 @@ async fn automatic_ocr_returns_intel_table_page_1306_once_without_dropping_words
     assert!(native[1].split_whitespace().count() > 100);
     assert_eq!(
         automatic[1], native[1],
-        "page 1306 must retain its native source once, with complete OCR word coverage proved"
+        "automatic OCR must preserve the native page 1306 text"
     );
 }
 
