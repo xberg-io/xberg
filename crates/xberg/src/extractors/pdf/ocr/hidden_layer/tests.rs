@@ -899,7 +899,10 @@ fn should_preserve_raw_and_ascii85_flate_stream_decoding_and_reject_other_chains
         decode_probe_stream(&expected, stream_filters(None).unwrap(), expected.len(), 4096),
         Some(expected)
     );
-    for filter in [
+    let unsupported = [
+        Object::Name("ASCII85Decode".into()),
+        Object::Reference(xberg_native_pdf::object::ObjectRef::new(1, 0)),
+        Object::Integer(1),
         Object::Array(vec![]),
         Object::Array(vec![Object::Name("ASCII85Decode".into())]),
         Object::Array(vec![
@@ -911,7 +914,31 @@ fn should_preserve_raw_and_ascii85_flate_stream_decoding_and_reject_other_chains
             Object::Name("FlateDecode".into()),
         ]),
         Object::Array(vec![Object::Null]),
+    ];
+    let accepted: Vec<_> = unsupported
+        .iter()
+        .filter(|filter| stream_filters(Some(filter)).is_some())
+        .collect();
+    assert!(accepted.is_empty(), "unsupported filters accepted: {accepted:?}");
+}
+
+#[test]
+fn should_decode_scalar_and_singleton_flate_streams_to_the_same_bytes() {
+    use super::{Object, stream_filters};
+
+    let expected = b"known stream samples ".repeat(8);
+    let mut stream = lopdf::Stream::new(lopdf::Dictionary::new(), expected.clone());
+    stream.compress().unwrap();
+    assert_eq!(stream.dict.get(b"Filter").unwrap().as_name().unwrap(), b"FlateDecode");
+    for filter in [
+        Object::Name("FlateDecode".into()),
+        Object::Array(vec![Object::Name("FlateDecode".into())]),
     ] {
-        assert!(stream_filters(Some(&filter)).is_none(), "{filter:?}");
+        let filters = stream_filters(Some(&filter)).expect("supported Flate spelling");
+        assert!(matches!(filters, StreamFilters::Flate));
+        assert_eq!(
+            decode_probe_stream(&stream.content, filters, expected.len(), 4096),
+            Some(expected.clone())
+        );
     }
 }

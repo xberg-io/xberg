@@ -307,8 +307,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(ocr): Tolerate the singleton Flate filter array form in certified Indexed scan recovery.** (#2798)
-  `[/FlateDecode]` uses the same decoding as `/FlateDecode` for the image, content and palette streams. A synthetic spelling variant of a public guide page verifies this compatibility; no unresolved real page from #2502 is fixed by this change.
+- **(ocr): Tolerate singleton Flate filter arrays in bounded PDF stream probes and Indexed scan recovery.** (#2798)
+  `[/FlateDecode]` uses the same decoding as `/FlateDecode` in shared hidden-layer, source-audit, embedded-gap, visible-raster content and tall-scan content/palette probes, including hidden-layer images with validated predictor dictionaries. Certified Indexed images accept either spelling; the separate gray/JPEG and ICC image certificates retain their scalar-only filters. Tests use synthetic filter-spelling and predictor variants; no unresolved real page from #2502 is fixed by this change.
 - **(pdf): Keep a page's native text when the OCR read of a script it is written in contains none of that script.** (#2794)
   When a Tesseract pipeline's first stage reads a native layer's script (such as `khm` for Khmer) but fails or scores below `pipeline_min_quality`, a later stage for another script (such as `eng`) no longer replaces the native text with its own. The page keeps its native text and an `ocr` warning names the script. A healthy read in the script still replaces the page, and pages the unreadable-script rule did not mark are unchanged. A whole-document read that drops the script on every page of the document is discarded and the native text is returned, with no second OCR pass; a document where only some pages drop it keeps the whole-document read, and so does a page whose Latin letters outnumber its Khmer. The discarded read's page failures (marked not recovered) and warnings are still reported, while its layout and LLM usage are dropped.
 - **(ocr): Print each row of a dot-leader table picture once when the block read keeps a line the table already holds.** (#2783)

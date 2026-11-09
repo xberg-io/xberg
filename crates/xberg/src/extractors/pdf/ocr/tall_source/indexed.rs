@@ -567,17 +567,7 @@ mod tests {
             for target in ["image", "content", "palette"] {
                 let mut document = filtered_scan(singleton_flate(), false);
                 let palette = wrap_content_and_palette(&mut document);
-                let stream = match target {
-                    "image" => scan_image_mut(&mut document),
-                    "palette" => document.get_object_mut(palette).unwrap().as_stream_mut().unwrap(),
-                    _ => document
-                        .objects
-                        .iter_mut()
-                        .filter(|(id, _)| **id != palette)
-                        .filter_map(|(_, object)| object.as_stream_mut().ok())
-                        .find(|stream| !stream.dict.has(b"Subtype"))
-                        .unwrap(),
-                };
+                let stream = scan_stream_mut(&mut document, palette, target);
                 stream.dict.set("DecodeParms", params.clone());
                 if load_scan(document).is_some() {
                     accepted.push((target, params.clone()));
@@ -587,14 +577,40 @@ mod tests {
         assert!(accepted.is_empty(), "unsupported DecodeParms accepted: {accepted:?}");
     }
 
+    fn scan_stream_mut<'a>(
+        document: &'a mut lopdf::Document,
+        palette: lopdf::ObjectId,
+        target: &str,
+    ) -> &'a mut lopdf::Stream {
+        match target {
+            "image" => scan_image_mut(document),
+            "palette" => document.get_object_mut(palette).unwrap().as_stream_mut().unwrap(),
+            "content" => document
+                .objects
+                .iter_mut()
+                .filter(|(id, _)| **id != palette)
+                .filter_map(|(_, object)| object.as_stream_mut().ok())
+                .find(|stream| !stream.dict.has(b"Subtype"))
+                .unwrap(),
+            _ => panic!("unknown fixture stream: {target}"),
+        }
+    }
+
     #[test]
-    fn should_reject_an_indirect_filter_element_even_when_it_resolves_to_flate() {
-        let mut document = filtered_scan(singleton_flate(), false);
-        let filter = document.add_object(lopdf::Object::Name(b"FlateDecode".to_vec()));
-        scan_image_mut(&mut document)
-            .dict
-            .set("Filter", vec![lopdf::Object::Reference(filter)]);
-        assert!(load_scan(document).is_none());
+    fn should_reject_an_indirect_filter_element_in_image_content_and_palette_even_when_it_resolves_to_flate() {
+        let mut accepted = Vec::new();
+        for target in ["image", "content", "palette"] {
+            let mut document = filtered_scan(singleton_flate(), false);
+            let palette = wrap_content_and_palette(&mut document);
+            let filter = document.add_object(lopdf::Object::Name(b"FlateDecode".to_vec()));
+            scan_stream_mut(&mut document, palette, target)
+                .dict
+                .set("Filter", vec![lopdf::Object::Reference(filter)]);
+            if load_scan(document).is_some() {
+                accepted.push(target);
+            }
+        }
+        assert!(accepted.is_empty(), "indirect filter elements accepted: {accepted:?}");
     }
 
     #[test]
