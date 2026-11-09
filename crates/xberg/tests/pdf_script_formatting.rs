@@ -450,13 +450,29 @@ fn should_keep_list_steps_and_a_word_beside_an_icon_in_their_sentences_on_real_p
     let Some(steps) = regression_page_markdown("irs-p946--2024-p20") else {
         return;
     };
-    assert!(
-        steps.contains("***Step 3\u{2014}*** $20,000 ($1,240,000 \u{2212} $1,220,000)."),
-        "{steps}"
-    );
+    for line in [
+        "***Step 3\u{2014}*** $20,000 ($1,240,000 \u{2212} $1,220,000).",
+        "***Step 4\u{2014}*** Using $20,000 (from Step 3) as taxable income, XYZ's hypothetical charitable \
+         contribution (limited to 10% of taxable income) is $2,000.",
+        "***Step 7\u{2014}*** $20,000 ($1,240,000 \u{2212} $1,220,000).",
+    ] {
+        assert!(
+            steps.lines().any(|candidate| candidate == line),
+            "missing {line:?} in\n{steps}"
+        );
+    }
     let Some(caution) = regression_page_markdown("irs-p946--2024-p23") else {
         return;
     };
-    assert!(caution.contains("placed in service during a particular year"), "{caution}");
+    for line in [
+        "*If any qualified zone property placed in service during a particular year ceases to be used in an*",
+        "- Qualified reuse and recycling property.",
+        "- Certain qualified property acquired after September 27, 2017.",
+    ] {
+        assert!(
+            caution.lines().any(|candidate| candidate == line),
+            "missing {line:?} in\n{caution}"
+        );
+    }
     assert!(!caution.contains("\n- \n"), "{caution}");
 }
