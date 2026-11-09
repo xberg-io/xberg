@@ -303,6 +303,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Optionally recover native Khmer numbers with provisioned `khm.traineddata`.** (Refs #2408)
+  Upright crops can restore omitted numbers when the model accompanies the selected primary model.
+  English-only text and forced OCR stay unchanged; missing Khmer models warn. Recovery retains
+  OCR tokens, so misread neighbors can remain, and declines transformed or ambiguous source claims.
+  No runtime model download; the original reporter page remains unverified.
+
 - **(ocr): Re-read a standalone dot-leader table picture whose first read holds a garbled table.** (#2503)
   At 14 px the sparse read turns each leader into low-confidence lowercase noise inside a table whose label cells are corrupted, so the picture was never re-read. A first-read table whose column rows (four or more) hold such noise is now read again as one block, and the re-read replaces it only if it has a table, at least four column rows carrying a leader, and keeps the first read's confidently read letters and digits. The 14 px picture keeps 11 of 12 rows by default instead of 3; correct first-read tables, table-of-contents pictures, scans and an explicit caller PSM are unchanged.
 - **(models): Make the candidate inventory's pins reachable by tests.** (#2771)
