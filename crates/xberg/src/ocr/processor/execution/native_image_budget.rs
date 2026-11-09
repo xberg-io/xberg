@@ -287,6 +287,37 @@ mod tests {
     }
 
     #[test]
+    fn gray_budget_flag_selects_the_gray_route_peak_for_the_contrast_policy_only() {
+        let (width, height, encoded) = (200, 100, 1000usize);
+        let contrast = ImagePreprocessingConfig {
+            contrast_enhance: true,
+            binarization_method: "none".to_owned(),
+            denoise: false,
+            normalize_shaded_rows: false,
+            ..Default::default()
+        };
+        let rgba = pix_bytes(width, height, 32).unwrap();
+        let rgb = u64::from(width) * u64::from(height) * RGB_CHANNELS;
+        let on_gray = known_gray_phase_peak(width, height, encoded, Some(&contrast))
+            .unwrap()
+            .unwrap();
+        let on_colour = known_phase_peak(width, height, encoded, Some(&contrast))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            on_gray,
+            gray_route_peak(width, height, rgb, rgba, encoded).unwrap(),
+            "the gray flag charges the gray route"
+        );
+        assert!(on_gray < on_colour, "{on_gray} vs {on_colour}");
+        let binarized = ImagePreprocessingConfig::default();
+        assert_eq!(
+            known_gray_phase_peak(width, height, encoded, Some(&binarized)).unwrap(),
+            known_phase_peak(width, height, encoded, Some(&binarized)).unwrap(),
+        );
+    }
+
+    #[test]
     fn contrast_phase_exceeds_40_mib_but_fits_96_mib_at_the_required_dimensions() {
         let options = ImagePreprocessingConfig {
             contrast_enhance: true,
