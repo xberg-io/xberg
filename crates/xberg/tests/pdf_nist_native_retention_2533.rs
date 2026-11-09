@@ -30,7 +30,7 @@ fn automatic_ocr_preserves_the_mapped_expression_on_the_nist_checklist() {
     assert_eq!(
         page.spans
             .iter()
-            .map(|span| span.text.matches(char::REPLACEMENT_CHARACTER).count())
+            .map(|span| span.text.matches(xberg_native_pdf::is_lost_glyph_marker).count())
             .sum::<usize>(),
         8
     );

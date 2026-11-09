@@ -198,7 +198,7 @@ pub use config::{DocumentType, ExtractionProfile};
 pub use document::{ExtractedImageRef, ImageFormat, PageRotation, PdfDocument, ReadingOrder};
 pub use error::{Error, Result};
 pub use extractors::images::{PdfFilter, PdfImageHandle};
-pub use fonts::unicode_decode::LOST_SYMBOL_GLYPH_MARKER;
+pub use fonts::unicode_decode::{LOST_SYMBOL_GLYPH_MARKER, is_lost_glyph_marker};
 pub use layout::PageText;
 pub use outline::{Destination, OutlineItem};
 pub use redaction::{

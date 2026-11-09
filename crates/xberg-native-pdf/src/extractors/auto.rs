@@ -589,7 +589,7 @@ pub fn text_quality_gate(text: &str) -> Option<ReasonCode> {
     let bad = chars
         .iter()
         .filter(|&&c| {
-            c == '\u{FFFD}'
+            crate::is_lost_glyph_marker(c)
                 || ('\u{0}'..'\u{9}').contains(&c)
                 || ('\u{E}'..'\u{20}').contains(&c)
                 || ('\u{E000}'..='\u{F8FF}').contains(&c) // private-use (notdef/tofu) ~keep

@@ -89,6 +89,20 @@ fn sig() -> PageSignals {
     }
 }
 
+/// A symbol font's lost glyphs are written as their own marker. The gate counts them as garbled,
+/// as it counts U+FFFD: words that are mostly lost glyphs of either kind fail the gate. ~keep
+#[test]
+fn quality_gate_flags_lost_glyphs_of_either_marker() {
+    for marker in ['\u{FFFD}', crate::LOST_SYMBOL_GLYPH_MARKER] {
+        let text = format!("Total{m}{m}{m} amount{m}{m}{m} received{m}{m}{m}{m}", m = marker);
+        assert_eq!(
+            text_quality_gate(&text),
+            Some(ReasonCode::GlyphMappingMissing),
+            "{text:?}"
+        );
+    }
+}
+
 #[test]
 fn quality_gate_flags_cid_garbage_and_passes_clean() {
     let garbage: String = "\u{FFFD}".repeat(40);

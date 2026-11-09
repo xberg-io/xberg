@@ -108,7 +108,7 @@ fn assert_source_glyphs(bytes: &[u8], nist_index: usize) {
             .unwrap()
             .spans
             .iter()
-            .map(|span| span.text.matches(char::REPLACEMENT_CHARACTER).count())
+            .map(|span| span.text.matches(xberg_native_pdf::is_lost_glyph_marker).count())
             .sum();
         assert_eq!(
             markers,

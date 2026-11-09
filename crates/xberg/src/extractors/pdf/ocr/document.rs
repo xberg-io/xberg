@@ -1128,8 +1128,13 @@ fn layer_lines_missing_and_owned<'a>(layer: &'a str, boxes: &PageLineBoxes) -> R
         }
     }
     // A row the geometry cannot place (no native box with its text, or no single OCR row that
-    // its box owns) comes from OCR when one OCR row holds it whole, in words no other row took. ~keep
-    for (row, line) in unplaced {
+    // its box owns) comes from OCR when one OCR row holds it whole, in words no other row took.
+    // Rows without markers take their words first, so a marked row never takes the read of an
+    // equal one. ~keep
+    let (marked, unmarked): (Vec<_>, Vec<_>) = unplaced
+        .into_iter()
+        .partition(|(_, line)| line.contains(super::super::unmapped_glyphs::is_lost_glyph));
+    for (row, line) in unmarked.into_iter().chain(marked) {
         let key = line_key(line);
         if read.take_whole(&key) {
             continue;

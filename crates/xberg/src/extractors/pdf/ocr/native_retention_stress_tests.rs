@@ -1050,6 +1050,68 @@ fn an_equal_row_takes_its_ocr_row_before_a_marked_row_does() {
     assert_eq!(first.lines, clean[0].replacen("approved", "appr ved", 1));
 }
 
+/// The ways geometry can hold two native rows that one OCR row reads: none (the text check), both
+/// rows with their own box under the one OCR row that spans them (placed), and both rows without a
+/// native box of their text (unplaced). The OCR read is the forty clean rows. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn one_ocr_row_under_two_native_rows(
+    native: &[String],
+) -> Vec<(&'static str, Option<super::super::document::PageLineBoxes>)> {
+    let read = forty_rows();
+    let mut spans: Vec<(String, usize)> = read.iter().map(|row| (row.clone(), 1)).collect();
+    spans[0].1 = 2;
+    let mut unplaced = native.to_vec();
+    for row in &mut unplaced[..2] {
+        row.push_str(" and more");
+    }
+    vec![
+        ("no geometry", None),
+        ("placed", Some(spanning_row_boxes(native, &spans))),
+        ("unplaced", Some(spanning_row_boxes(&unplaced, &spans))),
+    ]
+}
+
+/// Review point 3 of #2637: a marked row consumes the OCR row it matches, with row geometry as
+/// without it, and an equal row takes its OCR row before a marked row does. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn an_equal_row_takes_its_ocr_row_before_a_marked_row_does_with_row_geometry() {
+    let clean = forty_rows();
+    let marked = clean[0].replacen("approved", "appr\u{FFFD}ved", 1);
+    let native: Vec<String> = std::iter::once(marked).chain(clean.iter().cloned()).collect();
+    let read = clean.join("\n");
+    let expected = format!("{}\n\n{read}", clean[0].replacen("approved", "appr ved", 1));
+    let failures: Vec<String> = one_ocr_row_under_two_native_rows(&native)
+        .into_iter()
+        .map(|(name, boxes)| (name, merged_page(&native.join("\n"), &read, boxes.as_ref())))
+        .filter(|(_, merged)| *merged != expected)
+        .map(|(name, merged)| format!("{name}: the marked row is put first once: {merged:?}"))
+        .collect();
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
+/// Review point 3 of #2637: two native copies of a marked row and one OCR row that reads it: the
+/// OCR row covers one copy, and the other copy is put first. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn two_marked_copies_of_a_row_that_ocr_reads_once_put_one_copy_first() {
+    let clean = forty_rows();
+    let marked = clean[0].replacen("approved", "appr\u{FFFD}ved", 1);
+    let native: Vec<String> = [marked.clone(), marked]
+        .into_iter()
+        .chain(clean[1..].iter().cloned())
+        .collect();
+    let read = clean.join("\n");
+    let expected = format!("{}\n\n{read}", clean[0].replacen("approved", "appr ved", 1));
+    let failures: Vec<String> = one_ocr_row_under_two_native_rows(&native)
+        .into_iter()
+        .map(|(name, boxes)| (name, merged_page(&native.join("\n"), &read, boxes.as_ref())))
+        .filter(|(_, merged)| *merged != expected)
+        .map(|(name, merged)| format!("{name}: one copy is put first: {merged:?}"))
+        .collect();
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
 /// Two native copies of one marked row and one OCR occurrence of it: the occurrence covers one
 /// copy, so the other is put first, once, with and without row geometry. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
