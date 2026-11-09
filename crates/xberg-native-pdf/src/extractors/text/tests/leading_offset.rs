@@ -202,6 +202,8 @@ fn lead_after_a_tm_back_to_the_line_start_reads_like_an_offset_at_the_drawn_end(
         let at_end = format!("BT /F1 10 Tf 72 700 Td (abc) Tj [-{gap} (def)] TJ ET");
         let words = merged_words(half_em_font(), &set_back);
         assert_eq!(words, merged_words(half_em_font(), &at_end), "gap {gap}");
+        // Below 250 units the plain form `[-N (def)]` gives no space either, so those gaps pin parity only:
+        // the lead reads like the offset at the drawn end, whatever words that gives. ~keep
         if gap >= 250 {
             assert_eq!(words, ["abc", "def"], "gap {gap}");
         }
@@ -264,17 +266,17 @@ fn large_offset_after_a_ligature_keeps_the_pull_back_and_the_word_gap() {
     }
 }
 
-/// KNOWN GAP, tracked in https://github.com/xberg-io/xberg/issues/2322. The producer draws "define" with a
-/// space glyph that falls inside the ligature box after the set back, and the extractor still outputs the
-/// split "defi ne". The expected words below are the wrong output of today, not the right answer: a fix for
-/// the gap flips this test to `["define"]`. Dropping that space needs the ligature to survive the `Tm`. ~keep
+/// GH#2322: the producer draws "define" with a space glyph that falls inside the ligature box after the
+/// set back, and the extractor still outputs the split "defi ne". Dropping that space needs the ligature to
+/// survive the `Tm`. The test states the right answer and is ignored until that is fixed. ~keep
 #[test]
-fn known_gap_2322_space_glyph_inside_a_ligature_after_a_tm_back_splits_the_word() {
+#[ignore = "GH#2322 space glyph inside a ligature after a Tm back"]
+fn space_glyph_inside_a_ligature_after_a_tm_back_joins_the_word() {
     use super::ligature_decode::ligature_font;
     for array in ["[-700 ( ne)]", "[-450 ( ne)]"] {
         let stream = format!("BT /F1 10 Tf 72 700 Td (de\\200) Tj 1 0 0 1 85 700 Tm {array} TJ ET");
         let words = merged_words(ligature_font("00660069", None), &stream);
-        assert_eq!(words, ["defi", "ne"], "known gap, wrong output pinned: {array}");
+        assert_eq!(words, ["define"], "{array}");
     }
 }
 
@@ -370,4 +372,64 @@ fn tj_offset_is_not_scaled_by_horizontal_scaling_in_vertical_writing() {
     for tz in [100, 200] {
         assert_eq!((last_y(tz, -3000) - last_y(tz, -1000)).abs(), 20.0, "Tz {tz}");
     }
+}
+
+/// The drawn end belongs to the graphics state it was drawn under: after `Q` or `cm`, a text object under a
+/// new CTM is not set back into a run drawn under the old one.
+#[test]
+fn drawn_end_does_not_survive_a_q_or_cm_into_a_text_object_under_another_ctm() {
+    for stream in [
+        "q BT /F1 10 Tf 72 700 Td (abc) Tj ET Q q 1 0 0 1 50 0 cm BT /F1 10 Tf 72 700 Td [-3000 (def)] TJ ET Q",
+        "BT /F1 10 Tf 72 700 Td (abc) Tj ET 1 0 0 1 50 0 cm BT /F1 10 Tf 72 700 Td [-3000 (def)] TJ ET",
+    ] {
+        let spans = span_boxes(stream);
+        let texts: Vec<(&str, f32)> = spans.iter().map(|(t, x, _)| (t.as_str(), *x)).collect();
+        assert_eq!(texts, [("abc", 72.0), (" ", 122.0), ("def", 152.0)], "{stream}");
+    }
+}
+
+/// A form `Do` draws under its own matrix: the run drawn before it is not the run the pen sets back into.
+#[test]
+fn drawn_end_does_not_survive_a_form_do() {
+    let stream = "BT /F1 10 Tf 72 700 Td (abc) Tj ET /Fm0 Do BT /F1 10 Tf 72 700 Td [-3000 (def)] TJ ET";
+    let spans = span_boxes(stream);
+    let texts: Vec<(&str, f32)> = spans.iter().map(|(t, x, _)| (t.as_str(), *x)).collect();
+    assert_eq!(texts, [("abc", 72.0), (" ", 72.0), ("def", 102.0)]);
+}
+
+/// `'` and `"` set the pen like `T*`: with a leading of 0 they put it back at the start of the run just
+/// drawn, and a lead after them reads like one after `T*`.
+#[test]
+fn quote_operators_with_a_zero_leading_set_the_pen_back_like_t_star() {
+    let t_star = span_boxes("BT /F1 10 Tf 72 700 Td (abc) Tj T* [-3000 (def)] TJ ET");
+    for quote in ["() '", "0 0 () \""] {
+        let stream = format!("BT /F1 10 Tf 0 TL 72 700 Td (abc) Tj {quote} [-3000 (def)] TJ ET");
+        assert_eq!(span_boxes(&stream), t_star, "{quote}");
+    }
+}
+
+/// A sub-threshold offset moves the pen but not the end of the drawn run: the space of the next word gap
+/// still goes at that end, not 6 points inside the run.
+#[test]
+fn sub_threshold_offset_after_a_pen_set_back_keeps_the_drawn_end() {
+    let spans = span_boxes("BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 80 700 Tm [-100 -3000 (def)] TJ ET");
+    let texts: Vec<(&str, f32)> = spans.iter().map(|(t, x, _)| (t.as_str(), *x)).collect();
+    assert_eq!(texts[1], (" ", 87.0), "{texts:?}");
+}
+
+/// A `Td` back into the run right after an array that marked a word boundary: the seam carries the pen
+/// of the array, and the set-back rule still reads the run drawn last.
+#[test]
+fn td_back_after_a_seam_marked_array_keeps_the_set_back_rule() {
+    let stream = "BT /F1 10 Tf 72 700 Td [(abc) -3000] TJ -4 0 Td [-3000 (def)] TJ ET";
+    let texts: Vec<String> = span_boxes(stream).into_iter().map(|(t, _, _)| t).collect();
+    assert_eq!(texts, ["abc", " ", "def"]);
+}
+
+/// A negative lead under the word-boundary threshold is a kern, not a gap: it does not end the run at its
+/// glyphs, so the run keeps the 8 points of the pen move (GH#2690).
+#[test]
+fn sub_threshold_negative_lead_after_a_tm_back_keeps_the_pen_move_width() {
+    let spans = span_boxes("BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 80 700 Tm [-50 (def)] TJ ET");
+    assert_eq!(spans.first(), Some(&("abc".to_string(), 72.0, 8.0)));
 }

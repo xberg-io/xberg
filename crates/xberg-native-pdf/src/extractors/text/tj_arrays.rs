@@ -183,7 +183,7 @@ impl<'doc> TextExtractor<'doc> {
         } else {
             None
         };
-        if matches!(array.first(), Some(TextElement::Offset(lead)) if *lead < 0.0)
+        if matches!(array.first(), Some(TextElement::Offset(lead)) if *lead < self.calculate_adaptive_tj_threshold())
             && let Some(mut run) = self.tj_span_buffer.take()
         {
             self.end_set_back_run_at_drawn_end(&mut run);
@@ -380,7 +380,13 @@ impl<'doc> TextExtractor<'doc> {
             // Sub-threshold offset: matrix advances but the
             // current buffer keeps accumulating, so apply
             // the offset unconditionally here as well. ~keep
+            let at_positioned_pen = self.positioned_pen == Some(self.state_stack.current().text_matrix);
             self.advance_position_for_offset(offset)?;
+            // A sub-threshold offset moves the pen but not the end of the run drawn last: the pen
+            // stays the positioned pen until a glyph or an offset past the threshold moves it. ~keep
+            if at_positioned_pen {
+                self.positioned_pen = Some(self.state_stack.current().text_matrix);
+            }
             // Fold the same displacement into the buffer's
             // advance record. Historically only the text matrix
             // moved, so these kerning/word-space offsets were
@@ -489,11 +495,19 @@ impl<'doc> TextExtractor<'doc> {
     /// since the last positioning operator, else the end that operator kept. ~keep
     fn current_drawn_end(&self) -> Option<Matrix> {
         let pen = self.state_stack.current().text_matrix;
-        if self.positioned_pen != Some(pen) {
-            Some(pen)
-        } else {
+        // With no positioning operator since the last forget, the pen records no drawn run. ~keep
+        if self.positioned_pen.is_none() || self.positioned_pen == Some(pen) {
             self.drawn_end
+        } else {
+            Some(pen)
         }
+    }
+
+    /// Forget the end of the run drawn last. It is a raw text-space matrix read under the current CTM, so it
+    /// means nothing once a `Q`, a `cm` or a form `Do` changed the CTM it was drawn under. ~keep
+    pub(super) fn forget_drawn_end(&mut self) {
+        self.positioned_pen = None;
+        self.drawn_end = None;
     }
 
     /// The set-back depth of the pen, when a positioning operator set it back into the run drawn last and
@@ -525,14 +539,19 @@ impl<'doc> TextExtractor<'doc> {
     /// than its glyphs (GH#2690). When a `TJ` lead follows at that pen, the producer reaches the next glyph
     /// from there, so the run holds only glyphs drawn before that `Tm` and ends at the end of what the content
     /// stream drew last. Glyphs drawn at the pen itself keep the pen move: their place says where the run
-    /// before them ends. ~keep
+    /// before them ends. Only a lead past the word-boundary threshold does this. The glyph widths in
+    /// `char_widths` are untouched: the `Tm` continuation never added to them, so they already hold the glyph
+    /// run that `accumulated_width` is restored to. ~keep
     fn end_set_back_run_at_drawn_end(&self, buffer: &mut TjBuffer) {
         if self.pen_set_back_depth().is_some()
             && let Some(end) = self.current_drawn_end()
             && buffer.user_h_scale > 0.0
         {
-            let (along, _, _) = self.baseline_reach(buffer.start_matrix, end);
-            buffer.accumulated_width = along / buffer.user_h_scale;
+            let (along, _, scale) = self.baseline_reach(buffer.start_matrix, end);
+            let width = along / buffer.user_h_scale;
+            if scale > 0.0 && width.is_finite() {
+                buffer.accumulated_width = width;
+            }
         }
     }
 

@@ -434,12 +434,8 @@ impl<'doc> TextExtractor<'doc> {
                 self.flush_tj_span_buffer()?;
 
                 let leading = self.state_stack.current().leading;
-                {
-                    let state = self.state_stack.current_mut();
-                    let tm = Matrix::translation(0.0, -leading);
-                    state.text_line_matrix = tm.multiply(&state.text_line_matrix);
-                    state.text_matrix = state.text_line_matrix;
-                }
+                let tm = Matrix::translation(0.0, -leading);
+                self.position_pen(tm.multiply(&self.state_stack.current().text_line_matrix));
 
                 if self.extract_spans {
                     if self.tj_span_buffer.is_none() {
@@ -468,11 +464,10 @@ impl<'doc> TextExtractor<'doc> {
                     let state = self.state_stack.current_mut();
                     state.word_space = word_space;
                     state.char_space = char_space;
-                    let leading = state.leading;
-                    let tm = Matrix::translation(0.0, -leading);
-                    state.text_line_matrix = tm.multiply(&state.text_line_matrix);
-                    state.text_matrix = state.text_line_matrix;
                 }
+                let leading = self.state_stack.current().leading;
+                let tm = Matrix::translation(0.0, -leading);
+                self.position_pen(tm.multiply(&self.state_stack.current().text_line_matrix));
 
                 if self.extract_spans {
                     if self.tj_span_buffer.is_none() {
@@ -521,6 +516,7 @@ impl<'doc> TextExtractor<'doc> {
             Operator::RestoreState => {
                 self.flush_tj_span_buffer()?;
                 self.state_stack.restore();
+                self.forget_drawn_end();
                 let current_font = self
                     .state_stack
                     .current()
@@ -557,6 +553,7 @@ impl<'doc> TextExtractor<'doc> {
                 let new_ctm = Matrix { a, b, c, d, e, f };
                 // PDF spec ISO 32000-1:2008 §8.3.4: cm concatenates as M_cm × CTM ~keep
                 state.ctm = new_ctm.multiply(&state.ctm);
+                self.forget_drawn_end();
             }
 
             Operator::SetFillRgb { r, g, b } => {
@@ -886,6 +883,7 @@ impl<'doc> TextExtractor<'doc> {
                 // the form's text is emitted, so subsequent Tj chars
                 // would be stitched into the wrong cluster. ~keep
                 self.flush_tj_span_buffer()?;
+                self.forget_drawn_end();
 
                 // Process Form XObjects to extract text from reusable content.
                 // Form XObjects can contain text that is not duplicated in the main stream.
@@ -898,6 +896,7 @@ impl<'doc> TextExtractor<'doc> {
                         "failed to process XObject"
                     );
                 }
+                self.forget_drawn_end();
             }
 
             _ => {}

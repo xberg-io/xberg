@@ -226,6 +226,7 @@ impl<'doc> TextExtractor<'doc> {
         self.spans.clear();
         self.span_sequence_counter = 0;
         self.pen_seam = None;
+        self.forget_drawn_end();
         self.pen_continuations.clear();
     }
 
