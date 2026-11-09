@@ -1,3 +1,4 @@
+use super::prose::word_rect as iterator_rect;
 use super::{iterator_word, table_matches_words};
 use crate::core::config::OcrQualityThresholds;
 use crate::extractors::pdf::ocr::document::{
@@ -6,7 +7,7 @@ use crate::extractors::pdf::ocr::document::{
 use crate::extractors::pdf::ocr::scoring::word_count_of;
 use crate::extractors::security::SecurityLimits;
 use crate::table_core::{HocrWord, table_to_markdown};
-use crate::types::{BoundingBox, ExtractedDocument, OcrBoundingGeometry, OcrElement, OcrElementLevel, Table};
+use crate::types::{BoundingBox, ExtractedDocument, OcrElement, OcrElementLevel, Table};
 
 const MAX_CELLS: usize = 1024;
 use crate::ocr::tesseract_backend::orientation_evidence::{MAX_BYTES, MAX_WORDS};
@@ -23,37 +24,17 @@ pub(super) fn complete_text(
     let [first, second] = result.tables.as_slice() else {
         return None;
     };
-    let dims = processed_ocr_layout_dimensions(&result.metadata)?;
-    let original_dims = processed_ocr_layout_dimensions(&original.metadata)?;
-    let correction = resolved_ocr_correction_degrees(&result.metadata)?;
-    if !matches!(correction, 90 | 270)
-        || original_dims != (dims.1, dims.0)
-        || resolved_ocr_correction_degrees(&original.metadata).is_some_and(|angle| angle != 0)
-    {
-        return None;
-    }
+    let (dims, correction) = candidate_frame(result, original)?;
     let read = result.ocr_elements.as_deref()?;
     let primary = original.ocr_elements.as_deref()?;
     let remaining_work = remaining_work([first, second], [result, original], read, primary, limits)?;
     if !plain_page_payload(result)
         || !super::recognition::primary_covers_output(original)
-        || first.page_number == 0
-        || first.page_number != second.page_number
-        || read
-            .iter()
-            .chain(primary)
-            .any(|word| word.page_number != first.page_number)
+        || !same_page([first, second], read, primary)
     {
         return None;
     }
-    let boxes = [table_box(first, dims)?, table_box(second, dims)?];
-    if boxes[0].y1 >= boxes[1].y0
-        || [first, second]
-            .iter()
-            .any(|table| table_to_markdown(&table.cells).trim() != table.markdown.trim())
-    {
-        return None;
-    }
+    let boxes = canonical_table_boxes([first, second], dims)?;
     let prose = prose_bands(result, [first, second])?;
     if !structured_prose_matches(result, prose) {
         return None;
@@ -76,6 +57,24 @@ pub(super) fn complete_text(
     }
     primary_inside_tables(primary, &prose_words, boxes, dims, correction, thresholds)
         .then(|| flattened_page([first, second], prose))
+}
+
+fn same_page(tables: [&Table; 2], read: &[OcrElement], primary: &[OcrElement]) -> bool {
+    let page = tables[0].page_number;
+    page != 0 && page == tables[1].page_number && read.iter().chain(primary).all(|word| word.page_number == page)
+}
+
+fn candidate_frame(result: &ExtractedDocument, original: &ExtractedDocument) -> Option<((u32, u32), u16)> {
+    let dims = processed_ocr_layout_dimensions(&result.metadata)?;
+    let original_dims = processed_ocr_layout_dimensions(&original.metadata)?;
+    let correction = resolved_ocr_correction_degrees(&result.metadata)?;
+    if !matches!(correction, 90 | 270)
+        || original_dims != (dims.1, dims.0)
+        || resolved_ocr_correction_degrees(&original.metadata).is_some_and(|angle| angle != 0)
+    {
+        return None;
+    }
+    Some((dims, correction))
 }
 
 fn plain_page_payload(result: &ExtractedDocument) -> bool {
@@ -160,22 +159,7 @@ fn remaining_work(
         .iter()
         .map(|read| read.content.len())
         .fold(0usize, usize::saturating_add);
-    if let Some(document) = reads[0].ocr_internal_document.as_ref() {
-        if document.elements.len() > MAX_WORDS {
-            return None;
-        }
-        for element in &document.elements {
-            bytes = bytes.saturating_add(element.text.len());
-            if let Some(attributes) = &element.attributes {
-                if attributes.len() > MAX_WORDS {
-                    return None;
-                }
-                bytes = attributes.iter().fold(bytes, |sum, (key, value)| {
-                    sum.saturating_add(key.len()).saturating_add(value.len())
-                });
-            }
-        }
-    }
+    bytes = bytes.saturating_add(structured_bytes(reads[0])?);
     let mut cells = 0usize;
     for table in tables {
         bytes = bytes.saturating_add(table.markdown.len());
@@ -202,6 +186,27 @@ fn remaining_work(
         .checked_sub(elements.saturating_mul(cells.saturating_add(1)).saturating_add(bytes))
 }
 
+fn structured_bytes(read: &ExtractedDocument) -> Option<usize> {
+    let mut bytes = 0usize;
+    if let Some(document) = read.ocr_internal_document.as_ref() {
+        if document.elements.len() > MAX_WORDS {
+            return None;
+        }
+        for element in &document.elements {
+            bytes = bytes.saturating_add(element.text.len());
+            if let Some(attributes) = &element.attributes {
+                if attributes.len() > MAX_WORDS {
+                    return None;
+                }
+                bytes = attributes.iter().fold(bytes, |sum, (key, value)| {
+                    sum.saturating_add(key.len()).saturating_add(value.len())
+                });
+            }
+        }
+    }
+    Some(bytes)
+}
+
 fn prose_work(prose: &[&OcrElement], primary: &[OcrElement]) -> usize {
     let prose_bytes = prose
         .iter()
@@ -215,6 +220,19 @@ fn prose_work(prose: &[&OcrElement], primary: &[OcrElement]) -> usize {
         .saturating_mul(PROSE_WORK_PASSES)
         .saturating_add(primary.len().saturating_mul(prose_bytes))
         .saturating_add(prose.len().saturating_mul(primary_bytes))
+}
+
+fn canonical_table_boxes(tables: [&Table; 2], dims: (u32, u32)) -> Option<[BoundingBox; 2]> {
+    let [first, second] = tables;
+    let boxes = [table_box(first, dims)?, table_box(second, dims)?];
+    if boxes[0].y1 >= boxes[1].y0
+        || [first, second]
+            .iter()
+            .any(|table| table_to_markdown(&table.cells).trim() != table.markdown.trim())
+    {
+        return None;
+    }
+    Some(boxes)
 }
 
 fn table_box(table: &Table, (width, height): (u32, u32)) -> Option<BoundingBox> {
@@ -378,35 +396,11 @@ fn table_words(table: &Table) -> impl Iterator<Item = &str> {
     table.cells.iter().flatten().flat_map(|cell| cell.split_whitespace())
 }
 
-fn iterator_rect(element: &OcrElement, (w, h): (u32, u32)) -> Option<BoundingBox> {
-    let OcrBoundingGeometry::Rectangle {
-        left,
-        top,
-        width,
-        height,
-    } = element.geometry
-    else {
-        return None;
-    };
-    let (right, bottom) = (left.checked_add(width)?, top.checked_add(height)?);
-    (element.backend_metadata.get("backend")?.as_str()? == "tesseract-iterator"
-        && (0.0..=1.0).contains(&element.confidence.recognition)
-        && left < right
-        && top < bottom
-        && right <= w
-        && bottom <= h)
-        .then_some(BoundingBox {
-            x0: left.into(),
-            y0: top.into(),
-            x1: right.into(),
-            y1: bottom.into(),
-        })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ocr_metadata_keys::{OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY};
+    use crate::types::OcrBoundingGeometry;
 
     fn two_table_candidate() -> (ExtractedDocument, ExtractedDocument) {
         let mut candidate = super::super::tests::table_candidate();

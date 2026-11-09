@@ -101,7 +101,7 @@ pub(super) fn reads_in_order(elements: &[&OcrElement], text: &str, row_threshold
             .eq(text.split_whitespace())
 }
 
-fn word_rect(element: &OcrElement, (width, height): (u32, u32)) -> Option<BoundingBox> {
+pub(super) fn word_rect(element: &OcrElement, (width, height): (u32, u32)) -> Option<BoundingBox> {
     let OcrBoundingGeometry::Rectangle {
         left,
         top,
@@ -113,6 +113,7 @@ fn word_rect(element: &OcrElement, (width, height): (u32, u32)) -> Option<Boundi
     };
     let (right, bottom) = (left.checked_add(w)?, top.checked_add(h)?);
     (element.backend_metadata.get("backend")?.as_str()? == "tesseract-iterator"
+        && (0.0..=1.0).contains(&element.confidence.recognition)
         && left < right
         && top < bottom
         && right <= width
@@ -168,6 +169,16 @@ mod tests {
             complete_text(&candidate, 0.5).as_deref(),
             Some("Ledger Summary Cash 100 31,290 Rent 107 77,078 Fuel 114 71,433 Total 9")
         );
+    }
+
+    #[test]
+    fn refuses_non_finite_or_out_of_range_iterator_confidence() {
+        assert!(complete_text(&candidate(), 0.5).is_some());
+        for invalid in [f64::NAN, f64::INFINITY, -0.01, 1.01] {
+            let mut read = candidate();
+            read.ocr_elements.as_mut().unwrap()[0].confidence.recognition = invalid;
+            assert_eq!(complete_text(&read, 0.5), None, "invalid confidence {invalid}");
+        }
     }
 
     #[test]

@@ -356,6 +356,23 @@ mod tests {
     }
 
     #[test]
+    fn prose_between_or_below_tables_keeps_the_existing_frame() {
+        for top in [180., 340.] {
+            let mut read = two_table_frame();
+            let text = &mut read.ocr_internal_document.as_mut().unwrap().elements[0];
+            text.bbox.as_mut().unwrap().y0 = top;
+            text.bbox.as_mut().unwrap().y1 = top + 20.;
+            let before = read.clone();
+            assert!(stock_mixed_read(&read));
+            assert_eq!(place_table_in_render(&mut read, (400, 800), (200., 400.)), None);
+            assert_eq!(
+                serde_json::to_value(&read).unwrap(),
+                serde_json::to_value(&before).unwrap()
+            );
+        }
+    }
+
+    #[test]
     fn an_invalid_second_table_never_partially_rescales_the_first() {
         let mut read = two_table_frame();
         read.tables[1].bounding_box.as_mut().unwrap().x1 = 201.;
