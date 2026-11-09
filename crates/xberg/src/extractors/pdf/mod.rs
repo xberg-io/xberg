@@ -2453,6 +2453,29 @@ fn whole_document_ocr_hints(
     hints
 }
 
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+use unreadable_script::{dropped_script_warnings, every_page_dropped_script};
+
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    not(all(feature = "ocr", not(target_arch = "wasm32")))
+))]
+fn every_page_dropped_script(_: &[u32], _: &str, _: Option<&[crate::types::PageBoundary]>, _: &[String]) -> bool {
+    false
+}
+
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    not(all(feature = "ocr", not(target_arch = "wasm32")))
+))]
+fn dropped_script_warnings(
+    _: &[u32],
+    _: &str,
+    _: Option<&[crate::types::PageBoundary]>,
+) -> Vec<crate::types::ProcessingWarning> {
+    Vec::new()
+}
+
 /// PDF document extractor using xberg_native_pdf.
 #[cfg_attr(alef, alef(skip))]
 pub struct PdfExtractor;
@@ -2945,7 +2968,7 @@ impl PdfExtractor {
                             content,
                             config,
                             layout_pages,
-                            &[],
+                            (&[], &[]),
                         )
                         .await?;
                         #[cfg(feature = "formula-recognition")]
@@ -3020,7 +3043,7 @@ impl PdfExtractor {
                     content,
                     config,
                     layout_pages,
-                    &[],
+                    (&[], &[]),
                 )
                 .await
                 {
@@ -3120,6 +3143,8 @@ impl PdfExtractor {
                 pdf_metadata.pdf_specific.page_count,
                 &thresholds,
             );
+            #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+            let native_script_pages: Vec<u32> = Vec::new();
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             crate::core::diagnostics::dedup_extend_warnings(
                 &mut ocr_fallback_warnings,
@@ -3132,6 +3157,9 @@ impl PdfExtractor {
                     config,
                 ),
             );
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            let native_script_pages =
+                unreadable_script::native_script_pages(&decision, &native_text, boundaries.as_deref(), content, config);
 
             // `NativeTextStats`' character-class checks cannot see a font whose mapping
             // legitimately (per the §9.10.2 cascade) resolves to the wrong-but-ordinary
@@ -3274,7 +3302,13 @@ impl PdfExtractor {
                             layout_warning,
                             layout_glyph_drop_warnings,
                             discarded_visible_native_page,
-                        )) => {
+                        )) if !every_page_dropped_script(
+                            &native_script_pages,
+                            &native_text,
+                            boundaries.as_deref(),
+                            &ocr_pts,
+                        ) =>
+                        {
                             if let Some(warning) = layout_warning {
                                 crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
                             }
@@ -3312,6 +3346,32 @@ impl PdfExtractor {
                                 ocr_confidence_by_page = page_ocr_confidence;
                                 (ocr_text, ExtractionMethod::Ocr)
                             }
+                        }
+                        Ok((_, _, _, ocr_doc, _, _, _, _, _, _, _, _, _, _)) => {
+                            let (warnings, failures) = ocr_doc
+                                .map(|doc| (doc.processing_warnings, doc.ocr_page_failures))
+                                .unwrap_or_default();
+                            // The discarded read's text is not in the result: its failures were not
+                            // recovered by it, and layout inputs and llm_usage go with it, as in the
+                            // sibling arms.
+                            crate::core::diagnostics::dedup_extend_warnings(
+                                &mut ocr_fallback_warnings,
+                                warnings
+                                    .into_iter()
+                                    .filter(|warning| !warning.message.contains("was recovered from"))
+                                    .collect(),
+                            );
+                            ocr_page_failures.extend(failures.into_iter().map(|failure| {
+                                crate::types::OcrPageFailure {
+                                    recovered: false,
+                                    ..failure
+                                }
+                            }));
+                            crate::core::diagnostics::dedup_extend_warnings(
+                                &mut ocr_fallback_warnings,
+                                dropped_script_warnings(&native_script_pages, &native_text, boundaries.as_deref()),
+                            );
+                            (native_text, ExtractionMethod::Native)
                         }
                         Err(failed_run) => {
                             tracing::warn!(
@@ -3361,7 +3421,7 @@ impl PdfExtractor {
                             content,
                             config,
                             layout_pages,
-                            &outlined_ocr_pages,
+                            (&outlined_ocr_pages, &native_script_pages),
                         )
                         .await
                         {

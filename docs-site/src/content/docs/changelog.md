@@ -309,6 +309,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Tolerate the singleton Flate filter array form in certified Indexed scan recovery.** (#2798)
   `[/FlateDecode]` uses the same decoding as `/FlateDecode` for the image, content and palette streams. A synthetic spelling variant of a public guide page verifies this compatibility; no unresolved real page from #2502 is fixed by this change.
+- **(pdf): Keep a page's native text when the OCR read of a script it is written in contains none of that script.** (#2794)
+  When a Tesseract pipeline's first stage reads a native layer's script (such as `khm` for Khmer) but fails or scores below `pipeline_min_quality`, a later stage for another script (such as `eng`) no longer replaces the native text with its own. The page keeps its native text and an `ocr` warning names the script. A healthy read in the script still replaces the page, and pages the unreadable-script rule did not mark are unchanged. A whole-document read that drops the script on every page of the document is discarded and the native text is returned, with no second OCR pass; a document where only some pages drop it keeps the whole-document read, and so does a page whose Latin letters outnumber its Khmer. The discarded read's page failures (marked not recovered) and warnings are still reported, while its layout and LLM usage are dropped.
 - **(ocr): Print each row of a dot-leader table picture once when the block read keeps a line the table already holds.** (#2783)
   The PSM 6 read's hOCR grouped some rows into one multi-line paragraph, and a line is dropped as claimed only on an exact token match with a table row. A leader token or a stray `=` the table cell lacks kept the line, so the row appeared as text and in the table. Standalone dot-leader reads now compare a line with a table row without its leader tokens (dots, `=`, `_`); every other route still matches exactly.
 - **(pdf): Keep a word joined after a ligature that the font decodes to letters.** (GH#2718)
@@ -340,6 +342,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Resolve an indirect page `/ExtGState` once per resource scope in native path extraction.** (#2744)
   Each distinct `gs` name used to clone the whole dictionary, so thousands of names cost quadratic allocations; the container is now loaded once and borrowed, and returning from a Form XObject restores the page's parsed states instead of discarding them.
+
+- **(ocr): Recover sideways scans containing two stacked tables and independently proved prose.** (#2497)
+  Retain source words once, preserve both grids, and return table boxes in the source PDF frame.
+  The detached geometry correction is limited to uncached, single-page Plain extraction with one plain text block above the first table; text between or below the tables keeps the existing fallback.
 
 - **(ocr): Recover a sideways page with two tables when the first read held extra filtered words.** (#2497)
   The implicit orientation retry refused two rotated tables unless the first read's iterator word count equalled its reported count, so dictionary-filtered words left the page on its noise read. It now accepts iterator words that include every retained token (extra filtered words only widen the protection check), with the same exact table, geometry and protected-word proofs.
@@ -1464,6 +1470,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Let a confident OCR read replace an invisible text layer that shares almost no words with the page picture.** (#2425)
   A layer painted only in render mode 3 over a page-covering scan is replaced when the read repeats at most 15% of its words and passes the confidence check; visible text and layers that match the picture keep their text. The hidden-layer probe now also audits a text stream and a picture stream that are both Flate-compressed, in either order, and decodes a 300 dpi CCITT Group 4 picture with `/Decode [0 1]` and no `/Rows` or `/BlackIs1`. A layer that covers every ink band is now read too, unless the language check judged it plausible prose. Its CCITT preview budget is 16 work units per `max_iterations`.
+
+- **(markdown): Display math no longer opens an HTML block.** (GH#2793)
+  A line of display math that starts with `<` (`<script`, `<div`, `<!--` and others) now gets a space after the `<`, as a `<` before a closing `>` already did, so no Markdown reader starts an HTML block there and drops the math.
 
 ## [1.3.11] - 2026-10-16
 

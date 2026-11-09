@@ -560,6 +560,9 @@ struct MixedOcrPageSelection<'a> {
     raster_dpis: Option<std::sync::Arc<crate::pdf::render::OcrRasterDpis>>,
     single_block: &'a [u32],
     preserve_native: &'a [u32],
+    /// Pages whose native layer is in a script that OCR must produce again: see
+    /// `unreadable_script::ocr_dropped_native_script`.
+    native_script: &'a [u32],
     /// Readable text layers a whole-document caller computed; `None` lets a selected-page run
     /// read them from its own native text.
     native_layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
@@ -608,7 +611,7 @@ pub(crate) async fn extract_mixed_ocr_native_with_single_block_pages(
         content,
         config,
         None,
-        &[],
+        (&[], &[]),
     )
     .await
 }
@@ -621,7 +624,7 @@ pub(crate) async fn extract_mixed_ocr_native_with_layout_pages(
     content: &[u8],
     config: &ExtractionConfig,
     layout_pages: Option<&crate::core::layout_pages::LayoutPageSelection>,
-    preserve_native: &[u32],
+    (preserve_native, native_script): (&[u32], &[u32]),
 ) -> crate::Result<MixedOcrRun> {
     let (ocr_page_numbers, single_block_page_numbers) = selected_pages;
     let _ = &layout_pages;
@@ -633,6 +636,7 @@ pub(crate) async fn extract_mixed_ocr_native_with_layout_pages(
             raster_dpis: None,
             single_block: single_block_page_numbers,
             preserve_native,
+            native_script,
             native_layers: None,
             hidden_layer_backend: None,
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -677,6 +681,7 @@ pub(in crate::extractors::pdf) async fn probe_incomplete_hidden_layers(
             raster_dpis: None,
             single_block: &[],
             preserve_native: &[],
+            native_script: &[],
             native_layers: None,
             hidden_layer_backend: Some(backend),
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -711,7 +716,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     #[cfg(feature = "layout-detection")] layout_inputs: MixedLayoutInputs<'_>,
 ) -> OcrRunResult<MixedOcrRun> {
     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
-    let _ = pages.preserve_native;
+    let _ = (pages.preserve_native, pages.native_script);
     let ocr_set: std::collections::HashSet<u32> = pages
         .ocr
         .iter()
@@ -2485,6 +2490,24 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut accepted_replacements =
         accepted_ocr_page_replacements(native_text, boundaries, &ocr_results, &ocr_output_thresholds);
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    for boundary in boundaries {
+        let page = boundary.page_number;
+        if pages.native_script.contains(&page)
+            && let Some(text) = accepted_replacements.get(&page)
+            && let Some(native) = native_text.get(boundary.byte_start..boundary.byte_end)
+            && super::super::unreadable_script::ocr_dropped_native_script(native, text)
+        {
+            accepted_replacements.remove(&page);
+            structured_ocr_pages.remove(&page);
+            ocr_confidence_by_page.remove(&page);
+            preprocessing_by_page.remove(&page);
+            crate::core::diagnostics::push_warning_deduped(
+                &mut accumulated_warnings,
+                super::super::unreadable_script::ocr_dropped_script_warning(page, native),
+            );
+        }
+    }
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     if probing_hidden_layer || !pages.preserve_native.is_empty() {
         for boundary in boundaries {
             let page = boundary.page_number;
@@ -3156,6 +3179,7 @@ async fn extract_pages_with_per_page_pipeline(
             raster_dpis,
             single_block: &single_block_pages,
             preserve_native: &[],
+            native_script: &[],
             native_layers,
             hidden_layer_backend: None,
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -4430,7 +4454,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     && whole_page_raster
                     && page_rotation_degrees == 0
                     && correction_degrees == 0
-                    && base_ocr_config.auto_rotate != Some(true)
+                    && base_ocr_config.auto_rotate.is_none()
                     && base_ocr_config.tesseract_config.is_none()
                     && base_ocr_config.effective_tesseract_language().as_slice() == ["eng"];
                 let task = crate::engine::seams::inherit_progress(async move {
@@ -8658,6 +8682,10 @@ mod raster_budget_tests;
 ))]
 #[path = "pipeline/first_pass_route_tests.rs"]
 mod first_pass_route_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+#[path = "pipeline/native_script_kept_tests.rs"]
+mod native_script_kept_tests;
 
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
 #[path = "pipeline/budget_refusal_tests.rs"]
