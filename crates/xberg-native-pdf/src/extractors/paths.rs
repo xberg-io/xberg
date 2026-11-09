@@ -133,13 +133,6 @@ pub enum FillRule {
     EvenOdd,
 }
 
-/// Cache source fields only: omitted fields must inherit the state at each application. ~keep
-#[derive(Debug, Default)]
-pub(crate) struct PathGraphicsPatch {
-    pub(crate) dash: Option<(Vec<f32>, f32)>,
-    pub(crate) stroke_alpha: Option<f32>,
-}
-
 /// Path extractor for accumulating path operations from content streams.
 ///
 /// This struct maintains state during content stream processing and accumulates
@@ -190,7 +183,7 @@ pub struct PathExtractor {
     max_xobject_depth: usize,
     /// Cached XObject name → ObjectRef mapping, built on first lookup.
     cached_xobject_dict: Option<std::collections::HashMap<String, crate::object::ObjectRef>>,
-    cached_extgstates: std::collections::HashMap<String, PathGraphicsPatch>,
+    cached_extgstates: std::collections::HashMap<String, crate::rendering::ext_gstate::ParsedExtGState>,
     /// The scope's indirect `/ExtGState` container, loaded once. `None` until first resolved;
     /// `Some(None)` when the entry is absent or fails to load.
     cached_extgstate_container: Option<Option<crate::object::Object>>,
@@ -210,7 +203,7 @@ pub struct PathExtractor {
 pub(crate) type SavedResourceScope = (
     Option<crate::object::Object>,
     Option<std::collections::HashMap<String, crate::object::ObjectRef>>,
-    std::collections::HashMap<String, PathGraphicsPatch>,
+    std::collections::HashMap<String, crate::rendering::ext_gstate::ParsedExtGState>,
     Option<Option<crate::object::Object>>,
 );
 
@@ -353,16 +346,16 @@ impl PathExtractor {
         self.cached_extgstate_container.as_ref()?.as_ref()
     }
 
-    pub(crate) fn cache_path_extgstate(&mut self, name: &str, patch: PathGraphicsPatch) {
-        self.cached_extgstates.insert(name.to_owned(), patch);
+    pub(crate) fn cache_path_extgstate(&mut self, name: &str, parsed: crate::rendering::ext_gstate::ParsedExtGState) {
+        self.cached_extgstates.insert(name.to_owned(), parsed);
     }
 
     pub(crate) fn apply_cached_path_extgstate(&mut self, name: &str, state: &mut PathGraphicsState) -> bool {
-        let Some(patch) = self.cached_extgstates.get(name) else {
+        let Some(parsed) = self.cached_extgstates.get(name) else {
             return false;
         };
-        let alpha = patch.stroke_alpha;
-        if let Some((lengths, phase)) = &patch.dash {
+        let alpha = parsed.stroke_alpha;
+        if let Some((lengths, phase)) = &parsed.dash {
             state.dash.0.clone_from(lengths);
             state.dash.1 = *phase;
             self.current_dash.0.clone_from(lengths);
