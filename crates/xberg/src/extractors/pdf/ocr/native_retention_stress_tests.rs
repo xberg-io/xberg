@@ -1860,6 +1860,62 @@ async fn a_long_marked_layer_nothing_corroborates_gives_way_to_the_short_correct
     }
 }
 
+/// The same covered layer under the automatic Tesseract config, where the ink gate decides: without
+/// ink proof the short correct read replaces the marked page in either page order, and with it the
+/// page stays native. The merged text is compared whole. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[test]
+fn the_ink_gate_decides_whether_a_short_read_replaces_a_long_marked_layer() {
+    use super::super::document::{
+        accepted_ocr_page_replacements, apply_ocr_page_replacements, marked_page_is_judged_on_readable_text as judged,
+    };
+    const READ: &str = "visible invoice total";
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let config = mixed_route_config("tesseract", false);
+    let (_, marked_rows, _) = marked_cases().swap_remove(0);
+    let marked = format!("{}\n", marked_rows[..20].join("\n"));
+    let clean = format!("{}\n", forty_rows()[20..].join("\n"));
+    for marked_first in [true, false] {
+        let (native, marked_page, boundaries) = if marked_first {
+            let native = format!("{marked}{clean}");
+            (native, 1u32, page_pair(marked.len(), clean.len()))
+        } else {
+            let native = format!("{clean}{marked}");
+            (native, 2u32, page_pair(clean.len(), marked.len()))
+        };
+        let read: ahash::AHashMap<u32, String> = [(marked_page, READ.to_string())].into_iter().collect();
+        for (ink, replaced) in [(false, true), (true, false)] {
+            let accepted = accepted_ocr_page_replacements(&native, &boundaries, &read, &thresholds, |page| {
+                judged(&config, page, false, ink)
+            });
+            let merged = apply_ocr_page_replacements(&native, &boundaries, &accepted);
+            let expected = match (replaced, marked_first) {
+                (false, _) => native.clone(),
+                (true, true) => format!("{READ}{clean}"),
+                (true, false) => format!("{clean}{READ}"),
+            };
+            assert_eq!(merged, expected, "marked first: {marked_first}, ink proof: {ink}");
+        }
+    }
+}
+
+/// The boundaries of a two-page text whose pages are `first` and `second` bytes long. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn page_pair(first: usize, second: usize) -> Vec<crate::types::PageBoundary> {
+    vec![
+        crate::types::PageBoundary {
+            byte_start: 0,
+            byte_end: first,
+            page_number: 1,
+        },
+        crate::types::PageBoundary {
+            byte_start: first,
+            byte_end: first + second,
+            page_number: 2,
+        },
+    ]
+}
+
 /// With ink proof present the ink gate alone would keep the marked page native; a forced page or
 /// `force_ocr` must still let the OCR read replace it. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr"))]
