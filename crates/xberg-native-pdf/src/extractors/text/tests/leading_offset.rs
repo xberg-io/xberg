@@ -506,10 +506,20 @@ fn tj_lead_after_a_tm_back_into_the_run_makes_its_width_the_sum_of_its_glyph_wid
 #[test]
 fn a_degenerate_run_matrix_keeps_the_run_width() {
     let mut extractor = extractor();
-    let state = extractor.state_stack.current_mut();
-    state.font_size = 10.0;
-    state.text_matrix = Matrix::translation(87.0, 700.0);
+    extractor.state_stack.current_mut().font_size = 10.0;
+    // A glyph moved the pen to 87 after the positioning at 72, so the run drawn last ends at 87; the next
+    // positioning sets the pen back to 80, 7 before that end. ~keep
+    extractor.position_pen(Matrix::translation(72.0, 700.0));
+    extractor.state_stack.current_mut().text_matrix = Matrix::translation(87.0, 700.0);
     extractor.position_pen(Matrix::translation(80.0, 700.0));
+    // Control: a run with a baseline is as wide as the distance to the end of the run drawn last, so the
+    // rule is live in this setup. ~keep
+    let mut control = TjBuffer::new(extractor.state_stack.current(), None, None);
+    control.start_matrix = Matrix::translation(72.0, 700.0);
+    control.user_h_scale = 1.0;
+    control.accumulated_width = 8.0;
+    extractor.end_set_back_run_at_drawn_end(&mut control);
+    assert_eq!(control.accumulated_width, 15.0);
     let mut run = TjBuffer::new(extractor.state_stack.current(), None, None);
     run.start_matrix = Matrix {
         a: 0.0,
