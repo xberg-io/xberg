@@ -99,6 +99,7 @@ use std::sync::Arc;
 
 use crate::document::PdfDocument;
 use crate::object::Object;
+use crate::rendering::ext_gstate::{SoftMaskValue, parse_ext_g_state_inner};
 
 /// Classification of a PDF blend-mode name into the three categories
 /// §11.7.4.2 cares about.
@@ -500,42 +501,24 @@ pub(crate) fn page_declares_transparency(doc: &PdfDocument, resources: &Object) 
     resources_declare_transparency_or_overprint(doc, resources, &mut visited, 0, false)
 }
 
+/// Reads each state through the shared ExtGState parser, so the sidecar and the
+/// renderers agree on what a key means. Blend mode is compared with `"Normal"`
+/// exactly as the page renderer's `non_trivial` and `transparent` tests do.
+fn ext_g_states_signal(doc: &PdfDocument, ext_g_states: &HashMap<String, Object>, include_overprint: bool) -> bool {
+    ext_g_states.values().any(|state| {
+        let Ok(parsed) = parse_ext_g_state_inner(state, doc) else {
+            return false;
+        };
+        parsed.fill_alpha.is_some_and(|a| a < 1.0)
+            || parsed.stroke_alpha.is_some_and(|a| a < 1.0)
+            || matches!(parsed.smask, Some(SoftMaskValue::Form(_)))
+            || parsed.blend_mode.as_deref().is_some_and(|m| m != "Normal")
+            || (include_overprint && (parsed.stroke_overprint == Some(true) || parsed.fill_overprint == Some(true)))
+    })
+}
+
 fn ext_g_states_signal_transparency_only(doc: &PdfDocument, ext_g_states: &HashMap<String, Object>) -> bool {
-    for state in ext_g_states.values() {
-        let state_resolved = match doc.resolve_object(state) {
-            Ok(o) => o,
-            Err(_) => continue,
-        };
-        let Some(state_dict) = state_resolved.as_dict() else {
-            continue;
-        };
-        for key in ["CA", "ca"] {
-            if let Some(v_raw) = state_dict.get(key) {
-                let v = doc.resolve_object(v_raw).unwrap_or_else(|_| v_raw.clone());
-                let alpha = match v {
-                    Object::Real(r) => r as f32,
-                    Object::Integer(i) => i as f32,
-                    _ => 1.0,
-                };
-                if alpha < 1.0 {
-                    return true;
-                }
-            }
-        }
-        if let Some(smask_raw) = state_dict.get("SMask") {
-            let smask = doc.resolve_object(smask_raw).unwrap_or_else(|_| smask_raw.clone());
-            if !matches!(&smask, Object::Name(n) if n == "None") {
-                return true;
-            }
-        }
-        if let Some(bm_raw) = state_dict.get("BM") {
-            let bm = doc.resolve_object(bm_raw).unwrap_or_else(|_| bm_raw.clone());
-            if bm_is_non_normal(&bm) {
-                return true;
-            }
-        }
-    }
-    false
+    ext_g_states_signal(doc, ext_g_states, false)
 }
 
 /// Conservative detection: does this page declare any resource that
@@ -650,83 +633,7 @@ fn resources_declare_transparency_or_overprint(
 }
 
 fn ext_g_states_signal_transparency(doc: &PdfDocument, ext_g_states: &HashMap<String, Object>) -> bool {
-    for state in ext_g_states.values() {
-        let state_resolved = match doc.resolve_object(state) {
-            Ok(o) => o,
-            Err(_) => continue,
-        };
-        let Some(state_dict) = state_resolved.as_dict() else {
-            continue;
-        };
-        let op_true = state_dict
-            .get("OP")
-            .map(|o| {
-                let resolved = doc.resolve_object(o).unwrap_or_else(|_| o.clone());
-                matches!(resolved, Object::Boolean(true))
-            })
-            .unwrap_or(false);
-        let op_lower_true = state_dict
-            .get("op")
-            .map(|o| {
-                let resolved = doc.resolve_object(o).unwrap_or_else(|_| o.clone());
-                matches!(resolved, Object::Boolean(true))
-            })
-            .unwrap_or(false);
-        if op_true || op_lower_true {
-            return true;
-        }
-        for key in ["CA", "ca"] {
-            if let Some(v_raw) = state_dict.get(key) {
-                let v = doc.resolve_object(v_raw).unwrap_or_else(|_| v_raw.clone());
-                let alpha = match v {
-                    Object::Real(r) => r as f32,
-                    Object::Integer(i) => i as f32,
-                    _ => 1.0,
-                };
-                if alpha < 1.0 {
-                    return true;
-                }
-            }
-        }
-        if let Some(smask_raw) = state_dict.get("SMask") {
-            let smask = doc.resolve_object(smask_raw).unwrap_or_else(|_| smask_raw.clone());
-            if !matches!(&smask, Object::Name(n) if n == "None") {
-                return true;
-            }
-        }
-        // ISO 32000-1 §11.3.5 + §11.6.3: `/BM` may be a name OR an
-        // array of names. For an array, "the first name that names a
-        // blend mode supported by the conforming reader shall be used".
-        // An unrecognised name maps to /Normal per §11.6.3. Walk both
-        // shapes; fire the detection trigger only when the resolved
-        // mode is non-/Normal. The raw `/BM` may itself be an indirect
-        // ref to a name / array, so resolve before classifying. ~keep
-        if let Some(bm_raw) = state_dict.get("BM") {
-            let bm = doc.resolve_object(bm_raw).unwrap_or_else(|_| bm_raw.clone());
-            if bm_is_non_normal(&bm) {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-/// Resolve a `/BM` entry to "is this a recognised non-Normal blend
-/// mode?". Handles both the name and array forms per §11.3.5 +
-/// §11.6.3: the array form picks the FIRST recognised name; the name
-/// form is classified directly. Unrecognised names fall through to
-/// /Normal per the §11.6.3 fallback.
-fn bm_is_non_normal(bm: &Object) -> bool {
-    match bm {
-        Object::Name(name) => is_non_normal_mode(name),
-        Object::Array(arr) => arr
-            .iter()
-            .filter_map(Object::as_name)
-            .find(|name| is_recognised_mode(name))
-            .map(is_non_normal_mode)
-            .unwrap_or(false),
-        _ => false,
-    }
+    ext_g_states_signal(doc, ext_g_states, true)
 }
 
 /// True when `name` is one of the standard blend-mode names ISO 32000-1
@@ -753,12 +660,6 @@ pub(crate) fn is_recognised_mode(name: &str) -> bool {
             | "Color"
             | "Luminosity"
     )
-}
-
-/// True when `name` is a recognised non-/Normal blend mode. The
-/// transparency trigger fires only on this set.
-fn is_non_normal_mode(name: &str) -> bool {
-    is_recognised_mode(name) && name != "Normal"
 }
 
 /// Evaluate the §11.3.5.2 separable blend function `B(c_b, c_s)` for
@@ -2303,5 +2204,139 @@ mod tests {
             !page_declares_transparency(&doc, &resources),
             "no ExtGState or XObject → no transparency-only trigger."
         );
+    }
+
+    // Characterization of the ExtGState transparency decision. Each case
+    // states the (transparency-only, transparency-or-overprint) result.
+
+    fn detect(state_body: &str, extras: &[&str]) -> (bool, bool) {
+        let inner = format!("/ExtGState << /T << /Type /ExtGState {state_body} >> >>");
+        let (doc, resources) = build_doc_with_resources_and_objs(&inner, extras);
+        (
+            page_declares_transparency(&doc, &resources),
+            page_declares_transparency_or_overprint(&doc, &resources),
+        )
+    }
+
+    #[test]
+    fn detect_opacity_below_one_fires() {
+        assert_eq!(detect("/ca 0.5", &[]), (true, true));
+        assert_eq!(detect("/CA 0", &[]), (true, true));
+        assert_eq!(detect("/CA -0.5", &[]), (true, true));
+    }
+
+    #[test]
+    fn detect_opaque_or_out_of_range_high_or_missing_opacity_does_not_fire() {
+        assert_eq!(detect("/ca 1.0", &[]), (false, false));
+        assert_eq!(detect("/CA 2.5", &[]), (false, false));
+        assert_eq!(detect("", &[]), (false, false));
+        assert_eq!(detect("/ca /Half", &[]), (false, false));
+    }
+
+    #[test]
+    fn detect_nan_opacity_does_not_fire() {
+        let doc = build_doc_with_resources_and_objs("", &[]).0;
+        for key in ["CA", "ca"] {
+            let state = Object::Dictionary(HashMap::from([(key.to_string(), Object::Real(f64::NAN))]));
+            let states = HashMap::from([("T".to_string(), state)]);
+            assert!(!ext_g_states_signal_transparency_only(&doc, &states), "{key}");
+            assert!(!ext_g_states_signal_transparency(&doc, &states), "{key}");
+        }
+    }
+
+    #[test]
+    fn detect_state_behind_indirect_reference() {
+        let inner = "/ExtGState << /T 6 0 R >>";
+        let extras = ["6 0 obj\n<< /Type /ExtGState /ca 0.4 >>\nendobj\n"];
+        let (doc, resources) = build_doc_with_resources_and_objs(inner, &extras);
+        assert!(page_declares_transparency(&doc, &resources));
+        assert!(page_declares_transparency_or_overprint(&doc, &resources));
+    }
+
+    #[test]
+    fn detect_smask_none_does_not_fire() {
+        assert_eq!(detect("/SMask /None", &[]), (false, false));
+    }
+
+    #[test]
+    fn detect_smask_none_behind_reference_does_not_fire() {
+        assert_eq!(detect("/SMask 6 0 R", &["6 0 obj\n/None\nendobj\n"]), (false, false));
+    }
+
+    #[test]
+    fn detect_smask_dict_with_form_reference_fires() {
+        assert_eq!(detect("/SMask << /S /Alpha /G 6 0 R >>", &[]), (true, true));
+    }
+
+    #[test]
+    fn detect_smask_dict_without_form_reference() {
+        // Shared-parser rule (ext_gstate.rs parse_smask): a soft-mask dict
+        // without a /G reference parses to no mask, as it does for the renderers.
+        assert_eq!(detect("/SMask << /S /Alpha >>", &[]), (false, false));
+    }
+
+    #[test]
+    fn detect_smask_dict_with_direct_form_value() {
+        // Shared-parser rule (ext_gstate.rs parse_smask): /G must be a
+        // reference; anything else parses to no mask.
+        assert_eq!(detect("/SMask << /S /Alpha /G 7 >>", &[]), (false, false));
+    }
+
+    #[test]
+    fn detect_smask_non_name_non_dict() {
+        // Shared-parser rule (ext_gstate.rs parse_smask): only /None and a
+        // dict with /G classify; any other value leaves the mask untouched.
+        assert_eq!(detect("/SMask 3", &[]), (false, false));
+    }
+
+    #[test]
+    fn detect_smask_unresolvable_reference() {
+        // Shared-parser rule (ext_gstate.rs parse_smask): a reference
+        // that does not resolve is not a mask.
+        assert_eq!(detect("/SMask 99 0 R", &[]), (false, false));
+    }
+
+    #[test]
+    fn detect_blend_mode_names() {
+        assert_eq!(detect("/BM /Multiply", &[]), (true, true));
+        assert_eq!(detect("/BM /Normal", &[]), (false, false));
+    }
+
+    #[test]
+    fn detect_blend_mode_unrecognised_name() {
+        // Shared-parser rule (ext_gstate.rs parse_blend_mode): a name /BM is kept
+        // verbatim, and the renderers' `blend_mode != "Normal"` tests count it as
+        // non-trivial (it still paints as Normal). The sidecar now follows.
+        assert_eq!(detect("/BM /NoSuchMode", &[]), (true, true));
+        assert_eq!(detect("/BM /Compatible", &[]), (true, true));
+    }
+
+    #[test]
+    fn detect_blend_mode_array_takes_first_recognised_name() {
+        assert_eq!(detect("/BM [/NoSuchMode /Multiply]", &[]), (true, true));
+        assert_eq!(detect("/BM [/NoSuchMode /Normal /Multiply]", &[]), (false, false));
+        assert_eq!(detect("/BM [/NoSuchMode]", &[]), (false, false));
+    }
+
+    #[test]
+    fn detect_blend_mode_array_with_reference_element() {
+        // Shared-parser rule (ext_gstate.rs parse_blend_mode): array elements are
+        // resolved before the first recognised name is picked.
+        assert_eq!(detect("/BM [6 0 R]", &["6 0 obj\n/Multiply\nendobj\n"]), (true, true));
+    }
+
+    #[test]
+    fn detect_blend_mode_unresolvable_reference_does_not_fire() {
+        assert_eq!(detect("/BM 99 0 R", &[]), (false, false));
+    }
+
+    #[test]
+    fn detect_overprint_counts_only_for_the_overprint_variant() {
+        assert_eq!(detect("/OP true", &[]), (false, true));
+        assert_eq!(detect("/op true", &[]), (false, true));
+        assert_eq!(detect("/OP false /op true", &[]), (false, true));
+        assert_eq!(detect("/OP true /op false", &[]), (false, true));
+        assert_eq!(detect("/OP false /op false", &[]), (false, false));
+        assert_eq!(detect("/OP 6 0 R", &["6 0 obj\ntrue\nendobj\n"]), (false, true));
     }
 }
