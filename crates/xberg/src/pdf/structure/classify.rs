@@ -2642,6 +2642,51 @@ mod tests {
         assert_eq!(levels, [Some(2), None, None, None]);
     }
 
+    /// Mark the paragraph at each index in `removed` as page furniture before the stamp rule runs, then
+    /// return the furniture flag and the text of every paragraph.
+    fn furniture_and_text_after_removal(texts: &[&str], removed: &[usize]) -> Vec<(bool, String)> {
+        let mut page: Vec<PdfParagraph> = texts.iter().map(|text| margin_paragraph(text)).collect();
+        for index in removed {
+            page[*index].is_page_furniture = true;
+        }
+        let mut pages = vec![page];
+        mark_arxiv_noise(&mut pages);
+        pages[0]
+            .iter()
+            .map(|para| (para.is_page_furniture, paragraph_plain_text(para).trim().to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn arxiv_noise_does_not_join_or_count_a_stamp_part_that_is_already_furniture() {
+        // A removed piece is not a part: the two pieces left do not make a stamp, so both stay.
+        let page = furniture_and_text_after_removal(
+            &["Body words stay", "arXiv:2312.13591v2", "[hep-ph]", "6 Dec 2023"],
+            &[2],
+        );
+        let expected = [
+            (false, "Body words stay"),
+            (false, "arXiv:2312.13591v2"),
+            (true, "[hep-ph]"),
+            (false, "6 Dec 2023"),
+        ];
+        assert_eq!(page, expected.map(|(flag, text)| (flag, text.to_string())));
+        // A removed fourth piece is not counted: the three pieces left still make one stamp.
+        let page = furniture_and_text_after_removal(
+            &[
+                "arXiv:2312.13591v2",
+                "[hep-ph]",
+                "6 Dec 2023",
+                "7 Dec 2023",
+                "Body words stay",
+            ],
+            &[3],
+        );
+        let flags: Vec<bool> = page.iter().map(|(flag, _)| *flag).collect();
+        assert_eq!(flags, [true, true, true, true, false]);
+        assert_eq!(page[4].1, "Body words stay");
+    }
+
     #[test]
     fn arxiv_noise_leaves_stamps_after_the_second_page() {
         let mut pages = vec![
