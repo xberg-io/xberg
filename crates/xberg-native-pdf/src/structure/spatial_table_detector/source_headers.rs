@@ -91,6 +91,8 @@ pub(super) fn infer_complete_leading_header(table: &mut Table, shading: &[Rect])
 
 type RuleStyle = ([u32; 3], u32);
 
+/// Accept either visible group/leaf rules or a repeated schema with independent first-body shading.
+/// Both proofs share the role/path-count checks and matching visible leaf/body-rule veto. ~keep
 pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathContent], columns: usize) {
     let [groups, leaves, first_body, ..] = rows else {
         return;
@@ -185,8 +187,10 @@ fn grouped_leaves<'a>(groups: &'a TableRow, leaves: &'a TableRow) -> Option<Vec<
     (grouped.len() >= 2 && remaining.is_empty()).then_some(grouped)
 }
 
-/// A repeated column schema under separate groups and an independently shaded, regular body band
-/// establish headers even when the producer paints its grid white. Font size alone is not evidence. ~keep
+/// Certify repeated alphabetic leaf schemas under bold, aligned groups using unshaded headers and an
+/// independently shaded, regular first body band. First-body cells after column zero must contain an
+/// ASCII digit (`A1` qualifies); numeric-only strings are not required. This proof does not require visible
+/// separators, including when they are white, dashed, zero-opacity or light. ~keep
 fn repeated_schema_over_shaded_body(
     groups: &TableRow,
     leaves: &TableRow,

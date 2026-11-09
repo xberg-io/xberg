@@ -809,3 +809,11 @@ fn possible_header_shading_remains_ambiguous_after_partial_overpainting() {
     paths.push(white_fill(0.0, 0.0, 1.0, 1.0));
     assert!(!retained(repeated_schema_rows(), &paths));
 }
+
+#[test]
+fn the_same_leaf_and_body_rule_vetoes_independent_shading_evidence() {
+    let mut paths = shaded_first_body();
+    paths.push(PathContent::line(0.0, 0.0, COLUMNS as f32 * WIDTH, 0.0));
+    paths.push(PathContent::line(0.0, -HEIGHT, COLUMNS as f32 * WIDTH, -HEIGHT));
+    assert!(!retained(repeated_schema_rows(), &paths));
+}
