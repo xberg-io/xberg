@@ -115,14 +115,15 @@ pub(super) fn preview_page_limit(config: &ExtractionConfig) -> usize {
 
 /// Preview work units that one `max_iterations` step buys. A unit is a pixel or edge visit, far
 /// finer than the object-level iteration the limit counts. The default limit of 10 million
-/// iterations buys 160 million units, enough for one 300 dpi letter page (about 88 million) but
-/// not for two.
+/// iterations buys 160 million units, enough for five 300 dpi letter pages (27 million each) but
+/// not for six.
 const PREVIEW_WORK_PER_ITERATION: usize = 16;
 
 /// Per-page budgets in the document ceiling: 6 x `16 * max_iterations`, or 960 million units at
-/// the default, 6x the shared budget this replaces. Decoding measured 1.1 to 2.5 ms per million
-/// units optimized (about 5 ms pessimistic), so the worst case is 1 to 5 s while 10 audited 300 dpi
-/// pages (88 million each) still fit (#2694).
+/// the default, 6x the shared budget this replaces. On the release profile (fat LTO) on an AMD
+/// EPYC 7B12, spending the whole ceiling takes 3 to 4 s of decode, about 3.7 ms per million units;
+/// without LTO it takes about 15 s. A 300 dpi page costs 27 million units, so 10 audited pages fit
+/// and a longer scan is audited for its first 35 pages. A test pins the number (#2694, #2730).
 const PREVIEW_FULL_BUDGET_PAGES: usize = 6;
 
 /// Preview work for one document: each page may spend up to the per-page limit derived from
