@@ -1,6 +1,6 @@
 import inspect
 
-from xberg import (
+from xberg._xberg import (
     LayoutDetectionConfig,
     LayoutDetectionModel,
     LayoutStrategy,

@@ -231,6 +231,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Re-read a standalone dot-leader table picture whose first read holds a garbled table.** (#2503)
+  At 14 px the sparse read turns each leader into low-confidence lowercase noise inside a table whose label cells are corrupted, so the picture was never re-read. A first-read table whose column rows (four or more) hold such noise is now read again as one block, and the re-read replaces it only if it has a table, at least four column rows carrying a leader, and keeps the first read's confidently read letters and digits. The 14 px picture keeps 11 of 12 rows by default instead of 3; correct first-read tables, table-of-contents pictures, scans and an explicit caller PSM are unchanged.
 - **(models): Make the candidate inventory's pins reachable by tests.** (#2771)
   A test now stages stand-in files under the NLI-MiniLM2 pins in a temp cache and loads them through the real local classification adapter, so a corrupted byte, a skipped checksum comparison or a descriptor that selects the fp32 graph fails. The inventory verifies files with the shared download checksum check, and the unread per-file size manifest is removed so the SHA-256 is the only pin.
 
@@ -240,10 +242,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The adopted block re-read has no table, so its rows were one paragraph whose line breaks Markdown renders as spaces, welding the table into a single line. The extractor now marks that paragraph and Markdown renders each row as its own paragraph; Plain output and re-reads that find a table are unchanged.
 - **(ocr): Keep the native page when OCR differs from it only by hanging underscores or non-text-block bookkeeping (Refs #2534).**
   An underscore run that Tesseract reads just below a native line (the glyph hangs past the line box) now belongs to that line and must show glyph ink, and the count of words Tesseract placed in non-text blocks is run bookkeeping, as `word_count` is. Intel SDM pages 2383, 2486, 2645, 4420 and 4422 return their native text once instead of followed by an OCR copy.
-- **(bindings): Keep the Python, PHP and WASM `LayoutDetectionConfig` constructors in their pre-#2702 positional order.** (#2764)
-  Released signatures took the five settings first and the confidence threshold sixth, so `model` stays last, after `acceleration`. A call written for the last release no longer raises a type error or, in WASM with `1.0`, silently selects `pp_doc_layout_v3`.
-- **(bindings): Move `LayoutDetectionConfig.model` to the last field.** (#2717)
-  `model` had become the second field in #2702, shifting positional constructor arguments. It is now last, so the Java record constructor and the Swift `init` take their arguments in the pre-#2702 positions again, plus a trailing `model`. In the PHP and WASM `new` and the Python native constructor and `__init__` stub, `model` now follows `enableChartUnderstanding` but still precedes `confidenceThreshold`, `formulaModel` and `acceleration`, which stay one position later than before #2702, and in PHP `model` is now optional. The default model is unchanged (`rt_detr`).
+- **(bindings): Restore the pre-#2702 positional order of the `LayoutDetectionConfig` constructors.** (#2764, #2717)
+  The released eight-field order is back in the Python, PHP and WASM constructors, with `model` appended last and optional: `strategy`, `applyHeuristics`, `tableModel`, `tableOverlapPreference`, `enableChartUnderstanding`, `confidenceThreshold`, `formulaModel`, `acceleration`, then `model`. Python takes `model` keyword-only (`model=`); PHP and WASM take it as the trailing positional argument. Java and Swift gain a legacy eight-argument constructor and `init` that default to `RT_DETR` / `.rtDetr`. A call written for the last release no longer raises a type error or, in WASM with `1.0`, silently selects `pp_doc_layout_v3`. The default model is unchanged (`rt_detr`).
+
+- **(pdf): Keep a lone accent letter apart from the formula line under it.** (GH#2719)
+  A math font can draw a hat as its own lowercase letter, set just above the first letter of a formula line. If the formula line opens with a single capital letter or a number and then an operator (a hat over `X = V DU`, `Y = A B` or `Z + W`), that letter now stays apart from the formula line and is no longer joined into it as `bX`. A hat over a formula that opens with a lowercase letter still joins it.
+
+- **(pdf): Remove a repeated page stamp whose words join in more than one order.** (GH#2719)
+  The repeated-margin-text check now also compares a line by its set of words. A footer that reads "A B" on some pages and "B A" on others counts as one line, and is removed as page furniture from every page after its first.
+
 - **(ocr): Keep the first read of a picture when the table re-read finds no table.** (#2732)
   A standalone picture that the lattice test admits is now read again as one uniform block, and that read is adopted only if it finds a table. An upside-down table page, which the second read does not turn into a table, keeps its first read instead of the second.
 - **(pdf): Apply graphics states recovered while visiting a Form XObject.** (#2752)
