@@ -625,6 +625,9 @@ pub struct PdfDocument {
     /// Bounded at [`DEFAULT_OBJECT_CACHE_MAX_BYTES`] with FIFO eviction to
     /// prevent unbounded heap growth during multi-page extraction.
     object_cache: Mutex<BoundedObjectCache>,
+    /// Advances only when object-stream loading publishes a previously absent or Null object.
+    /// Path caches can then retry failures without retrying on every graphics-state use. ~keep
+    object_recovery_epoch: AtomicUsize,
     /// Parsed object streams keyed by the stream reference and bounded by accounted bytes.
     object_stream_cache: Mutex<BoundedObjectStreamCache>,
     /// Bounded markers for streams whose aggregated recovery telemetry fired.

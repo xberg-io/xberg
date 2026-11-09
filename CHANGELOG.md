@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(models): Pin experimental candidate classification and captioning ONNX artifacts to owned Hugging Face revisions.** (#2336)
+  The crate-private `candidate_models` inventory (feature `onnx-runtime`) lists NLI-MiniLM2, SmolVLM-256M, SmolVLM-500M and Florence-2-base as unmodified, license-preserving copies in `xberg-io/classification-models` and `xberg-io/captioning-models`, each file pinned by immutable commit, SHA-256 and size. Every entry is marked experimental and unqualified: none is a default or a supported preset, and no captioning adapter consumes them yet. The NLI-MiniLM2 cross-encoder declares Apache-2.0, but its base model `nreimers/MiniLMv2-L6-H768-distilled-from-RoBERTa-Large` publishes no license, so the entry's license is recorded as unresolved; its fp32 graph exceeds the local NLI adapter's graph size cap, so only the quantized graphs are selectable.
+
 - **(benchmarks): Freeze experimental NLI accounting plans and validate completed reports.** (#2334)
   The standalone runner calls the existing local classifier with pinned inputs and artifacts; report validation checks accounting consistency and does not qualify a model or prove inference occurred.
 
@@ -229,12 +232,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Recover independently verified native Khmer numbers at their source lines.** (#2408)
   When Khmer traineddata already accompanies the selected primary model, upright numeric crops can restore numbers omitted by the ordinary OCR read. English-only extraction and forced OCR stay unchanged; no auxiliary model is downloaded.
 
+- **(ocr): Adopt the block re-read of a standalone dot-leader table picture.** (#2503)
+  A re-read that finds no table is now also adopted when its word boxes show the column structure and at least four rows carry a dot leader, because the table check drops a leader table as prose while the block read keeps every row on one line. An 11 px plain leader picture keeps 11 of 12 rows by default instead of none; pictures without leaders, scans, part-page pictures and an explicit caller PSM are unchanged.
+- **(ocr): Keep each row of an adopted dot-leader table picture on its own line in Markdown.** (#2503)
+  The adopted block re-read has no table, so its rows were one paragraph whose line breaks Markdown renders as spaces, welding the table into a single line. The extractor now marks that paragraph and Markdown renders each row as its own paragraph; Plain output and re-reads that find a table are unchanged.
 - **(ocr): Keep the native page when OCR differs from it only by hanging underscores or non-text-block bookkeeping (Refs #2534).**
   An underscore run that Tesseract reads just below a native line (the glyph hangs past the line box) now belongs to that line and must show glyph ink, and the count of words Tesseract placed in non-text blocks is run bookkeeping, as `word_count` is. Intel SDM pages 2383, 2486, 2645, 4420 and 4422 return their native text once instead of followed by an OCR copy.
 - **(bindings): Move `LayoutDetectionConfig.model` to the last field.** (#2717)
   `model` had become the second field in #2702, shifting positional constructor arguments. It is now last, so the Java record constructor and the Swift `init` take their arguments in the pre-#2702 positions again, plus a trailing `model`. In the PHP and WASM `new` and the Python native constructor and `__init__` stub, `model` now follows `enableChartUnderstanding` but still precedes `confidenceThreshold`, `formulaModel` and `acceleration`, which stay one position later than before #2702, and in PHP `model` is now optional. The default model is unchanged (`rt_detr`).
 - **(ocr): Keep the first read of a picture when the table re-read finds no table.** (#2732)
   A standalone picture that the lattice test admits is now read again as one uniform block, and that read is adopted only if it finds a table. An upside-down table page, which the second read does not turn into a table, keeps its first read instead of the second.
+- **(pdf): Apply graphics states recovered while visiting a Form XObject.** (#2752)
+  Failed graphics-state dictionaries and indirect dash or opacity operands are retried only after object-stream loading publishes recovered objects, so later page strokes use recovered settings without repeatedly decoding a permanently broken stream.
+
 - **(pdf): Resolve an indirect page `/ExtGState` once per resource scope in native path extraction.** (#2744)
   Each distinct `gs` name used to clone the whole dictionary, so thousands of names cost quadratic allocations; the container is now loaded once and borrowed, and returning from a Form XObject restores the page's parsed states instead of discarding them.
 
