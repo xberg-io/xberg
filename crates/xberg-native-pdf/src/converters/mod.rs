@@ -282,7 +282,7 @@ pub struct ConversionOptions {
 
     /// Has no effect. A ligature glyph always yields its component letters
     /// (`ﬁ`→`fi`, `ﬂ`→`fl`, `ﬀ`→`ff`, `ﬃ`→`ffi`, `ﬄ`→`ffl`, `ﬅ`/`ﬆ`→`st`) when the text is read.
-    /// The field stays for one release so existing callers compile; remove it from your code.
+    /// The field is deprecated and will be removed in the next minor release; remove it from your code.
     ///
     /// Default: `false`.
     #[deprecated(note = "has no effect: ligature glyphs always yield their letters; the field will be removed")]
