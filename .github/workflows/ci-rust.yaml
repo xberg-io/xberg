@@ -14,6 +14,9 @@ on:
       - "Cargo.lock"
       - "rust-toolchain.toml"
       - ".github/workflows/ci-rust.yaml"
+      - ".github/workflows/ci-focused-pr.yaml"
+      - ".github/actions/setup-onnx-runtime/**"
+      - "scripts/ci/actions/setup-onnx-runtime/**"
       - "mise.toml"
       - "mise.lock"
       - "mise-tasks/rust.toml"
@@ -39,7 +42,6 @@ env:
   CARGO_PROFILE_DEV_DEBUG: 0
   RUST_BACKTRACE: short
   RUST_MIN_STACK: 16777216
-  ORT_VERSION: "1.24.2"
   MACOSX_DEPLOYMENT_TARGET: "15.0"
   BUILD_PROFILE: "ci"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -105,7 +107,6 @@ jobs:
       - name: Setup ONNX Runtime
         uses: ./.github/actions/setup-onnx-runtime
         with:
-          ort-version: ${{ env.ORT_VERSION }}
           # xberg-ffi's build.rs already emits the @loader_path rpath; a second one from RUSTFLAGS
           # makes ld warn and `build.warnings` turns that into a failed build. DYLD_LIBRARY_PATH and
           # ORT_DYLIB_PATH, set by the action, locate the runtime for tests. ~keep
@@ -119,7 +120,8 @@ jobs:
       - name: Install mise
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install: "false"
+          install: ${{ matrix.os == 'ubuntu-latest' && 'true' || 'false' }}
+          install-args: cargo-deny
 
       - name: Verify system Tesseract dynamic linking
         if: matrix.os == 'ubuntu-latest'
@@ -463,7 +465,6 @@ jobs:
       - name: Setup ONNX Runtime
         uses: ./.github/actions/setup-onnx-runtime
         with:
-          ort-version: ${{ env.ORT_VERSION }}
           dest-dir: crates/xberg-ffi
 
       - name: Clippy Windows ORT surface
@@ -611,7 +612,6 @@ jobs:
         if: matrix.name == 'sceptre-ocr-ort'
         uses: ./.github/actions/setup-onnx-runtime
         with:
-          ort-version: ${{ env.ORT_VERSION }}
           dest-dir: crates/xberg-ffi
 
       - name: cargo check -p xberg --no-default-features --features ${{ matrix.features }} --all-targets
@@ -784,8 +784,6 @@ jobs:
       - name: Setup ONNX Runtime
         if: matrix.needs_ort
         uses: ./.github/actions/setup-onnx-runtime
-        with:
-          ort-version: ${{ env.ORT_VERSION }}
 
       - name: Setup Tesseract cache
         if: matrix.needs_tesseract
@@ -920,8 +918,6 @@ jobs:
 
       - name: Setup ONNX Runtime
         uses: ./.github/actions/setup-onnx-runtime
-        with:
-          ort-version: ${{ env.ORT_VERSION }}
 
       - name: Cache HuggingFace fastembed models
         uses: ./.github/actions/cache-hf-fastembed

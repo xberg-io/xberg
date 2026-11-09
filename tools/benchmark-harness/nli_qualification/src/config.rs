@@ -7,8 +7,8 @@ const MAX_NAME_BYTES: usize = 256;
 const MAX_MANIFEST_BYTES: usize = 1024 * 1024;
 const MAX_EXTERNAL_FILES: usize = 64;
 
-// SDK admission helpers are private to the runtime feature; contract-only freezes
-// enforce a portable subset and runtime freezes additionally use the SDK constructor.
+// SDK admission helpers are private; portable validation enforces bounded artifact
+// metadata without preparing or loading a model.
 pub(crate) fn validate_config(config: &LocalClassificationConfig) -> Result<()> {
     let ceiling = LocalClassificationLimits::default();
     let limits = &config.limits;
@@ -50,8 +50,6 @@ pub(crate) fn validate_config(config: &LocalClassificationConfig) -> Result<()> 
             .all(|path| path.len() <= MAX_DESCRIPTOR_PATH_BYTES && path.starts_with(&parent) && artifact_path(path)),
         "invalid graph-relative external tensor path",
     )?;
-    #[cfg(feature = "runtime")]
-    xberg::local_classification::LocalTextClassifier::new(config.clone())?;
     Ok(())
 }
 

@@ -1,4 +1,9 @@
-#![cfg(all(feature = "ocr", feature = "tokio-runtime", feature = "bundle-tessdata-eng"))]
+#![cfg(all(
+    feature = "ocr",
+    feature = "pdf",
+    feature = "tokio-runtime",
+    feature = "bundle-tessdata-eng"
+))]
 
 //! One test per process: the re-read decision is observed through its debug events, which a
 //! global subscriber captures from the OCR worker threads.
@@ -11,6 +16,7 @@ use xberg::{ExtractionConfig, OcrConfig, OutputFormat};
 
 const LEADER_TABLE: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/20.png");
 const TWO_COLUMN_PROSE: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/two_column.png");
+const UPSIDE_DOWN_TABLE: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/upside_down_table.png");
 
 #[derive(Clone, Default)]
 struct Events(Arc<Mutex<Vec<String>>>);
@@ -76,5 +82,29 @@ fn a_leader_table_is_adopted_and_two_column_prose_is_never_read_again() {
     assert!(
         prose.iter().any(|event| event.contains("skipped")),
         "the page is refused by the geometry admission: {prose:?}"
+    );
+
+    events.0.lock().unwrap().clear();
+    assert_eq!(
+        psm(UPSIDE_DOWN_TABLE),
+        "11",
+        "a second read with no table is not adopted"
+    );
+    let upside_down = events.0.lock().unwrap().clone();
+    assert!(
+        upside_down
+            .iter()
+            .any(|event| event.contains("reading the picture again")),
+        "the geometry admits the page to a second read: {upside_down:?}"
+    );
+    assert!(
+        upside_down
+            .iter()
+            .any(|event| event.contains("rejected") && event.contains("found no table")),
+        "{upside_down:?}"
+    );
+    assert!(
+        !upside_down.iter().any(|event| event.contains("adopted")),
+        "{upside_down:?}"
     );
 }

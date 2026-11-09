@@ -5,6 +5,19 @@ const MAX_INFERENCES: usize = 100_000;
 
 impl FrozenPlan {
     pub fn validate(&self) -> Result<()> {
+        self.validate_portable()?;
+        #[cfg(feature = "runtime")]
+        for candidate in &self.candidates {
+            for variant in candidate.variants.values() {
+                xberg::local_classification::LocalTextClassifier::new(variant.config.clone())?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Validate the frozen accounting contract without SDK runtime admission.
+    /// Runtime-enabled `validate` additionally checks every SDK constructor.
+    pub fn validate_portable(&self) -> Result<()> {
         require(
             self.schema_version == 1 && !self.qualified,
             "schema must be version 1 and unqualified",
