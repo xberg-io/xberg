@@ -990,6 +990,31 @@ pub(super) mod tests {
         assert!(decision.fallback);
     }
 
+    /// A font the decoder cannot name a glyph of writes U+FFFF for that glyph (public docling.pdf
+    /// does for its ligatures). That is text the page keeps, not a lost-glyph marker: the garbage
+    /// count stays 0 and a readable page stays on the native route. ~keep
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn should_keep_the_native_route_for_a_page_whose_decode_writes_u_ffff_for_an_unmapped_ligature() {
+        let thresholds = t();
+        let sentence = "The committee reviewed the con\u{FFFF}gurations of the e\u{FFFF}ort and the \u{FFFF}nal \
+                        \u{FFFF}ag that \u{FFFF}attens the work the sta\u{FFFF} introduced, which signi\u{FFFF}cantly \
+                        changed the plan. ";
+        let prose = "Each section of the report describes the measured values and the method in plain words. ";
+        let text = format!("{sentence}{}", prose.repeat(100));
+        assert!(text.chars().filter(|c| !c.is_whitespace()).count() > 8000, "a long readable page");
+        assert_eq!(text.matches('\u{FFFF}').count(), 8, "eight words hold the glyph");
+        let stats = NativeTextStats::compute(&text, &thresholds);
+        assert_eq!(stats.garbage_char_count, 0, "U+FFFF is no lost-glyph marker");
+        assert_eq!(
+            NativeTextStats::compute(&text.replace('\u{FFFF}', "\u{FFFD}"), &thresholds).garbage_char_count,
+            8,
+            "control: the same page with lost-glyph markers counts them"
+        );
+        let decision = evaluate_native_text_for_ocr(&text, Some(1), &thresholds);
+        assert!(!decision.fallback, "the page stays on the native route: {decision:?}");
+    }
+
     #[cfg(feature = "ocr")]
     #[test]
     fn test_multi_page_garbage_threshold_routes_only_failing_page() {

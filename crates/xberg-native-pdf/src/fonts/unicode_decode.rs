@@ -849,6 +849,42 @@ mod tests {
         assert_eq!(LOST_SYMBOL_GLYPH_MARKER.len_utf8(), '\u{FFFD}'.len_utf8());
     }
 
+    /// A glyph a font program decodes to the marker noncharacter is a lost glyph of that font and
+    /// never the extractor's symbol marker, under both policies; U+FFFF, which a font can decode a
+    /// glyph to as well, passes as text (public docling.pdf decodes its ligatures to it). ~keep
+    #[test]
+    fn a_noncharacter_a_font_decodes_to_is_a_lost_glyph_and_never_the_marker() {
+        let cmap = b"1 begincodespacerange <00> <FF> endcodespacerange \
+            3 beginbfchar <41> <FFFE> <42> <0042> <43> <FFFF> endbfchar";
+        let font = FontInfo {
+            to_unicode: Some(crate::fonts::LazyCMap::new(cmap.to_vec())),
+            ..utf8_cmap_font()
+        };
+        let preserve = DecodePolicy {
+            preserve_unmapped: true,
+            ..DecodePolicy::default()
+        };
+        assert_eq!(
+            decode_text_to_unicode(b"ABC", Some(&font), preserve, None),
+            "\u{FFFD}B\u{FFFF}",
+            "a preserved decode keeps the lost glyph as U+FFFD and the U+FFFF as text"
+        );
+        assert_eq!(
+            decode_text_to_unicode(b"ABC", Some(&font), DecodePolicy::default(), None),
+            "B\u{FFFF}",
+            "a dropping decode drops the lost glyph"
+        );
+        let symbol = FontInfo {
+            base_font: "ABCDEF+Wingdings-Regular".to_string(),
+            ..font
+        };
+        assert_eq!(
+            decode_text_to_unicode(b"ABC", Some(&symbol), preserve, None),
+            format!("{LOST_SYMBOL_GLYPH_MARKER}B\u{FFFF}"),
+            "the marker in a decode is the extractor's, for the symbol font's lost glyph"
+        );
+    }
+
     /// A row that starts with the symbol marker is not right-to-left text: a marker inside an
     /// Arabic block made the span pass reverse `<marker>AB` to `BA`. ~keep
     #[test]

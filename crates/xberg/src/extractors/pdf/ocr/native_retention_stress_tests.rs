@@ -1340,6 +1340,56 @@ fn a_page_of_rich_ocr_payload_keeps_the_ocr_row_that_misreads_a_native_row() {
     }
 }
 
+/// The misread OCR row is a plain paragraph of a page that also holds a table: the row leaves
+/// by the element that holds it, not by the payload of the page. The whole-document run route,
+/// without a noise verdict, so the OCR text has to confirm the layer first. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn should_print_a_row_once_when_its_ocr_misread_is_a_paragraph_on_a_page_with_a_table() {
+    use super::super::document::{PageLayers, put_layers_first_in_run};
+    use crate::core::config::ExtractionConfig;
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+    let (native, read) = measure_rows();
+    let table_row = "| Budget | 12 | 45 |";
+    let mut doc = InternalDocument::new("pdf");
+    for row in &read {
+        let mut element = InternalElement::text(ElementKind::Paragraph, row.as_str(), 0);
+        element.page = Some(1);
+        doc.push_element(element);
+    }
+    let mut table = InternalElement::text(ElementKind::Table { table_index: 0 }, table_row, 0);
+    table.page = Some(1);
+    doc.push_element(table);
+    let layers = ahash::AHashMap::from([(1, stored_layer(&native.join("\n")))]);
+    let mut page_texts = vec![format!("{}\n{table_row}", read.join("\n"))];
+    let mut text = page_texts[0].clone();
+    put_layers_first_in_run(
+        &mut text,
+        &mut page_texts,
+        Some(&mut doc),
+        PageLayers {
+            lines: &layers,
+            boxes: &ahash::AHashMap::default(),
+        },
+        &[],
+        0,
+        &ExtractionConfig::default(),
+    );
+    let mut kept = read.clone();
+    kept.remove(3);
+    assert_eq!(
+        text,
+        format!("{}\n\n{}\n{table_row}", native[3], kept.join("\n")),
+        "the row prints once, as the native read it; the table row stays"
+    );
+    assert_eq!(page_texts[0], text);
+    let texts: Vec<&str> = doc.elements.iter().map(|element| element.text.as_str()).collect();
+    let mut expected = vec![native[3].as_str()];
+    expected.extend(kept.iter().map(String::as_str));
+    expected.push(table_row);
+    assert_eq!(texts, expected, "the misread paragraph leaves the page; the table element stays");
+}
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[test]
 fn a_misread_ocr_row_leaves_the_structured_page_once_and_an_emptied_element_leaves_it() {
