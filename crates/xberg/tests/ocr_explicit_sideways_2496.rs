@@ -984,6 +984,7 @@ fn source_cell_matches(result: &ExtractedDocument) -> usize {
 enum Route {
     Osd,
     Classifier,
+    /// Only where no recovery is expected; a half-turn recovery also reads as this.
     Original,
 }
 
@@ -1007,14 +1008,14 @@ fn assert_route(name: &str, result: &ExtractedDocument, expected: Route) {
 }
 
 /// The unset policy's read before the OSD pack exists: the classifier recovers the table when one
-/// is compiled; otherwise the original read is kept. ~keep
+/// is compiled and its model seeded (`auto-rotate-tract`); otherwise the original read is kept. ~keep
 fn assert_before_osd(before: &ExtractedDocument) {
-    #[cfg(auto_rotate)]
+    #[cfg(feature = "auto-rotate-tract")]
     {
         assert_source_table(before);
         assert_route("before", before, Route::Classifier);
     }
-    #[cfg(not(auto_rotate))]
+    #[cfg(not(feature = "auto-rotate-tract"))]
     {
         assert_original_read(before);
         assert_route("before", before, Route::Original);
