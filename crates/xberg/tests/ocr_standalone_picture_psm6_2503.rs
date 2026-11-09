@@ -14,6 +14,9 @@ const PICTURE_11PX: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/11.png"
 const PICTURE_11PX_ROWS: &str = include_str!("fixtures/ocr_dot_leader_2503/11.tsv");
 const TABLE_OF_CONTENTS: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/toc.png");
 const TWO_COLUMN_PROSE: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/two_column.png");
+const PICTURE_14PX: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/14.png");
+const PICTURE_14PX_ROWS: &str = include_str!("fixtures/ocr_dot_leader_2503/14.tsv");
+const CLEAN_TABLE: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/clean_table.png");
 const PICTURE_20PX: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/20.png");
 const PICTURE_20PX_ROWS: &str = include_str!("fixtures/ocr_dot_leader_2503/20.tsv");
 const TINTED_SCAN: &[u8] = include_bytes!("fixtures/ocr/dot_leader_scan_2503/scan-200-tinted.pdf");
@@ -163,4 +166,49 @@ fn plain_keeps_the_rows_of_an_adopted_leader_picture_on_consecutive_lines() {
         "no blank line between rows:\n{}",
         result.content
     );
+}
+
+/// Rows of the 14 px picture that sit whole on one line; the block read joins "Pool repairs" into
+/// "Poolrepairs", which is asserted separately and counted as kept.
+fn kept_14px_rows(content: &str) -> usize {
+    assert!(content.contains("Poolrepairs"), "the known join is gone:\n{content}");
+    let normalized = content.replace("Poolrepairs", "Pool repairs");
+    PICTURE_14PX_ROWS
+        .lines()
+        .filter(|row| row_lines(&normalized, row) == 1)
+        .count()
+}
+
+#[test]
+fn default_route_rereads_a_14px_picture_whose_first_read_holds_a_garbled_table() {
+    for format in [OutputFormat::Plain, OutputFormat::Markdown] {
+        let mut config = config(None);
+        config.output_format = format.clone();
+        let result = helpers::extract_bytes_document_blocking(PICTURE_14PX, "image/png", &config).unwrap();
+        assert_eq!(recorded_psm(&result), "6", "{format:?}");
+        let kept = kept_14px_rows(&result.content);
+        assert!(
+            kept >= 11,
+            "{format:?}: {kept} of 12 rows kept whole:\n{}",
+            result.content
+        );
+    }
+}
+
+#[test]
+fn explicit_caller_psm_wins_on_a_14px_picture_with_a_garbled_first_read() {
+    let result = helpers::extract_bytes_document_blocking(PICTURE_14PX, "image/png", &config(Some(11))).unwrap();
+    assert_eq!(recorded_psm(&result), "11");
+}
+
+#[test]
+fn a_picture_whose_first_read_holds_a_correct_table_keeps_it() {
+    let result = helpers::extract_bytes_document_blocking(CLEAN_TABLE, "image/png", &config(None)).unwrap();
+    assert_eq!(
+        result.tables.len(),
+        1,
+        "the first read must hold a table:\n{}",
+        result.content
+    );
+    assert_eq!(recorded_psm(&result), "11");
 }

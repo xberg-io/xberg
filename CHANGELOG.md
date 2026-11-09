@@ -232,6 +232,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Keep native text when an automatic all-pages OCR read duplicates it.** (#2768)
   Native-text preservation for automatic Tesseract OCR now uses the same page acceptance when every page needs OCR as when only some pages do. A native table page therefore keeps its text once whether extracted alone or inside a larger document; explicit pipelines, VLM fallback, custom backends, forced OCR and fallback without usable native page boundaries retain their existing routes.
 
+- **(ocr): Re-read a standalone dot-leader table picture whose first read holds a garbled table.** (#2503)
+  At 14 px the sparse read turns each leader into low-confidence lowercase noise inside a table whose label cells are corrupted, so the picture was never re-read. A first-read table whose column rows (four or more) hold such noise is now read again as one block, and the re-read replaces it only if it has a table, at least four column rows carrying a leader, and keeps the first read's confidently read letters and digits. The 14 px picture keeps 11 of 12 rows by default instead of 3; correct first-read tables, table-of-contents pictures, scans and an explicit caller PSM are unchanged.
 - **(models): Make the candidate inventory's pins reachable by tests.** (#2771)
   A test now stages stand-in files under the NLI-MiniLM2 pins in a temp cache and loads them through the real local classification adapter, so a corrupted byte, a skipped checksum comparison or a descriptor that selects the fp32 graph fails. The inventory verifies files with the shared download checksum check, and the unread per-file size manifest is removed so the SHA-256 is the only pin.
 
