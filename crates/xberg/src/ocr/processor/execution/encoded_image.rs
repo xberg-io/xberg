@@ -599,34 +599,136 @@ fn retry_candidate(decoded: DecodedOcrImage, preprocessing: Option<&ImagePreproc
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ocr::preprocessing::rgb_is_gray;
 
-    #[test]
-    fn budgeted_png_without_resize_keeps_the_real_source_resolution() {
+    enum ExpectedImage {
+        Original,
+        Upscaled,
+        WorkspaceError,
+    }
+
+    fn png_fixture(pixel: [u8; 3], expected_gray: bool) -> Vec<u8> {
+        let image = image::RgbImage::from_pixel(200, 100, image::Rgb(pixel));
+        assert_eq!(rgb_is_gray(image.as_raw()), expected_gray, "fixture {pixel:?}");
         let mut encoded = std::io::Cursor::new(Vec::new());
-        image::RgbImage::from_pixel(200, 100, image::Rgb([245; 3]))
-            .write_to(&mut encoded, image::ImageFormat::Png)
-            .unwrap();
-        let encoded = encoded.into_inner();
-        let policy = ImagePreprocessingConfig {
+        image.write_to(&mut encoded, image::ImageFormat::Png).unwrap();
+        encoded.into_inner()
+    }
+
+    fn contrast_policy() -> ImagePreprocessingConfig {
+        ImagePreprocessingConfig {
             contrast_enhance: true,
             binarization_method: "none".into(),
             deskew: false,
             ..Default::default()
-        };
-        let limit = native_image_budget::known_phase_peak(200, 100, encoded.len(), Some(&policy))
+        }
+    }
+
+    fn prepare_png(bytes: &[u8], policy: &ImagePreprocessingConfig, budget: usize) -> crate::Result<PreparedOcrImage> {
+        prepare_encoded_ocr_image(
+            bytes,
+            &SecurityLimits {
+                max_content_size: budget,
+                ..Default::default()
+            },
+            &TesseractConfig {
+                source_dpi: Some(100.0),
+                preprocessing: Some(policy.clone()),
+                ..Default::default()
+            },
+            Some(&ImageExtractionConfig {
+                auto_adjust_dpi: false,
+                ..Default::default()
+            }),
+            false,
+        )
+    }
+
+    fn assert_budget_cases(bytes: &[u8], policy: &ImagePreprocessingConfig, source_peak: usize, target_peak: usize) {
+        for (name, budget, expected) in [
+            ("source_at_peak", source_peak, ExpectedImage::Original),
+            ("source_below_peak", source_peak - 1, ExpectedImage::WorkspaceError),
+            ("target_at_peak", target_peak, ExpectedImage::Upscaled),
+        ] {
+            let result = prepare_png(bytes, policy, budget);
+            let (dimensions, scale, skipped) = match expected {
+                ExpectedImage::Original => ((200, 100, 100), 1.0, true),
+                ExpectedImage::Upscaled => ((600, 300, 300), 3.0, false),
+                ExpectedImage::WorkspaceError => {
+                    let error = result
+                        .err()
+                        .unwrap_or_else(|| panic!("{name}: expected a workspace refusal"));
+                    assert!(
+                        matches!(&error, crate::XbergError::Validation { message, .. }
+                            if message == &format!("OCR native image workspace exceeds security_limits.max_content_size \
+                                ({budget} bytes). Raise security_limits.max_content_size")),
+                        "{name}: {error}"
+                    );
+                    continue;
+                }
+            };
+            let image = result.unwrap_or_else(|error| panic!("{name}: {error}"));
+            assert_eq!((image.width, image.height, image.source_dpi), dimensions, "{name}");
+            let metadata = image
+                .image_preprocessing
+                .unwrap_or_else(|| panic!("{name}: missing DPI metadata"));
+            assert_eq!(metadata.target_dpi, 300, "{name}");
+            assert_eq!(metadata.final_dpi, dimensions.2, "{name}");
+            assert_eq!(metadata.scale_factor, scale, "{name}");
+            assert_eq!(metadata.skipped_resize, skipped, "{name}");
+        }
+    }
+
+    #[test]
+    fn budgeted_png_without_resize_keeps_the_real_source_resolution() {
+        let bytes = png_fixture([245; 3], true);
+        let policy = contrast_policy();
+        let source_peak = native_image_budget::known_gray_phase_peak(200, 100, bytes.len(), Some(&policy))
             .unwrap()
             .unwrap() as usize;
+        let target_peak = native_image_budget::known_gray_phase_peak(600, 300, bytes.len(), Some(&policy))
+            .unwrap()
+            .unwrap() as usize;
+        assert_budget_cases(&bytes, &policy, source_peak, target_peak);
+    }
+
+    #[test]
+    fn budgeted_colour_png_uses_the_colour_workspace_boundary() {
+        let bytes = png_fixture([245, 245, 244], false);
+        let policy = contrast_policy();
+        let source_peak = native_image_budget::known_phase_peak(200, 100, bytes.len(), Some(&policy))
+            .unwrap()
+            .unwrap() as usize;
+        let target_peak = native_image_budget::known_phase_peak(600, 300, bytes.len(), Some(&policy))
+            .unwrap()
+            .unwrap() as usize;
+        assert_budget_cases(&bytes, &policy, source_peak, target_peak);
+    }
+
+    fn gray_switch_png(pixel: [u8; 3]) -> Vec<u8> {
+        let mut encoded = std::io::Cursor::new(Vec::new());
+        image::RgbImage::from_pixel(200, 100, image::Rgb(pixel))
+            .write_to(&mut encoded, image::ImageFormat::Png)
+            .unwrap();
+        encoded.into_inner()
+    }
+
+    fn prepare_gray_switch(
+        encoded: &[u8],
+        limit: usize,
+        policy: &ImagePreprocessingConfig,
+    ) -> crate::Result<PreparedOcrImage> {
         let config = TesseractConfig {
             source_dpi: Some(100.0),
-            preprocessing: Some(policy),
+            preprocessing: Some(policy.clone()),
             ..Default::default()
         };
         let images = ImageExtractionConfig {
             auto_adjust_dpi: false,
             ..Default::default()
         };
-        let result = prepare_encoded_ocr_image(
-            &encoded,
+        prepare_encoded_ocr_image(
+            encoded,
             &SecurityLimits {
                 max_content_size: limit,
                 ..Default::default()
@@ -635,12 +737,39 @@ mod tests {
             Some(&images),
             false,
         )
-        .expect("the original raster fits its exact workspace");
-        assert_eq!((result.width, result.height, result.source_dpi), (200, 100, 100));
-        let metadata = result.image_preprocessing.expect("budget-aware DPI metadata");
-        assert_eq!(metadata.target_dpi, 300);
-        assert_eq!(metadata.final_dpi, 100);
-        assert_eq!(metadata.scale_factor, 1.0);
-        assert!(metadata.skipped_resize);
+    }
+
+    #[test]
+    fn gray_route_switch_charges_only_the_gray_raster_the_gray_model() {
+        let policy = ImagePreprocessingConfig {
+            contrast_enhance: true,
+            binarization_method: "none".into(),
+            deskew: false,
+            ..Default::default()
+        };
+        let (gray_png, colour_png) = (gray_switch_png([245; 3]), gray_switch_png([245, 245, 200]));
+        let gray_limit = native_image_budget::known_gray_phase_peak(200, 100, colour_png.len(), Some(&policy))
+            .unwrap()
+            .unwrap() as usize;
+        assert!(
+            gray_png.len() <= colour_png.len(),
+            "the gray raster is admitted under the colour raster's gray peak"
+        );
+        let colour_peak = native_image_budget::known_phase_peak(200, 100, colour_png.len(), Some(&policy))
+            .unwrap()
+            .unwrap() as usize;
+        assert!(gray_limit < colour_peak, "{gray_limit} vs {colour_peak}");
+        let kept = prepare_gray_switch(&gray_png, gray_limit, &policy).expect("gray fits the gray model");
+        assert_eq!((kept.width, kept.height), (200, 100));
+        let message = prepare_gray_switch(&colour_png, gray_limit, &policy)
+            .err()
+            .expect("a colour raster is charged the colour model, which the gray budget cannot hold")
+            .to_string();
+        assert!(
+            message.contains(&format!(
+                "exceeds security_limits.max_content_size ({gray_limit} bytes)"
+            )),
+            "{message}"
+        );
     }
 }

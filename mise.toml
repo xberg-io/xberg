@@ -31,7 +31,7 @@ dotnet = "10.0.403"
 zig = "0.17.0"
 "github:Goldziher/poly" = "0.32.1"
 "github:Goldziher/adrlint" = "0.4.1"
-"github:xberg-io/alef" = "0.123.0"
+"github:xberg-io/alef" = "0.129.1"
 cargo-deny = "0.20.2"
 "github:taiki-e/cargo-llvm-cov" = "0.9.1"
 bats = "1.14.0"
@@ -149,7 +149,7 @@ run = "uv run --no-project --with pytest python -m pytest -q scripts/ci/test_ver
 
 [tasks."test:v3-cross-runtime"]
 description = "Test the tie- and boundary-tolerant PP-DocLayoutV3 cross-runtime comparison"
-run = "uv run --no-project --with pytest --with numpy python -m pytest -q scripts/ci/test_v3_cross_runtime.py"
+run = "bash scripts/ci/test-v3-cross-runtime.sh"
 
 [tasks."poly:verify:tool-scopes"]
 description = "Check external Poly formatters are restricted to their intended languages"

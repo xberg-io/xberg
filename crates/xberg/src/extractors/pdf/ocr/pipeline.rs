@@ -776,7 +776,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             .map(|ocr| ocr.effective_thresholds())
             .unwrap_or_default();
         super::super::ensure_pdf_not_cancelled(config)?;
-        page_indices = super::super::spawn_pdf_blocking(move || {
+        let decisions = super::super::spawn_pdf_blocking(move || {
             let is_cancelled = || cancel.as_ref().is_some_and(|token| token.is_cancelled());
             let mut work_budget = work_budget;
             let mut decisions = Vec::new();
@@ -787,40 +787,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 let needed = work_budget.probe_page(|page_work| {
                     super::hidden_layer::needs_ocr(&probe_doc, index, byte_limit, page_work, is_cancelled)
                 });
-                let plausible = needed == Some(false)
-                    && layer_texts.get(&index).is_some_and(|text| {
-                        let boundary = crate::types::PageBoundary {
-                            byte_start: 0,
-                            byte_end: text.len(),
-                            page_number: 1,
-                        };
-                        !super::plausibility::scan_text_plausibility(
-                            text,
-                            Some(&[boundary]),
-                            None,
-                            &plausibility_thresholds,
-                        )
-                        .plausible
-                        .is_empty()
-                    });
+                let plausible = super::hidden_layer::layer_judged_plausible(
+                    needed,
+                    layer_texts.get(&index).map(String::as_str),
+                    &plausibility_thresholds,
+                );
                 decisions.push((index, needed, plausible));
             }
             Ok(decisions)
         })
-        .await?
-        .into_iter()
-        .filter_map(|(index, needed, plausible)| {
-            let probed = super::hidden_layer::probes_page(needed, plausible);
-            tracing::debug!(
-                page = index + 1,
-                ?needed,
-                plausible,
-                probed,
-                "Hidden PDF text probe decision"
-            );
-            probed.then_some(index)
-        })
-        .collect();
+        .await?;
+        page_indices = super::hidden_layer::pages_to_probe(decisions);
         super::super::ensure_pdf_not_cancelled(config)?;
     }
     if page_indices.is_empty() {
@@ -1098,7 +1075,28 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut native_ink_owned_pages = ahash::AHashSet::new();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    let native_coverage_layers = page_layers.as_ref().filter(|_| {
+    let ink_coverage_layers = {
+        let markers = if !probing_hidden_layer && all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative {
+            super::document::marker_native_ink_layers(
+                native_text,
+                boundaries,
+                &ocr_set,
+                page_count,
+                &ocr_output_thresholds,
+            )
+        } else {
+            ahash::AHashMap::new()
+        };
+        if markers.is_empty() {
+            page_layers.clone()
+        } else {
+            let mut layers = page_layers.as_deref().cloned().unwrap_or_default();
+            layers.extend(markers);
+            Some(std::sync::Arc::new(layers))
+        }
+    };
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let native_coverage_layers = ink_coverage_layers.as_ref().filter(|_| {
         all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative
             && !probing_hidden_layer
             && !mixed_route_layout_active
@@ -2505,14 +2503,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 // no low-confidence or dictionary-noise verdict. The fragmentation signal does not
                 // veto it: a table of numbers is mostly short tokens. ~keep
                 && !(probing_hidden_layer
-                    && !low_confidence_pages.contains(&page)
-                    && !dictionary_noise_pages.contains(&page)
-                    && ocr_confidence_by_page
-                        .get(&page)
-                        .is_some_and(|confidence| super::hidden_layer::confidence_clears_replacement_floor(confidence.score))
                     && native_text
                         .get(boundary.byte_start..boundary.byte_end)
-                        .is_some_and(|native| super::hidden_layer::ocr_supersedes_disjoint_layer(native, text)))
+                        .is_some_and(|native| {
+                            super::hidden_layer::confident_read_replaces_layer(
+                                low_confidence_pages.contains(&page),
+                                dictionary_noise_pages.contains(&page),
+                                ocr_confidence_by_page.get(&page).and_then(|confidence| confidence.score),
+                                native,
+                                text,
+                            )
+                        }))
             {
                 accepted_replacements.remove(&page);
             }
@@ -2762,7 +2763,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             }
             if native_ink_owned_pages.contains(&page)
                 && ink_proof_layout_free
-                && page_count == 1
                 && native.is_some_and(|native| native.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER))
                 && accepted_replacements.contains_key(&page)
                 && !noise_verdict_pages.contains(&page)
@@ -4430,7 +4430,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     && whole_page_raster
                     && page_rotation_degrees == 0
                     && correction_degrees == 0
-                    && !base_ocr_config.auto_rotate
+                    && base_ocr_config.auto_rotate != Some(true)
                     && base_ocr_config.tesseract_config.is_none()
                     && base_ocr_config.effective_tesseract_language().as_slice() == ["eng"];
                 let task = crate::engine::seams::inherit_progress(async move {
@@ -4884,7 +4884,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 let (correction_degrees, upright_width, upright_height) = batch_upright_correction[offset];
                 #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
                 let normalize_recovered_table = xobject_document.is_some()
-                    && (orientation_retry.is_some() || base_ocr_config.auto_rotate)
+                    && (orientation_retry.is_some() || base_ocr_config.auto_rotate == Some(true))
                     && !ocr_result.tables.is_empty()
                     && super::document::resolved_ocr_correction_degrees(&ocr_result.metadata)
                         .is_some_and(|angle| angle != 0);
