@@ -34,3 +34,36 @@ fn adjacent_source_glyphs_do_not_gain_a_word_boundary_from_rounding() {
     spans.sort_by(|a, b| a.bbox.x.total_cmp(&b.bbox.x));
     assert_eq!(spans.iter().map(|span| span.text.as_str()).collect::<String>(), "sture");
 }
+
+/// Merge the spans of a page that shows `first` at x = 100 and then `second` one ULP before the end of `first`.
+/// The font has no /Widths array, so the span merge uses the fallback advance for both shows.
+fn merged_text_with_one_ulp_overlap(first: &str, second: &str) -> String {
+    let page = |second_x: f32| {
+        let stream = format!(
+            "BT /F1 12 Tf 1 0 0 1 100 500 Tm ({first}) Tj ET\nBT /F1 12 Tf 1 0 0 1 {second_x:?} 500 Tm ({second}) Tj ET\n"
+        );
+        PdfDocument::from_bytes(common::build_minimal_pdf_raw(
+            stream.as_bytes(),
+            b"/Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]",
+        ))
+        .expect("parse the generated page")
+    };
+    let apart = page(400.0).extract_spans(0).expect("extract the spans of the far page");
+    let first_span = apart.iter().find(|span| span.text == first).expect("first show stays its own span");
+    let first_end = first_span.bbox.x + first_span.bbox.width;
+    let second_x = first_end.next_down();
+    assert_eq!(format!("{second_x:?}").parse::<f32>().unwrap(), second_x, "the start survives printing");
+    let mut spans = page(second_x).extract_spans(0).expect("extract the spans of the touching page");
+    spans.sort_by(|a, b| a.bbox.x.total_cmp(&b.bbox.x));
+    spans.iter().map(|span| span.text.as_str()).collect()
+}
+
+#[test]
+fn a_word_show_touching_the_previous_word_keeps_its_space() {
+    assert_eq!(merged_text_with_one_ulp_overlap("hello", "world"), "hello world");
+}
+
+#[test]
+fn a_one_glyph_show_touching_the_previous_glyphs_gains_no_space() {
+    assert_eq!(merged_text_with_one_ulp_overlap("hell", "o"), "hello");
+}
