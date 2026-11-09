@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(models): Pin experimental candidate classification and captioning ONNX artifacts to owned Hugging Face revisions.** (#2336)
+  The crate-private `candidate_models` inventory (feature `onnx-runtime`) lists NLI-MiniLM2, SmolVLM-256M, SmolVLM-500M and Florence-2-base as unmodified, license-preserving copies in `xberg-io/classification-models` and `xberg-io/captioning-models`, each file pinned by immutable commit, SHA-256 and size. Every entry is marked experimental and unqualified: none is a default or a supported preset, and no captioning adapter consumes them yet. The NLI-MiniLM2 cross-encoder declares Apache-2.0, but its base model `nreimers/MiniLMv2-L6-H768-distilled-from-RoBERTa-Large` publishes no license, so the entry's license is recorded as unresolved; its fp32 graph exceeds the local NLI adapter's graph size cap, so only the quantized graphs are selectable.
+
 - **(benchmarks): Freeze experimental NLI accounting plans and validate completed reports.** (#2334)
   The standalone runner calls the existing local classifier with pinned inputs and artifacts; report validation checks accounting consistency and does not qualify a model or prove inference occurred.
 
@@ -76,8 +79,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(pdf): Pin the native PDF reduced-JPEG decoder to the version the OCR path measures, and drop the unreachable decoder output cap.** (#2740)
+  `xberg-native-pdf` now requires `jpeg-decoder` `=0.3.2`, as `xberg` does. The decoder output cap is gone: the decoder checked it only after allocating its buffers, so it never bounded an allocation, and it always equalled the size already checked after scaling. Rendering is unchanged.
+
 - **(ocr): Re-read a standalone picture that looks like a table as one uniform block and adopt that read.** (#2503, #2432)
-  When the sparse-text first pass finds no table but its words form a lattice (at least four rows, three columns separated by wide gaps, emitted row by row), the picture is read again with Tesseract PSM 6, whose dot-leader row recovery keeps each row on one line, and that read replaces the first. It is adopted as a caller-forced `psm = 6` would be, so a token PSM 6 misreads is kept; only an empty re-read, or one with under three quarters of the first read's letters and digits, is discarded. On the #2432 set standalone pictures keep 162 of 288 rows whole (108 before; explicit `psm = 6` reaches 167). Every picture the lattice test admits is OCR'd twice, whether or not the re-read is adopted (11 of 24 pictures on that set, adopted on 6); only default Tesseract OCR is affected. An explicit `psm`, vertical languages, any TIFF, a VLM fallback or pipeline, requested document structure, layout detection, a first read that already has a table, and scanned PDF pages keep the first read.
+  When the sparse-text first pass finds no table but its words form a lattice (at least four rows, three columns separated by wide gaps, emitted row by row), the picture is read again with Tesseract PSM 6, whose dot-leader row recovery keeps each row on one line, and that read replaces the first. It is adopted as a caller-forced `psm = 6` would be, so a token PSM 6 misreads is kept; only a re-read with no table, an empty one, or one with under three quarters of the first read's letters and digits is discarded. On the #2432 set standalone pictures keep 162 of 288 rows whole (108 before; explicit `psm = 6` reaches 167). Every picture the lattice test admits is OCR'd twice, whether or not the re-read is adopted (11 of 24 pictures on that set, adopted on 6); only default Tesseract OCR is affected. An explicit `psm`, vertical languages, any TIFF, a VLM fallback or pipeline, requested document structure, layout detection, a first read that already has a table, and scanned PDF pages keep the first read.
 
 - **(layout): Pin PP-DocLayoutV3 to PaddlePaddle's official ONNX.** (#2284)
   The `pp_doclayout_v3` artifact now comes from `xberg-io/layout-models` revision `a0c2d342` (130,502,049 bytes, sha256 `45bf7175...`), the official PaddlePaddle export re-hosted with attribution. Its outputs keep the adapter's contract (`fetch_name_0` F32[N,7], `fetch_name_1` I32[1], `fetch_name_2` I32[N,200,200]). Any V3 capture set recorded against the previous artifact is bound to a hash the code no longer pins and must be re-recorded.
@@ -167,6 +173,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **(deps): Upgrade `rmcp` to 3.9.0 to fix RUSTSEC-2026-0462.**
+  Before 3.9.0 the Streamable HTTP clients read response bodies without a size limit; the `mcp` server feature, its lockfiles and the binding lockfiles now resolve the fixed release.
+
 - **(pdf): Share stored JPEG payloads in whole-document OCR retries.**
   Bound the unique retained bytes for plain embedded JPEGs while preserving repeated paints. (#2339)
 
@@ -222,6 +231,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Adopt the block re-read of a standalone dot-leader table picture.** (#2503)
+  A re-read that finds no table is now also adopted when its word boxes show the column structure and at least four rows carry a dot leader, because the table check drops a leader table as prose while the block read keeps every row on one line. An 11 px plain leader picture keeps 11 of 12 rows by default instead of none; pictures without leaders, scans, part-page pictures and an explicit caller PSM are unchanged.
+- **(ocr): Keep each row of an adopted dot-leader table picture on its own line in Markdown.** (#2503)
+  The adopted block re-read has no table, so its rows were one paragraph whose line breaks Markdown renders as spaces, welding the table into a single line. The extractor now marks that paragraph and Markdown renders each row as its own paragraph; Plain output and re-reads that find a table are unchanged.
+- **(ocr): Keep the native page when OCR differs from it only by hanging underscores or non-text-block bookkeeping (Refs #2534).**
+  An underscore run that Tesseract reads just below a native line (the glyph hangs past the line box) now belongs to that line and must show glyph ink, and the count of words Tesseract placed in non-text blocks is run bookkeeping, as `word_count` is. Intel SDM pages 2383, 2486, 2645, 4420 and 4422 return their native text once instead of followed by an OCR copy.
+- **(bindings): Move `LayoutDetectionConfig.model` to the last field.** (#2717)
+  `model` had become the second field in #2702, shifting positional constructor arguments. It is now last, so the Java record constructor and the Swift `init` take their arguments in the pre-#2702 positions again, plus a trailing `model`. In the PHP and WASM `new` and the Python native constructor and `__init__` stub, `model` now follows `enableChartUnderstanding` but still precedes `confidenceThreshold`, `formulaModel` and `acceleration`, which stay one position later than before #2702, and in PHP `model` is now optional. The default model is unchanged (`rt_detr`).
+- **(ocr): Keep the first read of a picture when the table re-read finds no table.** (#2732)
+  A standalone picture that the lattice test admits is now read again as one uniform block, and that read is adopted only if it finds a table. An upside-down table page, which the second read does not turn into a table, keeps its first read instead of the second.
+- **(pdf): Apply graphics states recovered while visiting a Form XObject.** (#2752)
+  Failed graphics-state dictionaries and indirect dash or opacity operands are retried only after object-stream loading publishes recovered objects, so later page strokes use recovered settings without repeatedly decoding a permanently broken stream.
+
 - **(pdf): Resolve an indirect page `/ExtGState` once per resource scope in native path extraction.** (#2744)
   Each distinct `gs` name used to clone the whole dictionary, so thousands of names cost quadratic allocations; the container is now loaded once and borrowed, and returning from a Form XObject restores the page's parsed states instead of discarding them.
 
@@ -231,8 +253,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Remove a painted orphan glyph beside a table whatever the glyph (#2616).**
   The standalone orphan that a painted table cell already carries was deleted only when it was an ASCII digit, so a "%", "-", currency sign or non-Latin digit stayed as a duplicate paragraph. It is now deleted when it is the single remaining source glyph of a painted overhang and the exact plain source paragraph; two competing glyphs, a multi-character word and blank text are still refused. A symbol candidate beside a digit candidate now counts as competing and is refused, where the symbol used to be ignored.
 
-- **(ocr): Budget the CCITT preview of an invisible-layer probe per page.** (#2694)
-  Each audited page may spend the per-page work derived from `max_iterations`, and all pages together at most six such budgets (960 million work units at the default, roughly 1-5 s of decode), so a multi-page scan with a junk layer on every page recovers every page while a hostile file still gets bounded decode work. Before, one budget shared by the document let a 300 dpi scan recover only its first page or two.
+- **(ocr): Budget the CCITT preview of an invisible-layer probe per page.** (#2694, #2730)
+  Each audited page may spend the per-page work derived from `max_iterations`, and all pages together at most six such budgets (960 million work units at the default, roughly 3 to 4 s of decode on a release build), so a multi-page scan with a junk layer on every page recovers its pages up to that ceiling (35 pages of 300 dpi) while a hostile file still gets bounded decode work. Before, one budget shared by the document let a 300 dpi scan recover only its first page or two.
 
 - **(ocr): Limit the glued-cell veto's leader exemption to the gap at the leader (#2704).**
   A native token that held a leader run (`PMC0___PMC1`) was exempt from the veto as a whole, and a read `_____` or `-----` closed a gap even when it overlapped the glued word; now only the gap at the run is exempt, a read leader must lie inside the gap, and `⋯` counts as a leader and `‥` counts toward one.
@@ -349,6 +371,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Words over rasters, outlines, rules, partial fills or overpaint keep their OCR alternative.
   The proof also runs on the direct Tesseract route used when PaddleOCR is not compiled in.
   A native word that no glyph paint shows (under a fill, clipped or invisible) or a native layer that the read contradicts at more than 15% of its words keeps the OCR page.
+
+- **(pdf): Keep certified native text on an automatically selected OCR page in a mixed document.** (#2533)
+  Pages with unmapped glyphs now reach the same glyph-ink proof as a one-page document, so an OCR read that misses mapped source text does not replace it. Explicitly forced OCR and pages without that proof keep their existing behavior.
 
 - **(pdf): Keep a one-page native text layer whose lost glyphs the automatic OCR read does not recover.** (#2533)
   The ink-ownership proof now accepts a layer with glyphs that have no Unicode value when each sits in a located native word and no kind of lost glyph (by font, size and advance) of three places or more is read as letters or digits at half its places, tolerates read words only on flat blank paper between native words, requires glyph ink in every located lost glyph and native word, and lets Markdown block structure yield to the native page. A read that sees a kind of three or more lost glyphs as text at half its places, or any word over a raster, outline, rule or fill, keeps the OCR page.

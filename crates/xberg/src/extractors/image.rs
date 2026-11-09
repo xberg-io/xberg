@@ -3096,9 +3096,9 @@ impl ImageExtractor {
     /// A standalone picture is read with the sparse-text default first. When that pass finds no
     /// table but its word boxes share column edges across rows, and the caller chose no PSM, the
     /// picture is read once more as one uniform block (PSM 6), whose row recovery keeps
-    /// dot-leader table rows whole (#2503, #2432). The second read is adopted as is, like a
-    /// caller-forced PSM 6, unless it is empty or kept too few letters and digits; see
-    /// [`image_table_reread::second_read_is_usable`].
+    /// dot-leader table rows whole (#2503, #2432). The second read is adopted only if it finds a
+    /// table and keeps enough letters and digits; see [`image_table_reread::second_read_is_usable`].
+    /// A cancelled second read ends the extraction.
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
     async fn extract_with_ocr(
         &self,
@@ -3136,9 +3136,12 @@ impl ImageExtractor {
         };
         tracing::debug!("standalone table re-read: reading the picture again as one block");
         match self.extract_with_ocr_pass(content, mime_type, &single_block).await {
-            Ok(second) => match image_table_reread::second_read_is_usable(&first, &second) {
+            Ok(mut second) => match image_table_reread::second_read_is_usable(&first, &second) {
                 Ok(()) => {
                     tracing::debug!("standalone table re-read adopted");
+                    if second.tables.is_empty() {
+                        mark_leader_rows(&mut second);
+                    }
                     Ok(second)
                 }
                 Err(reason) => {
@@ -4022,6 +4025,26 @@ fn build_image_internal_document(
         push_image_placeholder(&mut builder);
     }
     builder.build()
+}
+
+/// Marks the paragraphs of an adopted leader-row read as table rows. Markdown renders a
+/// paragraph's line breaks as spaces, which would weld every row of a table with no cell
+/// structure into one line; the marker has Markdown give each row its own paragraph while
+/// Plain keeps the element's line breaks (#2503).
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn mark_leader_rows(doc: &mut InternalDocument) {
+    use crate::types::internal::{ElementKind, MARKDOWN_ROW_LINES_ATTRIBUTE};
+
+    for element in doc
+        .elements
+        .iter_mut()
+        .filter(|element| element.kind == ElementKind::Paragraph && element.text.contains('\n'))
+    {
+        element
+            .attributes
+            .get_or_insert_with(Default::default)
+            .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(), String::new());
+    }
 }
 
 fn split_ocr_paragraphs(text: &str) -> Vec<String> {
@@ -5140,6 +5163,43 @@ mod tests {
             ..Default::default()
         });
         assert!(single_block_table_config(&explicit, "image/png", &first).is_none());
+    }
+
+    /// A cancelled second read ends the extraction, while any other failure of it keeps the first
+    /// read. The first read is a table page, so only the second read's own outcome differs.
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[tokio::test]
+    async fn a_cancelled_table_reread_ends_the_extraction_but_a_failed_one_keeps_the_first_read() {
+        let not_an_image = b"not an image";
+
+        let failed = ImageExtractor::new()
+            .reread_standalone_table(
+                not_an_image,
+                "image/png",
+                &ExtractionConfig::default(),
+                image_table_reread::sample_table_document(),
+            )
+            .await;
+        assert!(failed.is_ok(), "a failed second read keeps the first read: {failed:?}");
+
+        let token = crate::cancellation::CancellationToken::new();
+        token.cancel();
+        let cancelled_config = ExtractionConfig {
+            cancel_token: Some(token),
+            ..Default::default()
+        };
+        let cancelled = ImageExtractor::new()
+            .reread_standalone_table(
+                not_an_image,
+                "image/png",
+                &cancelled_config,
+                image_table_reread::sample_table_document(),
+            )
+            .await;
+        assert!(
+            matches!(cancelled, Err(crate::XbergError::Cancelled)),
+            "a cancelled second read must stop the extraction: {cancelled:?}"
+        );
     }
 
     #[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]

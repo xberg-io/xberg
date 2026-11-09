@@ -392,10 +392,16 @@ impl PdfDocument {
         extractor: &mut crate::extractors::paths::PathExtractor,
         stack: &mut crate::extractors::paths::PathGraphicsStateStack,
     ) {
+        extractor.prepare_path_extgstates(name, self.object_recovery_epoch.load(Ordering::Acquire), |reference| {
+            self.path_reference_available(reference)
+        });
         if extractor.apply_cached_path_extgstate(name, stack.current_mut()) {
             return;
         }
-        extractor.extgstate_container(|reference| self.load_object(reference).ok());
+        extractor.extgstate_container(
+            |reference| self.path_reference_available(reference),
+            |reference| self.load_object(reference),
+        );
         let parsed = self.resolve_path_extgstate(name, extractor);
         extractor.cache_path_extgstate(name, parsed);
         extractor.apply_cached_path_extgstate(name, stack.current_mut());
@@ -413,10 +419,36 @@ impl PdfDocument {
             Some(entry) if entry.as_reference().is_some() => extractor.loaded_extgstate_container(),
             other => other,
         };
+        let resolver = PathStateResolver { doc: self, extractor };
         states
             .and_then(|states| states.as_dict()?.get(name))
-            .and_then(|state| crate::rendering::ext_gstate::parse_ext_g_state_inner(state, self).ok())
+            .and_then(|state| crate::rendering::ext_gstate::parse_ext_g_state_inner(state, &resolver).ok())
             .unwrap_or_default()
+    }
+
+    fn path_reference_available(&self, reference: crate::object::ObjectRef) -> bool {
+        if self
+            .object_cache
+            .lock_or_recover()
+            .get(&reference)
+            .is_some_and(|object| !matches!(object, Object::Null))
+        {
+            return true;
+        }
+        let Some(entry) = self.xref.get(reference.id) else {
+            return false;
+        };
+        if entry.entry_type != crate::xref::XRefEntryType::Compressed || reference.generation != 0 {
+            return false;
+        }
+        let Ok(stream) = u32::try_from(entry.offset) else {
+            return false;
+        };
+        self.object_stream_cache
+            .lock_or_recover()
+            .get(&crate::object::ObjectRef::new(stream, 0))
+            .and_then(|objects| objects.get(&reference.id))
+            .is_some_and(|object| !matches!(object, Object::Null))
     }
 
     /// Dereference one level of indirection, loading the target object;
@@ -828,5 +860,30 @@ impl PdfDocument {
             .into_iter()
             .filter(|path| path.rendered_bbox().intersects(&region))
             .collect())
+    }
+}
+
+/// Lets the shared ExtGState parser load references through the extractor's failure ledger:
+/// a failed load is remembered, and retried only after recovery publishes the object. ~keep
+struct PathStateResolver<'a> {
+    doc: &'a PdfDocument,
+    extractor: &'a crate::extractors::paths::PathExtractor,
+}
+
+impl crate::rendering::ext_gstate::ObjectResolver for PathStateResolver<'_> {
+    fn resolve_object(&self, obj: &Object) -> Result<Object> {
+        let Some(reference) = obj.as_reference() else {
+            return Ok(obj.clone());
+        };
+        self.extractor
+            .load_path_object(
+                reference,
+                |reference| self.doc.path_reference_available(reference),
+                |reference| self.doc.load_object(reference),
+            )
+            .ok_or_else(|| Error::ParseError {
+                offset: 0,
+                reason: "ExtGState reference could not be loaded".to_string(),
+            })
     }
 }

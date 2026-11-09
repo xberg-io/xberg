@@ -4,8 +4,9 @@
 //! Admission is geometry only: the first read's word boxes must form a lattice table. Four or
 //! more rows share a few column edges with wide gaps between at least three columns, the words
 //! come out row by row, and the page is not a lattice of dozens of edges. Nothing depends on what
-//! a word says. The second read is then adopted as a caller-forced PSM 6 would be, so a token it
-//! misreads is kept; only a read that failed outright is discarded (see [`second_read_is_usable`]).
+//! a word says. The second read is adopted only if it finds a table, so a page that is not a
+//! readable table keeps its first read. A token it misreads is kept; a read that failed outright
+//! is discarded (see [`second_read_is_usable`]).
 
 use crate::types::internal::InternalDocument;
 use crate::types::{OcrBoundingGeometry, OcrElementLevel};
@@ -30,6 +31,7 @@ struct WordBox {
     right: u32,
     center: u32,
     height: u32,
+    leader: bool,
 }
 
 fn word_boxes(doc: &InternalDocument) -> Option<Vec<WordBox>> {
@@ -48,6 +50,7 @@ fn word_boxes(doc: &InternalDocument) -> Option<Vec<WordBox>> {
                 right: left.saturating_add(width),
                 center: top.saturating_add(height / 2),
                 height,
+                leader: is_leader(&element.text),
             }),
             _ => None,
         })
@@ -122,15 +125,15 @@ fn wide_gaps(row: &[WordBox], tolerance: u32) -> usize {
 /// Rows with words on at least [`MIN_COLUMNS_PER_ROW`] distinct shared column edges and a wide
 /// gap between each pair of columns, and how many shared edges the page has. Prose shares only
 /// its left margin, and a justified two-column page has one gutter, not a gap per column.
-fn column_structure(doc: &InternalDocument) -> (usize, usize) {
+fn column_structure(doc: &InternalDocument) -> (Vec<Vec<WordBox>>, usize) {
     let Some(words) = word_boxes(doc) else {
-        return (0, 0);
+        return (Vec::new(), 0);
     };
     let tolerance = median_height(&words) * TOLERANCE_NUMERATOR / TOLERANCE_DENOMINATOR;
     let rows = rows(&words, tolerance);
     let edges = column_edges(&rows, tolerance);
     let on_columns = rows
-        .iter()
+        .into_iter()
         .filter(|row| {
             let mut hit: Vec<usize> = row
                 .iter()
@@ -145,7 +148,7 @@ fn column_structure(doc: &InternalDocument) -> (usize, usize) {
             hit.dedup();
             hit.len() >= MIN_COLUMNS_PER_ROW && wide_gaps(row, tolerance) >= MIN_COLUMNS_PER_ROW - 1
         })
-        .count();
+        .collect();
     (on_columns, edges.len())
 }
 
@@ -186,6 +189,7 @@ fn emits_row_by_row(words: &[WordBox], tolerance: u32) -> bool {
 /// dozens of edges is a grid of cells, not a table. Every refusal is logged with the counts.
 pub(super) fn shows_column_structure(doc: &InternalDocument) -> bool {
     let (rows, edges) = column_structure(doc);
+    let rows = rows.len();
     if edges > MAX_SHARED_EDGES {
         tracing::debug!(
             rows,
@@ -225,11 +229,41 @@ fn alphanumeric_count(doc: &InternalDocument) -> usize {
         .sum()
 }
 
+/// Dots in a run a word must hold to count as a leader.
+const MIN_LEADER_DOTS: usize = 5;
+/// Rows that must carry a leader for a block read with no table to be taken as a dot-leader table.
+const MIN_LEADER_ROWS: usize = 4;
+
+/// A word that is nothing but a run of dots: the leader a block read keeps between a label and its
+/// values.
+fn is_leader(text: &str) -> bool {
+    let text = text.trim();
+    text.chars().count() >= MIN_LEADER_DOTS && text.chars().all(|c| c == '.')
+}
+
+/// Text rows that take part in the column structure and hold at least one leader word.
+fn leader_rows(doc: &InternalDocument) -> usize {
+    column_structure(doc)
+        .0
+        .iter()
+        .filter(|row| row.iter().any(|word| word.leader))
+        .count()
+}
+
+/// A block read that found no table but whose rows are dot-leader rows on shared column edges: the
+/// table check drops a dot-leader table as prose, and the row recovery keeps each row on one line.
+/// The leader rows are the column rows themselves, so leaders elsewhere on the page do not count.
+fn reads_leader_rows(doc: &InternalDocument) -> bool {
+    leader_rows(doc) >= MIN_LEADER_ROWS && shows_column_structure(doc)
+}
+
 /// A second read with no letters or digits in its word elements, or with less than three quarters
-/// of the first read's, failed to read the picture; any other second read is adopted as is, like a
-/// caller-forced PSM 6. A first read with none is replaced by any second read that has some. A
-/// second read with more is not capped: a block read legitimately recovers text the sparse read
-/// missed, and the guard only separates a failed read from a read.
+/// of the first read's, failed to read the picture. A second read with no table did not confirm the
+/// table the geometry showed, so the first read stands, unless its words are dot-leader rows (see
+/// [`reads_leader_rows`]). Any other second read is adopted as is. A
+/// first read with no letters or digits is replaced by any second read that has some and a table. A
+/// second read with more letters is not capped: a block read legitimately recovers text the sparse
+/// read missed, and the guard only separates a failed read from a read.
 pub(super) fn second_read_is_usable(first: &InternalDocument, second: &InternalDocument) -> Result<(), &'static str> {
     let (before, after) = (alphanumeric_count(first), alphanumeric_count(second));
     tracing::debug!(before, after, "standalone table re-read: letters and digits per read");
@@ -238,6 +272,9 @@ pub(super) fn second_read_is_usable(first: &InternalDocument, second: &InternalD
     }
     if after * MIN_RETAINED.1 < before * MIN_RETAINED.0 {
         return Err("the second read kept too few letters and digits");
+    }
+    if second.tables.is_empty() && !reads_leader_rows(second) {
+        return Err("the second read found no table");
     }
     Ok(())
 }
@@ -278,6 +315,13 @@ mod tests {
         }
     }
 
+    /// A read that found a table among its words.
+    fn doc_with_table(elements: Vec<OcrElement>) -> InternalDocument {
+        let mut read = doc(elements);
+        read.tables.push(Default::default());
+        read
+    }
+
     fn table_row(row: u32) -> [OcrElement; 4] {
         let top = 10 + row * 40;
         [
@@ -311,7 +355,7 @@ mod tests {
     #[test]
     fn aligned_columns_show_a_column_structure() {
         let table = doc(table(8));
-        assert_eq!(column_structure(&table).0, 8);
+        assert_eq!(column_structure(&table).0.len(), 8);
         assert!(shows_column_structure(&table));
     }
 
@@ -326,7 +370,7 @@ mod tests {
     #[test]
     fn ragged_prose_shows_no_column_structure() {
         let prose = doc(prose(10));
-        assert!(!shows_column_structure(&prose), "{:?}", column_structure(&prose));
+        assert!(!shows_column_structure(&prose), "{:?}", column_structure(&prose).1);
     }
 
     fn two_columns(row_major: bool) -> Vec<OcrElement> {
@@ -385,13 +429,13 @@ mod tests {
         let mut changed = table(6);
         changed[1].text = "17".to_string();
         changed[3].text = "9.10".to_string();
-        assert_eq!(second_read_is_usable(&first, &doc(changed)), Ok(()));
+        assert_eq!(second_read_is_usable(&first, &doc_with_table(changed)), Ok(()));
     }
 
     fn reads_of(first: &str, second: &str) -> Result<(), &'static str> {
         second_read_is_usable(
             &doc(vec![element(first, 0, 0, 10)]),
-            &doc(vec![element(second, 0, 0, 10)]),
+            &doc_with_table(vec![element(second, 0, 0, 10)]),
         )
     }
 
@@ -404,6 +448,131 @@ mod tests {
         let mut lines_only = element("abcd", 0, 0, 10);
         lines_only.level = OcrElementLevel::Line;
         assert_eq!(second_read_is_usable(&first, &doc(vec![lines_only])), Err(reason));
+    }
+
+    #[test]
+    fn a_re_read_without_a_table_is_refused_but_the_same_read_with_one_is_adopted() {
+        let first = doc(table(6));
+        let reason = "the second read found no table";
+        assert_eq!(second_read_is_usable(&first, &doc(table(6))), Err(reason));
+        assert_eq!(second_read_is_usable(&first, &doc_with_table(table(6))), Ok(()));
+    }
+
+    /// `rows` table rows, the first `with_leader` of which carry `leader` between label and values.
+    fn leader_table(rows: usize, with_leader: usize, leader: &str) -> Vec<OcrElement> {
+        (0..rows as u32)
+            .flat_map(|row| {
+                let top = 10 + row * 40;
+                let mut cells = vec![
+                    element("Label", 10, top, 120),
+                    element("12", 300, top, 30),
+                    element("345,678", 420, top, 90),
+                    element("(9.10)", 600, top, 70),
+                ];
+                if (row as usize) < with_leader {
+                    cells.push(element(leader, 140, top, 140));
+                }
+                cells
+            })
+            .collect()
+    }
+
+    const NO_TABLE: Result<(), &str> = Err("the second read found no table");
+
+    fn leader_read(rows: usize, with_leader: usize, leader: &str) -> Result<(), &'static str> {
+        second_read_is_usable(&doc(table(rows)), &doc(leader_table(rows, with_leader, leader)))
+    }
+
+    #[test]
+    fn a_re_read_without_a_table_is_adopted_when_its_rows_carry_leaders() {
+        assert_eq!(leader_read(6, 6, "........."), Ok(()));
+        assert_eq!(leader_read(6, 6, "ee eae"), NO_TABLE);
+    }
+
+    #[test]
+    fn exactly_four_leader_rows_are_adopted_and_three_are_not() {
+        assert_eq!(leader_read(4, 4, "....."), Ok(()));
+        assert_eq!(leader_read(6, 4, "....."), Ok(()));
+        assert_eq!(leader_read(6, 3, "....."), NO_TABLE, "3 of 6 rows is under the floor");
+        assert_eq!(leader_read(4, 3, "....."), NO_TABLE);
+    }
+
+    #[test]
+    fn a_leader_is_at_least_five_dots() {
+        assert_eq!(leader_read(4, 4, "....."), Ok(()));
+        assert_eq!(leader_read(4, 4, "...."), NO_TABLE);
+        assert_eq!(leader_read(6, 6, "......"), Ok(()));
+    }
+
+    #[test]
+    fn several_leaders_in_one_row_count_that_row_once() {
+        let mut read = leader_table(6, 3, ".....");
+        read.extend((0..3).map(|row| element(".....", 200, 10 + row * 40, 60)));
+        assert_eq!(second_read_is_usable(&doc(table(6)), &doc(read)), NO_TABLE);
+    }
+
+    #[test]
+    fn four_leader_words_in_one_row_are_one_leader_row() {
+        let mut read = table(6);
+        for _ in 0..4 {
+            read.insert(4, element(".........", 140, 10, 140));
+        }
+        assert!(shows_column_structure(&doc(read.clone())));
+        assert_eq!(leader_rows(&doc(read.clone())), 1);
+        assert_eq!(second_read_is_usable(&doc(table(6)), &doc(read)), NO_TABLE);
+    }
+
+    #[test]
+    fn leaders_outside_the_column_rows_do_not_make_a_leader_table() {
+        let mut read = table(8);
+        read.extend((0..4).map(|row| element(".........", 900, 410 + row * 40, 140)));
+        let read = doc(read);
+        assert!(shows_column_structure(&read));
+        assert_eq!(leader_rows(&read), 0);
+        assert_eq!(second_read_is_usable(&doc(table(8)), &read), NO_TABLE);
+    }
+
+    #[test]
+    fn leader_rows_with_too_few_letters_are_still_refused() {
+        let mut first = table(6);
+        first.push(element(
+            "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz",
+            10,
+            400,
+            300,
+        ));
+        assert_eq!(
+            second_read_is_usable(&doc(first), &doc(leader_table(6, 6, "........."))),
+            Err("the second read kept too few letters and digits")
+        );
+    }
+
+    #[test]
+    fn a_table_of_contents_is_not_a_leader_table() {
+        let toc: Vec<_> = (0..8)
+            .flat_map(|row| {
+                let top = 10 + row * 40;
+                [
+                    element("Chapter", 10, top, 160),
+                    element(".............", 180, top, 400),
+                    element("12", 600, top, 30),
+                ]
+            })
+            .collect();
+        assert_eq!(
+            leader_rows(&doc(toc.clone())),
+            0,
+            "no title/leader/page line is a column row"
+        );
+        assert_eq!(second_read_is_usable(&doc(toc.clone()), &doc(toc)), NO_TABLE);
+    }
+
+    #[test]
+    fn leaders_without_column_structure_are_not_a_table() {
+        let first = doc(vec![element("abcd", 10, 400, 30)]);
+        let mut leaders: Vec<_> = (0..6).map(|row| element(".........", 10, 10 + row * 40, 140)).collect();
+        leaders.push(element("abcd", 10, 400, 30));
+        assert_eq!(second_read_is_usable(&first, &doc(leaders)), NO_TABLE);
     }
 
     #[test]
@@ -447,6 +616,6 @@ mod tests {
         assert!(second_read_is_usable(&first, &doc(lost_label)).is_err());
         let mut lost_count = table(6);
         lost_count.retain(|word| word.text != "12");
-        assert_eq!(second_read_is_usable(&first, &doc(lost_count)), Ok(()));
+        assert_eq!(second_read_is_usable(&first, &doc_with_table(lost_count)), Ok(()));
     }
 }

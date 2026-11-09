@@ -11921,12 +11921,6 @@ class LayoutDetectionConfig {
   /// cannot help.
   final LayoutStrategy strategy;
 
-  /// Layout detection model.
-  ///
-  /// Defaults to [`LayoutDetectionModel::RtDetr`]. [`LayoutDetectionModel::PpDocLayoutV3`]
-  /// is experimental, ORT-only and bbox-only.
-  final LayoutDetectionModel model;
-
   /// Confidence threshold override (None = use model default).
   final double? confidenceThreshold;
 
@@ -11969,9 +11963,14 @@ class LayoutDetectionConfig {
   /// opt-in and has no effect on standard text/table extraction scores.
   final bool enableChartUnderstanding;
 
+  /// Layout detection model.
+  ///
+  /// Defaults to [`LayoutDetectionModel::RtDetr`]. [`LayoutDetectionModel::PpDocLayoutV3`]
+  /// is experimental, ORT-only and bbox-only.
+  final LayoutDetectionModel model;
+
   const LayoutDetectionConfig({
     required this.strategy,
-    required this.model,
     this.confidenceThreshold,
     required this.applyHeuristics,
     required this.tableModel,
@@ -11979,19 +11978,20 @@ class LayoutDetectionConfig {
     required this.tableOverlapPreference,
     this.acceleration,
     required this.enableChartUnderstanding,
+    required this.model,
   });
 
   @override
   int get hashCode =>
       strategy.hashCode ^
-      model.hashCode ^
       confidenceThreshold.hashCode ^
       applyHeuristics.hashCode ^
       tableModel.hashCode ^
       formulaModel.hashCode ^
       tableOverlapPreference.hashCode ^
       acceleration.hashCode ^
-      enableChartUnderstanding.hashCode;
+      enableChartUnderstanding.hashCode ^
+      model.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -11999,14 +11999,14 @@ class LayoutDetectionConfig {
       other is LayoutDetectionConfig &&
           runtimeType == other.runtimeType &&
           strategy == other.strategy &&
-          model == other.model &&
           confidenceThreshold == other.confidenceThreshold &&
           applyHeuristics == other.applyHeuristics &&
           tableModel == other.tableModel &&
           formulaModel == other.formulaModel &&
           tableOverlapPreference == other.tableOverlapPreference &&
           acceleration == other.acceleration &&
-          enableChartUnderstanding == other.enableChartUnderstanding;
+          enableChartUnderstanding == other.enableChartUnderstanding &&
+          model == other.model;
 }
 
 /// Which layout detection model runs on each page.

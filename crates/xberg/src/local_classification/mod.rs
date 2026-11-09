@@ -54,3 +54,6 @@ mod schema_tests;
 
 #[cfg(all(test, feature = "classification-onnx"))]
 mod artifacts_tests;
+
+#[cfg(all(test, feature = "classification-onnx"))]
+mod candidate_tests;

@@ -1148,6 +1148,18 @@ fn build_comrak_ast_with_table_mode<'a>(
                     tracing::trace!(index = orig_idx, "skipping empty paragraph");
                     continue;
                 }
+                if elem_annotations.is_empty()
+                    && elem_attributes.is_some_and(|attributes| {
+                        attributes.contains_key(crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE)
+                    })
+                {
+                    for line in elem_text.lines().map(str::trim).filter(|line| !line.is_empty()) {
+                        let para = mk(arena, NodeValue::Paragraph);
+                        build_inlines(arena, para, line, &[]);
+                        parent.append(para);
+                    }
+                    continue;
+                }
                 let para = mk(arena, NodeValue::Paragraph);
                 build_inlines(arena, para, elem_text, elem_annotations);
                 parent.append(para);

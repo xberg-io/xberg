@@ -10,6 +10,19 @@ use crate::document::PdfDocument;
 use crate::error::Result;
 use crate::object::Object;
 
+/// How the parser follows a reference. The renderers resolve through the document; path
+/// extraction resolves through its failure ledger, so a failed load is recorded and not
+/// repeated until recovery publishes the object.
+pub(crate) trait ObjectResolver {
+    fn resolve_object(&self, obj: &Object) -> Result<Object>;
+}
+
+impl ObjectResolver for PdfDocument {
+    fn resolve_object(&self, obj: &Object) -> Result<Object> {
+        PdfDocument::resolve_object(self, obj)
+    }
+}
+
 /// A parsed `/SMask` value from an ExtGState dict (§11.4.7 / Table 144).
 /// `None` corresponds to the spec `/None` value (clear the current mask);
 /// `Form` carries the Form XObject reference plus optional backdrop and
@@ -85,7 +98,7 @@ impl ParsedExtGState {
 /// Parse the fields we need from an `ExtGState` *entry* (the inner dict, not
 /// the resource dict that holds it). Resolves `state_obj` once if it is a
 /// reference.
-pub(crate) fn parse_ext_g_state_inner(state_obj: &Object, doc: &PdfDocument) -> Result<ParsedExtGState> {
+pub(crate) fn parse_ext_g_state_inner(state_obj: &Object, doc: &impl ObjectResolver) -> Result<ParsedExtGState> {
     let mut out = ParsedExtGState::default();
     let state_resolved = doc.resolve_object(state_obj)?;
     let state_dict = match state_resolved.as_dict() {
@@ -150,7 +163,7 @@ pub(crate) fn parse_ext_g_state_inner(state_obj: &Object, doc: &PdfDocument) -> 
 }
 
 /// Read a number through references. Non-finite values are rejected.
-fn finite_number(obj: &Object, doc: &PdfDocument) -> Option<f32> {
+fn finite_number(obj: &Object, doc: &impl ObjectResolver) -> Option<f32> {
     let obj = doc.resolve_object(obj).ok()?;
     let n = obj.as_real().or_else(|| obj.as_integer().map(|i| i as f64))? as f32;
     n.is_finite().then_some(n)
@@ -159,7 +172,7 @@ fn finite_number(obj: &Object, doc: &PdfDocument) -> Option<f32> {
 /// Classify an ExtGState `/D` value: `[dashArray phase]` with non-negative
 /// lengths. Any malformed part rejects the whole pattern, so the caller keeps
 /// the dash it already has. ~keep
-fn parse_dash(d: &Object, doc: &PdfDocument) -> Option<(Vec<f32>, f32)> {
+fn parse_dash(d: &Object, doc: &impl ObjectResolver) -> Option<(Vec<f32>, f32)> {
     let [array, phase] = d.as_array()?.as_slice() else {
         return None;
     };
@@ -184,7 +197,7 @@ fn parse_dash(d: &Object, doc: &PdfDocument) -> Option<(Vec<f32>, f32)> {
 ///
 /// Array elements may themselves be indirect refs (§7.3.10), so
 /// each is resolved before pattern-matching its name. ~keep
-fn parse_blend_mode(bm: &Object, doc: &PdfDocument) -> String {
+fn parse_blend_mode(bm: &Object, doc: &impl ObjectResolver) -> String {
     match bm {
         Object::Name(n) => n.clone(),
         Object::Array(arr) => arr
@@ -200,7 +213,7 @@ fn parse_blend_mode(bm: &Object, doc: &PdfDocument) -> String {
 /// Classify an ExtGState `/SMask` value (§11.4.7 / Table 144). Returns `None`
 /// when the value is neither `/None` nor a soft-mask dict carrying a `/G`
 /// Form-XObject reference, which leaves the current mask untouched.
-fn parse_smask(smask_obj: &Object, doc: &PdfDocument) -> Option<SoftMaskValue> {
+fn parse_smask(smask_obj: &Object, doc: &impl ObjectResolver) -> Option<SoftMaskValue> {
     // Resolve through references before classifying. ~keep
     let resolved = doc.resolve_object(smask_obj).unwrap_or(smask_obj.clone());
     let mask_dict = match &resolved {
