@@ -2125,12 +2125,15 @@ impl XYCutStrategy {
             return None;
         }
 
-        // Two x-sides are columns only when they share rows. A block that sits wholly above the
-        // other side (a letterhead at the right of a letter's top, above the address that starts
-        // below it) leaves a clean x-gap too, and cutting there reads the lower block before the
-        // upper one. Refusing the cut lets the row split, or the top-down sort, read the stacked
-        // blocks in page order. The decision is the y-geometry, not a content class. ~keep
-        if !Self::sides_share_rows(all_spans, &left, &right) {
+        // A column cut reads the left side before the right side. When the right side sits
+        // wholly above the left side (a letterhead at the right of a letter's top, above the
+        // address that starts below it), the sides share no rows and the cut would read the
+        // lower block before the upper one. Refusing the cut lets the row split read the two
+        // blocks in page order. A left side that sits wholly above the right side (a figure
+        // caption beside the body column that starts below it, GH#1763) keeps its cut: there
+        // the cut and the page order agree. The decision is the y-geometry, not a content
+        // class. ~keep
+        if Self::right_side_sits_above_left_side(all_spans, &left, &right) {
             return None;
         }
 
@@ -2199,12 +2202,13 @@ impl XYCutStrategy {
         Some((left, right))
     }
 
-    /// True when the y-extents of the two sides of a column cut overlap. Two sides that touch
-    /// or leave a gap share no rows: one sits wholly above the other. ~keep
-    fn sides_share_rows(all_spans: &[TextSpan], left: &[usize], right: &[usize]) -> bool {
+    /// True when the lowest y of the right side is at or above the highest y of the left side
+    /// (page space, y up): the two sides share no rows and the right side is the upper block.
+    /// `Rect::top` is the lower y edge and `Rect::bottom` the upper one. ~keep
+    fn right_side_sits_above_left_side(all_spans: &[TextSpan], left: &[usize], right: &[usize]) -> bool {
         let left_box = union_bboxes(all_spans, left);
         let right_box = union_bboxes(all_spans, right);
-        left_box.bottom().min(right_box.bottom()) > left_box.top().max(right_box.top())
+        right_box.top() >= left_box.bottom()
     }
 
     /// True when the cut at `split_x` would separate short label/value pairs that share a
@@ -5089,26 +5093,63 @@ mod tests {
         }
     }
 
-    /// A letter top: a five-line block at the right (x 212 to 482, 14 pt leading) above or
-    /// beside an eight-line block at the left (x 69 to 159, y 370 to 590). `right_bottom_y` is
-    /// the lower edge of the right block, so a value above 590 stacks it over the left block.
-    /// The right block's spans come first. The texts are short, so the region classifies as a
-    /// table and neither prose detector runs: the spans reach the column cut directly. ~keep
-    fn letter_top(right_bottom_y: f32) -> Vec<TextSpan> {
-        let mut spans: Vec<TextSpan> = (0..5)
-            .map(|k| make_span_text(212.0, right_bottom_y + k as f32 * 14.0, 270.0, 10.0, "lh", 12.0))
+    /// The twenty spans of a letter's top at their measured widths, with neutral words of the
+    /// measured lengths: a fifteen-span left block (date, address, "Sent via e-mail", "Re:",
+    /// salutation; x 69 to 339, y 318 to 580) and a five-line letterhead at the right (x 212
+    /// to 482, y 596 to 669). The "Re:" line reaches x 339, so no empty x-valley separates the
+    /// sides: the split falls between the two density peaks and the lines go to the side that
+    /// holds most of their ink. `right_shift_down` lowers the letterhead; at 0 it sits wholly
+    /// above the left block, at 240 it shares the left block's rows. ~keep
+    fn letter_top(right_shift_down: f32) -> Vec<TextSpan> {
+        let left: [(f32, f32, f32, f32, &str); 15] = [
+            (69.38, 569.89, 80.16, 10.30, "Weekday 10, 2000 "),
+            (69.42, 526.68, 155.20, 10.30, "Anna Lastnames, Executive Director "),
+            (69.44, 505.09, 53.08, 10.30, "Northlands "),
+            (120.91, 505.09, 130.03, 10.30, "Watershed Resources Board "),
+            (69.84, 483.13, 54.82, 10.30, "101 B 1000 "),
+            (123.80, 483.13, 23.59, 10.30, "10th "),
+            (146.14, 483.13, 10.01, 10.30, "B "),
+            (154.06, 483.13, 30.74, 10.30, "venue "),
+            (69.46, 469.81, 78.70, 10.30, "Springfield, ST "),
+            (146.86, 469.81, 45.44, 10.30, "A1B 2C3 "),
+            (69.42, 447.85, 123.61, 10.30, "E-mail: person@example.org "),
+            (68.74, 404.65, 69.57, 11.30, "Sent via e-mail "),
+            (
+                68.71,
+                361.09,
+                270.03,
+                10.60,
+                "Re: 2021-2024 Plan Revised Joint Management Proposal ",
+            ),
+            (68.71, 317.89, 25.86, 10.30, "Dear "),
+            (92.82, 317.89, 68.49, 10.30, "Anna Lastnames, "),
+        ];
+        let right: [(f32, f32, f32, f32, &str); 5] = [
+            (212.41, 651.97, 269.61, 16.60, "Harbor Watershed Resource Council "),
+            (277.35, 636.85, 56.86, 10.00, "P.O Box 100 "),
+            (261.85, 623.53, 85.46, 10.00, "Harbor, ST A0B0C0 "),
+            (215.78, 609.85, 178.84, 10.00, "Ph: (555) 010-0001 Fax: (555) 010-0002 "),
+            (237.50, 596.17, 129.80, 10.00, "unit manager@org.harbor.ca "),
+        ];
+        let mut spans: Vec<TextSpan> = left
+            .iter()
+            .map(|&(x, y, w, h, t)| make_span_text(x, y, w, h, t, h))
             .collect();
-        spans.extend((0..8).map(|k| make_span_text(69.0, 370.0 + k as f32 * 30.0, 90.0, 10.0, "ad", 12.0)));
+        spans.extend(
+            right
+                .iter()
+                .map(|&(x, y, w, h, t)| make_span_text(x, y - right_shift_down, w, h, t, h)),
+        );
         spans
     }
 
-    /// The right block sits wholly above the left block (a 6 pt gap, too narrow for a row
-    /// valley). The two sides share no rows, so the clean x-gap between them is not a column
-    /// gutter: the cut is refused and the page reads top-down, right block first.
+    /// The letterhead at the right sits wholly above the left block (its lowest line at y 596,
+    /// the left block's highest at 580). A column cut would read the left block first, so the
+    /// cut is refused and the row split reads the letterhead first.
     #[test]
-    fn stacked_blocks_with_a_clean_x_gap_are_not_cut_into_columns() {
+    fn a_right_block_wholly_above_the_left_block_is_not_cut_into_columns() {
         let strategy = XYCutStrategy::new();
-        let spans = letter_top(596.0);
+        let spans = letter_top(0.0);
         let indices: Vec<usize> = (0..spans.len()).collect();
 
         assert!(
@@ -5117,43 +5158,52 @@ mod tests {
         );
         let groups = strategy.partition_region(&spans, None);
         let order: Vec<&str> = groups.iter().flatten().map(|s| s.text.as_str()).collect();
-        let last_upper = order.iter().rposition(|t| *t == "lh").unwrap();
-        let first_lower = order.iter().position(|t| *t == "ad").unwrap();
-        assert!(last_upper < first_lower, "the upper block must read first, got {order:?}");
+        let last_upper = order
+            .iter()
+            .rposition(|t| {
+                t.starts_with("Harbor") || t.starts_with("P.O") || t.starts_with("Ph:") || t.starts_with("unit")
+            })
+            .unwrap();
+        let first_lower = order.iter().position(|t| t.starts_with("Weekday")).unwrap();
+        assert!(
+            last_upper < first_lower,
+            "the letterhead must read first, got {order:?}"
+        );
     }
 
-    /// Two eight-line columns on the same rows: the shared-rows rule leaves a true column cut
-    /// as it was, left column then right column.
+    /// The same letterhead lowered by 240 pt shares the left block's rows (y 356 to 432 against
+    /// 318 to 580): a true two-column region, cut as before, the fifteen left spans on the left
+    /// and the five letterhead spans on the right.
     #[test]
-    fn columns_that_share_rows_are_still_cut() {
+    fn a_right_block_that_shares_rows_with_the_left_block_is_still_cut() {
         let strategy = XYCutStrategy::new();
-        let mut spans: Vec<TextSpan> = (0..8)
-            .map(|k| make_span_text(69.0, 300.0 + k as f32 * 14.0, 200.0, 10.0, "lc", 12.0))
-            .collect();
-        spans.extend((0..8).map(|k| make_span_text(330.0, 300.0 + k as f32 * 14.0, 200.0, 10.0, "rc", 12.0)));
+        let spans = letter_top(240.0);
         let indices: Vec<usize> = (0..spans.len()).collect();
 
-        let (left, right) = strategy
+        let (mut left, mut right) = strategy
             .find_horizontal_split_indexed(&spans, &indices)
-            .expect("two columns on the same rows are cut");
-        assert_eq!(left, (0..8).collect::<Vec<_>>());
-        assert_eq!(right, (8..16).collect::<Vec<_>>());
+            .expect("two blocks on the same rows are cut into columns");
+        left.sort_unstable();
+        right.sort_unstable();
+        assert_eq!(left, (0..15).collect::<Vec<_>>());
+        assert_eq!(right, (15..20).collect::<Vec<_>>());
     }
 
-    /// The boundary of the rule is the y-extent itself: two sides that touch (the right block
-    /// ends at 590, where the left block starts) are stacked and not cut; two sides whose
-    /// extents overlap by one point share a row and are cut.
+    /// The boundary of the rule is the row itself: a letterhead whose lowest line touches the
+    /// left block's highest line (shift 15.98: lowest y 580.19 against highest y 580.19) is
+    /// the upper block and is not cut; one that overlaps that line by one point (shift 16.98)
+    /// shares a row and is cut.
     #[test]
-    fn sides_share_rows_only_when_their_y_extents_overlap() {
+    fn the_right_block_is_the_upper_block_until_it_overlaps_a_row_of_the_left_block() {
         let strategy = XYCutStrategy::new();
-        let indices: Vec<usize> = (0..13).collect();
+        let indices: Vec<usize> = (0..20).collect();
 
-        let touching = letter_top(590.0);
+        let touching = letter_top(15.98);
         assert!(
             strategy.find_horizontal_split_indexed(&touching, &indices).is_none(),
-            "two blocks that touch share no rows and are stacked"
+            "a right block that touches the left block's highest row is the upper block"
         );
-        let overlapping = letter_top(589.0);
+        let overlapping = letter_top(16.98);
         assert!(
             strategy.find_horizontal_split_indexed(&overlapping, &indices).is_some(),
             "an overlap of one point shares a row"
