@@ -39,7 +39,8 @@ fn every_selected_page_keeps_the_existing_page_acceptance_route() {
             &[1, 2],
             Some(&bounds),
             "one\n\ntwo",
-            Some(2)
+            Some(2),
+            &[]
         ),
         OcrGateOutcome::RunFallbackOnPages(vec![1, 2])
     );
@@ -49,7 +50,7 @@ fn every_selected_page_keeps_the_existing_page_acceptance_route() {
 fn one_page_with_utf8_text_can_keep_native_text_after_ocr() {
     let bounds = [boundary(1, 1, 3)];
     assert_eq!(
-        with_native_page_acceptance(OcrGateOutcome::RunFallback, &[1], Some(&bounds), " é\n", Some(1)),
+        with_native_page_acceptance(OcrGateOutcome::RunFallback, &[1], Some(&bounds), " é\n", Some(1), &[]),
         OcrGateOutcome::RunFallbackOnPages(vec![1])
     );
 }
@@ -59,13 +60,13 @@ fn aggregate_or_incomplete_selection_keeps_whole_document_fallback() {
     let bounds = [boundary(1, 0, 3), boundary(2, 4, 7)];
     for (pages, count) in [(&[][..], Some(2)), (&[1][..], Some(2)), (&[1, 2][..], None)] {
         assert_eq!(
-            with_native_page_acceptance(OcrGateOutcome::RunFallback, pages, Some(&bounds), "one two", count),
+            with_native_page_acceptance(OcrGateOutcome::RunFallback, pages, Some(&bounds), "one two", count, &[]),
             OcrGateOutcome::RunFallback
         );
     }
     for bounds in [None, Some(&[][..])] {
         assert_eq!(
-            with_native_page_acceptance(OcrGateOutcome::RunFallback, &[1], bounds, "one", Some(1)),
+            with_native_page_acceptance(OcrGateOutcome::RunFallback, &[1], bounds, "one", Some(1), &[]),
             OcrGateOutcome::RunFallback
         );
     }
@@ -79,7 +80,8 @@ fn no_native_text_keeps_whole_document_failure_handling() {
             &[1],
             Some(&[boundary(1, 0, 0)]),
             "",
-            Some(1)
+            Some(1),
+            &[]
         ),
         OcrGateOutcome::RunFallback
     );
@@ -98,7 +100,14 @@ fn invalid_or_incomplete_boundaries_keep_whole_document_fallback() {
     ];
     for bounds in cases {
         assert_eq!(
-            with_native_page_acceptance(OcrGateOutcome::RunFallback, &[1, 2], Some(&bounds), "one two", Some(2)),
+            with_native_page_acceptance(
+                OcrGateOutcome::RunFallback,
+                &[1, 2],
+                Some(&bounds),
+                "one two",
+                Some(2),
+                &[]
+            ),
             OcrGateOutcome::RunFallback,
             "{bounds:?}"
         );
@@ -109,7 +118,8 @@ fn invalid_or_incomplete_boundaries_keep_whole_document_fallback() {
             &[1],
             Some(&[boundary(1, 0, 1)]),
             "é",
-            Some(1)
+            Some(1),
+            &[]
         ),
         OcrGateOutcome::RunFallback
     );
@@ -126,7 +136,7 @@ fn existing_skips_and_partial_page_selection_are_unchanged() {
             OcrGateOutcome::RunFallbackOnPages(vec![1]),
         ),
     ] {
-        let actual = with_native_page_acceptance(outcome, &[1], Some(&[boundary(1, 0, 3)]), "one", Some(1));
+        let actual = with_native_page_acceptance(outcome, &[1], Some(&[boundary(1, 0, 3)]), "one", Some(1), &[]);
         assert_eq!(actual, expected);
     }
 }
@@ -219,7 +229,7 @@ fn native_khmer_number_candidates_keep_the_full_document_route() {
         let native = format!("native {digit} text");
         let bounds = [boundary(1, 0, native.len())];
         assert_eq!(
-            with_native_page_acceptance(OcrGateOutcome::RunFallback, &[1], Some(&bounds), &native, Some(1)),
+            with_native_page_acceptance(OcrGateOutcome::RunFallback, &[1], Some(&bounds), &native, Some(1), &[]),
             OcrGateOutcome::RunFallback,
             "{digit}"
         );
@@ -227,7 +237,7 @@ fn native_khmer_number_candidates_keep_the_full_document_route() {
     for text in ["native 0123456789 text", "native \u{17df} \u{17ea} text"] {
         let bounds = [boundary(1, 0, text.len())];
         assert_eq!(
-            with_native_page_acceptance(OcrGateOutcome::RunFallback, &[1], Some(&bounds), text, Some(1)),
+            with_native_page_acceptance(OcrGateOutcome::RunFallback, &[1], Some(&bounds), text, Some(1), &[]),
             OcrGateOutcome::RunFallbackOnPages(vec![1]),
             "{text}"
         );
@@ -339,47 +349,154 @@ fn an_explicit_empty_ocr_sidecar_does_not_reconstruct_filtered_elements() {
 }
 
 #[test]
-fn all_rejected_pages_keep_native_tables_and_exclude_rejected_ocr_payload() {
-    let mut native = crate::types::internal::InternalDocument::new("pdf");
-    native.push_element(crate::types::internal::InternalElement::text(
-        crate::types::internal::ElementKind::Paragraph,
-        "native text",
-        0,
-    ));
+fn mixed_rejected_page_keeps_native_tables_and_excludes_its_ocr_payload() {
+    let bounds = [boundary(1, 0, 11), boundary(2, 13, 21)];
+    let mut native = super::flat_pdf_document("native text\n\nold text", "application/pdf", Some(&bounds));
     native.tables.push(crate::types::Table {
         markdown: "| native table |".into(),
         page_number: 1,
         ..Default::default()
     });
-    let replacements = ahash::AHashMap::new();
-    let method = super::extraction_method_after_mixed_ocr(&replacements);
-    assert_eq!(method, super::ExtractionMethod::Native);
-    let (document, _, _) = super::select_pdf_document(
-        method,
-        "native text",
+    let mut rejected = recognized_page(1);
+    rejected.elements[0].text = "rejected OCR page one".into();
+    rejected.prebuilt_ocr_elements = Some(vec![crate::types::OcrElement {
+        text: "rejected OCR sidecar".into(),
+        page_number: 1,
+        ..Default::default()
+    }]);
+    let mut accepted = recognized_page(2);
+    accepted.metadata.additional.clear();
+    let pages = ahash::AHashMap::from([(1, rejected), (2, accepted)]);
+    let replacements = ahash::AHashMap::from([(2, "accepted OCR text".into())]);
+    let (document, origin, _) = super::select_pdf_document(
+        super::ExtractionMethod::Mixed,
+        "native text\n\naccepted OCR text",
         "application/pdf",
         Some(native),
         None,
         Some(&replacements),
-        Some(&ahash::AHashMap::from([(1, recognized_page(1))])),
-        None,
+        Some(&pages),
+        Some(&bounds),
         &crate::OutputFormat::Plain,
     );
+    assert_eq!(origin, super::PdfDocumentOrigin::Mixed);
     assert_eq!(document.tables[0].markdown, "| native table |");
-    assert!(document.prebuilt_ocr_elements.is_none());
     assert!(
         !document
             .metadata
             .additional
             .contains_key(crate::ocr_metadata_keys::OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY)
     );
-    assert_eq!(crate::rendering::render_plain(&document).trim(), "native text");
+    let actual = crate::extraction::derive::derive_extraction_result(document, false, crate::OutputFormat::Plain);
+    let elements = actual
+        .ocr_elements
+        .as_ref()
+        .expect("the accepted page carries OCR text");
+    assert_eq!(elements.len(), 1);
+    assert_eq!(elements[0].page_number, 2);
+    assert_eq!(elements[0].text, "accepted OCR text");
+    assert!(actual.content.contains("native text"));
+    assert!(!actual.content.contains("rejected OCR"));
+}
+
+#[test]
+fn non_plain_partial_mixed_output_keeps_fallback_elements_and_frames() {
+    let bounds = [boundary(1, 0, 11), boundary(2, 13, 21)];
+    let native = super::flat_pdf_document("native text\n\nold text", "application/pdf", Some(&bounds));
+    let pages = ahash::AHashMap::from([(2, recognized_page(2))]);
+    let replacements = ahash::AHashMap::from([(2, "accepted OCR text".into())]);
+    let (document, origin, _) = super::select_pdf_document(
+        super::ExtractionMethod::Mixed,
+        "native text\n\naccepted OCR text",
+        "application/pdf",
+        Some(native),
+        None,
+        Some(&replacements),
+        Some(&pages),
+        Some(&bounds),
+        &crate::OutputFormat::Markdown,
+    );
+    assert_eq!(origin, super::PdfDocumentOrigin::Mixed);
+    let actual = crate::extraction::derive::derive_extraction_result(document, false, crate::OutputFormat::Markdown);
+    assert!(actual.content.contains("native text"));
+    let expected = super::accepted_mixed_ocr_elements(&pages);
+    assert_eq!(expected.len(), 1);
+    assert_eq!(expected[0].page_number, 2);
+    assert_eq!(
+        serde_json::to_value(&actual.ocr_elements).unwrap(),
+        serde_json::to_value(Some(&expected)).unwrap()
+    );
+    let frames = super::accepted_mixed_ocr_coordinate_frames(&pages);
+    assert_eq!(frames.len(), 1);
+    assert_eq!(frames[0].page_number, 2);
+    assert_eq!((frames[0].width, frames[0].height), (640, 480));
+}
+
+#[test]
+fn fabricated_native_mappings_keep_the_whole_document_outcome() {
+    let bounds = [boundary(1, 0, 3), boundary(2, 5, 8)];
+    for fabricated in [&[1][..], &[2][..], &[37][..]] {
+        assert_eq!(
+            with_native_page_acceptance(
+                OcrGateOutcome::RunFallback,
+                &[1, 2],
+                Some(&bounds),
+                "one\n\ntwo",
+                Some(2),
+                fabricated
+            ),
+            OcrGateOutcome::RunFallback,
+            "fabricated pages {fabricated:?} must retain the original document route",
+        );
+    }
+    assert_eq!(
+        with_native_page_acceptance(
+            OcrGateOutcome::RunFallback,
+            &[1, 2],
+            Some(&bounds),
+            "one\n\ntwo",
+            Some(2),
+            &[]
+        ),
+        OcrGateOutcome::RunFallbackOnPages(vec![1, 2]),
+    );
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 #[test]
 #[serial_test::serial]
 fn a_registered_tesseract_replacement_does_not_gain_builtin_page_acceptance() {
+    // Registry readers do not all share the serial-test lock; replace the backend only in a child. ~keep
+    const CHILD_ENV: &str = "XBERG_PDF_BACKEND_IDENTITY_CHILD";
+    const TEST: &str = concat!(
+        "extractors::pdf::automatic_fallback_tests::",
+        "a_registered_tesseract_replacement_does_not_gain_builtin_page_acceptance",
+    );
+    if std::env::var(CHILD_ENV).as_deref() == Ok(TEST) {
+        let args: Vec<_> = std::env::args().collect();
+        assert!(args.iter().any(|arg| arg == "--exact"));
+        assert!(args.iter().any(|arg| arg == "--test-threads=1"));
+        assert_registered_backend_identity();
+        return;
+    }
+    let output = std::process::Command::new(std::env::current_exe().expect("native test executable"))
+        .args(["--exact", TEST, "--nocapture", "--test-threads=1"])
+        .env(CHILD_ENV, TEST)
+        .output()
+        .expect("run the backend replacement in its own process");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success()
+            && stdout.lines().any(|line| line == "running 1 test")
+            && stdout.contains("test result: ok. 1 passed; 0 failed; 0 ignored;"),
+        "isolated backend identity control failed: {}\n{stdout}\n{stderr}",
+        output.status,
+    );
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn assert_registered_backend_identity() {
     struct RestoreBackend(std::sync::Arc<dyn crate::plugins::OcrBackend>);
     impl Drop for RestoreBackend {
         fn drop(&mut self) {

@@ -76,7 +76,12 @@ pub(super) fn with_native_page_acceptance(
     boundaries: Option<&[crate::types::PageBoundary]>,
     native: &str,
     page_count: Option<u32>,
+    fabricated_text_pages: &[u32],
 ) -> ocr::OcrGateOutcome {
+    // Unmapped native text keeps the whole-document route's segmentation hints and diagnostics. ~keep
+    if !fabricated_text_pages.is_empty() {
+        return outcome;
+    }
     let Some(bounds) = boundaries.filter(|bounds| !bounds.is_empty()) else {
         return outcome;
     };

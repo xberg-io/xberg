@@ -3287,20 +3287,18 @@ impl PdfExtractor {
                 &decision,
                 &thresholds,
             );
-            // Unmapped native text keeps the whole-document route's segmentation hints and diagnostics. ~keep
-            let outcome = if automatic_page_acceptance_supported(config)
-                && pdf_metadata
-                    .pdf_specific
-                    .fabricated_text_pages
-                    .as_ref()
-                    .is_none_or(Vec::is_empty)
-            {
+            let outcome = if automatic_page_acceptance_supported(config) {
                 with_native_page_acceptance(
                     outcome,
                     &decision.failing_pages,
                     boundaries.as_deref(),
                     &native_text,
                     pdf_metadata.pdf_specific.page_count,
+                    pdf_metadata
+                        .pdf_specific
+                        .fabricated_text_pages
+                        .as_deref()
+                        .unwrap_or(&[]),
                 )
             } else {
                 outcome
