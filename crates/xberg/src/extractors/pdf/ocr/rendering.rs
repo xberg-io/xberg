@@ -386,12 +386,8 @@ pub(super) struct XObjectRecoveryOutcome {
     pub(super) image_preprocessing: Option<crate::types::ImagePreprocessingMetadata>,
     /// Why each embedded image the backend rejected yielded nothing, in paint order.
     pub(super) failure_causes: Vec<String>,
-    /// Whether any image was read at a resolution the page's placement proved rather than one
-    /// the backend estimated.
-    pub(super) used_proven_source_dpi: bool,
-    /// Whether a nonempty read of an image with placement-proven DPI may be illegible after
-    /// preparation. Text, proof and preprocessing must describe that same image, not separate page images.
-    pub(super) possibly_illegible: bool,
+    /// Noise warnings of the reads kept or dropped by the per-image verdict.
+    pub(super) warnings: Vec<crate::types::ProcessingWarning>,
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) async fn recover_image_xobjects(
@@ -412,15 +408,20 @@ pub(super) async fn recover_image_xobjects(
         formulas: Vec::new(),
         image_preprocessing: None,
         failure_causes: Vec::new(),
-        used_proven_source_dpi: false,
-        possibly_illegible: false,
+        warnings: Vec::new(),
     };
     for fallback in fallback_images {
         context.check_cancelled()?;
         context.budget.step()?;
-        let recovery =
-            collect_xobject_recovery_result(backend, fallback, page_idx, ocr_config, context.budget, &mut outcome)
-                .await;
+        let recovery = collect_xobject_recovery_result(
+            backend,
+            fallback,
+            page_idx,
+            ocr_config,
+            (context.budget, context.proven_read),
+            &mut outcome,
+        )
+        .await;
         crate::engine::seams::emit_ocr_page(page_idx + 1, total_pages, backend.name());
         context.check_cancelled()?;
         recovery?;
@@ -484,13 +485,14 @@ pub(super) async fn collect_xobject_recovery_result(
     fallback: &crate::pdf::native::images::PageFallbackImage,
     page_idx: usize,
     ocr_config: &crate::core::config::OcrConfig,
-    budget: &mut crate::extractors::security::SecurityBudget,
+    (budget, proven_read): (
+        &mut crate::extractors::security::SecurityBudget,
+        Option<super::pipeline::ProvenReadPolicy<'_>>,
+    ),
     outcome: &mut XObjectRecoveryOutcome,
 ) -> crate::Result<()> {
     let ocr_config = source_dpi::with_proven_source_dpi(ocr_config, fallback.source_dpi);
-    if matches!(ocr_config, std::borrow::Cow::Owned(_)) {
-        outcome.used_proven_source_dpi = true;
-    }
+    let used_proven_source_dpi = matches!(ocr_config, std::borrow::Cow::Owned(_));
     let result = match backend.process_image(&fallback.bytes, &ocr_config).await {
         Ok(result) => result,
         Err(error) => {
@@ -506,17 +508,33 @@ pub(super) async fn collect_xobject_recovery_result(
             return Ok(());
         }
     };
-    append_xobject_text(&mut outcome.text, &result.content, budget)?;
-    append_xobject_text(
-        &mut outcome.text_outside_tables,
-        &xobject_text_outside_tables(&result),
-        budget,
-    )?;
+    // Each image is judged on its own read, with its own preparation evidence: another image's
+    // clamp cannot reject this image's text. ~keep
+    let text = match proven_read {
+        Some(policy) => super::pipeline::judge_proven_read(
+            result.content.clone(),
+            super::pipeline::ProvenRead {
+                used_proven_source_dpi,
+                possibly_illegible: read_may_be_illegible(result.metadata.image_preprocessing.as_ref()),
+                page_idx,
+                warn_when_kept: policy.warn_when_kept,
+            },
+            policy.thresholds,
+            &mut outcome.warnings,
+            &mut outcome.failure_causes,
+        ),
+        None => result.content.clone(),
+    };
+    if !text.trim().is_empty() || result.content.trim().is_empty() {
+        append_xobject_text(&mut outcome.text, &text, budget)?;
+        append_xobject_text(
+            &mut outcome.text_outside_tables,
+            &xobject_text_outside_tables(&result),
+            budget,
+        )?;
+    }
     account_xobject_structured_output(&result, outcome.image_preprocessing.is_none(), budget)?;
     outcome.llm_usage.extend(result.llm_usage.unwrap_or_default());
-    outcome.possibly_illegible |= !result.content.trim().is_empty()
-        && matches!(ocr_config, std::borrow::Cow::Owned(_))
-        && read_may_be_illegible(result.metadata.image_preprocessing.as_ref());
     if outcome.image_preprocessing.is_none() {
         outcome.image_preprocessing = result.metadata.image_preprocessing;
     }
