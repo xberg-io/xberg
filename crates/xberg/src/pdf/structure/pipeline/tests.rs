@@ -1641,6 +1641,60 @@ fn dedup_keeps_the_words_of_a_native_table_when_its_layout_copy_is_the_one_that_
 }
 
 #[test]
+fn dedup_keeps_the_layout_copy_when_the_native_table_that_beat_it_is_removed_as_a_duplicate() {
+    use crate::core::config::layout::TableOverlapPreference;
+    let native = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["omega", "7"]]);
+    let rival = cell_table(
+        1,
+        (0.0, 0.0, 100.0, 85.0),
+        &[&["red", "1"], &["green", "2"], &["blue", "3"], &["black", "4"]],
+    );
+    let copy = cell_table(1, (0.0, 87.0, 100.0, 100.0), &[&["omega", "7"]]);
+    let mut wrong = Vec::new();
+    for preference in [TableOverlapPreference::Native, TableOverlapPreference::Content] {
+        let mut tables = vec![native.clone(), rival.clone(), copy.clone()];
+        deduplicate_overlapping_tables(&mut tables, 2, preference, &[]);
+        let survivors: Vec<&Vec<Vec<String>>> = tables.iter().map(|table| &table.cells).collect();
+        if survivors != [&rival.cells, &copy.cells] {
+            wrong.push(format!("{preference:?}: {survivors:?}"));
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "the rival and the layout copy stay, since the native table that beat the copy is gone: {wrong:?}"
+    );
+}
+
+#[test]
+fn dedup_keeps_the_native_table_when_the_layout_table_that_beat_it_is_removed_as_a_duplicate() {
+    use crate::core::config::layout::TableOverlapPreference;
+    let native = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["omega", "7"]]);
+    let winner = cell_table(
+        1,
+        (0.0, 40.0, 100.0, 140.0),
+        &[&["alpha", "1"], &["omega", "7"], &["sigma", "8"]],
+    );
+    let rival = cell_table(
+        1,
+        (0.0, 100.0, 100.0, 160.0),
+        &[&["red", "1"], &["green", "2"], &["blue", "3"], &["black", "4"]],
+    );
+    let mut wrong = Vec::new();
+    for preference in [TableOverlapPreference::Layout, TableOverlapPreference::Content] {
+        let mut tables = vec![native.clone(), winner.clone(), rival.clone()];
+        deduplicate_overlapping_tables(&mut tables, 1, preference, &[]);
+        let survivors: Vec<&Vec<Vec<String>>> = tables.iter().map(|table| &table.cells).collect();
+        if survivors != [&native.cells, &rival.cells] {
+            wrong.push(format!("{preference:?}: {survivors:?}"));
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "the native table and the rival stay, since the layout table that beat the native one is gone: {wrong:?}"
+    );
+}
+
+#[test]
 fn dedup_keeps_the_sole_copy_when_neighbouring_tables_print_digits_that_join_into_its_words() {
     let sole = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["12", "34"]]);
     let duplicate = cell_table(1, (0.0, 40.0, 100.0, 140.0), &[&["12", "34"]]);
