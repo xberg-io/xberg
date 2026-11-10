@@ -833,7 +833,9 @@ impl<'doc> TextExtractor<'doc> {
         if let Some(mut buffer) = self.tj_span_buffer.take()
             && !buffer.is_empty()
         {
-            // A run that ends at a continuing `Tm` ends at its last glyph, not at that `Tm`'s pen. ~keep
+            // A run that a continuing `Tm` moved past its last glyph, with no glyph or width change
+            // after it, ends at that glyph, not at the `Tm`'s pen. A `Tm` set back into the run and a
+            // word-gap lead in the next `TJ` keep the pen width (`ends_at_continuing_tm`). ~keep
             let width = buffer.ends_at_continuing_tm().unwrap_or(buffer.accumulated_width);
             let total_width = width * buffer.user_h_scale;
 

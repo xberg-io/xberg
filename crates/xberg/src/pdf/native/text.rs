@@ -542,7 +542,8 @@ fn is_fragmented_span_list(spans: &[xberg_native_pdf::layout::TextSpan]) -> bool
 /// 3. Within each group sort by x-ascending (left-to-right reading order).
 /// 4. Concatenate, inserting a space wherever the x-gap between adjacent spans
 ///    exceeds 0.15 of the right span's font size, the test of the span assembler. A
-///    script or a CJK seam keeps half the line's largest font size (`keeps_line_word_gap`).
+///    script or a CJK seam keeps half the line's largest font size (`keeps_line_word_gap`),
+///    and a seam at a space glyph gets no second space.
 fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpan]) -> String {
     if spans.is_empty() {
         return String::new();
@@ -584,7 +585,8 @@ fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpa
                     if gap > line_space_threshold {
                         result.push(' ');
                     }
-                } else {
+                } else if !result.ends_with(char::is_whitespace) && !span.text.starts_with(char::is_whitespace) {
+                    // A space glyph on either side of the seam already marks the gap. ~keep
                     append_visual_word_gap(&mut result, gap, span.font_size);
                 }
             }
@@ -597,12 +599,20 @@ fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpa
 }
 
 /// Whether a seam of the fragmented rebuild keeps the line's word-gap test, half the line's largest
-/// font size, instead of the right span's own size: a script on its symbol, or a CJK character (Han,
-/// kana or Hangul) on either side. Both join at gaps that are wide in their own size. ~keep
+/// font size, instead of the right span's own size: a script on its symbol, or a CJK seam character
+/// on either side. A script joins at gaps that are wide in its own size. Han and kana mark no word
+/// with a gap; Korean separates words with spaces, but Hangul keeps the line's test too, so that its
+/// reading stays as at the base. ~keep
 fn keeps_line_word_gap(prev: &TextSpan, span: &TextSpan) -> bool {
     is_script_of(prev, span)
-        || prev.text.chars().next_back().is_some_and(is_cjk_char)
-        || span.text.chars().next().is_some_and(is_cjk_char)
+        || prev.text.chars().next_back().is_some_and(is_cjk_seam_char)
+        || span.text.chars().next().is_some_and(is_cjk_seam_char)
+}
+
+/// A CJK character (Han, kana or Hangul), CJK punctuation (U+3000 to U+303F) or a fullwidth or
+/// halfwidth form (U+FF00 to U+FFEF): the blocks the native span assembler's CJK test knows. ~keep
+fn is_cjk_seam_char(c: char) -> bool {
+    is_cjk_char(c) || matches!(c as u32, 0x3000..=0x303F | 0xFF00..=0xFFEF)
 }
 
 /// A smaller span off its symbol's baseline, lowered or raised by its matrix or by `Ts`, is a script
