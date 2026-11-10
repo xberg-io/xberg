@@ -139,6 +139,41 @@ mod tests {
     }
 
     #[test]
+    fn should_keep_a_pipe_in_cell_math_inside_its_cell() {
+        let text = "$|x|$";
+        let (cells, encoded) = encoded_inline_cell(text, 0..text.len());
+        let mut builder = InternalDocumentBuilder::new("docx");
+        let element = builder.push_table_from_cells(
+            &[
+                vec![cells[0][0].clone(), "G".to_string()],
+                vec!["H".to_string(), "b".to_string()],
+            ],
+            None,
+            None,
+        );
+        builder.set_table_math_annotations(element, encoded);
+        let rendered = super::super::render_markdown(&builder.build());
+        let arena = comrak::Arena::new();
+        let parsed = comrak::parse_document(&arena, &rendered, &super::super::markdown::comrak_options());
+        let cells = parsed
+            .descendants()
+            .filter(|node| matches!(node.data.borrow().value, comrak::nodes::NodeValue::TableCell))
+            .count();
+        assert_eq!(cells, 4, "{rendered}");
+        assert!(rendered.contains("$\\|x\\|$"), "{rendered}");
+        let second_row_cell = parsed
+            .descendants()
+            .filter(|node| matches!(node.data.borrow().value, comrak::nodes::NodeValue::TableCell))
+            .nth(3)
+            .and_then(|cell| cell.first_child())
+            .map(|child| format!("{:?}", child.data.borrow().value));
+        assert!(
+            second_row_cell.is_some_and(|value| value.contains("\"b\"")),
+            "{rendered}"
+        );
+    }
+
+    #[test]
     fn should_reject_invalid_cached_cell_math_provenance_gh2256() {
         let text = "é $x$";
         let (cells, encoded) = encoded_inline_cell(text, "é ".len()..text.len());

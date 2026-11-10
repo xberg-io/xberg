@@ -683,6 +683,42 @@ impl FontInfo {
         names.get(gid as usize).and_then(|n| n.as_deref())
     }
 
+    /// The letters of a Type0 ligature glyph that /ToUnicode leaves unmapped (GH#2664): the
+    /// components of the embedded program's GSUB ligature rules for the code's glyph, each mapped
+    /// through /ToUnicode. `None` without a /ToUnicode map, an embedded program or such a rule.
+    /// Only a CIDFontType2 descendant qualifies: its CIDs are glyph indices (through the
+    /// CIDToGIDMap). A CIDFontType0 CID is a charset CID, so GSUB, which names glyph indices,
+    /// would be read at the wrong glyph and invent the letters of an unrelated ligature. ~keep
+    fn gsub_ligature_letters(&self, char_code: u32) -> Option<String> {
+        if self.cid_font_type.as_deref() != Some("CIDFontType2") {
+            return None;
+        }
+        let cid = u16::try_from(char_code).ok()?;
+        let cmap = self.to_unicode.as_ref()?.get()?;
+        let font_data = self.embedded_font_data.as_ref()?;
+        let gid = self.cid_to_gid_map.as_ref().map_or(cid, |map| map.get_gid(cid));
+        super::ligature_components::ligature_text(font_data, gid, |component| {
+            self.cids_of_gid(component).into_iter().find_map(|component_cid| {
+                cmap.get(&u32::from(component_cid))
+                    .filter(|text| {
+                        !text.is_empty()
+                            && !text
+                                .chars()
+                                .any(|c| c.is_control() || matches!(c, '\u{FFFD}' | '\u{FFFE}' | '\u{FFFF}'))
+                    })
+                    .map(std::borrow::Cow::into_owned)
+            })
+        })
+    }
+
+    /// Every CID whose glyph is `gid` under the font's CIDToGIDMap (CID == GID without one).
+    fn cids_of_gid(&self, gid: u16) -> Vec<u16> {
+        match &self.cid_to_gid_map {
+            Some(map @ CIDToGIDMap::Explicit(_)) => (0..=u16::MAX).filter(|&cid| map.get_gid(cid) == gid).collect(),
+            Some(CIDToGIDMap::Identity) | None => vec![gid],
+        }
+    }
+
     /// Authoritative glyph name for a *simple* font character code, in priority
     /// order (ISO 32000-1 §9.6.6.1 / §9.10.2):
     /// (a) the `/Differences` glyph name retained in `diff_glyph_names`;
@@ -4887,6 +4923,18 @@ impl FontInfo {
                         }
                     }
 
+                    // PRIORITY 3d: a ligature glyph with no /ToUnicode entry and no usable glyph name
+                    // takes the letters of its GSUB components (GH#2664). ~keep
+                    if let Some(letters) = self.gsub_ligature_letters(char_code) {
+                        tracing::trace!(
+                            "Priority 3d (GSUB ligature components): font='{}' CID=0x{:04X} → '{}'",
+                            self.base_font,
+                            char_code,
+                            letters,
+                        );
+                        return Some(letters);
+                    }
+
                     // ==================================================================================
                     // PRIORITY 5: Adobe Glyph List Fallback (Phase 1.2)
                     // ==================================================================================
@@ -5190,6 +5238,12 @@ impl FontInfo {
         // Now: true when /Widths is present (simple fonts), or when /W has entries
         // (CID fonts), or when /DW was explicitly set in the CIDFont dictionary. ~keep
         self.widths.is_some() || self.cid_widths.is_some() || self.has_explicit_dw
+    }
+
+    /// Whether the glyph widths come from the Adobe metrics of a standard-14 Times, Helvetica or
+    /// Courier font when the font dictionary gives none, as [`Self::get_glyph_width`] does.
+    pub(crate) fn has_standard_font_metrics(&self) -> bool {
+        self.std14_memo.get_or_init(|| self.classify_std14()).is_some()
     }
 
     /// Check if this font is likely italic based on the font name.

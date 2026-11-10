@@ -108,7 +108,7 @@ Nested sections (each `None`/unset by default unless noted): `ocr`, `xberg-chunk
 enabled = true
 backend = "tesseract"
 language = ["eng"]
-auto_rotate = false
+auto_rotate = true
 ```
 
 | Option         | Type             | Default     | Description                                                            |
@@ -116,7 +116,7 @@ auto_rotate = false
 | `enabled`      | boolean          | `true`      | Whether OCR is enabled. Setting `false` is equivalent to `disable_ocr` |
 | `backend`      | string           | `"tesseract"` | OCR backend: `tesseract`, `paddleocr`/`paddle-ocr`, or `vlm`         |
 | `language`     | string or array  | `["eng"]`   | Language code(s). Accepts `"eng"` or `["eng", "deu"]`. Tesseract joins with `+` |
-| `auto_rotate`  | boolean          | `false`     | Enable automatic page rotation based on orientation detection         |
+| `auto_rotate`  | boolean \| null  | `null`      | `true` always rotates, `false` never rotates or retries, unset keeps the orientation retry |
 | `vlm_fallback` | string           | `"disabled"` | VLM fallback policy                                                   |
 | `output_format`| string \| null   | `null`      | Optional OCR output format override                                    |
 

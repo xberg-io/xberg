@@ -1355,7 +1355,7 @@ impl TextRasterizer {
                 }
                 sum
             } else {
-                pos[i].x_advance as f32 / font_size * 1000.0
+                pos[i].x_advance as f32 / units_per_em * 1000.0
             };
 
             let x_advance = pdf_width * font_size / 1000.0;

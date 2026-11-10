@@ -21,7 +21,7 @@ use super::classify::{
 };
 use super::constants::{FULL_LINE_FRACTION, MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO};
 use super::lines::{is_cjk_char, segments_need_space};
-use super::paragraphs::{merge_continuation_paragraphs, split_embedded_list_items};
+use super::paragraphs::{accent_letter_over_formula_start, merge_continuation_paragraphs, split_embedded_list_items};
 use super::text_repair::{
     MIN_LIGATURE_WITNESS_WORD_LEN, TextReplacement, WordWitnesses, apply_to_all_segments, clean_duplicate_punctuation,
     collapse_spaced_hyphens, expand_ligatures, expand_ligatures_mapped, normalize_text_encoding,
@@ -2238,6 +2238,10 @@ fn blocks_to_paragraphs(
             // break its paragraph. See #1386. ~keep
             let starts_section =
                 starts_new_line && super::classify::is_numbered_section_heading(&visual_line_texts[line_idx]);
+            // A formula line under a hat drawn as a lone letter starts a new paragraph.
+            // The heading rule used to break there; joined, the two print as "bX". ~keep
+            let accent_over_formula =
+                starts_new_line && accent_letter_over_formula_start(prev, line, &visual_line_texts[line_idx]);
             // A numbered section heading also always ENDS the element it opens: without
             // this term nothing else distinguishes a heading from the body text that
             // follows it when both share font size, weight, role and line spacing --
@@ -2363,6 +2367,7 @@ fn blocks_to_paragraphs(
                 || bold_change
                 || is_list
                 || starts_section
+                || accent_over_formula
                 || follows_section
                 || crossed_gap
                 || crosses_column_corridor
@@ -4335,6 +4340,26 @@ mod annotation_text_repair_tests {
     }
 
     #[test]
+    fn a_ligature_code_point_before_a_space_joins_its_word_only_in_ocr_text_on_both_repair_paths() {
+        // Native text expands ligatures at decode, so this pass sees the code point only in OCR and
+        // structure-tree text. OCR has no glyph geometry, so its space is absorbed; other text keeps it.
+        for (ocr_text, expected) in [(true, "field"), (false, "fi eld")] {
+            assert_eq!(normalized_from("\u{FB01} eld", Vec::new(), ocr_text).text, expected);
+            let annotated = normalized_from(
+                "\u{FB01} eld",
+                vec![annotation("\u{FB01} eld", "eld", AnnotationKind::Bold)],
+                ocr_text,
+            );
+            assert_eq!(annotated.text, expected);
+            let witnesses = super::TextRepairWitnesses {
+                ocr_text,
+                ..Default::default()
+            };
+            assert_eq!(super::fused_text_repairs("\u{FB01} eld", &witnesses), expected);
+        }
+    }
+
+    #[test]
     fn expansion_preserves_script_and_overlapping_style_byte_ranges() {
         let source = "a*z mod (231-1)";
         let expected = "attz mod (231-1)";
@@ -6206,10 +6231,10 @@ const MAX_PAGE_NUMBER_WORD_COUNT: usize = 10;
 /// Page width assumed when a document yields no usable paragraph geometry.
 ///
 /// US Letter portrait, matching the 792pt height fallback used for `page_heights`.
-const FALLBACK_PAGE_WIDTH_PTS: f32 = 612.0;
+pub(super) const FALLBACK_PAGE_WIDTH_PTS: f32 = 612.0;
 
 /// Page height assumed when `page_heights` carries no entry for a page index.
-const FALLBACK_PAGE_HEIGHT_PTS: f32 = 792.0;
+pub(super) const FALLBACK_PAGE_HEIGHT_PTS: f32 = 792.0;
 
 /// Mark confirmed running page numbers as furniture (GH#1411).
 ///
@@ -7422,3 +7447,6 @@ mod tests;
 
 #[cfg(test)]
 mod list_marker_tests;
+
+#[cfg(test)]
+mod accent_line_tests;

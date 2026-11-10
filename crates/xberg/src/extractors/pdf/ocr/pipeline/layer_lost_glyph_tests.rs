@@ -85,6 +85,7 @@ async fn a_selected_page_whose_marked_layer_is_kept_warns_of_its_lost_glyphs() {
             ocr: &[1],
             single_block: &[],
             preserve_native: &[],
+            native_script: &[],
             native_layers: None,
             hidden_layer_backend: None,
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -126,6 +127,7 @@ async fn a_caller_supplied_layer_warns_of_the_glyphs_its_page_lost() {
             ocr: &[1],
             single_block: &[],
             preserve_native: &[],
+            native_script: &[],
             native_layers: Some(Arc::new(ahash::AHashMap::from([(1, layer.to_owned())]))),
             hidden_layer_backend: None,
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -227,6 +229,7 @@ async fn the_mixed_route_drops_a_misread_ocr_row_on_a_plain_page_only() {
                 ocr: &[1],
                 single_block: &[],
                 preserve_native: &[],
+                native_script: &[],
                 native_layers: None,
                 hidden_layer_backend: None,
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]

@@ -19,7 +19,7 @@ fn ligature_cmap(target: &str) -> crate::fonts::LazyCMap {
 }
 
 /// A simple font: every glyph is half an em wide, the space a quarter em, the ligature code one em.
-fn ligature_font(target: &str, glyph_name: Option<&str>) -> FontInfo {
+pub(super) fn ligature_font(target: &str, glyph_name: Option<&str>) -> FontInfo {
     let mut font = create_test_font();
     font.base_font = "Helvetica".to_string();
     font.widths = Some(
@@ -554,4 +554,73 @@ fn utf8_tj_after_a_ligature_ends_the_ligature() {
         b"BT /F1 10 Tf 72 700 Td (de\\200) Tj (\\320\\257) Tj [240 ( ne)] TJ ET",
     );
     assert!(text.ends_with("\u{42F} ne"), "{text:?}");
+}
+
+/// The word "define" with the ligature drawn by a show of its own, between two text matrices, as some
+/// word processors write it (GH#2664). The glyphs are drawn at 10 points in user space, by a font of size
+/// `10 / scale` under a text matrix of scale `scale` (a 1-point font at scale 10). The show after the
+/// ligature starts 0.02 points before the ligature ends.
+fn own_show_ligature_stream(type0: bool, scale: f32) -> String {
+    let size = 10.0 / scale;
+    let tm = |x: f32| format!("{scale} 0 0 {scale} {x:.2} 700 Tm");
+    let (head, ligature, tail) = if type0 {
+        ("<00010002>", "<0003>", "<00040002>")
+    } else {
+        ("(de)", "(\\200)", "(ne)")
+    };
+    format!(
+        "BT /F1 {size} Tf {} [{head}] TJ {} {ligature} Tj {} [{tail}] TJ ET",
+        tm(72.0),
+        tm(82.0),
+        tm(91.98)
+    )
+}
+
+fn own_show_fonts() -> [(bool, FontInfo); 2] {
+    [
+        (false, ligature_font("00660069", None)),
+        (true, type0_ligature_font("00660069")),
+    ]
+}
+
+/// A text matrix that scales the glyphs does not open a gap after a ligature drawn by its own show: the
+/// run that holds the ligature is as wide as the ligature, so the next show joins it.
+#[test]
+fn ligature_in_its_own_show_under_a_scaled_text_matrix_joins_the_word_in_spans() {
+    for scale in [1.0, 0.75, 0.5, 10.0] {
+        for (type0, font) in own_show_fonts() {
+            let mut extractor = extractor_with(font);
+            let stream = own_show_ligature_stream(type0, scale);
+            assert_eq!(
+                span_text(&mut extractor, stream.as_bytes()),
+                "define",
+                "scale {scale}, type0 {type0}"
+            );
+        }
+    }
+}
+
+/// A run that goes on across a text matrix keeps the width of its glyphs in user space, whatever the
+/// matrix scale: the same glyphs drawn at the same user-space size give runs of the same width.
+#[test]
+fn run_across_a_scaled_text_matrix_keeps_its_user_space_width() {
+    let width_of = |stream: &[u8]| -> f32 {
+        let mut extractor = extractor_with(ligature_font("00660069", None));
+        let spans = extractor.extract_text_spans(stream).unwrap();
+        assert_eq!(spans.len(), 1, "one run expected: {spans:?}");
+        assert_eq!(spans[0].text, "den");
+        spans[0].bbox.width
+    };
+    let unscaled = width_of(b"BT /F1 10 Tf 1 0 0 1 72 700 Tm (de) Tj 1 0 0 1 82 700 Tm (n) Tj ET");
+    let scaled = width_of(b"BT /F1 20 Tf 0.5 0 0 0.5 72 700 Tm (de) Tj 0.5 0 0 0.5 82 700 Tm (n) Tj ET");
+    let enlarged = width_of(b"BT /F1 1 Tf 10 0 0 10 72 700 Tm (de) Tj 10 0 0 10 82 700 Tm (n) Tj ET");
+    assert!((unscaled - 15.0).abs() < 0.01, "unscaled run width {unscaled}");
+    assert!(
+        (enlarged - unscaled).abs() < 0.01,
+        "enlarged run width {enlarged}, unscaled {unscaled}"
+    );
+    assert!(
+        (scaled - unscaled).abs() < 0.01,
+        "scaled run width {scaled}, unscaled {unscaled}"
+    );
 }

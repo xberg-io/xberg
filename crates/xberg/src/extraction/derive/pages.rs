@@ -452,7 +452,7 @@ fn observe_literal_page(
 /// An element without geometry is kept with a zero bounding box rather than
 /// discarded (#75): backends that report text without word boxes (VLM OCR, hOCR
 /// without `bbox` properties) would otherwise lose their recognised text entirely.
-pub(super) fn build_ocr_elements(doc: &InternalDocument) -> Option<Vec<OcrElement>> {
+pub(crate) fn build_ocr_elements(doc: &InternalDocument) -> Option<Vec<OcrElement>> {
     let ocr_elems: Vec<OcrElement> = doc
         .elements
         .iter()

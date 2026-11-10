@@ -193,7 +193,7 @@ fn should_keep_config_json_auto_rotate_when_no_auto_rotate_flag_is_given() {
 
     let ocr = config.ocr.expect("--ocr true must leave an OCR config in place");
     assert!(
-        ocr.auto_rotate,
+        ocr.auto_rotate == Some(true),
         "auto_rotate came from --config-json, and no --ocr-auto-rotate flag was given"
     );
 }

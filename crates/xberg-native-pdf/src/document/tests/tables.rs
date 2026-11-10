@@ -40,6 +40,7 @@ fn test_rowspan_label_promoted_to_top_of_block() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         }

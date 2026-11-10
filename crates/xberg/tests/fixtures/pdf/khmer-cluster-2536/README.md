@@ -26,3 +26,10 @@ qpdf --empty --pages cluster-complete-mapped.pdf 1 memo_prose_scanned.pdf 1 -- k
 `khmer-text-with-figure.pdf` is `cluster-complete-mapped.pdf` with its text drawn twice (about 440 readable glyphs) and the scanned English page scaled to 60% over it as a figure that covers about 36% of the page.
 
 The short fully mapped page is derived with `python3 -I derive_fully_mapped.py cluster-complete-mapped.pdf khmer-short-fully-mapped.pdf`: it keeps the first 14 glyphs and maps each continuation glyph to U+200B, so the layer has no U+FFFD marker.
+
+`khmer-among-english-pages.pdf` is a readable English text page, the Khmer page, the same English page and the scanned English page, so the text layer passes the quality check on pages 1 and 3 and only pages 2 and 4 are sent to OCR. Page 2 is the only one a first-stage Khmer model claims:
+
+```sh
+python3 -I english_page.py english.pdf
+qpdf --empty --pages english.pdf 1 cluster-complete-mapped.pdf 1 english.pdf 1 khmer-then-scanned-english.pdf 2 -- khmer-among-english-pages.pdf
+```

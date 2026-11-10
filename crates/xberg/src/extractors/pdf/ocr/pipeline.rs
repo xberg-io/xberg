@@ -560,6 +560,9 @@ struct MixedOcrPageSelection<'a> {
     raster_dpis: Option<std::sync::Arc<crate::pdf::render::OcrRasterDpis>>,
     single_block: &'a [u32],
     preserve_native: &'a [u32],
+    /// Pages whose native layer is in a script that OCR must produce again: see
+    /// `unreadable_script::ocr_dropped_native_script`.
+    native_script: &'a [u32],
     /// Readable text layers a whole-document caller computed; `None` lets a selected-page run
     /// read them from its own native text.
     native_layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
@@ -608,7 +611,7 @@ pub(crate) async fn extract_mixed_ocr_native_with_single_block_pages(
         content,
         config,
         None,
-        &[],
+        (&[], &[]),
     )
     .await
 }
@@ -621,7 +624,7 @@ pub(crate) async fn extract_mixed_ocr_native_with_layout_pages(
     content: &[u8],
     config: &ExtractionConfig,
     layout_pages: Option<&crate::core::layout_pages::LayoutPageSelection>,
-    preserve_native: &[u32],
+    (preserve_native, native_script): (&[u32], &[u32]),
 ) -> crate::Result<MixedOcrRun> {
     let (ocr_page_numbers, single_block_page_numbers) = selected_pages;
     let _ = &layout_pages;
@@ -633,6 +636,7 @@ pub(crate) async fn extract_mixed_ocr_native_with_layout_pages(
             raster_dpis: None,
             single_block: single_block_page_numbers,
             preserve_native,
+            native_script,
             native_layers: None,
             hidden_layer_backend: None,
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -677,6 +681,7 @@ pub(in crate::extractors::pdf) async fn probe_incomplete_hidden_layers(
             raster_dpis: None,
             single_block: &[],
             preserve_native: &[],
+            native_script: &[],
             native_layers: None,
             hidden_layer_backend: Some(backend),
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -711,7 +716,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     #[cfg(feature = "layout-detection")] layout_inputs: MixedLayoutInputs<'_>,
 ) -> OcrRunResult<MixedOcrRun> {
     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
-    let _ = pages.preserve_native;
+    let _ = (pages.preserve_native, pages.native_script);
     let ocr_set: std::collections::HashSet<u32> = pages
         .ocr
         .iter()
@@ -2503,6 +2508,24 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             )
         });
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    for boundary in boundaries {
+        let page = boundary.page_number;
+        if pages.native_script.contains(&page)
+            && let Some(text) = accepted_replacements.get(&page)
+            && let Some(native) = native_text.get(boundary.byte_start..boundary.byte_end)
+            && super::super::unreadable_script::ocr_dropped_native_script(native, text)
+        {
+            accepted_replacements.remove(&page);
+            structured_ocr_pages.remove(&page);
+            ocr_confidence_by_page.remove(&page);
+            preprocessing_by_page.remove(&page);
+            crate::core::diagnostics::push_warning_deduped(
+                &mut accumulated_warnings,
+                super::super::unreadable_script::ocr_dropped_script_warning(page, native),
+            );
+        }
+    }
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     if probing_hidden_layer || !pages.preserve_native.is_empty() {
         for boundary in boundaries {
             let page = boundary.page_number;
@@ -2543,6 +2566,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // lacks first. A page it keeps native stays as it was. ~keep
     let mut page_layers_first: ahash::AHashMap<u32, super::document::LayerFirst> = ahash::AHashMap::new();
     let mut complete_native_pages = std::collections::HashSet::new();
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let mut clean_native_ink_pages = std::collections::HashSet::new();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32"), feature = "layout-detection"))]
     let ink_proof_layout_free = resolved_layout_inputs.is_none();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32"), not(feature = "layout-detection")))]
@@ -2569,13 +2594,22 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 geometry.page_boxes(*page_number, ocr_page_paragraphs.get(page_number), ocr_scale)
             });
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            let clean_ink_layer = native_coverage_layers
+                .and_then(|layers| layers.get(page_number))
+                .map(String::as_str)
+                .filter(|layer| !layer.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER));
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             if native_ink_owned_pages.contains(page_number)
                 && ink_proof_layout_free
                 && super::document::native_preservation_is_automatic(config, *page_number)
                 && !noise_verdict_pages.contains(page_number)
                 && structured_ocr_pages.get(page_number).is_some_and(|doc| {
                     super::native_word_coverage::has_only_certified_tesseract_text(doc)
-                        || super::native_word_coverage::only_segments_certified_tesseract_text_and_tables(doc, text)
+                        || super::native_word_coverage::ink_owned_table_structure_can_yield_to_native(
+                            doc,
+                            text,
+                            clean_ink_layer,
+                        )
                 })
                 && layers.get(page_number).is_some_and(|layer| {
                     let mut stripped = layer.clone();
@@ -2584,6 +2618,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 })
             {
                 complete_native_pages.insert(*page_number);
+                // Marker-bearing candidates can own ink too; only this clean-layer admission permits omissions. ~keep
+                if clean_ink_layer.is_some() {
+                    clean_native_ink_pages.insert(*page_number);
+                }
             }
             if native_preservation_enabled
                 && super::document::native_preservation_is_automatic(config, *page_number)
@@ -2770,7 +2808,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     .get(&(page.saturating_sub(1) as usize))
                     .is_some_and(|raster| raster.type0_ink_loss)
                 && let (Some(native), Some(read)) = (native, ocr_results.get(&page))
-                && super::document::native_survives_type0_ink_loss(native, read, &ocr_output_thresholds)
+                && super::document::type0_native_is_corroborated(
+                    native,
+                    read,
+                    &ocr_output_thresholds,
+                    native_ink_owned_pages.contains(&page),
+                    native_words_covered_pages.contains(&page),
+                )
             {
                 complete_native_pages.insert(page);
                 type0_loss_pages.insert(page);
@@ -2806,8 +2850,16 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 }
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 if native_ink_owned_pages.contains(&page) {
+                    let clean_ink_layer = native_coverage_layers
+                        .filter(|_| clean_native_ink_pages.contains(&page))
+                        .and_then(|layers| layers.get(&page))
+                        .map(String::as_str);
                     return super::native_word_coverage::only_segments_certified_tesseract_text(doc, text)
-                        || super::native_word_coverage::only_segments_certified_tesseract_text_and_tables(doc, text);
+                        || super::native_word_coverage::ink_owned_table_structure_can_yield_to_native(
+                            doc,
+                            text,
+                            clean_ink_layer,
+                        );
                 }
                 false
             });
@@ -3182,6 +3234,7 @@ async fn extract_pages_with_per_page_pipeline(
             raster_dpis,
             single_block: &single_block_pages,
             preserve_native: &[],
+            native_script: &[],
             native_layers,
             hidden_layer_backend: None,
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -4456,7 +4509,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     && whole_page_raster
                     && page_rotation_degrees == 0
                     && correction_degrees == 0
-                    && !base_ocr_config.auto_rotate
+                    && base_ocr_config.auto_rotate.is_none()
                     && base_ocr_config.tesseract_config.is_none()
                     && base_ocr_config.effective_tesseract_language().as_slice() == ["eng"];
                 let task = crate::engine::seams::inherit_progress(async move {
@@ -4910,7 +4963,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 let (correction_degrees, upright_width, upright_height) = batch_upright_correction[offset];
                 #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
                 let normalize_recovered_table = xobject_document.is_some()
-                    && (orientation_retry.is_some() || base_ocr_config.auto_rotate)
+                    && (orientation_retry.is_some() || base_ocr_config.auto_rotate == Some(true))
                     && !ocr_result.tables.is_empty()
                     && super::document::resolved_ocr_correction_degrees(&ocr_result.metadata)
                         .is_some_and(|angle| angle != 0);
@@ -5989,7 +6042,13 @@ pub(super) async fn extract_with_ocr_for_page(
         && ocr_doc
             .as_ref()
             .is_none_or(|doc| super::document::plain_ocr_page_can_yield_to_native(doc, read))
-        && super::document::native_survives_type0_ink_loss(native, read, &ocr_output_thresholds)
+        && super::document::type0_native_is_corroborated(
+            native,
+            read,
+            &ocr_output_thresholds,
+            native_ink_owned,
+            complete_native_words,
+        )
     {
         for warning in render_warnings {
             crate::pdf::render::record_render_warning(warning);
@@ -8686,6 +8745,10 @@ mod raster_budget_tests;
 ))]
 #[path = "pipeline/first_pass_route_tests.rs"]
 mod first_pass_route_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+#[path = "pipeline/native_script_kept_tests.rs"]
+mod native_script_kept_tests;
 
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
 #[path = "pipeline/budget_refusal_tests.rs"]
