@@ -677,6 +677,22 @@ pub(super) fn ocr_dropped_native_script(native_page: &str, ocr_text: &str) -> bo
     !read.is_empty() && !read.iter().any(|script| scripts.contains(script))
 }
 
+/// Whether the whole-document read of a marked page wrote none of that page's native script. A page
+/// text missing from `page_texts` (a vector shorter than the document) is not a dropped read.
+fn marked_page_dropped_script(
+    page: u32,
+    native_text: &str,
+    boundaries: &[PageBoundary],
+    page_texts: &[String],
+) -> bool {
+    boundaries
+        .iter()
+        .find(|boundary| boundary.page_number == page)
+        .and_then(|boundary| native_text.get(boundary.byte_start..boundary.byte_end))
+        .zip(page.checked_sub(1).and_then(|index| page_texts.get(index as usize)))
+        .is_some_and(|(native, read)| ocr_dropped_native_script(native, read))
+}
+
 /// Whether a whole-document read dropped the script of every page of the document, all of them
 /// marked. A page text missing from `page_texts` (a vector shorter than the document) is not a
 /// dropped read, so the check is off for it.
@@ -690,14 +706,26 @@ pub(super) fn every_page_dropped_script(
     else {
         return false;
     };
-    marked.iter().all(|page| {
-        boundaries
-            .iter()
-            .find(|boundary| boundary.page_number == *page)
-            .and_then(|boundary| native_text.get(boundary.byte_start..boundary.byte_end))
-            .zip(page.checked_sub(1).and_then(|index| page_texts.get(index as usize)))
-            .is_some_and(|(native, read)| ocr_dropped_native_script(native, read))
-    })
+    marked
+        .iter()
+        .all(|page| marked_page_dropped_script(*page, native_text, boundaries, page_texts))
+}
+
+/// The marked pages whose native script the whole-document read dropped.
+pub(super) fn pages_that_dropped_script(
+    marked: &[u32],
+    native_text: &str,
+    boundaries: Option<&[PageBoundary]>,
+    page_texts: &[String],
+) -> Vec<u32> {
+    let Some(boundaries) = boundaries else {
+        return Vec::new();
+    };
+    marked
+        .iter()
+        .copied()
+        .filter(|page| marked_page_dropped_script(*page, native_text, boundaries, page_texts))
+        .collect()
 }
 
 /// The warnings for the marked pages whose native text is kept because OCR did not write its script.

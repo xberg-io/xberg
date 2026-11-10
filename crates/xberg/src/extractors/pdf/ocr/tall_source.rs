@@ -464,6 +464,8 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_lim
         return None;
     }
     let (width, height, dpi) = source_frame(&dict, frame, rendered_width)?;
+    // Keep this gray/JPEG image certificate's scalar-only grammar unchanged;
+    // shared content probes and Indexed image certification admit singleton Flate arrays. ~keep
     let packing = match (rendered_width, dict.get("Filter")?.as_name()?) {
         (None, "DCTDecode")
             if dict.get("ColorSpace")?.as_name()? == "DeviceGray"
@@ -920,6 +922,51 @@ mod tests {
         result.ocr_elements.as_mut().unwrap().pop();
         result.content = "one".to_owned();
         assert!(!certified_strip_lines(&result, 200, &(100..160), &ink));
+    }
+
+    fn source_with_filter_spellings(singleton_content: bool, singleton_image: bool) -> PdfDocument {
+        let mut pdf = lopdf::Document::load_mem(TALL_FIXTURE).unwrap();
+        let mut images = 0;
+        let mut contents = 0;
+        for stream in pdf
+            .objects
+            .values_mut()
+            .filter_map(|object| object.as_stream_mut().ok())
+        {
+            if stream.dict.get(b"Subtype").and_then(lopdf::Object::as_name).ok() == Some(b"Image") {
+                assert_eq!(stream.dict.get(b"Filter").unwrap().as_name().unwrap(), b"FlateDecode");
+                if singleton_image {
+                    stream
+                        .dict
+                        .set("Filter", vec![lopdf::Object::Name(b"FlateDecode".to_vec())]);
+                }
+                images += 1;
+            } else {
+                if singleton_content {
+                    let paint = stream.decompressed_content().unwrap();
+                    let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+                    encoder.write_all(&paint).unwrap();
+                    stream.set_content(encoder.finish().unwrap());
+                    stream
+                        .dict
+                        .set("Filter", vec![lopdf::Object::Name(b"FlateDecode".to_vec())]);
+                    assert_eq!(stream.decompressed_content().unwrap(), paint);
+                }
+                contents += 1;
+            }
+        }
+        assert_eq!((images, contents), (1, 1));
+        let mut bytes = Vec::new();
+        pdf.save_to(&mut bytes).unwrap();
+        PdfDocument::from_bytes(bytes).unwrap()
+    }
+
+    #[test]
+    fn non_indexed_image_certificate_keeps_scalar_filters_while_content_probes_accept_singletons() {
+        for (content, image, admitted) in [(false, false, true), (true, false, true), (true, true, false)] {
+            let document = source_with_filter_spellings(content, image);
+            assert_eq!(certify(&document, 0, Some(1100), 100 * 1024 * 1024).is_some(), admitted);
+        }
     }
 
     #[test]
