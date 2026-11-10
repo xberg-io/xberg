@@ -8,8 +8,8 @@
 //! when the read is confident prose that spells none of the layer's script.
 
 use super::unreadable_script::{
-    NativeLayer, first_stage, judgeable_boundaries, ocr_dropped_native_script, page_is_scan, structured_scripts,
-    uncovered_script_counts,
+    NativeLayer, first_stage, judgeable_boundaries, ocr_dropped_native_script, page_is_scan, script_letters,
+    structured_scripts, uncovered_script_counts,
 };
 use crate::core::config::ExtractionConfig;
 use crate::extractors::pdf::ocr::OcrFallbackDecision;
@@ -50,9 +50,27 @@ pub(super) struct ProbeOutcome {
     pub(super) warnings: Vec<crate::types::ProcessingWarning>,
 }
 
+/// Share of a layer's script letters, from which the letters in scripts the configured languages read
+/// vouch for the layer's map. A wrong map sends every letter of its font to the other script, so
+/// what stays readable is other fonts (a title); the wrong-script fixtures hold 2%, and the genuine
+/// Arabic and Hebrew pages 3% and 4%. A correct layer with a minority in another script holds far
+/// more: 45% on the minority fixtures, 28% on the mostly Arabic page.
+const MIN_READABLE_LETTER_SHARE: f64 = 0.1;
+
+/// Whether a layer already spells a sizable share of its letters (see [`MIN_READABLE_LETTER_SHARE`])
+/// in scripts the configured languages read. A read in those languages cannot then contradict the
+/// rest of the layer: it finds the prose that the layer spells correctly.
+fn layer_spells_read_scripts(text: &str, languages: &[String]) -> bool {
+    script_letters(text, languages).is_some_and(|letters| {
+        let other: usize = letters.uncovered.iter().map(|(_, count)| count).sum();
+        letters.covered as f64 >= MIN_READABLE_LETTER_SHARE * (letters.covered + other) as f64
+    })
+}
+
 /// The failing pages the script rule would keep on lost-glyph markers alone: their layer is in a
-/// script no configured language reads, and nothing but the markers vouches for it (see
-/// [`structured_scripts`]).
+/// script no configured language reads, nothing but the markers vouches for it (see
+/// [`structured_scripts`]), and few of its letters are in a script the configured languages read
+/// (see [`layer_spells_read_scripts`]).
 pub(super) fn unstructured_script_pages(
     decision: &OcrFallbackDecision,
     layer: NativeLayer<'_>,
@@ -77,6 +95,7 @@ pub(super) fn unstructured_script_pages(
                     text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER)
                         && uncovered_script_counts(text, &stage.languages)
                             .is_some_and(|counts| structured_scripts(text, counts).is_none())
+                        && !layer_spells_read_scripts(text, &stage.languages)
                 })
         })
         .collect()
@@ -342,6 +361,18 @@ mod tests {
 
     const ARABIC: &str = "ثخغ غػصبا تثرعا عظثبسثس ثخغ ظصج شازض ثخغ ؽثدؼثظ";
     const ENGLISH: &str = "the committee met on Tuesday to review the plan for the new library and the parking area";
+
+    #[test]
+    fn a_layer_with_a_tenth_of_its_letters_in_a_read_script_is_not_left_to_the_probe() {
+        let eng = ["eng".to_string()];
+        assert_eq!(ARABIC.chars().filter(|c| !c.is_whitespace()).count(), 39);
+        assert!(!layer_spells_read_scripts(&format!("Note \u{FFFD}{ARABIC}"), &eng));
+        assert!(layer_spells_read_scripts(&format!("Notes \u{FFFD}{ARABIC}"), &eng));
+        assert!(!layer_spells_read_scripts(
+            &format!("Notes \u{FFFD}{ARABIC}"),
+            &["xyz".to_string()]
+        ));
+    }
 
     #[test]
     fn a_confident_prose_read_in_another_script_contradicts_the_layer() {
