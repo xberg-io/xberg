@@ -1772,6 +1772,23 @@ fn dedup_ignores_a_table_of_another_page_that_holds_the_same_words() {
 }
 
 #[test]
+fn dedup_takes_the_first_covering_table_as_the_carrier_of_a_segment() {
+    // Two tables cover and carry "alpha". The first one is the carrier, so "beta", which only the
+    // second table carries, lies in another stream and the page prints no joined "alphabeta".
+    // With the last table as the carrier, both segments fall into one stream and join.
+    let first = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha"]]);
+    let second = cell_table(1, (0.0, 50.0, 100.0, 150.0), &[&["alpha"], &["x"], &["beta"]]);
+    let joined = cell_table(1, (0.0, 110.0, 100.0, 150.0), &[&["alphabeta"]]);
+    let page = vec![vec![printed_at("alpha", 5.0, 60.0), printed_at("beta", 5.0, 120.0)]];
+    let kept = kept_native_tables(vec![first, second, joined], &page);
+    assert_eq!(
+        kept.len(),
+        2,
+        "no stream of the page joins alpha and beta, so the table with alphabeta has no printed word to add"
+    );
+}
+
+#[test]
 fn dedup_counts_a_word_a_table_holds_once_as_one_new_word_however_often_the_page_prints_it() {
     let big = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["a", "b"], &["c", "e"], &["f", "g"]]);
     let small = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["x", "a"], &["b", "c"]]);

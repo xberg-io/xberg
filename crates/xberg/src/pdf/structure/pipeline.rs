@@ -5561,6 +5561,34 @@ struct OverlapRound<'a> {
     mixed_losses: &'a mut Vec<(usize, usize)>,
 }
 
+/// The table of an overlapping pair that goes, or `None` when both stay. `native_first` is `None`
+/// for a pair of one origin, and otherwise says whether the first table is the native one.
+/// `shares` is the part of each table that the overlap covers.
+fn overlap_loser(
+    tables: &[crate::types::Table],
+    preference: crate::core::config::layout::TableOverlapPreference,
+    protected_layout_children: &ahash::AHashSet<usize>,
+    (i, j): (usize, usize),
+    native_first: Option<bool>,
+    shares: (f64, f64),
+) -> Option<usize> {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    match (protected_layout_children.contains(&i), protected_layout_children.contains(&j)) {
+        (true, false) => Some(j),
+        (false, true) => Some(i),
+        (true, true) => {
+            let duplicate = shares.0 >= LAYOUT_CHILD_DUPLICATE_OVERLAP && shares.1 >= LAYOUT_CHILD_DUPLICATE_OVERLAP;
+            duplicate.then(|| lower_content_table(tables, i, j))
+        }
+        (false, false) => Some(match (preference, native_first) {
+            (TableOverlapPreference::Native, Some(true)) | (TableOverlapPreference::Layout, Some(false)) => j,
+            (TableOverlapPreference::Native, Some(false)) | (TableOverlapPreference::Layout, Some(true)) => i,
+            _ => lower_content_table(tables, i, j),
+        }),
+    }
+}
+
 /// One pass over the overlapping pairs of a page. The pass over the mixed native and layout pairs
 /// runs first: the preference decides them without the page text, so what they leave is the set of
 /// tables the output keeps. The pass over the same-origin pairs then counts words against that
@@ -5574,8 +5602,6 @@ fn resolve_overlaps(
     to_remove: &mut ahash::AHashSet<usize>,
     mut round: OverlapRound<'_>,
 ) {
-    use crate::core::config::layout::TableOverlapPreference;
-
     for i in 0..tables.len() {
         if to_remove.contains(&i) {
             continue;
@@ -5615,35 +5641,17 @@ fn resolve_overlaps(
                     {
                         continue;
                     }
-                    let i_is_protected = protected_layout_children.contains(&i);
-                    let j_is_protected = protected_layout_children.contains(&j);
-                    let remove = match (i_is_protected, j_is_protected) {
-                        (true, false) => Some(j),
-                        (false, true) => Some(i),
-                        (true, true) => {
-                            let duplicate = intersection / area_a >= LAYOUT_CHILD_DUPLICATE_OVERLAP
-                                && intersection / area_b >= LAYOUT_CHILD_DUPLICATE_OVERLAP;
-                            duplicate.then(|| lower_content_table(tables, i, j))
-                        }
-                        (false, false) => Some(match preference {
-                            TableOverlapPreference::Native if mixed_origin => {
-                                if i_is_native {
-                                    j
-                                } else {
-                                    i
-                                }
-                            }
-                            TableOverlapPreference::Layout if mixed_origin => {
-                                if i_is_native {
-                                    i
-                                } else {
-                                    j
-                                }
-                            }
-                            _ => lower_content_table(tables, i, j),
-                        }),
-                    };
-                    let Some(remove) = remove else {
+                    let shares = (intersection / area_a, intersection / area_b);
+                    let native_first = mixed_origin.then_some(i_is_native);
+                    let loser = overlap_loser(
+                        tables,
+                        preference,
+                        protected_layout_children,
+                        (i, j),
+                        native_first,
+                        shares,
+                    );
+                    let Some(remove) = loser else {
                         continue;
                     };
                     if mixed_origin {
@@ -5937,14 +5945,12 @@ impl<'a> OverlapEvidence<'a> {
         removed: &ahash::AHashSet<usize>,
     ) -> Option<bool> {
         let page_number = tables[dropped].page_number;
-        let page_index = page_number.saturating_sub(1) as usize;
         let live: Vec<usize> = (0..tables.len())
             .filter(|&index| tables[index].page_number == page_number && !removed.contains(&index))
             .collect();
         for &index in live.iter().chain(&[dropped]) {
             self.table(tables, index);
         }
-        self.page_segments.get(page_index)?;
         self.page_split(page_number, &live);
         let page = &self.splits[&page_number];
         if page.occurrences.is_empty() && page.carried.is_empty() {
