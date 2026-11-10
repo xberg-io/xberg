@@ -5485,6 +5485,52 @@ fn deduplicate_overlapping_tables(
         }
     }
 
+    for mixed_pass in [true, false] {
+        resolve_overlaps(
+            tables,
+            native_count,
+            preference,
+            &protected_layout_children,
+            &mut evidence,
+            &mut to_remove,
+            mixed_pass,
+        );
+    }
+
+    let surviving_protected: Vec<_> = protected_layout_children
+        .iter()
+        .copied()
+        .filter(|index| !to_remove.contains(index))
+        .collect();
+    let affected_rows: Vec<_> = surviving_protected
+        .iter()
+        .filter_map(|&index| tables[index].bounding_box.map(|bbox| (tables[index].page_number, bbox)))
+        .collect();
+
+    let mut idx = 0;
+    tables.retain(|_| {
+        let keep = !to_remove.contains(&idx);
+        idx += 1;
+        keep
+    });
+    canonicalize_affected_table_rows(tables, affected_rows);
+}
+
+/// One pass over the overlapping pairs of a page. The pass over the mixed native and layout pairs
+/// runs first: the preference decides them without the page text, so what they leave is the set of
+/// tables the output keeps. The pass over the same-origin pairs then counts words against that
+/// set, and a table that a later step removes never stands in for the words of another. ~keep
+fn resolve_overlaps(
+    tables: &[crate::types::Table],
+    native_count: usize,
+    preference: crate::core::config::layout::TableOverlapPreference,
+    protected_layout_children: &ahash::AHashSet<usize>,
+    evidence: &mut OverlapEvidence<'_>,
+    to_remove: &mut ahash::AHashSet<usize>,
+    mixed_pass: bool,
+) {
+    use crate::core::config::layout::TableOverlapPreference;
+
     for i in 0..tables.len() {
         if to_remove.contains(&i) {
             continue;
@@ -5508,11 +5554,14 @@ fn deduplicate_overlapping_tables(
                     let i_is_native = i < native_count;
                     let j_is_native = j < native_count;
                     let mixed_origin = i_is_native != j_is_native;
+                    if mixed_origin != mixed_pass {
+                        continue;
+                    }
                     let near_coincident = boxes_near_coincident(a, b);
                     if i < native_count
                         && j < native_count
                         && !near_coincident
-                        && keeps_overlapping_native_pair(&mut evidence, tables, (i, j), &to_remove)
+                        && keeps_overlapping_native_pair(evidence, tables, (i, j), to_remove)
                     {
                         continue;
                     }
@@ -5555,24 +5604,6 @@ fn deduplicate_overlapping_tables(
             }
         }
     }
-
-    let surviving_protected: Vec<_> = protected_layout_children
-        .iter()
-        .copied()
-        .filter(|index| !to_remove.contains(index))
-        .collect();
-    let affected_rows: Vec<_> = surviving_protected
-        .iter()
-        .filter_map(|&index| tables[index].bounding_box.map(|bbox| (tables[index].page_number, bbox)))
-        .collect();
-
-    let mut idx = 0;
-    tables.retain(|_| {
-        let keep = !to_remove.contains(&idx);
-        idx += 1;
-        keep
-    });
-    canonicalize_affected_table_rows(tables, affected_rows);
 }
 
 /// Share of a table's words that the page must still lack for the table to count as new content.
