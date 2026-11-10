@@ -26,7 +26,7 @@ The label g ∈ {U(1), Z~2~} is the gauge symmetry, with
 
 † 1 † 1
 
-H~⟨~ <sup>Z</sup>~2~ xy⟩,f = t c s~xy,f~c~y,f~ + c~y,f~s~xy,f~c~x,f~ x,f (3)
+H~⟨~ <sup>Z</sup>~2 xy~⟩,f = t c s~xy,f~c~y,f~ + c~y,f~s~xy,f~c~x,f~ x,f (3)
 
 U(1) † + † −
 
@@ -42,7 +42,7 @@ Then H is a designer term [62] that makes the mod⟨xy⟩,f
 
 2
 
-fermion hole spin-1/2 up spin-1/2 down FIG. 1: Example fermion occupations and bond variables for the theories on a square spatial lattice with N~f~ = 1. els simulable by the meron algorithm, 1 1 t H~⟨~ <sup>Z</sup>~2~ xy ,des ⟩,f = −2t n~x,f~ − n~y,f~ − + 2 2 2 1 1 U(1),des
+fermion hole spin-1/2 up spin-1/2 down FIG. 1: Example fermion occupations and bond variables for the theories on a square spatial lattice with N~f~ = 1. els simulable by the meron algorithm, 1 1 t H~⟨~ <sup>Z</sup>~2 xy~ ,des ⟩,f = −2t n~x,f~ − n~y,f~ − + 2 2 2 1 1 U(1),des
 
 - H = −t n (4) ⟨xy⟩,f x,f − n~y,f~ − 2 2 t
 
@@ -50,7 +50,9 @@ fermion hole spin-1/2 up spin-1/2 down FIG. 1: Example fermion occupations and b
 
 − ts~xy,f~ (n~y,f~ − n~x,f~) + 4 These terms serve a similar role as the V = 2t term in the meron cluster algorithm applied to the t-V model [45], and similarly an additional particle-hole symmetric V ≥ 0 term can be added to the models here in a signproblem-free way. In the Z~2~ gauge theory, the gauge field
 
-s<sup>1</sup> = σ<sup>1</sup>/2 couples to fermions, and the local Z~2~ symmetry is manifest via the commutation [Q~x~, H<sup>Z</sup>~2~] = 0,
+1 1
+
+s = σ /2 couples to fermions, and the local Z~2~ symmetry is manifest via the commutation [Q~x~, H<sup>Z</sup>~2~] = 0,
 
 P
 
@@ -60,13 +62,13 @@ n~x,f~ 3 3 f
 
 where Q~x~ = (−1) s s , αˆ are the f,αˆ x,x+ˆα,f x−α,x,fˆ unit vectors in a d-dimensional square lattice. For the U(1) theory, the unitary operator V~U~(1), which commutes Q
 
-U(1)
+U(1) iθxGx
 
-with H is given by V~U~(1) = e<sup>iθxGx</sup>, with G~x~ = h x i P P
+with H is given by V~U~(1) = e , with G~x~ = h x i P P
 
-3 3
+3 3 x
 
-n~x,f~ − s − s + ((−1)<sup>x</sup> − 1)/2 .
+n~x,f~ − s − s + ((−1) − 1)/2 .
 
 f αˆ x,x+ˆα,f x−α,x,fˆ
 
@@ -78,11 +80,11 @@ field operators is U = s , U = s , E = s~xy,f~ xy,f . xy,f xy,f xy,f We note tha
 
 ⊗N~f~
 
-Z~2~ and U(1)⊗N~f~ gauge symmetry. However, flavored gauge-interactions can also be turned on in the U(1) model (as explained in the Supplementary Material), X
+Z~2~ and U(1)<sup>⊗N</sup>~f~ gauge symmetry. However, flavored gauge-interactions can also be turned on in the U(1) model (as explained in the Supplementary Material), X
 
 U(1) U(1) 3 3
 
-H~Nf~=2 →H~Nf~=2 + J s~xy,~1s~xy,~2, (5)
+H~Nf=2~ →H~Nf=2~ + J s~xy,~1s~xy,~2, (5)
 
 ⟨xy⟩
 

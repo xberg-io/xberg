@@ -1,8 +1,12 @@
 Where H~s~(f, t) denotes the CSI measurements transmitted by static paths such as ceiling/wall reflections, termed as static CSI component. H~m~(f, t) and H~n~(f, t) represent the CSI measurements transmitted via body reflection paths and limb reflection paths, respectively. H(f, t) can also be expressed as:
 
-H(f, t) = ∥H(f, t)∥ · e<sup>iθ</sup> (2)
+iθ
 
-Where ∥H(f, t)∥ and e<sup>iθ</sup> symbolize the amplitude and phase of the transmitted signal, respectively. Thus, the received CSI can be rewritten as:
+H(f, t) = ∥H(f, t)∥ · e (2)
+
+iθ
+
+Where ∥H(f, t)∥ and e symbolize the amplitude and phase of the transmitted signal, respectively. Thus, the received CSI can be rewritten as:
 
 jθ jθs jθm
 
@@ -12,7 +16,9 @@ jθ jθs jθm
 - e + ∥ H m ( f, t ) ∥
 - e (3)
 
-\+∥H~n~(f, t)∥ · e<sup>jθn</sup> However, the phase information in CSI is often affected by factors like carrier frequency offset and sampling frequency offset, leading to significant errors in CSI phase information. Also, the amplitude information in CSI changes with device restarts. Hence, the actual measured CSI is:
+jθn
+
+\+∥H~n~(f, t)∥ · e However, the phase information in CSI is often affected by factors like carrier frequency offset and sampling frequency offset, leading to significant errors in CSI phase information. Also, the amplitude information in CSI changes with device restarts. Hence, the actual measured CSI is:
 
 jθs
 

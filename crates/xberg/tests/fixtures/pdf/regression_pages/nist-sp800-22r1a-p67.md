@@ -26,13 +26,7 @@ Another approach to testing for randomness is to check for linear dependence amo
 
 This test is a specification of one of the tests coming from the DIEHARD [1] battery of tests. It is based on the result of Kovalenko [2] and also formulated by Marsaglia and Tsay [3]. The result states that the rank *R* of the *M x Q* random binary matrix takes values *r* = 0, 1, 2, …, *m* where *m* ≡ *min* ( *M* , *Q* ) with probabilities
 
-*r* −1(<sup>1</sup>− 2 <sup>*i*</sup> <sup>−</sup> *Q*
-
-# )(<sup>1</sup>− 2 <sup>*i*</sup> <sup>−</sup> *M*
-
-)
-
-*r* ( *Q* + *M* − *r* )− *MQ*
+*r* −1 *i* − *Q i* − *M* (<sup>1</sup>− 2 )(<sup>1</sup>− 2 ) *r* ( *Q* + *M* − *r* )− *MQ*
 
 *p*~*r*~ = 2 .
 
@@ -40,7 +34,7 @@ This test is a specification of one of the tests coming from the DIEHARD [1] bat
 
 *i* − *r*
 
-## 1− 2
+# 1− 2
 
 *i* = 0
 

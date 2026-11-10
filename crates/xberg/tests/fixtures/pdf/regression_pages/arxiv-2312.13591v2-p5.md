@@ -164,7 +164,9 @@ I(J<sup>P</sup> ) Systems [Thr.] E~B~/E~V~ Decay channels
 
 1 − +3.1
 
-¯<sup>(</sup>∗) 0 4473.9 J/ψΛ, η~c~Λ,D~s~ Λ~c~ −4.5 B
+¯<sup>(</sup>∗) 0 4473.9 J/ψΛ, η~c~Λ,D~s~ Λ~c~ −4.5
+
+B
 
 **Ä**<sup>2</sup> **ä**
 
@@ -208,7 +210,9 @@ I(J<sup>P</sup> ) Systems [Thr.] E~B~/E~V~ Decay channels
 
 1 − +1.4
 
-¯<sup>(</sup>∗) 0 4585.0 J/ψΛ, η~c~Λ,D~s~ Λ~c~ −2.0 B
+¯<sup>(</sup>∗) 0 4585.0 J/ψΛ, η~c~Λ,D~s~ Λ~c~ −2.0
+
+B
 
 **Ä**<sup>2</sup> **ä**
 
@@ -252,13 +256,17 @@ I(J<sup>P</sup> ) Systems [Thr.] E~B~/E~V~ Decay channels
 
 1 − +3.0
 
-¯<sup>(</sup>∗) 0 4649.8 J/ψΛ, η~c~Λ,D~s~ Λ~c~ −4.0 B
+¯<sup>(</sup>∗) 0 4649.8 J/ψΛ, η~c~Λ,D~s~ Λ~c~ −4.0
+
+B
 
 **Ä**<sup>2</sup> **ä**
 
 3 − +1.8
 
-¯<sup>∗</sup> 0 4650.7 J/ψΛ,D~s~Λ~c~ −2.3 B
+¯<sup>∗</sup> 0 4650.7 J/ψΛ,D~s~Λ~c~ −2.3
+
+B
 
 **Ä**<sup>2</sup> **ä**
 

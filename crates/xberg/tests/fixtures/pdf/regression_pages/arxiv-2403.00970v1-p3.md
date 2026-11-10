@@ -34,13 +34,17 @@
 
 ***κ*** **(** ***t*** **) = −** ***αψ*** **ˆ(** ***t*** **)** ***φ*** **(** ***x*** **)** ***,*** **(10) ∆ (4) and the adaptive law for** ***ψ*** **ˆ(** ***t*** **) is given by ˙**
 
-***ψ*** **ˆ(** ***t*** **) = −Γ (** ***αkΨ*** **(** ***t*** **)k**<sup>**2**</sup> ***φ*** **(** ***x*** **) +** ***σψ*** **ˆ(** ***t*** **))** ***.*** **(11)**
+**2**
+
+***ψ*** **ˆ(** ***t*** **) = −Γ (** ***αkΨ*** **(** ***t*** **)k** ***φ*** **(** ***x*** **) +** ***σψ*** **ˆ(** ***t*** **))** ***.*** **(11)**
 
 ***T***
 
 **∞** ***,*** **(5) with** ***α*** **and** ***φ*** **are positive control constants, and Γ = Γ** ***\>*** **0.**
 
-**In this work, we choose** ***N*** **(** ***ζ*** **) =** ***ζ***<sup>**2**</sup> **cos(** ***ζ*** **) with the ∞** ***.*** **(6) property of** ***N*** **(0) = 0 as our Nussbaum function. The updating law for** ***ζ*** **is given by A function that satisfies these conditions is utilized for**
+**2**
+
+**In this work, we choose** ***N*** **(** ***ζ*** **) =** ***ζ*** **cos(** ***ζ*** **) with the ∞** ***.*** **(6) property of** ***N*** **(0) = 0 as our Nussbaum function. The updating law for** ***ζ*** **is given by A function that satisfies these conditions is utilized for**
 
 ***T***
 
@@ -50,13 +54,13 @@
 
 **˙ described by (1) with the Properties 1-3, satisfying to**
 
-***V*** **(** ***t*** **)** ***\< c*** **+** ***e*** **−** ***c***~**1**~***t***
+***V*** **(** ***t*** **)** ***\< c*** **+** ***e*** <sup>**−**</sup> <sup>***c***</sup>~**1**~<sup>***t***</sup>
 
-**(** ***gN*** **(** ***ζ*** **(** ***τ*** **)) + 1)** ***ζ*** **(** ***τ*** **)** ***e***<sup>***c***</sup>~**1**~***τdτ,*** **(7)**
+**(** ***gN*** **(** ***ζ*** **(** ***τ*** **)) + 1)** ***ζ*** **(** ***τ*** **)** ***e***<sup>***c***</sup>~**1**~<sup>***τ***</sup>***dτ,*** **(7)**
 
 **0 0**
 
-**Assumptions 1 and 2. If the Nussbaum function-based where** ***c***~**0**~ ***\>*** **0 and** ***c***~**1**~ ***\>*** **0 are positive constants, and** ***g*** **PID-like control law (9), with the adaptive updating laws is a control parameter within closed intervals** ***L*** **= [** ***l***~**−**~***,l***~**+**~**] (11), and (12), and and Lemmas 1, and 2 is implemented, excluding zero (0** \< ***L*** **), then** ***V*** **(** ***t*** **),** ***ζ*** **(** ***t*** **), and the integral then, with the design parameters are properly chosen, R**~***t***~ **˙ the closed-loop system remains stable, and all signals** ***gN*** **(** ***ζ*** **(** ***τ*** **))** ***ζ*** **(** ***τ*** **)** ***e***<sup>***c***</sup>~**1**~***τdτ*** **are guaranteed to be bounded on**
+**Assumptions 1 and 2. If the Nussbaum function-based where** ***c***~**0**~ ***\>*** **0 and** ***c***~**1**~ ***\>*** **0 are positive constants, and** ***g*** **PID-like control law (9), with the adaptive updating laws is a control parameter within closed intervals** ***L*** **= [** ***l***~**−**~***,l***~**+**~**] (11), and (12), and and Lemmas 1, and 2 is implemented, excluding zero (0** \< ***L*** **), then** ***V*** **(** ***t*** **),** ***ζ*** **(** ***t*** **), and the integral then, with the design parameters are properly chosen, R**~***t***~ **˙ the closed-loop system remains stable, and all signals** ***gN*** **(** ***ζ*** **(** ***τ*** **))** ***ζ*** **(** ***τ*** **)** ***e***<sup>***c***</sup>~**1**~<sup>***τ***</sup>***dτ*** **are guaranteed to be bounded on**
 
 **0**
 
@@ -66,13 +70,13 @@
 
 **trajectory** ***q***~***d***~**(** ***t*** **), with the tracking error converging to a Stability Analysis small neighborhood around zero. We propose a Nussbaum function based PID-like con-** Proof: **Consider the Lyapunov candidate as trol input for robot manipulator control, delineated as: 1 1 Z**
 
-***T*** **−1**
+***T T*** **−1**
 
 **˜ ˜**
 
 ***t***
 
-***V*** **(** ***t*** **) = Ψ (** ***t*** **)** ***M*** **(** ***q*** **(** ***t*** **))Ψ (** ***t*** **) +** ***ψ*** **(** ***t*** **)**<sup>***T***</sup> **Γ** ***ψ*** **(** ***t*** **)** ***,*** **(13)**
+***V*** **(** ***t*** **) = Ψ (** ***t*** **)** ***M*** **(** ***q*** **(** ***t*** **))Ψ (** ***t*** **) +** ***ψ*** **(** ***t*** **) Γ** ***ψ*** **(** ***t*** **)** ***,*** **(13)**
 
 **2 2** ***u*** **(** ***t*** **) =(** ***k***~***π***~**+** ***κ***~***π***~**(** ***t*** **))** ***K***~***N***~**(** ***ζ*** **)** ***e*** **(** ***t*** **) + (** ***k***~***ι***~**+** ***κ***~***ι***~**(** ***t*** **))** ***K***~***N***~**(** ***ζ*** **)** ***e*** **(** ***ρ*** **)** ***dρ***
 
@@ -80,37 +84,37 @@
 
 **where** ***ψ*** **˜(** ***t*** **) =** ***ψ*** **ˆ(** ***t*** **) −** ***ψ*** **with** ***ψ*** **(** ***t*** **) is the ideal constant** ***d*** **weight vector of neural network approximation. + (** ***k***~**∆**~**+** ***κ***~**∆**~**(** ***t*** **))** ***K***~***N***~**(** ***ζ*** **)** ***e*** **(** ***t*** **)** ***, dt*** **The time derivative of the Lyapunov function** ***V*** **(** ***t*** **) can (8) be bounded as with** ***K***~***N***~**(** ***ζ*** **) = −** ***N*** **(** ***ζ*** **) is the related Nussbaum function 1**
 
-**gain. In (8) we employed constant gains** ***k*** **,** ***k*** **, and** ***k*** **˙** ***T*** **˙ ˙ ˜ −1 ˆ˙** ***π ι*** **∆** ***V*** **(** ***t*** **) = Ψ (** ***t*** **)** ***M*** **(** ***t*** **)Ψ (** ***t*** **) + Ψ (** ***t*** **)**<sup>***T***</sup> ***M*** **(** ***t*** **)Ψ (** ***t*** **) +** ***ψ*** **(** ***t*** **)**<sup>***T***</sup> **Γ** ***ψ*** **(** ***t*** **)** ***.*** **2 alongside their time-varying analogs** ***κ***~***π***~**(** ***t*** **),** ***κ***~***ι***~**(** ***t*** **), and (14)** ***κ***~**∆**~**(** ***t*** **). This strategy enhances traditional PID controls Considering dynamics (1) and the definition by integrating adaptive gains that adjust in real-time of the generalized error Ψ (** ***t*** **), one can obtain to the system's state. To further simplify parameter ˙** ***M*** **(** ***t*** **)Ψ (** ***t*** **) =** ***C*** **(** ***t*** **)** ***q*** **˙(** ***t*** **) +** ***G*** **(** ***t*** **) −** ***τ*** **(** ***t*** **) +** ***M*** **(** ***t*** **)** ***e*** **¯(·), where** ***k***~***π***~ ***k***~***ι***~
+**gain. In (8) we employed constant gains** ***k*** **,** ***k*** **, and** ***k*** **˙** ***T*** **˙** ***T*** **˙ ˜** ***T*** **−1 ˆ˙** ***π ι*** **∆** ***V*** **(** ***t*** **) = Ψ (** ***t*** **)** ***M*** **(** ***t*** **)Ψ (** ***t*** **) + Ψ (** ***t*** **)** ***M*** **(** ***t*** **)Ψ (** ***t*** **) +** ***ψ*** **(** ***t*** **) Γ** ***ψ*** **(** ***t*** **)** ***.*** **2 alongside their time-varying analogs** ***κ***~***π***~**(** ***t*** **),** ***κ***~***ι***~**(** ***t*** **), and (14)** ***κ***~**∆**~**(** ***t*** **). This strategy enhances traditional PID controls Considering dynamics (1) and the definition by integrating adaptive gains that adjust in real-time of the generalized error Ψ (** ***t*** **), one can obtain to the system's state. To further simplify parameter ˙** ***M*** **(** ***t*** **)Ψ (** ***t*** **) =** ***C*** **(** ***t*** **)** ***q*** **˙(** ***t*** **) +** ***G*** **(** ***t*** **) −** ***τ*** **(** ***t*** **) +** ***M*** **(** ***t*** **)** ***e*** **¯(·), where** ***k***~***π***~ ***k***~***ι***~
 
 **tuning, we establish the relationships** ***k*** **= = and**
 
-**∆ 2*****γ***
+**2 ∆ 2*****γ***
 
-***e*** **¯(·) =** ***q*** **¨ (** ***t*** **)+2*****γe*** **˙(** ***t*** **)+** ***γ***<sup>**2**</sup> ***e*** **(** ***t*** **). Then, utilizing the application**
+***e*** **¯(·) =** ***q*** **¨ (** ***t*** **)+2*****γe*** **˙(** ***t*** **)+** ***γ e*** **(** ***t*** **). Then, utilizing the application**
 
 ***γ***<sup>**2**</sup> ***d κ***~***π***~**(** ***t*** **)** ***κ***~***ι***~**(** ***t*** **)**
 
-***κ*** **(** ***t*** **) = = , ensuring the quadratic expression of Young's inequality, and considering Property 2, ∆ 2*****γ γ***<sup>**2**</sup>
+***κ*** **(** ***t*** **) = = , ensuring the quadratic expression of Young's inequality, and considering Property 2, ∆ 2*****γ***
 
-**1**
+***γ***<sup>**2**</sup> ***T*** **2 2 4 1**
 
-**we obtain Ψ (** ***t*** **)**<sup>***T***</sup> ***C*** **(** ***t*** **)** ***q*** **˙(** ***t*** **) ≤** ***αkΨ*** **(** ***t*** **)k**<sup>**2**</sup> ***c***<sup>**2**</sup>**kq˙(** ***t*** **)k**<sup>**4**</sup> **+ ,**
+**we obtain Ψ (** ***t*** **)** ***C*** **(** ***t*** **)** ***q*** **˙(** ***t*** **) ≤** ***αkΨ*** **(** ***t*** **)k** ***c*** **kq˙(** ***t*** **)k + ,**
 
-**4*****α***
+**2 2 4*****α***
 
-***S***<sup>**2**</sup> **+ 2*****γS*** **+** ***γ***<sup>**2**</sup> **is Hurwitz polynomial, where** ***S*** **is the**
+***S*** **+ 2*****γS*** **+** ***γ*** **is Hurwitz polynomial, where** ***S*** **is the**
 
-***T*** **1** ***T***
+***T*** **2 2 1** ***T***
 
-**Ψ (** ***t*** **)** ***G*** **(** ***t*** **) ≤** ***αkΨ*** **(** ***t*** **)k**<sup>**2**</sup> ***g***<sup>**2**</sup> **+ , Ψ (** ***t*** **)** ***M*** **(** ***t*** **)** ***e*** **¯(·) ≤ Laplace operator. Thus, the control design primarily 4*****α***
+**Ψ (** ***t*** **)** ***G*** **(** ***t*** **) ≤** ***αkΨ*** **(** ***t*** **)k** ***g*** **+ , Ψ (** ***t*** **)** ***M*** **(** ***t*** **)** ***e*** **¯(·) ≤ Laplace operator. Thus, the control design primarily 4*****α***
 
-**2 1 1** ***T***
+**2 2 + 2 1 1** ***T***
 
-***αkΨ*** **(** ***t*** **)k**<sup>**2**</sup> ***m***<sup>**+**</sup> **ke¯(·)k**<sup>**2**</sup> **+ , and Ψ (** ***t*** **)** ***M*** **˙ (** ***t*** **)Ψ (** ***t*** **) = depends on selecting** ***k*** **and** ***κ*** **(** ***t*** **). The PID-like control**
+***αkΨ*** **(** ***t*** **)k** ***m*** **ke¯(·)k + , and Ψ (** ***t*** **)** ***M*** **˙ (** ***t*** **)Ψ (** ***t*** **) = depends on selecting** ***k*** **and** ***κ*** **(** ***t*** **). The PID-like control**
 
-**∆ ∆ 4*****α*** **2** ***T*** **1**
+**∆ ∆ 4*****α*** **2** ***T*** **2 2 2 2 1**
 
-**input is then refined to: Ψ (** ***t*** **)** ***C*** **(** ***t*** **)Ψ (** ***t*** **) ≤** ***αkΨ*** **(** ***t*** **)k**<sup>**2**</sup> ***c***<sup>**2**</sup>**kq˙(** ***t*** **)k**<sup>**2**</sup>**kΨ (** ***t*** **)k**<sup>**2**</sup> **+ , where**
+**input is then refined to: Ψ (** ***t*** **)** ***C*** **(** ***t*** **)Ψ (** ***t*** **) ≤** ***αkΨ*** **(** ***t*** **)k** ***c*** **kq˙(** ***t*** **)k kΨ (** ***t*** **)k + , where**
 
 **4*****α***
 
@@ -120,14 +124,18 @@
 
 ***d***
 
-***u*** **(** ***t*** **) =(** ***k*** **+** ***κ*** **(** ***t*** **))** ***K*** **(** ***ζ*** **) 2*****γe*** **(** ***t*** **) +** ***γ***<sup>**2**</sup> ***e*** **(** ***ρ*** **)** ***dρ*** **+** ***e*** **(** ***t*** **) account equation (14) and applying the aforementioned ∆ ∆** ***N dt***
+**2**
+
+***u*** **(** ***t*** **) =(** ***k*** **+** ***κ*** **(** ***t*** **))** ***K*** **(** ***ζ*** **) 2*****γe*** **(** ***t*** **) +** ***γ e*** **(** ***ρ*** **)** ***dρ*** **+** ***e*** **(** ***t*** **) account equation (14) and applying the aforementioned ∆ ∆** ***N dt***
 
 **0**
 
 **inequalities, one has, = − (** ***k***~**∆**~**+** ***κ***~**∆**~**(** ***t*** **))** ***N*** **(** ***ζ*** **)Ψ** ***.*** **1**
 
-**−1 ˙ ˙ ˜ ˆ**
+**2** ***T*** **−1** ***T*** **˙**
 
-***V*** **(** ***t*** **) ≤** ***αkΨ*** **(** ***t*** **)k**<sup>**2**</sup>**Λ(** ***t*** **)−Ψ (** ***t*** **)**<sup>***T***</sup> ***κu*** **(** ***t*** **)+ +Γ** ***ψ*** **(** ***t*** **)**<sup>***T***</sup> ***ψ*** **(** ***t*** **)** ***,*** **(15)**
+**˙ ˜ ˆ**
+
+***V*** **(** ***t*** **) ≤** ***αkΨ*** **(** ***t*** **)k Λ(** ***t*** **)−Ψ (** ***t*** **)** ***κu*** **(** ***t*** **)+ +Γ** ***ψ*** **(** ***t*** **)** ***ψ*** **(** ***t*** **)** ***,*** **(15)**
 
 - (9) ***α***

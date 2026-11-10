@@ -18,7 +18,7 @@ X (8)
 
 sj−γ
 
-eγ−s~i~) + log(1 + e )
+e<sup>γ−s</sup>~i~) + log(1 + e )
 
 j∈N
 

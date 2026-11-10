@@ -22,9 +22,9 @@ Sometimes researchers know in advance that they want to estimate a population me
 
 ⎛-
 
-*x* - *µ* <sup>⎞</sup> ~⎠~ 2
+*x* - *µ* <sup>⎞2</sup>
 
-⎝
+⎝ ⎠
 
 with a specific tolerance level is given by 2 *Z*~*α*~pq *n* = *e*<sup>2</sup>
 

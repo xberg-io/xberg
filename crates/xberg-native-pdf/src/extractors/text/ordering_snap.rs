@@ -1,9 +1,10 @@
+use super::script_stack::{StackSpan, script_stack};
 use super::span_ordering::{SnapReach, snapped_script_baselines};
 
 /// One span as the reading-order snap sees it: text, x, y, width, font size.
 pub(crate) type OrderingSpan<'a> = (&'a str, f32, f32, f32, f32);
 
-fn is_list_marker(text: &str) -> bool {
+pub(super) fn is_list_marker(text: &str) -> bool {
     matches!(
         text.trim(),
         "\u{2022}" | "\u{25a0}" | "\u{25aa}" | "\u{25cf}" | "\u{25e6}" | "\u{b7}" | "\u{2013}" | "\u{2014}" | "-"
@@ -13,7 +14,7 @@ fn is_list_marker(text: &str) -> bool {
 /// Largest rise of a phrase above its base line, in ems of the phrase: a phrase is a line of text, not a mark.
 const PHRASE_MAX_RISE_EM: f32 = 0.25;
 
-fn is_phrase(text: &str) -> bool {
+pub(super) fn is_phrase(text: &str) -> bool {
     let trimmed = text.trim();
     trimmed.chars().count() > 3 || trimmed.contains(char::is_whitespace)
 }
@@ -73,29 +74,24 @@ pub(crate) fn ordering_script_baselines(spans: &[OrderingSpan<'_>]) -> Vec<Optio
     result
 }
 
-/// Largest rise or drop of a stack member from its base line, in ems of the base.
-const STACK_MAX_SHIFT_EM: f32 = 0.5;
-/// Largest gap between a stack member and the right edge of the base or the stack so far, in ems of the base.
-const STACK_MAX_GAP_EM: f32 = 0.25;
-/// A stack member must be smaller than its base by at least this factor.
-const STACK_MIN_BASE_SIZE_FACTOR: f32 = 1.15;
-/// Members that differ in size by more than this fraction of the larger one sit at two levels of a stack. A
-/// numerator and denominator, or a run of same-size exponent glyphs, are not a stack.
-const STACK_MIN_SIZE_STEP: f32 = 0.1;
-
 /// Snaps the members of a nested script stack (`e^{-c_1 \tau}`, `R^{n_x}`) onto their base's line.
 ///
-/// The members are small spans that abut their base, or the member before them, in x and sit within half an
-/// em of the base line. A stack needs two members at two sizes, one of them beyond the reach of a single
-/// mark, so a lone mark, which the single-mark reach decides, a fraction and a run of same-size glyphs are
-/// left alone. Spans that already snapped, and list markers and phrases, are neither members nor moved.
+/// Which spans form a stack is decided by [`script_stack`]. Spans that already snapped are neither
+/// bases nor moved.
 fn snap_script_stacks(spans: &[OrderingSpan<'_>], own: &[Option<f32>], result: &mut [Option<f32>]) {
-    let is_member_shape = |i: usize| {
-        let (text, _, _, _, fs) = spans[i];
-        fs > 0.0 && !text.trim().is_empty() && !is_list_marker(text) && !is_phrase(text)
+    let to_stack = |i: usize| {
+        let (text, x, baseline, width, font_size) = spans[i];
+        StackSpan {
+            text,
+            x,
+            baseline,
+            width,
+            font_size,
+        }
     };
-    let mut members: Vec<usize> = (0..spans.len()).filter(|&i| is_member_shape(i)).collect();
+    let mut members: Vec<usize> = (0..spans.len()).filter(|&i| spans[i].4 > 0.0).collect();
     members.sort_by(|&a, &b| crate::utils::safe_float_cmp(spans[a].1, spans[b].1));
+    let candidates: Vec<StackSpan<'_>> = members.iter().map(|&i| to_stack(i)).collect();
     let mut bases: Vec<usize> = (0..spans.len())
         .filter(|&i| spans[i].4 > 0.0 && !spans[i].0.trim().is_empty())
         .collect();
@@ -106,37 +102,14 @@ fn snap_script_stacks(spans: &[OrderingSpan<'_>], own: &[Option<f32>], result: &
         if claimed[base] || result[base].is_some() || own[base].is_some() {
             continue;
         }
-        let (_, bx, by, bw, bfs) = spans[base];
-        let mut stack: Vec<usize> = Vec::new();
-        let mut edge = bx + bw;
-        let first = members.partition_point(|&m| spans[m].1 < edge - bfs * STACK_MAX_GAP_EM);
-        for &m in &members[first..] {
-            let (_, mx, my, mw, mfs) = spans[m];
-            if mx > edge + bfs * STACK_MAX_GAP_EM {
-                break;
-            }
-            let fits = m != base
-                && !claimed[m]
-                && bfs >= mfs * STACK_MIN_BASE_SIZE_FACTOR
-                && (my - by).abs() <= bfs * STACK_MAX_SHIFT_EM;
-            if fits {
-                stack.push(m);
-                edge = edge.max(mx + mw);
-            }
-        }
-        if stack.len() < 2 {
+        let stack: Vec<usize> = script_stack(&to_stack(base), &candidates)
+            .into_iter()
+            .map(|i| members[i])
+            .collect();
+        if stack.is_empty() || stack.iter().any(|&m| claimed[m]) {
             continue;
         }
-        let out_of_reach = stack
-            .iter()
-            .any(|&m| (spans[m].2 - by).abs() > bfs * SnapReach::ORDERING.max_shift_em);
-        let (min_fs, max_fs) = stack.iter().fold((f32::MAX, 0.0f32), |(lo, hi), &m| {
-            (lo.min(spans[m].4), hi.max(spans[m].4))
-        });
-        let two_sizes = max_fs - min_fs > max_fs * STACK_MIN_SIZE_STEP;
-        if !(out_of_reach && two_sizes) {
-            continue;
-        }
+        let by = spans[base].2;
         for m in stack {
             claimed[m] = true;
             if result[m].is_none() {
@@ -145,7 +118,6 @@ fn snap_script_stacks(spans: &[OrderingSpan<'_>], own: &[Option<f32>], result: &
         }
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

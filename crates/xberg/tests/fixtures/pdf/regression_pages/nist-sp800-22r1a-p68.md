@@ -34,7 +34,11 @@ To apply the Χ -test, use the classical statistic
 
 2
 
-which, under the null (randomness) hypothesis, has an approximate Χ -distribution with 2 degrees of freedom. The reported *P-value* is exp{<sup>−Χ2</sup>( *obs* )/2}<sup>.</sup>
+which, under the null (randomness) hypothesis, has an approximate Χ -distribution with 2 degrees of
+
+freedom. The reported *P-value* is exp ( *obs* )/2
+
+{<sup>−Χ2</sup> }<sup>.</sup>
 
 Interpretation of this test: large values of Χ<sup>2</sup>( *obs* ) indicate that the deviation of the rank distribution from that corresponding to a random sequence is significant. For example, pseudo random matrices produced by a shift-register generator formed by less than *M* successive vectors systematically have rank *R*~*l*~ ≡ *M* , while for truly random data, the proportion of such occurrences should be only about 0.29.
 
