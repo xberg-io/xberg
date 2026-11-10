@@ -5574,7 +5574,10 @@ fn overlap_loser(
 ) -> Option<usize> {
     use crate::core::config::layout::TableOverlapPreference;
 
-    match (protected_layout_children.contains(&i), protected_layout_children.contains(&j)) {
+    match (
+        protected_layout_children.contains(&i),
+        protected_layout_children.contains(&j),
+    ) {
         (true, false) => Some(j),
         (false, true) => Some(i),
         (true, true) => {
@@ -5600,7 +5603,7 @@ fn resolve_overlaps(
     protected_layout_children: &ahash::AHashSet<usize>,
     evidence: &mut OverlapEvidence<'_>,
     to_remove: &mut ahash::AHashSet<usize>,
-    mut round: OverlapRound<'_>,
+    round: OverlapRound<'_>,
 ) {
     for i in 0..tables.len() {
         if to_remove.contains(&i) {
@@ -5882,11 +5885,7 @@ impl<'a> OverlapEvidence<'a> {
 
     /// The page split by carrier. Read again only when the live set changes.
     fn page_split(&mut self, page_number: u32, live: &[usize]) -> &PageSplit {
-        if self
-            .splits
-            .get(&page_number)
-            .is_none_or(|cached| cached.live != live)
-        {
+        if self.splits.get(&page_number).is_none_or(|cached| cached.live != live) {
             let page_index = page_number.saturating_sub(1) as usize;
             let coverage: Vec<&TableCoverage> = live
                 .iter()

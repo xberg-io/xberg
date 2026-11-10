@@ -1806,7 +1806,7 @@ fn dedup_counts_a_word_a_table_holds_once_as_one_new_word_however_often_the_page
     ]];
     // The capped count is 1 new word of 4 and the uncapped count is 3 of 4. The test tells them
     // apart only while the fraction lies between the two.
-    assert!(NEW_WORD_FRACTION * 4.0 > 1.0 && NEW_WORD_FRACTION * 4.0 <= 3.0);
+    const { assert!(NEW_WORD_FRACTION * 4.0 > 1.0 && NEW_WORD_FRACTION * 4.0 <= 3.0) };
     for (name, tables) in [
         ("big first", vec![big.clone(), small.clone()]),
         ("small first", vec![small, big.clone()]),
