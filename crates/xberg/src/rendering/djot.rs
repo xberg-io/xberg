@@ -403,6 +403,10 @@ fn escape_leading_block_marker(line: &str) -> String {
 fn leading_block_marker_at(line: &str) -> Option<usize> {
     let first = line.chars().next()?;
     if first.is_ascii_punctuation() {
+        // A backslash before punctuation already escapes it, and doubling it would free the next character.
+        if first == '\\' && line[1..].chars().next().is_some_and(|c| c.is_ascii_punctuation()) {
+            return None;
+        }
         let hashtag = first == '#'
             && line
                 .trim_start_matches('#')

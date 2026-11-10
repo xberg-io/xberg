@@ -991,3 +991,40 @@ fn every_row_text_keeps_three_paragraphs_in_either_layout() {
         lost.join("\n")
     );
 }
+
+#[test]
+fn a_row_that_starts_with_an_escaped_delimiter_keeps_the_delimiter_literal() {
+    for delimiter in ["*", "_", "{", "[", "`", "~", "^", "=", "+", "-"] {
+        let closing = match delimiter {
+            "{" => "}",
+            "[" => "]",
+            // A closing backtick would open a code span of its own and swallow the rest of the row.
+            "`" => "",
+            other => other,
+        };
+        let row = format!("\\{delimiter}word{closing} .... 1");
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_element(marked_row_lines_element(&format!("Intro .... 5\n{row}\nTail .... 9")));
+        let output = render_djot(&b.build());
+        assert_eq!(
+            djot_paragraph_texts(&output),
+            [
+                "Intro .... 5".to_string(),
+                row[1..].to_string(),
+                "Tail .... 9".to_string()
+            ],
+            "row {row:?} -> {output:?}"
+        );
+    }
+}
+
+#[test]
+fn an_escaped_dash_row_reads_as_a_hyphen_and_an_en_dash() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element("--- Rule .... 6"));
+    let output = render_djot(&b.build());
+    assert_eq!(output, "\\--- Rule .... 6\n");
+    let events: Vec<_> = jotdown::Parser::new(&output).collect();
+    assert!(events.iter().any(|event| matches!(event, jotdown::Event::EnDash)));
+    assert!(!events.iter().any(|event| matches!(event, jotdown::Event::EmDash)));
+}
