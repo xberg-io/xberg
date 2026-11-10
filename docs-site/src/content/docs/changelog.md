@@ -311,6 +311,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Keep page byte ranges when OCR page text and plain content render a table differently.** (#2825)
+  Under `OutputFormat::Plain` the per-page OCR text kept tables as markdown and its own block separators, so it never matched the plain content and `page_boundaries` was dropped with a warning. When the page text cannot be found in the content, each page is now rendered from its own elements with the plain renderer, so page text equals its content range.
 - **(ocr): Read a sideways paragraph of short words as prose.** (#2670)
   The text-size check counted every word box narrower than tall as a stroke, so a paragraph of two-letter words such as `is of to in on` was refused. Only a single-character box, or a run of vertical-stroke glyphs such as `Il`, now counts as a stroke.
 - **(excel): Extract the sheets that fit when a workbook exceeds `security_limits.max_table_cells`.** (#2820)

@@ -17,11 +17,19 @@ pub(super) fn derive_pages(
     observer: &mut impl super::surfaces::DerivationObserver,
 ) -> Option<Vec<PageContent>> {
     let raw_pages = doc.prebuilt_pages.take().or_else(|| build_pages(doc, content_is_plain));
-    let pages = apply_page_content_format(raw_pages, doc, output_format, observer);
-    if content_is_plain
-        && !reconcile_page_boundaries(&mut doc.metadata, content, pages.as_deref())
-        && drop_unusable_page_boundaries(&mut doc.metadata, content)
+    let mut pages = apply_page_content_format(raw_pages, doc, output_format, observer);
+    let mut reconciled = !content_is_plain || reconcile_page_boundaries(&mut doc.metadata, content, pages.as_deref());
+    if !reconciled
+        // ~keep Prebuilt page text (OCR) renders tables and block separators its own way, so it
+        // cannot be found in the plain content. Render each page's elements as `render_plain`
+        // does and locate that instead (#2825).
+        && let Some(rerendered) = rerender_pages_plain(pages.as_deref(), doc)
+        && reconcile_page_boundaries(&mut doc.metadata, content, Some(&rerendered))
     {
+        pages = Some(rerendered);
+        reconciled = true;
+    }
+    if !reconciled && drop_unusable_page_boundaries(&mut doc.metadata, content) {
         crate::core::diagnostics::push_warning(
             &mut doc.processing_warnings,
             "page_boundaries",
@@ -298,16 +306,9 @@ fn compute_page_membership(doc: &InternalDocument) -> std::collections::BTreeMap
     elements_by_page
 }
 
-/// Re-render one page's `content` from just the elements (and the tables/images they
-/// reference, renumbered) that belong to it.
-fn render_sub_page(
-    page: PageContent,
-    elem_indices: &[usize],
-    doc: &InternalDocument,
-    renderer: Option<fn(&InternalDocument) -> String>,
-    observation: (usize, &crate::core::config::OutputFormat),
-    observer: &mut impl super::surfaces::DerivationObserver,
-) -> PageContent {
+/// A document of just the elements at `elem_indices`, with the tables and images they
+/// reference renumbered.
+fn build_sub_doc(elem_indices: &[usize], doc: &InternalDocument) -> InternalDocument {
     let mut table_remap: ahash::AHashMap<u32, u32> = ahash::AHashMap::new();
     let mut sub_tables: Vec<Table> = Vec::new();
     let mut image_remap: ahash::AHashMap<u32, u32> = ahash::AHashMap::new();
@@ -360,6 +361,42 @@ fn render_sub_page(
     // A page shows the OCR text of a picture the same way the document does. ~keep
     sub_doc.ocr_text_only = doc.ocr_text_only;
     sub_doc.append_ocr_text = doc.append_ocr_text;
+    sub_doc
+}
+
+/// Each page's content rendered from its own elements by `render_plain`, so a page holds
+/// exactly the text the plain document holds for it. `None` when no page has elements.
+fn rerender_pages_plain(pages: Option<&[PageContent]>, doc: &InternalDocument) -> Option<Vec<PageContent>> {
+    let pages = pages?;
+    let elements_by_page = compute_page_membership(doc);
+    if elements_by_page.is_empty() {
+        return None;
+    }
+    Some(
+        pages
+            .iter()
+            .map(|page| {
+                let mut page = page.clone();
+                if let Some(indices) = elements_by_page.get(&page.page_number) {
+                    page.content = crate::rendering::render_plain(&build_sub_doc(indices, doc));
+                }
+                page
+            })
+            .collect(),
+    )
+}
+
+/// Re-render one page's `content` from just the elements (and the tables/images they
+/// reference, renumbered) that belong to it.
+fn render_sub_page(
+    page: PageContent,
+    elem_indices: &[usize],
+    doc: &InternalDocument,
+    renderer: Option<fn(&InternalDocument) -> String>,
+    observation: (usize, &crate::core::config::OutputFormat),
+    observer: &mut impl super::surfaces::DerivationObserver,
+) -> PageContent {
+    let sub_doc = build_sub_doc(elem_indices, doc);
 
     render_observed_page(page, &sub_doc, renderer, observation, observer)
 }
