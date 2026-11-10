@@ -1009,7 +1009,7 @@ impl TextRasterizer {
                     // axis. The axis swap is applied by the caller via
                     // advance_text_matrix; here we just accumulate the
                     // scalar magnitude. ~keep
-                    let shift = (-offset / 1000.0) * gs.font_size;
+                    let shift = tj_offset_shift(*offset, gs);
                     total += shift;
                 }
             }
@@ -1073,7 +1073,7 @@ impl TextRasterizer {
                     total_advance += advance;
                 }
                 TextElement::Offset(offset) => {
-                    let shift = (-offset / 1000.0) * current_gs.font_size;
+                    let shift = tj_offset_shift(*offset, &current_gs);
                     current_gs.advance_text_matrix(shift);
                     total_advance += shift;
                 }
@@ -1528,7 +1528,7 @@ impl TextRasterizer {
                     };
                     let px = (x_cursor + x_offset + paint_origin_dx) * h_scale + rise_x;
                     let py = y_cursor + y_offset + paint_origin_dy + rise_y;
-                    let glyph_transform = combined_base.pre_translate(px, py).pre_scale(scale, scale);
+                    let glyph_transform = combined_base.pre_translate(px, py).pre_scale(scale * h_scale, scale);
 
                     target.glyph(&path, glyph_transform, base_transform);
                 }
@@ -1586,8 +1586,9 @@ impl TextRasterizer {
                                     };
                                     let px = (x_cursor + x_offset + paint_origin_dx) * h_scale + rise_x;
                                     let py = y_cursor + y_offset + paint_origin_dy + rise_y;
-                                    let cjk_transform =
-                                        combined_base.pre_translate(px, py).pre_scale(cjk_scale, cjk_scale);
+                                    let cjk_transform = combined_base
+                                        .pre_translate(px, py)
+                                        .pre_scale(cjk_scale * h_scale, cjk_scale);
                                     target.glyph(&cjk_path, cjk_transform, base_transform);
                                     has_outline = true;
 
@@ -1612,7 +1613,7 @@ impl TextRasterizer {
                             };
                             let px = (x_cursor + x_offset + paint_origin_dx) * h_scale + rise_x;
                             let py = y_cursor + y_offset + paint_origin_dy + rise_y;
-                            let transform = combined_base.pre_translate(px, py).pre_scale(scale, scale);
+                            let transform = combined_base.pre_translate(px, py).pre_scale(scale * h_scale, scale);
                             target.glyph(&path, transform, base_transform);
                         }
                     }
@@ -1656,7 +1657,7 @@ impl TextRasterizer {
         // this as a scalar; in vertical mode the cursor advances in y but
         // the magnitude is identically meaningful to the matrix-update
         // helper (which itself handles the axis swap). ~keep
-        Ok(if wmode == 0 { x_cursor } else { y_cursor })
+        Ok(if wmode == 0 { x_cursor * h_scale } else { y_cursor })
     }
     /// Render text using direct CID-to-GID mapping, bypassing harfrust shaping.
     /// Used for CID subset fonts that have embedded data but no usable Unicode cmap.
@@ -1790,7 +1791,7 @@ impl TextRasterizer {
                         };
                         let px = (x_cursor + paint_origin_dx) * h_scale + rise_x;
                         let py = y_cursor + paint_origin_dy + rise_y;
-                        let glyph_transform = combined_base.pre_translate(px, py).pre_scale(scale, scale);
+                        let glyph_transform = combined_base.pre_translate(px, py).pre_scale(scale * h_scale, scale);
                         target.glyph(&path, glyph_transform, base_transform);
                     }
                 }
@@ -1816,7 +1817,7 @@ impl TextRasterizer {
         self.record_type0_ink_loss(&dropped, Some(font_info));
         self.report_drops(&dropped, &font_info.base_font);
 
-        Ok(if wmode == 0 { x_cursor } else { y_cursor })
+        Ok(if wmode == 0 { x_cursor * h_scale } else { y_cursor })
     }
 
     /// Paint a Tj / TJ string for an Adobe predefined CIDFont whose source
@@ -1956,7 +1957,7 @@ impl TextRasterizer {
                         };
                         let px = (x_cursor + paint_origin_dx) * h_scale + rise_x;
                         let py = y_cursor + paint_origin_dy + rise_y;
-                        let glyph_transform = combined_base.pre_translate(px, py).pre_scale(scale, scale);
+                        let glyph_transform = combined_base.pre_translate(px, py).pre_scale(scale * h_scale, scale);
                         target.glyph(&path, glyph_transform, base_transform);
                         glyphs_painted += 1;
                     }
@@ -2054,9 +2055,9 @@ impl TextRasterizer {
                 }
             }
 
-            x_cursor += (char_width + gs.char_space) / h_scale;
+            x_cursor += char_width + gs.char_space;
             if c == ' ' {
-                x_cursor += gs.word_space / h_scale;
+                x_cursor += gs.word_space;
             }
         }
 
@@ -2067,6 +2068,17 @@ impl TextRasterizer {
 impl Default for TextRasterizer {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Text-space shift of a `TJ` number: `-offset/1000 * Tfs`, scaled by `Th` in
+/// horizontal mode (ISO 32000-1 §9.4.4).
+pub(crate) fn tj_offset_shift(offset: f32, gs: &GraphicsState) -> f32 {
+    let shift = (-offset / 1000.0) * gs.font_size;
+    if gs.text_wmode == 0 {
+        shift * gs.horizontal_scaling / 100.0
+    } else {
+        shift
     }
 }
 

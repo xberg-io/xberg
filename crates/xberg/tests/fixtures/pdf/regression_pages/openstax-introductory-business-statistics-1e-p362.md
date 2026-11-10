@@ -20,9 +20,9 @@ Sometimes researchers know in advance that they want to estimate a population me
 
 *Z*~*α*~*σ*<sup>2</sup> *n* =
 
-⎛- ⎞2
+⎛-
 
-*x* - *µ*
+*x* - *µ* <sup>⎞2</sup>
 
 ⎝ ⎠
 
