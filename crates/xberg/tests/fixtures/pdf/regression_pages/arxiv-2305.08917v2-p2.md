@@ -18,15 +18,15 @@ XY
 
 (g) (g) (g),des
 
-H~N~ = − H + H (2) ~⟨~xy⟩,f ⟨xy⟩,f
+H~Nf~ = − H + H (2) ~⟨~xy⟩,f ⟨xy⟩,f
 
-f ⟨xy⟩ f=1
+⟨xy⟩ f=1
 
 The label g ∈ {U(1), Z~2~} is the gauge symmetry, with
 
-Z~2~ † 1 † 1
+† 1 † 1
 
-H = t c s~xy,f~c~y,f~ + c s~xy,f~c~x,f~ ⟨xy⟩,f x,f y,f (3)
+H~⟨~ <sup>Z</sup>~2 xy~⟩,f = t c s~xy,f~c~y,f~ + c~y,f~s~xy,f~c~x,f~ x,f (3)
 
 U(1) † + † −
 
@@ -42,7 +42,7 @@ Then H is a designer term [62] that makes the mod⟨xy⟩,f
 
 2
 
-fermion hole spin-1/2 up spin-1/2 down FIG. 1: Example fermion occupations and bond variables for the theories on a square spatial lattice with N~f~ = 1. els simulable by the meron algorithm, 1 1 t Z~2~,des H = −2t n~x,f~ − n~y,f~ − + ⟨xy⟩,f 2 2 2 1 1 U(1),des
+fermion hole spin-1/2 up spin-1/2 down FIG. 1: Example fermion occupations and bond variables for the theories on a square spatial lattice with N~f~ = 1. els simulable by the meron algorithm, 1 1 t H~⟨~ <sup>Z</sup>~2 xy~ ,des ⟩,f = −2t n~x,f~ − n~y,f~ − + 2 2 2 1 1 U(1),des
 
 - H = −t n (4) ⟨xy⟩,f x,f − n~y,f~ − 2 2 t
 
@@ -52,11 +52,7 @@ fermion hole spin-1/2 up spin-1/2 down FIG. 1: Example fermion occupations and b
 
 1 1
 
-s = σ /2 couples to fermions, and the local Z~2~ sym-
-
-Z~2~
-
-metry is manifest via the commutation [Q~x~, H ] = 0,
+s = σ /2 couples to fermions, and the local Z~2~ symmetry is manifest via the commutation [Q~x~, H<sup>Z</sup>~2~] = 0,
 
 P
 
@@ -82,17 +78,13 @@ In the terminology of gauge fields, our microscopic models are quantum link mode
 
 field operators is U = s , U = s , E = s~xy,f~ xy,f . xy,f xy,f xy,f We note that a straightforward application of the meron idea necessitates the introduction of an equivalent flavor index for gauge links as fermion flavors. Naively, the total Gauss law can be expressed through a product (Z~2~) or sum (U(1)) of the Gauss law of individual flavors degrees of freedom, and the resulting theories have
 
-⊗N~f~ ⊗N~f~
+⊗N~f~
 
-Z~2~ and U(1) gauge symmetry. However, flavored gauge-interactions can also be turned on in the U(1) model (as explained in the Supplementary Material), X
+Z~2~ and U(1)<sup>⊗N</sup>~f~ gauge symmetry. However, flavored gauge-interactions can also be turned on in the U(1) model (as explained in the Supplementary Material), X
 
 U(1) U(1) 3 3
 
-H~N~ →H~N~ + J s~xy,~ s~xy,~ , =2 =2 1 2
-
-f f
-
-(5)
+H~Nf=2~ →H~Nf=2~ + J s~xy,~1s~xy,~2, (5)
 
 ⟨xy⟩
 

@@ -1309,8 +1309,12 @@ pub(super) fn segment_script(segments: &[&crate::pdf::hierarchy::SegmentData], i
         .iter()
         .rev()
         .take(super::pipeline::SCRIPT_RUN_BASE_LOOKBACK)
-        .find_map(|base| {
-            if script.font_size >= base.font_size || !super::pipeline::is_script_run_of(base, script) {
+        .enumerate()
+        .find_map(|(back, base)| {
+            if script.font_size >= base.font_size
+                || !(super::pipeline::is_script_run_of(base, script)
+                    || super::pipeline::script_stack_members(segments, index - 1 - back).contains(&index))
+            {
                 return None;
             }
             let shift = script.upright_baseline() - base.upright_baseline();

@@ -65,13 +65,9 @@ cording as t \> 1 + s or t ≦ 1 + s. [Compare with n .]
 
 4. Discuss the convergence or divergence of the series
 
-P
+P ( a 1 n s 1 + a 2 n s 2 +
 
-s~1~ s~2~ s~k~ t~1~ t~2~ t~l~
-
-( a 1 n + a 2 n +
-
-- \+ a k n ) / ( b 1 n + b 2 n +
-- \+ b l n ) ,
+- \+ a k n s k ) / ( b 1 n t 1 + b 2 n t 2 +
+- \+ b l n t l ) ,
 
 where all the letters denote positive numbers and the s's and t's are rational and arranged in descending order of magnitude.
