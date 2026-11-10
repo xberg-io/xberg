@@ -1071,3 +1071,10 @@ fn a_row_that_opens_with_brackets_and_braces_keeps_its_text() {
         assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
     }
 }
+
+#[test]
+fn the_punctuation_run_after_an_opener_stops_at_a_backslash_that_already_escapes() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element("{\\*x* .... 1\n[_]\\_x_ .... 2"));
+    assert_eq!(render_djot(&b.build()), "\\{\\*x* .... 1\n\n\\[\\_\\]\\_x_ .... 2\n");
+}
