@@ -3,15 +3,23 @@
 //! gap stays visible to the span merge (#2675).
 
 use xberg_native_pdf::document::PdfDocument;
+use xberg_native_pdf::layout::TextSpan;
 
 const SIZE: f32 = 12.0;
 const GLYPH: f32 = 7.2;
 
 /// `A` at x = 100 with its own `Tm`; `after_a` follows it, before `ET`.
-fn show(after_a: &str) -> String {
+fn page(after_a: &str) -> PdfDocument {
     let content = format!("BT /F1 {SIZE} Tf\n1 0 0 1 100 500 Tm 100 Tz (A) Tj\n{after_a}\nET");
-    let doc = PdfDocument::from_bytes(build(content.as_bytes())).expect("open fixture");
-    doc.extract_text(0).expect("extract_text").trim().to_string()
+    PdfDocument::from_bytes(build(content.as_bytes())).expect("open fixture")
+}
+
+fn show(after_a: &str) -> String {
+    page(after_a).extract_text(0).expect("extract_text").trim().to_string()
+}
+
+fn spans(after_a: &str) -> Vec<TextSpan> {
+    page(after_a).extract_spans(0).expect("extract_spans")
 }
 
 /// The origin of a show `gap_em` after `A`'s advance.
@@ -75,13 +83,29 @@ fn zero_width_glyph_after_continuing_tm_ends_the_record() {
     assert_eq!(show(&format!("1 0 0 1 {x_b} 500 Tm (C) Tj /F1 12 Tf 100 Tz (B) Tj")), "ACB");
 }
 
-/// A `Tm` that restates the run under a new horizontal scale (GH#2664) changes its width with no
-/// glyph: the record is stale, and the same-font `Tf` after it does not end the run, as at the base.
+/// A `Tm` that restates the run under a new horizontal scale (GH#2664) after a continuing `Tm` keeps
+/// the record in the new unit: `A` stays 7.2 wide at x = 100, `B` is drawn at x = 160 twice as wide,
+/// and the blank 52.8 pt between them reads as a word gap when a new font ends the run.
 #[test]
-fn stretched_tm_after_continuing_tm_ends_the_record() {
+fn stretched_tm_after_continuing_tm_keeps_the_run_at_its_last_glyph() {
+    let after_a = "1 0 0 1 160 500 Tm 2 0 0 1 160 500 Tm /F2 12 Tf 100 Tz (B) Tj";
+    let spans = spans(after_a);
+    let boxes: Vec<(String, f32, f32)> = spans.iter().map(|s| (s.text.clone(), s.bbox.x, s.bbox.width)).collect();
+    assert_eq!(boxes.len(), 2, "{boxes:?}");
+    for (span, (text, x, width)) in boxes.iter().zip([("A", 100.0, GLYPH), ("B", 160.0, 2.0 * GLYPH)]) {
+        assert_eq!(span.0.trim(), text, "{boxes:?}");
+        assert!((span.1 - x).abs() < 0.05 && (span.2 - width).abs() < 0.05, "{boxes:?}");
+    }
+    assert_eq!(show(after_a), "A B");
+}
+
+/// The same under a compressing scale and a repeated same-font `Tf`: `B` sits one word gap after
+/// `A` at half width, and the run still ends at `A`.
+#[test]
+fn stretched_tm_after_continuing_tm_splits_at_a_word_gap_under_same_font_tf() {
     let x_b = x_after_a(0.278);
     let after_a = format!("1 0 0 1 {x_b} 500 Tm 0.5 0 0 1 {x_b} 500 Tm /F1 12 Tf 100 Tz (B) Tj");
-    assert_eq!(show(&after_a), "AB");
+    assert_eq!(show(&after_a), "A B");
 }
 
 /// One page with two Helvetica-metric fonts, `F1` and `F2`, whose `A` and `B` are 600/1000 em wide
