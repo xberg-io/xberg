@@ -4,7 +4,9 @@ use std::io::{Read, Seek};
 
 use calamine::{DataRef, Reader};
 
-use crate::extractors::security::{SecurityBudget, SecurityError, SecurityLimits};
+use crate::extractors::security::{
+    SecurityBudget, SecurityError, SecurityLimits, StringGrowthValidator, TableValidator,
+};
 use crate::{Result, XbergError};
 
 mod legacy;
@@ -25,6 +27,10 @@ pub(super) use zip_metadata::validate_xlsx_string_parts;
 pub(super) struct SkippedSheets {
     indices: Vec<usize>,
     max_cells: usize,
+    /// Names of every ODS sheet in document order. Calamine keys ranges by name, so a skipped
+    /// sheet sharing its name with a kept one is renamed in the rewritten input and reported
+    /// here under its original name.
+    names: Vec<String>,
 }
 
 impl SkippedSheets {
@@ -32,6 +38,7 @@ impl SkippedSheets {
         Self {
             indices: Vec::new(),
             max_cells: limits.max_table_cells,
+            names: Vec::new(),
         }
     }
 
@@ -54,6 +61,7 @@ impl SkippedSheets {
         if !self.contains(index) {
             return None;
         }
+        let name = self.names.get(index).map_or(name, String::as_str);
         let message = format!(
             "Sheet '{name}' was skipped: its cells did not fit in the remaining table-cell budget \
              (`security_limits.max_table_cells` is {}); raise the limit to extract it",
@@ -75,19 +83,41 @@ fn is_cell_limit(error: &XbergError) -> bool {
     )
 }
 
+/// The part of a [`SecurityBudget`] that a skipped sheet gives back: its table-cell and text
+/// charges. The iteration and depth counters stay monotonic, so skipped sheets are not free
+/// against `max_iterations` (sheets can alias one oversized part and be preflighted repeatedly).
+struct Charges {
+    table: TableValidator,
+    growth: StringGrowthValidator,
+}
+
+impl Charges {
+    fn of(budget: &SecurityBudget) -> Self {
+        Self {
+            table: budget.table.clone(),
+            growth: budget.growth.clone(),
+        }
+    }
+
+    fn restore(self, budget: &mut SecurityBudget) {
+        budget.table = self.table;
+        budget.growth = self.growth;
+    }
+}
+
 /// Run one worksheet's preflight against `budget`. When the sheet alone trips the cell limit,
-/// the budget is rolled back to its state before the sheet and the sheet is recorded in
-/// `skipped`; any other failure still aborts the workbook.
+/// its cell and text charges are rolled back and the sheet is recorded in `skipped`; any other
+/// failure still aborts the workbook.
 fn preflight_sheet(
     index: usize,
     budget: &mut SecurityBudget,
     skipped: &mut SkippedSheets,
     sheet: impl FnOnce(&mut SecurityBudget) -> Result<()>,
 ) -> Result<()> {
-    let before = budget.clone();
+    let before = Charges::of(budget);
     match sheet(budget) {
         Err(error) if is_cell_limit(&error) => {
-            *budget = before;
+            before.restore(budget);
             skipped.indices.push(index);
             Ok(())
         }

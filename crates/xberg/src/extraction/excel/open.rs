@@ -463,7 +463,7 @@ pub(crate) fn read_excel_file(file_path: &str, limits: &SecurityLimits) -> Resul
         return read_xlam_file(file_path, office_metadata, warnings, limits);
     }
     if lower_path.ends_with(".xla") {
-        return read_xla_file(file_path, office_metadata, warnings, &skipped);
+        return read_xla_file(file_path, office_metadata, warnings, limits, &skipped);
     }
     if lower_path.ends_with(".xlsb") {
         return read_xlsb_file(file_path, office_metadata, warnings, limits);
@@ -475,7 +475,7 @@ pub(crate) fn read_excel_file(file_path: &str, limits: &SecurityLimits) -> Resul
     read_detected_spreadsheet_file(file_path, limits)
 }
 
-fn read_detected_spreadsheet_file(file_path: &str, limits: &SecurityLimits) -> Result<ExcelReadResult> {
+fn read_bounded_spreadsheet_file(file_path: &str, limits: &SecurityLimits) -> Result<Vec<u8>> {
     let file = std::fs::File::open(file_path)?;
     if file.metadata()?.len() > limits.max_archive_size as u64 {
         return Err(XbergError::validation(
@@ -490,6 +490,11 @@ fn read_detected_spreadsheet_file(file_path: &str, limits: &SecurityLimits) -> R
             "Spreadsheet file exceeds the configured archive size".to_string(),
         ));
     }
+    Ok(data)
+}
+
+fn read_detected_spreadsheet_file(file_path: &str, limits: &SecurityLimits) -> Result<ExcelReadResult> {
+    let data = read_bounded_spreadsheet_file(file_path, limits)?;
     const OLE_SIGNATURE: &[u8] = &[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
     let extension = if data.starts_with(OLE_SIGNATURE) {
         ".xls"
@@ -583,10 +588,13 @@ fn read_xla_file(
     file_path: &str,
     office_metadata: Option<HashMap<String, String>>,
     mut warnings: Vec<ProcessingWarning>,
+    limits: &SecurityLimits,
     skipped: &SkippedSheets,
 ) -> Result<ExcelReadResult> {
     if !skipped.is_empty() {
-        return read_xla_bytes(&std::fs::read(file_path)?, office_metadata, warnings, skipped);
+        // The skipped sheets are dropped by rewriting the input, so the file is read once under the
+        // archive-size bound and that buffer is validated again and parsed.
+        return read_excel_bytes(&read_bounded_spreadsheet_file(file_path, limits)?, ".xla", limits);
     }
     let file = std::fs::File::open(file_path)?;
     match calamine::Xls::new(std::io::BufReader::new(file)) {
@@ -651,8 +659,8 @@ pub(crate) fn read_excel_bytes(data: &[u8], file_extension: &str, limits: &Secur
     match file_extension.to_lowercase().as_str() {
         ".xlsx" | ".xlsm" | ".xltm" => read_xlsx_family_bytes(data, office_metadata, warnings, limits),
         ".xlam" => read_xlam_bytes(data, office_metadata, warnings, limits),
-        ".xls" => read_xls_bytes(data, office_metadata, warnings, &skipped),
-        ".xla" => read_xla_bytes(data, office_metadata, warnings, &skipped),
+        ".xls" => read_xls_bytes(data, office_metadata, warnings, limits, &skipped),
+        ".xla" => read_xla_bytes(data, office_metadata, warnings, limits, &skipped),
         ".xlsb" => read_xlsb_bytes(data, office_metadata, warnings, limits),
         ".ods" => read_ods_bytes(data, office_metadata, warnings, limits, &skipped),
         _ => Err(XbergError::parsing(format!(
@@ -723,9 +731,10 @@ fn read_xls_bytes(
     data: &[u8],
     office_metadata: Option<HashMap<String, String>>,
     mut warnings: Vec<ProcessingWarning>,
+    limits: &SecurityLimits,
     skipped: &SkippedSheets,
 ) -> Result<ExcelReadResult> {
-    let rewritten = super::table_budget::drop_skipped_xls_sheets(data, skipped)?;
+    let rewritten = super::table_budget::drop_skipped_xls_sheets(data, skipped, limits)?;
     let cursor = Cursor::new(rewritten.as_deref().unwrap_or(data));
     let workbook =
         calamine::Xls::new(cursor).map_err(|e| XbergError::parsing(format!("Failed to parse XLS: {}", e)))?;
@@ -738,9 +747,10 @@ fn read_xla_bytes(
     data: &[u8],
     office_metadata: Option<HashMap<String, String>>,
     mut warnings: Vec<ProcessingWarning>,
+    limits: &SecurityLimits,
     skipped: &SkippedSheets,
 ) -> Result<ExcelReadResult> {
-    let rewritten = super::table_budget::drop_skipped_xls_sheets(data, skipped)?;
+    let rewritten = super::table_budget::drop_skipped_xls_sheets(data, skipped, limits)?;
     let cursor = Cursor::new(rewritten.as_deref().unwrap_or(data));
     match calamine::Xls::new(cursor) {
         Ok(workbook) => {
@@ -815,7 +825,7 @@ fn read_ods_file(
     skipped: &SkippedSheets,
 ) -> Result<ExcelReadResult> {
     if !skipped.is_empty() {
-        return read_ods_bytes(&std::fs::read(file_path)?, office_metadata, warnings, limits, skipped);
+        return read_excel_bytes(&read_bounded_spreadsheet_file(file_path, limits)?, ".ods", limits);
     }
     let file = std::fs::File::open(file_path)?;
     match calamine::Ods::new(std::io::BufReader::new(file)) {

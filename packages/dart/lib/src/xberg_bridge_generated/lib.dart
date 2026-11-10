@@ -18004,7 +18004,12 @@ class SecurityLimits {
   /// Maximum aggregate table cells per document (100,000).
   ///
   /// Raise this for trusted large tabular inputs. Higher values permit
-  /// proportionally more parsing work and output allocation.
+  /// proportionally more parsing work and output allocation. A spreadsheet
+  /// workbook (XLSX, XLSB, XLS, ODS) over the limit is not rejected: each
+  /// sheet that does not fit the remaining budget is skipped with a warning
+  /// and returned empty, so a workbook whose every sheet is over the limit
+  /// yields placeholder sheets only. Other table formats fail with a
+  /// security error.
   final PlatformInt64 maxTableCells;
 
   /// Maximum number of pages (or slides, or frames) in a single document.

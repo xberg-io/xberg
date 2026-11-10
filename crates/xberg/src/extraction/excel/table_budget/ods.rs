@@ -4,7 +4,7 @@ use std::io::{BufReader, Read, Seek};
 
 use quick_xml::events::{BytesStart, Event};
 
-use super::{SecurityBudget, SecurityLimits, SheetAllocation, SkippedSheets, is_cell_limit};
+use super::{Charges, SecurityBudget, SecurityLimits, SheetAllocation, SkippedSheets, is_cell_limit};
 use crate::{Result, XbergError};
 
 // ~keep Match calamine0.37's ODS row/column caps so formatted empty tails are not charged as dense data.
@@ -139,8 +139,8 @@ pub(in crate::extraction::excel) fn validate_ods<R: Read + Seek>(
     let mut sheet: Option<Sheet> = None;
     let mut cell: Option<Cell> = None;
     let mut buffer = Vec::new();
-    // Budget before the current sheet, restored if the sheet alone trips the cell limit.
-    let mut before_sheet: Option<SecurityBudget> = None;
+    // Charges before the current sheet, given back if the sheet alone trips the cell limit.
+    let mut before_sheet: Option<Charges> = None;
     let mut sheet_index = 0usize;
     // Open `table:table` elements left to close while the over-budget sheet is being passed over.
     let mut skipping_depth = 0usize;
@@ -166,14 +166,17 @@ pub(in crate::extraction::excel) fn validate_ods<R: Read + Seek>(
             && sheet.is_none()
             && cell.is_none()
         {
-            before_sheet = Some(budget.clone());
+            before_sheet = Some(Charges::of(&budget));
+            if let Event::Start(start) = &event {
+                skipped.names.push(table_name(start));
+            }
         }
         match handle_event(event, &mut sheet, &mut cell, &mut budget) {
             Ok(true) => return Ok(skipped),
             Ok(false) => {}
             Err(error) if sheet.is_some() && is_cell_limit(&error) => {
                 if let Some(before) = before_sheet.take() {
-                    budget = before;
+                    before.restore(&mut budget);
                 }
                 skipped.indices.push(sheet_index);
                 sheet_index += 1;
@@ -217,6 +220,13 @@ pub(in crate::extraction::excel) fn drop_skipped_sheets(
                     changed = true;
                     continue;
                 }
+                let name = table_name(start);
+                if current_skipped && skipped.names.iter().filter(|other| **other == name).count() > 1 {
+                    let renamed = renamed_table(start, sheet_index - 1);
+                    writer.write_event(Event::Start(renamed)).map_err(xml_error)?;
+                    changed = true;
+                    continue;
+                }
             }
             Event::Empty(start) if start.name().as_ref() == "table:table" && table_depth == 0 => {
                 sheet_index += 1;
@@ -237,6 +247,31 @@ pub(in crate::extraction::excel) fn drop_skipped_sheets(
         writer.write_event(event.into_owned()).map_err(xml_error)?;
     }
     Ok((writer.into_inner(), changed))
+}
+
+fn renamed_table(start: &BytesStart<'_>, index: usize) -> BytesStart<'static> {
+    let mut renamed = BytesStart::new("table:table");
+    for attribute in start.attributes().flatten() {
+        if attribute.key.as_ref() == "table:name" {
+            renamed.push_attribute(("table:name", format!("xberg-skipped-sheet-{index}").as_str()));
+        } else {
+            renamed.push_attribute(attribute);
+        }
+    }
+    renamed
+}
+
+fn table_name(start: &BytesStart<'_>) -> String {
+    start
+        .attributes()
+        .flatten()
+        .find(|attribute| attribute.key.as_ref() == "table:name")
+        .and_then(|attribute| {
+            quick_xml::escape::unescape(&attribute.value)
+                .ok()
+                .map(|name| name.into_owned())
+        })
+        .unwrap_or_default()
 }
 
 fn active_string_cell(cell: &mut Option<Cell>) -> Option<&mut Cell> {

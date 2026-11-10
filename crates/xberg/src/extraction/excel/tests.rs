@@ -1053,7 +1053,12 @@ fn should_skip_xlsx_before_reading_cells_after_an_oversized_box_gh2296() {
 /// A sheet that tripped `max_table_cells` comes back empty with a warning naming it, never as an error.
 pub(super) fn assert_sheet_skipped_for_cell_limit(result: Result<ExcelReadResult>, sheet: &str, max: usize) {
     let (workbook, warnings) = result.expect("a sheet over the table-cell limit must degrade, not fail");
-    assert!(workbook.sheets.iter().any(|candidate| candidate.name == sheet));
+    assert_eq!(
+        workbook.sheets.len(),
+        1,
+        "the workbook's only sheet stays as a placeholder"
+    );
+    assert_eq!(workbook.sheets[0].name, sheet);
     assert!(workbook.sheets.iter().all(|candidate| candidate.table_cells.is_none()));
     let expected = format!("Sheet '{sheet}' was skipped");
     let limit = format!("`security_limits.max_table_cells` is {max}");
@@ -1796,4 +1801,96 @@ fn should_skip_only_the_ods_sheets_over_the_table_budget_gh2820() {
             skipped[0]
         );
     }
+}
+
+#[test]
+fn should_skip_xlsb_sheets_over_the_table_budget_gh2820() {
+    let path = format!(
+        "{}/../../test_documents/xlsx/test_xlsb.xlsb",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let bytes = std::fs::read(path).expect("required XLSB fixture");
+    let (baseline, _) = read_excel_bytes(&bytes, ".xlsb", &SecurityLimits::default()).unwrap();
+    let limits = SecurityLimits {
+        max_table_cells: 1,
+        ..Default::default()
+    };
+    let (workbook, warnings) =
+        read_excel_bytes(&bytes, ".xlsb", &limits).expect("an XLSB over the cell limit must degrade, not fail");
+    assert_eq!(workbook.sheets.len(), baseline.sheets.len());
+    let mut expected_skips = 0;
+    for (kept, full) in workbook.sheets.iter().zip(&baseline.sheets) {
+        assert_eq!(kept.name, full.name);
+        if full.row_count * full.col_count > 1 {
+            expected_skips += 1;
+            assert!(kept.table_cells.is_none(), "{}", kept.name);
+        }
+    }
+    assert!(expected_skips > 0, "the fixture must exceed one cell");
+    let skips = warnings
+        .iter()
+        .filter(|warning| warning.message.contains("was skipped: its cells did not fit"))
+        .count();
+    assert_eq!(skips, expected_skips, "{warnings:?}");
+}
+
+#[test]
+fn should_not_blank_an_ods_sheet_that_shares_a_name_with_a_skipped_one_gh2820() {
+    let cell = |value: u32| format!(r#"<table:table-cell office:value-type="float" office:value="{value}"/>"#);
+    let big = r#"<table:table-row table:number-rows-repeated="5"><table:table-cell table:number-columns-repeated="5" office:value-type="float" office:value="9"/></table:table-row>"#.to_string();
+    let small = format!("<table:table-row>{}{}</table:table-row>", cell(1), cell(2));
+    let limits = SecurityLimits {
+        max_table_cells: 10,
+        ..Default::default()
+    };
+    for (label, first, second) in [("big first", &big, &small), ("small first", &small, &big)] {
+        let rows = format!(r#"{first}</table:table><table:table table:name="Data">{second}"#);
+        let (workbook, warnings) = read_excel_bytes(&ods_with_table_rows(&rows), ".ods", &limits).unwrap();
+        let kept: Vec<_> = workbook
+            .sheets
+            .iter()
+            .filter_map(|sheet| sheet.table_cells.clone())
+            .collect();
+        assert_eq!(
+            kept,
+            vec![vec![vec!["1".to_string(), "2".to_string()]]; kept.len()],
+            "{label}: {:?}",
+            workbook.sheets
+        );
+        assert!(!kept.is_empty(), "{label}: the fitting sheet came back empty");
+        assert_eq!(
+            warnings
+                .iter()
+                .filter(|warning| warning.message.contains("was skipped"))
+                .count(),
+            1,
+            "{label}: {warnings:?}"
+        );
+    }
+}
+
+#[test]
+fn should_keep_the_iteration_budget_monotonic_across_skipped_xlsx_sheets_gh2820() {
+    const WORKSHEET: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
+    let count = 40;
+    let sheets: String = (1..=count)
+        .map(|n| format!(r#"<sheet name="S{n}" sheetId="{n}" r:id="rId{n}"/>"#))
+        .collect();
+    let rels: String = (1..=count)
+        .map(|n| format!(r#"<Relationship Id="rId{n}" Type="{WORKSHEET}" Target="worksheets/sheet1.xml"/>"#))
+        .collect();
+    let bytes = make_xlsx(
+        &format!("<sheets>{sheets}</sheets>"),
+        &rels,
+        &[("xl/worksheets/sheet1.xml", inline_string_sheet(5, 5, "a"))],
+    );
+    let limits = SecurityLimits {
+        max_table_cells: 10,
+        max_iterations: 100,
+        ..Default::default()
+    };
+    let error = read_excel_bytes(&bytes, ".xlsx", &limits).unwrap_err();
+    assert!(error.to_string().contains("iterations"), "{error}");
+    let (workbook, _) = read_excel_bytes(&bytes, ".xlsx", &SecurityLimits::default()).unwrap();
+    assert_eq!(workbook.sheets.len(), count);
 }

@@ -58,6 +58,7 @@ const BIFF_IGNORED: u16 = 0x0FFF;
 pub(in crate::extraction::excel) fn drop_skipped_sheets(
     data: &[u8],
     skipped: &SkippedSheets,
+    limits: &SecurityLimits,
 ) -> Result<Option<Vec<u8>>> {
     if skipped.is_empty() {
         return Ok(None);
@@ -72,17 +73,21 @@ pub(in crate::extraction::excel) fn drop_skipped_sheets(
     };
     let mut stream = Vec::new();
     compound.open_stream(stream_name)?.read_to_end(&mut stream)?;
-    neutralize_sheets(&mut stream, skipped)?;
-    // ~keep Calamine reads only the workbook stream, so the rewritten container carries just that.
+    neutralize_sheets(&mut stream, skipped, limits)?;
+    // ~keep Calamine reads only the workbook stream, so the rewritten container carries just that;
+    // the document-information, VBA and picture streams of the original are dropped, and nothing
+    // downstream reads them from XLS input.
     let mut rewritten = cfb::CompoundFile::create(std::io::Cursor::new(Vec::new()))?;
     std::io::Write::write_all(&mut rewritten.create_stream(stream_name)?, &stream)?;
     Ok(Some(rewritten.into_inner().into_inner()))
 }
 
-fn neutralize_sheets(stream: &mut [u8], skipped: &SkippedSheets) -> Result<()> {
+fn neutralize_sheets(stream: &mut [u8], skipped: &SkippedSheets, limits: &SecurityLimits) -> Result<()> {
+    let mut budget = SecurityBudget::from_limits(limits);
     let mut worksheets = Vec::new();
     let mut position = 0usize;
-    while let Some((kind, length)) = record_header(stream, position)? {
+    while let Some((kind, length)) = record_header(stream, position) {
+        budget.step()?;
         if kind == BIFF_EOF {
             break;
         }
@@ -92,12 +97,17 @@ fn neutralize_sheets(stream: &mut [u8], skipped: &SkippedSheets) -> Result<()> {
         }
         position += 4 + length;
     }
-    for (index, offset) in worksheets.into_iter().enumerate() {
-        if !skipped.contains(index) {
-            continue;
-        }
+    // Sheets may alias one substream; walk each distinct start once.
+    let starts: std::collections::BTreeSet<usize> = worksheets
+        .into_iter()
+        .enumerate()
+        .filter(|(index, _)| skipped.contains(*index))
+        .map(|(_, offset)| offset)
+        .collect();
+    for offset in starts {
         let (mut position, mut seen_bof, mut nested) = (offset, false, 0usize);
-        while let Some((kind, length)) = record_header(stream, position)? {
+        while let Some((kind, length)) = record_header(stream, position) {
+            budget.step()?;
             if nested > 0 {
                 match kind {
                     BIFF_BOF => nested += 1,
@@ -121,19 +131,12 @@ fn neutralize_sheets(stream: &mut [u8], skipped: &SkippedSheets) -> Result<()> {
     Ok(())
 }
 
-fn record_header(stream: &[u8], position: usize) -> Result<Option<(u16, usize)>> {
-    if position >= stream.len() {
-        return Ok(None);
-    }
-    if position + 4 > stream.len() {
-        return Err(XbergError::parsing("Truncated XLS record header".to_string()));
-    }
-    let kind = u16::from_le_bytes([stream[position], stream[position + 1]]);
-    let length = usize::from(u16::from_le_bytes([stream[position + 2], stream[position + 3]]));
-    if position + 4 + length > stream.len() {
-        return Err(XbergError::parsing("Truncated XLS record".to_string()));
-    }
-    Ok(Some((kind, length)))
+/// The record at `position`, or `None` at the end of the stream or at a truncated record.
+fn record_header(stream: &[u8], position: usize) -> Option<(u16, usize)> {
+    let header = stream.get(position..position.checked_add(4)?)?;
+    let kind = u16::from_le_bytes([header[0], header[1]]);
+    let length = usize::from(u16::from_le_bytes([header[2], header[3]]));
+    (position + 4 + length <= stream.len()).then_some((kind, length))
 }
 
 fn validate_sheet(reader: &mut impl Read, budget: &mut SecurityBudget, limits: &SecurityLimits) -> Result<()> {
@@ -357,20 +360,34 @@ mod tests {
     }
 
     fn workbook_of(sheets: &[Vec<u8>]) -> Vec<u8> {
+        workbook_with_globals(sheets, &[])
+    }
+
+    /// `extra_globals` are whole records placed in the globals substream after the BOUNDSHEETs.
+    fn workbook_with_globals(sheets: &[Vec<u8>], extra_globals: &[u8]) -> Vec<u8> {
+        let mut starts = Vec::new();
+        let mut next = bof(0x0005).len() + sheets.len() * 14 + extra_globals.len() + 4;
+        for sheet in sheets {
+            starts.push(next);
+            next += sheet.len();
+        }
+        workbook_at(sheets, &starts, extra_globals)
+    }
+
+    /// One BOUNDSHEET per entry of `starts` (absolute offsets in the stream), then the substreams.
+    fn workbook_at(substreams: &[Vec<u8>], starts: &[usize], extra_globals: &[u8]) -> Vec<u8> {
         let mut globals = bof(0x0005);
-        let end_globals = globals.len() + sheets.len() * 14 + 4;
-        let mut offset = end_globals;
-        for (index, sheet) in sheets.iter().enumerate() {
+        for (index, start) in starts.iter().enumerate() {
             let mut data = vec![0; 10];
-            data[..4].copy_from_slice(&(offset as u32).to_le_bytes());
+            data[..4].copy_from_slice(&(*start as u32).to_le_bytes());
             data[6] = 2;
-            data[8] = b'0' + (index / 10) as u8;
+            data[8] = b'0' + ((index / 10) % 10) as u8;
             data[9] = b'0' + (index % 10) as u8;
             globals.extend(record(BIFF_BOUND_SHEET, &data));
-            offset += sheet.len();
         }
+        globals.extend_from_slice(extra_globals);
         globals.extend(record(BIFF_EOF, &[]));
-        for sheet in sheets {
+        for sheet in substreams {
             globals.extend_from_slice(sheet);
         }
         globals
@@ -393,7 +410,9 @@ mod tests {
             let bytes = compound(&workbook(&sheet, count));
             let skipped = validate_xls(&mut Cursor::new(workbook(&sheet, count)), &limits).unwrap();
             assert_eq!(skipped.indices, (0..count).collect::<Vec<_>>());
-            // ~keep Calamine cannot open a 50-sheet fixture of this shape even unmodified (no Workbook stream found).
+            // ~keep Calamine's own CFB reader cannot open these generated containers at 50 sheets
+            // ("Cannot find Workbook stream") even unmodified, also on origin/main, so only the smaller
+            // ones are read end to end.
             if count <= 10 {
                 let (result, warnings) = crate::extraction::excel::read_excel_bytes(&bytes, ".xls", &limits).unwrap();
                 assert_eq!(result.sheets.len(), count);
@@ -733,5 +752,131 @@ mod tests {
             assert_eq!(skipped.len(), 1, "{label}: {warnings:?}");
             assert!(skipped[0].contains("Sheet '01' was skipped"), "{label}: {}", skipped[0]);
         }
+    }
+
+    fn sst(strings: &[&str]) -> Vec<u8> {
+        let mut data = (strings.len() as u32).to_le_bytes().to_vec();
+        data.extend((strings.len() as u32).to_le_bytes());
+        for text in strings {
+            data.extend((text.len() as u16).to_le_bytes());
+            data.push(0);
+            data.extend(text.bytes());
+        }
+        record(0x00FC, &data)
+    }
+
+    fn label_sst(row: u16, col: u16, index: u32) -> Vec<u8> {
+        let mut data = vec![0; 10];
+        data[..2].copy_from_slice(&row.to_le_bytes());
+        data[2..4].copy_from_slice(&col.to_le_bytes());
+        data[6..].copy_from_slice(&index.to_le_bytes());
+        record(0x00FD, &data)
+    }
+
+    #[test]
+    fn should_keep_shared_strings_for_a_sheet_after_a_skipped_xls_sheet_gh2820() {
+        let big = [
+            bof(0x0010),
+            dimensions((0, 0), (5, 5)),
+            label_sst(0, 0, 0),
+            record(0x003C, &[0; 8]),
+            record(BIFF_EOF, &[]),
+        ]
+        .concat();
+        let strings = [
+            bof(0x0010),
+            label_sst(0, 0, 1),
+            label_sst(0, 1, 0),
+            record(BIFF_EOF, &[]),
+        ]
+        .concat();
+        let bytes = compound(&workbook_with_globals(&[big, strings], &sst(&["hello", "world"])));
+        let limits = SecurityLimits {
+            max_table_cells: 10,
+            ..Default::default()
+        };
+        let (result, warnings) = crate::extraction::excel::read_excel_bytes(&bytes, ".xls", &limits).unwrap();
+        assert_eq!(result.sheets.len(), 2);
+        assert!(result.sheets[0].table_cells.is_none());
+        assert_eq!(
+            result.sheets[1].table_cells.as_ref().unwrap(),
+            &[vec!["world".to_string(), "hello".to_string()]]
+        );
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+    }
+
+    #[test]
+    fn should_skip_every_xls_sheet_that_shares_one_over_budget_substream_gh2820() {
+        let sheet = [bof(0x0010), dimensions((0, 0), (5, 5)), record(BIFF_EOF, &[])].concat();
+        let stream = workbook_at(std::slice::from_ref(&sheet), &[bof(0x0005).len() + 3 * 14 + 4; 3], &[]);
+        let limits = SecurityLimits {
+            max_table_cells: 10,
+            ..Default::default()
+        };
+        let skipped = validate_xls(&mut Cursor::new(stream.clone()), &limits).unwrap();
+        assert_eq!(skipped.indices, [0, 1, 2]);
+        let (result, warnings) =
+            crate::extraction::excel::read_excel_bytes(&compound(&stream), ".xls", &limits).unwrap();
+        assert_eq!(result.sheets.len(), 3);
+        assert!(result.sheets.iter().all(|sheet| sheet.table_cells.is_none()));
+        assert_eq!(warnings.len(), 3);
+    }
+
+    /// `count` BOUNDSHEETs that all point at one substream of `records` junk records, the first
+    /// of which is a DIMENSIONS record that trips the cell limit.
+    fn aliased_workbook(count: usize, records: usize) -> Vec<u8> {
+        let mut sheet = [bof(0x0010), dimensions((0, 0), (1999, 1000))].concat();
+        for _ in 0..records {
+            sheet.extend(record(0x0FFE, &[0; 4]));
+        }
+        sheet.extend(record(BIFF_EOF, &[]));
+        workbook_at(&[sheet], &vec![bof(0x0005).len() + count * 14 + 4; count], &[])
+    }
+
+    #[test]
+    fn should_walk_a_shared_xls_substream_once_when_blanking_skipped_sheets_gh2820() {
+        let stream = aliased_workbook(200, 2000);
+        let limits = SecurityLimits {
+            max_table_cells: 10,
+            max_iterations: 3000,
+            ..Default::default()
+        };
+        let skipped = validate_xls(&mut Cursor::new(stream.clone()), &limits).unwrap();
+        assert_eq!(skipped.indices.len(), 200);
+        let rewritten = drop_skipped_sheets(&compound(&stream), &skipped, &limits).unwrap();
+        assert!(rewritten.is_some());
+    }
+
+    #[test]
+    fn should_keep_the_iteration_budget_monotonic_across_skipped_xls_sheets_gh2820() {
+        let stream = aliased_workbook(100, 0);
+        let limits = SecurityLimits {
+            max_table_cells: 10,
+            max_iterations: 150,
+            ..Default::default()
+        };
+        let error = validate_xls(&mut Cursor::new(stream), &limits).unwrap_err();
+        assert!(error.to_string().contains("iterations"), "{error}");
+    }
+
+    #[test]
+    fn should_stop_blanking_a_skipped_xls_sheet_at_a_truncated_record_gh2820() {
+        let sheet = [bof(0x0010), dimensions((0, 0), (5, 5)), vec![0x03, 0x02, 0xFF, 0xFF]].concat();
+        let stream = workbook_of(&[sheet]);
+        let limits = SecurityLimits {
+            max_table_cells: 10,
+            ..Default::default()
+        };
+        assert_eq!(
+            validate_xls(&mut Cursor::new(stream.clone()), &limits).unwrap().indices,
+            [0]
+        );
+        let mut forced = SkippedSheets::new(&limits);
+        forced.indices.push(0);
+        assert!(
+            drop_skipped_sheets(&compound(&stream), &forced, &limits)
+                .unwrap()
+                .is_some()
+        );
     }
 }
