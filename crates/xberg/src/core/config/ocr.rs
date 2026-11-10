@@ -83,7 +83,7 @@ where
 ///
 /// Fields default to conservative extraction behavior. Suspected OCR recognition noise is
 /// reported but retained unless destructive filtering is explicitly enabled.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OcrQualityThresholds {
     /// Minimum total non-whitespace characters to consider text substantive.
@@ -133,8 +133,9 @@ pub struct OcrQualityThresholds {
     /// Measured over the 16 pages of a recorded municipal ordinance (13 prose pages, 3 scanned
     /// survey drawings): prose ran 0.04-0.28, the drawings 0.42-0.47. The default sits in that
     /// gap with margin on both sides. By default, crossing the threshold emits a processing
-    /// warning but retains the recognized text. Set [`Self::discard_suspected_ocr_noise`] to
-    /// `true` to restore destructive filtering.
+    /// warning and retains the recognized text, except for the symbol-noise lines that
+    /// [`Self::prune_symbol_noise_lines`] removes. Set [`Self::discard_suspected_ocr_noise`] to
+    /// `true` to restore destructive filtering of the whole page.
     #[serde(default = "default_max_ocr_output_fragmented_word_ratio")]
     pub max_ocr_output_fragmented_word_ratio: f64,
 
@@ -186,9 +187,44 @@ pub struct OcrQualityThresholds {
     /// Discard non-empty OCR text when any configured recognition-noise signal fires.
     ///
     /// Defaults to `false`: suspected noise is retained and surfaced through
-    /// `processing_warnings`. Set to `true` to preserve the legacy destructive behavior.
+    /// `processing_warnings`, minus the symbol-noise lines [`Self::prune_symbol_noise_lines`]
+    /// removes. Set to `true` to preserve the legacy destructive behavior.
     #[serde(default)]
     pub discard_suspected_ocr_noise: bool,
+
+    /// Remove symbol-noise lines from a page flagged as suspected recognition noise but retained.
+    ///
+    /// Applies to any such page, not only photographs, when it has at least 8 non-blank lines
+    /// and at least half of them are symbol noise. A line is symbol noise when fewer than half
+    /// its whitespace-separated tokens are word-shaped (3 or more letters, 4 or more when the
+    /// line is a single token, after trimming surrounding punctuation) and none of these keeps
+    /// it:
+    ///
+    /// - it contains any digit;
+    /// - it contains a character of a script written without spaces (CJK ideographs, Kana,
+    ///   Hangul, Thai, Lao, Khmer, Myanmar), each of which counts as a word;
+    /// - a token holds a letter outside the Latin script (Arabic, Cyrillic, Greek, ...);
+    /// - an `=`, `+`, `<`, `>` or comparison/multiplication sign sits between two operands, each
+    ///   a word of 3 or more letters, a digit-bearing token, or one letter other than
+    ///   `i`, `l`, `j`, `o` (`x = y`, `a + b`; `oe = ie` and `i - l` are pruned);
+    /// - it is an English phrase: two or more alphabetic tokens that are each an English
+    ///   function word (`I`, `am`, `to`, ...) or a word of 3 or more letters with a vowel, with at
+    ///   least one function word of 2 or more letters (`I am.`, `Go to`, `IS IT`; `ee so` is
+    ///   pruned). This rule is English-only, so a 2-token or 3-token line in another language
+    ///   (`de la`, `de la gare`) is pruned;
+    /// - a token is an English contraction (`I'm`, `it's`).
+    ///
+    /// A single-token form answer such as `No.`, `Yes` or `Qty` has too little around it to
+    /// count as a word and is pruned on a flagged page, and so is an equation written without
+    /// spaces (`x=y`).
+    ///
+    /// Pages with tables and pages discarded by [`Self::discard_suspected_ocr_noise`] are not
+    /// pruned. Stage scoring in a multi-stage OCR pipeline and the single-page first-pass
+    /// quality gate read the text before pruning. Each pruned page adds a processing warning
+    /// naming the page and the number of lines removed. Set to `false` to keep every
+    /// recognized line.
+    #[serde(default = "default_prune_symbol_noise_lines")]
+    pub prune_symbol_noise_lines: bool,
 
     /// Minimum average word length. Below this with enough words indicates garbled extraction.
     #[serde(default = "default_min_avg_word_length")]
@@ -351,6 +387,7 @@ impl Default for OcrQualityThresholds {
             min_words_for_ocr_output_check: default_min_words_for_ocr_output_check(),
             max_ocr_output_dict_invalid_word_ratio: default_max_ocr_output_dict_invalid_word_ratio(),
             discard_suspected_ocr_noise: false,
+            prune_symbol_noise_lines: default_prune_symbol_noise_lines(),
             min_avg_word_length: 2.0,
             min_words_for_avg_length_check: 50,
             min_consecutive_repeat_ratio: 0.08,
@@ -438,6 +475,10 @@ fn default_min_undecodable_ratio() -> f64 {
 /// Provenance-based fabricated-text OCR routing is on by default: it is a
 /// direct fact from xberg_native_pdf 0.3.75+, not a heuristic, so false positives are
 /// rare (issue #1254).
+fn default_prune_symbol_noise_lines() -> bool {
+    true
+}
+
 fn default_enable_provenance_ocr_routing() -> bool {
     true
 }
@@ -2694,6 +2735,15 @@ model_tier = "server"
     #[test]
     fn destructive_ocr_noise_filter_defaults_disabled() {
         assert!(!OcrQualityThresholds::default().discard_suspected_ocr_noise);
+    }
+
+    #[test]
+    fn symbol_noise_line_pruning_defaults_on_and_can_be_switched_off() {
+        assert!(OcrQualityThresholds::default().prune_symbol_noise_lines);
+        let thresholds: OcrQualityThresholds = serde_json::from_str(r#"{"prune_symbol_noise_lines":false}"#).unwrap();
+        assert!(!thresholds.prune_symbol_noise_lines);
+        let partial: OcrQualityThresholds = serde_json::from_str(r#"{"min_total_non_whitespace": 256}"#).unwrap();
+        assert!(partial.prune_symbol_noise_lines);
     }
 
     #[test]

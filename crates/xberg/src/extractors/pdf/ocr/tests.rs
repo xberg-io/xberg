@@ -5497,6 +5497,8 @@ pub(super) mod tests {
         );
     }
 
+    include!("tests/noise_stage_scoring_tests.rs");
+
     /// #1575: a rendered PDF page's own OCR backend warnings (e.g. Tesseract's
     /// dictionary-filter removal notice) and its `additional` metadata (psm, language) reached
     /// the caller for a standalone image (`extractors::image`, which assigns the whole OCR
