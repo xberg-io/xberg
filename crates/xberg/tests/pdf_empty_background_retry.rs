@@ -30,6 +30,8 @@ struct LabelBackend {
     seen: Arc<Mutex<Vec<(u32, u32)>>>,
     background_read: BackgroundRead,
     foreground_read: &'static str,
+    /// Whether the background's preparation clamped it. Off, it is the plain downscale of #2832.
+    background_clamped: bool,
 }
 
 impl Plugin for LabelBackend {
@@ -90,7 +92,12 @@ impl OcrBackend for LabelBackend {
         };
         let mut result = ExtractedDocument::default();
         result.content = content.to_owned();
-        result.metadata.image_preprocessing = Some(preprocessing(image.width(), image.height(), background));
+        result.metadata.image_preprocessing = Some(preprocessing(
+            image.width(),
+            image.height(),
+            background,
+            self.background_clamped,
+        ));
         Ok(result)
     }
     fn supports_language(&self, _: &str) -> bool {
@@ -108,15 +115,18 @@ fn verify_white_clamp(image: &image::DynamicImage) {
     assert!(resized.pixels().all(|p| p.0 == [255; 3]));
 }
 
-fn preprocessing(width: u32, height: u32, background: bool) -> xberg::types::ImagePreprocessingMetadata {
+fn preprocessing(width: u32, height: u32, background: bool, clamped: bool) -> xberg::types::ImagePreprocessingMetadata {
     let dpi = if background { 75.0 } else { 150.0 };
+    let clamped = background && clamped;
+    let downscaled = background && !clamped;
     serde_json::from_value(serde_json::json!({
         "original_dimensions": {"width": width, "height": height},
         "original_dpi": {"horizontal": dpi, "vertical": dpi}, "target_dpi": 150,
-        "scale_factor": if background {16.0 / 1024.0} else {1.0}, "resample_method": "nearest",
-        "new_dimensions": if background {serde_json::json!({"width":16,"height":12})}
+        "scale_factor": if clamped {16.0 / 1024.0} else if downscaled {0.4} else {1.0},
+        "resample_method": "nearest",
+        "new_dimensions": if clamped {serde_json::json!({"width":16,"height":12})}
             else {serde_json::Value::Null},
-        "final_dpi": if background {1} else {150}, "dimension_clamped": background,
+        "final_dpi": if clamped {1} else if downscaled {120} else {150}, "dimension_clamped": clamped,
         "auto_adjusted": background, "calculated_dpi": null, "skipped_resize": !background,
         "resize_error": null
     }))
@@ -196,12 +206,14 @@ fn run(
     background_read: BackgroundRead,
     foreground_read: &'static str,
     discard_noise: bool,
+    background_clamped: bool,
 ) -> (xberg::Result<ExtractedDocument>, Vec<(u32, u32)>) {
     let seen = Arc::new(Mutex::new(Vec::new()));
     register_ocr_backend(Arc::new(LabelBackend {
         seen: seen.clone(),
         background_read,
         foreground_read,
+        background_clamped,
     }))
     .unwrap();
     let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
@@ -219,7 +231,7 @@ fn run(
 }
 
 fn assert_background_retains_labels(pipeline: bool, background_read: BackgroundRead) {
-    let (control, seen) = run(pipeline, false, background_read, LABELS, false);
+    let (control, seen) = run(pipeline, false, background_read, LABELS, false, true);
     assert!(
         control
             .expect("foreground alone retains labels")
@@ -227,7 +239,7 @@ fn assert_background_retains_labels(pipeline: bool, background_read: BackgroundR
             .contains(LABELS)
     );
     assert_eq!(seen, vec![(2048, 1536)]);
-    let (result, seen) = run(pipeline, true, background_read, LABELS, false);
+    let (result, seen) = run(pipeline, true, background_read, LABELS, false, true);
     assert_eq!(
         seen,
         vec![(1024, 768), (2048, 1536)],
@@ -292,7 +304,7 @@ fn assert_one_image_read_is_judged_on_its_own(
     foreground_read: &'static str,
     discard_noise: bool,
 ) {
-    let (result, seen) = run(pipeline, true, background_read, foreground_read, discard_noise);
+    let (result, seen) = run(pipeline, true, background_read, foreground_read, discard_noise, true);
     assert_eq!(
         seen,
         vec![(1024, 768), (2048, 1536)],
@@ -331,7 +343,7 @@ fn pipeline_clamped_noisy_background_is_rejected_beside_legible_foreground() {
 }
 
 fn assert_clamped_noisy_read_alone_is_rejected(pipeline: bool) {
-    let (result, seen) = run(pipeline, true, BackgroundRead::Text(BACKGROUND_NOISE), "", false);
+    let (result, seen) = run(pipeline, true, BackgroundRead::Text(BACKGROUND_NOISE), "", false, true);
     assert_eq!(seen, vec![(1024, 768), (2048, 1536)]);
     let error = result.expect_err("the only read of the page is a clamped read that is noise");
     let message = format!("{error:?}");
@@ -347,4 +359,59 @@ fn direct_clamped_noisy_background_alone_is_still_rejected() {
 #[serial_test::serial]
 fn pipeline_clamped_noisy_background_alone_is_still_rejected() {
     assert_clamped_noisy_read_alone_is_rejected(true);
+}
+
+fn assert_two_rejected_images_name_the_cause_once(pipeline: bool) {
+    let (result, seen) = run(
+        pipeline,
+        true,
+        BackgroundRead::Text(BACKGROUND_NOISE),
+        LABELS,
+        true,
+        true,
+    );
+    assert_eq!(seen, vec![(1024, 768), (2048, 1536)]);
+    let message = format!("{:?}", result.expect_err("both reads of the page are noise"));
+    assert_eq!(
+        message.matches("the retry read was rejected as noise").count(),
+        1,
+        "{message}"
+    );
+}
+
+#[test]
+#[serial_test::serial]
+fn direct_two_rejected_images_name_the_cause_once() {
+    assert_two_rejected_images_name_the_cause_once(false);
+}
+#[test]
+#[serial_test::serial]
+fn pipeline_two_rejected_images_name_the_cause_once() {
+    assert_two_rejected_images_name_the_cause_once(true);
+}
+
+/// A background shrunk to 120 dpi without a clamp is the shape of #2832: it reads legibly, and
+/// the noise policy that rejects the noisy image beside it must not reach it.
+fn assert_unclamped_downscale_survives_noisy_neighbour(pipeline: bool) {
+    let (result, seen) = run(pipeline, true, BackgroundRead::Text(SENTENCE), LABELS, true, false);
+    assert_eq!(seen, vec![(1024, 768), (2048, 1536)]);
+    let doc = result.expect("the downscaled read is legible text");
+    assert!(
+        doc.content.contains(SENTENCE),
+        "{:?} {:?}",
+        doc.content,
+        doc.processing_warnings
+    );
+    assert!(!doc.content.contains(LABELS), "{:?}", doc.content);
+}
+
+#[test]
+#[serial_test::serial]
+fn direct_unclamped_downscale_survives_noisy_neighbour() {
+    assert_unclamped_downscale_survives_noisy_neighbour(false);
+}
+#[test]
+#[serial_test::serial]
+fn pipeline_unclamped_downscale_survives_noisy_neighbour() {
+    assert_unclamped_downscale_survives_noisy_neighbour(true);
 }

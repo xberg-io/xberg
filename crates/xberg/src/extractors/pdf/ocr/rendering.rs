@@ -413,6 +413,7 @@ pub(super) async fn recover_image_xobjects(
         failure_causes: Vec::new(),
         warnings: Vec::new(),
     };
+    let mut reads = Vec::with_capacity(fallback_images.len());
     for fallback in fallback_images {
         context.check_cancelled()?;
         context.budget.step()?;
@@ -421,13 +422,14 @@ pub(super) async fn recover_image_xobjects(
             fallback,
             page_idx,
             ocr_config,
-            (context.budget, context.proven_read),
+            context.budget,
+            context.proven_read,
             &mut outcome,
         )
         .await;
         crate::engine::seams::emit_ocr_page(page_idx + 1, total_pages, backend.name());
         context.check_cancelled()?;
-        recovery?;
+        reads.extend(recovery?);
         outcome.images.push(crate::types::ExtractedImage {
             data: fallback.bytes.clone(),
             format: std::borrow::Cow::Borrowed(fallback.format),
@@ -441,7 +443,79 @@ pub(super) async fn recover_image_xobjects(
             ..Default::default()
         });
     }
+    for read in reject_pooled_noise(reads, page_idx, context.proven_read, &mut outcome) {
+        append_xobject_text(&mut outcome.text, &read.text, context.budget)?;
+        let text_outside_tables = read.text_outside_tables.as_deref().unwrap_or(&read.text);
+        append_xobject_text(&mut outcome.text_outside_tables, text_outside_tables, context.budget)?;
+        outcome.tables.extend(read.tables);
+        outcome.formulas.extend(read.formulas);
+    }
     Ok(outcome)
+}
+/// What one embedded image's accepted read adds to the page, held until the page's small reads are
+/// judged together.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+struct CollectedRead {
+    text: String,
+    /// `None` when the read has no table, so its text outside tables is `text`.
+    text_outside_tables: Option<String>,
+    tables: Vec<crate::types::Table>,
+    formulas: Vec<crate::types::Formula>,
+    /// For a read with too few words to be judged alone: whether its preparation left it possibly
+    /// illegible. `None` for a read that was judged.
+    unjudged_small: Option<bool>,
+}
+
+/// Judge again the reads that were too small to be judged alone, pooled by kind: the reads of
+/// images whose preparation left them possibly illegible, and the others. Several small reads of
+/// garbage cross the word minimum together, and the page's noise policy rejects them as one read
+/// would be. A pool of one read has been judged already.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn reject_pooled_noise(
+    reads: Vec<CollectedRead>,
+    page_idx: usize,
+    proven_read: Option<super::pipeline::ProvenReadPolicy<'_>>,
+    outcome: &mut XObjectRecoveryOutcome,
+) -> Vec<CollectedRead> {
+    let Some(policy) = proven_read else {
+        return reads;
+    };
+    let mut rejected = vec![false; reads.len()];
+    for possibly_illegible in [true, false] {
+        let pool: Vec<usize> = (0..reads.len())
+            .filter(|&index| reads[index].unjudged_small == Some(possibly_illegible))
+            .collect();
+        if pool.len() < 2 {
+            continue;
+        }
+        let pooled = pool
+            .iter()
+            .map(|&index| reads[index].text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        let verdict = super::pipeline::judge_proven_read(
+            pooled,
+            super::pipeline::ProvenRead {
+                used_proven_source_dpi: true,
+                possibly_illegible,
+                page_idx,
+                warn_when_kept: policy.warn_when_kept,
+            },
+            policy.thresholds,
+            &mut outcome.warnings,
+            &mut outcome.failure_causes,
+        );
+        if verdict.trim().is_empty() {
+            for index in pool {
+                rejected[index] = true;
+            }
+        }
+    }
+    let mut rejected = rejected.into_iter();
+    reads
+        .into_iter()
+        .filter(|_| !rejected.next().unwrap_or(false))
+        .collect()
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn account_xobject_structured_output(
@@ -483,20 +557,18 @@ pub(super) fn account_xobject_structured_output(
     Ok(())
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-pub(super) async fn collect_xobject_recovery_result(
+async fn collect_xobject_recovery_result(
     backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
     fallback: &crate::pdf::native::images::PageFallbackImage,
     page_idx: usize,
     ocr_config: &crate::core::config::OcrConfig,
-    (budget, proven_read): (
-        &mut crate::extractors::security::SecurityBudget,
-        Option<super::pipeline::ProvenReadPolicy<'_>>,
-    ),
+    budget: &mut crate::extractors::security::SecurityBudget,
+    proven_read: Option<super::pipeline::ProvenReadPolicy<'_>>,
     outcome: &mut XObjectRecoveryOutcome,
-) -> crate::Result<()> {
+) -> crate::Result<Option<CollectedRead>> {
     let ocr_config = source_dpi::with_proven_source_dpi(ocr_config, fallback.source_dpi);
     let used_proven_source_dpi = matches!(ocr_config, std::borrow::Cow::Owned(_));
-    let result = match backend.process_image(&fallback.bytes, &ocr_config).await {
+    let mut result = match backend.process_image(&fallback.bytes, &ocr_config).await {
         Ok(result) => result,
         Err(error) => {
             tracing::debug!(
@@ -508,53 +580,77 @@ pub(super) async fn collect_xobject_recovery_result(
                 fallback.paint_order,
                 source_dpi::failure_cause(&error)
             ));
-            return Ok(());
+            return Ok(None);
         }
     };
     if outcome.attempted == 1 {
         outcome.tesseract_psm = super::pipeline::effective_tesseract_psm(&result.metadata, backend.name());
     }
     // Each image is judged on its own read, with its own preparation evidence: another image's
-    // clamp cannot reject this image's text. ~keep
-    let text = match proven_read {
-        Some(policy) => super::pipeline::judge_proven_read(
-            result.content.clone(),
-            super::pipeline::ProvenRead {
-                used_proven_source_dpi,
-                possibly_illegible: read_may_be_illegible(result.metadata.image_preprocessing.as_ref()),
-                page_idx,
-                warn_when_kept: policy.warn_when_kept,
-            },
-            policy.thresholds,
-            &mut outcome.warnings,
-            &mut outcome.failure_causes,
-        ),
-        None => result.content.clone(),
-    };
-    let rejected = !result.content.trim().is_empty() && text.trim().is_empty();
-    if !rejected {
-        append_xobject_text(&mut outcome.text, &text, budget)?;
-        append_xobject_text(
-            &mut outcome.text_outside_tables,
-            &xobject_text_outside_tables(&result),
-            budget,
-        )?;
-    }
+    // clamp cannot reject this image's text.
+    let judged = proven_read
+        .filter(|_| used_proven_source_dpi && !result.content.trim().is_empty())
+        .map(|policy| {
+            let possibly_illegible = read_may_be_illegible(result.metadata.image_preprocessing.as_ref());
+            let verdict = super::pipeline::judge_proven_read(
+                result.content.clone(),
+                super::pipeline::ProvenRead {
+                    used_proven_source_dpi,
+                    possibly_illegible,
+                    page_idx,
+                    warn_when_kept: policy.warn_when_kept,
+                },
+                policy.thresholds,
+                &mut outcome.warnings,
+                &mut outcome.failure_causes,
+            );
+            let unjudged_small = (!verdict.trim().is_empty()
+                && super::scoring::is_below_noise_check_minimum(&verdict, policy.thresholds))
+            .then_some(possibly_illegible);
+            (verdict, unjudged_small)
+        });
     account_xobject_structured_output(&result, outcome.image_preprocessing.is_none(), budget)?;
-    outcome.llm_usage.extend(result.llm_usage.unwrap_or_default());
+    outcome.llm_usage.extend(result.llm_usage.take().unwrap_or_default());
+    // A rejected read adds nothing, neither text nor the tables and formulas of the same read.
+    let rejected = judged.as_ref().is_some_and(|(verdict, _)| verdict.trim().is_empty());
+    let read = if rejected {
+        None
+    } else {
+        let text_outside_tables = match xobject_text_outside_tables(&result) {
+            std::borrow::Cow::Owned(text) => Some(text),
+            std::borrow::Cow::Borrowed(_) => None,
+        };
+        let page_number = (page_idx + 1) as u32;
+        let (text, unjudged_small) = match judged {
+            Some(judged) => judged,
+            None => (std::mem::take(&mut result.content), None),
+        };
+        Some(CollectedRead {
+            text,
+            text_outside_tables,
+            tables: result
+                .tables
+                .drain(..)
+                .map(|mut table| {
+                    table.page_number = page_number;
+                    table
+                })
+                .collect(),
+            formulas: result
+                .formulas
+                .drain(..)
+                .map(|mut formula| {
+                    formula.page = Some(page_number);
+                    formula
+                })
+                .collect(),
+            unjudged_small,
+        })
+    };
     if outcome.image_preprocessing.is_none() {
         outcome.image_preprocessing = result.metadata.image_preprocessing;
     }
-    let page_number = (page_idx + 1) as u32;
-    outcome.tables.extend(result.tables.into_iter().map(|mut table| {
-        table.page_number = page_number;
-        table
-    }));
-    outcome.formulas.extend(result.formulas.into_iter().map(|mut formula| {
-        formula.page = Some(page_number);
-        formula
-    }));
-    Ok(())
+    Ok(read)
 }
 /// The effective resolution below which a shrunk read of a proven-resolution image is judged by
 /// its output. The floor rests on two measured documents: ad9c80bf0b's clamped tall scan was read
