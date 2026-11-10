@@ -1856,19 +1856,18 @@ struct TjBuffer {
     /// the font expanded to a ligature's letters, else 0. The buffer is a lone ligature while its
     /// length still equals this: any later text ends the mark. Read by `is_lone_ligature`.
     ligature_len: usize,
-    /// Set by a `Tm` that continues the run past its last glyph: the length of `unicode`, the width
-    /// that `Tm` set and the width the run had before it. Read by `ends_at_continuing_tm`.
+    /// Set by a `Tm` that continues the run past its last glyph: the length of `unicode` and the width
+    /// the run had before it. Read by `ends_at_continuing_tm`; `add_width` ends it.
     tm_extension: Option<TmExtension>,
 }
 
-/// The pen move of a `Tm` that continues a run, kept while the run has the text and the width that
-/// `Tm` left it with. A later show inside an `ActualText` scope, or a glyph with no text, adds width
-/// and ends it. A `Tm` that restates the run under a new horizontal scale rescales it and anchors it
-/// to the restated pen; a `TJ` lead that marks the gap clears it. ~keep
+/// The pen move of a `Tm` that continues a run, kept until the next show. A show adds its width
+/// through `add_width`, which ends the record, text or not: a later show inside an `ActualText`
+/// scope and a glyph with no text end it as a glyph with text does. A `Tm` that restates the run
+/// under a new horizontal scale rescales it; a `TJ` lead that marks the gap clears it. ~keep
 #[derive(Clone, Copy, Debug)]
 struct TmExtension {
     text_len: usize,
-    width_set: f32,
     width_before: f32,
 }
 
@@ -2137,9 +2136,17 @@ impl TjBuffer {
         self.accumulated_width = advance;
         self.tm_extension = (advance > before).then_some(TmExtension {
             text_len,
-            width_set: advance,
             width_before: before,
         });
+    }
+
+    /// Adds the width of a show to the run and ends the record a continuing `Tm` left: the show
+    /// moved the pen, so the run reaches the pen again. Every show adds its width here, with text
+    /// (a glyph), without text (a later show inside an `ActualText` scope, a glyph the font gives
+    /// no text, an offset in a `TJ` array) or with no width at all.
+    fn add_width(&mut self, width: f32) {
+        self.accumulated_width += width;
+        self.tm_extension = None;
     }
 
     /// Keeps the width that a continuing `Tm` set, for a `TJ` whose leading offset marks the word gap
@@ -2150,23 +2157,20 @@ impl TjBuffer {
 
     /// Restates the run under a stretched `Tm` (GH#2664): the run's width becomes `pen`, the pen read
     /// under the new matrix, and the record a continuing `Tm` left scales by `ratio`, the same ratio as
-    /// the glyph widths, and anchors to that pen. One call sets both, so the record still matches the
-    /// run's width and the run still ends at its last glyph.
+    /// the glyph widths, so the run still ends at its last glyph in the new unit.
     fn restate_width_under_stretched_tm(&mut self, ratio: f32, pen: f32) {
         self.accumulated_width = pen;
         if let Some(mark) = &mut self.tm_extension {
             mark.width_before *= ratio;
-            mark.width_set = pen;
         }
     }
 
-    /// The width at the run's last glyph when a continuing `Tm` moved the pen and neither text nor
-    /// width came after it. That `Tm`'s width covers the gap to the next show, which is not the run's.
-    /// Width without text, such as a later show inside an `ActualText` scope, ends the record: the
-    /// run then reaches the pen again.
+    /// The width at the run's last glyph when a continuing `Tm` moved the pen and no show came after
+    /// it. That `Tm`'s width covers the gap to the next show, which is not the run's. A show ends the
+    /// record in `add_width`; a space the `Tm` inserted ends it here, by the text length.
     fn ends_at_continuing_tm(&self) -> Option<f32> {
         self.tm_extension
-            .filter(|mark| mark.text_len == self.unicode.len() && mark.width_set == self.accumulated_width)
+            .filter(|mark| mark.text_len == self.unicode.len())
             .map(|mark| mark.width_before)
     }
 

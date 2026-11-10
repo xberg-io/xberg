@@ -303,7 +303,7 @@ impl<'doc> TextExtractor<'doc> {
             w_sum
         };
 
-        buffer.accumulated_width += total_width;
+        buffer.add_width(total_width);
 
         // Update text matrix position per ISO 32000-1:2008 §9.4.4. The
         // axis-swap (H vs V) is encapsulated in advance_text_matrix. ~keep
@@ -408,7 +408,7 @@ impl<'doc> TextExtractor<'doc> {
                     None
                 };
                 if let Some(w) = utf8_width {
-                    buffer.accumulated_width += w;
+                    buffer.add_width(w);
                     self.state_stack.current_mut().advance_text_matrix(w);
                     return Ok(());
                 }
@@ -541,7 +541,7 @@ impl<'doc> TextExtractor<'doc> {
             w_sum
         };
 
-        buffer.accumulated_width += total_width;
+        buffer.add_width(total_width);
 
         self.state_stack.current_mut().advance_text_matrix(total_width);
 
@@ -719,7 +719,7 @@ impl<'doc> TextExtractor<'doc> {
             -offset / 1000.0 * state.font_size
         };
         *last += adv;
-        buffer.accumulated_width += adv;
+        buffer.add_width(adv);
         buffer.pullback = (buffer.pullback - adv).max(0.0);
     }
 
@@ -794,9 +794,9 @@ impl<'doc> TextExtractor<'doc> {
     /// Restate the run in the unit of the new horizontal scale `a`, so that the glyphs it holds keep
     /// their user-space width and the glyphs to come are measured in the new unit: the widths scale by
     /// the old `a` over the new one, the user-space scale by the inverse, and the pen reads from `e`
-    /// under the new matrix, and the width a continuing `Tm` recorded scales with the glyphs and
-    /// anchors to that pen. The pull-back is not scaled: only a `TJ` array raises it, in its own
-    /// buffer, so the run a `Tm` restates holds none. ~keep
+    /// under the new matrix, and the width a continuing `Tm` recorded scales with the glyphs. The
+    /// pull-back is not scaled: only a `TJ` array raises it, in its own buffer, so the run a `Tm`
+    /// restates holds none. ~keep
     pub(super) fn restate_run_under_stretched_tm(buffer: &mut TjBuffer, a: f32, e: f32) {
         let ratio = buffer.start_matrix.a / a;
         for width in &mut buffer.char_widths {
