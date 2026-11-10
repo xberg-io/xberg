@@ -113,6 +113,23 @@ fn an_empty_read_stays_empty_without_a_cause_or_warning() {
 }
 
 #[test]
+fn rejected_reads_of_several_images_name_the_cause_once() {
+    let mut warnings = Vec::new();
+    let mut causes = Vec::new();
+    for _ in 0..2 {
+        let text = judge_proven_read(
+            fragmented_text(),
+            read(true, true, true),
+            &thresholds(false),
+            &mut warnings,
+            &mut causes,
+        );
+        assert!(text.is_empty());
+    }
+    assert_eq!(causes, [CAUSE]);
+}
+
+#[test]
 fn a_read_without_a_proven_resolution_is_left_to_the_page_policy() {
     for shrunk in [false, true] {
         let judged = judge(&fragmented_text(), read(false, shrunk, true), true);
