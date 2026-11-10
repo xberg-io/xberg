@@ -300,7 +300,17 @@ fn a_khmer_stage_before_an_english_stage_keeps_page_one_and_reads_the_scanned_pa
             pages[1].content
         );
     } else {
-        assert!(!pages[1].content.trim().is_empty(), "OCR read page 2");
+        let khm_only = extract(KHMER_THEN_SCANNED_ENGLISH, models.path(), |config| {
+            let pipeline = serde_json::json!({"stages": [
+                {"backend": "tesseract", "priority": 100, "language": ["khm"]},
+            ]});
+            config.ocr.as_mut().unwrap().pipeline = Some(serde_json::from_value(pipeline).unwrap());
+        });
+        assert_eq!(
+            pages[1].content,
+            khm_only.pages.as_ref().unwrap()[1].content,
+            "the first stage that reads Khmer reads the scan"
+        );
     }
     assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Mixed));
 }

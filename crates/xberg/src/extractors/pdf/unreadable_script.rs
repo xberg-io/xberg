@@ -406,7 +406,7 @@ fn clusters_are_valid(text: &str, script: Script) -> bool {
         if matches!(character, '\u{200C}' | '\u{200D}') {
             continue;
         }
-        if script_of(character) == Some(script) {
+        if script_of(character) == Some(script) && part_of(script, character) != Part::Other {
             characters += 1;
         }
         match part_of(script, character) {
@@ -488,7 +488,8 @@ fn layer_is_lost(text: &str, languages: &[String]) -> bool {
     let letters = text
         .chars()
         .filter(|character| {
-            is_script_letter(*character) && script_of(*character).is_some_and(|script| structured.contains(&script))
+            script_of(*character)
+                .is_some_and(|script| structured.contains(&script) && part_of(script, *character) != Part::Other)
         })
         .count();
     let markers = text.matches(super::unmapped_glyphs::LOST_GLYPH_MARKER).count();
@@ -1736,6 +1737,21 @@ mod tests {
         assert!(warnings.is_empty(), "{warnings:?}");
     }
 
+    #[test]
+    fn punctuation_added_to_a_layer_that_lost_whole_clusters_does_not_make_it_complete() {
+        let lost = format!("{}{}", "កា ".repeat(10), "\u{FFFD}".repeat(30));
+        let padded = format!("{lost}{}", "។៕៖ៗ៘៙៚៛".repeat(6));
+        let eng = langs(&["eng"]);
+        assert!(layer_is_lost(&lost, &eng));
+        assert!(
+            layer_is_lost(&padded, &eng),
+            "Khmer punctuation and the riel sign are not letters"
+        );
+        let (decision, warnings) = run(&[&padded], ONE_PAGE, &khm_then_eng("khm", "eng"));
+        assert_eq!(decision.failing_pages, [1]);
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
     const COMPLETE_LAYER: &str = include_str!("../../../tests/fixtures/pdf/khmer-cluster-2536/layers/complete.txt");
     const PARTIAL_LAYER: &str = include_str!("../../../tests/fixtures/pdf/khmer-cluster-2536/layers/partial.txt");
     const SHORT_LAYER: &str = include_str!("../../../tests/fixtures/pdf/khmer-cluster-2536/layers/short.txt");
@@ -1985,9 +2001,10 @@ mod tests {
             (Script::Armenian, "hye"),
             (Script::Cyrillic, "rus"),
         ] {
-            let stage = FirstStage {
+            let stage = RouteStage {
                 languages: langs(&["eng"]),
                 source: LanguageSource::OcrLanguage,
+                position: 0,
             };
             let warning = kept_pages_warning(&[(4, vec![script], false)], &stage);
             let named = format!("page 4 ({script:?}; for example {model}): the native text");
