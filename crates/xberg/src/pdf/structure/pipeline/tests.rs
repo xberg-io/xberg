@@ -1544,6 +1544,55 @@ fn dedup_counts_an_exact_word_and_a_split_copy_of_it_as_two_printed_copies() {
 }
 
 #[test]
+fn dedup_counts_two_representations_of_one_region_once_whatever_their_order() {
+    let a = cell_table(1, (0.0, 40.0, 100.0, 90.0), &[&["PICCOLO21", "ASUMayo17"]]);
+    let whole = cell_table(
+        1,
+        (0.0, 40.0, 100.0, 140.0),
+        &[&["PICCOLO21", "m1"], &["ASUMayo17", "m2"]],
+    );
+    let split = cell_table(
+        1,
+        (0.0, 40.0, 100.0, 140.0),
+        &[&["PICCOLO 21", "m1"], &["ASUMayo 17", "m2"]],
+    );
+    let tables = [a.clone(), whole, split];
+    let page = vec![vec![
+        printed_at("PICCOLO21 ASUMayo17", 5.0, 45.0),
+        printed_at("PICCOLO21 m1", 5.0, 60.0),
+        printed_at("ASUMayo17 m2", 5.0, 75.0),
+    ]];
+    let wrong: Vec<[usize; 3]> = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]
+        .into_iter()
+        .filter(|order| {
+            let kept = kept_native_tables(order.iter().map(|&index| tables[index].clone()).collect(), &page);
+            kept.len() != 2 || !kept.iter().any(|table| table.cells == a.cells)
+        })
+        .collect();
+    assert!(
+        wrong.is_empty(),
+        "{} of 6 orders drop the table A or keep both readings of the region: {wrong:?}",
+        wrong.len()
+    );
+}
+
+#[test]
+fn dedup_does_not_let_the_seam_between_two_cells_of_another_table_back_a_second_copy() {
+    let printed = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["ABCD", "x1"], &["x2", "x3"]]);
+    let again = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["ABCD"]]);
+    let apart = cell_table(1, (200.0, 0.0, 300.0, 100.0), &[&["AB", "CD"]]);
+    let page = printed_cells(&[&printed, &apart]);
+    let kept = kept_native_tables(vec![printed.clone(), again, apart.clone()], &page);
+    assert_eq!(
+        kept.len(),
+        2,
+        "the page prints ABCD once whole and AB beside CD in another table, which is no second copy"
+    );
+    assert!(kept.iter().any(|table| table.cells == printed.cells));
+    assert!(kept.iter().any(|table| table.cells == apart.cells));
+}
+
+#[test]
 fn dedup_counts_two_split_copies_and_drops_a_table_for_one_printed_copy() {
     let (small, large) = joined_pair();
     let split_twice = vec![vec![
