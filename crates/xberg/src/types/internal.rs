@@ -268,6 +268,14 @@ pub struct InternalDocument {
     /// attempting to reconstruct pages from element-level page numbers.
     pub prebuilt_pages: Option<Vec<crate::types::PageContent>>,
 
+    /// Page numbers whose prebuilt text was replaced by OCR text.
+    ///
+    /// Set by the PDF extractor on every OCR route; `derive_extraction_result` re-renders only
+    /// these pages (and every page of an image or OCR source) when their text is not found in the
+    /// plain content. Not part of the plugin-bridge wire format.
+    #[serde(skip)]
+    pub ocr_text_pages: Vec<u32>,
+
     /// Pre-rendered formatted content produced by the extractor itself.
     ///
     /// When an extractor has direct access to high-quality formatted output (e.g.,
@@ -459,6 +467,7 @@ impl InternalDocument {
             ocr_page_failures: Vec::new(),
             annotations: None,
             prebuilt_pages: None,
+            ocr_text_pages: Vec::new(),
             pre_rendered_content: None,
             prebuilt_ocr_elements: None,
             llm_usage: None,

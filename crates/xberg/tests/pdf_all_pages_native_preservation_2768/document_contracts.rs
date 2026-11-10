@@ -190,11 +190,11 @@ fn assert_retained_tables(actual: &ExtractedDocument, native: &ExtractedDocument
     let pages = actual.pages.as_ref().unwrap();
     let source = native.pages.as_ref().unwrap();
     assert_eq!(pages[0].content, source[0].content);
-    assert!(
-        pages[1]
-            .content
-            .split_whitespace()
-            .eq(forced.pages.as_ref().unwrap()[1].content.split_whitespace())
+    // The mixed route keeps the OCR page text, the forced route renders the plain rows (#2903).
+    let normalized = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert_eq!(
+        normalized(&pages[1].content),
+        normalized(&forced.pages.as_ref().unwrap()[1].content)
     );
     assert!(
         !pages[1]

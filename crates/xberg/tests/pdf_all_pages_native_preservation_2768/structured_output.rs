@@ -55,6 +55,7 @@ fn assert_same_page_payload(actual: &ExtractedDocument, forced: &ExtractedDocume
             serde_json::to_value(actual_page.tables[0].as_ref()).unwrap(),
             serde_json::to_value(forced_page.tables[0].as_ref()).unwrap()
         );
+        // Plain on the mixed route carries the table Markdown (#2903); restore exact equality with the forced page when that is fixed.
         if mixed_route {
             super::assert_page_text_is_the_table_markdown(actual_page, forced_page);
         } else {

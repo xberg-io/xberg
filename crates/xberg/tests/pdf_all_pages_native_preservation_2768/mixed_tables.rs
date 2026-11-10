@@ -73,6 +73,7 @@ fn assert_mixed_tables(actual: &ExtractedDocument, native: &ExtractedDocument, f
         } else {
             &source[index]
         };
+        // Plain on the mixed route carries the table Markdown (#2903); restore exact equality with the forced page when that is fixed.
         if index == last {
             super::assert_page_text_is_the_table_markdown(page, reference);
         } else {
