@@ -1277,6 +1277,62 @@ fn dedup_keeps_a_table_whose_cells_join_words_the_page_prints_apart() {
 }
 
 #[test]
+fn dedup_keeps_a_table_whose_short_numeric_words_sit_inside_a_longer_printed_number() {
+    let distinct = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["1", "20"]]);
+    let mut page = printed_cells(&[&four_row_grid()]);
+    page[0].push(printed_at("2019", 500.0, 500.0));
+    assert_eq!(
+        kept_after_dedup(vec![four_row_grid(), distinct], &page),
+        2,
+        "1 and 20 are not printed: they only occur inside 2019"
+    );
+}
+
+#[test]
+fn dedup_keeps_a_table_whose_word_spans_the_boundary_of_two_unrelated_segments() {
+    let distinct = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["bc"]]);
+    let mut page = printed_cells(&[&four_row_grid()]);
+    page[0].push(printed_at("xab", 500.0, 500.0));
+    page[0].push(printed_at("cdy", 520.0, 500.0));
+    assert_eq!(
+        kept_after_dedup(vec![four_row_grid(), distinct], &page),
+        2,
+        "bc is neither a printed word nor a join of whole printed words"
+    );
+}
+
+#[test]
+fn dedup_drops_a_table_whose_joined_word_is_whole_segments_the_page_prints_outside_every_table() {
+    let joined = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["EstimatedIncreases"]]);
+    let mut page = printed_cells(&[&four_row_grid()]);
+    page[0].push(printed_at("Estimated", 500.0, 500.0));
+    page[0].push(printed_at("Increases", 520.0, 500.0));
+    assert_eq!(
+        kept_after_dedup(vec![four_row_grid(), joined], &page),
+        1,
+        "the page prints the joined word once, outside both boxes, so it is already printed"
+    );
+}
+
+#[test]
+fn dedup_drops_a_dropped_table_without_cell_text_because_it_gives_no_evidence() {
+    let empty = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&[""]]);
+    let page = printed_cells(&[&four_row_grid()]);
+    assert_eq!(kept_after_dedup(vec![four_row_grid(), empty], &page), 1);
+}
+
+#[test]
+fn dedup_compares_rows_when_the_tables_page_is_past_the_extracted_pages() {
+    let on_page_two = |cells: &[&[&str]]| cell_table(2, (0.0, 40.0, 100.0, 100.0), cells);
+    let grid = cell_table(2, (0.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let page = printed_cells(&[&four_row_grid()]);
+    let shared = on_page_two(&[&["alpha", "1"], &["beta", "2"]]);
+    let distinct = on_page_two(&[&["gamma", "3"], &["delta", "4"]]);
+    assert_eq!(kept_after_dedup(vec![grid.clone(), shared], &page), 1);
+    assert_eq!(kept_after_dedup(vec![grid, distinct], &page), 2);
+}
+
+#[test]
 fn dedup_keeps_a_table_whose_words_the_page_does_not_print_at_all() {
     let unseen = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["omega", "7"], &["sigma", "8"]]);
     let page = printed_cells(&[&four_row_grid()]);
