@@ -390,11 +390,17 @@ fn escape_leading_block_marker(line: &str) -> String {
     let first = rest.chars().next().unwrap_or_default();
     // After the first backtick or colon of a run is escaped, the rest of the run would still open
     // a code span or an empty symbol, so the whole run is escaped.
-    let run = if matches!(first, '`' | ':') {
+    let mut run = if matches!(first, '`' | ':') {
         rest.len() - rest.trim_start_matches(first).len()
     } else {
         first.len_utf8()
     };
+    // On the unescaped row, `{`, `[`, `!` and `:` hold the delimiter that follows them, so a pair such as
+    // `{_!_` stays text. Escaping only the opener would free the pair to become emphasis or a superscript.
+    let pairs = matches!(first, '{' | '[' | '!' | ':');
+    if pairs && rest[run..].starts_with(|c: char| c.is_ascii_punctuation() && c != '\\') {
+        run += 1;
+    }
     let escaped: String = rest[..run].chars().flat_map(|c| ['\\', c]).collect();
     format!("{head}{escaped}{}", &rest[run..])
 }
