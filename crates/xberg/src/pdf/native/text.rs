@@ -3571,6 +3571,36 @@ mod tests {
         assert_eq!(rebuild_text_from_fragmented_spans(&spans), "第17回");
     }
 
+    /// Fullwidth forms and CJK punctuation mark no word with a gap either: a bracket, a fullwidth
+    /// digit or a corner bracket beside a 0.2 em gap stays joined, as at the base.
+    #[test]
+    fn fragmented_rebuild_keeps_a_gap_beside_fullwidth_forms_and_cjk_punctuation() {
+        for (left, middle, right, expected) in [
+            ("（", "１", "）", "（１）"),
+            ("「", "AB", "」", "「AB」"),
+            ("２", "０", "年", "２０年"),
+        ] {
+            let spans = vec![
+                span_with_width(left, 100.0, 500.0, 10.0, 10.0, 10.0),
+                span_with_width(middle, 112.0, 500.0, 10.0, 10.0, 10.0),
+                span_with_width(right, 124.0, 500.0, 10.0, 10.0, 10.0),
+            ];
+            assert_eq!(rebuild_text_from_fragmented_spans(&spans), expected);
+        }
+    }
+
+    /// A span that holds only a space glyph already marks the gap on both of its sides: the rebuild
+    /// adds no second space.
+    #[test]
+    fn fragmented_rebuild_adds_no_space_beside_a_space_glyph() {
+        let spans = vec![
+            span_with_width("A", 100.0, 500.0, 7.0, 12.0, 12.0),
+            span_with_width(" ", 109.0, 500.0, 3.0, 12.0, 12.0),
+            span_with_width("B", 114.0, 500.0, 7.0, 12.0, 12.0),
+        ];
+        assert_eq!(rebuild_text_from_fragmented_spans(&spans), "A B");
+    }
+
     #[test]
     fn should_exclude_native_spans_by_configured_page_margins() {
         let mut spans = vec![
