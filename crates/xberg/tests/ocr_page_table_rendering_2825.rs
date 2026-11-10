@@ -1,4 +1,4 @@
-#![cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+#![cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
 
 mod helpers;
 
@@ -38,6 +38,16 @@ fn assert_pages_match_content(name: &str, result: &ExtractedDocument) {
         .unwrap_or_else(|| panic!("{name}: page boundaries were dropped"));
     assert_eq!(pages.len(), boundaries.len(), "{name}");
     for (page, boundary) in pages.iter().zip(boundaries) {
+        assert!(
+            !page.content.trim().is_empty(),
+            "{name}: page {} is empty",
+            page.page_number
+        );
+        assert!(
+            !page.content.contains("| ---") && !page.content.contains("|---"),
+            "{name}: page {} still carries a markdown table",
+            page.page_number
+        );
         assert_eq!(
             result.content.get(boundary.byte_start..boundary.byte_end),
             Some(page.content.as_str()),

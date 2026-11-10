@@ -34,5 +34,6 @@ fn full_scan_preserves_every_numeric_row_in_plain_and_page_output() {
     );
     let pages = result.pages.as_ref().expect("requested page output");
     assert_eq!(pages.len(), 1);
+    // Under Plain the page text is the plain rendering of the page, so it equals the content (#2825).
     assert_eq!(pages[0].content.trim(), result.content.trim());
 }
