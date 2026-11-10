@@ -290,8 +290,9 @@ fn assert_one_image_read_is_judged_on_its_own(
     pipeline: bool,
     background_read: BackgroundRead,
     foreground_read: &'static str,
+    discard_noise: bool,
 ) {
-    let (result, seen) = run(pipeline, true, background_read, foreground_read, true);
+    let (result, seen) = run(pipeline, true, background_read, foreground_read, discard_noise);
     assert_eq!(
         seen,
         vec![(1024, 768), (2048, 1536)],
@@ -311,26 +312,26 @@ fn assert_one_image_read_is_judged_on_its_own(
 #[test]
 #[serial_test::serial]
 fn direct_clamped_legible_background_survives_noisy_foreground() {
-    assert_one_image_read_is_judged_on_its_own(false, BackgroundRead::Text(SENTENCE), LABELS);
+    assert_one_image_read_is_judged_on_its_own(false, BackgroundRead::Text(SENTENCE), LABELS, true);
 }
 #[test]
 #[serial_test::serial]
 fn pipeline_clamped_legible_background_survives_noisy_foreground() {
-    assert_one_image_read_is_judged_on_its_own(true, BackgroundRead::Text(SENTENCE), LABELS);
+    assert_one_image_read_is_judged_on_its_own(true, BackgroundRead::Text(SENTENCE), LABELS, true);
 }
 #[test]
 #[serial_test::serial]
 fn direct_clamped_noisy_background_is_rejected_beside_legible_foreground() {
-    assert_one_image_read_is_judged_on_its_own(false, BackgroundRead::Text(BACKGROUND_NOISE), SENTENCE);
+    assert_one_image_read_is_judged_on_its_own(false, BackgroundRead::Text(BACKGROUND_NOISE), SENTENCE, false);
 }
 #[test]
 #[serial_test::serial]
 fn pipeline_clamped_noisy_background_is_rejected_beside_legible_foreground() {
-    assert_one_image_read_is_judged_on_its_own(true, BackgroundRead::Text(BACKGROUND_NOISE), SENTENCE);
+    assert_one_image_read_is_judged_on_its_own(true, BackgroundRead::Text(BACKGROUND_NOISE), SENTENCE, false);
 }
 
 fn assert_clamped_noisy_read_alone_is_rejected(pipeline: bool) {
-    let (result, seen) = run(pipeline, true, BackgroundRead::Text(BACKGROUND_NOISE), "", true);
+    let (result, seen) = run(pipeline, true, BackgroundRead::Text(BACKGROUND_NOISE), "", false);
     assert_eq!(seen, vec![(1024, 768), (2048, 1536)]);
     let error = result.expect_err("the only read of the page is a clamped read that is noise");
     let message = format!("{error:?}");
