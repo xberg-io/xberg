@@ -121,7 +121,13 @@ fn is_default_english_profile(ocr: &OcrConfig) -> bool {
         && ocr.backend_options.is_none()
         && ocr.element_config.is_none()
         && ocr.output_format.is_none()
-        && ocr.quality_thresholds.is_none()
+        && ocr.quality_thresholds.as_ref().is_none_or(|thresholds| {
+            *thresholds
+                == crate::core::config::OcrQualityThresholds {
+                    prune_symbol_noise_lines: thresholds.prune_symbol_noise_lines,
+                    ..Default::default()
+                }
+        })
         && ocr.tessdata_path.is_none()
         && ocr.tessdata_bytes.is_none()
         && ocr.pipeline.is_none()
@@ -613,6 +619,50 @@ fn title_insertion(
         return None;
     }
     Some((page_offset, (index, offset)))
+}
+
+/// Places a recovered title; when symbol-noise pruning emptied the page (`pruned` carries the
+/// page confidence), the title becomes the whole page.
+pub(super) fn place_recovered(
+    document: &mut InternalDocument,
+    title: Title,
+    output_format: &OutputFormat,
+    pruned: Option<Option<crate::types::page::PageOcrConfidence>>,
+) {
+    match pruned {
+        Some(confidence) if document.prebuilt_pages.is_none() => place_alone(document, title, confidence),
+        _ => place(document, title, output_format),
+    }
+}
+
+fn place_alone(
+    document: &mut InternalDocument,
+    title: Title,
+    ocr_confidence: Option<crate::types::page::PageOcrConfidence>,
+) {
+    let mut element = InternalElement::text(ElementKind::Paragraph, title.text.clone(), 0);
+    element.bbox = Some(BoundingBox {
+        x0: title.bounds.left.into(),
+        y0: title.bounds.top.into(),
+        x1: title.bounds.right.into(),
+        y1: title.bounds.bottom.into(),
+    });
+    document.push_element(element);
+    document.prebuilt_pages = Some(vec![crate::types::PageContent {
+        page_number: 1,
+        content: title.text,
+        tables: vec![],
+        image_indices: vec![],
+        image_preprocessing: None,
+        hierarchy: None,
+        is_blank: None,
+        layout_regions: None,
+        speaker_notes: None,
+        section_name: None,
+        sheet_name: None,
+        ocr_confidence,
+        native_content: None,
+    }]);
 }
 
 pub(super) fn place(document: &mut InternalDocument, title: Title, output_format: &OutputFormat) {

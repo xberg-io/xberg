@@ -34,6 +34,8 @@ pub(crate) use pages::build_ocr_elements;
 #[cfg(test)]
 use pages::build_pages;
 use pages::derive_pages;
+#[cfg(feature = "quality")]
+pub(crate) use pages::drop_unusable_page_boundaries;
 pub(crate) use pages::reconcile_page_boundaries;
 #[cfg(all(
     feature = "pdf",

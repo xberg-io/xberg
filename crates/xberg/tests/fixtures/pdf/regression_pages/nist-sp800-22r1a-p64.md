@@ -35,9 +35,11 @@ under the randomness hypothesis has the Χ<sup>2</sup>-distribution with N degre
 
 This variant of a classic nonparametric test looks at "runs" defined as substrings of consecutive 1's and consecutive 0's, and considers whether the oscillation among such homogeneous substrings is too fast or too slow.
 
-The specific test used here is based on the distribution of the total number of runs, *V*~*n*~. For the fixed proportion π = ∑ *n* (which by the Frequency test of Section 3.1 must have been established to be ε~*j*~ /
+The specific test used here is based on the distribution of the total number of runs, *V*~*n*~. For the fixed proportion π = ε / *n* (which by the Frequency test of Section 3.1 must have been established to be
 
-*j*
+∑
+
+*j j*
 
 1 2 close to 0.5: π − ≤ ). 2 *n* lim *P* ( *V*~*n*~ − 2 *nπ* (1− π)
 
@@ -47,13 +49,9 @@ The specific test used here is based on the distribution of the total number of 
 
 *n* −1
 
-*V*~*n*~ = *k* ) + 1. The *P-value* reported is
+*V*~*n*~ = *r* ( *k* ) + 1. The *P-value* reported is
 
-∑
-
-*r* (
-
-*k* =1
+# ∑~*k*~ ~=~1
 
 *V* ( *obs* ) − 2 *nπ* (1− π)
 

@@ -9,6 +9,7 @@ use crate::core::config::{ExtractionConfig, PageConfig};
 use crate::pdf::error::{PdfError, Result};
 use crate::pdf::metadata::PdfExtractionMetadata;
 use crate::pdf::structure::constants::{COALESCE_THRESHOLD, MAX_GLYPH_JITTER_PT, MIN_DISORDER_COUNT};
+use crate::pdf::structure::lines::is_cjk_char;
 use crate::pdf::text::{contains_html_markup, fix_pdf_control_chars};
 use crate::types::{PageBoundary, PageContent};
 use std::borrow::Cow;
@@ -540,7 +541,9 @@ fn is_fragmented_span_list(spans: &[xberg_native_pdf::layout::TextSpan]) -> bool
 ///    of the previous span belong to the same visual line.
 /// 3. Within each group sort by x-ascending (left-to-right reading order).
 /// 4. Concatenate, inserting a space wherever the x-gap between adjacent spans
-///    exceeds font_size * 0.5.
+///    exceeds 0.15 of the right span's font size, the test of the span assembler. A
+///    script or a CJK seam keeps half the line's largest font size (`keeps_line_word_gap`),
+///    and a seam at a space glyph gets no second space.
 fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpan]) -> String {
     if spans.is_empty() {
         return String::new();
@@ -570,16 +573,14 @@ fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpa
             result.push('\n');
         }
         let font_size = group.iter().map(|s| s.font_size).fold(0.0_f32, f32::max);
-        let space_threshold = font_size * 0.5;
+        let line_space_threshold = font_size * 0.5;
         let mut prev_end_x = f32::NEG_INFINITY;
-        let mut previous = None;
+        let mut previous: Option<&TextSpan> = None;
         for (index, span) in group.iter().enumerate() {
-            if (prev_end_x.is_finite() && span.bbox.x - prev_end_x > space_threshold)
-                || previous.is_some_and(|prev| {
-                    needs_numeric_script_boundary(prev, span, &notes, group.get(index + 1).copied())
-                })
-            {
-                result.push(' ');
+            if let Some(prev) = previous {
+                let gap = span.bbox.x - prev_end_x;
+                let script_boundary = needs_numeric_script_boundary(prev, span, &notes, group.get(index + 1).copied());
+                push_rebuild_seam(&mut result, prev, span, gap, line_space_threshold, script_boundary);
             }
             result.push_str(&span.text);
             prev_end_x = span.bbox.x + span.bbox.width;
@@ -587,6 +588,54 @@ fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpa
         }
     }
     result
+}
+
+/// Writes the separator of one seam of the fragmented rebuild: a space at a numeric script boundary,
+/// at a guarded seam wider than the line's test, or at a gap wider than the right span's own test;
+/// none where a space glyph already marks the gap. ~keep
+fn push_rebuild_seam(
+    result: &mut String,
+    prev: &TextSpan,
+    span: &TextSpan,
+    gap: f32,
+    line_space_threshold: f32,
+    script_boundary: bool,
+) {
+    if script_boundary {
+        result.push(' ');
+    } else if keeps_line_word_gap(prev, span) {
+        if gap > line_space_threshold {
+            result.push(' ');
+        }
+    } else if !result.ends_with(char::is_whitespace) && !span.text.starts_with(char::is_whitespace) {
+        // A space glyph on either side of the seam already marks the gap. ~keep
+        append_visual_word_gap(result, gap, span.font_size);
+    }
+}
+
+/// Whether a seam of the fragmented rebuild keeps the line's word-gap test, half the line's largest
+/// font size, instead of the right span's own size: a script on its symbol, or a CJK seam character
+/// on either side. A script joins at gaps that are wide in its own size. Han and kana mark no word
+/// with a gap; Korean separates words with spaces, but Hangul keeps the line's test too, so that its
+/// reading stays as at the base. ~keep
+fn keeps_line_word_gap(prev: &TextSpan, span: &TextSpan) -> bool {
+    is_script_of(prev, span)
+        || prev.text.chars().next_back().is_some_and(is_cjk_seam_char)
+        || span.text.chars().next().is_some_and(is_cjk_seam_char)
+}
+
+/// A CJK character (Han, kana or Hangul), CJK punctuation (U+3000 to U+303F) or a fullwidth or
+/// halfwidth form (U+FF00 to U+FFEF): the blocks the native span assembler's CJK test knows. ~keep
+fn is_cjk_seam_char(c: char) -> bool {
+    is_cjk_char(c) || matches!(c as u32, 0x3000..=0x303F | 0xFF00..=0xFFEF)
+}
+
+/// A smaller span off its symbol's baseline, lowered or raised by its matrix or by `Ts`, is a script
+/// of that symbol, such as `c` with subscript `B`. The size and rise bounds are those of
+/// `needs_numeric_script_boundary`. ~keep
+fn is_script_of(base: &TextSpan, script: &TextSpan) -> bool {
+    script.font_size < base.font_size * 0.8
+        && (script.text_rise.abs() >= 0.10 || (script.bbox.y - base.bbox.y).abs() >= base.font_size * 0.1)
 }
 
 // A small digit beside another digit can be a footnote or a power. Require a
@@ -3495,6 +3544,86 @@ mod tests {
             assert_eq!(assemble_page_text(&spans), expected);
             assert_eq!(rebuild_text_from_fragmented_spans(&spans), expected);
         }
+    }
+
+    /// Two small words 0.4 em apart in their own size, on a line that also holds a large label.
+    #[test]
+    fn fragmented_rebuild_measures_a_word_gap_in_the_right_span_size() {
+        let spans = vec![
+            span_with_width("alpha", 100.0, 500.0, 15.0, 6.0, 6.0),
+            span_with_width("beta", 117.4, 500.0, 12.0, 6.0, 6.0),
+            span_with_width("TOTAL", 300.0, 501.0, 60.0, 20.0, 20.0),
+        ];
+        assert_eq!(rebuild_text_from_fragmented_spans(&spans), "alpha beta TOTAL");
+    }
+
+    /// A word that steps down in size on the same baseline is a new word, not a script.
+    #[test]
+    fn fragmented_rebuild_splits_a_smaller_word_on_the_same_baseline() {
+        let spans = vec![
+            span_with_width("Name", 100.0, 500.0, 30.0, 12.0, 12.0),
+            span_with_width("first", 132.4, 500.0, 15.0, 8.0, 8.0),
+            span_with_width("Second", 132.4, 470.0, 30.0, 12.0, 12.0),
+            span_with_width("lower", 164.8, 467.0, 30.0, 12.0, 12.0),
+        ];
+        assert_eq!(rebuild_text_from_fragmented_spans(&spans), "Name first\nSecond lower");
+    }
+
+    /// A quantity symbol with a lowered or raised index, such as `c` with subscript `B`, `I` with
+    /// subscript `v` or `m` with a raised `3`, reads as one token.
+    #[test]
+    fn fragmented_rebuild_keeps_a_script_on_its_symbol() {
+        let mut raised = span_with_width("3", 107.6, 500.0, 4.0, 8.0, 8.0);
+        raised.text_rise = 0.33;
+        for (index, expected) in [
+            (span_with_width("B", 107.6, 497.0, 5.0, 8.0, 8.0), "cB"),
+            (span_with_width("v", 107.6, 497.5, 4.0, 7.0, 7.0), "cv"),
+            (raised, "c3"),
+        ] {
+            let spans = vec![span_with_width("c", 100.0, 500.0, 5.6, 12.0, 12.0), index];
+            assert_eq!(rebuild_text_from_fragmented_spans(&spans), expected);
+        }
+    }
+
+    /// Han and kana text marks no word with a gap: a gap beside such a character is layout.
+    #[test]
+    fn fragmented_rebuild_keeps_a_gap_beside_cjk_unspaced() {
+        let spans = vec![
+            span_with_width("第", 100.0, 500.0, 10.0, 10.0, 10.0),
+            span_with_width("17", 112.0, 500.0, 10.0, 10.0, 10.0),
+            span_with_width("回", 124.0, 500.0, 10.0, 10.0, 10.0),
+        ];
+        assert_eq!(rebuild_text_from_fragmented_spans(&spans), "第17回");
+    }
+
+    /// Fullwidth forms and CJK punctuation mark no word with a gap either: a bracket, a fullwidth
+    /// digit or a corner bracket beside a 0.2 em gap stays joined, as at the base.
+    #[test]
+    fn fragmented_rebuild_keeps_a_gap_beside_fullwidth_forms_and_cjk_punctuation() {
+        for (left, middle, right, expected) in [
+            ("（", "１", "）", "（１）"),
+            ("「", "AB", "」", "「AB」"),
+            ("２", "０", "年", "２０年"),
+        ] {
+            let spans = vec![
+                span_with_width(left, 100.0, 500.0, 10.0, 10.0, 10.0),
+                span_with_width(middle, 112.0, 500.0, 10.0, 10.0, 10.0),
+                span_with_width(right, 124.0, 500.0, 10.0, 10.0, 10.0),
+            ];
+            assert_eq!(rebuild_text_from_fragmented_spans(&spans), expected);
+        }
+    }
+
+    /// A span that holds only a space glyph already marks the gap on both of its sides: the rebuild
+    /// adds no second space.
+    #[test]
+    fn fragmented_rebuild_adds_no_space_beside_a_space_glyph() {
+        let spans = vec![
+            span_with_width("A", 100.0, 500.0, 7.0, 12.0, 12.0),
+            span_with_width(" ", 109.0, 500.0, 3.0, 12.0, 12.0),
+            span_with_width("B", 114.0, 500.0, 7.0, 12.0, 12.0),
+        ];
+        assert_eq!(rebuild_text_from_fragmented_spans(&spans), "A B");
     }
 
     #[test]
