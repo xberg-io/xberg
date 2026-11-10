@@ -19,7 +19,8 @@ fn ramp(cmyk: [u8; 4]) -> String {
 fn page(content: &str) -> Vec<u8> {
     let resources = format!(
         "/ColorSpace << /CsK [/Separation /Black /DeviceCMYK {k}] /CsC [/Separation /Cyan /DeviceCMYK {c}] \
-         /CsS [/Separation /SpotInk /DeviceCMYK {c}] /CsNK [/DeviceN [/Black] /DeviceCMYK {k}] /CsA [/Separation /All /DeviceCMYK {k}] >> \
+         /CsS [/Separation /SpotInk /DeviceCMYK {c}] /CsNK [/DeviceN [/Black] /DeviceCMYK {k}] /CsA [/Separation /All /DeviceCMYK {c}] \
+         /CsKc [/Separation /Black /DeviceCMYK {c}] >> \
          /ExtGState << /OP1 << /Type /ExtGState /OP true /op true /OPM 1 >> \
          /OP0 << /Type /ExtGState /OP true /op true /OPM 0 >> >> \
          /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >>",
@@ -117,6 +118,14 @@ fn an_overprinted_process_colorant_keeps_the_other_channels_of_the_backdrop() {
         overprinted[0] < 60 && overprinted[1] < 100 && overprinted[2] > 100,
         "cyan over magenta: {overprinted:?}"
     );
+}
+
+/// The alternate is only the fallback for a device without the colorant: a process name marks its
+/// plate, so a `Black` with a cyan alternate still paints black.
+#[test]
+fn an_overprinted_process_name_marks_its_plate_whatever_the_alternate() {
+    let rgb = centre(&format!("/OP1 gs /CsKc cs 1 scn {SQUARE}"));
+    assert!(rgb.iter().all(|&v| v < 60), "{rgb:?}");
 }
 
 #[test]
