@@ -258,3 +258,29 @@ fn mixed_automatic_ocr_keeps_the_original_redp5110_page_after_type0_ink_loss() {
         );
     }
 }
+
+/// The information-loss check keeps the marked page before the Type0 pass runs, and the page still
+/// reports why its native text stays: the warning names the page and the lost Type0 glyph ink. ~keep
+#[test]
+fn a_page_kept_by_the_loss_check_reports_the_lost_type0_glyph_ink() {
+    const WARNING: &str = "Page 3 retained native text after its OCR render lost Type0 glyph ink.";
+    let path = helpers::get_test_file_path("vendored/docling/pdf/redp5110_sampled.pdf");
+    let bytes = std::fs::read(&path).unwrap_or_else(|error| panic!("required source {}: {error}", path.display()));
+    assert_eq!(
+        hex::encode(Sha256::digest(&bytes)),
+        "2f6bc92861997d1434c069040dc63447c3e415e8e9eadbd1a8129ba2327ddba5"
+    );
+    let models = type0_fixture_models();
+    let config = type0_fallback_config(models.path(), OutputFormat::Plain);
+    let automatic = helpers::extract_bytes_document_blocking(&bytes, "application/pdf", &config).unwrap();
+    let messages: Vec<String> = automatic
+        .processing_warnings
+        .iter()
+        .map(|warning| warning.message.to_string())
+        .collect();
+    assert_eq!(
+        messages.iter().filter(|message| message.as_str() == WARNING).count(),
+        1,
+        "the warning of the kept page is printed once: {messages:#?}"
+    );
+}
