@@ -738,6 +738,9 @@ fn read_xls_bytes(
     let cursor = Cursor::new(rewritten.as_deref().unwrap_or(data));
     let workbook =
         calamine::Xls::new(cursor).map_err(|e| XbergError::parsing(format!("Failed to parse XLS: {}", e)))?;
+    if let Some(error) = skipped.name_collision_error(&workbook.sheet_names()) {
+        return Err(error);
+    }
     let result = process_workbook(workbook, office_metadata, &mut warnings, skipped)?;
     Ok((result, warnings))
 }
@@ -754,6 +757,9 @@ fn read_xla_bytes(
     let cursor = Cursor::new(rewritten.as_deref().unwrap_or(data));
     match calamine::Xls::new(cursor) {
         Ok(workbook) => {
+            if let Some(error) = skipped.name_collision_error(&workbook.sheet_names()) {
+                return Err(error);
+            }
             let result = process_workbook(workbook, office_metadata, &mut warnings, skipped)?;
             Ok((result, warnings))
         }

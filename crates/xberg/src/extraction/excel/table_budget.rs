@@ -32,6 +32,8 @@ pub(super) struct SkippedSheets {
     /// sheet sharing its name with another sheet is renamed in the rewritten input and reported
     /// here under its original name.
     names: Vec<String>,
+    /// `(observed, max)` of the first cell-limit error a skipped sheet raised.
+    first_error: Option<(usize, usize)>,
 }
 
 impl SkippedSheets {
@@ -40,6 +42,7 @@ impl SkippedSheets {
             indices: HashSet::new(),
             max_cells: limits.max_table_cells,
             names: Vec::new(),
+            first_error: None,
         }
     }
 
@@ -65,6 +68,28 @@ impl SkippedSheets {
             *counts.entry(name.as_str()).or_insert(0) += 1;
         }
         counts
+    }
+
+    /// The original cell-limit error, if a skipped sheet shares its name with another sheet.
+    ///
+    /// Calamine keys XLS sheets by name, so the later of two equally named sheets overwrites the
+    /// earlier one. `reader_names` must be the names the reader itself reports, because it decodes
+    /// them (byte-order marks, code pages) in ways a preflight cannot mirror exactly.
+    pub(super) fn name_collision_error(&self, reader_names: &[String]) -> Option<XbergError> {
+        let mut counts: HashMap<&str, usize> = HashMap::new();
+        for name in reader_names {
+            *counts.entry(name.as_str()).or_insert(0) += 1;
+        }
+        let collides = self
+            .indices
+            .iter()
+            .any(|index| reader_names.get(*index).is_some_and(|name| counts[name.as_str()] > 1));
+        collides.then(|| {
+            let (cells, max) = self
+                .first_error
+                .unwrap_or((self.max_cells.saturating_add(1), self.max_cells));
+            XbergError::from(SecurityError::TooManyCells { cells, max })
+        })
     }
 
     /// The empty sheet standing in for sheet `index` named `name`, with its warning recorded,
@@ -104,6 +129,18 @@ fn is_cell_limit(error: &XbergError) -> bool {
     )
 }
 
+fn cell_limit_counts(error: &XbergError) -> Option<(usize, usize)> {
+    match error {
+        XbergError::Security {
+            source: Some(source), ..
+        } => match source.downcast_ref::<SecurityError>() {
+            Some(SecurityError::TooManyCells { cells, max }) => Some((*cells, *max)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 /// The part of a [`SecurityBudget`] that a skipped sheet gives back: its table-cell and text
 /// charges. The iteration and depth counters stay monotonic, so skipped sheets are not free
 /// against `max_iterations` (sheets can alias one oversized part and be preflighted repeatedly).
@@ -139,6 +176,9 @@ fn preflight_sheet(
     let before = Charges::of(budget);
     match sheet(budget) {
         Err(error) if recoverable && is_cell_limit(&error) => {
+            if skipped.first_error.is_none() {
+                skipped.first_error = cell_limit_counts(&error);
+            }
             before.restore(budget);
             skipped.indices.insert(index);
             Ok(())

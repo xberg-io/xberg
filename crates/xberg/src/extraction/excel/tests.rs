@@ -1929,3 +1929,42 @@ fn should_pick_an_ods_replacement_name_no_sheet_already_uses_gh2820() {
         "{warnings:?}"
     );
 }
+
+#[test]
+fn should_walk_past_a_chain_of_taken_ods_replacement_names_gh2820() {
+    let cell = |value: u32| format!(r#"<table:table-cell office:value-type="float" office:value="{value}"/>"#);
+    let small = |value: u32| format!("<table:table-row>{}</table:table-row>", cell(value));
+    let big = r#"<table:table-row table:number-rows-repeated="5"><table:table-cell table:number-columns-repeated="5" office:value-type="float" office:value="9"/></table:table-row>"#;
+    // The skipped fifth sheet (index 4) shares "Data" with the first; the first three names
+    // it could take are already used by other sheets.
+    let rows = format!(
+        r#"{}</table:table><table:table table:name="xberg-skipped-sheet-4">{}</table:table><table:table table:name="xberg-skipped-sheet-4-1">{}</table:table><table:table table:name="xberg-skipped-sheet-4-2">{}</table:table><table:table table:name="Data">{big}"#,
+        small(1),
+        small(2),
+        small(3),
+        small(4),
+    );
+    let limits = SecurityLimits {
+        max_table_cells: 10,
+        ..Default::default()
+    };
+    let (workbook, warnings) = read_excel_bytes(&ods_with_table_rows(&rows), ".ods", &limits).unwrap();
+    assert_eq!(workbook.sheets.len(), 5);
+    for (index, value) in [(0, "1"), (1, "2"), (2, "3"), (3, "4")] {
+        assert_eq!(
+            workbook.sheets[index].table_cells,
+            Some(vec![vec![value.to_string()]]),
+            "sheet {index}"
+        );
+    }
+    assert_eq!(workbook.sheets[4].name, "Data");
+    assert!(workbook.sheets[4].table_cells.is_none());
+    assert_eq!(
+        warnings
+            .iter()
+            .filter(|warning| warning.message.contains("Sheet 'Data' was skipped"))
+            .count(),
+        1,
+        "{warnings:?}"
+    );
+}
