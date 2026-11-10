@@ -378,7 +378,8 @@ mod tests {
     #[test]
     fn a_word_box_on_or_past_the_top_or_bottom_table_edge_decides_the_read() {
         // (side, words moved together, box on the edge as (top, height), box one pixel past the edge)
-        let cases: [(&str, &[&str], (u32, u32), (u32, u32)); 4] = [
+        type EdgeCase<'a> = (&'a str, &'a [&'a str], (u32, u32), (u32, u32));
+        let cases: [EdgeCase<'_>; 4] = [
             ("table top", &["Cash"], (40, 30), (39, 32)),
             ("table bottom", &["71,433"], (70, 90), (69, 92)),
             ("text above", &["Ledger", "Summary"], (30, 10), (31, 10)),
