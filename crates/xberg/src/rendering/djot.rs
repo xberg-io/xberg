@@ -385,8 +385,19 @@ fn escape_paragraph_block_prefix(text: &str) -> std::borrow::Cow<'_, str> {
     if !prefix.starts_with(|c: char| c.is_ascii_punctuation()) && !prefix.ends_with(['.', ')']) {
         return text.into();
     }
-    let block = jotdown::Parser::new(text).nth(1);
-    if matches!(block, Some(jotdown::Event::Start(jotdown::Container::Paragraph, _))) {
+    let mut parser = jotdown::Parser::new(text).into_offset_iter();
+    let block = parser.nth(1).map(|(event, _)| event);
+    let leading_attributes_end = if line.starts_with('{')
+        && let Some((jotdown::Event::Attributes(_), range)) = parser.next()
+    {
+        Some(range.end - indent)
+    } else {
+        None
+    };
+    if matches!(block, Some(jotdown::Event::Start(jotdown::Container::Paragraph, _)))
+        && leading_attributes_end.is_none()
+        && prefix != "^"
+    {
         return text.into();
     }
     // Keep reference-label brackets intact: escaping the opener can activate underscores inside the label. ~keep
@@ -402,6 +413,8 @@ fn escape_paragraph_block_prefix(text: &str) -> std::borrow::Cow<'_, str> {
     }
     let end = if line.starts_with('|') {
         1
+    } else if let Some(end) = leading_attributes_end {
+        end
     } else if line.starts_with('{') || matches!(block, Some(jotdown::Event::ThematicBreak(_))) {
         line.len()
     } else if let Some(first @ ('`' | '~' | ':')) = line.chars().next() {
@@ -411,11 +424,13 @@ fn escape_paragraph_block_prefix(text: &str) -> std::borrow::Cow<'_, str> {
     };
     let mut escaped = String::with_capacity(text.len() + end);
     escaped.push_str(&text[..indent]);
+    let mut already_escaped = false;
     for c in line[..end].chars() {
-        if c.is_ascii_punctuation() {
+        if c.is_ascii_punctuation() && c != '\\' && !already_escaped {
             escaped.push('\\');
         }
         escaped.push(c);
+        already_escaped = c == '\\' && !already_escaped;
     }
     escaped.push_str(&line[end..]);
     escaped.into()
