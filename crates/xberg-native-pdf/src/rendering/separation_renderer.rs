@@ -2395,7 +2395,7 @@ fn render_tj_to_plate(
                 total_advance += advance;
             }
             TextElement::Offset(offset) => {
-                let shift = (-*offset / 1000.0) * gs_stack.current().font_size;
+                let shift = super::text_rasterizer::tj_offset_shift(*offset, gs_stack.current());
                 gs_stack.current_mut().advance_text_matrix(shift);
                 total_advance += shift;
             }
@@ -2445,7 +2445,11 @@ fn measure_text_advance(text: &[u8], gs: &GraphicsState, fonts: &HashMap<String,
         }
     }
     let advance = units * gs.font_size / 1000.0 + (count as f32) * gs.char_space;
-    Ok(advance)
+    Ok(if gs.text_wmode == 0 {
+        advance * gs.horizontal_scaling / 100.0
+    } else {
+        advance
+    })
 }
 
 /// Fill a path into the separation pixmap with the given tint value.

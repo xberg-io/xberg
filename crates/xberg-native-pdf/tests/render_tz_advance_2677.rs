@@ -1,5 +1,5 @@
 use xberg_native_pdf::PdfDocument;
-use xberg_native_pdf::rendering::{RenderOptions, render_page};
+use xberg_native_pdf::rendering::{RenderOptions, render_page, render_separation};
 
 const DPI: u32 = 144;
 const PX_PER_PT: f32 = DPI as f32 / 72.0;
@@ -133,4 +133,25 @@ fn should_leave_the_unscaled_pitch_unchanged_at_tz_100() {
     let pitch = (runs[1].0 - runs[0].0) as f32;
     let expected = HELVETICA_I_WIDTH * FONT_SIZE * PX_PER_PT;
     assert!((pitch - expected).abs() <= 2.0, "pitch {pitch}, expected {expected:.1}");
+}
+
+#[test]
+fn should_scale_a_tj_number_offset_by_the_horizontal_scaling_on_a_separation_plate() {
+    let content = format!("0 0 0 1 k BT /F1 {FONT_SIZE} Tf 50 Tz 20 40 Td [(I) -500 (I)] TJ ET");
+    let document = PdfDocument::from_bytes(build_pdf(&content)).expect("valid PDF");
+    let plate = render_separation(&document, 0, "Black", DPI).expect("render plate");
+    let ink = |x: u32| (0..plate.height).any(|y| plate.data[(y * plate.width + x) as usize] > 127);
+    let mut starts = Vec::new();
+    for x in 1..plate.width {
+        if ink(x) && !ink(x - 1) {
+            starts.push(x);
+        }
+    }
+    assert_eq!(starts.len(), 2, "{starts:?}");
+    let pitch = (starts[1] - starts[0]) as f32;
+    let expected = (HELVETICA_I_WIDTH + 0.5) * FONT_SIZE * 0.5 * PX_PER_PT;
+    assert!(
+        (pitch - expected).abs() <= 2.0,
+        "plate TJ pitch must be {expected:.1} px, got {pitch}"
+    );
 }
