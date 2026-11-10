@@ -11,8 +11,8 @@ mod legacy;
 mod ods;
 mod xlsb_framing;
 mod zip_metadata;
-pub(super) use legacy::validate_xls;
-pub(super) use ods::validate_ods;
+pub(super) use legacy::{drop_skipped_sheets as drop_skipped_xls_sheets, validate_xls};
+pub(super) use ods::{drop_skipped_sheets as drop_skipped_ods_sheets, validate_ods};
 pub(super) use xlsb_framing::validate_xlsb_parts;
 pub(super) use zip_metadata::validate_xlsx_string_parts;
 
@@ -28,17 +28,39 @@ pub(super) struct SkippedSheets {
 }
 
 impl SkippedSheets {
-    pub(super) fn contains(&self, index: usize) -> bool {
+    fn new(limits: &SecurityLimits) -> Self {
+        Self {
+            indices: Vec::new(),
+            max_cells: limits.max_table_cells,
+        }
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.indices.is_empty()
+    }
+
+    fn contains(&self, index: usize) -> bool {
         self.indices.contains(&index)
     }
 
-    /// The warning recorded for the skipped sheet `name`.
-    pub(super) fn warning(&self, name: &str) -> String {
-        format!(
+    /// The empty sheet standing in for sheet `index` named `name`, with its warning recorded,
+    /// or `None` when that sheet was not skipped.
+    pub(super) fn placeholder(
+        &self,
+        index: usize,
+        name: &str,
+        warnings: &mut Vec<crate::types::ProcessingWarning>,
+    ) -> Option<crate::types::ExcelSheet> {
+        if !self.contains(index) {
+            return None;
+        }
+        let message = format!(
             "Sheet '{name}' was skipped: its cells did not fit in the remaining table-cell budget \
              (`security_limits.max_table_cells` is {}); raise the limit to extract it",
             self.max_cells
-        )
+        );
+        crate::core::diagnostics::push_warning(warnings, "excel", message);
+        Some(super::empty_excel_sheet(name))
     }
 }
 
@@ -143,10 +165,7 @@ pub(super) fn validate_xlsx<R: Read + Seek>(
     limits: &SecurityLimits,
 ) -> Result<SkippedSheets> {
     let mut budget = SecurityBudget::from_limits(limits);
-    let mut skipped = SkippedSheets {
-        max_cells: limits.max_table_cells,
-        ..Default::default()
-    };
+    let mut skipped = SkippedSheets::new(limits);
     for (index, name) in workbook.sheet_names().into_iter().enumerate() {
         preflight_sheet(index, &mut budget, &mut skipped, |budget| {
             validate_xlsx_sheet(workbook, &name, limits, budget)
@@ -248,10 +267,7 @@ pub(super) fn validate_xlsb<R: Read + Seek>(
     limits: &SecurityLimits,
 ) -> Result<SkippedSheets> {
     let mut budget = SecurityBudget::from_limits(limits);
-    let mut skipped = SkippedSheets {
-        max_cells: limits.max_table_cells,
-        ..Default::default()
-    };
+    let mut skipped = SkippedSheets::new(limits);
     for (index, name) in workbook.sheet_names().into_iter().enumerate() {
         preflight_sheet(index, &mut budget, &mut skipped, |budget| {
             validate_xlsb_sheet(workbook, &name, limits, budget)

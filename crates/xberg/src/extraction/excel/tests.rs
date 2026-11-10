@@ -1051,7 +1051,7 @@ fn should_skip_xlsx_before_reading_cells_after_an_oversized_box_gh2296() {
 }
 
 /// A sheet that tripped `max_table_cells` comes back empty with a warning naming it, never as an error.
-fn assert_sheet_skipped_for_cell_limit(result: Result<ExcelReadResult>, sheet: &str, max: usize) {
+pub(super) fn assert_sheet_skipped_for_cell_limit(result: Result<ExcelReadResult>, sheet: &str, max: usize) {
     let (workbook, warnings) = result.expect("a sheet over the table-cell limit must degrade, not fail");
     assert!(workbook.sheets.iter().any(|candidate| candidate.name == sheet));
     assert!(workbook.sheets.iter().all(|candidate| candidate.table_cells.is_none()));
@@ -1373,8 +1373,7 @@ fn should_bound_ods_repeated_rows_and_columns_before_construction_gh2296() {
         max_table_cells: 5,
         ..Default::default()
     };
-    let error = read_excel_bytes(&bytes, ".ods", &low).unwrap_err();
-    assert!(error.to_string().contains("observed 6 cells"), "{error}");
+    assert_sheet_skipped_for_cell_limit(read_excel_bytes(&bytes, ".ods", &low), "Data", 5);
     let exact = SecurityLimits {
         max_table_cells: 6,
         ..Default::default()
@@ -1491,8 +1490,19 @@ fn should_share_the_ods_table_budget_between_sheets_gh2296() {
         max_table_cells: 1,
         ..Default::default()
     };
-    let error = read_excel_bytes(&bytes, ".ods", &low).unwrap_err();
-    assert!(error.to_string().contains("observed 2 cells"), "{error}");
+    let (workbook, warnings) = read_excel_bytes(&bytes, ".ods", &low).unwrap();
+    assert_eq!(workbook.sheets.len(), 2);
+    assert_eq!(
+        workbook.sheets[0].table_cells.as_ref().unwrap(),
+        &[vec!["1".to_string()]]
+    );
+    assert!(workbook.sheets[1].table_cells.is_none());
+    assert!(
+        warnings
+            .iter()
+            .any(|warning| warning.message.contains("Sheet 'Second' was skipped")),
+        "{warnings:?}"
+    );
     let exact = SecurityLimits {
         max_table_cells: 2,
         ..Default::default()
@@ -1518,8 +1528,7 @@ fn should_apply_ods_preflight_to_file_and_renamed_inputs_gh2296() {
     for filename in ["budget.ods", "renamed.dat", "no_extension"] {
         let path = directory.path().join(filename);
         std::fs::write(&path, &bytes).unwrap();
-        let error = read_excel_file(path.to_str().unwrap(), &low).unwrap_err();
-        assert!(error.to_string().contains("observed 6 cells"), "{error}");
+        assert_sheet_skipped_for_cell_limit(read_excel_file(path.to_str().unwrap(), &low), "Data", 5);
         let (workbook, _) = read_excel_file(path.to_str().unwrap(), &exact).unwrap();
         assert_eq!((workbook.sheets[0].row_count, workbook.sheets[0].col_count), (3, 2));
     }
@@ -1732,4 +1741,59 @@ async fn should_extract_the_sheets_within_budget_through_the_extractor_gh2820() 
         "{:?}",
         doc.processing_warnings
     );
+}
+
+#[test]
+fn should_skip_only_the_ods_sheets_over_the_table_budget_gh2820() {
+    let cell = |value: u32| format!(r#"<table:table-cell office:value-type="float" office:value="{value}"/>"#);
+    let rows = format!(
+        r#"<table:table-row>{}{}</table:table-row><table:table-row>{}{}</table:table-row></table:table><table:table table:name="Big"><table:table-row table:number-rows-repeated="5"><table:table-cell table:number-columns-repeated="5" office:value-type="float" office:value="9"/></table:table-row></table:table><table:table table:name="Tail"><table:table-row>{}{}</table:table-row>"#,
+        cell(1),
+        cell(2),
+        cell(3),
+        cell(4),
+        cell(7),
+        cell(8),
+    );
+    let bytes = ods_with_table_rows(&rows);
+    let limits = SecurityLimits {
+        max_table_cells: 10,
+        ..Default::default()
+    };
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("budget.ods");
+    std::fs::write(&path, &bytes).unwrap();
+    for (label, result) in [
+        ("bytes", read_excel_bytes(&bytes, ".ods", &limits)),
+        ("file", read_excel_file(path.to_str().unwrap(), &limits)),
+    ] {
+        let (workbook, warnings) = result.unwrap_or_else(|error| panic!("{label}: {error}"));
+        let names: Vec<&str> = workbook.sheets.iter().map(|sheet| sheet.name.as_str()).collect();
+        assert_eq!(names, ["Data", "Big", "Tail"], "{label}");
+        assert_eq!(
+            workbook.sheets[0].table_cells.as_ref().unwrap(),
+            &[
+                vec!["1".to_string(), "2".to_string()],
+                vec!["3".to_string(), "4".to_string()]
+            ],
+            "{label}"
+        );
+        assert!(workbook.sheets[1].table_cells.is_none(), "{label}");
+        assert_eq!(
+            workbook.sheets[2].table_cells.as_ref().unwrap(),
+            &[vec!["7".to_string(), "8".to_string()]],
+            "{label}"
+        );
+        let skipped: Vec<&str> = warnings
+            .iter()
+            .filter(|warning| warning.message.contains("max_table_cells"))
+            .map(|warning| warning.message.as_ref())
+            .collect();
+        assert_eq!(skipped.len(), 1, "{label}: {warnings:?}");
+        assert!(
+            skipped[0].contains("Sheet 'Big' was skipped"),
+            "{label}: {}",
+            skipped[0]
+        );
+    }
 }

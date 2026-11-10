@@ -127,9 +127,8 @@ fn process_xlsx_workbook<RS: Read + Seek>(
     let mut extra_metadata: HashMap<String, String> = HashMap::new();
 
     for (index, name) in sheet_names.iter().enumerate() {
-        if skipped.contains(index) {
-            push_warning(warnings, "excel", skipped.warning(name));
-            sheets.push(empty_excel_sheet(name));
+        if let Some(sheet) = skipped.placeholder(index, name, warnings) {
+            sheets.push(sheet);
             continue;
         }
         match process_xlsx_sheet_safe(&mut workbook, name, warnings) {
@@ -536,9 +535,8 @@ where
     let mut extra_metadata: HashMap<String, String> = HashMap::new();
 
     for (index, name) in sheet_names.iter().enumerate() {
-        if skipped.contains(index) {
-            push_warning(warnings, "excel", skipped.warning(name));
-            sheets.push(empty_excel_sheet(name));
+        if let Some(sheet) = skipped.placeholder(index, name, warnings) {
+            sheets.push(sheet);
             continue;
         }
         match workbook.worksheet_range(name) {
