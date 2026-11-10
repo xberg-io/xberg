@@ -180,7 +180,37 @@ fn recovers_the_painted_zero_once_at_its_source_position() {
         assert_eq!(text.matches('០').count(), 1, "one painted source occurrence: {text}");
         assert!(text.find('០').unwrap() < text.find(PROSE[0]).unwrap(), "{text}");
     }
+    assert_plain_page_ranges(&result);
     assert_two_page_numbers(&config, 1);
+}
+
+fn assert_plain_page_ranges(result: &ExtractedDocument) {
+    assert!(
+        result
+            .processing_warnings
+            .iter()
+            .all(|warning| warning.source != "page_boundaries"),
+        "recovery must preserve exact page ranges: {:?}",
+        result.processing_warnings
+    );
+    let pages = result.pages.as_ref().unwrap();
+    let boundaries = result
+        .metadata
+        .pages
+        .as_ref()
+        .unwrap()
+        .boundaries
+        .as_ref()
+        .expect("recovered Plain pages retain byte ranges");
+    assert_eq!(boundaries.len(), pages.len());
+    for (boundary, page) in boundaries.iter().zip(pages) {
+        assert_eq!(boundary.page_number, page.page_number);
+        assert_eq!(
+            result.content.get(boundary.byte_start..boundary.byte_end),
+            Some(page.content.as_str()),
+            "each Plain page must be the exact document slice"
+        );
+    }
 }
 
 fn provisioned_config() -> (tempfile::TempDir, ExtractionConfig) {
@@ -260,6 +290,9 @@ fn assert_two_page_numbers(config: &ExtractionConfig, count_per_page: usize) {
         assert_eq!(page.content.matches('០').count(), count_per_page);
     }
     assert_eq!(result.content.matches('០').count(), 2 * count_per_page);
+    if config.output_format == xberg::OutputFormat::Plain {
+        assert_plain_page_ranges(&result);
+    }
     let expected_warnings = if count_per_page == 0 { 2 } else { 0 };
     assert_eq!(missing_model_warnings(&result), expected_warnings);
     if expected_warnings != 0 {

@@ -497,3 +497,29 @@ fn verifier_fixture() -> (std::sync::Arc<Vec<u8>>, Rect, TextChar) {
     .unwrap();
     (std::sync::Arc::new(raster.data), media, character)
 }
+
+#[test]
+fn should_not_turn_verified_numbers_into_type0_page_corroboration() {
+    let native = "Covered account statements contain unrelated prose ០១២៣៤៥៦";
+    let read = "Quarterly revenue improved";
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    assert!(!super::super::document::native_spells_read(native, read, &thresholds));
+    assert!(
+        super::super::document::native_spells_read(native, &format!("{read} ០១២៣៤៥៦"), &thresholds,),
+        "verified numeric bigrams alone can satisfy the broader corroboration predicate"
+    );
+    let policy = |type0_ink_loss| PagePolicy {
+        accepted: true,
+        scale_only: true,
+        layout: false,
+        transformed: false,
+        type0_ink_loss,
+        structured: false,
+        builtin: true,
+    };
+    assert!(applicable(policy(false)), "intact raster remains eligible");
+    assert!(
+        !applicable(policy(true)),
+        "numeric crop evidence cannot certify the rest of a Type0 ink-loss page"
+    );
+}

@@ -30,8 +30,9 @@ Recovery requires an already-provisioned `khm.traineddata` in the same tessdata
 directory selected for the primary English read. The English OCR text is
 unchanged when that model is absent; eligible default automatic pages carry
 an OCR processing warning that the native Khmer numbers could not be verified.
-Forced OCR, custom Tesseract options, layout and other excluded paths do not
-receive this numeric-recovery warning. The separate unreadable-script guard
+Forced OCR, custom Tesseract options and layout paths do not receive this
+numeric-recovery warning. Missing-model diagnostics may still be emitted before
+the later Type0 ink-loss exclusion. The separate unreadable-script guard
 uses letter and cluster evidence and does not cover every numeric-only layer.
 Extraction never downloads or searches for an auxiliary model.
 
@@ -54,7 +55,9 @@ One lazy processor is retained for the OCR run. Its bounded native pool reuses
 the initialized Khmer engine across pages, while crops remain serial with at
 most 64 native numeric glyphs per page. Every crop still incurs recognition,
 image/config hashing and model-context resolution, even with result caching
-disabled. The independent numeral read is extra work on eligible pages only.
+disabled. The independent numeral read is extra work on eligible pages only. Eligible
+native Khmer-number pages bypass both the primary OCR cache and extraction-result
+cache, with or without the auxiliary model, so installing it changes the result.
 
 Run the mandatory model qualification explicitly:
 
@@ -62,7 +65,7 @@ Run the mandatory model qualification explicitly:
 XBERG_2408_KHM_MODEL=/path/to/khm.traineddata mise run rust:test:khmer-number-recovery
 ```
 
-The qualification requires all twelve public issue tests and fourteen unit
+The qualification requires all twelve public issue tests and fifteen unit
 controls to be collected and executed, including every external-model case; a
 missing or altered model fails setup. The existing Rust CI workflow invokes it
 through `.github/actions/qualify-ocr-orientation/action.yml`, which explicitly
@@ -80,7 +83,9 @@ applies to that model.
 This is a bounded capability improvement for upright Khmer numeric runs. It is
 not a general English-only recovery fix or evidence about the unavailable
 reporter page. Rotated/cropped pages, custom OCR settings, layout/pipeline
-routes and rows already containing OCR numbers remain unchanged.
+routes and rows already containing OCR numbers remain unchanged. A Latin date or total
+on the owning line also prevents recovery. Type0 rasters that lost glyph ink
+remain unchanged: a numeral crop cannot corroborate the rest of that page.
 
 [khm]: https://github.com/tesseract-ocr/tessdata_fast/blob/87416418657359cb625c412a48b6e1d6d41c29bd/khm.traineddata
 [lic]: https://github.com/tesseract-ocr/tessdata_fast/blob/87416418657359cb625c412a48b6e1d6d41c29bd/LICENSE
@@ -95,3 +100,7 @@ the primary-only read, and retains the standalone top/bottom recovery positives.
 Recovery requires complete located paragraph text and exactly one geometric
 line owner. An overlapping line remains ambiguous even if its text, font scale
 or ordering makes it ineligible for insertion.
+
+Successfully recovered Plain pages use the existing structure assembly and Plain
+renderer for their page text, so their returned byte ranges index the same text
+as the document. The positive control checks exact slices on one and two pages.

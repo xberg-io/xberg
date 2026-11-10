@@ -30,6 +30,7 @@ pub(super) struct PagePolicy {
     pub(super) scale_only: bool,
     pub(super) layout: bool,
     pub(super) transformed: bool,
+    pub(super) type0_ink_loss: bool,
     pub(super) structured: bool,
     pub(super) builtin: bool,
 }
@@ -39,6 +40,7 @@ pub(super) fn applicable(policy: PagePolicy) -> bool {
         && policy.scale_only
         && !policy.layout
         && !policy.transformed
+        && !policy.type0_ink_loss
         && !policy.structured
         && policy.builtin
 }
@@ -102,8 +104,23 @@ pub(super) async fn recover(
     let max_work = proof_limits(config).max_iterations;
     let numbers = recognize(source.raster, media, numbers, directory, config.clone(), run.clone()).await;
     if insert(numbers, paragraphs, scale, max_work) {
-        *read = super::document::ocr_paragraphs_plain_text(paragraphs);
+        *read = recovered_page_text(paragraphs, &config.output_format);
     }
+}
+
+fn recovered_page_text(paragraphs: &[PdfParagraph], format: &crate::OutputFormat) -> String {
+    if *format != crate::OutputFormat::Plain {
+        return super::document::ocr_paragraphs_plain_text(paragraphs);
+    }
+    // Use the document's geometry-aware text assembly so page byte ranges share its rendering. ~keep
+    let document = crate::pdf::structure::assemble_internal_document(
+        vec![paragraphs.to_vec()],
+        &[],
+        None,
+        &[],
+        &Default::default(),
+    );
+    crate::rendering::render_plain(&document)
 }
 
 fn source_numbers(source: &PageSource<'_>) -> crate::Result<Option<(Rect, Vec<Number>)>> {

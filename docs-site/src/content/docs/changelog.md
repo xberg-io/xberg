@@ -313,6 +313,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   automatic pages only. Recovery retains OCR tokens, so misread neighbors can remain, and declines
   transformed or ambiguous source claims. Numeric crops overlapping merged prose
   segments are declined when their internal word positions are unavailable.
+  Type0 rasters with lost glyph ink and lines already containing numbers stay unchanged.
+  Eligible pages bypass OCR and extraction-result caches so model installation takes effect.
+  Recovered Plain pages retain exact document byte ranges.
   No runtime model download; the original reporter page remains unverified.
 
 - **(pdf): Keep a Type0 page's native text after OCR ink loss only when the native layer owns or is covered by the read, or spells at least 25% of the read's distinct words.** (#2802)
