@@ -1698,7 +1698,8 @@ fn dedup_ignores_a_table_of_another_page_that_holds_the_same_words() {
     page.push(Vec::new());
     let kept = kept_native_tables(vec![big, small.clone(), elsewhere], &page);
     assert!(
-        kept.iter().any(|table| table.page_number == 1 && table.cells == small.cells),
+        kept.iter()
+            .any(|table| table.page_number == 1 && table.cells == small.cells),
         "the table that holds the words printed once on this page stays"
     );
 }
