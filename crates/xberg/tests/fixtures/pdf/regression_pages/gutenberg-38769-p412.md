@@ -47,13 +47,9 @@ dx and without integration, that Φ(ξ) = , where s \< 1, tends to infinity x<su
 
 1
 
-with ξ. P P P
+with ξ. P P P −2 −3/2 −11/10
 
-−2 −3/2 −11/10
-
-2. The series n , n , n are convergent, and their sumsP P
-
-−1/2 −10/11
+2. The series n , n , n are convergent, and their sumsP P −1/2 −10/11
 
 are not greater than 2, 3, 11 respectively. The series n , n are divergent. P
 

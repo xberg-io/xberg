@@ -19,9 +19,7 @@ enum ScriptGeometry {
 /// lifts the mark out of its sentence. `order` must only permute `spans`. Only `bbox.y` of a snapped
 /// mark changes while it runs, and the raw value is put back afterwards, matched on the span's
 /// text, x, snapped y, size and `sequence`, so `sequence` itself stays the content-stream order
-/// that the ordering passes read. A member of a nested script stack takes its base's line and
-/// style for good: its raw baseline lies beyond the reach that line assembly accepts for a mark, so
-/// restoring it would cut it out of its line again.
+/// that the ordering passes read.
 #[doc(hidden)]
 pub fn order_on_script_base_lines(
     spans: &mut Vec<crate::layout::TextSpan>,
@@ -53,26 +51,10 @@ pub fn order_on_script_base_lines(
             )
         })
         .collect();
-    let snap = ordering_script_baselines(&snapshot);
+    let snapped = ordering_script_baselines(&snapshot);
     let mut raw_by_key: HashMap<Key, Vec<f32>> = HashMap::new();
-    let bases: Vec<crate::layout::TextSpan> = snap
-        .stack_base
-        .iter()
-        .map(|base| base.map(|index| spans[index].clone()).unwrap_or_default())
-        .collect();
-    for (index, (span, base_y)) in spans.iter_mut().zip(snap.base_y).enumerate() {
-        let Some(base_y) = base_y else { continue };
-        if snap.stack_base[index].is_some() {
-            let base = &bases[index];
-            span.bbox.y = base_y;
-            span.bbox.height = base.bbox.height;
-            span.font_name.clone_from(&base.font_name);
-            span.font_size = base.font_size;
-            span.font_weight = base.font_weight;
-            span.is_italic = base.is_italic;
-            span.is_monospace = base.is_monospace;
-            span.text_rise = 0.0;
-        } else {
+    for (span, base_y) in spans.iter_mut().zip(snapped) {
+        if let Some(base_y) = base_y {
             let raw_y = span.bbox.y;
             span.bbox.y = base_y;
             raw_by_key.entry(key(span)).or_default().push(raw_y);

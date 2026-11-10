@@ -4,11 +4,15 @@ We have extended the expression (2.3) to achieve up to tenth-order accuracy, den
 
 ′′′ ′′′ ′′′ ′′′ ′′′
 
-βf~j~−2 + αf~j~−1 + f~j~ + αf~j~+1 + βf~j~+2 = a + b 2h<sup>3</sup> 8h<sup>3</sup> f~j~+4 − 4f~j~+1 + 4f~j~−1 − f~j~−4 + c . 20h<sup>3</sup> The third derivative cell-centered compact scheme (TDCCCS) is given by (2.5) fj+3 − 3fj+1 + 3fj−1 − fj−3 fj+5 − 5fj+1 + 5fj−1 − fj−5
+βf~j~−2 + αf~j~−1 + f~j~ + αf~j~+1 + βf~j~+2 = a + b 2h<sup>3</sup> 8h<sup>3</sup> f~j~+4 − 4f~j~+1 + 4f~j~−1 − f~j~−4 + c . 20h<sup>3</sup> The third derivative cell-centered compact scheme (TDCCCS) is given by (2.5) f
 
-′′′ ′′′ ′′′ ′′′ ′′′
+3 − 3f 1 + 3f 1 − f 3 f 5 − 5f 1 + 5f 1 − f 5 j+ j+ j− j− j+ j+ j− j− ′′′ ′′′ ′′′ ′′′ ′′′ 2 2 2 2 2 2 2 2
 
-2 2 2 2 2 2 2 2 βf~j~−2 + αf~j~−1 + f~j~ + αf~j~+1 + βf~j~+2 = a + b h<sup>3</sup> 5h<sup>3</sup> fj+72 − 7fj+21 + 7fj−12 − fj−27 + c . 14h<sup>3</sup>
+βf~j~−2 + αf~j~−1 + f~j~ + αf~j~+1 + βf~j~+2 = a + b h<sup>3</sup> 5h<sup>3</sup> f 7 − 7f 1 + 7f 1 − f~j~
+
+7 j+ j+ j− − 2 2 ~2 2~
+
+\+ c . 14h<sup>3</sup>
 
 | Scheme | Table 1. The coefficients of TDCNCS schemes. a | b | c | α | β | Order |
 | --- | --- | --- | --- | --- | --- | --- |

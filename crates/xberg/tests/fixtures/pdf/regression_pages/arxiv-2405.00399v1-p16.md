@@ -6,9 +6,9 @@ And considering (3.22), we have the following estimate s
 
 a
 
-u¯~i,h~ − E u¯~i,h~ ≤ λ~i,h~ 1 + 1 + i,h
+u¯~i,h~ − E u¯~i,h~ ≤ λ~i,h~ 1 + 1 + i,h (ℓ+1) 2
 
-(ℓ+1) 2 (ℓ) a,h
+(ℓ) a,h
 
 λ~1~ δ λδ ~λ 1 λ~ The following ∥·∥ -error estimate holds ~b~ \! 1 u¯~i,h~
 
@@ -50,11 +50,7 @@ a (ℓ+1)
 
 a
 
-γ(λ~i,h~) = λ~i,h~ 1 + 1 + 2
-
-(ℓ+1)
-
-λ~1~ δ λδ ~λ 1~
+γ(λ~i,h~) = λ~i,h~ 1 + 1 + (ℓ+1) 2 λ~1~ δ λδ ~λ 1~
 
 (ℓ)
 

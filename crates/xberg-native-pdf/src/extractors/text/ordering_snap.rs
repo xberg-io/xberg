@@ -18,22 +18,12 @@ fn is_phrase(text: &str) -> bool {
     trimmed.chars().count() > 3 || trimmed.contains(char::is_whitespace)
 }
 
-/// What the reading-order snap decided for a page of spans.
-pub(crate) struct OrderingSnap {
-    /// Base-line Y each span snaps to for reading order, or `None` when it stays on its own line.
-    pub(crate) base_y: Vec<Option<f32>>,
-    /// For a member of a nested script stack, the index of its base span. The extraction sets the
-    /// member in its base's line and style for good: its raw baseline sits beyond the reach the
-    /// later line assembly accepts for a mark.
-    pub(crate) stack_base: Vec<Option<usize>>,
-}
-
 /// Base-line Y each span snaps to for reading order, or `None` when it stays on its own line.
 ///
 /// Raised glyphs that touch on one baseline form a cluster. The cluster snaps whole when its
 /// first glyph abuts the base, so `(\u{2217})` and `1/t` are never split between two rows. List
 /// markers never count as marks, and a phrase snaps only when it abuts its base on its own line.
-pub(crate) fn ordering_script_baselines(spans: &[OrderingSpan<'_>]) -> OrderingSnap {
+pub(crate) fn ordering_script_baselines(spans: &[OrderingSpan<'_>]) -> Vec<Option<f32>> {
     let snapshot: Vec<_> = spans.iter().map(|&(_, x, y, w, fs)| (x, y, w, fs)).collect();
     let single = snapped_script_baselines(&snapshot, SnapReach::ORDERING);
     let phrase = snapped_script_baselines(&snapshot, SnapReach::ORDERING_PHRASE);
@@ -79,11 +69,8 @@ pub(crate) fn ordering_script_baselines(spans: &[OrderingSpan<'_>]) -> OrderingS
         }
         start = end;
     }
-    let stack_base = snap_script_stacks(spans, &own, &mut result);
-    OrderingSnap {
-        base_y: result,
-        stack_base,
-    }
+    snap_script_stacks(spans, &own, &mut result);
+    result
 }
 
 /// Largest rise or drop of a stack member from its base line, in ems of the base.
@@ -102,11 +89,7 @@ const STACK_MIN_SIZE_STEP: f32 = 0.1;
 /// em of the base line. A stack needs two members at two sizes, one of them beyond the reach of a single
 /// mark, so a lone mark, which the single-mark reach decides, a fraction and a run of same-size glyphs are
 /// left alone. Spans that already snapped, and list markers and phrases, are neither members nor moved.
-fn snap_script_stacks(
-    spans: &[OrderingSpan<'_>],
-    own: &[Option<f32>],
-    result: &mut [Option<f32>],
-) -> Vec<Option<usize>> {
+fn snap_script_stacks(spans: &[OrderingSpan<'_>], own: &[Option<f32>], result: &mut [Option<f32>]) {
     let is_member_shape = |i: usize| {
         let (text, _, _, _, fs) = spans[i];
         fs > 0.0 && !text.trim().is_empty() && !is_list_marker(text) && !is_phrase(text)
@@ -119,7 +102,6 @@ fn snap_script_stacks(
     bases.sort_by(|&a, &b| crate::utils::safe_float_cmp(spans[b].4, spans[a].4));
 
     let mut claimed = vec![false; spans.len()];
-    let mut stack_base = vec![None; spans.len()];
     for base in bases {
         if claimed[base] || result[base].is_some() || own[base].is_some() {
             continue;
@@ -159,11 +141,9 @@ fn snap_script_stacks(
             claimed[m] = true;
             if result[m].is_none() {
                 result[m] = Some(by);
-                stack_base[m] = Some(base);
             }
         }
     }
-    stack_base
 }
 
 #[cfg(test)]
@@ -180,10 +160,8 @@ mod tests {
             ("1", 90.61, 79.63, 3.65, 5.98),
             ("+", 97.69, 76.24, 8.49, 10.91),
         ];
-        let snap = ordering_script_baselines(&spans);
-        assert_eq!(snap.base_y[3], Some(76.24), "{:?}", snap.base_y);
-        assert_eq!(snap.base_y[4], Some(76.24), "{:?}", snap.base_y);
-        assert_eq!(snap.stack_base, [None, None, None, Some(1), Some(1), None]);
+        let snapped = ordering_script_baselines(&spans);
+        assert_eq!(snapped, [None, None, None, Some(76.24), Some(76.24), None]);
     }
 
     #[test]
@@ -193,8 +171,8 @@ mod tests {
             ("1", 15.0, 104.5, 3.0, 6.0),
             ("2", 15.0, 99.0, 3.0, 6.0),
         ];
-        assert_eq!(ordering_script_baselines(&fraction).stack_base, [None, None, None]);
+        assert_eq!(ordering_script_baselines(&fraction), [None, None, None]);
         let lone: Vec<OrderingSpan<'_>> = vec![("e", 10.0, 100.0, 5.0, 10.0), ("c", 15.0, 104.5, 3.0, 7.0)];
-        assert_eq!(ordering_script_baselines(&lone).stack_base, [None, None]);
+        assert_eq!(ordering_script_baselines(&lone), [None, None]);
     }
 }

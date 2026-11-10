@@ -50,11 +50,13 @@
 
 **˙ described by (1) with the Properties 1-3, satisfying to**
 
-***V*** **(** ***t*** **)** ***\< c*** **+** ***e−c1t*** **(** ***gN*** **(** ***ζ*** **(** ***τ*** **)) + 1)** ***ζ*** **(** ***τ*** **)** ***ec1τdτ,*** **(7)**
+***V*** **(** ***t*** **)** ***\< c*** **+** ***e*** **−** ***c***~**1**~***t***
+
+**(** ***gN*** **(** ***ζ*** **(** ***τ*** **)) + 1)** ***ζ*** **(** ***τ*** **)** ***e***<sup>***c***</sup>~**1**~***τdτ,*** **(7)**
 
 **0 0**
 
-**Assumptions 1 and 2. If the Nussbaum function-based where** ***c***~**0**~ ***\>*** **0 and** ***c***~**1**~ ***\>*** **0 are positive constants, and** ***g*** **PID-like control law (9), with the adaptive updating laws is a control parameter within closed intervals** ***L*** **= [** ***l***~**−**~***,l***~**+**~**] (11), and (12), and and Lemmas 1, and 2 is implemented, excluding zero (0** \< ***L*** **), then** ***V*** **(** ***t*** **),** ***ζ*** **(** ***t*** **), and the integral then, with the design parameters are properly chosen, R**~***t***~ **˙ the closed-loop system remains stable, and all signals** ***gN*** **(** ***ζ*** **(** ***τ*** **))** ***ζ*** **(** ***τ*** **)** ***ec1τdτ*** **are guaranteed to be bounded on**
+**Assumptions 1 and 2. If the Nussbaum function-based where** ***c***~**0**~ ***\>*** **0 and** ***c***~**1**~ ***\>*** **0 are positive constants, and** ***g*** **PID-like control law (9), with the adaptive updating laws is a control parameter within closed intervals** ***L*** **= [** ***l***~**−**~***,l***~**+**~**] (11), and (12), and and Lemmas 1, and 2 is implemented, excluding zero (0** \< ***L*** **), then** ***V*** **(** ***t*** **),** ***ζ*** **(** ***t*** **), and the integral then, with the design parameters are properly chosen, R**~***t***~ **˙ the closed-loop system remains stable, and all signals** ***gN*** **(** ***ζ*** **(** ***τ*** **))** ***ζ*** **(** ***τ*** **)** ***e***<sup>***c***</sup>~**1**~***τdτ*** **are guaranteed to be bounded on**
 
 **0**
 
@@ -88,9 +90,9 @@
 
 ***γ***<sup>**2**</sup> ***d κ***~***π***~**(** ***t*** **)** ***κ***~***ι***~**(** ***t*** **)**
 
-***κ*** **(** ***t*** **) = = , ensuring the quadratic expression of Young's inequality, and considering Property 2, ∆ 2*****γ***
+***κ*** **(** ***t*** **) = = , ensuring the quadratic expression of Young's inequality, and considering Property 2, ∆ 2*****γ γ***<sup>**2**</sup>
 
-***γ***<sup>**2**</sup> **1**
+**1**
 
 **we obtain Ψ (** ***t*** **)**<sup>***T***</sup> ***C*** **(** ***t*** **)** ***q*** **˙(** ***t*** **) ≤** ***αkΨ*** **(** ***t*** **)k**<sup>**2**</sup> ***c***<sup>**2**</sup>**kq˙(** ***t*** **)k**<sup>**4**</sup> **+ ,**
 

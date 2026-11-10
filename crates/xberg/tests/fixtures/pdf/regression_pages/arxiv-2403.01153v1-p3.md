@@ -39,10 +39,13 @@ Specifically, an integrated analysis of data and fitting the distribution using 
 
 27.63), between 1 and 3, -0.87 radians (concentration 19.61), and between 1 and 4, -1.74 radians (concentration 17.46).
 
-These differences are attributed to inherent antenna properties. Stability is maintained even after system reboots. Consequently, we adjust the CSI for consistent angular offsets and normalize amplitude. The calibrated CSI is represented as: | H R ( M,N ) ( f, t ) |
+These differences are attributed to inherent antenna properties. Stability is maintained even after system reboots. Consequently, we adjust the CSI for consistent angular offsets and normalize amplitude. The calibrated CSI is represented as: |H (f, t)| · e<sup>jθ</sup>~R~
 
-- e jθ R
-- e j ∆ θ N H cali ( M, N ) = P M (5)
+- e
+
+j∆θ~N~ R(M,N)
+
+H~cali~(M, N) = P~M~ (5)
 
 1
 

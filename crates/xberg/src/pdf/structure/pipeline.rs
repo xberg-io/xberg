@@ -2066,6 +2066,18 @@ impl<'a> ParagraphVisualRow<'a> {
     }
 
     fn carries_script(&self, script: &SegmentData) -> bool {
+        self.carries_script_within(script, false)
+    }
+
+    /// Whether `script` reads as a script of this row. A member of a nested stack (`e^{-c_1 \tau}`)
+    /// sits past the reach of a single mark, so `stacked` widens the reach to the stack's.
+    fn carries_script_within(&self, script: &SegmentData, stacked: bool) -> bool {
+        self.carries_script_beside(script, stacked, (self.left, self.right))
+    }
+
+    /// [`Self::carries_script_within`] for a script that abuts `extent`, the extent of a run of the row,
+    /// instead of the whole row.
+    fn carries_script_beside(&self, script: &SegmentData, stacked: bool, extent: (f32, f32)) -> bool {
         let base = self.anchor;
         // A bullet glyph is set apart from the text beside it, not under it: that text is the
         // item's body, never a script run of the glyph. Other markers, such as the label `(0)`,
@@ -2096,17 +2108,19 @@ impl<'a> ParagraphVisualRow<'a> {
         {
             return false;
         }
-        is_script_run_offset(
-            base,
-            script,
-            (base.upright_baseline() - script.upright_baseline()).abs(),
-            base.font_size,
-        ) && crate::script_run::is_script_run_forward_gap(
-            self.left,
-            self.right,
-            script.upright_advance_extent().0,
-            base.font_size,
-        )
+        let delta = (base.upright_baseline() - script.upright_baseline()).abs();
+        let offset_fits = if stacked {
+            crate::script_run::is_script_row_baseline_offset(delta, base.font_size, script.font_size)
+        } else {
+            is_script_run_offset(base, script, delta, base.font_size)
+        };
+        offset_fits
+            && crate::script_run::is_script_run_forward_gap(
+                extent.0,
+                extent.1,
+                script.upright_advance_extent().0,
+                base.font_size,
+            )
     }
 
     fn include(&mut self, segment: &'a SegmentData) {
@@ -2176,9 +2190,23 @@ fn blocks_to_paragraphs(
     let mut current_is_single_visual_line = true;
     let mut prev_idx = 0usize;
     let mut visual_row: Option<ParagraphVisualRow<'_>> = None;
+    let mut stack_open = false;
 
     for (line_idx, line) in lines.iter().enumerate() {
-        let is_row_script = visual_row.as_ref().is_some_and(|row| row.carries_script(line));
+        // A script past a single mark's reach belongs to its row when the next run is a script that
+        // abuts it, or when it continues a stack that has begun: the members of one stack, not a
+        // lone raised mark, which keeps the reach of a single mark. ~keep
+        let continues_stack = visual_row.as_ref().is_some_and(|row| {
+            stack_open
+                || lines.get(line_idx + 1).is_some_and(|next| {
+                    next.font_size <= line.font_size
+                        && row.carries_script_beside(next, true, line.upright_advance_extent())
+                })
+        });
+        let is_row_script = visual_row
+            .as_ref()
+            .is_some_and(|row| row.carries_script_within(line, continues_stack));
+        stack_open = is_row_script && continues_stack;
         let should_break = if current_lines.is_empty() {
             false
         } else {
@@ -2495,6 +2523,16 @@ fn is_script_run_offset(previous: &SegmentData, next: &SegmentData, baseline_del
 /// neither monospace, a materially smaller font raised or lowered by a fraction of it, and a start
 /// inside or abutting `previous`'s advance extent.
 pub(crate) fn is_script_run_of(previous: &SegmentData, next: &SegmentData) -> bool {
+    script_run_of(previous, next, false)
+}
+
+/// [`is_script_run_of`] at the reach of a nested script stack, whose first member sits past the
+/// reach of a single mark. It is only evidence of a stack when a neighbour joins it.
+pub(crate) fn is_stack_script_of(previous: &SegmentData, next: &SegmentData) -> bool {
+    script_run_of(previous, next, true)
+}
+
+fn script_run_of(previous: &SegmentData, next: &SegmentData, stacked: bool) -> bool {
     if previous.is_monospace || next.is_monospace || previous.assigned_role != next.assigned_role {
         return false;
     }
@@ -2520,8 +2558,16 @@ pub(crate) fn is_script_run_of(previous: &SegmentData, next: &SegmentData) -> bo
     let baseline_delta = (next.upright_baseline() - previous.upright_baseline()).abs();
     let (previous_start, previous_end) = previous.upright_advance_extent();
     let (next_start, _) = next.upright_advance_extent();
-    is_script_run_offset(previous, next, baseline_delta, font_size)
-        && crate::script_run::is_script_run_forward_gap(previous_start, previous_end, next_start, font_size)
+    let offset_fits = if stacked {
+        crate::script_run::is_script_row_baseline_offset(
+            baseline_delta,
+            font_size,
+            previous.font_size.min(next.font_size),
+        )
+    } else {
+        is_script_run_offset(previous, next, baseline_delta, font_size)
+    };
+    offset_fits && crate::script_run::is_script_run_forward_gap(previous_start, previous_end, next_start, font_size)
 }
 
 /// Whether `line` reads as the wrapped continuation of the numbered-heading

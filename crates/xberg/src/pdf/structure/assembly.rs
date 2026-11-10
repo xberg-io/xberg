@@ -1310,7 +1310,9 @@ pub(super) fn segment_script(segments: &[&crate::pdf::hierarchy::SegmentData], i
         .rev()
         .take(super::pipeline::SCRIPT_RUN_BASE_LOOKBACK)
         .find_map(|base| {
-            if script.font_size >= base.font_size || !super::pipeline::is_script_run_of(base, script) {
+            if script.font_size >= base.font_size
+                || !(super::pipeline::is_script_run_of(base, script) || is_stack_member(segments, index, base))
+            {
                 return None;
             }
             let shift = script.upright_baseline() - base.upright_baseline();
@@ -1329,6 +1331,36 @@ pub(super) fn segment_script(segments: &[&crate::pdf::hierarchy::SegmentData], i
                 annotate: !same_row_style,
             })
         })
+}
+
+/// Whether the script at `index` is a member of a nested script stack on `base`: past the reach of a
+/// single mark, but joined by a neighbouring script of the same base that abuts it.
+fn is_stack_member(
+    segments: &[&crate::pdf::hierarchy::SegmentData],
+    index: usize,
+    base: &crate::pdf::hierarchy::SegmentData,
+) -> bool {
+    use super::pipeline::is_stack_script_of;
+    let script = segments[index];
+    if !is_stack_script_of(base, script) {
+        return false;
+    }
+    let (left, right) = script.upright_advance_extent();
+    let joins = |neighbour: &crate::pdf::hierarchy::SegmentData, neighbour_first: bool| {
+        let (neighbour_left, neighbour_right) = neighbour.upright_advance_extent();
+        neighbour.font_size < base.font_size
+            && is_stack_script_of(base, neighbour)
+            && if neighbour_first {
+                crate::script_run::is_script_run_forward_gap(neighbour_left, neighbour_right, left, base.font_size)
+            } else {
+                crate::script_run::is_script_run_forward_gap(left, right, neighbour_left, base.font_size)
+            }
+    };
+    segments.get(index + 1).is_some_and(|next| joins(next, false))
+        || index
+            .checked_sub(1)
+            .and_then(|before| segments.get(before))
+            .is_some_and(|before| joins(before, true))
 }
 
 fn finish_script_span(annotations: &mut Vec<TextAnnotation>, open: &mut Option<(usize, &AnnotationKind)>, end: usize) {

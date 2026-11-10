@@ -22,7 +22,7 @@ Sometimes researchers know in advance that they want to estimate a population me
 
 ⎛-
 
-*x* - *µ⎞⎠2*
+*x* - *µ* <sup>⎞</sup> ~⎠~ 2
 
 ⎝
 

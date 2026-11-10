@@ -50,9 +50,7 @@ sm *n* =1
 
  *C*~*n*~
 
-#### ∑∑~*nm*~ ~=1 =−∞~
-
-\++ *J* cos ππ *f t* 2 *mf t*
+#### ∑∑~*nm*~ ~=1 =−∞~++ *J* cos ππ *f t* 2 *mf t*
 
 ###### ( <sup>β</sup>) (<sup>2</sup> )
 
@@ -72,7 +70,7 @@ sm *n* =1
 
 ##### (<sup>τ</sup>)<sup>=</sup> (<sup>*jf*</sup> 2πτ )
 
-2 *mn*∑k=0kmk\!  n nbi
+2 *mn*∑~*k*~ =0 *kmk* \!   *n* nbi
 
 ## ∑ n
 
@@ -92,7 +90,7 @@ Formulas (1), (2), (4) can be uniformly expressed as: *s B* exp (2)
 
 (<sup>τ</sup> )<sup>=</sup>
 
-# (<sup>*j*</sup> 2πτf cn+ jkπτ2)
+# (<sup>*j*</sup> 2πτ *f* ~*cn*~+ *jk* πτ2)
 
 wbi~cm~
 
@@ -104,7 +102,7 @@ wbi~cm~
 
 ( <sup>*t*</sup>)<sup>=</sup>
 
-# (<sup>*j*</sup> 2ππftc + RFIt2)
+# (<sup>*j*</sup> 2ππ *f*~*c*~*t* + *RFIt* 2)
 
 *RFI*
 

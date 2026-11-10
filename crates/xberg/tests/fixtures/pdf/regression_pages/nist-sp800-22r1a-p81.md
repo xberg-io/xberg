@@ -75,7 +75,7 @@ The approximate entropy *ApEn* of order *m* , *m* ≥ 1 is defined as
 
 ( *m* +1)
 
-*ApEn*( <sup>*m*</sup>) <sup>=</sup> Φ(m)<sup>− Φ</sup>
+*ApEn*( <sup>*m*</sup>) <sup>=</sup> Φ<sup>(</sup> <sup>*m*</sup> ) − Φ
 
 (1)
 
