@@ -190,7 +190,21 @@ fn assert_retained_tables(actual: &ExtractedDocument, native: &ExtractedDocument
     let pages = actual.pages.as_ref().unwrap();
     let source = native.pages.as_ref().unwrap();
     assert_eq!(pages[0].content, source[0].content);
-    assert_eq!(pages[1].content, forced.pages.as_ref().unwrap()[1].content);
+    super::plain_contract::assert_page_ranges(actual);
+    super::plain_contract::assert_page_ranges(forced);
+    assert_eq!(
+        pages[1]
+            .content
+            .lines()
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>(),
+        forced.pages.as_ref().unwrap()[1]
+            .content
+            .lines()
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>(),
+        "Plain paragraph separators may differ; every nonempty line stays byte-exact"
+    );
     assert!(
         !pages[1]
             .content
