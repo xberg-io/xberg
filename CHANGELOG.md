@@ -80,6 +80,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(ocr): Recover corroborated native Khmer numbers when the selected English-primary directory already contains `khm.traineddata`.** (GH#2408)
+  Activation is automatic in co-provisioned and all-model deployments; there is no separate recovery flag or auxiliary download.
+  The feature is qualified only for an English primary. Other primary languages, forced/custom OCR, detached or transformed
+  stages, unsupported glyph evidence, ambiguous ownership and lines already containing numbers retain their ordinary read.
+  Numeric insertion preserves neighboring OCR text and multiline paragraph bytes. Eligible pages bypass extraction caching;
+  with the auxiliary model present they also bypass primary OCR caching and perform bounded crop/shape verification.
+  Accepted eligible pages warn once about a missing model or an unbound geometry proof. The original reporter page remains
+  unavailable, so this is partial support. ADR 0014 records the activation policy and limits.
+
 - **(models): Pin experimental candidate classification and captioning ONNX artifacts to owned Hugging Face revisions.** (#2336)
   The crate-private `candidate_models` inventory (feature `onnx-runtime`) lists NLI-MiniLM2, SmolVLM-256M, SmolVLM-500M and Florence-2-base as unmodified, license-preserving copies in `xberg-io/classification-models` and `xberg-io/captioning-models`, each file pinned by immutable commit and SHA-256. Every entry is marked experimental and unqualified: none is a default or a supported preset, and no captioning adapter consumes them yet. The NLI-MiniLM2 cross-encoder declares Apache-2.0, but its base model `nreimers/MiniLMv2-L6-H768-distilled-from-RoBERTa-Large` publishes no license, so the entry's license is recorded as unresolved; its fp32 graph exceeds the local NLI adapter's graph size cap, so only the quantized graphs are selectable.
 
@@ -305,19 +314,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(ocr): Optionally recover native Khmer numbers with provisioned `khm.traineddata`.** (GH#2408)
-  Upright crops can restore omitted numbers when the model accompanies the selected primary model.
-  English-only text and forced OCR stay unchanged. Missing Khmer models warn on eligible default
-  automatic pages only. Recovery retains OCR tokens, so misread neighbors can remain, and declines
-  transformed or ambiguous source claims. Numeric crops overlapping merged prose
-  segments are declined when their internal word positions are unavailable.
-  Type0 rasters with lost glyph ink, stages without raster-integrity evidence, and lines
-  already containing numbers stay unchanged.
-  Eligible pages bypass OCR and extraction-result caches so model installation takes effect.
-  Recovered Plain pages retain exact document byte ranges.
-  A numeral cannot mask dropped native prose from the existing script-retention decision.
-  No runtime model download; the original reporter page remains unverified.
-
+- **(pdf): Preserve recovered Plain page strings when final rendering omits a page, and retain valid page byte ranges.** (#2813)
+  Recovered pages follow the finalized document rendering, including list normalization; unavailable page renderings retain
+  their earlier accepted text. OCR Unicode numerals no longer count as native-prose script evidence in the shared retention
+  guard, across all supported scripts.
 - **(ocr): Tolerate singleton Flate filter arrays in bounded PDF stream probes and Indexed scan recovery.** (#2798)
   `[/FlateDecode]` uses the same decoding as `/FlateDecode` in shared hidden-layer, source-audit, embedded-gap, visible-raster content and tall-scan content/palette probes, including hidden-layer images with validated predictor dictionaries. Certified Indexed images accept either spelling; the separate gray/JPEG and ICC image certificates retain their scalar-only filters. Tests use synthetic filter-spelling and predictor variants; no unresolved real page from #2502 is fixed by this change.
 - **(pdf): Keep a Type0 page's native text after OCR ink loss only when the native layer owns or is covered by the read, or spells at least 25% of the read's distinct words.** (#2802)

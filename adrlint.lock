@@ -70,3 +70,8 @@ blake3 = "b13c4f6cd88062c5ae8f06056af271258b7c143a735b72a104ba392c29dc4415"
 number = 13
 status = "accepted"
 blake3 = "9646553cc062e0821b6444652344d175e4b2823136f3b389925b372412622d68"
+
+[adrs."adrs/0014-gate-khmer-numeric-recovery-on-locally-provisioned-models.md"]
+number = 14
+status = "accepted"
+blake3 = "f5aaa30c664cd1f1d24b4f164bba0e64796da93706f1e81eefd81c5204e2d86f"

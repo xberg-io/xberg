@@ -398,8 +398,8 @@ fn assert_verified_positive(config: &ExtractionConfig) {
     assert_eq!(missing_model_warnings(&result), 0, "provisioned model is available");
 }
 
-fn assert_crop_recognizer_reads_zero(models: &std::path::Path) {
-    let raster = image::load_from_memory(&rendered(MISLEADING)).unwrap().into_rgb8();
+fn assert_crop_recognizer_reads_zero(models: &std::path::Path, input: &[u8]) {
+    let raster = image::load_from_memory(&rendered(input)).unwrap().into_rgb8();
     let crop = image::imageops::crop_imm(&raster, 248, 233, 40, 63).to_image();
     let mut padded = image::RgbImage::from_pixel(56, 79, image::Rgb([255; 3]));
     image::imageops::replace(&mut padded, &crop, 8, 8);
@@ -425,7 +425,7 @@ fn assert_crop_recognizer_reads_zero(models: &std::path::Path) {
 #[ignore = "Run mise run rust:test:khmer-number-recovery with the pinned Khmer model"]
 fn provisioned_recognition_still_refuses_false_native_digits() {
     let (models, config) = provisioned_config();
-    assert_crop_recognizer_reads_zero(models.path());
+    assert_crop_recognizer_reads_zero(models.path(), MISLEADING);
     assert_verified_positive(&config);
     for input in [MISLEADING.to_vec(), wrong_unicode()] {
         let result = extract(&input, &config);
@@ -705,4 +705,49 @@ fn assert_inline_prose_is_unchanged(input: &[u8], config: &ExtractionConfig) {
         after.pages.as_ref().unwrap()[0].content,
         before.pages.as_ref().unwrap()[0].content
     );
+}
+
+#[test]
+#[ignore = "Run mise run rust:test:khmer-number-recovery with the pinned Khmer model"]
+fn provisioned_recognition_refuses_painted_latin_lookalikes() {
+    let latin_o = include_bytes!("fixtures/pdf_khmer_number_2408/painted_latin_o.pdf");
+    let ascii_zero = include_bytes!("fixtures/pdf_khmer_number_2408/painted_ascii_zero.pdf");
+    let (models, config) = provisioned_config();
+    assert_verified_positive(&config);
+    assert_crop_recognizer_reads_zero(models.path(), latin_o);
+    for (input, expected) in [
+        (
+            latin_o.as_slice(),
+            "2589b3d11be6e45c9e287830c5f08050201a97403a2f691651490157b394ae1e",
+        ),
+        (
+            ascii_zero.as_slice(),
+            "1f1a0ed8d95f3446bad5d2452267bb4cbe049c203480c5f193bedc9634f436f6",
+        ),
+    ] {
+        assert_eq!(
+            hex::encode(Sha256::digest(input)),
+            expected,
+            "pinned painted look-alike fixture"
+        );
+        let document = PdfDocument::from_bytes(input.to_vec()).unwrap();
+        assert_eq!(
+            document
+                .extract_chars(0)
+                .unwrap()
+                .iter()
+                .map(|value| value.char)
+                .collect::<String>(),
+            "ប០ប"
+        );
+        let result = extract(input, &config);
+        assert_ocr_retains_prose(&result);
+        for text in [&result.content, &result.pages.as_ref().unwrap()[0].content] {
+            assert_eq!(
+                text.matches('០').count(),
+                0,
+                "a painted Latin glyph must not inherit native Khmer Unicode: {text}"
+            );
+        }
+    }
 }

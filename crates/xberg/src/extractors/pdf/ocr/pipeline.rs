@@ -3581,6 +3581,17 @@ pub(crate) struct PageOcrHints {
     pub(crate) native_coverage_layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
 }
 
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+impl PageOcrHints {
+    fn native_layer(&self, page: u32) -> Option<&str> {
+        self.native_coverage_layers
+            .as_ref()
+            .or(self.native_page_layers.as_ref())
+            .and_then(|layers| layers.get(&page))
+            .map(String::as_str)
+    }
+}
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn effective_tesseract_psm(metadata: &crate::types::Metadata, backend: &str) -> Option<i32> {
     if backend != "tesseract" {
@@ -4495,15 +4506,7 @@ pub(super) async fn extract_with_ocr_for_page(
                             page_index_offset + *page_idx,
                             page_ocr_hints
                                 .as_ref()
-                                .and_then(|hints| {
-                                    hints
-                                        .native_coverage_layers
-                                        .as_ref()
-                                        .or(hints.native_page_layers.as_ref())
-                                })
-                                .and_then(|layers| layers.get(&((page_index_offset + *page_idx + 1) as u32)))
-                                .map(String::as_str),
-                            &mut backend_page_warnings,
+                                .and_then(|hints| hints.native_layer((page_index_offset + *page_idx + 1) as u32)),
                         )
                     } else {
                         (config_clone, false)
@@ -5392,6 +5395,45 @@ pub(super) async fn extract_with_ocr_for_page(
             )]
             let mut margin_filter_complete = false;
 
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            let number_page = super::number_recovery::PreparedPage {
+                policy: super::number_recovery::PagePolicy {
+                    page_index_offset,
+                    accepted: false,
+                    scale_only: number_frame_reads[offset],
+                    deferred_structure: skip_document_global_heuristic,
+                    raster: raster_dpis.get(&page_idx),
+                    layout: has_layout_detections,
+                    transformed: tall_source_used
+                        || batch_upright_correction[offset].0 != 0
+                        || pages_with_recovered_xobject_payload[page_idx],
+                    structured: false,
+                    builtin: get_ocr_backend_registry().read().is_builtin_tesseract(&backend),
+                },
+                source: xobject_document
+                    .or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf))
+                    .zip(
+                        page_ocr_hints
+                            .as_ref()
+                            .and_then(|hints| hints.native_layer(document_page_number)),
+                    )
+                    .map(|(document, layer)| super::number_recovery::PageSource {
+                        document,
+                        index: document_page_idx,
+                        layer,
+                        raster: Arc::clone(&encoded_batch[offset].1),
+                        dimensions: (encoded_batch[offset].2, encoded_batch[offset].3),
+                        metadata: &ocr_result.metadata,
+                    }),
+                config,
+                run: &number_recovery,
+            };
+
             #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm")))]
             if ocr_result.ocr_internal_document.is_some()
                 || ocr_result
@@ -5643,51 +5685,19 @@ pub(super) async fn extract_with_ocr_for_page(
                     feature = "tokio-runtime",
                     not(target_arch = "wasm32")
                 ))]
-                if super::number_recovery::applicable(super::number_recovery::PagePolicy {
-                    accepted: !acceptance.discarded && acceptance.verdict.is_none(),
-                    scale_only: number_frame_reads[offset],
-                    deferred_structure: skip_document_global_heuristic,
-                    raster: raster_dpis.get(&page_idx),
-                    layout: has_layout_detections,
-                    transformed: tall_source_used
-                        || batch_upright_correction[offset].0 != 0
-                        || pages_with_recovered_xobject_payload[page_idx],
-                    structured: collected_tables
-                        .iter()
-                        .any(|table| table.page_number == document_page_number)
-                        || accumulated_formulas
-                            .iter()
-                            .any(|formula| formula.page == Some(document_page_number)),
-                    builtin: get_ocr_backend_registry().read().is_builtin_tesseract(&backend),
-                }) && let (Some(pdf), Some(layer), Some(paragraphs)) = (
-                    xobject_document.or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf)),
-                    page_ocr_hints
-                        .as_ref()
-                        .and_then(|hints| {
-                            hints
-                                .native_coverage_layers
-                                .as_ref()
-                                .or(hints.native_page_layers.as_ref())
-                        })
-                        .and_then(|layers| layers.get(&document_page_number)),
-                    all_page_paragraphs[page_idx].as_mut(),
-                ) {
-                    number_recovered_pages[page_idx] = super::number_recovery::recover(
-                        super::number_recovery::PageSource {
-                            document: pdf,
-                            index: document_page_idx,
-                            layer,
-                            raster: std::sync::Arc::clone(&encoded_batch[offset].1),
-                            dimensions: (encoded_batch[offset].2, encoded_batch[offset].3),
-                            metadata: &ocr_result.metadata,
-                        },
-                        paragraphs,
-                        &mut page_texts[page_idx],
-                        config,
-                        &number_recovery,
-                        &mut backend_page_warnings,
-                    )
-                    .await;
+                {
+                    number_recovered_pages[page_idx] = number_page
+                        .apply(
+                            super::number_recovery::AcceptedRead {
+                                accepted: !acceptance.discarded && acceptance.verdict.is_none(),
+                                paragraphs: all_page_paragraphs[page_idx].as_deref_mut(),
+                                text: &mut page_texts[page_idx],
+                                warnings: &mut backend_page_warnings,
+                            },
+                            &collected_tables,
+                            &accumulated_formulas,
+                        )
+                        .await;
                 }
 
                 if let Some(verdict) = acceptance.verdict {
@@ -5791,51 +5801,19 @@ pub(super) async fn extract_with_ocr_for_page(
                 feature = "tokio-runtime",
                 not(target_arch = "wasm32")
             ))]
-            if super::number_recovery::applicable(super::number_recovery::PagePolicy {
-                accepted: !acceptance.discarded && acceptance.verdict.is_none(),
-                scale_only: number_frame_reads[offset],
-                deferred_structure: skip_document_global_heuristic,
-                raster: raster_dpis.get(&page_idx),
-                layout: has_layout_detections,
-                transformed: tall_source_used
-                    || batch_upright_correction[offset].0 != 0
-                    || pages_with_recovered_xobject_payload[page_idx],
-                structured: collected_tables
-                    .iter()
-                    .any(|table| table.page_number == document_page_number)
-                    || accumulated_formulas
-                        .iter()
-                        .any(|formula| formula.page == Some(document_page_number)),
-                builtin: get_ocr_backend_registry().read().is_builtin_tesseract(&backend),
-            }) && let (Some(pdf), Some(layer), Some(paragraphs)) = (
-                xobject_document.or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf)),
-                page_ocr_hints
-                    .as_ref()
-                    .and_then(|hints| {
-                        hints
-                            .native_coverage_layers
-                            .as_ref()
-                            .or(hints.native_page_layers.as_ref())
-                    })
-                    .and_then(|layers| layers.get(&document_page_number)),
-                all_page_paragraphs[page_idx].as_mut(),
-            ) {
-                number_recovered_pages[page_idx] = super::number_recovery::recover(
-                    super::number_recovery::PageSource {
-                        document: pdf,
-                        index: document_page_idx,
-                        layer,
-                        raster: std::sync::Arc::clone(&encoded_batch[offset].1),
-                        dimensions: (encoded_batch[offset].2, encoded_batch[offset].3),
-                        metadata: &ocr_result.metadata,
-                    },
-                    paragraphs,
-                    &mut page_texts[page_idx],
-                    config,
-                    &number_recovery,
-                    &mut backend_page_warnings,
-                )
-                .await;
+            {
+                number_recovered_pages[page_idx] = number_page
+                    .apply(
+                        super::number_recovery::AcceptedRead {
+                            accepted: !acceptance.discarded && acceptance.verdict.is_none(),
+                            paragraphs: all_page_paragraphs[page_idx].as_deref_mut(),
+                            text: &mut page_texts[page_idx],
+                            warnings: &mut backend_page_warnings,
+                        },
+                        &collected_tables,
+                        &accumulated_formulas,
+                    )
+                    .await;
             }
 
             if let Some(verdict) = acceptance.verdict {

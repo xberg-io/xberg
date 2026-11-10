@@ -52,10 +52,22 @@ pub struct OcrProcessor {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ImageOcrPolicy {
     Default,
+    #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+    ProvisionedModelsOnly,
     BoundedInferredUpscale,
     StandaloneDotLeaderRows,
     #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
     StandaloneSparseRows,
+}
+
+impl ImageOcrPolicy {
+    fn requires_provisioned_models(self) -> bool {
+        match self {
+            #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+            Self::ProvisionedModelsOnly => true,
+            _ => false,
+        }
+    }
 }
 
 impl OcrProcessor {

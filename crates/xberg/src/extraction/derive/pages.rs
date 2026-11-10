@@ -267,8 +267,8 @@ pub(crate) fn render_plain_selected_pages(
     build_pages(doc, true)
         .unwrap_or_default()
         .into_iter()
-        .filter(|page| requested.contains(&page.page_number))
         .enumerate()
+        .filter(|(_, page)| requested.contains(&page.page_number))
         .filter_map(|(index, page)| {
             let indices = membership.get(&page.page_number)?;
             let rendered = render_sub_page(

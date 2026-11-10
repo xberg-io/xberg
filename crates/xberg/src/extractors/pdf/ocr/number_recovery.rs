@@ -12,12 +12,20 @@ const MAX_CROP_PIXELS: u64 = 1024 * 1024;
 const CROP_BORDER: u32 = 8;
 
 mod read_proof;
+mod shape_proof;
 pub(super) use read_proof::ReadProof;
 
+#[derive(Clone)]
 struct Number {
     text: String,
     bbox: Rect,
     baseline: f32,
+}
+
+struct SourceProof {
+    media: Rect,
+    numbers: Vec<Number>,
+    shape: shape_proof::ShapeProof,
 }
 
 #[derive(Default)]
@@ -25,7 +33,9 @@ pub(super) struct Run {
     processor: once_cell::sync::OnceCell<OcrProcessor>,
 }
 
+#[derive(Clone, Copy)]
 pub(super) struct PagePolicy<'a> {
+    pub(super) page_index_offset: usize,
     pub(super) accepted: bool,
     pub(super) scale_only: bool,
     pub(super) deferred_structure: bool,
@@ -37,7 +47,8 @@ pub(super) struct PagePolicy<'a> {
 }
 
 pub(super) fn applicable(policy: PagePolicy<'_>) -> bool {
-    policy.accepted
+    policy.page_index_offset == 0
+        && policy.accepted
         && policy.scale_only
         && !policy.deferred_structure
         && !policy.layout
@@ -60,6 +71,59 @@ pub(super) struct PageSource<'a> {
     pub(super) metadata: &'a crate::types::Metadata,
 }
 
+pub(super) struct PreparedPage<'a> {
+    pub(super) policy: PagePolicy<'a>,
+    pub(super) source: Option<PageSource<'a>>,
+    pub(super) config: &'a ExtractionConfig,
+    pub(super) run: &'a std::sync::Arc<Run>,
+}
+
+pub(super) struct AcceptedRead<'a> {
+    pub(super) accepted: bool,
+    pub(super) paragraphs: Option<&'a mut [PdfParagraph]>,
+    pub(super) text: &'a mut String,
+    pub(super) warnings: &'a mut Vec<crate::types::ProcessingWarning>,
+}
+
+impl PreparedPage<'_> {
+    pub(super) async fn apply(
+        mut self,
+        read: AcceptedRead<'_>,
+        tables: &[crate::types::Table],
+        formulas: &[crate::types::Formula],
+    ) -> bool {
+        let Some(source) = self.source else { return false };
+        let Ok(page) = u32::try_from(source.index.saturating_add(1)) else {
+            return false;
+        };
+        self.policy.accepted = read.accepted;
+        self.policy.structured = tables.iter().any(|table| table.page_number == page)
+            || formulas.iter().any(|formula| formula.page == Some(page));
+        let verified_frame = applicable(self.policy);
+        self.policy.scale_only = true;
+        if !applicable(self.policy) || !eligible(self.config, source.index) || !has_bounded_numbers(source.layer) {
+            return false;
+        }
+        let Some(paragraphs) = read.paragraphs else {
+            return false;
+        };
+        if !verified_frame && model_directory(self.config).is_some() {
+            unproved_read_warning(read.warnings, source.index);
+            return false;
+        }
+        recover(source, paragraphs, read.text, self.config, self.run, read.warnings).await
+    }
+}
+
+fn has_bounded_numbers(layer: &str) -> bool {
+    let count = layer
+        .chars()
+        .filter(|character| is_khmer_digit(*character))
+        .take(MAX_NUMBER_GLYPHS + 1)
+        .count();
+    (1..=MAX_NUMBER_GLYPHS).contains(&count)
+}
+
 pub(super) async fn recover(
     source: PageSource<'_>,
     paragraphs: &mut [PdfParagraph],
@@ -68,15 +132,9 @@ pub(super) async fn recover(
     run: &std::sync::Arc<Run>,
     warnings: &mut Vec<crate::types::ProcessingWarning>,
 ) -> bool {
-    let count = source
-        .layer
-        .chars()
-        .filter(|character| is_khmer_digit(*character))
-        .count();
     if !eligible(config, source.index)
         || super::document::resolved_ocr_correction_degrees(source.metadata).is_some_and(|angle| angle != 0)
-        || count == 0
-        || count > MAX_NUMBER_GLYPHS
+        || !has_bounded_numbers(source.layer)
         || !super::document::ocr_paragraphs_plain_text(paragraphs)
             .split_whitespace()
             .eq(read.split_whitespace())
@@ -89,7 +147,7 @@ pub(super) async fn recover(
         missing_model_warning(warnings, source.index);
         return false;
     };
-    let (media, numbers) = match source_numbers(&source) {
+    let proof = match source_numbers(&source, config) {
         Ok(Some(prepared)) => prepared,
         Ok(None) => return false,
         Err(error) => {
@@ -102,9 +160,9 @@ pub(super) async fn recover(
     if frame.0 == 0 || frame.1 == 0 {
         return false;
     }
-    let scale = (media.width / frame.0 as f32, media.height / frame.1 as f32);
+    let scale = (proof.media.width / frame.0 as f32, proof.media.height / frame.1 as f32);
     let max_work = proof_limits(config).max_iterations;
-    let numbers = recognize(source.raster, media, numbers, directory, config.clone(), run.clone()).await;
+    let numbers = recognize(source.raster, proof, directory, config.clone(), run.clone()).await;
     let changed = insert(numbers, paragraphs, scale, max_work);
     if changed {
         *read = super::document::ocr_paragraphs_plain_text(paragraphs);
@@ -131,36 +189,44 @@ pub(super) fn synchronize_plain_pages(
         return false;
     }
     let mut rendered = crate::extraction::derive::render_plain_selected_pages(document, &requested);
-    for ((index, read), changed) in page_texts.iter_mut().enumerate().zip(recovered) {
-        if *changed && let Ok(page) = u32::try_from(index + 1) {
-            *read = rendered.remove(&page).unwrap_or_default();
+    let mut changed = false;
+    for ((index, read), recovered) in page_texts.iter_mut().enumerate().zip(recovered) {
+        if *recovered
+            && let Ok(page) = u32::try_from(index + 1)
+            && let Some(rendered) = rendered.remove(&page)
+            && *read != rendered
+        {
+            *read = rendered;
+            changed = true;
         }
     }
-    true
+    changed
 }
 
-fn source_numbers(source: &PageSource<'_>) -> crate::Result<Option<(Rect, Vec<Number>)>> {
+fn source_numbers(source: &PageSource<'_>, config: &ExtractionConfig) -> crate::Result<Option<SourceProof>> {
     let info = source.document.get_page_info(source.index).map_err(proof_error)?;
     let media = info.media_box;
     if info.rotation != 0 || media.x != 0.0 || media.y != 0.0 || info.crop_box.is_some_and(|crop| crop != media) {
         return Ok(None);
     }
-    let chars = source.document.extract_chars(source.index).map_err(proof_error)?;
-    if chars.len() > MAX_NATIVE_CHARS {
+    let limits = proof_limits(config);
+    let budget = limits.max_content_size.saturating_sub(source.raster.capacity());
+    let Some((numbers, shape)) =
+        shape_proof::prepare_source(source.document, source.index, budget, limits.max_iterations)?
+    else {
         return Ok(None);
-    }
-    Ok(Some((media, candidates(chars))))
+    };
+    Ok(Some(SourceProof { media, numbers, shape }))
 }
 
 async fn recognize(
     raster: std::sync::Arc<Vec<u8>>,
-    media: Rect,
-    numbers: Vec<Number>,
+    proof: SourceProof,
     directory: String,
     config: ExtractionConfig,
     run: std::sync::Arc<Run>,
 ) -> Vec<Number> {
-    match tokio::task::spawn_blocking(move || verify_source(raster, media, numbers, &directory, &config, &run)).await {
+    match tokio::task::spawn_blocking(move || verify_source(raster, &proof, &directory, &config, &run)).await {
         Ok(Ok(numbers)) => numbers,
         Ok(Err(error)) => {
             tracing::warn!(%error, "Unable to verify native numeric source crops");
@@ -189,7 +255,11 @@ fn eligible(config: &ExtractionConfig, index: usize) -> bool {
             crate::OutputFormat::Plain | crate::OutputFormat::Markdown
         )
         && config.ocr.as_ref().is_some_and(|ocr| {
-            ocr.tesseract_config.is_none()
+            ocr.effective_tesseract_language()
+                .iter()
+                .map(String::as_str)
+                .eq(["eng"])
+                && ocr.tesseract_config.is_none()
                 && ocr.element_config.is_none()
                 && ocr.backend_options.is_none()
                 && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
@@ -215,17 +285,12 @@ pub(super) fn prepare_read(
     config: &ExtractionConfig,
     page: usize,
     layer: Option<&str>,
-    warnings: &mut Vec<crate::types::ProcessingWarning>,
 ) -> (crate::core::config::OcrConfig, bool) {
-    let count = layer.map_or(0, |text| {
-        text.chars().filter(|character| is_khmer_digit(*character)).count()
-    });
-    if !eligible(config, page) || count == 0 || count > MAX_NUMBER_GLYPHS {
+    if !eligible(config, page) || !layer.is_some_and(has_bounded_numbers) {
         return (primary, false);
     }
     crate::core::extractor::cacheability::invalidate_current();
     if model_directory(config).is_none() {
-        missing_model_warning(warnings, page);
         return (primary, false);
     }
     let options = primary.backend_options.get_or_insert_with(|| serde_json::json!({}));
@@ -243,8 +308,33 @@ fn missing_model_warning(warnings: &mut Vec<crate::types::ProcessingWarning>, in
         "The native text on PDF page {page} contains Khmer-script numbers, but no khm.traineddata accompanies \
          the selected OCR model. Those numbers cannot be verified and may be missing from the OCR text."
     );
-    tracing::warn!(page, script = "Khmer", "{message}");
-    crate::core::diagnostics::push_warning(warnings, "ocr", message);
+    recovery_warning(warnings, page, message);
+}
+
+fn unproved_read_warning(warnings: &mut Vec<crate::types::ProcessingWarning>, index: usize) {
+    let page = index.saturating_add(1);
+    recovery_warning(
+        warnings,
+        page,
+        format!(
+            "Native Khmer numbers on PDF page {page} were not recovered because the accepted OCR text and geometry \
+         could not be bound to the original raster within the numeric recovery proof limits. The OCR read is retained."
+        ),
+    );
+}
+
+fn recovery_warning(warnings: &mut Vec<crate::types::ProcessingWarning>, page: usize, message: String) {
+    let warning = crate::types::ProcessingWarning {
+        source: std::borrow::Cow::Borrowed("ocr"),
+        message: std::borrow::Cow::Owned(message),
+    };
+    if !warnings
+        .iter()
+        .any(|existing| existing.source == warning.source && existing.message == warning.message)
+    {
+        tracing::warn!(page, script = "Khmer", message = %warning.message);
+        crate::core::diagnostics::push_warning_deduped(warnings, warning);
+    }
 }
 
 fn proof_error(error: impl std::error::Error + Send + Sync + 'static) -> crate::XbergError {
@@ -254,7 +344,7 @@ fn proof_error(error: impl std::error::Error + Send + Sync + 'static) -> crate::
     }
 }
 
-fn candidates(chars: Vec<TextChar>) -> Vec<Number> {
+fn candidates(chars: &[TextChar]) -> Vec<Number> {
     let mut numbers: Vec<Number> = Vec::new();
     let mut adjacent = false;
     for character in chars {
@@ -284,12 +374,12 @@ fn candidates(chars: Vec<TextChar>) -> Vec<Number> {
 
 fn verify_source(
     encoded: std::sync::Arc<Vec<u8>>,
-    media: Rect,
-    numbers: Vec<Number>,
+    proof: &SourceProof,
     directory: &str,
     config: &ExtractionConfig,
     run: &Run,
 ) -> crate::Result<Vec<Number>> {
+    let SourceProof { media, numbers, shape } = proof;
     let limits = proof_limits(config);
     if numbers.is_empty()
         || numbers.iter().map(|number| number.text.chars().count()).sum::<usize>() > MAX_NUMBER_GLYPHS
@@ -300,13 +390,14 @@ fn verify_source(
     let raster = crate::extraction::image_decode::decode_standard_rgb8_with_additional_live_bytes_and_security_limits(
         &encoded,
         &limits,
-        u64::try_from(encoded.capacity()).unwrap_or(u64::MAX),
+        u64::try_from(encoded.capacity().saturating_add(shape.retained_bytes())).unwrap_or(u64::MAX),
     )?;
     let raster = image::DynamicImage::ImageRgb8(raster);
     let processor = run
         .processor
         .get_or_try_init(|| OcrProcessor::new(None).map_err(proof_error))?;
-    let retained = encoded.capacity().saturating_add(raster.as_bytes().len());
+    let source_retained = encoded.capacity().saturating_add(raster.as_bytes().len());
+    let retained = source_retained.saturating_add(shape.retained_bytes());
     let mut recognition = recognition_config(
         directory,
         config,
@@ -316,15 +407,37 @@ fn verify_source(
         limits: &limits,
         retained,
     };
+    verify_numbers(proof, &raster, processor, &mut recognition, &budget, config)
+}
+
+fn verify_numbers(
+    proof: &SourceProof,
+    raster: &image::DynamicImage,
+    processor: &OcrProcessor,
+    recognition: &mut TesseractConfig,
+    budget: &CropBudget<'_>,
+    config: &ExtractionConfig,
+) -> crate::Result<Vec<Number>> {
+    let limits = budget.limits;
+    let source_retained = budget.retained.saturating_sub(proof.shape.retained_bytes());
     let mut verified = Vec::new();
-    for number in numbers {
+    for (index, number) in proof.numbers.iter().enumerate() {
         if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
             break;
         }
-        if let Some(read) = recognize_crop(&raster, media, number.bbox, processor, &mut recognition, &budget)?
+        if !proof.shape.corroborates(
+            index,
+            raster,
+            proof.media,
+            number,
+            limits.max_content_size.saturating_sub(source_retained),
+        )? {
+            continue;
+        }
+        if let Some(read) = recognize_crop(raster, proof.media, number.bbox, processor, recognition, budget)?
             && recognized_number_matches(&read.content, &number.text)
         {
-            verified.push(number);
+            verified.push(number.clone());
         }
     }
     Ok(verified)
@@ -368,7 +481,12 @@ fn recognize_crop(
     crop_limits.max_content_size = remaining;
     recognition.security_limits = Some(crop_limits);
     processor
-        .process_image_with_policy(encoded.get_ref(), recognition, None, ImageOcrPolicy::Default)
+        .process_image_with_policy(
+            encoded.get_ref(),
+            recognition,
+            None,
+            ImageOcrPolicy::ProvisionedModelsOnly,
+        )
         .map(Some)
         .map_err(proof_error)
 }
@@ -468,17 +586,66 @@ fn insert(numbers: Vec<Number>, paragraphs: &mut [PdfParagraph], scale: (f32, f3
             Some((paragraph, line, number, bbox))
         })
         .collect::<Vec<_>>();
-    let changed = !planned.is_empty();
+    let mut changed = false;
     for (paragraph, line, number, bbox) in planned {
         let paragraph = &mut paragraphs[paragraph];
+        let position = paragraph.lines[line]
+            .segments
+            .partition_point(|existing| existing.x <= bbox.x);
+        if !splice_paragraph_number(paragraph, line, position, &number.text) {
+            continue;
+        }
         let line = &mut paragraph.lines[line];
         let segment = numeric_segment(number, bbox, scale.1, line.dominant_font_size);
-        let position = line.segments.partition_point(|existing| existing.x <= bbox.x);
         line.segments.insert(position, segment);
-        paragraph.text.clear();
-        paragraph.word_count = PdfParagraph::compute_word_count("", &paragraph.lines);
+        paragraph.word_count = PdfParagraph::compute_word_count(&paragraph.text, &paragraph.lines);
+        changed = true;
     }
     changed
+}
+
+fn splice_paragraph_number(paragraph: &mut PdfParagraph, line: usize, position: usize, number: &str) -> bool {
+    if paragraph.text.is_empty() {
+        return true;
+    }
+    let preceding = paragraph.lines[..line]
+        .iter()
+        .flat_map(|line| &line.segments)
+        .chain(paragraph.lines[line].segments[..position].iter())
+        .map(|segment| segment.text.split_whitespace().count())
+        .sum::<usize>();
+    let before_word = paragraph.lines[line].segments[position..]
+        .iter()
+        .any(|segment| !segment.text.trim().is_empty());
+    let Some(index) = (if before_word {
+        Some(preceding)
+    } else {
+        preceding.checked_sub(1)
+    }) else {
+        return false;
+    };
+    let Some(range) = word_byte_range(&paragraph.text, index) else {
+        return false;
+    };
+    let (offset, addition) = if before_word {
+        (range.start, format!("{number} "))
+    } else {
+        (range.end, format!(" {number}"))
+    };
+    paragraph.text.insert_str(offset, &addition);
+    true
+}
+
+fn word_byte_range(text: &str, index: usize) -> Option<std::ops::Range<usize>> {
+    let mut offset = 0;
+    text.split_inclusive(char::is_whitespace)
+        .filter_map(|part| {
+            let start = offset;
+            offset += part.len();
+            let word = part.trim_end_matches(char::is_whitespace);
+            (!word.is_empty()).then_some(start..start + word.len())
+        })
+        .nth(index)
 }
 
 fn numeric_segment(number: Number, bbox: Rect, scale: f32, font_size: f32) -> crate::pdf::hierarchy::SegmentData {

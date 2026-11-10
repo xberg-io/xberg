@@ -33,7 +33,39 @@ def native_word(canvas, word, invisible):
     canvas.drawText(text)
 
 
-def generate(font, output):
+def generate_lookalikes(output, poppler):
+    latin = Path(__file__).resolve().parents[4] / "xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf"
+    assert sha256(latin.read_bytes()).hexdigest() == "abdc775b21b1bc470d50c97e790d276f2054b7504e56e5bd3e64f48d68582322"
+    pdfmetrics.registerFont(TTFont("Latin", str(latin)))
+    flank = pdfmetrics.stringWidth("ប", "Khmer", 30)
+    digit = pdfmetrics.stringWidth("០", "Khmer", 30)
+    for name, glyph in [("painted_latin_o", "O"), ("painted_ascii_zero", "0")]:
+        with TemporaryDirectory() as folder:
+            visible = Path(folder) / "visible"
+            canvas = Canvas(str(visible.with_suffix(".pdf")), pagesize=PAGE, invariant=True)
+            canvas.setFont("Khmer", 30)
+            canvas.drawString(100, 650, "ប")
+            canvas.drawString(100 + flank + digit, 650, "ប")
+            canvas.saveState()
+            canvas.translate(100 + flank, 650)
+            canvas.scale(digit / pdfmetrics.stringWidth(glyph, "Latin", 30), 1)
+            canvas.setFont("Latin", 30)
+            canvas.drawString(0, 0, glyph)
+            canvas.restoreState()
+            canvas.setFont("Helvetica", 15)
+            for row, text in enumerate(PROSE):
+                canvas.drawString(100, 600 - 30 * row, text)
+            canvas.save()
+            subprocess.run(
+                [poppler, "-png", "-r", "150", "-singlefile", visible.with_suffix(".pdf"), visible], check=True
+            )
+            canvas = Canvas(str(output / f"{name}.pdf"), pagesize=PAGE, invariant=True)
+            canvas.drawImage(str(visible.with_suffix(".png")), 0, 0, *PAGE)
+            native_word(canvas, DIGITS["matching"], invisible=True)
+            canvas.save()
+
+
+def generate(font, output, lookalikes_only=False):
     assert sha256(font.read_bytes()).hexdigest() == FONT_SHA256
     poppler = which("pdftoppm")
     if poppler is None:
@@ -41,6 +73,9 @@ def generate(font, output):
     rl_config.useA85 = False
     pdfmetrics.registerFont(TTFont("Khmer", str(font)))
     output.mkdir(parents=True, exist_ok=True)
+    if lookalikes_only:
+        generate_lookalikes(output, poppler)
+        return
     with TemporaryDirectory() as folder:
         visible = Path(folder) / "visible"
         canvas = Canvas(str(visible.with_suffix(".pdf")), pagesize=PAGE, invariant=True)
@@ -58,4 +93,4 @@ def generate(font, output):
 
 
 if __name__ == "__main__":
-    generate(Path(sys.argv[1]), Path(sys.argv[2]))
+    generate(Path(sys.argv[1]), Path(sys.argv[2]), "--lookalikes-only" in sys.argv[3:])

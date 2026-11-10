@@ -2996,7 +2996,11 @@ pub(super) fn process_image_with_cache_and_policy(
 ) -> Result<OcrExtractionResult, OcrError> {
     config.validate().map_err(OcrError::InvalidConfiguration)?;
 
-    let resolved = resolve_config_language(config)?;
+    let resolved = if policy.requires_provisioned_models() {
+        None
+    } else {
+        resolve_config_language(config)?
+    };
     let config = resolved.as_ref().unwrap_or(config);
 
     process_image_resolved(image_bytes, config, cache, api_pool, output_format, policy)
@@ -3018,10 +3022,16 @@ fn process_image_resolved(
     let image_hash = crate::cache::blake3_hash_bytes(image_bytes);
 
     // Share one resolved model revision between cached output and its native handle. ~keep
-    let models = ModelContext::resolve(config)?;
+    let models = if policy.requires_provisioned_models() {
+        ModelContext::for_provisioned(config)?
+    } else {
+        ModelContext::resolve(config)?
+    };
     let mut config_str = models.result_key(config);
     config_str.push_str(match policy {
         ImageOcrPolicy::Default => "",
+        #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+        ImageOcrPolicy::ProvisionedModelsOnly => ":provisioned-models-only",
         ImageOcrPolicy::BoundedInferredUpscale => ":bounded-inferred-upscale",
         ImageOcrPolicy::StandaloneDotLeaderRows => ":standalone-dot-leader-rows",
         #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]

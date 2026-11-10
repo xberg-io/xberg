@@ -256,11 +256,11 @@ fn assert_invalid_owner_font_is_refused() {
 
 #[test]
 fn should_keep_adjacent_native_digits_in_one_numeric_candidate() {
-    let chars = [('ប', 0.0), ('១', 20.0), ('២', 40.0), ('ប', 60.0)]
+    let chars: Vec<TextChar> = [('ប', 0.0), ('១', 20.0), ('២', 40.0), ('ប', 60.0)]
         .into_iter()
         .map(|(character, x)| TextChar::simple(character, Rect::new(x, 0.0, 20.0, 30.0), "Khmer".into(), 30.0))
         .collect();
-    let numbers = candidates(chars);
+    let numbers = candidates(&chars);
     assert_eq!(numbers.len(), 1);
     assert_eq!(numbers[0].text, "១២");
     assert_eq!(numbers[0].bbox, Rect::new(20.0, 0.0, 40.0, 30.0));
@@ -435,7 +435,7 @@ fn should_reuse_one_lazy_processor_for_independent_page_verifications() {
     let directory = tempfile::tempdir().unwrap();
     let model = std::fs::read(std::env::var_os("XBERG_2408_KHM_MODEL").expect("pinned model")).unwrap();
     std::fs::write(directory.path().join("khm.traineddata"), model).unwrap();
-    let (encoded, media, character) = verifier_fixture();
+    let (encoded, proof, _) = verifier_fixture();
     let config = ExtractionConfig::default();
     let run = Run::default();
     assert!(
@@ -444,15 +444,9 @@ fn should_reuse_one_lazy_processor_for_independent_page_verifications() {
     );
     let mut first_processor = None;
     for _ in 0..2 {
-        let numbers = vec![Number {
-            text: "០".into(),
-            bbox: character.bbox,
-            baseline: character.origin_y,
-        }];
         let verified = verify_source(
             encoded.clone(),
-            media,
-            numbers,
+            &proof,
             directory.path().to_str().unwrap(),
             &config,
             &run,
@@ -476,11 +470,15 @@ fn should_reuse_one_lazy_processor_for_independent_page_verifications() {
     }
 }
 
-fn verifier_fixture() -> (std::sync::Arc<Vec<u8>>, Rect, TextChar) {
+fn verifier_fixture() -> (std::sync::Arc<Vec<u8>>, SourceProof, TextChar) {
     let source = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/tests/fixtures/pdf_khmer_number_2408/matching.pdf"
     ));
+    verifier_fixture_from(source)
+}
+
+fn verifier_fixture_from(source: &[u8]) -> (std::sync::Arc<Vec<u8>>, SourceProof, TextChar) {
     let document = PdfDocument::from_bytes(source.to_vec()).unwrap();
     let media = document.get_page_info(0).unwrap().media_box;
     let character = document
@@ -495,7 +493,20 @@ fn verifier_fixture() -> (std::sync::Arc<Vec<u8>>, Rect, TextChar) {
         &xberg_native_pdf::rendering::RenderOptions::with_dpi(150),
     )
     .unwrap();
-    (std::sync::Arc::new(raster.data), media, character)
+    let numbers = candidates(&document.extract_chars(0).unwrap());
+    let shape = shape_proof::prepare(
+        &document,
+        0,
+        &numbers,
+        proof_limits(&ExtractionConfig::default()).max_content_size,
+    )
+    .unwrap()
+    .expect("supported real source font");
+    (
+        std::sync::Arc::new(raster.data),
+        SourceProof { media, numbers, shape },
+        character,
+    )
 }
 
 #[test]
@@ -514,6 +525,7 @@ fn should_require_proven_page_context_for_numeric_recovery() {
     assert!(!intact.type0_ink_loss, "positive must use a real intact render");
     assert!(lost.type0_ink_loss, "negative must really lose Type0 ink");
     let policy = |raster| PagePolicy {
+        page_index_offset: 0,
         accepted: true,
         scale_only: true,
         deferred_structure: false,
@@ -524,6 +536,12 @@ fn should_require_proven_page_context_for_numeric_recovery() {
         builtin: true,
     };
     assert!(applicable(policy(Some(&intact))), "intact raster remains eligible");
+    let mut offset = policy(Some(&intact));
+    offset.page_index_offset = 7;
+    assert!(
+        !applicable(offset),
+        "only whole-document local page numbering is qualified"
+    );
     let mut deferred = policy(Some(&intact));
     deferred.deferred_structure = true;
     assert!(
@@ -594,4 +612,309 @@ fn assert_source_script_loss_is_not_certified_by_a_numeric_crop() {
             "numeric-only reads are not evidence of another prose script: {read}"
         );
     }
+}
+
+#[test]
+fn should_keep_recovered_page_text_when_final_rendering_has_no_page() {
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+    let mut document = InternalDocument::new("pdf");
+    let mut reads = vec!["retained ០".to_owned(), "retained ១".to_owned()];
+    let before = reads.clone();
+    assert!(!synchronize_plain_pages(
+        &document,
+        &[true, true],
+        &mut reads,
+        &crate::OutputFormat::Plain
+    ));
+    assert_eq!(reads, before, "an absent final page must not erase a successful read");
+    document.push_element(InternalElement::text(ElementKind::Paragraph, "final ០", 0).with_page(1));
+    assert!(synchronize_plain_pages(
+        &document,
+        &[true, true],
+        &mut reads,
+        &crate::OutputFormat::Plain
+    ));
+    assert_eq!(
+        reads,
+        ["final ០", "retained ១"],
+        "render only the page the final document actually supplies"
+    );
+}
+
+#[test]
+fn should_preserve_multiline_authoritative_ocr_text_when_inserting_a_number() {
+    let original = "first \tline\nsecond  line";
+    let mut value = paragraph(original, "first");
+    value.lines[0].segments[0].width = 20.0;
+    let mut right = segment("line");
+    right.x = 50.0;
+    right.width = 30.0;
+    value.lines[0].segments.push(right);
+    let mut second = value.lines[0].clone();
+    second.baseline_y = -40.0;
+    second.segments[0].text = "second".into();
+    for segment in &mut second.segments {
+        segment.y = -40.0;
+        segment.baseline_y = -40.0;
+    }
+    value.lines.push(second);
+    let mut paragraphs = [value];
+    assert!(insert(vec![number("០", 30.0)], &mut paragraphs, (1.0, 1.0), 100));
+    assert_eq!(paragraphs[0].text, "first \t០ line\nsecond  line");
+    assert_eq!(
+        paragraphs[0].text.replace("០ ", ""),
+        original,
+        "all pre-existing OCR bytes survive"
+    );
+    assert_eq!(paragraphs[0].lines[1].segments[0].text, "second");
+    assert_eq!(paragraphs[0].word_count, 5);
+}
+
+#[test]
+fn should_decline_unqualified_primary_languages_before_numeric_recovery() {
+    let mut config = ExtractionConfig {
+        ocr: Some(crate::OcrConfig::default()),
+        ..Default::default()
+    };
+    assert!(eligible(&config, 0), "the qualified English primary remains supported");
+    for language in [vec!["deu"], vec!["khm"], vec!["eng", "khm"], vec!["eng+khm"]] {
+        config.ocr.as_mut().unwrap().language = language.iter().map(|value| value.to_string()).collect();
+        assert!(!eligible(&config, 0), "unqualified primary language: {language:?}");
+    }
+}
+
+#[test]
+#[ignore = "Run mise run rust:test:khmer-number-recovery with the pinned Khmer model"]
+fn should_refuse_when_the_provisioned_crop_model_disappears() {
+    if assert_disappearance_with_a_provisioned_fallback() {
+        return;
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let model = std::fs::read(std::env::var_os("XBERG_2408_KHM_MODEL").expect("pinned Khmer model")).unwrap();
+    let model_path = directory.path().join("khm.traineddata");
+    std::fs::write(&model_path, model).unwrap();
+    let (encoded, proof, _) = verifier_fixture();
+    let config = ExtractionConfig::default();
+    let run = Run::default();
+    let positive = verify_source(
+        encoded.clone(),
+        &proof,
+        directory.path().to_str().unwrap(),
+        &config,
+        &run,
+    )
+    .unwrap();
+    assert_eq!(positive[0].text, "០");
+    std::fs::remove_file(&model_path).unwrap();
+    assert!(
+        verify_source(encoded, &proof, directory.path().to_str().unwrap(), &config, &run).is_err(),
+        "a missing selected model must not fall back to another root or download a replacement"
+    );
+    assert!(!model_path.exists());
+}
+
+fn assert_disappearance_with_a_provisioned_fallback() -> bool {
+    const CHILD: &str = "XBERG_2408_MODEL_DISAPPEARANCE_CHILD";
+    if std::env::var_os(CHILD).as_deref() == Some(std::ffi::OsStr::new("1")) {
+        return false;
+    }
+    let fallback = tempfile::tempdir().unwrap();
+    std::fs::copy(
+        std::env::var_os("XBERG_2408_KHM_MODEL").expect("pinned Khmer model"),
+        fallback.path().join("khm.traineddata"),
+    )
+    .unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .env(CHILD, "1")
+        .env("TESSDATA_PREFIX", fallback.path())
+        .args([
+            "--exact",
+            "extractors::pdf::ocr::number_recovery::tests::should_refuse_when_the_provisioned_crop_model_disappears",
+            "--include-ignored",
+            "--test-threads=1",
+        ])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "controlled model fallback child failed:\n{stdout}\n{stderr}"
+    );
+    assert!(
+        stdout.contains("1 passed; 0 failed; 0 ignored"),
+        "one child control must execute: {stdout}"
+    );
+    true
+}
+
+#[test]
+#[ignore = "Run mise run rust:test:khmer-number-recovery with the pinned Khmer model"]
+fn should_refuse_painted_latin_lookalikes_in_a_claimed_khmer_crop() {
+    let directory = tempfile::tempdir().unwrap();
+    let model = std::fs::read(std::env::var_os("XBERG_2408_KHM_MODEL").expect("pinned model")).unwrap();
+    std::fs::write(directory.path().join("khm.traineddata"), model).unwrap();
+    std::fs::write(
+        directory.path().join("eng.traineddata"),
+        xberg_tesseract::bundled_eng_traineddata().unwrap(),
+    )
+    .unwrap();
+    let config = ExtractionConfig::default();
+    let run = Run::default();
+    let fixtures: [(&str, &[u8]); 3] = [
+        (
+            "matching",
+            include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/pdf_khmer_number_2408/matching.pdf"
+            )),
+        ),
+        (
+            "painted Latin O",
+            include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/pdf_khmer_number_2408/painted_latin_o.pdf"
+            )),
+        ),
+        (
+            "painted ASCII 0",
+            include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/fixtures/pdf_khmer_number_2408/painted_ascii_zero.pdf"
+            )),
+        ),
+    ];
+    let mut observed = Vec::new();
+    for (name, source) in fixtures {
+        let (encoded, proof, character) = verifier_fixture_from(source);
+        let media = proof.media;
+        let raster = image::DynamicImage::ImageRgb8(image::load_from_memory(&encoded).unwrap().into_rgb8());
+        let limits = proof_limits(&config);
+        let budget = CropBudget {
+            limits: &limits,
+            retained: encoded.capacity() + raster.as_bytes().len(),
+        };
+        let processor = run.processor.get_or_try_init(|| OcrProcessor::new(None)).unwrap();
+        for language in ["khm", "eng"] {
+            let mut recognition = recognition_config(directory.path().to_str().unwrap(), &config, 150.0);
+            recognition.language = language.into();
+            let actual = recognize_crop(&raster, media, character.bbox, processor, &mut recognition, &budget)
+                .unwrap()
+                .unwrap();
+            eprintln!("{name}: {language} crop read={:?}", actual.content);
+        }
+        let verified = verify_source(encoded, &proof, directory.path().to_str().unwrap(), &config, &run).unwrap();
+        observed.push((name, verified.len()));
+    }
+    assert_eq!(
+        observed[0],
+        ("matching", 1),
+        "the genuine source must actually be recovered"
+    );
+    assert_eq!(
+        &observed[1..],
+        &[("painted Latin O", 0), ("painted ASCII 0", 0)],
+        "different painted glyphs must not inherit the hidden Khmer Unicode claim"
+    );
+}
+
+#[tokio::test]
+#[ignore = "Run mise run rust:test:khmer-number-recovery with the pinned Khmer model"]
+async fn should_defer_missing_model_warnings_until_the_primary_page_is_accepted() {
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::write(
+        directory.path().join("eng.traineddata"),
+        xberg_tesseract::bundled_eng_traineddata().unwrap(),
+    )
+    .unwrap();
+    let config = ExtractionConfig {
+        ocr: Some(crate::OcrConfig {
+            tessdata_path: Some(directory.path().to_owned()),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let (_, observe) = prepare_read(config.ocr.clone().unwrap(), &config, 0, Some("ប០ប"));
+    assert!(!observe);
+    let input = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/pdf_khmer_number_2408/matching.pdf"
+    ));
+    let document = PdfDocument::from_bytes(input.to_vec()).unwrap();
+    let (encoded, _, _) = verifier_fixture();
+    let integrity = rendered_integrity(input);
+    let metadata = primary_read().metadata;
+    let run = std::sync::Arc::new(Run::default());
+    let page = || PreparedPage {
+        policy: PagePolicy {
+            page_index_offset: 0,
+            accepted: false,
+            scale_only: observe,
+            deferred_structure: false,
+            layout: false,
+            transformed: false,
+            raster: Some(&integrity),
+            structured: false,
+            builtin: true,
+        },
+        source: Some(PageSource {
+            document: &document,
+            index: 0,
+            layer: "ប០ប",
+            raster: encoded.clone(),
+            dimensions: (1275, 1650),
+            metadata: &metadata,
+        }),
+        config: &config,
+        run: &run,
+    };
+    exercise_accepted_page_warnings(page, directory.path()).await;
+}
+
+async fn exercise_accepted_page_warnings<'a>(page: impl Fn() -> PreparedPage<'a>, directory: &std::path::Path) {
+    let mut warnings = Vec::new();
+    let mut paragraphs = [paragraph("VOU", "VOU")];
+    let mut text = "VOU".to_owned();
+    for (accepted, expected) in [(false, 0), (true, 1), (true, 1)] {
+        assert!(
+            !page()
+                .apply(
+                    AcceptedRead {
+                        accepted,
+                        paragraphs: Some(&mut paragraphs),
+                        text: &mut text,
+                        warnings: &mut warnings
+                    },
+                    &[],
+                    &[]
+                )
+                .await
+        );
+        assert_eq!(warnings.len(), expected, "warnings describe accepted pages once");
+    }
+    let model = std::fs::read(std::env::var_os("XBERG_2408_KHM_MODEL").expect("pinned model")).unwrap();
+    std::fs::write(directory.join("khm.traineddata"), model).unwrap();
+    for _ in 0..2 {
+        assert!(
+            !page()
+                .apply(
+                    AcceptedRead {
+                        accepted: true,
+                        paragraphs: Some(&mut paragraphs),
+                        text: &mut text,
+                        warnings: &mut warnings
+                    },
+                    &[],
+                    &[]
+                )
+                .await
+        );
+    }
+    assert_eq!(
+        warnings.len(),
+        2,
+        "an unbound accepted read reports a distinct, deduplicated proof gap"
+    );
+    assert!(warnings[1].message.contains("proof limits"));
+    assert_eq!(text, "VOU");
 }

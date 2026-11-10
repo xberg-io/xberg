@@ -380,6 +380,40 @@ if (file) {
 </TabItem>
 </Tabs>
 
+### Native Khmer numbers with an English primary
+
+For eligible automatic native PDF OCR, provisioning `khm.traineddata` beside the selected
+`eng.traineddata` automatically enables bounded Khmer-number recovery. There is no separate
+recovery flag. An all-model deployment can therefore produce different text and perform extra
+verification work even when `ocr.language` remains `eng`.
+
+Without the auxiliary file, the English read stays unchanged and an accepted eligible page
+receives an OCR warning about its unverified native Khmer numbers. Recovery never downloads
+or materializes an auxiliary model, searches another root for it, or changes the primary OCR
+language. Other primary languages, including `deu`, `khm` and `eng+khm`, retain their ordinary
+OCR behavior without this recovery step.
+
+This capability is limited to corroborated source crops with intact raster evidence and a
+unique line owner. It inserts verified numbers while retaining existing OCR tokens; a misread
+neighbor can remain. Forced/custom OCR, layout, explicit pipelines, transformed or detached
+stages, unsupported glyph evidence, and lines already containing numbers are excluded. A
+selected read whose serialized text and geometry exceed the 256 KiB proof limit is retained
+with a verification-gap warning.
+
+Eligible pages bypass extraction-result caching, with or without the model. When the auxiliary
+model is available, their primary OCR read also bypasses OCR caching to observe the actual
+preprocessing geometry. See [ADR 0014](https://github.com/xberg-io/xberg/blob/main/adrs/0014-gate-khmer-numeric-recovery-on-locally-provisioned-models.md)
+for the activation decision, costs and limits. This is partial support for
+[issue 2408](https://github.com/xberg-io/xberg/issues/2408); the original reporter page has not
+been verified.
+
+The initial source proof admits simple embedded glyphs and small page content.
+Tagged or ActualText content, Forms, custom graphics-state resources, composite
+outlines and unsupported encodings retain the ordinary OCR read. Source text
+and character memory are admitted before private extraction, which reuses one
+owned character buffer. See the fixture README for the exact font, content and
+work limits.
+
 ### Force OCR
 
 Process PDFs with OCR even when they have a text layer:
