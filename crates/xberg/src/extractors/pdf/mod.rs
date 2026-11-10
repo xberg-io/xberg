@@ -49,6 +49,11 @@ use extraction::extract_all_from_native_document;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 use mixed_tables::merge_mixed_ocr_tables;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn is_khmer_digit(character: char) -> bool {
+    ('\u{17e0}'..='\u{17e9}').contains(&character)
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn extraction_method_after_mixed_ocr(replacements: &ahash::AHashMap<u32, String>) -> ExtractionMethod {
     if replacements.is_empty() {
         ExtractionMethod::Native

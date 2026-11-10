@@ -14,6 +14,8 @@ mod document_scope;
 mod helpers;
 #[path = "pdf_all_pages_native_preservation_2768/mixed_tables.rs"]
 mod mixed_tables;
+#[path = "pdf_all_pages_native_preservation_2768/plain_contract.rs"]
+mod plain_contract;
 #[path = "pdf_all_pages_native_preservation_2768/structured_output.rs"]
 mod structured_output;
 

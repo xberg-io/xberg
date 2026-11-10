@@ -80,6 +80,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(ocr): Recover corroborated native Khmer numbers when the selected English-primary directory already contains `khm.traineddata`.** (GH#2408)
+  Activation is automatic in co-provisioned and all-model deployments; there is no separate recovery flag or auxiliary download.
+  The feature is qualified only for an English primary. Other primary languages, forced/custom OCR, detached or transformed
+  stages, unsupported glyph evidence, ambiguous ownership and lines already containing numbers retain their ordinary read.
+  Numeric insertion preserves neighboring OCR text and multiline paragraph bytes. Eligible pages bypass extraction caching;
+  with the auxiliary model present, admitted pages also bypass primary OCR caching. Serial blocking workers share one
+  document budget of at most eight metadata-supported pages, 64 crops and 128 MiB of accounted verifier work; caller limits
+  can lower these bounds. Each source proof reserves half the document allowance, rounded up (the full allowance for a one-page
+  limit); unmeasured late declines, errors and cancellation retain that share. Metadata-only unsupported pages use no page
+  slot or work allowance. Exhaustion retains accepted OCR text and reports the verification gap. Implicit deferred per-page
+  pipelines, including the usual full-feature route, are outside this capability and its missing-model warning.
+  Accepted eligible pages warn once about a missing model or an unbound geometry proof. The original reporter page remains
+  unavailable, so this is partial support. ADR 0014 records the activation policy and limits.
+
 - **(models): Pin experimental candidate classification and captioning ONNX artifacts to owned Hugging Face revisions.** (#2336)
   The crate-private `candidate_models` inventory (feature `onnx-runtime`) lists NLI-MiniLM2, SmolVLM-256M, SmolVLM-500M and Florence-2-base as unmodified, license-preserving copies in `xberg-io/classification-models` and `xberg-io/captioning-models`, each file pinned by immutable commit and SHA-256. Every entry is marked experimental and unqualified: none is a default or a supported preset, and no captioning adapter consumes them yet. The NLI-MiniLM2 cross-encoder declares Apache-2.0, but its base model `nreimers/MiniLMv2-L6-H768-distilled-from-RoBERTa-Large` publishes no license, so the entry's license is recorded as unresolved; its fp32 graph exceeds the local NLI adapter's graph size cap, so only the quantized graphs are selectable.
 
@@ -309,6 +323,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Exclude Unicode numerals from native-prose script evidence.**
+  Numeric-only OCR reads do not claim retention of native prose, across all supported scripts.
 - **(djot): Preserve paragraph text that begins with block syntax.** (#2856, #2869)
   Escape block markers without changing following inline markup or existing backslash escapes.
 - **(pdf): Keep a nested superscript or subscript stack on its base's line.** (#2728)
