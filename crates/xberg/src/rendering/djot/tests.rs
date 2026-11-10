@@ -847,3 +847,27 @@ fn a_row_lines_paragraph_inside_a_blockquote_quotes_every_row() {
     b.push_quote_end();
     assert_eq!(render_djot(&b.build()), "> Water .... 36\n> \n> Street .... 17\n>\n");
 }
+
+#[test]
+fn row_lines_that_start_with_any_djot_list_marker_are_escaped() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element(
+        "I. Introduction .... 3\nA. Appendix .... 40\niv. Index .... 9\na) Note .... 2\n(1) Aim .... 4\n(a) Scope .... 5\n(ii) Terms .... 6\n: Term .... 8",
+    ));
+    assert_eq!(
+        render_djot(&b.build()),
+        "I\\. Introduction .... 3\n\nA\\. Appendix .... 40\n\niv\\. Index .... 9\n\na\\) Note .... 2\n\n\\(1) Aim .... 4\n\n\\(a) Scope .... 5\n\n\\(ii) Terms .... 6\n\n\\: Term .... 8\n"
+    );
+}
+
+#[test]
+fn row_lines_escape_bare_markers_thematic_breaks_and_heading_runs_only() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element(
+        "+ Pool .... 4\n* Park .... 7\n### Lot .... 2\n1.5 Units .... 3\n1.\n-\n---\n*** Rule\n#hashtag .... 1\nPlan A. .... 2",
+    ));
+    assert_eq!(
+        render_djot(&b.build()),
+        "\\+ Pool .... 4\n\n\\* Park .... 7\n\n\\### Lot .... 2\n\n1.5 Units .... 3\n\n1\\.\n\n\\-\n\n\\---\n\n\\*** Rule\n\n#hashtag .... 1\n\nPlan A. .... 2\n"
+    );
+}

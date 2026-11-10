@@ -376,45 +376,44 @@ fn render_annotations_djot(annotations: &[PdfAnnotation]) -> String {
     out
 }
 
-/// Render text with djot inline annotations, normalizing inline text.
-///
-/// Plain text segments and annotated spans are normalized (whitespace collapsed,
-/// newlines replaced, control characters stripped) to match the markdown renderer.
-/// Code spans are left un-normalized to preserve literal content.
 /// Backslash-escapes a leading block marker so a row that starts its own paragraph is not read as
-/// a table, list item, heading or quote.
+/// a table, list, definition list, heading, quote or thematic break.
 fn escape_leading_block_marker(line: &str) -> String {
-    let mut chars = line.char_indices();
-    let Some((_, first)) = chars.next() else {
-        return String::new();
-    };
-    let rest = &line[first.len_utf8()..];
-    let followed_by_space = rest.chars().next().is_none_or(char::is_whitespace);
-    let at = match first {
-        '|' | '>' => Some(0),
-        '-' | '+' | '*' if followed_by_space => Some(0),
-        '#' if rest
-            .trim_start_matches('#')
-            .chars()
-            .next()
-            .is_none_or(char::is_whitespace) =>
-        {
-            Some(0)
-        }
-        digit if digit.is_ascii_digit() => {
-            let digits = line.len() - line.trim_start_matches(|c: char| c.is_ascii_digit()).len();
-            let after = &line[digits..];
-            let delimiter = after.chars().next().filter(|c| matches!(c, '.' | ')'));
-            delimiter
-                .filter(|_| after[1..].chars().next().is_none_or(char::is_whitespace))
-                .map(|_| digits)
-        }
-        _ => None,
-    };
-    match at {
+    match leading_block_marker_at(line) {
         Some(at) => format!("{}\\{}", &line[..at], &line[at..]),
         None => line.to_string(),
     }
+}
+
+/// Byte offset of the character to escape when `line` opens with Djot block syntax.
+fn leading_block_marker_at(line: &str) -> Option<usize> {
+    let first = line.chars().next()?;
+    let after = |len: usize| line[len..].chars().next().is_none_or(char::is_whitespace);
+    if matches!(first, '-' | '*') && line.starts_with(&first.to_string().repeat(3)) {
+        return Some(0);
+    }
+    match first {
+        '|' | '>' => Some(0),
+        '-' | '+' | '*' | ':' if after(1) => Some(0),
+        '#' if after(line.len() - line.trim_start_matches('#').len()) => Some(0),
+        '(' => {
+            let end = line.find(')')?;
+            (is_list_label(&line[1..end]) && after(end + 1)).then_some(0)
+        }
+        _ => {
+            let end = line.find(['.', ')'])?;
+            (is_list_label(&line[..end]) && after(end + 1)).then_some(end)
+        }
+    }
+}
+
+/// A decimal number, a single letter or a roman numeral run: the labels Djot opens a list with.
+fn is_list_label(label: &str) -> bool {
+    let all = |accepts: &dyn Fn(char) -> bool| !label.is_empty() && label.chars().all(accepts);
+    all(&|c| c.is_ascii_digit())
+        || (label.chars().count() == 1 && all(&|c| c.is_ascii_alphabetic()))
+        || all(&|c| "ivxlcdm".contains(c))
+        || all(&|c| "IVXLCDM".contains(c))
 }
 
 /// Byte offset just past the text of the last block in `out`: before the newlines that close
@@ -434,6 +433,11 @@ fn block_text_end(out: &str, bq_depth: usize) -> usize {
     }
 }
 
+/// Render text with djot inline annotations, normalizing inline text.
+///
+/// Plain text segments and annotated spans are normalized (whitespace collapsed,
+/// newlines replaced, control characters stripped) to match the markdown renderer.
+/// Code spans are left un-normalized to preserve literal content.
 fn render_djot_annotated(text: &str, annotations: &[crate::types::document_structure::TextAnnotation]) -> String {
     if annotations
         .iter()

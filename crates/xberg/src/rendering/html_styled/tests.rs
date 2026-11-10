@@ -341,9 +341,16 @@ fn a_row_lines_paragraph_emits_one_paragraph_per_row() {
         .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(), String::new());
     let mut doc = InternalDocument::new("image");
     doc.push_element(paragraph);
-    let html = render(HtmlOutputConfig::default(), &doc);
-    assert!(
-        html.contains(r#"<p class="kb-p">Water .... 36</p><p class="kb-p">A &amp; B .... 17</p>"#),
-        "got: {html}"
+    let config = HtmlOutputConfig {
+        embed_css: false,
+        ..HtmlOutputConfig::default()
+    };
+    assert_eq!(
+        render(config, &doc),
+        concat!(
+            r#"<div class="kb-doc"><main class="kb-content">"#,
+            r#"<p class="kb-p">Water .... 36</p><p class="kb-p">A &amp; B .... 17</p>"#,
+            "</main></div>"
+        )
     );
 }
