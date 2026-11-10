@@ -8896,6 +8896,10 @@ mod first_pass_route_tests;
 #[path = "pipeline/native_script_kept_tests.rs"]
 mod native_script_kept_tests;
 
+#[cfg(all(test, feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+#[path = "pipeline/second_site_clean_admission_tests.rs"]
+mod second_site_clean_admission_tests;
+
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
 #[path = "pipeline/budget_refusal_tests.rs"]
 mod budget_refusal_tests;
