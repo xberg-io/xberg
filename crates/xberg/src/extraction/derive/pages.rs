@@ -364,9 +364,21 @@ fn build_sub_doc(elem_indices: &[usize], doc: &InternalDocument) -> InternalDocu
     sub_doc
 }
 
-/// Pages whose prebuilt text is not found in `content` (in page order) rendered from their
+/// Whether `page`'s prebuilt text is OCR text: the page carries an OCR confidence, or its text
+/// holds the Markdown of one of its own tables. A DOCX page with its notes or a native PDF page
+/// is neither, and its text is deliberately not the plain rendering of its elements.
+fn is_ocr_page_text(page: &PageContent) -> bool {
+    page.ocr_confidence.is_some()
+        || page.tables.iter().any(|table| {
+            let markdown = table.markdown.trim();
+            !markdown.is_empty() && page.content.contains(markdown)
+        })
+}
+
+/// OCR pages whose prebuilt text is not found in `content` (in page order) rendered from their
 /// own elements by `render_plain`; a page whose text is found keeps it. `None` when no page has
-/// elements, a re-rendered page is empty, or a re-rendered page is still not found.
+/// elements, a page that is not found is not OCR text (see `is_ocr_page_text`), a re-rendered
+/// page is empty, or a re-rendered page is still not found.
 ///
 /// Pages are located with the leftmost `find` after the previous page, so short or repeated
 /// page text can match early, as in `reconcile_page_boundaries`.
@@ -390,6 +402,9 @@ fn rerender_pages_plain(
                 search_offset = start + page.content.len();
                 out.push(page);
                 continue;
+            }
+            if !is_ocr_page_text(&page) {
+                return None;
             }
             let indices = elements_by_page.get(&page.page_number)?;
             let rendered = crate::rendering::render_plain(&build_sub_doc(indices, doc));
@@ -560,7 +575,11 @@ mod plain_page_rerender_tests {
             speaker_notes: None,
             section_name: None,
             sheet_name: None,
-            ocr_confidence: None,
+            ocr_confidence: Some(crate::types::page::PageOcrConfidence {
+                score: None,
+                word_count: 1,
+                backend: "tesseract".to_string(),
+            }),
             native_content: None,
         }
     }
@@ -689,6 +708,18 @@ mod plain_page_rerender_tests {
         let mut doc = doc_with(vec![page(1, "| a |"), page(2, "two")], &[(1, ""), (2, "two")]);
         let pages = derive(&mut doc, content);
         assert_eq!(pages[0].content, "| a |");
+        assert!(warned(&doc));
+        assert!(doc.metadata.pages.as_ref().unwrap().boundaries.is_none());
+    }
+
+    #[test]
+    fn a_page_not_read_by_ocr_keeps_its_text_and_drops_the_boundaries_with_a_warning() {
+        let content = "kept\n\nplain two";
+        let mut native = page(2, "native | two");
+        native.ocr_confidence = None;
+        let mut doc = doc_with(vec![page(1, "kept"), native], &[(1, "kept"), (2, "plain two")]);
+        let pages = derive(&mut doc, content);
+        assert_eq!(pages[1].content, "native | two");
         assert!(warned(&doc));
         assert!(doc.metadata.pages.as_ref().unwrap().boundaries.is_none());
     }
