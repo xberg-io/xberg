@@ -71,7 +71,10 @@ fn nfc_leaves_an_entity_span_that_was_not_on_a_character_boundary_as_it_was_and_
     assert_eq!(result.content, COMPOSED);
     let entities = result.entities.unwrap();
     assert_eq!(entities[0], untouched);
-    assert_eq!(COMPOSED.get(entities[1].start as usize..entities[1].end as usize), Some("Paris"));
+    assert_eq!(
+        COMPOSED.get(entities[1].start as usize..entities[1].end as usize),
+        Some("Paris")
+    );
 }
 
 /// A span that cuts a base letter from the mark that joins it lands inside the composed letter once
@@ -155,7 +158,10 @@ impl crate::plugins::Plugin for ParisTagger {
 #[async_trait::async_trait]
 impl crate::plugins::PostProcessor for ParisTagger {
     async fn process(&self, result: &mut ExtractedDocument, _config: &ExtractionConfig) -> Result<()> {
-        result.entities = Some(vec![location(&result.content, "Paris"), location(&result.content, "Cafe")]);
+        result.entities = Some(vec![
+            location(&result.content, "Paris"),
+            location(&result.content, "Cafe"),
+        ]);
         Ok(())
     }
     fn processing_stage(&self) -> crate::plugins::ProcessingStage {

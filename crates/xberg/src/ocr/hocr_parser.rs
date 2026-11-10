@@ -2801,7 +2801,10 @@ mod tests {
                     .enumerate()
                     .map(|(i, word)| {
                         let left = i * 100;
-                        format!(r#"<span class="ocrx_word" title="bbox {left} 10 {} 40">{word}</span>"#, left + 90)
+                        format!(
+                            r#"<span class="ocrx_word" title="bbox {left} 10 {} 40">{word}</span>"#,
+                            left + 90
+                        )
                     })
                     .collect();
                 format!(
