@@ -3643,6 +3643,9 @@ pub(super) struct OcrReadEvidence {
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     caption: Option<super::caption_conversion::CaptionRewrite>,
     no_admitted_images: bool,
+    /// The page text joined as it was before symbol-noise pruning, when any page was pruned, so
+    /// pipeline stage scoring judges the same text as without pruning (#2312).
+    pub(super) unpruned_text: Option<String>,
     original_tesseract_raster: bool,
     discarded_visible_native_page: bool,
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
@@ -5732,6 +5735,9 @@ pub(super) async fn extract_with_ocr_for_page(
 
     // Pages the verdict flagged but kept lose their symbol-noise lines only now, so the
     // verdict, backend choice and table acceptance above judged the unpruned text (#2312).
+    // The pruned text is what this function returns; pipeline stage scoring reads
+    // `OcrReadEvidence::unpruned_text` instead, so pruning never changes stage selection.
+    let mut unpruned_page_texts: Vec<(usize, String)> = Vec::new();
     for verdict in recognition_noise_verdicts.iter().filter(|verdict| !verdict.discarded) {
         let Some(page_idx) = verdict.page_index.checked_sub(page_index_offset) else {
             continue;
@@ -5747,7 +5753,7 @@ pub(super) async fn extract_with_ocr_for_page(
             && super::symbol_noise_lines::page_is_dominated_by_noise_lines(page_texts[page_idx].lines())
         {
             let (pruned, removed) = super::symbol_noise_lines::prune_text(&page_texts[page_idx]);
-            page_texts[page_idx] = pruned;
+            unpruned_page_texts.push((page_idx, std::mem::replace(&mut page_texts[page_idx], pruned)));
             if let Some(paragraphs) = all_page_paragraphs[page_idx].as_mut() {
                 super::symbol_noise_lines::prune_paragraphs(paragraphs);
             }
@@ -5759,18 +5765,47 @@ pub(super) async fn extract_with_ocr_for_page(
     }
 
     let page_marker_cfg = config.pages.as_ref().filter(|p| p.insert_page_markers);
-    let mut result = String::new();
-    for (i, text) in page_texts.iter().enumerate() {
-        if let Some(cfg) = page_marker_cfg {
-            let marker = cfg
-                .marker_format
-                .replace("{page_num}", &(page_index_offset + i + 1).to_string());
-            result.push_str(&marker);
-        } else if i > 0 {
-            result.push_str("\n\n");
+    let join_pages = |texts: &[String]| {
+        let mut joined = String::new();
+        for (i, text) in texts.iter().enumerate() {
+            if let Some(cfg) = page_marker_cfg {
+                let marker = cfg
+                    .marker_format
+                    .replace("{page_num}", &(page_index_offset + i + 1).to_string());
+                joined.push_str(&marker);
+            } else if i > 0 {
+                joined.push_str("\n\n");
+            }
+            joined.push_str(text);
         }
-        result.push_str(text);
-    }
+        joined
+    };
+    #[cfg_attr(
+        not(all(
+            feature = "ocr",
+            feature = "pdf",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        )),
+        allow(unused_mut)
+    )]
+    let mut result = join_pages(&page_texts);
+    #[cfg_attr(
+        not(all(
+            feature = "ocr",
+            feature = "pdf",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        )),
+        allow(unused_mut)
+    )]
+    let mut unpruned_text = (!unpruned_page_texts.is_empty()).then(|| {
+        let mut texts = page_texts.clone();
+        for (page_idx, original) in &unpruned_page_texts {
+            texts[*page_idx] = original.clone();
+        }
+        join_pages(&texts)
+    });
 
     // A page the quality gate rejected must not keep its structured paragraphs either.
     //
@@ -6050,6 +6085,7 @@ pub(super) async fn extract_with_ocr_for_page(
             .await?
         {
             result.clone_from(page);
+            unpruned_text = None;
         }
         ocr_doc
     };
@@ -6200,6 +6236,7 @@ pub(super) async fn extract_with_ocr_for_page(
             #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
             caption,
             no_admitted_images,
+            unpruned_text,
             discarded_visible_native_page,
             #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
             complete_native_words,
@@ -7838,7 +7875,11 @@ async fn run_ocr_pipeline_stages(
                 stage_recognition_noise_verdicts,
                 read_evidence,
             )) => {
-                let text_score = compute_quality_score(&text, &pipeline.quality_thresholds);
+                // Scored before pruning, so symbol-noise pruning never changes stage selection.
+                let text_score = compute_quality_score(
+                    read_evidence.unpruned_text.as_deref().unwrap_or(&text),
+                    &pipeline.quality_thresholds,
+                );
                 let score = pipeline_stage_score(text_score, mean_conf);
 
                 tracing::debug!(

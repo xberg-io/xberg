@@ -15,12 +15,15 @@ const PHOTO_PNG: &[u8] = include_bytes!("fixtures/ocr_photo_title_2312/title.png
 const PHOTO_PDF: &[u8] = include_bytes!("fixtures/pdf/discarded-noise-2312/photo-title.pdf");
 const TABLE_PNG: &[u8] = include_bytes!("fixtures/ocr_photo_title_2312/table.png");
 const PROSE_PNG: &[u8] = include_bytes!("fixtures/ocr_photo_noise_2312/prose.png");
+const PHOTO_ONLY_PDF: &[u8] = include_bytes!("fixtures/ocr_photo_noise_2312/photo-only.pdf");
 const MIXED_PDF: &[u8] = include_bytes!("fixtures/ocr_photo_noise_2312/prose-then-photo.pdf");
 const PROSE_PDF: &[u8] = include_bytes!("fixtures/ocr_photo_noise_2312/prose.pdf");
 
 /// Characters of OCR output before the filter existed, measured on this tree's parent commit.
 const PNG_NOISE_BEFORE: usize = 840;
 const PDF_NOISE_BEFORE: usize = 1056;
+const PDF_NOISE_AFTER_PLAIN: usize = 169;
+const PDF_PRUNED_LINES: usize = 200;
 
 const PROSE: &str = "The committee met on Tuesday to review the annual budget.\n\n\
 Members agreed that the library needs a new roof before winter.\n\n\
@@ -66,8 +69,14 @@ async fn photograph_png_keeps_at_most_a_quarter_of_its_symbol_noise() {
 #[tokio::test]
 async fn photograph_pdf_keeps_at_most_a_quarter_of_its_symbol_noise() {
     for format in [OutputFormat::Plain, OutputFormat::Markdown] {
+        let plain = format == OutputFormat::Plain;
         let content = read(PHOTO_PDF, "application/pdf", format).await;
         assert!(noise_chars(&content) * 4 <= PDF_NOISE_BEFORE, "{content:?}");
+        if plain {
+            // Lines with a digit are kept (`$5`, `1.`), which is why 169 characters of the 1056 stay;
+            // an earlier rule that dropped single-digit lines left 50.
+            assert_eq!(noise_chars(&content), PDF_NOISE_AFTER_PLAIN, "{content:?}");
+        }
         assert!(content.trim_start().starts_with(TITLE), "{content:?}");
     }
 }
@@ -93,21 +102,62 @@ async fn short_table_scan_is_unchanged() {
     );
 }
 
-#[tokio::test]
-async fn a_pruned_pdf_page_carries_a_warning_naming_the_page_and_the_line_count() {
-    let mut batch = extract(
-        ExtractInput::from_bytes(PHOTO_PDF.to_vec(), "application/pdf", None),
-        &config(OutputFormat::Plain),
-    )
-    .await
-    .unwrap();
-    let document = batch.results.remove(0);
-    let warning = document
+async fn document(bytes: &[u8], mime: &str, config: &ExtractionConfig) -> xberg::ExtractedDocument {
+    let mut batch = extract(ExtractInput::from_bytes(bytes.to_vec(), mime, None), config)
+        .await
+        .expect("extract");
+    assert!(batch.errors.is_empty(), "{:?}", batch.errors);
+    batch.results.remove(0)
+}
+
+fn prune_warnings(document: &xberg::ExtractedDocument) -> Vec<String> {
+    document
         .processing_warnings
         .iter()
-        .find(|warning| warning.message.contains("symbol-noise line(s)"))
-        .unwrap_or_else(|| panic!("{:?}", document.processing_warnings));
-    assert!(warning.message.starts_with("Page 1: removed "), "{}", warning.message);
+        .map(|warning| warning.message.to_string())
+        .filter(|message| message.contains("symbol-noise line(s)"))
+        .collect()
+}
+
+fn non_blank_lines(text: &str) -> usize {
+    text.lines().filter(|line| !line.trim().is_empty()).count()
+}
+
+/// A photograph page that follows a native-text page is read page by page like a PDF of its own,
+/// so it is pruned the same way and its warning names its own page number.
+#[tokio::test]
+async fn a_photograph_page_after_native_text_is_pruned_like_the_pdf_route() {
+    let config = config(OutputFormat::Plain);
+    let mixed = document(MIXED_PDF, "application/pdf", &config).await;
+    let warnings = prune_warnings(&mixed);
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(warnings[0].starts_with("Page 2: removed "), "{}", warnings[0]);
+    let (prose, photo) = mixed.content.split_once("next month.").expect("prose page");
+    assert!(prose.contains("annual budget"));
+
+    let control = document(PHOTO_ONLY_PDF, "application/pdf", &config).await;
+    let control_warnings = prune_warnings(&control);
+    assert_eq!(control_warnings.len(), 1, "{control_warnings:?}");
+    assert!(
+        control_warnings[0].starts_with("Page 1: removed "),
+        "{}",
+        control_warnings[0]
+    );
+    assert!(
+        non_blank_lines(photo) < 60 && non_blank_lines(&control.content) < 60,
+        "{photo:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_pruned_pdf_page_carries_a_warning_naming_the_page_and_the_line_count() {
+    let document = document(PHOTO_PDF, "application/pdf", &config(OutputFormat::Plain)).await;
+    assert_eq!(
+        prune_warnings(&document),
+        vec![format!(
+            "Page 1: removed {PDF_PRUNED_LINES} symbol-noise line(s) from suspected OCR recognition noise; set prune_symbol_noise_lines to false to keep them."
+        )]
+    );
 }
 
 #[tokio::test]
@@ -117,35 +167,11 @@ async fn the_flag_off_keeps_every_line_of_the_photograph() {
         prune_symbol_noise_lines: false,
         ..OcrQualityThresholds::default()
     });
-    let mut batch = extract(
-        ExtractInput::from_bytes(PHOTO_PDF.to_vec(), "application/pdf", None),
-        &config,
-    )
-    .await
-    .unwrap();
-    let document = batch.results.remove(0);
+    let document = document(PHOTO_PDF, "application/pdf", &config).await;
     assert!(
         noise_chars(&document.content) * 10 >= PDF_NOISE_BEFORE * 9,
         "{:?}",
         document.content
     );
-    assert!(
-        !document
-            .processing_warnings
-            .iter()
-            .any(|w| w.message.contains("symbol-noise"))
-    );
-}
-
-/// Known gap: a photograph page that follows a native-text page is read by the mixed route, which
-/// does not prune. This pins today's behaviour so that closing the gap is a deliberate change.
-#[tokio::test]
-async fn the_mixed_route_does_not_prune_a_photograph_page_yet() {
-    let content = read(MIXED_PDF, "application/pdf", OutputFormat::Plain).await;
-    let (prose, photo) = content.split_once("next month.").expect("prose page");
-    assert!(prose.contains("annual budget"));
-    assert!(
-        photo.lines().filter(|line| !line.trim().is_empty()).count() >= 30,
-        "{photo:?}"
-    );
+    assert!(prune_warnings(&document).is_empty());
 }

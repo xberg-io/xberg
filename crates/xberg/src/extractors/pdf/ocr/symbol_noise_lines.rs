@@ -16,14 +16,22 @@ const MIN_LINES: usize = 8;
 const MIN_WORD_LETTERS: usize = 3;
 /// A line made of one token needs one more letter: nothing around it vouches for a bare trigram.
 const MIN_LONE_WORD_LETTERS: usize = 4;
-/// Two-letter English function words that make a short line such as `I am` or `Go to` a phrase.
-const FUNCTION_WORDS: [&str; 24] = [
-    "am", "an", "as", "at", "be", "by", "do", "go", "he", "if", "in", "is", "it", "me", "my", "no", "of", "on", "or",
-    "so", "to", "up", "us", "we",
+/// English function words that let a short line such as `I am` or `Go to` count as a phrase.
+/// English-only: the same short words of another Latin-script language (`de la`) are pruned.
+const FUNCTION_WORDS: [&str; 26] = [
+    "a", "am", "an", "as", "at", "be", "by", "do", "go", "he", "i", "if", "in", "is", "it", "me", "my", "no", "of",
+    "on", "or", "so", "to", "up", "us", "we",
 ];
-const OPERATORS: [&str; 12] = [
-    "=", "+", "-", "*", "/", "<", ">", "\u{2264}", "\u{2265}", "\u{d7}", "\u{f7}", "\u{2260}",
+/// Operators that, between two operands, make a line an equation or a sum. `-`, `*` and `/` are
+/// left out: Tesseract draws them from rules and specks, giving `fragment - fragment` noise.
+const OPERATORS: [&str; 9] = [
+    "=", "+", "<", ">", "\u{2264}", "\u{2265}", "\u{d7}", "\u{f7}", "\u{2260}",
 ];
+/// Single letters that look like a vertical stroke or a ring and are what texture reads as, so
+/// they do not count as an equation variable (`i - l`).
+const STROKE_LETTERS: [char; 6] = ['i', 'l', 'j', 'o', 'I', 'O'];
+/// Contraction endings (`I'm`, `it's`, `don't`, `we'll`, `they're`, `I've`, `he'd`).
+const CONTRACTION_ENDINGS: [&str; 7] = ["m", "s", "t", "d", "ll", "re", "ve"];
 
 /// Scripts written without spaces between words, where one character can be a whole word.
 fn is_unspaced_script(c: char) -> bool {
@@ -49,39 +57,78 @@ fn is_non_latin_letter(c: char) -> bool {
     c.is_alphabetic() && code >= 0x0250 && !(0x1E00..=0x1EFF).contains(&code)
 }
 
-/// `am`, `Go` and `to` count as words only inside a line of two or more purely alphabetic tokens.
+/// The token without surrounding punctuation (`"Go`, `to.`, `(am)`).
+fn core(token: &str) -> &str {
+    token.trim_matches(|c: char| !c.is_alphanumeric())
+}
+
+fn letter_count(token: &str) -> usize {
+    token.chars().filter(|c| c.is_alphabetic()).count()
+}
+
+fn has_vowel(token: &str) -> bool {
+    token.chars().any(|c| "aeiouyAEIOUY".contains(c))
+}
+
 fn is_function_word(token: &str) -> bool {
-    FUNCTION_WORDS.iter().any(|word| {
-        token == *word
-            || token
-                .strip_prefix(|c: char| c.is_uppercase())
-                .is_some_and(|rest| rest == &word[1..])
-    })
+    FUNCTION_WORDS.iter().any(|word| word.eq_ignore_ascii_case(token))
 }
 
-fn is_word_like(token: &str, min_letters: usize, in_phrase: bool) -> bool {
+fn is_contraction(token: &str) -> bool {
+    let Some((head, tail)) = token.split_once(['\'', '\u{2019}']) else {
+        return false;
+    };
+    !head.is_empty()
+        && head.chars().all(char::is_alphabetic)
+        && CONTRACTION_ENDINGS
+            .iter()
+            .any(|ending| ending.eq_ignore_ascii_case(tail))
+}
+
+fn is_word_like(token: &str, min_letters: usize) -> bool {
+    let token = core(token);
     token.chars().any(|c| is_unspaced_script(c) || is_non_latin_letter(c))
-        || token.chars().filter(|c| c.is_alphabetic()).count() >= min_letters
-        || (in_phrase && is_function_word(token))
+        || letter_count(token) >= min_letters
+        || is_contraction(token)
 }
 
-fn is_alphanumeric_token(token: &str) -> bool {
-    token.chars().any(char::is_alphanumeric)
+/// An English phrase: two or more purely alphabetic tokens, each a function word or a word of 3 or
+/// more letters with a vowel, and at least one of them a function word of 2 or more letters. The
+/// vowel and length conditions keep `fragment word` junk such as `ee so` or `rs or` out.
+fn is_english_phrase(tokens: &[&str]) -> bool {
+    let cores: Vec<&str> = tokens.iter().map(|token| core(token)).collect();
+    cores.len() >= 2
+        && cores.iter().all(|c| {
+            c.chars().all(char::is_alphabetic)
+                && (is_function_word(c) || (letter_count(c) >= MIN_WORD_LETTERS && has_vowel(c)))
+        })
+        && cores.iter().any(|c| c.chars().count() >= 2 && is_function_word(c))
+}
+
+/// An operand of an equation: a digit-bearing token, a word of 3 or more letters, or one letter
+/// that is not a stroke-like glyph (`x`, `y`, `a`, `b`).
+fn is_operand(token: &str) -> bool {
+    let token = core(token);
+    let mut letters = token.chars().filter(|c| c.is_alphabetic());
+    token.chars().any(|c| c.is_numeric())
+        || letter_count(token) >= MIN_WORD_LETTERS
+        || (token.chars().count() == 1 && letters.next().is_some_and(|c| !STROKE_LETTERS.contains(&c)))
 }
 
 fn has_operator_between_operands(tokens: &[&str]) -> bool {
     tokens
         .windows(3)
-        .any(|w| OPERATORS.contains(&w[1]) && is_alphanumeric_token(w[0]) && is_alphanumeric_token(w[2]))
+        .any(|w| OPERATORS.contains(&w[1]) && is_operand(w[0]) && is_operand(w[2]))
 }
 
 /// A line is symbol noise when fewer than half its tokens are word-shaped and it holds no digit,
-/// no character of an unspaced script and no operator between two operands.
+/// no character of an unspaced script, no equation (`x = y`) and is not an English phrase.
 fn is_symbol_noise_line(line: &str) -> bool {
     let tokens: Vec<&str> = line.split_whitespace().collect();
     if tokens.is_empty()
         || line.chars().any(|c| c.is_numeric() || is_unspaced_script(c))
         || has_operator_between_operands(&tokens)
+        || is_english_phrase(&tokens)
     {
         return false;
     }
@@ -90,11 +137,7 @@ fn is_symbol_noise_line(line: &str) -> bool {
     } else {
         MIN_WORD_LETTERS
     };
-    let in_phrase = tokens.len() >= 2 && tokens.iter().all(|token| token.chars().all(char::is_alphabetic));
-    let words = tokens
-        .iter()
-        .filter(|token| is_word_like(token, min_letters, in_phrase))
-        .count();
+    let words = tokens.iter().filter(|token| is_word_like(token, min_letters)).count();
     words * 2 < tokens.len()
 }
 
@@ -173,7 +216,9 @@ pub(super) fn prune_paragraphs(paragraphs: &mut Vec<PdfParagraph>) {
 }
 
 /// Rebuilds an element's text without its noise lines and moves each annotation that sits
-/// inside a surviving line to that line's new offset; one spanning a removed line is dropped.
+/// inside one surviving line to that line's new offset. An annotation that crosses a line
+/// boundary is dropped, even between two surviving lines: its byte range has no single new
+/// offset once the lines between or around it are gone.
 #[cfg(all(feature = "ocr", feature = "pdf"))]
 fn prune_element_text(element: &mut crate::types::internal::InternalElement) -> bool {
     let mut kept = String::with_capacity(element.text.len());
@@ -313,7 +358,16 @@ mod tests {
 
     #[test]
     fn flags_fragment_and_symbol_lines() {
-        for line in ["a", "mal", "# ae", "ef \"ae Car Sa % ey Bo ary \"dl", "~", "I", "ie ee"] {
+        for line in [
+            "a",
+            "mal",
+            "# ae",
+            "ef \"ae Car Sa % ey Bo ary \"dl",
+            "~",
+            "I",
+            "ie ee",
+            "No.",
+        ] {
             assert!(is_symbol_noise_line(line), "{line}");
         }
     }
@@ -346,8 +400,41 @@ mod tests {
     }
 
     #[test]
-    fn keeps_short_phrases_and_math() {
-        assert_kept_exactly(&["I am", "Go to", "x = y", "a + b"]);
+    fn keeps_equations_between_variables_and_sums() {
+        assert_kept_exactly(&["x = y", "a + b", "n < m", "total = cost"]);
+    }
+
+    #[test]
+    fn prunes_fragment_operator_fragment_lines() {
+        for line in ["ae - ee", "i - l", "oe = ie", "a * e", "= -", "ee + oe"] {
+            assert!(is_symbol_noise_line(line), "{line}");
+        }
+        let text = page(&["x = y"], 12) + "\n\nae - ee\n\ni - l\n\noe = ie";
+        assert_eq!(prune_text(&text).0, "x = y");
+    }
+
+    #[test]
+    fn keeps_english_phrases_with_punctuation_case_and_contractions() {
+        assert_kept_exactly(&[
+            "I am",
+            "Go to",
+            "I am.",
+            "Go to.",
+            "I'm",
+            "IS IT",
+            "We go to",
+            "\"Go to\"",
+            "it\u{2019}s",
+        ]);
+    }
+
+    #[test]
+    fn prunes_a_function_word_beside_a_fragment() {
+        for line in ["ee so", "rs or", "ie it", "oe of", "a a", "de la", "zz to"] {
+            assert!(is_symbol_noise_line(line), "{line}");
+        }
+        let text = page(&["Go to."], 12) + "\n\nee so\n\nrs or";
+        assert_eq!(prune_text(&text).0, "Go to.");
     }
 
     #[test]

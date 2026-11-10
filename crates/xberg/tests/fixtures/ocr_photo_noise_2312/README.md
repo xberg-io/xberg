@@ -5,4 +5,7 @@ six lines as a native Helvetica 12 text layer. Neither contains a photograph, so
 filter must leave their text unchanged.
 
 `prose-then-photo.pdf` has a native-text page followed by a page holding only a 1275 x 1650
-JPEG (quality 60) of random noise at four scales, drawn across the page. It pins the mixed route.
+JPEG (quality 60) of random noise at four scales, drawn across the page. It covers a photograph page after native text.
+
+`photo-only.pdf` is the second page of `prose-then-photo.pdf` on its own, generated from the same
+image, and is the control for it.
