@@ -5622,16 +5622,23 @@ fn word_sequence<'a>(texts: impl IntoIterator<Item = &'a str>) -> Vec<String> {
         .collect()
 }
 
-/// Count the words that two to [`MAX_JOINED_PARTS`] neighbouring words of the sequence make when
-/// run together. A word that a cell joins or a hyphen repair rebuilds is one of these. ~keep
-fn add_joined_words(words: &[String], counts: &mut WordCounts) {
+/// The occurrences a reading order holds: every word once for each copy, and every word that two to
+/// [`MAX_JOINED_PARTS`] neighbouring words make when run together. A word that a cell joins or a
+/// hyphen repair rebuilds is one of these. The page, the text no table carries and every table
+/// are counted by this one function, each in its own reading order, so a segment seam on the page
+/// and a cell seam in a table are the same kind of seam and a representation is never counted
+/// twice. ~keep
+fn count_occurrences(words: &[String]) -> WordCounts {
+    let mut counts = WordCounts::new();
     for start in 0..words.len() {
+        *counts.entry(words[start].clone()).or_default() += 1;
         let mut joined = words[start].clone();
         for next in words.iter().skip(start + 1).take(MAX_JOINED_PARTS - 1) {
             joined.push_str(next);
             *counts.entry(joined.clone()).or_default() += 1;
         }
     }
+    counts
 }
 
 fn table_word_counts(table: &crate::types::Table) -> WordCounts {
@@ -5683,25 +5690,17 @@ fn holds_distinct_rows(left: &crate::types::Table, right: &crate::types::Table) 
     (shared as f64) < SHARED_ROW_FRACTION * small_rows.len() as f64
 }
 
-/// What one page prints, read once per call: each word's copies, and the words that neighbouring
-/// page words make when run together, for words that a cell joins or repairs.
-struct PageText {
-    words: WordCounts,
-    joined: WordCounts,
-}
-
-/// What one table holds: its words, the words its cells join, and where it carries page text.
+/// What one table holds: its words, its occurrences in cell order, and where it carries page text.
 struct TableText {
     words: WordCounts,
-    joined: WordCounts,
+    occurrences: WordCounts,
     coverage: Option<TableCoverage>,
 }
 
-/// The page text that no live table of the page carries, for one set of live tables.
+/// The occurrences of the page text that no live table of the page carries, for one set of live tables.
 struct LeftoverText {
     live: Vec<usize>,
-    words: WordCounts,
-    joined: WordCounts,
+    occurrences: WordCounts,
 }
 
 /// The reads for the overlap test. Each page and table is read once for the whole call. The text
@@ -5710,7 +5709,7 @@ struct LeftoverText {
 /// dropped one, because that sum depends on which table is dropped.
 struct OverlapEvidence<'a> {
     page_segments: &'a [Vec<SegmentData>],
-    pages: ahash::AHashMap<usize, Option<PageText>>,
+    pages: ahash::AHashMap<usize, Option<WordCounts>>,
     tables: ahash::AHashMap<usize, TableText>,
     leftovers: ahash::AHashMap<u32, LeftoverText>,
 }
@@ -5778,19 +5777,15 @@ impl<'a> OverlapEvidence<'a> {
         }
     }
 
-    fn page(&mut self, page_index: usize) -> Option<&PageText> {
+    /// The occurrences of the page text, or `None` when the page has no words.
+    fn page(&mut self, page_index: usize) -> Option<&WordCounts> {
         let page_segments = self.page_segments;
         self.pages
             .entry(page_index)
             .or_insert_with(|| {
                 let segments = page_segments.get(page_index)?;
-                let texts = || segments.iter().map(|segment| segment.text.as_str());
-                let words = count_words(texts());
-                (!words.is_empty()).then(|| {
-                    let mut joined = WordCounts::new();
-                    add_joined_words(&word_sequence(texts()), &mut joined);
-                    PageText { words, joined }
-                })
+                let words = word_sequence(segments.iter().map(|segment| segment.text.as_str()));
+                (!words.is_empty()).then(|| count_occurrences(&words))
             })
             .as_ref()
     }
@@ -5798,13 +5793,10 @@ impl<'a> OverlapEvidence<'a> {
     fn table(&mut self, tables: &[crate::types::Table], index: usize) -> &TableText {
         self.tables.entry(index).or_insert_with(|| {
             let table = &tables[index];
-            let mut joined = WordCounts::new();
-            for cell in table.cells.iter().flatten() {
-                add_joined_words(&word_sequence([cell.as_str()]), &mut joined);
-            }
+            let words = word_sequence(table.cells.iter().flatten().map(String::as_str));
             TableText {
                 words: table_word_counts(table),
-                joined,
+                occurrences: count_occurrences(&words),
                 coverage: table_coverage(table),
             }
         })
@@ -5830,12 +5822,9 @@ impl<'a> OverlapEvidence<'a> {
                 .filter(|segment| !segment_is_carried(segment, coverage.iter().copied()))
                 .map(|segment| segment.text.as_str())
                 .collect();
-            let mut joined = WordCounts::new();
-            add_joined_words(&word_sequence(texts.iter().copied()), &mut joined);
             let leftover = LeftoverText {
                 live: live.to_vec(),
-                words: count_words(texts.iter().copied()),
-                joined,
+                occurrences: count_occurrences(&word_sequence(texts.iter().copied())),
             };
             self.leftovers.insert(page_number, leftover);
         }
@@ -5852,8 +5841,9 @@ impl<'a> OverlapEvidence<'a> {
     ///
     /// A cell can join or repair words that the page prints apart (two segments in one cell, a
     /// hyphen repair). The page prints a word once for each whole copy and once for each run of two
-    /// to four neighbouring page words that spell it, and the rest of the page is counted the same
-    /// way. A word that the page prints in neither form is new, so a short word never matches inside
+    /// to four neighbouring page words that spell it. The page, the text no live table carries and
+    /// each table are counted by the same function, each in its own reading order, so one printed
+    /// copy is one occurrence however a table or the page splits it. A word that the page prints in neither form is new, so a short word never matches inside
     /// a longer one. Live tables whose boxes nearly coincide are one region read twice and count
     /// once, so the order of the tables does not change the rest of the page. `None` means no
     /// evidence: the table has no cell text, the page has no text, or the page is not in the text.
@@ -5881,28 +5871,22 @@ impl<'a> OverlapEvidence<'a> {
             return None;
         }
         let others: Vec<usize> = live.iter().copied().filter(|&index| index != dropped).collect();
-        let mut rest = leftover.words.clone();
-        let mut rest_joined = leftover.joined.clone();
+        let mut rest = leftover.occurrences.clone();
         for group in near_coincident_groups(tables, &others) {
             add_group_max(
                 &mut rest,
-                &group.iter().map(|index| &self.tables[index].words).collect::<Vec<_>>(),
-            );
-            add_group_max(
-                &mut rest_joined,
-                &group.iter().map(|index| &self.tables[index].joined).collect::<Vec<_>>(),
+                &group.iter().map(|index| &self.tables[index].occurrences).collect::<Vec<_>>(),
             );
         }
         let count_of = |counts: &WordCounts, word: &String| counts.get(word).copied().unwrap_or(0);
         let mut new_words = 0usize;
         for (word, &count) in &own.words {
-            let printed = count_of(&page.words, word) + count_of(&page.joined, word);
+            let printed = count_of(page, word);
             if printed == 0 {
                 new_words += count;
                 continue;
             }
-            let elsewhere = count_of(&rest, word) + count_of(&rest_joined, word);
-            new_words += count.min(printed.saturating_sub(elsewhere));
+            new_words += count.min(printed.saturating_sub(count_of(&rest, word)));
         }
         Some(new_words as f64 >= NEW_WORD_FRACTION * own_total as f64)
     }
