@@ -5605,13 +5605,34 @@ fn count_words<'a>(texts: impl IntoIterator<Item = &'a str>) -> WordCounts {
     counts
 }
 
-/// The texts' letters and digits run together, in order, with the same ligature expansion as
-/// [`count_words`]. A word that a cell joins or a hyphen repair rebuilds is a substring of it. ~keep
-fn glyph_run<'a>(texts: impl IntoIterator<Item = &'a str>) -> String {
+/// The most whole words that one joined word can be made of. A cell joins a few page segments
+/// ("Estimated" and "Increases"), not a line. ~keep
+const MAX_JOINED_PARTS: usize = 4;
+
+/// The words of the texts in reading order, normalized the way [`count_words`] counts them. ~keep
+fn word_sequence<'a>(texts: impl IntoIterator<Item = &'a str>) -> Vec<String> {
     texts
         .into_iter()
-        .map(|text| normalize_for_table_coverage(&expand_ligatures(text, false)))
+        .flat_map(|text| {
+            expand_ligatures(text, false)
+                .split_whitespace()
+                .map(normalize_for_table_coverage)
+                .filter(|word| !word.is_empty())
+                .collect::<Vec<_>>()
+        })
         .collect()
+}
+
+/// Count the words that two to [`MAX_JOINED_PARTS`] neighbouring words of the sequence make when
+/// run together. A word that a cell joins or a hyphen repair rebuilds is one of these. ~keep
+fn add_joined_words(words: &[String], counts: &mut WordCounts) {
+    for start in 0..words.len() {
+        let mut joined = words[start].clone();
+        for next in words.iter().skip(start + 1).take(MAX_JOINED_PARTS - 1) {
+            joined.push_str(next);
+            *counts.entry(joined.clone()).or_default() += 1;
+        }
+    }
 }
 
 fn table_word_counts(table: &crate::types::Table) -> WordCounts {
@@ -5663,14 +5684,15 @@ fn holds_distinct_rows(left: &crate::types::Table, right: &crate::types::Table) 
     (shared as f64) < SHARED_ROW_FRACTION * small_rows.len() as f64
 }
 
-/// What one page prints, counted once per page: each word's copies, and the letters and digits run
-/// together for words that a cell joins or repairs.
+/// What one page prints, read once per call: each word's copies, and the words that neighbouring
+/// page words make when run together, for words that a cell joins or repairs.
 struct PageText {
     words: WordCounts,
-    glyphs: String,
+    joined: WordCounts,
 }
 
-/// Per-page and per-table facts for the overlap test, each computed at most once per call.
+/// The page and table reads for the overlap test, each done at most once per call. A call still
+/// recomputes the live tables, the carried segments and the rest-of-page counts.
 struct OverlapEvidence<'a> {
     page_segments: &'a [Vec<SegmentData>],
     pages: ahash::AHashMap<usize, Option<PageText>>,
@@ -5705,9 +5727,10 @@ impl<'a> OverlapEvidence<'a> {
         let page = page_segments.get(page_index).and_then(|segments| {
             let texts = || segments.iter().map(|segment| segment.text.as_str());
             let words = count_words(texts());
-            (!words.is_empty()).then(|| PageText {
-                words,
-                glyphs: glyph_run(texts()),
+            (!words.is_empty()).then(|| {
+                let mut joined = WordCounts::new();
+                add_joined_words(&word_sequence(texts()), &mut joined);
+                PageText { words, joined }
             })
         });
         self.pages.insert(page_index, page);
@@ -5733,11 +5756,12 @@ impl<'a> OverlapEvidence<'a> {
     /// is the other live tables on the page and the text no live table suppresses. The table stays
     /// when at least [`NEW_WORD_FRACTION`] of its words are new.
     ///
-    /// A cell can join or repair words that the page prints apart ("USD" and "1,000" in one cell, a
-    /// hyphen or ligature repair). A word with no copy among the page words is then looked up in the
-    /// page's letters and digits run together, and compared there against the rest of the page. A word
-    /// that the page does not print in either form is new. `None` means no evidence: the table has no
-    /// cell text, or the page has no text.
+    /// A cell can join or repair words that the page prints apart (two segments in one cell, a
+    /// hyphen repair). A word with no copy among the page words is then looked up among the words
+    /// that two to four neighbouring page words make when run together, and compared there against
+    /// the rest of the page, which is joined the same way. A word that the page does not print in
+    /// either form is new, so a short word never matches inside a longer one. `None` means no
+    /// evidence: the table has no cell text, the page has no text, or the page is not in the text.
     fn holds_unprinted_words(
         &mut self,
         tables: &[crate::types::Table],
@@ -5772,7 +5796,7 @@ impl<'a> OverlapEvidence<'a> {
                 *rest.entry(word.clone()).or_default() += count;
             }
         }
-        let mut rest_glyphs: Option<String> = None;
+        let mut rest_joined: Option<WordCounts> = None;
         let mut new_words = 0usize;
         for (word, &count) in own {
             let printed = page.words.get(word).copied().unwrap_or(0);
@@ -5780,18 +5804,23 @@ impl<'a> OverlapEvidence<'a> {
                 new_words += count.min(printed.saturating_sub(rest.get(word).copied().unwrap_or(0)));
                 continue;
             }
-            let printed_joined = page.glyphs.matches(word.as_str()).count();
+            let printed_joined = page.joined.get(word).copied().unwrap_or(0);
             if printed_joined == 0 {
                 new_words += count;
                 continue;
             }
-            let rest_glyphs = rest_glyphs.get_or_insert_with(|| {
-                let cells = others
-                    .iter()
-                    .flat_map(|&index| tables[index].cells.iter().flatten().map(String::as_str));
-                glyph_run(unsuppressed.iter().copied().chain(cells))
+            let rest_joined = rest_joined.get_or_insert_with(|| {
+                let mut joined = WordCounts::new();
+                add_joined_words(&word_sequence(unsuppressed.iter().copied()), &mut joined);
+                for &index in &others {
+                    for cell in tables[index].cells.iter().flatten() {
+                        add_joined_words(&word_sequence([cell.as_str()]), &mut joined);
+                    }
+                }
+                joined
             });
-            new_words += count.min(printed_joined.saturating_sub(rest_glyphs.matches(word.as_str()).count()));
+            let in_rest = rest_joined.get(word).copied().unwrap_or(0) + rest.get(word).copied().unwrap_or(0);
+            new_words += count.min(printed_joined.saturating_sub(in_rest));
         }
         Some(new_words as f64 >= NEW_WORD_FRACTION * own_total as f64)
     }
