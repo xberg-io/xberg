@@ -91,3 +91,7 @@ appending the number could move it past suffix prose. Single OCR tokens remain
 intact and can still appear beside a recovered number. The ordering control
 uses readable prose on both sides of the painted digit, compares the result with
 the primary-only read, and retains the standalone top/bottom recovery positives.
+
+Recovery requires complete located paragraph text and exactly one geometric
+line owner. An overlapping line remains ambiguous even if its text, font scale
+or ordering makes it ineligible for insertion.

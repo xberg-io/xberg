@@ -58,16 +58,37 @@ fn should_keep_authoritative_text_whose_located_segments_are_incomplete() {
     let mut paragraphs = [paragraph("VOU retained tail", "VOU")];
     assert!(!insert(vec![number("០", 30.0)], &mut paragraphs, (1.0, 1.0), 100));
     assert_eq!(paragraphs[0].text, "VOU retained tail");
+    let mut unlocated = paragraph("unlocated ០", "");
+    unlocated.lines.clear();
+    let mut paragraphs = [unlocated, paragraph("VOU", "VOU")];
+    let before = super::super::document::ocr_paragraphs_plain_text(&paragraphs);
+    assert!(!insert(vec![number("០", 30.0)], &mut paragraphs, (1.0, 1.0), 100));
+    assert_eq!(super::super::document::ocr_paragraphs_plain_text(&paragraphs), before);
 }
 
 #[test]
 fn should_not_invent_an_owner_when_two_ocr_lines_overlap() {
-    let mut paragraphs = [paragraph("VOU", "VOU"), paragraph("VOU", "VOU")];
-    assert!(!insert(vec![number("០", 30.0)], &mut paragraphs, (1.0, 1.0), 100));
-    assert_eq!(
-        super::super::document::ocr_paragraphs_plain_text(&paragraphs),
-        "VOU\n\nVOU"
-    );
+    for text in ["VOU", "Amount O due", "០"] {
+        assert_overlapping_owner_is_refused(paragraph(text, text));
+    }
+    for font_size in [0.0, -1.0, f32::NAN, f32::INFINITY] {
+        let mut first = paragraph("VOU", "VOU");
+        first.lines[0].dominant_font_size = font_size;
+        assert_overlapping_owner_is_refused(first);
+    }
+    let mut first = paragraph("right left", "right");
+    first.lines[0].segments[0].x = 80.0;
+    first.lines[0].segments.push(segment("left"));
+    assert_overlapping_owner_is_refused(first);
+}
+
+fn assert_overlapping_owner_is_refused(first: PdfParagraph) {
+    let other = paragraph("VOU", "VOU");
+    for mut paragraphs in [[first.clone(), other.clone()], [other, first]] {
+        let before = super::super::document::ocr_paragraphs_plain_text(&paragraphs);
+        assert!(!insert(vec![number("០", 30.0)], &mut paragraphs, (1.0, 1.0), 100));
+        assert_eq!(super::super::document::ocr_paragraphs_plain_text(&paragraphs), before);
+    }
 }
 
 #[test]

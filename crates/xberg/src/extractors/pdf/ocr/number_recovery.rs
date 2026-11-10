@@ -399,7 +399,14 @@ fn crop_number(raster: &image::DynamicImage, media: Rect, bbox: Rect, budget: us
 }
 
 fn insert(numbers: Vec<Number>, paragraphs: &mut [PdfParagraph], scale: (f32, f32), max_work: usize) -> bool {
-    if !scale.0.is_finite() || !scale.1.is_finite() || scale.0 <= 0.0 || scale.1 <= 0.0 {
+    if !scale.0.is_finite()
+        || !scale.1.is_finite()
+        || scale.0 <= 0.0
+        || scale.1 <= 0.0
+        || paragraphs
+            .iter()
+            .any(|paragraph| !located_text_covers_paragraph(paragraph))
+    {
         return false;
     }
     let lines = paragraphs.iter().map(|paragraph| paragraph.lines.len()).sum::<usize>();
@@ -415,15 +422,14 @@ fn insert(numbers: Vec<Number>, paragraphs: &mut [PdfParagraph], scale: (f32, f3
                 number.bbox.width / scale.0,
                 number.bbox.height / scale.1,
             );
-            let mut owners = paragraphs.iter().enumerate().flat_map(|(paragraph, value)| {
-                value
-                    .lines
-                    .iter()
-                    .enumerate()
-                    .filter_map(move |(line, value)| line_owns(value, bbox).then_some((paragraph, line)))
-            });
+            let mut owners =
+                paragraphs.iter().enumerate().flat_map(|(paragraph, value)| {
+                    value.lines.iter().enumerate().filter_map(move |(line, value)| {
+                        line_geometrically_owns(value, bbox).then_some((paragraph, line))
+                    })
+                });
             let (paragraph, line) = owners.next()?;
-            if owners.next().is_some() || !located_text_covers_paragraph(&paragraphs[paragraph]) {
+            if owners.next().is_some() || !line_accepts_number(&paragraphs[paragraph].lines[line], bbox) {
                 return None;
             }
             Some((paragraph, line, number, bbox))
@@ -481,13 +487,10 @@ fn located_text_covers_paragraph(paragraph: &PdfParagraph) -> bool {
             .flat_map(|segment| segment.text.split_whitespace()))
 }
 
-fn line_owns(line: &PdfLine, bbox: Rect) -> bool {
+fn line_accepts_number(line: &PdfLine, bbox: Rect) -> bool {
     if !line.dominant_font_size.is_finite() || line.dominant_font_size <= 0.0 {
         return false;
     }
-    let Some(first) = line.segments.first() else {
-        return false;
-    };
     if !line.segments.windows(2).all(|pair| pair[0].x <= pair[1].x) {
         return false;
     }
@@ -499,6 +502,13 @@ fn line_owns(line: &PdfLine, bbox: Rect) -> bool {
     }) {
         return false;
     }
+    true
+}
+
+fn line_geometrically_owns(line: &PdfLine, bbox: Rect) -> bool {
+    let Some(first) = line.segments.first() else {
+        return false;
+    };
     let bounds = line.segments.iter().fold(
         Rect::new(first.x, first.y, first.width, first.height),
         |bounds, segment| bounds.union(&Rect::new(segment.x, segment.y, segment.width, segment.height)),
