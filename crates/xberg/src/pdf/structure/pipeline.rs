@@ -5811,7 +5811,7 @@ impl<'a> OverlapEvidence<'a> {
     }
 
     /// The text of the page that none of the live tables carries. Read again only when the live set changes.
-    fn leftover(&mut self, tables: &[crate::types::Table], page_number: u32, live: &[usize]) -> &LeftoverText {
+    fn leftover(&mut self, page_number: u32, live: &[usize]) -> &LeftoverText {
         if self
             .leftovers
             .get(&page_number)
@@ -5872,7 +5872,7 @@ impl<'a> OverlapEvidence<'a> {
             self.table(tables, index);
         }
         self.page(page_index)?;
-        self.leftover(tables, page_number, &live);
+        self.leftover(page_number, &live);
         let page = self.pages[&page_index].as_ref()?;
         let leftover = &self.leftovers[&page_number];
         let own = &self.tables[&dropped];
