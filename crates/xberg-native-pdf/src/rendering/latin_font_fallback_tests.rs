@@ -682,3 +682,31 @@ fn a_form_whose_resources_reference_cannot_load_logs_its_object_number() {
     assert_eq!(ours[0].get("object_number").map(String::as_str), Some("5"));
     assert_eq!(ours[0].get("error_code").map(String::as_str), Some("parse_error"));
 }
+
+/// GH#2709: a run drawn without font info read its shaped advances, which are in font units, as thousandths
+/// of an em. Every glyph after the first landed far off the page. The run names `/F9`, which the page's
+/// resources do not hold.
+#[test]
+fn a_run_without_font_info_keeps_its_glyphs_at_their_shaped_spacing() {
+    let doc = page_pdf(
+        (100, 40),
+        b"BT /F9 12 Tf 10 14 Td (308) Tj ET",
+        vec![b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_vec()],
+    );
+    let image = render_without_system_fonts(&doc);
+    let width = image.width as usize;
+    let ink_columns: Vec<usize> = (0..width)
+        .filter(|&x| {
+            (0..image.height as usize).any(|y| has_ink(image.data[(y * width + x) * 4..][..4].try_into().unwrap()))
+        })
+        .collect();
+    let (first, last) = (
+        *ink_columns.first().expect("the run has ink"),
+        *ink_columns.last().unwrap(),
+    );
+    assert_eq!(separate_ink_columns(&image), 3, "all three glyphs are drawn");
+    assert!(
+        first >= 10 && last < 10 + 3 * 12,
+        "ink spans {first}..={last}, within three em of the origin"
+    );
+}

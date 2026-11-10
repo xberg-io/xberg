@@ -227,6 +227,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Keep a word whole when a producer sets the text matrix back over it before a large TJ offset.** (GH#2322)
   Some producers set the text matrix to the start of a run they already drew and reach the next glyph with a large leading offset in a TJ array. That offset no longer adds a space where the matrix points, so words such as `benefits` no longer come out as `benefi ts`. When the offset reaches past the end of that run by a word gap, the space goes at the end of the run. Otherwise the gap between the real letters on each side decides the space. A lead that follows such a matrix also ends the run at its glyphs when it is a lead at least as large as the word-boundary gap (GH#2690). Not covered: a space glyph that lands inside a ligature after the matrix is set back still splits the word (`defi ne`), tracked in GH#2322.
+- **(pdf): Keep every glyph of a text run that the renderer draws without font info.** (#2709)
+  The renderer read the run's shaped advances, which are in font units, as thousandths of an em, so the glyphs after the first landed far off the page and a raster for OCR lost them. It now converts the advances by the font's units per em.
 - **(pdf): Draw every digit of a page number that a form XObject paints.** (#2685)
   A form whose resource dictionary is a separate PDF object never had its fonts or colour spaces loaded for rendering, so the renderer spaced its glyphs by raw font units and drew only the first one. The renderer now loads that dictionary first, and logs a warning with the object number if it cannot read it.
 - **(pdf): Read a block at the right of a page before a block at the left that starts below it.** (#2680)
