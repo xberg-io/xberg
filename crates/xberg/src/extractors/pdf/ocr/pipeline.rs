@@ -691,6 +691,7 @@ pub(crate) async fn extract_mixed_ocr_native_with_probe_reads(
         Option<std::sync::Arc<super::read_reuse::ProbeReads>>,
     ),
 ) -> crate::Result<MixedOcrRun> {
+    let _release_reads = probe_reads.as_ref().and_then(|reads| reads.release_after_final_read());
     let _ = &layout_pages;
     extract_mixed_ocr_native_with_layout_inputs(
         native_text,

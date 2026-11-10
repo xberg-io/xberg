@@ -3353,6 +3353,8 @@ impl PdfExtractor {
                     // silently suppress page OCR on scanned PDFs, leaving `pages[].content`
                     // empty (#1576). `RunFallbackOnPages` below has never read this field;
                     // this now matches it. ~keep
+                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                    let release_reads = probe_reads.as_ref().and_then(|reads| reads.release_after_final_read());
                     let whole_read = run_ocr_with_layout_pages(
                         content,
                         config,
@@ -3383,6 +3385,8 @@ impl PdfExtractor {
                         markdown_layout_acceleration_override.take(),
                     )
                     .await;
+                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                    drop(release_reads);
                     // Some marked pages lost their script to the whole read while others did not
                     // (a scan beside a native page): the pages go through the per-page route, which
                     // keeps the native text of the marked ones. That is a second OCR run over the

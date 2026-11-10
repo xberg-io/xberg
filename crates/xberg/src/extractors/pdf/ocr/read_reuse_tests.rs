@@ -3,14 +3,13 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 
 use super::*;
 use crate::cancellation::CancellationToken;
-use crate::plugins::Plugin;
+use crate::plugins::{OcrBackendType, Plugin};
 
 struct Fake {
     kind: OcrBackendType,
     calls: AtomicUsize,
-    version: AtomicUsize,
     fail: AtomicBool,
-    bump_version_on_read: AtomicBool,
+    change_model_on_read: AtomicBool,
     policy_sensitive: AtomicBool,
     cancel_on_version: parking_lot::Mutex<Option<CancellationToken>>,
 }
@@ -20,9 +19,8 @@ impl Fake {
         Arc::new(Self {
             kind,
             calls: AtomicUsize::new(0),
-            version: AtomicUsize::new(0),
             fail: AtomicBool::new(false),
-            bump_version_on_read: AtomicBool::new(false),
+            change_model_on_read: AtomicBool::new(false),
             policy_sensitive: AtomicBool::new(false),
             cancel_on_version: parking_lot::Mutex::new(None),
         })
@@ -41,7 +39,7 @@ impl Plugin for Fake {
         if let Some(token) = self.cancel_on_version.lock().as_ref() {
             token.cancel();
         }
-        format!("v{}", self.version.load(SeqCst))
+        "v0".to_string()
     }
     fn initialize(&self) -> crate::Result<()> {
         Ok(())
@@ -55,8 +53,9 @@ impl Plugin for Fake {
 impl OcrBackend for Fake {
     async fn process_image(&self, image: &[u8], config: &OcrConfig) -> crate::Result<ExtractedDocument> {
         let call = self.calls.fetch_add(1, SeqCst) + 1;
-        if self.bump_version_on_read.load(SeqCst) {
-            self.version.fetch_add(1, SeqCst);
+        if self.change_model_on_read.load(SeqCst) {
+            let model = config.tessdata_path.as_ref().unwrap().join("eng.traineddata");
+            std::fs::write(model, b"replacement model written during recognition").unwrap();
         }
         if self.fail.load(SeqCst) {
             return Err(crate::XbergError::ocr("fake backend failure".to_string()));
@@ -66,7 +65,7 @@ impl OcrBackend for Fake {
             ..Default::default()
         };
         if self.policy_sensitive.load(SeqCst) {
-            let day = if config.effective_thresholds().discard_suspected_ocr_noise {
+            let day = if config.tesseract_config.as_ref().and_then(|c| c.psm) == Some(3) {
                 "Tuesday"
             } else {
                 "Thursday"
@@ -105,6 +104,7 @@ fn effective_config() -> OcrConfig {
 struct Fixture {
     _models: tempfile::TempDir,
     fake: Arc<Fake>,
+    reader: Arc<dyn OcrBackend>,
     backend: Arc<dyn OcrBackend>,
     original: OcrConfig,
     effective: OcrConfig,
@@ -114,7 +114,11 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let fake = Fake::new(OcrBackendType::Tesseract);
-        let backend: Arc<dyn OcrBackend> = fake.clone();
+        let reader: Arc<dyn OcrBackend> = fake.clone();
+        crate::plugins::ensure_ocr_backends_initialized();
+        let registry = crate::plugins::registry::get_ocr_backend_registry();
+        let backend = registry.read().get("tesseract").unwrap();
+        assert!(registry.read().is_builtin_tesseract(&backend));
         let models = tempfile::tempdir().unwrap();
         std::fs::write(models.path().join("eng.traineddata"), b"fake model a").unwrap();
         let mut effective = effective_config();
@@ -122,6 +126,7 @@ impl Fixture {
         Self {
             _models: models,
             fake,
+            reader,
             backend,
             original: OcrConfig::default(),
             effective,
@@ -133,6 +138,7 @@ impl Fixture {
         Call {
             page,
             backend: &self.backend,
+            reader: &self.reader,
             original: &self.original,
             effective: &self.effective,
             bytes: &self.pixels,
@@ -149,6 +155,7 @@ impl Fixture {
 struct Call<'a> {
     page: u32,
     backend: &'a Arc<dyn OcrBackend>,
+    reader: &'a Arc<dyn OcrBackend>,
     original: &'a OcrConfig,
     effective: &'a OcrConfig,
     bytes: &'a Arc<Vec<u8>>,
@@ -164,7 +171,7 @@ async fn run(reuse: &Arc<ProbeReads>, call: Call<'_>) -> crate::Result<Extracted
         whole_page_raster: call.whole_page_raster,
         correction_degrees: 0,
     };
-    let engine = Arc::clone(call.backend);
+    let engine = Arc::clone(call.reader);
     let config = call.effective.clone();
     let recognize = move |bytes: Arc<Vec<u8>>| async move { engine.process_image(bytes.as_slice(), &config).await };
     read(Some(reuse), identity, Arc::clone(call.bytes), call.cancel, recognize).await
@@ -278,16 +285,13 @@ async fn identity_changes_miss_without_consuming_the_matching_read() {
         ..fixture.call(1)
     };
     assert_miss(&fixture, &reuse, call, "a changed serde-skipped security limit").await;
-    fixture.fake.version.store(1, SeqCst);
-    assert_miss(&fixture, &reuse, fixture.call(1), "a backend version change").await;
-    fixture.fake.version.store(0, SeqCst);
-
     let other = Fake::new(OcrBackendType::Tesseract);
     let other_backend: Arc<dyn OcrBackend> = other.clone();
     run(
         &reuse,
         Call {
             backend: &other_backend,
+            reader: &other_backend,
             ..fixture.call(1)
         },
     )
@@ -328,25 +332,24 @@ async fn cancelled_read_returns_cancelled_without_ocr_or_consuming_the_read() {
 }
 
 #[tokio::test]
-async fn cancellation_during_a_hit_returns_cancelled_without_ocr() {
-    let fixture = Fixture::new();
+async fn plugin_reuse_bypass_does_not_consult_version() {
+    let mut fixture = Fixture::new();
+    fixture.backend = Arc::clone(&fixture.reader);
     let reuse = reuse();
-    fixture.read(&reuse, 1).await.unwrap();
-    reuse.finish(&[1]);
-
     let token = CancellationToken::new();
     *fixture.fake.cancel_on_version.lock() = Some(token.clone());
-    let result = run(
+    run(
         &reuse,
         Call {
             cancel: Some(&token),
             ..fixture.call(1)
         },
     )
-    .await;
-    assert!(token.is_cancelled(), "the backend revision query must have run");
-    assert!(matches!(result, Err(crate::XbergError::Cancelled)));
-    assert_eq!(fixture.fake.calls(), 1, "a cancelled hit must not fall through to OCR");
+    .await
+    .unwrap();
+    assert!(!token.is_cancelled(), "reuse must not call the plugin's version method");
+    assert_eq!(fixture.fake.calls(), 1);
+    assert!(!reuse.finish(&[1]));
 }
 
 #[tokio::test]
@@ -382,27 +385,20 @@ async fn failed_backend_read_is_not_retained() {
 }
 
 #[tokio::test]
-async fn backend_version_change_during_a_read_is_not_retained() {
+async fn model_change_during_a_read_is_not_retained() {
     let fixture = Fixture::new();
     let reuse = reuse();
-    fixture.fake.bump_version_on_read.store(true, SeqCst);
+    fixture.fake.change_model_on_read.store(true, SeqCst);
     fixture.read(&reuse, 1).await.unwrap();
-    fixture.fake.bump_version_on_read.store(false, SeqCst);
+    fixture.fake.change_model_on_read.store(false, SeqCst);
     assert_eq!(
-        fixture.fake.version.load(SeqCst),
-        1,
-        "the read must have changed the version"
+        std::fs::read(fixture._models.path().join("eng.traineddata")).unwrap(),
+        b"replacement model written during recognition"
     );
-    // Restore the keyed version so the post-read revision check alone refuses the entry. ~keep
-    fixture.fake.version.store(0, SeqCst);
-    reuse.finish(&[1]);
+    assert!(!reuse.finish(&[1]), "the post-read check refuses a changed model");
 
     fixture.read(&reuse, 1).await.unwrap();
-    assert_eq!(
-        fixture.fake.calls(),
-        2,
-        "a read whose backend changed under it is not retained"
-    );
+    assert_eq!(fixture.fake.calls(), 2);
 }
 
 #[tokio::test]
@@ -445,6 +441,7 @@ async fn unkeyable_reads_are_never_retained() {
             &reuse,
             Call {
                 backend: &paddle_backend,
+                reader: &paddle_backend,
                 ..fixture.call(3)
             },
         )
@@ -474,9 +471,7 @@ async fn unkeyable_reads_are_never_retained() {
 #[test]
 fn model_identity_tracks_override_traineddata_and_osd() {
     let directory = tempfile::tempdir().unwrap();
-    let environment = crate::ocr::processor::validation::TessdataEnv::from_lookup(|_| None);
-    let languages = ["eng".to_string()];
-    let identity = || model_identity(&languages, Some(directory.path()), &environment);
+    let identity = || model_identity(&ModelFiles::resolve(vec!["eng".into()], Some(directory.path()))?);
     std::fs::write(directory.path().join("eng.traineddata"), b"fake model a").unwrap();
     let first = identity().expect("an override directory holding eng resolves");
     assert_eq!(identity(), Some(first), "unchanged files hash identically");
@@ -603,10 +598,11 @@ async fn stock_builtin_does_not_reuse_a_different_decode_budget() {
 #[tokio::test]
 async fn custom_backend_reads_changed_encoding_even_when_rgb_pixels_match() {
     use image::ImageEncoder;
-    let fixture = Fixture::new();
+    let mut fixture = Fixture::new();
+    fixture.backend = Arc::clone(&fixture.reader);
     let reuse = reuse();
     fixture.read(&reuse, 1).await.unwrap();
-    assert!(reuse.finish(&[1]));
+    assert!(!reuse.finish(&[1]));
     let pixels = image::load_from_memory(fixture.pixels.as_slice()).unwrap().to_rgb8();
     let mut encoded = Vec::new();
     image::codecs::png::PngEncoder::new_with_quality(
@@ -652,6 +648,11 @@ async fn model_change_alone_requires_a_fresh_backend_read() {
     let read = fixture.read(&reuse, 1).await.unwrap();
     assert_eq!(fixture.fake.version(), "v0");
     assert_eq!(fixture.fake.calls(), 2, "only the model bytes changed");
+    assert_eq!(
+        reuse.model_hashes.load(SeqCst),
+        1,
+        "a changed file invalidates the snapshot"
+    );
     assert_eq!(read.content, format!("read 2 of {} bytes", fixture.pixels.len()));
 }
 
@@ -659,16 +660,17 @@ async fn model_change_alone_requires_a_fresh_backend_read() {
 async fn changed_policy_preserves_fresh_source_words_and_table_payload() {
     let mut fixture = Fixture::new();
     fixture.fake.policy_sensitive.store(true, SeqCst);
-    let mut thresholds = fixture.effective.effective_thresholds();
-    thresholds.discard_suspected_ocr_noise = true;
-    fixture.effective.quality_thresholds = Some(thresholds);
+    fixture.effective.tesseract_config = Some(crate::types::TesseractConfig {
+        psm: Some(3),
+        ..Default::default()
+    });
     let reuse = reuse();
     let probe = fixture.read(&reuse, 1).await.unwrap();
     assert_eq!(probe.content, "The committee meets on Tuesday.");
     assert_eq!(probe.tables[0].cells, vec![vec!["Day"], vec!["Tuesday"]]);
     assert!(reuse.finish(&[1]));
     let mut changed = fixture.effective.clone();
-    changed.quality_thresholds.as_mut().unwrap().discard_suspected_ocr_noise = false;
+    changed.tesseract_config.as_mut().unwrap().psm = Some(6);
     let read = run(
         &reuse,
         Call {
@@ -678,7 +680,11 @@ async fn changed_policy_preserves_fresh_source_words_and_table_payload() {
     )
     .await
     .unwrap();
-    assert_eq!(fixture.fake.calls(), 2, "only the effective discard policy changed");
+    assert_eq!(
+        fixture.fake.calls(),
+        2,
+        "only the effective page segmentation mode changed"
+    );
     assert_eq!(read.content, "The committee meets on Thursday.");
     assert_eq!(read.tables[0].cells, vec![vec!["Day"], vec!["Thursday"]]);
     let reused = fixture.read(&reuse, 1).await.unwrap();
@@ -722,5 +728,238 @@ async fn stock_builtin_does_not_reuse_a_different_encoded_working_size() {
         calls.load(SeqCst),
         2,
         "identical RGB can have a different encoded working cost"
+    );
+}
+
+#[tokio::test]
+async fn model_contents_are_hashed_once_for_two_probe_reads_and_two_hits() {
+    let fixture = Fixture::new();
+    let reuse = reuse();
+    for page in [1, 2] {
+        fixture.read(&reuse, page).await.unwrap();
+    }
+    assert!(reuse.finish(&[1, 2]));
+    for page in [1, 2] {
+        fixture.read(&reuse, page).await.unwrap();
+    }
+    assert_eq!(fixture.fake.calls(), 2, "both retained reads must actually be consumed");
+    assert_eq!(
+        reuse.model_hashes.load(SeqCst),
+        1,
+        "hash one model snapshot for the extraction"
+    );
+}
+
+fn fabricated_key(tag: &[u8]) -> ReadKey {
+    ReadKey {
+        digest: blake3::hash(tag),
+        revision: (String::new(), blake3::hash(tag)),
+    }
+}
+
+fn tesseract_typed_backend() -> Arc<dyn OcrBackend> {
+    Fake::new(OcrBackendType::Tesseract)
+}
+
+#[tokio::test]
+async fn tesseract_typed_plugin_that_is_not_the_builtin_reads_every_time() {
+    let mut fixture = Fixture::new();
+    fixture.backend = Arc::clone(&fixture.reader);
+    assert!(matches!(fixture.backend.backend_type(), OcrBackendType::Tesseract));
+    assert!(
+        !crate::plugins::registry::get_ocr_backend_registry()
+            .read()
+            .is_builtin_tesseract(&fixture.backend),
+        "premise: the fake only claims to be Tesseract"
+    );
+    let reuse = reuse();
+    let probe = fixture.read(&reuse, 1).await.unwrap();
+    let retained = reuse.finish(&[1]);
+
+    let final_read = fixture.read(&reuse, 1).await.unwrap();
+    assert_eq!(
+        fixture.fake.calls(),
+        2,
+        "a plugin outside the registry builtin must be invoked for the final read"
+    );
+    assert_eq!(final_read.content, format!("read 2 of {} bytes", fixture.pixels.len()));
+    assert_ne!(final_read.content, probe.content);
+    assert!(!retained);
+    assert_eq!(reuse.model_hashes.load(SeqCst), 0);
+}
+
+fn hidden(formatted: String) -> ExtractedDocument {
+    ExtractedDocument {
+        content: "tiny".to_string(),
+        formatted_content: Some(formatted),
+        ..Default::default()
+    }
+}
+
+fn oversized() -> String {
+    "x".repeat(2 << 20)
+}
+
+fn child_entry() -> crate::types::ArchiveEntry {
+    crate::types::ArchiveEntry {
+        path: "inner.txt".to_string(),
+        mime_type: "text/plain".to_string(),
+        result: Box::new(hidden(oversized())),
+    }
+}
+
+fn image_with_ocr() -> crate::types::ExtractedImage {
+    crate::types::ExtractedImage {
+        ocr_result: Some(Box::new(hidden(oversized()))),
+        ..Default::default()
+    }
+}
+
+fn nested_oversized_reads() -> Vec<(&'static str, ExtractedDocument)> {
+    vec![
+        (
+            "child ArchiveEntry formatted_content",
+            ExtractedDocument {
+                content: "tiny".to_string(),
+                children: Some(vec![child_entry()]),
+                ..Default::default()
+            },
+        ),
+        (
+            "image ocr_result formatted_content",
+            ExtractedDocument {
+                content: "tiny".to_string(),
+                images: Some(vec![image_with_ocr()]),
+                ..Default::default()
+            },
+        ),
+        (
+            "ocr_internal_document child",
+            ExtractedDocument {
+                content: "tiny".to_string(),
+                ocr_internal_document: Some(crate::types::internal::InternalDocument {
+                    children: Some(vec![child_entry()]),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        ),
+        (
+            "internal_document image OCR",
+            ExtractedDocument {
+                content: "tiny".to_string(),
+                internal_document: Some(crate::types::internal::InternalDocument {
+                    images: vec![image_with_ocr()],
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        ),
+    ]
+}
+
+#[test]
+fn nested_skipped_payload_over_the_limit_is_not_retained() {
+    let limit = 1 << 20;
+    assert!(
+        retained_size(&hidden("tiny".to_string()), limit).is_some(),
+        "control: a tiny top-level read fits, so the limit alone refuses nothing"
+    );
+    let backend = tesseract_typed_backend();
+    for (index, (what, document)) in nested_oversized_reads().into_iter().enumerate() {
+        assert!(
+            serde_json::to_vec(&document).unwrap().len() < 1 << 16,
+            "premise: {what} serializes small"
+        );
+        assert_eq!(retained_size(&document, limit), None, "{what} must not pass sizing");
+
+        let reuse = Arc::new(ProbeReads::new(limit));
+        let tag = format!("nested-{index}");
+        reuse.insert(1, Arc::clone(&backend), fabricated_key(tag.as_bytes()), &document);
+        assert!(!reuse.finish(&[1]), "{what} must not be retained");
+        assert!(
+            reuse.take(1, &fabricated_key(tag.as_bytes()), &backend).is_none(),
+            "{what}: the final read has nothing to take and reads fresh"
+        );
+    }
+}
+
+#[test]
+fn retention_cap_does_not_follow_a_huge_requested_content_limit() {
+    let requested = 1 << 30;
+    let reuse = Arc::new(ProbeReads::new(requested));
+    let backend = tesseract_typed_backend();
+    let document = ExtractedDocument {
+        content: "x".repeat(9 << 20),
+        ..Default::default()
+    };
+    let visible = serde_json::to_vec(&document).unwrap().len();
+    assert!(visible > 8 << 20 && visible < requested, "premise: {visible} bytes");
+
+    reuse.insert(1, Arc::clone(&backend), fabricated_key(b"cap"), &document);
+    assert!(
+        !reuse.finish(&[1]),
+        "a 9 MiB read must exceed the dedicated retention cap whatever max_content_size asks for"
+    );
+}
+
+#[test]
+fn insert_clones_the_read_before_waiting_for_the_state_lock() {
+    use std::time::{Duration, Instant};
+    let reuse = reuse();
+    let backend = tesseract_typed_backend();
+    let table = Arc::new(crate::types::Table {
+        cells: vec![vec!["Day".into()], vec!["Tuesday".into()]],
+        ..Default::default()
+    });
+    let document = ExtractedDocument {
+        content: "The committee meets on Tuesday.".to_string(),
+        pages: Some(vec![crate::types::PageContent {
+            page_number: 1,
+            content: "The committee meets on Tuesday.".to_string(),
+            tables: vec![Arc::clone(&table)],
+            image_indices: Vec::new(),
+            image_preprocessing: None,
+            hierarchy: None,
+            is_blank: None,
+            layout_regions: None,
+            speaker_notes: None,
+            section_name: None,
+            sheet_name: None,
+            ocr_confidence: None,
+            native_content: None,
+        }]),
+        ..Default::default()
+    };
+    assert!(serde_json::to_vec(&document).unwrap().len() < 1 << 16);
+    let baseline = Arc::strong_count(&table);
+    let started = std::sync::Barrier::new(2);
+
+    let observed = std::thread::scope(|scope| {
+        let guard = reuse.state.lock();
+        let (reuse, backend, started) = (&reuse, &backend, &started);
+        let worker = scope.spawn(move || {
+            started.wait();
+            reuse.insert(1, Arc::clone(backend), fabricated_key(b"lock"), &document);
+        });
+        started.wait();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut observed = false;
+        while Instant::now() < deadline {
+            if Arc::strong_count(&table) > baseline {
+                observed = true;
+                break;
+            }
+            std::thread::yield_now();
+        }
+        drop(guard);
+        worker.join().unwrap();
+        observed
+    });
+
+    assert!(reuse.finish(&[1]), "the read was retained once the lock was free");
+    assert!(
+        observed,
+        "the retained copy must be made before the State lock is needed, not while another holder blocks it"
     );
 }

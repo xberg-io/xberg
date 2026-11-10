@@ -289,3 +289,67 @@ async fn stock_public_mixed_route_reads_the_wrong_script_page_once() {
         "the final route must consume a retained probe read, not merely run OCR once"
     );
 }
+
+const CLEANUP_CASE: usize = 0x2862_5103;
+
+#[tokio::test]
+async fn final_mixed_route_frees_a_retained_read_it_did_not_take() {
+    let pdf = with_healthy_pages(ARABIC);
+    let stock = stock(CLEANUP_CASE, serde_json::json!({"use_cache": false}));
+    let reuse = Arc::new(ProbeReads::new(1 << 20));
+    let wrong = || ReadKey {
+        digest: blake3::hash(b"not the route's key"),
+        revision: (String::new(), blake3::hash(b"not the route's model")),
+    };
+    reuse.insert(
+        1,
+        Arc::clone(&stock.backend),
+        wrong(),
+        &ExtractedDocument {
+            content: "stale probe read".to_string(),
+            ..Default::default()
+        },
+    );
+    assert!(reuse.finish(&[1]), "premise: page 1 holds a retained read");
+
+    let mut native_text = String::new();
+    let mut boundaries = Vec::new();
+    for (index, text) in ["page one", "native page two", "native page three"].iter().enumerate() {
+        if index > 0 {
+            native_text.push_str("\n\n");
+        }
+        let byte_start = native_text.len();
+        native_text.push_str(text);
+        boundaries.push(crate::types::PageBoundary {
+            byte_start,
+            byte_end: native_text.len(),
+            page_number: index as u32 + 1,
+        });
+    }
+    let config = crate::ExtractionConfig {
+        use_cache: false,
+        ocr: Some(stock.config.clone()),
+        security_limits: Some(limits(CLEANUP_CASE)),
+        ..Default::default()
+    };
+    let _run = super::super::extract_mixed_ocr_native_with_probe_reads(
+        &native_text,
+        &boundaries,
+        (&[1], &[]),
+        &pdf,
+        &config,
+        None,
+        (&[], &[], Some(Arc::clone(&reuse))),
+    )
+    .await
+    .expect("the targeted route runs");
+    assert_eq!(
+        read_counter::reads(CLEANUP_CASE),
+        1,
+        "the route OCRs page 1 itself instead of taking the wrong-key read"
+    );
+    assert!(
+        reuse.state.lock().reads.is_empty(),
+        "a retained read the final route did not take must be freed when the route ends"
+    );
+}

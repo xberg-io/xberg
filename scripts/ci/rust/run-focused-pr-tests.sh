@@ -87,10 +87,10 @@ run_ink_probe_cases() {
     zero_retention_limit_reads_again_and_returns_each_document_intact \
     identity_changes_miss_without_consuming_the_matching_read \
     cancelled_read_returns_cancelled_without_ocr_or_consuming_the_read \
-    cancellation_during_a_hit_returns_cancelled_without_ocr \
+    plugin_reuse_bypass_does_not_consult_version \
     geometry_observer_bypasses_retained_reads \
     failed_backend_read_is_not_retained \
-    backend_version_change_during_a_read_is_not_retained \
+    model_change_during_a_read_is_not_retained \
     unkeyable_reads_are_never_retained \
     model_identity_tracks_override_traineddata_and_osd \
     stock_builtin_reuses_its_own_raw_read_once \
@@ -98,13 +98,19 @@ run_ink_probe_cases() {
     stock_builtin_does_not_reuse_a_different_encoded_working_size \
     custom_backend_reads_changed_encoding_even_when_rgb_pixels_match \
     model_change_alone_requires_a_fresh_backend_read \
-    changed_policy_preserves_fresh_source_words_and_table_payload; do
+    changed_policy_preserves_fresh_source_words_and_table_payload \
+    model_contents_are_hashed_once_for_two_probe_reads_and_two_hits \
+    tesseract_typed_plugin_that_is_not_the_builtin_reads_every_time \
+    nested_skipped_payload_over_the_limit_is_not_retained \
+    retention_cap_does_not_follow_a_huge_requested_content_limit \
+    insert_clones_the_read_before_waiting_for_the_state_lock; do
     run_exact "extractors::pdf::ocr::read_reuse::tests::$test_name" --lib
   done
   run_exact 'extractors::pdf::ocr::read_reuse::stock_tests::stock_raw_read_of_a_text_raster_matches_an_uncached_final_read' --lib
   run_exact 'extractors::pdf::ocr::read_reuse::stock_tests::stock_public_mixed_route_reads_the_wrong_script_page_once' --lib
-  if [ "$((passed - before))" -ne 31 ]; then
-    printf 'Expected 31 executed ink-probe reuse tests, observed %s\n' "$((passed - before))" >&2
+  run_exact 'extractors::pdf::ocr::read_reuse::stock_tests::final_mixed_route_frees_a_retained_read_it_did_not_take' --lib
+  if [ "$((passed - before))" -ne 37 ]; then
+    printf 'Expected 37 executed ink-probe reuse tests, observed %s\n' "$((passed - before))" >&2
     exit 1
   fi
 }
@@ -118,7 +124,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=41
+  expected=47
   run_pdf_cases
   run_ink_probe_cases
   ;;

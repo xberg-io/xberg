@@ -148,6 +148,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(pdf): Reuse matching built-in OCR reads from the ink probe.** (#2862)
+  A final PDF page pass can reuse recognition from the ink probe when its image, settings,
+  and model files match. The final pass still applies its own quality checks and retries.
+
 - **(excel): A workbook over `security_limits.max_table_cells` no longer fails with a security error.** (#2820)
   A workbook whose only sheet, or every sheet, exceeds the limit now returns empty placeholder sheets and a warning per skipped sheet instead of `SecurityError::TooManyCells`. The limit still bounds parsing work and allocation, because a skipped sheet is never materialized, and there is no strict mode to restore the error. CSV, TSV and other table formats are unchanged. A legacy XLS or XLA workbook in which the over-budget sheet carries the same name as another sheet, as the reader decodes the names (including names that differ only by a byte-order mark, NUL characters or code-page decoding), still fails with the security error, because the reader keys sheets by name.
 - **(markdown): Markdown output writes math as `$...$` and `$$...$$` instead of code math.** (#2331)

@@ -1,21 +1,28 @@
 //! Raw reads shared only between one extraction's ink probe and its final page route.
 
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::core::config::OcrConfig;
-use crate::plugins::{OcrBackend, OcrBackendType};
+use crate::plugins::OcrBackend;
 use crate::types::ExtractedDocument;
+
+const MAX_RETAINED_CHARGE: usize = 8 << 20;
+// Allow headroom for owned allocations that take less space in JSON. ~keep
+const SERIALIZED_BYTE_CHARGE: usize = 8;
 
 pub(crate) struct ProbeReads {
     state: parking_lot::Mutex<State>,
-    limit: usize,
+    budget: Arc<tokio::sync::Semaphore>,
+    models: once_cell::sync::OnceCell<Option<ModelSnapshot>>,
+    #[cfg(test)]
+    model_hashes: std::sync::atomic::AtomicUsize,
 }
 
 #[derive(Default)]
 struct State {
     ready: bool,
-    bytes: usize,
     reads: ahash::AHashMap<u32, Entry>,
 }
 
@@ -23,7 +30,7 @@ struct Entry {
     key: blake3::Hash,
     backend: Arc<dyn OcrBackend>,
     document: ExtractedDocument,
-    bytes: usize,
+    _permit: tokio::sync::OwnedSemaphorePermit,
 }
 
 pub(super) struct ReadIdentity<'a> {
@@ -43,16 +50,31 @@ impl ProbeReads {
     pub(in crate::extractors::pdf) fn new(limit: usize) -> Self {
         Self {
             state: Default::default(),
-            limit,
+            budget: Arc::new(tokio::sync::Semaphore::new(limit.min(MAX_RETAINED_CHARGE))),
+            models: Default::default(),
+            #[cfg(test)]
+            model_hashes: Default::default(),
         }
     }
 
     pub(in crate::extractors::pdf) fn finish(&self, contradicted: &[u32]) -> bool {
-        let mut state = self.state.lock();
-        state.reads.retain(|page, _| contradicted.contains(page));
-        state.bytes = state.reads.values().map(|entry| entry.bytes).sum();
-        state.ready = true;
-        !state.reads.is_empty()
+        let (has_reads, discarded) = {
+            let mut state = self.state.lock();
+            let mut discarded = std::mem::take(&mut state.reads);
+            for page in contradicted {
+                if let Some(entry) = discarded.remove(page) {
+                    state.reads.insert(*page, entry);
+                }
+            }
+            state.ready = true;
+            (!state.reads.is_empty(), discarded)
+        };
+        drop(discarded);
+        has_reads
+    }
+
+    pub(in crate::extractors::pdf) fn release_after_final_read(self: &Arc<Self>) -> Option<FinalRead> {
+        self.state.lock().ready.then(|| FinalRead(Arc::clone(self)))
     }
 
     fn may_read(&self, page: u32) -> bool {
@@ -74,31 +96,38 @@ impl ProbeReads {
             return None;
         }
         let entry = state.reads.remove(&page)?;
-        state.bytes -= entry.bytes;
+        drop(state);
         Some(entry.document)
     }
 
     fn insert(&self, page: u32, backend: Arc<dyn OcrBackend>, key: ReadKey, read: &ExtractedDocument) {
-        let mut state = self.state.lock();
-        if state.ready {
-            return;
-        }
-        if let Some(previous) = state.reads.remove(&page) {
-            state.bytes -= previous.bytes;
-        }
-        let Some(bytes) = retained_size(read, self.limit.saturating_sub(state.bytes)) else {
+        let Some(charge) = retained_size(read, self.budget.available_permits()) else {
             return;
         };
-        state.bytes += bytes;
-        state.reads.insert(
-            page,
-            Entry {
-                key: key.digest,
-                backend,
-                document: read.clone(),
-                bytes,
-            },
-        );
+        let Ok(permit) = Arc::clone(&self.budget).try_acquire_many_owned(charge as u32) else {
+            return;
+        };
+        let entry = Entry {
+            key: key.digest,
+            backend,
+            document: read.clone(),
+            _permit: permit,
+        };
+        let mut state = self.state.lock();
+        if !state.ready {
+            let previous = state.reads.insert(page, entry);
+            drop(state);
+            drop(previous);
+        }
+    }
+}
+
+pub(in crate::extractors::pdf) struct FinalRead(Arc<ProbeReads>);
+
+impl Drop for FinalRead {
+    fn drop(&mut self) {
+        let reads = std::mem::take(&mut self.0.state.lock().reads);
+        drop(reads);
     }
 }
 
@@ -119,12 +148,12 @@ where
     check_cancelled(cancel)?;
     let reuse = reuse.filter(|reads| reads.may_read(identity.page));
     let key = match reuse {
-        Some(_) => key(&identity, Arc::clone(&bytes)).await,
+        Some(reuse) => key(reuse, &identity, Arc::clone(&bytes)).await,
         None => None,
     };
     if let (Some(reuse), Some(key)) = (reuse, key.as_ref())
         && let Some(document) = reuse.take(identity.page, key, identity.backend)
-        && revision(&identity).await == Some(key.revision.clone())
+        && revision(reuse, &identity).await == Some(key.revision.clone())
     {
         check_cancelled(cancel)?;
         #[cfg(all(test, feature = "bundle-tessdata-eng"))]
@@ -132,11 +161,12 @@ where
         tracing::trace!(page = identity.page, "reused ink-probe OCR read");
         return Ok(document);
     }
+    check_cancelled(cancel)?;
     let document = recognize(bytes).await?;
     check_cancelled(cancel)?;
     if let (Some(reuse), Some(key)) = (reuse, key)
         && reuse.collecting()
-        && revision(&identity).await == Some(key.revision.clone())
+        && revision(reuse, &identity).await == Some(key.revision.clone())
     {
         let reuse = Arc::clone(reuse);
         let backend = Arc::clone(identity.backend);
@@ -159,7 +189,7 @@ fn check_cancelled(cancel: Option<&crate::cancellation::CancellationToken>) -> c
     Ok(())
 }
 
-async fn key(identity: &ReadIdentity<'_>, bytes: Arc<Vec<u8>>) -> Option<ReadKey> {
+async fn key(reuse: &Arc<ProbeReads>, identity: &ReadIdentity<'_>, bytes: Arc<Vec<u8>>) -> Option<ReadKey> {
     if identity.whole_page_raster
         || observer_active()
         || [identity.configs.0, identity.configs.1].iter().any(|config| {
@@ -171,7 +201,9 @@ async fn key(identity: &ReadIdentity<'_>, bytes: Arc<Vec<u8>>) -> Option<ReadKey
                         .and_then(|config| config.preprocessing.as_ref())
                         .is_some_and(|preprocessing| preprocessing.auto_rotate))
         })
-        || !matches!(identity.backend.backend_type(), OcrBackendType::Tesseract)
+        || !crate::plugins::registry::get_ocr_backend_registry()
+            .read()
+            .is_builtin_tesseract(identity.backend)
         || identity.configs.0.tessdata_bytes.is_some()
         || identity.configs.1.tessdata_bytes.is_some()
         || !identity
@@ -185,10 +217,7 @@ async fn key(identity: &ReadIdentity<'_>, bytes: Arc<Vec<u8>>) -> Option<ReadKey
     {
         return None;
     }
-    let builtin = crate::plugins::registry::get_ocr_backend_registry()
-        .read()
-        .is_builtin_tesseract(identity.backend);
-    let revision = revision(identity).await?;
+    let revision = revision(reuse, identity).await?;
     let mut hash = blake3::Hasher::new();
     hash.update(b"ink-probe-raw-whole-image-sparse-no-standard-retry");
     hash.update(&identity.page.to_le_bytes());
@@ -199,7 +228,7 @@ async fn key(identity: &ReadIdentity<'_>, bytes: Arc<Vec<u8>>) -> Option<ReadKey
     )
     .ok()?;
     for config in [identity.configs.0, identity.configs.1] {
-        hash_config(&mut hash, config, builtin).ok()?;
+        hash_config(&mut hash, config).ok()?;
     }
     hash.update(&(bytes.len() as u64).to_le_bytes());
     hash.update(blake3::hash(bytes.as_slice()).as_bytes());
@@ -225,57 +254,133 @@ fn observer_active() -> bool {
     false
 }
 
-fn hash_config(hash: &mut blake3::Hasher, config: &OcrConfig, builtin: bool) -> serde_json::Result<()> {
+fn hash_config(hash: &mut blake3::Hasher, config: &OcrConfig) -> serde_json::Result<()> {
     let mut config = config.clone();
-    if builtin {
-        // Stock Tesseract leaves this discard policy to PDF scoring after the raw read. ~keep
-        let mut thresholds = config.effective_thresholds();
-        thresholds.discard_suspected_ocr_noise = false;
-        config.quality_thresholds = Some(thresholds);
-    }
+    // Stock Tesseract leaves this discard policy to PDF scoring after the raw read. ~keep
+    let mut thresholds = config.effective_thresholds();
+    thresholds.discard_suspected_ocr_noise = false;
+    config.quality_thresholds = Some(thresholds);
     hash_json(hash, &(&config, &config.security_limits, &config.acceleration))
 }
 
-async fn revision(identity: &ReadIdentity<'_>) -> Option<(String, blake3::Hash)> {
+#[derive(Clone, PartialEq, Eq)]
+struct ModelFiles {
+    root: PathBuf,
+    languages: Vec<String>,
+    stamps: Vec<Option<FileStamp>>,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct FileStamp {
+    path: PathBuf,
+    len: u64,
+    modified: std::time::SystemTime,
+    #[cfg(unix)]
+    identity: (u64, u64, i64, i64),
+}
+
+impl FileStamp {
+    fn read(path: &Path) -> std::io::Result<Self> {
+        let path = path.canonicalize()?;
+        let metadata = path.metadata()?;
+        if !metadata.is_file() {
+            return Err(std::io::Error::other("not a traineddata file"));
+        }
+        #[cfg(unix)]
+        use std::os::unix::fs::MetadataExt;
+        Ok(Self {
+            path,
+            len: metadata.len(),
+            modified: metadata.modified()?,
+            #[cfg(unix)]
+            identity: (metadata.dev(), metadata.ino(), metadata.ctime(), metadata.ctime_nsec()),
+        })
+    }
+}
+
+impl ModelFiles {
+    fn resolve(languages: Vec<String>, directory: Option<&Path>) -> Option<Self> {
+        let env = crate::ocr::processor::validation::TessdataEnv::from_process();
+        let root = crate::ocr::processor::validation::existing_tessdata_dir_for(&languages, directory, &env)?;
+        let root = Path::new(&root).canonicalize().ok()?;
+        let stamps = Self::stamps(&root, &languages)?;
+        Some(Self {
+            root,
+            languages,
+            stamps,
+        })
+    }
+
+    fn stamps(root: &Path, languages: &[String]) -> Option<Vec<Option<FileStamp>>> {
+        languages
+            .iter()
+            .map(|lang| (lang.as_str(), false))
+            .chain([("osd", true)])
+            .map(|(lang, optional)| {
+                let path = root.join(format!("{lang}.traineddata"));
+                match FileStamp::read(&path) {
+                    Ok(stamp) => Some(Some(stamp)),
+                    Err(error) if optional && error.kind() == std::io::ErrorKind::NotFound => Some(None),
+                    Err(_) => None,
+                }
+            })
+            .collect()
+    }
+}
+
+struct ModelSnapshot {
+    files: ModelFiles,
+    digest: blake3::Hash,
+}
+
+async fn revision(reuse: &Arc<ProbeReads>, identity: &ReadIdentity<'_>) -> Option<(String, blake3::Hash)> {
     if observer_active() {
         return None;
     }
-    let version = identity.backend.version();
     let config = identity.configs.1;
     let languages = config.effective_tesseract_language();
     let directory = config.tessdata_path.clone();
-    let environment = crate::ocr::processor::validation::TessdataEnv::from_process();
-    let model =
-        super::super::spawn_pdf_blocking(move || Ok(model_identity(&languages, directory.as_deref(), &environment)))
-            .await
-            .ok()??;
-    Some((version, model))
+    let reuse = Arc::clone(reuse);
+    let model = super::super::spawn_pdf_blocking(move || {
+        let Some(files) = ModelFiles::resolve(languages, directory.as_deref()) else {
+            return Ok(None);
+        };
+        // Initialize inside the blocking worker so cancelling its waiter cannot restart the hash. ~keep
+        let snapshot = reuse.models.get_or_init(|| {
+            #[cfg(test)]
+            reuse.model_hashes.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let digest = model_identity(&files)?;
+            if ModelFiles::stamps(&files.root, &files.languages)? != files.stamps {
+                return None;
+            }
+            Some(ModelSnapshot {
+                files: files.clone(),
+                digest,
+            })
+        });
+        Ok(snapshot
+            .as_ref()
+            .filter(|snapshot| snapshot.files == files)
+            .map(|snapshot| snapshot.digest))
+    })
+    .await
+    .ok()??;
+    Some((identity.backend.version(), model))
 }
 
-fn model_identity(
-    languages: &[String],
-    directory: Option<&std::path::Path>,
-    environment: &crate::ocr::processor::validation::TessdataEnv,
-) -> Option<blake3::Hash> {
-    let root = crate::ocr::processor::validation::existing_tessdata_dir_for(languages, directory, environment)?;
-    let root = std::fs::canonicalize(root).ok()?;
+fn model_identity(files: &ModelFiles) -> Option<blake3::Hash> {
     let mut hash = blake3::Hasher::new();
-    hash_json(&mut hash, &root).ok()?;
-    for language in languages.iter().map(String::as_str).chain(std::iter::once("osd")) {
-        hash_json(&mut hash, &language).ok()?;
-        match std::fs::File::open(root.join(format!("{language}.traineddata"))) {
-            Ok(mut file) => {
-                hash.update(&[1]);
-                let length = file.metadata().ok()?.len();
-                hash.update(&length.to_le_bytes());
-                if std::io::copy(&mut file, &mut HashWriter(&mut hash)).ok()? != length {
-                    return None;
-                }
+    hash_json(&mut hash, &(&files.root, &files.languages)).ok()?;
+    for stamp in &files.stamps {
+        if let Some(stamp) = stamp {
+            hash.update(&[1]);
+            hash.update(&stamp.len.to_le_bytes());
+            let mut file = std::fs::File::open(&stamp.path).ok()?;
+            if std::io::copy(&mut file, &mut HashWriter(&mut hash)).ok()? != stamp.len {
+                return None;
             }
-            Err(error) if language == "osd" && error.kind() == std::io::ErrorKind::NotFound => {
-                hash.update(&[0]);
-            }
-            Err(_) => return None,
+        } else {
+            hash.update(&[0]);
         }
     }
     Some(hash.finalize())
@@ -283,6 +388,16 @@ fn model_identity(
 
 fn retained_size(document: &ExtractedDocument, limit: usize) -> Option<usize> {
     if document.raw_ocr_source_frame.is_some() || document.llm_usage.as_ref().is_some_and(|usage| !usage.is_empty()) {
+        return None;
+    }
+    if has_nested_read(
+        document.children.as_deref(),
+        document.images.as_deref().unwrap_or_default(),
+    ) || [&document.ocr_internal_document, &document.internal_document]
+        .into_iter()
+        .flatten()
+        .any(|internal| has_nested_read(internal.children.as_deref(), &internal.images))
+    {
         return None;
     }
     let mut writer = SizeWriter {
@@ -308,7 +423,12 @@ fn retained_size(document: &ExtractedDocument, limit: usize) -> Option<usize> {
         ),
     )
     .ok()?;
-    Some(writer.bytes)
+    (writer.bytes <= limit).then_some(writer.bytes)
+}
+
+fn has_nested_read(children: Option<&[crate::types::ArchiveEntry]>, images: &[crate::types::ExtractedImage]) -> bool {
+    // Nested documents may own data omitted from their serialized form. ~keep
+    children.is_some_and(|children| !children.is_empty()) || images.iter().any(|image| image.ocr_result.is_some())
 }
 
 struct HashWriter<'a>(&'a mut blake3::Hasher);
@@ -336,7 +456,7 @@ impl Write for SizeWriter {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
         self.bytes = self
             .bytes
-            .checked_add(bytes.len())
+            .checked_add(bytes.len().saturating_mul(SERIALIZED_BYTE_CHARGE))
             .filter(|total| *total <= self.limit)
             .ok_or_else(|| std::io::Error::other("ink probe retention limit"))?;
         Ok(bytes.len())
