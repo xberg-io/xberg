@@ -2512,6 +2512,18 @@ mod tests {
     }
 
     #[test]
+    fn blend_subtractive_tint_unpremultiplies_the_stored_backdrop_tint() {
+        // The lane stores the tint times the backdrop alpha: 0.25 at alpha 0.5 is the colour 0.5.
+        // Lighten at tint 0.8 gives ink 0.5 against that colour, mixed with the source by the
+        // alpha: 0.5 * 0.8 + 0.5 * 0.5 = 0.65. Reading 0.25 as the colour would give 0.525.
+        let got = blend_subtractive_tint("Lighten", 0.25, 0.5, 0.8);
+        assert!((got - 0.65).abs() < 1e-6, "{got}");
+        // A stored tint above the alpha cannot come from a paint; the colour clamps to 1.
+        let clamped = blend_subtractive_tint("Multiply", 0.9, 0.5, 0.5);
+        assert!((clamped - (0.5 * 0.5 + 0.5 * 1.0)).abs() < 1e-6, "{clamped}");
+    }
+
+    #[test]
     fn blend_subtractive_tint_follows_the_soft_light_formula_on_the_complements() {
         // SoftLight is not self-dual, so the complement round trip moves the overlap value.
         // Additive backdrop 0.5 and source 0.75 give 0.5 + 0.5 * (sqrt(0.5) - 0.5).

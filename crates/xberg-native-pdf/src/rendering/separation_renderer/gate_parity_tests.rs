@@ -29,11 +29,12 @@ fn build_page_with(content: &str, colour_spaces: &str, state_body: &str, extras:
     };
     push(&mut buf, "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
     push(&mut buf, "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+    let xobjects = if content.contains("/F Do") { "/XObject << /F 5 0 R >>" } else { "" };
     push(
         &mut buf,
         &format!(
             "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R \
-             /Resources << /ColorSpace << {colour_spaces} >> \
+             /Resources << /ColorSpace << {colour_spaces} >> {xobjects} \
              /ExtGState << /T << /Type /ExtGState {state_body} >> >> >> >>\nendobj\n"
         ),
     );
@@ -308,6 +309,30 @@ fn lighten_over_an_explicit_tint_zero_paint_gives_no_ink() {
         at(&normal, ONLY_FIRST.0, ONLY_FIRST.1),
         128,
         "control: Normal paints the source tint"
+    );
+}
+
+/// A transparency group without /K composites its paints against the page backdrop, so a
+/// Lighten inside it over a tint-0 paint on the page gives no ink as well.
+#[test]
+fn lighten_in_a_non_knockout_group_over_a_tint_zero_paint_gives_no_ink() {
+    let form = |blend: &str| {
+        let body = "/CS0 cs /T gs 0.5 scn 10 10 60 60 re f";
+        format!(
+            "5 0 obj\n<< /Type /XObject /Subtype /Form /FormType 1 /BBox [0 0 100 100] \
+             /Resources << /ColorSpace << {SPOT_A} >> /ExtGState << /T << /Type /ExtGState /BM /{blend} >> >> >> \
+             /Group << /Type /Group /S /Transparency >> /Length {} >>\nstream\n{body}\nendstream\nendobj\n",
+            body.len()
+        )
+    };
+    let content = "/CS0 cs 0.8 scn 10 10 60 60 re f 0 scn 10 10 60 60 re f /F Do";
+    let lighten = plate_of(content, "/BM /Normal", &[&form("Lighten")]);
+    assert_eq!(at(&lighten, ONLY_FIRST.0, ONLY_FIRST.1), 0);
+    let normal = plate_of(content, "/BM /Normal", &[&form("Normal")]);
+    assert_eq!(
+        at(&normal, ONLY_FIRST.0, ONLY_FIRST.1),
+        128,
+        "control: Normal in the group paints the source tint"
     );
 }
 
