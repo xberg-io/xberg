@@ -1454,6 +1454,12 @@ fn dedup_compares_rows_when_the_page_segments_hold_no_words() {
         2,
         "a page of rules and dots gives no words to count, so the rows of the two tables decide"
     );
+    let repeat = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    assert_eq!(
+        kept_after_dedup(vec![four_row_grid(), repeat], &page),
+        1,
+        "the rows of the smaller table repeat the larger one, and no page words call them new"
+    );
 }
 
 #[test]
