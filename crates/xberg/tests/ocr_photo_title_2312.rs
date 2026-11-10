@@ -59,33 +59,15 @@ fn assert_body(text: &str, expected_sha: &str) {
     assert_eq!(hex::encode(Sha256::digest(text.as_bytes())), expected_sha, "{text:?}");
 }
 
-fn remove_positioned_photo_title(content: &str) -> String {
-    let (before, after) = content
-        .split_once(TITLE_PARAGRAPH)
-        .expect("title is a separate paragraph");
-    assert_eq!(before.lines().filter(|line| !line.trim().is_empty()).count(), 103);
-    assert!(
-        after.starts_with('*'),
-        "the first recognized line below the source title"
-    );
-    assert!(!after.contains(TITLE));
-    format!("{before}{after}")
-}
-
-fn assert_addition(document: &ExtractedDocument, body_sha: &str, page_sha: &str) {
-    assert_body(&remove_positioned_photo_title(&document.content), body_sha);
-    let page = &document.pages.as_ref().unwrap()[0].content;
-    assert_body(&remove_positioned_photo_title(page.trim()), page_sha);
+fn assert_only_the_title(document: &ExtractedDocument) {
+    assert_eq!(document.content.trim_end(), TITLE);
+    assert_eq!(document.pages.as_ref().unwrap()[0].content.trim_end(), TITLE);
 }
 
 #[tokio::test]
-async fn recovers_the_photo_title_and_keeps_unrelated_primary_lines() {
+async fn recovers_the_photo_title_and_prunes_the_symbol_noise_around_it() {
     let document = extract_primary(PHOTO, 215, 0).await;
-    assert_addition(
-        &document,
-        "0f5edadaac602317a553d4fce3f4473215abe745ad0b5005c916cd8c5540c1d9",
-        "77d64c8b58e3646f88fdaf16a6c2e783189194293da40a8c4a9efbc6d7ddfa0f",
-    );
+    assert_only_the_title(&document);
 }
 
 #[tokio::test]
@@ -94,12 +76,7 @@ async fn certified_photo_title_does_not_repeat_its_source_glyph_as_a_separate_li
     let page = &document.pages.as_ref().unwrap()[0];
     for content in [&document.content, &page.content] {
         assert_eq!(content.matches(TITLE).count(), 1);
-        assert_eq!(
-            content.lines().filter(|line| line.trim() == "I").count(),
-            0,
-            "the primary I occupies the same source glyph recovered inside SECTION"
-        );
-        assert!(content.lines().any(|line| line.trim() == "*"));
+        assert_eq!(content.lines().filter(|line| line.trim() == "I").count(), 0);
     }
 }
 
@@ -142,10 +119,7 @@ async fn leaves_a_partially_recognized_sign_at_its_existing_location() {
     let document = extract_primary(PARTIAL, 21, 0).await;
     assert!(document.content.lines().any(|line| line == "NORTH"));
     assert!(!document.content.contains("NORTH GATE"));
-    assert_body(
-        &document.content,
-        "e0c04b85d5e3263df7e7302708b39bad37c54d6e322e74c1f3afa7f2ad202ff6",
-    );
+    assert_eq!(document.content, "NORTH");
 }
 
 #[tokio::test]
@@ -163,16 +137,11 @@ async fn leaves_requested_document_structure_untouched() {
     let document = extract_png(PHOTO, &config).await;
     assert!(document.document.is_some(), "structured extraction was requested");
     assert!(!document.content.contains(TITLE));
-    assert!(!document.pages.unwrap()[0].content.contains(TITLE));
-}
-
-fn remove_markdown_title(document: &mut ExtractedDocument) {
-    document.content = remove_positioned_photo_title(&document.content);
-    let [page] = document.pages.as_deref_mut().expect("requested pages") else {
-        panic!("one standalone PNG page")
-    };
-    assert_eq!(page.page_number, 1);
-    page.content = remove_positioned_photo_title(&page.content);
+    assert!(
+        document
+            .pages
+            .is_none_or(|pages| pages.iter().all(|page| !page.content.contains(TITLE)))
+    );
 }
 
 fn markdown_config() -> ExtractionConfig {
@@ -189,30 +158,22 @@ async fn recovers_photo_title_in_markdown() {
     // The standalone extractor sets this same effective OCR format. Supplying it explicitly
     // disqualifies the optional title proof while leaving the ordinary Markdown read unchanged.
     reference_config.ocr.as_mut().unwrap().output_format = Some(OutputFormat::Markdown);
-    let mut reference = extract_png(PHOTO, &reference_config).await;
-    assert_body(
-        &reference.content,
-        "b48f67548d303c58954cbe54c95bd7545eca1de64a73b45e59f4dafa8ae37fbf",
-    );
-    assert_body(
-        &reference.pages.as_ref().unwrap()[0].content,
-        "2ab44fd7d097fd8353d7c6f346ce3a4ba370e64fec2871d7131de9382012507c",
-    );
+    let reference = extract_png(PHOTO, &reference_config).await;
     assert_eq!(
-        reference.pages.as_ref().unwrap()[0]
+        reference.content, "",
+        "the photo's symbol noise is pruned and nothing else was read"
+    );
+    let recovered = extract_png(PHOTO, &config).await;
+    assert!(recovered.tables.is_empty());
+    assert_only_the_title(&recovered);
+    assert_eq!(
+        recovered.pages.as_ref().unwrap()[0]
             .ocr_confidence
             .as_ref()
             .unwrap()
             .word_count,
         215
     );
-    let mut recovered = extract_png(PHOTO, &config).await;
-    assert!(recovered.tables.is_empty());
-    remove_markdown_title(&mut recovered);
-    reference.content = reference.content.replacen("\n# I\n\n", "\n", 1);
-    let reference_page = &mut reference.pages.as_mut().unwrap()[0];
-    reference_page.content = reference_page.content.replacen("\nI\n\n", "\n", 1);
-    assert_same_document(&reference, &recovered);
 }
 
 #[tokio::test]
@@ -305,11 +266,7 @@ async fn check_photo_title_cache_paths(uncached: ExtractionConfig) {
     };
     assert!(config.use_cache, "exercise the default cache policy");
     let cold = read_engine(&engine, PHOTO, &config).await;
-    if config.output_format == OutputFormat::Markdown {
-        remove_markdown_title(&mut cold.clone());
-    } else {
-        assert_cached_title(&cold);
-    }
+    assert_cached_title(&cold);
     assert_eq!(cache.writes.load(Ordering::SeqCst), 1);
     assert_eq!(cache.hits.load(Ordering::SeqCst), 0);
     let first_lookup = lookups.0.lock().unwrap().clone();
@@ -347,11 +304,7 @@ async fn check_photo_title_cache_paths(uncached: ExtractionConfig) {
 }
 
 fn assert_cached_title(document: &ExtractedDocument) {
-    assert_addition(
-        document,
-        "0f5edadaac602317a553d4fce3f4473215abe745ad0b5005c916cd8c5540c1d9",
-        "77d64c8b58e3646f88fdaf16a6c2e783189194293da40a8c4a9efbc6d7ddfa0f",
-    );
+    assert_only_the_title(document);
     assert!(document.ocr_elements.is_none());
     assert!(document.tables.is_empty());
     let pages = document.pages.as_ref().expect("requested pages");

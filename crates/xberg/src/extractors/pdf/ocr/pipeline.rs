@@ -5707,6 +5707,27 @@ pub(super) async fn extract_with_ocr_for_page(
         _ => None,
     };
 
+    // Pages the verdict flagged but kept lose their symbol-noise lines only now, so the
+    // verdict, backend choice and table acceptance above judged the unpruned text (#2312).
+    for verdict in recognition_noise_verdicts.iter().filter(|verdict| !verdict.discarded) {
+        let Some(page_idx) = verdict.page_index.checked_sub(page_index_offset) else {
+            continue;
+        };
+        let page_number = (verdict.page_index + 1) as u32;
+        if page_idx >= page_texts.len()
+            || rejected_pages[page_idx]
+            || collected_tables.iter().any(|table| table.page_number == page_number)
+        {
+            continue;
+        }
+        if let Some(pruned) = super::symbol_noise_lines::prune_symbol_noise_lines(&page_texts[page_idx]) {
+            page_texts[page_idx] = pruned;
+            if let Some(paragraphs) = all_page_paragraphs[page_idx].as_mut() {
+                super::symbol_noise_lines::prune_symbol_noise_paragraphs(paragraphs);
+            }
+        }
+    }
+
     let page_marker_cfg = config.pages.as_ref().filter(|p| p.insert_page_markers);
     let mut result = String::new();
     for (i, text) in page_texts.iter().enumerate() {

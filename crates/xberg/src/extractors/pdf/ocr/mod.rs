@@ -48,6 +48,8 @@ mod rendering;
 mod scoring;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) mod stage_model_inputs;
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) mod symbol_noise_lines;
 #[cfg(all(
     feature = "ocr",
     feature = "pdf",

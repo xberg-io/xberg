@@ -3387,6 +3387,19 @@ impl ImageExtractor {
             );
         }
 
+        // #2312: a photograph read as symbol noise keeps only its word-shaped lines. The page
+        // verdict and photo-title recovery above judged the unpruned run.
+        #[cfg(all(feature = "ocr", feature = "pdf"))]
+        let pruned_symbol_noise = !has_public_ocr_structure
+            && crate::extractors::pdf::ocr::symbol_noise_lines::prune_standalone_image_noise(
+                &mut ocr_content,
+                ocr_internal_document.as_mut(),
+                !ocr_tables.is_empty(),
+                &ocr_config.quality_thresholds.clone().unwrap_or_default(),
+            );
+        #[cfg(all(feature = "ocr", not(feature = "pdf")))]
+        let pruned_symbol_noise = false;
+
         // ~keep The whole image is one OCR run, so its confidence describes page 1 and only
         // page 1. The multi-frame TIFF branch below splits that single run's text by byte
         // offset into several pages with no per-frame OCR of their own, so those pages keep
@@ -3467,6 +3480,7 @@ impl ImageExtractor {
                 })
                 .collect();
 
+            let title_page_confidence = whole_image_ocr_confidence.clone();
             if let Some(pages) = ocr_extraction_result.page_contents {
                 doc.prebuilt_pages = Some(pages);
             } else {
@@ -3499,7 +3513,12 @@ impl ImageExtractor {
 
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(title) = photo_title {
-                image_photo_title::place(&mut doc, title, &config.output_format);
+                image_photo_title::place_recovered(
+                    &mut doc,
+                    title,
+                    &config.output_format,
+                    pruned_symbol_noise.then_some(title_page_confidence),
+                );
             }
             Ok(doc)
         }

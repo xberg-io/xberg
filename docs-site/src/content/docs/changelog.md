@@ -311,6 +311,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Drop the symbol-noise lines OCR reads from a photograph.** (#2312)
+  When the page verdict flags recognition noise and fragment lines (no word-shaped token, no number) are at least half its lines, those lines are removed from the text, pages and hOCR elements after the verdict, backend choice and table acceptance. A fixture photograph keeps 0 of 840 noise characters on a standalone image and 50 of 1056 on a PDF; clean prose, native text and table scans are unchanged.
 - **(ocr): Keep page byte ranges when OCR page text and plain content render a table differently.** (#2825)
   Under `OutputFormat::Plain` the per-page OCR text kept tables as markdown and its own block separators, so it never matched the plain content and `page_boundaries` was dropped with a warning. A page whose text cannot be found in the content is now rendered from its own elements with the plain renderer, so page text equals its content range. When the re-render succeeds, `pages[].content` under Plain OCR no longer carries markdown tables; the structured tables stay in `pages[].tables`.
 - **(pdf): Honor compound glyph names at printable font codes.** (GH#2834)
