@@ -2347,4 +2347,69 @@ mod tests {
         assert_eq!(detect("/OP false /op false", &[]), (false, false));
         assert_eq!(detect("/OP 6 0 R", &["6 0 obj\ntrue\nendobj\n"]), (false, true));
     }
+
+    fn opaque_state() -> Object {
+        Object::Dictionary(HashMap::from([("ca".to_string(), Object::Real(1.0))]))
+    }
+
+    fn transparent_state() -> Object {
+        Object::Dictionary(HashMap::from([("ca".to_string(), Object::Real(0.5))]))
+    }
+
+    /// A document whose object 4 has an xref offset past the end of the file, so loading it
+    /// fails. Returns the document and a reference to that object, which the shared parser refuses.
+    fn doc_with_unreadable_state() -> (PdfDocument, Object) {
+        let objects = [
+            "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+            "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+            "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources << >> >>\nendobj\n",
+            "4 0 obj\n<< /Type /ExtGState /ca 0.5 >>\nendobj\n",
+        ];
+        let mut buf = b"%PDF-1.4\n".to_vec();
+        let mut offsets = Vec::new();
+        for object in objects {
+            offsets.push(buf.len());
+            buf.extend_from_slice(object.as_bytes());
+        }
+        let unreadable = buf.len() + 100_000;
+        let xref_offset = buf.len();
+        buf.extend_from_slice(b"xref\n0 5\n0000000000 65535 f \n");
+        for offset in [offsets[0], offsets[1], offsets[2], unreadable] {
+            buf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+        }
+        buf.extend_from_slice(
+            format!("trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n").as_bytes(),
+        );
+        let doc = PdfDocument::from_bytes(buf).expect("synthetic PDF parses");
+        let state = Object::Reference(crate::object::ObjectRef { id: 4, generation: 0 });
+        assert!(
+            parse_ext_g_state_inner(&state, &doc).is_err(),
+            "fixture must fail to parse"
+        );
+        (doc, state)
+    }
+
+    #[test]
+    fn detect_state_that_fails_to_parse_does_not_fire() {
+        let (doc, broken) = doc_with_unreadable_state();
+        let states = HashMap::from([("T".to_string(), broken.clone()), ("U".to_string(), opaque_state())]);
+        assert!(!ext_g_states_signal_transparency_only(&doc, &states));
+        assert!(!ext_g_states_signal_transparency(&doc, &states));
+        let with_transparent = HashMap::from([("T".to_string(), broken), ("U".to_string(), transparent_state())]);
+        assert!(ext_g_states_signal_transparency_only(&doc, &with_transparent));
+    }
+
+    #[test]
+    fn detect_one_transparent_state_among_opaque_ones_fires() {
+        let doc = build_doc_with_resources_and_objs("", &[]).0;
+        let states = HashMap::from([
+            ("A".to_string(), opaque_state()),
+            ("B".to_string(), transparent_state()),
+            ("C".to_string(), opaque_state()),
+        ]);
+        assert!(ext_g_states_signal_transparency_only(&doc, &states));
+        assert!(ext_g_states_signal_transparency(&doc, &states));
+        let all_opaque = HashMap::from([("A".to_string(), opaque_state()), ("C".to_string(), opaque_state())]);
+        assert!(!ext_g_states_signal_transparency_only(&doc, &all_opaque));
+    }
 }

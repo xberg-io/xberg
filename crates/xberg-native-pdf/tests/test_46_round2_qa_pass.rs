@@ -872,13 +872,13 @@ fn qa6_spot_mirror_fires_when_fill_color_cmyk_is_none() {
     let plane = renderer.cmyk_sidecar_spot_plane(0).expect("InkA plane");
     let dims = renderer.cmyk_sidecar_dims().unwrap();
     let centre = ((dims.1 / 2) * dims.0 + dims.0 / 2) as usize;
-    // B(0.8, 0.5) = 0.4 → t_r at α=1 = 0.4 → u8 = 102. ~keep
-    let expected = 102u8;
+    // B(0.8, 0.5) = 1 - 0.2·0.5 = 0.9 → t_r at α=1 = 0.9 → u8 = 230. ~keep
+    let expected = 230u8;
     assert_eq!(
         plane[centre], expected,
         "ISO 32000-1 §11.7.4.2: a /Separation paint's spot mirror \
          fires independently of fill_color_cmyk (None for Separation \
-         sources). /Multiply(0.8, 0.5) = 0.4 → u8 = {}. Got {}.",
+         sources). /Multiply(0.8, 0.5) = 0.9 → u8 = {}. Got {}.",
         expected, plane[centre]
     );
 }
