@@ -870,8 +870,8 @@ fn row_lines_escape_punctuation_starts_but_not_hashtags_or_decimals() {
     assert_eq!(
         render_djot(&b.build()),
         concat!(
-            "\\+ Pool .... 4\n\n\\* Park .... 7\n\n\\### Lot .... 2\n\n1.5 Units .... 3\n\n1\\.\n\n\\-\n\n",
-            "\\---\n\n\\- - -\n\n\\***\n\n#hashtag .... 1\n\nPlan A. .... 2\n\n\\--- Rule .... 6\n\n",
+            "\\+ Pool .... 4\n\n\\* Park .... 7\n\n\\#\\#\\# Lot .... 2\n\n1.5 Units .... 3\n\n1\\.\n\n\\-\n\n",
+            "\\-\\-\\-\n\n\\- - -\n\n\\*\\*\\*\n\n#hashtag .... 1\n\nPlan A. .... 2\n\n\\-\\-\\- Rule .... 6\n\n",
             "\\-5 .... 1\n\n\\:\\:\\: note\n\n\\`\\`\\` rust\n"
         )
     );
@@ -905,6 +905,11 @@ fn row_escape_matrix() -> Vec<String> {
         rows.push(punctuation.to_string());
         rows.push(format!("{punctuation} word .... 1"));
         rows.push(format!("{punctuation}word .... 1"));
+    }
+    for punctuation in (0u8..128).map(char::from).filter(char::is_ascii_punctuation) {
+        rows.push(format!("a{punctuation}b .... 1"));
+        rows.push(format!("[word] {punctuation}x{punctuation} .... 1"));
+        rows.push(format!("[word_a] {punctuation}x{punctuation}y_z .... 1"));
     }
     rows.extend(
         [
@@ -997,8 +1002,14 @@ fn every_row_text_keeps_three_paragraphs_in_either_layout() {
     );
 }
 
+fn render_rows(rows: &[&str]) -> String {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element(&rows.join("\n")));
+    render_djot(&b.build())
+}
+
 #[test]
-fn a_row_that_starts_with_an_escaped_delimiter_keeps_the_delimiter_literal() {
+fn a_row_that_starts_with_an_escaped_delimiter_shows_its_own_backslash() {
     for delimiter in ["*", "_", "{", "[", "`", "~", "^", "=", "+", "-"] {
         let closing = match delimiter {
             "{" => "}",
@@ -1008,30 +1019,74 @@ fn a_row_that_starts_with_an_escaped_delimiter_keeps_the_delimiter_literal() {
             other => other,
         };
         let row = format!("\\{delimiter}word{closing} .... 1");
-        let mut b = InternalDocumentBuilder::new("test");
-        b.push_element(marked_row_lines_element(&format!("Intro .... 5\n{row}\nTail .... 9")));
-        let output = render_djot(&b.build());
-        assert_eq!(
-            djot_paragraph_texts(&output),
-            [
-                "Intro .... 5".to_string(),
-                row[1..].to_string(),
-                "Tail .... 9".to_string()
-            ],
-            "row {row:?} -> {output:?}"
-        );
+        let layout = ["Intro .... 5", row.as_str(), "Tail .... 9"];
+        let output = render_rows(&layout);
+        assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
     }
+    assert_eq!(render_rows(&["\\*note* .... 3"]), "\\\\\\*note\\* .... 3\n");
 }
 
 #[test]
-fn an_escaped_dash_row_reads_as_a_hyphen_and_an_en_dash() {
-    let mut b = InternalDocumentBuilder::new("test");
-    b.push_element(marked_row_lines_element("--- Rule .... 6"));
-    let output = render_djot(&b.build());
-    assert_eq!(output, "\\--- Rule .... 6\n");
+fn a_row_with_a_bracketed_word_keeps_the_underscores_and_stars_after_it() {
+    for row in [
+        "[snake_case] and a_b .... 3",
+        "[ref_1] see ref_2 .... 5",
+        "[file_name] report_final .... 7",
+        "[x*] y*z .... 3",
+    ] {
+        let layout = ["Intro .... 5", row, "Tail .... 9"];
+        let output = render_rows(&layout);
+        assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
+    }
+    assert_eq!(
+        render_rows(&["[snake_case] and a_b .... 3"]),
+        "\\[snake\\_case\\] and a\\_b .... 3\n"
+    );
+}
+
+#[test]
+fn a_row_with_a_bracketed_word_and_attributes_keeps_its_text() {
+    for row in ["[a]{.x} .... 1", "word{.x} .... 1"] {
+        let layout = ["Intro .... 5", row, "Tail .... 9"];
+        let output = render_rows(&layout);
+        assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
+    }
+    assert_eq!(render_rows(&["[a]{.x} .... 1"]), "\\[a\\]\\{.x\\} .... 1\n");
+}
+
+#[test]
+fn a_backslash_in_a_row_is_shown_and_frees_no_delimiter() {
+    for row in ["{\\*x* .... 1", "[_]\\_x_ .... 2"] {
+        let layout = ["Intro .... 5", row, "Tail .... 9"];
+        let output = render_rows(&layout);
+        assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
+    }
+    assert_eq!(
+        render_rows(&["{\\*x* .... 1", "[_]\\_x_ .... 2"]),
+        "\\{\\\\\\*x\\* .... 1\n\n\\[\\_\\]\\\\\\_x\\_ .... 2\n"
+    );
+}
+
+#[test]
+fn a_row_that_starts_with_hyphens_escapes_each_hyphen() {
+    let output = render_rows(&["--- Rule .... 6"]);
+    assert_eq!(output, "\\-\\-\\- Rule .... 6\n");
     let events: Vec<_> = jotdown::Parser::new(&output).collect();
-    assert!(events.iter().any(|event| matches!(event, jotdown::Event::EnDash)));
+    assert!(!events.iter().any(|event| matches!(event, jotdown::Event::EnDash)));
     assert!(!events.iter().any(|event| matches!(event, jotdown::Event::EmDash)));
+}
+
+#[test]
+fn a_row_with_a_sign_after_a_brace_escapes_the_sign() {
+    for row in ["{+ins+} .... 1", "{=mark=} .... 2", "{-del-} .... 3"] {
+        let layout = ["Intro .... 5", row, "Tail .... 9"];
+        let output = render_rows(&layout);
+        assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
+    }
+    assert_eq!(
+        render_rows(&["{+ins+} .... 1", "x {=m=} .... 2", "{-d-} .... 3"]),
+        "\\{\\+ins+\\} .... 1\n\nx \\{\\=m=\\} .... 2\n\n\\{\\-d-\\} .... 3\n"
+    );
 }
 
 #[test]
@@ -1070,13 +1125,6 @@ fn a_row_that_opens_with_brackets_and_braces_keeps_its_text() {
         let output = render_djot(&b.build());
         assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
     }
-}
-
-#[test]
-fn the_punctuation_run_after_an_opener_stops_at_a_backslash_that_already_escapes() {
-    let mut b = InternalDocumentBuilder::new("test");
-    b.push_element(marked_row_lines_element("{\\*x* .... 1\n[_]\\_x_ .... 2"));
-    assert_eq!(render_djot(&b.build()), "\\{\\*x* .... 1\n\n\\[\\_\\]\\_x_ .... 2\n");
 }
 
 fn paragraph_roundtrip_html(text: &str, annotations: Vec<TextAnnotation>) -> String {
