@@ -8,6 +8,8 @@ mod automatic_fallback;
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 mod automatic_fallback_tests;
 mod extraction;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+mod ink_probe;
 #[cfg(feature = "layout-detection")]
 mod layout_hints;
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
@@ -1381,8 +1383,7 @@ async fn run_ocr_with_layout_pages(
         feature = "tokio-runtime",
         not(target_arch = "wasm32")
     ))]
-    if ocr_config.pipeline.is_none()
-        && ocr_config.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
+    if ocr::uses_default_ocr_pipeline(ocr_config)
         && ocr_config.backend == "tesseract"
         && ocr_images_absent
         && let Some(pipeline) = ocr_config.effective_pipeline()
@@ -1422,10 +1423,7 @@ async fn run_ocr_with_layout_pages(
         // it here as one document lets a good page's score hide a bad page, so use the same
         // page-local runner as selected-page OCR. Explicit pipelines retain their configured
         // document scope because their stages may intentionally process the document. ~keep
-        if ocr_config.pipeline.is_none()
-            && ocr_config.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
-            && ocr_config.backend == "tesseract"
-        {
+        if ocr::uses_default_ocr_pipeline(ocr_config) && ocr_config.backend == "tesseract" {
             let (text, tables, elements, document, usage, page_texts, rasters, formulas, preprocessing, confidence) =
                 Box::pin(ocr::extract_full_document_ocr_pipeline_per_page(
                     content,
@@ -2433,9 +2431,7 @@ fn whole_document_ocr_hints(
     }
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     if config.ocr_strategy == crate::core::config::OcrStrategy::Auto
-        && config.ocr.as_ref().is_some_and(|ocr| {
-            ocr.pipeline.is_none() && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
-        })
+        && config.ocr.as_ref().is_some_and(ocr::uses_default_ocr_pipeline)
         && let Some([boundary]) = boundaries
         && boundary.page_number == 1
         && let Some(native) = native_text.get(boundary.byte_start..boundary.byte_end)
@@ -3196,17 +3192,25 @@ impl PdfExtractor {
             #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
             let native_script_pages: Vec<u32> = Vec::new();
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-            crate::core::diagnostics::dedup_extend_warnings(
-                &mut ocr_fallback_warnings,
-                unreadable_script::retain_unreadable_script_pages(
-                    &mut decision,
-                    &native_text,
-                    boundaries.as_deref(),
-                    pdf_metadata.pdf_specific.page_count,
-                    content,
-                    config,
-                ),
-            );
+            {
+                let layer = unreadable_script::NativeLayer {
+                    text: &native_text,
+                    boundaries: boundaries.as_deref(),
+                    page_count: pdf_metadata.pdf_specific.page_count,
+                };
+                let ink = ink_probe::contradicted_pages(&decision, layer, content, config, layout_pages).await?;
+                crate::core::diagnostics::dedup_extend_warnings(&mut ocr_fallback_warnings, ink.warnings);
+                crate::core::diagnostics::dedup_extend_warnings(
+                    &mut ocr_fallback_warnings,
+                    unreadable_script::retain_unreadable_script_pages(
+                        &mut decision,
+                        layer,
+                        content,
+                        config,
+                        &ink.contradicted,
+                    ),
+                );
+            }
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             let native_script_pages =
                 unreadable_script::native_script_pages(&decision, &native_text, boundaries.as_deref(), content, config);

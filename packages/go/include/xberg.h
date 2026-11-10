@@ -19283,6 +19283,14 @@ int32_t xberg_ocr_quality_thresholds_discard_suspected_ocr_noise(
     XBERGAlefHandle handle);
 
 /**
+ * Get the `prune_symbol_noise_lines` field from a `OcrQualityThresholds`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+int32_t
+xberg_ocr_quality_thresholds_prune_symbol_noise_lines(XBERGAlefHandle handle);
+
+/**
  * Get the `min_avg_word_length` field from a `OcrQualityThresholds`.
  * # Safety
  * Pointer must be a valid handle returned by this library.

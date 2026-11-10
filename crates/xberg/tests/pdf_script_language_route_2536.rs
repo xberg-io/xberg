@@ -38,6 +38,13 @@ fn extract(source: &[u8], tessdata: &std::path::Path, tweak: impl FnOnce(&mut Ex
     helpers::extract_bytes_document_blocking(source, "application/pdf", &config).unwrap()
 }
 
+fn khm_only(config: &mut ExtractionConfig) {
+    let pipeline = serde_json::json!({"stages": [
+        {"backend": "tesseract", "priority": 100, "language": ["khm"]},
+    ]});
+    config.ocr.as_mut().unwrap().pipeline = Some(serde_json::from_value(pipeline).unwrap());
+}
+
 fn english_model() -> tempfile::TempDir {
     let models = tempfile::tempdir().unwrap();
     let eng = xberg_tesseract::bundled_eng_traineddata().expect("real English OCR model");
@@ -222,6 +229,16 @@ fn the_kept_page_warning_of_a_page_without_lost_glyphs_does_not_say_glyphs_stay_
     assert!(warnings[0].contains("stay lost"), "{}", warnings[0]);
 }
 
+/// A model directory whose `khm.traineddata` is not a model. The tessdata search takes the first
+/// directory that holds a file for every requested language, and the configured directory comes
+/// before `TESSDATA_PREFIX`, the cache directory and the system directories. So a Khmer model on
+/// the host cannot be reached, and the Khmer stage cannot read a page on any host.
+fn english_model_and_unreadable_khmer() -> tempfile::TempDir {
+    let models = english_model();
+    std::fs::write(models.path().join("khm.traineddata"), b"not a model").unwrap();
+    models
+}
+
 fn khmer_model_dir() -> Option<tempfile::TempDir> {
     let candidates = std::env::var_os("TESSDATA_PREFIX")
         .map(std::path::PathBuf::from)
@@ -251,21 +268,120 @@ fn khm_then_eng(config: &mut ExtractionConfig) {
 }
 
 #[test]
+fn a_khmer_stage_before_an_english_stage_keeps_a_complete_layer() {
+    let models = english_model();
+    for (source, name) in [
+        (COMPLETE, "complete"),
+        (KHMER_SHORT_FULLY_MAPPED, "short"),
+        (KHMER_TEXT_WITH_FIGURE, "figure"),
+    ] {
+        let native = extract(source, models.path(), |config| config.disable_ocr = true);
+        let automatic = extract(source, models.path(), khm_then_eng);
+        assert!(khmer_count(&native.content) > 0, "{name}");
+        assert!(
+            automatic.content.starts_with(native.content.trim_end()),
+            "{name}: {:?}",
+            automatic.content
+        );
+        assert_eq!(khmer_count(&automatic.content), khmer_count(&native.content), "{name}");
+        assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native), "{name}");
+        let warnings = khmer_warnings(&automatic);
+        assert_eq!(warnings.len(), 1, "{name}: {:?}", automatic.processing_warnings);
+        assert!(
+            warnings[0].contains("the language of stage 2"),
+            "{name}: {}",
+            warnings[0]
+        );
+    }
+}
+
+#[test]
+fn a_khmer_stage_before_an_english_stage_keeps_page_one_and_reads_the_scanned_page_two() {
+    let models = english_model_and_unreadable_khmer();
+    let native = extract(KHMER_THEN_SCANNED_ENGLISH, models.path(), |config| {
+        config.disable_ocr = true
+    });
+    let automatic = extract(KHMER_THEN_SCANNED_ENGLISH, models.path(), khm_then_eng);
+    let native_pages = native.pages.as_ref().unwrap();
+    let pages = automatic.pages.as_ref().unwrap();
+    assert_eq!(pages.len(), 2);
+    assert_eq!(pages[0].content, native_pages[0].content);
+    assert_eq!(khmer_count(&pages[0].content), 222);
+    assert!(native_pages[1].content.trim().is_empty(), "page 2 has no text layer");
+    assert!(
+        pages[1].content.contains("20,000 bottles of water"),
+        "the English stage reads the scan: {:?}",
+        pages[1].content
+    );
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Mixed));
+    // The placeholder Khmer model cannot load, so the Khmer stage fails and the run falls
+    // through to the English stage. The warning shows the fall-through happened.
+    assert!(
+        automatic
+            .processing_warnings
+            .iter()
+            .any(|w| w.source == "ocr_pipeline" && w.message.contains("failed and was skipped")),
+        "the Khmer stage failed and the English stage read the scan: {:?}",
+        automatic.processing_warnings
+    );
+}
+
+#[test]
 #[ignore = "needs khm.traineddata in TESSDATA_PREFIX or a system tessdata directory"]
 #[allow(clippy::print_stderr)]
-fn a_khmer_stage_before_an_english_stage_reads_the_khmer_page_with_ocr() {
+fn a_khmer_stage_before_an_english_stage_keeps_the_complete_page_when_the_khmer_model_is_installed() {
     let Some(models) = khmer_model_dir() else {
         eprintln!("skipped: khm.traineddata is not installed");
         return;
     };
+    let native = extract(COMPLETE, models.path(), |config| config.disable_ocr = true);
     let automatic = extract(COMPLETE, models.path(), khm_then_eng);
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
+    assert_eq!(automatic.content, native.content);
+}
+
+#[test]
+#[ignore = "needs khm.traineddata in TESSDATA_PREFIX or a system tessdata directory"]
+#[allow(clippy::print_stderr)]
+fn a_khmer_stage_before_an_english_stage_sends_the_scanned_page_to_the_khmer_stage() {
+    let Some(models) = khmer_model_dir() else {
+        eprintln!("skipped: khm.traineddata is not installed");
+        return;
+    };
+    let automatic = extract(KHMER_THEN_SCANNED_ENGLISH, models.path(), khm_then_eng);
+    let khmer = extract(KHMER_THEN_SCANNED_ENGLISH, models.path(), khm_only);
+    let read = &khmer.pages.as_ref().unwrap()[1].content;
+    assert!(!read.trim().is_empty(), "the Khmer stage reads the scan");
+    assert_eq!(
+        &automatic.pages.as_ref().unwrap()[1].content,
+        read,
+        "the first stage reads the scan"
+    );
+}
+
+#[test]
+#[ignore = "needs khm.traineddata in TESSDATA_PREFIX or a system tessdata directory"]
+#[allow(clippy::print_stderr)]
+fn a_khmer_stage_before_an_english_stage_reads_a_page_that_lost_glyphs_with_ocr() {
+    let Some(models) = khmer_model_dir() else {
+        eprintln!("skipped: khm.traineddata is not installed");
+        return;
+    };
+    let native = extract(PARTIAL, models.path(), |config| config.disable_ocr = true);
+    let automatic = extract(PARTIAL, models.path(), khm_then_eng);
     assert_eq!(
         automatic.extraction_method,
         Some(ExtractionMethod::Ocr),
         "{:?}",
         automatic.content
     );
-    assert!(khmer_count(&automatic.content) > 0, "{:?}", automatic.content);
+    let words = |text: &str| text.split_whitespace().count();
+    assert!(
+        words(&automatic.content) > words(&native.content),
+        "{} words against {} native",
+        words(&automatic.content),
+        words(&native.content)
+    );
     assert!(
         khmer_warnings(&automatic).is_empty(),
         "{:?}",

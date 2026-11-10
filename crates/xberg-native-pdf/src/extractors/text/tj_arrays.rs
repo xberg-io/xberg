@@ -185,24 +185,40 @@ impl<'doc> TextExtractor<'doc> {
         } else {
             None
         };
-        if let Some(TextElement::Offset(lead)) = array.first()
-            && self.word_boundary_mode == WordBoundaryMode::Tiebreaker
-        {
-            let threshold = self.calculate_adaptive_tj_threshold();
-            self.lead_threshold = Some(threshold);
-            if *lead < threshold
-                && let Some(mut run) = self.tj_span_buffer.take()
-            {
-                self.end_set_back_run_at_drawn_end(&mut run);
-                self.tj_span_buffer = Some(run);
-            }
-        }
+        let primary_boundaries = if self.word_boundary_mode == WordBoundaryMode::Primary {
+            self.primary_tj_boundaries()?
+        } else {
+            Vec::new()
+        };
+        self.prepare_tj_lead(array, primary_boundaries.is_empty());
         self.flush_tj_span_buffer()?;
         match self.word_boundary_mode {
             WordBoundaryMode::Tiebreaker => self.process_tj_array_tiebreaker(array, carried, continues_pen),
             WordBoundaryMode::Primary => {
-                self.process_tj_array_primary(array)?;
+                self.process_tj_array_primary(array, primary_boundaries)?;
                 Ok(false)
+            }
+        }
+    }
+
+    fn prepare_tj_lead(&mut self, array: &[TextElement], primary_fallback: bool) {
+        if let Some(TextElement::Offset(lead)) = array.first() {
+            // Primary's fallback records the lead before classifying it; preview that same distribution
+            // without recording twice. Successful Primary detection does not record the lead. ~keep
+            let threshold = if self.word_boundary_mode == WordBoundaryMode::Primary && primary_fallback {
+                self.calculate_tj_threshold_after_offset(*lead)
+            } else {
+                self.calculate_adaptive_tj_threshold()
+            };
+            if self.word_boundary_mode == WordBoundaryMode::Tiebreaker {
+                self.lead_threshold = Some(threshold);
+            }
+            if *lead < threshold
+                && let Some(mut run) = self.tj_span_buffer.take()
+            {
+                self.end_set_back_run_at_drawn_end(&mut run);
+                run.keep_continuing_tm_width();
+                self.tj_span_buffer = Some(run);
             }
         }
     }
@@ -359,7 +375,7 @@ impl<'doc> TextExtractor<'doc> {
         // Track TJ offset for statistical analysis
         // Per ISO 32000-1:2008 Section 9.4.4, collect all TJ values
         // to detect justified vs normal text through coefficient of variation ~keep
-        if self.tj_offset_history.len() < 10000 {
+        if self.tj_offset_history.len() < adaptive_spacing::TJ_OFFSET_HISTORY_LIMIT {
             // Keep history reasonable size (first 10k offsets per document)
             // and update the running accumulators. ~keep
             let x = offset as f64;
@@ -554,8 +570,8 @@ impl<'doc> TextExtractor<'doc> {
     /// stream drew last. Glyphs drawn at the pen itself keep the pen move: their place says where the run
     /// before them ends. Only a lead past the word-boundary threshold does this. The glyph widths in
     /// `char_widths` are untouched: the `Tm` continuation never added to them, so they already hold the glyph
-    /// run that `accumulated_width` is restored to. ~keep
-    fn end_set_back_run_at_drawn_end(&self, buffer: &mut TjBuffer) {
+    /// run that `accumulated_width` is restored to. It applies in both word-boundary modes. ~keep
+    pub(super) fn end_set_back_run_at_drawn_end(&self, buffer: &mut TjBuffer) {
         if self.pen_set_back_depth().is_some()
             && let Some(end) = self.current_drawn_end()
             && buffer.user_h_scale > 0.0
@@ -595,18 +611,12 @@ impl<'doc> TextExtractor<'doc> {
 
     /// Process TJ array using primary detection mode.
     ///
-    /// This implementation:
-    /// 1. Creates BoundaryContext from graphics state
-    /// 2. Calls WordBoundaryDetector to detect boundaries in tj_character_array
-    /// 3. Apply ligature expansion decisions
-    /// 4. Partitions characters into clusters at boundary positions
-    /// 5. Converts each cluster to a TextSpan with proper bounding boxes
-    /// 6. Marks spans with primary_detected flag
-    fn process_tj_array_primary(&mut self, array: &[TextElement]) -> Result<()> {
+    /// Decide whether Primary will record offsets before the preceding run is flushed, so its lead
+    /// classification and width restoration use the same history. ~keep
+    fn primary_tj_boundaries(&mut self) -> Result<Vec<usize>> {
         if self.tj_character_array.is_empty() {
-            return self.process_tj_array_tiebreaker(array, None, false).map(|_| ());
+            return Ok(Vec::new());
         }
-
         // Mark pattern contexts BEFORE boundary detection
         // This protects email and URL patterns from being split at word boundaries ~keep
         let pattern_config = crate::extractors::PatternPreservationConfig::default();
@@ -621,6 +631,10 @@ impl<'doc> TextExtractor<'doc> {
         let detector = WordBoundaryDetector::new().with_document_script(script);
         let boundaries = detector.detect_word_boundaries(&self.tj_character_array, &context);
 
+        Ok(boundaries)
+    }
+
+    fn process_tj_array_primary(&mut self, array: &[TextElement], boundaries: Vec<usize>) -> Result<()> {
         if boundaries.is_empty() {
             return self.process_tj_array_tiebreaker(array, None, false).map(|_| ());
         }

@@ -11021,14 +11021,19 @@ sealed class ImageOutputFormat with _$ImageOutputFormat {
 class ImagePreprocessingConfig {
   /// Target DPI for the image (300 is standard, 600 for small text).
   ///
-  /// For a PDF page, this resamples the already-rendered raster; it does not make the page
-  /// re-render at a higher native resolution. A value above what
-  /// `image::preprocessing::calculate_target_dpi`'s memory/dimension clamp allows is
-  /// silently capped (GH#1786: 400 and 600 both clamped to the same ~372 on a Letter page
-  /// and produced byte-identical output), so upscaling interpolated pixels this way adds no
-  /// detail. To change the actual PDF render resolution, set `images.target_dpi` on
-  /// [`ExtractionConfig`](crate::core::config::ExtractionConfig) instead
-  /// (`image::dpi::effective_pdf_render_dpi`).
+  /// Forced whole-document PDF OCR with the registered built-in Tesseract backend renders
+  /// native page content at this density before normalization when a preprocessing block
+  /// is configured and this value exceeds 150. This includes the synthesized classical
+  /// pipeline and a block that only sets another option: omitted `target_dpi` defaults to 300.
+  /// Without a preprocessing block, the default PDF render remains 150 DPI.
+  ///
+  /// Explicit `images` settings and detected full-page scan density take precedence.
+  /// Selected-page OCR, prepared rasters, custom backends, explicit OCR pipelines and VLM
+  /// fallback retain their source-render policy. Existing raster memory and dimension limits
+  /// can cap both rendering and normalization; increasing this value cannot recover detail
+  /// from a supplied raster. Set `images.target_dpi` on
+  /// [`ExtractionConfig`](crate::core::config::ExtractionConfig) to configure PDF rendering
+  /// independently of preprocessing.
   final PlatformInt64 targetDpi;
 
   /// Auto-detect and correct image rotation.
@@ -14348,8 +14353,9 @@ class OcrQualityThresholds {
   /// Measured over the 16 pages of a recorded municipal ordinance (13 prose pages, 3 scanned
   /// survey drawings): prose ran 0.04-0.28, the drawings 0.42-0.47. The default sits in that
   /// gap with margin on both sides. By default, crossing the threshold emits a processing
-  /// warning but retains the recognized text. Set [`Self::discard_suspected_ocr_noise`] to
-  /// `true` to restore destructive filtering.
+  /// warning and retains the recognized text, except for the symbol-noise lines that
+  /// [`Self::prune_symbol_noise_lines`] removes. Set [`Self::discard_suspected_ocr_noise`] to
+  /// `true` to restore destructive filtering of the whole page.
   final double maxOcrOutputFragmentedWordRatio;
 
   /// Minimum mean OCR confidence (0-100) below which a page is reported as suspected noise.
@@ -14397,8 +14403,42 @@ class OcrQualityThresholds {
   /// Discard non-empty OCR text when any configured recognition-noise signal fires.
   ///
   /// Defaults to `false`: suspected noise is retained and surfaced through
-  /// `processing_warnings`. Set to `true` to preserve the legacy destructive behavior.
+  /// `processing_warnings`, minus the symbol-noise lines [`Self::prune_symbol_noise_lines`]
+  /// removes. Set to `true` to preserve the legacy destructive behavior.
   final bool discardSuspectedOcrNoise;
+
+  /// Remove symbol-noise lines from a page flagged as suspected recognition noise but retained.
+  ///
+  /// Applies to any such page, not only photographs, when it has at least 8 non-blank lines
+  /// and at least half of them are symbol noise. A line is symbol noise when fewer than half
+  /// its whitespace-separated tokens are word-shaped (3 or more letters, 4 or more when the
+  /// line is a single token, after trimming surrounding punctuation) and none of these keeps
+  /// it:
+  ///
+  /// - it contains any digit;
+  /// - it contains a character of a script written without spaces (CJK ideographs, Kana,
+  ///   Hangul, Thai, Lao, Khmer, Myanmar), each of which counts as a word;
+  /// - a token holds a letter outside the Latin script (Arabic, Cyrillic, Greek, ...);
+  /// - an `=`, `+`, `<`, `>` or comparison/multiplication sign sits between two operands, each
+  ///   a word of 3 or more letters, a digit-bearing token, or one letter other than
+  ///   `i`, `l`, `j`, `o` (`x = y`, `a + b`; `oe = ie` and `i - l` are pruned);
+  /// - it is an English phrase: two or more alphabetic tokens that are each an English
+  ///   function word (`I`, `am`, `to`, ...) or a word of 3 or more letters with a vowel, with at
+  ///   least one function word of 2 or more letters (`I am.`, `Go to`, `IS IT`; `ee so` is
+  ///   pruned). This rule is English-only, so a 2-token or 3-token line in another language
+  ///   (`de la`, `de la gare`) is pruned;
+  /// - a token is an English contraction (`I'm`, `it's`).
+  ///
+  /// A single-token form answer such as `No.`, `Yes` or `Qty` has too little around it to
+  /// count as a word and is pruned on a flagged page, and so is an equation written without
+  /// spaces (`x=y`).
+  ///
+  /// Pages with tables and pages discarded by [`Self::discard_suspected_ocr_noise`] are not
+  /// pruned. Stage scoring in a multi-stage OCR pipeline and the single-page first-pass
+  /// quality gate read the text before pruning. Each pruned page adds a processing warning
+  /// naming the page and the number of lines removed. Set to `false` to keep every
+  /// recognized line.
+  final bool pruneSymbolNoiseLines;
 
   /// Minimum average word length. Below this with enough words indicates garbled extraction.
   final double minAvgWordLength;
@@ -14478,6 +14518,7 @@ class OcrQualityThresholds {
     required this.minWordsForOcrOutputCheck,
     required this.maxOcrOutputDictInvalidWordRatio,
     required this.discardSuspectedOcrNoise,
+    required this.pruneSymbolNoiseLines,
     required this.minAvgWordLength,
     required this.minWordsForAvgLengthCheck,
     required this.minConsecutiveRepeatRatio,
@@ -14508,6 +14549,7 @@ class OcrQualityThresholds {
       minWordsForOcrOutputCheck.hashCode ^
       maxOcrOutputDictInvalidWordRatio.hashCode ^
       discardSuspectedOcrNoise.hashCode ^
+      pruneSymbolNoiseLines.hashCode ^
       minAvgWordLength.hashCode ^
       minWordsForAvgLengthCheck.hashCode ^
       minConsecutiveRepeatRatio.hashCode ^
@@ -14542,6 +14584,7 @@ class OcrQualityThresholds {
           maxOcrOutputDictInvalidWordRatio ==
               other.maxOcrOutputDictInvalidWordRatio &&
           discardSuspectedOcrNoise == other.discardSuspectedOcrNoise &&
+          pruneSymbolNoiseLines == other.pruneSymbolNoiseLines &&
           minAvgWordLength == other.minAvgWordLength &&
           minWordsForAvgLengthCheck == other.minWordsForAvgLengthCheck &&
           minConsecutiveRepeatRatio == other.minConsecutiveRepeatRatio &&
@@ -18004,7 +18047,12 @@ class SecurityLimits {
   /// Maximum aggregate table cells per document (100,000).
   ///
   /// Raise this for trusted large tabular inputs. Higher values permit
-  /// proportionally more parsing work and output allocation.
+  /// proportionally more parsing work and output allocation. A spreadsheet
+  /// workbook (XLSX, XLSM, XLTM, XLAM, XLSB, XLS, XLA, ODS) over the limit is not rejected: each
+  /// sheet that does not fit the remaining budget is skipped with a warning
+  /// and returned empty, so a workbook whose every sheet is over the limit
+  /// yields placeholder sheets only. Other table formats fail with a
+  /// security error.
   final PlatformInt64 maxTableCells;
 
   /// Maximum number of pages (or slides, or frames) in a single document.

@@ -2977,7 +2977,12 @@ impl FontInfo {
                     if current_code <= 255 {
                         diff_glyph_names.insert(current_code as u8, glyph_name.clone());
                     }
-                    if let Some(unicode_char) = glyph_name_to_unicode(glyph_name) {
+                    let components = glyph_name_components_to_string(glyph_name);
+                    let single = match components {
+                        Some(_) => None,
+                        None => glyph_name_to_unicode(glyph_name),
+                    };
+                    if let Some(unicode_char) = single {
                         if current_code <= 255 {
                             encoding_map.insert(current_code as u8, unicode_char);
                             if is_ligature_char(unicode_char) {
@@ -2990,10 +2995,13 @@ impl FontInfo {
                                 );
                             }
                         }
-                    } else if let Some(unicode_string) = glyph_name_to_unicode_string(glyph_name) {
+                    } else if let Some(unicode_string) = components.or_else(|| glyph_name_to_unicode_string(glyph_name))
+                    {
                         // Compound glyph name (e.g. f_f → "ff", f_f_i → "ffi")
                         // ~keep
                         if current_code <= 255 {
+                            // Decoding checks the single-character map first; a compound replaces that entry. ~keep
+                            encoding_map.remove(&(current_code as u8));
                             multi_char_map.insert(current_code as u8, unicode_string.clone());
                             tracing::debug!(
                                 "/Differences: code {} → /{} → {:?} (compound)",
@@ -5566,26 +5574,59 @@ pub(crate) fn glyph_name_to_unicode(glyph_name: &str) -> Option<char> {
     None
 }
 
+/// One `_` component of a glyph name: `uni` followed by a multiple of four hex digits is that
+/// sequence of code points (surrogates reject it, per the AGL specification); anything else is a
+/// single-name lookup.
+fn component_to_string(component: &str) -> Option<String> {
+    if let Some(hex) = component.strip_prefix("uni")
+        && !hex.is_empty()
+        && hex.len() % 4 == 0
+        && hex.bytes().all(|b| b.is_ascii_hexdigit())
+    {
+        let decoded: Option<String> = (0..hex.len())
+            .step_by(4)
+            .map(|start| {
+                u32::from_str_radix(&hex[start..start + 4], 16)
+                    .ok()
+                    .and_then(char::from_u32)
+            })
+            .collect();
+        if decoded.is_some() {
+            return decoded;
+        }
+    }
+    glyph_name_to_unicode(component).map(String::from)
+}
+
+/// The letters of an underscore-joined glyph name, by the Adobe Glyph List specification: drop
+/// everything from the first `.`, split on `_`, map each component (an AGL name, `uniXXXX` or
+/// `uXXXX`) and skip the empty and unknown ones. `None` when the name has neither an underscore nor
+/// several `uni` code points, or no component maps.
+fn glyph_name_components_to_string(glyph_name: &str) -> Option<String> {
+    let base = glyph_name.split('.').next().unwrap_or_default();
+    let multi_code_point_uni = base.strip_prefix("uni").is_some_and(|hex| hex.len() > 4);
+    if !glyph_name.contains('_') && !multi_code_point_uni {
+        return None;
+    }
+    let letters: String = base
+        .split('_')
+        .filter(|component| !component.is_empty())
+        .filter_map(component_to_string)
+        .collect();
+    (!letters.is_empty()).then_some(letters)
+}
+
 /// Resolve a glyph name to a Unicode string, handling compound names.
 ///
 /// Like `glyph_name_to_unicode` but returns a full String for compound glyph names
 /// (underscore-delimited per AGL spec, e.g. "f_f" → "ff", "f_f_i" → "ffi").
 pub(crate) fn glyph_name_to_unicode_string(glyph_name: &str) -> Option<String> {
-    if let Some(ch) = glyph_name_to_unicode(glyph_name) {
-        return Some(ch.to_string());
+    if let Some(joined) = glyph_name_components_to_string(glyph_name) {
+        return Some(joined);
     }
 
-    // Handle underscore-delimited compound names (AGL spec section 2) ~keep
-    if glyph_name.contains('_') {
-        let mut result = String::new();
-        for part in glyph_name.split('_') {
-            // If any component is unknown, fail entirely. ~keep
-            let ch = glyph_name_to_unicode(part)?;
-            result.push(ch);
-        }
-        if !result.is_empty() {
-            return Some(result);
-        }
+    if let Some(ch) = glyph_name_to_unicode(glyph_name) {
+        return Some(ch.to_string());
     }
 
     // Final fallback: unified chain — variant-suffix
@@ -9899,14 +9940,21 @@ mod tests {
 
     #[test]
     fn test_glyph_name_to_unicode_string_compound_ff() {
-        // glyph_name_to_unicode("f_f") returns Some('f') — first component via AGL
-        // So glyph_name_to_unicode_string wraps it as "f" (single-char short-circuit) ~keep
-        assert_eq!(glyph_name_to_unicode_string("f_f"), Some("f".to_string()));
+        assert_eq!(glyph_name_to_unicode_string("f_f"), Some("ff".to_string()));
+        for (name, letters) in [
+            ("f_f_i", "ffi"),
+            ("f_i", "fi"),
+            ("f_l", "fl"),
+            ("f_f_l", "ffl"),
+            ("s_t", "st"),
+        ] {
+            assert_eq!(glyph_name_to_unicode_string(name), Some(letters.to_string()), "{name}");
+        }
     }
 
     #[test]
     fn test_glyph_name_to_unicode_string_compound_all_known() {
-        assert_eq!(glyph_name_to_unicode_string("T_h"), Some("T".to_string()));
+        assert_eq!(glyph_name_to_unicode_string("T_h"), Some("Th".to_string()));
     }
 
     #[test]
@@ -11528,6 +11576,86 @@ mod tests {
             ]),
         );
         Object::Dictionary(enc)
+    }
+
+    fn encoding_naming_code_65(glyph_name: &str) -> Object {
+        let mut enc: HashMap<String, Object> = HashMap::new();
+        enc.insert(
+            "Differences".to_string(),
+            Object::Array(vec![Object::Integer(65), Object::Name(glyph_name.to_string())]),
+        );
+        Object::Dictionary(enc)
+    }
+
+    /// An underscore-joined /Differences name gives the letters of all its components, not the first
+    /// (Adobe Glyph List specification): `f_f_i` is `ffi` (#2689).
+    #[test]
+    fn test_differences_underscore_name_decodes_every_component() {
+        let doc = minimal_pdf_doc();
+        for (name, letters) in [
+            ("f_f_i", "ffi"),
+            ("f_f", "ff"),
+            ("f_i", "fi"),
+            ("f_l", "fl"),
+            ("f_f_l", "ffl"),
+            ("s_t", "st"),
+        ] {
+            let (_enc, multi, _names) =
+                FontInfo::parse_encoding(&encoding_naming_code_65(name), &doc, None, false).unwrap();
+            assert_eq!(multi.get(&65).map(String::as_str), Some(letters), "{name}");
+        }
+    }
+
+    /// The Adobe Glyph List algorithm: drop everything from the first `.`, split on `_`, map each
+    /// component and let the empty and unknown ones contribute nothing.
+    #[test]
+    fn test_glyph_name_to_unicode_string_follows_the_agl_algorithm() {
+        for (name, expected) in [
+            ("uni0066_uni0069", Some("fi")),
+            ("f_i.alt", Some("fi")),
+            ("f.alt_i", Some("f")),
+            ("f__i", Some("fi")),
+            ("_f", Some("f")),
+            ("zzz_i", Some("i")),
+            ("a_b", Some("ab")),
+            ("uni00660069", Some("fi")),
+            ("uni00660069_x", Some("fix")),
+            ("uni0066_uniD800_i", Some("fi")),
+            ("zzz_yyy", None),
+            ("_", None),
+        ] {
+            assert_eq!(glyph_name_to_unicode_string(name).as_deref(), expected, "{name}");
+        }
+    }
+
+    #[test]
+    fn test_differences_underscore_names_follow_the_agl_algorithm() {
+        let doc = minimal_pdf_doc();
+        for (name, letters) in [
+            ("uni0066_uni0069", "fi"),
+            ("f_i.alt", "fi"),
+            ("f.alt_i", "f"),
+            ("f__i", "fi"),
+            ("zzz_i", "i"),
+            ("a_b", "ab"),
+        ] {
+            let (_enc, multi, _names) =
+                FontInfo::parse_encoding(&encoding_naming_code_65(name), &doc, None, false).unwrap();
+            assert_eq!(multi.get(&65).map(String::as_str), Some(letters), "{name}");
+        }
+    }
+
+    /// Control: a name in which no component maps leaves the base encoding's letter for the code, as before.
+    #[test]
+    fn test_differences_underscore_name_with_no_known_component_keeps_the_base_letter() {
+        let doc = minimal_pdf_doc();
+        let (enc, multi, _names) =
+            FontInfo::parse_encoding(&encoding_naming_code_65("zzz_yyy"), &doc, None, false).unwrap();
+        assert!(multi.is_empty(), "{multi:?}");
+        assert!(
+            matches!(&enc, Encoding::Custom(map) if map.get(&65) == Some(&'A')),
+            "{enc:?}"
+        );
     }
 
     /// Task 1 verify: the /Differences glyph name survives parse time.

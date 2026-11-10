@@ -367,6 +367,27 @@ mod tests {
         assert_eq!(prepared.source_dpi, metadata.final_dpi);
     }
 
+    /// The memory budget alone shrinks the frame here, far below `max_image_dimension`. The record
+    /// must say so through `scale_factor` and `final_dpi`, since the PDF retry judges a noisy read
+    /// of a shrunk image by those fields and `dimension_clamped` stays false.
+    #[test]
+    fn a_budget_shrink_is_recorded_as_a_downscale_not_a_dimension_clamp() {
+        let png = b"\x89PNG\r\n\x1a\n";
+        let limits = SecurityLimits {
+            max_content_size: 5 * 1024 * 1024,
+            ..Default::default()
+        };
+        let image = image::RgbImage::from_pixel(1000, 750, image::Rgb([170, 170, 170]));
+        let prepared = recover(image, png, &limits, None, None, SourceDpi::Known(300.0))
+            .unwrap()
+            .expect("a smaller frame fits the budget");
+        let metadata = prepared.image_preprocessing.as_ref().expect("a record of the shrink");
+        assert!(prepared.width < 1000, "{}", prepared.width);
+        assert!(!metadata.dimension_clamped, "{metadata:?}");
+        assert!(metadata.scale_factor < 1.0, "{metadata:?}");
+        assert!(metadata.final_dpi < 300, "{metadata:?}");
+    }
+
     #[test]
     fn known_source_recovery_keeps_raw_policy_and_physical_dpi_within_the_cap() {
         let png = b"\x89PNG\r\n\x1a\n";

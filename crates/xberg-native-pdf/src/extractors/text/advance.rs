@@ -796,13 +796,15 @@ impl<'doc> TextExtractor<'doc> {
     /// Restate the run in the unit of the new horizontal scale `a`, so that the glyphs it holds keep
     /// their user-space width and the glyphs to come are measured in the new unit: the widths scale by
     /// the old `a` over the new one, the user-space scale by the inverse, and the pen reads from `e`
-    /// under the new matrix. The pull-back is not scaled: only a `TJ` array raises it, in its own
-    /// buffer, so the run a `Tm` restates holds none. ~keep
+    /// under the new matrix, and the width a continuing `Tm` recorded scales with the glyphs. The
+    /// pull-back is not scaled: only a `TJ` array raises it, in its own buffer, so the run a `Tm`
+    /// restates holds none. ~keep
     pub(super) fn restate_run_under_stretched_tm(buffer: &mut TjBuffer, a: f32, e: f32) {
         let ratio = buffer.start_matrix.a / a;
         for width in &mut buffer.char_widths {
             *width *= ratio;
         }
+        buffer.rescale_continuing_tm_record(ratio);
         buffer.user_h_scale /= ratio;
         buffer.start_matrix.a = a;
         buffer.accumulated_width = Self::text_space_advance(buffer.start_matrix, 0, e);
@@ -835,7 +837,11 @@ impl<'doc> TextExtractor<'doc> {
         if let Some(mut buffer) = self.tj_span_buffer.take()
             && !buffer.is_empty()
         {
-            let total_width = buffer.accumulated_width * buffer.user_h_scale;
+            // A run that a continuing `Tm` moved past its last glyph, with no glyph or width change
+            // after it, ends at that glyph, not at the `Tm`'s pen. A `Tm` set back into the run and a
+            // word-gap lead in the next `TJ` keep the pen width (`ends_at_continuing_tm`). ~keep
+            let width = buffer.ends_at_continuing_tm().unwrap_or(buffer.accumulated_width);
+            let total_width = width * buffer.user_h_scale;
 
             // Use pre-computed values from buffer creation (avoids
             // matrix multiply + sqrt + HashMap lookup per flush) ~keep

@@ -131,11 +131,10 @@ fn a_dot_leader_table_of_contents_is_not_read_again_as_a_table() {
     assert_eq!(recorded_psm(&result), "11");
 }
 
-#[test]
-fn markdown_keeps_every_row_of_an_adopted_leader_picture_on_its_own_line() {
-    let mut markdown = config(None);
-    markdown.output_format = OutputFormat::Markdown;
-    let result = helpers::extract_bytes_document_blocking(PICTURE_11PX, "image/png", &markdown).unwrap();
+fn assert_rows_are_own_lines(format: OutputFormat) {
+    let mut rendered = config(None);
+    rendered.output_format = format;
+    let result = helpers::extract_bytes_document_blocking(PICTURE_11PX, "image/png", &rendered).unwrap();
     assert_eq!(recorded_psm(&result), "6");
     let lines: Vec<_> = result.content.lines().filter(|line| !line.trim().is_empty()).collect();
     assert_eq!(
@@ -155,6 +154,11 @@ fn markdown_keeps_every_row_of_an_adopted_leader_picture_on_its_own_line() {
         next = at;
     }
     assert!(kept >= 11, "{kept} of 12 rows kept whole:\n{}", result.content);
+}
+
+#[test]
+fn markdown_keeps_every_row_of_an_adopted_leader_picture_on_its_own_line() {
+    assert_rows_are_own_lines(OutputFormat::Markdown);
 }
 
 #[test]
@@ -211,4 +215,9 @@ fn a_picture_whose_first_read_holds_a_correct_table_keeps_it() {
         result.content
     );
     assert_eq!(recorded_psm(&result), "11");
+}
+
+#[test]
+fn djot_keeps_every_row_of_an_adopted_11px_leader_picture_on_its_own_line() {
+    assert_rows_are_own_lines(OutputFormat::Djot);
 }

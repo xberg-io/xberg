@@ -456,3 +456,253 @@ fn sub_threshold_kern_across_the_drawn_end_does_not_keep_it() {
         );
     }
 }
+
+/// `cm` moves the pen in user space without drawing (GH#2322). A pen that the new matrix puts past the end
+/// of the run drawn last keeps its space span at the pen. The stream has no `Q`, so only the `cm` can forget
+/// the run. ~keep
+#[test]
+fn cm_that_puts_the_pen_past_the_drawn_run_keeps_the_space_at_the_pen() {
+    let stream = "BT /F1 10 Tf 72 700 Td (abc) Tj ET 1 0 0 1 50 0 cm BT /F1 10 Tf 1 0 0 1 80 700 Tm [-700 (def)] TJ ET";
+    assert_eq!(
+        starts(stream),
+        [start("abc", 72.0), start(" ", 130.0), start("def", 137.0)]
+    );
+}
+
+/// `Q` restores the text matrix saved by `q`, which is a raw matrix of the run drawn before the `q`, read
+/// under the CTM that `q` restored (GH#2322). A pen set back to 80 sits 7 before that raw end, but the run
+/// drawn inside the `q` block (under a `cm` that comes before its glyphs) was the run drawn last: the space
+/// goes at the pen. Only the `Q` can forget the end here. ~keep
+#[test]
+fn q_that_restores_the_text_matrix_of_an_earlier_run_keeps_the_space_at_the_pen() {
+    let stream = "BT /F1 10 Tf 72 700 Td (abc) Tj ET \
+                  q 1 0 0 1 50 0 cm BT 1 0 0 1 72 300 Tm (xyz) Tj ET Q \
+                  BT 1 0 0 1 80 700 Tm [-700 (def)] TJ ET";
+    assert_eq!(
+        starts(stream),
+        [
+            start("abc", 72.0),
+            start("xyz", 122.0),
+            start(" ", 80.0),
+            start("def", 87.0)
+        ]
+    );
+}
+
+/// A `q` ... `Q` block that only sets the pen draws nothing: the page reads as if the block were not there.
+#[test]
+fn q_block_that_draws_nothing_leaves_the_drawn_run_alone() {
+    let plain = "BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 200 700 Tm ET \
+                 BT /F1 10 Tf 1 0 0 1 150 700 Tm [-3000 (def)] TJ ET";
+    let with_block = "BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 200 700 Tm ET q BT /F1 10 Tf 300 100 Td ET Q \
+                      BT /F1 10 Tf 1 0 0 1 150 700 Tm [-3000 (def)] TJ ET";
+    assert_eq!(
+        starts(plain),
+        [start("abc", 72.0), start(" ", 150.0), start("def", 180.0)]
+    );
+    assert_eq!(starts(with_block), starts(plain));
+}
+
+/// A run that a word-boundary lead ends at its glyphs is as wide as its glyph advances again (GH#2690).
+#[test]
+fn tj_lead_after_a_tm_back_into_the_run_makes_its_width_the_sum_of_its_glyph_widths() {
+    let mut extractor = extractor();
+    extractor.extract_spans = true;
+    let stream = "BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 80 700 Tm [-3000 (def)] TJ ET";
+    extractor.run_content_stream(stream.as_bytes()).unwrap();
+    extractor.flush_tj_span_buffer().unwrap();
+    extractor.settle_span_holds();
+    let texts: Vec<&str> = extractor.spans.iter().map(|s| s.text.as_str()).collect();
+    assert_eq!(texts, ["abc", " ", "def"]);
+    let run = &extractor.spans[0];
+    assert_eq!(run.char_widths, [5.000_000_5_f32; 3]);
+    assert_eq!(run.bbox.width, 15.0);
+}
+
+/// An extractor whose run drawn last ended at 87 and whose pen the last positioning set back to 80. ~keep
+fn extractor_with_a_pen_set_back() -> TextExtractor<'static> {
+    let mut extractor = extractor();
+    extractor.state_stack.current_mut().font_size = 10.0;
+    extractor.position_pen(Matrix::translation(72.0, 700.0));
+    extractor.state_stack.current_mut().text_matrix = Matrix::translation(87.0, 700.0);
+    extractor.position_pen(Matrix::translation(80.0, 700.0));
+    assert!(extractor.drawn_end.is_some(), "no run was drawn before the set back");
+    extractor
+}
+
+/// A run with a baseline is as wide as the distance to the end of the run drawn last. The other tests
+/// that use this setup need it to be live. ~keep
+#[test]
+fn a_run_set_back_into_the_drawn_run_is_as_wide_as_the_distance_to_its_end() {
+    let extractor = extractor_with_a_pen_set_back();
+    let mut run = TjBuffer::new(extractor.state_stack.current(), None, None);
+    run.start_matrix = Matrix::translation(72.0, 700.0);
+    run.user_h_scale = 1.0;
+    run.accumulated_width = 8.0;
+    extractor.end_set_back_run_at_drawn_end(&mut run);
+    assert_eq!(run.accumulated_width, 15.0);
+}
+
+/// A run whose matrix maps every glyph to one point has no baseline: its width stays as it was, not NaN.
+/// The scale is 0 and the distance along the baseline is 0 / 0, so the finite check refuses it too
+/// (`baseline_reach` in tj_arrays.rs). ~keep
+#[test]
+fn a_degenerate_run_matrix_keeps_the_run_width() {
+    let extractor = extractor_with_a_pen_set_back();
+    let mut run = TjBuffer::new(extractor.state_stack.current(), None, None);
+    run.start_matrix = Matrix {
+        a: 0.0,
+        b: 0.0,
+        c: 0.0,
+        d: 0.0,
+        e: 72.0,
+        f: 700.0,
+    };
+    run.user_h_scale = 1.0;
+    run.accumulated_width = 8.0;
+    extractor.end_set_back_run_at_drawn_end(&mut run);
+    assert_eq!(run.accumulated_width, 8.0);
+}
+
+/// A run with a baseline whose width does not fit in an `f32` keeps its width: the scale is positive, so
+/// only the finite check refuses it. ~keep
+#[test]
+fn a_run_width_that_overflows_keeps_the_run_width() {
+    let extractor = extractor_with_a_pen_set_back();
+    let mut run = TjBuffer::new(extractor.state_stack.current(), None, None);
+    run.start_matrix = Matrix::translation(72.0, 700.0);
+    run.user_h_scale = f32::MIN_POSITIVE;
+    run.accumulated_width = 8.0;
+    extractor.end_set_back_run_at_drawn_end(&mut run);
+    assert_eq!(run.accumulated_width, 8.0);
+}
+
+/// Whether a glyph or an offset moved the pen since the last positioning operator: the extractor then holds
+/// a run drawn last that the next positioning operator would take as its end. ~keep
+fn holds_a_drawn_run(extractor: &TextExtractor<'_>) -> bool {
+    extractor
+        .positioned_pen
+        .is_some_and(|pen| pen != extractor.state_stack.current().text_matrix)
+}
+
+const FIRST_STREAM: &[u8] = b"BT /F1 10 Tf 72 700 Td (abc) Tj ET";
+const NEXT_STREAM: &[u8] = b"BT /F1 10 Tf 1 0 0 1 80 700 Tm [-3000 (def)] TJ ET";
+
+fn origins(spans: &[TextSpan]) -> Vec<(String, f32)> {
+    spans.iter().map(|s| (s.text.clone(), s.bbox.x)).collect()
+}
+
+/// `extract_text_spans` does not see the run that an earlier call drew with the same extractor. ~keep
+#[test]
+fn extract_text_spans_forgets_the_run_drawn_by_the_last_call() {
+    let mut reused = extractor();
+    reused.extract_text_spans(FIRST_STREAM).unwrap();
+    assert!(holds_a_drawn_run(&reused), "the first stream left no drawn run");
+    let after_a_page = origins(&reused.extract_text_spans(NEXT_STREAM).unwrap());
+    let fresh = origins(&extractor().extract_text_spans(NEXT_STREAM).unwrap());
+    assert_eq!(after_a_page, fresh);
+    assert_eq!(fresh, [start(" ", 80.0), start("def", 110.0)]);
+}
+
+/// `prepare_for_span_extraction` does not see the run that an earlier stream drew with the same extractor.
+/// The first stream runs without `extract_text_spans`, which would reset the run itself. ~keep
+#[test]
+fn prepare_for_span_extraction_forgets_the_run_drawn_by_the_last_stream() {
+    let spans = |e: &mut TextExtractor<'_>, stream: &[u8]| {
+        e.prepare_for_span_extraction();
+        e.run_content_stream(stream).unwrap();
+        e.flush_tj_span_buffer().unwrap();
+        origins(&e.spans)
+    };
+    let mut reused = extractor();
+    spans(&mut reused, FIRST_STREAM);
+    assert!(holds_a_drawn_run(&reused), "the first stream left no drawn run");
+    let after_a_page = spans(&mut reused, NEXT_STREAM);
+    let fresh = spans(&mut extractor(), NEXT_STREAM);
+    assert_eq!(after_a_page, fresh);
+    assert_eq!(fresh, [start(" ", 80.0), start("def", 110.0)]);
+}
+
+/// A `Td` with no line move right after an array that marked a word boundary sets the pen through the
+/// positioning rule, so the set-back rule reads it. A `Td` back into the array's last word puts the space span
+/// at the end of that word. A `Td` with a negative `tx` puts the pen before the array's start: the lead does
+/// not reach past the end of the drawn run, so it adds no space span. The pen seam itself is pinned by the
+/// `c01` and `c03` tests, not here. ~keep
+#[test]
+fn td_after_a_marked_array_sets_the_pen_back_into_the_array() {
+    // "abc" ends at 87, "def" spans 117 to 132. ~keep
+    let line = "BT /F1 10 Tf 72 700 Td [(abc) -3000 (def)] TJ";
+    let back_into_def = starts(&format!("{line} 52 0 Td [-3000 (ghi)] TJ ET"));
+    let want = [
+        start("abc", 72.0),
+        start(" ", 87.0),
+        start("def", 117.0),
+        start(" ", 132.0),
+        start("ghi", 154.0),
+    ];
+    assert_eq!(back_into_def, want);
+    let before_abc = starts(&format!("{line} -6 0 Td [-3000 (ghi)] TJ ET"));
+    let want = [
+        start("abc", 72.0),
+        start(" ", 87.0),
+        start("def", 117.0),
+        start("ghi", 96.0),
+    ];
+    assert_eq!(before_abc, want);
+}
+
+fn span_boxes_in_mode(mode: WordBoundaryMode, stream: &str) -> Vec<(String, f32, f32)> {
+    let config = TextExtractionConfig {
+        word_boundary_mode: mode,
+        ..TextExtractionConfig::default()
+    };
+    let mut extractor = TextExtractor::with_config(config);
+    extractor.add_font("F1".to_string(), half_em_font());
+    extractor.extract_spans = true;
+    extractor.run_content_stream(stream.as_bytes()).unwrap();
+    extractor.flush_tj_span_buffer().unwrap();
+    extractor.settle_span_holds();
+    let round = |v: f32| (v * 100.0).round() / 100.0;
+    extractor
+        .spans
+        .iter()
+        .map(|s| (s.text.clone(), round(s.bbox.x), round(s.bbox.width)))
+        .collect()
+}
+
+/// The Primary word-boundary mode ends the run at its drawn width after a `Tm` set back, as the default
+/// mode does (GH#2690). The `def` span sits at the pen move plus the lead, 30 points past it. ~keep
+#[test]
+fn primary_mode_tj_lead_after_a_tm_back_keeps_the_drawn_width() {
+    for (setup, back, space_width) in [
+        ("BT /F1 10 Tf 72 700 Td", "1 0 0 1 80 700 Tm", 2.5),
+        ("BT 10 0 0 10 72 700 Tm /F1 1 Tf", "10 0 0 10 80 700 Tm", 0.25),
+    ] {
+        let stream = format!("{setup} (abc) Tj {back} [-3000 (def)] TJ ET");
+        let spans = span_boxes_in_mode(WordBoundaryMode::Primary, &stream);
+        let default = span_boxes_in_mode(WordBoundaryMode::Tiebreaker, &stream);
+        assert_eq!(spans, default, "{setup}");
+        let expected = [
+            ("abc".to_string(), 72.0, 15.0),
+            (" ".to_string(), 87.0, space_width),
+            ("def".to_string(), 110.0, 15.0),
+        ];
+        assert_eq!(spans, expected, "{setup}");
+    }
+}
+
+/// Controls for Primary mode: a kern under the threshold keeps the pen move, and glyphs drawn at the pen
+/// continue the run from it. ~keep
+#[test]
+fn primary_mode_keeps_the_pen_move_for_a_kern_and_for_glyphs_at_the_pen() {
+    let kern = span_boxes_in_mode(
+        WordBoundaryMode::Primary,
+        "BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 80 700 Tm [-50 (def)] TJ ET",
+    );
+    assert_eq!(kern.first(), Some(&("abc".to_string(), 72.0, 8.0)), "{kern:?}");
+    let at_pen = span_boxes_in_mode(
+        WordBoundaryMode::Primary,
+        "BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 80 700 Tm (d) Tj ET",
+    );
+    assert_eq!(at_pen, [("abcd".to_string(), 72.0, 13.0)]);
+}
