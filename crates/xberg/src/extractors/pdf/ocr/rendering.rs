@@ -389,6 +389,9 @@ pub(super) struct XObjectRecoveryOutcome {
     /// Whether any image was read at a resolution the page's placement proved rather than one
     /// the backend estimated.
     pub(super) used_proven_source_dpi: bool,
+    /// Whether any image was shrunk to the backend's `max_image_dimension`, which can leave
+    /// its glyphs illegible.
+    pub(super) dimension_clamped: bool,
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) async fn recover_image_xobjects(
@@ -410,6 +413,7 @@ pub(super) async fn recover_image_xobjects(
         image_preprocessing: None,
         failure_causes: Vec::new(),
         used_proven_source_dpi: false,
+        dimension_clamped: false,
     };
     for fallback in fallback_images {
         context.check_cancelled()?;
@@ -510,6 +514,11 @@ pub(super) async fn collect_xobject_recovery_result(
     )?;
     account_xobject_structured_output(&result, outcome.image_preprocessing.is_none(), budget)?;
     outcome.llm_usage.extend(result.llm_usage.unwrap_or_default());
+    outcome.dimension_clamped |= result
+        .metadata
+        .image_preprocessing
+        .as_ref()
+        .is_some_and(|metadata| metadata.dimension_clamped);
     if outcome.image_preprocessing.is_none() {
         outcome.image_preprocessing = result.metadata.image_preprocessing;
     }

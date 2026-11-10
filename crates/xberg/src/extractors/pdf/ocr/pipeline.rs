@@ -1259,15 +1259,22 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     image_preprocessing,
                     failure_causes,
                     used_proven_source_dpi,
+                    dimension_clamped,
                 }) = recovery
                 {
                     retry_causes = failure_causes;
-                    let text = if used_proven_source_dpi && proven_read_is_noise(&text, &ocr_output_thresholds) {
-                        retry_causes.push(PROVEN_READ_NOISE_CAUSE.to_owned());
-                        String::new()
-                    } else {
-                        text
-                    };
+                    let text = judge_proven_read(
+                        text,
+                        ProvenRead {
+                            used_proven_source_dpi,
+                            dimension_clamped,
+                            page_idx,
+                            warn_when_kept: true,
+                        },
+                        &ocr_output_thresholds,
+                        &mut accumulated_warnings,
+                        &mut retry_causes,
+                    );
                     recovered = should_adopt_xobject_retry_text("", &text) || !tables.is_empty();
                     if should_adopt_xobject_retry_text("", &text) {
                         structured_ocr_pages.insert(
@@ -1297,11 +1304,19 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     accumulated_warnings.push(xobject_fallback_warning(page_idx, attempted, true));
                 }
                 if recovered {
+                    let recovered_kind = if ocr_results
+                        .get(&page_number)
+                        .is_some_and(|text| !text.trim().is_empty())
+                    {
+                        "text"
+                    } else {
+                        "content"
+                    };
                     accumulated_warnings.push(crate::types::ProcessingWarning {
                         source: std::borrow::Cow::Borrowed("ocr"),
                         message: std::borrow::Cow::Owned(format!(
-                            "OCR of page {page_number} failed ({error}); its content was recovered from the page's \
-                             embedded image XObjects instead."
+                            "OCR of page {page_number} failed ({error}); its {recovered_kind} was recovered from the \
+                             page's embedded image XObjects instead."
                         )),
                     });
                     merge_ocr_page_failures(
@@ -2302,15 +2317,22 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 image_preprocessing,
                 failure_causes,
                 used_proven_source_dpi,
+                dimension_clamped,
             }) = recovery
             {
                 retry_causes = failure_causes;
-                let text = if used_proven_source_dpi && proven_read_is_noise(&text, &ocr_output_thresholds) {
-                    retry_causes.push(PROVEN_READ_NOISE_CAUSE.to_owned());
-                    String::new()
-                } else {
-                    text
-                };
+                let text = judge_proven_read(
+                    text,
+                    ProvenRead {
+                        used_proven_source_dpi,
+                        dimension_clamped,
+                        page_idx: *page_idx,
+                        warn_when_kept: false,
+                    },
+                    &ocr_output_thresholds,
+                    &mut accumulated_warnings,
+                    &mut retry_causes,
+                );
                 let recovered_tables = !tables.is_empty();
                 let recovered_text_is_empty = text.trim().is_empty();
                 if should_adopt_xobject_retry_text(page_text, &text) {
@@ -5214,6 +5236,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         image_preprocessing,
                         failure_causes: _,
                         used_proven_source_dpi: _,
+                        dimension_clamped: _,
                     } = recovery;
                     let recovered_tables = !tables.is_empty();
                     let recovered_payload = !text.trim().is_empty() || recovered_tables || !formulas.is_empty();
@@ -7540,12 +7563,61 @@ fn pre_page_ocr_config(config: &ExtractionConfig) -> Cow<'_, crate::core::config
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 const PROVEN_READ_NOISE_CAUSE: &str = "the retry read was rejected as noise";
 
-/// Whether text read at a proven resolution is recognition noise. The proven resolution lets the
-/// backend read an image the budget refused, but a dimension clamp can still shrink it until
-/// the glyphs are illegible, and only the output shows that.
+/// What a retry read made at a placement-proven resolution is judged against.
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
-fn proven_read_is_noise(text: &str, thresholds: &crate::core::config::OcrQualityThresholds) -> bool {
-    super::scoring::is_ocr_recognition_noise(text, thresholds)
+struct ProvenRead {
+    used_proven_source_dpi: bool,
+    dimension_clamped: bool,
+    page_idx: usize,
+    /// Whether this route warns about a read it keeps. The single-backend route assesses every
+    /// adopted page afterwards and warns there.
+    warn_when_kept: bool,
+}
+
+/// Apply the page's recognition-noise policy to a retry read made at a proven resolution.
+///
+/// The proven resolution lets the backend read an image the budget refused. A dimension clamp can
+/// still shrink that image until the glyphs are illegible, and only the output shows it, so a
+/// noisy read of a clamped image is dropped. Any other read follows the caller's
+/// `discard_suspected_ocr_noise` like a page read: kept with the warning, or dropped when the
+/// caller asked for that.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn judge_proven_read(
+    text: String,
+    read: ProvenRead,
+    thresholds: &crate::core::config::OcrQualityThresholds,
+    warnings: &mut Vec<crate::types::ProcessingWarning>,
+    retry_causes: &mut Vec<String>,
+) -> String {
+    if !read.used_proven_source_dpi {
+        return text;
+    }
+    if read.dimension_clamped {
+        if super::scoring::is_ocr_recognition_noise(&text, thresholds) {
+            retry_causes.push(PROVEN_READ_NOISE_CAUSE.to_owned());
+            return String::new();
+        }
+        return text;
+    }
+    let mut assessment = Vec::new();
+    let acceptance = accept_or_reject_ocr_page(
+        read.page_idx,
+        text,
+        thresholds,
+        &mut assessment,
+        None,
+        crate::plugins::ConfidenceSemantics::None,
+        None,
+    );
+    if acceptance.discarded {
+        retry_causes.push(PROVEN_READ_NOISE_CAUSE.to_owned());
+    }
+    if read.warn_when_kept || acceptance.discarded {
+        for warning in assessment {
+            crate::core::diagnostics::push_warning_deduped(warnings, warning);
+        }
+    }
+    acceptance.content
 }
 
 /// Most image causes a page error names before summarizing the rest.

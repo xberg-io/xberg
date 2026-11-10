@@ -309,6 +309,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Keep the text a large scanned page's embedded-image retry reads when the read trips the noise check.** (#2832)
+  A one-page JPEG scan whose render exceeded the image working budget was read from its embedded image at the proven resolution, and the read was dropped whenever the fragmented-word test judged it noise, so the page came back blank. The read now follows `discard_suspected_ocr_noise` like any page read, kept with the suspected-noise warning unless the caller asked to discard it. Only a read of an image shrunk to `max_image_dimension` is still dropped. A recovery warning no longer says the content was recovered when the retry kept nothing, and says text when it kept text.
 - **(excel): Extract the sheets that fit when a workbook exceeds `security_limits.max_table_cells`.** (#2820)
   A workbook whose sheets together held more cells than the limit failed as a whole and returned no content. XLSX, XLSM, XLTM, XLAM, XLSB, XLS, XLA and ODS workbooks now skip only the sheet that does not fit, keep every other sheet, and record a warning naming the sheet and the limit. The limit and its default are unchanged.
 - **(pdf): Read an underscore-joined `/Differences` glyph name as all its letters.** (#2689)
