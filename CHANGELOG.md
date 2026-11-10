@@ -309,6 +309,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Honor compound glyph names at printable font codes.** (GH#2834)
+  A `/Differences` mapping such as `65 /f_f_i` now extracts `ffi` instead of the base encoding's `A`. Explicit `ToUnicode` mappings keep precedence.
 - **(ocr): Keep the text a large scanned page's embedded-image retry reads when the read trips the noise check.** (#2832)
   A one-page JPEG scan whose render exceeded the image working budget was read from its embedded image at the proven resolution, and the read was dropped whenever the fragmented-word test judged it noise, so the page came back blank. The read now follows `discard_suspected_ocr_noise` like any page read, kept with the suspected-noise warning unless the caller asked to discard it. A noisy read is still dropped when the image was clamped to `max_image_dimension`, was read below 100 dpi, or has no preprocessing record. The recovery warning says text when text was kept.
 - **(ocr): Read a sideways paragraph of short words as prose.** (#2670)
@@ -386,6 +388,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A re-read that finds no table is now also adopted when its word boxes show the column structure and at least four rows carry a dot leader, because the table check drops a leader table as prose while the block read keeps every row on one line. An 11 px plain leader picture keeps 11 of 12 rows by default instead of none; pictures without leaders, scans, part-page pictures and an explicit caller PSM are unchanged.
 - **(ocr): Keep each row of an adopted dot-leader table picture on its own line in Markdown.** (#2503)
   The adopted block re-read has no table, so its rows were one paragraph whose line breaks Markdown renders as spaces, welding the table into a single line. The extractor now marks that paragraph and Markdown renders each row as its own paragraph; Plain output and re-reads that find a table are unchanged.
+- **(djot): Keep each row of an adopted dot-leader table picture on its own line.** (#2804)
+  Since #2773 the extractor marks the paragraph of an adopted block re-read so Markdown and the comrak-based HTML render each row as its own paragraph, but Djot never read the mark and joined every row into one line. Djot now renders each marked row as its own paragraph, escaping a leading block marker, and so does the styled HTML renderer, both through the same helper; Plain output is unchanged.
 - **(ocr): Keep the native page when OCR differs from it only by hanging underscores or non-text-block bookkeeping (Refs #2534).**
   An underscore run that Tesseract reads just below a native line (the glyph hangs past the line box) now belongs to that line and must show glyph ink, and the count of words Tesseract placed in non-text blocks is run bookkeeping, as `word_count` is. Intel SDM pages 2383, 2486, 2645, 4420 and 4422 return their native text once instead of followed by an OCR copy.
 - **(bindings): Restore the pre-#2702 positional order of the `LayoutDetectionConfig` constructors.** (#2764, #2717)

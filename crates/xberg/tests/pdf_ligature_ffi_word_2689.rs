@@ -163,3 +163,58 @@ fn an_ffi_glyph_with_a_word_gap_on_each_side_stays_between_words() {
     let line = last_line(show, OutputFormat::Markdown, Some("FB03"), "ffi");
     assert!(line.starts_with("The o ffi ce is open."), "{line:?}");
 }
+
+fn printable_last_line(glyph: &str, to_unicode: Option<&str>) -> String {
+    let bytes = build_pdf(&page_with("(The ) Tj (A) Tj ( marker.) Tj"), to_unicode, glyph);
+    let mut document = lopdf::Document::load_mem(&bytes).expect("fixture PDF");
+    let font = document.get_object_mut((5, 0)).unwrap().as_dict_mut().unwrap();
+    font.get_mut(b"Encoding").unwrap().as_dict_mut().unwrap().set(
+        "Differences",
+        vec![
+            lopdf::Object::Integer(i64::from(b'A')),
+            lopdf::Object::Name(glyph.as_bytes().to_vec()),
+        ],
+    );
+    font.get_mut(b"Widths").unwrap().as_array_mut().unwrap()[usize::from(b'A') - 1] = 840.into();
+    if let Some(target) = to_unicode {
+        document
+            .get_object_mut((6, 0))
+            .unwrap()
+            .as_stream_mut()
+            .unwrap()
+            .set_plain_content(to_unicode_map(target).replace("<01>", "<41>").into_bytes());
+    }
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).unwrap();
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Plain,
+        disable_ocr: true,
+        use_cache: false,
+        ..Default::default()
+    };
+    let result = extract_bytes_document_blocking(&bytes, "application/pdf", &config).expect("fixture must extract");
+    assert!(result.content.contains("committee reviewed"), "{}", result.content);
+    let content = result.content.split_whitespace().collect::<Vec<_>>().join(" ");
+    content[content.rfind("The ").expect("marker line")..].to_owned()
+}
+
+#[test]
+fn printable_compound_differences_replace_the_base_encoding_letter() {
+    let actual: Vec<_> = ["f_f_i", "a_b", "uni006600660069"]
+        .map(|glyph| printable_last_line(glyph, None))
+        .into();
+    assert_eq!(actual, ["The ffi marker.", "The ab marker.", "The ffi marker."]);
+}
+
+#[test]
+fn printable_compound_differences_keep_tounicode_authoritative() {
+    assert_eq!(printable_last_line("f_f_i", Some("0058")), "The X marker.");
+}
+
+#[test]
+fn printable_compound_differences_strip_suffixes_and_keep_unknown_base_letters() {
+    let actual: Vec<_> = ["A.alt_B", "zzz_yyy", "f_f_i.alt"]
+        .map(|glyph| printable_last_line(glyph, None))
+        .into();
+    assert_eq!(actual, ["The A marker.", "The A marker.", "The ffi marker."]);
+}
