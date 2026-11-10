@@ -491,6 +491,20 @@ fn text_matrix_between_tj_and_tj_array_ends_the_ligature() {
     }
 }
 
+/// A `Tm` that only stretches the horizontal scale at the pen continues the run but sets the pen again,
+/// so the pull-back of the array after it no longer refers to the ligature and the space keeps its room.
+#[test]
+fn stretching_text_matrix_between_tj_and_tj_array_ends_the_ligature() {
+    let mut extractor = extractor_with(ligature_font("00660069", None));
+    assert_eq!(
+        span_text(
+            &mut extractor,
+            b"BT /F1 10 Tf 72 700 Td (de\\200) Tj 1.1 0 0 1 92 700 Tm [240 ( ne)] TJ ET"
+        ),
+        "defi ne"
+    );
+}
+
 /// Each setting that the run captured ends the ligature when it changes between the `Tj` and the `TJ`.
 /// Each pull-back below covers the whole space under the new setting, so a run that went on across the
 /// change would drop the space. The spans are checked; the characters ignore the change, as before.
