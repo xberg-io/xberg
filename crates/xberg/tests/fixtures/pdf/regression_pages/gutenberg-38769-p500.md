@@ -25,9 +25,9 @@ f(m, x)f(m , x) = f(m + m , x) (Ex. lxxxi. 6).
 
 √
 
-1 1 3 π
+1 1 3
 
-2. Determine which of (~2~e) and ( 2)<sup>2</sup> is the greater. [Take logarithms √ √ √
+2. Determine which of (~2~e) and ( 2)<sup>2</sup>π is the greater. [Take logarithms √ √ √
 
 1 2
 

@@ -73,11 +73,9 @@ where π~*l*~ is the relative frequency of pattern *l* = ( *i*~*1*~, …, *i*~*m
 
 The approximate entropy *ApEn* of order *m* , *m* ≥ 1 is defined as
 
-( *m* ) ( *m* +1)
+( *m* +1)
 
-*ApEn*( <sup>*m*</sup>) <sup>=</sup> Φ
-
-## − Φ
+*ApEn*( <sup>*m*</sup>) <sup>=</sup> Φ(m)<sup>− Φ</sup>
 
 (1)
 

@@ -8,11 +8,7 @@ The parameters of this test are *M* and *N* , so that *n* = *MN* , i.e., the ori
 
  1
 
-Χ<sup>2</sup>( *obs* ) = 4 *M*∑<sup>π</sup> − ~~
-
-*i*
-
-  2
+Χ<sup>2</sup>( *obs* ) = 4 *M*∑<sup>π</sup>i − 2
 
 *i* =1
 

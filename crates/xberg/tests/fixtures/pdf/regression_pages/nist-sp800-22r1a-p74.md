@@ -4,33 +4,31 @@ This test rejects sequences which show too many or too few occurrences of *m* -r
 
 To implement this test, parameters *M* and *N* are determined so that *n* = *MN* , i.e., the original string is partitioned into *N* blocks, each of length *M* .
 
-Let *W* ˜ = *W* ˜ *m* , *n* be the number of (possibly overlapping) runs of ones of length *m* in the jth block.
+˜ ˜
 
-*j j* ( )
+Let *W* = *W*
+
+(<sup>*m*</sup> , *n*) <sup>be the number of (possibly overlapping) runs of ones of length</sup> *m* in the jth block.
+
+*j j*
 
 The asymptotic distribution of *W*~*j*~ is the compound Poisson distribution (the so-called Pòlya-Aeppli law, see[1]):
 
-
+λ(<sup>*e*</sup>t −1)<sup></sup> *E* exp ˜ {<sup>*tW*</sup>~*j*~ } <sup>→</sup> exp  (5)
 
 *t*
 
- λ(<sup>*e*</sup> −1)<sup></sup> *E* exp *tW* ˜ → exp (5)
-
-{
-
-*j* }
-
-  *t*  2 − *e*   
-
-− *m*
-
-when (<sup>*M*</sup> − *m* + 1)<sup>2</sup> → λ \> 0 ( *t* is a real variable).
+ 2 − *e*    when (<sup>*M*</sup> −m + 1)<sup>2</sup>−m → λ \> 0 ( *t* is a real variable).
 
 The corresponding probabilities can be expressed in terms of the confluent hypergeometric function Φ = *F* . If *U* denotes a random variable with the compound Poisson asymptotic distribution, then for u ≥ 1 1 1 with η = λ/2.
 
-−η *u l* −2η
+−η *u*
 
-*e*  *u* −1η ηe *P* (<sup>*U*</sup> = *u*)<sup>=</sup>
+ 
+
+*l* −2η
+
+*e u* −1 η ηe *P* (<sup>*U*</sup> = *u*)<sup>=</sup>
 
 ∑~~
 
@@ -42,11 +40,7 @@ The corresponding probabilities can be expressed in terms of the confluent hyper
 
 *l* =1
 
-For example,
-
-−η
-
-*P* ( <sup>*U*</sup> = 0)<sup>=</sup> *e* , η
+For example, *P* ( <sup>*U*</sup> = 0)<sup>=</sup> *e*−η, η
 
 −η
 
@@ -56,21 +50,17 @@ For example,
 
 ηe *P* ( <sup>*U*</sup> = 2)<sup>=</sup> [<sup>η</sup> + 2]<sup>,</sup> 8
 
-−η
+−η 2
 
-
+ηe η  *P* ( <sup>*U*</sup> = 3)<sup>=</sup>  + η + 1, 8  6 
 
-2
+−η 3
 
-ηe η  *P* ( <sup>*U*</sup> = 3)<sup>=</sup>  + η + 1, 8  6 
+ηe η η<sup>2</sup> 3η  *P* (<sup>*U*</sup> = 4)<sup>=</sup>  + + + 1.
 
-−η
+following probabilities:
 
-
-
-3
-
-ηe η η<sup>2</sup> 3η  *P* (<sup>*U*</sup> = 4)<sup>=</sup>  + + + 1. 16 24 2 2  More accurate, but also more complicated, expressions are given in [3]. These expressions yield the following probabilities:
+16 24 2 2  More accurate, but also more complicated, expressions are given in [3]. These expressions yield the
 
 | π ~0~ | 0.364091 |
 | --- | --- |

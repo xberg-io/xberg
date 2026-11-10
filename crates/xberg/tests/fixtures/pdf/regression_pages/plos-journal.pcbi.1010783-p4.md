@@ -14,23 +14,7 @@ We consider ODE models of the form
 
 **x**
 
-_ ¼ **fðxðtÞ** *;* **θ** *;* **uÞ** *;* **xðt**~0~Þ¼ **x**~0~ðθ *;* **uÞ** *;* ð1Þ
-
-n~x~ n~y~
-
-in which **xðt** *;* **θ** *;* **uÞ** 2 R is the vector of state variables, **θ** 2 R is the parameter vector, **u** 2 þ þ
-
-n~u~
-
-R is the vector of constant inputs and t 2 R is the time. The vector field of the ODE model is þ
-
-n~x~ n~y~ n~u~ n~x~
-
-**f** : R R R \! R , which is Lipschitz-continuous with respect to x, and the initial þ þ þ þ
-
-n~y~ n~u~ n~x~
-
-condition at t~0~is **x**~0~ : R~þ~ R~þ~ \! R~þ~. The ODE model determines the time evolution of the state variables, given the parameters. In case of biochemical reaction networks, this can be e.g., concentrations of biochemical species and reaction rate constants, respectively. The inputs ( **u** ) describe experimental conditions, e.g., regime of administration of a drug or composition of a cell culture medium. In many models, the state variables approach a steady-state **x** ( **θ** , **u** ) for large values of t: **x** ðθ *;* **uÞ** ¼ lim **xðt** *;* **x**~0~ðθ *;* **uÞ** *;* **θ** *;* **uÞ** *:* ð2Þ
+_ ¼ **fðxðtÞ** *;* **θ** *;* **uÞ** *;* **xðt**~0~Þ¼ **x**~0~ðθ *;* **uÞ** *;* ð1Þ in which **xðt** *;* **θ** *;* **uÞ** 2 Rnþx is the vector of state variables, **θ** 2 Rnþy is the parameter vector, **u** 2 Rnþu is the vector of constant inputs and t 2 R is the time. The vector field of the ODE model is **f** : Rnþx Rnþy Rnþu \! Rnþx, which is Lipschitz-continuous with respect to x, and the initial condition at t~0~is **x**~0~ : Rnþy Rnþu \! Rnþx. The ODE model determines the time evolution of the state variables, given the parameters. In case of biochemical reaction networks, this can be e.g., concentrations of biochemical species and reaction rate constants, respectively. The inputs ( **u** ) describe experimental conditions, e.g., regime of administration of a drug or composition of a cell culture medium. In many models, the state variables approach a steady-state **x** ( **θ** , **u** ) for large values of t: **x** ðθ *;* **uÞ** ¼ lim **xðt** *;* **x**~0~ðθ *;* **uÞ** *;* **θ** *;* **uÞ** *:* ð2Þ
 
 t\!1
 

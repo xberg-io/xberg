@@ -20,11 +20,11 @@ Sometimes researchers know in advance that they want to estimate a population me
 
 *Z*~*α*~*σ*<sup>2</sup> *n* =
 
-⎛- ⎞2
+⎛-
 
-*x* - *µ*
+*x* - *µ⎞⎠2*
 
-⎝ ⎠
+⎝
 
 with a specific tolerance level is given by 2 *Z*~*α*~pq *n* = *e*<sup>2</sup>
 

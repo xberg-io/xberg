@@ -64,7 +64,7 @@ sm *n* =1
 
 ( <sup>−</sup>1)
 
-β~*n*~ Where, *J*
+β Where, *J*
 
 ( <sup>β</sup> )<sup>=</sup>
 
@@ -72,47 +72,43 @@ sm *n* =1
 
 ##### (<sup>τ</sup>)<sup>=</sup> (<sup>*jf*</sup> 2πτ )
 
-2 *mn*∑
-
-
-
-nbi
+2 *mn*∑k=0kmk\!  n nbi
 
 ## ∑ n
 
-*cn k* =0 *n* =1
+*cn n* =1
 
-*kmk* \!( +
+(
 
-)<sup>\!2</sup>
+\+
+
+##### )<sup>\!2</sup>
 
 Where, *f*~*c*~ is the carrier frequency, *A*~*n*~ is the amplitude, *f*~*n*~ is (4), sinusoidally modulated broadband interference is the frequency offset, and *N* is the number of interference composed of a series of narrowband interferences, signals. approximating a specific form of chirp modulated broadband The chirp modulation interference can be expressed as: interference.
 
-*N* 2
+*N*
 
-Formulas (1), (2), (4) can be uniformly expressed as: *s B* exp *f* + *jk* πτ (2)
+Formulas (1), (2), (4) can be uniformly expressed as: *s B* exp (2)
 
 (<sup>τ</sup> )<sup>=</sup>
 
-# (<sup>*j*</sup> 2πτ )
+# (<sup>*j*</sup> 2πτf cn+ jkπτ2)
 
 wbi~cm~
 
-## ∑ n
+## ∑~*n*~ =1 *n*
 
-*cn n* =1 *N* 2
+*N*
 
-*s D* exp ππ *ft* + *j k t* (5)
+*s D* exp *j k* (5)
 
 ( <sup>*t*</sup>)<sup>=</sup>
 
-# (<sup>*j*</sup> 2 )
+# (<sup>*j*</sup> 2ππftc + RFIt2)
 
 *RFI*
 
 ## ∑ n
-
-*c RFI*
 
 Where, *B*~*n*~ is the amplitude, and *k*~*n*~ is the chirp rate.
 

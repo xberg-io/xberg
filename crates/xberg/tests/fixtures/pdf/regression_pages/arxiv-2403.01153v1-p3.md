@@ -1,22 +1,24 @@
 Where H~s~(f, t) denotes the CSI measurements transmitted by static paths such as ceiling/wall reflections, termed as static CSI component. H~m~(f, t) and H~n~(f, t) represent the CSI measurements transmitted via body reflection paths and limb reflection paths, respectively. H(f, t) can also be expressed as:
 
-Where ∥H(f, t)∥ and e<sup>iθ</sup> CSI can be rewritten as:
+H(f, t) = ∥H(f, t)∥ · e<sup>iθ</sup> (2)
 
-H(f, t) = ∥H(f, t)∥ · e<sup>iθ</sup> (2) symbolize the amplitude and phase of the transmitted signal, respectively. Thus, the received
+Where ∥H(f, t)∥ and e<sup>iθ</sup> symbolize the amplitude and phase of the transmitted signal, respectively. Thus, the received CSI can be rewritten as:
 
-∥H(f, t)∥ · e<sup>jθ</sup>
+jθ jθs jθm
 
-= ∥H~s~(f, t)∥ · e<sup>jθs</sup>
+∥ H ( f, t ) ∥
 
-\+ ∥H~m~(f, t)∥ · e<sup>jθm</sup> (3)
+- e = ∥ H s ( f, t ) ∥
+- e + ∥ H m ( f, t ) ∥
+- e (3)
 
 \+∥H~n~(f, t)∥ · e<sup>jθn</sup> However, the phase information in CSI is often affected by factors like carrier frequency offset and sampling frequency offset, leading to significant errors in CSI phase information. Also, the amplitude information in CSI changes with device restarts. Hence, the actual measured CSI is:
 
-jθ~R~ jθs
+jθs
 
 ∥ H R ( f, t ) ∥
 
-- e = α ( ∥ H s ( f, t ) ∥
+- e jθ R = α ( ∥ H s ( f, t ) ∥
 - e (4)
 
 jθm jθn jθe
@@ -37,14 +39,10 @@ Specifically, an integrated analysis of data and fitting the distribution using 
 
 27.63), between 1 and 3, -0.87 radians (concentration 19.61), and between 1 and 4, -1.74 radians (concentration 17.46).
 
-These differences are attributed to inherent antenna properties. Stability is maintained even after system reboots. Consequently, we adjust the CSI for consistent angular offsets and normalize amplitude. The calibrated CSI is represented as:
+These differences are attributed to inherent antenna properties. Stability is maintained even after system reboots. Consequently, we adjust the CSI for consistent angular offsets and normalize amplitude. The calibrated CSI is represented as: | H R ( M,N ) ( f, t ) |
 
-jθ~R~ j∆θ~N~
-
-| H R ( M,N ) ( f, t ) |
-
-- e
-- e H cali ( M, N ) = P M (5)
+- e jθ R
+- e j ∆ θ N H cali ( M, N ) = P M (5)
 
 1
 

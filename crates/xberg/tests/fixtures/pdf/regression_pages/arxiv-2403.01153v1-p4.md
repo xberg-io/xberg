@@ -16,9 +16,9 @@ i j j∈N
 
 X (8)
 
-γ−s~i~ sj−γ
+sj−γ
 
-e ) + log(1 + e )
+eγ−si) + log(1 + e )
 
 j∈N
 

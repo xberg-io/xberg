@@ -22,9 +22,9 @@ bit pattern *i*~*1*~*…i ;* ~*m*~ let *v* denote the frequency of the ( *m-1)* 
 
 *m 2 2* 
 
-- (3) Compute: ψ~*m*~ = ∑
+- (3) Compute: ψ
 
- *v*~*i1*~*...i n i*~*1*~ *...i*~*m*~ *2 n*  *2*<sup>*m*</sup> *2* −  = ∑ − *n*
+= ∑  *vi1*~*...i*~ *m n i*~*1*~ *...i*~*m*~ *2 n*  *2*<sup>*m*</sup> *2* −  = ∑ − *n*
 
 *m*
 
