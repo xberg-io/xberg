@@ -660,8 +660,13 @@ pub(crate) const DEFAULT_DICT_INVALID_LINE_RATIO: f64 = 0.6;
 /// Whether `line`'s dictionary-checkable words are, on balance, not real words.
 ///
 /// Returns `false` (never noise) for a line with fewer than
-/// [`MIN_DICT_CANDIDATES_FOR_LINE`] checkable words — see that constant's doc comment.
+/// [`MIN_DICT_CANDIDATES_FOR_LINE`] checkable words — see that constant's doc comment —
+/// and for a line that holds a numeral: a dictionary cannot judge a number, and a number
+/// the OCR read is data, so dropping its line loses it from the content (#2851). ~keep
 fn is_dictionary_noise_line(line: &HocrLineInfo, filter: &DictionaryLineFilter<'_>) -> bool {
+    if line.words.iter().any(|word| word.text.chars().any(char::is_numeric)) {
+        return false;
+    }
     let mut candidates = 0usize;
     let mut invalid = 0usize;
     for word in &line.words {
