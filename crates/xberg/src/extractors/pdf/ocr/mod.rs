@@ -35,6 +35,8 @@ pub(super) use hidden_layer::VisibleRasterProof;
 #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
 pub(crate) use hidden_layer::embedded_gap_placement;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(in crate::extractors::pdf) use hidden_layer::preview_byte_limit;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod native_word_coverage;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod orientation_retry;

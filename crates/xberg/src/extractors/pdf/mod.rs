@@ -8,6 +8,8 @@ mod automatic_fallback;
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 mod automatic_fallback_tests;
 mod extraction;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+mod ink_probe;
 #[cfg(feature = "layout-detection")]
 mod layout_hints;
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
@@ -3194,17 +3196,25 @@ impl PdfExtractor {
             #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
             let native_script_pages: Vec<u32> = Vec::new();
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-            crate::core::diagnostics::dedup_extend_warnings(
-                &mut ocr_fallback_warnings,
-                unreadable_script::retain_unreadable_script_pages(
-                    &mut decision,
-                    &native_text,
-                    boundaries.as_deref(),
-                    pdf_metadata.pdf_specific.page_count,
-                    content,
-                    config,
-                ),
-            );
+            {
+                let layer = unreadable_script::NativeLayer {
+                    text: &native_text,
+                    boundaries: boundaries.as_deref(),
+                    page_count: pdf_metadata.pdf_specific.page_count,
+                };
+                let ink = ink_probe::contradicted_pages(&decision, layer, content, config, layout_pages).await?;
+                crate::core::diagnostics::dedup_extend_warnings(&mut ocr_fallback_warnings, ink.warnings);
+                crate::core::diagnostics::dedup_extend_warnings(
+                    &mut ocr_fallback_warnings,
+                    unreadable_script::retain_unreadable_script_pages(
+                        &mut decision,
+                        layer,
+                        content,
+                        config,
+                        &ink.contradicted,
+                    ),
+                );
+            }
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             let native_script_pages =
                 unreadable_script::native_script_pages(&decision, &native_text, boundaries.as_deref(), content, config);
