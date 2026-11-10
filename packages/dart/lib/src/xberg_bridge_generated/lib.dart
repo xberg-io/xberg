@@ -11029,9 +11029,11 @@ class ImagePreprocessingConfig {
   ///
   /// Explicit `images` settings and detected full-page scan density take precedence.
   /// Selected-page OCR, prepared rasters, custom backends, explicit OCR pipelines and VLM
-  /// fallback retain their source-render policy. Existing raster memory and dimension limits
-  /// can cap both rendering and normalization; increasing this value cannot recover detail
-  /// from a supplied raster. Set `images.target_dpi` on
+  /// fallback retain their source-render policy. Mixed native-and-OCR routes likewise keep
+  /// the source render while layout detection is active or a hidden text layer is being
+  /// probed. Existing raster memory and dimension limits can cap both rendering and
+  /// normalization; increasing this value cannot recover detail from a supplied raster. Set
+  /// `images.target_dpi` on
   /// [`ExtractionConfig`](crate::core::config::ExtractionConfig) to configure PDF rendering
   /// independently of preprocessing.
   final PlatformInt64 targetDpi;

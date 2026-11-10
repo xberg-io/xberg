@@ -24,6 +24,11 @@
 /// there and gates dehyphenation at `spans_visual_line_break`.
 pub(crate) const SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR: f32 = 0.35;
 
+/// Largest baseline offset, as a multiple of the base's font size, at which a smaller run still joins
+/// the printed row of its base. A nested script stack (`e^{-c_1 \tau}`) puts its first member this far
+/// above the base line, past [`SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR`].
+pub(crate) const SCRIPT_ROW_MAX_BASELINE_FONT_FACTOR: f32 = 0.5;
+
 /// Largest ratio of the smaller run's font size to the larger one's for the pair to read as a
 /// sub/superscript.
 ///
@@ -45,8 +50,28 @@ pub(crate) const SCRIPT_RUN_MAX_FORWARD_GAP_FONT_FACTOR: f32 = 0.25;
 /// Deliberately requires a *non-zero* offset — a run at the identical baseline is a same-size
 /// style transition, not a script run, and is handled by the caller's own on-baseline path.
 pub(crate) fn is_script_run_baseline_offset(baseline_delta: f32, font_size: f32, smaller_font_size: f32) -> bool {
+    is_script_offset_within(
+        baseline_delta,
+        font_size,
+        smaller_font_size,
+        SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR,
+    )
+}
+
+/// [`is_script_run_baseline_offset`] against the wider reach of a script that joins the printed row of
+/// its base rather than the run before it.
+pub(crate) fn is_script_row_baseline_offset(baseline_delta: f32, font_size: f32, smaller_font_size: f32) -> bool {
+    is_script_offset_within(
+        baseline_delta,
+        font_size,
+        smaller_font_size,
+        SCRIPT_ROW_MAX_BASELINE_FONT_FACTOR,
+    )
+}
+
+fn is_script_offset_within(baseline_delta: f32, font_size: f32, smaller_font_size: f32, reach: f32) -> bool {
     baseline_delta > 0.0
-        && baseline_delta <= font_size * SCRIPT_RUN_MAX_BASELINE_FONT_FACTOR
+        && baseline_delta <= font_size * reach
         && smaller_font_size <= font_size * SCRIPT_RUN_MAX_FONT_SIZE_RATIO
 }
 
@@ -69,6 +94,13 @@ mod tests {
     fn should_accept_small_positive_offset_with_smaller_font() {
         // 11.59pt base, ~0.7pt offset (< 0.35 * 11.59), subscript at 8pt (<= 0.85 * 11.59). ~keep
         assert!(is_script_run_baseline_offset(0.7, 11.59, 8.0));
+    }
+
+    #[test]
+    fn should_accept_a_stack_member_raised_past_a_single_marks_reach_only_at_the_row_reach() {
+        assert!(!is_script_run_baseline_offset(4.2, 9.96, 7.57));
+        assert!(is_script_row_baseline_offset(4.2, 9.96, 7.57));
+        assert!(!is_script_row_baseline_offset(5.5, 9.96, 7.57));
     }
 
     #[test]
