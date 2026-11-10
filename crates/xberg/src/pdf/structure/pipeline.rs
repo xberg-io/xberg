@@ -2066,6 +2066,12 @@ impl<'a> ParagraphVisualRow<'a> {
     }
 
     fn carries_script(&self, script: &SegmentData) -> bool {
+        self.carries_script_within(script, false)
+    }
+
+    /// Whether `script` reads as a script of this row. A member of a nested stack sits past the reach
+    /// of a single mark, so `stacked` widens the offset to the stack's.
+    fn carries_script_within(&self, script: &SegmentData, stacked: bool) -> bool {
         let base = self.anchor;
         // A bullet glyph is set apart from the text beside it, not under it: that text is the
         // item's body, never a script run of the glyph. Other markers, such as the label `(0)`,
@@ -2096,17 +2102,19 @@ impl<'a> ParagraphVisualRow<'a> {
         {
             return false;
         }
-        is_script_run_offset(
-            base,
-            script,
-            (base.upright_baseline() - script.upright_baseline()).abs(),
-            base.font_size,
-        ) && crate::script_run::is_script_run_forward_gap(
-            self.left,
-            self.right,
-            script.upright_advance_extent().0,
-            base.font_size,
-        )
+        let delta = (base.upright_baseline() - script.upright_baseline()).abs();
+        let offset_fits = if stacked {
+            crate::script_run::is_script_row_baseline_offset(delta, base.font_size, script.font_size)
+        } else {
+            is_script_run_offset(base, script, delta, base.font_size)
+        };
+        offset_fits
+            && crate::script_run::is_script_run_forward_gap(
+                self.left,
+                self.right,
+                script.upright_advance_extent().0,
+                base.font_size,
+            )
     }
 
     fn include(&mut self, segment: &'a SegmentData) {
@@ -2176,9 +2184,22 @@ fn blocks_to_paragraphs(
     let mut current_is_single_visual_line = true;
     let mut prev_idx = 0usize;
     let mut visual_row: Option<ParagraphVisualRow<'_>> = None;
+    let mut stack_end: Option<usize> = None;
 
     for (line_idx, line) in lines.iter().enumerate() {
-        let is_row_script = visual_row.as_ref().is_some_and(|row| row.carries_script(line));
+        // The members of a nested script stack on the previous run join its row past a single mark's
+        // reach; the stack ends at its last member. ~keep
+        if stack_end.is_none_or(|end| line_idx > end) {
+            stack_end = line_idx
+                .checked_sub(1)
+                .map(|base| script_stack_members(&lines, base))
+                .filter(|members| members.contains(&line_idx))
+                .and_then(|members| members.last().copied());
+        }
+        let in_stack = stack_end.is_some();
+        let is_row_script = visual_row
+            .as_ref()
+            .is_some_and(|row| row.carries_script_within(line, in_stack));
         let should_break = if current_lines.is_empty() {
             false
         } else {
@@ -2522,6 +2543,42 @@ pub(crate) fn is_script_run_of(previous: &SegmentData, next: &SegmentData) -> bo
     let (next_start, _) = next.upright_advance_extent();
     is_script_run_offset(previous, next, baseline_delta, font_size)
         && crate::script_run::is_script_run_forward_gap(previous_start, previous_end, next_start, font_size)
+}
+
+/// How many runs after a base are searched for the members of its script stack.
+const SCRIPT_STACK_LOOKAHEAD: usize = 8;
+
+/// Indices into `segments` of the members of the nested script stack on `segments[base]`, in reading
+/// order, or none. The rule is `xberg_native_pdf::document::script_stack`, shared with reading-order
+/// snapping.
+pub(super) fn script_stack_members<T: std::borrow::Borrow<SegmentData>>(segments: &[T], base: usize) -> Vec<usize> {
+    use xberg_native_pdf::document::{StackSpan, script_stack};
+
+    let span = |segment: &SegmentData| {
+        let (x, right) = segment.upright_advance_extent();
+        (x, right - x, segment.upright_baseline())
+    };
+    let Some(base_segment) = segments.get(base).map(std::borrow::Borrow::borrow) else {
+        return Vec::new();
+    };
+    let window = (base + 1)..segments.len().min(base + 1 + SCRIPT_STACK_LOOKAHEAD);
+    let mut order: Vec<usize> = window.collect();
+    order.sort_by(|&a, &b| span(segments[a].borrow()).0.total_cmp(&span(segments[b].borrow()).0));
+    fn to_stack<'a>(segment: &'a SegmentData, span: &impl Fn(&SegmentData) -> (f32, f32, f32)) -> StackSpan<'a> {
+        let (x, width, baseline) = span(segment);
+        StackSpan {
+            text: segment.text.as_str(),
+            x,
+            baseline,
+            width,
+            font_size: segment.font_size,
+        }
+    }
+    let candidates: Vec<StackSpan<'_>> = order.iter().map(|&i| to_stack(segments[i].borrow(), &span)).collect();
+    script_stack(&to_stack(base_segment, &span), &candidates)
+        .into_iter()
+        .map(|i| order[i])
+        .collect()
 }
 
 /// Whether `line` reads as the wrapped continuation of the numbered-heading
