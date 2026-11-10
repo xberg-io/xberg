@@ -5656,6 +5656,9 @@ struct OverlapEvidence<'a> {
     pages: ahash::AHashMap<usize, Option<PageText>>,
     table_words: ahash::AHashMap<usize, WordCounts>,
     coverage: ahash::AHashMap<usize, Option<TableCoverage>>,
+    /// How many pages and tables were read, for the test that pins one read each.
+    #[cfg(test)]
+    reads: (usize, usize),
 }
 
 impl<'a> OverlapEvidence<'a> {
@@ -5665,13 +5668,21 @@ impl<'a> OverlapEvidence<'a> {
             pages: ahash::AHashMap::new(),
             table_words: ahash::AHashMap::new(),
             coverage: ahash::AHashMap::new(),
+            #[cfg(test)]
+            reads: (0, 0),
         }
     }
 
     fn ensure_page(&mut self, page_index: usize) {
+        if self.pages.contains_key(&page_index) {
+            return;
+        }
+        #[cfg(test)]
+        {
+            self.reads.0 += 1;
+        }
         let page_segments = self.page_segments;
-        self.pages.entry(page_index).or_insert_with(|| {
-            let segments = page_segments.get(page_index)?;
+        let page = page_segments.get(page_index).and_then(|segments| {
             let texts = || segments.iter().map(|segment| segment.text.as_str());
             let words = count_words(texts());
             (!words.is_empty()).then(|| PageText {
@@ -5679,15 +5690,19 @@ impl<'a> OverlapEvidence<'a> {
                 glyphs: glyph_run(texts()),
             })
         });
+        self.pages.insert(page_index, page);
     }
 
     fn ensure_table(&mut self, tables: &[crate::types::Table], index: usize) {
-        self.table_words
-            .entry(index)
-            .or_insert_with(|| table_word_counts(&tables[index]));
-        self.coverage
-            .entry(index)
-            .or_insert_with(|| table_coverage(&tables[index]));
+        if self.table_words.contains_key(&index) {
+            return;
+        }
+        #[cfg(test)]
+        {
+            self.reads.1 += 1;
+        }
+        self.table_words.insert(index, table_word_counts(&tables[index]));
+        self.coverage.insert(index, table_coverage(&tables[index]));
     }
 
     /// Whether the table that overlap arbitration would drop holds words the page would otherwise lack.

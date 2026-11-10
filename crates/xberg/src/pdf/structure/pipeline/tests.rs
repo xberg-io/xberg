@@ -1248,7 +1248,19 @@ fn dedup_keeps_a_table_whose_cells_join_words_the_page_prints_apart() {
         (0.0, 40.0, 100.0, 100.0),
         &[&["EstimatedIncreases", "ProjectedProjections"]],
     );
-    let mut page = printed_cells(&[&four_row_grid()]);
+    let grid = cell_table(
+        1,
+        (0.0, 0.0, 100.0, 100.0),
+        &[
+            &["alpha", "1"],
+            &["beta", "2"],
+            &["gamma", "3"],
+            &["delta", "4"],
+            &["epsilon", "5"],
+            &["zeta", "6"],
+        ],
+    );
+    let mut page = printed_cells(&[&grid]);
     for (text, x) in [
         ("Estimated", 1.0),
         ("Increases", 11.0),
@@ -1258,7 +1270,7 @@ fn dedup_keeps_a_table_whose_cells_join_words_the_page_prints_apart() {
         page[0].push(printed_at(text, x, 41.0));
     }
     assert_eq!(
-        kept_after_dedup(vec![four_row_grid(), joined], &page),
+        kept_after_dedup(vec![grid, joined], &page),
         2,
         "the page prints those letters once, and only the joined cells carry them"
     );
@@ -1344,8 +1356,7 @@ fn overlap_evidence_reads_each_page_and_table_once() {
     for dropped in [1, 2, 1, 2] {
         assert!(evidence.holds_unprinted_words(&tables, dropped, &removed).is_some());
     }
-    assert_eq!(evidence.pages.len(), 1, "one page, counted once");
-    assert_eq!(evidence.table_words.len(), 3, "each table's words, counted once");
+    assert_eq!(evidence.reads, (1, 3), "one page and three tables, each read once");
 }
 
 /// Tables that the document build emits for one page of text and the given native tables.
