@@ -1399,8 +1399,9 @@ async fn run_extraction_job(
 
 /// Fails the job when its task ends without reporting a result (extractor panic,
 /// task dropped before or during its run at runtime shutdown) so it does not stay
-/// `Pending` or `Running` and hold its slot forever. After a normal completion or
-/// failure `fail` is a no-op.
+/// `Pending` or `Running` and hold its slot forever. It cancels the job's token before
+/// the job shows `Failed`, so blocking extraction that outlives the task stops. After a
+/// normal completion or failure `abort` is a no-op.
 #[cfg(feature = "api")]
 struct JobAbortGuard {
     store: Arc<super::jobs::JobStore>,
@@ -1410,7 +1411,7 @@ struct JobAbortGuard {
 #[cfg(feature = "api")]
 impl Drop for JobAbortGuard {
     fn drop(&mut self) {
-        self.store.fail(
+        self.store.abort(
             &self.job_id,
             "extraction task ended without a result".to_string(),
             super::jobs::now_rfc3339(),

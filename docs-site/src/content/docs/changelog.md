@@ -313,7 +313,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(api): Keep async jobs while they run.** (#2621)
   Jobs expire 5 minutes after they finish, not 5 minutes after submission. Long extractions keep their result and can be cancelled.
-  A submission rejected by validation, a crashed extraction task, and a cancelled job all release their active-job slot. Validation now runs before admission, so an invalid input gets 400 even when the store is full, and concurrent submissions cannot take the store above the active-job limit.
+  A submission rejected by validation, a crashed extraction task, and a cancelled job all release their active-job slot. A task that ends without a result, such as one dropped at runtime shutdown, cancels its extraction before the job shows as failed. Validation now runs before admission, so an invalid input gets 400 even when the store is full, and concurrent submissions cannot take the store above the active-job limit.
 - **(djot): Preserve paragraph text that begins with block syntax.** (#2856, #2869)
   Escape block markers without changing following inline markup or existing backslash escapes.
 - **(pdf): Keep a nested superscript or subscript stack on its base's line.** (#2728)

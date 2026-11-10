@@ -150,12 +150,34 @@ impl JobStore {
         });
     }
 
+    /// Mark a pending or running job as `Failed` because its task ended without a result.
+    ///
+    /// Fires the job's [`CancellationToken`] first, then publishes `Failed`, under one
+    /// lock: blocking extraction that outlives the task observes the cancellation, and
+    /// no reader sees `Failed` or a free slot while the token is still unsignalled.
+    /// A no-op for a job that already finished, like [`JobStore::fail`].
+    pub fn abort(&self, job_id: &str, error: String, timestamp: String) {
+        self.finish_with(job_id, true, |status| {
+            status.state = JobState::Failed;
+            status.error = Some(error);
+            status.updated_at = timestamp;
+        });
+    }
+
     /// Move a live job to `finished`. A no-op once the job is no longer active.
     fn finish(&self, job_id: &str, apply: impl FnOnce(&mut JobStatus)) {
+        self.finish_with(job_id, false, apply);
+    }
+
+    /// Move a live job to `finished`, firing its token first when `cancel_first` is set.
+    fn finish_with(&self, job_id: &str, cancel_first: bool, apply: impl FnOnce(&mut JobStatus)) {
         let mut active = self.active.lock();
-        let Some(ActiveJob { mut status, .. }) = active.remove(job_id) else {
+        let Some(ActiveJob { mut status, token }) = active.remove(job_id) else {
             return;
         };
+        if cancel_first {
+            token.cancel();
+        }
         apply(&mut status);
         // Inserted while `active` is still locked; see `get`. ~keep
         self.finished.insert(job_id.to_string(), status);
@@ -382,6 +404,34 @@ mod tests {
             "a late completion must not override a cancelled job"
         );
         assert!(status.result.is_none());
+    }
+
+    #[test]
+    fn test_abort_cancels_token_and_fails_job() {
+        let store = JobStore::new();
+        let job_id = store.create_job().expect("slot available");
+        let token = store.cancellation_token(&job_id).expect("token registered on create");
+
+        store.abort(&job_id, "task ended".to_string(), "2026-05-01T12:00:01Z".to_string());
+
+        assert!(token.is_cancelled(), "an aborted job must fire its token");
+        let status = store.get(&job_id).unwrap();
+        assert_eq!(status.state, JobState::Failed);
+        assert_eq!(status.error.as_deref(), Some("task ended"));
+        assert_eq!(store.active_count(), 0);
+    }
+
+    #[test]
+    fn test_abort_after_completion_is_noop() {
+        let store = JobStore::new();
+        let job_id = store.create_job().expect("slot available");
+        let token = store.cancellation_token(&job_id).expect("token registered on create");
+        store.complete(&job_id, serde_json::json!({}), "2026-05-01T12:00:01Z".to_string());
+
+        store.abort(&job_id, "late".to_string(), "2026-05-01T12:00:02Z".to_string());
+
+        assert!(!token.is_cancelled(), "a finished job's abort must not fire the token");
+        assert_eq!(store.get(&job_id).unwrap().state, JobState::Completed);
     }
 
     #[test]
