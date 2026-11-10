@@ -86,6 +86,17 @@ async fn read_document(bytes: &[u8], config: &ExtractionConfig, expected_pages: 
     document
 }
 
+fn assert_page_text_is_the_table_markdown(actual: &xberg::types::PageContent, recognized: &xberg::types::PageContent) {
+    let markdown = recognized
+        .tables
+        .iter()
+        .map(|table| table.markdown.trim())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    assert!(!markdown.is_empty(), "the recognized page has an OCR table");
+    assert_eq!(actual.content, markdown);
+}
+
 fn page_tables_json(page: &xberg::types::PageContent) -> serde_json::Value {
     serde_json::to_value(page.tables.iter().map(|table| table.as_ref()).collect::<Vec<_>>()).unwrap()
 }

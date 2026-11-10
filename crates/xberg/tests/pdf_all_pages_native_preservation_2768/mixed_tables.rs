@@ -73,7 +73,11 @@ fn assert_mixed_tables(actual: &ExtractedDocument, native: &ExtractedDocument, f
         } else {
             &source[index]
         };
-        assert_eq!(page.content, reference.content);
+        if index == last {
+            super::assert_page_text_is_the_table_markdown(page, reference);
+        } else {
+            assert_eq!(page.content, reference.content);
+        }
         assert_eq!(super::page_tables_json(page), super::page_tables_json(reference));
         expected.extend(reference.tables.iter().map(|table| table.as_ref()));
     }

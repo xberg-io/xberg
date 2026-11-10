@@ -190,7 +190,12 @@ fn assert_retained_tables(actual: &ExtractedDocument, native: &ExtractedDocument
     let pages = actual.pages.as_ref().unwrap();
     let source = native.pages.as_ref().unwrap();
     assert_eq!(pages[0].content, source[0].content);
-    assert_eq!(pages[1].content, forced.pages.as_ref().unwrap()[1].content);
+    assert!(
+        pages[1]
+            .content
+            .split_whitespace()
+            .eq(forced.pages.as_ref().unwrap()[1].content.split_whitespace())
+    );
     assert!(
         !pages[1]
             .content

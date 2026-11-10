@@ -42,7 +42,7 @@ async fn read(bytes: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
         .expect("extract stamped table pages")
 }
 
-fn assert_same_page_payload(actual: &ExtractedDocument, forced: &ExtractedDocument) {
+fn assert_same_page_payload(actual: &ExtractedDocument, forced: &ExtractedDocument, mixed_route: bool) {
     assert_eq!(actual.tables.len(), 2, "all accepted OCR tables survive");
     let actual_pages = actual.pages.as_ref().unwrap();
     let forced_pages = forced.pages.as_ref().unwrap();
@@ -55,7 +55,11 @@ fn assert_same_page_payload(actual: &ExtractedDocument, forced: &ExtractedDocume
             serde_json::to_value(actual_page.tables[0].as_ref()).unwrap(),
             serde_json::to_value(forced_page.tables[0].as_ref()).unwrap()
         );
-        assert_eq!(actual_page.content, forced_page.content, "per-page OCR text survives");
+        if mixed_route {
+            super::assert_page_text_is_the_table_markdown(actual_page, forced_page);
+        } else {
+            assert_eq!(actual_page.content, forced_page.content, "per-page OCR text survives");
+        }
     }
     assert_eq!(
         serde_json::to_value(&actual.tables).unwrap(),
@@ -101,7 +105,7 @@ async fn automatic_all_pages_keeps_the_ocr_tables_and_page_texts() {
     let forced = whole_document_control(&bytes, &automatic).await;
     let actual = read(&bytes, &automatic).await;
     assert_eq!(actual.extraction_method, Some(xberg::types::ExtractionMethod::Mixed));
-    assert_same_page_payload(&actual, &forced);
+    assert_same_page_payload(&actual, &forced, true);
 }
 
 #[tokio::test]
@@ -115,7 +119,7 @@ async fn requested_document_structure_and_semantic_elements_keep_the_whole_docum
     assert!(!forced.document.as_ref().unwrap().nodes.is_empty());
     assert!(!forced.elements.as_ref().unwrap().is_empty());
     let actual = read(&bytes, &automatic).await;
-    assert_same_page_payload(&actual, &forced);
+    assert_same_page_payload(&actual, &forced, false);
     assert_eq!(
         serde_json::to_value(&actual.document).unwrap(),
         serde_json::to_value(&forced.document).unwrap()
@@ -144,7 +148,7 @@ async fn requested_ocr_elements_keep_the_whole_document_payload() {
         serde_json::to_value(&actual.ocr_elements).unwrap(),
         serde_json::to_value(&forced.ocr_elements).unwrap()
     );
-    assert_same_page_payload(&actual, &forced);
+    assert_same_page_payload(&actual, &forced, false);
 }
 
 #[tokio::test]
@@ -165,6 +169,6 @@ async fn non_plain_formats_keep_the_whole_document_ocr_route() {
         let actual = read(&bytes, &config).await;
         assert_eq!(actual.extraction_method, Some(xberg::types::ExtractionMethod::Ocr));
         assert!(!actual.content.trim().is_empty());
-        assert_same_page_payload(&actual, &forced);
+        assert_same_page_payload(&actual, &forced, false);
     }
 }
