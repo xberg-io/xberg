@@ -60,6 +60,28 @@ fn promoted_batch_reserves_the_page_cap_and_never_less_than_before() {
 }
 
 #[test]
+fn plain_mixed_route_promotes_the_configured_density() {
+    assert!(mixed_route_promotes_preprocessing_dpi(false, false));
+}
+
+#[test]
+fn mixed_route_with_layout_detection_keeps_the_source_render() {
+    assert!(!mixed_route_promotes_preprocessing_dpi(true, false));
+}
+
+#[test]
+fn mixed_route_probing_hidden_layer_keeps_the_source_render() {
+    assert!(!mixed_route_promotes_preprocessing_dpi(false, true));
+}
+
+#[test]
+fn promoted_mixed_route_batch_working_set_reserves_the_page_cap() {
+    let base = UNMEASURED_OCR_PAGE_WORKING_SET_BYTES;
+    assert_eq!(mixed_route_batch_working_set(base, None, base * 4), base);
+    assert_eq!(mixed_route_batch_working_set(base, Some(300), base * 4), base * 4);
+}
+
+#[test]
 fn explicit_pipeline_and_vlm_keep_their_render_route() {
     let config = configuration();
     let mut ocr = config.ocr.as_ref().unwrap().clone();

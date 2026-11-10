@@ -978,9 +978,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     }
 
     #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
-    let preprocessing_render_dpi = (!mixed_route_layout_active && !probing_hidden_layer)
-        .then(|| registered_preprocessing_render_dpi(config, &ocr_config_resolved))
-        .flatten();
+    let preprocessing_render_dpi =
+        mixed_route_promotes_preprocessing_dpi(mixed_route_layout_active, probing_hidden_layer)
+            .then(|| registered_preprocessing_render_dpi(config, &ocr_config_resolved))
+            .flatten();
     #[cfg(not(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32"))))]
     let preprocessing_render_dpi: Option<i32> = None;
     let render_page_cap = config
@@ -1009,14 +1010,15 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             adapt_batch_size_to_memory(
                 configured_batch_size,
                 content.len(),
-                ocr_page_working_set_bytes(
-                    f64::from(page_width_pt),
-                    f64::from(page_height_pt),
-                    config.images.as_ref(),
-                )
-                .max(preprocessing_render_dpi.map_or(0, |target| {
-                    preprocessing_render_reservation(Some(target), render_page_cap)
-                })),
+                mixed_route_batch_working_set(
+                    ocr_page_working_set_bytes(
+                        f64::from(page_width_pt),
+                        f64::from(page_height_pt),
+                        config.images.as_ref(),
+                    ),
+                    preprocessing_render_dpi,
+                    render_page_cap,
+                ),
             )
             .await
         }
@@ -8957,6 +8959,26 @@ fn preprocessing_render_reservation(target: Option<i32>, page_cap: usize) -> usi
     } else {
         UNMEASURED_OCR_PAGE_WORKING_SET_BYTES
     }
+}
+
+/// The mixed route promotes native page content to the configured density only when nothing
+/// keeps the source render: active layout detection and a hidden-text-layer probe each run
+/// their own render policy. ~keep
+#[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+fn mixed_route_promotes_preprocessing_dpi(mixed_route_layout_active: bool, probing_hidden_layer: bool) -> bool {
+    !mixed_route_layout_active && !probing_hidden_layer
+}
+
+/// A promoted mixed-route batch sizes itself from the page security cap instead of the bare
+/// fallback, so the wider batch cannot outrun the memory the promotion assumes. ~keep
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn mixed_route_batch_working_set(
+    measured_page_bytes: usize,
+    preprocessing_render_dpi: Option<i32>,
+    page_cap: usize,
+) -> usize {
+    measured_page_bytes
+        .max(preprocessing_render_dpi.map_or(0, |target| preprocessing_render_reservation(Some(target), page_cap)))
 }
 
 #[cfg(all(test, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
