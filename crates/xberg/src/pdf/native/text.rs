@@ -3497,6 +3497,56 @@ mod tests {
         }
     }
 
+    /// Two small words 0.4 em apart in their own size, on a line that also holds a large label.
+    #[test]
+    fn fragmented_rebuild_measures_a_word_gap_in_the_right_span_size() {
+        let spans = vec![
+            span_with_width("alpha", 100.0, 500.0, 15.0, 6.0, 6.0),
+            span_with_width("beta", 117.4, 500.0, 12.0, 6.0, 6.0),
+            span_with_width("TOTAL", 300.0, 501.0, 60.0, 20.0, 20.0),
+        ];
+        assert_eq!(rebuild_text_from_fragmented_spans(&spans), "alpha beta TOTAL");
+    }
+
+    /// A word that steps down in size on the same baseline is a new word, not a script.
+    #[test]
+    fn fragmented_rebuild_splits_a_smaller_word_on_the_same_baseline() {
+        let spans = vec![
+            span_with_width("Name", 100.0, 500.0, 30.0, 12.0, 12.0),
+            span_with_width("first", 132.4, 500.0, 15.0, 8.0, 8.0),
+            span_with_width("Second", 132.4, 470.0, 30.0, 12.0, 12.0),
+            span_with_width("lower", 164.8, 467.0, 30.0, 12.0, 12.0),
+        ];
+        assert_eq!(rebuild_text_from_fragmented_spans(&spans), "Name first\nSecond lower");
+    }
+
+    /// A quantity symbol with a lowered or raised index, such as `c` with subscript `B`, `I` with
+    /// subscript `v` or `m` with a raised `3`, reads as one token.
+    #[test]
+    fn fragmented_rebuild_keeps_a_script_on_its_symbol() {
+        let mut raised = span_with_width("3", 107.6, 500.0, 4.0, 8.0, 8.0);
+        raised.text_rise = 0.33;
+        for (index, expected) in [
+            (span_with_width("B", 107.6, 497.0, 5.0, 8.0, 8.0), "cB"),
+            (span_with_width("v", 107.6, 497.5, 4.0, 7.0, 7.0), "cv"),
+            (raised, "c3"),
+        ] {
+            let spans = vec![span_with_width("c", 100.0, 500.0, 5.6, 12.0, 12.0), index];
+            assert_eq!(rebuild_text_from_fragmented_spans(&spans), expected);
+        }
+    }
+
+    /// Han and kana text marks no word with a gap: a gap beside such a character is layout.
+    #[test]
+    fn fragmented_rebuild_keeps_a_gap_beside_cjk_unspaced() {
+        let spans = vec![
+            span_with_width("第", 100.0, 500.0, 10.0, 10.0, 10.0),
+            span_with_width("17", 112.0, 500.0, 10.0, 10.0, 10.0),
+            span_with_width("回", 124.0, 500.0, 10.0, 10.0, 10.0),
+        ];
+        assert_eq!(rebuild_text_from_fragmented_spans(&spans), "第17回");
+    }
+
     #[test]
     fn should_exclude_native_spans_by_configured_page_margins() {
         let mut spans = vec![
