@@ -242,41 +242,58 @@ mod collected_reads {
 
     #[tokio::test]
     async fn a_rejected_read_adds_no_text_but_keeps_its_table() {
-        let outcome = recover(fragmented_text()).await;
+        let outcome = recover(fragmented_text(), Some(300.0), true).await;
         assert!(outcome.text.is_empty(), "{:?}", outcome.text);
-        assert!(outcome.text_outside_tables.is_empty(), "{:?}", outcome.text_outside_tables);
+        assert!(
+            outcome.text_outside_tables.is_empty(),
+            "{:?}",
+            outcome.text_outside_tables
+        );
         assert_eq!(outcome.failure_causes, [CAUSE]);
         assert_eq!(outcome.tables.len(), 1);
     }
 
     #[tokio::test]
     async fn an_empty_read_is_not_a_rejection_and_keeps_its_table_text() {
-        let outcome = recover(String::new()).await;
+        let outcome = recover(String::new(), Some(300.0), true).await;
         assert!(outcome.failure_causes.is_empty(), "{:?}", outcome.failure_causes);
         assert_eq!(outcome.text_outside_tables, fragmented_text());
         assert_eq!(outcome.tables.len(), 1);
     }
 
-    async fn recover(content: String) -> super::super::rendering::XObjectRecoveryOutcome {
+    #[tokio::test]
+    async fn a_read_without_a_proven_resolution_is_left_to_the_page_policy() {
+        let outcome = recover(fragmented_text(), None, true).await;
+        assert_eq!(outcome.text, fragmented_text());
+        assert!(outcome.failure_causes.is_empty(), "{:?}", outcome.failure_causes);
+    }
+
+    #[tokio::test]
+    async fn a_route_without_a_policy_keeps_every_read() {
+        let outcome = recover(fragmented_text(), Some(300.0), false).await;
+        assert_eq!(outcome.text, fragmented_text());
+        assert!(outcome.failure_causes.is_empty(), "{:?}", outcome.failure_causes);
+    }
+
+    async fn recover(
+        content: String,
+        source_dpi: Option<f64>,
+        judged: bool,
+    ) -> super::super::rendering::XObjectRecoveryOutcome {
         let backend: Arc<dyn OcrBackend> = Arc::new(NoisyTableBackend { content });
         let mut image = crate::pdf::native::images::PageFallbackImage::placeholder_jpeg(0);
-        image.source_dpi = Some(300.0);
+        image.source_dpi = source_dpi;
         let mut budget = crate::extractors::security::SecurityBudget::from_limits(&Default::default());
         let thresholds = thresholds(false);
         let mut context = super::super::pipeline::XObjectRecoveryContext::with_budget(&mut budget, None);
-        context.proven_read = Some(super::super::pipeline::ProvenReadPolicy {
-            thresholds: &thresholds,
-            warn_when_kept: false,
-        });
-        super::super::rendering::recover_image_xobjects(
-            &backend,
-            &[image],
-            0,
-            1,
-            &OcrConfig::default(),
-            context,
-        )
-        .await
-        .unwrap()
+        if judged {
+            context.proven_read = Some(super::super::pipeline::ProvenReadPolicy {
+                thresholds: &thresholds,
+                warn_when_kept: false,
+            });
+        }
+        super::super::rendering::recover_image_xobjects(&backend, &[image], 0, 1, &OcrConfig::default(), context)
+            .await
+            .unwrap()
     }
 }
