@@ -43,11 +43,18 @@ mod orientation_retry;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(crate) use orientation_retry::recognition_retry_eligible;
 mod pipeline;
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    any(paddle_ocr, all(feature = "ocr", not(target_arch = "wasm32")))
+))]
+pub(super) use pipeline::uses_default_ocr_pipeline;
 mod plausibility;
 mod rendering;
 mod scoring;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) mod stage_model_inputs;
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) mod symbol_noise_lines;
 #[cfg(all(
     feature = "ocr",
     feature = "pdf",
