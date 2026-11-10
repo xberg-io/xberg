@@ -502,8 +502,8 @@ fn read_xlsx_family_file(
             .ok_or_else(|| XbergError::parsing("Failed to normalize row-only XLSX worksheet dimensions".to_owned()))?;
         let mut workbook = calamine::Xlsx::new(Cursor::new(normalized))
             .map_err(|e| XbergError::parsing(format!("Failed to parse XLSX: {}", e)))?;
-        super::table_budget::validate_xlsx(&mut workbook, limits)?;
-        let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings)?;
+        let skipped = super::table_budget::validate_xlsx(&mut workbook, limits)?;
+        let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings, &skipped)?;
         result.revisions = extract_xlsx_revisions_from_file(file_path);
         if let Some(comments) = extract_xlsx_comments_from_file(file_path) {
             result.metadata.insert("comments".to_owned(), comments);
@@ -513,8 +513,8 @@ fn read_xlsx_family_file(
     let file = std::fs::File::open(file_path)?;
     let mut workbook = calamine::Xlsx::new(std::io::BufReader::new(file))
         .map_err(|e| XbergError::parsing(format!("Failed to parse XLSX: {}", e)))?;
-    super::table_budget::validate_xlsx(&mut workbook, limits)?;
-    let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings)?;
+    let skipped = super::table_budget::validate_xlsx(&mut workbook, limits)?;
+    let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings, &skipped)?;
     result.revisions = extract_xlsx_revisions_from_file(file_path);
     if let Some(comments) = extract_xlsx_comments_from_file(file_path) {
         result.metadata.insert("comments".to_owned(), comments);
@@ -534,8 +534,8 @@ fn read_xlam_file(
     let file = std::fs::File::open(file_path)?;
     match calamine::Xlsx::new(std::io::BufReader::new(file)) {
         Ok(mut workbook) => {
-            super::table_budget::validate_xlsx(&mut workbook, limits)?;
-            let result = process_xlsx_workbook(workbook, office_metadata, &mut warnings)?;
+            let skipped = super::table_budget::validate_xlsx(&mut workbook, limits)?;
+            let result = process_xlsx_workbook(workbook, office_metadata, &mut warnings, &skipped)?;
             Ok((result, warnings))
         }
         Err(e) => {
@@ -566,7 +566,7 @@ fn read_xla_file(
     let file = std::fs::File::open(file_path)?;
     match calamine::Xls::new(std::io::BufReader::new(file)) {
         Ok(workbook) => {
-            let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+            let result = process_workbook(workbook, office_metadata, &mut warnings, &SkippedSheets::default())?;
             Ok((result, warnings))
         }
         Err(e) => {
@@ -597,8 +597,8 @@ fn read_xlsb_file(
     let file = std::fs::File::open(file_path)?;
     let mut workbook = calamine::Xlsb::new(std::io::BufReader::new(file))
         .map_err(|e| XbergError::parsing(format!("Failed to parse XLSB: {}", e)))?;
-    super::table_budget::validate_xlsb(&mut workbook, limits)?;
-    let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+    let skipped = super::table_budget::validate_xlsb(&mut workbook, limits)?;
+    let result = process_workbook(workbook, office_metadata, &mut warnings, &skipped)?;
     Ok((result, warnings))
 }
 
@@ -649,8 +649,8 @@ fn read_xlsx_family_bytes(
     let cursor = Cursor::new(normalized.as_deref().unwrap_or(data));
     let mut workbook =
         calamine::Xlsx::new(cursor).map_err(|e| XbergError::parsing(format!("Failed to parse XLSX: {}", e)))?;
-    super::table_budget::validate_xlsx(&mut workbook, limits)?;
-    let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings)?;
+    let skipped = super::table_budget::validate_xlsx(&mut workbook, limits)?;
+    let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings, &skipped)?;
     result.revisions = extract_xlsx_revisions_from_bytes(data);
     if let Some(comments) = extract_xlsx_comments_from_bytes(data) {
         result.metadata.insert("comments".to_owned(), comments);
@@ -668,8 +668,8 @@ fn read_xlam_bytes(
     let cursor = Cursor::new(data);
     match calamine::Xlsx::new(cursor) {
         Ok(mut workbook) => {
-            super::table_budget::validate_xlsx(&mut workbook, limits)?;
-            let result = process_xlsx_workbook(workbook, office_metadata, &mut warnings)?;
+            let skipped = super::table_budget::validate_xlsx(&mut workbook, limits)?;
+            let result = process_xlsx_workbook(workbook, office_metadata, &mut warnings, &skipped)?;
             Ok((result, warnings))
         }
         Err(e) => {
@@ -699,7 +699,7 @@ fn read_xls_bytes(
     let cursor = Cursor::new(data);
     let workbook =
         calamine::Xls::new(cursor).map_err(|e| XbergError::parsing(format!("Failed to parse XLS: {}", e)))?;
-    let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+    let result = process_workbook(workbook, office_metadata, &mut warnings, &SkippedSheets::default())?;
     Ok((result, warnings))
 }
 
@@ -712,7 +712,7 @@ fn read_xla_bytes(
     let cursor = Cursor::new(data);
     match calamine::Xls::new(cursor) {
         Ok(workbook) => {
-            let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+            let result = process_workbook(workbook, office_metadata, &mut warnings, &SkippedSheets::default())?;
             Ok((result, warnings))
         }
         Err(e) => {
@@ -743,8 +743,8 @@ fn read_xlsb_bytes(
     let cursor = Cursor::new(data);
     let mut workbook =
         calamine::Xlsb::new(cursor).map_err(|e| XbergError::parsing(format!("Failed to parse XLSB: {}", e)))?;
-    super::table_budget::validate_xlsb(&mut workbook, limits)?;
-    let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+    let skipped = super::table_budget::validate_xlsb(&mut workbook, limits)?;
+    let result = process_workbook(workbook, office_metadata, &mut warnings, &skipped)?;
     Ok((result, warnings))
 }
 
@@ -757,7 +757,7 @@ fn read_ods_bytes(
     let cursor = Cursor::new(data);
     match calamine::Ods::new(cursor) {
         Ok(workbook) => {
-            let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+            let result = process_workbook(workbook, office_metadata, &mut warnings, &SkippedSheets::default())?;
             Ok((result, warnings))
         }
         Err(original_error) => {
@@ -766,7 +766,7 @@ fn read_ods_bytes(
             };
             let workbook = calamine::Ods::new(Cursor::new(normalized))
                 .map_err(|error| XbergError::parsing(format!("Failed to parse ODS: {error}")))?;
-            let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+            let result = process_workbook(workbook, office_metadata, &mut warnings, &SkippedSheets::default())?;
             Ok((result, warnings))
         }
     }
@@ -781,7 +781,7 @@ fn read_ods_file(
     let file = std::fs::File::open(file_path)?;
     match calamine::Ods::new(std::io::BufReader::new(file)) {
         Ok(workbook) => {
-            let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+            let result = process_workbook(workbook, office_metadata, &mut warnings, &SkippedSheets::default())?;
             Ok((result, warnings))
         }
         Err(original_error) => {
@@ -791,7 +791,7 @@ fn read_ods_file(
             };
             let workbook = calamine::Ods::new(Cursor::new(normalized))
                 .map_err(|error| XbergError::parsing(format!("Failed to parse ODS: {error}")))?;
-            let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+            let result = process_workbook(workbook, office_metadata, &mut warnings, &SkippedSheets::default())?;
             Ok((result, warnings))
         }
     }

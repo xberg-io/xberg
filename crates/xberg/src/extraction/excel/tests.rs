@@ -703,9 +703,11 @@ fn should_warn_when_sheet_declared_dimensions_greatly_exceed_actual_data() {
         &[("xl/worksheets/sheet1.xml", sheet1_xml.to_vec())],
     );
 
-    let error = read_excel_bytes(&bytes, ".xlsx", &test_limits(10_000))
-        .expect_err("the default cell limit must reject the oversized bounding range before allocation");
-    assert!(error.to_string().contains("100002") && error.to_string().contains("max_table_cells"));
+    assert_sheet_skipped_for_cell_limit(
+        read_excel_bytes(&bytes, ".xlsx", &test_limits(10_000)),
+        "Huge",
+        SecurityLimits::default().max_table_cells,
+    );
     let limits = SecurityLimits {
         max_table_cells: 100_002,
         ..test_limits(10_000)
@@ -1012,7 +1014,8 @@ fn should_warn_when_named_sheet_range_cannot_be_read() {
     names.push("Definitely-Not-A-Real-Sheet".to_owned());
 
     let mut warnings = Vec::new();
-    let (sheets, _extra_metadata) = process_named_sheets(&mut workbook, &names, &mut warnings);
+    let (sheets, _extra_metadata) =
+        process_named_sheets(&mut workbook, &names, &mut warnings, &SkippedSheets::default());
 
     assert_eq!(
         sheets.len(),
@@ -1033,7 +1036,7 @@ fn should_warn_when_named_sheet_range_cannot_be_read() {
 }
 
 #[test]
-fn should_reject_xlsx_before_reading_cells_after_an_oversized_box_gh2296() {
+fn should_skip_xlsx_before_reading_cells_after_an_oversized_box_gh2296() {
     let bytes = make_xlsx_with_worksheet(
         r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
         <sheetData><row r="1"><c r="A1"><v>1</v></c></row>
@@ -1044,8 +1047,93 @@ fn should_reject_xlsx_before_reading_cells_after_an_oversized_box_gh2296() {
         max_table_cells: 8,
         ..Default::default()
     };
-    let error = read_excel_bytes(&bytes, ".xlsx", &limits).unwrap_err();
-    assert!(error.to_string().contains("observed 10 cells"), "{error}");
+    assert_sheet_skipped_for_cell_limit(read_excel_bytes(&bytes, ".xlsx", &limits), "Sheet1", 8);
+}
+
+/// A sheet that tripped `max_table_cells` comes back empty with a warning naming it, never as an error.
+fn assert_sheet_skipped_for_cell_limit(result: Result<ExcelReadResult>, sheet: &str, max: usize) {
+    let (workbook, warnings) = result.expect("a sheet over the table-cell limit must degrade, not fail");
+    assert!(workbook.sheets.iter().any(|candidate| candidate.name == sheet));
+    assert!(workbook.sheets.iter().all(|candidate| candidate.table_cells.is_none()));
+    let expected = format!("Sheet '{sheet}' was skipped");
+    let limit = format!("`security_limits.max_table_cells` is {max}");
+    assert!(
+        warnings
+            .iter()
+            .any(|warning| warning.message.contains(&expected) && warning.message.contains(&limit)),
+        "{warnings:?}"
+    );
+}
+
+fn inline_string_sheet(rows: usize, cols: usize, prefix: &str) -> Vec<u8> {
+    let mut xml = String::from(
+        r#"<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>"#,
+    );
+    for row in 0..rows {
+        xml.push_str(&format!(r#"<row r="{}">"#, row + 1));
+        for col in 0..cols {
+            let column = (b'A' + col as u8) as char;
+            xml.push_str(&format!(
+                r#"<c r="{column}{}" t="inlineStr"><is><t>{prefix}{row}{col}</t></is></c>"#,
+                row + 1
+            ));
+        }
+        xml.push_str("</row>");
+    }
+    xml.push_str("</sheetData></worksheet>");
+    xml.into_bytes()
+}
+
+fn three_sheet_workbook() -> Vec<u8> {
+    const REL: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
+    make_xlsx(
+        r#"<sheets><sheet name="Small" sheetId="1" r:id="rId1"/><sheet name="Big" sheetId="2" r:id="rId2"/><sheet name="Tail" sheetId="3" r:id="rId3"/></sheets>"#,
+        &format!(
+            r#"<Relationship Id="rId1" Type="{REL}" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="{REL}" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="{REL}" Target="worksheets/sheet3.xml"/>"#
+        ),
+        &[
+            ("xl/worksheets/sheet1.xml", inline_string_sheet(2, 2, "s")),
+            ("xl/worksheets/sheet2.xml", inline_string_sheet(5, 5, "b")),
+            ("xl/worksheets/sheet3.xml", inline_string_sheet(1, 2, "t")),
+        ],
+    )
+}
+
+#[test]
+fn should_skip_only_the_sheets_over_the_table_budget_gh2820() {
+    let limits = SecurityLimits {
+        max_table_cells: 10,
+        ..Default::default()
+    };
+    let (workbook, warnings) = read_excel_bytes(&three_sheet_workbook(), ".xlsx", &limits)
+        .expect("a workbook over the cell limit must degrade, not fail");
+
+    let names: Vec<&str> = workbook.sheets.iter().map(|sheet| sheet.name.as_str()).collect();
+    assert_eq!(names, ["Small", "Big", "Tail"]);
+    assert_eq!(
+        workbook.sheets[0].table_cells.as_ref().unwrap(),
+        &[
+            vec!["s00".to_string(), "s01".to_string()],
+            vec!["s10".to_string(), "s11".to_string()]
+        ]
+    );
+    assert!(workbook.sheets[1].table_cells.is_none());
+    assert_eq!(
+        workbook.sheets[2].table_cells.as_ref().unwrap(),
+        &[vec!["t00".to_string(), "t01".to_string()]]
+    );
+    let skipped: Vec<&str> = warnings
+        .iter()
+        .filter(|warning| warning.message.contains("max_table_cells"))
+        .map(|warning| warning.message.as_ref())
+        .collect();
+    assert_eq!(skipped.len(), 1, "{warnings:?}");
+    assert!(skipped[0].contains("Sheet 'Big' was skipped"), "{}", skipped[0]);
+    assert!(
+        skipped[0].contains("`security_limits.max_table_cells` is 10"),
+        "{}",
+        skipped[0]
+    );
 }
 
 #[test]
@@ -1081,8 +1169,7 @@ fn should_budget_formula_only_xlsx_ranges_before_collecting_formulas_gh2296() {
         max_table_cells: 8,
         ..Default::default()
     };
-    let error = read_excel_bytes(&bytes, ".xlsx", &limits).unwrap_err();
-    assert!(error.to_string().contains("observed 10 cells"), "{error}");
+    assert_sheet_skipped_for_cell_limit(read_excel_bytes(&bytes, ".xlsx", &limits), "Sheet1", 8);
 }
 
 #[test]
@@ -1098,12 +1185,10 @@ fn should_apply_the_xlsx_preflight_to_file_inputs_and_addins_gh2296() {
     };
     let directory = tempfile::tempdir().unwrap();
     for extension in [".xlsx", ".xlsm", ".xltm", ".xlam"] {
-        let error = read_excel_bytes(&bytes, extension, &limits).unwrap_err();
-        assert!(error.to_string().contains("observed 10 cells"), "{extension}: {error}");
+        assert_sheet_skipped_for_cell_limit(read_excel_bytes(&bytes, extension, &limits), "Sheet1", 8);
         let path = directory.path().join(format!("budget{extension}"));
         std::fs::write(&path, &bytes).unwrap();
-        let error = read_excel_file(path.to_str().unwrap(), &limits).unwrap_err();
-        assert!(error.to_string().contains("observed 10 cells"), "{extension}: {error}");
+        assert_sheet_skipped_for_cell_limit(read_excel_file(path.to_str().unwrap(), &limits), "Sheet1", 8);
     }
 }
 
@@ -1160,8 +1245,7 @@ fn should_keep_xlsx_cell_guards_when_a_file_is_renamed_gh2296() {
             max_table_cells: 3,
             ..Default::default()
         };
-        let error = read_excel_file(path.to_str().unwrap(), &low).unwrap_err();
-        assert!(error.to_string().contains("observed 4 cells"), "{error}");
+        assert_sheet_skipped_for_cell_limit(read_excel_file(path.to_str().unwrap(), &low), "Sheet1", 3);
         let exact = SecurityLimits {
             max_table_cells: 4,
             ..Default::default()
@@ -1614,4 +1698,38 @@ fn should_reject_truncated_xlsb_record_lengths_before_constructor_allocation_gh2
             "{path}: {error}"
         );
     }
+}
+
+#[tokio::test]
+async fn should_extract_the_sheets_within_budget_through_the_extractor_gh2820() {
+    use crate::plugins::InternalDocumentExtractor;
+
+    let config = crate::core::config::ExtractionConfig {
+        security_limits: Some(SecurityLimits {
+            max_table_cells: 10,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let doc = crate::extractors::excel::ExcelExtractor::new()
+        .extract_content(
+            &three_sheet_workbook(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            &config,
+        )
+        .await
+        .expect("a workbook over the cell limit must still extract");
+
+    let pages = doc.prebuilt_pages.expect("one page per sheet");
+    assert_eq!(pages.len(), 3);
+    assert!(pages[0].content.contains("s11"), "{}", pages[0].content);
+    assert!(!pages[1].content.contains("b44"), "{}", pages[1].content);
+    assert!(pages[2].content.contains("t01"), "{}", pages[2].content);
+    assert!(
+        doc.processing_warnings
+            .iter()
+            .any(|warning| warning.message.contains("Sheet 'Big' was skipped")),
+        "{:?}",
+        doc.processing_warnings
+    );
 }
