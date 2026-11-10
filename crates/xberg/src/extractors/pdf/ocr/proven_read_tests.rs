@@ -139,12 +139,16 @@ fn metadata(scale_factor: f64, final_dpi: i32, dimension_clamped: bool) -> Image
 }
 
 #[test]
-fn a_plain_downscale_to_the_issue_2832_resolution_is_not_suspect() {
-    assert!(!read_may_be_illegible(Some(&metadata(1.0, 300, false))));
+fn an_unshrunk_image_at_a_low_resolution_is_not_suspect() {
     assert!(
         !read_may_be_illegible(Some(&metadata(1.0, 90, false))),
         "an unshrunk image keeps its own low resolution"
     );
+}
+
+#[test]
+fn a_plain_downscale_to_the_issue_2832_resolution_is_not_suspect() {
+    assert!(!read_may_be_illegible(Some(&metadata(1.0, 300, false))));
     assert!(
         !read_may_be_illegible(Some(&metadata(0.4, 120, false))),
         "10200 px read at 120 dpi"

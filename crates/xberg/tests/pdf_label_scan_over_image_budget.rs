@@ -175,7 +175,7 @@ fn a_downscaled_but_legible_retry_read_is_kept_with_the_warning() {
         .as_ref()
         .expect("the retry read records its preprocessing");
     assert!(!preprocessing.dimension_clamped, "{preprocessing:?}");
-    assert!(preprocessing.scale_factor < 1.0, "{preprocessing:?}");
-    assert!((100..300).contains(&preprocessing.final_dpi), "{preprocessing:?}");
+    assert!((preprocessing.scale_factor - 0.91).abs() < 0.01, "{preprocessing:?}");
+    assert!((preprocessing.final_dpi - 273).abs() <= 2, "{preprocessing:?}");
     assert_kept_with_warning(&document, 0);
 }

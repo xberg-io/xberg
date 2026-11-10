@@ -14,6 +14,7 @@ use xberg::plugins::{OcrBackend, OcrBackendType, Plugin, register_ocr_backend, u
 use xberg::{ExtractedDocument, ExtractionConfig, OcrConfig};
 
 const BACKEND: &str = "jpeg-budget-joint-2836";
+const NOISE_CAUSE: &str = "the retry read was rejected as noise";
 const LABELS: &str = "A B C D E F G H I J K L M N O P Q R S T U V W X";
 
 struct LabelBackend {
@@ -63,11 +64,6 @@ impl OcrBackend for LabelBackend {
             );
         }
         let aux = image.width() == 32;
-        if aux {
-            let processed = image::imageops::resize(&image.to_rgb8(), 16, 16, image::imageops::FilterType::Nearest);
-            assert_eq!((processed.width(), processed.height()), (16, 16));
-            assert!(processed.pixels().all(|p| p.0 == [0, 0, 0]));
-        }
         let mut result = ExtractedDocument::default();
         result.content = if image.width() == 32 {
             String::new()
@@ -206,6 +202,30 @@ fn assert_joint(pipeline: bool) {
     );
     let doc = with.expect("an unrelated unproven clamped image must not veto the proven unclamped label read");
     assert!(doc.content.contains(LABELS), "{:?}", doc.processing_warnings);
+    // LABELS is 24 one-letter words, so it trips the noise test at the default thresholds: the
+    // read is kept with the warning, not dropped with the retry's noise cause.
+    let noise: Vec<_> = doc
+        .processing_warnings
+        .iter()
+        .filter(|warning| warning.message.contains("suspected OCR recognition noise"))
+        .collect();
+    assert_eq!(noise.len(), 1, "{:?}", doc.processing_warnings);
+    assert!(
+        noise[0].message.contains("its text was retained"),
+        "{}",
+        noise[0].message
+    );
+    let mentions_cause = doc.processing_warnings.iter().any(|w| w.message.contains(NOISE_CAUSE))
+        || doc
+            .ocr_page_failures
+            .iter()
+            .flatten()
+            .any(|failure| failure.error.contains(NOISE_CAUSE));
+    assert!(
+        !mentions_cause,
+        "{:?} {:?}",
+        doc.processing_warnings, doc.ocr_page_failures
+    );
 }
 #[test]
 #[serial_test::serial]

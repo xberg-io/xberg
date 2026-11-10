@@ -18,7 +18,9 @@ uv run --no-project --with pillow==13.0.0 python generate.py label-scan-downscal
 ```
 
 The real-Tesseract tests in `pdf_label_scan_over_image_budget.rs` cover direct and explicit-pipeline
-retention and discard. `pdf_cross_image_retry_2836.rs` separately checks the retry policy with a
-controlled backend: an unclamped, proven-DPI JPEG read must survive an empty, unproven auxiliary
-image that the backend actually resizes from 32 to 16 pixels. Those two tests check provenance
-pairing, not OCR recognition accuracy.
+retention and discard, and a downscaled but legible read (scale 0.91, 273 dpi). No end-to-end test
+drops a shrunk read below 100 dpi; that clause is pinned by the unit tests in `proven_read_tests.rs`
+and, for the clamped case, by `pdf_tall_scan_strips.rs`. `pdf_cross_image_retry_2836.rs` separately
+checks the retry policy with a controlled backend: an unclamped, proven-DPI JPEG read must survive an
+empty, unproven, clamped auxiliary image. Those two tests check provenance pairing, not OCR
+recognition accuracy.
