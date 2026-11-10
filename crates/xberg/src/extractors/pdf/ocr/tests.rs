@@ -5595,6 +5595,36 @@ pub(super) mod tests {
         );
     }
 
+    /// #2312: the single-page first pass is scored on the page text before symbol-noise pruning, so
+    /// pruning cannot lift a noisy page over `pipeline_min_quality` and change the route.
+    #[test]
+    fn first_pass_gate_scores_the_unpruned_text() {
+        let thresholds = OcrQualityThresholds {
+            pipeline_min_quality: 0.85,
+            ..OcrQualityThresholds::default()
+        };
+        let noise: Vec<&str> = ["a", "oe", "ae", "ee", "rs", "ie", "~", "=|"]
+            .into_iter()
+            .cycle()
+            .take(200)
+            .collect();
+        let pruned = "The committee met on Tuesday to review the annual budget and agreed that the library needs a new \
+            roof before winter. The treasurer will publish the final figures next month.";
+        let unpruned = format!("{pruned}\n{}", noise.join("\n"));
+        assert!(
+            compute_quality_score(pruned, &thresholds) >= thresholds.pipeline_min_quality
+                && compute_quality_score(&unpruned, &thresholds) < thresholds.pipeline_min_quality,
+            "the fixture must straddle the gate"
+        );
+        assert!(!first_pass_clears_quality_gate(
+            pruned,
+            Some(&unpruned),
+            None,
+            &thresholds
+        ));
+        assert!(first_pass_clears_quality_gate(pruned, None, None, &thresholds));
+    }
+
     /// #1575: a rendered PDF page's own OCR backend warnings (e.g. Tesseract's
     /// dictionary-filter removal notice) and its `additional` metadata (psm, language) reached
     /// the caller for a standalone image (`extractors::image`, which assigns the whole OCR

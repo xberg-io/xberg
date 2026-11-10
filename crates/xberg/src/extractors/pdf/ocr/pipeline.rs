@@ -3156,7 +3156,7 @@ pub(crate) async fn accepted_single_page_first_pass(
     if !render_budget_bounds_first_page(&document, config) {
         return None;
     }
-    let output = Box::pin(extract_with_ocr_with_page_hints_and_evidence(
+    let (output, discarded_visible_native_page, unpruned_text) = Box::pin(extract_with_ocr_with_unpruned_text(
         Some(content),
         None,
         #[cfg(feature = "layout-detection")]
@@ -3167,6 +3167,7 @@ pub(crate) async fn accepted_single_page_first_pass(
     ))
     .await
     .ok()?;
+    let output = (output, discarded_visible_native_page);
     let budget_bounded = output
         .0
         .9
@@ -3175,8 +3176,26 @@ pub(crate) async fn accepted_single_page_first_pass(
     if !budget_bounded {
         return None;
     }
-    let score = pipeline_stage_score(compute_quality_score(&output.0.0, thresholds), output.0.1);
-    (score >= thresholds.pipeline_min_quality).then_some(output)
+    first_pass_clears_quality_gate(&output.0.0, unpruned_text.as_deref(), output.0.1, thresholds).then_some(output)
+}
+
+/// Whether a first read clears the pipeline quality gate. The read is scored before symbol-noise
+/// pruning, so pruning cannot lift a noisy page over the gate and change the route (#2312).
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    any(paddle_ocr, all(test, feature = "ocr"))
+))]
+pub(super) fn first_pass_clears_quality_gate(
+    text: &str,
+    unpruned_text: Option<&str>,
+    mean_confidence: Option<f64>,
+    thresholds: &crate::core::config::OcrQualityThresholds,
+) -> bool {
+    let score = pipeline_stage_score(
+        compute_quality_score(unpruned_text.unwrap_or(text), thresholds),
+        mean_confidence,
+    );
+    score >= thresholds.pipeline_min_quality
 }
 
 #[cfg(all(
@@ -3444,6 +3463,30 @@ pub(crate) async fn extract_with_ocr_with_page_hints_and_evidence(
     path: Option<&std::path::Path>,
     page_ocr_hints: Option<PageOcrHints>,
 ) -> OcrRunResult<(WholeDirectOcrOutput, bool)> {
+    extract_with_ocr_with_unpruned_text(
+        content,
+        images,
+        #[cfg(feature = "layout-detection")]
+        layout_detections,
+        config,
+        path,
+        page_ocr_hints,
+    )
+    .await
+    .map(|(output, discarded_visible_native_page, _)| (output, discarded_visible_native_page))
+}
+
+/// [`extract_with_ocr_with_page_hints_and_evidence`] plus the page text as it was before
+/// symbol-noise pruning, when a page was pruned, for callers that score the read (#2312).
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+async fn extract_with_ocr_with_unpruned_text(
+    content: Option<&[u8]>,
+    images: Option<&[image::DynamicImage]>,
+    #[cfg(feature = "layout-detection")] layout_detections: Option<&[crate::layout::DetectionResult]>,
+    config: &ExtractionConfig,
+    path: Option<&std::path::Path>,
+    page_ocr_hints: Option<PageOcrHints>,
+) -> OcrRunResult<(WholeDirectOcrOutput, bool, Option<String>)> {
     let run_layers = page_ocr_hints
         .as_ref()
         .and_then(|hints| hints.native_page_layers.clone());
@@ -3472,7 +3515,7 @@ pub(crate) async fn extract_with_ocr_with_page_hints_and_evidence(
         && let Err(failed) = &run
         && let Some(output) = try_gray_jpeg_render_recovery(content, config, failed).await?
     {
-        return Ok((output, false));
+        return Ok((output, false, None));
     }
     #[cfg(all(
         feature = "pdf",
@@ -3485,7 +3528,7 @@ pub(crate) async fn extract_with_ocr_with_page_hints_and_evidence(
         && let Err(failed) = &run
         && let Some(output) = direct_rgb_budget_recovery::try_recovery(content, config, path, failed).await?
     {
-        return Ok((output, false));
+        return Ok((output, false, None));
     }
     let (
         text,
@@ -3532,6 +3575,7 @@ pub(crate) async fn extract_with_ocr_with_page_hints_and_evidence(
             ocr_confidence,
         ),
         read_evidence.discarded_visible_native_page,
+        read_evidence.unpruned_text,
     ))
 }
 

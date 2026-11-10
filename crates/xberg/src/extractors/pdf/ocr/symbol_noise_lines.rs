@@ -67,7 +67,11 @@ fn letter_count(token: &str) -> usize {
 }
 
 fn has_vowel(token: &str) -> bool {
-    token.chars().any(|c| "aeiouyAEIOUY".contains(c))
+    token.chars().any(|c| {
+        c.to_lowercase().any(|lower| {
+            "aeiouy\u{e0}\u{e1}\u{e2}\u{e3}\u{e4}\u{e5}\u{e6}\u{e8}\u{e9}\u{ea}\u{eb}\u{ec}\u{ed}\u{ee}\u{ef}\u{f2}\u{f3}\u{f4}\u{f5}\u{f6}\u{f8}\u{f9}\u{fa}\u{fb}\u{fc}\u{fd}\u{ff}\u{153}".contains(lower)
+        })
+    })
 }
 
 fn is_function_word(token: &str) -> bool {
@@ -402,6 +406,32 @@ mod tests {
     #[test]
     fn keeps_equations_between_variables_and_sums() {
         assert_kept_exactly(&["x = y", "a + b", "n < m", "total = cost"]);
+    }
+
+    #[test]
+    fn accented_latin_vowels_count_as_vowels() {
+        for word in ["f\u{ff}r", "Gr\u{fc}n", "\u{c9}t\u{e9}", "p\u{e5}st", "s\u{153}ur"] {
+            assert!(has_vowel(word), "{word}");
+        }
+        assert!(!has_vowel("pst"));
+        assert!(
+            !is_symbol_noise_line("go f\u{ff}r"),
+            "a vowel-bearing accented word makes the phrase"
+        );
+    }
+
+    #[test]
+    fn prunes_a_three_token_non_english_line_on_a_gated_page() {
+        assert!(is_symbol_noise_line("de la gare"));
+        let text = page(&["Go to."], 12) + "\n\nde la gare";
+        assert_eq!(prune_text(&text).0, "Go to.");
+    }
+
+    #[test]
+    fn prunes_a_single_token_answer_and_an_unspaced_equation() {
+        for line in ["No.", "Yes", "Qty", "x=y"] {
+            assert!(is_symbol_noise_line(line), "{line}");
+        }
     }
 
     #[test]
