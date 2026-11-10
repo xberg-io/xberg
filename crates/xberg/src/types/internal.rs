@@ -268,11 +268,7 @@ pub struct InternalDocument {
     /// attempting to reconstruct pages from element-level page numbers.
     pub prebuilt_pages: Option<Vec<crate::types::PageContent>>,
 
-    /// Page numbers whose prebuilt text was replaced by OCR text.
-    ///
-    /// Set by the PDF extractor on every OCR route; `derive_extraction_result` re-renders only
-    /// these pages (and every page of an image or OCR source) when their text is not found in the
-    /// plain content. Not part of the plugin-bridge wire format.
+    /// Pages whose prebuilt text an OCR route wrote; only these are re-rendered as plain. Not on the wire.
     #[serde(skip)]
     pub ocr_text_pages: Vec<u32>,
 

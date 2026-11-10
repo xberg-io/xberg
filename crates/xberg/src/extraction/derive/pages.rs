@@ -795,7 +795,13 @@ mod plain_page_rerender_tests {
         assert!(warned(&doc));
         assert_eq!(boundary_pages(&doc), vec![1, 3]);
         let boundaries = doc.metadata.pages.as_ref().unwrap().boundaries.as_ref().unwrap();
-        assert_eq!(content.get(boundaries[0].byte_start..boundaries[0].byte_end), Some("one"));
-        assert_eq!(content.get(boundaries[1].byte_start..boundaries[1].byte_end), Some("three"));
+        assert_eq!(
+            content.get(boundaries[0].byte_start..boundaries[0].byte_end),
+            Some("one")
+        );
+        assert_eq!(
+            content.get(boundaries[1].byte_start..boundaries[1].byte_end),
+            Some("three")
+        );
     }
 }
