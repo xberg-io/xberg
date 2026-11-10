@@ -73,7 +73,12 @@ fn assert_mixed_tables(actual: &ExtractedDocument, native: &ExtractedDocument, f
         } else {
             &source[index]
         };
-        assert_eq!(page.content, reference.content);
+        if index == last {
+            super::assert_plain_table_page(page, reference);
+            assert!(actual.content.contains(&page.content));
+        } else {
+            assert_eq!(page.content, reference.content);
+        }
         assert_eq!(super::page_tables_json(page), super::page_tables_json(reference));
         expected.extend(reference.tables.iter().map(|table| table.as_ref()));
     }

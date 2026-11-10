@@ -641,6 +641,43 @@ pub(crate) async fn extract_mixed_ocr_native_with_layout_pages(
     content: &[u8],
     config: &ExtractionConfig,
     layout_pages: Option<&crate::core::layout_pages::LayoutPageSelection>,
+    keep_native_pages: (&[u32], &[u32]),
+) -> crate::Result<MixedOcrRun> {
+    let mut run = read_mixed_ocr_native_with_layout_pages(
+        native_text,
+        boundaries,
+        selected_pages,
+        content,
+        config,
+        layout_pages,
+        keep_native_pages,
+    )
+    .await?;
+    // ~keep Backend page text can inline table Markdown. Render the recognized table
+    // transcripts after acceptance, keeping the surrounding text on the mixed Plain route.
+    if config.output_format == crate::core::config::OutputFormat::Plain {
+        let (text, replacements, documents, ..) = &mut run.output;
+        let mut changed = false;
+        for (page, replacement) in &mut *replacements {
+            if let Some(document) = documents.get(page) {
+                changed |= render_inline_tables_plain(replacement, &document.tables);
+            }
+        }
+        if changed {
+            *text = apply_ocr_page_replacements(native_text, boundaries, replacements);
+        }
+    }
+    Ok(run)
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(in crate::extractors::pdf) async fn read_mixed_ocr_native_with_layout_pages(
+    native_text: &str,
+    boundaries: &[crate::types::PageBoundary],
+    selected_pages: (&[u32], &[u32]),
+    content: &[u8],
+    config: &ExtractionConfig,
+    layout_pages: Option<&crate::core::layout_pages::LayoutPageSelection>,
     (preserve_native, native_script): (&[u32], &[u32]),
 ) -> crate::Result<MixedOcrRun> {
     let (ocr_page_numbers, single_block_page_numbers) = selected_pages;
@@ -3004,6 +3041,78 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         #[cfg(feature = "formula-recognition")]
         formula_layout_inputs,
     })
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn render_inline_tables_plain(text: &mut String, tables: &[crate::types::Table]) -> bool {
+    let mut changed = false;
+    let mut tables = tables
+        .iter()
+        .filter(|table| !table.cells.is_empty() && !table.markdown.trim().is_empty())
+        .collect::<Vec<_>>();
+    // ~keep Render longer blocks first so a shared header and initial rows cannot mask a shorter table.
+    tables.sort_by_key(|table| std::cmp::Reverse(table.markdown.trim().len()));
+    for (index, table) in tables.iter().enumerate() {
+        let markdown = table.markdown.trim();
+        let mut matches = text.match_indices(markdown).map(|(start, _)| start).filter(|&start| {
+            let end = start + markdown.len();
+            (start == 0 || text.as_bytes()[start - 1] == b'\n') && (end == text.len() || text.as_bytes()[end] == b'\n')
+        });
+        if let Some(start) = matches.next() {
+            let remaining_tables = tables[index + 1..]
+                .iter()
+                .filter(|table| table.markdown.trim() == markdown)
+                .count();
+            // ~keep An extra identical block could be literal prose.
+            if matches.nth(remaining_tables).is_none() {
+                let rows = crate::rendering::common::render_table_plain(&table.cells);
+                text.replace_range(start..start + markdown.len(), rows.trim_end_matches('\n'));
+                changed = true;
+            }
+        }
+    }
+    changed
+}
+
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+mod plain_table_tests {
+    use super::render_inline_tables_plain;
+    use crate::types::Table;
+
+    #[test]
+    fn renders_owned_table_blocks_without_changing_adjacent_text() {
+        let markdown = "| Name | Count |\n| --- | --- |\n| A | 3 |";
+        let table = Table {
+            markdown: markdown.to_owned(),
+            cells: vec![vec!["Name".into(), "Count".into()], vec!["A".into(), "3".into()]],
+            ..Default::default()
+        };
+        let mut text = format!("Lead: | Name | Count |\n\n{markdown}\n\nLiteral | prose\n\n{markdown}");
+        let original = text.clone();
+        assert!(!render_inline_tables_plain(&mut text, std::slice::from_ref(&table)));
+        assert_eq!(text, original);
+
+        assert!(render_inline_tables_plain(&mut text, &[table.clone(), table]));
+        assert_eq!(
+            text,
+            "Lead: | Name | Count |\n\nName Count\nA 3\n\nLiteral | prose\n\nName Count\nA 3"
+        );
+    }
+
+    #[test]
+    fn renders_both_tables_when_one_starts_with_the_same_rows() {
+        let short = Table {
+            markdown: "| Name | Count |\n| --- | --- |\n| A | 3 |".into(),
+            cells: vec![vec!["Name".into(), "Count".into()], vec!["A".into(), "3".into()]],
+            ..Default::default()
+        };
+        let mut long = short.clone();
+        long.markdown.push_str("\n| B | 5 |");
+        long.cells.push(vec!["B".into(), "5".into()]);
+        let mut text = format!("{}\n\n{}", long.markdown, short.markdown);
+        assert!(render_inline_tables_plain(&mut text, &[short, long]));
+        assert_eq!(text, "Name Count\nA 3\nB 5\n\nName Count\nA 3");
+    }
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]

@@ -43,6 +43,16 @@ async fn read(bytes: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
 }
 
 fn assert_same_page_payload(actual: &ExtractedDocument, forced: &ExtractedDocument) {
+    assert_page_payload(actual, forced, |actual, forced| {
+        assert_eq!(actual.content, forced.content)
+    });
+}
+
+fn assert_page_payload(
+    actual: &ExtractedDocument,
+    forced: &ExtractedDocument,
+    assert_text: impl Fn(&xberg::types::PageContent, &xberg::types::PageContent),
+) {
     assert_eq!(actual.tables.len(), 2, "all accepted OCR tables survive");
     let actual_pages = actual.pages.as_ref().unwrap();
     let forced_pages = forced.pages.as_ref().unwrap();
@@ -55,7 +65,7 @@ fn assert_same_page_payload(actual: &ExtractedDocument, forced: &ExtractedDocume
             serde_json::to_value(actual_page.tables[0].as_ref()).unwrap(),
             serde_json::to_value(forced_page.tables[0].as_ref()).unwrap()
         );
-        assert_eq!(actual_page.content, forced_page.content, "per-page OCR text survives");
+        assert_text(actual_page, forced_page);
     }
     assert_eq!(
         serde_json::to_value(&actual.tables).unwrap(),
@@ -101,7 +111,9 @@ async fn automatic_all_pages_keeps_the_ocr_tables_and_page_texts() {
     let forced = whole_document_control(&bytes, &automatic).await;
     let actual = read(&bytes, &automatic).await;
     assert_eq!(actual.extraction_method, Some(xberg::types::ExtractionMethod::Mixed));
-    assert_same_page_payload(&actual, &forced);
+    assert_page_payload(&actual, &forced, super::assert_plain_table_page);
+    let pages = actual.pages.as_ref().unwrap();
+    assert_eq!(actual.content, format!("{}\n\n{}", pages[0].content, pages[1].content));
 }
 
 #[tokio::test]

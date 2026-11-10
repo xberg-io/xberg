@@ -86,6 +86,20 @@ async fn read_document(bytes: &[u8], config: &ExtractionConfig, expected_pages: 
     document
 }
 
+fn assert_plain_table_page(actual: &xberg::types::PageContent, forced: &xberg::types::PageContent) {
+    assert_eq!(forced.tables.len(), 1);
+    let rows = forced.tables[0]
+        .cells
+        .iter()
+        .map(|row| row.join(" "))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let rows = rows.trim();
+    assert!(!rows.is_empty());
+    assert!(forced.content.contains(rows), "forced OCR renders the same table rows");
+    assert_eq!(actual.content, rows);
+}
+
 fn page_tables_json(page: &xberg::types::PageContent) -> serde_json::Value {
     serde_json::to_value(page.tables.iter().map(|table| table.as_ref()).collect::<Vec<_>>()).unwrap()
 }
