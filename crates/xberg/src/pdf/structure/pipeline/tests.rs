@@ -1593,6 +1593,36 @@ fn dedup_does_not_let_the_seam_between_two_cells_of_another_table_back_a_second_
 }
 
 #[test]
+fn dedup_keeps_the_words_of_a_native_table_when_its_layout_copy_is_the_one_that_goes() {
+    use crate::core::config::layout::TableOverlapPreference;
+    let big = cell_table(
+        1,
+        (0.0, 0.0, 100.0, 100.0),
+        &[&["alpha", "1"], &["beta", "2"], &["gamma", "3"], &["delta", "4"]],
+    );
+    let small = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["omega", "7"], &["sigma", "8"]]);
+    let page = printed_cells(&[&big, &small]);
+    let mut losses = Vec::new();
+    for preference in [TableOverlapPreference::Native, TableOverlapPreference::Content] {
+        let mut tables = vec![big.clone(), small.clone(), small.clone()];
+        deduplicate_overlapping_tables(&mut tables, 2, preference, &page);
+        let words: ahash::AHashSet<&str> = tables
+            .iter()
+            .flat_map(|table| table.cells.iter().flatten())
+            .map(String::as_str)
+            .collect();
+        let lost: Vec<&str> = ["omega", "sigma", "7", "8"]
+            .into_iter()
+            .filter(|word| !words.contains(word))
+            .collect();
+        if !lost.is_empty() {
+            losses.push(format!("{preference:?}: no table holds {lost:?}"));
+        }
+    }
+    assert!(losses.is_empty(), "{losses:?}");
+}
+
+#[test]
 fn dedup_counts_two_split_copies_and_drops_a_table_for_one_printed_copy() {
     let (small, large) = joined_pair();
     let split_twice = vec![vec![
