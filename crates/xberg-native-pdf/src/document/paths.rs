@@ -411,12 +411,18 @@ impl PdfDocument {
         extractor: &mut crate::extractors::paths::PathExtractor,
         stack: &mut crate::extractors::paths::PathGraphicsStateStack,
     ) {
+        extractor.prepare_path_extgstates(name, self.object_recovery_epoch.load(Ordering::Acquire), |reference| {
+            self.path_reference_available(reference)
+        });
         if extractor.apply_cached_path_extgstate(name, stack.current_mut()) {
             return;
         }
-        extractor.extgstate_container(|reference| self.load_object(reference).ok());
-        let patch = self.resolve_path_extgstate(name, extractor).unwrap_or_default();
-        extractor.cache_path_extgstate(name, patch);
+        extractor.extgstate_container(
+            |reference| self.path_reference_available(reference),
+            |reference| self.load_object(reference),
+        );
+        let parsed = self.resolve_path_extgstate(name, extractor);
+        extractor.cache_path_extgstate(name, parsed);
         extractor.apply_cached_path_extgstate(name, stack.current_mut());
     }
 
@@ -424,63 +430,44 @@ impl PdfDocument {
         &self,
         name: &str,
         extractor: &crate::extractors::paths::PathExtractor,
-    ) -> Option<crate::extractors::paths::PathGraphicsPatch> {
-        let entry = extractor.current_resources()?.as_dict()?.get("ExtGState")?;
-        let states = if entry.as_reference().is_some() {
-            extractor.loaded_extgstate_container()?
-        } else {
-            entry
+    ) -> crate::rendering::ext_gstate::ParsedExtGState {
+        let entry = extractor
+            .current_resources()
+            .and_then(|resources| resources.as_dict()?.get("ExtGState"));
+        let states = match entry {
+            Some(entry) if entry.as_reference().is_some() => extractor.loaded_extgstate_container(),
+            other => other,
         };
-        let dictionary = states
-            .as_dict()
-            .and_then(|states| states.get(name))
-            .and_then(|state| self.path_state_object(state))?;
-        let dictionary = dictionary.as_dict()?;
-        Some(crate::extractors::paths::PathGraphicsPatch {
-            dash: dictionary.get("D").and_then(|dash| self.path_dash_pattern(dash)),
-            stroke_alpha: dictionary.get("CA").and_then(|alpha| self.path_stroke_alpha(alpha)),
-        })
+        let resolver = PathStateResolver { doc: self, extractor };
+        states
+            .and_then(|states| states.as_dict()?.get(name))
+            .and_then(|state| crate::rendering::ext_gstate::parse_ext_g_state_inner(state, &resolver).ok())
+            .unwrap_or_default()
     }
 
-    fn path_stroke_alpha(&self, object: &crate::object::Object) -> Option<f32> {
-        let object = self.path_state_object(object)?;
-        let number = object
-            .as_real()
-            .or_else(|| object.as_integer().map(|value| value as f64))?;
-        // Clamp at PDF number precision so finite out-of-f32-range constants are not discarded. ~keep
-        number.is_finite().then(|| number.clamp(0.0, 1.0) as f32)
-    }
-
-    fn path_state_number(&self, object: &crate::object::Object) -> Option<f32> {
-        let object = self.path_state_object(object)?;
-        let number = object
-            .as_real()
-            .or_else(|| object.as_integer().map(|value| value as f64))? as f32;
-        number.is_finite().then_some(number)
-    }
-
-    fn path_dash_pattern(&self, object: &crate::object::Object) -> Option<(Vec<f32>, f32)> {
-        let object = self.path_state_object(object)?;
-        let [array, phase] = object.as_array()?.as_slice() else {
-            return None;
-        };
-        let array = self.path_state_object(array)?;
-        let lengths = array
-            .as_array()?
-            .iter()
-            .map(|length| self.path_state_number(length).filter(|length| *length >= 0.0))
-            .collect::<Option<Vec<_>>>()?;
-        Some((lengths, self.path_state_number(phase)?))
-    }
-
-    fn path_state_object<'a>(
-        &self,
-        object: &'a crate::object::Object,
-    ) -> Option<std::borrow::Cow<'a, crate::object::Object>> {
-        match object.as_reference() {
-            Some(reference) => self.load_object(reference).ok().map(std::borrow::Cow::Owned),
-            None => Some(std::borrow::Cow::Borrowed(object)),
+    fn path_reference_available(&self, reference: crate::object::ObjectRef) -> bool {
+        if self
+            .object_cache
+            .lock_or_recover()
+            .get(&reference)
+            .is_some_and(|object| !matches!(object, Object::Null))
+        {
+            return true;
         }
+        let Some(entry) = self.xref.get(reference.id) else {
+            return false;
+        };
+        if entry.entry_type != crate::xref::XRefEntryType::Compressed || reference.generation != 0 {
+            return false;
+        }
+        let Ok(stream) = u32::try_from(entry.offset) else {
+            return false;
+        };
+        self.object_stream_cache
+            .lock_or_recover()
+            .get(&crate::object::ObjectRef::new(stream, 0))
+            .and_then(|objects| objects.get(&reference.id))
+            .is_some_and(|object| !matches!(object, Object::Null))
     }
 
     /// Dereference one level of indirection, loading the target object;
@@ -892,5 +879,30 @@ impl PdfDocument {
             .into_iter()
             .filter(|path| path.rendered_bbox().intersects(&region))
             .collect())
+    }
+}
+
+/// Lets the shared ExtGState parser load references through the extractor's failure ledger:
+/// a failed load is remembered, and retried only after recovery publishes the object. ~keep
+struct PathStateResolver<'a> {
+    doc: &'a PdfDocument,
+    extractor: &'a crate::extractors::paths::PathExtractor,
+}
+
+impl crate::rendering::ext_gstate::ObjectResolver for PathStateResolver<'_> {
+    fn resolve_object(&self, obj: &Object) -> Result<Object> {
+        let Some(reference) = obj.as_reference() else {
+            return Ok(obj.clone());
+        };
+        self.extractor
+            .load_path_object(
+                reference,
+                |reference| self.doc.path_reference_available(reference),
+                |reference| self.doc.load_object(reference),
+            )
+            .ok_or_else(|| Error::ParseError {
+                offset: 0,
+                reason: "ExtGState reference could not be loaded".to_string(),
+            })
     }
 }

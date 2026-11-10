@@ -1,14 +1,27 @@
 //! Shared parser for PDF `ExtGState` dictionary entries.
 //!
-//! Both the page renderer and the separation-plate renderer need to apply
-//! transparency / blend-mode overrides from `gs` operators. Keeping the
-//! parser in a single module avoids drift between the two renderers and
-//! removes the `pub(crate)` leak that previously crossed module boundaries.
+//! The page renderer and the separation-plate renderer apply transparency and
+//! blend-mode overrides from `gs` operators; path extraction reads the dash
+//! pattern and stroke opacity. Keeping the parser in a single module avoids
+//! drift between the three readers.
 
 use crate::content::graphics_state::{GraphicsState, SoftMaskForm, SoftMaskSubtype};
 use crate::document::PdfDocument;
 use crate::error::Result;
 use crate::object::Object;
+
+/// How the parser follows a reference. The renderers resolve through the document; path
+/// extraction resolves through its failure ledger, so a failed load is recorded and not
+/// repeated until recovery publishes the object.
+pub(crate) trait ObjectResolver {
+    fn resolve_object(&self, obj: &Object) -> Result<Object>;
+}
+
+impl ObjectResolver for PdfDocument {
+    fn resolve_object(&self, obj: &Object) -> Result<Object> {
+        PdfDocument::resolve_object(self, obj)
+    }
+}
 
 /// A parsed `/SMask` value from an ExtGState dict (§11.4.7 / Table 144).
 /// `None` corresponds to the spec `/None` value (clear the current mask);
@@ -22,10 +35,10 @@ pub(crate) enum SoftMaskValue {
     Form(SoftMaskForm),
 }
 
-/// Parsed effects of a PDF `ExtGState` dictionary. Only the fields actually
-/// applied during rendering are captured (fill/stroke alpha, blend mode,
-/// the overprint parameters from ISO 32000-1 §11.7.4, and §11.4.7
-/// Form-XObject soft masks).
+/// Parsed effects of a PDF `ExtGState` dictionary: fill/stroke alpha, blend
+/// mode, the overprint parameters from ISO 32000-1 §11.7.4, §11.4.7
+/// Form-XObject soft masks and the dash pattern. [`ParsedExtGState::apply`]
+/// leaves the dash to path extraction, which reads it from this struct.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ParsedExtGState {
     pub(crate) fill_alpha: Option<f32>,
@@ -42,6 +55,9 @@ pub(crate) struct ParsedExtGState {
     /// spec `/None` value (clear). `Some(SoftMaskValue::Form(..))` is a
     /// Form-XObject mask.
     pub(crate) smask: Option<SoftMaskValue>,
+    /// Dash pattern (ExtGState `/D`, Table 57): on/off lengths and phase.
+    /// `None` when the entry is absent or malformed.
+    pub(crate) dash: Option<(Vec<f32>, f32)>,
 }
 
 impl ParsedExtGState {
@@ -82,7 +98,7 @@ impl ParsedExtGState {
 /// Parse the fields we need from an `ExtGState` *entry* (the inner dict, not
 /// the resource dict that holds it). Resolves `state_obj` once if it is a
 /// reference.
-pub(crate) fn parse_ext_g_state_inner(state_obj: &Object, doc: &PdfDocument) -> Result<ParsedExtGState> {
+pub(crate) fn parse_ext_g_state_inner(state_obj: &Object, doc: &impl ObjectResolver) -> Result<ParsedExtGState> {
     let mut out = ParsedExtGState::default();
     let state_resolved = doc.resolve_object(state_obj)?;
     let state_dict = match state_resolved.as_dict() {
@@ -113,6 +129,7 @@ pub(crate) fn parse_ext_g_state_inner(state_obj: &Object, doc: &PdfDocument) -> 
             .map(|v| v as f32)
             .or_else(|| ca_upper.as_integer().map(|v| v as f32));
     }
+    out.dash = read("D").and_then(|d| parse_dash(&d, doc));
     if let Some(bm) = read("BM") {
         out.blend_mode = Some(parse_blend_mode(&bm, doc));
     }
@@ -145,6 +162,29 @@ pub(crate) fn parse_ext_g_state_inner(state_obj: &Object, doc: &PdfDocument) -> 
     Ok(out)
 }
 
+/// Read a number through references. Non-finite values are rejected.
+fn finite_number(obj: &Object, doc: &impl ObjectResolver) -> Option<f32> {
+    let obj = doc.resolve_object(obj).ok()?;
+    let n = obj.as_real().or_else(|| obj.as_integer().map(|i| i as f64))? as f32;
+    n.is_finite().then_some(n)
+}
+
+/// Classify an ExtGState `/D` value: `[dashArray phase]` with non-negative
+/// lengths. Any malformed part rejects the whole pattern, so the caller keeps
+/// the dash it already has. ~keep
+fn parse_dash(d: &Object, doc: &impl ObjectResolver) -> Option<(Vec<f32>, f32)> {
+    let [array, phase] = d.as_array()?.as_slice() else {
+        return None;
+    };
+    let array = doc.resolve_object(array).ok()?;
+    let lengths = array
+        .as_array()?
+        .iter()
+        .map(|length| finite_number(length, doc).filter(|length| *length >= 0.0))
+        .collect::<Option<Vec<_>>>()?;
+    Some((lengths, finite_number(phase, doc)?))
+}
+
 /// Resolve a `/BM` value to a blend-mode name.
 ///
 /// ISO 32000-1 §11.3.5 + §11.6.3: `/BM` may be a name OR an array of
@@ -157,9 +197,10 @@ pub(crate) fn parse_ext_g_state_inner(state_obj: &Object, doc: &PdfDocument) -> 
 ///
 /// Array elements may themselves be indirect refs (§7.3.10), so
 /// each is resolved before pattern-matching its name. ~keep
-fn parse_blend_mode(bm: &Object, doc: &PdfDocument) -> String {
+fn parse_blend_mode(bm: &Object, doc: &impl ObjectResolver) -> String {
     match bm {
-        Object::Name(n) => n.clone(),
+        Object::Name(n) if crate::rendering::sidecar::is_recognised_mode(n) => n.clone(),
+        Object::Name(_) => "Normal".to_string(),
         Object::Array(arr) => arr
             .iter()
             .filter_map(|elem| doc.resolve_object(elem).ok())
@@ -173,7 +214,7 @@ fn parse_blend_mode(bm: &Object, doc: &PdfDocument) -> String {
 /// Classify an ExtGState `/SMask` value (§11.4.7 / Table 144). Returns `None`
 /// when the value is neither `/None` nor a soft-mask dict carrying a `/G`
 /// Form-XObject reference, which leaves the current mask untouched.
-fn parse_smask(smask_obj: &Object, doc: &PdfDocument) -> Option<SoftMaskValue> {
+fn parse_smask(smask_obj: &Object, doc: &impl ObjectResolver) -> Option<SoftMaskValue> {
     // Resolve through references before classifying. ~keep
     let resolved = doc.resolve_object(smask_obj).unwrap_or(smask_obj.clone());
     let mask_dict = match &resolved {
@@ -368,13 +409,14 @@ mod tests {
         emit(&mut buf, "5 0 obj\n1\nendobj\n");
         emit(&mut buf, "6 0 obj\n/Multiply\nendobj\n");
         emit(&mut buf, "7 0 obj\n[/Multiply]\nendobj\n");
+        emit(&mut buf, "8 0 obj\n[1 0.5]\nendobj\n");
         let xref_off = buf.len();
-        buf.extend_from_slice(b"xref\n0 8\n0000000000 65535 f \n");
+        buf.extend_from_slice(b"xref\n0 9\n0000000000 65535 f \n");
         for off in &offsets {
             buf.extend_from_slice(format!("{:010} 00000 n \n", off).as_bytes());
         }
         buf.extend_from_slice(
-            format!("trailer\n<< /Size 8 /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n", xref_off).as_bytes(),
+            format!("trailer\n<< /Size 9 /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n", xref_off).as_bytes(),
         );
         PdfDocument::from_bytes(buf).expect("fixture PDF parses")
     }
@@ -449,5 +491,58 @@ mod tests {
         let doc = fixture_doc_with_indirect_values();
         let parsed = parse_ext_g_state_inner(&obj, &doc).expect("parses");
         assert_eq!(parsed.blend_mode.as_deref(), Some("Multiply"));
+    }
+
+    fn dash_entry(lengths: Vec<Object>, phase: Object) -> Object {
+        dict(&[("D", Object::Array(vec![Object::Array(lengths), phase]))])
+    }
+
+    #[test]
+    fn parses_the_dash_array_and_phase() {
+        let obj = dash_entry(vec![Object::Integer(3), Object::Real(2.5)], Object::Integer(1));
+        let parsed = parse_ext_g_state_inner(&obj, &fixture_doc()).expect("parses");
+        assert_eq!(parsed.dash, Some((vec![3.0, 2.5], 1.0)));
+    }
+
+    #[test]
+    fn dash_values_resolve_through_references() {
+        use crate::object::ObjectRef;
+        let reference = |id| Object::Reference(ObjectRef::new(id, 0));
+        // Object 8 is the array [1 0.5], object 3 is 0.5 and object 5 is 1.
+        let in_array = dict(&[("D", Object::Array(vec![reference(8), Object::Integer(2)]))]);
+        let in_elements = dash_entry(vec![reference(5), reference(3)], reference(5));
+        let whole = dict(&[("D", reference(7))]);
+        let doc = fixture_doc_with_indirect_values();
+        assert_eq!(
+            parse_ext_g_state_inner(&in_array, &doc).expect("parses").dash,
+            Some((vec![1.0, 0.5], 2.0))
+        );
+        assert_eq!(
+            parse_ext_g_state_inner(&in_elements, &doc).expect("parses").dash,
+            Some((vec![1.0, 0.5], 1.0))
+        );
+        // Object 7 is [/Multiply]: not a two-operand dash, so it is rejected.
+        assert_eq!(parse_ext_g_state_inner(&whole, &doc).expect("parses").dash, None);
+    }
+
+    #[test]
+    fn a_malformed_dash_is_rejected_whole() {
+        let doc = fixture_doc();
+        let negative = dash_entry(vec![Object::Integer(3), Object::Integer(-1)], Object::Integer(0));
+        let not_number = dash_entry(vec![Object::Integer(3), Object::Name("x".into())], Object::Integer(0));
+        let bad_phase = dash_entry(vec![Object::Integer(3)], Object::Name("x".into()));
+        let too_large = dash_entry(vec![Object::Real(1e39)], Object::Integer(0));
+        let one_operand = dict(&[("D", Object::Array(vec![Object::Array(vec![Object::Integer(3)])]))]);
+        let three_operands = dict(&[(
+            "D",
+            Object::Array(vec![
+                Object::Array(vec![Object::Integer(3), Object::Integer(2)]),
+                Object::Integer(1),
+                Object::Integer(5),
+            ]),
+        )]);
+        for obj in [negative, not_number, bad_phase, too_large, one_operand, three_operands] {
+            assert_eq!(parse_ext_g_state_inner(&obj, &doc).expect("parses").dash, None);
+        }
     }
 }

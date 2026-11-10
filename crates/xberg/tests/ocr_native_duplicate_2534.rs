@@ -20,13 +20,15 @@ const ESCAPED_CELL_TABLE_PAGE: u32 = 4311;
 const ENGLISH_MODEL_SHA256: &str = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2";
 
 fn three_pages_around(book: &str, page: u32) -> Vec<u8> {
+    pages_excerpt(book, &[page - 1, page, page + 1])
+}
+
+fn pages_excerpt(book: &str, wanted: &[u32]) -> Vec<u8> {
     use lopdf::Object;
 
     let mut document = lopdf::Document::load(helpers::get_test_file_path(book)).expect("open the corpus PDF");
     let pages = document.get_pages();
-    let kept: Vec<Object> = (page - 1..=page + 1)
-        .map(|number| Object::Reference(pages[&number]))
-        .collect();
+    let kept: Vec<Object> = wanted.iter().map(|number| Object::Reference(pages[number])).collect();
     let root = document
         .catalog()
         .unwrap()
@@ -34,21 +36,22 @@ fn three_pages_around(book: &str, page: u32) -> Vec<u8> {
         .unwrap()
         .as_reference()
         .unwrap();
-    for number in pages.keys().filter(|number| number.abs_diff(page) > 1) {
+    for number in pages.keys().filter(|number| !wanted.contains(number)) {
         document.objects.remove(&pages[number]);
     }
     let tree = document.get_object_mut(root).and_then(Object::as_dict_mut).unwrap();
+    let count = i64::try_from(kept.len()).unwrap();
     tree.set("Kids", kept);
-    tree.set("Count", 3);
-    for number in page - 1..=page + 1 {
+    tree.set("Count", count);
+    for number in wanted {
         document
-            .get_object_mut(pages[&number])
+            .get_object_mut(pages[number])
             .and_then(Object::as_dict_mut)
             .unwrap()
             .set("Parent", root);
     }
     let mut bytes = Vec::new();
-    document.save_to(&mut bytes).expect("save the three-page excerpt");
+    document.save_to(&mut bytes).expect("save the page excerpt");
     bytes
 }
 
@@ -78,6 +81,14 @@ fn pinned_english_config(tessdata: &std::path::Path) -> ExtractionConfig {
 }
 
 async fn pages_of(bytes: &[u8], config: &ExtractionConfig) -> (Vec<String>, Option<ExtractionMethod>) {
+    pages_of_excerpt(bytes, config, 3).await
+}
+
+async fn pages_of_excerpt(
+    bytes: &[u8],
+    config: &ExtractionConfig,
+    expected: usize,
+) -> (Vec<String>, Option<ExtractionMethod>) {
     let output = xberg::extract(
         ExtractInput::from_bytes(bytes.to_vec(), "application/pdf", None),
         config,
@@ -88,7 +99,7 @@ async fn pages_of(bytes: &[u8], config: &ExtractionConfig) -> (Vec<String>, Opti
     let [document]: [ExtractedDocument; 1] = output.results.try_into().expect("one document");
     let method = document.extraction_method;
     let pages = document.pages.expect("per-page output requested");
-    assert_eq!(pages.len(), 3);
+    assert_eq!(pages.len(), expected);
     (pages.into_iter().map(|page| page.content).collect(), method)
 }
 
@@ -258,4 +269,97 @@ async fn automatic_ocr_returns_a_neighbouring_clean_table_page_once() {
         "the clean table page holds its native words"
     );
     assert_eq!(automatic[1], native[1], "a table page with no glued token stays native");
+}
+
+const UNDERSCORE_PAGES: [u32; 3] = [2383, 2486, 2645];
+const NON_TEXT_BLOCK_PAGES: [u32; 2] = [4420, 4422];
+// A page that needs no OCR beside the table page, which keeps the excerpt on the route that mixes
+// native and OCR pages, as in the whole manual: an excerpt of OCR pages only is read as a scan.
+const NATIVE_COMPANION_PAGE: u32 = 4410;
+
+#[tokio::test]
+async fn automatic_ocr_preserves_native_intel_table_page_1306_once() {
+    assert!(
+        !helpers::skip_if_missing(SDM),
+        "the corpus manual {SDM} is required for the public duplicate regression"
+    );
+    let tessdata = tempfile::tempdir().unwrap();
+    let config = pinned_english_config(tessdata.path());
+    let bytes = pages_excerpt(SDM, &[NATIVE_COMPANION_PAGE, 1306]);
+    let (native, _) = pages_of_excerpt(
+        &bytes,
+        &ExtractionConfig {
+            disable_ocr: true,
+            ..config.clone()
+        },
+        2,
+    )
+    .await;
+    let (automatic, _) = pages_of_excerpt(&bytes, &config, 2).await;
+    assert!(native[1].split_whitespace().count() > 100);
+    assert_eq!(
+        automatic[1], native[1],
+        "automatic OCR must preserve the native page 1306 text"
+    );
+}
+
+#[tokio::test]
+async fn automatic_ocr_returns_a_page_once_when_its_underscores_hang_below_their_lines() {
+    assert!(
+        !helpers::skip_if_missing(SDM),
+        "the corpus manual {SDM} is missing; fetch test_documents with the test-corpus skill"
+    );
+    for page in UNDERSCORE_PAGES {
+        let tessdata = tempfile::tempdir().unwrap();
+        let config = pinned_english_config(tessdata.path());
+        let bytes = three_pages_around(SDM, page);
+        let (native, _) = pages_of(
+            &bytes,
+            &ExtractionConfig {
+                disable_ocr: true,
+                ..config.clone()
+            },
+        )
+        .await;
+        let (automatic, _) = pages_of(&bytes, &config).await;
+        assert!(
+            native[1].split_whitespace().count() > 250,
+            "page {page} holds its native words"
+        );
+        assert_eq!(
+            automatic[1], native[1],
+            "page {page} is returned once, from its native text"
+        );
+    }
+}
+
+#[tokio::test]
+async fn automatic_ocr_returns_a_table_page_once_when_tesseract_places_words_in_non_text_blocks() {
+    assert!(
+        !helpers::skip_if_missing(SDM),
+        "the corpus manual {SDM} is missing; fetch test_documents with the test-corpus skill"
+    );
+    for page in NON_TEXT_BLOCK_PAGES {
+        let tessdata = tempfile::tempdir().unwrap();
+        let config = pinned_english_config(tessdata.path());
+        let bytes = pages_excerpt(SDM, &[NATIVE_COMPANION_PAGE, page]);
+        let (native, _) = pages_of_excerpt(
+            &bytes,
+            &ExtractionConfig {
+                disable_ocr: true,
+                ..config.clone()
+            },
+            2,
+        )
+        .await;
+        let (automatic, _) = pages_of_excerpt(&bytes, &config, 2).await;
+        assert!(
+            native[1].split_whitespace().count() > 250,
+            "page {page} holds its native words"
+        );
+        assert_eq!(
+            automatic[1], native[1],
+            "page {page} is returned once, from its native text"
+        );
+    }
 }

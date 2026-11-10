@@ -230,7 +230,7 @@ impl<'doc> TextExtractor<'doc> {
                                 ));
                             }
                             if let Some(ref mut buffer) = self.tj_span_buffer {
-                                buffer.unicode.push_str(&actual_text);
+                                buffer.push_actual_text(&actual_text);
                             }
                         } else {
                             // Character mode: show_text maps through font, but ActualText
@@ -278,6 +278,9 @@ impl<'doc> TextExtractor<'doc> {
                 // subsequent show-text operators inside the same scope. ~keep
                 let (current_at, already_emitted) = self.peek_current_actual_text();
                 if let Some(actual_text) = current_at {
+                    // The replacement span, built before the array advances so that the width of the
+                    // glyphs it replaces lands on it and the gap after it is measured from its end. ~keep
+                    let mut replacement = None;
                     if !already_emitted {
                         tracing::trace!(target: LOG_TARGET,
                             "TJ operator: emitting MC-scope ActualText '{}' (replacing {} elements)",
@@ -292,8 +295,8 @@ impl<'doc> TextExtractor<'doc> {
                                 self.cached_current_font.clone(),
                                 &self.font_provenance_cache,
                             );
-                            buffer.unicode.push_str(&actual_text);
-                            self.flush_tj_buffer(buffer)?;
+                            buffer.push_actual_text(&actual_text);
+                            replacement = Some(buffer);
                         } else {
                             self.show_text(actual_text.as_bytes(), true)?;
                         }
@@ -305,14 +308,30 @@ impl<'doc> TextExtractor<'doc> {
                             TextElement::String(s) => {
                                 let repair_zero_widths = !Self::has_following_tj_displacement(&array, index);
                                 let w = self.advance_position_for_string(s, repair_zero_widths)?;
-                                if let Some(ref mut buffer) = self.tj_span_buffer {
+                                if let Some(buffer) = replacement.as_mut().or(self.tj_span_buffer.as_mut()) {
                                     buffer.accumulated_width += w;
                                 }
                             }
                             TextElement::Offset(offset) => {
                                 self.advance_position_for_offset(*offset)?;
+                                let state = self.state_stack.current();
+                                let scale = if state.text_wmode == 0 {
+                                    state.horizontal_scaling / 100.0
+                                } else {
+                                    1.0
+                                };
+                                let advance = -offset / 1000.0 * state.font_size * scale;
+                                if let Some(buffer) = replacement.as_mut().or(self.tj_span_buffer.as_mut()) {
+                                    buffer.accumulated_width += advance;
+                                }
                             }
                         }
+                    }
+                    if let Some(buffer) = replacement {
+                        // Left open like the Tj path leaves its run, so a later array in the same
+                        // scope adds its width here instead of to an unrelated buffer. ~keep
+                        self.flush_tj_span_buffer()?;
+                        self.tj_span_buffer = Some(buffer);
                     }
                 } else {
                     if self.extract_spans {

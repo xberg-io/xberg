@@ -3030,7 +3030,8 @@ fn apply_numeric_repair_to_standalone_image_ocr(
 /// - the image is a TIFF (single or multi-frame);
 /// - a VLM fallback or an explicit pipeline is configured;
 /// - document structure or layout detection is requested;
-/// - the first pass found a table, whose detectors already certified the rows;
+/// - the first pass found a table whose column rows do not hold misread dot leaders, whose detectors
+///   already certified the rows;
 /// - the first pass shows no column structure in its word boxes.
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 fn single_block_table_config(
@@ -3057,7 +3058,9 @@ fn single_block_table_config(
     if config.layout.is_some() {
         return None;
     }
-    if !first.tables.is_empty() || !image_table_reread::shows_column_structure(first) {
+    if !(first.tables.is_empty() || image_table_reread::first_read_is_garbled(first))
+        || !image_table_reread::shows_column_structure(first)
+    {
         return None;
     }
     enable_image_ocr_elements(&mut ocr, true);
@@ -3136,9 +3139,12 @@ impl ImageExtractor {
         };
         tracing::debug!("standalone table re-read: reading the picture again as one block");
         match self.extract_with_ocr_pass(content, mime_type, &single_block).await {
-            Ok(second) => match image_table_reread::second_read_is_usable(&first, &second) {
+            Ok(mut second) => match image_table_reread::second_read_is_usable(&first, &second) {
                 Ok(()) => {
                     tracing::debug!("standalone table re-read adopted");
+                    if second.tables.is_empty() {
+                        mark_leader_rows(&mut second);
+                    }
                     Ok(second)
                 }
                 Err(reason) => {
@@ -4022,6 +4028,26 @@ fn build_image_internal_document(
         push_image_placeholder(&mut builder);
     }
     builder.build()
+}
+
+/// Marks the paragraphs of an adopted leader-row read as table rows. Markdown renders a
+/// paragraph's line breaks as spaces, which would weld every row of a table with no cell
+/// structure into one line; the marker has Markdown give each row its own paragraph while
+/// Plain keeps the element's line breaks (#2503).
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn mark_leader_rows(doc: &mut InternalDocument) {
+    use crate::types::internal::{ElementKind, MARKDOWN_ROW_LINES_ATTRIBUTE};
+
+    for element in doc
+        .elements
+        .iter_mut()
+        .filter(|element| element.kind == ElementKind::Paragraph && element.text.contains('\n'))
+    {
+        element
+            .attributes
+            .get_or_insert_with(Default::default)
+            .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(), String::new());
+    }
 }
 
 fn split_ocr_paragraphs(text: &str) -> Vec<String> {
@@ -5114,6 +5140,39 @@ mod tests {
         assert!(single_block_table_config(&config, "image/png", &with_table).is_none());
 
         assert!(single_block_table_config(&config, "image/png", &InternalDocument::default()).is_none());
+    }
+
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[test]
+    fn table_reread_applies_to_a_first_read_table_garbled_by_misread_leaders() {
+        let mut garbled = image_table_reread::sample_table_document();
+        garbled.tables.push(Default::default());
+        // Each misread leader follows the label of its row, as the engine emits it.
+        for row in (0..4usize).rev() {
+            let top = 10 + row as u32 * 40;
+            garbled.prebuilt_ocr_elements.as_mut().unwrap().insert(
+                row * 4 + 1,
+                crate::types::OcrElement {
+                    text: "eae".to_string(),
+                    geometry: crate::types::OcrBoundingGeometry::Rectangle {
+                        left: 150,
+                        top,
+                        width: 120,
+                        height: 20,
+                    },
+                    confidence: crate::types::OcrConfidence {
+                        detection: None,
+                        recognition: 0.1,
+                    },
+                    level: crate::types::OcrElementLevel::Word,
+                    rotation: None,
+                    page_number: 1,
+                    parent_id: None,
+                    backend_metadata: Default::default(),
+                },
+            );
+        }
+        assert!(single_block_table_config(&ExtractionConfig::default(), "image/png", &garbled).is_some());
     }
 
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]

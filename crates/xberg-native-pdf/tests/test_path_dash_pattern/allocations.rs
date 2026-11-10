@@ -6,13 +6,15 @@ use super::document_with_resource_objects;
 thread_local! {
     static COUNTING: Cell<bool> = const { Cell::new(false) };
     static ALLOCATIONS: Cell<usize> = const { Cell::new(0) };
+    static ALLOCATED_BYTES: Cell<usize> = const { Cell::new(0) };
 }
 
 struct CountingAllocator;
 
-fn record_allocation() {
+fn record_allocation(size: usize) {
     if COUNTING.try_with(Cell::get).unwrap_or(false) {
         let _ = ALLOCATIONS.try_with(|count| count.set(count.get() + 1));
+        let _ = ALLOCATED_BYTES.try_with(|count| count.set(count.get() + size));
     }
 }
 
@@ -23,7 +25,7 @@ fn record_allocation() {
 )]
 unsafe impl GlobalAlloc for CountingAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        record_allocation();
+        record_allocation(layout.size());
         // SAFETY: The caller supplies the allocation layout required by GlobalAlloc.
         unsafe { System.alloc(layout) }
     }
@@ -34,7 +36,7 @@ unsafe impl GlobalAlloc for CountingAllocator {
     }
 
     unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, size: usize) -> *mut u8 {
-        record_allocation();
+        record_allocation(size);
         // SAFETY: The caller's allocation and requested size are forwarded unchanged.
         unsafe { System.realloc(pointer, layout, size) }
     }
@@ -44,6 +46,16 @@ unsafe impl GlobalAlloc for CountingAllocator {
 static ALLOCATOR: CountingAllocator = CountingAllocator;
 
 struct CountingScope;
+
+pub(super) fn measure<T>(action: impl FnOnce() -> T) -> (T, usize, usize) {
+    ALLOCATIONS.set(0);
+    ALLOCATED_BYTES.set(0);
+    COUNTING.set(true);
+    let scope = CountingScope;
+    let output = action();
+    drop(scope);
+    (output, ALLOCATIONS.get(), ALLOCATED_BYTES.get())
+}
 
 impl Drop for CountingScope {
     fn drop(&mut self) {
@@ -148,8 +160,23 @@ fn should_resolve_indirect_extgstate_once_for_many_distinct_names() {
         large < small * 3,
         "allocations grew superlinearly: N={small}, 2N={large}"
     );
+    // Measured at 4000 names: indirect 48156, inline 96153, a ratio of 0.50. A bound of 0.6 leaves
+    // room for unrelated changes and fails an indirect path that costs 1.25 times what it does now.
     assert!(
-        large <= inline * 2,
-        "indirect dictionary costs far more than inline: indirect={large}, inline={inline}"
+        large * 5 <= inline * 3,
+        "indirect dictionary costs more than 0.6 of inline: indirect={large}, inline={inline}"
+    );
+}
+
+#[test]
+fn should_not_clone_all_inline_states_for_each_distinct_gs_name() {
+    const NAMES: usize = 500;
+    // Every name misses the per-name cache. A copy of the dictionary per lookup makes the cost grow
+    // with the square of the name count, so doubling the names would about quadruple the allocations.
+    let small = distinct_name_allocations(NAMES, StateStorage::Inline);
+    let large = distinct_name_allocations(2 * NAMES, StateStorage::Inline);
+    assert!(
+        large < small * 3,
+        "dictionary copied per distinct gs name: N={small}, 2N={large}"
     );
 }

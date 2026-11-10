@@ -906,4 +906,34 @@ mod tests {
         let result = collapse_excess_newlines(input);
         assert_eq!(result.as_ref(), expected.as_str());
     }
+
+    fn paragraph_doc(text: &str, marked: bool) -> InternalDocument {
+        use crate::types::internal::{ElementKind, InternalElement, MARKDOWN_ROW_LINES_ATTRIBUTE};
+
+        let mut doc = InternalDocument::new("image");
+        let mut paragraph = InternalElement::text(ElementKind::Paragraph, text, 0);
+        if marked {
+            paragraph
+                .attributes
+                .get_or_insert_with(Default::default)
+                .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(), String::new());
+        }
+        doc.push_element(paragraph);
+        doc
+    }
+
+    #[test]
+    fn a_row_lines_paragraph_renders_each_line_as_its_own_paragraph() {
+        let marked = paragraph_doc("Water .... 36\r\n\nStreet .... 17\nPool .... 16\n", true);
+        assert_eq!(
+            render_markdown(&marked).trim_end(),
+            "Water .... 36\n\nStreet .... 17\n\nPool .... 16"
+        );
+    }
+
+    #[test]
+    fn a_paragraph_without_the_row_lines_marker_keeps_joining_its_lines() {
+        let unmarked = paragraph_doc("Water .... 36\nStreet .... 17", false);
+        assert_eq!(render_markdown(&unmarked).trim_end(), "Water .... 36 Street .... 17");
+    }
 }
