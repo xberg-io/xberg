@@ -7,16 +7,16 @@ use std::borrow::Cow;
 use xberg_native_pdf::PdfDocument;
 
 pub(in super::super) fn supports(config: &ExtractionConfig, ocr: &OcrConfig) -> bool {
-    #[cfg(feature = "layout-detection")]
-    if config.layout.is_some() {
-        return false;
-    }
     unsupported_reason(config, ocr).is_none()
 }
 
 /// Names the first configuration choice that keeps strip recovery from running. Callers
-/// that report it have already excluded layout detection and stored scans.
+/// that report it have already excluded stored scans.
 pub(in super::super) fn unsupported_reason(config: &ExtractionConfig, ocr: &OcrConfig) -> Option<&'static str> {
+    #[cfg(feature = "layout-detection")]
+    if config.layout.is_some() {
+        return Some("layout detection is configured");
+    }
     if !matches!(config.output_format, OutputFormat::Plain | OutputFormat::Markdown) {
         return Some("the output format is not plain text or Markdown");
     }
@@ -123,6 +123,27 @@ pub(in super::super) fn note_unrecovered(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn a_layout_configuration_blocks_recovery_for_every_caller_and_is_named() {
+        let ocr = OcrConfig {
+            language: vec!["eng".into()],
+            ..Default::default()
+        };
+        let layout = ExtractionConfig {
+            layout: Some(Default::default()),
+            ..Default::default()
+        };
+        assert_eq!(
+            unsupported_reason(&layout, &ocr),
+            Some("layout detection is configured")
+        );
+        assert!(!supports(&layout, &ocr));
+        let plain = ExtractionConfig::default();
+        assert_eq!(unsupported_reason(&plain, &ocr), None);
+        assert!(supports(&plain, &ocr));
+    }
 
     const TALL_PAGE: &[u8] = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
