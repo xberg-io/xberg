@@ -421,6 +421,43 @@ mod tests {
         assert_eq!(store.active_count(), 0);
     }
 
+    /// An observer that reads the finished cache without taking the active-jobs lock sees
+    /// `Failed` the moment it is published; the token must already be cancelled by then.
+    #[test]
+    fn test_abort_cancels_token_before_failed_is_published() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        for run in 0..300 {
+            let store = Arc::new(JobStore::new());
+            let job_id = store.create_job().expect("slot available");
+            let token = store.cancellation_token(&job_id).expect("token registered on create");
+            let ready = Arc::new(AtomicBool::new(false));
+
+            let observer = {
+                let store = Arc::clone(&store);
+                let job_id = job_id.clone();
+                let token = token.clone();
+                let ready = Arc::clone(&ready);
+                std::thread::spawn(move || {
+                    ready.store(true, Ordering::SeqCst);
+                    loop {
+                        if store.finished.get(&job_id).is_some() {
+                            return token.is_cancelled();
+                        }
+                        std::hint::spin_loop();
+                    }
+                })
+            };
+            while !ready.load(Ordering::SeqCst) {
+                std::thread::yield_now();
+            }
+            store.abort(&job_id, "task ended".to_string(), "2026-05-01T12:00:01Z".to_string());
+
+            assert!(observer.join().unwrap(), "run {run}: Failed was published before the token fired");
+        }
+    }
+
     #[test]
     fn test_abort_after_completion_is_noop() {
         let store = JobStore::new();
