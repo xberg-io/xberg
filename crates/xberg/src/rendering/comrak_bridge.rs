@@ -1279,12 +1279,10 @@ fn build_comrak_ast_with_table_mode<'a>(
                     tracing::trace!(index = orig_idx, "skipping empty paragraph");
                     continue;
                 }
-                if elem_annotations.is_empty()
-                    && elem_attributes.is_some_and(|attributes| {
-                        attributes.contains_key(crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE)
-                    })
+                if let Some(lines) =
+                    crate::rendering::common::marked_row_lines(elem_text, elem_annotations, elem_attributes)
                 {
-                    for line in elem_text.lines().map(str::trim).filter(|line| !line.is_empty()) {
+                    for line in lines {
                         let para = mk(arena, NodeValue::Paragraph);
                         build_inlines(arena, para, line, &[]);
                         parent.append(para);

@@ -48,6 +48,15 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
                 push_with_bq(&mut out, &block, bq_depth);
             }
             ElementKind::Paragraph => {
+                if let Some(lines) =
+                    crate::rendering::common::marked_row_lines(&elem.text, &elem.annotations, elem.attributes.as_ref())
+                {
+                    for line in lines {
+                        let block = format!("{}\n\n", render_djot_annotated(line, &[]));
+                        push_with_bq(&mut out, &block, bq_depth);
+                    }
+                    continue;
+                }
                 let text = render_djot_annotated(&elem.text, &elem.annotations);
                 let block = format!("{}\n\n", text);
                 push_with_bq(&mut out, &block, bq_depth);

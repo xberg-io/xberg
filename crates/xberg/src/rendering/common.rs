@@ -815,6 +815,20 @@ pub(crate) fn external_link_target(url: &str) -> Option<String> {
 #[cfg(test)]
 mod tests;
 
+/// The non-empty trimmed lines of a paragraph marked as leader rows, each of which a renderer
+/// that folds paragraph line breaks into spaces (Markdown, HTML, Djot) emits as its own
+/// paragraph. `None` when the paragraph is unmarked or carries annotations.
+pub(crate) fn marked_row_lines<'a>(
+    text: &'a str,
+    annotations: &[crate::types::document_structure::TextAnnotation],
+    attributes: Option<&ahash::AHashMap<String, String>>,
+) -> Option<impl Iterator<Item = &'a str>> {
+    if !annotations.is_empty() || !attributes?.contains_key(crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE) {
+        return None;
+    }
+    Some(text.lines().map(str::trim).filter(|line| !line.is_empty()))
+}
+
 #[cfg(test)]
 mod retained_furniture_tests {
     use super::*;
