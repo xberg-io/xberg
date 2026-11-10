@@ -5843,8 +5843,8 @@ impl<'a> OverlapEvidence<'a> {
     /// hyphen repair). The page prints a word once for each whole copy and once for each run of two
     /// to four neighbouring page words that spell it. The page, the text no live table carries and
     /// each table are counted by the same function, each in its own reading order, so one printed
-    /// copy is one occurrence however a table or the page splits it. A word that the page prints in neither form is new, so a short word never matches inside
-    /// a longer one. Live tables whose boxes nearly coincide are one region read twice and count
+    /// copy is one occurrence however a table or the page splits it. A word that the page prints in
+    /// neither form is new, so a short word never matches inside a longer one. Live tables whose boxes nearly coincide are one region read twice and count
     /// once, so the order of the tables does not change the rest of the page. `None` means no
     /// evidence: the table has no cell text, the page has no text, or the page is not in the text.
     fn holds_unprinted_words(
