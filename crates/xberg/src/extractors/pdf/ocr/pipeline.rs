@@ -3448,7 +3448,14 @@ async fn try_gray_jpeg_render_recovery(
         return Ok(None);
     }
     let ocr = super::resolve_ocr_config(config);
-    if !super::tall_source::supports(config, &ocr)
+    // No layout pass ran for the refused page, so its detections cannot be checked; a layout
+    // request alone keeps the strips from replacing a read the caller wanted laid out. ~keep
+    #[cfg(feature = "layout-detection")]
+    let layout_requested = config.layout.is_some();
+    #[cfg(not(feature = "layout-detection"))]
+    let layout_requested = false;
+    if layout_requested
+        || !super::tall_source::supports(config, &ocr)
         || ocr.pipeline.is_some()
         || ocr.vlm_fallback != crate::core::config::VlmFallbackPolicy::Disabled
     {

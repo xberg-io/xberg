@@ -757,3 +757,136 @@ fn should_render_issue_2123_nested_math_as_native_djot() {
         1
     );
 }
+
+fn leader_paragraph_doc(text: &str, marked: bool) -> InternalDocument {
+    use crate::types::internal::{ElementKind, InternalElement, MARKDOWN_ROW_LINES_ATTRIBUTE};
+
+    let mut doc = InternalDocument::new("image");
+    let mut paragraph = InternalElement::text(ElementKind::Paragraph, text, 0);
+    if marked {
+        paragraph
+            .attributes
+            .get_or_insert_with(Default::default)
+            .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(), String::new());
+    }
+    doc.push_element(paragraph);
+    doc
+}
+
+#[test]
+fn a_row_lines_paragraph_renders_each_line_as_its_own_djot_paragraph() {
+    let marked = leader_paragraph_doc("Water .... 36\r\n\nStreet .... 17\nPool .... 16\n", true);
+    assert_eq!(
+        render_djot(&marked).trim_end(),
+        "Water .... 36\n\nStreet .... 17\n\nPool .... 16"
+    );
+}
+
+#[test]
+fn a_paragraph_without_the_row_lines_marker_keeps_joining_its_lines_in_djot() {
+    let unmarked = leader_paragraph_doc("Water .... 36\nStreet .... 17", false);
+    assert_eq!(render_djot(&unmarked).trim_end(), "Water .... 36 Street .... 17");
+}
+
+fn marked_row_lines_element(text: &str) -> crate::types::internal::InternalElement {
+    use crate::types::internal::{ElementKind, InternalElement, MARKDOWN_ROW_LINES_ATTRIBUTE};
+
+    let mut paragraph = InternalElement::text(ElementKind::Paragraph, text, 0);
+    paragraph
+        .attributes
+        .get_or_insert_with(Default::default)
+        .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(), String::new());
+    paragraph
+}
+
+#[test]
+fn a_footnote_ref_after_a_row_lines_paragraph_joins_its_last_row() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element("Water .... 36\nStreet .... 17"));
+    b.push_footnote_ref("1", "fn1", None);
+    let def = b.push_footnote_definition("A note.", "fn1", None);
+    b.set_layer(def, ContentLayer::Footnote);
+    assert_eq!(
+        render_djot(&b.build()),
+        "Water .... 36\n\nStreet .... 17[^1]\n\n\n[^1]: A note.\n"
+    );
+}
+
+#[test]
+fn row_lines_that_start_with_block_syntax_are_escaped() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element(
+        "1. Intro .... 5\n2) Scope .... 9\n| Water .... 36\n- Pool .... 4\n# Park .... 7\n> Lot .... 2\nPlain .... 1",
+    ));
+    assert_eq!(
+        render_djot(&b.build()),
+        "1\\. Intro .... 5\n\n2\\) Scope .... 9\n\n\\| Water .... 36\n\n\\- Pool .... 4\n\n\\# Park .... 7\n\n\\> Lot .... 2\n\nPlain .... 1\n"
+    );
+}
+
+#[test]
+fn a_row_lines_paragraph_with_annotations_keeps_its_single_paragraph_in_djot() {
+    let mut paragraph = marked_row_lines_element("Water .... 36\nStreet .... 17");
+    paragraph.annotations = vec![TextAnnotation {
+        start: 0,
+        end: 5,
+        kind: AnnotationKind::Bold,
+    }];
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(paragraph);
+    assert_eq!(render_djot(&b.build()), "*Water* .... 36 Street .... 17\n");
+}
+
+#[test]
+fn a_row_lines_paragraph_inside_a_blockquote_quotes_every_row() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_quote_start();
+    let mut paragraph = marked_row_lines_element("Water .... 36\nStreet .... 17");
+    paragraph.depth = 1;
+    b.push_element(paragraph);
+    b.push_quote_end();
+    assert_eq!(render_djot(&b.build()), "> Water .... 36\n> \n> Street .... 17\n>\n");
+}
+
+#[test]
+fn row_lines_that_start_with_any_djot_list_marker_are_escaped() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element(
+        "I. Introduction .... 3\nA. Appendix .... 40\niv. Index .... 9\na) Note .... 2\n(1) Aim .... 4\n(a) Scope .... 5\n(ii) Terms .... 6\n: Term .... 8",
+    ));
+    assert_eq!(
+        render_djot(&b.build()),
+        "I\\. Introduction .... 3\n\nA\\. Appendix .... 40\n\niv\\. Index .... 9\n\na\\) Note .... 2\n\n\\(1) Aim .... 4\n\n\\(a) Scope .... 5\n\n\\(ii) Terms .... 6\n\n\\: Term .... 8\n"
+    );
+}
+
+#[test]
+fn row_lines_escape_bare_markers_thematic_breaks_and_heading_runs_only() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element(
+        "+ Pool .... 4\n* Park .... 7\n### Lot .... 2\n1.5 Units .... 3\n1.\n-\n---\n- - -\n***\n#hashtag .... 1\nPlan A. .... 2",
+    ));
+    assert_eq!(
+        render_djot(&b.build()),
+        "\\+ Pool .... 4\n\n\\* Park .... 7\n\n\\### Lot .... 2\n\n1.5 Units .... 3\n\n1\\.\n\n\\-\n\n\\---\n\n\\- - -\n\n\\***\n\n#hashtag .... 1\n\nPlan A. .... 2\n"
+    );
+}
+
+#[test]
+fn row_lines_of_ordinary_prose_are_not_escaped() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element(
+        "I am .... 1\nA big .... 2\ni.e. .... 3\nI.e. .... 4\nDr. Smith .... 5\n--- Rule .... 6",
+    ));
+    assert_eq!(
+        render_djot(&b.build()),
+        "I am .... 1\n\nA big .... 2\n\ni.e. .... 3\n\nI.e. .... 4\n\nDr. Smith .... 5\n\n--- Rule .... 6\n"
+    );
+}
+
+#[test]
+fn a_lowercase_roman_run_row_is_escaped_like_a_list_label() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element("mix. .... 6"));
+    assert_eq!(render_djot(&b.build()), "mix\\. .... 6\n");
+}

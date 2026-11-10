@@ -85,7 +85,7 @@ fn preserves_requested_projection(config: &ExtractionConfig) -> bool {
         })
 }
 
-pub(super) fn preview_byte_limit(config: &ExtractionConfig) -> usize {
+pub(in crate::extractors::pdf) fn preview_byte_limit(config: &ExtractionConfig) -> usize {
     let default_limits = crate::extractors::security::SecurityLimits::default();
     let limit = config
         .security_limits
