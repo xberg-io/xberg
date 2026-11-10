@@ -41,6 +41,9 @@ use tiny_skia::{Color, PathBuilder, Pixmap, PixmapPaint, Transform};
 
 #[path = "image_budget.rs"]
 mod image_budget;
+#[path = "knockout.rs"]
+mod knockout;
+use knockout::{KnockoutBackdrop, KnockoutShape, PatternShape};
 
 /// Which path-paint side(s) [`PageRenderer::pipeline_resolve_paint_gs`]
 /// should resolve for the current operator.
@@ -302,6 +305,8 @@ pub struct PageRenderer {
     /// ignored (ISO 32000-1:2008 §9.6.5.2). `None` for `d0` glyphs and all
     /// ordinary content, which paint with their own colour operators.
     type3_fill_lock: Option<(f32, f32, f32)>,
+    knockout_shape: Option<KnockoutShape>,
+    knockout_mask_alpha: Option<Vec<f32>>,
 }
 
 /// Maximum SMask materialisation recursion depth. A cyclic
@@ -477,6 +482,8 @@ impl PageRenderer {
             k_zero_warning_emitted: false,
             type3_depth: 0,
             type3_fill_lock: None,
+            knockout_shape: None,
+            knockout_mask_alpha: None,
         }
     }
 
@@ -613,6 +620,8 @@ impl PageRenderer {
         doc: &PdfDocument,
         png_budget: Option<PngRenderBudget>,
     ) -> Result<(RenderedImage, u32)> {
+        self.knockout_shape = None;
+        self.knockout_mask_alpha = None;
         self.reported_source_budget_exceeded = false;
         self.source_image_budget = png_budget
             .as_ref()
@@ -746,7 +755,21 @@ impl PageRenderer {
             }
         };
 
-        self.execute_operators(&mut pixmap, transform, &operators, doc, page_num, &resources)?;
+        let page = doc.get_page(page_num)?;
+        let group = page
+            .as_dict()
+            .and_then(|dict| dict.get("Group"))
+            .map(|group| doc.resolve_object(group))
+            .transpose()?;
+        let knockout = group.as_ref().and_then(Object::as_dict).is_some_and(|group| {
+            group.get("S").and_then(Object::as_name) == Some("Transparency")
+                && matches!(group.get("K"), Some(Object::Boolean(true)))
+        });
+        if knockout {
+            self.execute_knockout_group(&mut pixmap, transform, &operators, doc, page_num, &resources)?;
+        } else {
+            self.execute_operators(&mut pixmap, transform, &operators, doc, page_num, &resources)?;
+        }
         self.check_source_image_budget()?;
 
         if self.options.render_annotations {
@@ -989,7 +1012,10 @@ impl PageRenderer {
         snapshots: PaintModulatorSnapshots,
         coverage: Option<&[u8]>,
         ctx: PaintModulatorContext<'_>,
-    ) -> Result<()> {
+    ) -> Result<Option<Vec<f32>>> {
+        let opacity_before = self.knockout_opacity_snapshot(ctx.gs);
+        self.knockout_mask_alpha = None;
+        self.record_knockout_shape(coverage, ctx.gs, ctx.fill_side);
         if let Some(snap) = snapshots.cmyk_compose {
             self.apply_cmyk_compose_after_paint(pixmap, &snap, ctx.gs, ctx.doc, ctx.fill_side);
         }
@@ -1011,7 +1037,7 @@ impl PageRenderer {
                 ctx.base_transform,
             )?;
         }
-        Ok(())
+        Ok(self.finish_knockout_mask(opacity_before))
     }
 
     /// Applies the sidecar-mirroring post-paint modulator cadence shared by
@@ -1025,6 +1051,9 @@ impl PageRenderer {
         coverage: Option<&[u8]>,
         ctx: PaintModulatorContext<'_>,
     ) -> Result<()> {
+        let opacity_before = self.knockout_opacity_snapshot(ctx.gs);
+        self.knockout_mask_alpha = None;
+        self.record_knockout_shape(coverage, ctx.gs, ctx.fill_side);
         if let Some(snap) = snapshots.cmyk_compose {
             self.apply_cmyk_compose_after_paint_with_coverage(pixmap, &snap, coverage, ctx.gs, ctx.doc, ctx.fill_side);
         }
@@ -1050,6 +1079,7 @@ impl PageRenderer {
                 ctx.base_transform,
             )?;
         }
+        self.finish_knockout_mask(opacity_before);
         Ok(())
     }
 
@@ -1066,6 +1096,20 @@ impl PageRenderer {
         doc: &PdfDocument,
         page_num: usize,
         resources: &Object,
+    ) -> Result<()> {
+        self.execute_operators_with_backdrop(pixmap, base_transform, operators, doc, page_num, resources, None)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn execute_operators_with_backdrop(
+        &mut self,
+        pixmap: &mut Pixmap,
+        base_transform: Transform,
+        operators: &[Operator],
+        doc: &PdfDocument,
+        page_num: usize,
+        resources: &Object,
+        backdrop: Option<&KnockoutBackdrop>,
     ) -> Result<()> {
         // Per-render snapshot lives on `self.excluded_layers_snapshot` (filled
         // by `render_page_with_options`). Recursive calls into this function
@@ -1147,7 +1191,13 @@ impl PageRenderer {
         // at most once per unique name in scope. ~keep
         let mut ext_g_state_cache: std::collections::HashMap<String, ParsedExtGState> =
             std::collections::HashMap::new();
-        for op in operators {
+        for (operator_index, op) in operators.iter().enumerate() {
+            if operator_index + 1 == operators.len()
+                && let Some(backdrop) = backdrop
+            {
+                backdrop.restore(self, pixmap);
+                self.knockout_shape = Some(KnockoutShape::new(pixmap.width(), pixmap.height()));
+            }
             // While a Type 3 `d1` glyph stencil is being painted, colour-
             // setting operators are ignored so the glyph keeps the current
             // fill colour (ISO 32000-1:2008 §9.6.5.2). ~keep
@@ -2160,9 +2210,11 @@ impl PageRenderer {
                             // (AA-edge fidelity + identical-RGB
                             // collision insulated) instead of a
                             // snapshot-vs-post-paint diff. ~keep
-                            let text_coverage = spot_snap.as_ref().and_then(|_| {
-                                self.rasterise_text_coverage_render_text(text, transform, gs, resources, doc, clip)
-                            });
+                            let text_coverage = (spot_snap.is_some() || self.knockout_shape.is_some())
+                                .then(|| {
+                                    self.rasterise_text_coverage_render_text(text, transform, gs, resources, doc, clip)
+                                })
+                                .flatten();
                             let contrast_samples = self
                                 .text_contrast_probe
                                 .as_mut()
@@ -2277,9 +2329,11 @@ impl PageRenderer {
                             let overprint_snap = self.overprint_snapshot(pixmap, gs, true);
                             let cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, gs, doc, true);
                             let spot_snap = self.text_fill_spot_snapshot(pixmap, gs);
-                            let text_coverage = spot_snap.as_ref().and_then(|_| {
-                                self.rasterise_text_coverage_render_text(text, transform, gs, resources, doc, clip)
-                            });
+                            let text_coverage = (spot_snap.is_some() || self.knockout_shape.is_some())
+                                .then(|| {
+                                    self.rasterise_text_coverage_render_text(text, transform, gs, resources, doc, clip)
+                                })
+                                .flatten();
                             let paint_gs = self.text_paint_state(gs);
                             let adv = self.text_rasterizer.render_text(
                                 pixmap,
@@ -2379,9 +2433,13 @@ impl PageRenderer {
                             let overprint_snap = self.overprint_snapshot(pixmap, gs, true);
                             let cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, gs, doc, true);
                             let spot_snap = self.text_fill_spot_snapshot(pixmap, gs);
-                            let text_coverage = spot_snap.as_ref().and_then(|_| {
-                                self.rasterise_text_coverage_render_tj_array(array, transform, gs, resources, doc, clip)
-                            });
+                            let text_coverage = (spot_snap.is_some() || self.knockout_shape.is_some())
+                                .then(|| {
+                                    self.rasterise_text_coverage_render_tj_array(
+                                        array, transform, gs, resources, doc, clip,
+                                    )
+                                })
+                                .flatten();
                             let paint_gs = self.text_paint_state(gs);
                             let adv = self.text_rasterizer.render_tj_array(
                                 pixmap,
@@ -2493,9 +2551,11 @@ impl PageRenderer {
                             let overprint_snap = self.overprint_snapshot(pixmap, gs, true);
                             let cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, gs, doc, true);
                             let spot_snap = self.text_fill_spot_snapshot(pixmap, gs);
-                            let text_coverage = spot_snap.as_ref().and_then(|_| {
-                                self.rasterise_text_coverage_render_text(text, transform, gs, resources, doc, clip)
-                            });
+                            let text_coverage = (spot_snap.is_some() || self.knockout_shape.is_some())
+                                .then(|| {
+                                    self.rasterise_text_coverage_render_text(text, transform, gs, resources, doc, clip)
+                                })
+                                .flatten();
                             let paint_gs = self.text_paint_state(gs);
                             let adv = self.text_rasterizer.render_text(
                                 pixmap,
@@ -2606,11 +2666,14 @@ impl PageRenderer {
                         // inside the recursive content stream — the
                         // post-Do mirror for Forms is already
                         // suppressed by round 3's P0 fix). ~keep
-                        let image_coverage = spot_snap.as_ref().and_then(|_| {
-                            self.rasterise_image_xobject_coverage(name, transform, &gs_clone, resources, doc, clip)
-                        });
+                        let image_coverage = (spot_snap.is_some() || self.knockout_shape.is_some())
+                            .then(|| {
+                                self.rasterise_image_xobject_coverage(name, transform, &gs_clone, resources, doc, clip)
+                            })
+                            .flatten();
+                        let form_opacity_before = is_form.then(|| self.knockout_opacity_snapshot(&gs_clone)).flatten();
                         self.render_xobject(pixmap, name, transform, &gs_clone, resources, doc, page_num, clip)?;
-                        self.apply_paint_modulators(
+                        let mask = self.apply_paint_modulators(
                             pixmap,
                             PaintModulatorSnapshots {
                                 cmyk_compose: cmyk_compose_snap,
@@ -2629,6 +2692,11 @@ impl PageRenderer {
                                 fill_side: true,
                             },
                         )?;
+                        if let (Some(shape), Some(before), Some(mask)) =
+                            (self.knockout_shape.as_mut(), form_opacity_before, mask)
+                        {
+                            shape.attenuate_opacity(&before, &mask);
+                        }
                     }
                 }
 
@@ -2655,6 +2723,16 @@ impl PageRenderer {
                             dict: expanded,
                             data: bytes::Bytes::from(data.clone()),
                         };
+                        if self.knockout_shape.is_some() {
+                            self.collect_inline_image_shape(
+                                &synthetic,
+                                transform,
+                                &gs_clone,
+                                doc,
+                                clip,
+                                is_image_mask,
+                            )?;
+                        }
                         if is_image_mask {
                             if let Err(error) =
                                 self.render_image_mask(pixmap, &synthetic, None, transform, doc, clip, &gs_clone)
@@ -2814,9 +2892,9 @@ impl PageRenderer {
                         // geometry (intersected with the active clip)
                         // so the spot mirror sees the geometry-true
                         // per-pixel coverage of the gradient. ~keep
-                        let shading_coverage = spot_snap.as_ref().and_then(|_| {
-                            self.rasterise_shading_coverage(name, transform, &gs_clone, resources, doc, clip)
-                        });
+                        let shading_coverage = (spot_snap.is_some() || self.knockout_shape.is_some())
+                            .then(|| self.rasterise_shading_coverage(name, transform, &gs_clone, resources, doc, clip))
+                            .flatten();
                         self.render_shading(pixmap, name, transform, &gs_clone, resources, doc, clip)?;
                         self.apply_paint_modulators(
                             pixmap,
@@ -4578,13 +4656,19 @@ impl PageRenderer {
             let mut group_pixmap = Pixmap::new(pixmap.width(), pixmap.height())
                 .ok_or_else(|| crate::error::Error::InvalidPdf("Failed to create group pixmap".into()))?;
 
-            if !is_isolated {
-                // Non-isolated: copy parent content as initial backdrop ~keep
+            let parent_lanes = is_isolated.then(|| KnockoutBackdrop::capture(self, pixmap));
+            if let Some(parent) = &parent_lanes {
+                parent.clear_sidecar(self);
+            } else {
                 group_pixmap.data_mut().copy_from_slice(pixmap.data());
             }
             // Isolated groups start fully transparent (default Pixmap state) ~keep
 
-            if is_knockout {
+            let parent_shape = self.knockout_shape.take();
+            if parent_shape.is_some() || parent_lanes.is_some() {
+                self.knockout_shape = Some(KnockoutShape::new(pixmap.width(), pixmap.height()));
+            }
+            let result = if is_knockout {
                 // §11.4.6.2: snapshot the initial backdrop, then composite
                 // each element separately against it. The accumulator
                 // starts as the backdrop; each paint operator's result is
@@ -4597,7 +4681,7 @@ impl PageRenderer {
                     doc,
                     page_num,
                     &form_resources,
-                )?;
+                )
             } else {
                 self.execute_operators(
                     &mut group_pixmap,
@@ -4606,10 +4690,24 @@ impl PageRenderer {
                     doc,
                     page_num,
                     &form_resources,
-                )?;
+                )
+            };
+            let group_shape = self.knockout_shape.take();
+            self.knockout_shape = parent_shape;
+            if result.is_err() {
+                if let Some(parent) = &parent_lanes {
+                    parent.restore(self, pixmap);
+                }
+                return result;
+            }
+            if let (Some(parent), Some(group)) = (self.knockout_shape.as_mut(), group_shape.as_ref()) {
+                parent.include_shape(group);
             }
 
             if is_isolated {
+                if let Some(parent) = &parent_lanes {
+                    parent.composite_sidecar(self, &group_pixmap, group_shape.as_ref());
+                }
                 pixmap.draw_pixmap(
                     0,
                     0,
@@ -4783,6 +4881,8 @@ impl PageRenderer {
         // Render the cell with a fresh resource scope and no CMYK sidecar
         // (the sidecar is sized to the page pixmap, not this cell). ~keep
         let saved_sidecar = self.cmyk_sidecar.take();
+        let parent_shape = self.knockout_shape.take();
+        self.knockout_shape = parent_shape.as_ref().map(|_| KnockoutShape::new(cw, ch));
         let saved_fonts = self.fonts.clone();
         let saved_cs = self.color_spaces.clone();
         let _ = self.load_resources(doc, &pattern_resources);
@@ -4791,6 +4891,11 @@ impl PageRenderer {
         self.fonts = saved_fonts;
         self.color_spaces = saved_cs;
         self.cmyk_sidecar = saved_sidecar;
+        let cell_shape = self.knockout_shape.take();
+        self.knockout_shape = parent_shape;
+        let mut pattern_shape = cell_shape
+            .map(|shape| PatternShape::new(shape, pixmap.width(), pixmap.height()))
+            .transpose()?;
         if render_res.is_err() {
             return Ok(false);
         }
@@ -4823,7 +4928,7 @@ impl PageRenderer {
         }
         let npix = (cw as u64) * (ch as u64);
         let avg_a = (sa / npix) as u8;
-        if avg_a == 0 && paint_type == 1 {
+        if avg_a == 0 && paint_type == 1 && pattern_shape.is_none() {
             return Ok(true);
         }
         // Un-premultiply the average to a straight colour for the flood path. ~keep
@@ -4881,6 +4986,7 @@ impl PageRenderer {
             || step_x_len < 0.5
             || step_y_len < 0.5
         {
+            self.record_pattern_flood_shape(pattern_shape.as_ref(), path, path_transform, fill_rule, clip, gs);
             flood(pixmap);
             return Ok(true);
         }
@@ -4889,6 +4995,7 @@ impl PageRenderer {
         let (j_lo, j_hi) = axis_tile_range(ry0, ry1, cminy, ch as f32, step_y.1);
         let tile_count = (i_hi as i64 - i_lo as i64 + 1) * (j_hi as i64 - j_lo as i64 + 1);
         if tile_count <= 0 || tile_count > MAX_TILES {
+            self.record_pattern_flood_shape(pattern_shape.as_ref(), path, path_transform, fill_rule, clip, gs);
             flood(pixmap);
             return Ok(true);
         }
@@ -4898,6 +5005,7 @@ impl PageRenderer {
         let mut mask = match tiny_skia::Mask::new(pixmap.width(), pixmap.height()) {
             Some(m) => m,
             None => {
+                self.record_pattern_flood_shape(pattern_shape.as_ref(), path, path_transform, fill_rule, clip, gs);
                 flood(pixmap);
                 return Ok(true);
             }
@@ -4919,6 +5027,9 @@ impl PageRenderer {
             for i in i_lo..=i_hi {
                 let px = cminx + i as f32 * step_x.0 + j as f32 * step_y.0;
                 let py = cminy + i as f32 * step_x.1 + j as f32 * step_y.1;
+                if let Some(shape) = pattern_shape.as_mut() {
+                    shape.paint_tile(Transform::from_translate(px, py), &mask);
+                }
                 pixmap.draw_pixmap(
                     0,
                     0,
@@ -4928,6 +5039,10 @@ impl PageRenderer {
                     Some(&mask),
                 );
             }
+        }
+        if let Some(shape) = pattern_shape {
+            let coverage = Self::extract_alpha_as_coverage(&shape.page);
+            self.record_knockout_shape(Some(&coverage), gs, true);
         }
         Ok(true)
     }
@@ -5256,17 +5371,18 @@ impl PageRenderer {
         fill_rule: tiny_skia::FillRule,
         clip: Option<&tiny_skia::Mask>,
     ) -> Option<Vec<u8>> {
-        let sidecar = self.cmyk_sidecar.as_ref()?;
-        let (w, h) = sidecar.dims();
+        let (w, h) = self.coverage_dimensions()?;
         let mut mask = tiny_skia::Mask::new(w, h)?;
         guarded_mask_fill_path(&mut mask, path, fill_rule, true, transform);
         let mut buf = mask.data().to_vec();
-        // Intersect with the active clip mask. tiny_skia's clip mask
-        // is per-pixel coverage; pixel-wise min gives the
-        // intersection. ~keep
+        // Knockout shape must use the same multiplicative clip as the raster paint. ~keep
         if let Some(c) = clip {
             for (b, cv) in buf.iter_mut().zip(c.data().iter()) {
-                *b = (*b).min(*cv);
+                *b = if self.knockout_shape.is_some() {
+                    ((u32::from(*b) * u32::from(*cv) + 127) / 255) as u8
+                } else {
+                    (*b).min(*cv)
+                };
             }
         }
         Some(buf)
@@ -5285,8 +5401,7 @@ impl PageRenderer {
         gs: &GraphicsState,
         clip: Option<&tiny_skia::Mask>,
     ) -> Option<Vec<u8>> {
-        let sidecar = self.cmyk_sidecar.as_ref()?;
-        let (w, h) = sidecar.dims();
+        let (w, h) = self.coverage_dimensions()?;
         let mut scratch = Pixmap::new(w, h)?;
         let dash = if !gs.dash_pattern.0.is_empty() {
             tiny_skia::StrokeDash::new(gs.dash_pattern.0.clone(), gs.dash_pattern.1)
@@ -5477,10 +5592,13 @@ impl PageRenderer {
         doc: &PdfDocument,
         clip_mask: Option<&tiny_skia::Mask>,
     ) -> Option<Vec<u8>> {
-        let sidecar = self.cmyk_sidecar.as_ref()?;
-        let (w, h) = sidecar.dims();
+        if matches!(gs.render_mode, 3 | 7) {
+            return None;
+        }
+        let (w, h) = self.coverage_dimensions()?;
         let mut scratch = Pixmap::new(w, h)?;
-        let cov_gs = Self::coverage_only_gs(gs);
+        let mut cov_gs = Self::coverage_only_gs(gs);
+        cov_gs.render_mode = gs.render_mode;
         let _ = self.text_rasterizer.render_text(
             &mut scratch,
             text,
@@ -5507,10 +5625,13 @@ impl PageRenderer {
         doc: &PdfDocument,
         clip_mask: Option<&tiny_skia::Mask>,
     ) -> Option<Vec<u8>> {
-        let sidecar = self.cmyk_sidecar.as_ref()?;
-        let (w, h) = sidecar.dims();
+        if matches!(gs.render_mode, 3 | 7) {
+            return None;
+        }
+        let (w, h) = self.coverage_dimensions()?;
         let mut scratch = Pixmap::new(w, h)?;
-        let cov_gs = Self::coverage_only_gs(gs);
+        let mut cov_gs = Self::coverage_only_gs(gs);
+        cov_gs.render_mode = gs.render_mode;
         let _ = self.text_rasterizer.render_tj_array(
             &mut scratch,
             array,
@@ -5546,8 +5667,7 @@ impl PageRenderer {
         doc: &PdfDocument,
         clip_mask: Option<&tiny_skia::Mask>,
     ) -> Option<Vec<u8>> {
-        let sidecar = self.cmyk_sidecar.as_ref()?;
-        let (w, h) = sidecar.dims();
+        let (w, h) = self.coverage_dimensions()?;
         let mut scratch = Pixmap::new(w, h)?;
         let cov_gs = Self::coverage_only_gs(gs);
         // Resolve the XObject reference + subtype dispatch the same
@@ -5583,7 +5703,12 @@ impl PageRenderer {
                                             &cov_gs,
                                         );
                                     } else {
-                                        let smask = dict.get("SMask").cloned();
+                                        // Image soft masks supply opacity, not knockout shape. ~keep
+                                        let smask = self
+                                            .knockout_shape
+                                            .is_none()
+                                            .then(|| dict.get("SMask").cloned())
+                                            .flatten();
                                         let mask = dict.get("Mask").cloned();
                                         let _ = self.render_image(
                                             &mut scratch,
@@ -5698,8 +5823,7 @@ impl PageRenderer {
         doc: &PdfDocument,
         clip_mask: Option<&tiny_skia::Mask>,
     ) -> Option<Vec<u8>> {
-        let sidecar = self.cmyk_sidecar.as_ref()?;
-        let (w, h) = sidecar.dims();
+        let (w, h) = self.coverage_dimensions()?;
         let mut scratch = Pixmap::new(w, h)?;
         let cov_gs = Self::coverage_only_gs(gs);
         let _ = self.render_shading(&mut scratch, name, transform, &cov_gs, resources, doc, clip_mask);
@@ -6945,6 +7069,9 @@ impl PageRenderer {
         // The form's /Matrix is still composed on top of `base_transform`
         // by `render_form_xobject`, so the mask remains positioned by
         // its own matrix within the page-aligned device frame. ~keep
+        let saved_shape = self.knockout_shape.take();
+        let saved_mask_alpha = self.knockout_mask_alpha.take();
+        let saved_sidecar = self.cmyk_sidecar.take();
         let _ = self.render_form_xobject(
             &mut mask_pixmap,
             &form_dict,
@@ -6954,6 +7081,9 @@ impl PageRenderer {
             page_num,
             &form_resources_obj,
         );
+        self.knockout_shape = saved_shape;
+        self.knockout_mask_alpha = saved_mask_alpha;
+        self.cmyk_sidecar = saved_sidecar;
 
         // Resolve /TR transfer function once. The audit fixture uses
         // a Type-2 power function (`N=2` squares the input); the
@@ -7038,198 +7168,8 @@ impl PageRenderer {
             }
         }
 
-        Ok(())
-    }
-
-    /// Render a knockout transparency group per ISO 32000-1:2008 §11.4.6.2.
-    ///
-    /// The group's initial backdrop is `pixmap` on entry. Each painted
-    /// element composites against that backdrop (not against earlier
-    /// elements in the group), and later elements override earlier ones
-    /// in overlap regions.
-    ///
-    /// Implementation: segment the operator stream at paint operators
-    /// (Fill / Stroke / FillStroke / PaintShading / DrawObject /
-    /// ShowText / inline image). For each paint boundary `i`, render
-    /// the cumulative slice `operators[0..=i]` into a fresh
-    /// backdrop-copy scratch pixmap. The cumulative replay preserves
-    /// graphics-state side effects (color, CTM, clip) across paint
-    /// boundaries while keeping each paint's pixel contribution
-    /// referenced to the original backdrop. The scratch pixmap's
-    /// differences from the backdrop identify the pixels this element
-    /// touched, which then overwrite the accumulator.
-    ///
-    /// Cost: O(N · K) operator executions where N is total operators
-    /// and K is paint operators. Knockout groups are rare in practice
-    /// so the quadratic factor is acceptable.
-    fn execute_knockout_group(
-        &mut self,
-        pixmap: &mut Pixmap,
-        base_transform: Transform,
-        operators: &[Operator],
-        doc: &PdfDocument,
-        page_num: usize,
-        resources: &Object,
-    ) -> Result<()> {
-        // Backdrop is the pixmap state at group entry. ~keep
-        let width = pixmap.width();
-        let height = pixmap.height();
-        let backdrop_data: Vec<u8> = pixmap.data().to_vec();
-
-        // Sidecar backdrop snapshot. ISO 32000-1 §11.3.3 + §11.4.6.2:
-        // a knockout group composes each element against the group's
-        // INITIAL backdrop, and the single (shape, opacity) the spec
-        // maintains per pixel applies to BOTH process and spot lanes.
-        // So the CMYK plane and every spot plane must be reset to the
-        // group's backdrop before each element's cumulative replay,
-        // exactly like the RGB pixmap is. Without this reset the
-        // round-2 spot mirror's per-paint writes would compose against
-        // the previous element's lane state — that is non-isolated
-        // group semantics, NOT knockout. The brief calls this out as
-        // the round-2 gap the secondary scope of round 3 closes. ~keep
-        let sidecar_backdrop_cmyk: Option<Vec<u8>> = self.cmyk_sidecar.as_ref().map(|s| s.cmyk().to_vec());
-        let sidecar_backdrop_spots: Option<Vec<u8>> = self.cmyk_sidecar.as_ref().map(|s| s.spots_all().to_vec());
-
-        // Identify paint-operator indices. These define element
-        // boundaries. ~keep
-        let paint_indices: Vec<usize> = operators
-            .iter()
-            .enumerate()
-            .filter_map(|(i, op)| if is_paint_operator(op) { Some(i) } else { None })
-            .collect();
-
-        if paint_indices.is_empty() {
-            // No paint ops — still execute for state side effects (rare). ~keep
-            return self.execute_operators(pixmap, base_transform, operators, doc, page_num, resources);
-        }
-
-        // Accumulator starts as the backdrop. Each element's painted
-        // pixels overwrite the accumulator. ~keep
-        let mut accumulator: Vec<u8> = backdrop_data.clone();
-        // Sidecar accumulators parallel `accumulator` for the process
-        // and spot lanes. They start at the group's initial backdrop
-        // and absorb per-element scratch-vs-backdrop diffs. ~keep
-        let mut sidecar_accum_cmyk: Option<Vec<u8>> = sidecar_backdrop_cmyk.clone();
-        let mut sidecar_accum_spots: Option<Vec<u8>> = sidecar_backdrop_spots.clone();
-
-        for &end_idx in &paint_indices {
-            // Cumulative replay: graphics-state operators 0..end_idx
-            // plus the paint at end_idx, with all PRIOR paint operators
-            // filtered out. Filtering keeps the state side effects
-            // (CTM, fill color, ExtGState, clip path construction) that
-            // the current paint depends on, while ensuring no earlier
-            // element's pixel contribution reaches the scratch. The
-            // scratch is initialised to the backdrop so the paint
-            // composites against the group's initial backdrop only. ~keep
-            let mut scratch = Pixmap::new(width, height)
-                .ok_or_else(|| crate::error::Error::InvalidPdf("knockout scratch pixmap alloc failed".into()))?;
-            scratch.data_mut().copy_from_slice(&backdrop_data);
-
-            // Reset sidecar lanes to the group's backdrop before this
-            // element's replay so the per-paint mirror writes compose
-            // against the BACKDROP (knockout rule), not against earlier
-            // elements' lane state. The §11.4.6.2 spec is explicit: the
-            // group's "constituent objects ... shall be composited with
-            // the group's initial backdrop rather than with each
-            // other". This restoration extends that rule to the
-            // process / spot lanes the round-1/2 sidecar carries. ~keep
-            if let (Some(sidecar), Some(cmyk_b)) = (self.cmyk_sidecar.as_mut(), sidecar_backdrop_cmyk.as_ref()) {
-                sidecar.restore_cmyk(cmyk_b);
-            }
-            if let (Some(sidecar), Some(spots_b)) = (self.cmyk_sidecar.as_mut(), sidecar_backdrop_spots.as_ref()) {
-                sidecar.restore_spots(spots_b);
-            }
-
-            let element_ops: Vec<Operator> = operators[..=end_idx]
-                .iter()
-                .enumerate()
-                .filter_map(|(i, op)| {
-                    if i < end_idx && is_paint_operator(op) {
-                        None
-                    } else {
-                        Some(op.clone())
-                    }
-                })
-                .collect();
-
-            self.execute_operators(&mut scratch, base_transform, &element_ops, doc, page_num, resources)?;
-
-            // Merge: where scratch differs from backdrop, this element
-            // touched the pixel — its value overrides the accumulator.
-            // Comparing scratch vs backdrop (not vs accumulator) is the
-            // key knockout semantic: each element sees only the
-            // backdrop, never the accumulated paint from earlier
-            // elements. ~keep
-            let scratch_data = scratch.data();
-            debug_assert_eq!(scratch_data.len(), backdrop_data.len());
-            debug_assert_eq!(accumulator.len(), backdrop_data.len());
-
-            for px in 0..(scratch_data.len() / 4) {
-                let off = px * 4;
-                let same = scratch_data[off] == backdrop_data[off]
-                    && scratch_data[off + 1] == backdrop_data[off + 1]
-                    && scratch_data[off + 2] == backdrop_data[off + 2]
-                    && scratch_data[off + 3] == backdrop_data[off + 3];
-                if !same {
-                    accumulator[off] = scratch_data[off];
-                    accumulator[off + 1] = scratch_data[off + 1];
-                    accumulator[off + 2] = scratch_data[off + 2];
-                    accumulator[off + 3] = scratch_data[off + 3];
-                }
-            }
-
-            // Merge sidecar lanes: any byte that differs from the
-            // backdrop snapshot was written by this element's paint
-            // mirror. Pull the post-element value into the accumulator
-            // so later replay iterations see only the backdrop on
-            // restore, but the merged group result preserves every
-            // element's contribution (last-paint wins on per-byte
-            // collision, mirroring the pixmap merge). ~keep
-            if let (Some(sidecar), Some(accum), Some(backdrop)) = (
-                self.cmyk_sidecar.as_ref(),
-                sidecar_accum_cmyk.as_mut(),
-                sidecar_backdrop_cmyk.as_ref(),
-            ) {
-                let post = sidecar.cmyk();
-                debug_assert_eq!(post.len(), backdrop.len());
-                debug_assert_eq!(accum.len(), backdrop.len());
-                for i in 0..post.len() {
-                    if post[i] != backdrop[i] {
-                        accum[i] = post[i];
-                    }
-                }
-            }
-            if let (Some(sidecar), Some(accum), Some(backdrop)) = (
-                self.cmyk_sidecar.as_ref(),
-                sidecar_accum_spots.as_mut(),
-                sidecar_backdrop_spots.as_ref(),
-            ) {
-                let post = sidecar.spots_all();
-                debug_assert_eq!(post.len(), backdrop.len());
-                debug_assert_eq!(accum.len(), backdrop.len());
-                for i in 0..post.len() {
-                    if post[i] != backdrop[i] {
-                        accum[i] = post[i];
-                    }
-                }
-            }
-        }
-
-        // Replay any trailing non-paint operators (state side effects
-        // that follow the last paint) onto the accumulator. The group's
-        // visible output IS the accumulator, so we install it before
-        // returning. ~keep
-        pixmap.data_mut().copy_from_slice(&accumulator);
-
-        // Install the merged sidecar accumulators back into the
-        // sidecar. The group's spot and process lanes are now the
-        // accumulated knockout result — later operators (outside the
-        // group) compose against this state. ~keep
-        if let (Some(sidecar), Some(cmyk_a)) = (self.cmyk_sidecar.as_mut(), sidecar_accum_cmyk.as_ref()) {
-            sidecar.restore_cmyk(cmyk_a);
-        }
-        if let (Some(sidecar), Some(spots_a)) = (self.cmyk_sidecar.as_mut(), sidecar_accum_spots.as_ref()) {
-            sidecar.restore_spots(spots_a);
+        if self.knockout_shape.is_some() {
+            self.knockout_mask_alpha = Some(mask_alpha);
         }
         Ok(())
     }
