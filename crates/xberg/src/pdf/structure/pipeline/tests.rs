@@ -1686,6 +1686,47 @@ fn dedup_keeps_the_sole_copy_when_neighbouring_tables_print_digits_that_join_int
 }
 
 #[test]
+fn dedup_ignores_a_table_of_another_page_that_holds_the_same_words() {
+    let big = cell_table(
+        1,
+        (0.0, 0.0, 100.0, 100.0),
+        &[&["alpha", "1"], &["beta", "2"], &["gamma", "3"], &["delta", "4"]],
+    );
+    let small = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["omega", "7"], &["sigma", "8"]]);
+    let elsewhere = cell_table(2, (0.0, 0.0, 100.0, 100.0), &[&["omega", "7"], &["sigma", "8"]]);
+    let mut page = printed_cells(&[&big, &small]);
+    page.push(Vec::new());
+    let kept = kept_native_tables(vec![big, small.clone(), elsewhere], &page);
+    assert!(
+        kept.iter().any(|table| table.page_number == 1 && table.cells == small.cells),
+        "the table that holds the words printed once on this page stays"
+    );
+}
+
+#[test]
+fn dedup_counts_a_word_a_table_holds_once_as_one_new_word_however_often_the_page_prints_it() {
+    let big = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["a", "b"], &["c", "e"], &["f", "g"]]);
+    let small = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["x", "a"], &["b", "c"]]);
+    let page = vec![vec![
+        printed_at("a", 5.0, 5.0),
+        printed_at("b", 20.0, 5.0),
+        printed_at("c", 40.0, 5.0),
+        printed_at("e", 60.0, 5.0),
+        printed_at("f", 70.0, 5.0),
+        printed_at("g", 85.0, 5.0),
+        printed_at("x", 5.0, 50.0),
+        printed_at("x", 5.0, 60.0),
+        printed_at("x", 5.0, 70.0),
+    ]];
+    let kept = kept_native_tables(vec![big, small], &page);
+    assert_eq!(
+        kept.len(),
+        1,
+        "one new word of four is under the fraction, whatever the page prints of it"
+    );
+}
+
+#[test]
 fn dedup_counts_two_split_copies_and_drops_a_table_for_one_printed_copy() {
     let (small, large) = joined_pair();
     let split_twice = vec![vec![
