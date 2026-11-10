@@ -2107,6 +2107,53 @@ fn nfc_moves_a_page_range_past_the_text_it_shortened() {
 
 #[test]
 #[cfg(feature = "quality")]
+fn nfc_leaves_the_page_ranges_of_content_it_did_not_change_as_they_were() {
+    let mut result = result_with_one_range("ab", 0, 99);
+
+    normalize_nfc(&mut result);
+
+    let boundary = &result.metadata.pages.unwrap().boundaries.unwrap()[0];
+    assert_eq!((boundary.byte_start, boundary.byte_end), (0, 99));
+    assert!(result.processing_warnings.is_empty());
+}
+
+/// Ranges in reverse page order, a blank page (an empty range) and two ranges that share an
+/// offset all move with the text that precedes them (#2851).
+#[test]
+#[cfg(feature = "quality")]
+fn nfc_moves_unordered_empty_and_touching_page_ranges() {
+    use crate::types::PageBoundary;
+    let range = |byte_start, byte_end, page_number| PageBoundary {
+        byte_start,
+        byte_end,
+        page_number,
+    };
+    // "e\u{0301}" is 3 bytes before NFC and 2 after.
+    let mut result = result_with_one_range("e\u{0301}ab\ne\u{0301}", 0, 0);
+    result.metadata.pages.as_mut().unwrap().boundaries = Some(vec![
+        range(6, 9, 3),
+        range(3, 3, 2),
+        range(0, 3, 1),
+        range(3, 5, 4),
+        range(5, 6, 5),
+    ]);
+
+    normalize_nfc(&mut result);
+
+    assert_eq!(result.content, "\u{00e9}ab\n\u{00e9}");
+    let boundaries = result.metadata.pages.unwrap().boundaries.unwrap();
+    let slices: Vec<(u32, &str)> = boundaries
+        .iter()
+        .map(|b| (b.page_number, &result.content[b.byte_start..b.byte_end]))
+        .collect();
+    assert_eq!(
+        slices,
+        [(3, "\u{00e9}"), (2, ""), (1, "\u{00e9}"), (4, "ab"), (5, "\n")]
+    );
+}
+
+#[test]
+#[cfg(feature = "quality")]
 fn nfc_leaves_the_page_ranges_of_a_rendered_output_to_the_rendering_step() {
     let mut result = result_with_one_range("e\u{0301}ab", 3, 5);
     result.formatted_content = Some("# rendered".to_string());

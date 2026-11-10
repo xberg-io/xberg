@@ -2774,6 +2774,42 @@ mod tests {
             assert_eq!(letter_only.document.elements[0].text, "Report");
         }
 
+        /// The numeral decides on every line it sits on, whatever its place in the line: inside a
+        /// word, as the only word, and on a second line of the same paragraph (#2851).
+        #[test]
+        fn every_noise_line_that_holds_a_numeral_survives_wherever_the_numeral_sits() {
+            let word = |left: u32, text: &str| {
+                format!(
+                    r#"<span class="ocrx_word" title="bbox {left} 10 {} 40">{text}</span>"#,
+                    left + 90
+                )
+            };
+            let line = |words: &[&str]| {
+                let words: String = words.iter().zip(0u32..).map(|(w, i)| word(i * 100, w)).collect();
+                format!(r#"<span class="ocr_line">{words}</span>"#)
+            };
+            let hocr = format!(
+                r#"<div class="ocr_page" title="ppageno 0"><p class="ocr_par">{}{}{}{}</p></div>"#,
+                line(&["OWATS", "DNDEVET", "OPM3NT"]),
+                line(&["OWATS", "DNDEVET", "OPMENT"]),
+                line(&["7", "DNDEVET", "OPMENT"]),
+                line(&["OWATS", "DNDEVET", "OPMENT", "7"]),
+            );
+            let invalid = |_: &str| Some(false);
+            let filter = DictionaryLineFilter {
+                is_valid_word: &invalid,
+                max_invalid_ratio: TEST_THRESHOLD,
+            };
+
+            let result = parse_hocr_to_internal_document_with_page_offset_and_stats(&hocr, Some(&filter), 1);
+
+            assert_eq!(result.dictionary_filtered_line_count, 1);
+            assert_eq!(
+                result.document.elements[0].text,
+                "OWATS DNDEVET OPM3NT\n7 DNDEVET OPMENT\nOWATS DNDEVET OPMENT 7"
+            );
+        }
+
         /// No filter at all (the plain [`parse_hocr_to_internal_document`] entry point,
         /// what every other test in this file uses) must behave exactly as before this
         /// feature existed: nothing is removed, no matter how garbled the text is.
