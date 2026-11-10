@@ -741,18 +741,25 @@ pub(crate) fn separable_blend(mode: &str, c_b: f32, c_s: f32) -> f32 {
 /// over a lane with ink gives less ink than either tint, and over an empty lane gives
 /// `0 * t_s = 0`, which erases the source ink that the page render shows.
 ///
-/// `a_b` is the backdrop alpha of the lane at the pixel: 0 where no paint reached it, 1 where
-/// a paint covered it fully, even a paint of tint 0. §11.3.6 mixes the source with the blend
-/// by that alpha: `(1 - a_b) * t_s + a_b * B(t_b, t_s)`. Where `a_b` is 0 the result is `t_s`
-/// for every mode. `/Normal`, non-separable modes and unknown names return `t_s` as they are,
-/// because `B(c_b, c_s) = c_s` does not depend on the representation.
+/// The lane stores the tint times the backdrop alpha, so `t_b` is premultiplied. `a_b` is the
+/// backdrop alpha of the lane at the pixel: 0 where no paint reached it, 1 where a paint
+/// covered it fully, even a paint of tint 0. §11.3.6 blends the unpremultiplied backdrop colour
+/// `t_b / a_b` and mixes the source with that blend by the alpha:
+/// `(1 - a_b) * t_s + a_b * B(t_b / a_b, t_s)`. The caller composes the result with the stored
+/// `t_b` by the source alpha, which is the premultiplied form of the same formula. Where `a_b`
+/// is 0 the result is `t_s` for every mode. `/Normal`, non-separable modes and unknown names
+/// return `t_s` as they are, because `B(c_b, c_s) = c_s` does not depend on the representation.
 pub(crate) fn blend_subtractive_tint(mode: &str, t_b: f32, a_b: f32, t_s: f32) -> f32 {
     let (t_b, a_b, t_s) = (t_b.clamp(0.0, 1.0), a_b.clamp(0.0, 1.0), t_s.clamp(0.0, 1.0));
     let non_separable = matches!(mode, "Normal" | "Hue" | "Saturation" | "Color" | "Luminosity");
     if non_separable || !is_recognised_mode(mode) {
         return t_s;
     }
-    let blended = 1.0 - separable_blend(mode, 1.0 - t_b, 1.0 - t_s);
+    if a_b == 0.0 {
+        return t_s;
+    }
+    let c_b = (t_b / a_b).min(1.0);
+    let blended = 1.0 - separable_blend(mode, 1.0 - c_b, 1.0 - t_s);
     (1.0 - a_b) * t_s + a_b * blended
 }
 

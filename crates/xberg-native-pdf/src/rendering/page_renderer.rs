@@ -8796,10 +8796,11 @@ fn fit_png_dpi(
 
 fn png_working_bytes_fit(width: u32, height: u32, spot_names: Option<&[String]>, limit: usize) -> bool {
     // The canvas and PNG demultiply copy are both RGBA. Reserve the same per-pixel
-    // and fixed PNG allowance as Core image encoding, plus the live CMYK and spot planes.
+    // and fixed PNG allowance as Core image encoding, plus the live CMYK plane and, for each spot
+    // ink, a tint plane and a backdrop-alpha plane.
     const RGBA_AND_PNG_BYTES_PER_PIXEL: usize = 12;
     const PNG_FIXED_OVERHEAD: usize = 256 * 1024;
-    let sidecar_bytes_per_pixel = spot_names.map_or(Some(0), |names| 4_usize.checked_add(names.len()));
+    let sidecar_bytes_per_pixel = spot_names.map_or(Some(0), |names| names.len().checked_mul(2)?.checked_add(4));
     let charge = sidecar_bytes_per_pixel
         .and_then(|bytes| RGBA_AND_PNG_BYTES_PER_PIXEL.checked_add(bytes))
         .and_then(|bytes| (width as usize).checked_mul(height as usize)?.checked_mul(bytes))
