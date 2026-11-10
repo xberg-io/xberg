@@ -13,7 +13,7 @@ use crate::extractors::pdf::ocr::stage_model_inputs::StageModelInputs;
 use crate::types::PageBoundary;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Script {
+pub(super) enum Script {
     Latin,
     Greek,
     Cyrillic,
@@ -171,7 +171,7 @@ fn is_script_letter(character: char) -> bool {
 }
 
 /// [`unreadable_scripts`] with the number of letters each script holds, largest first.
-fn uncovered_script_counts(text: &str, languages: &[String]) -> Option<Vec<(Script, usize)>> {
+pub(super) fn uncovered_script_counts(text: &str, languages: &[String]) -> Option<Vec<(Script, usize)>> {
     if languages.is_empty() {
         return None;
     }
@@ -239,12 +239,16 @@ fn model_for(script: Script) -> &'static str {
 /// Whether the page is a scan or a page that carries one, by the rule the scanned-page detector
 /// uses: pictures covering at least 80% of it, or covering a quarter with a text layer too short to
 /// be the page's body. A page with a figure beside a full text layer is not.
-fn page_is_scan(document: &xberg_native_pdf::PdfDocument, page_index: usize) -> bool {
-    crate::pdf::native::guard_native_panic(
-        || Ok::<_, String>(crate::pdf::scan_detect::full_page_raster_density(document, page_index).is_some()),
-        |message| message,
-    )
-    .unwrap_or_else(|error| {
+pub(super) fn page_is_scan(document: &xberg_native_pdf::PdfDocument, page_index: usize) -> bool {
+    scan_verdict(page_index, || {
+        crate::pdf::scan_detect::full_page_raster_density(document, page_index).is_some()
+    })
+}
+
+/// The verdict of a scan check, which is "a scan" when the check panics: a page whose raster cannot
+/// be inspected is left to OCR, the only reader of a picture.
+fn scan_verdict(page_index: usize, check: impl FnOnce() -> bool) -> bool {
+    crate::pdf::native::guard_native_panic(|| Ok::<_, String>(check()), |message| message).unwrap_or_else(|error| {
         tracing::debug!(%error, page_index, "script evidence assumes a scan: the page raster check failed");
         true
     })
@@ -260,8 +264,8 @@ enum LanguageSource {
 
 /// A Tesseract stage of the route: the models it reads, where they come from, and its position in
 /// run order (0 is the stage that reads first).
-struct RouteStage {
-    languages: Vec<String>,
+pub(super) struct RouteStage {
+    pub(super) languages: Vec<String>,
     source: LanguageSource,
     position: usize,
 }
@@ -337,6 +341,11 @@ fn route(ocr: &crate::OcrConfig) -> Option<Vec<RouteStage>> {
         })
         .collect();
     (!route.is_empty()).then_some(route)
+}
+
+/// The stage that reads first, the one that decides the script rule when it succeeds.
+pub(super) fn first_stage(ocr: &crate::OcrConfig) -> Option<RouteStage> {
+    route(ocr)?.into_iter().next()
 }
 
 /// Tells a letter that starts a cluster from a sign that attaches to one, for the scripts whose
@@ -446,6 +455,12 @@ fn judged_scripts(text: &str, languages: &[String]) -> Option<Vec<Script>> {
     if text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER) {
         return Some(counts.into_iter().map(|(script, _)| script).collect());
     }
+    structured_scripts(text, counts)
+}
+
+/// The weighty scripts of a layer when each of them has checkable cluster structure that the layer
+/// satisfies: the evidence that does not depend on lost-glyph markers.
+pub(super) fn structured_scripts(text: &str, counts: Vec<(Script, usize)>) -> Option<Vec<Script>> {
     let weighty = weighty_scripts(counts);
     // Many scripts of a few letters each leave none above the share: nothing is established.
     (!weighty.is_empty() && weighty.iter().all(|script| clusters_are_valid(text, *script))).then_some(weighty)
@@ -610,28 +625,24 @@ fn read_pages_warning(read: &[(u32, Vec<Script>)], stage: &RouteStage) -> crate:
 /// kept pages and one for the pages that stay failing although their layer is in an unreadable
 /// script, so a caller whose scan is in Khmer is told to add `khm`. A page is in at most one.
 ///
+/// `ink_contradicted` lists pages whose ink an OCR read contradicted (see
+/// [`super::ink_probe::contradicted_pages`]); they stay failing and get no warning.
+///
 /// The filter runs before the provenance and plausibility flags are merged into the decision, so
 /// a page whose layer is flagged as a mis-decode (all-Greek English from a symbol font, for
 /// example) is returned to OCR by them.
 pub(super) fn retain_unreadable_script_pages(
     decision: &mut OcrFallbackDecision,
-    native_text: &str,
-    boundaries: Option<&[PageBoundary]>,
-    page_count: Option<u32>,
+    layer: NativeLayer<'_>,
     content: &[u8],
     config: &ExtractionConfig,
+    ink_contradicted: &[u32],
 ) -> Vec<crate::types::ProcessingWarning> {
+    let native_text = layer.text;
     let Some(ocr) = config.ocr.as_ref() else {
         return Vec::new();
     };
-    let Some(boundaries) = boundaries.filter(|boundaries| {
-        !decision.failing_pages.is_empty()
-            && page_count.is_some_and(|count| count as usize == boundaries.len())
-            && boundaries
-                .iter()
-                .enumerate()
-                .all(|(index, boundary)| boundary.page_number as usize == index + 1)
-    }) else {
+    let Some(boundaries) = judgeable_boundaries(decision, layer) else {
         return Vec::new();
     };
     let Some(route) = route(ocr) else {
@@ -640,6 +651,7 @@ pub(super) fn retain_unreadable_script_pages(
     let candidates: Vec<(Candidate, usize)> = decision
         .failing_pages
         .iter()
+        .filter(|page| !ink_contradicted.contains(page))
         .filter_map(|page| {
             let boundary = boundaries.iter().find(|boundary| boundary.page_number == *page)?;
             let text = native_text.get(boundary.byte_start..boundary.byte_end)?;
@@ -692,6 +704,29 @@ pub(super) fn retain_unreadable_script_pages(
         warnings.push(read_pages_warning(&read, &route[0]));
     }
     warnings
+}
+
+/// The native text of a document with the page boundaries and page count it was extracted with.
+#[derive(Clone, Copy)]
+pub(super) struct NativeLayer<'a> {
+    pub(super) text: &'a str,
+    pub(super) boundaries: Option<&'a [PageBoundary]>,
+    pub(super) page_count: Option<u32>,
+}
+
+/// The page boundaries when they cover the document page for page and some page is failing.
+pub(super) fn judgeable_boundaries<'a>(
+    decision: &OcrFallbackDecision,
+    layer: NativeLayer<'a>,
+) -> Option<&'a [PageBoundary]> {
+    layer.boundaries.filter(|boundaries| {
+        !decision.failing_pages.is_empty()
+            && layer.page_count.is_some_and(|count| count as usize == boundaries.len())
+            && boundaries
+                .iter()
+                .enumerate()
+                .all(|(index, boundary)| boundary.page_number as usize == index + 1)
+    })
 }
 
 /// The scripts that dominate a native page, judged against Latin alone: those holding at least
@@ -930,11 +965,14 @@ mod tests {
         let mut decision = decision_for(&text, &boundaries);
         let warnings = retain_unreadable_script_pages(
             &mut decision,
-            &text,
-            Some(&boundaries),
-            Some(boundaries.len() as u32),
+            NativeLayer {
+                text: &text,
+                boundaries: Some(&boundaries),
+                page_count: Some(boundaries.len() as u32),
+            },
             content,
             config,
+            &[],
         );
         (decision, warnings)
     }
@@ -1134,13 +1172,32 @@ mod tests {
         assert!(!before.is_empty());
         for (page_count, shift) in [(None, 0), (Some(2), 0), (Some(1), 1)] {
             boundaries[0].page_number += shift;
-            let warning =
-                retain_unreadable_script_pages(&mut decision, &text, Some(&boundaries), page_count, ONE_PAGE, &config);
+            let warning = retain_unreadable_script_pages(
+                &mut decision,
+                NativeLayer {
+                    text: &text,
+                    boundaries: Some(&boundaries),
+                    page_count,
+                },
+                ONE_PAGE,
+                &config,
+                &[],
+            );
             boundaries[0].page_number -= shift;
             assert!(warning.is_empty(), "{page_count:?} {shift}");
             assert_eq!(decision.failing_pages, before, "{page_count:?} {shift}");
         }
-        let warning = retain_unreadable_script_pages(&mut decision, &text, None, Some(1), ONE_PAGE, &config);
+        let warning = retain_unreadable_script_pages(
+            &mut decision,
+            NativeLayer {
+                text: &text,
+                boundaries: None,
+                page_count: Some(1),
+            },
+            ONE_PAGE,
+            &config,
+            &[],
+        );
         assert!(warning.is_empty());
         assert_eq!(decision.failing_pages, before);
     }
@@ -1436,11 +1493,14 @@ mod tests {
         let mut decision = decision_for(&text, &boundaries);
         retain_unreadable_script_pages(
             &mut decision,
-            &text,
-            Some(&boundaries),
-            Some(boundaries.len() as u32),
+            NativeLayer {
+                text: &text,
+                boundaries: Some(&boundaries),
+                page_count: Some(boundaries.len() as u32),
+            },
             ONE_PAGE,
             config,
+            &[],
         );
         let marked = native_script_pages(&decision, &text, Some(&boundaries), ONE_PAGE, config);
         (decision.failing_pages, marked)
@@ -1843,11 +1903,14 @@ mod tests {
         decision.whole_doc_failure = true;
         let warnings = retain_unreadable_script_pages(
             &mut decision,
-            &text,
-            Some(&boundaries),
-            Some(1),
+            NativeLayer {
+                text: &text,
+                boundaries: Some(&boundaries),
+                page_count: Some(1),
+            },
             ONE_PAGE,
             &config_with(languages),
+            &[],
         );
         (decision, warnings)
     }
@@ -1954,14 +2017,32 @@ mod tests {
         let (text, mut boundaries) = page_text(&[KHMER_MARKED, ""]);
         let config = config_with(&["eng"]);
         let mut control = decision_for(&text, &boundaries);
-        let warnings =
-            retain_unreadable_script_pages(&mut control, &text, Some(&boundaries), Some(2), TWO_PAGES, &config);
+        let warnings = retain_unreadable_script_pages(
+            &mut control,
+            NativeLayer {
+                text: &text,
+                boundaries: Some(&boundaries),
+                page_count: Some(2),
+            },
+            TWO_PAGES,
+            &config,
+            &[],
+        );
         assert_eq!(warnings.len(), 1, "control: page 1 is kept when the numbering is right");
         let mut decision = decision_for(&text, &boundaries);
         let before = decision.failing_pages.clone();
         boundaries[1].page_number = 3;
-        let warnings =
-            retain_unreadable_script_pages(&mut decision, &text, Some(&boundaries), Some(2), TWO_PAGES, &config);
+        let warnings = retain_unreadable_script_pages(
+            &mut decision,
+            NativeLayer {
+                text: &text,
+                boundaries: Some(&boundaries),
+                page_count: Some(2),
+            },
+            TWO_PAGES,
+            &config,
+            &[],
+        );
         assert!(warnings.is_empty());
         assert_eq!(decision.failing_pages, before);
     }
@@ -2031,11 +2112,14 @@ mod tests {
         let mut decision = decision_for(&text, &boundaries);
         retain_unreadable_script_pages(
             &mut decision,
-            &text,
-            Some(&boundaries),
-            Some(1),
+            NativeLayer {
+                text: &text,
+                boundaries: Some(&boundaries),
+                page_count: Some(1),
+            },
             ONE_PAGE,
             &config_with(&["eng"]),
+            &[],
         );
         assert!(decision.failing_pages.is_empty());
         super::super::ocr::apply_flagged_pages(&mut decision, &[1], true, Some(1));
@@ -2170,5 +2254,40 @@ mod tests {
     fn joiners_inside_an_indic_cluster_do_not_end_it() {
         let text = "क्\u{200D}ष र्\u{200D}क ज्\u{200C}ञ त्\u{200D}र नमस्ते हिन्दी";
         assert!(clusters_are_valid(text, Script::Devanagari));
+    }
+
+    #[test]
+    fn a_scan_check_that_panics_assumes_a_scan_and_one_that_returns_is_believed() {
+        assert!(scan_verdict(0, || panic!("raster check refused the page")));
+        assert!(scan_verdict(0, || true));
+        assert!(!scan_verdict(0, || false));
+    }
+
+    #[test]
+    fn a_marked_greek_page_with_three_latin_words_is_kept_native() {
+        // Known limit: a lost-glyph marker makes `judged_scripts` return every uncovered script on
+        // script evidence alone, with no check of the Latin share of the page.
+        let greek: String = "αβγδ ".repeat(40);
+        let page = format!("{greek}\u{FFFD} the report states");
+        assert_eq!(judged_scripts(&page, &langs(&["eng"])), Some(vec![Script::Greek]));
+        let (decision, warnings) = forced_failing(&page, &["eng"]);
+        assert!(decision.failing_pages.is_empty());
+        assert!(!decision.fallback);
+        assert!(!decision.whole_doc_failure);
+        assert_eq!(warnings.len(), 1);
+        assert!(
+            warnings[0].message.starts_with("OCR was skipped for page 1 (Greek;"),
+            "{}",
+            warnings[0].message
+        );
+        let unmarked = page.replace('\u{FFFD}', "");
+        assert_eq!(judged_scripts(&unmarked, &langs(&["eng"])), None);
+    }
+
+    #[test]
+    fn the_echoed_khmer_fixture_text_is_judged_unreadable_khmer() {
+        let page = "ខ្ញុំស្រលាញ់ប្រទេសកម្ពុជា ស្រលាញ់ប្រទេសកម្ពុជាសួស្តី ភ្នំពេញក្រុងសៀវភៅសាលារៀន សូមអរគុណខ្ញុំ";
+        assert_eq!(judged_scripts(page, &langs(&["eng"])), Some(vec![Script::Khmer]));
+        assert_eq!(judged_scripts(page, &langs(&["eng", "khm"])), None);
     }
 }

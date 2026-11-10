@@ -314,6 +314,16 @@ fn a_khmer_stage_before_an_english_stage_keeps_page_one_and_reads_the_scanned_pa
         pages[1].content
     );
     assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Mixed));
+    // The placeholder Khmer model cannot load, so the Khmer stage fails and the run falls
+    // through to the English stage. The warning shows the fall-through happened.
+    assert!(
+        automatic
+            .processing_warnings
+            .iter()
+            .any(|w| w.source == "ocr_pipeline" && w.message.contains("failed and was skipped")),
+        "the Khmer stage failed and the English stage read the scan: {:?}",
+        automatic.processing_warnings
+    );
 }
 
 #[test]

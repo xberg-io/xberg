@@ -957,3 +957,21 @@ fn corrected_space_gap_uses_the_coordinates_rounding_scale() {
     assert_eq!(true_overlap, corrected_space_gap(-2.0, false, 30.0, false, 0.0));
     assert!(true_overlap > 0.0);
 }
+
+/// A span with no text has no glyphs to overlap: the overlap correction does not apply to it, whatever
+/// its box width.
+#[test]
+fn corrected_space_gap_leaves_the_gap_of_an_empty_span_alone() {
+    assert_eq!(corrected_space_gap(-2.0, false, 30.0, true, 0.0), -2.0);
+    assert!(corrected_space_gap(-2.0, false, 30.0, false, 0.0) > 0.0);
+}
+
+/// Two ULPs at the coordinate's magnitude, from the magnitude alone: a negative coordinate has the
+/// same error as its absolute value, whose ULP is larger below a power of two than above it.
+#[test]
+fn edge_rounding_error_is_two_ulps_of_the_absolute_coordinate() {
+    assert_eq!(edge_rounding_error(1024.0), 2.0 * 2.0_f32.powi(-13));
+    assert_eq!(edge_rounding_error(-1024.0), 2.0 * 2.0_f32.powi(-13));
+    assert_eq!(edge_rounding_error(1023.0), 2.0 * 2.0_f32.powi(-14));
+    assert_eq!(edge_rounding_error(0.0), 2.0 * f32::from_bits(1));
+}

@@ -420,3 +420,81 @@ fn a_fixed_pitch_space_after_a_lone_ligature_leaves_the_span_unmarked() {
     assert!(spans[0].0.starts_with("ff"), "{spans:?}");
     assert!(!spans[0].1, "{spans:?}");
 }
+
+/// Every ligature a glyph can expand to joins the word around it in the merge pass once marked, `st`
+/// (what U+FB05 and U+FB06 decode to) included, and none of them does as plain letters (#2689).
+#[test]
+fn merging_joins_every_expanded_ligature_and_no_literal_letters() {
+    for letters in ["ff", "fi", "fl", "ffi", "ffl", "st"] {
+        assert_eq!(
+            merged_text_around(letters, true),
+            vec![format!("di{letters}erent")],
+            "{letters}"
+        );
+        assert_eq!(
+            merged_text_around(letters, false),
+            vec![format!("di {letters} erent")],
+            "literal {letters}"
+        );
+    }
+}
+
+/// A ligature code point on either side of a gap relaxes it across the whole block U+FB00..U+FB06.
+#[test]
+fn merging_joins_around_every_ligature_code_point() {
+    for code in '\u{FB00}'..='\u{FB06}' {
+        assert_eq!(
+            merged_text_around(&code.to_string(), false),
+            vec![format!("di{code}erent")],
+            "U+{:04X}",
+            code as u32
+        );
+    }
+}
+
+/// A font with no ToUnicode in which the byte 0x41 ("A") has `letters` in the compound-name table, where
+/// the parser of a /Differences array puts an underscore-joined glyph name.
+fn compound_name_font_decoding_a_to(letters: &str) -> FontInfo {
+    let mut font = create_test_font();
+    font.encoding = Encoding::Custom(HashMap::new());
+    font.multi_char_map.insert(0x41, letters.to_string());
+    font
+}
+
+/// The letters of an underscore-joined /Differences name (`f_f_i`) mark the span like a ToUnicode entry
+/// that gives them, so the 0.2 em join applies to the glyph (#2689).
+#[test]
+fn a_compound_glyph_name_code_marks_the_span() {
+    for letters in ["ff", "fi", "fl", "ffi", "ffl", "st"] {
+        let spans = spans_of(
+            compound_name_font_decoding_a_to(letters),
+            b"BT /F1 12 Tf 0 0 Td (A) Tj ET",
+        );
+        assert_eq!(spans, marked(letters), "{letters}");
+    }
+}
+
+/// A font whose ToUnicode maps the byte 0x41 ("A") to the C0 control U+0001 and whose /Differences names
+/// that code `glyph_name`: the glyph name decides the text (the ToUnicode recovery path of the font).
+fn c0_tounicode_font_naming_a(glyph_name: &str) -> FontInfo {
+    let mut font = simple_font_decoding_a_to("0001");
+    font.diff_glyph_names.insert(0x41, glyph_name.to_string());
+    font
+}
+
+/// The recovery from a C0 ToUnicode value reads an underscore-joined glyph name by the Adobe Glyph List
+/// algorithm too: suffix dropped first, empty and unknown components skipped.
+#[test]
+fn a_c0_tounicode_value_is_recovered_from_a_compound_glyph_name() {
+    for (name, letters) in [
+        ("f_f_i", "ffi"),
+        ("f__i", "fi"),
+        ("f_i.alt", "fi"),
+        ("f.alt_i", "f"),
+        ("zzz_i", "i"),
+    ] {
+        let spans = spans_of(c0_tounicode_font_naming_a(name), b"BT /F1 12 Tf 0 0 Td (A) Tj ET");
+        assert_eq!(spans.len(), 1, "{name}: {spans:?}");
+        assert_eq!(spans[0].0, letters, "{name}");
+    }
+}

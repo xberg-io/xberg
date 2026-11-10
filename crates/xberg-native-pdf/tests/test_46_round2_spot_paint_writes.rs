@@ -240,12 +240,14 @@ fn tint_to_u8(t: f32) -> u8 {
 /// §11.3.3 basic compositing formula at full coverage and full
 /// backdrop alpha: `t_r = (1 - α_s) · t_b + α_s · B(t_b, t_s)`, where
 /// `α_s = coverage · gs_alpha` and `B(·,·)` is the dispatched separable
-/// blend function on subtractive tints.
+/// blend function on the additive complements of the subtractive tints.
 fn compose_normal(t_b: f32, t_s: f32, alpha: f32) -> f32 {
     (1.0 - alpha) * t_b + alpha * t_s
 }
 fn compose_multiply(t_b: f32, t_s: f32, alpha: f32) -> f32 {
-    let blended = t_b * t_s;
+    // Multiply is defined on additive values (ISO 32000-1 §11.3.5.2), so the
+    // subtractive tints are complemented before the product and after it. ~keep
+    let blended = 1.0 - (1.0 - t_b) * (1.0 - t_s);
     (1.0 - alpha) * t_b + alpha * blended
 }
 
@@ -442,9 +444,9 @@ fn round2_p4_non_wp_bm_substitutes_normal_on_spot() {
 /// `/BM /Multiply` + /Separation /InkA paint at tint 0.5 onto a backdrop
 /// where InkA was already painted to 0.8: per §11.7.4.2 /Multiply is
 /// separable AND white-preserving, so the spot lane runs the requested
-/// /Multiply unchanged. Result: B(0.8, 0.5) = 0.8 · 0.5 = 0.4 → u8 = 102.
-/// At α=1 the basic compositing formula collapses to the blend value:
-/// `t_r = (1-1)·0.8 + 1·B(0.8, 0.5) = 0.4`.
+/// /Multiply unchanged. Result: B(0.8, 0.5) = 1 - 0.2 · 0.5 = 0.9 (two inks
+/// stack, so the tint grows). At α=1 the basic compositing formula collapses
+/// to the blend value: `t_r = (1-1)·0.8 + 1·B(0.8, 0.5) = 0.9`.
 #[test]
 fn round2_p5_separable_wp_bm_passes_through_on_spot() {
     let icc = build_constant_cmyk_icc(135);
@@ -463,7 +465,10 @@ fn round2_p5_separable_wp_bm_passes_through_on_spot() {
     let _img = renderer.render_page(&doc, 0).expect("render succeeds");
 
     let expected = tint_to_u8(compose_multiply(0.8, 0.5, 1.0));
-    assert_eq!(expected, 102);
+    assert!(
+        expected > tint_to_u8(0.8),
+        "two stacked inks must be denser than the backdrop"
+    );
     let plane = renderer.cmyk_sidecar_spot_plane(0).expect("InkA plane");
     let dims = renderer.cmyk_sidecar_dims().unwrap();
     let centre = ((dims.1 / 2) * dims.0 + dims.0 / 2) as usize;
@@ -471,7 +476,7 @@ fn round2_p5_separable_wp_bm_passes_through_on_spot() {
         plane[centre], expected,
         "ISO 32000-1 §11.7.4.2: /Multiply is separable AND \
          white-preserving → spot lane uses the requested /Multiply \
-         unchanged. /Multiply(0.8, 0.5) = 0.4 → u8 = {}. Got {} at \
+         unchanged. /Multiply(0.8, 0.5) = 0.9 → u8 = {}. Got {} at \
          centre.",
         expected, plane[centre]
     );
@@ -673,7 +678,7 @@ fn round2_p8_multi_spot_devicen_writes_all_named_lanes() {
 ///
 /// The fill side writes with /Normal: t_r = (1-1)·0.8 + 1·0.5 = 0.5.
 /// The stroke side then composes ON TOP with /Multiply: B(0.5, 0.5) =
-/// 0.25 → t_r = (1-1)·0.5 + 1·0.25 = 0.25 along the stroke geometry.
+/// 0.75 → t_r = (1-1)·0.5 + 1·0.75 = 0.75 along the stroke geometry.
 ///
 /// Probe pin: the centre pixel (interior of the fill, NOT on the
 /// stroke line) has t_r = 0.5 → u8 = 128. The stroke geometry only
@@ -713,7 +718,7 @@ fn round2_p9_stroke_fill_share_one_bm_per_paint_arm() {
         plane[centre], expected,
         "spot mirror dispatches the active /BM /Multiply through the \
          §11.7.4.2 spot dispatch (separable+WP → UseRequested). \
-         Multiply(0.8, 0.5) = 0.4 → u8 = {}. Got {}.",
+         Multiply(0.8, 0.5) = 0.9 → u8 = {}. Got {}.",
         expected, plane[centre]
     );
 }
@@ -854,7 +859,7 @@ fn round2_p11_bm_array_first_recognised_rule_drives_spot_dispatch() {
         plane[centre], expected_after_fix,
         "ISO 32000-1 §11.6.3 + §11.3.5: /BM array picks the first \
          RECOGNISED name. [/UnknownMode /Multiply] → /Multiply. \
-         Multiply(0.8, 0.5) = 0.4 → u8 = {}. Got {}. If still showing \
+         Multiply(0.8, 0.5) = 0.9 → u8 = {}. Got {}. If still showing \
          {}, the parser fell through to arr.first() == UnknownMode and \
          classified as /Normal.",
         expected_after_fix, plane[centre], pre_fix_wrong
