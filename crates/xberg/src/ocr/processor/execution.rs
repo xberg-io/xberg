@@ -3,6 +3,19 @@
 //! This module handles the core OCR execution logic, including image processing,
 //! text extraction, and result formatting.
 
+#[path = "execution/fragmented_tables.rs"]
+mod fragmented_tables;
+
+use fragmented_tables::{
+    FragmentedTablePolicy, apply_fragmented_reconciliation, fragmented_hocr_budget,
+    reconcile_fragmented_hocr_table_rows,
+};
+
+#[cfg(feature = "pdf")]
+use crate::ocr::hocr_parser::parse_hocr_without_proved_table_fragments;
+#[cfg(feature = "pdf")]
+use fragmented_tables::{MAX_FRAGMENTED_HOCR_INPUT_BYTES, MAX_FRAGMENTED_HOCR_WORDS};
+
 #[path = "execution/recognition_orientation.rs"]
 mod recognition_orientation;
 
@@ -30,7 +43,6 @@ use crate::ocr::error::OcrError;
 use crate::ocr::hocr_parser::{
     DictionaryLineFilter, RetainedWordConfidenceStats, parse_hocr_preserving_rejected_table_words,
     parse_hocr_to_internal_document_with_page_offset_and_stats, parse_hocr_without_claimed_table_rows,
-    parse_hocr_without_proved_table_fragments,
 };
 use crate::ocr::preprocessing::preprocess_pix;
 #[cfg(test)]
@@ -57,7 +69,7 @@ use xberg_tesseract::{TessPageSegMode, TessPolyBlockType, TesseractAPI};
 
 use crate::table_core::{
     HocrWord, MIN_TABLE_CANDIDATE_WORDS, cluster_word_indices_into_table_regions, detect_rows,
-    drop_leading_caption_row, find_row_index, hocr_words_are_rtl, median_word_height, merge_disjoint_numeric_columns,
+    drop_leading_caption_row, hocr_words_are_rtl, median_word_height, merge_disjoint_numeric_columns,
 };
 use crate::types::OcrElement;
 
@@ -958,170 +970,12 @@ fn ocr_table_bbox(table: &OcrTable) -> Option<BoundingBox> {
     })
 }
 
-// ~keep This proof is optional. Bound the extra retained input and the row
-// searches even when the configured extraction limits are larger.
-const MAX_FRAGMENTED_HOCR_INPUT_BYTES: usize = 512 * 1024;
-const MAX_FRAGMENTED_HOCR_WORDS: usize = 1024;
-const MAX_FRAGMENTED_HOCR_ALIGNMENTS: usize = 8;
-
-fn fragmented_hocr_budget(hocr: &str, tsv: &str, limits: &SecurityLimits) -> Option<usize> {
-    let bytes = hocr.len().saturating_add(tsv.len());
-    if bytes > MAX_FRAGMENTED_HOCR_INPUT_BYTES.min(limits.max_content_size) {
-        return None;
-    }
-    limits.max_iterations.checked_sub(bytes.saturating_mul(4))
-}
-
-fn prove_fragmented_table_rows<'a>(
-    words: &'a mut Vec<HocrWord>,
-    bbox: BoundingBox,
-    cells: &[Vec<String>],
-    row_threshold: f64,
-    budget: usize,
-    allow_dot_leader: bool,
-) -> Option<Vec<&'a HocrWord>> {
-    if cells.is_empty() || words.len() > MAX_FRAGMENTED_HOCR_WORDS {
-        return None;
-    }
-    words.retain(|word| {
-        word.width > 0
-            && word.height > 0
-            && f64::from(word.left) >= bbox.x0
-            && f64::from(word.top) >= bbox.y0
-            && f64::from(word.left.saturating_add(word.width)) <= bbox.x1
-            && f64::from(word.top.saturating_add(word.height)) <= bbox.y1
-    });
-    // Both row detection and nearest-row assignment can scan every word for
-    // each row. The word cap makes the multiplication safe.
-    let budget = budget.checked_sub(2 * words.len() * words.len())?;
-    let row_positions = detect_rows(words, row_threshold);
-    let alignments = row_positions.len().checked_sub(cells.len())? + 1;
-    if alignments > MAX_FRAGMENTED_HOCR_ALIGNMENTS {
-        return None;
-    }
-    let comparison_bytes = words
-        .iter()
-        .map(|word| word.text.len() + 1)
-        .chain(cells.iter().flatten().map(|cell| cell.len() + 1))
-        .fold(0usize, usize::saturating_add);
-    if comparison_bytes.saturating_mul(alignments) > budget {
-        return None;
-    }
-    let mut rows = vec![Vec::new(); row_positions.len()];
-    for word in words.iter() {
-        rows[find_row_index(&row_positions, word)?].push(word);
-    }
-    for row in &mut rows {
-        sort_ocr_line_word_refs(row);
-    }
-    let matched = unique_table_row_window(&rows, cells, false).or_else(|| {
-        (allow_dot_leader && comparison_bytes.saturating_mul(alignments).saturating_mul(2) <= budget)
-            .then(|| unique_table_row_window(&rows, cells, true))
-            .flatten()
-    })?;
-    Some(matched.iter().flatten().copied().collect())
-}
-
-// ~keep A matching window can omit a caption, but ambiguous matches cannot claim any words.
-fn unique_table_row_window<'a, 'word>(
-    rows: &'a [Vec<&'word HocrWord>],
-    cells: &[Vec<String>],
-    allow_dot_leader: bool,
-) -> Option<&'a [Vec<&'word HocrWord>]> {
-    let mut matches = rows.windows(cells.len()).filter(|window| {
-        window.iter().zip(cells).all(|(row, cells)| {
-            !row.is_empty()
-                && row.windows(2).all(|pair| pair[0].left != pair[1].left)
-                && (row
-                    .iter()
-                    .flat_map(|word| word.text.split_whitespace())
-                    .eq(cells.iter().flat_map(|cell| cell.split_whitespace()))
-                    || allow_dot_leader && row_has_only_extra_dot_leader(row, cells))
-        })
-    });
-    let matched = matches.next()?;
-    matches.next().is_none().then_some(matched)
-}
-
-fn row_has_only_extra_dot_leader(row: &[&HocrWord], cells: &[String]) -> bool {
-    let [label, values @ ..] = cells else {
-        return false;
-    };
-    let label_words = label.split_whitespace();
-    let split = label_words.clone().count();
-    if split == 0
-        || values.len() < 2
-        || row.len() != split + 1 + values.len()
-        || !row[..split].iter().map(|word| word.text.as_str()).eq(label_words)
-        || !row[split + 1..]
-            .iter()
-            .zip(values)
-            .all(|(word, value)| word.text == *value)
-    {
-        return false;
-    }
-    let [left, dots, right] = &row[split - 1..=split + 1] else {
-        return false;
-    };
-    const MIN_DOT_LEADER_LENGTH: usize = 3;
-    dots.text.len() >= MIN_DOT_LEADER_LENGTH
-        && dots.text.bytes().all(|byte| byte == b'.')
-        && dots.width > left.height.max(right.height)
-        && dots.height.saturating_mul(2) <= left.height.min(right.height)
-        && left.left.saturating_add(left.width) < dots.left
-        && dots.left.saturating_add(dots.width) < right.left
-        && dots.top >= left.top.max(right.top)
-        && dots.top.saturating_add(dots.height)
-            <= left
-                .top
-                .saturating_add(left.height)
-                .min(right.top.saturating_add(right.height))
-}
-
-fn reconcile_fragmented_hocr_table_rows(
-    hocr: &str,
-    document: &InternalDocument,
-    tables: &[OcrTable],
-    tsv: &str,
-    config: &TesseractConfig,
-    limits: &SecurityLimits,
-    allow_dot_leader: bool,
-) -> Option<InternalDocument> {
-    let [table] = tables else { return None };
-    let budget = fragmented_hocr_budget(hocr, tsv, limits)?;
-    if table.cells.iter().map(Vec::len).fold(0usize, usize::saturating_add) > limits.max_table_cells {
-        return None;
-    }
-    let bbox = ocr_table_bbox(table)?;
-    if table_retains_region_words(&document.elements, &bbox, &table.cells) {
-        return None;
-    }
-    let mut words = extract_words_from_tsv(tsv, 0.0).ok()?;
-    let proved = prove_fragmented_table_rows(
-        &mut words,
-        bbox,
-        &table.cells,
-        config.table_row_threshold_ratio,
-        budget,
-        allow_dot_leader,
-    )?;
-    let mut reconciled = parse_hocr_without_proved_table_fragments(hocr, config.page_number, proved);
-    let words = |doc: &InternalDocument| {
-        doc.elements
-            .iter()
-            .map(|e| e.text.split_whitespace().count())
-            .sum::<usize>()
-    };
-    let remaining = words(&reconciled);
-    reconciled.ocr_text_claimed_by_tables = remaining == 0;
-    (remaining < words(document)).then_some(reconciled)
-}
-
 fn reconcile_grouped_hocr_table_rows(
     hocr: &str,
     document: &InternalDocument,
     tables: &[OcrTable],
     page_number: u32,
+    ignore_marks: bool,
 ) -> Option<InternalDocument> {
     let [table] = tables else {
         return None;
@@ -1139,6 +993,7 @@ fn reconcile_grouped_hocr_table_rows(
         page_number,
         &bbox,
         &table.cells,
+        ignore_marks,
     ))
 }
 
@@ -1182,6 +1037,10 @@ const CLEAN_PAGE_DARK_PIXEL_COUNT_THRESHOLD: usize = 8;
 const CLEAN_PAGE_TEXT_COMPONENT_MAX_FILL_NUMERATOR: usize = 3;
 const CLEAN_PAGE_TEXT_COMPONENT_MAX_FILL_DENOMINATOR: usize = 4;
 const CLEAN_PAGE_TEXT_COMPONENT_MIN_NARROW_ASPECT_RATIO: usize = 3;
+/// Largest spread between the RGB channels of dark ink that still counts as neutral: black, slate, brown-black. ~keep
+/// Coloured graphics have ink far above it; scan noise on black stays below it. The photo-title check keeps its own
+/// limit: it asks whether a background is near white, not what hue the ink has.
+const INK_NEUTRAL_CHANNEL_SPREAD: u8 = 40;
 /// Maximum value of an 8-bit RGB channel.
 const RGB_CHANNEL_MAX: f64 = u8::MAX as f64;
 /// Number of channels in an RGB pixel.
@@ -1341,6 +1200,8 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
     let mut light_pixels = 0usize;
     let mut foreground_pixels = 0usize;
     let mut foreground_histogram = [0usize; 256];
+    let mut foreground_by_darkest = [0usize; 256];
+    let mut coloured_by_darkest = [0usize; 256];
 
     for pixel in rgb_data.as_chunks::<RGB_CHANNEL_COUNT>().0 {
         let pixel_channel_sum = u16::from(pixel[0]) + u16::from(pixel[1]) + u16::from(pixel[2]);
@@ -1352,6 +1213,10 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
             foreground_channel_sum += u128::from(pixel_channel_sum);
             foreground_pixels += 1;
             foreground_histogram[((pixel_channel_sum + 1) / RGB_CHANNEL_COUNT as u16) as usize] += 1;
+            let darkest = pixel[0].min(pixel[1]).min(pixel[2]);
+            let spread = pixel[0].max(pixel[1]).max(pixel[2]) - darkest;
+            foreground_by_darkest[usize::from(darkest)] += 1;
+            coloured_by_darkest[usize::from(darkest)] += usize::from(spread > INK_NEUTRAL_CHANNEL_SPREAD);
         }
     }
     let pixel_count_f64 = pixel_count as f64;
@@ -1379,6 +1244,10 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
     let Some((lower_mode_max, lower_mode_pixels)) = foreground_lower_mode(&foreground_histogram) else {
         return false;
     };
+    // A dark mean from mostly coloured ink is a graphic, not dense text; it keeps its raw pixels. ~keep
+    if !bright_mean && ink_is_coloured(&foreground_by_darkest, &coloured_by_darkest, lower_mode_max) {
+        return false;
+    }
     lower_mode_pixels >= CLEAN_PAGE_DARK_PIXEL_COUNT_THRESHOLD
         && lower_mode_pixels as f64 / pixel_count_f64 >= CLEAN_PAGE_DARK_PIXEL_FRACTION_THRESHOLD
         && lower_mode_has_text_structure(
@@ -1389,6 +1258,20 @@ fn should_apply_default_preprocessing(rgb_data: &[u8], width: u32, height: u32) 
             lower_mode_pixels,
             (!bright_mean).then_some(foreground_pixels),
         )
+}
+
+/// More than half of the ink is coloured. Ink is every foreground pixel whose darkest channel is in the lower mode.
+/// Pure blue text has a channel mean of 85, so the lower mode can leave it out, but its darkest channel is 0, as for
+/// black ink. Pale shading keeps a high darkest channel and stays out of the ink. ~keep
+fn ink_is_coloured(
+    foreground_by_darkest: &[usize; 256],
+    coloured_by_darkest: &[usize; 256],
+    lower_mode_max: u8,
+) -> bool {
+    let ink_bins = ..=usize::from(lower_mode_max);
+    let ink: usize = foreground_by_darkest[ink_bins].iter().sum();
+    let coloured_ink: usize = coloured_by_darkest[ink_bins].iter().sum();
+    coloured_ink * 2 > ink
 }
 
 #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
@@ -2986,15 +2869,26 @@ pub(super) fn perform_ocr(
                             document,
                             &tables,
                             tsv,
-                            config,
+                            FragmentedTablePolicy {
+                                config,
+                                allow_dot_leader: policy == ImageOcrPolicy::StandaloneDotLeaderRows,
+                            },
                             &security_limits,
-                            policy == ImageOcrPolicy::StandaloneDotLeaderRows,
                         )
                     })
-                    .or_else(|| reconcile_grouped_hocr_table_rows(hocr, document, &tables, config.page_number))
+                    .or_else(|| {
+                        reconcile_grouped_hocr_table_rows(
+                            hocr,
+                            document,
+                            &tables,
+                            config.page_number,
+                            policy == ImageOcrPolicy::StandaloneDotLeaderRows,
+                        )
+                        .map(|document| (document, Vec::new()))
+                    })
             });
-        if let Some(reconciled) = reconciled {
-            *document = reconciled;
+        if let Some((reconciled, bounds)) = reconciled {
+            apply_fragmented_reconciliation(document, &mut tables, reconciled, bounds);
         } else {
             filter_elements_covered_by_tables(document, &tables);
         }
@@ -3329,6 +3223,28 @@ mod tests {
     use crate::table_core::cluster_words_into_table_regions;
     use serial_test::serial;
     use tempfile::tempdir;
+
+    /// The hOCR page and the TSV table of a list of words (text, left, top, width, height, TSV line), each
+    /// word on its own hOCR line, as a sparse-text read gives.
+    pub(in crate::ocr::processor::execution) fn word_table_markup<'a>(
+        words: impl IntoIterator<Item = (&'a str, u32, u32, u32, u32, usize)>,
+    ) -> (String, String) {
+        let mut hocr = r#"<div class="ocr_page" title="ppageno 0">"#.to_owned();
+        let mut tsv = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
+            .to_owned();
+        for (text, left, top, width, height, line) in words {
+            let (right, bottom) = (left + width, top + height);
+            hocr.push_str(r#"<p class="ocr_par"><span class="ocr_line">"#);
+            hocr.push_str(&format!(
+                r#"<span class="ocrx_word" title="bbox {left} {top} {right} {bottom}">{text}</span></span></p>"#
+            ));
+            tsv.push_str(&format!(
+                "5\t1\t1\t1\t{line}\t1\t{left}\t{top}\t{width}\t{height}\t90\t{text}\n"
+            ));
+        }
+        hocr.push_str("</div>");
+        (hocr, tsv)
+    }
 
     #[test]
     fn ocr_line_sort_uses_each_lines_direction_and_preserves_identifiers() {
@@ -4035,199 +3951,6 @@ mod tests {
         let ratio = invalid_word_ratio_from(&words, is_valid).expect("enough candidates to score");
 
         assert_eq!(ratio, 0.0, "the failed lookup must not count as invalid");
-    }
-
-    fn positioned_dot_leader_row() -> [HocrWord; 5] {
-        [
-            word_at(10, 30, 22, 10, "Signal"),
-            word_at(35, 30, 24, 10, "timing"),
-            word_at(65, 37, 29, 2, "........"),
-            word_at(101, 30, 11, 10, "-64"),
-            word_at(130, 30, 26, 10, "143.92"),
-        ]
-    }
-
-    #[test]
-    fn dot_leader_requires_literal_anchors_and_isolated_geometry() {
-        let cells = ["Signal timing", "-64", "143.92"].map(str::to_owned);
-        let accepts = |words: &[HocrWord; 5]| row_has_only_extra_dot_leader(&words.each_ref(), &cells);
-        let words = positioned_dot_leader_row();
-        assert!(accepts(&words));
-        for (index, token) in [(0, "Signals"), (2, ".."), (2, "...7"), (3, "64"), (4, "14392")] {
-            let mut changed = words.clone();
-            changed[index].text = token.to_owned();
-            assert!(!accepts(&changed), "must preserve source token {token:?}");
-        }
-        for (left, top, width) in [(58, 37, 29), (65, 41, 29), (95, 37, 29), (65, 37, 8)] {
-            let mut changed = words.clone();
-            changed[2].left = left;
-            changed[2].top = top;
-            changed[2].width = width;
-            assert!(!accepts(&changed), "must reject leader box {left},{top},{width}");
-        }
-    }
-
-    #[test]
-    fn dot_leader_row_ownership_does_not_depend_on_label_letters_or_value_digits() {
-        let accepts = |label: [&str; 2], values: [&str; 2]| {
-            let cells = [
-                format!("{} {}", label[0], label[1]),
-                values[0].to_owned(),
-                values[1].to_owned(),
-            ];
-            let mut words = positioned_dot_leader_row();
-            words[0].text = label[0].to_owned();
-            words[1].text = label[1].to_owned();
-            words[3].text = values[0].to_owned();
-            words[4].text = values[1].to_owned();
-            let accepted = row_has_only_extra_dot_leader(&words.each_ref(), &cells);
-            for (index, token) in [(0, "Other"), (3, "x"), (4, "3.2")] {
-                let mut changed = words.clone();
-                changed[index].text = token.to_owned();
-                assert!(
-                    !row_has_only_extra_dot_leader(&changed.each_ref(), &cells),
-                    "source token changed to {token:?}"
-                );
-            }
-            let mut overlapping = words.clone();
-            overlapping[2].left = 95;
-            assert!(!row_has_only_extra_dot_leader(&overlapping.each_ref(), &cells));
-            accepted
-        };
-        assert!(accepts(["Signal", "timing"], ["-64", "143.92"]));
-        assert!(accepts(["Item", "4(b)"], ["$1,010", "3.2%"]));
-        assert!(accepts(["Total:", "net"], ["alpha", "beta"]));
-    }
-
-    #[test]
-    fn dot_leader_box_is_at_most_half_the_text_height() {
-        let cells = ["Signal timing", "-64", "143.92"].map(str::to_owned);
-        let mut words = positioned_dot_leader_row();
-        words[2].top = 30;
-        words[2].height = 5;
-        assert!(
-            row_has_only_extra_dot_leader(&words.each_ref(), &cells),
-            "half of 10 is the limit"
-        );
-        words[2].height = 6;
-        assert!(
-            !row_has_only_extra_dot_leader(&words.each_ref(), &cells),
-            "a box taller than half the text inside the shared band is a stroke, not leader dots"
-        );
-    }
-
-    #[test]
-    fn dot_leader_proof_refuses_to_choose_one_of_two_identical_physical_rows() {
-        let first = positioned_dot_leader_row();
-        let mut second = positioned_dot_leader_row();
-        for word in &mut second {
-            word.top += 25;
-        }
-        let rows = [first.iter().collect::<Vec<_>>(), second.iter().collect()];
-        let cells = vec![["Signal timing", "-64", "143.92"].map(str::to_owned).to_vec()];
-        assert!(unique_table_row_window(&rows[..1], &cells, false).is_none());
-        assert!(unique_table_row_window(&rows[..1], &cells, true).is_some());
-        assert!(unique_table_row_window(&rows, &cells, true).is_none());
-    }
-
-    #[test]
-    fn repeated_rows_beyond_alignment_budget_leave_hocr_unclaimed() {
-        let mut words: Vec<_> = (0..64)
-            .map(|row| word_at(10, row * 20, 12, 10, if row == 63 { "end" } else { "same" }))
-            .collect();
-        let mut cells = vec![vec!["same".to_string()]; 31];
-        cells.push(vec!["end".to_string()]);
-        let bbox = BoundingBox {
-            x0: 0.0,
-            y0: 0.0,
-            x1: 25.0,
-            y1: 1280.0,
-        };
-        assert!(prove_fragmented_table_rows(&mut words, bbox, &cells, 0.5, usize::MAX, false).is_none());
-    }
-
-    #[test]
-    fn split_hocr_table_rows_are_claimed_without_removing_heading() {
-        let fragments = [
-            ("Inventory", 10, 10),
-            ("Apples", 10, 40),
-            ("20", 70, 40),
-            ("Pears", 10, 70),
-            ("30", 70, 70),
-        ];
-        let mut hocr = r#"<div class="ocr_page" title="ppageno 0">"#.to_owned();
-        let mut tsv = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
-            .to_owned();
-        for (text, left, top) in fragments {
-            hocr.push_str(&format!(
-                r#"<p class="ocr_par"><span class="ocr_line"><span class="ocrx_word" title="bbox {left} {top} {} {}">{text}</span></span></p>"#,
-                left + 15,
-                top + 10,
-            ));
-            tsv.push_str(&format!("5\t1\t1\t1\t1\t1\t{left}\t{top}\t15\t10\t90\t{text}\n"));
-        }
-        hocr.push_str("</div>");
-        let document = crate::ocr::hocr_parser::parse_hocr_to_internal_document(&hocr);
-        let mut table = OcrTable {
-            cells: vec![vec!["Apples".into(), "20".into()], vec!["Pears".into(), "30".into()]],
-            markdown: String::new(),
-            page_number: 1,
-            bounding_box: Some(OcrTableBoundingBox {
-                left: 10,
-                top: 10,
-                right: 85,
-                bottom: 80,
-            }),
-        };
-        let config = TesseractConfig::default();
-        let limits = SecurityLimits::default();
-        let reconciled = reconcile_fragmented_hocr_table_rows(
-            &hocr,
-            &document,
-            std::slice::from_ref(&table),
-            &tsv,
-            &config,
-            &limits,
-            false,
-        )
-        .expect("the exact visual rows are split into hOCR fragments");
-        assert_eq!(reconciled.elements.len(), 1);
-        assert_eq!(reconciled.elements[0].text, "Inventory");
-        assert_eq!(reconciled.elements[0].bbox, document.elements[0].bbox);
-        assert!(!reconciled.ocr_text_claimed_by_tables);
-
-        for limits in [
-            SecurityLimits {
-                max_content_size: hocr.len(),
-                ..limits.clone()
-            },
-            SecurityLimits {
-                max_iterations: (hocr.len() + tsv.len()) * 4,
-                ..limits.clone()
-            },
-            SecurityLimits {
-                max_table_cells: 3,
-                ..limits.clone()
-            },
-        ] {
-            assert!(
-                reconcile_fragmented_hocr_table_rows(
-                    &hocr,
-                    &document,
-                    std::slice::from_ref(&table),
-                    &tsv,
-                    &config,
-                    &limits,
-                    false,
-                )
-                .is_none()
-            );
-        }
-
-        table.cells[1][1].clear();
-        assert!(
-            reconcile_fragmented_hocr_table_rows(&hocr, &document, &[table], &tsv, &config, &limits, false).is_none()
-        );
     }
 
     fn word_at(left: u32, top: u32, width: u32, height: u32, text: &str) -> crate::table_core::HocrWord {
@@ -5535,6 +5258,47 @@ mod tests {
     }
 
     #[test]
+    fn a_symbol_dot_leader_row_is_claimed_only_under_the_standalone_leader_policy() {
+        let dir = tempdir().unwrap();
+        let cache = OcrCache::new(Some(dir.path().to_path_buf())).unwrap();
+        let pool = TesseractApiPool::new();
+        let image = include_bytes!("../../../tests/fixtures/ocr_dot_leader_2503/symbol-rows.png");
+        let config = TesseractConfig {
+            psm: crate::ocr::types::PSMMode::SingleBlock as u8,
+            use_cache: false,
+            ..Default::default()
+        };
+        let row_in_document = |policy| {
+            let result = process_image_with_cache_and_policy(
+                image,
+                &config,
+                &cache,
+                &pool,
+                Some(crate::core::config::OutputFormat::Plain),
+                policy,
+            )
+            .unwrap();
+            assert_eq!(result.tables.len(), 1, "the table holds the rows");
+            result
+                .internal_document
+                .as_ref()
+                .unwrap()
+                .elements
+                .iter()
+                .flat_map(|element| element.text.lines())
+                .any(|line| line == "Field lights .......... $640 2.7% -9")
+        };
+        assert!(
+            row_in_document(ImageOcrPolicy::Default),
+            "control: a default read leaves the symbol row beside the table"
+        );
+        assert!(
+            !row_in_document(ImageOcrPolicy::StandaloneDotLeaderRows),
+            "a standalone leader scan claims the symbol row for the table"
+        );
+    }
+
+    #[test]
     fn test_preprocess_pix_produces_grayscale_with_valid_resolution() {
         let width = 32;
         let height = 32;
@@ -6298,6 +6062,511 @@ mod tests {
         assert!(
             should_apply_default_preprocessing(raster.as_raw(), raster.width(), raster.height()),
             "the dark text components qualify despite their contribution to the page mean"
+        );
+    }
+
+    const RING_GRID_SIDE: usize = 400;
+    const RING_GRID_PITCH: usize = 40;
+    const RING_OUTER: usize = 20;
+    const RING_HOLE: std::ops::Range<usize> = 3..17;
+
+    /// Paints one closed ring with a one-pixel outline: an open glyph-like shape on a light page. ~keep
+    fn draw_ring(data: &mut [u8], stride: usize, origin: (usize, usize), ink: [u8; 3], outline: [u8; 3]) {
+        for dy in 0..=RING_OUTER + 1 {
+            for dx in 0..=RING_OUTER + 1 {
+                let on_outline = dx == 0 || dy == 0 || dx == RING_OUTER + 1 || dy == RING_OUTER + 1;
+                let (ring_x, ring_y) = (dx.wrapping_sub(1), dy.wrapping_sub(1));
+                let in_hole = RING_HOLE.contains(&ring_x) && RING_HOLE.contains(&ring_y);
+                let color = match (on_outline, in_hole) {
+                    (true, _) => outline,
+                    (false, true) => continue,
+                    (false, false) => ink,
+                };
+                let offset = ((origin.1 + dy) * stride + origin.0 + dx) * RGB_CHANNEL_COUNT;
+                data[offset..offset + RGB_CHANNEL_COUNT].copy_from_slice(&color);
+            }
+        }
+    }
+
+    /// A square page with `rings_per_side` squared rings; ring `index` is painted with `ink_of(index)`. ~keep
+    fn ring_grid_page(rings_per_side: usize, ink_of: impl Fn(usize) -> [u8; 3], outline: [u8; 3]) -> Vec<u8> {
+        let mut data = vec![255u8; RING_GRID_SIDE * RING_GRID_SIDE * RGB_CHANNEL_COUNT];
+        for index in 0..rings_per_side * rings_per_side {
+            let origin = (
+                (index % rings_per_side) * RING_GRID_PITCH + 8,
+                (index / rings_per_side) * RING_GRID_PITCH + 8,
+            );
+            draw_ring(&mut data, RING_GRID_SIDE, origin, ink_of(index), outline);
+        }
+        data
+    }
+
+    fn ring_grid_raster(ink: [u8; 3], outline: [u8; 3]) -> Vec<u8> {
+        ring_grid_page(RING_GRID_SIDE / RING_GRID_PITCH, |_| ink, outline)
+    }
+
+    fn mean_luminance(rgb: &[u8]) -> f64 {
+        rgb.iter().map(|&channel| f64::from(channel)).sum::<f64>() / (rgb.len() as f64 * RGB_CHANNEL_MAX)
+    }
+
+    #[test]
+    fn dense_neutral_ink_with_a_dark_mean_selects_default_preprocessing() {
+        let neutral = ring_grid_raster([0; 3], [128; 3]);
+        let side = RING_GRID_SIDE as u32;
+        assert!(
+            mean_luminance(&neutral) < CLEAN_PAGE_MEAN_LUMINANCE_THRESHOLD,
+            "the rings must lower the mean"
+        );
+        assert!(should_apply_default_preprocessing(&neutral, side, side));
+    }
+
+    #[test]
+    fn dense_coloured_graphic_with_a_dark_mean_keeps_raw_pixels() {
+        let coloured = ring_grid_raster([0, 0, 160], [96, 96, 208]);
+        let side = RING_GRID_SIDE as u32;
+        assert!(
+            mean_luminance(&coloured) < CLEAN_PAGE_MEAN_LUMINANCE_THRESHOLD,
+            "the rings must lower the mean"
+        );
+        assert!(!should_apply_default_preprocessing(&coloured, side, side));
+    }
+
+    #[test]
+    fn dense_coloured_graphic_with_a_dark_mean_reaches_ocr_unprocessed() {
+        let coloured = ring_grid_raster([0, 0, 160], [96, 96, 208]);
+        let side = RING_GRID_SIDE as u32;
+
+        let prepared = prepare_ocr_image(coloured.clone(), side, side, None, None, false, None, false);
+
+        assert!(
+            !prepared.apply_pix_preprocessing,
+            "the coloured graphic must keep its raw pixels"
+        );
+        assert_eq!(prepared.data, coloured);
+    }
+
+    #[test]
+    fn dense_neutral_ink_with_a_dark_mean_reaches_ocr_preprocessed() {
+        let neutral = ring_grid_raster([0; 3], [128; 3]);
+        let side = RING_GRID_SIDE as u32;
+
+        let prepared = prepare_ocr_image(neutral, side, side, None, None, false, None, false);
+
+        assert!(
+            prepared.apply_pix_preprocessing,
+            "dense neutral ink must take the default preprocessing"
+        );
+    }
+
+    const COLOURED_INK: [u8; 3] = [0, 0, 160];
+    const GRID_OUTLINE: [u8; 3] = [128; 3];
+
+    fn assert_dark_mean(rgb: &[u8]) {
+        assert!(
+            mean_luminance(rgb) < CLEAN_PAGE_MEAN_LUMINANCE_THRESHOLD,
+            "the rings must lower the mean"
+        );
+    }
+
+    #[test]
+    fn ink_up_to_the_neutral_spread_is_preprocessed_and_one_step_beyond_keeps_raw_pixels() {
+        let side = RING_GRID_SIDE as u32;
+        assert_eq!(
+            INK_NEUTRAL_CHANNEL_SPREAD, 40,
+            "the boundary below is written for a spread of 40"
+        );
+        for spread in [0, 8, 9, 20, 40] {
+            let ink = ring_grid_raster([0, 0, spread], GRID_OUTLINE);
+            assert_dark_mean(&ink);
+            assert!(
+                should_apply_default_preprocessing(&ink, side, side),
+                "ink at spread {spread} is neutral and must be preprocessed"
+            );
+        }
+        for spread in [41, 60] {
+            let ink = ring_grid_raster([0, 0, spread], GRID_OUTLINE);
+            assert_dark_mean(&ink);
+            assert!(
+                !should_apply_default_preprocessing(&ink, side, side),
+                "ink at spread {spread} is coloured and must keep its raw pixels"
+            );
+        }
+    }
+
+    /// Rings in a 10 by 10 grid; the first `coloured_rings` are coloured ink and the rest are neutral. ~keep
+    fn grid_with_coloured_rings(coloured_rings: usize) -> Vec<u8> {
+        let ink_of = |index: usize| if index < coloured_rings { COLOURED_INK } else { [0; 3] };
+        ring_grid_page(RING_GRID_SIDE / RING_GRID_PITCH, ink_of, GRID_OUTLINE)
+    }
+
+    #[test]
+    fn ink_that_is_exactly_half_coloured_is_preprocessed_and_one_ring_more_keeps_raw_pixels() {
+        let side = RING_GRID_SIDE as u32;
+        let rings = (RING_GRID_SIDE / RING_GRID_PITCH).pow(2);
+        let half = grid_with_coloured_rings(rings / 2);
+        let more_than_half = grid_with_coloured_rings(rings / 2 + 1);
+        assert_dark_mean(&half);
+        assert!(should_apply_default_preprocessing(&half, side, side));
+        assert!(!should_apply_default_preprocessing(&more_than_half, side, side));
+    }
+
+    const PANEL_PAGE_WIDTH: usize = 600;
+    const PANEL_PAGE_HEIGHT: usize = 400;
+
+    /// 80 rings on the left, 23 040 ink pixels in `ring_ink`, and on the right a solid panel of the same
+    /// pixel count in `panel`. Foreground is split exactly in half between rings and panel. ~keep
+    fn rings_beside_panel(ring_ink: [u8; 3], panel: [u8; 3]) -> Vec<u8> {
+        let mut data = vec![255u8; PANEL_PAGE_WIDTH * PANEL_PAGE_HEIGHT * RGB_CHANNEL_COUNT];
+        for index in 0..80 {
+            let origin = ((index % 10) * RING_GRID_PITCH + 8, (index / 10) * RING_GRID_PITCH + 8);
+            draw_ring(&mut data, PANEL_PAGE_WIDTH, origin, ring_ink, ring_ink);
+        }
+        for y in 20..164 {
+            for x in 420..580 {
+                let offset = (y * PANEL_PAGE_WIDTH + x) * RGB_CHANNEL_COUNT;
+                data[offset..offset + RGB_CHANNEL_COUNT].copy_from_slice(&panel);
+            }
+        }
+        data
+    }
+
+    #[test]
+    fn coloured_graphic_beside_an_equal_neutral_panel_keeps_raw_pixels() {
+        let (width, height) = (PANEL_PAGE_WIDTH as u32, PANEL_PAGE_HEIGHT as u32);
+        let page = rings_beside_panel(COLOURED_INK, [150; 3]);
+        assert_dark_mean(&page);
+        assert!(
+            !should_apply_default_preprocessing(&page, width, height),
+            "the ink is coloured; the neutral panel must not outvote it"
+        );
+        let prepared = prepare_ocr_image(page.clone(), width, height, None, None, false, None, false);
+        assert!(!prepared.apply_pix_preprocessing);
+        assert_eq!(prepared.data, page);
+    }
+
+    /// The shape of a debugger screenshot: pale blue paper, black, dark blue and green text in the lower mode, and
+    /// pure blue text whose channel mean of 85 puts it above the lower mode. Ring counts per ink, in this order. ~keep
+    const SCREENSHOT_INKS: [([u8; 3], usize); 5] = [
+        ([0; 3], 34),
+        ([0, 0, 132], 15),
+        ([0, 129, 0], 5),
+        ([0, 0, 255], 38),
+        ([129; 3], 8),
+    ];
+
+    fn screenshot_shaped_page() -> Vec<u8> {
+        let mut data = [224, 224, 255].repeat(RING_GRID_SIDE * RING_GRID_SIDE);
+        let inks = SCREENSHOT_INKS
+            .iter()
+            .flat_map(|&(ink, rings)| std::iter::repeat_n(ink, rings));
+        for (index, ink) in inks.enumerate() {
+            let origin = ((index % 10) * RING_GRID_PITCH + 8, (index / 10) * RING_GRID_PITCH + 8);
+            draw_ring(&mut data, RING_GRID_SIDE, origin, ink, ink);
+        }
+        data
+    }
+
+    #[test]
+    fn coloured_text_on_pale_paper_keeps_raw_pixels_when_pure_blue_falls_outside_the_lower_mode() {
+        let side = RING_GRID_SIDE as u32;
+        let page = screenshot_shaped_page();
+        assert_dark_mean(&page);
+        let bin = |pixel: &[u8; 3]| usize::from((pixel.iter().map(|&c| u16::from(c)).sum::<u16>() + 1) / 3);
+        let mut histogram = [0usize; 256];
+        for pixel in page.as_chunks::<RGB_CHANNEL_COUNT>().0 {
+            if pixel.iter().map(|&c| u16::from(c)).sum::<u16>() < CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD {
+                histogram[bin(pixel)] += 1;
+            }
+        }
+        let (lower_mode_max, _) = foreground_lower_mode(&histogram).expect("the page has a lower mode");
+        let lower_mode = ..=usize::from(lower_mode_max);
+        assert!(
+            lower_mode.contains(&bin(&[0, 0, 132])) && !lower_mode.contains(&bin(&[0, 0, 255])),
+            "the lower mode must hold the dark blue ink and leave out the pure blue: {lower_mode_max}"
+        );
+        assert!(
+            !should_apply_default_preprocessing(&page, side, side),
+            "most of the ink is coloured once the pure blue text counts as ink"
+        );
+        let prepared = prepare_ocr_image(page.clone(), side, side, None, None, false, None, false);
+        assert!(!prepared.apply_pix_preprocessing);
+        assert_eq!(prepared.data, page);
+    }
+
+    /// 100 rings in the left 400 columns, the first `coloured_rings` in coloured ink and the rest black, and a
+    /// pale blue panel of 90 by 160 pixels on the right. ~keep
+    fn mostly_black_rings_beside_a_pale_panel(coloured_rings: usize) -> Vec<u8> {
+        let mut data = vec![255u8; PANEL_PAGE_WIDTH * PANEL_PAGE_HEIGHT * RGB_CHANNEL_COUNT];
+        for index in 0..100 {
+            let origin = ((index % 10) * RING_GRID_PITCH + 8, (index / 10) * RING_GRID_PITCH + 8);
+            let ink = if index < coloured_rings { COLOURED_INK } else { [0; 3] };
+            draw_ring(&mut data, PANEL_PAGE_WIDTH, origin, ink, ink);
+        }
+        for y in 20..180 {
+            for x in 420..510 {
+                let offset = (y * PANEL_PAGE_WIDTH + x) * RGB_CHANNEL_COUNT;
+                data[offset..offset + RGB_CHANNEL_COUNT].copy_from_slice(&[200, 220, 255]);
+            }
+        }
+        data
+    }
+
+    #[test]
+    fn mostly_black_ink_beside_a_pale_panel_is_preprocessed_though_most_page_pixels_are_coloured() {
+        let (width, height) = (PANEL_PAGE_WIDTH as u32, PANEL_PAGE_HEIGHT as u32);
+        let page = mostly_black_rings_beside_a_pale_panel(34);
+        assert_dark_mean(&page);
+        let share = coloured_foreground_share(&page);
+        assert!(
+            share > 0.5,
+            "the pale panel and the coloured rings must be most of the page pixels: {share}"
+        );
+        assert!(
+            should_apply_default_preprocessing(&page, width, height),
+            "two thirds of the ink is black; the pale panel is not ink"
+        );
+        let prepared = prepare_ocr_image(page, width, height, None, None, false, None, false);
+        assert!(prepared.apply_pix_preprocessing);
+    }
+
+    #[test]
+    fn coloured_graphic_with_a_bright_mean_is_preprocessed_as_before_the_dark_mean_lane() {
+        let side = RING_GRID_SIDE as u32;
+        let sparse = ring_grid_page(5, |_| COLOURED_INK, [96, 96, 208]);
+        assert!(
+            mean_luminance(&sparse) >= CLEAN_PAGE_MEAN_LUMINANCE_THRESHOLD,
+            "fewer rings leave the mean bright"
+        );
+        assert!(
+            should_apply_default_preprocessing(&sparse, side, side),
+            "a bright mean with strong contrast decides before the ink is measured"
+        );
+
+        // Light grey shading dominates the foreground, so the contrast is weak and the ink is measured. ~keep
+        let mut shaded = vec![255u8; RING_GRID_SIDE * RING_GRID_SIDE * RGB_CHANNEL_COUNT];
+        for index in 0..10 {
+            draw_ring(
+                &mut shaded,
+                RING_GRID_SIDE,
+                (index * RING_GRID_PITCH + 8, 8),
+                COLOURED_INK,
+                COLOURED_INK,
+            );
+        }
+        for y in 100..260 {
+            for x in 100..250 {
+                let offset = (y * RING_GRID_SIDE + x) * RGB_CHANNEL_COUNT;
+                shaded[offset..offset + RGB_CHANNEL_COUNT].copy_from_slice(&[225; 3]);
+            }
+        }
+        assert!(mean_luminance(&shaded) >= CLEAN_PAGE_MEAN_LUMINANCE_THRESHOLD);
+        assert!(
+            foreground_luminance(&shaded) > 1.0 - CLEAN_PAGE_MIN_FOREGROUND_CONTRAST,
+            "the shading must make the contrast weak"
+        );
+        assert!(
+            should_apply_default_preprocessing(&shaded, side, side),
+            "on a bright mean the coloured ink does not decide, as before the dark-mean lane"
+        );
+    }
+
+    /// Mean luminance of the pixels that are not light, which the contrast check compares with the paper.
+    fn foreground_luminance(rgb: &[u8]) -> f64 {
+        let foreground: Vec<u16> = rgb
+            .as_chunks::<RGB_CHANNEL_COUNT>()
+            .0
+            .iter()
+            .map(|pixel| pixel.iter().map(|&c| u16::from(c)).sum::<u16>())
+            .filter(|&sum| sum < CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD)
+            .collect();
+        let channels = RGB_CHANNEL_COUNT as f64 * RGB_CHANNEL_MAX;
+        foreground.iter().map(|&sum| f64::from(sum)).sum::<f64>() / (foreground.len() as f64 * channels)
+    }
+
+    /// Share of the foreground pixels that are coloured, counted over the whole page and not over the ink.
+    fn coloured_foreground_share(rgb: &[u8]) -> f64 {
+        let foreground: Vec<&[u8; 3]> = rgb
+            .as_chunks::<RGB_CHANNEL_COUNT>()
+            .0
+            .iter()
+            .filter(|pixel| pixel.iter().map(|&c| u16::from(c)).sum::<u16>() < CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD)
+            .collect();
+        let coloured = foreground
+            .iter()
+            .filter(|pixel| {
+                pixel[0].max(pixel[1]).max(pixel[2]) - pixel[0].min(pixel[1]).min(pixel[2]) > INK_NEUTRAL_CHANNEL_SPREAD
+            })
+            .count();
+        coloured as f64 / foreground.len() as f64
+    }
+
+    const PALE_TINT: [u16; 3] = [200, 220, 255];
+
+    /// Share of the pixels that are not light, which is what the 80 percent light-pixel gate reads.
+    fn foreground_share(rgb: &[u8]) -> f64 {
+        let foreground = rgb
+            .as_chunks::<RGB_CHANNEL_COUNT>()
+            .0
+            .iter()
+            .filter(|pixel| pixel.iter().map(|&c| u16::from(c)).sum::<u16>() < CLEAN_PAGE_LIGHT_CHANNEL_SUM_THRESHOLD)
+            .count();
+        foreground as f64 / (rgb.len() / RGB_CHANNEL_COUNT) as f64
+    }
+
+    /// The repeated-line raster with a pale blue tint over the top `band` rows of every line, like shaded
+    /// form fields. The glyphs keep their pixels; only the white paper takes the tint. ~keep
+    fn tinted_field_lines(band: u32) -> Option<image::RgbImage> {
+        let mut raster = repeated_line_raster(REPEATED_LINE_COUNT, false)?;
+        for (y, row) in raster.enumerate_rows_mut() {
+            if y % REPEATED_LINE_PITCH >= band {
+                continue;
+            }
+            for (_, _, pixel) in row {
+                for (channel, tint) in pixel.0.iter_mut().zip(PALE_TINT) {
+                    *channel = (u16::from(*channel) * tint / 255) as u8;
+                }
+            }
+        }
+        Some(raster)
+    }
+
+    /// The widest tint that still leaves the page 80 percent light, so the page reaches the ink check. ~keep
+    fn pale_tinted_field_lines() -> Option<(image::RgbImage, f64)> {
+        let plain = foreground_share(repeated_line_raster(REPEATED_LINE_COUNT, false)?.as_raw());
+        (1..REPEATED_LINE_PITCH).rev().find_map(|band| {
+            let raster = tinted_field_lines(band)?;
+            let share = foreground_share(raster.as_raw());
+            (share <= 1.0 - CLEAN_PAGE_LIGHT_PIXEL_FRACTION_THRESHOLD - 0.01).then_some((raster, share - plain))
+        })
+    }
+
+    const CORPUS_TEXT_LINE: &str =
+        "needs test_documents/images/test_hello_world.png: run `python3 test_documents/scripts/fetch_corpus.py`";
+
+    #[test]
+    fn dense_text_with_pale_tinted_fields_is_preprocessed_though_most_page_pixels_are_coloured() {
+        let (mut raster, tint_share) = pale_tinted_field_lines().expect(CORPUS_TEXT_LINE);
+        assert!(
+            tint_share > 0.02,
+            "the tint must cover a real share of the page: {tint_share}"
+        );
+        // Recolour the glyphs of the first lines until the tint and the coloured glyphs are most of the page
+        // pixels, so that only a count over the ink keeps the page preprocessed. ~keep
+        let mut coloured_lines = 0;
+        while coloured_foreground_share(raster.as_raw()) <= 0.5 {
+            assert!(
+                coloured_lines < REPEATED_LINE_COUNT / 2,
+                "the tint must outvote the black glyphs"
+            );
+            let top = REPEATED_LINE_PITCH * u32::try_from(coloured_lines).expect("small test raster");
+            for y in top..top + REPEATED_LINE_PITCH {
+                for x in 0..raster.width() {
+                    let pixel = raster.get_pixel_mut(x, y);
+                    if pixel.0.iter().all(|&channel| channel < 128) {
+                        pixel.0 = COLOURED_INK;
+                    }
+                }
+            }
+            coloured_lines += 1;
+        }
+        assert_dark_mean(raster.as_raw());
+        assert!(
+            should_apply_default_preprocessing(raster.as_raw(), raster.width(), raster.height()),
+            "{coloured_lines} of {REPEATED_LINE_COUNT} lines are coloured; the pale tint is not ink"
+        );
+    }
+
+    #[tokio::test]
+    async fn dense_black_text_with_pale_tinted_fields_keeps_every_word() {
+        let (raster, _) = pale_tinted_field_lines().expect(CORPUS_TEXT_LINE);
+        let result = extract_repeated_line_raster(&raster, crate::core::config::OutputFormat::Plain, None).await;
+        assert_repeated_line_text(&result, REPEATED_LINE_COUNT, "11");
+        assert!(result.metadata.image_preprocessing.is_some());
+    }
+
+    /// The repeated-line raster with the black glyph pixels recoloured to `ink`; the white paper is unchanged. ~keep
+    fn inked_lines(ink: [u8; 3]) -> Option<image::RgbImage> {
+        let mut raster = repeated_line_raster(REPEATED_LINE_COUNT, false)?;
+        for pixel in raster.pixels_mut() {
+            let paper = u16::from(pixel.0[0]);
+            for (channel, ink) in pixel.0.iter_mut().zip(ink) {
+                *channel = ((u16::from(ink) * (255 - paper) + 255 * paper) / 255) as u8;
+            }
+        }
+        Some(raster)
+    }
+
+    #[test]
+    fn dense_slate_and_tinted_black_text_with_a_dark_mean_is_preprocessed() {
+        for ink in [[20, 28, 40], [0, 0, 40]] {
+            let raster = inked_lines(ink).expect(CORPUS_TEXT_LINE);
+            assert_dark_mean(raster.as_raw());
+            assert!(
+                should_apply_default_preprocessing(raster.as_raw(), raster.width(), raster.height()),
+                "ink {ink:?} is neutral and must be preprocessed"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn dense_slate_and_tinted_black_text_reads_every_line() {
+        for ink in [[20, 28, 40], [0, 0, 40]] {
+            let raster = inked_lines(ink).expect(CORPUS_TEXT_LINE);
+            assert_dark_mean(raster.as_raw());
+            let result = extract_repeated_line_raster(&raster, crate::core::config::OutputFormat::Plain, None).await;
+            assert_repeated_line_text(&result, REPEATED_LINE_COUNT, "11");
+            assert!(
+                result.metadata.image_preprocessing.is_some(),
+                "ink {ink:?} must take the default preprocessing"
+            );
+        }
+    }
+
+    /// Ink of each line of a debugger listing: black, dark blue and green in the lower mode, pure blue and grey above
+    /// it, as in the screenshot-shaped page. ~keep
+    const LISTING_INKS: [[u8; 3]; 12] = [
+        [0; 3],
+        [0, 0, 255],
+        [0, 0, 132],
+        [0; 3],
+        [0, 0, 255],
+        [0, 129, 0],
+        [0; 3],
+        [129; 3],
+        [0, 0, 132],
+        [0; 3],
+        [0, 0, 255],
+        [0; 3],
+    ];
+
+    /// The repeated-line text at half size as a 1-bit screenshot: every glyph pixel takes the ink of its line, with
+    /// no anti-aliasing, and the paper is pale blue. At full size Tesseract drops letters from the raw pixels. ~keep
+    fn coloured_listing() -> Option<image::RgbImage> {
+        let full = repeated_line_raster(LISTING_INKS.len(), false)?;
+        let mut raster = image::imageops::resize(
+            &full,
+            full.width() / 2,
+            full.height() / 2,
+            image::imageops::FilterType::Lanczos3,
+        );
+        for (y, row) in raster.enumerate_rows_mut() {
+            let ink = LISTING_INKS[(y / (REPEATED_LINE_PITCH / 2)) as usize];
+            for (_, _, pixel) in row {
+                pixel.0 = if pixel.0[0] < 128 { ink } else { [224, 224, 255] };
+            }
+        }
+        Some(raster)
+    }
+
+    #[tokio::test]
+    async fn coloured_screenshot_listing_reads_every_line_from_its_raw_pixels() {
+        let raster = coloured_listing().expect(CORPUS_TEXT_LINE);
+        assert_dark_mean(raster.as_raw());
+        let result = extract_repeated_line_raster(&raster, crate::core::config::OutputFormat::Plain, None).await;
+        assert_repeated_line_text(&result, LISTING_INKS.len(), "11");
+        assert!(
+            result.metadata.image_preprocessing.is_none(),
+            "the coloured screenshot must reach OCR with its raw pixels"
         );
     }
 

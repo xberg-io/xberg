@@ -33,7 +33,11 @@ async fn read(pdf: &[u8], config: &ExtractionConfig) -> xberg::ExtractedDocument
 }
 
 async fn assert_read(pdf: &[u8], force_ocr: bool, expected_ocr: bool) {
-    let document = read(pdf, &config(force_ocr)).await;
+    assert_read_with_config(pdf, &config(force_ocr), expected_ocr).await;
+}
+
+async fn assert_read_with_config(pdf: &[u8], config: &ExtractionConfig, expected_ocr: bool) {
+    let document = read(pdf, config).await;
     let expected = SOURCE.split_whitespace().collect::<Vec<_>>();
     assert_eq!(expected.len(), 81);
     let actual = document.content.split_whitespace().collect::<Vec<_>>();
@@ -142,4 +146,90 @@ async fn tight_ccitt_work_limit_keeps_the_partial_native_text() {
         flate.content.split_whitespace().collect::<Vec<_>>(),
         SOURCE.split_whitespace().collect::<Vec<_>>()
     );
+}
+
+#[cfg(feature = "bundle-tessdata-eng")]
+fn encode_up_rows(pixels: &[u8], width: usize) -> Vec<u8> {
+    use std::io::Write;
+
+    let mut tagged = Vec::with_capacity(pixels.len() + pixels.len() / width);
+    for (y, row) in pixels.chunks_exact(width).enumerate() {
+        tagged.push(2);
+        tagged.extend(
+            row.iter()
+                .enumerate()
+                .map(|(x, sample)| sample.wrapping_sub(if y == 0 { 0 } else { pixels[(y - 1) * width + x] })),
+        );
+    }
+    let params = xberg_native_pdf::decoders::DecodeParams {
+        predictor: 12,
+        columns: width,
+        colors: 1,
+        bits_per_component: 8,
+    };
+    assert_eq!(
+        xberg_native_pdf::decoders::decode_predictor(&tagged, &params).unwrap(),
+        pixels
+    );
+    let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(&tagged).unwrap();
+    encoder.finish().unwrap()
+}
+
+#[cfg(feature = "bundle-tessdata-eng")]
+fn predictor_image(pdf: &[u8], singleton: bool) -> Vec<u8> {
+    use lopdf::{Object, dictionary};
+
+    let mut document = lopdf::Document::load_mem(pdf).unwrap();
+    let mut changed = 0;
+    for image in document
+        .objects
+        .values_mut()
+        .filter_map(|object| object.as_stream_mut().ok())
+    {
+        if image.dict.get(b"Subtype").and_then(Object::as_name).ok() != Some(b"Image") {
+            continue;
+        }
+        assert_eq!(image.dict.get(b"Filter").unwrap().as_name().unwrap(), b"FlateDecode");
+        let width = usize::try_from(image.dict.get(b"Width").unwrap().as_i64().unwrap()).unwrap();
+        let height = usize::try_from(image.dict.get(b"Height").unwrap().as_i64().unwrap()).unwrap();
+        let pixels = image.decompressed_content().unwrap();
+        assert_eq!(pixels.len(), width * height);
+        image.set_content(encode_up_rows(&pixels, width));
+        image.dict.set(
+            "DecodeParms",
+            dictionary! {"Predictor" => 12, "Columns" => width as i64,
+            "Colors" => 1, "BitsPerComponent" => 8},
+        );
+        if singleton {
+            image.dict.set("Filter", vec![Object::Name(b"FlateDecode".to_vec())]);
+        }
+        changed += 1;
+    }
+    assert_eq!(changed, 1);
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+#[cfg(feature = "bundle-tessdata-eng")]
+#[tokio::test]
+async fn singleton_flate_predictor_recovers_partial_layer_and_keeps_complete_layer_native() {
+    let tessdata = tempfile::tempdir().unwrap();
+    let english = xberg_tesseract::bundled_eng_traineddata().expect("compiled English fixture, no download");
+    std::fs::write(tessdata.path().join("eng.traineddata"), english).unwrap();
+    let mut config = config(false);
+    config.ocr.as_mut().unwrap().tessdata_path = Some(tessdata.path().to_path_buf());
+    assert_fixture(
+        FLATE_PARTIAL,
+        "cc42e3932f1d65eac547c7279fe1ea2fbb1aeaee93e93cc06eb2bc3a41fdb13b",
+    );
+    assert_fixture(
+        FLATE_COMPLETE,
+        "66df812b7beed4db08e830d0f5540b5b806de0fc6382fdc49e0f2e09d57160a5",
+    );
+    for singleton in [false, true] {
+        assert_read_with_config(&predictor_image(FLATE_PARTIAL, singleton), &config, true).await;
+        assert_read_with_config(&predictor_image(FLATE_COMPLETE, singleton), &config, false).await;
+    }
 }

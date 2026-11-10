@@ -362,7 +362,7 @@ fn resolved_page_box(doc: &PdfDocument, object: &Object) -> Option<Rect> {
     finite_box(bounds).then_some(bounds)
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum StreamFilters {
     Raw,
     Flate,
@@ -370,12 +370,17 @@ pub(super) enum StreamFilters {
 }
 
 pub(super) fn stream_filters(filter: Option<&Object>) -> Option<StreamFilters> {
-    match filter {
-        None => Some(StreamFilters::Raw),
-        Some(filter) if filter.as_name() == Some("FlateDecode") => Some(StreamFilters::Flate),
-        Some(filter) if filter.as_array().is_some_and(|filters| {
-            matches!(filters.as_slice(), [a, b] if a.as_name() == Some("ASCII85Decode") && b.as_name() == Some("FlateDecode"))
-        }) => Some(StreamFilters::Ascii85Flate),
+    let filters = match filter {
+        None => return Some(StreamFilters::Raw),
+        Some(filter @ Object::Name(_)) => std::slice::from_ref(filter),
+        Some(Object::Array(filters)) => filters.as_slice(),
+        _ => return None,
+    };
+    match filters {
+        [filter] if filter.as_name() == Some("FlateDecode") => Some(StreamFilters::Flate),
+        [a, b] if a.as_name() == Some("ASCII85Decode") && b.as_name() == Some("FlateDecode") => {
+            Some(StreamFilters::Ascii85Flate)
+        }
         _ => None,
     }
 }

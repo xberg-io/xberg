@@ -1200,18 +1200,6 @@ impl PdfDocument {
         // re-interpreted as Latin-1. Re-decode those runs in place. ~keep
         let cleaned_text = Self::repair_utf8_mojibake(&cleaned_text);
 
-        let cleaned_text = if options.expand_ligatures {
-            cleaned_text
-                .replace('\u{FB00}', "ff")
-                .replace('\u{FB01}', "fi")
-                .replace('\u{FB02}', "fl")
-                .replace('\u{FB03}', "ffi")
-                .replace('\u{FB04}', "ffl")
-                .replace(['\u{FB05}', '\u{FB06}'], "st")
-        } else {
-            cleaned_text
-        };
-
         // Drop stray spaces a producer inserted between a CJK ideograph and an
         // embedded ASCII number (e.g. "公元前 1000 年" → "公元前1000年"). ~keep
         let cleaned_text = crate::extractors::text::strip_cjk_digit_boundary_spaces(&cleaned_text);

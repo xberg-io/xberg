@@ -3,7 +3,7 @@ use super::common::*;
 
 /// Helper: build a minimal PDF whose single character maps to U+FB01 (LATIN SMALL
 /// LIGATURE FI) via a ToUnicode CMap. This exercises the path where pdfium hands us
-/// U+FB01 from the font's ToUnicode map and we must NOT expand it to "fi".
+/// U+FB01 from the font's ToUnicode map; the glyph stage returns the letters "fi" (GH#2322).
 pub(super) fn build_ligature_fi_pdf() -> Vec<u8> {
     let cmap = "/CIDInit /ProcSet findresource begin\n\
                     12 dict begin\n\
@@ -196,6 +196,7 @@ pub(super) fn corridor_span(text: &str, x: f32, y: f32, w: f32) -> crate::layout
         rotation_degrees: 0.0,
         wmode: 0,
         rtl_draw_logical: false,
+        ligature_glyph: false,
         mirrored: false,
         page_rotation_applied: 0,
     }

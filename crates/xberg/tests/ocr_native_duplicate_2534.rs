@@ -278,6 +278,32 @@ const NON_TEXT_BLOCK_PAGES: [u32; 2] = [4420, 4422];
 const NATIVE_COMPANION_PAGE: u32 = 4410;
 
 #[tokio::test]
+async fn automatic_ocr_preserves_native_intel_table_page_1306_once() {
+    assert!(
+        !helpers::skip_if_missing(SDM),
+        "the corpus manual {SDM} is required for the public duplicate regression"
+    );
+    let tessdata = tempfile::tempdir().unwrap();
+    let config = pinned_english_config(tessdata.path());
+    let bytes = pages_excerpt(SDM, &[NATIVE_COMPANION_PAGE, 1306]);
+    let (native, _) = pages_of_excerpt(
+        &bytes,
+        &ExtractionConfig {
+            disable_ocr: true,
+            ..config.clone()
+        },
+        2,
+    )
+    .await;
+    let (automatic, _) = pages_of_excerpt(&bytes, &config, 2).await;
+    assert!(native[1].split_whitespace().count() > 100);
+    assert_eq!(
+        automatic[1], native[1],
+        "automatic OCR must preserve the native page 1306 text"
+    );
+}
+
+#[tokio::test]
 async fn automatic_ocr_returns_a_page_once_when_its_underscores_hang_below_their_lines() {
     assert!(
         !helpers::skip_if_missing(SDM),

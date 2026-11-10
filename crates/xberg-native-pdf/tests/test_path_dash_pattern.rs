@@ -309,14 +309,14 @@ fn indirect_extgstate_state_and_dash_objects_preserve_the_pattern() {
 }
 
 #[test]
-fn negative_stroke_opacity_clamps_to_zero() {
+fn negative_stroke_opacity_draws_no_stroke() {
     let paths = paths_with_extgstate(b"/GS gs 0 700 m 300 700 l S", "/GS << /CA -1 >>");
     assert_eq!(paths.len(), 1);
     assert_eq!(paths[0].stroke_color, None);
 }
 
 #[test]
-fn above_one_stroke_opacity_clamps_to_one_after_a_clear_state() {
+fn above_one_stroke_opacity_draws_the_stroke_after_a_clear_state() {
     let paths = paths_with_extgstate(
         b"/Clear gs /High gs 0 700 m 300 700 l S",
         "/Clear << /CA 0 >> /High << /CA 2 >>",
@@ -335,7 +335,7 @@ mod object_loads;
 mod retries;
 
 #[test]
-fn finite_negative_ca_outside_f32_range_clamps_to_zero() {
+fn finite_negative_ca_outside_f32_range_draws_no_stroke() {
     let paths = paths_with_extgstate(
         b"/GS gs 0 700 m 300 700 l S",
         "/GS << /CA -9999999999999999999999999999999999999999.0 >>",
@@ -345,7 +345,7 @@ fn finite_negative_ca_outside_f32_range_clamps_to_zero() {
 }
 
 #[test]
-fn finite_positive_ca_outside_f32_range_clamps_to_one() {
+fn finite_positive_ca_outside_f32_range_draws_the_stroke() {
     let paths = paths_with_extgstate(
         b"/Clear gs /GS gs 0 700 m 300 700 l S",
         "/Clear << /CA 0 >> /GS << /CA 9999999999999999999999999999999999999999.0 >>",

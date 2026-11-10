@@ -11,3 +11,7 @@ mod color_spaces;
 mod columns_and_ordering;
 mod config_and_merging;
 mod extraction_and_rotation;
+mod leading_offset;
+mod ligature_decode;
+mod ligature_glyph;
+mod pen_continuation;

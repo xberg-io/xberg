@@ -36,12 +36,23 @@ fn embedded_dejavu(base_font: &str, font: &[u8], glyph: u8) -> Vec<Vec<u8>> {
 
 /// A one-page PDF whose content uses font `/F0`, the first of `font_objects`.
 /// The font objects are numbered from 5.
-fn page_pdf((width, height): (u32, u32), content: &[u8], font_objects: Vec<Vec<u8>>) -> PdfDocument {
+fn page_pdf(size: (u32, u32), content: &[u8], font_objects: Vec<Vec<u8>>) -> PdfDocument {
+    page_pdf_with_resources(size, content, font_objects, "")
+}
+
+/// [`page_pdf`] with `extra_resources` added to the page's resource dictionary.
+fn page_pdf_with_resources(
+    (width, height): (u32, u32),
+    content: &[u8],
+    font_objects: Vec<Vec<u8>>,
+    extra_resources: &str,
+) -> PdfDocument {
     let mut objects = vec![
         b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
         format!(
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Contents 4 0 R /Resources << /Font << /F0 5 0 R >> >> >>"
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Contents 4 0 R \
+             /Resources << /Font << /F0 5 0 R >> {extra_resources} >> >>"
         )
         .into_bytes(),
         pdf_stream("", content),
@@ -524,4 +535,178 @@ fn provided_font_is_used_before_the_bundled_regular_face() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(stdout.contains("1 passed"), "{stdout}");
+}
+
+/// A form XObject (object 8) that shows `text` in a font named only by the form's own
+/// resource dictionary, which is an indirect object (object 9).
+fn form_with_indirect_font_resources(text: &str) -> RenderedImage {
+    let mut objects = embedded_dejavu("DejaVuSans", crate::fonts::bundled::DEJAVU_SANS, b'0');
+    objects[0] = b"<< /Type /Font /Subtype /TrueType /BaseFont /DejaVuSans /Encoding /WinAnsiEncoding \
+        /FirstChar 48 /LastChar 56 /Widths [750 750 750 750 750 750 750 750 750] /FontDescriptor 6 0 R >>"
+        .to_vec();
+    objects.push(pdf_stream(
+        "/Type /XObject /Subtype /Form /BBox [0 0 60 20] /Resources 9 0 R ",
+        format!("BT /F1 10 Tf 0 4 Td ({text}) Tj ET").as_bytes(),
+    ));
+    objects.push(b"<< /Font << /F1 5 0 R >> >>".to_vec());
+    let doc = page_pdf_with_resources(
+        (100, 40),
+        b"q 1 0 0 1 20 10 cm /Fm0 Do Q",
+        objects,
+        "/XObject << /Fm0 8 0 R >>",
+    );
+    render_without_system_fonts(&doc)
+}
+
+fn separate_ink_columns(image: &RenderedImage) -> usize {
+    let width = image.width as usize;
+    let has_ink_in_column = |x: usize| {
+        (0..image.height as usize).any(|y| has_ink(image.data[(y * width + x) * 4..][..4].try_into().unwrap()))
+    };
+    let columns: Vec<bool> = (0..width).map(has_ink_in_column).collect();
+    columns.windows(2).filter(|pair| !pair[0] && pair[1]).count()
+}
+
+/// GH#2685: a page number drawn by a form whose font resources are an indirect object lost every glyph
+/// after the first, because the renderer never loaded that font and spaced the glyphs by raw font units.
+#[test]
+fn a_form_with_indirect_font_resources_draws_every_glyph_of_a_page_number() {
+    let one = separate_ink_columns(&form_with_indirect_font_resources("3"));
+    let three = separate_ink_columns(&form_with_indirect_font_resources("308"));
+    assert_eq!(one, 1, "control: a one-digit page number draws one glyph");
+    assert_eq!(three, 3, "all three digits of the page number are drawn");
+}
+
+/// A separation space whose full tint is red.
+const RED_SPOT: &str =
+    "[/Separation /Spot /DeviceRGB << /FunctionType 2 /Domain [0 1] /C0 [1 1 1] /C1 [1 0 0] /N 1 >>]";
+
+fn filled_centre_pixel(image: &RenderedImage) -> [u8; 4] {
+    let at = ((image.height as usize / 2) * image.width as usize + image.width as usize / 2) * 4;
+    image.data[at..][..4].try_into().unwrap()
+}
+
+/// A page that fills a rectangle with the full tint of the colour space `/Spot`. The space is named by the
+/// resources of the page when `through_form` is false, and by those of a form (object 7, indirect) otherwise.
+fn spot_fill(through_form: bool) -> RenderedImage {
+    let font = b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_vec();
+    let doc = if through_form {
+        let form = pdf_stream(
+            "/Type /XObject /Subtype /Form /BBox [0 0 60 20] /Resources 7 0 R ",
+            b"/Spot cs 1 scn 0 0 60 20 re f",
+        );
+        let resources = format!("<< /ColorSpace << /Spot {RED_SPOT} >> >>").into_bytes();
+        page_pdf_with_resources(
+            (100, 40),
+            b"q 1 0 0 1 20 10 cm /Fm0 Do Q",
+            vec![font, form, resources],
+            "/XObject << /Fm0 6 0 R >>",
+        )
+    } else {
+        page_pdf_with_resources(
+            (100, 40),
+            b"/Spot cs 1 scn 20 10 60 20 re f",
+            vec![font],
+            &format!("/ColorSpace << /Spot {RED_SPOT} >>"),
+        )
+    };
+    render_without_system_fonts(&doc)
+}
+
+/// A form whose colour spaces are an indirect object paints with them, as a page whose resources name the
+/// same space does.
+#[test]
+fn a_form_with_indirect_colour_space_resources_paints_with_them() {
+    let control = filled_centre_pixel(&spot_fill(false));
+    let through_form = filled_centre_pixel(&spot_fill(true));
+    let is_red = |pixel: [u8; 4]| pixel[0] > 200 && pixel[1] < 80 && pixel[2] < 80;
+    assert!(
+        is_red(control),
+        "control: the page's own colour space paints red, got {control:?}"
+    );
+    assert!(
+        is_red(through_form),
+        "the form's indirect colour space paints red, got {through_form:?}"
+    );
+}
+
+#[derive(Default)]
+struct CapturedWarnings(std::sync::Arc<std::sync::Mutex<Vec<std::collections::BTreeMap<String, String>>>>);
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for CapturedWarnings {
+    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        struct Fields(std::collections::BTreeMap<String, String>);
+        impl tracing::field::Visit for Fields {
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                self.0.insert(field.name().to_string(), format!("{value:?}"));
+            }
+            fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+                self.0.insert(field.name().to_string(), value.to_string());
+            }
+        }
+        if *event.metadata().level() == tracing::Level::WARN {
+            let mut fields = Fields(Default::default());
+            event.record(&mut fields);
+            self.0.lock().unwrap().push(fields.0);
+        }
+    }
+}
+
+/// A form whose `/Resources` reference cannot load still renders, and the renderer logs a warning with the
+/// object number. A reference to a missing object is a null (ISO 32000-1 7.3.10) and loads without an error,
+/// so the reference here names generation 1 of object 5, which the file holds only as generation 0.
+#[test]
+fn a_form_whose_resources_reference_cannot_load_logs_its_object_number() {
+    use tracing_subscriber::layer::SubscriberExt as _;
+    let form = pdf_stream(
+        "/Type /XObject /Subtype /Form /BBox [0 0 60 20] /Resources 5 1 R ",
+        b"0 0 60 20 re f",
+    );
+    let doc = page_pdf_with_resources(
+        (100, 40),
+        b"q 1 0 0 1 20 10 cm /Fm0 Do Q",
+        vec![b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_vec(), form],
+        "/XObject << /Fm0 6 0 R >>",
+    );
+    let captured = CapturedWarnings::default();
+    let warnings = captured.0.clone();
+    let subscriber = tracing_subscriber::registry().with(captured);
+    let image = tracing::subscriber::with_default(subscriber, || render_without_system_fonts(&doc));
+    assert_eq!((image.width, image.height), (100, 40), "the page still renders");
+    let warnings = warnings.lock().unwrap();
+    let ours: Vec<_> = warnings
+        .iter()
+        .filter(|fields| fields.get("operation").map(String::as_str) == Some("load_render_resources"))
+        .collect();
+    assert_eq!(ours.len(), 1, "one warning for the one unreadable object: {warnings:?}");
+    assert_eq!(ours[0].get("object_number").map(String::as_str), Some("5"));
+    assert_eq!(ours[0].get("error_code").map(String::as_str), Some("parse_error"));
+}
+
+/// GH#2709: a run drawn without font info read its shaped advances, which are in font units, as thousandths
+/// of an em. Every glyph after the first landed far off the page. The run names `/F9`, which the page's
+/// resources do not hold.
+#[test]
+fn a_run_without_font_info_keeps_its_glyphs_at_their_shaped_spacing() {
+    let doc = page_pdf(
+        (100, 40),
+        b"BT /F9 12 Tf 10 14 Td (308) Tj ET",
+        vec![b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_vec()],
+    );
+    let image = render_without_system_fonts(&doc);
+    let width = image.width as usize;
+    let ink_columns: Vec<usize> = (0..width)
+        .filter(|&x| {
+            (0..image.height as usize).any(|y| has_ink(image.data[(y * width + x) * 4..][..4].try_into().unwrap()))
+        })
+        .collect();
+    let (first, last) = (
+        *ink_columns.first().expect("the run has ink"),
+        *ink_columns.last().unwrap(),
+    );
+    assert_eq!(separate_ink_columns(&image), 3, "all three glyphs are drawn");
+    assert!(
+        first >= 10 && last < 10 + 3 * 12,
+        "ink spans {first}..={last}, within three em of the origin"
+    );
 }
