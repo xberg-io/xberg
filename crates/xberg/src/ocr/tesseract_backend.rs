@@ -1002,8 +1002,11 @@ const WORD_ITERATOR_SKIPPED_COUNT_METADATA_KEY: &str = "word_iterator_skipped_co
 /// never ran. Mirrors the literal written in `ocr::processor::execution::perform_ocr`.
 const AUTO_ROTATE_UNAVAILABLE_METADATA_KEY: &str = "auto_rotate_unavailable";
 
-/// Metadata key carrying the exact number of hOCR lines removed by dictionary filtering. ~keep
+/// Metadata key carrying the exact number of hOCR lines the dictionary filter judged noise. ~keep
 const DICTIONARY_FILTERED_LINE_COUNT_METADATA_KEY: &str = "dictionary_filtered_line_count";
+
+/// Metadata key carrying how many of those judged lines stayed because they hold a numeral. ~keep
+const DICTIONARY_KEPT_NUMERAL_LINE_COUNT_METADATA_KEY: &str = "dictionary_kept_numeral_line_count";
 
 /// Metadata key `perform_ocr` sets when it rebuilds `content` with inline
 /// table markdown at each table's original vertical position (see
@@ -1089,17 +1092,26 @@ fn warnings_from_ocr_metadata(
         );
     }
 
-    if let Some(filtered_lines) = metadata
-        .get(DICTIONARY_FILTERED_LINE_COUNT_METADATA_KEY)
-        .and_then(serde_json::Value::as_u64)
-        && filtered_lines > 0
-    {
+    let count = |key| metadata.get(key).and_then(serde_json::Value::as_u64).unwrap_or(0);
+    let kept_lines = count(DICTIONARY_KEPT_NUMERAL_LINE_COUNT_METADATA_KEY);
+    let removed_lines = count(DICTIONARY_FILTERED_LINE_COUNT_METADATA_KEY).saturating_sub(kept_lines);
+    if removed_lines > 0 {
         crate::core::diagnostics::push_warning(
             &mut warnings,
             "tesseract",
             format!(
-                "Tesseract removed {filtered_lines} OCR line(s) because their dictionary-checkable words were mostly \
+                "Tesseract removed {removed_lines} OCR line(s) because their dictionary-checkable words were mostly \
                  not real words"
+            ),
+        );
+    }
+    if kept_lines > 0 {
+        crate::core::diagnostics::push_warning(
+            &mut warnings,
+            "tesseract",
+            format!(
+                "Tesseract kept {kept_lines} OCR line(s) whose dictionary-checkable words were mostly not real words, \
+                 because they hold numbers"
             ),
         );
     }
@@ -1165,6 +1177,7 @@ fn strip_ocr_scratch_metadata_keys(metadata: &mut std::collections::HashMap<Stri
     metadata.remove(WORD_ITERATOR_SKIPPED_COUNT_METADATA_KEY);
     metadata.remove(AUTO_ROTATE_UNAVAILABLE_METADATA_KEY);
     metadata.remove(DICTIONARY_FILTERED_LINE_COUNT_METADATA_KEY);
+    metadata.remove(DICTIONARY_KEPT_NUMERAL_LINE_COUNT_METADATA_KEY);
 }
 
 fn compact_cjk_horizontal_spacing(text: &str) -> String {

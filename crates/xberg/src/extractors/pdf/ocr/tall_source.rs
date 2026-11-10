@@ -199,6 +199,7 @@ fn apply_recovery(original: &mut ExtractedDocument, recovered: TextAccumulator, 
         "p10_word_conf",
         "word_iterator_skipped_count",
         "dictionary_filtered_line_count",
+        "dictionary_kept_numeral_line_count",
         "non_text_block_word_count",
     ] {
         additional.remove(key);
