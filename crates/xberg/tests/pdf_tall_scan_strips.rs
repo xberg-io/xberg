@@ -595,13 +595,18 @@ fn a_layout_request_whose_models_are_unavailable_still_recovers_the_tall_scan() 
             ])
             .args(["--test-threads=1", "--nocapture"])
             .env(CHILD, "1")
+            .env_remove("HUGGINGFACE_HUB_CACHE")
+            .env("HF_HOME", empty_cache.path())
             .env("HF_HUB_CACHE", empty_cache.path())
             .env("HF_HUB_OFFLINE", "1")
             .output()
             .expect("run the child test");
         let report = String::from_utf8_lossy(&output.stdout).into_owned() + &String::from_utf8_lossy(&output.stderr);
         assert!(output.status.success(), "{report}");
-        assert!(report.contains("1 passed"), "the child test did not run: {report}");
+        assert!(
+            report.contains("test result: ok. 1 passed; 0 failed; 0 ignored;"),
+            "the child test did not run: {report}"
+        );
         return;
     }
     let document = extract(TALL, &configured(serde_json::json!({"layout": {}})));
@@ -615,4 +620,27 @@ fn a_layout_request_whose_models_are_unavailable_still_recovers_the_tall_scan() 
     );
     assert_image_text(&document, true);
     assert_eq!(not_used_warnings(&document), Vec::<&str>::new());
+}
+
+/// The render-failure fallback has no layout detections in scope, so a layout request alone keeps it
+/// from replacing the refusal with a source-image read.
+#[cfg(feature = "layout-detection")]
+#[test]
+fn a_layout_request_keeps_the_gray_jpeg_render_refusal() {
+    let config = configured(serde_json::json!({"layout": {}}));
+    let document = extract(TALL_JPEG, &config);
+    assert!(!strip_warning(&document));
+    assert!(
+        words(&document.content).len() < words(ORACLE).len() / 2,
+        "{:?}",
+        document.content.chars().take(80).collect::<String>()
+    );
+    assert!(
+        document
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "layout" && warning.message.contains("image working budget")),
+        "{:?}",
+        document.processing_warnings
+    );
 }

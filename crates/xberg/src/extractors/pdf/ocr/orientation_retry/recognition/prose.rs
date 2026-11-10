@@ -83,7 +83,8 @@ fn line_lengths(paragraph: &str, keys: &[Option<usize>]) -> Option<Vec<usize>> {
 /// - The median line thickness must reach a page-relative floor, so uniformly tiny boxes (dust, grain) fail.
 /// - A box thinner than a third of the median is a mark (`-`, `.`, `•`); a few are tolerated, a share is not.
 /// - Most boxes must be at least as long as they are thick, as words are and isolated strokes (`l I |`, or a
-///   run of them such as `Il`) are not.
+///   run of them such as `Il`) are not. A region of mostly `ill` or `I'll` words could read as strokes; that
+///   risk is accepted.
 /// - Most tokens must carry a letter, so a grid of digits or marks is not read as prose.
 ///
 /// A region whose majority is a large heading font sets the median and thins the body words, so it is refused.

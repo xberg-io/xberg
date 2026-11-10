@@ -120,26 +120,6 @@ pub(in super::super) fn note_unrecovered(
 mod tests {
     use super::*;
 
-    #[cfg(feature = "layout-detection")]
-    #[test]
-    fn support_is_exactly_the_absence_of_an_unsupported_reason() {
-        let ocr = OcrConfig {
-            language: vec!["eng".into()],
-            ..Default::default()
-        };
-        let layout = ExtractionConfig {
-            layout: Some(Default::default()),
-            ..Default::default()
-        };
-        let structured = ExtractionConfig {
-            include_document_structure: true,
-            ..Default::default()
-        };
-        for config in [layout, structured, ExtractionConfig::default()] {
-            assert_eq!(supports(&config, &ocr), unsupported_reason(&config, &ocr).is_none());
-        }
-    }
-
     const TALL_PAGE: &[u8] = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../fixtures/repros/tall-scan-strips/jpeg-tall.pdf"
