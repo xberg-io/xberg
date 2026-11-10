@@ -2476,6 +2476,81 @@ mod tests {
         assert_eq!(job_store.active_count(), 0);
     }
 
+    /// Dropping a task while blocking extraction is held must signal the job's token and
+    /// only then show the job as `Failed` with its slot free. An observer thread reads the
+    /// store in a tight loop and checks the token the moment it sees `Failed`.
+    #[cfg(feature = "api")]
+    #[test]
+    fn test_dropped_task_cancels_token_before_job_fails() {
+        use crate::api::types::JobState;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::time::{Duration, Instant};
+
+        for run in 0..100 {
+            let job_store = std::sync::Arc::new(crate::api::jobs::JobStore::new());
+            let job_id = job_store.create_job().expect("slot available");
+            let token = job_store.cancellation_token(&job_id).expect("token registered on create");
+            let guard = JobAbortGuard {
+                store: std::sync::Arc::clone(&job_store),
+                job_id: job_id.clone(),
+            };
+
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .build()
+                .expect("runtime builds");
+            runtime.spawn(async move {
+                let _guard = guard;
+                std::future::pending::<()>().await;
+            });
+            runtime.block_on(tokio::task::yield_now());
+
+            // Blocking work that only stops when its token fires; it outlives the task.
+            let work_token = token.clone();
+            let work_started = std::sync::Arc::new(AtomicBool::new(false));
+            let work_started_flag = std::sync::Arc::clone(&work_started);
+            let work = std::thread::spawn(move || {
+                work_started_flag.store(true, Ordering::SeqCst);
+                let deadline = Instant::now() + Duration::from_secs(5);
+                while !work_token.is_cancelled() {
+                    if Instant::now() > deadline {
+                        return false;
+                    }
+                    std::thread::yield_now();
+                }
+                true
+            });
+            while !work_started.load(Ordering::SeqCst) {
+                std::thread::yield_now();
+            }
+
+            let observer_store = std::sync::Arc::clone(&job_store);
+            let observer_id = job_id.clone();
+            let observer_token = token.clone();
+            let observer = std::thread::spawn(move || {
+                let deadline = Instant::now() + Duration::from_secs(5);
+                loop {
+                    if observer_store.get(&observer_id).is_some_and(|s| s.state == JobState::Failed) {
+                        return Some(observer_token.is_cancelled());
+                    }
+                    if Instant::now() > deadline {
+                        return None;
+                    }
+                }
+            });
+
+            drop(runtime);
+
+            assert!(work.join().unwrap(), "run {run}: blocking work never saw its token fire");
+            assert_eq!(
+                observer.join().unwrap(),
+                Some(true),
+                "run {run}: the job showed Failed before its token was cancelled"
+            );
+            assert_eq!(job_store.get(&job_id).unwrap().state, JobState::Failed);
+            assert_eq!(job_store.active_count(), 0, "run {run}: the slot was not released");
+        }
+    }
+
     /// A task dropped before its first poll (runtime shutdown right after the
     /// submission) must still release the job's slot, which is why the guard is
     /// built before the future is spawned.
