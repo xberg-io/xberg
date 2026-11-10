@@ -362,7 +362,7 @@ fn resolved_page_box(doc: &PdfDocument, object: &Object) -> Option<Rect> {
     finite_box(bounds).then_some(bounds)
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum StreamFilters {
     Raw,
     Flate,

@@ -915,11 +915,9 @@ fn should_preserve_raw_and_ascii85_flate_stream_decoding_and_reject_other_chains
         ]),
         Object::Array(vec![Object::Null]),
     ];
-    let accepted: Vec<_> = unsupported
-        .iter()
-        .filter(|filter| stream_filters(Some(filter)).is_some())
-        .collect();
-    assert!(accepted.is_empty(), "unsupported filters accepted: {accepted:?}");
+    for filter in unsupported {
+        assert_eq!(stream_filters(Some(&filter)), None, "{filter:?}");
+    }
 }
 
 #[test]
@@ -942,3 +940,5 @@ fn should_decode_scalar_and_singleton_flate_streams_to_the_same_bytes() {
         );
     }
 }
+
+mod predictor;
