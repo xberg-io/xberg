@@ -2454,13 +2454,21 @@ fn whole_document_ocr_hints(
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-use unreadable_script::{dropped_script_warnings, every_page_dropped_script};
+use unreadable_script::{any_page_dropped_script, dropped_script_warnings, every_page_dropped_script};
 
 #[cfg(all(
     any(feature = "ocr", feature = "ocr-pipeline"),
     not(all(feature = "ocr", not(target_arch = "wasm32")))
 ))]
 fn every_page_dropped_script(_: &[u32], _: &str, _: Option<&[crate::types::PageBoundary]>, _: &[String]) -> bool {
+    false
+}
+
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    not(all(feature = "ocr", not(target_arch = "wasm32")))
+))]
+fn any_page_dropped_script(_: &[u32], _: &str, _: Option<&[crate::types::PageBoundary]>, _: &[String]) -> bool {
     false
 }
 
@@ -2905,6 +2913,44 @@ impl PdfExtractor {
             }
         }
 
+        // The result of a targeted per-page run, shared by the `RunFallbackOnPages` arm and the
+        // whole-document arm's retry of the pages whose native script the whole read dropped. ~keep
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        macro_rules! apply_targeted_mixed_run {
+            ($mixed_run:expr) => {{
+                let mixed_run = $mixed_run;
+                #[cfg(feature = "formula-recognition")]
+                {
+                    mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
+                }
+                let (
+                    mixed,
+                    results_map,
+                    mixed_structured_pages,
+                    mixed_llm_usage,
+                    mixed_rstrs,
+                    mixed_formulas,
+                    mixed_preprocessing,
+                    mixed_ocr_confidence,
+                    mixed_warnings,
+                    mixed_page_failures,
+                ) = mixed_run.output;
+                let extraction_method = extraction_method_after_mixed_ocr(&results_map);
+                ocr_llm_usage = mixed_llm_usage;
+                ocr_results_map = Some(results_map);
+                structured_ocr_pages = Some(mixed_structured_pages);
+                ocr_page_rasters = mixed_rstrs;
+                if !mixed_formulas.is_empty() {
+                    ocr_formulas = mixed_formulas;
+                }
+                ocr_preprocessing_by_page.extend(mixed_preprocessing);
+                ocr_confidence_by_page.extend(mixed_ocr_confidence);
+                ocr_page_failures.extend(mixed_page_failures);
+                ocr_fallback_warnings.extend(mixed_warnings);
+                (mixed, extraction_method)
+            }};
+        }
+
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         let (mut text, extraction_method) = if config.effective_disable_ocr() {
             (native_text, ExtractionMethod::Native)
@@ -3270,7 +3316,7 @@ impl PdfExtractor {
                     // silently suppress page OCR on scanned PDFs, leaving `pages[].content`
                     // empty (#1576). `RunFallbackOnPages` below has never read this field;
                     // this now matches it. ~keep
-                    match run_ocr_with_layout_pages(
+                    let whole_read = run_ocr_with_layout_pages(
                         content,
                         config,
                         path,
@@ -3285,123 +3331,183 @@ impl PdfExtractor {
                         #[cfg(feature = "layout-detection")]
                         markdown_layout_acceleration_override.take(),
                     )
-                    .await
-                    {
-                        Ok((
-                            ocr_text,
-                            ocr_tbls,
-                            ocr_elems,
-                            ocr_doc,
-                            llm_usage,
-                            ocr_pts,
-                            ocr_rstrs,
-                            formulas,
-                            preprocessing,
-                            page_ocr_confidence,
-                            gate_audit,
-                            layout_warning,
-                            layout_glyph_drop_warnings,
-                            discarded_visible_native_page,
-                        )) if !every_page_dropped_script(
-                            &native_script_pages,
-                            &native_text,
-                            boundaries.as_deref(),
-                            &ocr_pts,
-                        ) =>
-                        {
-                            if let Some(warning) = layout_warning {
-                                crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
+                    .await;
+                    // Some marked pages lost their script to the whole read while others did not
+                    // (a scan beside a native page): the pages go through the per-page route, which
+                    // keeps the native text of the marked ones. The whole read stays the fallback
+                    // when that run fails. ~keep
+                    let partial_script_drop = match (&whole_read, boundaries.as_deref()) {
+                        (Ok(read), Some(bounds)) if !bounds.is_empty() => {
+                            let read_pages = &read.5;
+                            any_page_dropped_script(&native_script_pages, &native_text, Some(bounds), read_pages)
+                                && !every_page_dropped_script(
+                                    &native_script_pages,
+                                    &native_text,
+                                    Some(bounds),
+                                    read_pages,
+                                )
+                        }
+                        _ => false,
+                    };
+                    let targeted_retry = match boundaries.as_deref() {
+                        Some(bounds) if partial_script_drop => Some(
+                            ocr::extract_mixed_ocr_native_with_layout_pages(
+                                &native_text,
+                                bounds,
+                                (
+                                    &decision.failing_pages,
+                                    pdf_metadata
+                                        .pdf_specific
+                                        .fabricated_text_pages
+                                        .as_deref()
+                                        .unwrap_or(&[]),
+                                ),
+                                content,
+                                config,
+                                layout_pages,
+                                (&outlined_ocr_pages, &native_script_pages),
+                            )
+                            .await,
+                        ),
+                        _ => None,
+                    };
+                    let retried = match targeted_retry {
+                        Some(Ok(mixed_run)) => Some(apply_targeted_mixed_run!(mixed_run)),
+                        Some(Err(error)) => {
+                            tracing::warn!(
+                                error = %error,
+                                failing_pages = ?decision.failing_pages,
+                                "Targeted OCR of the pages that dropped their native script failed; \
+                                 using the whole-document read"
+                            );
+                            ensure_pdf_not_cancelled(config)?;
+                            None
+                        }
+                        None => None,
+                    };
+                    if let Some(retried) = retried {
+                        retried
+                    } else {
+                        match whole_read {
+                            Ok((
+                                ocr_text,
+                                ocr_tbls,
+                                ocr_elems,
+                                ocr_doc,
+                                llm_usage,
+                                ocr_pts,
+                                ocr_rstrs,
+                                formulas,
+                                preprocessing,
+                                page_ocr_confidence,
+                                gate_audit,
+                                layout_warning,
+                                layout_glyph_drop_warnings,
+                                discarded_visible_native_page,
+                            )) if !every_page_dropped_script(
+                                &native_script_pages,
+                                &native_text,
+                                boundaries.as_deref(),
+                                &ocr_pts,
+                            ) =>
+                            {
+                                if let Some(warning) = layout_warning {
+                                    crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
+                                }
+                                for warning in layout_glyph_drop_warnings {
+                                    crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
+                                }
+                                let preserve_native_after_discard = discarded_visible_native_page
+                                    && pdf_metadata
+                                        .pdf_specific
+                                        .fabricated_text_pages
+                                        .as_ref()
+                                        .is_some_and(Vec::is_empty)
+                                    && pdf_metadata
+                                        .pdf_specific
+                                        .implausible_text_pages
+                                        .as_ref()
+                                        .is_some_and(Vec::is_empty);
+                                if preserve_native_after_discard {
+                                    let (warnings, failures) = ocr_doc
+                                        .map(|doc| (doc.processing_warnings, doc.ocr_page_failures))
+                                        .unwrap_or_default();
+                                    crate::core::diagnostics::dedup_extend_warnings(
+                                        &mut ocr_fallback_warnings,
+                                        warnings,
+                                    );
+                                    ocr_page_failures.extend(failures);
+                                    (native_text, ExtractionMethod::Native)
+                                } else {
+                                    ocr_layout_gate_audit = gate_audit;
+                                    ocr_tables = ocr_tbls;
+                                    ocr_elements = ocr_elems;
+                                    ocr_internal_doc = ocr_doc;
+                                    ocr_llm_usage = llm_usage;
+                                    ocr_page_texts = Some(ocr_pts);
+                                    ocr_page_rasters = ocr_rstrs;
+                                    ocr_formulas = formulas;
+                                    ocr_preprocessing_by_page = preprocessing;
+                                    ocr_confidence_by_page = page_ocr_confidence;
+                                    (ocr_text, ExtractionMethod::Ocr)
+                                }
                             }
-                            for warning in layout_glyph_drop_warnings {
-                                crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
-                            }
-                            let preserve_native_after_discard = discarded_visible_native_page
-                                && pdf_metadata
-                                    .pdf_specific
-                                    .fabricated_text_pages
-                                    .as_ref()
-                                    .is_some_and(Vec::is_empty)
-                                && pdf_metadata
-                                    .pdf_specific
-                                    .implausible_text_pages
-                                    .as_ref()
-                                    .is_some_and(Vec::is_empty);
-                            if preserve_native_after_discard {
+                            Ok((_, _, _, ocr_doc, _, _, _, _, _, _, _, _, _, _)) => {
                                 let (warnings, failures) = ocr_doc
                                     .map(|doc| (doc.processing_warnings, doc.ocr_page_failures))
                                     .unwrap_or_default();
-                                crate::core::diagnostics::dedup_extend_warnings(&mut ocr_fallback_warnings, warnings);
-                                ocr_page_failures.extend(failures);
+                                // The discarded read's text is not in the result: its failures were not
+                                // recovered by it, and layout inputs and llm_usage go with it, as in the
+                                // sibling arms.
+                                crate::core::diagnostics::dedup_extend_warnings(
+                                    &mut ocr_fallback_warnings,
+                                    warnings
+                                        .into_iter()
+                                        .filter(|warning| !warning.message.contains("was recovered from"))
+                                        .collect(),
+                                );
+                                ocr_page_failures.extend(failures.into_iter().map(|failure| {
+                                    crate::types::OcrPageFailure {
+                                        recovered: false,
+                                        ..failure
+                                    }
+                                }));
+                                crate::core::diagnostics::dedup_extend_warnings(
+                                    &mut ocr_fallback_warnings,
+                                    dropped_script_warnings(&native_script_pages, &native_text, boundaries.as_deref()),
+                                );
                                 (native_text, ExtractionMethod::Native)
-                            } else {
-                                ocr_layout_gate_audit = gate_audit;
-                                ocr_tables = ocr_tbls;
-                                ocr_elements = ocr_elems;
-                                ocr_internal_doc = ocr_doc;
-                                ocr_llm_usage = llm_usage;
-                                ocr_page_texts = Some(ocr_pts);
-                                ocr_page_rasters = ocr_rstrs;
-                                ocr_formulas = formulas;
-                                ocr_preprocessing_by_page = preprocessing;
-                                ocr_confidence_by_page = page_ocr_confidence;
-                                (ocr_text, ExtractionMethod::Ocr)
                             }
-                        }
-                        Ok((_, _, _, ocr_doc, _, _, _, _, _, _, _, _, _, _)) => {
-                            let (warnings, failures) = ocr_doc
-                                .map(|doc| (doc.processing_warnings, doc.ocr_page_failures))
-                                .unwrap_or_default();
-                            // The discarded read's text is not in the result: its failures were not
-                            // recovered by it, and layout inputs and llm_usage go with it, as in the
-                            // sibling arms.
-                            crate::core::diagnostics::dedup_extend_warnings(
-                                &mut ocr_fallback_warnings,
-                                warnings
-                                    .into_iter()
-                                    .filter(|warning| !warning.message.contains("was recovered from"))
-                                    .collect(),
-                            );
-                            ocr_page_failures.extend(failures.into_iter().map(|failure| {
-                                crate::types::OcrPageFailure {
-                                    recovered: false,
-                                    ..failure
+                            Err(failed_run) => {
+                                tracing::warn!(
+                                    error = %failed_run.error,
+                                    "OCR fallback failed; using native text extraction result"
+                                );
+                                if failed_ocr_fallback_is_total_loss(&native_text) {
+                                    return Err(failed_run.error);
                                 }
-                            }));
-                            crate::core::diagnostics::dedup_extend_warnings(
-                                &mut ocr_fallback_warnings,
-                                dropped_script_warnings(&native_script_pages, &native_text, boundaries.as_deref()),
-                            );
-                            (native_text, ExtractionMethod::Native)
-                        }
-                        Err(failed_run) => {
-                            tracing::warn!(
-                                error = %failed_run.error,
-                                "OCR fallback failed; using native text extraction result"
-                            );
-                            if failed_ocr_fallback_is_total_loss(&native_text) {
-                                return Err(failed_run.error);
-                            }
-                            // ~keep A cancelled run did not fail to read its pages, so it adds no
-                            // record. The token decides: a pipeline run reports a cancellation as
-                            // the failure of each of its stages, not as the cancellation error.
-                            if ensure_pdf_not_cancelled(config).is_ok() {
-                                ocr_page_failures.extend(ocr::failed_run_page_failures(
-                                    &failed_run,
-                                    pdf_metadata.pdf_specific.page_count.unwrap_or(0),
-                                    &native_text,
-                                    boundaries.as_deref().unwrap_or(&[]),
-                                ));
-                            }
-                            let e = &failed_run.error;
-                            ocr_fallback_warnings.push(crate::types::ProcessingWarning {
-                                source: std::borrow::Cow::Borrowed("ocr"),
-                                message: std::borrow::Cow::Owned(format!(
-                                    "OCR fallback failed ({e}); returning native text that was below the \
+                                // ~keep A cancelled run did not fail to read its pages, so it adds no
+                                // record. The token decides: a pipeline run reports a cancellation as
+                                // the failure of each of its stages, not as the cancellation error.
+                                if ensure_pdf_not_cancelled(config).is_ok() {
+                                    ocr_page_failures.extend(ocr::failed_run_page_failures(
+                                        &failed_run,
+                                        pdf_metadata.pdf_specific.page_count.unwrap_or(0),
+                                        &native_text,
+                                        boundaries.as_deref().unwrap_or(&[]),
+                                    ));
+                                }
+                                let e = &failed_run.error;
+                                ocr_fallback_warnings.push(crate::types::ProcessingWarning {
+                                    source: std::borrow::Cow::Borrowed("ocr"),
+                                    message: std::borrow::Cow::Owned(format!(
+                                        "OCR fallback failed ({e}); returning native text that was below the \
                                          quality threshold which triggered OCR. Extracted content may be empty \
                                          or incomplete."
-                                )),
-                            });
-                            (native_text, ExtractionMethod::Native)
+                                    )),
+                                });
+                                (native_text, ExtractionMethod::Native)
+                            }
                         }
                     }
                 }
@@ -3425,37 +3531,7 @@ impl PdfExtractor {
                         )
                         .await
                         {
-                            Ok(mixed_run) => {
-                                #[cfg(feature = "formula-recognition")]
-                                {
-                                    mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
-                                }
-                                let (
-                                    mixed,
-                                    results_map,
-                                    mixed_structured_pages,
-                                    mixed_llm_usage,
-                                    mixed_rstrs,
-                                    mixed_formulas,
-                                    mixed_preprocessing,
-                                    mixed_ocr_confidence,
-                                    mixed_warnings,
-                                    mixed_page_failures,
-                                ) = mixed_run.output;
-                                let extraction_method = extraction_method_after_mixed_ocr(&results_map);
-                                ocr_llm_usage = mixed_llm_usage;
-                                ocr_results_map = Some(results_map);
-                                structured_ocr_pages = Some(mixed_structured_pages);
-                                ocr_page_rasters = mixed_rstrs;
-                                if !mixed_formulas.is_empty() {
-                                    ocr_formulas = mixed_formulas;
-                                }
-                                ocr_preprocessing_by_page.extend(mixed_preprocessing);
-                                ocr_confidence_by_page.extend(mixed_ocr_confidence);
-                                ocr_page_failures.extend(mixed_page_failures);
-                                ocr_fallback_warnings.extend(mixed_warnings);
-                                (mixed, extraction_method)
-                            }
+                            Ok(mixed_run) => apply_targeted_mixed_run!(mixed_run),
                             Err(e) => {
                                 tracing::warn!(
                                     error = %e,

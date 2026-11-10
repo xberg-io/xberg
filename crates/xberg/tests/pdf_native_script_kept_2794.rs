@@ -15,6 +15,7 @@ use xberg::{ExtractionConfig, OcrConfig, OutputFormat};
 
 const COMPLETE: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/cluster-complete-mapped.pdf");
 const FIGURE: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-text-with-figure.pdf");
+const THEN_SCANNED: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-then-scanned-english.pdf");
 const AMONG_ENGLISH: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-among-english-pages.pdf");
 const KHMER_PAGE_LETTERS: usize = 222;
 const ENGLISH: &str = "The quarterly report contains useful readable text about the country and its people.";
@@ -234,4 +235,51 @@ fn only_the_marked_page_of_a_document_with_readable_pages_keeps_its_native_text(
         .filter(|w| w.source == "ocr" && w.message.contains("Page 2 retained its native text"))
         .collect();
     assert_eq!(kept.len(), 1, "{:?}", automatic.processing_warnings);
+}
+
+#[test]
+#[serial_test::serial]
+fn a_marked_page_beside_a_scan_keeps_its_native_text_when_the_whole_document_read_drops_its_script() {
+    let native = read_with(THEN_SCANNED, Arc::new(Fixed(ENGLISH)), true);
+    let automatic = read_with(THEN_SCANNED, Arc::new(Fixed(ENGLISH)), false);
+    let native_pages = native.pages.as_ref().unwrap();
+    let pages = automatic.pages.as_ref().unwrap();
+    assert_eq!(pages.len(), 2);
+    assert_eq!(khmer_count(&native_pages[0].content), KHMER_PAGE_LETTERS);
+    assert!(native_pages[1].content.trim().is_empty(), "page 2 is a scan");
+    assert_eq!(pages[0].content, native_pages[0].content);
+    assert_eq!(pages[1].content.trim(), ENGLISH);
+    assert_eq!(
+        khmer_count(&automatic.content),
+        KHMER_PAGE_LETTERS,
+        "{:?}",
+        automatic.content
+    );
+    let kept: Vec<_> = automatic
+        .processing_warnings
+        .iter()
+        .filter(|w| w.source == "ocr" && w.message.contains("Page 1 retained its native text"))
+        .collect();
+    assert_eq!(kept.len(), 1, "{:?}", automatic.processing_warnings);
+}
+
+#[test]
+#[serial_test::serial]
+fn a_healthy_khmer_read_replaces_the_marked_page_beside_a_scan() {
+    let automatic = read_with(THEN_SCANNED, Arc::new(Fixed(KHMER)), false);
+    let pages = automatic.pages.as_ref().unwrap();
+    assert_eq!(pages.len(), 2);
+    assert!(
+        pages[0].content.contains("ប្រទេសកម្ពុជាមានប្រជាជនច្រើន"),
+        "{:?}",
+        pages[0].content
+    );
+    assert!(
+        !automatic
+            .processing_warnings
+            .iter()
+            .any(|w| w.message.contains("retained its native text")),
+        "{:?}",
+        automatic.processing_warnings
+    );
 }
