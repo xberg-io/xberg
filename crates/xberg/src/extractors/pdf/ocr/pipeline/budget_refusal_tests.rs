@@ -73,6 +73,8 @@ async fn read_refused_page(with_pipeline: bool) -> OcrRunResult<MixedOcrRun> {
         "",
         &boundaries,
         MixedOcrPageSelection {
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            probe_reads: None,
             ocr: &[1],
             single_block: &[],
             preserve_native: &[],

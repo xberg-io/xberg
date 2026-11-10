@@ -3190,13 +3190,14 @@ impl PdfExtractor {
             #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
             let native_script_pages: Vec<u32> = Vec::new();
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-            {
+            let probe_reads = {
                 let layer = unreadable_script::NativeLayer {
                     text: &native_text,
                     boundaries: boundaries.as_deref(),
                     page_count: pdf_metadata.pdf_specific.page_count,
                 };
                 let ink = ink_probe::contradicted_pages(&decision, layer, content, config, layout_pages).await?;
+                let reads = ink.reads.filter(|reads| reads.finish(&ink.contradicted));
                 crate::core::diagnostics::dedup_extend_warnings(&mut ocr_fallback_warnings, ink.warnings);
                 crate::core::diagnostics::dedup_extend_warnings(
                     &mut ocr_fallback_warnings,
@@ -3208,7 +3209,8 @@ impl PdfExtractor {
                         &ink.contradicted,
                     ),
                 );
-            }
+                reads
+            };
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             let native_script_pages =
                 unreadable_script::native_script_pages(&decision, &native_text, boundaries.as_deref(), content, config);
@@ -3357,7 +3359,21 @@ impl PdfExtractor {
                         path,
                         PageOcrLayoutContext {
                             pages: layout_pages,
-                            hints: whole_document_ocr_hints(&pdf_metadata, &native_text, boundaries.as_deref(), config),
+                            hints: {
+                                #[allow(unused_mut)]
+                                let mut hints = whole_document_ocr_hints(
+                                    &pdf_metadata,
+                                    &native_text,
+                                    boundaries.as_deref(),
+                                    config,
+                                );
+                                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                                if let Some(reads) = &probe_reads {
+                                    hints.get_or_insert_with(Default::default).probe_reads =
+                                        Some(std::sync::Arc::clone(reads));
+                                }
+                                hints
+                            },
                         },
                         #[cfg(feature = "layout-detection")]
                         markdown_layout_images.take(),
@@ -3600,7 +3616,26 @@ impl PdfExtractor {
                 }
                 ocr::OcrGateOutcome::RunFallbackOnPages(pages) => match boundaries.as_deref() {
                     Some(bounds) if !bounds.is_empty() => {
-                        match ocr::extract_mixed_ocr_native_with_layout_pages(
+                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                        let selected_run = ocr::extract_mixed_ocr_native_with_probe_reads(
+                            &native_text,
+                            bounds,
+                            (
+                                &pages,
+                                pdf_metadata
+                                    .pdf_specific
+                                    .fabricated_text_pages
+                                    .as_deref()
+                                    .unwrap_or(&[]),
+                            ),
+                            content,
+                            config,
+                            layout_pages,
+                            (&outlined_ocr_pages, &native_script_pages, probe_reads.clone()),
+                        )
+                        .await;
+                        #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+                        let selected_run = ocr::extract_mixed_ocr_native_with_layout_pages(
                             &native_text,
                             bounds,
                             (
@@ -3616,8 +3651,8 @@ impl PdfExtractor {
                             layout_pages,
                             (&outlined_ocr_pages, &native_script_pages),
                         )
-                        .await
-                        {
+                        .await;
+                        match selected_run {
                             Ok(mixed_run) => apply_targeted_mixed_run!(mixed_run),
                             Err(e) => {
                                 tracing::warn!(

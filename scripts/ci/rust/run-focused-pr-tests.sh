@@ -63,6 +63,52 @@ run_type0_cases() {
   fi
 }
 
+run_ink_probe_cases() {
+  local before="$passed"
+  local test_name
+  for test_name in \
+    custom_backend_reads_each_encoded_input_and_keeps_words_and_confidence \
+    a_failed_probe_retains_native_text_and_does_not_reuse_a_failed_read \
+    custom_backend_reads_do_not_survive_an_extraction \
+    cancellation_after_the_probe_does_not_publish_its_accepted_read \
+    probe_and_production_configs_can_return_different_source_words \
+    a_changed_backend_model_is_read_again_after_the_accepted_probe \
+    production_keeps_the_table_payload_of_its_configured_read \
+    a_failed_custom_stage_and_its_fallback_run_on_each_encoded_input \
+    a_quality_retry_still_runs_and_keeps_the_confident_fallback \
+    custom_backend_keeps_the_table_payload_after_a_changed_encoding \
+    changed_traineddata_is_not_reused_even_when_backend_version_is_unchanged; do
+    run_exact "$test_name" --test pdf_ink_probe_reuse_2862
+  done
+  for test_name in \
+    final_read_takes_the_probe_read_once_for_a_contradicted_page \
+    finish_retains_only_contradicted_pages \
+    same_pixels_on_another_page_are_not_reused \
+    zero_retention_limit_reads_again_and_returns_each_document_intact \
+    identity_changes_miss_without_consuming_the_matching_read \
+    cancelled_read_returns_cancelled_without_ocr_or_consuming_the_read \
+    cancellation_during_a_hit_returns_cancelled_without_ocr \
+    geometry_observer_bypasses_retained_reads \
+    failed_backend_read_is_not_retained \
+    backend_version_change_during_a_read_is_not_retained \
+    unkeyable_reads_are_never_retained \
+    model_identity_tracks_override_traineddata_and_osd \
+    stock_builtin_reuses_its_own_raw_read_once \
+    stock_builtin_does_not_reuse_a_different_decode_budget \
+    stock_builtin_does_not_reuse_a_different_encoded_working_size \
+    custom_backend_reads_changed_encoding_even_when_rgb_pixels_match \
+    model_change_alone_requires_a_fresh_backend_read \
+    changed_policy_preserves_fresh_source_words_and_table_payload; do
+    run_exact "extractors::pdf::ocr::read_reuse::tests::$test_name" --lib
+  done
+  run_exact 'extractors::pdf::ocr::read_reuse::stock_tests::stock_raw_read_of_a_text_raster_matches_an_uncached_final_read' --lib
+  run_exact 'extractors::pdf::ocr::read_reuse::stock_tests::stock_public_mixed_route_reads_the_wrong_script_page_once' --lib
+  if [ "$((passed - before))" -ne 31 ]; then
+    printf 'Expected 31 executed ink-probe reuse tests, observed %s\n' "$((passed - before))" >&2
+    exit 1
+  fi
+}
+
 run_api_cases() {
   run_exact 'api::handlers::tests::test_extract_async_then_poll_job_id' --lib
   run_exact 'api::jobs::tests::test_cancel_running_job_fires_token' --lib
@@ -72,8 +118,9 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=10
+  expected=41
   run_pdf_cases
+  run_ink_probe_cases
   ;;
 api-jobs)
   expected=4

@@ -48,6 +48,7 @@ pub(super) struct ProbeOutcome {
     /// Pages whose ink contradicts their layer; the script rule must leave them to OCR.
     pub(super) contradicted: Vec<u32>,
     pub(super) warnings: Vec<crate::types::ProcessingWarning>,
+    pub(super) reads: Option<std::sync::Arc<super::ocr::read_reuse::ProbeReads>>,
 }
 
 /// The failing pages the script rule would keep on lost-glyph markers alone: their layer is in a
@@ -255,6 +256,10 @@ pub(super) async fn contradicted_pages(
     eligible.sort_unstable();
     eligible.dedup();
     let (probe_config, thresholds) = discarding_noise(config);
+    let retention_limit = config.security_limits.clone().unwrap_or_default().max_content_size;
+    outcome.reads = Some(std::sync::Arc::new(super::ocr::read_reuse::ProbeReads::new(
+        retention_limit,
+    )));
     let mut probed: Vec<u32> = Vec::new();
     loop {
         let batch = next_batch(&eligible, &probed, !outcome.contradicted.is_empty());
@@ -262,14 +267,14 @@ pub(super) async fn contradicted_pages(
             return Ok(outcome);
         }
         probed.extend_from_slice(&batch);
-        let run = super::ocr::extract_mixed_ocr_native_with_layout_pages(
+        let run = super::ocr::extract_mixed_ocr_native_with_probe_reads(
             layer.text,
             boundaries,
             (&batch, &[]),
             content,
             &probe_config,
             layout_pages,
-            (&[], &[]),
+            (&[], &[], outcome.reads.clone()),
         )
         .await;
         super::ensure_pdf_not_cancelled(config)?;
