@@ -185,11 +185,11 @@ impl<'doc> TextExtractor<'doc> {
         } else {
             None
         };
-        if let Some(TextElement::Offset(lead)) = array.first()
-            && self.word_boundary_mode == WordBoundaryMode::Tiebreaker
-        {
+        if let Some(TextElement::Offset(lead)) = array.first() {
             let threshold = self.calculate_adaptive_tj_threshold();
-            self.lead_threshold = Some(threshold);
+            if self.word_boundary_mode == WordBoundaryMode::Tiebreaker {
+                self.lead_threshold = Some(threshold);
+            }
             if *lead < threshold
                 && let Some(mut run) = self.tj_span_buffer.take()
             {
