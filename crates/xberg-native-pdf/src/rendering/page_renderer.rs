@@ -6427,12 +6427,12 @@ impl PageRenderer {
     ///    `t_r = (1 - α') · t_b + α' · B(t_b, t_s)` where
     ///    `α' = coverage · gs_alpha`, `t_b` is the backdrop tint,
     ///    `t_s` is the source tint, and `B(·, ·)` is the dispatched
-    ///    blend function on subtractive tints. Per §11.3.5.2 Table 136
-    ///    the separable formulas operate on additive components — for
-    ///    /Normal and the white-preserving modes the subtractive form
-    ///    is mathematically equivalent (the formulas are component-wise
-    ///    monotonic), so we apply them directly on tint values without
-    ///    the additive↔subtractive conversion round-trip.
+    ///    blend function. Per §11.3.5.2 Table 136 the separable
+    ///    formulas operate on additive components, so
+    ///    [`blend_subtractive_tint`](crate::rendering::sidecar::blend_subtractive_tint)
+    ///    complements the tints before the blend and the result after
+    ///    it. Only /Normal skips the round trip: `B = c_s` holds in
+    ///    both representations.
     ///
     /// Spot inks active on the source but with no plane in the sidecar
     /// (device does not carry the colorant per §8.6.6.3) are silently
@@ -6544,7 +6544,7 @@ impl PageRenderer {
                 let alpha = (cov as f32 / 255.0) * gs_alpha;
                 let alpha = alpha.clamp(0.0, 1.0);
                 let t_b = plane[px] as f32 / 255.0;
-                let blended = crate::rendering::sidecar::separable_blend(effective_bm, t_b, c_s);
+                let blended = crate::rendering::sidecar::blend_subtractive_tint(effective_bm, t_b, c_s);
                 let t_r = (1.0 - alpha) * t_b + alpha * blended;
                 plane[px] = (t_r.clamp(0.0, 1.0) * 255.0).round() as u8;
             }

@@ -720,6 +720,25 @@ pub(crate) fn separable_blend(mode: &str, c_b: f32, c_s: f32) -> f32 {
     }
 }
 
+/// Blend one subtractive tint (a spot ink lane) with the §11.3.5.2 separable blend modes.
+///
+/// ISO 32000-1 §11.3.5 defines every blend function on additive values, so a subtractive tint
+/// `t` is blended as `1 - t` and the result is complemented back. Without that, a Multiply
+/// over a lane with ink gives less ink than either tint, and over an empty lane gives
+/// `0 * t_s = 0`, which erases the source ink that the page render shows.
+///
+/// A lane without ink has no backdrop to blend with: §11.3.3 gives the source when the
+/// backdrop alpha is 0, for every mode. `/Normal`, non-separable modes and unknown names
+/// return `t_s` as they are, because `B(c_b, c_s) = c_s` does not depend on the representation.
+pub(crate) fn blend_subtractive_tint(mode: &str, t_b: f32, t_s: f32) -> f32 {
+    let (t_b, t_s) = (t_b.clamp(0.0, 1.0), t_s.clamp(0.0, 1.0));
+    let non_separable = matches!(mode, "Normal" | "Hue" | "Saturation" | "Color" | "Luminosity");
+    if t_b == 0.0 || non_separable || !is_recognised_mode(mode) {
+        return t_s;
+    }
+    1.0 - separable_blend(mode, 1.0 - t_b, 1.0 - t_s)
+}
+
 fn hard_light_component(c_b: f32, c_s: f32) -> f32 {
     if c_s <= 0.5 {
         // Multiply(c_b, 2*c_s) ~keep
@@ -2397,6 +2416,48 @@ mod tests {
         assert!(!ext_g_states_signal_transparency(&doc, &states));
         let with_transparent = HashMap::from([("T".to_string(), broken), ("U".to_string(), transparent_state())]);
         assert!(ext_g_states_signal_transparency_only(&doc, &with_transparent));
+    }
+
+    #[test]
+    fn blend_subtractive_tint_blends_the_complements() {
+        // Two stacked inks are denser than either: 1 - (1 - 0.5) * (1 - 0.25).
+        assert_eq!(blend_subtractive_tint("Multiply", 0.5, 0.25), 0.625);
+        assert_eq!(blend_subtractive_tint("Multiply", 0.25, 0.5), 0.625);
+        // Screen of the complements 0.5 and 0.75 is 0.875, so the ink is 0.125.
+        assert_eq!(blend_subtractive_tint("Screen", 0.5, 0.25), 0.125);
+        // Darken keeps the denser ink and Lighten keeps the lighter ink.
+        assert_eq!(blend_subtractive_tint("Darken", 0.25, 0.5), 0.5);
+        assert_eq!(blend_subtractive_tint("Darken", 0.5, 0.25), 0.5);
+        assert_eq!(blend_subtractive_tint("Lighten", 0.25, 0.5), 0.25);
+        assert_eq!(blend_subtractive_tint("Lighten", 0.5, 0.25), 0.25);
+    }
+
+    #[test]
+    fn blend_subtractive_tint_keeps_the_source_over_an_empty_lane() {
+        for mode in [
+            "Multiply",
+            "Screen",
+            "Darken",
+            "Lighten",
+            "ColorDodge",
+            "ColorBurn",
+            "Difference",
+        ] {
+            assert_eq!(blend_subtractive_tint(mode, 0.0, 0.5), 0.5, "{mode}");
+        }
+    }
+
+    #[test]
+    fn blend_subtractive_tint_returns_the_source_where_the_complement_does_not_matter() {
+        let tint = 0.1_f32;
+        assert_ne!(
+            1.0 - (1.0 - tint),
+            tint,
+            "control: the complement round trip is not exact"
+        );
+        for mode in ["Normal", "Hue", "Saturation", "Color", "Luminosity", "NoSuchMode"] {
+            assert_eq!(blend_subtractive_tint(mode, 0.7, tint), tint, "{mode}");
+        }
     }
 
     #[test]
