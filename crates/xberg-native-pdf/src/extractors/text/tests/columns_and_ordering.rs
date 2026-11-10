@@ -34,6 +34,7 @@ fn test_detect_span_columns_single_column() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         });
@@ -224,6 +225,7 @@ fn test_merge_adjacent_spans_same_line() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -254,6 +256,7 @@ fn test_merge_adjacent_spans_same_line() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -343,6 +346,7 @@ fn test_merge_adjacent_spans_different_lines() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -373,6 +377,7 @@ fn test_merge_adjacent_spans_different_lines() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -422,6 +427,7 @@ fn test_merge_adjacent_spans_column_boundary() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -452,6 +458,7 @@ fn test_merge_adjacent_spans_column_boundary() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -685,7 +692,7 @@ fn test_should_insert_space_boundary_already_present_trailing() {
     let fonts = HashMap::new();
 
     let decision = should_insert_space(
-        "word ", "next", 5.0, 12.0, "F1", &fonts, true, &config, None, None, 12.0, 12.0,
+        "word ", "next", 5.0, 12.0, "F1", &fonts, true, &config, None, None, 12.0, 12.0, false,
     );
     assert!(!decision.insert_space);
     assert_eq!(decision.source, SpaceSource::AlreadyPresent);
@@ -697,7 +704,7 @@ fn test_should_insert_space_boundary_already_present_leading() {
     let fonts = HashMap::new();
 
     let decision = should_insert_space(
-        "word", " next", 5.0, 12.0, "F1", &fonts, true, &config, None, None, 12.0, 12.0,
+        "word", " next", 5.0, 12.0, "F1", &fonts, true, &config, None, None, 12.0, 12.0, false,
     );
     assert!(!decision.insert_space);
     assert_eq!(decision.source, SpaceSource::AlreadyPresent);
@@ -712,7 +719,7 @@ fn test_should_insert_space_strong_geometric() {
     // geometric_threshold = 12.0 * 0.25 = 3.0 (fallback)
     // strong threshold = 3.0 * 2.0 = 6.0 ~keep
     let decision = should_insert_space(
-        "word", "next", 10.0, 12.0, "F1", &fonts, false, &config, None, None, 12.0, 12.0,
+        "word", "next", 10.0, 12.0, "F1", &fonts, false, &config, None, None, 12.0, 12.0, false,
     );
     assert!(decision.insert_space, "Large gap should insert space");
     assert_eq!(decision.source, SpaceSource::GeometricGap);
@@ -726,7 +733,7 @@ fn test_should_insert_space_consensus_tj_and_geometric() {
     // Both TJ offset and geometric gap triggered
     // geometric_threshold = 12.0 * 0.25 = 3.0 (fallback) ~keep
     let decision = should_insert_space(
-        "word", "next", 4.0, 12.0, "F1", &fonts, true, &config, None, None, 12.0, 12.0,
+        "word", "next", 4.0, 12.0, "F1", &fonts, true, &config, None, None, 12.0, 12.0, false,
     );
     assert!(decision.insert_space, "Consensus should insert space");
     assert_eq!(decision.source, SpaceSource::TjOffset);
@@ -739,7 +746,7 @@ fn test_should_insert_space_no_consensus_small_gap() {
     let fonts = HashMap::new();
 
     let decision = should_insert_space(
-        "word", "next", 0.5, 12.0, "F1", &fonts, false, &config, None, None, 12.0, 12.0,
+        "word", "next", 0.5, 12.0, "F1", &fonts, false, &config, None, None, 12.0, 12.0, false,
     );
     assert!(!decision.insert_space, "Small gap without TJ should not insert space");
     assert_eq!(decision.source, SpaceSource::NoSpace);
@@ -766,6 +773,7 @@ fn test_should_insert_space_line_break_hard() {
         Some(&next_bbox),
         12.0,
         12.0,
+        false,
     );
     // Line break detected, same column, not ending with hyphen => insert space ~keep
     assert!(decision.insert_space, "Hard line break should insert space");
@@ -793,6 +801,7 @@ fn test_should_insert_space_line_break_hyphen() {
         Some(&next_bbox),
         12.0,
         12.0,
+        false,
     );
     assert!(!decision.insert_space, "Hyphenated line break should not insert space");
 }

@@ -75,20 +75,24 @@ Rent 422	44,640	41,234	47,311	Fuel 423	81,713	66,965	57,031
 Fuel 429	18,230	49,617	49,481	Parts 430	73,352	94,112	29,209";
 
 #[test]
-fn omitted_and_false_rotation_are_the_same_typed_public_configuration() {
-    let omitted: OcrConfig = serde_json::from_value(serde_json::json!({
-        "backend": "tesseract", "language": ["eng"]
-    }))
-    .unwrap();
-    let disabled: OcrConfig = serde_json::from_value(serde_json::json!({
-        "backend": "tesseract", "language": ["eng"], "auto_rotate": false
-    }))
-    .unwrap();
-    assert!(!omitted.auto_rotate);
-    assert_eq!(
-        serde_json::to_value(omitted).unwrap(),
-        serde_json::to_value(disabled).unwrap()
-    );
+fn omitted_false_and_true_rotation_are_three_distinct_public_configurations() {
+    let parse = |value: serde_json::Value| -> OcrConfig {
+        let mut block = serde_json::json!({"backend": "tesseract", "language": ["eng"]});
+        block
+            .as_object_mut()
+            .unwrap()
+            .extend(value.as_object().unwrap().clone());
+        serde_json::from_value(block).unwrap()
+    };
+    let omitted = parse(serde_json::json!({}));
+    let disabled = parse(serde_json::json!({"auto_rotate": false}));
+    let enabled = parse(serde_json::json!({"auto_rotate": true}));
+    assert_eq!(omitted.auto_rotate, None);
+    assert_eq!(disabled.auto_rotate, Some(false));
+    assert_eq!(enabled.auto_rotate, Some(true));
+    assert!(serde_json::to_value(&omitted).unwrap().get("auto_rotate").is_none());
+    assert_eq!(serde_json::to_value(&disabled).unwrap()["auto_rotate"], false);
+    assert_eq!(serde_json::to_value(&enabled).unwrap()["auto_rotate"], true);
 }
 
 #[cfg(feature = "auto-rotate-tract")]
@@ -115,7 +119,7 @@ fn explicit_language_block_retains_the_sideways_source_table() {
         PDF,
         &ExtractionConfig {
             ocr: Some(OcrConfig {
-                auto_rotate: true,
+                auto_rotate: Some(true),
                 ..Default::default()
             }),
             ..config.clone()
@@ -315,7 +319,7 @@ fn upright_osd_preserves_its_existing_cells_and_content() {
     }
     let (upright, mut config) = controls();
     config.ocr = Some(OcrConfig {
-        auto_rotate: false,
+        auto_rotate: None,
         tesseract_config: Some(xberg::types::TesseractConfig {
             psm: Some(1),
             ..Default::default()
@@ -337,30 +341,113 @@ fn upright_osd_preserves_its_existing_cells_and_content() {
     assert!(result.metadata.additional.get("auto_rotated").is_none());
 }
 
-#[test]
-#[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
-fn language_only_without_cached_osd_keeps_the_original_read() {
-    const OFFLINE_CASE: &str = "language_only_without_cached_osd_keeps_the_original_read";
-    if std::env::var(CHILD).as_deref() != Ok(OFFLINE_CASE) {
-        run_private_child(OFFLINE_CASE);
-        return;
-    }
+const NO_OSD_ORIGINAL_SHA256: &str = "ecd2f9eadd62662614e11e74d43ebac8286a993c812cb5fc3a2a4ca1f93259f9";
+
+fn no_osd_config(models: &std::path::Path, auto_rotate: Option<bool>) -> ExtractionConfig {
     let (_, mut config) = controls();
-    let models = tempfile::tempdir().unwrap();
-    seed_english(models.path());
+    seed_english(models);
     config.ocr = Some(OcrConfig {
-        tessdata_path: Some(models.path().into()),
+        tessdata_path: Some(models.into()),
+        auto_rotate,
         ..Default::default()
     });
-    let result = extract("explicit-no-osd", PDF, &config);
+    config
+}
+
+fn assert_original_read(result: &ExtractedDocument) {
     assert_eq!(result.content.split_whitespace().count(), 147);
     assert_eq!(source_matches(&result.content), 0);
     assert!(result.tables.is_empty());
     assert!(result.ocr_elements.is_none(), "private primary evidence must not leak");
     assert_eq!(
         hex::encode(Sha256::digest(result.content.as_bytes())),
-        "ecd2f9eadd62662614e11e74d43ebac8286a993c812cb5fc3a2a4ca1f93259f9"
+        NO_OSD_ORIGINAL_SHA256
     );
+}
+
+#[cfg(feature = "auto-rotate-tract")]
+#[test]
+#[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
+fn language_only_without_cached_osd_recovers_through_the_classifier() {
+    const CASE: &str = "language_only_without_cached_osd_recovers_through_the_classifier";
+    if std::env::var(CHILD).as_deref() != Ok(CASE) {
+        run_private_child(CASE);
+        return;
+    }
+    let models = tempfile::tempdir().unwrap();
+    let config = no_osd_config(models.path(), None);
+    let result = extract("unset-no-osd", PDF, &config);
+    assert_source_table(&result);
+    assert!(result.ocr_elements.is_none(), "private retry evidence must not leak");
+    assert_eq!(
+        std::fs::read_dir(models.path()).unwrap().count(),
+        1,
+        "no model download"
+    );
+}
+
+#[cfg(feature = "auto-rotate-tract")]
+#[test]
+#[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
+fn language_only_without_cached_osd_recovers_the_counterclockwise_and_upside_down_grids() {
+    const CASE: &str = "language_only_without_cached_osd_recovers_the_counterclockwise_and_upside_down_grids";
+    if std::env::var(CHILD).as_deref() != Ok(CASE) {
+        run_private_child(CASE);
+        return;
+    }
+    let source = PdfDocument::from_bytes(PDF.to_vec()).unwrap();
+    let images = source.page_image_handles(0).unwrap();
+    let sideways = images[0].decode().unwrap().to_dynamic_image().unwrap().to_rgb8();
+    let models = tempfile::tempdir().unwrap();
+    let config = no_osd_config(models.path(), None);
+    for (name, raster) in [
+        ("unset-no-osd-270", image::imageops::rotate180(&sideways)),
+        ("unset-no-osd-180", image::imageops::rotate270(&sideways)),
+    ] {
+        let result = extract(name, &image_pdf(&raster), &config);
+        assert_source_table(&result);
+        assert!(result.ocr_elements.is_none(), "{name}: private evidence must not leak");
+    }
+}
+
+#[test]
+#[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
+fn explicit_false_keeps_the_original_read_with_and_without_cached_osd() {
+    const CASE: &str = "explicit_false_keeps_the_original_read_with_and_without_cached_osd";
+    if std::env::var(CHILD).as_deref() != Ok(CASE) {
+        run_private_child(CASE);
+        return;
+    }
+    let models = tempfile::tempdir().unwrap();
+    let missing = no_osd_config(models.path(), Some(false));
+    assert_original_read(&extract("false-no-osd", PDF, &missing));
+    assert_eq!(
+        std::fs::read_dir(models.path()).unwrap().count(),
+        1,
+        "no model download"
+    );
+    // The child's TESSDATA_PREFIX carries the OSD pack, so this is the cached-OSD path.
+    let (_, mut cached) = controls();
+    cached.ocr = Some(OcrConfig {
+        auto_rotate: Some(false),
+        ..Default::default()
+    });
+    assert_original_read(&extract("false-cached-osd", PDF, &cached));
+}
+
+#[cfg(feature = "auto-rotate-tract")]
+#[test]
+#[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
+fn explicit_true_rotates_without_cached_osd() {
+    const CASE: &str = "explicit_true_rotates_without_cached_osd";
+    if std::env::var(CHILD).as_deref() != Ok(CASE) {
+        run_private_child(CASE);
+        return;
+    }
+    let models = tempfile::tempdir().unwrap();
+    let config = no_osd_config(models.path(), Some(true));
+    let result = extract("true-no-osd", PDF, &config);
+    assert_source_table(&result);
     assert_eq!(
         std::fs::read_dir(models.path()).unwrap().count(),
         1,
@@ -395,8 +482,7 @@ fn cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
         result
     };
     let before = read(&config);
-    assert_eq!(before.content.split_whitespace().count(), 147);
-    assert!(before.tables.is_empty());
+    assert_before_osd(&before);
     assert_eq!(
         persisted_extraction_entries("explicit-osd-transition"),
         1,
@@ -409,9 +495,52 @@ fn cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
         ..config.clone()
     });
     assert_source_table(&fresh);
+    assert_route("fresh", &fresh, Route::Osd);
     let after = read(&config);
     record_result("cached-after-osd", &after);
     assert_source_table(&after);
+    assert_route("after", &after, Route::Osd);
+}
+
+#[cfg(feature = "auto-rotate-tract")]
+#[test]
+#[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
+fn a_read_kept_before_the_classifier_is_installed_is_not_cached_or_served_after_it() {
+    const CASE: &str = "a_read_kept_before_the_classifier_is_installed_is_not_cached_or_served_after_it";
+    if std::env::var(CHILD).as_deref() != Ok(CASE) {
+        run_private_child_without_classifier(CASE);
+        return;
+    }
+    let models = tempfile::tempdir().unwrap();
+    let mut config = no_osd_config(models.path(), None);
+    config.use_cache = true;
+    let cache = std::sync::Arc::new(DocumentResultsCache::default());
+    let engine = xberg::engine::Engine::builder()
+        .with_cache_backend(cache.clone())
+        .build();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let before = read_engine(&engine, &runtime, &config);
+    assert_original_read(&before);
+    assert_eq!(
+        cache.writes.load(std::sync::atomic::Ordering::SeqCst),
+        0,
+        "a read kept only because the classifier is missing must not be cached"
+    );
+    let model = std::fs::read(std::env::var_os("XBERG_ORIENTATION_TEST_MODEL").unwrap()).unwrap();
+    let destination = std::path::PathBuf::from(std::env::var_os("HF_HUB_CACHE").unwrap()).join(
+        "models--xberg-io--paddleocr-onnx-models/snapshots/bc5ec866cf0e798e667808dfa51b0ba8ad0dafc8/\
+         v2/classifiers/PP-LCNet_x1_0_doc_ori.onnx",
+    );
+    std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
+    std::fs::write(destination, model).unwrap();
+    let after = read_engine(&engine, &runtime, &config);
+    assert_source_table(&after);
+    assert_route("after", &after, Route::Classifier);
+    assert_eq!(cache.hits.load(std::sync::atomic::Ordering::SeqCst), 0);
+    assert_eq!(cache.writes.load(std::sync::atomic::Ordering::SeqCst), 1);
 }
 
 #[derive(Default)]
@@ -467,14 +596,16 @@ fn cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_config
         .unwrap();
     let read = |config: &ExtractionConfig| read_engine(&engine, &runtime, config);
     let before = read(&config);
-    assert_eq!(before.content.split_whitespace().count(), 147);
+    assert_before_osd(&before);
     assert_eq!(cache.writes.load(std::sync::atomic::Ordering::SeqCst), 1);
     let osd = osd_model();
     std::fs::write(models.path().join("osd.traineddata"), osd).unwrap();
-    assert_source_table(&read(&ExtractionConfig {
+    let fresh = read(&ExtractionConfig {
         use_cache: false,
         ..config.clone()
-    }));
+    });
+    assert_source_table(&fresh);
+    assert_route("fresh", &fresh, Route::Osd);
     let after = read(&config);
     assert_eq!(
         cache.hits.load(std::sync::atomic::Ordering::SeqCst),
@@ -482,6 +613,7 @@ fn cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_config
         "changed OSD capability must miss the outer cache"
     );
     assert_source_table(&after);
+    assert_route("after", &after, Route::Osd);
 }
 
 #[test]
@@ -512,7 +644,9 @@ fn cached_context_changed_during_extraction_is_not_written() {
         .enable_all()
         .build()
         .unwrap();
-    assert_source_table(&read_engine(&engine, &runtime, &config));
+    let read = read_engine(&engine, &runtime, &config);
+    assert_source_table(&read);
+    assert_route("read after install during lookup", &read, Route::Osd);
     assert!(
         cache.install_osd_on_lookup.lock().unwrap().is_none(),
         "lookup installed the verified OSD pack"
@@ -528,9 +662,9 @@ fn cached_context_changed_during_extraction_is_not_written() {
 fn automatic_layout_control(base: &ExtractionConfig) -> ExtractedDocument {
     let mut config = base.clone();
     let ocr = config.ocr.as_mut().unwrap();
-    ocr.auto_rotate = false;
+    ocr.auto_rotate = None;
     ocr.tesseract_config.get_or_insert_default().psm = Some(3);
-    assert!(!ocr.auto_rotate);
+    assert_eq!(ocr.auto_rotate, None);
     let result = extract("psm3-no-rotation", PDF, &config);
     assert_eq!(
         result
@@ -550,14 +684,14 @@ fn automatic_layout_control(base: &ExtractionConfig) -> ExtractedDocument {
 fn osd_recognition_control(base: &ExtractionConfig) -> ExtractedDocument {
     let mut config = base.clone();
     let ocr = config.ocr.as_mut().unwrap();
-    ocr.auto_rotate = false;
+    ocr.auto_rotate = None;
     ocr.tesseract_config.get_or_insert_default().psm = Some(1);
     ocr.element_config = Some(xberg::types::OcrElementConfig {
         include_elements: true,
         min_level: xberg::types::OcrElementLevel::Word,
         ..Default::default()
     });
-    assert!(!ocr.auto_rotate);
+    assert_eq!(ocr.auto_rotate, None);
     let result = extract("psm1-osd-no-rotation", PDF, &config);
     assert_eq!(
         result
@@ -659,10 +793,22 @@ fn report(name: &str, result: &ExtractedDocument) {
 }
 
 fn run_private_child(case: &str) {
+    spawn_private_child(case, true);
+}
+
+/// Like `run_private_child`, but the hub starts without the orientation classifier.
+#[cfg(feature = "auto-rotate-tract")]
+fn run_private_child_without_classifier(case: &str) {
+    spawn_private_child(case, false);
+}
+
+fn spawn_private_child(case: &str, seed_classifier: bool) {
+    #[cfg(not(feature = "auto-rotate-tract"))]
+    let _ = seed_classifier;
     let root = tempfile::tempdir().unwrap();
     let hub = root.path().join("hub");
     #[cfg(feature = "auto-rotate-tract")]
-    {
+    if seed_classifier {
         let model = std::fs::read(
             std::env::var_os("XBERG_ORIENTATION_TEST_MODEL")
                 .expect("set the pinned orientation model path; this test must not silently skip"),
@@ -885,6 +1031,48 @@ fn source_cell_matches(result: &ExtractedDocument) -> usize {
                 .count()
         })
         .sum()
+}
+
+#[derive(Debug, PartialEq)]
+enum Route {
+    Osd,
+    Classifier,
+    /// Only where no recovery is expected; a half-turn recovery also reads as this.
+    Original,
+}
+
+/// The OSD recognition read is forced to PSM 1 and never rotates pixels; the classifier route
+/// rotates the raster and records it, so a stale entry from the other route is visible. ~keep
+fn assert_route(name: &str, result: &ExtractedDocument, expected: Route) {
+    let psm1 = result
+        .metadata
+        .additional
+        .get("psm")
+        .and_then(serde_json::Value::as_str)
+        == Some("1");
+    let rotated = result.metadata.additional.contains_key("auto_rotated");
+    let observed = match (psm1, rotated) {
+        (true, false) => Route::Osd,
+        (false, true) => Route::Classifier,
+        (false, false) => Route::Original,
+        _ => panic!("{name}: ambiguous route psm1={psm1} auto_rotated={rotated}"),
+    };
+    assert_eq!(observed, expected, "{name}: served from the wrong orientation route");
+}
+
+/// The unset policy's read before the OSD pack exists: the classifier recovers the table when one
+/// is compiled and its model seeded (`auto-rotate-tract`); otherwise the original read is kept. ~keep
+fn assert_before_osd(before: &ExtractedDocument) {
+    #[cfg(feature = "auto-rotate-tract")]
+    {
+        assert_source_table(before);
+        assert_route("before", before, Route::Classifier);
+    }
+    #[cfg(not(feature = "auto-rotate-tract"))]
+    {
+        assert_original_read(before);
+        assert_route("before", before, Route::Original);
+    }
 }
 
 fn assert_source_table(result: &ExtractedDocument) {

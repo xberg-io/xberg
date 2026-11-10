@@ -55,6 +55,7 @@ impl<'doc> TextExtractor<'doc> {
 
         // RTL text correction. See `correct_tj_buffer_rtl_order` for the full
         // rationale (unchanged, just split out for file size). ~keep
+        let ligature_glyph = buffer.is_lone_ligature();
         let text = std::mem::take(&mut buffer.unicode);
         let text = Self::correct_tj_buffer_rtl_order(text, &buffer);
 
@@ -102,6 +103,7 @@ impl<'doc> TextExtractor<'doc> {
             wmode: buffer.wmode,
             text_rise: buffer.text_rise,
             rtl_draw_logical: false,
+            ligature_glyph,
             mirrored: buffer.mirrored,
             page_rotation_applied: 0,
         };

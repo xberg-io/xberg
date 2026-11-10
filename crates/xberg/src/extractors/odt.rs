@@ -2195,10 +2195,9 @@ mod tests {
         assert_eq!(math_spans(&doc), ["$a^{2}$"]);
         assert_eq!(recorded_latex(&doc), ["a^{2}"]);
         let markdown = crate::rendering::render_markdown(&doc);
-        assert!(
-            markdown.contains("For a right triangle, $`a^{2}`$ holds."),
-            "{markdown}"
-        );
+        assert!(markdown.contains("For a right triangle, $a^{2}$ holds."), "{markdown}");
+        assert!(markdown.contains("\n$$\ny\n$$"), "{markdown}");
+        assert!(!markdown.contains("```math"), "{markdown}");
     }
 
     #[test]

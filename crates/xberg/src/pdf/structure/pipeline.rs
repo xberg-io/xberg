@@ -21,7 +21,7 @@ use super::classify::{
 };
 use super::constants::{FULL_LINE_FRACTION, MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO};
 use super::lines::{is_cjk_char, segments_need_space};
-use super::paragraphs::{merge_continuation_paragraphs, split_embedded_list_items};
+use super::paragraphs::{accent_letter_over_formula_start, merge_continuation_paragraphs, split_embedded_list_items};
 use super::text_repair::{
     MIN_LIGATURE_WITNESS_WORD_LEN, TextReplacement, WordWitnesses, apply_to_all_segments, clean_duplicate_punctuation,
     collapse_spaced_hyphens, expand_ligatures, expand_ligatures_mapped, normalize_text_encoding,
@@ -2238,6 +2238,10 @@ fn blocks_to_paragraphs(
             // break its paragraph. See #1386. ~keep
             let starts_section =
                 starts_new_line && super::classify::is_numbered_section_heading(&visual_line_texts[line_idx]);
+            // A formula line under a hat drawn as a lone letter starts a new paragraph.
+            // The heading rule used to break there; joined, the two print as "bX". ~keep
+            let accent_over_formula =
+                starts_new_line && accent_letter_over_formula_start(prev, line, &visual_line_texts[line_idx]);
             // A numbered section heading also always ENDS the element it opens: without
             // this term nothing else distinguishes a heading from the body text that
             // follows it when both share font size, weight, role and line spacing --
@@ -2363,6 +2367,7 @@ fn blocks_to_paragraphs(
                 || bold_change
                 || is_list
                 || starts_section
+                || accent_over_formula
                 || follows_section
                 || crossed_gap
                 || crosses_column_corridor
@@ -7442,3 +7447,6 @@ mod tests;
 
 #[cfg(test)]
 mod list_marker_tests;
+
+#[cfg(test)]
+mod accent_line_tests;

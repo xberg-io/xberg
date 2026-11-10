@@ -32,6 +32,74 @@ fn should_ignore_only_known_hocr_run_bookkeeping_in_a_plain_page() {
 }
 
 #[test]
+fn should_accept_the_count_of_words_tesseract_placed_in_non_text_blocks_as_run_bookkeeping() {
+    let mut doc = super::super::document::flat_ocr_page_document("real source words");
+    doc.metadata
+        .additional
+        .insert("non_text_block_word_count".into(), serde_json::json!(2));
+    assert!(has_only_certified_tesseract_text(&doc));
+
+    doc.metadata
+        .additional
+        .insert("non_text_block_word_count".into(), serde_json::json!("two"));
+    assert!(!has_only_certified_tesseract_text(&doc));
+}
+
+mod hanging_underscore {
+    use super::*;
+    use xberg_native_pdf::layout::TextLine;
+
+    fn rect(x: f32, y: f32, width: f32, height: f32) -> Rect {
+        Rect { x, y, width, height }
+    }
+
+    fn line_at(x: f32, y: f32, width: f32) -> TextLine {
+        let bbox = rect(x, y, width, 9.0);
+        TextLine {
+            words: Vec::new(),
+            bbox,
+            text: "_mm_mask_i64scatter_pd".into(),
+        }
+    }
+
+    fn read(text: &str, left: f32, top: f32, right: f32, bottom: f32) -> Vec<(String, LineBox)> {
+        vec![(
+            text.to_owned(),
+            LineBox {
+                left,
+                top,
+                right,
+                bottom,
+            },
+        )]
+    }
+
+    #[test]
+    fn should_place_an_underscore_that_hangs_just_below_its_line_on_that_line() {
+        let lines = [line_at(45.0, 138.0, 400.0)];
+        let placed = read_on_native_lines(&read("_", 276.5, 136.8, 280.3, 137.8), &lines).expect("placed");
+        assert!(
+            placed[0].1,
+            "a hanging underscore must show glyph ink, as a read over a native word does"
+        );
+    }
+
+    #[test]
+    fn should_not_place_other_words_that_miss_every_line() {
+        let lines = [line_at(45.0, 138.0, 400.0)];
+        assert!(read_on_native_lines(&read("x", 276.5, 136.8, 280.3, 137.8), &lines).is_none());
+        assert!(read_on_native_lines(&read("-", 276.5, 136.8, 280.3, 137.8), &lines).is_none());
+    }
+
+    #[test]
+    fn should_not_place_an_underscore_far_from_a_line_or_beside_it() {
+        let lines = [line_at(45.0, 138.0, 400.0)];
+        assert!(read_on_native_lines(&read("_", 276.5, 128.0, 280.3, 129.0), &lines).is_none());
+        assert!(read_on_native_lines(&read("_", 476.5, 136.8, 480.3, 137.8), &lines).is_none());
+    }
+}
+
+#[test]
 fn should_compare_a_table_read_to_its_words_without_the_table_markup() {
     let content = "| Value | Type |\n| --- | --- |\n| 00H | General |";
     let words = ["Value", "Type", "00H", "General", "|", "|"];
