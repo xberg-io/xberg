@@ -1738,22 +1738,56 @@ fn remap_page_boundaries_after_nfc(result: &mut ExtractedDocument, unnormalized:
 
 /// Move each entity span from `unnormalized` to the same text in `result.content`. Spans that
 /// were not on character boundaries of `unnormalized` index no text, so they stay as they were.
+/// A span that cuts a letter from its combining accent first grows to hold both, so the entity
+/// keeps its text and no offset of any span lands inside a composed letter.
 #[cfg(feature = "quality")]
 fn remap_entity_spans_after_nfc(result: &mut ExtractedDocument, unnormalized: &str) {
     let Some(entities) = result.entities.as_mut() else {
         return;
     };
-    let spans = entities
+    let on_boundary = |offset: u32| unnormalized.is_char_boundary(offset as usize);
+    if !entities.iter().all(|e| on_boundary(e.start) && on_boundary(e.end)) {
+        return;
+    }
+    let grown: Vec<(usize, usize)> = entities
         .iter()
-        .flat_map(|e| [e.start, e.end])
-        .map(|offset| offset as usize);
-    let Some(moved) = nfc_offsets(unnormalized, spans) else {
+        .map(|e| {
+            (
+                nfc_stable_offset(unnormalized, e.start as usize, false),
+                nfc_stable_offset(unnormalized, e.end as usize, true),
+            )
+        })
+        .collect();
+    let Some(moved) = nfc_offsets(unnormalized, grown.iter().flat_map(|&(start, end)| [start, end])) else {
         return;
     };
-    for entity in entities.iter_mut() {
-        entity.start = moved[&(entity.start as usize)] as u32;
-        entity.end = moved[&(entity.end as usize)] as u32;
+    for (entity, (start, end)) in entities.iter_mut().zip(grown) {
+        entity.start = moved[&start] as u32;
+        entity.end = moved[&end] as u32;
     }
+}
+
+/// The nearest offset to `offset` (after it when `forward`, else before it) that no NFC
+/// composition reaches across: its next character does not join the character before it.
+#[cfg(feature = "quality")]
+fn nfc_stable_offset(text: &str, mut offset: usize, forward: bool) -> usize {
+    use unicode_normalization::char::{canonical_combining_class, compose};
+    let joins_previous = |offset: usize| {
+        let (Some(previous), Some(next)) = (text[..offset].chars().next_back(), text[offset..].chars().next()) else {
+            return false;
+        };
+        // U+1161 to U+11FF are the Hangul vowel and final jamo, which compose with the syllable before. ~keep
+        let hangul_tail = ('\u{1161}'..='\u{11ff}').contains(&next);
+        hangul_tail || canonical_combining_class(next) != 0 || compose(previous, next).is_some()
+    };
+    while joins_previous(offset) {
+        offset = if forward {
+            offset + text[offset..].chars().next().map_or(0, char::len_utf8)
+        } else {
+            offset - text[..offset].chars().next_back().map_or(0, char::len_utf8)
+        };
+    }
+    offset
 }
 
 /// Where each byte offset of `unnormalized` lands in its NFC form: after the NFC of the text
