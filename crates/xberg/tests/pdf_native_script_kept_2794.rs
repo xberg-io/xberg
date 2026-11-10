@@ -15,6 +15,7 @@ use xberg::{ExtractionConfig, OcrConfig, OutputFormat};
 
 const COMPLETE: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/cluster-complete-mapped.pdf");
 const FIGURE: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-text-with-figure.pdf");
+const THEN_SCANNED: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-then-scanned-english.pdf");
 const AMONG_ENGLISH: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-among-english-pages.pdf");
 const KHMER_PAGE_LETTERS: usize = 222;
 const ENGLISH: &str = "The quarterly report contains useful readable text about the country and its people.";
@@ -86,6 +87,47 @@ impl OcrBackend for FailingFirst {
     async fn process_image(&self, _: &[u8], _: &OcrConfig) -> xberg::Result<ExtractedDocument> {
         if self.calls.fetch_add(1, Ordering::SeqCst) < self.failing {
             return Err(xberg::XbergError::ocr("page raster refused"));
+        }
+        let mut document = ExtractedDocument::default();
+        document.content = self.text.to_owned();
+        Ok(document)
+    }
+}
+
+/// Reads `text` for its first `ok_calls` calls and errors afterwards, counting every call, so a test
+/// can let the whole-document read succeed and fail only the per-page retry that follows it.
+struct Counting {
+    text: &'static str,
+    ok_calls: usize,
+    calls: AtomicUsize,
+}
+
+impl Plugin for Counting {
+    fn name(&self) -> &str {
+        "tesseract"
+    }
+    fn version(&self) -> String {
+        "1.0.0".to_owned()
+    }
+    fn initialize(&self) -> xberg::Result<()> {
+        Ok(())
+    }
+    fn shutdown(&self) -> xberg::Result<()> {
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl OcrBackend for Counting {
+    fn backend_type(&self) -> OcrBackendType {
+        OcrBackendType::Custom
+    }
+    fn supports_language(&self, _: &str) -> bool {
+        true
+    }
+    async fn process_image(&self, _: &[u8], _: &OcrConfig) -> xberg::Result<ExtractedDocument> {
+        if self.calls.fetch_add(1, Ordering::SeqCst) >= self.ok_calls {
+            return Err(xberg::XbergError::ocr("per-page read refused"));
         }
         let mut document = ExtractedDocument::default();
         document.content = self.text.to_owned();
@@ -234,4 +276,92 @@ fn only_the_marked_page_of_a_document_with_readable_pages_keeps_its_native_text(
         .filter(|w| w.source == "ocr" && w.message.contains("Page 2 retained its native text"))
         .collect();
     assert_eq!(kept.len(), 1, "{:?}", automatic.processing_warnings);
+}
+
+fn counting(text: &'static str, ok_calls: usize) -> Arc<Counting> {
+    Arc::new(Counting {
+        text,
+        ok_calls,
+        calls: AtomicUsize::new(0),
+    })
+}
+
+#[test]
+#[serial_test::serial]
+fn a_marked_page_beside_a_scan_keeps_its_native_text_when_the_whole_document_read_drops_its_script() {
+    let native = read_with(THEN_SCANNED, Arc::new(Fixed(ENGLISH)), true);
+    let backend = counting(ENGLISH, usize::MAX);
+    let automatic = read_with(THEN_SCANNED, backend.clone(), false);
+    let native_pages = native.pages.as_ref().unwrap();
+    let pages = automatic.pages.as_ref().unwrap();
+    assert_eq!(pages.len(), 2);
+    assert_eq!(khmer_count(&native_pages[0].content), KHMER_PAGE_LETTERS);
+    assert!(native_pages[1].content.trim().is_empty(), "page 2 is a scan");
+    assert_eq!(pages[0].content, native_pages[0].content);
+    assert_eq!(pages[1].content.trim(), ENGLISH);
+    assert_eq!(
+        khmer_count(&automatic.content),
+        KHMER_PAGE_LETTERS,
+        "{:?}",
+        automatic.content
+    );
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Mixed));
+    let kept: Vec<_> = automatic
+        .processing_warnings
+        .iter()
+        .filter(|w| w.source == "ocr" && w.message.contains("Page 1 retained its native text"))
+        .collect();
+    assert_eq!(kept.len(), 1, "{:?}", automatic.processing_warnings);
+    assert_eq!(
+        backend.calls.load(Ordering::SeqCst),
+        4,
+        "the whole-document read and the per-page retry both run"
+    );
+}
+
+#[test]
+#[serial_test::serial]
+fn a_retry_that_cannot_read_a_scan_the_whole_read_read_keeps_the_whole_read_and_warns() {
+    let backend = counting(ENGLISH, 2);
+    let automatic = read_with(THEN_SCANNED, backend.clone(), false);
+    assert!(
+        backend.calls.load(Ordering::SeqCst) > 2,
+        "the whole-document read took the first two calls, so the retry ran and was refused"
+    );
+    let pages = automatic.pages.as_ref().unwrap();
+    assert_eq!(pages[1].content.trim(), ENGLISH);
+    let warned: Vec<_> = automatic
+        .processing_warnings
+        .iter()
+        .filter(|w| w.source == "ocr" && w.message.contains("Pages [1]"))
+        .collect();
+    assert_eq!(warned.len(), 1, "{:?}", automatic.processing_warnings);
+}
+
+#[test]
+#[serial_test::serial]
+fn a_healthy_khmer_read_replaces_the_marked_page_beside_a_scan() {
+    let backend = counting(KHMER, usize::MAX);
+    let automatic = read_with(THEN_SCANNED, backend.clone(), false);
+    let pages = automatic.pages.as_ref().unwrap();
+    assert_eq!(pages.len(), 2);
+    assert!(
+        pages[0].content.contains("ប្រទេសកម្ពុជាមានប្រជាជនច្រើន"),
+        "{:?}",
+        pages[0].content
+    );
+    assert_eq!(pages[1].content.trim(), KHMER);
+    assert_eq!(
+        backend.calls.load(Ordering::SeqCst),
+        2,
+        "a read that keeps the script needs no retry"
+    );
+    assert!(
+        !automatic
+            .processing_warnings
+            .iter()
+            .any(|w| w.message.contains("retained its native text")),
+        "{:?}",
+        automatic.processing_warnings
+    );
 }
