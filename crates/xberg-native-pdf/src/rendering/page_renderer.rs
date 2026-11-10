@@ -9138,9 +9138,9 @@ enum SourceCsClass {
     /// DeviceCMYK").
     OtherProcess,
     /// `Separation` or non-process `DeviceN` that names at least one
-    /// process colorant (`Cyan`, `Magenta`, `Yellow`, `Black`). Table 149
-    /// row 3: a named colorant carries `c_s`, every other process
-    /// channel preserves backdrop (`B = c_b`). `named` holds one flag per
+    /// process colorant (`Cyan`, `Magenta`, `Yellow`, `Black`, or `All`,
+    /// which names all four). Table 149 row 3: a named colorant carries
+    /// `c_s`, every other process channel preserves backdrop (`B = c_b`). `named` holds one flag per
     /// channel in C, M, Y, K order. A paint that names only spot inks
     /// never reaches this class: [`source_for_overprint`] skips it.
     SeparationOrDeviceN { named: [bool; 4] },
@@ -9275,8 +9275,8 @@ fn source_for_overprint(gs: &GraphicsState, fill_side: bool) -> Option<Overprint
             // 2. `spot_inks` non-empty (no process CMYK) — Separation or
             //    DeviceN with NO process attribution. A colorant named
             //    Cyan, Magenta, Yellow or Black is that process plate
-            //    (§8.6.6.4): its channel carries the tint, the others
-            //    preserve backdrop. A paint that names only spot inks
+            //    (§8.6.6.4), and All is every plate: a named channel
+            //    carries the tint, the others preserve backdrop. A paint that names only spot inks
             //    returns None: the composite keeps the alternate colour
             //    the rasteriser painted, as a viewer shows it, and the
             //    process plates keep their backdrop because nothing
@@ -9300,15 +9300,18 @@ fn source_for_overprint(gs: &GraphicsState, fill_side: bool) -> Option<Overprint
                 let mut named = [false; 4];
                 let mut tints = [0.0_f32; 4];
                 for (ink, tint) in spot_inks {
-                    let channel = match ink.as_str() {
-                        "Cyan" => 0,
-                        "Magenta" => 1,
-                        "Yellow" => 2,
-                        "Black" => 3,
+                    let channels = match ink.as_str() {
+                        "Cyan" => 0..1,
+                        "Magenta" => 1..2,
+                        "Yellow" => 2..3,
+                        "Black" => 3..4,
+                        "All" => 0..4,
                         _ => continue,
                     };
-                    named[channel] = true;
-                    tints[channel] = tint.clamp(0.0, 1.0);
+                    for channel in channels {
+                        named[channel] = true;
+                        tints[channel] = tint.clamp(0.0, 1.0);
+                    }
                 }
                 named.contains(&true).then_some(OverprintSource {
                     class: SourceCsClass::SeparationOrDeviceN { named },

@@ -1,6 +1,6 @@
 //! An overprinted `Separation` or `DeviceN` paint shows in the composite render: a process colorant
-//! name (Cyan, Magenta, Yellow, Black) marks its own channel and keeps the others, and a spot ink
-//! paints its alternate colour. OCR reads this render, so a paint that left the backdrop showed no
+//! name (Cyan, Magenta, Yellow, Black) marks its own channel and keeps the others, `/All` marks
+//! every channel, and a spot ink paints its alternate colour. OCR reads this render, so a paint that left the backdrop showed no
 //! text at all.
 
 use xberg_native_pdf::PdfDocument;
@@ -19,7 +19,7 @@ fn ramp(cmyk: [u8; 4]) -> String {
 fn page(content: &str) -> Vec<u8> {
     let resources = format!(
         "/ColorSpace << /CsK [/Separation /Black /DeviceCMYK {k}] /CsC [/Separation /Cyan /DeviceCMYK {c}] \
-         /CsS [/Separation /SpotInk /DeviceCMYK {c}] /CsNK [/DeviceN [/Black] /DeviceCMYK {k}] >> \
+         /CsS [/Separation /SpotInk /DeviceCMYK {c}] /CsNK [/DeviceN [/Black] /DeviceCMYK {k}] /CsA [/Separation /All /DeviceCMYK {k}] >> \
          /ExtGState << /OP1 << /Type /ExtGState /OP true /op true /OPM 1 >> \
          /OP0 << /Type /ExtGState /OP true /op true /OPM 0 >> >> \
          /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >>",
@@ -120,6 +120,14 @@ fn an_overprinted_devicen_black_fill_paints_black() {
 fn an_overprinted_spot_ink_paints_its_alternate_colour() {
     let rgb = centre(&format!("/OP1 gs /CsS cs 1 scn {SQUARE}"));
     assert!(rgb[0] < 60 && rgb[1] > 180 && rgb[2] > 180, "{rgb:?}");
+}
+
+#[test]
+fn an_overprinted_all_separation_marks_every_process_channel() {
+    let content = format!("0 1 0 0 k {SQUARE} /OP1 gs /CsA cs 1 scn {SQUARE}");
+    let rgb = centre(&content);
+    assert!(rgb.iter().all(|&v| v < 60), "{rgb:?}");
+    assert_eq!(plate_centre(&content, "Cyan"), 255);
 }
 
 #[test]
