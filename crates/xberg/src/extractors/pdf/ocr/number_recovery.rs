@@ -25,22 +25,22 @@ pub(super) struct Run {
     processor: once_cell::sync::OnceCell<OcrProcessor>,
 }
 
-pub(super) struct PagePolicy {
+pub(super) struct PagePolicy<'a> {
     pub(super) accepted: bool,
     pub(super) scale_only: bool,
     pub(super) layout: bool,
     pub(super) transformed: bool,
-    pub(super) type0_ink_loss: bool,
+    pub(super) raster: Option<&'a crate::pdf::render::OcrRasterDpi>,
     pub(super) structured: bool,
     pub(super) builtin: bool,
 }
 
-pub(super) fn applicable(policy: PagePolicy) -> bool {
+pub(super) fn applicable(policy: PagePolicy<'_>) -> bool {
     policy.accepted
         && policy.scale_only
         && !policy.layout
         && !policy.transformed
-        && !policy.type0_ink_loss
+        && policy.raster.is_some_and(|raster| !raster.type0_ink_loss)
         && !policy.structured
         && policy.builtin
 }

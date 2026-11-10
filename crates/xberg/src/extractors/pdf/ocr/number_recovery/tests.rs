@@ -500,26 +500,53 @@ fn verifier_fixture() -> (std::sync::Arc<Vec<u8>>, Rect, TextChar) {
 
 #[test]
 fn should_not_turn_verified_numbers_into_type0_page_corroboration() {
-    let native = "Covered account statements contain unrelated prose ០១២៣៤៥៦";
-    let read = "Quarterly revenue improved";
-    let thresholds = crate::core::config::OcrQualityThresholds::default();
-    assert!(!super::super::document::native_spells_read(native, read, &thresholds));
-    assert!(
-        super::super::document::native_spells_read(native, &format!("{read} ០១២៣៤៥៦"), &thresholds,),
-        "verified numeric bigrams alone can satisfy the broader corroboration predicate"
-    );
-    let policy = |type0_ink_loss| PagePolicy {
+    let matching = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/pdf_khmer_number_2408/matching.pdf"
+    ));
+    let type0 = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../xberg-native-pdf/tests/fixtures/cid_glyph_raster_2309/custom.pdf"
+    ));
+    let intact = rendered_integrity(matching);
+    let lost = rendered_integrity(type0);
+    assert!(!intact.type0_ink_loss, "positive must use a real intact render");
+    assert!(lost.type0_ink_loss, "negative must really lose Type0 ink");
+    let policy = |raster| PagePolicy {
         accepted: true,
         scale_only: true,
         layout: false,
         transformed: false,
-        type0_ink_loss,
+        raster,
         structured: false,
         builtin: true,
     };
-    assert!(applicable(policy(false)), "intact raster remains eligible");
+    assert!(applicable(policy(Some(&intact))), "intact raster remains eligible");
     assert!(
-        !applicable(policy(true)),
-        "numeric crop evidence cannot certify the rest of a Type0 ink-loss page"
+        !applicable(policy(Some(&lost))),
+        "numeric crops cannot certify a Type0 ink-loss page"
     );
+    let detached = super::super::pipeline::PageOcrHints::default();
+    let raster_dpis = detached.raster_dpis.as_deref().cloned().unwrap_or_default();
+    assert!(
+        !applicable(policy(raster_dpis.get(&0))),
+        "a detached stage without raster integrity must decline recovery"
+    );
+    let known = super::super::rendering::PageRasterDpis::from_iter([(0, intact)]);
+    assert!(
+        !applicable(policy(known.get(&1))),
+        "another page's evidence cannot certify this page"
+    );
+}
+
+fn rendered_integrity(source: &[u8]) -> crate::pdf::render::OcrRasterDpi {
+    let document = PdfDocument::from_bytes(source.to_vec()).unwrap();
+    crate::pdf::render::render_pdf_ocr_page_with_dpi(
+        &document,
+        0,
+        None,
+        &crate::extractors::security::SecurityLimits::default(),
+    )
+    .unwrap()
+    .1
 }

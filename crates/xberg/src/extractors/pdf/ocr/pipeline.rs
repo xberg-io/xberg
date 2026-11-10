@@ -5639,7 +5639,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 if super::number_recovery::applicable(super::number_recovery::PagePolicy {
                     accepted: !acceptance.discarded && acceptance.verdict.is_none(),
                     scale_only: number_frame_reads[offset],
-                    type0_ink_loss: raster_dpis.get(&page_idx).is_some_and(|raster| raster.type0_ink_loss),
+                    raster: raster_dpis.get(&page_idx),
                     layout: has_layout_detections,
                     transformed: tall_source_used
                         || batch_upright_correction[offset].0 != 0
@@ -5786,7 +5786,7 @@ pub(super) async fn extract_with_ocr_for_page(
             if super::number_recovery::applicable(super::number_recovery::PagePolicy {
                 accepted: !acceptance.discarded && acceptance.verdict.is_none(),
                 scale_only: number_frame_reads[offset],
-                type0_ink_loss: raster_dpis.get(&page_idx).is_some_and(|raster| raster.type0_ink_loss),
+                raster: raster_dpis.get(&page_idx),
                 layout: has_layout_detections,
                 transformed: tall_source_used
                     || batch_upright_correction[offset].0 != 0

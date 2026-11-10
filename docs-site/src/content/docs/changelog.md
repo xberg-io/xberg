@@ -307,13 +307,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(ocr): Optionally recover native Khmer numbers with provisioned `khm.traineddata`.** (Refs #2408)
+- **(ocr): Optionally recover native Khmer numbers with provisioned `khm.traineddata`.** (GH#2408)
   Upright crops can restore omitted numbers when the model accompanies the selected primary model.
   English-only text and forced OCR stay unchanged. Missing Khmer models warn on eligible default
   automatic pages only. Recovery retains OCR tokens, so misread neighbors can remain, and declines
   transformed or ambiguous source claims. Numeric crops overlapping merged prose
   segments are declined when their internal word positions are unavailable.
-  Type0 rasters with lost glyph ink and lines already containing numbers stay unchanged.
+  Type0 rasters with lost glyph ink, stages without raster-integrity evidence, and lines
+  already containing numbers stay unchanged.
   Eligible pages bypass OCR and extraction-result caches so model installation takes effect.
   Recovered Plain pages retain exact document byte ranges.
   No runtime model download; the original reporter page remains unverified.

@@ -86,6 +86,8 @@ reporter page. Rotated/cropped pages, custom OCR settings, layout/pipeline
 routes and rows already containing OCR numbers remain unchanged. A Latin date or total
 on the owning line also prevents recovery. Type0 rasters that lost glyph ink
 remain unchanged: a numeral crop cannot corroborate the rest of that page.
+Recovery also declines detached stages without positive raster-integrity
+evidence; missing evidence is not proof that the raster retained every glyph.
 
 [khm]: https://github.com/tesseract-ocr/tessdata_fast/blob/87416418657359cb625c412a48b6e1d6d41c29bd/khm.traineddata
 [lic]: https://github.com/tesseract-ocr/tessdata_fast/blob/87416418657359cb625c412a48b6e1d6d41c29bd/LICENSE
