@@ -23,6 +23,7 @@ const PROSE_PDF: &[u8] = include_bytes!("fixtures/ocr_photo_noise_2312/prose.pdf
 const PNG_NOISE_BEFORE: usize = 840;
 const PDF_NOISE_BEFORE: usize = 1056;
 const PDF_NOISE_AFTER_PLAIN: usize = 169;
+const PDF_NOISE_PLATFORM_SLACK: usize = 16;
 const PDF_PRUNED_LINES: usize = 200;
 
 const PROSE: &str = "The committee met on Tuesday to review the annual budget.\n\n\
@@ -75,7 +76,13 @@ async fn photograph_pdf_keeps_at_most_a_quarter_of_its_symbol_noise() {
         if plain {
             // Lines with a digit are kept (`$5`, `1.`), which is why 169 characters of the 1056 stay;
             // an earlier rule that dropped single-digit lines left 50.
-            assert_eq!(noise_chars(&content), PDF_NOISE_AFTER_PLAIN, "{content:?}");
+            // The OCR read differs by platform in a few one-digit lines the keep rule retains
+            // (macOS 169, Linux CI 182), so the count is a band, not a point.
+            assert!(
+                (PDF_NOISE_AFTER_PLAIN..=PDF_NOISE_AFTER_PLAIN + PDF_NOISE_PLATFORM_SLACK)
+                    .contains(&noise_chars(&content)),
+                "{content:?}"
+            );
         }
         assert!(content.trim_start().starts_with(TITLE), "{content:?}");
     }
