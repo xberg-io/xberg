@@ -376,38 +376,58 @@ fn render_annotations_djot(annotations: &[PdfAnnotation]) -> String {
     out
 }
 
-/// Backslash-escapes a leading block marker so a row that starts its own paragraph is not read as
-/// a table, list, definition list, heading, quote or thematic break.
+/// Backslash-escapes the first character of a row that starts its own paragraph when that
+/// character could open Djot block syntax: a table, list, definition list, heading, quote,
+/// thematic break, div, code fence, footnote, link definition, caption or attribute line.
+/// Djot lets a backslash escape any ASCII punctuation character, so every punctuation start is
+/// escaped; only a `#` that is not a heading marker (`#hashtag`) stays plain. A row that
+/// starts with a letter or digit is escaped at the delimiter of a list label (`1.`, `a)`).
 fn escape_leading_block_marker(line: &str) -> String {
-    match leading_block_marker_at(line) {
-        Some(at) => format!("{}\\{}", &line[..at], &line[at..]),
-        None => line.to_string(),
+    let Some(at) = leading_block_marker_at(line) else {
+        return line.to_string();
+    };
+    let (head, rest) = line.split_at(at);
+    let first = rest.chars().next().unwrap_or_default();
+    // After the first backtick or colon of a run is escaped, the rest of the run would still open
+    // a code span or an empty symbol, so the whole run is escaped.
+    let mut run = if matches!(first, '`' | ':') {
+        rest.len() - rest.trim_start_matches(first).len()
+    } else {
+        first.len_utf8()
+    };
+    // On the unescaped row, `{`, `[`, `!` and `:` hold the delimiters that follow them, so a row such as `{_!_`
+    // or `[]{}` stays text. Escaping only the opener would free those delimiters to become emphasis, a
+    // superscript or attributes, so the whole run of punctuation after the opener is escaped.
+    if matches!(first, '{' | '[' | '!' | ':') {
+        let extra = rest[run..]
+            .chars()
+            .take_while(|c| c.is_ascii_punctuation() && *c != '\\')
+            .count();
+        run += extra;
     }
+    let escaped: String = rest[..run].chars().flat_map(|c| ['\\', c]).collect();
+    format!("{head}{escaped}{}", &rest[run..])
 }
 
-/// Byte offset of the character to escape when `line` opens with Djot block syntax.
+/// Byte offset of the character to escape when `line` could open Djot block syntax.
 fn leading_block_marker_at(line: &str) -> Option<usize> {
     let first = line.chars().next()?;
-    let after = |len: usize| line[len..].chars().next().is_none_or(char::is_whitespace);
-    if matches!(first, '-' | '*')
-        && line.chars().all(|c| c == first || c == ' ')
-        && line.chars().filter(|&c| c == first).count() >= 3
-    {
-        return Some(0);
-    }
-    match first {
-        '|' | '>' => Some(0),
-        '-' | '+' | '*' | ':' if after(1) => Some(0),
-        '#' if after(line.len() - line.trim_start_matches('#').len()) => Some(0),
-        '(' => {
-            let end = line.find(')')?;
-            (is_list_label(&line[1..end]) && after(end + 1)).then_some(0)
+    if first.is_ascii_punctuation() {
+        // A backslash before punctuation already escapes it, and doubling it would free the next character.
+        if first == '\\' && line[1..].chars().next().is_some_and(|c| c.is_ascii_punctuation()) {
+            return None;
         }
-        _ => {
-            let end = line.find(['.', ')'])?;
-            (is_list_label(&line[..end]) && after(end + 1)).then_some(end)
-        }
+        let hashtag = first == '#'
+            && line
+                .trim_start_matches('#')
+                .chars()
+                .next()
+                .is_some_and(|c| !c.is_whitespace());
+        return (!hashtag).then_some(0);
     }
+    let end = line.find(['.', ')'])?;
+    let followed_by_space = line[end + 1..].chars().next().is_none_or(char::is_whitespace);
+    (is_list_label(&line[..end]) && followed_by_space).then_some(end)
 }
 
 /// A decimal number, a single letter or a roman numeral run: the labels Djot opens a list with.
