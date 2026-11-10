@@ -157,9 +157,11 @@ fn unreadable_scripts(text: &str, languages: &[String]) -> Option<Vec<Script>> {
     )
 }
 
-/// Whether a character can be a letter or mark of a script: not whitespace, a lost-glyph marker, a
-/// numeral or punctuation. The candidate counts and the marker share count characters the same way,
-/// so padding a page with digits changes neither.
+/// Whether a character can count toward the candidate script counts: not whitespace, a lost-glyph
+/// marker, a numeral or ASCII and general punctuation. Punctuation that belongs to one script, such
+/// as the Khmer khan, still counts here, because a script without cluster structure has no table to
+/// tell it from a letter. The loss test (`layer_is_lost`, `clusters_are_valid`) is stricter: it counts
+/// only what the cluster table calls a base or a sign.
 fn is_script_letter(character: char) -> bool {
     !character.is_whitespace()
         && character != super::unmapped_glyphs::LOST_GLYPH_MARKER
@@ -1750,6 +1752,18 @@ mod tests {
         let (decision, warnings) = run(&[&padded], ONE_PAGE, &khm_then_eng("khm", "eng"));
         assert_eq!(decision.failing_pages, [1]);
         assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn punctuation_added_to_a_complete_layer_does_not_break_its_sign_density() {
+        let complete = "កា ".repeat(10);
+        let padded = format!("{complete}{}", "។".repeat(100));
+        assert!(clusters_are_valid(&complete, Script::Khmer));
+        assert!(
+            clusters_are_valid(&padded, Script::Khmer),
+            "Khmer punctuation is not a letter of the layer"
+        );
+        assert!(!padded.contains('\u{FFFD}'), "the page holds no marker");
     }
 
     const COMPLETE_LAYER: &str = include_str!("../../../tests/fixtures/pdf/khmer-cluster-2536/layers/complete.txt");
