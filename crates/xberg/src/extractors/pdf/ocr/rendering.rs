@@ -384,6 +384,8 @@ pub(super) struct XObjectRecoveryOutcome {
     pub(super) formulas: Vec<crate::types::Formula>,
     /// First preprocessing record in paint order, matching the per-page metadata surface.
     pub(super) image_preprocessing: Option<crate::types::ImagePreprocessingMetadata>,
+    /// Producing Tesseract mode, only when one image represents the recovered page.
+    pub(super) tesseract_psm: Option<i32>,
     /// Why each embedded image the backend rejected yielded nothing, in paint order.
     pub(super) failure_causes: Vec<String>,
     /// Noise warnings of the reads kept or dropped by the per-image verdict.
@@ -407,6 +409,7 @@ pub(super) async fn recover_image_xobjects(
         tables: Vec::new(),
         formulas: Vec::new(),
         image_preprocessing: None,
+        tesseract_psm: None,
         failure_causes: Vec::new(),
         warnings: Vec::new(),
     };
@@ -508,6 +511,9 @@ pub(super) async fn collect_xobject_recovery_result(
             return Ok(());
         }
     };
+    if outcome.attempted == 1 {
+        outcome.tesseract_psm = super::pipeline::effective_tesseract_psm(&result.metadata, backend.name());
+    }
     // Each image is judged on its own read, with its own preparation evidence: another image's
     // clamp cannot reject this image's text. ~keep
     let text = match proven_read {
@@ -801,7 +807,7 @@ fn render_one_full_pdf_ocr_page(
     security_limits: &crate::extractors::security::SecurityLimits,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
 ) -> crate::Result<EncodedPage> {
-    render_one_full_pdf_ocr_page_with_dpi(doc, page_rotations, page_idx, security_limits, images_config)
+    render_one_full_pdf_ocr_page_with_dpi(doc, page_rotations, page_idx, security_limits, images_config, None)
         .map(|(page, _)| page)
 }
 
@@ -821,6 +827,7 @@ fn render_one_full_pdf_ocr_page_with_dpi(
     page_idx: usize,
     security_limits: &crate::extractors::security::SecurityLimits,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
+    preprocessing_dpi: Option<i32>,
 ) -> crate::Result<(EncodedPage, crate::pdf::render::OcrRasterDpi)> {
     #[cfg(test)]
     record_render_thread();
@@ -834,6 +841,7 @@ fn render_one_full_pdf_ocr_page_with_dpi(
         images_config,
         security_limits,
         &mut exceeded,
+        preprocessing_dpi,
     )
     .map_err(|error| {
         let message = format!("Failed to render page {page_idx} for OCR: {error:?}");
@@ -868,7 +876,7 @@ pub(super) fn render_full_pdf_ocr_batch(
     security_limits: &crate::extractors::security::SecurityLimits,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
 ) -> crate::Result<Vec<EncodedPage>> {
-    render_full_pdf_ocr_batch_with_dpi(doc, page_rotations, page_range, security_limits, images_config)
+    render_full_pdf_ocr_batch_with_dpi(doc, page_rotations, page_range, security_limits, images_config, None)
         .map(|(pages, _)| pages)
 }
 
@@ -879,13 +887,21 @@ pub(super) fn render_full_pdf_ocr_batch_with_dpi(
     page_range: std::ops::Range<usize>,
     security_limits: &crate::extractors::security::SecurityLimits,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
+    preprocessing_dpi: Option<i32>,
 ) -> crate::Result<(Vec<EncodedPage>, PageRasterDpis)> {
     // rayon's work-stealing pool needs OS threads; wasm32 has none, so this falls back to a
     // sequential iterator there, matching `render_selected_pages_from_document`. ~keep
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     {
         let rendered = crate::pdf::render::par_render_pages_collecting_warnings(page_range.collect(), |page_idx| {
-            render_one_full_pdf_ocr_page_with_dpi(doc, page_rotations, page_idx, security_limits, images_config)
+            render_one_full_pdf_ocr_page_with_dpi(
+                doc,
+                page_rotations,
+                page_idx,
+                security_limits,
+                images_config,
+                preprocessing_dpi,
+            )
         })?;
         Ok(partition_raster_dpis(rendered))
     }
@@ -894,7 +910,14 @@ pub(super) fn render_full_pdf_ocr_batch_with_dpi(
         let rendered = crate::pdf::render::discard_new_render_warnings_on_error(|| {
             page_range
                 .map(|page_idx| {
-                    render_one_full_pdf_ocr_page_with_dpi(doc, page_rotations, page_idx, security_limits, images_config)
+                    render_one_full_pdf_ocr_page_with_dpi(
+                        doc,
+                        page_rotations,
+                        page_idx,
+                        security_limits,
+                        images_config,
+                        preprocessing_dpi,
+                    )
                 })
                 .collect()
         })?;
@@ -933,6 +956,7 @@ fn render_one_selected_page(
     idx: usize,
     security_limits: &crate::extractors::security::SecurityLimits,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
+    preprocessing_dpi: Option<i32>,
 ) -> crate::Result<raster_dpi::PageWithDpi> {
     #[cfg(test)]
     record_render_thread();
@@ -943,6 +967,7 @@ fn render_one_selected_page(
         images_config,
         security_limits,
         &mut exceeded,
+        preprocessing_dpi,
     )
     .map_err(|error| {
         let message = format!("Failed to render PDF page {}: {}", idx + 1, error);
@@ -988,7 +1013,7 @@ pub(super) fn render_selected_pages_from_document(
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
 ) -> (RenderedPages, PageRenderFailures) {
     let (pages, failures, _) =
-        render_selected_pages_with_dpi(doc, page_rotations, page_indices, security_limits, images_config);
+        render_selected_pages_with_dpi(doc, page_rotations, page_indices, security_limits, images_config, None);
     (pages, failures)
 }
 
@@ -999,6 +1024,7 @@ pub(super) fn render_selected_pages_with_dpi(
     page_indices: &[usize],
     security_limits: &crate::extractors::security::SecurityLimits,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
+    preprocessing_dpi: Option<i32>,
 ) -> (RenderedPages, PageRenderFailures, PageRasterDpis) {
     // rayon's work-stealing pool needs OS threads; wasm32 has none, so this falls back to a
     // sequential iterator there, matching the same gate used for the PNG-encode parallel path
@@ -1006,7 +1032,14 @@ pub(super) fn render_selected_pages_with_dpi(
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     {
         let outcomes = crate::pdf::render::par_render_pages_collecting_results(page_indices.to_vec(), |idx| {
-            render_one_selected_page(doc, page_rotations, idx, security_limits, images_config)
+            render_one_selected_page(
+                doc,
+                page_rotations,
+                idx,
+                security_limits,
+                images_config,
+                preprocessing_dpi,
+            )
         });
         partition_page_render_outcomes(outcomes)
     }
@@ -1017,7 +1050,14 @@ pub(super) fn render_selected_pages_with_dpi(
             .map(|&idx| {
                 (
                     idx,
-                    render_one_selected_page(doc, page_rotations, idx, security_limits, images_config),
+                    render_one_selected_page(
+                        doc,
+                        page_rotations,
+                        idx,
+                        security_limits,
+                        images_config,
+                        preprocessing_dpi,
+                    ),
                 )
             })
             .collect();

@@ -1103,7 +1103,7 @@ pub(crate) fn render_pdf_ocr_page_with_dpi(
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
     security_limits: &crate::extractors::security::SecurityLimits,
 ) -> std::result::Result<(xberg_native_pdf::rendering::RenderedImage, OcrRasterDpi), xberg_native_pdf::Error> {
-    render_pdf_ocr_page_with_budget_evidence(doc, page_index, images_config, security_limits, &mut false)
+    render_pdf_ocr_page_with_budget_evidence(doc, page_index, images_config, security_limits, &mut false, None)
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
@@ -1113,10 +1113,19 @@ pub(crate) fn render_pdf_ocr_page_with_budget_evidence(
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
     security_limits: &crate::extractors::security::SecurityLimits,
     source_budget_exceeded: &mut bool,
+    preprocessing_dpi: Option<i32>,
 ) -> std::result::Result<(xberg_native_pdf::rendering::RenderedImage, OcrRasterDpi), xberg_native_pdf::Error> {
     *source_budget_exceeded = false;
-    let (requested, planned) =
-        crate::image::dpi::planned_pdf_ocr_render_dpi(doc, page_index, images_config, security_limits);
+    let (requested, planned) = match preprocessing_dpi {
+        Some(target) => crate::image::dpi::planned_pdf_ocr_render_dpi_with_preprocessing(
+            doc,
+            page_index,
+            images_config,
+            security_limits,
+            Some(target),
+        ),
+        None => crate::image::dpi::planned_pdf_ocr_render_dpi(doc, page_index, images_config, security_limits),
+    };
     let media = doc.get_page_info(page_index)?.media_box;
     let options = safeguarded_render_options(page_index, planned.max(1) as u32, (media.width, media.height));
     let floor = if options.dpi == 72 && media.width.max(media.height) > MAX_RENDER_DIMENSION_PX {
