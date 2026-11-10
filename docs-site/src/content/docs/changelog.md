@@ -1557,6 +1557,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(markdown): Display math no longer opens an HTML block.** (GH#2793)
   A line of display math that starts with `<` (`<script`, `<div`, `<!--` and others) now gets a space after the `<`, as a `<` before a closing `>` already did, so no Markdown reader starts an HTML block there and drops the math.
 
+- **(pdf): Preserve source detail for explicitly configured Tesseract preprocessing.** Refs #2711.
+  Forced whole-document OCR with the built-in Tesseract backend now renders at an explicit higher preprocessing target DPI before normalization, within the existing render budget. This recovers a reproduced small-text word boundary lost by rendering at 150 DPI and then enlarging; explicit image settings and original full-page scan density retain precedence. Implicit defaults, selected-page OCR, prepared images and OCR pipelines keep their existing behavior.
+
 ## [1.3.11] - 2026-10-16
 
 ### Added

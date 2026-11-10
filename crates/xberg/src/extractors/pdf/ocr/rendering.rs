@@ -781,7 +781,7 @@ fn render_one_full_pdf_ocr_page(
     security_limits: &crate::extractors::security::SecurityLimits,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
 ) -> crate::Result<EncodedPage> {
-    render_one_full_pdf_ocr_page_with_dpi(doc, page_rotations, page_idx, security_limits, images_config)
+    render_one_full_pdf_ocr_page_with_dpi(doc, page_rotations, page_idx, security_limits, images_config, None)
         .map(|(page, _)| page)
 }
 
@@ -801,6 +801,7 @@ fn render_one_full_pdf_ocr_page_with_dpi(
     page_idx: usize,
     security_limits: &crate::extractors::security::SecurityLimits,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
+    preprocessing_dpi: Option<i32>,
 ) -> crate::Result<(EncodedPage, crate::pdf::render::OcrRasterDpi)> {
     #[cfg(test)]
     record_render_thread();
@@ -814,6 +815,7 @@ fn render_one_full_pdf_ocr_page_with_dpi(
         images_config,
         security_limits,
         &mut exceeded,
+        preprocessing_dpi,
     )
     .map_err(|error| {
         let message = format!("Failed to render page {page_idx} for OCR: {error:?}");
@@ -848,7 +850,7 @@ pub(super) fn render_full_pdf_ocr_batch(
     security_limits: &crate::extractors::security::SecurityLimits,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
 ) -> crate::Result<Vec<EncodedPage>> {
-    render_full_pdf_ocr_batch_with_dpi(doc, page_rotations, page_range, security_limits, images_config)
+    render_full_pdf_ocr_batch_with_dpi(doc, page_rotations, page_range, security_limits, images_config, None)
         .map(|(pages, _)| pages)
 }
 
@@ -859,13 +861,21 @@ pub(super) fn render_full_pdf_ocr_batch_with_dpi(
     page_range: std::ops::Range<usize>,
     security_limits: &crate::extractors::security::SecurityLimits,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
+    preprocessing_dpi: Option<i32>,
 ) -> crate::Result<(Vec<EncodedPage>, PageRasterDpis)> {
     // rayon's work-stealing pool needs OS threads; wasm32 has none, so this falls back to a
     // sequential iterator there, matching `render_selected_pages_from_document`. ~keep
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     {
         let rendered = crate::pdf::render::par_render_pages_collecting_warnings(page_range.collect(), |page_idx| {
-            render_one_full_pdf_ocr_page_with_dpi(doc, page_rotations, page_idx, security_limits, images_config)
+            render_one_full_pdf_ocr_page_with_dpi(
+                doc,
+                page_rotations,
+                page_idx,
+                security_limits,
+                images_config,
+                preprocessing_dpi,
+            )
         })?;
         Ok(partition_raster_dpis(rendered))
     }
@@ -874,7 +884,14 @@ pub(super) fn render_full_pdf_ocr_batch_with_dpi(
         let rendered = crate::pdf::render::discard_new_render_warnings_on_error(|| {
             page_range
                 .map(|page_idx| {
-                    render_one_full_pdf_ocr_page_with_dpi(doc, page_rotations, page_idx, security_limits, images_config)
+                    render_one_full_pdf_ocr_page_with_dpi(
+                        doc,
+                        page_rotations,
+                        page_idx,
+                        security_limits,
+                        images_config,
+                        preprocessing_dpi,
+                    )
                 })
                 .collect()
         })?;
@@ -923,6 +940,7 @@ fn render_one_selected_page(
         images_config,
         security_limits,
         &mut exceeded,
+        None,
     )
     .map_err(|error| {
         let message = format!("Failed to render PDF page {}: {}", idx + 1, error);
