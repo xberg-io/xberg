@@ -329,3 +329,21 @@ fn image_ocr_text_only_emits_paragraph_not_figure() {
     assert!(out.contains("OCR caption"), "expected OCR text as paragraph: {out}");
     assert!(out.contains("kb-ocr-text"), "expected ocr-text class: {out}");
 }
+
+#[test]
+fn a_row_lines_paragraph_emits_one_paragraph_per_row() {
+    use crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE;
+
+    let mut paragraph = InternalElement::text(ElementKind::Paragraph, "Water .... 36\r\n\nA & B .... 17\n", 0);
+    paragraph
+        .attributes
+        .get_or_insert_with(Default::default)
+        .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(), String::new());
+    let mut doc = InternalDocument::new("image");
+    doc.push_element(paragraph);
+    let html = render(HtmlOutputConfig::default(), &doc);
+    assert!(
+        html.contains(r#"<p class="kb-p">Water .... 36</p><p class="kb-p">A &amp; B .... 17</p>"#),
+        "got: {html}"
+    );
+}

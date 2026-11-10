@@ -787,3 +787,63 @@ fn a_paragraph_without_the_row_lines_marker_keeps_joining_its_lines_in_djot() {
     let unmarked = leader_paragraph_doc("Water .... 36\nStreet .... 17", false);
     assert_eq!(render_djot(&unmarked).trim_end(), "Water .... 36 Street .... 17");
 }
+
+fn marked_row_lines_element(text: &str) -> crate::types::internal::InternalElement {
+    use crate::types::internal::{ElementKind, InternalElement, MARKDOWN_ROW_LINES_ATTRIBUTE};
+
+    let mut paragraph = InternalElement::text(ElementKind::Paragraph, text, 0);
+    paragraph
+        .attributes
+        .get_or_insert_with(Default::default)
+        .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(), String::new());
+    paragraph
+}
+
+#[test]
+fn a_footnote_ref_after_a_row_lines_paragraph_joins_its_last_row() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element("Water .... 36\nStreet .... 17"));
+    b.push_footnote_ref("1", "fn1", None);
+    let def = b.push_footnote_definition("A note.", "fn1", None);
+    b.set_layer(def, ContentLayer::Footnote);
+    assert_eq!(
+        render_djot(&b.build()),
+        "Water .... 36\n\nStreet .... 17[^1]\n\n\n[^1]: A note.\n"
+    );
+}
+
+#[test]
+fn row_lines_that_start_with_block_syntax_are_escaped() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element(
+        "1. Intro .... 5\n2) Scope .... 9\n| Water .... 36\n- Pool .... 4\n# Park .... 7\n> Lot .... 2\nPlain .... 1",
+    ));
+    assert_eq!(
+        render_djot(&b.build()),
+        "1\\. Intro .... 5\n\n2\\) Scope .... 9\n\n\\| Water .... 36\n\n\\- Pool .... 4\n\n\\# Park .... 7\n\n\\> Lot .... 2\n\nPlain .... 1\n"
+    );
+}
+
+#[test]
+fn a_row_lines_paragraph_with_annotations_keeps_its_single_paragraph_in_djot() {
+    let mut paragraph = marked_row_lines_element("Water .... 36\nStreet .... 17");
+    paragraph.annotations = vec![TextAnnotation {
+        start: 0,
+        end: 5,
+        kind: AnnotationKind::Bold,
+    }];
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(paragraph);
+    assert_eq!(render_djot(&b.build()), "*Water* .... 36 Street .... 17\n");
+}
+
+#[test]
+fn a_row_lines_paragraph_inside_a_blockquote_quotes_every_row() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_quote_start();
+    let mut paragraph = marked_row_lines_element("Water .... 36\nStreet .... 17");
+    paragraph.depth = 1;
+    b.push_element(paragraph);
+    b.push_quote_end();
+    assert_eq!(render_djot(&b.build()), "> Water .... 36\n> \n> Street .... 17\n>\n");
+}

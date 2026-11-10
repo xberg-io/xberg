@@ -52,14 +52,14 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
                     crate::rendering::common::marked_row_lines(&elem.text, &elem.annotations, elem.attributes.as_ref())
                 {
                     for line in lines {
-                        let block = format!("{}\n\n", render_djot_annotated(line, &[]));
+                        let block = format!("{}\n\n", escape_leading_block_marker(&render_djot_annotated(line, &[])));
                         push_with_bq(&mut out, &block, bq_depth);
                     }
-                    continue;
+                } else {
+                    let text = render_djot_annotated(&elem.text, &elem.annotations);
+                    let block = format!("{}\n\n", text);
+                    push_with_bq(&mut out, &block, bq_depth);
                 }
-                let text = render_djot_annotated(&elem.text, &elem.annotations);
-                let block = format!("{}\n\n", text);
-                push_with_bq(&mut out, &block, bq_depth);
             }
             ElementKind::ListItem { ordered } => {
                 let list_depth = state.list_depth();
@@ -381,6 +381,42 @@ fn render_annotations_djot(annotations: &[PdfAnnotation]) -> String {
 /// Plain text segments and annotated spans are normalized (whitespace collapsed,
 /// newlines replaced, control characters stripped) to match the markdown renderer.
 /// Code spans are left un-normalized to preserve literal content.
+/// Backslash-escapes a leading block marker so a row that starts its own paragraph is not read as
+/// a table, list item, heading or quote.
+fn escape_leading_block_marker(line: &str) -> String {
+    let mut chars = line.char_indices();
+    let Some((_, first)) = chars.next() else {
+        return String::new();
+    };
+    let rest = &line[first.len_utf8()..];
+    let followed_by_space = rest.chars().next().is_none_or(char::is_whitespace);
+    let at = match first {
+        '|' | '>' => Some(0),
+        '-' | '+' | '*' if followed_by_space => Some(0),
+        '#' if rest
+            .trim_start_matches('#')
+            .chars()
+            .next()
+            .is_none_or(char::is_whitespace) =>
+        {
+            Some(0)
+        }
+        digit if digit.is_ascii_digit() => {
+            let digits = line.len() - line.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+            let after = &line[digits..];
+            let delimiter = after.chars().next().filter(|c| matches!(c, '.' | ')'));
+            delimiter
+                .filter(|_| after[1..].chars().next().is_none_or(char::is_whitespace))
+                .map(|_| digits)
+        }
+        _ => None,
+    };
+    match at {
+        Some(at) => format!("{}\\{}", &line[..at], &line[at..]),
+        None => line.to_string(),
+    }
+}
+
 /// Byte offset just past the text of the last block in `out`: before the newlines that close
 /// it and, inside a blockquote, before the quoted blank line (`> `) that follows it.
 fn block_text_end(out: &str, bq_depth: usize) -> usize {
