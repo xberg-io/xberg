@@ -282,9 +282,7 @@ fn prepared_layout_inputs(pdf: &[u8]) -> PreparedLayoutInputs {
 }
 
 #[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
-async fn real_route_run(
-    #[cfg(feature = "layout-detection")] layout: Option<&PreparedLayoutInputs>,
-) -> MixedOcrRun {
+async fn real_route_run(#[cfg(feature = "layout-detection")] layout: Option<&PreparedLayoutInputs>) -> MixedOcrRun {
     let mut config = configuration();
     config.concurrency = Some(crate::core::config::ConcurrencyConfig {
         max_threads: Some(2),
@@ -429,7 +427,10 @@ fn promoted_mixed_route_sizes_the_batch_from_the_preprocessing_reservation() {
         &capture,
         100 * 1024 * 1024,
         bytes.len(),
-        real_route_run(#[cfg(feature = "layout-detection")] None),
+        real_route_run(
+            #[cfg(feature = "layout-detection")]
+            None,
+        ),
     );
     assert_eq!(
         capture.0.lock().unwrap().as_slice(),
@@ -442,12 +443,15 @@ fn promoted_mixed_route_sizes_the_batch_from_the_preprocessing_reservation() {
 #[tokio::test]
 #[serial_test::serial]
 async fn plain_mixed_route_promotes_through_the_real_call() {
-    let metadata = real_route_run(#[cfg(feature = "layout-detection")] None)
-        .await
-        .output
-        .6
-        .remove(&1)
-        .unwrap();
+    let metadata = real_route_run(
+        #[cfg(feature = "layout-detection")]
+        None,
+    )
+    .await
+    .output
+    .6
+    .remove(&1)
+    .unwrap();
     assert_eq!(
         (metadata.original_dimensions.width, metadata.original_dimensions.height),
         (1800, 900),
