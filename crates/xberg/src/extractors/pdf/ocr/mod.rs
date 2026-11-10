@@ -154,6 +154,8 @@ mod page_failure_cause_tests;
 mod photo_layer_tests;
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 mod plausibility_tests;
+#[cfg(all(test, feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+mod proven_read_tests;
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 mod recognition_noise_tests;
 #[cfg(all(test, feature = "ocr", feature = "tokio-runtime"))]
