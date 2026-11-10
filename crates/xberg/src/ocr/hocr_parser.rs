@@ -2754,7 +2754,7 @@ mod tests {
 
             let with_numeral =
                 parse_hocr_to_internal_document_with_page_offset_and_stats(&hocr("1,250.75"), Some(&filter), 1);
-            assert_eq!(with_numeral.dictionary_filtered_line_count, 0);
+            assert_eq!(with_numeral.dictionary_filtered_line_count, 1);
             assert_eq!(with_numeral.document.elements[0].text, "Report\nOWATS DNDEVET 1,250.75");
 
             let arabic_indic = parse_hocr_to_internal_document_with_page_offset_and_stats(
@@ -2762,7 +2762,7 @@ mod tests {
                 Some(&filter),
                 1,
             );
-            assert_eq!(arabic_indic.dictionary_filtered_line_count, 0);
+            assert_eq!(arabic_indic.dictionary_filtered_line_count, 1);
             assert_eq!(
                 arabic_indic.document.elements[0].text,
                 "Report\nOWATS DNDEVET \u{0661}\u{0662}\u{0663}"
@@ -2803,7 +2803,7 @@ mod tests {
 
             let result = parse_hocr_to_internal_document_with_page_offset_and_stats(&hocr, Some(&filter), 1);
 
-            assert_eq!(result.dictionary_filtered_line_count, 1);
+            assert_eq!(result.dictionary_filtered_line_count, 4);
             assert_eq!(
                 result.document.elements[0].text,
                 "OWATS DNDEVET OPM3NT\n7 DNDEVET OPMENT\nOWATS DNDEVET OPMENT 7"

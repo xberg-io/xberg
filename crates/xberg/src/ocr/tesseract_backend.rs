@@ -2193,6 +2193,31 @@ mod tests {
         );
     }
 
+    /// Lines kept for a numeral are still judged noise, so they get their own warning and are not
+    /// reported as removed (#2851).
+    #[test]
+    fn warnings_from_ocr_metadata_reports_kept_numeral_lines_apart_from_removed_ones() {
+        let metadata = std::collections::HashMap::from([
+            ("dictionary_filtered_line_count".to_string(), 3.into()),
+            ("dictionary_kept_numeral_line_count".to_string(), 1.into()),
+        ]);
+
+        let warnings = warnings_from_ocr_metadata(&metadata);
+
+        assert!(warnings.iter().all(|warning| warning.source == "tesseract"));
+        assert_eq!(
+            warnings
+                .iter()
+                .map(|warning| warning.message.as_ref())
+                .collect::<Vec<&str>>(),
+            [
+                "Tesseract removed 2 OCR line(s) because their dictionary-checkable words were mostly not real words",
+                "Tesseract kept 1 OCR line(s) whose dictionary-checkable words were mostly not real words, because \
+                 they hold numbers",
+            ]
+        );
+    }
+
     /// A `word_iterator_skipped_count` of exactly zero must not produce a
     /// warning -- the metadata-insertion side already omits the key in that
     /// case, but this guards the consumption side independently (#309).

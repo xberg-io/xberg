@@ -13,6 +13,9 @@ mod page_markers;
 #[cfg(all(test, feature = "quality"))]
 mod normalization_tests;
 
+#[cfg(all(test, feature = "quality"))]
+mod nfc_offset_tests;
+
 #[cfg(test)]
 mod tests;
 
