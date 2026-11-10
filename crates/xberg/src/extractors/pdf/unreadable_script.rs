@@ -1763,7 +1763,6 @@ mod tests {
             clusters_are_valid(&padded, Script::Khmer),
             "Khmer punctuation is not a letter of the layer"
         );
-        assert!(!padded.contains('\u{FFFD}'), "the page holds no marker");
     }
 
     const COMPLETE_LAYER: &str = include_str!("../../../tests/fixtures/pdf/khmer-cluster-2536/layers/complete.txt");

@@ -20,6 +20,14 @@ fn khmer_count(text: &str) -> usize {
 }
 
 fn extract(source: &[u8], tessdata: &std::path::Path, tweak: impl FnOnce(&mut ExtractionConfig)) -> ExtractedDocument {
+    try_extract(source, tessdata, tweak).unwrap()
+}
+
+fn try_extract(
+    source: &[u8],
+    tessdata: &std::path::Path,
+    tweak: impl FnOnce(&mut ExtractionConfig),
+) -> Result<ExtractedDocument, xberg::XbergError> {
     let mut config = ExtractionConfig {
         use_cache: false,
         output_format: OutputFormat::Plain,
@@ -35,7 +43,14 @@ fn extract(source: &[u8], tessdata: &std::path::Path, tweak: impl FnOnce(&mut Ex
         ..Default::default()
     };
     tweak(&mut config);
-    helpers::extract_bytes_document_blocking(source, "application/pdf", &config).unwrap()
+    helpers::extract_bytes_document_blocking(source, "application/pdf", &config)
+}
+
+fn khm_only(config: &mut ExtractionConfig) {
+    let pipeline = serde_json::json!({"stages": [
+        {"backend": "tesseract", "priority": 100, "language": ["khm"]},
+    ]});
+    config.ocr.as_mut().unwrap().pipeline = Some(serde_json::from_value(pipeline).unwrap());
 }
 
 fn english_model() -> tempfile::TempDir {
@@ -291,11 +306,22 @@ fn a_khmer_stage_before_an_english_stage_keeps_page_one_and_reads_the_scanned_pa
     assert_eq!(pages[0].content, native_pages[0].content);
     assert_eq!(khmer_count(&pages[0].content), 222);
     assert!(native_pages[1].content.trim().is_empty(), "page 2 has no text layer");
-    assert!(
-        !pages[1].content.trim().is_empty(),
-        "OCR read page 2: {:?}",
-        pages[1].content
-    );
+    // Whether the Khmer stage can read the scan depends on the Khmer model the host holds, which the
+    // tessdata search order finds outside `models`. The first stage that reads a page decides it, so
+    // page 2 equals the read of the Khmer stage alone when that stage reads it, and the read of the
+    // English stage otherwise.
+    let khmer_read = try_extract(KHMER_THEN_SCANNED_ENGLISH, models.path(), khm_only)
+        .ok()
+        .and_then(|document| document.pages.map(|pages| pages[1].content.clone()))
+        .filter(|content| !content.trim().is_empty());
+    match khmer_read {
+        Some(content) => assert_eq!(pages[1].content, content, "the Khmer stage reads the scan"),
+        None => assert!(
+            pages[1].content.contains("20,000 bottles of water"),
+            "the English stage reads the scan: {:?}",
+            pages[1].content
+        ),
+    }
     assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Mixed));
 }
 
@@ -322,15 +348,12 @@ fn a_khmer_stage_before_an_english_stage_sends_the_scanned_page_to_the_khmer_sta
         return;
     };
     let automatic = extract(KHMER_THEN_SCANNED_ENGLISH, models.path(), khm_then_eng);
-    let khm_only = extract(KHMER_THEN_SCANNED_ENGLISH, models.path(), |config| {
-        let pipeline = serde_json::json!({"stages": [
-            {"backend": "tesseract", "priority": 100, "language": ["khm"]},
-        ]});
-        config.ocr.as_mut().unwrap().pipeline = Some(serde_json::from_value(pipeline).unwrap());
-    });
+    let khmer = extract(KHMER_THEN_SCANNED_ENGLISH, models.path(), khm_only);
+    let read = &khmer.pages.as_ref().unwrap()[1].content;
+    assert!(!read.trim().is_empty(), "the Khmer stage reads the scan");
     assert_eq!(
-        automatic.pages.as_ref().unwrap()[1].content,
-        khm_only.pages.as_ref().unwrap()[1].content,
+        &automatic.pages.as_ref().unwrap()[1].content,
+        read,
         "the first stage reads the scan"
     );
 }
