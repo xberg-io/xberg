@@ -43,7 +43,16 @@ use tiny_skia::{Color, PathBuilder, Pixmap, PixmapPaint, Transform};
 mod image_budget;
 #[path = "knockout.rs"]
 mod knockout;
-use knockout::{KnockoutBackdrop, KnockoutShape, PatternShape};
+#[path = "knockout_resources.rs"]
+mod knockout_resources;
+use knockout::{KnockoutGroup, KnockoutShape, PatternShape};
+#[path = "group_compositing.rs"]
+mod group_compositing;
+use group_compositing::{FormInvocation, GroupReplay, GroupSidecar};
+#[path = "group_process_text.rs"]
+mod group_process_text;
+use super::text_rasterizer::TextRun;
+use group_process_text::GroupTextPaint;
 
 /// Which path-paint side(s) [`PageRenderer::pipeline_resolve_paint_gs`]
 /// should resolve for the current operator.
@@ -306,6 +315,11 @@ pub struct PageRenderer {
     /// ordinary content, which paint with their own colour operators.
     type3_fill_lock: Option<(f32, f32, f32)>,
     knockout_shape: Option<KnockoutShape>,
+    knockout_resources: knockout_resources::KnockoutResources,
+    #[cfg(test)]
+    paint_operator_calls: usize,
+    #[cfg(test)]
+    rgba_snapshot_bytes: std::sync::atomic::AtomicUsize,
 }
 
 /// Maximum SMask materialisation recursion depth. A cyclic
@@ -365,12 +379,18 @@ struct PaintModulatorContext<'a> {
 /// Pre-paint snapshots consumed by `PageRenderer::apply_paint_modulators`.
 /// This is the cadence shared by the combo path ops (`B`/`b`/`B*`/`b*`),
 /// text-showing (`Tj`/`'`/`"`/`TJ`), `Do`, and `sh`. ~keep
+struct GroupPathSnapshot {
+    alpha: Vec<u8>,
+    source: [f32; 4],
+    _workspace: knockout_resources::Reservation,
+}
+
 struct PaintModulatorSnapshots {
+    process_path: Option<GroupPathSnapshot>,
     cmyk_compose: Option<Vec<u8>>,
     overprint: Option<Vec<u8>>,
     spot: Option<Vec<u8>>,
-    smask: Option<Vec<u8>>,
-    smask_spot: Option<Vec<u8>>,
+    smask: Option<PaintMaskSnapshots>,
 }
 
 /// Pre-paint snapshots consumed by
@@ -384,8 +404,15 @@ struct SidecarPaintModulatorSnapshots {
     overprint: Option<Vec<u8>>,
     cmyk_sidecar: Option<Vec<u8>>,
     rgb_sidecar: Option<Vec<u8>>,
-    smask: Option<Vec<u8>>,
-    smask_spot: Option<Vec<u8>>,
+    smask: Option<PaintMaskSnapshots>,
+}
+
+struct PaintMaskSnapshots {
+    rgba: Vec<u8>,
+    spots: Option<Vec<u8>>,
+    process: Option<Vec<u8>>,
+    shape: Option<KnockoutShape>,
+    _workspace: Option<knockout_resources::Reservation>,
 }
 
 /// Colour resolved from an `/ICCBased` colour-space array's stream `/N`
@@ -483,6 +510,11 @@ impl PageRenderer {
             type3_depth: 0,
             type3_fill_lock: None,
             knockout_shape: None,
+            knockout_resources: knockout_resources::KnockoutResources::default(),
+            #[cfg(test)]
+            paint_operator_calls: 0,
+            #[cfg(test)]
+            rgba_snapshot_bytes: std::sync::atomic::AtomicUsize::new(0),
         }
     }
 
@@ -620,6 +652,8 @@ impl PageRenderer {
         png_budget: Option<PngRenderBudget>,
     ) -> Result<(RenderedImage, u32)> {
         self.knockout_shape = None;
+        self.knockout_resources
+            .reset(png_budget.as_ref().map(|budget| budget.max_working_bytes));
         self.reported_source_budget_exceeded = false;
         self.source_image_budget = png_budget
             .as_ref()
@@ -743,6 +777,11 @@ impl PageRenderer {
         self.cmyk_sidecar = None;
         let spots = admitted_spots.unwrap_or_else(|| self.page_sidecar_spots(doc, page_num, &resources));
         self.cmyk_sidecar = spots.map(|names| CmykSidecar::new(width, height, names));
+        let retained_sidecar = self
+            .cmyk_sidecar
+            .as_ref()
+            .map_or(0, |sidecar| sidecar.cmyk().len() + sidecar.spot_state().len());
+        self.knockout_resources.canvas(pixmap.data().len() + retained_sidecar);
 
         let content_data = doc.get_page_content_data(page_num)?;
 
@@ -753,16 +792,7 @@ impl PageRenderer {
             }
         };
 
-        let page = doc.get_page(page_num)?;
-        let group = page
-            .as_dict()
-            .and_then(|dict| dict.get("Group"))
-            .map(|group| doc.resolve_object(group))
-            .transpose()?;
-        let knockout = group.as_ref().and_then(Object::as_dict).is_some_and(|group| {
-            group.get("S").and_then(Object::as_name) == Some("Transparency")
-                && matches!(group.get("K"), Some(Object::Boolean(true)))
-        });
+        let knockout = knockout::page_is_knockout(doc, page_num);
         if knockout {
             self.execute_knockout_group(&mut pixmap, transform, &operators, doc, page_num, &resources)?;
         } else {
@@ -793,6 +823,7 @@ impl PageRenderer {
     }
 
     fn check_source_image_budget(&mut self) -> Result<()> {
+        self.knockout_resources.check()?;
         if let Some(budget) = &self.source_image_budget
             && let Some(error) = budget.error()
         {
@@ -1020,23 +1051,17 @@ impl PageRenderer {
         if let Some(snap) = snapshots.cmyk_compose {
             self.apply_cmyk_compose_after_paint(pixmap, &snap, ctx.gs, ctx.doc, ctx.fill_side);
         }
+        if let (Some(path), Some(coverage)) = (snapshots.process_path, coverage) {
+            self.compose_group_process_path(coverage, path.alpha.into_iter(), path.source, ctx.gs, ctx.fill_side);
+        }
         if let Some(snap) = snapshots.overprint {
             self.apply_overprint_after_paint(pixmap, &snap, ctx.gs, ctx.doc, ctx.fill_side);
         }
         if let Some(snap) = snapshots.spot {
             self.mirror_spot_paint_into_sidecar_with_coverage(pixmap, &snap, coverage, ctx.gs, ctx.fill_side);
         }
-        if let Some(snap) = snapshots.smask {
-            self.apply_smask_after_paint(
-                pixmap,
-                &snap,
-                snapshots.smask_spot.as_deref(),
-                ctx.gs,
-                ctx.doc,
-                ctx.page_num,
-                ctx.resources,
-                ctx.base_transform,
-            )?;
+        if let Some(snapshots) = snapshots.smask {
+            self.apply_paint_mask(pixmap, snapshots, ctx)?;
         }
         Ok(())
     }
@@ -1066,17 +1091,8 @@ impl PageRenderer {
             self.mirror_rgb_paint_into_sidecar_with_coverage(pixmap, &snap, coverage, ctx.gs, ctx.doc, ctx.fill_side);
         }
         self.mirror_spot_paint_into_sidecar_with_coverage(pixmap, &[], coverage, ctx.gs, ctx.fill_side);
-        if let Some(snap) = snapshots.smask {
-            self.apply_smask_after_paint(
-                pixmap,
-                &snap,
-                snapshots.smask_spot.as_deref(),
-                ctx.gs,
-                ctx.doc,
-                ctx.page_num,
-                ctx.resources,
-                ctx.base_transform,
-            )?;
+        if let Some(snapshots) = snapshots.smask {
+            self.apply_paint_mask(pixmap, snapshots, ctx)?;
         }
         Ok(())
     }
@@ -1107,7 +1123,7 @@ impl PageRenderer {
         doc: &PdfDocument,
         page_num: usize,
         resources: &Object,
-        backdrop: Option<&KnockoutBackdrop>,
+        mut knockout: Option<&mut KnockoutGroup>,
     ) -> Result<()> {
         // Per-render snapshot lives on `self.excluded_layers_snapshot` (filled
         // by `render_page_with_options`). Recursive calls into this function
@@ -1189,12 +1205,22 @@ impl PageRenderer {
         // at most once per unique name in scope. ~keep
         let mut ext_g_state_cache: std::collections::HashMap<String, ParsedExtGState> =
             std::collections::HashMap::new();
-        for (operator_index, op) in operators.iter().enumerate() {
-            if operator_index + 1 == operators.len()
-                && let Some(backdrop) = backdrop
-            {
-                backdrop.restore(self, pixmap);
-                self.knockout_shape = Some(KnockoutShape::new(pixmap.width(), pixmap.height()));
+        for op in operators {
+            if is_paint_operator(op) && self.knockout_resources.active() {
+                let pixels = if knockout::is_path_paint(op) {
+                    0
+                } else {
+                    pixmap.data().len() / 4
+                };
+                self.knockout_resources.paint(pixels)?;
+            }
+            if let Some(group) = knockout.as_deref_mut() {
+                group.before_operator(self, pixmap, op);
+            }
+            let _raster_workspace = self.reserve_operator_workspace(pixmap, gs_stack.current(), op)?;
+            #[cfg(test)]
+            if is_paint_operator(op) {
+                self.paint_operator_calls += 1;
             }
             // While a Type 3 `d1` glyph stencil is being painted, colour-
             // setting operators are ignored so the glyph keeps the current
@@ -1694,8 +1720,8 @@ impl PageRenderer {
                             let spliced = self.pipeline_resolve_paint_gs(doc, &gs_clone, PipelinePaintKind::PathStroke);
                             let render_gs: &GraphicsState = spliced.as_ref().unwrap_or(&gs_clone);
                             let transform = combine_transforms(base_transform, &gs_clone.ctm);
-                            let smask_snap = self.smask_snapshot(pixmap, &gs_clone);
-                            let smask_spot_snap = self.smask_spot_snapshot(&gs_clone);
+                            self.charge_path_work(pixmap, &path, transform, &gs_clone, op)?;
+                            let smask_snap = self.paint_mask_snapshots(pixmap, &gs_clone)?;
                             let overprint_snap = self.overprint_snapshot(pixmap, &gs_clone, false);
                             let cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, &gs_clone, doc, false);
                             let cmyk_sidecar_snap = self.cmyk_sidecar_snapshot(pixmap, &gs_clone, false);
@@ -1711,7 +1737,6 @@ impl PageRenderer {
                                     cmyk_sidecar: cmyk_sidecar_snap,
                                     rgb_sidecar: rgb_sidecar_snap,
                                     smask: smask_snap,
-                                    smask_spot: smask_spot_snap,
                                 },
                                 cmyk_coverage.as_deref(),
                                 PaintModulatorContext {
@@ -1744,6 +1769,7 @@ impl PageRenderer {
                             let spliced = self.pipeline_resolve_paint_gs(doc, &gs_clone, PipelinePaintKind::PathFill);
                             let render_gs: &GraphicsState = spliced.as_ref().unwrap_or(&gs_clone);
                             let transform = combine_transforms(base_transform, &gs_clone.ctm);
+                            self.charge_path_work(pixmap, &path, transform, &gs_clone, op)?;
                             // §8.7.3: a Pattern-space fill routes to the
                             // tiling-pattern rasteriser first. When it paints
                             // the region the solid-colour paint below is
@@ -1770,8 +1796,7 @@ impl PageRenderer {
                                 // paint so the post-paint modulators can
                                 // blend the backdrop (snapshot) with the
                                 // painted result. ~keep
-                                let smask_snap = self.smask_snapshot(pixmap, &gs_clone);
-                                let smask_spot_snap = self.smask_spot_snapshot(&gs_clone);
+                                let smask_snap = self.paint_mask_snapshots(pixmap, &gs_clone)?;
                                 let overprint_snap = self.overprint_snapshot(pixmap, &gs_clone, true);
                                 let cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, &gs_clone, doc, true);
                                 let cmyk_sidecar_snap = self.cmyk_sidecar_snapshot(pixmap, &gs_clone, true);
@@ -1795,7 +1820,6 @@ impl PageRenderer {
                                         cmyk_sidecar: cmyk_sidecar_snap,
                                         rgb_sidecar: rgb_sidecar_snap,
                                         smask: smask_snap,
-                                        smask_spot: smask_spot_snap,
                                     },
                                     cmyk_coverage.as_deref(),
                                     PaintModulatorContext {
@@ -1832,6 +1856,7 @@ impl PageRenderer {
                         if let Some(path) = current_path.finish() {
                             let gs_clone = gs_stack.current().clone();
                             let transform = combine_transforms(base_transform, &gs_clone.ctm);
+                            self.charge_path_work(pixmap, &path, transform, &gs_clone, op)?;
                             let fill_rule = if matches!(op, Operator::CloseFillStrokeEvenOdd) {
                                 tiny_skia::FillRule::EvenOdd
                             } else {
@@ -1882,10 +1907,10 @@ impl PageRenderer {
                             // pass also lays paint on top, so each side
                             // gets its own snapshot/apply cycle. ~keep
                             if !fill_by_pattern {
-                                let fill_smask_snap = self.smask_snapshot(pixmap, &gs_clone);
-                                let fill_smask_spot_snap = self.smask_spot_snapshot(&gs_clone);
+                                let fill_smask_snap = self.paint_mask_snapshots(pixmap, &gs_clone)?;
                                 let fill_overprint_snap = self.overprint_snapshot(pixmap, &gs_clone, true);
                                 let fill_cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, &gs_clone, doc, true);
+                                let process_path = self.group_path_snapshot(pixmap, &gs_clone, doc, true)?;
                                 let fill_spot_snap = self.spot_paint_snapshot(pixmap, &gs_clone, true);
                                 // §11.7.3 + §11.3.3 require per-pixel
                                 // coverage on every lane. The path-Fill
@@ -1902,11 +1927,11 @@ impl PageRenderer {
                                 self.apply_paint_modulators(
                                     pixmap,
                                     PaintModulatorSnapshots {
+                                        process_path,
                                         cmyk_compose: fill_cmyk_compose_snap,
                                         overprint: fill_overprint_snap,
                                         spot: fill_spot_snap,
                                         smask: fill_smask_snap,
-                                        smask_spot: fill_smask_spot_snap,
                                     },
                                     fill_cmyk_coverage.as_deref(),
                                     PaintModulatorContext {
@@ -1921,10 +1946,10 @@ impl PageRenderer {
                                 )?;
                             }
 
-                            let stroke_smask_snap = self.smask_snapshot(pixmap, &gs_clone);
-                            let stroke_smask_spot_snap = self.smask_spot_snapshot(&gs_clone);
+                            let stroke_smask_snap = self.paint_mask_snapshots(pixmap, &gs_clone)?;
                             let stroke_overprint_snap = self.overprint_snapshot(pixmap, &gs_clone, false);
                             let stroke_cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, &gs_clone, doc, false);
+                            let process_path = self.group_path_snapshot(pixmap, &gs_clone, doc, false)?;
                             let stroke_spot_snap = self.spot_paint_snapshot(pixmap, &gs_clone, false);
                             let stroke_cmyk_coverage =
                                 self.rasterise_stroke_coverage(&path, transform, &gs_clone, clip);
@@ -1933,11 +1958,11 @@ impl PageRenderer {
                             self.apply_paint_modulators(
                                 pixmap,
                                 PaintModulatorSnapshots {
+                                    process_path,
                                     cmyk_compose: stroke_cmyk_compose_snap,
                                     overprint: stroke_overprint_snap,
                                     spot: stroke_spot_snap,
                                     smask: stroke_smask_snap,
-                                    smask_spot: stroke_smask_spot_snap,
                                 },
                                 stroke_cmyk_coverage.as_deref(),
                                 PaintModulatorContext {
@@ -1963,6 +1988,7 @@ impl PageRenderer {
                         if let Some(path) = current_path.finish() {
                             let gs_clone = gs_stack.current().clone();
                             let transform = combine_transforms(base_transform, &gs_clone.ctm);
+                            self.charge_path_work(pixmap, &path, transform, &gs_clone, op)?;
                             // One unified resolve covers both fill and the
                             // optional stroke pass — for plain `f*` the
                             // helper produces a fill-only splice; for
@@ -1993,10 +2019,10 @@ impl PageRenderer {
                                 )?;
 
                             if !fill_by_pattern {
-                                let fill_smask_snap = self.smask_snapshot(pixmap, &gs_clone);
-                                let fill_smask_spot_snap = self.smask_spot_snapshot(&gs_clone);
+                                let fill_smask_snap = self.paint_mask_snapshots(pixmap, &gs_clone)?;
                                 let fill_overprint_snap = self.overprint_snapshot(pixmap, &gs_clone, true);
                                 let fill_cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, &gs_clone, doc, true);
+                                let process_path = self.group_path_snapshot(pixmap, &gs_clone, doc, true)?;
                                 let fill_spot_snap = self.spot_paint_snapshot(pixmap, &gs_clone, true);
                                 let fill_cmyk_coverage =
                                     self.rasterise_fill_coverage(&path, transform, tiny_skia::FillRule::EvenOdd, clip);
@@ -2011,11 +2037,11 @@ impl PageRenderer {
                                 self.apply_paint_modulators(
                                     pixmap,
                                     PaintModulatorSnapshots {
+                                        process_path,
                                         cmyk_compose: fill_cmyk_compose_snap,
                                         overprint: fill_overprint_snap,
                                         spot: fill_spot_snap,
                                         smask: fill_smask_snap,
-                                        smask_spot: fill_smask_spot_snap,
                                     },
                                     fill_cmyk_coverage.as_deref(),
                                     PaintModulatorContext {
@@ -2031,11 +2057,11 @@ impl PageRenderer {
                             }
 
                             if matches!(op, Operator::FillStrokeEvenOdd) {
-                                let stroke_smask_snap = self.smask_snapshot(pixmap, &gs_clone);
-                                let stroke_smask_spot_snap = self.smask_spot_snapshot(&gs_clone);
+                                let stroke_smask_snap = self.paint_mask_snapshots(pixmap, &gs_clone)?;
                                 let stroke_overprint_snap = self.overprint_snapshot(pixmap, &gs_clone, false);
                                 let stroke_cmyk_compose_snap =
                                     self.cmyk_compose_snapshot(pixmap, &gs_clone, doc, false);
+                                let process_path = self.group_path_snapshot(pixmap, &gs_clone, doc, false)?;
                                 let stroke_spot_snap = self.spot_paint_snapshot(pixmap, &gs_clone, false);
                                 let stroke_cmyk_coverage =
                                     self.rasterise_stroke_coverage(&path, transform, &gs_clone, clip);
@@ -2044,11 +2070,11 @@ impl PageRenderer {
                                 self.apply_paint_modulators(
                                     pixmap,
                                     PaintModulatorSnapshots {
+                                        process_path,
                                         cmyk_compose: stroke_cmyk_compose_snap,
                                         overprint: stroke_overprint_snap,
                                         spot: stroke_spot_snap,
                                         smask: stroke_smask_snap,
-                                        smask_spot: stroke_smask_spot_snap,
                                     },
                                     stroke_cmyk_coverage.as_deref(),
                                     PaintModulatorContext {
@@ -2190,71 +2216,22 @@ impl PageRenderer {
                                     doc,
                                 );
                             }
-                            // Resolve the fill (and/or stroke per Tr mode)
-                            // once for the whole `Tj` call and hand the
-                            // resolved RGBA to the rasteriser. The rasteriser
-                            // already clones `gs` to advance `text_matrix`
-                            // per element, so it splices the override into
-                            // that clone — no operator-arm-side clone
-                            // needed. ~keep
-                            let colors = self.pipeline_resolve_text_colors(doc, gs);
-                            // §11.4.7 + §11.7.4 + §11.4 cycle: text-
-                            // showing is a fill-side paint (modulated by
-                            // Tr render mode for stroke). One snapshot
-                            // per Tj call brackets the whole string. ~keep
-                            let smask_snap = self.smask_snapshot(pixmap, gs);
-                            let smask_spot_snap = self.smask_spot_snapshot(gs);
-                            let overprint_snap = self.overprint_snapshot(pixmap, gs, true);
-                            let cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, gs, doc, true);
-                            let spot_snap = self.text_fill_spot_snapshot(pixmap, gs);
-                            // §9.4 + §11.7.3 + §11.3.3: rasterise the
-                            // glyph-outline coverage in parallel with
-                            // the visible paint so the spot mirror has
-                            // a geometry-true per-pixel coverage mask
-                            // (AA-edge fidelity + identical-RGB
-                            // collision insulated) instead of a
-                            // snapshot-vs-post-paint diff. ~keep
-                            let text_coverage = (spot_snap.is_some() || self.knockout_shape.is_some())
-                                .then(|| {
-                                    self.rasterise_text_coverage_render_text(text, transform, gs, resources, doc, clip)
-                                })
-                                .flatten();
                             let contrast_samples = self
                                 .text_contrast_probe
                                 .as_mut()
                                 .and_then(|probe| probe.capture(pixmap, text, base_transform));
-                            let paint_gs = self.text_paint_state(gs);
-                            let adv = self.text_rasterizer.render_text(
+                            let adv = self.render_text_with_modulators(
                                 pixmap,
-                                text,
-                                transform,
-                                &paint_gs,
-                                colors.as_ref(),
-                                resources,
-                                doc,
-                                clip,
-                                &self.fonts,
-                            )?;
-                            let gs_for_apply = gs_stack.current().clone();
-                            self.apply_paint_modulators(
-                                pixmap,
-                                PaintModulatorSnapshots {
-                                    cmyk_compose: cmyk_compose_snap,
-                                    overprint: overprint_snap,
-                                    spot: spot_snap,
-                                    smask: smask_snap,
-                                    smask_spot: smask_spot_snap,
-                                },
-                                text_coverage.as_deref(),
-                                PaintModulatorContext {
-                                    gs: &gs_for_apply,
+                                TextRun::String(text),
+                                GroupTextPaint {
+                                    gs,
                                     doc,
-                                    page_num,
                                     resources,
-                                    base_transform,
-                                    fill_side: true,
-                                    knockout_coverage: None,
+                                    clip,
+                                    transform,
                                 },
+                                page_num,
+                                base_transform,
                             )?;
                             if let Some((probe, samples)) = self.text_contrast_probe.as_mut().zip(contrast_samples) {
                                 probe.observe(pixmap, samples);
@@ -2328,51 +2305,19 @@ impl PageRenderer {
                             // ISO 32000-1; the resolved colour depends only
                             // on the prior colour-setting ops, so the resolve
                             // happens here, not inside `T*`. ~keep
-                            let colors = self.pipeline_resolve_text_colors(doc, gs);
-                            let smask_snap = self.smask_snapshot(pixmap, gs);
-                            let smask_spot_snap = self.smask_spot_snapshot(gs);
-                            let overprint_snap = self.overprint_snapshot(pixmap, gs, true);
-                            let cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, gs, doc, true);
-                            let spot_snap = self.text_fill_spot_snapshot(pixmap, gs);
-                            let text_coverage = (spot_snap.is_some() || self.knockout_shape.is_some())
-                                .then(|| {
-                                    self.rasterise_text_coverage_render_text(text, transform, gs, resources, doc, clip)
-                                })
-                                .flatten();
-                            let paint_gs = self.text_paint_state(gs);
-                            let adv = self.text_rasterizer.render_text(
+                            self.render_text_with_modulators(
                                 pixmap,
-                                text,
-                                transform,
-                                &paint_gs,
-                                colors.as_ref(),
-                                resources,
-                                doc,
-                                clip,
-                                &self.fonts,
-                            )?;
-                            let gs_for_apply = gs_stack.current().clone();
-                            self.apply_paint_modulators(
-                                pixmap,
-                                PaintModulatorSnapshots {
-                                    cmyk_compose: cmyk_compose_snap,
-                                    overprint: overprint_snap,
-                                    spot: spot_snap,
-                                    smask: smask_snap,
-                                    smask_spot: smask_spot_snap,
-                                },
-                                text_coverage.as_deref(),
-                                PaintModulatorContext {
-                                    gs: &gs_for_apply,
+                                TextRun::String(text),
+                                GroupTextPaint {
+                                    gs,
                                     doc,
-                                    page_num,
                                     resources,
-                                    base_transform,
-                                    fill_side: true,
-                                    knockout_coverage: None,
+                                    clip,
+                                    transform,
                                 },
-                            )?;
-                            adv
+                                page_num,
+                                base_transform,
+                            )?
                         } else {
                             self.text_rasterizer.measure_text(text, gs, &self.fonts)
                         };
@@ -2433,53 +2378,19 @@ impl PageRenderer {
                             // override into the per-element `render_text`
                             // calls so the colour propagates without an
                             // operator-arm-side clone of `gs`. ~keep
-                            let colors = self.pipeline_resolve_text_colors(doc, gs);
-                            let smask_snap = self.smask_snapshot(pixmap, gs);
-                            let smask_spot_snap = self.smask_spot_snapshot(gs);
-                            let overprint_snap = self.overprint_snapshot(pixmap, gs, true);
-                            let cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, gs, doc, true);
-                            let spot_snap = self.text_fill_spot_snapshot(pixmap, gs);
-                            let text_coverage = (spot_snap.is_some() || self.knockout_shape.is_some())
-                                .then(|| {
-                                    self.rasterise_text_coverage_render_tj_array(
-                                        array, transform, gs, resources, doc, clip,
-                                    )
-                                })
-                                .flatten();
-                            let paint_gs = self.text_paint_state(gs);
-                            let adv = self.text_rasterizer.render_tj_array(
+                            self.render_text_with_modulators(
                                 pixmap,
-                                array,
-                                transform,
-                                &paint_gs,
-                                colors.as_ref(),
-                                resources,
-                                doc,
-                                clip,
-                                &self.fonts,
-                            )?;
-                            let gs_for_apply = gs_stack.current().clone();
-                            self.apply_paint_modulators(
-                                pixmap,
-                                PaintModulatorSnapshots {
-                                    cmyk_compose: cmyk_compose_snap,
-                                    overprint: overprint_snap,
-                                    spot: spot_snap,
-                                    smask: smask_snap,
-                                    smask_spot: smask_spot_snap,
-                                },
-                                text_coverage.as_deref(),
-                                PaintModulatorContext {
-                                    gs: &gs_for_apply,
+                                TextRun::Array(array),
+                                GroupTextPaint {
+                                    gs,
                                     doc,
-                                    page_num,
                                     resources,
-                                    base_transform,
-                                    fill_side: true,
-                                    knockout_coverage: None,
+                                    clip,
+                                    transform,
                                 },
-                            )?;
-                            adv
+                                page_num,
+                                base_transform,
+                            )?
                         } else {
                             self.text_rasterizer.measure_tj_array(array, gs, &self.fonts)
                         };
@@ -2552,51 +2463,19 @@ impl PageRenderer {
                             // influence the resolved colour, so the resolve
                             // happens immediately before painting just like
                             // in `Tj` / `'`. ~keep
-                            let colors = self.pipeline_resolve_text_colors(doc, gs);
-                            let smask_snap = self.smask_snapshot(pixmap, gs);
-                            let smask_spot_snap = self.smask_spot_snapshot(gs);
-                            let overprint_snap = self.overprint_snapshot(pixmap, gs, true);
-                            let cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, gs, doc, true);
-                            let spot_snap = self.text_fill_spot_snapshot(pixmap, gs);
-                            let text_coverage = (spot_snap.is_some() || self.knockout_shape.is_some())
-                                .then(|| {
-                                    self.rasterise_text_coverage_render_text(text, transform, gs, resources, doc, clip)
-                                })
-                                .flatten();
-                            let paint_gs = self.text_paint_state(gs);
-                            let adv = self.text_rasterizer.render_text(
+                            self.render_text_with_modulators(
                                 pixmap,
-                                text,
-                                transform,
-                                &paint_gs,
-                                colors.as_ref(),
-                                resources,
-                                doc,
-                                clip,
-                                &self.fonts,
-                            )?;
-                            let gs_for_apply = gs_stack.current().clone();
-                            self.apply_paint_modulators(
-                                pixmap,
-                                PaintModulatorSnapshots {
-                                    cmyk_compose: cmyk_compose_snap,
-                                    overprint: overprint_snap,
-                                    spot: spot_snap,
-                                    smask: smask_snap,
-                                    smask_spot: smask_spot_snap,
-                                },
-                                text_coverage.as_deref(),
-                                PaintModulatorContext {
-                                    gs: &gs_for_apply,
+                                TextRun::String(text),
+                                GroupTextPaint {
+                                    gs,
                                     doc,
-                                    page_num,
                                     resources,
-                                    base_transform,
-                                    fill_side: true,
-                                    knockout_coverage: None,
+                                    clip,
+                                    transform,
                                 },
-                            )?;
-                            adv
+                                page_num,
+                                base_transform,
+                            )?
                         } else {
                             self.text_rasterizer.measure_text(text, gs, &self.fonts)
                         };
@@ -2647,10 +2526,22 @@ impl PageRenderer {
                         // Do attaches to the Do's entire region
                         // regardless of how the inner produced its
                         // pixels. ~keep
-                        let xobj_subtype = self.xobject_subtype(name, resources, doc);
-                        let is_form = matches!(xobj_subtype.as_deref(), Some("Form"));
-                        let smask_snap = self.smask_snapshot(pixmap, &gs_clone);
-                        let smask_spot_snap = self.smask_spot_snapshot(&gs_clone);
+                        let (is_form, group_boundary) = self.xobject_kind(name, resources, doc).unwrap_or_default();
+                        let _image_workspace = if is_form {
+                            None
+                        } else {
+                            self.reserve_raster_workspace(pixmap, &gs_clone, 6)?
+                        };
+                        let _ordinary_form_mask = if is_form && !group_boundary && gs_clone.smask.is_some() {
+                            Some(self.knockout_resources.reserve(Some(0))?)
+                        } else {
+                            None
+                        };
+                        let smask_snap = if group_boundary {
+                            None
+                        } else {
+                            self.paint_mask_snapshots(pixmap, &gs_clone)?
+                        };
                         let overprint_snap = if is_form {
                             None
                         } else {
@@ -2688,15 +2579,25 @@ impl PageRenderer {
                                 )
                             })
                             .flatten();
-                        self.render_xobject(pixmap, name, transform, &gs_clone, resources, doc, page_num, clip)?;
+                        self.render_xobject(
+                            pixmap,
+                            name,
+                            transform,
+                            &gs_clone,
+                            resources,
+                            doc,
+                            page_num,
+                            clip,
+                            base_transform,
+                        )?;
                         self.apply_paint_modulators(
                             pixmap,
                             PaintModulatorSnapshots {
+                                process_path: None,
                                 cmyk_compose: cmyk_compose_snap,
                                 overprint: overprint_snap,
                                 spot: spot_snap,
                                 smask: smask_snap,
-                                smask_spot: smask_spot_snap,
                             },
                             image_coverage.as_deref(),
                             PaintModulatorContext {
@@ -2895,8 +2796,7 @@ impl PageRenderer {
                         // `gs.fill_color_cmyk`), so they only fire when
                         // the page set a CMYK fill before invoking
                         // `sh`. ~keep
-                        let smask_snap = self.smask_snapshot(pixmap, &gs_clone);
-                        let smask_spot_snap = self.smask_spot_snapshot(&gs_clone);
+                        let smask_snap = self.paint_mask_snapshots(pixmap, &gs_clone)?;
                         let overprint_snap = self.overprint_snapshot(pixmap, &gs_clone, true);
                         let cmyk_compose_snap = self.cmyk_compose_snapshot(pixmap, &gs_clone, doc, true);
                         let spot_snap = self.spot_paint_snapshot(pixmap, &gs_clone, true);
@@ -2911,11 +2811,11 @@ impl PageRenderer {
                         self.apply_paint_modulators(
                             pixmap,
                             PaintModulatorSnapshots {
+                                process_path: None,
                                 cmyk_compose: cmyk_compose_snap,
                                 overprint: overprint_snap,
                                 spot: spot_snap,
                                 smask: smask_snap,
-                                smask_spot: smask_spot_snap,
                             },
                             shading_coverage.as_deref(),
                             PaintModulatorContext {
@@ -2964,6 +2864,9 @@ impl PageRenderer {
 
                 _ => {}
             }
+        }
+        if let Some(group) = knockout {
+            group.finish_paint(self, pixmap);
         }
 
         Ok(())
@@ -3682,13 +3585,12 @@ impl PageRenderer {
 
     /// Render an XObject (image or form).
     /// Resolve the `/Subtype` name of the named XObject in the active
-    /// resources without rendering it. Returns `Some("Form")`,
-    /// `Some("Image")`, etc., or `None` when the lookup fails or the
-    /// XObject lacks a `/Subtype`. Used by the `Do` operator dispatcher
+    /// resources without rendering it. The two flags identify a Form and
+    /// whether its transparency boundary handles the invocation mask. Used by the `Do` dispatcher
     /// to pick the correct post-Do colour-lane modulators per ISO
     /// 32000-1 §11.4.7 (Image XObjects paint with outer gs; Form
     /// XObjects run their own operators with their own gs).
-    fn xobject_subtype(&self, name: &str, resources: &Object, doc: &PdfDocument) -> Option<String> {
+    fn xobject_kind(&self, name: &str, resources: &Object, doc: &PdfDocument) -> Option<(bool, bool)> {
         let res_dict = resources.as_dict()?;
         let xobj_entry = res_dict.get("XObject")?;
         let xobjects_obj = doc.resolve_object(xobj_entry).ok()?;
@@ -3696,7 +3598,15 @@ impl PageRenderer {
         let xobj_ref_obj = xobjects.get(name)?;
         let xobj = doc.resolve_object(xobj_ref_obj).ok()?;
         if let Object::Stream { ref dict, .. } = xobj {
-            return dict.get("Subtype").and_then(|o| o.as_name()).map(String::from);
+            let form = dict.get("Subtype").and_then(Object::as_name) == Some("Form");
+            let group = form
+                && dict
+                    .get("Group")
+                    .and_then(Object::as_dict)
+                    .and_then(|group| group.get("S"))
+                    .and_then(Object::as_name)
+                    == Some("Transparency");
+            return Some((form, group));
         }
         None
     }
@@ -3711,6 +3621,7 @@ impl PageRenderer {
         doc: &PdfDocument,
         page_num: usize,
         clip_mask: Option<&tiny_skia::Mask>,
+        mask_transform: Transform,
     ) -> Result<()> {
         if let Object::Dictionary(res_dict) = resources {
             // PDF spec uses "XObject" (singular) ~keep
@@ -3792,7 +3703,7 @@ impl PageRenderer {
                                         let old_cs = self.color_spaces.clone();
                                         self.load_resources(doc, form_resources)?;
 
-                                        if let Err(error) = self.render_form_xobject(
+                                        if let Err(error) = self.render_form_xobject_with_invocation(
                                             pixmap,
                                             &dict,
                                             &stream_data,
@@ -3800,6 +3711,12 @@ impl PageRenderer {
                                             doc,
                                             page_num,
                                             form_resources,
+                                            Some(FormInvocation {
+                                                gs,
+                                                clip: clip_mask,
+                                                mask_transform,
+                                                mask_resources: resources,
+                                            }),
                                         ) {
                                             tracing::warn!(
                                                 error_code = error.telemetry_code(),
@@ -3843,7 +3760,9 @@ impl PageRenderer {
         let mut canvas = 0;
         if let Some(budget) = self.source_image_budget.as_mut() {
             let sidecar = self.cmyk_sidecar.as_ref().map_or(0, CmykSidecar::image_buffer_bytes);
-            canvas = sidecar.saturating_add(pixmap.data().len() as u64);
+            canvas = sidecar
+                .saturating_add(pixmap.data().len() as u64)
+                .max(self.knockout_resources.retained_bytes());
             // A colour-key /Mask and an in-data soft mask index the full-size samples. ~keep
             if matches!(mask_obj, Some(Object::Array(_))) || pdf_image.soft_mask_in_data().is_some() {
                 budget.admit_jpeg(&pdf_image, canvas)?;
@@ -4451,6 +4370,14 @@ impl PageRenderer {
             .ok_or_else(|| Error::Image("ImageMask XObject is not a stream".to_string()))?;
 
         let (width, height, row_bytes, expected, rgba_len) = Self::image_mask_layout(dict, doc)?;
+        let _stencil_workspace = if self.knockout_resources.active() {
+            Some(
+                self.knockout_resources
+                    .reserve(expected.checked_mul(2).and_then(|bytes| bytes.checked_add(rgba_len)))?,
+            )
+        } else {
+            None
+        };
 
         // PDF §8.9.6.4: ImageMask BitsPerComponent must be 1 when present.
         // Some producers omit it; default to 1. Others write it as an
@@ -4591,6 +4518,35 @@ impl PageRenderer {
         page_num: usize,
         parent_resources: &Object,
     ) -> Result<()> {
+        self.render_form_xobject_with_invocation(
+            pixmap,
+            dict,
+            data,
+            parent_transform,
+            doc,
+            page_num,
+            parent_resources,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn render_form_xobject_with_invocation(
+        &mut self,
+        pixmap: &mut Pixmap,
+        dict: &HashMap<String, Object>,
+        data: &[u8],
+        parent_transform: Transform,
+        doc: &PdfDocument,
+        page_num: usize,
+        parent_resources: &Object,
+        invocation: Option<FormInvocation<'_>>,
+    ) -> Result<()> {
+        let _nested_form = if self.knockout_resources.active() {
+            Some(self.knockout_resources.reserve(Some(0))?)
+        } else {
+            None
+        };
         let form_matrix = if let Some(Object::Array(arr)) = dict.get("Matrix") {
             let get_f32 = |i: usize| -> f32 {
                 match arr.get(i) {
@@ -4666,12 +4622,37 @@ impl PageRenderer {
                 is_knockout
             );
 
+            let sidecar_bytes = self.cmyk_sidecar.as_ref().map_or(Some(0), |sidecar| {
+                sidecar.cmyk().len().checked_add(sidecar.spot_state().len())
+            });
+            let _group_workspace = self.knockout_resources.group(pixmap.data().len(), sidecar_bytes)?;
             let mut group_pixmap = Pixmap::new(pixmap.width(), pixmap.height())
-                .ok_or_else(|| crate::error::Error::InvalidPdf("Failed to create group pixmap".into()))?;
-
-            let parent_lanes = is_isolated.then(|| KnockoutBackdrop::capture(self, pixmap));
-            if let Some(parent) = &parent_lanes {
-                parent.clear_sidecar(self);
+                .ok_or_else(|| Error::InvalidPdf("Failed to create group pixmap".into()))?;
+            let parent_lanes = GroupSidecar::capture(self);
+            let _mask_backdrop_workspace = if invocation.is_some_and(|context| context.gs.smask.is_some()) {
+                Some(self.knockout_resources.reserve(Some(pixmap.data().len()))?)
+            } else {
+                None
+            };
+            let mask_backdrop = invocation
+                .filter(|context| context.gs.smask.is_some())
+                .map(|_| pixmap.data().to_vec());
+            let _shape_workspace = if self.knockout_shape.is_some() {
+                let inks = self
+                    .cmyk_sidecar
+                    .as_ref()
+                    .map_or(0, |sidecar| sidecar.spot_names().len());
+                Some(
+                    self.knockout_resources
+                        .reserve(knockout_resources::shape_bytes(pixmap.data().len() / 4, inks))?,
+                )
+            } else {
+                None
+            };
+            if is_isolated {
+                if let Some(parent) = &parent_lanes {
+                    parent.clear(self);
+                }
             } else {
                 group_pixmap.data_mut().copy_from_slice(pixmap.data());
             }
@@ -4705,34 +4686,74 @@ impl PageRenderer {
                     &form_resources,
                 )
             };
-            let group_shape = self.knockout_shape.take();
+            let mut group_shape = self.knockout_shape.take();
             self.knockout_shape = parent_shape;
             if result.is_err() {
                 if let Some(parent) = &parent_lanes {
-                    parent.restore(self, pixmap);
+                    parent.restore(self);
                 }
                 return result;
             }
+            let recover_source = !is_isolated && invocation.is_some_and(|context| context.gs.blend_mode != "Normal");
+            if recover_source {
+                let recovered = self.recover_nonisolated_source(
+                    pixmap,
+                    &mut group_pixmap,
+                    parent_lanes.as_ref(),
+                    GroupReplay {
+                        operators: &operators,
+                        transform: combined_transform,
+                        doc,
+                        page_num,
+                        resources: &form_resources,
+                        knockout: is_knockout,
+                    },
+                );
+                if let Err(error) = recovered {
+                    if let Some(parent) = &parent_lanes {
+                        parent.restore(self);
+                    }
+                    return Err(error);
+                }
+            }
+            let source_isolated = is_isolated || recover_source;
+            if let Some(parent) = &parent_lanes {
+                parent.composite(self, pixmap, &group_pixmap, invocation, source_isolated);
+            }
+            let composed = group_compositing::composite_rgb(
+                pixmap,
+                &group_pixmap,
+                invocation,
+                source_isolated,
+                &mut self.knockout_resources,
+            );
+            if let Err(error) = composed {
+                if let Some(parent) = &parent_lanes {
+                    parent.restore(self);
+                }
+                return Err(error);
+            }
+            if let (Some(snapshot), Some(context)) = (mask_backdrop.as_ref(), invocation) {
+                let masked = self.apply_smask_with_cmyk(
+                    pixmap,
+                    snapshot,
+                    parent_lanes.as_ref().map(|parent| parent.spots.as_slice()),
+                    parent_lanes.as_ref().map(|parent| parent.cmyk.as_slice()),
+                    context.gs,
+                    doc,
+                    page_num,
+                    context.mask_resources,
+                    context.mask_transform,
+                );
+                if !masked? {
+                    return Ok(());
+                }
+            }
+            if let (Some(group), Some(clip)) = (group_shape.as_mut(), invocation.and_then(|context| context.clip)) {
+                group.clip(clip);
+            }
             if let (Some(parent), Some(group)) = (self.knockout_shape.as_mut(), group_shape.as_ref()) {
                 parent.include_shape(group);
-            }
-
-            if is_isolated {
-                if let Some(parent) = &parent_lanes {
-                    parent.composite_sidecar(self, &group_pixmap);
-                }
-                pixmap.draw_pixmap(
-                    0,
-                    0,
-                    group_pixmap.as_ref(),
-                    &tiny_skia::PixmapPaint::default(),
-                    Transform::identity(),
-                    None,
-                );
-            } else {
-                // Non-isolated: the group pixmap IS the result (it started with parent content)
-                // ~keep
-                pixmap.data_mut().copy_from_slice(group_pixmap.data());
             }
         } else {
             self.execute_operators(pixmap, combined_transform, &operators, doc, page_num, &form_resources)?;
@@ -4883,6 +4904,14 @@ impl PageRenderer {
         let cell_ops = match parse_content_stream(&stream_data) {
             Ok(ops) => ops,
             Err(_) => return Ok(false),
+        };
+        let _pattern_workspace = if self.knockout_shape.is_some() {
+            Some(
+                self.knockout_resources
+                    .pattern(cw as usize * ch as usize, pixmap.data().len())?,
+            )
+        } else {
+            None
         };
         let mut cell = match Pixmap::new(cw, ch) {
             Some(p) => p,
@@ -5092,6 +5121,42 @@ impl PageRenderer {
         Some(sidecar.spot_state().to_vec())
     }
 
+    fn paint_mask_snapshots(&mut self, pixmap: &Pixmap, gs: &GraphicsState) -> Result<Option<PaintMaskSnapshots>> {
+        if gs.smask.is_none() {
+            return Ok(None);
+        }
+        let group = self.knockout_resources.active();
+        let bytes = (|| {
+            let mut bytes = pixmap.data().len();
+            if let Some(sidecar) = self.cmyk_sidecar.as_ref() {
+                bytes = bytes.checked_add(sidecar.spot_state().len())?;
+                if group {
+                    bytes = bytes.checked_add(sidecar.cmyk().len())?;
+                }
+            }
+            if let Some(shape) = self.knockout_shape.as_ref() {
+                bytes = bytes.checked_add(shape.allocation_bytes()?)?;
+            }
+            Some(bytes)
+        })();
+        let workspace = if group {
+            Some(self.knockout_resources.reserve(bytes)?)
+        } else {
+            None
+        };
+        Ok(Some(PaintMaskSnapshots {
+            rgba: self.smask_snapshot(pixmap, gs).expect("checked mask state"),
+            spots: self.smask_spot_snapshot(gs),
+            process: if group {
+                self.cmyk_sidecar.as_ref().map(|sidecar| sidecar.cmyk().to_vec())
+            } else {
+                None
+            },
+            shape: self.knockout_shape.clone(),
+            _workspace: workspace,
+        }))
+    }
+
     /// Predicate: should the CMYK compose-before-convert path fire for
     /// the current paint operator? Per ISO 32000-1:2008 §11.4 + Annex G,
     /// transparency compositing happens in the source colour space and
@@ -5177,23 +5242,6 @@ impl PageRenderer {
             return None;
         }
         Some(pixmap.data().to_vec())
-    }
-
-    /// Fill-side spot snapshot for a text show, additionally gated on the
-    /// fill-producing text render modes (`Tr` 0/2/4/6). ISO 32000-1 §9.3.6
-    /// Table 106: modes 1/3/5/7 lay down no visible *fill* mark — mode 3 is
-    /// fully invisible, 1/5 stroke only, 7 clip only. The spot mirror derives
-    /// its coverage from [`Self::coverage_only_gs`], which force-overrides the
-    /// render mode to 0 so the coverage scratch always paints; without this
-    /// gate an invisible (`3 Tr`) or stroke-only show would still write the
-    /// spot/InkA lane where nothing was painted. `spot_paint_active` cannot
-    /// carry this check because it is shared with path paints, for which the
-    /// text render mode is meaningless.
-    fn text_fill_spot_snapshot(&self, pixmap: &Pixmap, gs: &GraphicsState) -> Option<Vec<u8>> {
-        if !matches!(gs.render_mode, 0 | 2 | 4 | 6) {
-            return None;
-        }
-        self.spot_paint_snapshot(pixmap, gs, true)
     }
 
     /// Snapshot the pixmap when the CMYK sidecar plane is present and
@@ -5387,7 +5435,7 @@ impl PageRenderer {
         let (w, h) = self.coverage_dimensions()?;
         let mut mask = tiny_skia::Mask::new(w, h)?;
         guarded_mask_fill_path(&mut mask, path, fill_rule, true, transform);
-        let mut buf = mask.data().to_vec();
+        let mut buf = mask.take();
         // Knockout shape must use the same multiplicative clip as the raster paint. ~keep
         if let Some(c) = clip {
             for (b, cv) in buf.iter_mut().zip(c.data().iter()) {
@@ -5581,82 +5629,6 @@ impl PageRenderer {
             None,
             &self.fonts,
         );
-    }
-
-    /// Rasterise the text-show coverage for a single `Tj` / `'` / `"`
-    /// string by running the same `text_rasterizer.render_text` path
-    /// the visible paint uses, but with [`Self::coverage_only_gs`] so
-    /// the alpha channel encodes per-glyph AA-edge coverage exactly.
-    /// Returns `None` when the sidecar is detection-OFF (coverage
-    /// would be unused work).
-    ///
-    /// Per ISO 32000-1 §9.4 text-showing operators + §9.6 simple-font
-    /// glyph rasterisation: every glyph in the run is laid into the
-    /// scratch pixmap via the same tt-parser / harfrust / ttf-outline
-    /// path the visible paint uses, so the coverage mask is geometry-
-    /// identical (including font-fallback substitutions) to the
-    /// visible glyph bodies.
-    fn rasterise_text_coverage_render_text(
-        &self,
-        text: &[u8],
-        base_transform: Transform,
-        gs: &GraphicsState,
-        resources: &Object,
-        doc: &PdfDocument,
-        clip_mask: Option<&tiny_skia::Mask>,
-    ) -> Option<Vec<u8>> {
-        if self.text_ink_suppressed || matches!(gs.render_mode, 3 | 7) {
-            return None;
-        }
-        let (w, h) = self.coverage_dimensions()?;
-        let mut scratch = Pixmap::new(w, h)?;
-        let mut cov_gs = Self::coverage_only_gs(gs);
-        cov_gs.render_mode = gs.render_mode;
-        let _ = self.text_rasterizer.render_text(
-            &mut scratch,
-            text,
-            base_transform,
-            &cov_gs,
-            None,
-            resources,
-            doc,
-            clip_mask,
-            &self.fonts,
-        );
-        Some(Self::extract_alpha_as_coverage(&scratch))
-    }
-
-    /// Rasterise the text-show coverage for a `TJ` array. Mirror of
-    /// [`Self::rasterise_text_coverage_render_text`] for the
-    /// positioning-adjustment form. Same §9.4 + §9.6 contract.
-    fn rasterise_text_coverage_render_tj_array(
-        &self,
-        array: &[crate::content::operators::TextElement],
-        base_transform: Transform,
-        gs: &GraphicsState,
-        resources: &Object,
-        doc: &PdfDocument,
-        clip_mask: Option<&tiny_skia::Mask>,
-    ) -> Option<Vec<u8>> {
-        if self.text_ink_suppressed || matches!(gs.render_mode, 3 | 7) {
-            return None;
-        }
-        let (w, h) = self.coverage_dimensions()?;
-        let mut scratch = Pixmap::new(w, h)?;
-        let mut cov_gs = Self::coverage_only_gs(gs);
-        cov_gs.render_mode = gs.render_mode;
-        let _ = self.text_rasterizer.render_tj_array(
-            &mut scratch,
-            array,
-            base_transform,
-            &cov_gs,
-            None,
-            resources,
-            doc,
-            clip_mask,
-            &self.fonts,
-        );
-        Some(Self::extract_alpha_as_coverage(&scratch))
     }
 
     /// Rasterise the coverage for an Image / ImageMask Do by re-running
@@ -6440,6 +6412,11 @@ impl PageRenderer {
         let (sc, sm, sy, sk) = self.resolve_rgb_paint_to_cmyk(gs, doc, fill_side);
 
         let coverage = coverage.expect("checked above");
+        if self.knockout_resources.active() && doc.output_intent_cmyk_profile().is_none() {
+            let alpha = snapshot.as_chunks::<4>().0.iter().map(|pixel| pixel[3]);
+            self.compose_group_process_path(coverage, alpha, [sc, sm, sy, sk], gs, fill_side);
+            return;
+        }
         let plane = self.cmyk_sidecar.as_mut().expect("checked above").cmyk_mut();
         for px in 0..(plane.len() / 4) {
             let cov = coverage[px];
@@ -6502,34 +6479,93 @@ impl PageRenderer {
             gs.stroke_overprint
         };
         let transparent = alpha < 1.0 || gs.blend_mode != "Normal" || gs.smask.is_some();
-        if transparent || overprint {
+        let group_fallback =
+            transparent && self.knockout_resources.active() && doc.output_intent_cmyk_profile().is_none();
+        if overprint || (transparent && !group_fallback) {
             return;
         }
 
         let coverage = coverage.expect("checked above");
+        if group_fallback {
+            let alpha = snapshot.as_chunks::<4>().0.iter().map(|pixel| pixel[3]);
+            self.compose_group_process_path(coverage, alpha, [sc, sm, sy, sk], gs, fill_side);
+            return;
+        }
         let plane = self.cmyk_sidecar.as_mut().expect("checked above").cmyk_mut();
-        for px in 0..(plane.len() / 4) {
-            let cov = coverage[px];
-            if cov == 0 {
+        let source = [sc, sm, sy, sk];
+        for (pixel, &coverage) in plane.as_chunks_mut::<4>().0.iter_mut().zip(coverage) {
+            let effective = f32::from(coverage) / 255.0;
+            for (ink, source) in pixel.iter_mut().zip(source) {
+                *ink = (effective * source * 255.0 + (1.0 - effective) * f32::from(*ink))
+                    .clamp(0.0, 255.0)
+                    .round() as u8;
+            }
+        }
+    }
+
+    fn group_path_snapshot(
+        &mut self,
+        pixmap: &Pixmap,
+        gs: &GraphicsState,
+        doc: &PdfDocument,
+        fill_side: bool,
+    ) -> Result<Option<GroupPathSnapshot>> {
+        let (source, _, overprint) = Self::process_path_state(gs, fill_side);
+        if !self.knockout_resources.active()
+            || self.cmyk_sidecar.is_none()
+            || overprint
+            || doc.output_intent_cmyk_profile().is_some()
+        {
+            return Ok(None);
+        }
+        let (c, m, y, k) = source.unwrap_or_else(|| self.resolve_rgb_paint_to_cmyk(gs, doc, fill_side));
+        let workspace = self.knockout_resources.reserve(Some(pixmap.data().len() / 4))?;
+        Ok(Some(GroupPathSnapshot {
+            alpha: Self::extract_alpha_as_coverage(pixmap),
+            source: [c, m, y, k],
+            _workspace: workspace,
+        }))
+    }
+
+    fn process_path_state(gs: &GraphicsState, fill_side: bool) -> (Option<(f32, f32, f32, f32)>, f32, bool) {
+        if fill_side {
+            (gs.fill_color_cmyk, gs.fill_alpha, gs.fill_overprint)
+        } else {
+            (gs.stroke_color_cmyk, gs.stroke_alpha, gs.stroke_overprint)
+        }
+    }
+
+    fn compose_group_process_path(
+        &mut self,
+        coverage: &[u8],
+        backdrop_alpha: impl Iterator<Item = u8>,
+        source: [f32; 4],
+        gs: &GraphicsState,
+        fill_side: bool,
+    ) {
+        let (_, opacity, _) = Self::process_path_state(gs, fill_side);
+        let Some(sidecar) = self.cmyk_sidecar.as_mut() else {
+            return;
+        };
+        for ((pixel, &coverage), alpha) in sidecar
+            .cmyk_mut()
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(coverage)
+            .zip(backdrop_alpha)
+        {
+            if coverage == 0 {
                 continue;
             }
-            let cov_f = cov as f32 / 255.0;
-            let off = px * 4;
-            let dc = plane[off] as f32 / 255.0;
-            let dm = plane[off + 1] as f32 / 255.0;
-            let dy = plane[off + 2] as f32 / 255.0;
-            let dk = plane[off + 3] as f32 / 255.0;
-            let mc = cov_f * sc + (1.0 - cov_f) * dc;
-            let mm = cov_f * sm + (1.0 - cov_f) * dm;
-            let my = cov_f * sy + (1.0 - cov_f) * dy;
-            let mk = cov_f * sk + (1.0 - cov_f) * dk;
-            plane[off] = (mc.clamp(0.0, 1.0) * 255.0).round() as u8;
-            plane[off + 1] = (mm.clamp(0.0, 1.0) * 255.0).round() as u8;
-            plane[off + 2] = (my.clamp(0.0, 1.0) * 255.0).round() as u8;
-            plane[off + 3] = (mk.clamp(0.0, 1.0) * 255.0).round() as u8;
+            let effective = f32::from(coverage) / 255.0 * opacity.clamp(0.0, 1.0);
+            let source = group_compositing::process_blend(&gs.blend_mode, pixel, f32::from(alpha) / 255.0, source);
+            for (ink, source) in pixel.iter_mut().zip(source) {
+                *ink = (effective * source * 255.0 + (1.0 - effective) * f32::from(*ink))
+                    .clamp(0.0, 255.0)
+                    .round() as u8;
+            }
         }
-        let _ = snapshot;
-        let _ = doc;
     }
 
     /// Predicate: should the spot-lane mirror fire for the current paint?
@@ -6917,20 +6953,44 @@ impl PageRenderer {
     /// modulation. The destination pixel is updated as a linear blend
     /// between `snapshot` and `pixmap` weighted by the mask:
     /// `dest = mask * pixmap + (1 - mask) * snapshot`.
-    fn apply_smask_after_paint(
+    fn apply_paint_mask(
+        &mut self,
+        pixmap: &mut Pixmap,
+        mask: PaintMaskSnapshots,
+        ctx: PaintModulatorContext<'_>,
+    ) -> Result<()> {
+        let applied = self.apply_smask_with_cmyk(
+            pixmap,
+            &mask.rgba,
+            mask.spots.as_deref(),
+            mask.process.as_deref(),
+            ctx.gs,
+            ctx.doc,
+            ctx.page_num,
+            ctx.resources,
+            ctx.base_transform,
+        );
+        if !matches!(&applied, Ok(true)) {
+            self.knockout_shape = mask.shape;
+        }
+        applied.map(|_| ())
+    }
+
+    fn apply_smask_with_cmyk(
         &mut self,
         pixmap: &mut Pixmap,
         snapshot: &[u8],
         spot_snapshot: Option<&[u8]>,
+        cmyk_snapshot: Option<&[u8]>,
         gs: &GraphicsState,
         doc: &PdfDocument,
         page_num: usize,
         resources: &Object,
         base_transform: Transform,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let smask = match gs.smask.as_ref() {
             Some(s) => s.clone(),
-            None => return Ok(()),
+            None => return Ok(true),
         };
 
         // Defend against adversarial cyclic /SMask /G chains: the form
@@ -6946,13 +7006,14 @@ impl PageRenderer {
                  modulation on this paint.",
                 MAX_SMASK_DEPTH
             );
-            return Ok(());
+            return Ok(true);
         }
         self.smask_depth += 1;
         let result = self.apply_smask_after_paint_inner(
             pixmap,
             snapshot,
             spot_snapshot,
+            cmyk_snapshot,
             &smask,
             doc,
             page_num,
@@ -6960,6 +7021,17 @@ impl PageRenderer {
             base_transform,
         );
         self.smask_depth -= 1;
+        if !matches!(&result, Ok(true)) {
+            pixmap.data_mut().copy_from_slice(snapshot);
+            if let Some(sidecar) = self.cmyk_sidecar.as_mut() {
+                if let Some(parent) = spot_snapshot {
+                    sidecar.restore_spot_state(parent);
+                }
+                if let Some(parent) = cmyk_snapshot {
+                    sidecar.restore_cmyk(parent);
+                }
+            }
+        }
         result
     }
 
@@ -6968,18 +7040,24 @@ impl PageRenderer {
         pixmap: &mut Pixmap,
         snapshot: &[u8],
         spot_snapshot: Option<&[u8]>,
+        cmyk_snapshot: Option<&[u8]>,
         smask: &crate::content::graphics_state::SoftMaskForm,
         doc: &PdfDocument,
         page_num: usize,
         resources: &Object,
         base_transform: Transform,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         // Render the Form XObject into a fresh pixmap. The pixmap
         // starts fully transparent for /S /Alpha (the spec default
         // backdrop is the black point, which projects to alpha=0).
         // For /S /Luminosity the optional /BC backdrop pre-fills with
         // the declared colour; absent /BC the spec default is the
         // colour space's black point (also fills with zeros). ~keep
+        let _mask_workspace = if self.knockout_resources.active() {
+            Some(self.knockout_resources.reserve(pixmap.data().len().checked_mul(2))?)
+        } else {
+            None
+        };
         let w = pixmap.width();
         let h = pixmap.height();
         let mut mask_pixmap = match Pixmap::new(w, h) {
@@ -6988,7 +7066,7 @@ impl PageRenderer {
                 // Allocation failed — restore the snapshot to avoid
                 // emitting an unmasked paint. ~keep
                 pixmap.data_mut().copy_from_slice(snapshot);
-                return Ok(());
+                return Ok(false);
             }
         };
 
@@ -7000,7 +7078,7 @@ impl PageRenderer {
             Ok(o) => o,
             Err(_) => {
                 pixmap.data_mut().copy_from_slice(snapshot);
-                return Ok(());
+                return Ok(false);
             }
         };
 
@@ -7014,7 +7092,7 @@ impl PageRenderer {
             }
             _ => {
                 pixmap.data_mut().copy_from_slice(snapshot);
-                return Ok(());
+                return Ok(false);
             }
         };
 
@@ -7089,7 +7167,7 @@ impl PageRenderer {
         // its own matrix within the page-aligned device frame. ~keep
         let saved_shape = self.knockout_shape.take();
         let saved_sidecar = self.cmyk_sidecar.take();
-        let _ = self.render_form_xobject(
+        let mask_result = self.render_form_xobject(
             &mut mask_pixmap,
             &form_dict,
             &form_data,
@@ -7100,6 +7178,7 @@ impl PageRenderer {
         );
         self.knockout_shape = saved_shape;
         self.cmyk_sidecar = saved_sidecar;
+        mask_result?;
 
         // Resolve /TR transfer function once. The audit fixture uses
         // a Type-2 power function (`N=2` squares the input); the
@@ -7152,6 +7231,13 @@ impl PageRenderer {
             }
         }
 
+        if let (Some(parent), Some(sidecar)) = (cmyk_snapshot, self.cmyk_sidecar.as_mut()) {
+            for (index, (value, parent)) in sidecar.cmyk_mut().iter_mut().zip(parent).enumerate() {
+                let alpha = mask_alpha[index / 4];
+                *value = (alpha * f32::from(*value) + (1.0 - alpha) * f32::from(*parent)).round() as u8;
+            }
+        }
+
         // Spot lanes: apply the same SMask alpha attenuation to every
         // spot plane against its pre-mirror snapshot. Per §11.7.3, the
         // soft mask's alpha modulates the spot lane the same way it
@@ -7184,7 +7270,7 @@ impl PageRenderer {
             }
         }
 
-        Ok(())
+        Ok(true)
     }
 
     /// Render annotations for a page.
