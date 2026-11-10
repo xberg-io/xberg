@@ -32,8 +32,10 @@ pub(super) struct SkippedSheets {
     /// sheet sharing its name with another sheet is renamed in the rewritten input and reported
     /// here under its original name.
     names: Vec<String>,
-    /// `(observed, max)` of the first cell-limit error a skipped sheet raised.
-    first_error: Option<(usize, usize)>,
+    /// `(observed, max)` of the cell-limit error each skipped sheet raised.
+    cell_limit_errors: HashMap<usize, (usize, usize)>,
+    /// BOUNDSHEET records the XLS preflight saw; the reader must report exactly this many sheets.
+    sheet_count: usize,
 }
 
 impl SkippedSheets {
@@ -42,7 +44,8 @@ impl SkippedSheets {
             indices: HashSet::new(),
             max_cells: limits.max_table_cells,
             names: Vec::new(),
-            first_error: None,
+            cell_limit_errors: HashMap::new(),
+            sheet_count: 0,
         }
     }
 
@@ -76,20 +79,26 @@ impl SkippedSheets {
     /// earlier one. `reader_names` must be the names the reader itself reports, because it decodes
     /// them (byte-order marks, code pages) in ways a preflight cannot mirror exactly.
     pub(super) fn name_collision_error(&self, reader_names: &[String]) -> Option<XbergError> {
+        if self.indices.is_empty() {
+            return None;
+        }
         let mut counts: HashMap<&str, usize> = HashMap::new();
         for name in reader_names {
             *counts.entry(name.as_str()).or_insert(0) += 1;
         }
-        let collides = self
+        let misaligned = reader_names.len() != self.sheet_count;
+        let culprit = self
             .indices
             .iter()
-            .any(|index| reader_names.get(*index).is_some_and(|name| counts[name.as_str()] > 1));
-        collides.then(|| {
-            let (cells, max) = self
-                .first_error
-                .unwrap_or((self.max_cells.saturating_add(1), self.max_cells));
-            XbergError::from(SecurityError::TooManyCells { cells, max })
-        })
+            .copied()
+            .filter(|index| misaligned || reader_names.get(*index).is_none_or(|name| counts[name.as_str()] > 1))
+            .min()?;
+        let (cells, max) = self
+            .cell_limit_errors
+            .get(&culprit)
+            .copied()
+            .unwrap_or((self.max_cells.saturating_add(1), self.max_cells));
+        Some(XbergError::from(SecurityError::TooManyCells { cells, max }))
     }
 
     /// The empty sheet standing in for sheet `index` named `name`, with its warning recorded,
@@ -176,8 +185,8 @@ fn preflight_sheet(
     let before = Charges::of(budget);
     match sheet(budget) {
         Err(error) if recoverable && is_cell_limit(&error) => {
-            if skipped.first_error.is_none() {
-                skipped.first_error = cell_limit_counts(&error);
+            if let Some(counts) = cell_limit_counts(&error) {
+                skipped.cell_limit_errors.insert(index, counts);
             }
             before.restore(budget);
             skipped.indices.insert(index);

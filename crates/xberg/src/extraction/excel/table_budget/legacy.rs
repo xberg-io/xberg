@@ -40,6 +40,7 @@ pub(in crate::extraction::excel) fn validate_xls(
             worksheets.push(u64::from(u32::from_le_bytes(data[..4].try_into().unwrap())));
         }
     }
+    skipped.sheet_count = worksheets.len();
     for (index, offset) in worksheets.into_iter().enumerate() {
         preflight_sheet(index, &mut budget, &mut skipped, true, |budget| {
             reader.seek(SeekFrom::Start(offset))?;
@@ -955,19 +956,25 @@ mod tests {
         assert!(warnings[0].message.contains("Sheet '01' was skipped"), "{warnings:?}");
     }
 
-    fn assert_cell_limit_error(result: Result<crate::extraction::excel::ExcelReadResult>, label: &str) {
+    /// The result must be the cell-limit error of the over-budget sheet: `observed` cells against
+    /// the `tight_limits()` maximum of 10.
+    fn assert_cell_limit_error(
+        result: Result<crate::extraction::excel::ExcelReadResult>,
+        label: &str,
+        observed: usize,
+    ) {
+        use crate::extractors::security::SecurityError;
         let error = result.expect_err(label);
-        assert!(
-            matches!(
-                &error,
-                XbergError::Security { source: Some(source), .. }
-                    if matches!(
-                        source.downcast_ref::<crate::extractors::security::SecurityError>(),
-                        Some(crate::extractors::security::SecurityError::TooManyCells { .. })
-                    )
-            ),
-            "{label}: {error}"
-        );
+        let counts = match &error {
+            XbergError::Security {
+                source: Some(source), ..
+            } => match source.downcast_ref::<SecurityError>() {
+                Some(SecurityError::TooManyCells { cells, max }) => Some((*cells, *max)),
+                _ => None,
+            },
+            _ => None,
+        };
+        assert_eq!(counts, Some((observed, 10)), "{label}: {error}");
     }
 
     fn same_name_sheets() -> [Vec<u8>; 2] {
@@ -986,14 +993,15 @@ mod tests {
     #[test]
     fn should_keep_the_cell_limit_error_when_a_skipped_xls_sheet_shares_a_name_gh2820() {
         let [kept, big] = same_name_sheets();
-        for (label, sheets) in [
-            ("skipped last", [kept.clone(), big.clone()]),
-            ("skipped first", [big, kept]),
+        for (label, sheets, observed) in [
+            ("skipped last", [kept.clone(), big.clone()], 27),
+            ("skipped first", [big, kept], 25),
         ] {
             let bytes = compound(&workbook_named(&sheets, &["Same", "Same"], &[]));
             assert_cell_limit_error(
                 crate::extraction::excel::read_excel_bytes(&bytes, ".xls", &tight_limits()),
                 label,
+                observed,
             );
         }
     }
@@ -1005,6 +1013,7 @@ mod tests {
         assert_cell_limit_error(
             crate::extraction::excel::read_excel_bytes(&bytes, ".xls", &tight_limits()),
             "nul variant",
+            27,
         );
     }
 
@@ -1018,6 +1027,7 @@ mod tests {
         assert_cell_limit_error(
             crate::extraction::excel::read_excel_bytes(&compound(&stream), ".xls", &tight_limits()),
             "version zero",
+            27,
         );
     }
 
@@ -1082,6 +1092,7 @@ mod tests {
             assert_cell_limit_error(
                 crate::extraction::excel::read_excel_bytes(&bytes, ".xls", &tight_limits()),
                 label,
+                if label == "skipped last" { 27 } else { 25 },
             );
         }
     }
@@ -1100,6 +1111,7 @@ mod tests {
         assert_cell_limit_error(
             crate::extraction::excel::read_excel_bytes(&bytes, ".xls", &tight_limits()),
             "code page",
+            27,
         );
     }
 
@@ -1114,7 +1126,7 @@ mod tests {
         records.push(record(BIFF_EOF, &[]));
         let big = [bof(0x0010), dimensions((0, 0), (100, 100)), record(BIFF_EOF, &[])].concat();
         let stream = workbook_named(&[records.concat(), big], &["Kept", "Big"], &[]);
-        assert!(stream.len() > 2048);
+        assert!(stream.len() > 4096, "{}", stream.len());
         let limits = SecurityLimits {
             max_table_cells: 1000,
             ..Default::default()
@@ -1149,6 +1161,7 @@ mod tests {
         assert_cell_limit_error(
             crate::extraction::excel::read_excel_bytes(&compound(&same), ".xls", &tight_limits()),
             "biff5 duplicate",
+            27,
         );
     }
 
@@ -1159,6 +1172,63 @@ mod tests {
         assert_cell_limit_error(
             crate::extraction::excel::read_excel_bytes(&compound(&same), ".xls", &tight_limits()),
             "biff2 duplicate",
+            27,
+        );
+    }
+
+    #[test]
+    fn should_skip_a_sheet_of_a_biff2_versioned_xls_with_distinct_names_gh2820() {
+        let [kept, big] = same_name_sheets();
+        let distinct = with_version(workbook_named(&[kept, big], &["B5:Keep", "B5:Skip"], &[]), 0x0200);
+        let (result, warnings) =
+            crate::extraction::excel::read_excel_bytes(&compound(&distinct), ".xls", &tight_limits()).unwrap();
+        let names: Vec<&str> = result.sheets.iter().map(|sheet| sheet.name.as_str()).collect();
+        assert_eq!(names, ["Keep", "Skip"]);
+        assert_eq!(result.sheets[0].table_cells.as_ref().unwrap().len(), 1);
+        assert!(result.sheets[1].table_cells.is_none());
+        assert!(warnings[0].message.contains("Sheet 'Skip' was skipped"), "{warnings:?}");
+    }
+
+    #[test]
+    fn should_fail_closed_on_an_xla_name_collision_through_bytes_and_file_gh2820() {
+        let [kept, big] = same_name_sheets();
+        let bytes = compound(&workbook_named(&[kept, big], &["Same", "Same"], &[]));
+        assert_cell_limit_error(
+            crate::extraction::excel::read_excel_bytes(&bytes, ".xla", &tight_limits()),
+            "xla bytes",
+            27,
+        );
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("collision.xla");
+        std::fs::write(&path, &bytes).unwrap();
+        assert_cell_limit_error(
+            crate::extraction::excel::read_excel_file(path.to_str().unwrap(), &tight_limits()),
+            "xla file",
+            27,
+        );
+    }
+
+    #[test]
+    fn should_fail_closed_when_the_reader_reports_a_different_sheet_count_gh2820() {
+        let limits = tight_limits();
+        let mut skipped = SkippedSheets::new(&limits);
+        skipped.indices.insert(1);
+        skipped.sheet_count = 3;
+        skipped.cell_limit_errors.insert(1, (27, 10));
+        let names = |names: &[&str]| names.iter().map(|name| name.to_string()).collect::<Vec<_>>();
+        assert!(skipped.name_collision_error(&names(&["a", "b", "c"])).is_none());
+        assert!(
+            skipped.name_collision_error(&names(&["a", "b"])).is_some(),
+            "missing sheet"
+        );
+        assert!(
+            skipped.name_collision_error(&names(&["a", "b", "c", "d"])).is_some(),
+            "extra sheet"
+        );
+        skipped.indices.insert(5);
+        assert!(
+            skipped.name_collision_error(&names(&["a", "b", "c"])).is_some(),
+            "index out of range"
         );
     }
 }
