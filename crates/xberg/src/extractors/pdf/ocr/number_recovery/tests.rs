@@ -499,7 +499,8 @@ fn verifier_fixture() -> (std::sync::Arc<Vec<u8>>, Rect, TextChar) {
 }
 
 #[test]
-fn should_not_turn_verified_numbers_into_type0_page_corroboration() {
+fn should_require_proven_page_context_for_numeric_recovery() {
+    assert_source_script_loss_is_not_certified_by_a_numeric_crop();
     let matching = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/tests/fixtures/pdf_khmer_number_2408/matching.pdf"
@@ -556,4 +557,41 @@ fn rendered_integrity(source: &[u8]) -> crate::pdf::render::OcrRasterDpi {
     )
     .unwrap()
     .1
+}
+
+fn assert_source_script_loss_is_not_certified_by_a_numeric_crop() {
+    let native = "ខ្ញុំ\u{FFFD}\u{FFFD} ស្រលាញ់\u{FFFD} ប្រទេស\u{FFFD}\u{FFFD} កម្ពុជា\u{FFFD} សួស្តី\u{FFFD} ភ្នំពេញ";
+    let boundary = crate::types::PageBoundary {
+        byte_start: 0,
+        byte_end: native.len(),
+        page_number: 1,
+    };
+    let dropped = |read: &str| {
+        super::super::super::unreadable_script::pages_that_dropped_script(
+            &[1],
+            native,
+            Some(std::slice::from_ref(&boundary)),
+            &[read.to_owned()],
+        )
+    };
+    assert!(
+        dropped(native).is_empty(),
+        "actually retained prose must not request a retry"
+    );
+    assert_eq!(
+        dropped("The office keeps the records"),
+        [1],
+        "the unaugmented read must really drop Khmer"
+    );
+    assert_eq!(
+        dropped("The office keeps the records ០"),
+        [1],
+        "a verified numeral must not remove the page from AF's native-script retry"
+    );
+    for read in ["123", "០១២", "١٢٣", "50% ០١2"] {
+        assert!(
+            dropped(read).is_empty(),
+            "numeric-only reads are not evidence of another prose script: {read}"
+        );
+    }
 }

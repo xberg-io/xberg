@@ -315,6 +315,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already containing numbers stay unchanged.
   Eligible pages bypass OCR and extraction-result caches so model installation takes effect.
   Recovered Plain pages retain exact document byte ranges.
+  A numeral cannot mask dropped native prose from the existing script-retention decision.
   No runtime model download; the original reporter page remains unverified.
 
 - **(pdf): Keep a Type0 page's native text after OCR ink loss only when the native layer owns or is covered by the read, or spells at least 25% of the read's distinct words.** (#2802)

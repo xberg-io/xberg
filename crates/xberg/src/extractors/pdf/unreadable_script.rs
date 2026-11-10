@@ -673,7 +673,11 @@ pub(super) fn ocr_dropped_native_script(native_page: &str, ocr_text: &str) -> bo
     let Some(scripts) = dominant_scripts(native_page) else {
         return false;
     };
-    let read: Vec<Script> = ocr_text.chars().filter_map(script_of).collect();
+    let read: Vec<Script> = ocr_text
+        .chars()
+        .filter(|character| !character.is_numeric())
+        .filter_map(script_of)
+        .collect();
     !read.is_empty() && !read.iter().any(|script| scripts.contains(script))
 }
 

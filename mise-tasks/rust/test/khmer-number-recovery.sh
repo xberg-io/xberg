@@ -70,7 +70,7 @@ unit_names=(
   should_refuse_an_oversized_selected_read_proof
   should_normalize_only_spacing_in_the_recognized_numeric_run
   should_reuse_one_lazy_processor_for_independent_page_verifications
-  should_not_turn_verified_numbers_into_type0_page_corroboration
+  should_require_proven_page_context_for_numeric_recovery
 )
 expected_units="${#unit_names[@]}"
 unit_listed="$(cargo "${unit_args[@]}" -- --include-ignored --list --color never)"

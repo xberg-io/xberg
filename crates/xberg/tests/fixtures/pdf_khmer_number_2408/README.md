@@ -108,3 +108,7 @@ through the existing page renderer, including list and document normalization.
 Only recovered pages are synchronized; stages that defer assembly remain
 unchanged. The positive control checks exact slices on one and two pages, with
 and without adjacent real OCR lists.
+
+Verified numerals do not count as evidence that OCR retained the native prose's
+script. The existing native-script retry and retention check excludes numerals
+from that evidence, including numeric-only reads in another script block.
