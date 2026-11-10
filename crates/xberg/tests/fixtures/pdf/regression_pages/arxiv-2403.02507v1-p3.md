@@ -23,11 +23,9 @@
 
 **K**~**0**~ **= −R B P (24) The proof that (A, B) is exponentially stabilizable and**
 
-1
+1 2
 
-**(P**
-
-2**C, A) is exponentially detectable given V \< 0 is shown in [23]. Furthermore, P := Φ(z)I (25) where Φ(z) is the solution of the matrix Riccati differential equation given by dΦ ∗ ∗ −1 ∗**
+**(P C, A) is exponentially detectable given V \< 0 is shown in [23]. Furthermore, P := Φ(z)I (25) where Φ(z) is the solution of the matrix Riccati differential equation given by dΦ ∗ ∗ −1 ∗**
 
 **V = M Φ + ΦM + C Q**~**0**~ **C**~**0**~ **− ΦB R**~**0**~ **B**~**0**~ **0 Φ 0 dz (26) Φ(L) = 0 where Q**~**0**~ **is a positive matrix and R**~**0**~ **is a self-adjoint positive matrix. Thus, (24) becomes**
 

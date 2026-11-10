@@ -12,10 +12,6 @@ enum ScriptGeometry {
     Preserve,
 }
 
-/// Largest raised-mark shift, in ems of its base, that ordering treats as on the base line; the
-/// same bound as the shared script-run predicate. Wider shifts stay on their raw baseline.
-const ORDERING_MAX_SCRIPT_SHIFT_EM: f32 = 0.35;
-
 /// Internal bridge: reorders `spans` with `order` as if each raised mark sat on the baseline of the
 /// span it follows.
 ///
@@ -29,6 +25,7 @@ pub fn order_on_script_base_lines(
     spans: &mut Vec<crate::layout::TextSpan>,
     order: impl FnOnce(&mut Vec<crate::layout::TextSpan>),
 ) {
+    use crate::extractors::text::{OrderingSpan, ordering_script_baselines};
     use std::collections::HashMap;
 
     type Key = (String, u32, u32, usize, u32);
@@ -42,11 +39,19 @@ pub fn order_on_script_base_lines(
         )
     }
 
-    let snapshot: Vec<_> = spans
+    let snapshot: Vec<OrderingSpan<'_>> = spans
         .iter()
-        .map(|span| (span.bbox.x, span.bbox.y, span.bbox.width, span.font_size))
+        .map(|span| {
+            (
+                span.text.as_str(),
+                span.bbox.x,
+                span.bbox.y,
+                span.bbox.width,
+                span.font_size,
+            )
+        })
         .collect();
-    let snapped = crate::extractors::text::snapped_script_baselines(&snapshot, ORDERING_MAX_SCRIPT_SHIFT_EM);
+    let snapped = ordering_script_baselines(&snapshot);
     let mut raw_by_key: HashMap<Key, Vec<f32>> = HashMap::new();
     for (span, base_y) in spans.iter_mut().zip(snapped) {
         if let Some(base_y) = base_y {
@@ -2223,10 +2228,10 @@ mod order_on_script_base_lines_tests {
 
     fn page() -> Vec<TextSpan> {
         vec![
-            span("near-mark", 110.0, 703.0, 4.0, 8.0, 5),
+            span("n", 110.0, 703.0, 4.0, 8.0, 5),
             span("near-other", 500.0, 702.0, 20.0, 12.0, 5),
             span("near-base", 100.0, 700.0, 10.0, 12.0, 1),
-            span("far-mark", 210.0, 605.5, 4.0, 8.0, 5),
+            span("f", 210.0, 605.5, 4.0, 8.0, 5),
             span("far-other", 500.0, 602.0, 20.0, 12.0, 5),
             span("far-base", 200.0, 600.0, 10.0, 12.0, 2),
         ]
@@ -2246,15 +2251,146 @@ mod order_on_script_base_lines_tests {
         order_on_script_base_lines(&mut spans, |spans| by_row(spans));
         assert_eq!(
             texts(&spans),
-            [
-                "near-other",
-                "near-base",
-                "near-mark",
-                "far-mark",
-                "far-other",
-                "far-base"
-            ]
+            ["near-other", "near-base", "n", "f", "far-other", "far-base"]
         );
+    }
+
+    fn mark_beside_base(mark_x: f32, mark_size: f32) -> Vec<TextSpan> {
+        vec![
+            span("2", mark_x, 703.0, 4.0, mark_size, 5),
+            span("other", 500.0, 702.0, 20.0, 10.0, 5),
+            span("base", 100.0, 700.0, 10.0, 10.0, 1),
+        ]
+    }
+
+    const SNAPPED: [&str; 3] = ["other", "base", "2"];
+    const RAW: [&str; 3] = ["2", "other", "base"];
+
+    #[test]
+    fn should_order_a_mark_of_exactly_08_of_its_base_size() {
+        let mut spans = mark_beside_base(110.0, 8.0);
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), SNAPPED);
+    }
+
+    #[test]
+    fn should_not_order_a_mark_larger_than_08_of_its_base_size() {
+        let mut spans = mark_beside_base(110.0, 8.1);
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), RAW);
+    }
+
+    #[test]
+    fn should_order_a_mark_02em_right_of_its_base() {
+        let mut spans = mark_beside_base(112.0, 7.0);
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), SNAPPED);
+    }
+
+    #[test]
+    fn should_not_order_a_mark_03em_right_of_its_base() {
+        let mut spans = mark_beside_base(113.0, 7.0);
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), RAW);
+    }
+
+    #[test]
+    fn should_snap_a_raised_cluster_all_or_nothing() {
+        let mut spans = vec![
+            span("(", 110.0, 703.0, 2.9, 6.0, 5),
+            span("\u{2217}", 112.9, 703.0, 3.8, 6.0, 5),
+            span(")", 116.7, 703.0, 2.9, 6.0, 5),
+            span("other", 500.0, 702.0, 20.0, 10.0, 5),
+            span("base", 100.0, 700.0, 10.0, 10.0, 1),
+        ];
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["other", "base", "(", "\u{2217}", ")"]);
+    }
+
+    #[test]
+    fn should_snap_a_whole_raised_cluster_whose_glyphs_all_abut_the_base() {
+        let mut spans = vec![
+            span("(", 110.0, 703.0, 0.8, 6.0, 5),
+            span("\u{2217}", 110.8, 703.0, 0.8, 6.0, 5),
+            span(")", 111.6, 703.0, 0.8, 6.0, 5),
+            span("other", 500.0, 702.0, 20.0, 10.0, 5),
+            span("base", 100.0, 700.0, 10.0, 10.0, 1),
+        ];
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["other", "base", "(", "\u{2217}", ")"]);
+    }
+
+    #[test]
+    fn should_snap_a_touching_exponent_whose_first_glyph_abuts_the_base() {
+        let mut spans = vec![
+            span("1", 130.0, 703.0, 4.0, 7.0, 5),
+            span("/t", 134.0, 703.0, 7.0, 7.0, 5),
+            span("other", 500.0, 702.0, 20.0, 10.0, 5),
+            span("(1 \u{2212} \u{3b4})", 100.0, 700.0, 30.0, 10.0, 1),
+        ];
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["other", "(1 \u{2212} \u{3b4})", "1", "/t"]);
+    }
+
+    #[test]
+    fn should_not_pull_pull_quote_lines_onto_a_large_opening_quote() {
+        let mut spans = vec![
+            span("the types of content that", 80.0, 1013.0, 160.0, 17.0, 5),
+            span("other", 500.0, 1012.0, 20.0, 17.0, 5),
+            span("\u{201c}", 60.0, 1000.0, 20.0, 40.0, 1),
+        ];
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["the types of content that", "other", "\u{201c}"]);
+    }
+
+    #[test]
+    fn should_not_treat_a_bullet_glyph_as_a_raised_mark() {
+        let mut spans = mark_beside_base(110.0, 7.0);
+        spans[0].text = "\u{2022}".to_string();
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["\u{2022}", "other", "base"]);
+    }
+
+    #[test]
+    fn should_keep_a_phrase_that_abuts_its_base_on_the_base_line() {
+        let mut spans = vec![
+            span("(see instructions):", 142.9, 427.7, 62.0, 8.0, 5),
+            span("other", 500.0, 427.5, 20.0, 9.0, 5),
+            span("Dependents", 100.0, 427.2, 40.0, 9.5, 1),
+        ];
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["other", "Dependents", "(see instructions):"]);
+    }
+
+    #[test]
+    fn should_not_pull_a_phrase_set_apart_from_a_larger_glyph_onto_its_line() {
+        let mut spans = vec![
+            span("Step 3", 128.0, 286.6, 40.0, 10.0, 5),
+            span("other", 500.0, 286.4, 20.0, 10.0, 5),
+            span("\u{a0}", 100.0, 286.1, 20.0, 12.0, 1),
+        ];
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["Step 3", "other", "\u{a0}"]);
+    }
+
+    #[test]
+    fn should_not_snap_prose_that_is_only_slightly_smaller_than_a_bullet_beside_it() {
+        let mut spans = vec![
+            span("item text", 110.0, 700.5, 100.0, 10.0, 2),
+            span("\u{2022}", 100.0, 700.0, 4.0, 12.0, 1),
+        ];
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["item text", "\u{2022}"]);
+    }
+
+    #[test]
+    fn should_not_snap_a_word_that_sits_far_from_a_larger_icon() {
+        let mut spans = vec![
+            span("during", 118.0, 508.0, 30.0, 10.0, 2),
+            span("!", 100.0, 504.5, 6.0, 19.0, 1),
+        ];
+        order_on_script_base_lines(&mut spans, |spans| by_row(spans));
+        assert_eq!(texts(&spans), ["during", "!"]);
     }
 
     #[test]
