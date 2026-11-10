@@ -57,7 +57,7 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
                     }
                 } else {
                     let text = render_djot_annotated(&elem.text, &elem.annotations);
-                    let block = format!("{}\n\n", text);
+                    let block = format!("{}\n\n", escape_paragraph_block_prefix(&text));
                     push_with_bq(&mut out, &block, bq_depth);
                 }
             }
@@ -374,6 +374,51 @@ fn render_annotations_djot(annotations: &[PdfAnnotation]) -> String {
     }
     out.push('\n');
     out
+}
+
+/// Protect block openers without escaping intentional inline markup in ordinary paragraphs.
+fn escape_paragraph_block_prefix(text: &str) -> std::borrow::Cow<'_, str> {
+    let line = text.trim_start_matches(|c: char| c.is_ascii_whitespace());
+    let indent = text.len() - line.len();
+    let prefix_end = line.find(|c: char| c.is_ascii_whitespace()).unwrap_or(line.len());
+    let prefix = &line[..prefix_end];
+    if !prefix.starts_with(|c: char| c.is_ascii_punctuation()) && !prefix.ends_with(['.', ')']) {
+        return text.into();
+    }
+    let block = jotdown::Parser::new(text).nth(1);
+    if matches!(block, Some(jotdown::Event::Start(jotdown::Container::Paragraph, _))) {
+        return text.into();
+    }
+    // Keep reference-label brackets intact: escaping the opener can activate underscores inside the label. ~keep
+    if line.starts_with('[')
+        && let Some(end) = line.find("]:")
+    {
+        let mut escaped = text.to_string();
+        escaped.insert(indent + end + 1, '\\');
+        if line.starts_with("[^") {
+            escaped.insert(indent + 1, '\\');
+        }
+        return escaped.into();
+    }
+    let end = if line.starts_with('|') {
+        1
+    } else if line.starts_with('{') || matches!(block, Some(jotdown::Event::ThematicBreak(_))) {
+        line.len()
+    } else if let Some(first @ ('`' | '~' | ':')) = line.chars().next() {
+        line.len() - line.trim_start_matches(first).len()
+    } else {
+        prefix_end
+    };
+    let mut escaped = String::with_capacity(text.len() + end);
+    escaped.push_str(&text[..indent]);
+    for c in line[..end].chars() {
+        if c.is_ascii_punctuation() {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+    }
+    escaped.push_str(&line[end..]);
+    escaped.into()
 }
 
 /// Backslash-escapes the first character of a row that starts its own paragraph when that
