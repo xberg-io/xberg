@@ -395,11 +395,15 @@ fn escape_leading_block_marker(line: &str) -> String {
     } else {
         first.len_utf8()
     };
-    // On the unescaped row, `{`, `[`, `!` and `:` hold the delimiter that follows them, so a pair such as
-    // `{_!_` stays text. Escaping only the opener would free the pair to become emphasis or a superscript.
-    let pairs = matches!(first, '{' | '[' | '!' | ':');
-    if pairs && rest[run..].starts_with(|c: char| c.is_ascii_punctuation() && c != '\\') {
-        run += 1;
+    // On the unescaped row, `{`, `[`, `!` and `:` hold the delimiters that follow them, so a row such as `{_!_`
+    // or `[]{}` stays text. Escaping only the opener would free those delimiters to become emphasis, a
+    // superscript or attributes, so the whole run of punctuation after the opener is escaped.
+    if matches!(first, '{' | '[' | '!' | ':') {
+        let extra = rest[run..]
+            .chars()
+            .take_while(|c| c.is_ascii_punctuation() && *c != '\\')
+            .count();
+        run += extra;
     }
     let escaped: String = rest[..run].chars().flat_map(|c| ['\\', c]).collect();
     format!("{head}{escaped}{}", &rest[run..])
