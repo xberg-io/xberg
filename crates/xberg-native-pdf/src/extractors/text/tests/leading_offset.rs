@@ -477,26 +477,23 @@ fn span_boxes_in_mode(mode: WordBoundaryMode, stream: &str) -> Vec<(String, f32,
 }
 
 /// The Primary word-boundary mode ends the run at its drawn width after a `Tm` set back, as the default
-/// mode does (GH#2690). ~keep
+/// mode does (GH#2690). The `def` span sits at the pen move plus the lead, 30 points past it. ~keep
 #[test]
 fn primary_mode_tj_lead_after_a_tm_back_keeps_the_drawn_width() {
-    for (setup, back) in [
-        ("BT /F1 10 Tf 72 700 Td", "1 0 0 1 80 700 Tm"),
-        ("BT 10 0 0 10 72 700 Tm /F1 1 Tf", "10 0 0 10 80 700 Tm"),
+    for (setup, back, space_width) in [
+        ("BT /F1 10 Tf 72 700 Td", "1 0 0 1 80 700 Tm", 2.5),
+        ("BT 10 0 0 10 72 700 Tm /F1 1 Tf", "10 0 0 10 80 700 Tm", 0.25),
     ] {
         let stream = format!("{setup} (abc) Tj {back} [-3000 (def)] TJ ET");
         let spans = span_boxes_in_mode(WordBoundaryMode::Primary, &stream);
-        assert_eq!(
-            spans.first(),
-            Some(&("abc".to_string(), 72.0, 15.0)),
-            "{setup}: {spans:?}"
-        );
         let default = span_boxes_in_mode(WordBoundaryMode::Tiebreaker, &stream);
-        assert_eq!(
-            default.first(),
-            Some(&("abc".to_string(), 72.0, 15.0)),
-            "{setup}: {default:?}"
-        );
+        assert_eq!(spans, default, "{setup}");
+        let expected = [
+            ("abc".to_string(), 72.0, 15.0),
+            (" ".to_string(), 87.0, space_width),
+            ("def".to_string(), 110.0, 15.0),
+        ];
+        assert_eq!(spans, expected, "{setup}");
     }
 }
 

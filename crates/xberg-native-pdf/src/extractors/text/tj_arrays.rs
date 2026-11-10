@@ -186,6 +186,8 @@ impl<'doc> TextExtractor<'doc> {
             None
         };
         if let Some(TextElement::Offset(lead)) = array.first() {
+            // Primary never pushes to `tj_offset_history`, so the adaptive threshold here always takes the
+            // non-justified margin. ~keep
             let threshold = self.calculate_adaptive_tj_threshold();
             if self.word_boundary_mode == WordBoundaryMode::Tiebreaker {
                 self.lead_threshold = Some(threshold);
@@ -554,7 +556,7 @@ impl<'doc> TextExtractor<'doc> {
     /// stream drew last. Glyphs drawn at the pen itself keep the pen move: their place says where the run
     /// before them ends. Only a lead past the word-boundary threshold does this. The glyph widths in
     /// `char_widths` are untouched: the `Tm` continuation never added to them, so they already hold the glyph
-    /// run that `accumulated_width` is restored to. ~keep
+    /// run that `accumulated_width` is restored to. It applies in both word-boundary modes. ~keep
     fn end_set_back_run_at_drawn_end(&self, buffer: &mut TjBuffer) {
         if self.pen_set_back_depth().is_some()
             && let Some(end) = self.current_drawn_end()
