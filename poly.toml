@@ -1004,6 +1004,7 @@ root = "packages/elixir"
   "too-many-parameters",
 ]
 "crates/xberg/src/extractors/pdf/ocr/document.rs" = ["file-too-long", "function-too-long", "too-many-parameters"]
+"crates/xberg/src/extractors/pdf/ocr/native_word_coverage.rs" = ["too-many-parameters"]
 "crates/xberg/src/extractors/pdf/ocr/pipeline.rs" = [
   "cyclomatic-complexity",
   "file-too-long",
