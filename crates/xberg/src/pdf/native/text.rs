@@ -579,8 +579,7 @@ fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpa
         for (index, span) in group.iter().enumerate() {
             if let Some(prev) = previous {
                 let gap = span.bbox.x - prev_end_x;
-                let script_boundary =
-                    needs_numeric_script_boundary(prev, span, &notes, group.get(index + 1).copied());
+                let script_boundary = needs_numeric_script_boundary(prev, span, &notes, group.get(index + 1).copied());
                 push_rebuild_seam(&mut result, prev, span, gap, line_space_threshold, script_boundary);
             }
             result.push_str(&span.text);
