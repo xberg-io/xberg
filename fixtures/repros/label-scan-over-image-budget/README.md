@@ -16,3 +16,9 @@ uv run --no-project --with pillow==13.0.0 python generate.py label-scan.pdf 12 8
 uv run --no-project --with pillow==13.0.0 python generate.py label-scan-mixed.pdf 12 8.5 300 --mixed
 uv run --no-project --with pillow==13.0.0 python generate.py label-scan-downscaled.pdf 15 10 300
 ```
+
+The real-Tesseract tests in `pdf_label_scan_over_image_budget.rs` cover direct and explicit-pipeline
+retention and discard. `pdf_cross_image_retry_2836.rs` separately checks the retry policy with a
+controlled backend: an unclamped, proven-DPI JPEG read must survive an empty, unproven auxiliary
+image that the backend actually resizes from 32 to 16 pixels. Those two tests check provenance
+pairing, not OCR recognition accuracy.

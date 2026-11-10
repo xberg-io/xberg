@@ -389,8 +389,8 @@ pub(super) struct XObjectRecoveryOutcome {
     /// Whether any image was read at a resolution the page's placement proved rather than one
     /// the backend estimated.
     pub(super) used_proven_source_dpi: bool,
-    /// Whether any image may have been shrunk before it was read, which can leave its glyphs
-    /// illegible. An image whose backend reported no preprocessing counts as possibly shrunk.
+    /// Whether a successfully read image with placement-proven DPI may be illegible after
+    /// preparation. Proof and preprocessing must describe that same image, not separate page images.
     pub(super) possibly_illegible: bool,
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -514,7 +514,8 @@ pub(super) async fn collect_xobject_recovery_result(
     )?;
     account_xobject_structured_output(&result, outcome.image_preprocessing.is_none(), budget)?;
     outcome.llm_usage.extend(result.llm_usage.unwrap_or_default());
-    outcome.possibly_illegible |= read_may_be_illegible(result.metadata.image_preprocessing.as_ref());
+    outcome.possibly_illegible |= matches!(ocr_config, std::borrow::Cow::Owned(_))
+        && read_may_be_illegible(result.metadata.image_preprocessing.as_ref());
     if outcome.image_preprocessing.is_none() {
         outcome.image_preprocessing = result.metadata.image_preprocessing;
     }
