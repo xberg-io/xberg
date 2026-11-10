@@ -2635,7 +2635,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             {
                 complete_native_pages.insert(*page_number);
             }
-            if let Some(layer) = layers.get(page_number)
+            // A page whose native script the OCR read kept is replaced by that read: the script rule
+            // decided it, so no native row is put first. ~keep
+            if !pages.native_script.contains(page_number)
+                && let Some(layer) = layers.get(page_number)
                 && let Some(first) = super::document::layer_lines_to_put_first(
                     layer,
                     text,
