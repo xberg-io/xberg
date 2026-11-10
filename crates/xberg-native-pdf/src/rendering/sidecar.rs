@@ -1744,7 +1744,22 @@ mod tests {
         assert!(s.spot_plate("InkC").is_none());
     }
 
-    /// `restore_cmyk` and `restore_spots` overwrite the sidecar's
+    /// The tint planes come first and the backdrop-alpha planes follow, one pair per lane:
+    /// lane 1 must not alias the alpha plane of lane 0.
+    #[test]
+    fn sidecar_spot_state_holds_every_tint_plane_then_every_alpha_plane() {
+        let mut s = CmykSidecar::new(2, 1, vec!["InkA".into(), "InkB".into()]);
+        let (tint, alpha) = s.spot_lane_mut(0).unwrap();
+        tint.copy_from_slice(&[1, 2]);
+        alpha.copy_from_slice(&[3, 4]);
+        let (tint, alpha) = s.spot_lane_mut(1).unwrap();
+        tint.copy_from_slice(&[5, 6]);
+        alpha.copy_from_slice(&[7, 8]);
+        assert_eq!(s.spot_state(), &[1, 2, 5, 6, 3, 4, 7, 8]);
+        assert!(s.spot_lane_mut(2).is_none());
+    }
+
+    /// `restore_cmyk` and `restore_spot_state` overwrite the sidecar's
     /// process and spot buffers. Used by the knockout-group cumulative
     /// replay to reset lane state to the group's backdrop between
     /// element compositions (ISO 32000-1 §11.4.6.2).
