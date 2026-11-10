@@ -1851,6 +1851,8 @@ mod tests {
 
     #[test]
     fn a_marked_greek_page_with_three_latin_words_is_kept_native() {
+        // Known limit: a lost-glyph marker makes `judged_scripts` return every uncovered script on
+        // script evidence alone, with no check of the Latin share of the page.
         let greek: String = "αβγδ ".repeat(40);
         let page = format!("{greek}\u{FFFD} the report states");
         assert_eq!(judged_scripts(&page, &langs(&["eng"])), Some(vec![Script::Greek]));
@@ -1859,7 +1861,19 @@ mod tests {
         assert!(!decision.fallback);
         assert!(!decision.whole_doc_failure);
         assert_eq!(warnings.len(), 1);
+        assert!(
+            warnings[0].message.starts_with("OCR was skipped for page 1 (Greek;"),
+            "{}",
+            warnings[0].message
+        );
         let unmarked = page.replace('\u{FFFD}', "");
         assert_eq!(judged_scripts(&unmarked, &langs(&["eng"])), None);
+    }
+
+    #[test]
+    fn the_echoed_khmer_fixture_text_is_judged_unreadable_khmer() {
+        let page = "ខ្ញុំស្រលាញ់ប្រទេសកម្ពុជា ស្រលាញ់ប្រទេសកម្ពុជាសួស្តី ភ្នំពេញក្រុងសៀវភៅសាលារៀន សូមអរគុណខ្ញុំ";
+        assert_eq!(judged_scripts(page, &langs(&["eng"])), Some(vec![Script::Khmer]));
+        assert_eq!(judged_scripts(page, &langs(&["eng", "khm"])), None);
     }
 }

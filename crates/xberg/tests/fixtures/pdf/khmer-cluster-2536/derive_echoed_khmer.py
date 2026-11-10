@@ -31,17 +31,29 @@ for row, line in enumerate(LINES):
     codes = "".join(f"{ord(c):04X}" for c in line if c != " ")
     ops.append(f"1 0 0 1 72 {740 - row * 43} Tm <{codes}> Tj")
 ops.append("ET")
-objs[4] = objs[4].replace(b" /ToUnicode 7 0 R", b"")
-objs[5] = objs[5].replace(b" /CIDToGIDMap 10 0 R", b" /CIDToGIDMap /Identity")
-objs[7] = st(b"% unused")
+
+
+def replaced(body, old, new):
+    if old not in body:
+        sys.exit(f"pattern {old!r} not found: the source PDF is not the expected cluster-complete-mapped.pdf")
+    return body.replace(old, new)
+
+
+objs[4] = replaced(objs[4], b" /ToUnicode 7 0 R", b"")
+objs[5] = replaced(objs[5], b" /CIDToGIDMap 10 0 R", b" /CIDToGIDMap /Identity")
 objs[8] = st("\n".join(ops).encode())
-objs.pop(10)
+for unused in (7, 10):
+    if unused not in objs:
+        sys.exit(f"object {unused} not found: the source PDF is not the expected cluster-complete-mapped.pdf")
+    del objs[unused]
 out = bytearray(b"%PDF-1.5\n")
-offs = []
+offs = {}
 for i in sorted(objs):
-    offs.append(len(out))
+    offs[i] = len(out)
     out += b"%d 0 obj\n" % i + objs[i] + b"\nendobj\n"
+size = max(objs) + 1
 x = len(out)
-out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1) + b"".join(b"%010d 00000 n \n" % o for o in offs)
-out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, x)
+out += b"xref\n0 %d\n0000000000 65535 f \n" % size
+out += b"".join(b"%010d 00000 n \n" % offs[i] if i in offs else b"0000000000 65535 f \n" for i in range(1, size))
+out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (size, x)
 Path(sys.argv[2]).write_bytes(out)

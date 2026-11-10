@@ -20,6 +20,7 @@ const AMONG_ENGLISH: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khm
 const ECHOED: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/echoed-khmer.pdf");
 const KHMER_PAGE_LETTERS: usize = 222;
 const ECHOED_KHMER_LETTERS: usize = 144;
+const ECHOED_OCR_CALLS: usize = 1;
 const ENGLISH: &str = "The quarterly report contains useful readable text about the country and its people.";
 const KHMER: &str = "ខ្ញុំស្រលាញ់ប្រទេសកម្ពុជា សួស្តីភ្នំពេញ ប្រទេសកម្ពុជាមានប្រជាជនច្រើន សៀវភៅសាលារៀន";
 
@@ -398,19 +399,24 @@ fn a_khmer_page_whose_text_was_echoed_from_character_codes_goes_to_ocr_not_to_th
         "{:?}",
         native.content
     );
+    // The script rule would qualify this layer as unreadable Khmer: see
+    // `the_echoed_khmer_fixture_text_is_judged_unreadable_khmer` in `unreadable_script.rs`.
+    // `ProcessingWarning` carries no code, so the kept-page warning is matched by its opening text.
+    let skipped = |document: &ExtractedDocument| {
+        document
+            .processing_warnings
+            .iter()
+            .filter(|w| w.source == "ocr" && w.message.starts_with("OCR was skipped for page 1 (Khmer"))
+            .count()
+    };
+
     let backend = counting(ENGLISH, usize::MAX);
     let automatic = read_default_route(ECHOED, backend.clone(), false);
-    assert!(
-        backend.calls.load(Ordering::SeqCst) >= 1,
+    assert_eq!(
+        backend.calls.load(Ordering::SeqCst),
+        ECHOED_OCR_CALLS,
         "the provenance flag is merged after the script rule, so OCR reads the page"
     );
     assert_eq!(automatic.content.trim(), ENGLISH, "{:?}", automatic.content);
-    assert!(
-        !automatic
-            .processing_warnings
-            .iter()
-            .any(|w| w.message.contains("OCR was skipped")),
-        "{:?}",
-        automatic.processing_warnings
-    );
+    assert_eq!(skipped(&automatic), 0, "{:?}", automatic.processing_warnings);
 }
