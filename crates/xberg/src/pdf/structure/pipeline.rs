@@ -5463,7 +5463,9 @@ fn fused_text_repairs<'a>(text: &'a str, witnesses: &TextRepairWitnesses) -> Cow
 /// the rest are layout (TATR/SLANeXT) tables. Complete side-by-side layout replacements
 /// are selected atomically before ordinary pairwise arbitration. Outside those replacements,
 /// `preference` decides mixed native/layout overlaps, while content weight decides same-origin
-/// overlaps and [`TableOverlapPreference::Content`].
+/// overlaps and [`TableOverlapPreference::Content`]. A mixed removal holds only while its winner
+/// stays: when a later pass removes the winner, the pair is set aside and the page is resolved
+/// again. Each round sets aside at least one new pair, so the rounds end.
 fn deduplicate_overlapping_tables(
     tables: &mut Vec<crate::types::Table>,
     native_count: usize,
