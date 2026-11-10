@@ -28,9 +28,9 @@ pub(super) use zip_metadata::validate_xlsx_string_parts;
 pub(super) struct SkippedSheets {
     indices: HashSet<usize>,
     max_cells: usize,
-    /// Names of every XLS or ODS sheet in document order. Calamine keys ranges by name, so a
-    /// skipped sheet sharing its name with another sheet is renamed in the rewritten input and
-    /// reported here under its original name.
+    /// Names of every ODS sheet in document order. Calamine keys ranges by name, so a skipped
+    /// sheet sharing its name with another sheet is renamed in the rewritten input and reported
+    /// here under its original name.
     names: Vec<String>,
 }
 
@@ -126,18 +126,19 @@ impl Charges {
     }
 }
 
-/// Run one worksheet's preflight against `budget`. When the sheet alone trips the cell limit,
-/// its cell and text charges are rolled back and the sheet is recorded in `skipped`; any other
-/// failure still aborts the workbook.
+/// Run one worksheet's preflight against `budget`. When the sheet alone trips the cell limit and
+/// `recoverable` is set, its cell and text charges are rolled back and the sheet is recorded in
+/// `skipped`; otherwise (and for any other failure) the error aborts the workbook.
 fn preflight_sheet(
     index: usize,
     budget: &mut SecurityBudget,
     skipped: &mut SkippedSheets,
+    recoverable: bool,
     sheet: impl FnOnce(&mut SecurityBudget) -> Result<()>,
 ) -> Result<()> {
     let before = Charges::of(budget);
     match sheet(budget) {
-        Err(error) if is_cell_limit(&error) => {
+        Err(error) if recoverable && is_cell_limit(&error) => {
             before.restore(budget);
             skipped.indices.insert(index);
             Ok(())
@@ -218,7 +219,7 @@ pub(super) fn validate_xlsx<R: Read + Seek>(
     let mut budget = SecurityBudget::from_limits(limits);
     let mut skipped = SkippedSheets::new(limits);
     for (index, name) in workbook.sheet_names().into_iter().enumerate() {
-        preflight_sheet(index, &mut budget, &mut skipped, |budget| {
+        preflight_sheet(index, &mut budget, &mut skipped, true, |budget| {
             validate_xlsx_sheet(workbook, &name, limits, budget)
         })?;
     }
@@ -320,7 +321,7 @@ pub(super) fn validate_xlsb<R: Read + Seek>(
     let mut budget = SecurityBudget::from_limits(limits);
     let mut skipped = SkippedSheets::new(limits);
     for (index, name) in workbook.sheet_names().into_iter().enumerate() {
-        preflight_sheet(index, &mut budget, &mut skipped, |budget| {
+        preflight_sheet(index, &mut budget, &mut skipped, true, |budget| {
             validate_xlsb_sheet(workbook, &name, limits, budget)
         })?;
     }

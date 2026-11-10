@@ -320,7 +320,7 @@ fn drop_skipped_ods_sheets(data: &[u8], limits: &SecurityLimits, skipped: &Skipp
     }
     rewrite_spreadsheet_zip(data, limits, |name, contents| {
         if name == "content.xml" {
-            super::table_budget::drop_skipped_ods_sheets(contents, skipped)
+            super::table_budget::drop_skipped_ods_sheets(contents, skipped, limits)
         } else {
             Ok((contents.to_vec(), false))
         }

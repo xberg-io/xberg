@@ -201,7 +201,9 @@ pub(in crate::extraction::excel) fn validate_ods<R: Read + Seek>(
 pub(in crate::extraction::excel) fn drop_skipped_sheets(
     xml: &[u8],
     skipped: &SkippedSheets,
+    limits: &SecurityLimits,
 ) -> Result<(Vec<u8>, bool)> {
+    let mut budget = SecurityBudget::from_limits(limits);
     let mut reader = quick_xml::Reader::from_reader(xml);
     let mut writer = quick_xml::Writer::new(Vec::with_capacity(xml.len()));
     let mut buffer = Vec::new();
@@ -224,7 +226,7 @@ pub(in crate::extraction::excel) fn drop_skipped_sheets(
                     continue;
                 }
                 if current_skipped && counts.get(table_name(start).as_str()).is_some_and(|count| *count > 1) {
-                    let name = unused_name(&mut taken, sheet_index - 1);
+                    let name = unused_name(&mut taken, sheet_index - 1, &mut budget)?;
                     writer
                         .write_event(Event::Start(renamed_table(start, &name)))
                         .map_err(xml_error)?;
@@ -254,15 +256,19 @@ pub(in crate::extraction::excel) fn drop_skipped_sheets(
 }
 
 /// A replacement sheet name that no sheet in the workbook (or earlier replacement) carries.
-fn unused_name(taken: &mut HashSet<String>, index: usize) -> String {
+/// Candidates are per-index (`xberg-skipped-sheet-{index}[-{attempt}]`), so a name already in the
+/// workbook can only push the attempts of one index; the total over all calls is bounded by the
+/// number of sheet names, and every attempt is charged to `budget`.
+fn unused_name(taken: &mut HashSet<String>, index: usize, budget: &mut SecurityBudget) -> Result<String> {
     let mut candidate = format!("xberg-skipped-sheet-{index}");
     let mut attempt = 0usize;
     while taken.contains(&candidate) {
+        budget.step()?;
         attempt += 1;
         candidate = format!("xberg-skipped-sheet-{index}-{attempt}");
     }
     taken.insert(candidate.clone());
-    candidate
+    Ok(candidate)
 }
 
 fn renamed_table(start: &BytesStart<'_>, name: &str) -> BytesStart<'static> {

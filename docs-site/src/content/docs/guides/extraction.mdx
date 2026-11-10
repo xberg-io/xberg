@@ -415,7 +415,8 @@ fail as a whole when it exceeds the limit. Each sheet that does not fit in the
 remaining budget is skipped, returned as an empty sheet, and reported in
 `processing_warnings` with the sheet name and `security_limits.max_table_cells`.
 A workbook whose only sheet, or every sheet, is over the limit therefore
-returns placeholder sheets and warnings instead of a security error.
+returns placeholder sheets and warnings instead of a security error. The exception is a legacy XLS or XLA workbook in which the over-budget sheet shares its
+name with another sheet: it still fails with the security error.
 
 `max_pages` is enforced before per-page work for PDF, PPTX, Keynote, ODP, and
 multi-frame TIFF when OCR is enabled. It is not a universal document-page cap:
