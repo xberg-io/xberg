@@ -10784,3 +10784,7 @@ mod tests {
 #[cfg(test)]
 #[path = "image_budget_tests.rs"]
 mod image_budget_tests;
+
+#[cfg(test)]
+#[path = "spot_mirror_tests.rs"]
+mod spot_mirror_tests;

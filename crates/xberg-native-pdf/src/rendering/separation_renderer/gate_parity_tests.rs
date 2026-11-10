@@ -67,15 +67,23 @@ fn gate(doc: &PdfDocument) -> bool {
 }
 
 fn plate(state_body: &str, extras: &[&str]) -> Vec<u8> {
+    plate_of(CONTENT, state_body, extras)
+}
+
+fn plate_of(content: &str, state_body: &str, extras: &[&str]) -> Vec<u8> {
     let inks = vec!["InkA".to_string()];
-    let doc = build_page(state_body, extras);
+    let doc = build_page_with(content, SPOT_A, state_body, extras);
     let plates = render_plates_for_inks(&doc, 0, DPI, &inks, &inks).expect("render plates");
     assert_eq!(plates.len(), 1);
     plates.into_iter().next().expect("one plate").data
 }
 
 fn page(state_body: &str, force_sidecar: bool) -> Vec<u8> {
-    let doc = build_page(state_body, &[]);
+    page_with(state_body, &[], force_sidecar)
+}
+
+fn page_with(state_body: &str, extras: &[&str], force_sidecar: bool) -> Vec<u8> {
+    let doc = build_page(state_body, extras);
     let mut renderer = PageRenderer::new(RenderOptions::with_dpi(DPI).as_raw());
     renderer.force_cmyk_sidecar = force_sidecar;
     renderer.render_page(&doc, 0).expect("render page").data
@@ -170,7 +178,7 @@ fn assert_multiply_plate_matches_page(label: &str, state: &str, extras: &[&str])
         "{label}: overlap stacks the two inks"
     );
     assert!(at_overlap > at_first, "{label}: overlap is denser than the backdrop");
-    let rendered = page(state, false);
+    let rendered = page_with(state, extras, false);
     let white = |x: usize, y: usize| rendered[(y * SIDE + x) * 4..(y * SIDE + x) * 4 + 3] == [255, 255, 255];
     assert!(
         !white(ONLY_SECOND.0, ONLY_SECOND.1),
@@ -199,8 +207,11 @@ fn darken_plate_keeps_the_ink_where_only_the_source_covers() {
     assert!(at(&darken, ONLY_SECOND.0, ONLY_SECOND.1) > 0);
 }
 
+/// Control, green on main: over untouched paper Screen and Lighten already gave the source ink,
+/// and Difference and Exclusion are replaced by Normal on spot lanes, so none of the four ever
+/// reached the blend this change fixes.
 #[test]
-fn modes_that_lighten_keep_the_ink_where_only_the_source_covers() {
+fn control_screen_lighten_difference_exclusion_keep_the_source_ink_over_paper() {
     let normal = plate("/BM /Normal", &[]);
     for mode in ["Screen", "Lighten", "Difference", "Exclusion"] {
         let state = format!("/BM /{mode}");
@@ -209,6 +220,91 @@ fn modes_that_lighten_keep_the_ink_where_only_the_source_covers() {
         assert_eq!(sample, at(&normal, ONLY_SECOND.0, ONLY_SECOND.1), "{mode}");
         assert!(sample > 0, "{mode}: ink is lost over an empty area");
     }
+}
+
+/// Ink that Color Dodge and Color Burn leave in the overlap, from the additive formulas of
+/// ISO 32000-1 11.3.5 with the source tint 0.5: the backdrop complement is `(255 - b) / 255`.
+fn dodge_overlap(backdrop: u8) -> u8 {
+    let cb = (255 - backdrop as i32) as f32 / 255.0;
+    ((1.0 - (cb / 0.5).min(1.0)) * 255.0).round() as u8
+}
+
+fn burn_overlap(backdrop: u8) -> u8 {
+    let cb = (255 - backdrop as i32) as f32 / 255.0;
+    ((1.0 - (1.0 - ((1.0 - cb) / 0.5).min(1.0))) * 255.0).round() as u8
+}
+
+#[test]
+fn color_dodge_and_color_burn_plates_keep_the_ink_over_paper_and_follow_the_additive_formulas() {
+    let normal = plate("/BM /Normal", &[]);
+    let first = at(&normal, ONLY_FIRST.0, ONLY_FIRST.1);
+    let second = at(&normal, ONLY_SECOND.0, ONLY_SECOND.1);
+    for (mode, overlap) in [("ColorDodge", dodge_overlap(first)), ("ColorBurn", burn_overlap(first))] {
+        let state = format!("/BM /{mode}");
+        let blended = plate(&state, &[]);
+        assert_eq!(
+            at(&blended, ONLY_SECOND.0, ONLY_SECOND.1),
+            second,
+            "{mode}: ink is lost where only the second rectangle covers"
+        );
+        assert_eq!(at(&blended, ONLY_FIRST.0, ONLY_FIRST.1), first, "{mode}: first rectangle");
+        assert_eq!(at(&blended, OVERLAP.0, OVERLAP.1), overlap, "{mode}: overlap");
+    }
+}
+
+/// Alpha of a page pixel is always 255 here, so the colour channels alone tell how much ink the
+/// page shows. The red channel stays 255 for the ink `InkA`, so the green channel is the gauge.
+fn green(data: &[u8], (x, y): (usize, usize)) -> u8 {
+    data[(y * SIDE + x) * 4 + 1]
+}
+
+/// Screen and Lighten put less ink in the overlap than the first rectangle holds, on the plate
+/// and on the page. (Over untouched paper the page shows white for both modes while the plate
+/// keeps the source ink; that page difference is not part of this change.)
+#[test]
+fn screen_and_lighten_plate_and_page_both_lighten_the_overlap() {
+    let normal_plate = plate("/BM /Normal", &[]);
+    let normal_page = page_with("/BM /Normal", &[], false);
+    assert_eq!(
+        green(&normal_page, OVERLAP),
+        green(&normal_page, ONLY_SECOND),
+        "control: Normal paints the source colour in the overlap"
+    );
+    for mode in ["Screen", "Lighten"] {
+        let state = format!("/BM /{mode}");
+        let plates = plate(&state, &[]);
+        let rendered = page_with(&state, &[], false);
+        assert!(
+            at(&plates, OVERLAP.0, OVERLAP.1) < at(&plates, ONLY_FIRST.0, ONLY_FIRST.1),
+            "{mode} plate: the overlap holds less ink than the first rectangle"
+        );
+        assert!(
+            green(&rendered, OVERLAP) > green(&rendered, ONLY_FIRST),
+            "{mode} page: the overlap is lighter than the first rectangle"
+        );
+        assert!(
+            at(&plates, OVERLAP.0, OVERLAP.1) <= at(&normal_plate, OVERLAP.0, OVERLAP.1),
+            "{mode} plate: no denser than Normal"
+        );
+    }
+}
+
+/// An opaque tint-0 paint is a backdrop, not untouched paper: Lighten at tint 0.5 over it gives
+/// no ink. Treating a tint of 0 as "no backdrop" keeps 128 here. Overlay, the blend of the
+/// reported case, cannot be drawn by tiny-skia in a debug build; the spot mirror tests cover it.
+const KNOCKOUT_THEN_BLEND: &str =
+    "/CS0 cs 0.8 scn 10 10 60 60 re f 0 scn 10 10 60 60 re f /T gs 0.5 scn 10 10 60 60 re f";
+
+#[test]
+fn lighten_over_an_explicit_tint_zero_paint_gives_no_ink() {
+    let lighten = plate_of(KNOCKOUT_THEN_BLEND, "/BM /Lighten", &[]);
+    assert_eq!(at(&lighten, ONLY_FIRST.0, ONLY_FIRST.1), 0);
+    let normal = plate_of(KNOCKOUT_THEN_BLEND, "/BM /Normal", &[]);
+    assert_eq!(
+        at(&normal, ONLY_FIRST.0, ONLY_FIRST.1),
+        128,
+        "control: Normal paints the source tint"
+    );
 }
 
 fn sidecar_allocated(state_body: &str) -> bool {
