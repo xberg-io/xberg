@@ -5562,19 +5562,44 @@ pub(crate) fn glyph_name_to_unicode(glyph_name: &str) -> Option<char> {
     None
 }
 
+/// One `_` component of a glyph name: `uni` followed by a multiple of four hex digits is that
+/// sequence of code points (surrogates reject it, per the AGL specification); anything else is a
+/// single-name lookup.
+fn component_to_string(component: &str) -> Option<String> {
+    if let Some(hex) = component.strip_prefix("uni")
+        && !hex.is_empty()
+        && hex.len() % 4 == 0
+        && hex.bytes().all(|b| b.is_ascii_hexdigit())
+    {
+        let decoded: Option<String> = (0..hex.len())
+            .step_by(4)
+            .map(|start| {
+                u32::from_str_radix(&hex[start..start + 4], 16)
+                    .ok()
+                    .and_then(char::from_u32)
+            })
+            .collect();
+        if decoded.is_some() {
+            return decoded;
+        }
+    }
+    glyph_name_to_unicode(component).map(String::from)
+}
+
 /// The letters of an underscore-joined glyph name, by the Adobe Glyph List specification: drop
 /// everything from the first `.`, split on `_`, map each component (an AGL name, `uniXXXX` or
-/// `uXXXX`) and skip the empty and unknown ones. `None` when the name has no underscore or no
-/// component maps.
+/// `uXXXX`) and skip the empty and unknown ones. `None` when the name has neither an underscore nor
+/// several `uni` code points, or no component maps.
 fn glyph_name_components_to_string(glyph_name: &str) -> Option<String> {
-    if !glyph_name.contains('_') {
+    let base = glyph_name.split('.').next().unwrap_or_default();
+    let multi_code_point_uni = base.strip_prefix("uni").is_some_and(|hex| hex.len() > 4);
+    if !glyph_name.contains('_') && !multi_code_point_uni {
         return None;
     }
-    let base = glyph_name.split('.').next().unwrap_or_default();
     let letters: String = base
         .split('_')
         .filter(|component| !component.is_empty())
-        .filter_map(glyph_name_to_unicode)
+        .filter_map(component_to_string)
         .collect();
     (!letters.is_empty()).then_some(letters)
 }
@@ -11581,6 +11606,9 @@ mod tests {
             ("_f", Some("f")),
             ("zzz_i", Some("i")),
             ("a_b", Some("ab")),
+            ("uni00660069", Some("fi")),
+            ("uni00660069_x", Some("fix")),
+            ("uni0066_uniD800_i", Some("fi")),
             ("zzz_yyy", None),
             ("_", None),
         ] {
@@ -11607,7 +11635,7 @@ mod tests {
 
     /// Control: a name in which no component maps leaves the base encoding's letter for the code, as before.
     #[test]
-    fn test_differences_underscore_name_with_no_known_component_decodes_to_nothing() {
+    fn test_differences_underscore_name_with_no_known_component_keeps_the_base_letter() {
         let doc = minimal_pdf_doc();
         let (enc, multi, _names) =
             FontInfo::parse_encoding(&encoding_naming_code_65("zzz_yyy"), &doc, None, false).unwrap();
