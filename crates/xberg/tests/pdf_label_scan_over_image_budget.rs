@@ -8,6 +8,8 @@
 use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, extract as extract_public};
 
 const LABEL_SCAN: &[u8] = include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan.pdf");
+const DOWNSCALED_LABEL_SCAN: &[u8] =
+    include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-downscaled.pdf");
 const MIXED_LABEL_SCAN: &[u8] =
     include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-mixed.pdf");
 
@@ -156,4 +158,24 @@ fn explicit_pipeline_discards_the_retry_read_when_the_caller_asks_and_says_why()
         "{}",
         failure.error
     );
+}
+
+/// The 4500 px scan is read at 4096 px (scale 0.91, 273 dpi): downscaled to fit, not clamped, and
+/// still legible, so the noisy read is kept like any page read.
+#[test]
+fn a_downscaled_but_legible_retry_read_is_kept_with_the_warning() {
+    let mut config = config(false, false);
+    config
+        .security_limits
+        .get_or_insert_with(Default::default)
+        .max_content_size = 112 * 1024 * 1024;
+    let document = extract(DOWNSCALED_LABEL_SCAN, &config);
+    let preprocessing = document.pages.as_ref().expect("page record")[0]
+        .image_preprocessing
+        .as_ref()
+        .expect("the retry read records its preprocessing");
+    assert!(!preprocessing.dimension_clamped, "{preprocessing:?}");
+    assert!(preprocessing.scale_factor < 1.0, "{preprocessing:?}");
+    assert!((100..300).contains(&preprocessing.final_dpi), "{preprocessing:?}");
+    assert_kept_with_warning(&document, 0);
 }

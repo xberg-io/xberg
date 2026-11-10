@@ -391,7 +391,7 @@ pub(super) struct XObjectRecoveryOutcome {
     pub(super) used_proven_source_dpi: bool,
     /// Whether any image may have been shrunk before it was read, which can leave its glyphs
     /// illegible. An image whose backend reported no preprocessing counts as possibly shrunk.
-    pub(super) possibly_shrunk: bool,
+    pub(super) possibly_illegible: bool,
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) async fn recover_image_xobjects(
@@ -413,7 +413,7 @@ pub(super) async fn recover_image_xobjects(
         image_preprocessing: None,
         failure_causes: Vec::new(),
         used_proven_source_dpi: false,
-        possibly_shrunk: false,
+        possibly_illegible: false,
     };
     for fallback in fallback_images {
         context.check_cancelled()?;
@@ -514,7 +514,7 @@ pub(super) async fn collect_xobject_recovery_result(
     )?;
     account_xobject_structured_output(&result, outcome.image_preprocessing.is_none(), budget)?;
     outcome.llm_usage.extend(result.llm_usage.unwrap_or_default());
-    outcome.possibly_shrunk |= read_may_be_shrunk(result.metadata.image_preprocessing.as_ref());
+    outcome.possibly_illegible |= read_may_be_illegible(result.metadata.image_preprocessing.as_ref());
     if outcome.image_preprocessing.is_none() {
         outcome.image_preprocessing = result.metadata.image_preprocessing;
     }
@@ -529,19 +529,24 @@ pub(super) async fn collect_xobject_recovery_result(
     }));
     Ok(())
 }
-/// The effective resolution below which a read of a proven-resolution image is judged by its
-/// output. ad9c80bf0b's clamped tall scan was read at 72 dpi and came back illegible; #2832's sheet
-/// is read at 120 dpi (a plain 0.4 downscale, not clamped) and stays legible. 100 sits between
-/// them with margin on both sides.
+/// The effective resolution below which a shrunk read of a proven-resolution image is judged by
+/// its output. The floor rests on two measured documents: ad9c80bf0b's clamped tall scan was read
+/// at 72 dpi and came back illegible; #2832's sheet is read at 120 dpi (a plain 0.4 downscale, not
+/// clamped) and stays legible. 100 sits between them. On the non-budget route `final_dpi` is the
+/// planned DPI and goes stale after a clamp, so the floor alone cannot stand in for the clamp flag.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) const MIN_LEGIBLE_PROVEN_DPI: i32 = 100;
 
 /// Whether the glyphs of a read may be illegible because of how the image was prepared: a
-/// dimension clamp, an effective resolution below [`MIN_LEGIBLE_PROVEN_DPI`], or no record of what
-/// was done. A plain downscale that keeps the resolution at or above the floor is not suspect.
+/// dimension clamp, a shrink that left the effective resolution below [`MIN_LEGIBLE_PROVEN_DPI`],
+/// or no record of what was done. An unshrunk image keeps its own resolution, and a plain downscale
+/// at or above the floor is not suspect.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-pub(super) fn read_may_be_shrunk(metadata: Option<&crate::types::ImagePreprocessingMetadata>) -> bool {
-    metadata.is_none_or(|metadata| metadata.dimension_clamped || metadata.final_dpi < MIN_LEGIBLE_PROVEN_DPI)
+pub(super) fn read_may_be_illegible(metadata: Option<&crate::types::ImagePreprocessingMetadata>) -> bool {
+    metadata.is_none_or(|metadata| {
+        // `final_dpi` is stale after a clamp on the non-budget route, so the clamp is judged on its own. ~keep
+        metadata.dimension_clamped || (metadata.scale_factor < 1.0 && metadata.final_dpi < MIN_LEGIBLE_PROVEN_DPI)
+    })
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn append_xobject_text(

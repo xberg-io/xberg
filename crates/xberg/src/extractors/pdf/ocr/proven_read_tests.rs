@@ -1,5 +1,5 @@
 use super::pipeline::{ProvenRead, judge_proven_read};
-use super::rendering::{MIN_LEGIBLE_PROVEN_DPI, read_may_be_shrunk};
+use super::rendering::{MIN_LEGIBLE_PROVEN_DPI, read_may_be_illegible};
 use crate::core::config::OcrQualityThresholds;
 use crate::types::ImagePreprocessingMetadata;
 
@@ -20,10 +20,10 @@ fn thresholds(discard: bool) -> OcrQualityThresholds {
     }
 }
 
-fn read(used_proven_source_dpi: bool, possibly_shrunk: bool, warn_when_kept: bool) -> ProvenRead {
+fn read(used_proven_source_dpi: bool, possibly_illegible: bool, warn_when_kept: bool) -> ProvenRead {
     ProvenRead {
         used_proven_source_dpi,
-        possibly_shrunk,
+        possibly_illegible,
         page_idx: 0,
         warn_when_kept,
     }
@@ -50,7 +50,7 @@ fn judge(text: &str, read: ProvenRead, discard: bool) -> Judged {
 }
 
 #[test]
-fn a_noisy_read_of_a_possibly_shrunk_image_is_dropped_whatever_the_policy() {
+fn a_noisy_read_of_a_possibly_illegible_image_is_dropped_whatever_the_policy() {
     for discard in [false, true] {
         let judged = judge(&fragmented_text(), read(true, true, true), discard);
         assert!(judged.text.is_empty(), "discard={discard}");
@@ -60,7 +60,7 @@ fn a_noisy_read_of_a_possibly_shrunk_image_is_dropped_whatever_the_policy() {
 }
 
 #[test]
-fn a_clean_read_of_a_possibly_shrunk_image_is_kept() {
+fn a_clean_read_of_a_possibly_illegible_image_is_kept() {
     let judged = judge(PROSE, read(true, true, true), true);
     assert_eq!(judged.text, PROSE);
     assert!(judged.causes.is_empty() && judged.warnings.is_empty());
@@ -140,13 +140,17 @@ fn metadata(scale_factor: f64, final_dpi: i32, dimension_clamped: bool) -> Image
 
 #[test]
 fn a_plain_downscale_to_the_issue_2832_resolution_is_not_suspect() {
-    assert!(!read_may_be_shrunk(Some(&metadata(1.0, 300, false))));
+    assert!(!read_may_be_illegible(Some(&metadata(1.0, 300, false))));
     assert!(
-        !read_may_be_shrunk(Some(&metadata(0.4, 120, false))),
+        !read_may_be_illegible(Some(&metadata(1.0, 90, false))),
+        "an unshrunk image keeps its own low resolution"
+    );
+    assert!(
+        !read_may_be_illegible(Some(&metadata(0.4, 120, false))),
         "10200 px read at 120 dpi"
     );
     assert!(
-        !read_may_be_shrunk(Some(&metadata(0.34, MIN_LEGIBLE_PROVEN_DPI, false))),
+        !read_may_be_illegible(Some(&metadata(0.34, MIN_LEGIBLE_PROVEN_DPI, false))),
         "at the floor"
     );
 }
@@ -154,13 +158,13 @@ fn a_plain_downscale_to_the_issue_2832_resolution_is_not_suspect() {
 #[test]
 fn a_clamp_a_resolution_below_the_floor_or_no_record_is_suspect() {
     assert!(
-        read_may_be_shrunk(Some(&metadata(0.34, 72, true))),
+        read_may_be_illegible(Some(&metadata(0.34, 72, true))),
         "ad9c80bf0b's clamped tall scan"
     );
-    assert!(read_may_be_shrunk(Some(&metadata(1.0, 300, true))), "clamp alone");
+    assert!(read_may_be_illegible(Some(&metadata(1.0, 300, true))), "clamp alone");
     assert!(
-        read_may_be_shrunk(Some(&metadata(0.3, MIN_LEGIBLE_PROVEN_DPI - 1, false))),
+        read_may_be_illegible(Some(&metadata(0.3, MIN_LEGIBLE_PROVEN_DPI - 1, false))),
         "below the floor without a clamp"
     );
-    assert!(read_may_be_shrunk(None), "no record of what was done");
+    assert!(read_may_be_illegible(None), "no record of what was done");
 }

@@ -1259,7 +1259,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     image_preprocessing,
                     failure_causes,
                     used_proven_source_dpi,
-                    possibly_shrunk,
+                    possibly_illegible,
                 }) = recovery
                 {
                     retry_causes = failure_causes;
@@ -1267,7 +1267,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         text,
                         ProvenRead {
                             used_proven_source_dpi,
-                            possibly_shrunk,
+                            possibly_illegible,
                             page_idx,
                             warn_when_kept: true,
                         },
@@ -2317,7 +2317,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 image_preprocessing,
                 failure_causes,
                 used_proven_source_dpi,
-                possibly_shrunk,
+                possibly_illegible,
             }) = recovery
             {
                 retry_causes = failure_causes;
@@ -2325,7 +2325,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     text,
                     ProvenRead {
                         used_proven_source_dpi,
-                        possibly_shrunk,
+                        possibly_illegible,
                         page_idx: *page_idx,
                         warn_when_kept: false,
                     },
@@ -5243,7 +5243,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         image_preprocessing,
                         failure_causes: _,
                         used_proven_source_dpi: _,
-                        possibly_shrunk: _,
+                        possibly_illegible: _,
                     } = recovery;
                     let recovered_tables = !tables.is_empty();
                     let recovered_payload = !text.trim().is_empty() || recovered_tables || !formulas.is_empty();
@@ -7574,7 +7574,7 @@ const PROVEN_READ_NOISE_CAUSE: &str = "the retry read was rejected as noise";
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) struct ProvenRead {
     pub(super) used_proven_source_dpi: bool,
-    pub(super) possibly_shrunk: bool,
+    pub(super) possibly_illegible: bool,
     pub(super) page_idx: usize,
     /// Whether this route warns about a read it keeps. The single-backend route assesses every
     /// adopted page afterwards and warns there.
@@ -7584,11 +7584,11 @@ pub(super) struct ProvenRead {
 /// Apply the page's recognition-noise policy to a retry read made at a proven resolution.
 ///
 /// The proven resolution lets the backend read an image the budget refused. A dimension clamp or a
-/// resolution below the legibility floor can leave the glyphs illegible, and only the output shows
+/// shrink below the legibility floor can leave the glyphs illegible, and only the output shows
 /// it, so a noisy read of such an image (or one with no preprocessing record) is dropped. Any other
 /// read, including a plain downscale, follows the caller's `discard_suspected_ocr_noise` like a
-/// page read: kept with the warning, or dropped when the caller asked for that. The assessment carries no confidence or dictionary
-/// signal, so only the fragmented-word test judges it.
+/// page read: kept with the warning, or dropped when the caller asked for that. The assessment
+/// carries no confidence or dictionary signal, so only the fragmented-word test judges it.
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) fn judge_proven_read(
     text: String,
@@ -7600,7 +7600,7 @@ pub(super) fn judge_proven_read(
     if !read.used_proven_source_dpi {
         return text;
     }
-    if read.possibly_shrunk {
+    if read.possibly_illegible {
         if super::scoring::is_ocr_recognition_noise(&text, thresholds) {
             retry_causes.push(PROVEN_READ_NOISE_CAUSE.to_owned());
             return String::new();
