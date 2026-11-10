@@ -465,6 +465,36 @@ pub(super) fn ocr_page_only_segments_text_with(
         && block_words == solid_words(read)
 }
 
+/// Whether a page's structure holds only text cut into blocks, lists and tables, with no image,
+/// link, formula or markup. Its words are not compared with the read: block building rewrites
+/// them, and the caller keeps a native layer it already compared with that read. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn ocr_page_only_structures_text_with(
+    doc: &crate::types::internal::InternalDocument,
+    is_private_metadata: impl Fn(&str, &serde_json::Value) -> bool,
+) -> bool {
+    use crate::types::internal::ElementKind;
+
+    let mut metadata = doc.metadata.clone();
+    metadata.additional.retain(|key, value| {
+        key != crate::ocr_metadata_keys::OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY && !is_private_metadata(key, value)
+    });
+    let structure = |element: &crate::types::internal::InternalElement| {
+        matches!(
+            element.kind,
+            ElementKind::Table { .. } | ElementKind::ListStart { .. } | ElementKind::ListEnd
+        ) && element.layer == crate::types::document_structure::ContentLayer::Body
+            && element.annotations.is_empty()
+    };
+    no_ocr_rich_assets_besides_tables(doc)
+        && metadata.is_empty()
+        && !doc.elements.is_empty()
+        && doc
+            .elements
+            .iter()
+            .all(|element| segmenting_ocr_text(element) || structure(element))
+}
+
 /// Whether a page's structure holds nothing but its read text cut into blocks and tables: the
 /// same words, each once, with no image, link, formula or markup. Tables reorder the words into
 /// cells and add rulings, so the words are compared by their letters and digits alone. ~keep

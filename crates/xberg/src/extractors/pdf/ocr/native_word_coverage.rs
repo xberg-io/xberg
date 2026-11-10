@@ -645,6 +645,13 @@ pub(super) fn only_segments_certified_tesseract_text_and_tables(doc: &InternalDo
         && super::document::ocr_page_only_segments_text_and_tables_with(doc, read, is_hocr_bookkeeping_with_tables)
 }
 
+/// Whether the page's final structure holds only certified Tesseract text in blocks, lists and
+/// tables (see [`super::document::ocr_page_only_structures_text_with`]).
+pub(super) fn only_structures_certified_tesseract_text(doc: &InternalDocument) -> bool {
+    doc.prebuilt_ocr_elements.is_none()
+        && super::document::ocr_page_only_structures_text_with(doc, is_hocr_bookkeeping_with_tables)
+}
+
 /// Only for a complete read already certified by `native_text_paints_all_read_ink`: its final
 /// structure may omit words, but every retained occurrence and asset must remain certified. ~keep
 pub(super) fn uses_only_certified_tesseract_text_and_tables(doc: &InternalDocument, read: &str) -> bool {

@@ -21,9 +21,9 @@ const SINGLE_RETAINED: &str = "Page 1 OCR read omitted native text after its ren
 enum Layer {
     Covered,
     Visible,
-    /// The visible layer under 9000 small black squares: the render reads as noise, and the
+    /// The visible layer under this many small black squares: the render reads as noise, and the
     /// native text is still what the page shows.
-    Speckled,
+    Speckled(usize),
 }
 
 /// Squares of 2.2 points at pseudo-random places over the page, from a fixed linear congruential
@@ -87,13 +87,13 @@ fn source_pdf(layer: Layer, second_page: bool) -> Vec<u8> {
             .unwrap();
         fonts.as_dict_mut().unwrap().set("F9", helvetica);
     }
-    if layer == Layer::Speckled {
+    if let Layer::Speckled(squares) = layer {
         let stream = pdf.get_object_mut(contents).unwrap().as_stream_mut().unwrap();
         assert!(
             stream.dict.get(b"Filter").is_err(),
             "the source page stream must be unfiltered"
         );
-        stream.content.extend_from_slice(speckle(9000).as_bytes());
+        stream.content.extend_from_slice(speckle(squares).as_bytes());
         stream.dict.set("Length", stream.content.len() as i64);
     }
     if second_page {
@@ -120,12 +120,16 @@ fn source_pdf(layer: Layer, second_page: bool) -> Vec<u8> {
 }
 
 fn extract(layer: Layer, second_page: bool) -> xberg::ExtractedDocument {
+    extract_as(layer, second_page, OutputFormat::Plain)
+}
+
+fn extract_as(layer: Layer, second_page: bool, output_format: OutputFormat) -> xberg::ExtractedDocument {
     let tessdata = tempfile::tempdir().unwrap();
     let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English data");
     std::fs::write(tessdata.path().join("eng.traineddata"), english).unwrap();
     let config = ExtractionConfig {
         use_cache: false,
-        output_format: OutputFormat::Plain,
+        output_format,
         ocr: Some(OcrConfig {
             tessdata_path: Some(tessdata.path().to_path_buf()),
             ..Default::default()
@@ -190,7 +194,7 @@ fn a_visible_single_page_type0_layer_keeps_native_text_after_ink_loss() {
 
 #[test]
 fn a_speckled_type0_layer_keeps_native_text_after_ink_loss() {
-    let result = extract(Layer::Speckled, true);
+    let result = extract(Layer::Speckled(9000), true);
     let pages = result.pages.as_ref().unwrap();
     assert!(
         pages[0].content.contains("committee met on Tuesd"),
@@ -203,9 +207,46 @@ fn a_speckled_type0_layer_keeps_native_text_after_ink_loss() {
 
 #[test]
 fn a_speckled_single_page_type0_layer_keeps_native_text_after_ink_loss() {
-    let result = extract(Layer::Speckled, false);
+    let result = extract(Layer::Speckled(9000), false);
     let page = &result.pages.as_ref().unwrap()[0].content;
     assert!(page.contains("committee met on Tuesd"), "{page:?}");
     assert!(single_page_type0_retained(&result), "{:?}", result.processing_warnings);
     assert_eq!(result.extraction_method, Some(ExtractionMethod::Native));
+}
+
+/// The page keeps its native text in both forms, whatever blocks, lists or tables the noisy read
+/// was built into.
+fn assert_speckled_page_keeps_native_text(squares: usize, output_format: OutputFormat) {
+    for second_page in [false, true] {
+        let result = extract_as(Layer::Speckled(squares), second_page, output_format.clone());
+        let pages = result.pages.as_ref().unwrap();
+        assert!(
+            pages[0].content.contains("committee met on Tuesd"),
+            "{squares} squares, second page {second_page}: {:?}",
+            pages[0].content
+        );
+        assert!(
+            single_page_type0_retained(&result),
+            "{squares} squares, second page {second_page}: {:?}",
+            result.processing_warnings
+        );
+        if second_page {
+            assert!(pages[1].content.contains("Second page text"), "{:?}", pages[1].content);
+        }
+    }
+}
+
+#[test]
+fn a_lightly_speckled_type0_layer_keeps_native_text_after_ink_loss() {
+    assert_speckled_page_keeps_native_text(3000, OutputFormat::Plain);
+}
+
+#[test]
+fn a_moderately_speckled_type0_layer_keeps_native_text_after_ink_loss() {
+    assert_speckled_page_keeps_native_text(6000, OutputFormat::Plain);
+}
+
+#[test]
+fn a_speckled_type0_layer_keeps_native_text_in_markdown() {
+    assert_speckled_page_keeps_native_text(9000, OutputFormat::Markdown);
 }

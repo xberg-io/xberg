@@ -2895,6 +2895,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 if super::document::plain_ocr_page_can_yield_to_native(doc, text) {
                     return true;
                 }
+                // The Type0 rule kept the native layer on the read itself, so the structure built
+                // from that read only has to carry nothing the native page would lose. ~keep
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                if type0_loss_pages.contains(&page)
+                    && super::native_word_coverage::only_structures_certified_tesseract_text(doc)
+                {
+                    return true;
+                }
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 if native_words_covered_pages.contains(&page) {
                     return super::native_word_coverage::has_only_certified_tesseract_text(doc)
