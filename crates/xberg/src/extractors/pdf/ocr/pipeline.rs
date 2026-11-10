@@ -1324,6 +1324,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                 stored_jpegs: None,
                                 cancel_token: config.cancel_token.as_ref(),
                                 use_proven_source_dpi: true,
+                                proven_read: Some(ProvenReadPolicy {
+                                    thresholds: &ocr_output_thresholds,
+                                    warn_when_kept: true,
+                                }),
                             },
                         )
                         .await?
@@ -1344,23 +1348,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     image_preprocessing,
                     tesseract_psm,
                     failure_causes,
-                    used_proven_source_dpi,
-                    possibly_illegible,
+                    warnings,
                 }) = recovery
                 {
                     retry_causes = failure_causes;
-                    let text = judge_proven_read(
-                        text,
-                        ProvenRead {
-                            used_proven_source_dpi,
-                            possibly_illegible,
-                            page_idx,
-                            warn_when_kept: true,
-                        },
-                        &ocr_output_thresholds,
-                        &mut accumulated_warnings,
-                        &mut retry_causes,
-                    );
+                    accumulated_warnings.extend(warnings);
                     recovered = should_adopt_xobject_retry_text("", &text) || !tables.is_empty();
                     if should_adopt_xobject_retry_text("", &text) {
                         structured_ocr_pages.insert(
@@ -2423,6 +2415,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         stored_jpegs: None,
                         cancel_token: config.cancel_token.as_ref(),
                         use_proven_source_dpi: true,
+                        proven_read: Some(ProvenReadPolicy {
+                            thresholds: &ocr_output_thresholds,
+                            warn_when_kept: false,
+                        }),
                     },
                 )
                 .await?
@@ -2442,23 +2438,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 image_preprocessing,
                 tesseract_psm,
                 failure_causes,
-                used_proven_source_dpi,
-                possibly_illegible,
+                warnings,
             }) = recovery
             {
                 retry_causes = failure_causes;
-                let text = judge_proven_read(
-                    text,
-                    ProvenRead {
-                        used_proven_source_dpi,
-                        possibly_illegible,
-                        page_idx: *page_idx,
-                        warn_when_kept: false,
-                    },
-                    &ocr_output_thresholds,
-                    &mut accumulated_warnings,
-                    &mut retry_causes,
-                );
+                accumulated_warnings.extend(warnings);
                 let recovered_tables = !tables.is_empty();
                 let recovered_text_is_empty = text.trim().is_empty();
                 if should_adopt_xobject_retry_text(page_text, &text) {
@@ -5493,6 +5477,7 @@ pub(super) async fn extract_with_ocr_for_page(
                             stored_jpegs: None,
                             cancel_token: config.cancel_token.as_ref(),
                             use_proven_source_dpi: false,
+                            proven_read: None,
                         },
                     )
                     .await?
@@ -5508,8 +5493,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         image_preprocessing,
                         tesseract_psm: _,
                         failure_causes: _,
-                        used_proven_source_dpi: _,
-                        possibly_illegible: _,
+                        warnings: _,
                     } = recovery;
                     let recovered_tables = !tables.is_empty();
                     let recovered_payload = !text.trim().is_empty() || recovered_tables || !formulas.is_empty();
@@ -7119,6 +7103,18 @@ pub(super) struct XObjectRecoveryContext<'a> {
     /// Hand the backend the resolution a page-covering image's placement proves. Off, the
     /// backend estimates it as before.
     pub(super) use_proven_source_dpi: bool,
+    /// How each image read made at a proven resolution is judged for noise. `None` leaves every
+    /// read to the page policy.
+    pub(super) proven_read: Option<ProvenReadPolicy<'a>>,
+}
+
+/// The noise policy a route applies to each retry read made at a placement-proven resolution.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[derive(Clone, Copy)]
+pub(super) struct ProvenReadPolicy<'a> {
+    pub(super) thresholds: &'a crate::core::config::OcrQualityThresholds,
+    /// Whether this route warns about a read it keeps.
+    pub(super) warn_when_kept: bool,
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -7134,6 +7130,7 @@ impl<'a> XObjectRecoveryContext<'a> {
             stored_jpegs: None,
             cancel_token,
             use_proven_source_dpi: false,
+            proven_read: None,
         }
     }
 
@@ -7898,6 +7895,14 @@ fn pre_page_ocr_config(config: &ExtractionConfig) -> Cow<'_, crate::core::config
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 const PROVEN_READ_NOISE_CAUSE: &str = "the retry read was rejected as noise";
 
+/// Name the noise cause once, however many images of the page were rejected.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn push_proven_noise_cause(causes: &mut Vec<String>) {
+    if !causes.iter().any(|cause| cause == PROVEN_READ_NOISE_CAUSE) {
+        causes.push(PROVEN_READ_NOISE_CAUSE.to_owned());
+    }
+}
+
 /// What a retry read made at a placement-proven resolution is judged against.
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) struct ProvenRead {
@@ -7930,7 +7935,7 @@ pub(super) fn judge_proven_read(
     }
     if read.possibly_illegible {
         if super::scoring::is_ocr_recognition_noise(&text, thresholds) {
-            retry_causes.push(PROVEN_READ_NOISE_CAUSE.to_owned());
+            push_proven_noise_cause(retry_causes);
             return String::new();
         }
         return text;
@@ -7946,7 +7951,7 @@ pub(super) fn judge_proven_read(
         None,
     );
     if acceptance.discarded {
-        retry_causes.push(PROVEN_READ_NOISE_CAUSE.to_owned());
+        push_proven_noise_cause(retry_causes);
     }
     if read.warn_when_kept || acceptance.discarded {
         for warning in assessment {
