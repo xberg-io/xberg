@@ -525,7 +525,8 @@ pub(super) async fn collect_xobject_recovery_result(
         ),
         None => result.content.clone(),
     };
-    if !text.trim().is_empty() || result.content.trim().is_empty() {
+    let rejected = !result.content.trim().is_empty() && text.trim().is_empty();
+    if !rejected {
         append_xobject_text(&mut outcome.text, &text, budget)?;
         append_xobject_text(
             &mut outcome.text_outside_tables,

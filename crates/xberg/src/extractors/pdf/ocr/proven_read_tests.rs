@@ -189,3 +189,94 @@ fn a_clamp_a_resolution_below_the_floor_or_no_record_is_suspect() {
     );
     assert!(read_may_be_illegible(None), "no record of what was done");
 }
+
+#[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+mod collected_reads {
+    use super::{CAUSE, fragmented_text, metadata, thresholds};
+    use crate::core::config::OcrConfig;
+    use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
+    use std::sync::Arc;
+
+    /// A clamped read that also carries a table and the page document of its lines. `content` is
+    /// the page text the backend reports for them.
+    struct NoisyTableBackend {
+        content: String,
+    }
+
+    impl Plugin for NoisyTableBackend {
+        fn name(&self) -> &str {
+            "proven-read-noisy-table"
+        }
+        fn version(&self) -> String {
+            "1".to_owned()
+        }
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl OcrBackend for NoisyTableBackend {
+        fn backend_type(&self) -> OcrBackendType {
+            OcrBackendType::Custom
+        }
+        fn supports_language(&self, _: &str) -> bool {
+            true
+        }
+        async fn process_image(&self, _: &[u8], _: &OcrConfig) -> crate::Result<crate::ExtractedDocument> {
+            let mut result = crate::ExtractedDocument::default();
+            result.content = self.content.clone();
+            result.tables = vec![crate::types::Table {
+                cells: vec![vec!["kept".to_owned()]],
+                markdown: "| kept |".to_owned(),
+                ..Default::default()
+            }];
+            result.ocr_internal_document = Some(super::super::document::flat_ocr_page_document(&fragmented_text()));
+            result.metadata.image_preprocessing = Some(metadata(0.34, 72, true));
+            Ok(result)
+        }
+    }
+
+    #[tokio::test]
+    async fn a_rejected_read_adds_no_text_but_keeps_its_table() {
+        let outcome = recover(fragmented_text()).await;
+        assert!(outcome.text.is_empty(), "{:?}", outcome.text);
+        assert!(outcome.text_outside_tables.is_empty(), "{:?}", outcome.text_outside_tables);
+        assert_eq!(outcome.failure_causes, [CAUSE]);
+        assert_eq!(outcome.tables.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn an_empty_read_is_not_a_rejection_and_keeps_its_table_text() {
+        let outcome = recover(String::new()).await;
+        assert!(outcome.failure_causes.is_empty(), "{:?}", outcome.failure_causes);
+        assert_eq!(outcome.text_outside_tables, fragmented_text());
+        assert_eq!(outcome.tables.len(), 1);
+    }
+
+    async fn recover(content: String) -> super::super::rendering::XObjectRecoveryOutcome {
+        let backend: Arc<dyn OcrBackend> = Arc::new(NoisyTableBackend { content });
+        let mut image = crate::pdf::native::images::PageFallbackImage::placeholder_jpeg(0);
+        image.source_dpi = Some(300.0);
+        let mut budget = crate::extractors::security::SecurityBudget::from_limits(&Default::default());
+        let thresholds = thresholds(false);
+        let mut context = super::super::pipeline::XObjectRecoveryContext::with_budget(&mut budget, None);
+        context.proven_read = Some(super::super::pipeline::ProvenReadPolicy {
+            thresholds: &thresholds,
+            warn_when_kept: false,
+        });
+        super::super::rendering::recover_image_xobjects(
+            &backend,
+            &[image],
+            0,
+            1,
+            &OcrConfig::default(),
+            context,
+        )
+        .await
+        .unwrap()
+    }
+}
