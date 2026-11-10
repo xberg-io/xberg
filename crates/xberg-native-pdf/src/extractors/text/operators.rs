@@ -12,6 +12,8 @@ impl<'doc> TextExtractor<'doc> {
     ///
     /// Updates the graphics state and extracts text as appropriate.
     pub(super) fn execute_operator(&mut self, op: Operator) -> Result<()> {
+        // The seam of the previous `TJ` array reaches this operator only (see `PenSeam`). ~keep
+        let seam = self.pen_seam.take();
         match op {
             Operator::Tf { font, size } => {
                 let same_font = {
@@ -68,6 +70,7 @@ impl<'doc> TextExtractor<'doc> {
                 // two axes swap. The added conjunct re-checks both along the
                 // run's own writing axis (ISO 32000-1 §9.4.4). ~keep
                 let cur_font_size = self.state_stack.current().font_size;
+                let severe_overlap_pt = self.merging_config.severe_overlap_threshold_pt;
                 let is_continuation = self.merging_config.merge_tm_tj_runs
                     && match self.tj_span_buffer {
                         Some(ref mut buffer)
@@ -107,8 +110,9 @@ impl<'doc> TextExtractor<'doc> {
                             // `is_monospace` so proportional-font Tm+Tj runs (a
                             // separate, differently-shaped gap problem) are
                             // untouched. ~keep
-                            let expected_next_e = buffer.start_matrix.e + buffer.accumulated_width;
-                            let raw_gap = e - expected_next_e;
+                            // The pen's move in text space, the unit of the run's width. ~keep
+                            let advance = Self::text_space_advance(buffer.start_matrix, buffer.wmode, e);
+                            let raw_gap = advance - buffer.accumulated_width;
                             if buffer.wmode == 0
                                 && buffer.is_monospace
                                 && !buffer.unicode.ends_with(|c: char| c.is_whitespace())
@@ -128,7 +132,24 @@ impl<'doc> TextExtractor<'doc> {
 
                             // Same line, same transform, LTR progression →
                             // update width to reflect actual visual extent ~keep
-                            buffer.accumulated_width = e - buffer.start_matrix.e;
+                            buffer.accumulated_width = advance;
+                            // A new matrix sets the pen again: the pull-back after a ligature
+                            // no longer refers to the glyph that ends the run. ~keep
+                            buffer.ligature_tail = false;
+                            true
+                        }
+                        // A matrix that changes only the horizontal scale `a` and starts the show at
+                        // or just before the pen stretches the same word (GH#2664). The run goes on in
+                        // the new unit. ~keep
+                        Some(ref mut buffer)
+                            if (f - buffer.start_matrix.f).abs()
+                                <= ((cur_font_size * buffer.start_matrix.d).abs() * 0.5).max(0.5)
+                                && b == buffer.start_matrix.b
+                                && c == buffer.start_matrix.c
+                                && d == buffer.start_matrix.d
+                                && Self::stretched_tm_starts_at_the_pen(buffer, a, e, severe_overlap_pt) =>
+                        {
+                            Self::restate_run_under_stretched_tm(buffer, a, e);
                             true
                         }
                         _ => false,
@@ -138,40 +159,34 @@ impl<'doc> TextExtractor<'doc> {
                     self.flush_tj_span_buffer()?;
                 }
 
-                let state = self.state_stack.current_mut();
-                state.text_matrix = Matrix { a, b, c, d, e, f };
-                state.text_line_matrix = state.text_matrix;
+                self.position_pen(Matrix { a, b, c, d, e, f });
             }
             Operator::Td { tx, ty } => {
                 self.flush_tj_span_buffer()?;
-                let state = self.state_stack.current_mut();
+                self.carry_pen_seam(seam, ty);
                 // Per ISO 32000-1:2008 §9.4.2, Table 108:
                 // Tlm_new = T(tx,ty) × Tlm_old
                 // The translation is in text-line space, so it must be
                 // pre-multiplied to be scaled by the existing Tlm transform. ~keep
                 let tm = Matrix::translation(tx, ty);
-                state.text_line_matrix = tm.multiply(&state.text_line_matrix);
-                state.text_matrix = state.text_line_matrix;
+                self.position_pen(tm.multiply(&self.state_stack.current().text_line_matrix));
             }
             Operator::TD { tx, ty } => {
                 self.flush_tj_span_buffer()?;
+                self.carry_pen_seam(seam, ty);
 
-                let state = self.state_stack.current_mut();
-                state.leading = -ty;
+                self.state_stack.current_mut().leading = -ty;
                 // Per ISO 32000-1:2008 §9.4.2: Tlm_new = T(tx,ty) × Tlm_old ~keep
                 let tm = Matrix::translation(tx, ty);
-                state.text_line_matrix = tm.multiply(&state.text_line_matrix);
-                state.text_matrix = state.text_line_matrix;
+                self.position_pen(tm.multiply(&self.state_stack.current().text_line_matrix));
             }
             Operator::TStar => {
                 self.flush_tj_span_buffer()?;
 
                 let leading = self.state_stack.current().leading;
-                let state = self.state_stack.current_mut();
                 // Per ISO 32000-1:2008 §9.4.2: Tlm_new = T(0,-TL) × Tlm_old ~keep
                 let tm = Matrix::translation(0.0, -leading);
-                state.text_line_matrix = tm.multiply(&state.text_line_matrix);
-                state.text_matrix = state.text_line_matrix;
+                self.position_pen(tm.multiply(&self.state_stack.current().text_line_matrix));
             }
 
             Operator::Tj { text } => {
@@ -324,7 +339,11 @@ impl<'doc> TextExtractor<'doc> {
                         // Per PDF Spec ISO 32000-1:2008, Section 9.4.4 NOTE 6:
                         // "text strings are as long as possible"
                         // This creates one span per logical text unit instead of fragmenting ~keep
-                        self.process_tj_array(&array)?;
+                        let continues_pen = seam == Some(PenSeam::ContinuesPen);
+                        let word_boundary_flushed = self.process_tj_array(&array, continues_pen)?;
+                        if word_boundary_flushed && self.current_font_gives_widths() {
+                            self.pen_seam = Some(PenSeam::TjArrayEnd);
+                        }
                     } else {
                         for (index, element) in array.iter().enumerate() {
                             match element {
@@ -434,12 +453,8 @@ impl<'doc> TextExtractor<'doc> {
                 self.flush_tj_span_buffer()?;
 
                 let leading = self.state_stack.current().leading;
-                {
-                    let state = self.state_stack.current_mut();
-                    let tm = Matrix::translation(0.0, -leading);
-                    state.text_line_matrix = tm.multiply(&state.text_line_matrix);
-                    state.text_matrix = state.text_line_matrix;
-                }
+                let tm = Matrix::translation(0.0, -leading);
+                self.position_pen(tm.multiply(&self.state_stack.current().text_line_matrix));
 
                 if self.extract_spans {
                     if self.tj_span_buffer.is_none() {
@@ -468,11 +483,10 @@ impl<'doc> TextExtractor<'doc> {
                     let state = self.state_stack.current_mut();
                     state.word_space = word_space;
                     state.char_space = char_space;
-                    let leading = state.leading;
-                    let tm = Matrix::translation(0.0, -leading);
-                    state.text_line_matrix = tm.multiply(&state.text_line_matrix);
-                    state.text_matrix = state.text_line_matrix;
                 }
+                let leading = self.state_stack.current().leading;
+                let tm = Matrix::translation(0.0, -leading);
+                self.position_pen(tm.multiply(&self.state_stack.current().text_line_matrix));
 
                 if self.extract_spans {
                     if self.tj_span_buffer.is_none() {
@@ -521,6 +535,7 @@ impl<'doc> TextExtractor<'doc> {
             Operator::RestoreState => {
                 self.flush_tj_span_buffer()?;
                 self.state_stack.restore();
+                self.forget_drawn_end();
                 let current_font = self
                     .state_stack
                     .current()
@@ -557,6 +572,7 @@ impl<'doc> TextExtractor<'doc> {
                 let new_ctm = Matrix { a, b, c, d, e, f };
                 // PDF spec ISO 32000-1:2008 §8.3.4: cm concatenates as M_cm × CTM ~keep
                 state.ctm = new_ctm.multiply(&state.ctm);
+                self.forget_drawn_end();
             }
 
             Operator::SetFillRgb { r, g, b } => {
@@ -711,9 +727,7 @@ impl<'doc> TextExtractor<'doc> {
             // "At the beginning of a text object, Tm and Tlm shall be
             // initialized to the identity matrix." ~keep
             Operator::BeginText => {
-                let state = self.state_stack.current_mut();
-                state.text_matrix = Matrix::identity();
-                state.text_line_matrix = Matrix::identity();
+                self.position_pen(Matrix::identity());
             }
             Operator::EndText => {
                 self.flush_tj_span_buffer()?;
@@ -888,6 +902,7 @@ impl<'doc> TextExtractor<'doc> {
                 // the form's text is emitted, so subsequent Tj chars
                 // would be stitched into the wrong cluster. ~keep
                 self.flush_tj_span_buffer()?;
+                self.forget_drawn_end();
 
                 // Process Form XObjects to extract text from reusable content.
                 // Form XObjects can contain text that is not duplicated in the main stream.
@@ -900,6 +915,7 @@ impl<'doc> TextExtractor<'doc> {
                         "failed to process XObject"
                     );
                 }
+                self.forget_drawn_end();
             }
 
             _ => {}

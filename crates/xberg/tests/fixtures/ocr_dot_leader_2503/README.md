@@ -12,6 +12,10 @@ DejaVu Sans): `uv run --no-project --with pillow python gen_leader_fixtures.py D
 
 `two_column.png` is a generated two-column justified prose page (Pillow, DejaVu Sans 20 px, invented words), SHA-256 `c7d67a400423f94d2ec3b7617b98f9729b181b4f03cf3e6d37012416889e84f4`; it must never be re-read as a table.
 
+`symbol-rows.png` is a synthetic image in the same layout (Pillow, DejaVu Sans, 20 pixels):
+twelve rows of a label, a dot leader and three right-aligned values with symbols
+(`$`, `%`, `-`), under the header `No.`, `Qty`, `$`, `%`.
+
 `upside_down_table.png` is a generated 12-row, 5-column table page (invented item names and amounts) turned 180 degrees, 1275 x 1650 px at 150 dpi, SHA-256 `8243e7701e46ccc534c298bab12f1ce4ecaaf3a1ca801a73a5c7392711c868e0`. The geometry test admits it to a second read, and that read finds no table, so the first read must stand.
 
 `clean_table.png` is the 11 px recipe's 12-row table at 20 px without leaders (`gen_leader_fixtures.py`), SHA-256 `2f23b6d18631b842762fe45398d1795e6af0c68cd3687af67f37596949d99cc4`. Its first read holds a correct table, so it must keep that read.

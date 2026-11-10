@@ -771,7 +771,11 @@ mod tests {
     const TEXT_WITH_FIGURE: &[u8] =
         include_bytes!("../../../tests/fixtures/pdf/khmer-cluster-2536/khmer-text-with-figure.pdf");
 
-    const KHMER_MARKED: &str = "ខ្ញុំ\u{FFFD}\u{FFFD} ស្រលាញ់\u{FFFD} ប្រទេស\u{FFFD}\u{FFFD} កម្ពុជា\u{FFFD} សួស្តី\u{FFFD} ភ្នំពេញ";
+    const KHMER_MARKED: &str = concat!(
+        "ខ្ញុំ\u{FFFD}\u{FFFD} ស្រលាញ់\u{FFFD} ",
+        "ប្រទេស\u{FFFD}\u{FFFD} កម្ពុជា\u{FFFD} ",
+        "សួស្តី\u{FFFD} ភ្នំពេញ",
+    );
 
     fn langs(codes: &[&str]) -> Vec<String> {
         codes.iter().map(|code| (*code).to_string()).collect()
@@ -875,8 +879,8 @@ mod tests {
         );
         assert_eq!(unreadable_scripts(&latin_heavy, &langs(&["eng"])), None);
         let english_with_greek = format!(
-            "The measured resistance in the sample was {} with a tolerance of the stated value \u{FFFD}\u{FFFD} per cent \
-             across every one of the trial runs reported in the table below and in the appendix",
+            "The measured resistance in the sample was {} with a tolerance of the stated value \u{FFFD}\u{FFFD} \
+             per cent across every one of the trial runs reported in the table below and in the appendix",
             "αβγδ ".repeat(8)
         );
         let greek = english_with_greek
@@ -1598,6 +1602,93 @@ mod tests {
         assert_eq!(warnings.len(), 2, "{warnings:?}");
         assert!(warnings[0].message.contains("page 1") && !warnings[0].message.contains("page 2"));
         assert!(warnings[1].message.contains("page 2") && !warnings[1].message.contains("page 1"));
+    }
+
+    #[test]
+    fn disabled_ocr_leaves_the_page_to_the_gate() {
+        let (decision, warnings) = run(&[KHMER_MARKED], ONE_PAGE, &config_with(&["eng"]));
+        assert!(decision.failing_pages.is_empty(), "control: the same page is kept");
+        assert_eq!(warnings.len(), 1);
+        let mut disabled = config_with(&["eng"]);
+        disabled.ocr.as_mut().unwrap().enabled = false;
+        let (decision, warnings) = run(&[KHMER_MARKED], ONE_PAGE, &disabled);
+        assert_eq!(decision.failing_pages, [1]);
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn one_misnumbered_page_boundary_leaves_every_page_to_the_gate() {
+        let (text, mut boundaries) = page_text(&[KHMER_MARKED, ""]);
+        let config = config_with(&["eng"]);
+        let mut control = decision_for(&text, &boundaries);
+        let warnings =
+            retain_unreadable_script_pages(&mut control, &text, Some(&boundaries), Some(2), TWO_PAGES, &config);
+        assert_eq!(warnings.len(), 1, "control: page 1 is kept when the numbering is right");
+        let mut decision = decision_for(&text, &boundaries);
+        let before = decision.failing_pages.clone();
+        boundaries[1].page_number = 3;
+        let warnings =
+            retain_unreadable_script_pages(&mut decision, &text, Some(&boundaries), Some(2), TWO_PAGES, &config);
+        assert!(warnings.is_empty());
+        assert_eq!(decision.failing_pages, before);
+    }
+
+    #[test]
+    fn a_language_code_with_a_plus_names_each_model_it_joins() {
+        let russian = "Привет мир это длинная строка текста\u{FFFD}";
+        assert_eq!(
+            unreadable_scripts(russian, &langs(&["eng+deu"])),
+            Some(vec![Script::Cyrillic])
+        );
+        assert_eq!(unreadable_scripts(russian, &langs(&["eng+rus"])), None);
+    }
+
+    #[test]
+    fn a_layer_of_mostly_symbols_is_not_a_page_in_any_script() {
+        let letters = "я".repeat(MIN_SCRIPT_CHARS);
+        assert_eq!(
+            unreadable_scripts(&letters, &langs(&["eng"])),
+            Some(vec![Script::Cyrillic])
+        );
+        let diluted = format!("{letters} {}", "\u{E000}".repeat(100));
+        assert_eq!(unreadable_scripts(&diluted, &langs(&["eng"])), None);
+    }
+
+    #[test]
+    fn script_blocks_include_their_first_and_last_character() {
+        for (script, first, last) in [
+            (Script::Cyrillic, '\u{0400}', '\u{052F}'),
+            (Script::Cyrillic, '\u{1C80}', '\u{1C8F}'),
+            (Script::Cyrillic, '\u{2DE0}', '\u{2DFF}'),
+            (Script::Cyrillic, '\u{A640}', '\u{A69F}'),
+            (Script::Armenian, '\u{0530}', '\u{058F}'),
+            (Script::Hebrew, '\u{0590}', '\u{05FF}'),
+            (Script::Khmer, '\u{1780}', '\u{17FF}'),
+        ] {
+            assert_eq!(script_of(first), Some(script), "{first:?}");
+            assert_eq!(script_of(last), Some(script), "{last:?}");
+        }
+        assert_eq!(script_of('\u{03FF}'), Some(Script::Greek));
+        assert_eq!(script_of('\u{0400}'), Some(Script::Cyrillic));
+    }
+
+    #[test]
+    fn the_warning_names_the_model_that_reads_the_script() {
+        for (script, model) in [
+            (Script::Han, "chi_sim"),
+            (Script::Kana, "jpn"),
+            (Script::Hangul, "kor"),
+            (Script::Armenian, "hye"),
+            (Script::Cyrillic, "rus"),
+        ] {
+            let stage = FirstStage {
+                languages: langs(&["eng"]),
+                source: LanguageSource::OcrLanguage,
+            };
+            let warning = kept_pages_warning(&[(4, vec![script], false)], &stage);
+            let named = format!("page 4 ({script:?}; for example {model}): the native text");
+            assert!(warning.message.contains(&named), "{named}: {}", warning.message);
+        }
     }
 
     #[test]

@@ -194,3 +194,31 @@ pub fn build_and_extract_page0(content: &str) -> String {
     let doc = xberg_native_pdf::document::PdfDocument::from_bytes(bytes).expect("open PDF");
     doc.extract_text(0).expect("extract page 0")
 }
+
+/// Assemble an sfnt (TrueType) font program from `(tag, data)` tables. The
+/// tables must be sorted by tag; checksums are left zero, which the parsers
+/// in this crate accept.
+pub fn build_sfnt(tables: &[(&[u8; 4], Vec<u8>)]) -> Vec<u8> {
+    let num_tables = u16::try_from(tables.len()).expect("table count fits u16");
+    let entry_selector = 15 - num_tables.leading_zeros() as u16;
+    let search_range = (1u16 << entry_selector) * 16;
+    let mut font: Vec<u8> = Vec::new();
+    font.extend(0x0001_0000u32.to_be_bytes());
+    font.extend(num_tables.to_be_bytes());
+    font.extend(search_range.to_be_bytes());
+    font.extend(entry_selector.to_be_bytes());
+    font.extend((num_tables * 16 - search_range).to_be_bytes());
+    let mut offset = 12 + 16 * tables.len();
+    for (tag, data) in tables {
+        font.extend_from_slice(*tag);
+        font.extend(0u32.to_be_bytes());
+        font.extend(u32::try_from(offset).expect("offset fits u32").to_be_bytes());
+        font.extend(u32::try_from(data.len()).expect("length fits u32").to_be_bytes());
+        offset += data.len().div_ceil(4) * 4;
+    }
+    for (_, data) in tables {
+        font.extend_from_slice(data);
+        font.extend(std::iter::repeat_n(0u8, data.len().div_ceil(4) * 4 - data.len()));
+    }
+    font
+}
