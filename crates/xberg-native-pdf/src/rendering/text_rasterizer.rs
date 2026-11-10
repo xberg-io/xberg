@@ -920,7 +920,7 @@ impl TextRasterizer {
                     // axis. The axis swap is applied by the caller via
                     // advance_text_matrix; here we just accumulate the
                     // scalar magnitude. ~keep
-                    let shift = (-offset / 1000.0) * gs.font_size;
+                    let shift = tj_offset_shift(*offset, gs);
                     total += shift;
                 }
             }
@@ -976,7 +976,7 @@ impl TextRasterizer {
                     total_advance += advance;
                 }
                 TextElement::Offset(offset) => {
-                    let shift = (-offset / 1000.0) * current_gs.font_size;
+                    let shift = tj_offset_shift(*offset, &current_gs);
                     current_gs.advance_text_matrix(shift);
                     total_advance += shift;
                 }
@@ -1996,9 +1996,9 @@ impl TextRasterizer {
                 }
             }
 
-            x_cursor += (char_width + gs.char_space) / h_scale;
+            x_cursor += char_width + gs.char_space;
             if c == ' ' {
-                x_cursor += gs.word_space / h_scale;
+                x_cursor += gs.word_space;
             }
         }
 
@@ -2009,6 +2009,17 @@ impl TextRasterizer {
 impl Default for TextRasterizer {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Text-space shift of a `TJ` number: `-offset/1000 * Tfs`, scaled by `Th` in
+/// horizontal mode (ISO 32000-1 §9.4.4).
+pub(crate) fn tj_offset_shift(offset: f32, gs: &GraphicsState) -> f32 {
+    let shift = (-offset / 1000.0) * gs.font_size;
+    if gs.text_wmode == 0 {
+        shift * gs.horizontal_scaling / 100.0
+    } else {
+        shift
     }
 }
 
