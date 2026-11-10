@@ -5,9 +5,18 @@
 //!
 //! Supports Word 97, 2000, XP, and 2003 (.doc) files.
 
+use crate::error::{Result, XbergError};
+use crate::types::ProcessingWarning;
+use std::io::Cursor;
+
 mod chpx;
+mod cp1252;
 mod images;
+mod list_numbers;
 mod papx;
+
+use cp1252::cp1252_to_char;
+
 pub(crate) use images::{DocPicture, DocWithImages};
 
 #[cfg(test)]
@@ -21,10 +30,6 @@ mod test_prm_scripts;
 #[cfg(all(test, feature = "tokio-runtime"))]
 mod test_scripts;
 
-use crate::error::{Result, XbergError};
-use crate::types::ProcessingWarning;
-use std::io::Cursor;
-
 /// Warning source tag for `.doc` extraction diagnostics (#171 convention).
 const DOC_WARNING_SOURCE: &str = "doc";
 
@@ -32,8 +37,8 @@ const DOC_WARNING_SOURCE: &str = "doc";
 ///
 /// #1550: the extractor previously returned text only, so a paragraph Word
 /// numbers automatically was indistinguishable from prose. This carries
-/// membership and depth; the number Word paints is deliberately not resolved
-/// (that needs `PlfLst`/`PlfLfo` and a counter walk). ~keep
+/// membership, depth and -- since #2857 -- the number Word paints for it,
+/// counted from the list tables (`PlfLst`/`PlfLfo`). ~keep
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct DocParagraph {
     pub content: String,
@@ -111,15 +116,9 @@ pub(crate) enum DocSubdocumentKind {
     TextBox,
 }
 
-/// A paragraph's place in an automatic list.
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
-pub(crate) struct DocListMembership {
-    /// Zero-based nesting depth (`ilvl`).
-    pub level: u8,
-    /// Whether the level paints numbers rather than bullets, resolved from the
-    /// list tables' `nfc`.
-    pub ordered: bool,
-}
+/// A paragraph's place in an automatic list: [`DocListMembership`], defined
+/// with the list tables that resolve it (`list_numbers`).
+pub(crate) use list_numbers::DocListMembership;
 
 /// Result of DOC text extraction.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -507,6 +506,16 @@ struct ParagraphOutput {
     pending_pictures: Vec<(images::PictureReference, usize)>,
     buffer: ParagraphBuffer,
     picture_count: usize,
+    /// The main story's list counters, advanced by the paragraphs as the walk
+    /// meets them in document order. ~keep
+    numbering: list_numbers::NumberingState,
+}
+
+/// What the paragraph mark resolves to: the paragraph's list membership (the
+/// counter having advanced with it) and its style's heading level.
+struct ResolvedMark {
+    list: Option<DocListMembership>,
+    heading_level: Option<u8>,
 }
 
 impl ParagraphOutput {
@@ -518,7 +527,16 @@ impl ParagraphOutput {
         budget: &mut crate::extractors::security::SecurityBudget,
     ) -> Result<()> {
         let index = self.paragraphs.len();
-        let supported = push_paragraph(&mut self.paragraphs, &self.buffer, mark_fc_end, table, lists, budget)?;
+        // The mark's properties are resolved *before* the empty-text drop in
+        // `push_paragraph`: an empty numbered paragraph still advances its
+        // list's counter, so dropping the paragraph must not drop its number
+        // ([MS-DOC] numbers every paragraph of the sequence, however it is
+        // rendered). ~keep
+        let mark = mark_fc_end.map(|fc_end| ResolvedMark {
+            list: lists.membership_for_paragraph_end(fc_end, &mut self.numbering),
+            heading_level: lists.heading_level_for_paragraph_end(fc_end),
+        });
+        let supported = push_paragraph(&mut self.paragraphs, &self.buffer, mark, table, budget)?;
         images::place_pictures(
             &mut self.pictures,
             &mut self.pending_pictures,
@@ -630,26 +648,22 @@ fn split_paragraphs_and_pictures(
 
 /// Normalize one paragraph's raw text, field markup already taken out, and
 /// record it when it survives. A table paragraph always does: an empty cell
-/// still holds its column, and a row's end mark is empty.
+/// still holds its column, and a row's end mark is empty. The mark's
+/// resolved properties arrive with it (see [`ParagraphOutput::finish`]): the
+/// list membership is what distinguishes a numbered paragraph from prose.
 fn push_paragraph(
     out: &mut Vec<DocParagraph>,
     buffer: &ParagraphBuffer,
-    mark_fc_end: Option<u32>,
+    mark: Option<ResolvedMark>,
     table: Option<DocTableMark>,
-    list_tables: &papx::ListTables,
     budget: &mut crate::extractors::security::SecurityBudget,
 ) -> Result<bool> {
     let (content, annotations) = chpx::normalize(&buffer.raw, &buffer.scripts, budget)?;
-    // Word keys a paragraph's PAPX on the FC one past its paragraph mark,
-    // which is exactly what `fc_ends` recorded for that character.
-    let list = mark_fc_end
-        .and_then(|fc_end| list_tables.membership_for_paragraph_end(fc_end))
-        .map(|(level, ordered)| DocListMembership { level, ordered });
+    let (list, heading_level) = mark.map_or((None, None), |mark| (mark.list, mark.heading_level));
     let supported = table.is_none() && list.is_none();
     if content.is_empty() && table.is_none() {
         return Ok(supported);
     }
-    let heading_level = mark_fc_end.and_then(|fc_end| list_tables.heading_level_for_paragraph_end(fc_end));
     out.push(DocParagraph {
         content,
         annotations,
@@ -944,40 +958,6 @@ fn collapse_excess_newlines(text: &str) -> String {
     }
 
     cleaned
-}
-
-/// Convert CP1252 byte to Unicode char.
-fn cp1252_to_char(b: u8) -> char {
-    match b {
-        0x80 => '\u{20AC}',
-        0x82 => '\u{201A}',
-        0x83 => '\u{0192}',
-        0x84 => '\u{201E}',
-        0x85 => '\u{2026}',
-        0x86 => '\u{2020}',
-        0x87 => '\u{2021}',
-        0x88 => '\u{02C6}',
-        0x89 => '\u{2030}',
-        0x8A => '\u{0160}',
-        0x8B => '\u{2039}',
-        0x8C => '\u{0152}',
-        0x8E => '\u{017D}',
-        0x91 => '\u{2018}',
-        0x92 => '\u{2019}',
-        0x93 => '\u{201C}',
-        0x94 => '\u{201D}',
-        0x95 => '\u{2022}',
-        0x96 => '\u{2013}',
-        0x97 => '\u{2014}',
-        0x98 => '\u{02DC}',
-        0x99 => '\u{2122}',
-        0x9A => '\u{0161}',
-        0x9B => '\u{203A}',
-        0x9C => '\u{0153}',
-        0x9E => '\u{017E}',
-        0x9F => '\u{0178}',
-        b => b as char,
-    }
 }
 
 /// Read a named stream from the CFB compound file.

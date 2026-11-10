@@ -346,6 +346,17 @@ fn push_list_paragraph(
 
     let element_depth = u16::try_from(open.len()).unwrap_or(u16::MAX);
     let mut element = InternalElement::text(ElementKind::ListItem { ordered: list.ordered }, text, element_depth);
+    // The number Word paints (#2857): a container closed at every heading or
+    // prose paragraph reopens with the renderers' positional counter back at
+    // 1, so the resolved ordinal rides along as the item's source label --
+    // the same channel the DOCX extractor uses -- and the renderers keep the
+    // source's numbering (the markdown bridge reopens an ordered run at a
+    // decimal label's value; plain and Djot print the label). An ordinal of
+    // None -- bullets, non-decimal formats, unreadable tables -- leaves the
+    // renderers' synthesized sequence, as before this fix.
+    if let Some(ordinal) = list.ordinal {
+        element.set_list_item_source_label(format!("{ordinal}."));
+    }
     element.annotations = annotations.to_vec();
     doc.push_element(element);
 }
@@ -598,16 +609,18 @@ mod tests {
         );
     }
 
-    /// #1553: a document whose only heading-styled paragraph is list-bound
-    /// emits no styled heading at all, so it must fall back to shape rather
-    /// than end up with no heading structure.
-    ///
-    /// `simple.doc` is exactly that: its `Heading 1` paragraph also carries a
-    /// list binding, and a list binding wins (matching the DOCX path's
-    /// handling of `w:numPr`). Counting it as "this document uses heading
-    /// styles" suppressed the heuristic while emitting nothing in its place.
+    /// `simple.doc`: its `Heading 1` paragraph also carries a list binding --
+    /// one whose level has no number sequence (`nfc` 255), which paints no
+    /// marker in Word. A binding that paints nothing does not swallow the
+    /// heading: the paragraph is the heading its style says, the document
+    /// counts as style-declaring, and the shape heuristic must not invent
+    /// h2s beside it (#1553's failure mode stayed away -- the styled heading
+    /// itself is emitted, so the document is not left without structure).
+    /// Before #2857 the markerless binding rendered as a bullet list item,
+    /// which pushed the document to the shape heuristic's 3 invented
+    /// headings instead of its 1 real one.
     #[tokio::test]
-    async fn a_document_whose_only_styled_heading_is_list_bound_falls_back_to_shape() {
+    async fn a_document_whose_only_styled_heading_is_bound_to_a_markerless_list_emits_the_heading() {
         let doc = internal_document("../../test_documents/vendored/unstructured/doc/simple.doc").await;
 
         let headings = doc
@@ -617,9 +630,9 @@ mod tests {
             .count();
 
         assert_eq!(
-            headings, 3,
-            "expected the shape heuristic's 3 headings; 0 means the document was treated as \
-             style-declaring on the strength of a paragraph emitted as a ListItem"
+            headings, 1,
+            "expected the styled heading itself; 0 means the document was left with no heading \
+             structure, and more than 1 means the shape heuristic ran beside the styles"
         );
     }
 
