@@ -148,6 +148,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(excel): A workbook over `security_limits.max_table_cells` no longer fails with a security error.** (#2820)
+  A workbook whose only sheet, or every sheet, exceeds the limit now returns empty placeholder sheets and a warning per skipped sheet instead of `SecurityError::TooManyCells`. The limit still bounds parsing work and allocation, because a skipped sheet is never materialized, and there is no strict mode to restore the error. CSV, TSV and other table formats are unchanged. A legacy XLS or XLA workbook in which the over-budget sheet carries the same name as another sheet, as the reader decodes the names (including names that differ only by a byte-order mark, NUL characters or code-page decoding), still fails with the security error, because the reader keys sheets by name.
 - **(markdown): Markdown output writes math as `$...$` and `$$...$$` instead of code math.** (#2331)
   Display math standing alone is now `$$`, the TeX, `$$` on separate lines (on one line, `$$tex$$`, inside a quote, list item or footnote, or when a line of the TeX would open a Markdown block); other display math is `$$tex$$` and inline math `$tex$`. Readers that know only dollar math (GitHub, Pandoc, Obsidian, MathJax, the olmOCR evaluator) read these, and they did not read the previous `` $`...`$ `` and ```` ```math ```` forms. TeX holding a backtick, or display TeX with a `%` comment that needs those placements, keeps the ```` ```math ```` fence. HTML and Djot output are unchanged.
   The TeX is rewritten to stay inside its delimiters, and some rewrites are lossy: a `$` in it becomes `\$` (which also changes a `$` inside `\text{}`); blank lines are dropped; lines joined onto one line lose their `%` comments; and `<` gains a space before a letter, `/`, `!` or `?` (in display math only where a `>` follows it), so `<img ...>` cannot read as HTML (the space shows inside `\text{}`). In a paragraph or block that holds math, a prose `$` is written `\$`, so a raw-text consumer sees `\$5` for `$5`.
@@ -309,6 +311,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(excel): Extract the sheets that fit when a workbook exceeds `security_limits.max_table_cells`.** (#2820)
+  A workbook whose sheets together held more cells than the limit failed as a whole and returned no content. XLSX, XLSM, XLTM, XLAM, XLSB, XLS, XLA and ODS workbooks now skip only the sheet that does not fit, keep every other sheet, and record a warning naming the sheet and the limit. The limit and its default are unchanged.
 - **(pdf): Read an underscore-joined `/Differences` glyph name as all its letters.** (#2689)
   With no `ToUnicode` map, a glyph named `f_f_i` extracted as `f`, so a word with an `ffi` glyph lost letters. The name now decodes by the Adobe Glyph List algorithm: everything from the first `.` is dropped, each `_` component maps to its letters (`f_f_i` is `ffi`, `f_l` is `fl`, `s_t` is `st`, `uni0066_uni0069` is `fi`), and empty or unknown components add nothing. A name in which no component maps keeps the letter its base encoding gives the code.
 - **(pdf): Keep a word whole when a producer sets the text matrix back over it before a large TJ offset.** (GH#2322)
