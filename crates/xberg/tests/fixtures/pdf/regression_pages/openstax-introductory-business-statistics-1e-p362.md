@@ -40,17 +40,9 @@ If the random variable is binary then the formula for the appropriate sample siz
 
 The general form for a confidence interval for a single mean, population standard deviation unknown, and sample size less than 30 Student's t is given by:
 
-- ⎛ - ⎛
+- ⎛ ⎞ - ⎛ ⎞
 
-*s*
-
-⎞
-
-*s*
-
-⎞
-
-*x* - *t*~v,α~ ≤ *µ* ≤ *x* + *t* ⎝ *n*<sup>⎠</sup> ~v,α~⎝ *n*<sup>⎠</sup>
+*s s x* - *t*~v,α~ ≤ *µ* ≤ *x* + *t* ⎝ *n*<sup>⎠</sup> ~v,α~⎝ *n*<sup>⎠</sup>
 
 **8.3 A Confidence Interval for A Population Proportion**
 

@@ -62,17 +62,9 @@ P
 
 Q
 
-n~x,f~ 3 3
+n~x,f~ 3 3 f
 
-where Q = (−1)
-
-f
-
-s s , αˆ are the
-
-x f,αˆ x,x+ˆα,f x−α,x,fˆ
-
-unit vectors in a d-dimensional square lattice. For the U(1) theory, the unitary operator V~U~(1), which commutes Q
+where Q~x~ = (−1) s s , αˆ are the f,αˆ x,x+ˆα,f x−α,x,fˆ unit vectors in a d-dimensional square lattice. For the U(1) theory, the unitary operator V~U~(1), which commutes Q
 
 U(1) iθxGx
 
