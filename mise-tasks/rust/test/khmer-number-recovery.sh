@@ -189,7 +189,7 @@ page_names=(
   synchronization_keeps_the_unrecovered_first_page_read
   synchronized_second_page_survives_extraction_result_derivation
   synchronized_second_page_survives_renderer_input_derivation
-  skipping_synchronization_leaves_stale_pages_and_drops_invalid_ranges
+  plain_derivation_repairs_an_unsynchronized_prebuilt_page
 )
 expected_pages="${#page_names[@]}"
 page_listed="$(cargo "${page_args[@]}" -- --list --color never)"

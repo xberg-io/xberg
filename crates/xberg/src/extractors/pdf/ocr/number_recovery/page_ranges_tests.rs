@@ -122,37 +122,14 @@ fn synchronized_second_page_survives_renderer_input_derivation() {
 }
 
 #[test]
-fn skipping_synchronization_leaves_stale_pages_and_drops_invalid_ranges() {
+fn plain_derivation_repairs_an_unsynchronized_prebuilt_page() {
     let mut document = recovered_document();
     assert_eq!(
         attach_page_handoff(&mut document, &intermediate_reads()),
         "Page 1 café\n\nTotal O ១២៣\n\n\npaid",
     );
     let result = derive_extraction_result(document, false, OutputFormat::Plain);
-    assert_eq!(result.content, "Page 1 café\n\nTotal O ១២៣\n\npaid");
-    let pages = result.pages.as_ref().expect("the stale OCR pages are still published");
-    assert_eq!(pages.len(), 2);
-    assert_eq!(pages[0].content, "Page 1 café");
-    assert_eq!(pages[1].content, "Total O ១២៣\n\n\npaid");
-    assert_ne!(pages[1].content, "Total O ១២៣\n\npaid");
-    assert!(
-        result
-            .metadata
-            .pages
-            .as_ref()
-            .expect("page metadata remains")
-            .boundaries
-            .is_none(),
-        "the stale second-page range ends at byte 38, beyond the 37-byte final content",
-    );
-    assert_eq!(
-        result
-            .processing_warnings
-            .iter()
-            .filter(|warning| warning.source == "page_boundaries")
-            .count(),
-        1,
-    );
+    assert_final_page_ranges(&result);
 }
 
 #[test]
