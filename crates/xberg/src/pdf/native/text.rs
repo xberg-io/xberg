@@ -579,16 +579,9 @@ fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpa
         for (index, span) in group.iter().enumerate() {
             if let Some(prev) = previous {
                 let gap = span.bbox.x - prev_end_x;
-                if needs_numeric_script_boundary(prev, span, &notes, group.get(index + 1).copied()) {
-                    result.push(' ');
-                } else if keeps_line_word_gap(prev, span) {
-                    if gap > line_space_threshold {
-                        result.push(' ');
-                    }
-                } else if !result.ends_with(char::is_whitespace) && !span.text.starts_with(char::is_whitespace) {
-                    // A space glyph on either side of the seam already marks the gap. ~keep
-                    append_visual_word_gap(&mut result, gap, span.font_size);
-                }
+                let script_boundary =
+                    needs_numeric_script_boundary(prev, span, &notes, group.get(index + 1).copied());
+                push_rebuild_seam(&mut result, prev, span, gap, line_space_threshold, script_boundary);
             }
             result.push_str(&span.text);
             prev_end_x = span.bbox.x + span.bbox.width;
@@ -596,6 +589,29 @@ fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpa
         }
     }
     result
+}
+
+/// Writes the separator of one seam of the fragmented rebuild: a space at a numeric script boundary,
+/// at a guarded seam wider than the line's test, or at a gap wider than the right span's own test;
+/// none where a space glyph already marks the gap. ~keep
+fn push_rebuild_seam(
+    result: &mut String,
+    prev: &TextSpan,
+    span: &TextSpan,
+    gap: f32,
+    line_space_threshold: f32,
+    script_boundary: bool,
+) {
+    if script_boundary {
+        result.push(' ');
+    } else if keeps_line_word_gap(prev, span) {
+        if gap > line_space_threshold {
+            result.push(' ');
+        }
+    } else if !result.ends_with(char::is_whitespace) && !span.text.starts_with(char::is_whitespace) {
+        // A space glyph on either side of the seam already marks the gap. ~keep
+        append_visual_word_gap(result, gap, span.font_size);
+    }
 }
 
 /// Whether a seam of the fragmented rebuild keeps the line's word-gap test, half the line's largest

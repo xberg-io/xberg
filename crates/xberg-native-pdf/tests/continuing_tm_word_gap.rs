@@ -80,7 +80,10 @@ fn second_continuing_tm_before_tf_keeps_the_run_at_its_last_glyph() {
 #[test]
 fn zero_width_glyph_after_continuing_tm_ends_the_record() {
     let x_b = x_after_a(0.278);
-    assert_eq!(show(&format!("1 0 0 1 {x_b} 500 Tm (C) Tj /F1 12 Tf 100 Tz (B) Tj")), "ACB");
+    assert_eq!(
+        show(&format!("1 0 0 1 {x_b} 500 Tm (C) Tj /F1 12 Tf 100 Tz (B) Tj")),
+        "ACB"
+    );
 }
 
 /// A `Tm` that restates the run under a new horizontal scale (GH#2664) after a continuing `Tm` keeps
