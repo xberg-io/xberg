@@ -7,14 +7,22 @@ use xberg_native_pdf::document::PdfDocument;
 const SIZE: f32 = 12.0;
 const GLYPH: f32 = 7.2;
 
+/// `A` at x = 100 with its own `Tm`; `after_a` follows it, before `ET`.
+fn show(after_a: &str) -> String {
+    let content = format!("BT /F1 {SIZE} Tf\n1 0 0 1 100 500 Tm 100 Tz (A) Tj\n{after_a}\nET");
+    let doc = PdfDocument::from_bytes(build(content.as_bytes())).expect("open fixture");
+    doc.extract_text(0).expect("extract_text").trim().to_string()
+}
+
+/// The origin of a show `gap_em` after `A`'s advance.
+fn x_after_a(gap_em: f32) -> f32 {
+    100.0 + GLYPH + gap_em * SIZE
+}
+
 /// `A` at x = 100 and `B` one word gap after its advance, each with its own `Tm`; `between` sits after
 /// the second `Tm` and before `(B) Tj`.
 fn text(between: &str, gap_em: f32) -> String {
-    let x_b = 100.0 + GLYPH + gap_em * SIZE;
-    let content =
-        format!("BT /F1 {SIZE} Tf\n1 0 0 1 100 500 Tm 100 Tz (A) Tj\n1 0 0 1 {x_b} 500 Tm {between}(B) Tj\nET");
-    let doc = PdfDocument::from_bytes(build(content.as_bytes())).expect("open fixture");
-    doc.extract_text(0).expect("extract_text").trim().to_string()
+    show(&format!("1 0 0 1 {} 500 Tm {between}(B) Tj", x_after_a(gap_em)))
 }
 
 #[test]
@@ -50,12 +58,39 @@ fn bare_continuing_tm_stays_joined() {
     assert_eq!(text("", 0.278), "AB");
 }
 
-/// One page with two Helvetica-metric fonts, `F1` and `F2`, whose `A` and `B` are 600/1000 em wide.
+/// Two continuing `Tm`s with no glyph between them, the first a tenth of an em before `B`, keep the
+/// first record: the run still ends at `A`, not at the first `Tm`'s pen.
+#[test]
+fn second_continuing_tm_before_tf_keeps_the_run_at_its_last_glyph() {
+    let (x_near, x_b) = (x_after_a(0.178), x_after_a(0.278));
+    let after_a = format!("1 0 0 1 {x_near} 500 Tm 1 0 0 1 {x_b} 500 Tm /F1 12 Tf 100 Tz (B) Tj");
+    assert_eq!(show(&after_a), "A B");
+}
+
+/// A glyph after the continuing `Tm`, even `C` with no width, ends the record: the same-font `Tf`
+/// after it does not end the run, as at the base.
+#[test]
+fn zero_width_glyph_after_continuing_tm_ends_the_record() {
+    let x_b = x_after_a(0.278);
+    assert_eq!(show(&format!("1 0 0 1 {x_b} 500 Tm (C) Tj /F1 12 Tf 100 Tz (B) Tj")), "ACB");
+}
+
+/// A `Tm` that restates the run under a new horizontal scale (GH#2664) changes its width with no
+/// glyph: the record is stale, and the same-font `Tf` after it does not end the run, as at the base.
+#[test]
+fn stretched_tm_after_continuing_tm_ends_the_record() {
+    let x_b = x_after_a(0.278);
+    let after_a = format!("1 0 0 1 {x_b} 500 Tm 0.5 0 0 1 {x_b} 500 Tm /F1 12 Tf 100 Tz (B) Tj");
+    assert_eq!(show(&after_a), "AB");
+}
+
+/// One page with two Helvetica-metric fonts, `F1` and `F2`, whose `A` and `B` are 600/1000 em wide
+/// and whose `C` has no width.
 fn build(content: &[u8]) -> Vec<u8> {
     let mut pdf = b"%PDF-1.4\n".to_vec();
     let mut offsets = vec![0usize];
     let font = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding \
-                /FirstChar 65 /LastChar 66 /Widths [600 600] >>";
+                /FirstChar 65 /LastChar 67 /Widths [600 600 0] >>";
     let objs = [
         "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
