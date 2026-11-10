@@ -1,5 +1,6 @@
 //! ODS repeat preflight before calamine's eager dense-range construction.
 
+use std::collections::HashSet;
 use std::io::{BufReader, Read, Seek};
 
 use quick_xml::events::{BytesStart, Event};
@@ -178,7 +179,7 @@ pub(in crate::extraction::excel) fn validate_ods<R: Read + Seek>(
                 if let Some(before) = before_sheet.take() {
                     before.restore(&mut budget);
                 }
-                skipped.indices.push(sheet_index);
+                skipped.indices.insert(sheet_index);
                 sheet_index += 1;
                 sheet = None;
                 cell = None;
@@ -206,6 +207,8 @@ pub(in crate::extraction::excel) fn drop_skipped_sheets(
     let mut buffer = Vec::new();
     let (mut sheet_index, mut table_depth, mut changed) = (0usize, 0usize, false);
     let mut current_skipped = false;
+    let counts = skipped.name_counts();
+    let mut taken: HashSet<String> = skipped.names.iter().cloned().collect();
     loop {
         buffer.clear();
         let event = reader.read_event_into(&mut buffer).map_err(xml_error)?;
@@ -220,10 +223,11 @@ pub(in crate::extraction::excel) fn drop_skipped_sheets(
                     changed = true;
                     continue;
                 }
-                let name = table_name(start);
-                if current_skipped && skipped.names.iter().filter(|other| **other == name).count() > 1 {
-                    let renamed = renamed_table(start, sheet_index - 1);
-                    writer.write_event(Event::Start(renamed)).map_err(xml_error)?;
+                if current_skipped && counts.get(table_name(start).as_str()).is_some_and(|count| *count > 1) {
+                    let name = unused_name(&mut taken, sheet_index - 1);
+                    writer
+                        .write_event(Event::Start(renamed_table(start, &name)))
+                        .map_err(xml_error)?;
                     changed = true;
                     continue;
                 }
@@ -249,11 +253,23 @@ pub(in crate::extraction::excel) fn drop_skipped_sheets(
     Ok((writer.into_inner(), changed))
 }
 
-fn renamed_table(start: &BytesStart<'_>, index: usize) -> BytesStart<'static> {
+/// A replacement sheet name that no sheet in the workbook (or earlier replacement) carries.
+fn unused_name(taken: &mut HashSet<String>, index: usize) -> String {
+    let mut candidate = format!("xberg-skipped-sheet-{index}");
+    let mut attempt = 0usize;
+    while taken.contains(&candidate) {
+        attempt += 1;
+        candidate = format!("xberg-skipped-sheet-{index}-{attempt}");
+    }
+    taken.insert(candidate.clone());
+    candidate
+}
+
+fn renamed_table(start: &BytesStart<'_>, name: &str) -> BytesStart<'static> {
     let mut renamed = BytesStart::new("table:table");
     for attribute in start.attributes().flatten() {
         if attribute.key.as_ref() == "table:name" {
-            renamed.push_attribute(("table:name", format!("xberg-skipped-sheet-{index}").as_str()));
+            renamed.push_attribute(("table:name", name));
         } else {
             renamed.push_attribute(attribute);
         }

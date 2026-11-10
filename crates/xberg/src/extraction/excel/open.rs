@@ -523,7 +523,7 @@ fn read_xlsx_family_file(
 ) -> Result<ExcelReadResult> {
     let check_file = std::fs::File::open(file_path)?;
     if has_row_only_xlsx_dimensions(std::io::BufReader::new(check_file), limits)? {
-        let bytes = std::fs::read(file_path)?;
+        let bytes = read_bounded_spreadsheet_file(file_path, limits)?;
         let normalized = normalize_xlsx_dimensions(&bytes, limits)?
             .ok_or_else(|| XbergError::parsing("Failed to normalize row-only XLSX worksheet dimensions".to_owned()))?;
         let mut workbook = calamine::Xlsx::new(Cursor::new(normalized))
@@ -834,7 +834,7 @@ fn read_ods_file(
             Ok((result, warnings))
         }
         Err(original_error) => {
-            let bytes = std::fs::read(file_path)?;
+            let bytes = read_bounded_spreadsheet_file(file_path, limits)?;
             let Some(normalized) = normalize_ods_row_whitespace(&bytes, limits)? else {
                 return Err(XbergError::parsing(format!("Failed to parse ODS: {original_error}")));
             };

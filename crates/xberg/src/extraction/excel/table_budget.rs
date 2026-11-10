@@ -1,5 +1,6 @@
 //! Preflight dense worksheet allocation using the backend's streaming cell readers.
 
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
 use calamine::{DataRef, Reader};
@@ -25,18 +26,18 @@ pub(super) use zip_metadata::validate_xlsx_string_parts;
 /// still extracted.
 #[derive(Debug, Default)]
 pub(super) struct SkippedSheets {
-    indices: Vec<usize>,
+    indices: HashSet<usize>,
     max_cells: usize,
-    /// Names of every ODS sheet in document order. Calamine keys ranges by name, so a skipped
-    /// sheet sharing its name with a kept one is renamed in the rewritten input and reported
-    /// here under its original name.
+    /// Names of every XLS or ODS sheet in document order. Calamine keys ranges by name, so a
+    /// skipped sheet sharing its name with another sheet is renamed in the rewritten input and
+    /// reported here under its original name.
     names: Vec<String>,
 }
 
 impl SkippedSheets {
     fn new(limits: &SecurityLimits) -> Self {
         Self {
-            indices: Vec::new(),
+            indices: HashSet::new(),
             max_cells: limits.max_table_cells,
             names: Vec::new(),
         }
@@ -50,6 +51,22 @@ impl SkippedSheets {
         self.indices.contains(&index)
     }
 
+    #[cfg(test)]
+    fn sorted_indices(&self) -> Vec<usize> {
+        let mut indices: Vec<usize> = self.indices.iter().copied().collect();
+        indices.sort_unstable();
+        indices
+    }
+
+    /// How many sheets carry each name.
+    fn name_counts(&self) -> HashMap<&str, usize> {
+        let mut counts = HashMap::new();
+        for name in &self.names {
+            *counts.entry(name.as_str()).or_insert(0) += 1;
+        }
+        counts
+    }
+
     /// The empty sheet standing in for sheet `index` named `name`, with its warning recorded,
     /// or `None` when that sheet was not skipped.
     pub(super) fn placeholder(
@@ -61,7 +78,11 @@ impl SkippedSheets {
         if !self.contains(index) {
             return None;
         }
-        let name = self.names.get(index).map_or(name, String::as_str);
+        let name = self
+            .names
+            .get(index)
+            .filter(|name| !name.is_empty())
+            .map_or(name, String::as_str);
         let message = format!(
             "Sheet '{name}' was skipped: its cells did not fit in the remaining table-cell budget \
              (`security_limits.max_table_cells` is {}); raise the limit to extract it",
@@ -118,7 +139,7 @@ fn preflight_sheet(
     match sheet(budget) {
         Err(error) if is_cell_limit(&error) => {
             before.restore(budget);
-            skipped.indices.push(index);
+            skipped.indices.insert(index);
             Ok(())
         }
         result => result,

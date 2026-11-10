@@ -1846,6 +1846,8 @@ fn should_not_blank_an_ods_sheet_that_shares_a_name_with_a_skipped_one_gh2820() 
     for (label, first, second) in [("big first", &big, &small), ("small first", &small, &big)] {
         let rows = format!(r#"{first}</table:table><table:table table:name="Data">{second}"#);
         let (workbook, warnings) = read_excel_bytes(&ods_with_table_rows(&rows), ".ods", &limits).unwrap();
+        assert_eq!(workbook.sheets.len(), 2, "{label}");
+        assert!(workbook.sheets.iter().all(|sheet| sheet.name == "Data"), "{label}");
         let kept: Vec<_> = workbook
             .sheets
             .iter()
@@ -1890,7 +1892,40 @@ fn should_keep_the_iteration_budget_monotonic_across_skipped_xlsx_sheets_gh2820(
         ..Default::default()
     };
     let error = read_excel_bytes(&bytes, ".xlsx", &limits).unwrap_err();
-    assert!(error.to_string().contains("iterations"), "{error}");
+    assert!(error.to_string().contains("Too many iterations"), "{error}");
     let (workbook, _) = read_excel_bytes(&bytes, ".xlsx", &SecurityLimits::default()).unwrap();
     assert_eq!(workbook.sheets.len(), count);
+}
+
+#[test]
+fn should_pick_an_ods_replacement_name_no_sheet_already_uses_gh2820() {
+    let cell = |value: u32| format!(r#"<table:table-cell office:value-type="float" office:value="{value}"/>"#);
+    let small = |a: u32, b: u32| format!("<table:table-row>{}{}</table:table-row>", cell(a), cell(b));
+    let big = r#"<table:table-row table:number-rows-repeated="5"><table:table-cell table:number-columns-repeated="5" office:value-type="float" office:value="9"/></table:table-row>"#;
+    // The skipped third sheet shares its name with the first, and a middle sheet already
+    // carries the name the rename would pick for index 2.
+    let rows = format!(
+        r#"{}</table:table><table:table table:name="xberg-skipped-sheet-2">{}</table:table><table:table table:name="Data">{big}"#,
+        small(1, 2),
+        small(5, 6),
+    );
+    let limits = SecurityLimits {
+        max_table_cells: 10,
+        ..Default::default()
+    };
+    let (workbook, warnings) = read_excel_bytes(&ods_with_table_rows(&rows), ".ods", &limits).unwrap();
+    assert_eq!(workbook.sheets.len(), 3);
+    let cells = |index: usize| workbook.sheets[index].table_cells.clone();
+    assert_eq!(cells(0), Some(vec![vec!["1".to_string(), "2".to_string()]]));
+    assert_eq!(cells(1), Some(vec![vec!["5".to_string(), "6".to_string()]]));
+    assert_eq!(cells(2), None);
+    assert_eq!(workbook.sheets[2].name, "Data");
+    assert_eq!(
+        warnings
+            .iter()
+            .filter(|warning| warning.message.contains("Sheet 'Data' was skipped"))
+            .count(),
+        1,
+        "{warnings:?}"
+    );
 }

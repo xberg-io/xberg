@@ -1,5 +1,6 @@
 //! Bounded BIFF preflight before calamine eagerly builds legacy XLS ranges.
 
+use std::collections::HashSet;
 use std::io::{Read, Seek, SeekFrom};
 
 use super::{SecurityBudget, SecurityLimits, SheetBounds, SkippedSheets, preflight_sheet};
@@ -9,6 +10,8 @@ const BIFF_BOF: u16 = 0x0809;
 const BIFF_EOF: u16 = 0x000A;
 const BIFF_BOUND_SHEET: u16 = 0x0085;
 const BIFF_DIMENSIONS: u16 = 0x0200;
+const BIFF8_VERSION: u16 = 0x0600;
+const BIFF_WORKSHEET: u16 = 0x0010;
 
 fn next_record(reader: &mut impl Read, budget: &mut SecurityBudget) -> Result<Option<(u16, Vec<u8>)>> {
     let mut header = [0u8; 4];
@@ -31,12 +34,21 @@ pub(in crate::extraction::excel) fn validate_xls(
     let mut budget = SecurityBudget::from_limits(limits);
     let mut skipped = SkippedSheets::new(limits);
     let mut worksheets = Vec::new();
+    let mut biff8 = true;
+    let mut first_record = true;
     while let Some((kind, data)) = next_record(reader, &mut budget)? {
         if kind == BIFF_EOF {
             break;
         }
+        if kind == BIFF_BOF && first_record {
+            biff8 = data.get(..2) == Some(&BIFF8_VERSION.to_le_bytes());
+        }
+        first_record = false;
         if kind == BIFF_BOUND_SHEET && data.len() >= 4 {
             worksheets.push(u64::from(u32::from_le_bytes(data[..4].try_into().unwrap())));
+            skipped
+                .names
+                .push(bound_sheet_name(&data, biff8).map(|name| name.text).unwrap_or_default());
         }
     }
     for (index, offset) in worksheets.into_iter().enumerate() {
@@ -48,13 +60,12 @@ pub(in crate::extraction::excel) fn validate_xls(
     Ok(skipped)
 }
 
-/// Record id no BIFF reader acts on; overwrites the records of a skipped sheet in place.
-const BIFF_IGNORED: u16 = 0x0FFF;
-
 /// Calamine builds every XLS range while constructing the reader, so a sheet that did not fit
-/// in the cell budget cannot be left out afterwards. Rewrite the input with that sheet's
-/// records (everything between its BOF and EOF) turned into ignored records; offsets and
-/// lengths stay the same, so the reader sees an empty sheet and allocates nothing for it.
+/// in the cell budget cannot be left out afterwards. Rewrite the input so each skipped
+/// BOUNDSHEET points at one empty worksheet substream appended to the workbook stream: the
+/// reader then allocates nothing for it, and no substream, including one a kept sheet shares,
+/// is modified. A skipped sheet whose name another sheet also carries is renamed in place
+/// (same length), because calamine keys sheets by name.
 pub(in crate::extraction::excel) fn drop_skipped_sheets(
     data: &[u8],
     skipped: &SkippedSheets,
@@ -73,7 +84,7 @@ pub(in crate::extraction::excel) fn drop_skipped_sheets(
     };
     let mut stream = Vec::new();
     compound.open_stream(stream_name)?.read_to_end(&mut stream)?;
-    neutralize_sheets(&mut stream, skipped, limits)?;
+    repoint_skipped_sheets(&mut stream, skipped, limits)?;
     // ~keep Calamine reads only the workbook stream, so the rewritten container carries just that;
     // the document-information, VBA and picture streams of the original are dropped, and nothing
     // downstream reads them from XLS input.
@@ -82,53 +93,110 @@ pub(in crate::extraction::excel) fn drop_skipped_sheets(
     Ok(Some(rewritten.into_inner().into_inner()))
 }
 
-fn neutralize_sheets(stream: &mut [u8], skipped: &SkippedSheets, limits: &SecurityLimits) -> Result<()> {
+fn repoint_skipped_sheets(stream: &mut Vec<u8>, skipped: &SkippedSheets, limits: &SecurityLimits) -> Result<()> {
     let mut budget = SecurityBudget::from_limits(limits);
-    let mut worksheets = Vec::new();
-    let mut position = 0usize;
+    let empty_sheet_start = u32::try_from(stream.len())
+        .map_err(|_| XbergError::validation("XLS workbook stream is too large to rewrite".to_string()))?;
+    let (mut biff8, mut first_record, mut empty_sheet) = (true, true, Vec::new());
+    let counts = skipped.name_counts();
+    let mut taken: HashSet<String> = skipped.names.iter().cloned().collect();
+    let (mut position, mut index) = (0usize, 0usize);
     while let Some((kind, length)) = record_header(stream, position) {
         budget.step()?;
+        let data = position + 4..position + 4 + length;
+        if kind == BIFF_BOF && first_record {
+            biff8 = stream[data.clone()].get(..2) == Some(&BIFF8_VERSION.to_le_bytes());
+            empty_sheet = stream[position..data.end].to_vec();
+            if let Some(substream_type) = empty_sheet.get_mut(6..8) {
+                substream_type.copy_from_slice(&BIFF_WORKSHEET.to_le_bytes());
+            }
+        }
+        first_record = false;
         if kind == BIFF_EOF {
             break;
         }
         if kind == BIFF_BOUND_SHEET && length >= 4 {
-            let offset = u32::from_le_bytes(stream[position + 4..position + 8].try_into().unwrap());
-            worksheets.push(offset as usize);
-        }
-        position += 4 + length;
-    }
-    // Sheets may alias one substream; walk each distinct start once.
-    let starts: std::collections::BTreeSet<usize> = worksheets
-        .into_iter()
-        .enumerate()
-        .filter(|(index, _)| skipped.contains(*index))
-        .map(|(_, offset)| offset)
-        .collect();
-    for offset in starts {
-        let (mut position, mut seen_bof, mut nested) = (offset, false, 0usize);
-        while let Some((kind, length)) = record_header(stream, position) {
-            budget.step()?;
-            if nested > 0 {
-                match kind {
-                    BIFF_BOF => nested += 1,
-                    BIFF_EOF => nested -= 1,
-                    _ => {}
-                }
-            } else {
-                match kind {
-                    BIFF_BOF if seen_bof => nested = 1,
-                    BIFF_BOF => seen_bof = true,
-                    BIFF_EOF => break,
-                    _ => {}
+            if skipped.contains(index) {
+                stream[data.start..data.start + 4].copy_from_slice(&empty_sheet_start.to_le_bytes());
+                if let Some(name) = bound_sheet_name(&stream[data.clone()], biff8)
+                    && counts.get(name.text.as_str()).is_some_and(|count| *count > 1)
+                {
+                    let replacement = unused_name(&mut taken, &name)?;
+                    let at = data.start + name.byte_offset;
+                    stream[at..at + replacement.len()].copy_from_slice(&replacement);
                 }
             }
-            if !matches!(kind, BIFF_BOF | BIFF_EOF) {
-                stream[position..position + 2].copy_from_slice(&BIFF_IGNORED.to_le_bytes());
-            }
-            position += 4 + length;
+            index += 1;
         }
+        position = data.end;
     }
+    if empty_sheet.is_empty() {
+        return Err(XbergError::parsing("XLS workbook stream has no BOF record".to_string()));
+    }
+    stream.extend_from_slice(&empty_sheet);
+    stream.extend_from_slice(&[BIFF_EOF.to_le_bytes().as_slice(), &[0, 0]].concat());
     Ok(())
+}
+
+/// A BOUNDSHEET name: where its characters sit in the record data, their encoded length, and text.
+struct BoundSheetName {
+    byte_offset: usize,
+    char_count: usize,
+    wide: bool,
+    text: String,
+}
+
+fn bound_sheet_name(data: &[u8], biff8: bool) -> Option<BoundSheetName> {
+    let char_count = usize::from(*data.get(6)?);
+    let (byte_offset, wide) = if biff8 { (8, data.get(7)? & 1 == 1) } else { (7, false) };
+    let bytes = data.get(byte_offset..byte_offset + char_count * if wide { 2 } else { 1 })?;
+    let text = if wide {
+        String::from_utf16_lossy(
+            &bytes
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|pair| u16::from_le_bytes(*pair))
+                .collect::<Vec<_>>(),
+        )
+    } else {
+        bytes.iter().map(|byte| char::from(*byte)).collect()
+    };
+    Some(BoundSheetName {
+        byte_offset,
+        char_count,
+        wide,
+        text,
+    })
+}
+
+/// Encoded bytes of a name of the same length as `like` that no sheet carries, built from
+/// characters real sheet names do not use (control characters, or private-use code points).
+fn unused_name(taken: &mut HashSet<String>, like: &BoundSheetName) -> Result<Vec<u8>> {
+    const ALPHABET: u32 = 31;
+    for attempt in 0..u32::MAX {
+        let mut remaining = attempt;
+        let mut characters = Vec::with_capacity(like.char_count);
+        for _ in 0..like.char_count {
+            let digit = remaining % ALPHABET;
+            remaining /= ALPHABET;
+            characters.push(char::from_u32(if like.wide { 0xE000 + digit } else { 1 + digit }).unwrap_or('\u{1}'));
+        }
+        if remaining > 0 {
+            break;
+        }
+        let candidate: String = characters.iter().collect();
+        if taken.insert(candidate) {
+            return Ok(if like.wide {
+                characters.iter().flat_map(|c| (*c as u16).to_le_bytes()).collect()
+            } else {
+                characters.iter().map(|c| *c as u8).collect()
+            });
+        }
+    }
+    Err(XbergError::validation(
+        "Cannot give a skipped XLS sheet a unique name of the same length".to_string(),
+    ))
 }
 
 /// The record at `position`, or `None` at the end of the stream or at a truncated record.
@@ -365,32 +433,48 @@ mod tests {
 
     /// `extra_globals` are whole records placed in the globals substream after the BOUNDSHEETs.
     fn workbook_with_globals(sheets: &[Vec<u8>], extra_globals: &[u8]) -> Vec<u8> {
+        workbook_named(sheets, &[], extra_globals)
+    }
+
+    /// Sheets named `names` (default `00`, `01`, ...), each substream placed right after the globals.
+    fn workbook_named(sheets: &[Vec<u8>], names: &[&str], extra_globals: &[u8]) -> Vec<u8> {
+        let names: Vec<String> = (0..sheets.len())
+            .map(|index| {
+                names
+                    .get(index)
+                    .map_or_else(|| format!("{:02}", index % 100), |name| name.to_string())
+            })
+            .collect();
+        let mut next = globals(&vec![0; sheets.len()], &names, extra_globals).len();
         let mut starts = Vec::new();
-        let mut next = bof(0x0005).len() + sheets.len() * 14 + extra_globals.len() + 4;
         for sheet in sheets {
             starts.push(next);
             next += sheet.len();
         }
-        workbook_at(sheets, &starts, extra_globals)
+        [globals(&starts, &names, extra_globals), sheets.concat()].concat()
     }
 
-    /// One BOUNDSHEET per entry of `starts` (absolute offsets in the stream), then the substreams.
-    fn workbook_at(substreams: &[Vec<u8>], starts: &[usize], extra_globals: &[u8]) -> Vec<u8> {
+    fn globals(starts: &[usize], names: &[String], extra_globals: &[u8]) -> Vec<u8> {
         let mut globals = bof(0x0005);
         for (index, start) in starts.iter().enumerate() {
-            let mut data = vec![0; 10];
+            let name = names
+                .get(index)
+                .cloned()
+                .unwrap_or_else(|| format!("{:02}", index % 100));
+            let mut data = vec![0; 8];
             data[..4].copy_from_slice(&(*start as u32).to_le_bytes());
-            data[6] = 2;
-            data[8] = b'0' + ((index / 10) % 10) as u8;
-            data[9] = b'0' + (index % 10) as u8;
+            data[6] = name.len() as u8;
+            data.extend(name.bytes());
             globals.extend(record(BIFF_BOUND_SHEET, &data));
         }
         globals.extend_from_slice(extra_globals);
         globals.extend(record(BIFF_EOF, &[]));
-        for sheet in substreams {
-            globals.extend_from_slice(sheet);
-        }
         globals
+    }
+
+    /// One BOUNDSHEET per entry of `starts` (absolute offsets in the stream), then the substreams.
+    fn workbook_at(substreams: &[Vec<u8>], starts: &[usize], extra_globals: &[u8]) -> Vec<u8> {
+        [globals(starts, &[], extra_globals), substreams.concat()].concat()
     }
 
     fn compound(workbook: &[u8]) -> Vec<u8> {
@@ -409,7 +493,7 @@ mod tests {
         for count in [1, 10, 50] {
             let bytes = compound(&workbook(&sheet, count));
             let skipped = validate_xls(&mut Cursor::new(workbook(&sheet, count)), &limits).unwrap();
-            assert_eq!(skipped.indices, (0..count).collect::<Vec<_>>());
+            assert_eq!(skipped.sorted_indices(), (0..count).collect::<Vec<_>>());
             // ~keep Calamine's own CFB reader cannot open these generated containers at 50 sheets
             // ("Cannot find Workbook stream") even unmodified, also on origin/main, so only the smaller
             // ones are read end to end.
@@ -430,7 +514,7 @@ mod tests {
             ..Default::default()
         };
         let skipped = validate_xls(&mut Cursor::new(workbook(&sheet, 1)), &limits).unwrap();
-        assert_eq!(skipped.indices, [0]);
+        assert_eq!(skipped.sorted_indices(), [0]);
     }
 
     #[test]
@@ -498,7 +582,7 @@ mod tests {
             ..Default::default()
         };
         let skipped = validate_xls(&mut Cursor::new(workbook(&sheet, 2)), &limits).unwrap();
-        assert_eq!(skipped.indices, [1]);
+        assert_eq!(skipped.sorted_indices(), [1]);
     }
 
     #[test]
@@ -808,13 +892,17 @@ mod tests {
     #[test]
     fn should_skip_every_xls_sheet_that_shares_one_over_budget_substream_gh2820() {
         let sheet = [bof(0x0010), dimensions((0, 0), (5, 5)), record(BIFF_EOF, &[])].concat();
-        let stream = workbook_at(std::slice::from_ref(&sheet), &[bof(0x0005).len() + 3 * 14 + 4; 3], &[]);
+        let stream = workbook_at(
+            std::slice::from_ref(&sheet),
+            &[globals(&[0; 3], &[], &[]).len(); 3],
+            &[],
+        );
         let limits = SecurityLimits {
             max_table_cells: 10,
             ..Default::default()
         };
         let skipped = validate_xls(&mut Cursor::new(stream.clone()), &limits).unwrap();
-        assert_eq!(skipped.indices, [0, 1, 2]);
+        assert_eq!(skipped.sorted_indices(), [0, 1, 2]);
         let (result, warnings) =
             crate::extraction::excel::read_excel_bytes(&compound(&stream), ".xls", &limits).unwrap();
         assert_eq!(result.sheets.len(), 3);
@@ -830,7 +918,7 @@ mod tests {
             sheet.extend(record(0x0FFE, &[0; 4]));
         }
         sheet.extend(record(BIFF_EOF, &[]));
-        workbook_at(&[sheet], &vec![bof(0x0005).len() + count * 14 + 4; count], &[])
+        workbook_at(&[sheet], &vec![globals(&vec![0; count], &[], &[]).len(); count], &[])
     }
 
     #[test]
@@ -856,7 +944,7 @@ mod tests {
             ..Default::default()
         };
         let error = validate_xls(&mut Cursor::new(stream), &limits).unwrap_err();
-        assert!(error.to_string().contains("iterations"), "{error}");
+        assert!(error.to_string().contains("Too many iterations"), "{error}");
     }
 
     #[test]
@@ -868,15 +956,90 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            validate_xls(&mut Cursor::new(stream.clone()), &limits).unwrap().indices,
+            validate_xls(&mut Cursor::new(stream.clone()), &limits)
+                .unwrap()
+                .sorted_indices(),
             [0]
         );
         let mut forced = SkippedSheets::new(&limits);
-        forced.indices.push(0);
+        forced.indices.insert(0);
         assert!(
             drop_skipped_sheets(&compound(&stream), &forced, &limits)
                 .unwrap()
                 .is_some()
         );
+    }
+
+    fn six_cells() -> Vec<u8> {
+        let mut records = vec![bof(0x0010)];
+        for (row, col, value) in [
+            (0, 0, 1.0),
+            (0, 1, 2.0),
+            (0, 2, 3.0),
+            (1, 0, 4.0),
+            (1, 1, 5.0),
+            (1, 2, 6.0),
+        ] {
+            records.push(number(row, col, value));
+        }
+        records.push(record(BIFF_EOF, &[]));
+        records.concat()
+    }
+
+    #[test]
+    fn should_not_blank_a_substream_a_kept_xls_sheet_also_uses_gh2820() {
+        let sheet = six_cells();
+        let start = globals(&[0; 2], &[], &[]).len();
+        let bytes = compound(&workbook_at(&[sheet], &[start; 2], &[]));
+        let limits = SecurityLimits {
+            max_table_cells: 10,
+            ..Default::default()
+        };
+        let (result, warnings) = crate::extraction::excel::read_excel_bytes(&bytes, ".xls", &limits).unwrap();
+        assert_eq!(result.sheets.len(), 2);
+        assert_eq!(
+            result.sheets[0].table_cells.as_ref().unwrap(),
+            &[
+                vec!["1".to_string(), "2".to_string(), "3".to_string()],
+                vec!["4".to_string(), "5".to_string(), "6".to_string()]
+            ]
+        );
+        assert!(result.sheets[1].table_cells.is_none());
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].message.contains("Sheet '01' was skipped"), "{warnings:?}");
+    }
+
+    #[test]
+    fn should_keep_a_kept_xls_sheet_when_a_skipped_sheet_has_the_same_name_gh2820() {
+        let kept = [bof(0x0010), number(0, 0, 1.0), number(0, 1, 2.0), record(BIFF_EOF, &[])].concat();
+        let big = [bof(0x0010), dimensions((0, 0), (5, 5)), record(BIFF_EOF, &[])].concat();
+        let limits = SecurityLimits {
+            max_table_cells: 10,
+            ..Default::default()
+        };
+        for (label, sheets) in [
+            ("skipped last", [kept.clone(), big.clone()]),
+            ("skipped first", [big, kept]),
+        ] {
+            let bytes = compound(&workbook_named(&sheets, &["Same", "Same"], &[]));
+            let (result, warnings) = crate::extraction::excel::read_excel_bytes(&bytes, ".xls", &limits).unwrap();
+            assert_eq!(result.sheets.len(), 2, "{label}");
+            let kept_cells: Vec<_> = result
+                .sheets
+                .iter()
+                .filter_map(|sheet| sheet.table_cells.clone())
+                .collect();
+            assert_eq!(
+                kept_cells,
+                vec![vec![vec!["1".to_string(), "2".to_string()]]],
+                "{label}"
+            );
+            assert!(result.sheets.iter().all(|sheet| sheet.name == "Same"), "{label}");
+            assert_eq!(warnings.len(), 1, "{label}: {warnings:?}");
+            assert!(
+                warnings[0].message.contains("Sheet 'Same' was skipped"),
+                "{label}: {warnings:?}"
+            );
+        }
     }
 }
