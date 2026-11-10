@@ -182,6 +182,7 @@ fn reuse() -> Arc<ProbeReads> {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn final_read_takes_the_probe_read_once_for_a_contradicted_page() {
     let fixture = Fixture::new();
     let reuse = reuse();
@@ -198,6 +199,7 @@ async fn final_read_takes_the_probe_read_once_for_a_contradicted_page() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn finish_retains_only_contradicted_pages() {
     let fixture = Fixture::new();
     let reuse = reuse();
@@ -212,6 +214,7 @@ async fn finish_retains_only_contradicted_pages() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn same_pixels_on_another_page_are_not_reused() {
     let fixture = Fixture::new();
     let reuse = reuse();
@@ -225,6 +228,7 @@ async fn same_pixels_on_another_page_are_not_reused() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn zero_retention_limit_reads_again_and_returns_each_document_intact() {
     let fixture = Fixture::new();
     let reuse = Arc::new(ProbeReads::new(0));
@@ -249,6 +253,7 @@ async fn assert_miss(fixture: &Fixture, reuse: &Arc<ProbeReads>, call: Call<'_>,
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn identity_changes_miss_without_consuming_the_matching_read() {
     let fixture = Fixture::new();
     let reuse = reuse();
@@ -309,6 +314,7 @@ async fn identity_changes_miss_without_consuming_the_matching_read() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn cancelled_read_returns_cancelled_without_ocr_or_consuming_the_read() {
     let fixture = Fixture::new();
     let reuse = reuse();
@@ -332,6 +338,7 @@ async fn cancelled_read_returns_cancelled_without_ocr_or_consuming_the_read() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn plugin_reuse_bypass_does_not_consult_version() {
     let mut fixture = Fixture::new();
     fixture.backend = Arc::clone(&fixture.reader);
@@ -353,6 +360,7 @@ async fn plugin_reuse_bypass_does_not_consult_version() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn geometry_observer_bypasses_retained_reads() {
     use crate::ocr::preprocessing::geometry_evidence::observe;
     let fixture = Fixture::new();
@@ -372,6 +380,7 @@ async fn geometry_observer_bypasses_retained_reads() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn failed_backend_read_is_not_retained() {
     let fixture = Fixture::new();
     let reuse = reuse();
@@ -385,6 +394,7 @@ async fn failed_backend_read_is_not_retained() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn model_change_during_a_read_is_not_retained() {
     let fixture = Fixture::new();
     let reuse = reuse();
@@ -402,6 +412,7 @@ async fn model_change_during_a_read_is_not_retained() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn unkeyable_reads_are_never_retained() {
     let fixture = Fixture::new();
     let paddle = Fake::new(OcrBackendType::PaddleOCR);
@@ -550,6 +561,7 @@ async fn stock_read(
 
 #[cfg(feature = "bundle-tessdata-eng")]
 #[tokio::test]
+#[serial_test::serial]
 async fn stock_builtin_reuses_its_own_raw_read_once() {
     let fixture = stock_fixture();
     let reuse = reuse();
@@ -577,6 +589,7 @@ async fn stock_builtin_reuses_its_own_raw_read_once() {
 
 #[cfg(feature = "bundle-tessdata-eng")]
 #[tokio::test]
+#[serial_test::serial]
 async fn stock_builtin_does_not_reuse_a_different_decode_budget() {
     let fixture = stock_fixture();
     let reuse = reuse();
@@ -596,6 +609,7 @@ async fn stock_builtin_does_not_reuse_a_different_decode_budget() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn custom_backend_reads_changed_encoding_even_when_rgb_pixels_match() {
     use image::ImageEncoder;
     let mut fixture = Fixture::new();
@@ -638,25 +652,35 @@ async fn custom_backend_reads_changed_encoding_even_when_rgb_pixels_match() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn model_change_alone_requires_a_fresh_backend_read() {
     let fixture = Fixture::new();
     let reuse = reuse();
     fixture.read(&reuse, 1).await.unwrap();
     assert!(reuse.finish(&[1]));
     assert_eq!(fixture.fake.version(), "v0");
-    std::fs::write(fixture._models.path().join("eng.traineddata"), b"fake model b").unwrap();
+    let path = fixture._models.path().join("eng.traineddata");
+    let before = reuse.model_hashes.load(SeqCst);
+    std::fs::write(&path, b"fake model b").unwrap();
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(std::time::SystemTime::UNIX_EPOCH)
+        .unwrap();
     let read = fixture.read(&reuse, 1).await.unwrap();
     assert_eq!(fixture.fake.version(), "v0");
     assert_eq!(fixture.fake.calls(), 2, "only the model bytes changed");
     assert_eq!(
         reuse.model_hashes.load(SeqCst),
-        1,
-        "a changed file invalidates the snapshot"
+        before,
+        "a changed stamp invalidates the snapshot"
     );
     assert_eq!(read.content, format!("read 2 of {} bytes", fixture.pixels.len()));
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn changed_policy_preserves_fresh_source_words_and_table_payload() {
     let mut fixture = Fixture::new();
     fixture.fake.policy_sensitive.store(true, SeqCst);
@@ -695,6 +719,7 @@ async fn changed_policy_preserves_fresh_source_words_and_table_payload() {
 
 #[cfg(feature = "bundle-tessdata-eng")]
 #[tokio::test]
+#[serial_test::serial]
 async fn stock_builtin_does_not_reuse_a_different_encoded_working_size() {
     use image::ImageEncoder;
     let mut fixture = stock_fixture();
@@ -731,9 +756,12 @@ async fn stock_builtin_does_not_reuse_a_different_encoded_working_size() {
     );
 }
 
+#[cfg(unix)]
 #[tokio::test]
+#[serial_test::serial]
 async fn model_contents_are_hashed_once_for_two_probe_reads_and_two_hits() {
     let fixture = Fixture::new();
+    tokio::time::sleep(MODEL_TIMESTAMP_MARGIN + std::time::Duration::from_millis(100)).await;
     let reuse = reuse();
     for page in [1, 2] {
         fixture.read(&reuse, page).await.unwrap();
@@ -762,6 +790,7 @@ fn tesseract_typed_backend() -> Arc<dyn OcrBackend> {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn tesseract_typed_plugin_that_is_not_the_builtin_reads_every_time() {
     let mut fixture = Fixture::new();
     fixture.backend = Arc::clone(&fixture.reader);
@@ -962,4 +991,25 @@ fn insert_clones_the_read_before_waiting_for_the_state_lock() {
         observed,
         "the retained copy must be made before the State lock is needed, not while another holder blocks it"
     );
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn recent_model_with_an_unchanged_stamp_is_rechecked_before_a_hit() {
+    let fixture = Fixture::new();
+    let mut reuse = reuse();
+    let original = fixture.read(&reuse, 1).await.unwrap();
+    assert!(reuse.finish(&[1]));
+
+    std::fs::write(fixture._models.path().join("eng.traineddata"), b"fake model b").unwrap();
+    let mut snapshot = Arc::get_mut(&mut reuse).unwrap().models.take().unwrap().unwrap();
+    let files = ModelFiles::resolve(vec!["eng".into()], Some(fixture._models.path())).unwrap();
+    assert_ne!(model_identity(&files), Some(snapshot.digest));
+    // Simulate a filesystem reporting the same stamp for a same-length write in one clock tick. ~keep
+    snapshot.files = files;
+    assert!(reuse.models.set(Some(snapshot)).is_ok());
+
+    let final_read = fixture.read(&reuse, 1).await.unwrap();
+    assert_eq!(fixture.fake.calls(), 2, "the stale raw read must not be reused");
+    assert_ne!(final_read.content, original.content);
 }

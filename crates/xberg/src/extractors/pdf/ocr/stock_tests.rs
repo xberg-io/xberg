@@ -135,6 +135,7 @@ fn assert_source_prose(text: &str) {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn stock_raw_read_of_a_text_raster_matches_an_uncached_final_read() {
     let pixels = Arc::new(crate::pdf::render::render_pdf_page_to_png(ARABIC, 0, Some(150), None).unwrap());
     let stock = stock(
@@ -246,6 +247,7 @@ fn with_healthy_pages(source: &[u8]) -> Vec<u8> {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn stock_public_mixed_route_reads_the_wrong_script_page_once() {
     let pdf = with_healthy_pages(ARABIC);
     let stock = stock(ROUTE_CASE, serde_json::json!({"use_cache": false}));
@@ -293,6 +295,7 @@ async fn stock_public_mixed_route_reads_the_wrong_script_page_once() {
 const CLEANUP_CASE: usize = 0x2862_5103;
 
 #[tokio::test]
+#[serial_test::serial]
 async fn final_mixed_route_frees_a_retained_read_it_did_not_take() {
     let pdf = with_healthy_pages(ARABIC);
     let stock = stock(CLEANUP_CASE, serde_json::json!({"use_cache": false}));

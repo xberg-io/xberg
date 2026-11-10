@@ -3,6 +3,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use crate::core::config::OcrConfig;
 use crate::plugins::OcrBackend;
@@ -11,6 +12,8 @@ use crate::types::ExtractedDocument;
 const MAX_RETAINED_CHARGE: usize = 8 << 20;
 // Allow headroom for owned allocations that take less space in JSON. ~keep
 const SERIALIZED_BYTE_CHARGE: usize = 8;
+#[cfg(unix)]
+const MODEL_TIMESTAMP_MARGIN: std::time::Duration = std::time::Duration::from_secs(2);
 
 pub(crate) struct ProbeReads {
     state: parking_lot::Mutex<State>,
@@ -326,9 +329,36 @@ impl ModelFiles {
             })
             .collect()
     }
+
+    fn requires_rehash(&self, checked_at: SystemTime) -> bool {
+        // A recent same-length write can land in the same filesystem clock tick. ~keep
+        #[cfg(unix)]
+        {
+            let Some(cutoff) = checked_at.checked_sub(MODEL_TIMESTAMP_MARGIN) else {
+                return true;
+            };
+            self.stamps.iter().flatten().any(|stamp| {
+                let (.., changed_sec, changed_nsec) = stamp.identity;
+                let changed = u64::try_from(changed_sec)
+                    .ok()
+                    .zip(u32::try_from(changed_nsec).ok())
+                    .and_then(|(seconds, nanos)| {
+                        SystemTime::UNIX_EPOCH.checked_add(std::time::Duration::new(seconds, nanos))
+                    });
+                stamp.modified >= cutoff || changed.is_none_or(|changed| changed >= cutoff)
+            })
+        }
+        // Portable metadata has no change time to detect writes that restore mtime. ~keep
+        #[cfg(not(unix))]
+        {
+            let _ = checked_at;
+            true
+        }
+    }
 }
 
 struct ModelSnapshot {
+    checked_at: SystemTime,
     files: ModelFiles,
     digest: blake3::Hash,
 }
@@ -345,27 +375,46 @@ async fn revision(reuse: &Arc<ProbeReads>, identity: &ReadIdentity<'_>) -> Optio
         let Some(files) = ModelFiles::resolve(languages, directory.as_deref()) else {
             return Ok(None);
         };
-        // Initialize inside the blocking worker so cancelling its waiter cannot restart the hash. ~keep
-        let snapshot = reuse.models.get_or_init(|| {
-            #[cfg(test)]
-            reuse.model_hashes.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let digest = model_identity(&files)?;
-            if ModelFiles::stamps(&files.root, &files.languages)? != files.stamps {
-                return None;
-            }
-            Some(ModelSnapshot {
-                files: files.clone(),
-                digest,
-            })
-        });
-        Ok(snapshot
-            .as_ref()
-            .filter(|snapshot| snapshot.files == files)
-            .map(|snapshot| snapshot.digest))
+        Ok(model_revision(&reuse, &files))
     })
     .await
     .ok()??;
     Some((identity.backend.version(), model))
+}
+
+fn model_revision(reuse: &ProbeReads, files: &ModelFiles) -> Option<blake3::Hash> {
+    let mut initialized = false;
+    // Initialize inside the blocking worker so cancelling its waiter cannot restart the hash. ~keep
+    let snapshot = reuse
+        .models
+        .get_or_init(|| {
+            initialized = true;
+            let checked_at = SystemTime::now();
+            let digest = hash_stamped_models(reuse, files)?;
+            Some(ModelSnapshot {
+                checked_at,
+                files: files.clone(),
+                digest,
+            })
+        })
+        .as_ref()?;
+    if &snapshot.files != files {
+        return None;
+    }
+    if !initialized
+        && files.requires_rehash(snapshot.checked_at)
+        && hash_stamped_models(reuse, files)? != snapshot.digest
+    {
+        return None;
+    }
+    Some(snapshot.digest)
+}
+
+fn hash_stamped_models(_reuse: &ProbeReads, files: &ModelFiles) -> Option<blake3::Hash> {
+    #[cfg(test)]
+    _reuse.model_hashes.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let digest = model_identity(files)?;
+    (ModelFiles::stamps(&files.root, &files.languages)? == files.stamps).then_some(digest)
 }
 
 fn model_identity(files: &ModelFiles) -> Option<blake3::Hash> {

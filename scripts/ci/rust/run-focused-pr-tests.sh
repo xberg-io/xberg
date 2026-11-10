@@ -103,14 +103,15 @@ run_ink_probe_cases() {
     tesseract_typed_plugin_that_is_not_the_builtin_reads_every_time \
     nested_skipped_payload_over_the_limit_is_not_retained \
     retention_cap_does_not_follow_a_huge_requested_content_limit \
-    insert_clones_the_read_before_waiting_for_the_state_lock; do
+    insert_clones_the_read_before_waiting_for_the_state_lock \
+    recent_model_with_an_unchanged_stamp_is_rechecked_before_a_hit; do
     run_exact "extractors::pdf::ocr::read_reuse::tests::$test_name" --lib
   done
   run_exact 'extractors::pdf::ocr::read_reuse::stock_tests::stock_raw_read_of_a_text_raster_matches_an_uncached_final_read' --lib
   run_exact 'extractors::pdf::ocr::read_reuse::stock_tests::stock_public_mixed_route_reads_the_wrong_script_page_once' --lib
   run_exact 'extractors::pdf::ocr::read_reuse::stock_tests::final_mixed_route_frees_a_retained_read_it_did_not_take' --lib
-  if [ "$((passed - before))" -ne 37 ]; then
-    printf 'Expected 37 executed ink-probe reuse tests, observed %s\n' "$((passed - before))" >&2
+  if [ "$((passed - before))" -ne 38 ]; then
+    printf 'Expected 38 executed ink-probe reuse tests, observed %s\n' "$((passed - before))" >&2
     exit 1
   fi
 }
@@ -124,7 +125,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=47
+  expected=48
   run_pdf_cases
   run_ink_probe_cases
   ;;
