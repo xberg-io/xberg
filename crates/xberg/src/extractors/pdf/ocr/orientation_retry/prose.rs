@@ -232,6 +232,145 @@ mod tests {
         }
     }
 
+    fn rewrite(candidate: &mut ExtractedDocument, text: &str, geometry: impl Fn(&mut OcrBoundingGeometry)) {
+        let element = candidate
+            .ocr_elements
+            .as_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|element| element.text == text)
+            .unwrap();
+        geometry(&mut element.geometry);
+    }
+
+    fn tall_candidate() -> ExtractedDocument {
+        let mut candidate = candidate();
+        for key in [
+            crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY,
+            crate::ocr_metadata_keys::OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY,
+        ] {
+            candidate.metadata.additional.insert(key.into(), 400.into());
+        }
+        candidate
+    }
+
+    #[test]
+    fn a_table_repeated_in_the_markdown_is_not_a_unique_table() {
+        let mut read = tall_candidate();
+        let markdown = read.tables[0].markdown.clone();
+        read.content = format!("{markdown}\n\n{markdown}");
+        let echoed: Vec<_> = markdown.lines().map(str::to_owned).collect();
+        let mut count = 9;
+        let elements = read.ocr_elements.as_mut().unwrap();
+        elements.retain(|element| element.geometry.to_aabb().1 >= 30 && element.geometry.to_aabb().1 < 160);
+        for (row, line) in echoed.iter().enumerate() {
+            for (column, token) in line.split_whitespace().enumerate() {
+                elements.push(word(token, 20 + 15 * column as u32, 200 + 15 * row as u32));
+                count += 1;
+            }
+        }
+        read.metadata.additional.insert("word_count".into(), count.into());
+        assert_eq!(complete_text(&read, 0.5), None);
+    }
+
+    #[test]
+    fn a_read_with_no_text_outside_the_table_is_left_to_the_table_route() {
+        let mut read = candidate();
+        read.content = read.tables[0].markdown.clone();
+        read.ocr_elements
+            .as_mut()
+            .unwrap()
+            .retain(|element| !["Ledger", "Summary", "Total", "9"].contains(&element.text.as_str()));
+        read.metadata.additional.insert("word_count".into(), 9.into());
+        assert_eq!(complete_text(&read, 0.5), None);
+    }
+
+    #[test]
+    fn a_word_straddling_the_table_edge_refuses_the_read() {
+        let mut read = candidate();
+        read.ocr_elements.as_mut().unwrap().push(word("edge", 190, 155));
+        assert_eq!(complete_text(&read, 0.5), None);
+        let mut inside_x = candidate();
+        inside_x.ocr_elements.as_mut().unwrap().push(word("edge", 60, 155));
+        assert_eq!(complete_text(&inside_x, 0.5), None);
+    }
+
+    #[test]
+    fn text_outside_the_table_needs_iterator_evidence_from_the_tesseract_iterator() {
+        let mut read = candidate();
+        read.ocr_elements
+            .as_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|element| element.text == "Ledger")
+            .unwrap()
+            .backend_metadata
+            .insert("backend".into(), "hocr".into());
+        assert_eq!(complete_text(&read, 0.5), None);
+        let mut unnamed = candidate();
+        unnamed
+            .ocr_elements
+            .as_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|element| element.text == "Ledger")
+            .unwrap()
+            .backend_metadata
+            .clear();
+        assert_eq!(complete_text(&unnamed, 0.5), None);
+    }
+
+    #[test]
+    fn word_boxes_outside_the_image_or_without_area_refuse_the_read() {
+        type Edit = fn(&mut OcrBoundingGeometry);
+        let cases: [(&str, &str, Edit); 5] = [
+            ("zero width", "Ledger", |geometry| {
+                if let OcrBoundingGeometry::Rectangle { width, .. } = geometry {
+                    *width = 0;
+                }
+            }),
+            ("zero height", "Ledger", |geometry| {
+                if let OcrBoundingGeometry::Rectangle { height, .. } = geometry {
+                    *height = 0;
+                }
+            }),
+            ("past the right edge", "Summary", |geometry| {
+                if let OcrBoundingGeometry::Rectangle { left, .. } = geometry {
+                    *left = 195;
+                }
+            }),
+            ("past the bottom edge", "9", |geometry| {
+                if let OcrBoundingGeometry::Rectangle { top, .. } = geometry {
+                    *top = 195;
+                }
+            }),
+            ("coordinate overflow", "Ledger", |geometry| {
+                if let OcrBoundingGeometry::Rectangle { left, .. } = geometry {
+                    *left = u32::MAX - 5;
+                }
+            }),
+        ];
+        assert!(complete_text(&candidate(), 0.5).is_some());
+        for (name, text, edit) in cases {
+            let mut read = candidate();
+            rewrite(&mut read, text, edit);
+            assert_eq!(complete_text(&read, 0.5), None, "{name}");
+        }
+    }
+
+    #[test]
+    fn two_words_at_one_position_in_a_row_refuse_the_read() {
+        let mut read = candidate();
+        let elements = read.ocr_elements.as_mut().unwrap();
+        elements.retain(|element| !["Ledger", "Summary"].contains(&element.text.as_str()));
+        elements.extend([word("Ledger", 30, 10), word("Summary", 30, 10)]);
+        assert_eq!(complete_text(&read, 0.5), None);
+        let elements = read.ocr_elements.as_mut().unwrap();
+        elements.retain(|element| !["Ledger", "Summary"].contains(&element.text.as_str()));
+        elements.extend([word("Ledger", 30, 10), word("Summary", 60, 10)]);
+        assert!(complete_text(&read, 0.5).is_some());
+    }
+
     #[test]
     fn the_implicit_retry_accepts_text_around_a_table_only_with_a_consistent_word_count() {
         use crate::core::config::{ExtractionConfig, OcrQualityThresholds};

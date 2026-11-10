@@ -124,6 +124,44 @@ pub(in super::super) fn note_unrecovered(
 mod tests {
     use super::*;
 
+    const TALL_PAGE: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../fixtures/repros/tall-scan-strips/jpeg-tall.pdf"
+    ));
+
+    fn downscale_warning(raster_height: u32) -> Vec<String> {
+        let document = PdfDocument::from_bytes(TALL_PAGE.to_vec()).unwrap();
+        let (_, page_height) = super::super::super::rendering::page_dimensions_pt(&document, 0);
+        assert_eq!(page_height, 5760.0, "the fixture page is 12000 px tall at 150 DPI");
+        let mut original = ExtractedDocument::default();
+        note_unrecovered(
+            &mut original,
+            &OcrConfig::default(),
+            (&document, 0),
+            raster_height,
+            Unrecovered::TablesOrFormulas,
+        );
+        original
+            .processing_warnings
+            .into_iter()
+            .map(|warning| warning.message.into_owned())
+            .collect()
+    }
+
+    #[test]
+    fn a_render_at_98_percent_of_the_standard_density_is_not_reported_and_one_pixel_less_is() {
+        assert_eq!(downscale_warning(11_760), Vec::<String>::new(), "exactly 147 DPI");
+        assert_eq!(downscale_warning(12_000), Vec::<String>::new(), "150 DPI");
+        assert_eq!(
+            downscale_warning(11_759),
+            vec![
+                "Page 1 was read from a render downscaled to 147 DPI and its source-image strips were not used: \
+                 the downscaled read already contains tables or formulas. The text may be incomplete."
+                    .to_string()
+            ]
+        );
+    }
+
     #[test]
     fn recovery_runs_for_plain_and_markdown_and_names_what_blocks_it() {
         let ocr = OcrConfig {

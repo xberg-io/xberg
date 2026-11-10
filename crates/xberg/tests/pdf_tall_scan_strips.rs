@@ -548,3 +548,33 @@ fn a_configuration_that_blocks_strip_recovery_is_named_in_the_result() {
         .expect("the skipped recovery is reported");
     assert!(warning.message.contains("document structure"), "{}", warning.message);
 }
+
+fn not_used_warnings(document: &ExtractedDocument) -> Vec<&str> {
+    document
+        .processing_warnings
+        .iter()
+        .map(|warning| warning.message.as_ref())
+        .filter(|message| message.contains("source-image strips were not used"))
+        .collect()
+}
+
+/// The mixed route retries nothing for a scan its configuration keeps from strip recovery, and says why.
+#[test]
+fn the_mixed_route_names_the_configuration_that_blocked_strip_recovery() {
+    let blocked = extract(
+        MIXED,
+        &configured(serde_json::json!({"include_document_structure": true})),
+    );
+    assert_eq!(blocked.extraction_method, Some(ExtractionMethod::Mixed));
+    assert!(!strip_warning(&blocked));
+    assert_eq!(
+        not_used_warnings(&blocked),
+        vec![
+            "Page 2 was read from a render downscaled to 130 DPI and its source-image strips were not used: \
+             per-element results or document structure were requested. The text may be incomplete."
+        ]
+    );
+    let allowed = extract(MIXED, &extraction_config());
+    assert!(strip_warning(&allowed));
+    assert_eq!(not_used_warnings(&allowed), Vec::<&str>::new());
+}
