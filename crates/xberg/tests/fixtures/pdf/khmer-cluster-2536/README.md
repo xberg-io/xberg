@@ -33,3 +33,9 @@ The short fully mapped page is derived with `python3 -I derive_fully_mapped.py c
 python3 -I english_page.py english.pdf
 qpdf --empty --pages english.pdf 1 cluster-complete-mapped.pdf 1 english.pdf 1 khmer-then-scanned-english.pdf 2 -- khmer-among-english-pages.pdf
 ```
+
+`echoed-khmer.pdf` is a Khmer page whose font has no `/ToUnicode` map and whose content stream shows the code points of real Khmer text, so the decoder echoes each code and every span has fallback provenance (144 Khmer characters, valid clusters, no U+FFFD). The provenance check flags the page for OCR, which must win over the script rule that would keep it native:
+
+```sh
+python3 -I derive_echoed_khmer.py cluster-complete-mapped.pdf echoed-khmer.pdf
+```

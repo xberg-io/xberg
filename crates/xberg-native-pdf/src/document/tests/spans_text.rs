@@ -837,3 +837,55 @@ fn test_a_drop_cap_prepended_to_an_expanded_ligature_ends_the_relaxed_gap() {
     let next = make_test_span("ice", right + 2.6, 100.0, 15.0, 12.0); // 2.6 pt gap, 0.217 em
     assert!(PdfDocument::should_insert_space(&spans[0], &next), "{spans:?}");
 }
+
+/// A literal `fi`, `fl`, `ff`, `ffi`, `ffl` or `st` on the current side carries no ligature provenance, so
+/// it keeps the ordinary 0.15 em gap: "done" + "fi" 2.4pt (0.2 em) apart are two words (#2689).
+#[test]
+fn test_should_insert_space_keeps_literal_ligature_letters_apart_from_the_previous_word() {
+    for letters in ["fi", "fl", "ff", "ffi", "ffl", "st"] {
+        let word = make_test_span("done", 72.0, 700.0, 20.0, 12.0); // right edge 92
+        let literal = make_test_span(letters, 94.4, 700.0, 7.0, 12.0); // 2.4pt = 0.2 em
+        assert!(PdfDocument::should_insert_space(&word, &literal), "done {letters}");
+    }
+}
+
+/// Every ligature a glyph can expand to, `st` (what U+FB05 and U+FB06 decode to) included, joins the
+/// word on both sides once the decoder has marked the span, at the same 0.17 em gap (#2689).
+#[test]
+fn test_should_insert_space_joins_every_expanded_ligature_on_both_sides() {
+    for letters in ["ff", "fi", "fl", "ffi", "ffl", "st"] {
+        let before = make_test_span("di", 72.0, 700.0, 10.0, 12.0); // right edge 82
+        let mut ligature = make_test_span(letters, 84.0, 700.0, 7.0, 12.0); // 2pt gap, right edge 91
+        ligature.ligature_glyph = true;
+        let after = make_test_span("erent", 93.0, 700.0, 30.0, 12.0); // 2pt gap
+        assert!(
+            !PdfDocument::should_insert_space(&before, &ligature),
+            "{letters} before"
+        );
+        assert!(!PdfDocument::should_insert_space(&ligature, &after), "{letters} after");
+        ligature.ligature_glyph = false;
+        assert!(
+            PdfDocument::should_insert_space(&before, &ligature),
+            "literal {letters} before"
+        );
+        assert!(
+            PdfDocument::should_insert_space(&ligature, &after),
+            "literal {letters} after"
+        );
+    }
+}
+
+/// A ligature code point on the preceding side relaxes the gap to the next run, for the whole block
+/// U+FB00..U+FB06 and not only U+FB00: 2.6pt is 0.217 em.
+#[test]
+fn test_should_insert_space_relaxes_every_ligature_code_point_on_the_previous_side() {
+    for code in '\u{FB00}'..='\u{FB06}' {
+        let ligature = make_test_span(&code.to_string(), 72.0, 700.0, 7.0, 12.0); // right edge 79
+        let after = make_test_span("erent", 81.6, 700.0, 30.0, 12.0); // 2.6pt gap
+        assert!(
+            !PdfDocument::should_insert_space(&ligature, &after),
+            "U+{:04X}",
+            code as u32
+        );
+    }
+}
