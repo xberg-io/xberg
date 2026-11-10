@@ -861,14 +861,14 @@ fn row_lines_that_start_with_any_djot_list_marker_are_escaped() {
 }
 
 #[test]
-fn row_lines_escape_bare_markers_thematic_breaks_and_heading_runs_only() {
+fn row_lines_escape_punctuation_starts_but_not_hashtags_or_decimals() {
     let mut b = InternalDocumentBuilder::new("test");
     b.push_element(marked_row_lines_element(
-        "+ Pool .... 4\n* Park .... 7\n### Lot .... 2\n1.5 Units .... 3\n1.\n-\n---\n- - -\n***\n#hashtag .... 1\nPlan A. .... 2",
+        "+ Pool .... 4\n* Park .... 7\n### Lot .... 2\n1.5 Units .... 3\n1.\n-\n---\n- - -\n***\n#hashtag .... 1\nPlan A. .... 2\n--- Rule .... 6\n-5 .... 1\n::: note\n``` rust",
     ));
     assert_eq!(
         render_djot(&b.build()),
-        "\\+ Pool .... 4\n\n\\* Park .... 7\n\n\\### Lot .... 2\n\n1.5 Units .... 3\n\n1\\.\n\n\\-\n\n\\---\n\n\\- - -\n\n\\***\n\n#hashtag .... 1\n\nPlan A. .... 2\n"
+        "\\+ Pool .... 4\n\n\\* Park .... 7\n\n\\### Lot .... 2\n\n1.5 Units .... 3\n\n1\\.\n\n\\-\n\n\\---\n\n\\- - -\n\n\\***\n\n#hashtag .... 1\n\nPlan A. .... 2\n\n\\--- Rule .... 6\n\n\\-5 .... 1\n\n\\:\\:\\: note\n\n\\`\\`\\` rust\n"
     );
 }
 
@@ -876,11 +876,11 @@ fn row_lines_escape_bare_markers_thematic_breaks_and_heading_runs_only() {
 fn row_lines_of_ordinary_prose_are_not_escaped() {
     let mut b = InternalDocumentBuilder::new("test");
     b.push_element(marked_row_lines_element(
-        "I am .... 1\nA big .... 2\ni.e. .... 3\nI.e. .... 4\nDr. Smith .... 5\n--- Rule .... 6",
+        "I am .... 1\nA big .... 2\ni.e. .... 3\nI.e. .... 4\nDr. Smith .... 5",
     ));
     assert_eq!(
         render_djot(&b.build()),
-        "I am .... 1\n\nA big .... 2\n\ni.e. .... 3\n\nI.e. .... 4\n\nDr. Smith .... 5\n\n--- Rule .... 6\n"
+        "I am .... 1\n\nA big .... 2\n\ni.e. .... 3\n\nI.e. .... 4\n\nDr. Smith .... 5\n"
     );
 }
 
@@ -889,4 +889,105 @@ fn a_lowercase_roman_run_row_is_escaped_like_a_list_label() {
     let mut b = InternalDocumentBuilder::new("test");
     b.push_element(marked_row_lines_element("mix. .... 6"));
     assert_eq!(render_djot(&b.build()), "mix\\. .... 6\n");
+}
+
+/// Row texts that must each stay one paragraph with their text kept: every ASCII punctuation
+/// character as a whole row, before a word and before a space and a word, the block syntax the
+/// parser reads from a row start, and the label forms that must stay plain text.
+fn row_escape_matrix() -> Vec<String> {
+    let mut rows: Vec<String> = Vec::new();
+    for punctuation in (0u8..128).map(char::from).filter(char::is_ascii_punctuation) {
+        rows.push(punctuation.to_string());
+        rows.push(format!("{punctuation} word .... 1"));
+        rows.push(format!("{punctuation}word .... 1"));
+    }
+    rows.extend(
+        [
+            "::: note",
+            ":::",
+            "```",
+            "``` rust",
+            "````",
+            "~~~",
+            "~~~ x",
+            "[^1]: note .... 2",
+            "[^a]: note",
+            "[ref]: http://a.example",
+            "[ref]:",
+            "[a]: b",
+            "^ caption .... 3",
+            "{.a}",
+            "1. Intro .... 5",
+            "2) Scope .... 9",
+            "(1) Aim .... 4",
+            "(a) Scope .... 5",
+            "I. Introduction .... 3",
+            "iv. Index .... 9",
+            "a) Note .... 2",
+            "1.",
+            "- - -",
+            "--- Rule .... 6",
+            "### Lot .... 2",
+            "1.5 Units .... 3",
+            "#hashtag .... 1",
+            "I am .... 1",
+            "Plan A. .... 2",
+        ]
+        .map(String::from),
+    );
+    rows
+}
+
+/// Text of each paragraph that the Djot parser reads from `output`.
+fn djot_paragraph_texts(output: &str) -> Vec<String> {
+    let mut paragraphs: Vec<String> = Vec::new();
+    let mut open = false;
+    for event in jotdown::Parser::new(output) {
+        match event {
+            jotdown::Event::Start(jotdown::Container::Paragraph, _) => {
+                open = true;
+                paragraphs.push(String::new());
+            }
+            jotdown::Event::End(jotdown::Container::Paragraph) => open = false,
+            jotdown::Event::Str(value) if open => paragraphs.last_mut().unwrap().push_str(&value),
+            // The parser turns `...`, `--`, `---` and quotes into events of their own.
+            jotdown::Event::Ellipsis if open => paragraphs.last_mut().unwrap().push_str("..."),
+            jotdown::Event::EnDash if open => paragraphs.last_mut().unwrap().push_str("--"),
+            jotdown::Event::EmDash if open => paragraphs.last_mut().unwrap().push_str("---"),
+            jotdown::Event::LeftSingleQuote | jotdown::Event::RightSingleQuote if open => {
+                paragraphs.last_mut().unwrap().push('\'');
+            }
+            jotdown::Event::LeftDoubleQuote | jotdown::Event::RightDoubleQuote if open => {
+                paragraphs.last_mut().unwrap().push('"');
+            }
+            _ => {}
+        }
+    }
+    paragraphs
+}
+
+#[test]
+fn every_row_text_keeps_three_paragraphs_in_either_layout() {
+    let rows = row_escape_matrix();
+    assert!(rows.len() >= 95, "the matrix holds {} rows", rows.len());
+    let mut lost: Vec<String> = Vec::new();
+    for row in &rows {
+        for layout in [
+            ["Intro .... 5", row.as_str(), "Tail .... 9"],
+            [row.as_str(), "Intro .... 5", "Tail .... 9"],
+        ] {
+            let mut b = InternalDocumentBuilder::new("test");
+            b.push_element(marked_row_lines_element(&layout.join("\n")));
+            let output = render_djot(&b.build());
+            if djot_paragraph_texts(&output) != layout {
+                lost.push(format!("{layout:?} -> {output:?}"));
+            }
+        }
+    }
+    assert!(
+        lost.is_empty(),
+        "{} layouts changed the Djot structure:\n{}",
+        lost.len(),
+        lost.join("\n")
+    );
 }
