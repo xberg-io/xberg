@@ -660,8 +660,13 @@ pub(crate) const DEFAULT_DICT_INVALID_LINE_RATIO: f64 = 0.6;
 /// Whether `line`'s dictionary-checkable words are, on balance, not real words.
 ///
 /// Returns `false` (never noise) for a line with fewer than
-/// [`MIN_DICT_CANDIDATES_FOR_LINE`] checkable words — see that constant's doc comment.
+/// [`MIN_DICT_CANDIDATES_FOR_LINE`] checkable words — see that constant's doc comment —
+/// and for a line that holds a numeral: a dictionary cannot judge a number, and a number
+/// the OCR read is data, so dropping its line loses it from the content (#2851). ~keep
 fn is_dictionary_noise_line(line: &HocrLineInfo, filter: &DictionaryLineFilter<'_>) -> bool {
+    if line.words.iter().any(|word| word.text.chars().any(char::is_numeric)) {
+        return false;
+    }
     let mut candidates = 0usize;
     let mut invalid = 0usize;
     for word in &line.words {
@@ -2717,6 +2722,91 @@ mod tests {
             assert!(
                 doc.elements.is_empty(),
                 "a paragraph with no surviving lines must not appear at all"
+            );
+        }
+
+        /// A line whose letter words are all dictionary-invalid but which holds a numeral keeps
+        /// every word: a numeral is data, never noise (#2851). The letter-only twin of the same
+        /// line is still removed, so the numeral decides the outcome.
+        #[test]
+        fn a_noise_line_with_a_numeral_survives_and_its_letter_only_twin_does_not() {
+            let hocr = |third: &str| {
+                format!(
+                    r#"<div class="ocr_page" title="ppageno 0">
+                <p class="ocr_par">
+                    <span class="ocr_line">
+                        <span class="ocrx_word" title="bbox 10 10 100 40">Report</span>
+                    </span>
+                    <span class="ocr_line">
+                        <span class="ocrx_word" title="bbox 10 50 100 80">OWATS</span>
+                        <span class="ocrx_word" title="bbox 110 50 220 80">DNDEVET</span>
+                        <span class="ocrx_word" title="bbox 230 50 320 80">{third}</span>
+                    </span>
+                </p>
+            </div>"#
+                )
+            };
+            let invalid_unless_report = |word: &str| Some(word == "Report");
+            let filter = DictionaryLineFilter {
+                is_valid_word: &invalid_unless_report,
+                max_invalid_ratio: TEST_THRESHOLD,
+            };
+
+            let with_numeral =
+                parse_hocr_to_internal_document_with_page_offset_and_stats(&hocr("1,250.75"), Some(&filter), 1);
+            assert_eq!(with_numeral.dictionary_filtered_line_count, 0);
+            assert_eq!(with_numeral.document.elements[0].text, "Report\nOWATS DNDEVET 1,250.75");
+
+            let arabic_indic = parse_hocr_to_internal_document_with_page_offset_and_stats(
+                &hocr("\u{0661}\u{0662}\u{0663}"),
+                Some(&filter),
+                1,
+            );
+            assert_eq!(arabic_indic.dictionary_filtered_line_count, 0);
+            assert_eq!(
+                arabic_indic.document.elements[0].text,
+                "Report\nOWATS DNDEVET \u{0661}\u{0662}\u{0663}"
+            );
+
+            let letter_only =
+                parse_hocr_to_internal_document_with_page_offset_and_stats(&hocr("OPMENT"), Some(&filter), 1);
+            assert_eq!(letter_only.dictionary_filtered_line_count, 1);
+            assert_eq!(letter_only.document.elements[0].text, "Report");
+        }
+
+        /// The numeral decides on every line it sits on, whatever its place in the line: inside a
+        /// word, as the only word, and on a second line of the same paragraph (#2851).
+        #[test]
+        fn every_noise_line_that_holds_a_numeral_survives_wherever_the_numeral_sits() {
+            let word = |left: u32, text: &str| {
+                format!(
+                    r#"<span class="ocrx_word" title="bbox {left} 10 {} 40">{text}</span>"#,
+                    left + 90
+                )
+            };
+            let line = |words: &[&str]| {
+                let words: String = words.iter().zip(0u32..).map(|(w, i)| word(i * 100, w)).collect();
+                format!(r#"<span class="ocr_line">{words}</span>"#)
+            };
+            let hocr = format!(
+                r#"<div class="ocr_page" title="ppageno 0"><p class="ocr_par">{}{}{}{}</p></div>"#,
+                line(&["OWATS", "DNDEVET", "OPM3NT"]),
+                line(&["OWATS", "DNDEVET", "OPMENT"]),
+                line(&["7", "DNDEVET", "OPMENT"]),
+                line(&["OWATS", "DNDEVET", "OPMENT", "7"]),
+            );
+            let invalid = |_: &str| Some(false);
+            let filter = DictionaryLineFilter {
+                is_valid_word: &invalid,
+                max_invalid_ratio: TEST_THRESHOLD,
+            };
+
+            let result = parse_hocr_to_internal_document_with_page_offset_and_stats(&hocr, Some(&filter), 1);
+
+            assert_eq!(result.dictionary_filtered_line_count, 1);
+            assert_eq!(
+                result.document.elements[0].text,
+                "OWATS DNDEVET OPM3NT\n7 DNDEVET OPMENT\nOWATS DNDEVET OPMENT 7"
             );
         }
 

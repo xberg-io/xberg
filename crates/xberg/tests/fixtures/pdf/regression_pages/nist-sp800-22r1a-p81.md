@@ -18,11 +18,11 @@ Cambridge Philos. Soc.. 47, pp. 276-284.
 - D. E. Knuth (1998), The Art of Computer Programming. Vol. 2, 3rd ed. Reading: Addison- Wesley, Inc., pp. 61-80.
 - A. J. Menezes, P. C. van Oorschot, and S. A. Vanstone (1997), Handbook of Applied Cryptography. Boca Raton, FL: CRC Press, p. 181.
 
-# ( <sup>*m*</sup>) <sup>=</sup>( <sup>ε</sup>~*i*~,…
+# ( <sup>*m*</sup>) <sup>=</sup>( <sup>ε</sup>~*i*~
 
 **3.12 Approximate Entropy Test**
 
-,ε
+,…,ε
 
 ## )<sup>, set</sup>
 
