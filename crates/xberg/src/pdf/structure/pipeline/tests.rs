@@ -1226,6 +1226,25 @@ fn dedup_keeps_a_table_with_exactly_half_new_words_and_drops_one_below_half() {
     );
 }
 
+#[test]
+fn dedup_drops_a_table_with_four_tenths_new_words() {
+    let mut rows: Vec<&[&str]> = vec![&["a1"], &["a2"], &["a3"], &["a4"], &["a5"], &["a6"]];
+    rows.extend(std::iter::repeat_n(&[""][..], 20));
+    let grid = cell_table(1, (0.0, 0.0, 100.0, 100.0), &rows);
+    let four_new = cell_table(
+        1,
+        (0.0, 40.0, 100.0, 100.0),
+        &[&["a1", "a2", "a3", "a4", "a5", "a6", "b1", "b2", "b3", "b4"]],
+    );
+    let mut page = printed_cells(&[&grid]);
+    page[0].push(printed_at("b1 b2 b3 b4", 1.0, 41.0));
+    assert_eq!(
+        kept_after_dedup(vec![grid, four_new], &page),
+        1,
+        "4 of 10 words are new, below the half that keeps a table"
+    );
+}
+
 fn printed_at(text: &str, x: f32, y: f32) -> SegmentData {
     let mut segment = seg(text, x, 5.0);
     segment.y = y;
@@ -1311,6 +1330,31 @@ fn dedup_drops_a_table_whose_joined_word_is_whole_segments_the_page_prints_outsi
         kept_after_dedup(vec![four_row_grid(), joined], &page),
         1,
         "the page prints the joined word once, outside both boxes, so it is already printed"
+    );
+}
+
+#[test]
+fn dedup_joins_up_to_four_neighbouring_page_words_and_no_more() {
+    let page_with = |parts: &[&str]| {
+        let mut page = printed_cells(&[&four_row_grid()]);
+        for (index, part) in parts.iter().enumerate() {
+            page[0].push(printed_at(part, 500.0 + 20.0 * index as f32, 500.0));
+        }
+        page
+    };
+    let four = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["QRSTUVWX"]]);
+    let page = page_with(&["QR", "ST", "UV", "WX"]);
+    assert_eq!(
+        kept_after_dedup(vec![four_row_grid(), four], &page),
+        1,
+        "four neighbouring words spell the cell word"
+    );
+    let five = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["QRSTUVWXYZ"]]);
+    let page = page_with(&["QR", "ST", "UV", "WX", "YZ"]);
+    assert_eq!(
+        kept_after_dedup(vec![four_row_grid(), five], &page),
+        2,
+        "five neighbouring words are more than one cell joins"
     );
 }
 
@@ -1404,26 +1448,33 @@ fn dedup_without_page_text_keeps_row_disjoint_native_tables() {
 fn overlap_evidence_follows_the_live_tables_when_arbitration_removes_one() {
     let grid = four_row_grid();
     let partner = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
-    let page = printed_cells(&[&partner]);
     let tables = [grid, partner];
+    let removed_grid: ahash::AHashSet<usize> = [0].into_iter().collect();
+    let page = printed_cells(&[&tables[0]]);
     let mut evidence = OverlapEvidence::new(&page);
-    let mut removed = ahash::AHashSet::new();
+    let removed = ahash::AHashSet::new();
     assert_eq!(
         evidence.holds_unprinted_words(&tables, 1, &removed),
         Some(false),
         "the grid holds every word of the partner, and the page prints each of them once"
     );
-    removed.insert(0);
     assert_eq!(
-        evidence.holds_unprinted_words(&tables, 1, &removed),
-        Some(true),
-        "with the grid removed, the live set changes and the partner's words are the only copies"
+        evidence.holds_unprinted_words(&tables, 1, &removed_grid),
+        Some(false),
+        "with the grid removed, its text is left on the page and still prints the partner's words"
     );
-    removed.clear();
     assert_eq!(
         evidence.holds_unprinted_words(&tables, 1, &removed),
         Some(false),
         "a repeated question with the first live set gives the first answer"
+    );
+    let partner_page = printed_cells(&[&tables[1]]);
+    let mut evidence = OverlapEvidence::new(&partner_page);
+    assert_eq!(evidence.holds_unprinted_words(&tables, 1, &removed), Some(false));
+    assert_eq!(
+        evidence.holds_unprinted_words(&tables, 1, &removed_grid),
+        Some(true),
+        "with the grid removed, the partner's text is the only copy of its words"
     );
 }
 
