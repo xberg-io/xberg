@@ -3000,6 +3000,8 @@ impl FontInfo {
                         // Compound glyph name (e.g. f_f → "ff", f_f_i → "ffi")
                         // ~keep
                         if current_code <= 255 {
+                            // Decoding checks the single-character map first; a compound replaces that entry. ~keep
+                            encoding_map.remove(&(current_code as u8));
                             multi_char_map.insert(current_code as u8, unicode_string.clone());
                             tracing::debug!(
                                 "/Differences: code {} → /{} → {:?} (compound)",
