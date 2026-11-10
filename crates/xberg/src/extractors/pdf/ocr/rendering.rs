@@ -384,6 +384,8 @@ pub(super) struct XObjectRecoveryOutcome {
     pub(super) formulas: Vec<crate::types::Formula>,
     /// First preprocessing record in paint order, matching the per-page metadata surface.
     pub(super) image_preprocessing: Option<crate::types::ImagePreprocessingMetadata>,
+    /// Producing Tesseract mode, only when one image represents the recovered page.
+    pub(super) tesseract_psm: Option<i32>,
     /// Why each embedded image the backend rejected yielded nothing, in paint order.
     pub(super) failure_causes: Vec<String>,
     /// Whether any image was read at a resolution the page's placement proved rather than one
@@ -411,6 +413,7 @@ pub(super) async fn recover_image_xobjects(
         tables: Vec::new(),
         formulas: Vec::new(),
         image_preprocessing: None,
+        tesseract_psm: None,
         failure_causes: Vec::new(),
         used_proven_source_dpi: false,
         possibly_illegible: false,
@@ -506,6 +509,9 @@ pub(super) async fn collect_xobject_recovery_result(
             return Ok(());
         }
     };
+    if outcome.attempted == 1 {
+        outcome.tesseract_psm = super::pipeline::effective_tesseract_psm(&result.metadata, backend.name());
+    }
     append_xobject_text(&mut outcome.text, &result.content, budget)?;
     append_xobject_text(
         &mut outcome.text_outside_tables,
