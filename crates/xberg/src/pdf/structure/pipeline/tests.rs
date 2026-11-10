@@ -1627,18 +1627,27 @@ fn dedup_keeps_the_sole_copy_when_neighbouring_tables_print_digits_that_join_int
     let sole = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["12", "34"]]);
     let duplicate = cell_table(1, (0.0, 40.0, 100.0, 140.0), &[&["12", "34"]]);
     let single = |digit: &str, x: f64| cell_table(1, (x, 0.0, x + 100.0, 100.0), &[&[digit]]);
-    let diagonal = |first: &str, second: &str, x: f64| {
-        cell_table(1, (x, 0.0, x + 100.0, 100.0), &[&[first, ""], &["", second]])
-    };
+    let diagonal =
+        |first: &str, second: &str, x: f64| cell_table(1, (x, 0.0, x + 100.0, 100.0), &[&[first, ""], &["", second]]);
     let scenarios = [
         (
             "single cells, joined in page order",
-            vec![single("1", 300.0), single("2", 500.0), single("3", 700.0), single("4", 900.0)],
+            vec![
+                single("1", 300.0),
+                single("2", 500.0),
+                single("3", 700.0),
+                single("4", 900.0),
+            ],
             [("1", 305.0), ("2", 505.0), ("3", 705.0), ("4", 905.0)],
         ),
         (
             "single cells, page order reversed",
-            vec![single("1", 300.0), single("2", 500.0), single("3", 700.0), single("4", 900.0)],
+            vec![
+                single("1", 300.0),
+                single("2", 500.0),
+                single("3", 700.0),
+                single("4", 900.0),
+            ],
             [("4", 905.0), ("3", 705.0), ("2", 505.0), ("1", 305.0)],
         ),
         (
@@ -1666,7 +1675,10 @@ fn dedup_keeps_the_sole_copy_when_neighbouring_tables_print_digits_that_join_int
             let kept = kept_native_tables(tables, &[segments]);
             let copies = kept.iter().filter(|table| table.cells == sole.cells).count();
             if copies != 1 || kept.len() != 1 + neighbours.len() {
-                wrong.push(format!("{name}, duplicate first {duplicate_first}: {copies} copies, {} tables", kept.len()));
+                wrong.push(format!(
+                    "{name}, duplicate first {duplicate_first}: {copies} copies, {} tables",
+                    kept.len()
+                ));
             }
         }
     }
