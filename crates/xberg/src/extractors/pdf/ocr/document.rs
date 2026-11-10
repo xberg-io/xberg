@@ -888,9 +888,8 @@ pub(super) fn read_words_in_native(
     use super::super::unmapped_glyphs::is_lost_glyph;
 
     let spaced = |word: &String| !word.chars().any(is_unspaced_script);
-    let spelled: std::collections::HashSet<String> = whole_words(&native.replace(is_lost_glyph, ""))
-        .filter(spaced)
-        .collect();
+    let spelled: std::collections::HashSet<String> =
+        whole_words(&native.replace(is_lost_glyph, "")).filter(spaced).collect();
     let distinct: std::collections::HashSet<String> = whole_words(read)
         .filter(spaced)
         .filter(|word| word.chars().count() >= thresholds.min_meaningful_word_len)

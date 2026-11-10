@@ -2154,7 +2154,10 @@ fn the_symbol_marker_inside_a_native_word_is_removed_like_the_other_lost_glyph_m
     let read = "The committee met on Tuesday to review the budget and design";
     let words = read_words_in_native(&layer('\u{FFFD}'), read, &thresholds);
     assert!(words.0 > 0, "the control shares words: {words:?}");
-    assert_eq!(read_words_in_native(&layer(LOST_SYMBOL_GLYPH_MARKER), read, &thresholds), words);
+    assert_eq!(
+        read_words_in_native(&layer(LOST_SYMBOL_GLYPH_MARKER), read, &thresholds),
+        words
+    );
     let thai = |marker: char| format!("\u{0e2a}\u{0e27}{marker}\u{0e31}\u{0e2a}\u{0e14}\u{0e35}");
     let read = "\u{0e2a}\u{0e27}\u{0e31}\u{0e2a}\u{0e14}\u{0e35}";
     let bigrams = read_bigrams_in_native(&thai('\u{FFFD}'), read);
