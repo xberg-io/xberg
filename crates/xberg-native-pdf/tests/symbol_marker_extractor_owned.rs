@@ -137,11 +137,7 @@ fn a_utf8_literal_that_holds_fffe_is_not_the_marker() {
 #[test]
 fn a_utf8_literal_in_a_tj_array_that_holds_fffe_is_not_the_marker() {
     for preserve in [false, true] {
-        let bytes = page(
-            "Helvetica",
-            None,
-            &two_lines(b"[(\xef\xbf\xbe\xd0\x96) -10 (BC)] TJ"),
-        );
+        let bytes = page("Helvetica", None, &two_lines(b"[(\xef\xbf\xbe\xd0\x96) -10 (BC)] TJ"));
         let text = extract(bytes, preserve);
         assert!(!text.contains(MARKER), "preserve={preserve}: {text:?}");
         assert!(text.contains('\u{416}'), "preserve={preserve}: {text:?}");
