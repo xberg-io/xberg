@@ -5,20 +5,27 @@ equal to glyph IDs) under a Helvetica title. The letter "q" has no ToUnicode ent
   bengali: the ToUnicode map sends each Latin letter to a Bengali code point.
   genuine: the body is real Arabic text, its ToUnicode map is correct, and the letter qaf has no entry (control: a
            page whose ink really is Arabic).
+  hebrew:  the body is real Hebrew text with a correct map and the letter qof lost (control: a script no eng model reads).
+  bilingual: real Arabic paragraphs followed by one English paragraph, a correct map, qaf lost (control: a page whose
+           ink is mostly Arabic with English beside it).
 Needs fontTools. FONT defaults to crates/xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf.
 """
 
 import io
 import sys
-from pathlib import Path
 import zlib
+from pathlib import Path
 
 from fontTools.ttLib import TTFont
 
 variant, out = sys.argv[1:3]
 font = TTFont(sys.argv[3] if len(sys.argv) > 3 else "crates/xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf")
 best = font.getBestCmap()
-gid = {chr(c): font.getGlyphID(best[c]) for c in list(range(32, 127)) + list(range(0x0621, 0x064B)) if c in best}
+gid = {
+    chr(c): font.getGlyphID(best[c])
+    for c in list(range(32, 127)) + list(range(0x0621, 0x064B)) + list(range(0x05D0, 0x05EB))
+    if c in best
+}
 upem = font["head"].unitsPerEm
 widths = {g: font["hmtx"][font.getGlyphName(g)][0] * 1000 // upem for g in gid.values()}
 del font["cmap"]
@@ -36,16 +43,31 @@ ARABIC = (
     "اجتمعت اللجنة يوم الثلاثاء لمراجعة خطة المكتبة الجديدة وسأل الأعضاء عن الجدول الزمني وميزانية موقف السيارات "
     "وقال المهندس إن أعمال البناء ستبدأ بعد الشتاء وانتظر السكان للحديث عن تصميم قاعات القراءة والحديقة "
 ) * 4
-if variant == "genuine":
-    text = ARABIC
-lines, cur = [], ""
-for word in text.split():
-    if len(cur) + len(word) + 1 > 95:
-        lines.append(cur)
-        cur = word
-    else:
-        cur = (cur + " " + word).strip()
-lines.append(cur)
+HEBREW = (
+    "הוועדה התכנסה ביום שלישי כדי לבחון את התוכנית לספרייה החדשה והחברים שאלו על לוח הזמנים ועל התקציב של אזור החניה "
+    "האדריכל אמר שעבודות הבנייה יתחילו אחרי החורף "
+) * 4
+PARAGRAPHS = {
+    "genuine": [ARABIC],
+    "hebrew": [HEBREW],
+    "bilingual": [ARABIC, text.split(". ", maxsplit=1)[0] + ". " + ". ".join(text.split(". ")[1:4]) + "."],
+}.get(variant, [text])
+
+
+def wrap(paragraph: str) -> list[str]:
+    """Break a paragraph into lines of at most 95 characters."""
+    wrapped, cur = [], ""
+    for word in paragraph.split():
+        if len(cur) + len(word) + 1 > 95:
+            wrapped.append(cur)
+            cur = word
+        else:
+            cur = (cur + " " + word).strip()
+    wrapped.append(cur)
+    return wrapped
+
+
+lines = [line for paragraph in PARAGRAPHS for line in wrap(paragraph)]
 
 ops = ["BT /F1 14 Tf 50 750 Td (Library Planning Notes) Tj ET", "BT /F2 10 Tf 50 720 Td 13 TL"]
 ops += ["<" + "".join(f"{gid[c]:04X}" for c in line) + "> Tj T*" for line in lines]
@@ -62,7 +84,7 @@ def unicode_of(c: str) -> int:
     return ord(c)
 
 
-LOST = "\u0642" if variant == "genuine" else "q"
+LOST = {"genuine": "\u0642", "bilingual": "\u0642", "hebrew": "\u05e7"}.get(variant, "q")
 pairs = [(g, c) for c, g in sorted(gid.items(), key=lambda x: x[1]) if c != LOST]
 cmap = [
     "/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /U def",
