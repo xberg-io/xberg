@@ -5,7 +5,7 @@
     not(target_arch = "wasm32")
 ))]
 
-//! A line the dictionary filter judges noise and keeps for its numeral still counts as judged noise (#2851).
+//! A line the dictionary filter judges noise and keeps for its numeral still counts as judged noise.
 //!
 //! `noise.png` is six lines of black Arial 44 on a white canvas: four sentences, one line of random
 //! letters that ends in a year, and one line of random letters alone.

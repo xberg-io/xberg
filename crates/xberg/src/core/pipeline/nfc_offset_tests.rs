@@ -1,4 +1,4 @@
-//! Byte offsets that index `content` follow it through Unicode normalization (#2851).
+//! Byte offsets that index `content` follow it through Unicode normalization.
 
 use super::*;
 use crate::types::entity::{Entity, EntityCategory};
@@ -55,32 +55,36 @@ fn nfc_moves_entity_spans_with_the_text_they_name() {
 }
 
 #[test]
-fn nfc_leaves_an_entity_span_that_was_not_on_a_character_boundary_as_it_was() {
+fn nfc_leaves_an_entity_span_that_was_not_on_a_character_boundary_as_it_was_and_moves_the_others() {
     let mut result = ExtractedDocument {
         content: DECOMPOSED.to_string(),
-        entities: Some(vec![location(DECOMPOSED, "Paris")]),
+        entities: Some(vec![location(DECOMPOSED, "Lyon"), location(DECOMPOSED, "Paris")]),
         ..Default::default()
     };
     let inside_the_accent = DECOMPOSED.find('\u{0301}').unwrap() as u32 + 1;
     let entities = result.entities.as_mut().unwrap();
     entities[0].start = inside_the_accent;
-    let before = entities.clone();
+    let untouched = entities[0].clone();
 
     normalize_nfc(&mut result);
 
     assert_eq!(result.content, COMPOSED);
-    assert_eq!(result.entities.unwrap(), before);
+    let entities = result.entities.unwrap();
+    assert_eq!(entities[0], untouched);
+    assert_eq!(COMPOSED.get(entities[1].start as usize..entities[1].end as usize), Some("Paris"));
 }
 
 /// A span that cuts a base letter from the mark that joins it lands inside the composed letter once
 /// they compose. It grows to hold the composed letter at either end, and every span after it still
 /// finds its text, whether the letter comes once or twice and whatever the order of the spans. Each
-/// case joins for another reason: an accent, Hangul jamo cut after the first and after the second
-/// one, and two Oriya vowel signs.
+/// case joins for another reason: an accent, two marks that normalization puts in the other order
+/// ("a", the accent, then the dot below, cut before the dot), Hangul jamo cut after the first and
+/// after the second one, and two Oriya vowel signs.
 #[test]
 fn nfc_grows_an_entity_span_that_splits_a_letter_from_the_mark_that_joins_it() {
     for (decomposed, cut_after, composed) in [
         ("e\u{0301}", 1, "\u{00e9}"),
+        ("a\u{0301}\u{0323}", 2, "\u{1ea1}\u{0301}"),
         ("\u{1100}\u{1161}", 1, "\u{ac00}"),
         ("\u{1100}\u{1161}\u{11a8}", 2, "\u{ac01}"),
         ("\u{0b47}\u{0b3e}", 1, "\u{0b4b}"),
@@ -126,7 +130,8 @@ fn nfc_grows_an_entity_span_that_splits_a_letter_from_the_mark_that_joins_it() {
     }
 }
 
-/// A Middle-stage processor that tags "Paris" in the text it is given, as the NER step does.
+/// A Middle-stage processor that tags "Paris" and "Cafe" in the text it is given, as the NER step
+/// does. The second mention ends before the accent that follows it.
 #[cfg(feature = "tokio-runtime")]
 struct ParisTagger;
 
@@ -150,7 +155,7 @@ impl crate::plugins::Plugin for ParisTagger {
 #[async_trait::async_trait]
 impl crate::plugins::PostProcessor for ParisTagger {
     async fn process(&self, result: &mut ExtractedDocument, _config: &ExtractionConfig) -> Result<()> {
-        result.entities = Some(vec![location(&result.content, "Paris")]);
+        result.entities = Some(vec![location(&result.content, "Paris"), location(&result.content, "Cafe")]);
         Ok(())
     }
     fn processing_stage(&self) -> crate::plugins::ProcessingStage {
@@ -175,7 +180,7 @@ async fn entity_spans_of_a_post_processor_index_the_content_after_nfc() {
     clear_processor_cache().unwrap();
     let processed = processed.unwrap();
     assert_eq!(processed.content, COMPOSED);
-    assert_eq!(mentions(&processed), [Some("Paris")]);
+    assert_eq!(mentions(&processed), [Some("Paris"), Some("Caf\u{00e9}")]);
 }
 
 fn result_with_one_range(content: &str, byte_start: usize, byte_end: usize) -> ExtractedDocument {

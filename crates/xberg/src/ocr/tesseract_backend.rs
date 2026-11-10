@@ -2207,7 +2207,7 @@ mod tests {
     }
 
     /// Lines kept for a numeral are still judged noise, so they get their own warning and are not
-    /// reported as removed (#2851).
+    /// reported as removed.
     #[test]
     fn warnings_from_ocr_metadata_reports_kept_numeral_lines_apart_from_removed_ones() {
         let metadata = std::collections::HashMap::from([

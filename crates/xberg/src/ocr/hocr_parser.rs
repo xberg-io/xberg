@@ -101,7 +101,7 @@ pub(crate) struct HocrParseResult {
     pub document: InternalDocument,
     /// Lines the dictionary filter judged noise, including the ones kept for their numerals.
     pub dictionary_filtered_line_count: usize,
-    /// The judged lines kept because they hold a numeral (#2851); the rest were removed.
+    /// The judged lines kept because they hold a numeral; the rest were removed.
     pub dictionary_kept_numeral_line_count: usize,
     pub retained_word_confidence_stats: RetainedWordConfidenceStats,
 }
@@ -691,7 +691,7 @@ fn is_dictionary_noise_line(line: &HocrLineInfo, filter: &DictionaryLineFilter<'
 }
 
 /// Whether any word on `line` holds a numeral: a dictionary cannot judge a number, and a number
-/// the OCR read is data, so dropping its line loses it from the content (#2851). ~keep
+/// the OCR read is data, so dropping its line loses it from the content. ~keep
 fn holds_numeral(line: &HocrLineInfo) -> bool {
     line.words.iter().any(|word| word.text.chars().any(char::is_numeric))
 }
@@ -2789,6 +2789,37 @@ mod tests {
             assert_eq!(letter_only.dictionary_filtered_line_count, 1);
             assert_eq!(letter_only.dictionary_kept_numeral_line_count, 0);
             assert_eq!(letter_only.document.elements[0].text, "Report");
+        }
+
+        /// Real numbers never make a line noise on their own: the filter counts only words of three
+        /// letters or more, so a price or a code that holds a numeral flags nothing and keeps nothing.
+        #[test]
+        fn a_line_of_short_words_and_numerals_is_not_noise() {
+            let hocr = |line: &str| {
+                let words: String = line
+                    .split(' ')
+                    .enumerate()
+                    .map(|(i, word)| {
+                        let left = i * 100;
+                        format!(r#"<span class="ocrx_word" title="bbox {left} 10 {} 40">{word}</span>"#, left + 90)
+                    })
+                    .collect();
+                format!(
+                    r#"<div class="ocr_page" title="ppageno 0"><p class="ocr_par"><span class="ocr_line">{words}</span></p></div>"#
+                )
+            };
+            let nothing_is_valid = |_: &str| Some(false);
+            let filter = DictionaryLineFilter {
+                is_valid_word: &nothing_is_valid,
+                max_invalid_ratio: TEST_THRESHOLD,
+            };
+
+            for line in ["Total $5", "Item A1 2026"] {
+                let result = parse_hocr_to_internal_document_with_page_offset_and_stats(&hocr(line), Some(&filter), 1);
+                assert_eq!(result.dictionary_filtered_line_count, 0, "{line}");
+                assert_eq!(result.dictionary_kept_numeral_line_count, 0, "{line}");
+                assert_eq!(result.document.elements[0].text, line);
+            }
         }
 
         /// The numeral decides on every line it sits on, whatever its place in the line: inside a
