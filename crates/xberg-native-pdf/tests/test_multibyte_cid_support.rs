@@ -684,7 +684,7 @@ endcodespacerange
 5 beginbfchar
 <8000> <F900>
 <9000> <FA00>
-<A000> <FB00>
+<A000> <FB1D>
 <FFFD> <FFFD>
 <FFFE> <FFFE>
 endbfchar
@@ -751,7 +751,7 @@ end
     );
     assert_eq!(
         font.char_to_unicode(0xA000),
-        Some("\u{FB00}".to_string()),
+        Some("\u{FB1D}".to_string()),
         "Large CID 0xA000"
     );
 

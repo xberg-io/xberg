@@ -7,26 +7,30 @@ use xberg::types::ExtractionMethod;
 use xberg::{ExtractedDocument, ExtractionConfig, OutputFormat, PageConfig};
 
 const SOURCE: &[u8] = include_bytes!("fixtures/pdf/ligature-source-space-2322/dejavu-source-space.pdf");
-const LITERAL: &str = "diﬀerent deﬁnes ﬂow; staﬀ only, waﬄe ﬂoor";
+/// The fixture's ToUnicode map gives ligature code points (`diﬀerent deﬁnes ﬂow; staﬀ only, waﬄe ﬂoor`), and
+/// native text returns their letters in every output.
 const COMPATIBILITY_TEXT: &str = "different defines flow; staff only, waffle floor";
 
 #[tokio::test]
-async fn native_default_text_keeps_the_words_and_the_source_space() {
+async fn native_default_text_expands_author_tounicode_ligatures_and_keeps_the_source_space() {
     assert_eq!(
         hex::encode(Sha256::digest(SOURCE)),
         "d49ee26b226d6196de84bb12b5c15751c77196ba9d1f502252bad099e48e8413"
     );
     let native = xberg_native_pdf::PdfDocument::from_bytes(SOURCE.to_vec()).unwrap();
     assert_eq!(native.page_count().unwrap(), 1);
-    assert_words_and_source_space(native.extract_text(0).unwrap().trim_end());
+    assert_eq!(native.extract_text(0).unwrap().trim_end(), COMPATIBILITY_TEXT);
     let default = extract(&ExtractionConfig::default()).await;
-    assert_words_and_source_space(default.content.trim_end());
+    assert_eq!(default.content.trim_end(), COMPATIBILITY_TEXT);
 }
 
 #[tokio::test]
 async fn rich_plain_expands_ligatures_and_preserves_the_source_space() {
     let document = extract(&rich_config(OutputFormat::Plain)).await;
-    assert_words_and_source_space(document.pages.as_ref().unwrap()[0].content.trim_end());
+    assert_eq!(
+        document.pages.as_ref().unwrap()[0].content.trim_end(),
+        COMPATIBILITY_TEXT
+    );
     assert_eq!(document.content.trim_end(), COMPATIBILITY_TEXT);
     assert_paragraph(&document);
 }
@@ -40,15 +44,6 @@ async fn rich_markdown_expands_ligatures_and_preserves_the_source_space() {
         COMPATIBILITY_TEXT
     );
     assert_paragraph(&document);
-}
-
-/// The native text is either the author's ligature code points or their letters, never a mix of the
-/// two, and the source space after "staff" stays in both forms.
-fn assert_words_and_source_space(actual: &str) {
-    assert!(
-        actual == LITERAL || actual == COMPATIBILITY_TEXT,
-        "expected the ligature code points or their letters with the source space, got: {actual:?}"
-    );
 }
 
 async fn extract(config: &ExtractionConfig) -> ExtractedDocument {

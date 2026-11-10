@@ -934,9 +934,7 @@ fn corrected_space_gap(
 ) -> f32 {
     // Two rounded edge coordinates can differ by a couple of ULPs even when
     // source glyph advances touch. Do not amplify that uncertainty into a word gap. ~keep
-    const EDGE_ROUNDING_ULPS: f32 = 2.0;
-    let coordinate = position_magnitude.abs();
-    let rounding_error = EDGE_ROUNDING_ULPS * (coordinate.next_up() - coordinate);
+    let rounding_error = edge_rounding_error(position_magnitude);
     if !reliable_widths && raw_gap < -rounding_error && bbox_width > 0.0 && !text_empty {
         raw_gap + bbox_width * (1.0 - 1.0 / 1.22)
     } else {
@@ -1845,11 +1843,74 @@ struct TjBuffer {
     /// producer would, so the geometric visual/logical detector's ascending-
     /// x signal is uninformative here — see `bidi::apply_rtl_verdict`.
     render_mode: u8,
+    /// How far, in text-space units, the pen sits left of the right edge of the last glyph
+    /// because a `TJ` offset pulled it back. A glyph that starts here has no room of its own.
+    pullback: f32,
+    /// Whether the last glyph stood for more than one letter (a ligature). Only such a glyph has a
+    /// box that a space can start inside of.
+    ligature_tail: bool,
+    /// Whether this run starts where the previous `TJ` array left the pen (see [`PenSeam`]). The span
+    /// it flushes to is recorded in `TextExtractor::pen_continuations`.
+    pen_continuation: bool,
     /// The length of `unicode` after its first decode when that decode was one character code that
     /// the font expanded to a ligature's letters, else 0. The buffer is a lone ligature while its
     /// length still equals this: any later text ends the mark. Read by `is_lone_ligature`.
     ligature_len: usize,
 }
+
+/// The seam between a `TJ` array and the text after it, kept for one operator only (GH#2664).
+///
+/// A producer that marks its word spaces with `TJ` offsets writes a long line as several arrays, each
+/// placed by a `Td` with no line move back to the pen the previous array left. The merge would read
+/// that seam through the fallback-width correction and tear the word. The `TJ` arm sets
+/// `TjArrayEnd` when the array flushed a word boundary and the font gives its glyph widths; the
+/// `Td` or `TD` arm with `ty == 0` turns it into `ContinuesPen`; the next `TJ` arm consumes it. Any
+/// other operator in between drops it, so a `BT`, a `Tj` or a line move ends the chain. ~keep
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PenSeam {
+    TjArrayEnd,
+    ContinuesPen,
+}
+
+/// The identity of a span before the merge: its sequence number and the bits of its x and y coordinates.
+///
+/// Sequence numbers are unique within one extraction, but a cached form XObject replays spans with
+/// the sequence numbers of an earlier extraction, so the key holds the position too. The script snap
+/// moves the mark of a span it rewrites to the span's snapped y. ~keep
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct SpanKey {
+    sequence: usize,
+    x_bits: u32,
+    y_bits: u32,
+}
+
+impl SpanKey {
+    fn at(sequence: usize, x: f32, y: f32) -> Self {
+        SpanKey {
+            sequence,
+            x_bits: x.to_bits(),
+            y_bits: y.to_bits(),
+        }
+    }
+
+    fn of(span: &TextSpan) -> Self {
+        Self::at(span.sequence, span.bbox.x, span.bbox.y)
+    }
+}
+
+/// How far two rounded edge coordinates of size `coordinate` can differ when the source glyph
+/// advances touch: two ULPs at that magnitude. Gaps inside this error are no gap at all. ~keep
+fn edge_rounding_error(coordinate: f32) -> f32 {
+    const EDGE_ROUNDING_ULPS: f32 = 2.0;
+    let coordinate = coordinate.abs();
+    EDGE_ROUNDING_ULPS * (coordinate.next_up() - coordinate)
+}
+
+/// The share of a space glyph that must lie inside the previous glyph's box before the space
+/// takes no room. The value is chosen, not measured: a producer that joins a ligature pulls the pen
+/// back by the whole space, and a pull-back of half the space leaves a word gap. Tests pin 60% (kept)
+/// and 96% (dropped). ~keep
+const ROOMLESS_SPACE_OVERLAP: f32 = 0.9;
 
 /// Snap a run's display rotation (from the composed `CTM × T_m` rotation block,
 /// `θ = atan2(b, a)`) to the nearest of `0 / 90 / 180 / -90` when it is within
@@ -1975,7 +2036,52 @@ impl TjBuffer {
                 0.0
             },
             render_mode: state.render_mode,
+            pullback: 0.0,
+            ligature_tail: false,
+            pen_continuation: false,
             ligature_len: 0,
+        }
+    }
+
+    /// Decide whether a space glyph of advance `width` takes no room on the line: it follows a
+    /// ligature and the pen was pulled back over at least `ROOMLESS_SPACE_OVERLAP` of the space.
+    /// If so, the space stays out of the text and its advance goes to the previous glyph, so the
+    /// gap test between the real neighbours decides. A smaller pull-back keeps the space, because
+    /// part of the space then stands between the two words. A glyph of one letter keeps its space
+    /// too, because a producer may pull the pen back there to place a word gap. ~keep
+    fn absorb_roomless_space(&mut self, width: f32) -> bool {
+        if !self.ligature_tail || self.pullback < width * ROOMLESS_SPACE_OVERLAP {
+            return false;
+        }
+        let Some(last) = self.char_widths.last_mut() else {
+            return false;
+        };
+        *last += width;
+        self.pullback = (self.pullback - width).max(0.0);
+        true
+    }
+
+    /// Whether text shown under `state` continues this run: every setting the buffer captured at its
+    /// start is unchanged, so the run can go on without a span of its own. The font and the writing mode
+    /// need no comparison: `Tf` and `Q` flush the run before they change either. ~keep
+    fn continues_under(&self, state: &crate::content::graphics_state::GraphicsState) -> bool {
+        let text_rise = if state.font_size > 0.0 {
+            state.text_rise / state.font_size
+        } else {
+            0.0
+        };
+        self.fill_color_rgb == state.fill_color_rgb
+            && self.char_space == state.char_space
+            && self.word_space == state.word_space
+            && self.horizontal_scaling == state.horizontal_scaling
+            && self.render_mode == state.render_mode
+            && self.text_rise == text_rise
+    }
+
+    /// Push one width for each output letter of a code, so `char_widths` and the text stay equal in length.
+    fn push_letter_widths(&mut self, letter_count: usize, width: f32) {
+        for _ in 0..letter_count {
+            self.char_widths.push(width / letter_count as f32);
         }
     }
 
@@ -2210,6 +2316,8 @@ pub struct TextExtractor<'doc> {
     pub(crate) preserve_script_baselines: bool,
     /// Extracted characters (for backward compatibility)
     chars: Vec<TextChar>,
+    /// Whether the last glyph that was not a space stood for more than one letter (a ligature).
+    after_ligature: bool,
     /// Resources dictionary (for accessing XObjects and fonts)
     resources: Option<Object>,
     /// Reference to the document (for loading XObjects)
@@ -2338,6 +2446,11 @@ pub struct TextExtractor<'doc> {
     /// Used as a tie-breaker when sorting spans by Y-coordinate. Ensures
     /// that spans with identical Y-coordinates maintain extraction order.
     span_sequence_counter: usize,
+    /// The seam the last operator left, if it was a `TJ` array or a `Td` right after one.
+    pen_seam: Option<PenSeam>,
+    /// The spans that start where the previous `TJ` array left the pen. The merge reads their gap
+    /// raw, without the fallback-width correction. Reset with `span_sequence_counter`. ~keep
+    pen_continuations: HashSet<SpanKey>,
     /// History of TJ array offsets for statistical analysis
     ///
     /// Tracks TJ offset values to detect justified vs. normal text through
@@ -2363,6 +2476,15 @@ pub struct TextExtractor<'doc> {
     /// Updated as each character in a TJ array is processed. Used to calculate
     /// x_position for CharacterInfo entries (not used after character collection).
     current_x_position: f32,
+    /// The text matrix that the last `BT`, `Tm`, `Td`, `TD` or `T*` set. While the current text matrix
+    /// still equals it, no glyph and no offset has moved the pen since that operator. ~keep
+    positioned_pen: Option<Matrix>,
+    /// The text matrix where the pen stood when a positioning operator moved it away from a place that a
+    /// glyph or an offset reached: the end of what the content stream drew last. ~keep
+    drawn_end: Option<Matrix>,
+    /// The word-boundary threshold that classified the lead of the `TJ` array in progress, so that the run
+    /// truncation and the offset handling read the same value. ~keep
+    lead_threshold: Option<f32>,
     /// Word boundary detection mode
     ///
     /// Controls whether WordBoundaryDetector is used as:

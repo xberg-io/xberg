@@ -164,6 +164,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Tell the default VLM OCR prompt to transcribe repeated text in order.** (#2132)
   The prompt now forbids merging or skipping a paragraph, sentence or line because it repeats earlier text. On captured `gemini-2.5-flash` replays of three eight-group images, the previous prompt kept all eight groups in 2 of 8 responses and an instruction with the same intent in 4 of 9 (this exact wording was not replayed); the provider can still omit repeats. A custom `vlm_prompt` is unchanged.
+- **(pdf): Native PDF text returns the letters of every ligature.** (GH#2322)
+  A glyph mapped to a ligature code point (U+FB00 to U+FB06) now yields its letters in every output format, so `office` matches a search. The default output of a native PDF changes: text that held `ﬁ` now holds `fi`. Neither the native `extract_text` nor the default output carries U+FB00 to U+FB06 any more, so a caller that matched the ligature code points must match the letters. The `expand_ligatures` option of the native conversion options has no effect and is deprecated; it will be removed in the next minor release.
 
 - **(pdf): Reduce allocations in native text extraction.** (#2429)
   Reuse ordered spans directly when the text pass does not need character records.
@@ -305,6 +307,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep a word whole when a producer sets the text matrix back over it before a large TJ offset.** (GH#2322)
+  Some producers set the text matrix to the start of a run they already drew and reach the next glyph with a large leading offset in a TJ array. That offset no longer adds a space where the matrix points, so words such as `benefits` no longer come out as `benefi ts`. When the offset reaches past the end of that run by a word gap, the space goes at the end of the run. Otherwise the gap between the real letters on each side decides the space. A lead that follows such a matrix also ends the run at its glyphs when it is a lead at least as large as the word-boundary gap (GH#2690). Not covered: a space glyph that lands inside a ligature after the matrix is set back still splits the word (`defi ne`), tracked in GH#2322.
+- **(pdf): Keep every glyph of a text run that the renderer draws without font info.** (#2709)
+  The renderer read the run's shaped advances, which are in font units, as thousandths of an em, so the glyphs after the first landed far off the page and a raster for OCR lost them. It now converts the advances by the font's units per em.
+- **(pdf): Draw every digit of a page number that a form XObject paints.** (#2685)
+  A form whose resource dictionary is a separate PDF object never had its fonts or colour spaces loaded for rendering, so the renderer spaced its glyphs by raw font units and drew only the first one. The renderer now loads that dictionary first, and logs a warning with the object number if it cannot read it.
+- **(pdf): Read a block at the right of a page before a block at the left that starts below it.** (#2680)
+  The reading order cut a region into two columns at a gap or density valley between its left and right spans, even when the right side sat wholly above the left side, so a letterhead at the right of a page top came after the address that started below it. The cut is now refused when the right side sits wholly above the left side, and the two blocks read top-down. A left block above a right block keeps its column cut: the two orders agree there.
+- **(pdf): Stop OCR from splitting words at a ligature such as "fi nancial".** (GH#2322)
+  A page that OCR reads is first drawn by the native renderer. A glyph code in an embedded TrueType font
+  can decode to several letters, as a ligature does, and the renderer gave each later glyph the width of a
+  later glyph. That opened a gap after the ligature, and OCR read it as a space. The renderer now draws each
+  run (one show string) that holds such a code glyph by glyph from the font, each at its own width.
+  Markdown, HTML and Djot output of OCR pages change too.
+- **(pdf): Recover a page of outlined prose with eight or more drawn rows beside a native header and footer.** (GH#2313)
+  The outlined-prose check refused a page that painted more than about seven rows of outlined text.
+  Such a page kept only its native header and footer. The check now accepts a full page of outlined rows.
+  The recovered words still pass through the merge that keeps every native word.
+- **(pdf): Recover a page of outlined prose that also paints a picture.** (GH#2313)
+  The outlined-prose check refused any page that drew an image or a form object.
+  A picture holds no outlined text, so the check now reads past an image. It still refuses a page with a form object.
+- **(pdf): Return the letters of a ligature glyph that the ToUnicode map leaves out.** (GH#2664)
+  Some embedded TrueType subsets draw "ti", "tt" or "st" as one glyph that has no ToUnicode entry and no glyph name, so its letters were dropped and an invented word such as "frotiny" came out as "fro ny".
+  The letters now come from the font's own standard and discretionary GSUB ligatures: the component glyphs of the ligature, each mapped through ToUnicode.
+  A ToUnicode entry for the ligature still wins, and a ligature whose rules disagree or whose components have no ToUnicode entry keeps the old output.
+  The shaping forms of complex scripts, such as Khmer below-base forms, are not read, because their components are not in reading order.
+  Ligature lookups behind an Extension lookup are covered by a test.
+  A ligature drawn by its own show operator under a text matrix that scales the glyphs no longer leaves a space after it ("defi ne" for "define"): the run that holds it is now as wide as its glyph.
+  A word drawn in two shows under text matrices that differ only in their horizontal scale, the second show starting at or just before the pen of the first, no longer gets a space inside it ("Char lie" for "Charlie"): the run continues under the second matrix, in its unit.
+  A line written as several TJ arrays, each placed by a Td with no line move back to the pen of the previous array, no longer gets a space at the seam between two arrays ("bro wn" for "brown") when the font gives its glyph widths.
+- **(pdf): Keep arXiv citations and the words before them in Markdown output.** (#2650)
+  One rule now decides what the arXiv margin stamp is: the identifier with its version, the category and the date, at the end of a paragraph. The PDF structure pass and the Markdown renderer both use it.
+  A reference such as `[11] J. Doe, A short title, arXiv:2107.09275 [hep-ph].`, a versioned citation without a date, and a sentence that ends at a bare identifier are kept whole.
+  A stamp drawn in parts that the extractor reads as separate paragraphs (identifier, category, date) is removed when the parts on the page make one whole stamp, so its date no longer shows as a heading. The parts must read identifier, category, date (or the reverse), share one rotation (modulo a full turn), sit on one line in their reading direction, and lie in a margin: within a tenth of the page width (text turned up or down) or height (text read across) from a page edge, measured by the thickness of the text, not the length of its run. A page that reads category, identifier, date keeps its parts. A page with two split stamps keeps all six parts, because together they do not make one stamp.
+  A stamp that ends a paragraph is removed alone; the words before it stay.
+
+- **(ocr): Do not crash when the process exits while a thread is still recognizing.**
+  The Tesseract exit cleanup freed every engine, including one an OCR thread still used, so a document that hit the extraction timeout could abort or segfault and lose all its text.
+  The cleanup now frees only engines that are parked in the idle pool and skips an engine in use. Each engine has its own id, so a new engine at the address of a freed one is never mistaken for the old engine. A direct user of the `xberg-tesseract` crate who never calls `mark_idle` gets tesseract's leak report on stderr at exit instead of a crash.
+- **(pdf): Join a word that a ligature glyph split in two, and return the letters of every ligature.** (GH#2322)
+  A space drawn inside a ligature's box (the pen is pulled back by the space width) no longer counts as a word break: the gap between the real letters decides. A space with its own room stays, because the page shows a gap there: a space with a full advance after a ligature stays in native text, so `fi eld` stays split. A ToUnicode value of U+0000 for a ligature now falls back to the `/Differences` glyph name of the font. A glyph mapped to a ligature code point (U+FB00 to U+FB06) now yields its letters, so `office` matches a search. The default output of a native PDF changes: text that held `ﬁ` now holds `fi`. The `expand_ligatures` option of the native conversion options has no effect and is deprecated; it will be removed in the next minor release.
+- **(ocr): Budget the CCITT preview of an invisible-layer probe per page.** (#2694)
+  Each audited page may spend the per-page work derived from `max_iterations`, and all pages together at most six such budgets (960 million work units at the default, roughly 1-5 s of decode), so a multi-page scan with a junk layer on every page recovers every page while a hostile file still gets bounded decode work. Before, one budget shared by the document let a 300 dpi scan recover only its first page or two.
+- **(ocr): Keep native text when an automatic all-pages OCR read duplicates it.** (#2768)
+  Automatic plain-text Tesseract OCR now applies the same native-text acceptance when every page needs OCR as when only some pages do. Explicit renderers, pipelines, VLM fallback, custom backends, forced OCR, rich projections, fabricated native mappings and native Khmer-number candidates keep their existing routes. Mixed reads attach accepted OCR tables before building page results, including explicitly forced pages and detected scanned pages, while retaining tables from pages whose native text was kept. All mixed routes, including non-Plain output and partial-page OCR, retain accepted fallback spatial OCR elements and matching coordinate frames when no prebuilt sidecar exists. Accepted pages also retain effective segmentation metadata when plain output skips structural merging.
 - **(ocr): Tolerate singleton Flate filter arrays in bounded PDF stream probes and Indexed scan recovery.** (#2798)
   `[/FlateDecode]` uses the same decoding as `/FlateDecode` in shared hidden-layer, source-audit, embedded-gap, visible-raster content and tall-scan content/palette probes, including hidden-layer images with validated predictor dictionaries. Certified Indexed images accept either spelling; the separate gray/JPEG and ICC image certificates retain their scalar-only filters. Tests use synthetic filter-spelling and predictor variants; no unresolved real page from #2502 is fixed by this change.
 - **(pdf): Keep a Type0 page's native text after OCR ink loss only when the native layer owns or is covered by the read, or spells at least 25% of the read's distinct words.** (#2802)
@@ -425,16 +472,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep raised exponents and footnote marks inside their sentence on native pages (#2647).**
   Row and column ordering of preserved-geometry spans now treats a mark raised by up to 0.35em as sitting on its base line, and a mark after a closing bracket can be attached as a suffix, so `(x + 3y)2` and a footnote mark no longer become paragraphs of their own.
 
-- **(pdf): Keep unversioned arXiv identifiers in citations on the first pages.**
+- **(pdf): Keep unversioned arXiv identifiers in citations on the first pages (GH#2644).**
   Only a versioned identifier counts as the sidebar stamp, so a short citation ending in `arXiv:2107.09275` is no longer page furniture.
 
-- **(ocr): Recover raster-proven dot-leader scan rows whatever the header, label and value text.**
+- **(ocr): Recover raster-proven dot-leader scan rows whatever the header, label and value text (GH#2616).**
   The full-scan leader recovery no longer requires an all-letter header and label or digit-only values. Rows are still refused unless every leader is proved as regular dots on the raster, each value lies in its header column and the hOCR words match exactly.
 
-- **(ocr): Match a dot-leader table row by its source tokens and leader geometry, not letters and digits (#2616).**
+- **(ocr): Match a dot-leader table row by its source tokens and leader geometry, not letters and digits (GH#2616).**
   The hOCR row claim no longer requires an all-letter label and digit-only values; a value such as "$1,010" or "3.2%" or a label with a digit now keeps its one claimed row. The row's words must still equal the table cells and the leader must still sit alone between the label and the first value.
 
-- **(ocr): Admit a sideways prose region by its word boxes, not by word letters (#2616).**
+- **(ocr): Admit a sideways prose region by its word boxes, not by word letters (GH#2616).**
   The recognition-only retry no longer requires every word to be two or more letters, so a comma, digit, hyphen, apostrophe or "a" no longer keeps the sparse result. Instead the region needs a median line thickness above a page-relative floor, at most a small share of marks thinner than a third of that median, mostly word-shaped (not stroke-shaped) boxes and mostly tokens carrying a letter, all measured in the upright frame.
 
 - **(ocr): Give an explicitly rotated table in-page bounds on the per-page route.** (#2497)
@@ -446,7 +493,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Recover more tall scans: Indexed scans at 120 DPI, Markdown output and an explicit Tesseract page mode, and report when strips were not used.** (#2502)
   Indexed sources down to 120 DPI use source-image strips, each of which must match its source ink rows; bilevel, neutral RGB and JPEG scans rendered at 120 DPI did not read back as their source words and keep the 150 DPI floor. A Tesseract page mode such as PSM 3 no longer turns recovery off, and Markdown output recovers the words as plain paragraphs with a warning that no Markdown structure was rebuilt. Strips now join as separate paragraphs. A page read from a render downscaled below 150 DPI carries a warning that names why its strips were not used.
 
-- **(pdf): Keep a marked native page that the configured OCR languages cannot read.** (#2536)
+- **(pdf): Keep a marked native page that the configured OCR languages cannot read (GH#2536).**
   A page whose lost-glyph-marked text layer is nearly all in scripts none of the configured languages cover (Khmer under `eng`, Latin names aside) no longer goes to OCR, which read it as other letters and replaced it. A scanned page (pictures cover most of it, or a quarter of it with little text) is still read, the other pages of the document are read, and an `ocr` warning names the kept pages and the model to add.
 
 - **(pdf): Keep any native page the configured OCR languages cannot read, also through a Tesseract pipeline, and warn when a scan is in such a script.** (#2536)
@@ -470,6 +517,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(engine): Run extraction on the 16 MiB runtime so FFI hosts with small thread stacks do not overflow.**
   `Engine::extract`, the batch entry points and layout-page extraction poll their work as a task on the shared large-stack runtime instead of the caller's thread, so a JVM or other host thread of 1 to 2 MB no longer crashes the process (E2E Java `ContractTest` segfault). The task keeps the caller's tracing subscriber and span. Dropping the call aborts the task at its next await: blocking work already running finishes first.
+- **(ocr): Keep the raw pixels of coloured graphics that have a dark mean.**
+  Automatic preprocessing for dense dark glyphs on a dark-mean image now applies only when most of the dark ink
+  is neutral: black, grey, or slate and brown-black ink with up to 40 levels between the strongest and weakest
+  colour channel. Saturated text such as pure blue counts as dark ink. A coloured graphic with a dark mean skips
+  the preprocessing and reaches OCR with its raw pixels (GH#2515).
 
 - **(ocr): Place mixed-route OCR lines in the resampled frame when matching them to native text.**
   OCR paragraphs are in the frame preprocessing resampled the render to, but the page-text merge scaled them by the render's size, so every OCR box was twice its true size at a 150 to 300 DPI resample, owned no native line and the native lines were prepended a second time (#2313).

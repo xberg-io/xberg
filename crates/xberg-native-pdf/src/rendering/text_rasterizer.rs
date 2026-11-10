@@ -716,10 +716,14 @@ impl TextRasterizer {
                         && info.cid_font_type.as_deref() == Some("CIDFontType2");
                     // Unicode cmap presence does not recover codes dropped by ToUnicode. For
                     // identity-encoded TrueType runs, the original CIDs still own their outlines. ~keep
+                    // A code that decodes to several letters (a ligature, a letter with an accent) is the
+                    // same case: shaping reads PDF widths by letter index, so later glyphs take later
+                    // codes' widths. ~keep
                     let lost_identity_run = cid_truetype
                         && matches!(info.encoding, crate::fonts::Encoding::Identity)
                         && info.embedded_cid_map.is_none()
-                        && decode_drops.reason().is_some();
+                        && (decode_drops.reason().is_some()
+                            || unicode_text.chars().count() != TextCharIter::new(text, Some(info)).count());
                     if has_unicode_cmap && !lost_identity_run {
                         tracing::trace!("Using embedded PDF font data");
                         Some((None, Arc::clone(embedded), 0, false))
@@ -1351,7 +1355,7 @@ impl TextRasterizer {
                 }
                 sum
             } else {
-                pos[i].x_advance as f32 / font_size * 1000.0
+                pos[i].x_advance as f32 / units_per_em * 1000.0
             };
 
             let x_advance = pdf_width * font_size / 1000.0;

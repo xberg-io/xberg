@@ -117,6 +117,11 @@ fn notice(result: &xberg::ExtractedDocument, text: &str) -> bool {
         .any(|warning| warning.message.contains(text))
 }
 
+/// Automatic single-page fallback may retain native text through either OCR route.
+fn single_page_type0_retained(result: &xberg::ExtractedDocument) -> bool {
+    notice(result, SINGLE_RETAINED) || notice(result, MIXED_RETAINED)
+}
+
 #[test]
 fn a_covered_type0_layer_does_not_outvote_the_short_visible_read() {
     let result = extract(Layer::Covered, true);
@@ -142,12 +147,14 @@ fn a_covered_single_page_type0_layer_does_not_outvote_the_short_visible_read() {
     assert_eq!(result.pages.as_ref().unwrap().len(), 1);
     assert!(page.contains("Quarterly revenue improved"), "{page:?}");
     assert!(!page.contains("committee"), "{page:?}");
-    assert!(!notice(&result, SINGLE_RETAINED), "{:?}", result.processing_warnings);
+    assert!(!single_page_type0_retained(&result), "{:?}", result.processing_warnings);
 }
 
 #[test]
 fn a_visible_single_page_type0_layer_keeps_native_text_after_ink_loss() {
     let result = extract(Layer::Visible, false);
-    assert!(notice(&result, SINGLE_RETAINED), "{:?}", result.processing_warnings);
+    let page = &result.pages.as_ref().unwrap()[0].content;
+    assert!(page.contains("committee met on Tuesd"), "{page:?}");
+    assert!(single_page_type0_retained(&result), "{:?}", result.processing_warnings);
     assert_eq!(result.extraction_method, Some(ExtractionMethod::Native));
 }
