@@ -641,8 +641,8 @@ fn native_spells_read_needs_distinct_alphabetic_words_above_the_floor() {
             "{name}: {overlap:?}"
         );
     }
-    assert_eq!(read_words_in_native(native, &near_floor, &thresholds), (3, 9, true));
-    assert_eq!(read_words_in_native(native, &noisy, &thresholds), (3, 29, true));
+    assert_eq!(read_words_in_native(native, &near_floor, &thresholds), (3, true));
+    assert_eq!(read_words_in_native(native, &noisy, &thresholds), (3, true));
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]

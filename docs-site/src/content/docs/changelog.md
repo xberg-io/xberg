@@ -479,6 +479,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Stop reading order from moving list items and words out of their sentence on native pages (GH#2658).**
   Ordering on a base line now applies only to a mark at most 0.8 of its base size that abuts the base, and a run of raised glyphs such as `(*)` moves as one or not at all. Bullets, text of nearly the same size as a bullet, and text set apart from a larger icon keep their own line.
 
+- **(pdf): Keep correct Type0 text when the page renders as noise or its text is overprinted (GH#2817).**
+  A Type0 page whose render lost glyphs keeps its native text when the OCR read shares at least three of its words (the OCR quality floor `min_meaningful_words`), however many other words noise adds to the read. Overprinted text in a Separation or DeviceN colour now shows in the page render: a Cyan, Magenta, Yellow or Black colorant marks its own channel, and a spot ink paints its alternate colour.
+
 - **(pdf): Keep unversioned arXiv identifiers in citations on the first pages (GH#2644).**
   Only a versioned identifier counts as the sidebar stamp, so a short citation ending in `arXiv:2107.09275` is no longer page furniture.
 

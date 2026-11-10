@@ -943,9 +943,9 @@ fn process_names_if_valid_prefix(
 /// successfully. Returns `None` for:
 ///  - non-`DeviceN` colour spaces (callers should handle Separation /
 ///    Device-family / ICC / CalGray / CalRGB explicitly),
-///  - DeviceN without `/Process` attribution (the paint is a pure spot
-///    paint; the process-side overprint rule is "preserve backdrop" per
-///    Table 149 row 3, handled by the `SeparationOrDeviceN` class),
+///  - DeviceN without `/Process` attribution (the overprint pass reads
+///    its colorant names: a process name marks that channel, Table 149
+///    row 3; a paint of spot inks only keeps its alternate colour),
 ///  - DeviceN with a `/Process /ColorSpace` whose array form is neither
 ///    `/ICCBased` (N=1/3/4) nor `/Cal*` (the latter falls through to
 ///    the §10.3.5 RGB inverse). Real PDFs use the four device-family

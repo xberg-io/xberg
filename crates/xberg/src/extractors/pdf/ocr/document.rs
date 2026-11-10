@@ -606,12 +606,10 @@ pub(in crate::extractors::pdf) fn native_preservation_is_automatic(config: &Extr
         })
 }
 
-/// The share of a read's distinct meaningful words the native text must also spell before the
-/// native layer counts as the page's visible content. It sits below the share the legitimate
-/// Type0 pages of `pdf_cid_glyph_raster_2309` reach and above none, which a covered layer beside
-/// a short visible line shares. ~keep
+/// The share of a read's distinct unspaced-script bigrams the native text must also hold before
+/// the native layer counts as the page's visible content. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
-pub(super) const MIN_READ_WORD_SHARE_SPELLED_BY_NATIVE: f64 = 0.25;
+pub(super) const MIN_READ_BIGRAM_SHARE_IN_NATIVE: f64 = 0.25;
 
 /// Scripts written without spaces: a line of them is one "word" to `whole_words`, so they are
 /// compared by character bigrams instead. ~keep
@@ -630,8 +628,8 @@ fn is_unspaced_script(c: char) -> bool {
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 pub(super) const MIN_SHARED_UNSPACED_BIGRAMS: usize = 6;
 
-/// The distinct meaningful words of a read, how many the native text also spells, and whether any
-/// of those is alphabetic. Lost-glyph markers are removed from the native text first so a word
+/// How many distinct meaningful words of a read the native text also spells, and whether any of
+/// those is alphabetic. Lost-glyph markers are removed from the native text first so a word
 /// the render dropped a letter from still matches its read. Words in unspaced scripts are left to
 /// `read_bigrams_in_native`. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
@@ -639,7 +637,7 @@ pub(super) fn read_words_in_native(
     native: &str,
     read: &str,
     thresholds: &OcrQualityThresholds,
-) -> (usize, usize, bool) {
+) -> (usize, bool) {
     use super::super::unmapped_glyphs::LOST_GLYPH_MARKER;
 
     let spaced = |word: &String| !word.chars().any(is_unspaced_script);
@@ -652,7 +650,7 @@ pub(super) fn read_words_in_native(
         .collect();
     let shared: Vec<&String> = distinct.iter().filter(|word| spelled.contains(*word)).collect();
     let alphabetic = shared.iter().any(|word| word.chars().any(char::is_alphabetic));
-    (shared.len(), distinct.len(), alphabetic)
+    (shared.len(), alphabetic)
 }
 
 /// The distinct character bigrams of the unspaced-script runs of a text. ~keep
@@ -691,19 +689,17 @@ pub(super) fn read_bigrams_in_native(native: &str, read: &str) -> (usize, usize)
 
 /// Whether the native text spells enough of the read to be the page's visible content. Spaced
 /// scripts need at least the quality floor of distinct shared words (never fewer than two), one of
-/// them alphabetic, and the minimum share of the read's distinct words; a short read cannot pass
-/// on one shared word. Unspaced scripts (Han, kana, Hangul, Thai, Khmer) need the minimum share of
+/// them alphabetic; a short read cannot pass on one shared word. The words of the read that the
+/// native text does not spell do not count against it: noise in the render adds them while the
+/// layer stays right. Unspaced scripts (Han, kana, Hangul, Thai, Khmer) need the minimum share of
 /// the read's distinct bigrams and at least `MIN_SHARED_UNSPACED_BIGRAMS` of them. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 pub(super) fn native_spells_read(native: &str, read: &str, thresholds: &OcrQualityThresholds) -> bool {
-    let (shared, distinct, alphabetic) = read_words_in_native(native, read, thresholds);
-    let words = distinct > 0
-        && alphabetic
-        && shared >= thresholds.min_meaningful_words.max(2)
-        && shared as f64 >= distinct as f64 * MIN_READ_WORD_SHARE_SPELLED_BY_NATIVE;
+    let (shared, alphabetic) = read_words_in_native(native, read, thresholds);
+    let words = alphabetic && shared >= thresholds.min_meaningful_words.max(2);
     let (shared, distinct) = read_bigrams_in_native(native, read);
     let bigrams = shared >= MIN_SHARED_UNSPACED_BIGRAMS
-        && shared as f64 >= distinct as f64 * MIN_READ_WORD_SHARE_SPELLED_BY_NATIVE;
+        && shared as f64 >= distinct as f64 * MIN_READ_BIGRAM_SHARE_IN_NATIVE;
     words || bigrams
 }
 
