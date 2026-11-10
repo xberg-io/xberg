@@ -1445,6 +1445,18 @@ fn dedup_without_page_text_keeps_row_disjoint_native_tables() {
 }
 
 #[test]
+fn dedup_compares_rows_when_the_page_segments_hold_no_words() {
+    let partner = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["gamma", "3"], &["delta", "4"]]);
+    let grid = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let page = vec![vec![printed_at("...", 5.0, 50.0), printed_at("---", 40.0, 60.0)]];
+    assert_eq!(
+        kept_after_dedup(vec![grid, partner], &page),
+        2,
+        "a page of rules and dots gives no words to count, so the rows of the two tables decide"
+    );
+}
+
+#[test]
 fn overlap_evidence_follows_the_live_tables_when_arbitration_removes_one() {
     let grid = four_row_grid();
     let partner = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
