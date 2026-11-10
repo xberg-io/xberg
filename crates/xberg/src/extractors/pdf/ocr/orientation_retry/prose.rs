@@ -289,6 +289,87 @@ mod tests {
         assert_eq!(complete_text(&inside_x, 0.5), None);
     }
 
+    /// Only the word limit refuses this read: the padding is not a word, so the word count, the
+    /// bytes and the geometry of the read stay as in the accepted candidate.
+    #[test]
+    fn the_word_limit_alone_refuses_a_read_with_more_evidence_than_the_limit() {
+        let filler = OcrElement {
+            text: "filler".into(),
+            level: OcrElementLevel::Line,
+            ..Default::default()
+        };
+        let mut read = candidate();
+        let words = read.ocr_elements.as_ref().unwrap().len();
+        read.ocr_elements
+            .as_mut()
+            .unwrap()
+            .extend(std::iter::repeat_n(filler.clone(), MAX_WORDS - words));
+        assert_eq!(read.ocr_elements.as_ref().unwrap().len(), MAX_WORDS);
+        assert!(complete_text(&read, 0.5).is_some(), "a read at the limit is accepted");
+        read.ocr_elements.as_mut().unwrap().push(filler);
+        assert_eq!(read.ocr_elements.as_ref().unwrap().len(), MAX_WORDS + 1);
+        assert_eq!(complete_text(&read, 0.5), None);
+    }
+
+    /// Only the byte limit refuses this read: the padding is white space between two words, so
+    /// the words, their count and their geometry stay as in the accepted candidate.
+    #[test]
+    fn the_byte_limit_alone_refuses_a_read_with_more_content_than_the_limit() {
+        let padded = |gap: usize| {
+            let mut read = candidate();
+            read.content = read
+                .content
+                .replacen("Ledger Summary", &format!("Ledger{}Summary", " ".repeat(gap)), 1);
+            read
+        };
+        let gap = MAX_BYTES - candidate().content.len() + 1;
+        let at_limit = padded(gap);
+        assert_eq!(at_limit.content.len(), MAX_BYTES);
+        assert!(
+            complete_text(&at_limit, 0.5).is_some(),
+            "a read at the limit is accepted"
+        );
+        let over = padded(gap + 1);
+        assert_eq!(over.content.len(), MAX_BYTES + 1);
+        assert_eq!(complete_text(&over, 0.5), None);
+    }
+
+    /// The table word keeps its centre inside the table and its place in its row. Only the edge
+    /// of its box decides: a box that ends on the table edge is inside, a box one pixel past it
+    /// is neither inside, above nor below. The table spans x 20 to 180.
+    #[test]
+    fn a_table_word_whose_box_crosses_the_left_or_right_table_edge_refuses_the_read() {
+        // (side, word, box on the edge as (left, width), box one pixel past the edge)
+        let cases = [
+            ("left", "Cash", (20, 10), (19, 11)),
+            ("right", "31,290", (80, 100), (80, 101)),
+        ];
+        let place = |text: &str, (left, width): (u32, u32)| {
+            let mut read = candidate();
+            rewrite(&mut read, text, |geometry| {
+                if let OcrBoundingGeometry::Rectangle { left: l, width: w, .. } = geometry {
+                    (*l, *w) = (left, width);
+                }
+            });
+            read
+        };
+        assert_eq!(
+            candidate().tables[0].bounding_box.map(|b| (b.x0, b.x1)),
+            Some((20.0, 180.0))
+        );
+        for (side, text, on_edge, past_edge) in cases {
+            assert!(
+                complete_text(&place(text, on_edge), 0.5).is_some(),
+                "{side}: box on the edge"
+            );
+            assert_eq!(
+                complete_text(&place(text, past_edge), 0.5),
+                None,
+                "{side}: box past the edge"
+            );
+        }
+    }
+
     #[test]
     fn text_outside_the_table_needs_iterator_evidence_from_the_tesseract_iterator() {
         let mut read = candidate();
