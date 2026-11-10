@@ -1676,7 +1676,7 @@ fn is_markdown_image_reference(text: &str) -> bool {
 /// across all extraction backends (PDF, OCR, DOCX, HTML, etc.).
 ///
 /// Page ranges in `metadata.pages.boundaries` and entity spans index the plain `content`, so
-/// they follow it through the normalization (#2851). A rendering swapped in later re-locates
+/// they follow it through the normalization. A rendering swapped in later re-locates
 /// the page ranges itself.
 fn normalize_nfc(result: &mut ExtractedDocument) {
     #[cfg(feature = "quality")]
@@ -1736,20 +1736,21 @@ fn remap_page_boundaries_after_nfc(result: &mut ExtractedDocument, unnormalized:
     }
 }
 
-/// Move each entity span from `unnormalized` to the same text in `result.content`. Spans that
-/// were not on character boundaries of `unnormalized` index no text, so they stay as they were.
-/// A span that cuts a letter from its combining accent first grows to hold both, so the entity
-/// keeps its text and no offset of any span lands inside a composed letter.
+/// Move each entity span from `unnormalized` to the same text in `result.content`. A span with an
+/// end that is not on a character boundary of `unnormalized` indexes no text, so that span stays as
+/// it was and the others still move. A span that cuts a letter from its combining accent first grows
+/// to hold both, so the entity keeps its text and no offset lands inside a composed letter.
 #[cfg(feature = "quality")]
 fn remap_entity_spans_after_nfc(result: &mut ExtractedDocument, unnormalized: &str) {
     let Some(entities) = result.entities.as_mut() else {
         return;
     };
     let on_boundary = |offset: u32| unnormalized.is_char_boundary(offset as usize);
-    if !entities.iter().all(|e| on_boundary(e.start) && on_boundary(e.end)) {
-        return;
-    }
-    let grown: Vec<(usize, usize)> = entities
+    let mut movable: Vec<_> = entities
+        .iter_mut()
+        .filter(|e| on_boundary(e.start) && on_boundary(e.end))
+        .collect();
+    let grown: Vec<(usize, usize)> = movable
         .iter()
         .map(|e| {
             (
@@ -1761,7 +1762,7 @@ fn remap_entity_spans_after_nfc(result: &mut ExtractedDocument, unnormalized: &s
     let Some(moved) = nfc_offsets(unnormalized, grown.iter().flat_map(|&(start, end)| [start, end])) else {
         return;
     };
-    for (entity, (start, end)) in entities.iter_mut().zip(grown) {
+    for (entity, (start, end)) in movable.iter_mut().zip(grown) {
         entity.start = moved[&start] as u32;
         entity.end = moved[&end] as u32;
     }
