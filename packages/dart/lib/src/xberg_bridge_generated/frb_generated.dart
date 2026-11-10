@@ -21464,14 +21464,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return LayoutDetectionConfig(
       strategy: dco_decode_layout_strategy(arr[0]),
-      model: dco_decode_layout_detection_model(arr[1]),
-      confidenceThreshold: dco_decode_opt_box_autoadd_f_64(arr[2]),
-      applyHeuristics: dco_decode_bool(arr[3]),
-      tableModel: dco_decode_table_model(arr[4]),
-      formulaModel: dco_decode_opt_box_autoadd_formula_model(arr[5]),
-      tableOverlapPreference: dco_decode_table_overlap_preference(arr[6]),
-      acceleration: dco_decode_opt_box_autoadd_acceleration_config(arr[7]),
-      enableChartUnderstanding: dco_decode_bool(arr[8]),
+      confidenceThreshold: dco_decode_opt_box_autoadd_f_64(arr[1]),
+      applyHeuristics: dco_decode_bool(arr[2]),
+      tableModel: dco_decode_table_model(arr[3]),
+      formulaModel: dco_decode_opt_box_autoadd_formula_model(arr[4]),
+      tableOverlapPreference: dco_decode_table_overlap_preference(arr[5]),
+      acceleration: dco_decode_opt_box_autoadd_acceleration_config(arr[6]),
+      enableChartUnderstanding: dco_decode_bool(arr[7]),
+      model: dco_decode_layout_detection_model(arr[8]),
     );
   }
 
@@ -22673,7 +22673,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         arr[9],
       ),
       pipeline: dco_decode_opt_box_autoadd_ocr_pipeline_config(arr[10]),
-      autoRotate: dco_decode_bool(arr[11]),
+      autoRotate: dco_decode_opt_box_autoadd_bool(arr[11]),
       vlmFallback: dco_decode_vlm_fallback_policy(arr[12]),
       vlmConfig: dco_decode_opt_box_autoadd_llm_config(arr[13]),
       vlmPrompt: dco_decode_opt_String(arr[14]),
@@ -31046,7 +31046,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_strategy = sse_decode_layout_strategy(deserializer);
-    var var_model = sse_decode_layout_detection_model(deserializer);
     var var_confidenceThreshold = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_applyHeuristics = sse_decode_bool(deserializer);
     var var_tableModel = sse_decode_table_model(deserializer);
@@ -31060,9 +31059,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       deserializer,
     );
     var var_enableChartUnderstanding = sse_decode_bool(deserializer);
+    var var_model = sse_decode_layout_detection_model(deserializer);
     return LayoutDetectionConfig(
       strategy: var_strategy,
-      model: var_model,
       confidenceThreshold: var_confidenceThreshold,
       applyHeuristics: var_applyHeuristics,
       tableModel: var_tableModel,
@@ -31070,6 +31069,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       tableOverlapPreference: var_tableOverlapPreference,
       acceleration: var_acceleration,
       enableChartUnderstanding: var_enableChartUnderstanding,
+      model: var_model,
     );
   }
 
@@ -33029,7 +33029,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_pipeline = sse_decode_opt_box_autoadd_ocr_pipeline_config(
       deserializer,
     );
-    var var_autoRotate = sse_decode_bool(deserializer);
+    var var_autoRotate = sse_decode_opt_box_autoadd_bool(deserializer);
     var var_vlmFallback = sse_decode_vlm_fallback_policy(deserializer);
     var var_vlmConfig = sse_decode_opt_box_autoadd_llm_config(deserializer);
     var var_vlmPrompt = sse_decode_opt_String(deserializer);
@@ -42175,7 +42175,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_layout_strategy(self.strategy, serializer);
-    sse_encode_layout_detection_model(self.model, serializer);
     sse_encode_opt_box_autoadd_f_64(self.confidenceThreshold, serializer);
     sse_encode_bool(self.applyHeuristics, serializer);
     sse_encode_table_model(self.tableModel, serializer);
@@ -42189,6 +42188,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       serializer,
     );
     sse_encode_bool(self.enableChartUnderstanding, serializer);
+    sse_encode_layout_detection_model(self.model, serializer);
   }
 
   @protected
@@ -43880,7 +43880,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       serializer,
     );
     sse_encode_opt_box_autoadd_ocr_pipeline_config(self.pipeline, serializer);
-    sse_encode_bool(self.autoRotate, serializer);
+    sse_encode_opt_box_autoadd_bool(self.autoRotate, serializer);
     sse_encode_vlm_fallback_policy(self.vlmFallback, serializer);
     sse_encode_opt_box_autoadd_llm_config(self.vlmConfig, serializer);
     sse_encode_opt_String(self.vlmPrompt, serializer);

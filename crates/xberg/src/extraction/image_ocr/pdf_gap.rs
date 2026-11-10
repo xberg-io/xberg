@@ -156,7 +156,7 @@ fn eligible_tesseract(ocr: &OcrConfig) -> bool {
         && ocr.tessdata_bytes.is_none()
         && ocr.tessdata_path.is_none()
         && ocr.output_format.is_none()
-        && !ocr.auto_rotate
+        && ocr.auto_rotate != Some(true)
         && !ocr.numeric_repair
         && ocr.vlm_fallback == VlmFallbackPolicy::Disabled
 }

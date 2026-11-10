@@ -171,6 +171,8 @@ pub(crate) struct CachedFormSpans {
     /// Includes this Form and the deepest descendant visited by the complete run.
     pub(crate) required_depth: u32,
     pub(crate) spans: Option<Vec<crate::layout::TextSpan>>,
+    /// The spans among `spans` that start at the pen of the previous `TJ` array (GH#2664).
+    pub(crate) pen_continuations: Vec<crate::extractors::text::SpanKey>,
     /// Weak references retain allocation identity without retaining font data.
     fonts: Vec<(String, Weak<crate::fonts::FontInfo>)>,
     local_scope: bool,
@@ -195,9 +197,15 @@ impl CachedFormSpans {
         Self {
             required_depth,
             spans,
+            pen_continuations: Vec::new(),
             fonts,
             local_scope,
         }
+    }
+
+    pub(crate) fn with_pen_continuations(mut self, keys: Vec<crate::extractors::text::SpanKey>) -> Self {
+        self.pen_continuations = keys;
+        self
     }
 
     pub(crate) fn matches_inherited_fonts(&self, inherited: &ExtractorFonts) -> bool {
@@ -625,6 +633,9 @@ pub struct PdfDocument {
     /// Bounded at [`DEFAULT_OBJECT_CACHE_MAX_BYTES`] with FIFO eviction to
     /// prevent unbounded heap growth during multi-page extraction.
     object_cache: Mutex<BoundedObjectCache>,
+    /// Advances only when object-stream loading publishes a previously absent or Null object.
+    /// Path caches can then retry failures without retrying on every graphics-state use. ~keep
+    object_recovery_epoch: AtomicUsize,
     /// Parsed object streams keyed by the stream reference and bounded by accounted bytes.
     object_stream_cache: Mutex<BoundedObjectStreamCache>,
     /// Bounded markers for streams whose aggregated recovery telemetry fired.

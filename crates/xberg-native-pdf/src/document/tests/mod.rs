@@ -21,6 +21,7 @@ mod extract_api;
 mod fonts;
 mod form_cache_depth;
 mod form_cache_page_context;
+mod form_cache_pen_continuation;
 mod images;
 mod key_value_rows;
 mod objects;

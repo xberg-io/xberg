@@ -268,7 +268,7 @@ fn sceptre_orientation_detector_cache_rejects_a_fifth_live_root() {
 fn sceptre_disabled_auto_rotation_does_not_cache_a_detector() {
     let backend = SceptreOcrBackend::new().expect("backend should initialize");
     let request = OcrConfig {
-        auto_rotate: false,
+        auto_rotate: None,
         backend_options: Some(serde_json::json!({"model": {"cache_dir": "/unused/cache"}})),
         ..OcrConfig::default()
     };

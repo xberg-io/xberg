@@ -196,6 +196,7 @@ impl<'doc> TextExtractor<'doc> {
                 let char_table = font.get_byte_to_char_table();
                 let width_table = Self::simple_widths(self.cached_extraction_widths.as_deref(), font, true);
                 let mut w_sum = 0.0f32;
+                let run_start = buffer.unicode.len();
                 for &byte in text {
                     let len_before = buffer.unicode.len();
                     let c = char_table[byte as usize];
@@ -239,6 +240,7 @@ impl<'doc> TextExtractor<'doc> {
                         }
                     }
                 }
+                buffer.record_decode(run_start, || text.len() == 1);
                 w_sum
             } else if wmode == 0 {
                 // Type0/CID font, horizontal: unified iterator handles 1- or
@@ -415,6 +417,7 @@ impl<'doc> TextExtractor<'doc> {
                 let width_table =
                     Self::simple_widths(self.cached_extraction_widths.as_deref(), font, repair_zero_widths);
                 let mut w_sum = 0.0f32;
+                let run_start = buffer.unicode.len();
                 for &byte in text {
                     let len_before = buffer.unicode.len();
                     let c = char_table[byte as usize];
@@ -466,6 +469,7 @@ impl<'doc> TextExtractor<'doc> {
                         }
                     }
                 }
+                buffer.record_decode(run_start, || text.len() == 1);
                 w_sum
             } else if wmode == 0 {
                 // Width calculation: use TextCharIter so byte-width respects the
@@ -647,6 +651,7 @@ impl<'doc> TextExtractor<'doc> {
                 0.0
             },
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: run_is_mirrored(&state.ctm.multiply(&state.text_matrix)),
             page_rotation_applied: 0,
         };
@@ -677,20 +682,20 @@ impl<'doc> TextExtractor<'doc> {
     /// not apply in vertical mode. The matrix-side axis-swap lives in
     /// `advance_text_matrix`.
     pub(super) fn advance_position_for_offset(&mut self, offset: f32) -> Result<()> {
-        let state = self.state_stack.current();
-        let font_size = state.font_size;
-        let horizontal_scaling = state.horizontal_scaling;
-        let wmode = state.text_wmode;
-
-        let tx = if wmode == 0 {
-            -offset / 1000.0 * font_size * horizontal_scaling / 100.0
-        } else {
-            -offset / 1000.0 * font_size
-        };
-
+        let tx = self.tj_offset_advance(offset);
         self.state_stack.current_mut().advance_text_matrix(tx);
 
         Ok(())
+    }
+
+    /// The shift along the active writing axis, in text space, of a TJ offset value. ~keep
+    pub(super) fn tj_offset_advance(&self, offset: f32) -> f32 {
+        let state = self.state_stack.current();
+        if state.text_wmode == 0 {
+            -offset / 1000.0 * state.font_size * state.horizontal_scaling / 100.0
+        } else {
+            -offset / 1000.0 * state.font_size
+        }
     }
 
     /// Fold a sub-threshold TJ offset into the active buffer's advance record
@@ -754,6 +759,72 @@ impl<'doc> TextExtractor<'doc> {
         perp.abs() <= tolerance && along >= 0.0
     }
 
+    /// How far the pen at `e` lies from `start`'s origin along an upright run, in text space.
+    ///
+    /// `e` is a user-space coordinate, while a run's `accumulated_width` is in text space and the
+    /// flush scales it by the run's matrix. A text matrix that scales the glyphs (`a = 0.75`) needs the
+    /// user-space move divided by that scale, or the run comes out narrower than the glyphs it holds.
+    /// For `a = 1` this is `e - start.e`. A turned or mirrored matrix and WMode 1 keep the raw
+    /// difference, as before. ~keep
+    pub(super) fn text_space_advance(start: Matrix, wmode: u8, e: f32) -> f32 {
+        let dx = e - start.e;
+        if wmode != 0 || start.b != 0.0 || start.a <= 0.0 {
+            return dx;
+        }
+        dx / start.a
+    }
+
+    /// Whether a `Tm` that changes the horizontal scale of an upright run from `start.a` to `a` puts its
+    /// origin `e` at the run's pen (GH#2664): within `[severe_overlap_pt, 0]` of it in user space, with
+    /// the rounding error of the coordinate allowed above zero, and forward of the run's start, as
+    /// the continuation under an unchanged matrix requires. The caller has checked that `b`, `c`,
+    /// `d` and the line are unchanged. ~keep
+    pub(super) fn stretched_tm_starts_at_the_pen(buffer: &TjBuffer, a: f32, e: f32, severe_overlap_pt: f32) -> bool {
+        let start = buffer.start_matrix;
+        if buffer.is_empty() || buffer.wmode != 0 || start.b != 0.0 || start.a <= 0.0 || a <= 0.0 || a == start.a {
+            return false;
+        }
+        if e < start.e {
+            return false;
+        }
+        let gap = (Self::text_space_advance(start, 0, e) - buffer.accumulated_width) * buffer.user_h_scale;
+        gap >= severe_overlap_pt && gap <= edge_rounding_error(e)
+    }
+
+    /// Restate the run in the unit of the new horizontal scale `a`, so that the glyphs it holds keep
+    /// their user-space width and the glyphs to come are measured in the new unit: the widths scale by
+    /// the old `a` over the new one, the user-space scale by the inverse, and the pen reads from `e`
+    /// under the new matrix. The pull-back is not scaled: only a `TJ` array raises it, in its own
+    /// buffer, so the run a `Tm` restates holds none. ~keep
+    pub(super) fn restate_run_under_stretched_tm(buffer: &mut TjBuffer, a: f32, e: f32) {
+        let ratio = buffer.start_matrix.a / a;
+        for width in &mut buffer.char_widths {
+            *width *= ratio;
+        }
+        buffer.user_h_scale /= ratio;
+        buffer.start_matrix.a = a;
+        buffer.accumulated_width = Self::text_space_advance(buffer.start_matrix, 0, e);
+        // A new matrix sets the pen again: the pull-back after a ligature no longer refers to the
+        // glyph that ends the run. ~keep
+        buffer.ligature_tail = false;
+    }
+
+    /// A `Td` or `TD` with no line move right after a `TJ` array that marked a word boundary keeps the
+    /// array's pen for the next `TJ` (see `PenSeam`). ~keep
+    pub(super) fn carry_pen_seam(&mut self, seam: Option<PenSeam>, ty: f32) {
+        if ty == 0.0 && seam == Some(PenSeam::TjArrayEnd) {
+            self.pen_seam = Some(PenSeam::ContinuesPen);
+        }
+    }
+
+    /// Whether the current font gives the width of its glyphs, from a `/Widths` array or from the
+    /// Adobe metrics of a standard font, so that the extractor's pen is the producer's pen. ~keep
+    pub(super) fn current_font_gives_widths(&self) -> bool {
+        self.cached_current_font
+            .as_deref()
+            .is_some_and(|font| font.has_explicit_widths() || font.has_standard_font_metrics())
+    }
+
     /// Flush accumulated Tj span buffer into a single TextSpan.
     ///
     /// This is similar to flush_tj_buffer but works with the tj_span_buffer field
@@ -779,6 +850,7 @@ impl<'doc> TextExtractor<'doc> {
             // geometric detector when `char_widths` give us per-char x,
             // falling back to the coarse `accumulated_width > 0`
             // heuristic only when ambiguous. ~keep
+            let ligature_glyph = buffer.is_lone_ligature();
             let mut text = std::mem::take(&mut buffer.unicode);
             if text.len() > 1 {
                 let has_rtl = text.chars().any(|c| crate::text::rtl_detector::is_rtl_text(c as u32));
@@ -851,6 +923,7 @@ impl<'doc> TextExtractor<'doc> {
                 wmode: buffer.wmode,
                 text_rise: buffer.text_rise,
                 rtl_draw_logical: false,
+                ligature_glyph,
                 mirrored: buffer.mirrored,
                 page_rotation_applied: 0,
             };

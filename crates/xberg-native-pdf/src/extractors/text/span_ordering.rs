@@ -142,13 +142,21 @@ impl<'doc> TextExtractor<'doc> {
             .iter()
             .map(|s| (s.bbox.x, s.bbox.y, s.bbox.width, s.font_size))
             .collect();
+        // When the snap is kept, the spans still carry their sequence, so a pen mark follows the span
+        // to its snapped y. Under `preserve_script_baselines` the caller renumbers the spans and
+        // restores the original geometry, which the marks were taken at. ~keep
+        let moves_marks = !self.preserve_script_baselines;
         for (span, base_y) in self
             .spans
             .iter_mut()
             .zip(snapped_script_baselines(&snapshot, SnapReach::EXTRACTOR))
         {
             if let Some(base_y) = base_y {
+                let marked = moves_marks && self.pen_continuations.remove(&SpanKey::of(span));
                 span.bbox.y = base_y;
+                if marked {
+                    self.pen_continuations.insert(SpanKey::of(span));
+                }
             }
         }
     }

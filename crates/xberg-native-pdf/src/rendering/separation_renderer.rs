@@ -3286,3 +3286,6 @@ fn paint_image_mask_to_plates(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod gate_parity_tests;
