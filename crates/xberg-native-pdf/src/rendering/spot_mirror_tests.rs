@@ -33,6 +33,11 @@ fn lane(renderer: &PageRenderer) -> Vec<u8> {
     renderer.cmyk_sidecar.as_ref().expect("sidecar").spot_plane(0).expect("lane").to_vec()
 }
 
+fn painted(renderer: &PageRenderer) -> Vec<u8> {
+    let state = renderer.cmyk_sidecar.as_ref().expect("sidecar").spot_state();
+    state[state.len() / 2..].to_vec()
+}
+
 #[test]
 fn overlay_over_an_opaque_tint_zero_paint_gives_no_ink() {
     let mut r = renderer();
@@ -70,6 +75,18 @@ fn every_separable_mode_keeps_the_source_ink_on_the_pixels_no_earlier_paint_reac
         assert_ne!(lane[1], 0, "{mode}: ink lost over untouched paper");
         assert_eq!(lane[1], 128, "{mode}: the source ink over untouched paper");
     }
+}
+
+#[test]
+fn the_painted_plane_is_the_union_of_the_alphas_of_the_paints() {
+    let mut r = renderer();
+    assert_eq!(painted(&r), vec![0; 3]);
+    paint(&mut r, "Normal", 0.0, 1.0, [255, 0, 0]);
+    assert_eq!(painted(&r), vec![255, 0, 0], "a tint-0 paint still marks the lane painted");
+    paint(&mut r, "Normal", 0.5, 0.5, [0, 255, 255]);
+    assert_eq!(painted(&r), vec![255, 128, 128]);
+    paint(&mut r, "Normal", 0.5, 0.4, [0, 0, 255]);
+    assert_eq!(painted(&r), vec![255, 128, 179], "1 - (1 - 128/255) * 0.6 = 0.701");
 }
 
 #[test]

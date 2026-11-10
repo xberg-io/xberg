@@ -234,11 +234,19 @@ pub(crate) struct CmykSidecar {
     /// ASCII and dedups; `/All` and `/None` are filtered out by that
     /// helper per §8.6.6.4.
     spot_names: Vec<String>,
-    /// Stack of per-ink tint planes. Length is `spot_names.len() · w
-    /// · h`. Plane `i` lives at `spots[i·w·h .. (i+1)·w·h]`, one byte
-    /// per pixel (0 = no ink, 255 = full tint). Initialised to zero
-    /// per §11.7.3 ("an additive value of 1.0 or a subtractive tint
-    /// value of 0.0 shall be assumed" for an unset component).
+    /// Stack of per-ink tint planes followed by one backdrop-alpha plane
+    /// per ink. Length is `2 · spot_names.len() · w · h`. Tint plane `i`
+    /// lives at `spots[i·w·h .. (i+1)·w·h]`, one byte per pixel (0 = no
+    /// ink, 255 = full tint). Initialised to zero per §11.7.3 ("an
+    /// additive value of 1.0 or a subtractive tint value of 0.0 shall
+    /// be assumed" for an unset component). Alpha plane `i` lives at
+    /// `spots[(n+i)·w·h .. (n+i+1)·w·h]` with `n = spot_names.len()`: the
+    /// union of the alpha of every paint that reached lane `i` (0 =
+    /// untouched paper, 255 = fully painted). A tint of 0 alone cannot
+    /// tell an explicit tint-0 paint from untouched paper, and §11.3.6
+    /// blends against the backdrop only where its alpha is above 0.
+    /// The two stacks share one buffer so every snapshot, soft-mask
+    /// attenuation and knockout restore of the lanes covers both.
     spots: Vec<u8>,
 }
 
@@ -253,7 +261,7 @@ impl CmykSidecar {
     pub(crate) fn new(width: u32, height: u32, spot_names: Vec<String>) -> Self {
         let pixels = (width as usize) * (height as usize);
         let cmyk = vec![0u8; 4 * pixels];
-        let spots = vec![0u8; spot_names.len() * pixels];
+        let spots = vec![0u8; 2 * spot_names.len() * pixels];
         Self {
             dims: (width, height),
             cmyk,
@@ -292,27 +300,31 @@ impl CmykSidecar {
     pub(crate) fn spot_plane(&self, index: usize) -> Option<&[u8]> {
         let (w, h) = self.dims;
         let plane_size = (w as usize) * (h as usize);
-        let start = index.checked_mul(plane_size)?;
-        let end = start.checked_add(plane_size)?;
-        if end > self.spots.len() {
+        if index >= self.spot_names.len() {
             return None;
         }
+        let start = index.checked_mul(plane_size)?;
+        let end = start.checked_add(plane_size)?;
         Some(&self.spots[start..end])
     }
 
-    /// Mutable slice over the tint plane for spot ink `index`.
-    /// Returns `None` when `index >= spot_count()`. The per-paint spot
-    /// mirror writes through this accessor to compose new tints
-    /// against the backdrop.
-    pub(crate) fn spot_plane_mut(&mut self, index: usize) -> Option<&mut [u8]> {
+    /// Mutable tint plane and backdrop-alpha plane for spot ink `index`,
+    /// in that order. Returns `None` when `index >= spot_count()`. The
+    /// per-paint spot mirror writes through this accessor to compose new
+    /// tints against the backdrop and to record where the lane is painted.
+    pub(crate) fn spot_lane_mut(&mut self, index: usize) -> Option<(&mut [u8], &mut [u8])> {
         let (w, h) = self.dims;
         let plane_size = (w as usize) * (h as usize);
-        let start = index.checked_mul(plane_size)?;
-        let end = start.checked_add(plane_size)?;
-        if end > self.spots.len() {
+        if index >= self.spot_names.len() {
             return None;
         }
-        Some(&mut self.spots[start..end])
+        let tint_start = index.checked_mul(plane_size)?;
+        let alpha_start = self.spot_names.len().checked_add(index)?.checked_mul(plane_size)?;
+        let (tints, alphas) = self.spots.split_at_mut(alpha_start);
+        Some((
+            &mut tints[tint_start..tint_start + plane_size],
+            &mut alphas[..plane_size],
+        ))
     }
 
     /// Find the spot plane index for an ink name, or `None` when the
@@ -323,18 +335,19 @@ impl CmykSidecar {
         self.spot_names.iter().position(|n| n == ink)
     }
 
-    /// Read-only view of every spot plane stacked end-to-end. Layout
-    /// matches the internal `spots` buffer: plane `i` lives at
-    /// `[i·w·h, (i+1)·w·h)`. Used by the SMask path to snapshot every
-    /// spot lane before the paint mirror writes so the post-paint
-    /// attenuation can blend `m·post + (1-m)·pre` per pixel per lane.
-    pub(crate) fn spots_all(&self) -> &[u8] {
+    /// Read-only view of the whole spot lane state: every tint plane,
+    /// then every backdrop-alpha plane, each `w·h` bytes. Used by the
+    /// SMask path to snapshot every lane before the paint mirror writes
+    /// so the post-paint attenuation can blend `m·post + (1-m)·pre` per
+    /// pixel per plane, and by the knockout replay to snapshot and merge
+    /// the lanes.
+    pub(crate) fn spot_state(&self) -> &[u8] {
         &self.spots
     }
 
-    /// Mutable counterpart of [`Self::spots_all`]. The SMask attenuation
-    /// path writes the per-lane blend back through this slice.
-    pub(crate) fn spots_all_mut(&mut self) -> &mut [u8] {
+    /// Mutable counterpart of [`Self::spot_state`]. The SMask attenuation
+    /// path writes the per-plane blend back through this slice.
+    pub(crate) fn spot_state_mut(&mut self) -> &mut [u8] {
         &mut self.spots
     }
 
@@ -411,7 +424,8 @@ impl CmykSidecar {
         self.cmyk.copy_from_slice(data);
     }
 
-    /// Overwrite the spot plane stack with `data`. Companion to
+    /// Overwrite the whole spot lane state (tints and backdrop alpha, the
+    /// layout of [`Self::spot_state`]) with `data`. Companion to
     /// [`Self::restore_cmyk`] for the spot lanes inside a knockout
     /// group's cumulative replay. ISO 32000-1 §11.3.3 + §11.4.6.2:
     /// "a single shape value and opacity value shall be maintained at
@@ -422,7 +436,7 @@ impl CmykSidecar {
     /// backdrop spot state, not the previously-composed state.
     ///
     /// Panics if `data.len() != self.spots.len()`.
-    pub(crate) fn restore_spots(&mut self, data: &[u8]) {
+    pub(crate) fn restore_spot_state(&mut self, data: &[u8]) {
         debug_assert_eq!(data.len(), self.spots.len());
         self.spots.copy_from_slice(data);
     }
@@ -727,16 +741,19 @@ pub(crate) fn separable_blend(mode: &str, c_b: f32, c_s: f32) -> f32 {
 /// over a lane with ink gives less ink than either tint, and over an empty lane gives
 /// `0 * t_s = 0`, which erases the source ink that the page render shows.
 ///
-/// A lane without ink has no backdrop to blend with: §11.3.3 gives the source when the
-/// backdrop alpha is 0, for every mode. `/Normal`, non-separable modes and unknown names
-/// return `t_s` as they are, because `B(c_b, c_s) = c_s` does not depend on the representation.
-pub(crate) fn blend_subtractive_tint(mode: &str, t_b: f32, t_s: f32) -> f32 {
-    let (t_b, t_s) = (t_b.clamp(0.0, 1.0), t_s.clamp(0.0, 1.0));
+/// `a_b` is the backdrop alpha of the lane at the pixel: 0 where no paint reached it, 1 where
+/// a paint covered it fully, even a paint of tint 0. §11.3.6 mixes the source with the blend
+/// by that alpha: `(1 - a_b) * t_s + a_b * B(t_b, t_s)`. Where `a_b` is 0 the result is `t_s`
+/// for every mode. `/Normal`, non-separable modes and unknown names return `t_s` as they are,
+/// because `B(c_b, c_s) = c_s` does not depend on the representation.
+pub(crate) fn blend_subtractive_tint(mode: &str, t_b: f32, a_b: f32, t_s: f32) -> f32 {
+    let (t_b, a_b, t_s) = (t_b.clamp(0.0, 1.0), a_b.clamp(0.0, 1.0), t_s.clamp(0.0, 1.0));
     let non_separable = matches!(mode, "Normal" | "Hue" | "Saturation" | "Color" | "Luminosity");
-    if t_b == 0.0 || non_separable || !is_recognised_mode(mode) {
+    if non_separable || !is_recognised_mode(mode) {
         return t_s;
     }
-    1.0 - separable_blend(mode, 1.0 - t_b, 1.0 - t_s)
+    let blended = 1.0 - separable_blend(mode, 1.0 - t_b, 1.0 - t_s);
+    (1.0 - a_b) * t_s + a_b * blended
 }
 
 fn hard_light_component(c_b: f32, c_s: f32) -> f32 {
@@ -1718,10 +1735,8 @@ mod tests {
     #[test]
     fn sidecar_spot_plate_returns_named_lane() {
         let mut s = CmykSidecar::new(3, 1, vec!["InkA".into(), "InkB".into()]);
-        let plane_a = s.spot_plane_mut(0).unwrap();
-        plane_a.copy_from_slice(&[10, 20, 30]);
-        let plane_b = s.spot_plane_mut(1).unwrap();
-        plane_b.copy_from_slice(&[40, 50, 60]);
+        s.spot_lane_mut(0).unwrap().0.copy_from_slice(&[10, 20, 30]);
+        s.spot_lane_mut(1).unwrap().0.copy_from_slice(&[40, 50, 60]);
         assert_eq!(s.spot_plate("InkA").unwrap(), &[10, 20, 30]);
         assert_eq!(s.spot_plate("InkB").unwrap(), &[40, 50, 60]);
         // Not-discovered → None (the §8.6.6.3 "no plate" semantic at
@@ -1737,13 +1752,16 @@ mod tests {
     fn sidecar_restore_cmyk_and_spots_overwrites_buffers() {
         let mut s = CmykSidecar::new(2, 1, vec!["InkA".into()]);
         s.cmyk_mut().copy_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8]);
-        s.spot_plane_mut(0).unwrap().copy_from_slice(&[9, 10]);
+        let (tint, alpha) = s.spot_lane_mut(0).unwrap();
+        tint.copy_from_slice(&[9, 10]);
+        alpha.copy_from_slice(&[255, 255]);
         let backdrop_cmyk = vec![100u8; 8];
-        let backdrop_spots = vec![50u8; 2];
+        let backdrop_spots = vec![50u8; 4];
         s.restore_cmyk(&backdrop_cmyk);
-        s.restore_spots(&backdrop_spots);
+        s.restore_spot_state(&backdrop_spots);
         assert_eq!(s.cmyk(), backdrop_cmyk.as_slice());
-        assert_eq!(s.spots_all(), backdrop_spots.as_slice());
+        assert_eq!(s.spot_state(), backdrop_spots.as_slice());
+        assert_eq!(s.spot_plane(0).unwrap(), &[50, 50], "the tint plane is the first half");
     }
 
     /// A test-only `tracing_subscriber::Layer` that captures every
@@ -2421,42 +2439,93 @@ mod tests {
     #[test]
     fn blend_subtractive_tint_blends_the_complements() {
         // Two stacked inks are denser than either: 1 - (1 - 0.5) * (1 - 0.25).
-        assert_eq!(blend_subtractive_tint("Multiply", 0.5, 0.25), 0.625);
-        assert_eq!(blend_subtractive_tint("Multiply", 0.25, 0.5), 0.625);
+        assert_eq!(blend_subtractive_tint("Multiply", 0.5, 1.0, 0.25), 0.625);
+        assert_eq!(blend_subtractive_tint("Multiply", 0.25, 1.0, 0.5), 0.625);
         // Screen of the complements 0.5 and 0.75 is 0.875, so the ink is 0.125.
-        assert_eq!(blend_subtractive_tint("Screen", 0.5, 0.25), 0.125);
+        assert_eq!(blend_subtractive_tint("Screen", 0.5, 1.0, 0.25), 0.125);
         // Darken keeps the denser ink and Lighten keeps the lighter ink.
-        assert_eq!(blend_subtractive_tint("Darken", 0.25, 0.5), 0.5);
-        assert_eq!(blend_subtractive_tint("Darken", 0.5, 0.25), 0.5);
-        assert_eq!(blend_subtractive_tint("Lighten", 0.25, 0.5), 0.25);
-        assert_eq!(blend_subtractive_tint("Lighten", 0.5, 0.25), 0.25);
+        assert_eq!(blend_subtractive_tint("Darken", 0.25, 1.0, 0.5), 0.5);
+        assert_eq!(blend_subtractive_tint("Darken", 0.5, 1.0, 0.25), 0.5);
+        assert_eq!(blend_subtractive_tint("Lighten", 0.25, 1.0, 0.5), 0.25);
+        assert_eq!(blend_subtractive_tint("Lighten", 0.5, 1.0, 0.25), 0.25);
     }
 
     #[test]
-    fn blend_subtractive_tint_keeps_the_source_over_an_empty_lane() {
+    fn blend_subtractive_tint_keeps_the_source_where_the_lane_is_unpainted() {
         for mode in [
             "Multiply",
             "Screen",
+            "Overlay",
             "Darken",
             "Lighten",
             "ColorDodge",
             "ColorBurn",
+            "HardLight",
+            "SoftLight",
             "Difference",
+            "Exclusion",
         ] {
-            assert_eq!(blend_subtractive_tint(mode, 0.0, 0.5), 0.5, "{mode}");
+            assert_eq!(blend_subtractive_tint(mode, 0.0, 0.0, 0.5), 0.5, "{mode}");
+        }
+    }
+
+    #[test]
+    fn blend_subtractive_tint_blends_against_an_explicit_tint_zero_backdrop() {
+        // A paint of tint 0 is a backdrop (alpha 1). Its complement is full additive white, so
+        // the modes that lighten, dodge or burn give no ink; Multiply and Darken keep the source.
+        let expected = [
+            ("Multiply", 0.5),
+            ("Darken", 0.5),
+            ("Difference", 0.5),
+            ("Screen", 0.0),
+            ("Lighten", 0.0),
+            ("Overlay", 0.0),
+            ("HardLight", 0.0),
+            ("SoftLight", 0.0),
+            ("ColorDodge", 0.0),
+            ("ColorBurn", 0.0),
+        ];
+        for (mode, ink) in expected {
+            assert_eq!(blend_subtractive_tint(mode, 0.0, 1.0, 0.5), ink, "{mode}");
+        }
+    }
+
+    #[test]
+    fn blend_subtractive_tint_mixes_the_blend_with_the_source_by_the_backdrop_alpha() {
+        // Lighten over a tint-0 backdrop blends to 0; over untouched paper it gives the source.
+        assert_eq!(blend_subtractive_tint("Lighten", 0.0, 0.5, 0.5), 0.25);
+    }
+
+    #[test]
+    fn blend_subtractive_tint_follows_the_soft_light_formula_on_the_complements() {
+        // SoftLight is not self-dual, so the complement round trip moves the overlap value.
+        // Additive backdrop 0.5 and source 0.75 give 0.5 + 0.5 * (sqrt(0.5) - 0.5).
+        let additive = 0.5 + 0.5 * (0.5_f32.sqrt() - 0.5);
+        let got = blend_subtractive_tint("SoftLight", 0.5, 1.0, 0.25);
+        assert!((got - (1.0 - additive)).abs() < 1e-6, "{got}");
+        assert!(
+            (got - separable_blend("SoftLight", 0.5, 0.25)).abs() > 0.01,
+            "control: the blend on the raw tints gives another value"
+        );
+    }
+
+    #[test]
+    fn overlay_and_hard_light_overlap_values_do_not_move_with_the_complement() {
+        // Both are self-dual: B(1 - b, 1 - s) = 1 - B(b, s), so the round trip gives the raw value.
+        for mode in ["Overlay", "HardLight"] {
+            for b in [0.1_f32, 0.3, 0.5, 0.8] {
+                for s in [0.2_f32, 0.5, 0.75] {
+                    let got = blend_subtractive_tint(mode, b, 1.0, s);
+                    assert!((got - separable_blend(mode, b, s)).abs() < 1e-6, "{mode} {b} {s}");
+                }
+            }
         }
     }
 
     #[test]
     fn blend_subtractive_tint_returns_the_source_where_the_complement_does_not_matter() {
-        let tint = 0.1_f32;
-        assert_ne!(
-            1.0 - (1.0 - tint),
-            tint,
-            "control: the complement round trip is not exact"
-        );
         for mode in ["Normal", "Hue", "Saturation", "Color", "Luminosity", "NoSuchMode"] {
-            assert_eq!(blend_subtractive_tint(mode, 0.7, tint), tint, "{mode}");
+            assert_eq!(blend_subtractive_tint(mode, 0.7, 1.0, 0.1), 0.1, "{mode}");
         }
     }
 

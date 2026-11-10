@@ -4943,7 +4943,7 @@ impl PageRenderer {
     fn smask_spot_snapshot(&self, gs: &GraphicsState) -> Option<Vec<u8>> {
         gs.smask.as_ref()?;
         let sidecar = self.cmyk_sidecar.as_ref()?;
-        Some(sidecar.spots_all().to_vec())
+        Some(sidecar.spot_state().to_vec())
     }
 
     /// Predicate: should the CMYK compose-before-convert path fire for
@@ -6431,8 +6431,11 @@ impl PageRenderer {
     ///    formulas operate on additive components, so
     ///    [`blend_subtractive_tint`](crate::rendering::sidecar::blend_subtractive_tint)
     ///    complements the tints before the blend and the result after
-    ///    it. Only /Normal skips the round trip: `B = c_s` holds in
-    ///    both representations.
+    ///    it, and mixes the blend with the source by the lane's backdrop
+    ///    alpha (§11.3.6). Only /Normal skips the round trip: `B = c_s`
+    ///    holds in both representations. The backdrop alpha is the
+    ///    sidecar's per-lane painted plane, so an explicit tint-0 paint
+    ///    is a backdrop and untouched paper is not.
     ///
     /// Spot inks active on the source but with no plane in the sidecar
     /// (device does not carry the colorant per §8.6.6.3) are silently
@@ -6527,7 +6530,7 @@ impl PageRenderer {
             let Some(idx) = sidecar.spot_index(&name) else {
                 continue;
             };
-            let Some(plane) = sidecar.spot_plane_mut(idx) else {
+            let Some((plane, painted)) = sidecar.spot_lane_mut(idx) else {
                 continue;
             };
             // The `tint` value is the operator's component for this
@@ -6544,9 +6547,13 @@ impl PageRenderer {
                 let alpha = (cov as f32 / 255.0) * gs_alpha;
                 let alpha = alpha.clamp(0.0, 1.0);
                 let t_b = plane[px] as f32 / 255.0;
-                let blended = crate::rendering::sidecar::blend_subtractive_tint(effective_bm, t_b, c_s);
+                let a_b = painted[px] as f32 / 255.0;
+                let blended = crate::rendering::sidecar::blend_subtractive_tint(effective_bm, t_b, a_b, c_s);
                 let t_r = (1.0 - alpha) * t_b + alpha * blended;
                 plane[px] = (t_r.clamp(0.0, 1.0) * 255.0).round() as u8;
+                // §11.3.3 union of the backdrop alpha and the source alpha. ~keep
+                let a_r = a_b + alpha - a_b * alpha;
+                painted[px] = (a_r.clamp(0.0, 1.0) * 255.0).round() as u8;
             }
         }
     }
@@ -6999,7 +7006,7 @@ impl PageRenderer {
         // the visible composite by exactly the SMask attenuation
         // factor. ~keep
         if let (Some(pre_spots), Some(sidecar)) = (spot_snapshot, self.cmyk_sidecar.as_mut()) {
-            let spots = sidecar.spots_all_mut();
+            let spots = sidecar.spot_state_mut();
             // The snapshot length tracks the page's spot plane count.
             // If the sidecar's plane count changed mid-paint (it
             // doesn't — fixed at page setup) the comparison would be
@@ -7070,7 +7077,7 @@ impl PageRenderer {
         // group semantics, NOT knockout. The brief calls this out as
         // the round-2 gap the secondary scope of round 3 closes. ~keep
         let sidecar_backdrop_cmyk: Option<Vec<u8>> = self.cmyk_sidecar.as_ref().map(|s| s.cmyk().to_vec());
-        let sidecar_backdrop_spots: Option<Vec<u8>> = self.cmyk_sidecar.as_ref().map(|s| s.spots_all().to_vec());
+        let sidecar_backdrop_spots: Option<Vec<u8>> = self.cmyk_sidecar.as_ref().map(|s| s.spot_state().to_vec());
 
         // Identify paint-operator indices. These define element
         // boundaries. ~keep
@@ -7119,7 +7126,7 @@ impl PageRenderer {
                 sidecar.restore_cmyk(cmyk_b);
             }
             if let (Some(sidecar), Some(spots_b)) = (self.cmyk_sidecar.as_mut(), sidecar_backdrop_spots.as_ref()) {
-                sidecar.restore_spots(spots_b);
+                sidecar.restore_spot_state(spots_b);
             }
 
             let element_ops: Vec<Operator> = operators[..=end_idx]
@@ -7186,7 +7193,7 @@ impl PageRenderer {
                 sidecar_accum_spots.as_mut(),
                 sidecar_backdrop_spots.as_ref(),
             ) {
-                let post = sidecar.spots_all();
+                let post = sidecar.spot_state();
                 debug_assert_eq!(post.len(), backdrop.len());
                 debug_assert_eq!(accum.len(), backdrop.len());
                 for i in 0..post.len() {
@@ -7211,7 +7218,7 @@ impl PageRenderer {
             sidecar.restore_cmyk(cmyk_a);
         }
         if let (Some(sidecar), Some(spots_a)) = (self.cmyk_sidecar.as_mut(), sidecar_accum_spots.as_ref()) {
-            sidecar.restore_spots(spots_a);
+            sidecar.restore_spot_state(spots_a);
         }
         Ok(())
     }
