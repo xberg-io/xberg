@@ -37,18 +37,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 name = "xberg_tesseract"
 crate-type = ["lib"]
 
-# The exit cleanup tests load the bundled English model, so cargo builds them only with
-# `bundle-tessdata-eng`. Without it they are not compiled and `cargo test` lists them as absent
-# instead of counting a run of zero tests as a pass. CI runs them in the all-features workspace leg, and
-# scripts/ci/rust/run-tesseract-exit-tests.sh fails that leg unless all three run and pass. ~keep
-[[test]]
-name = "exit_cleanup_leak"
-required-features = ["build-tesseract", "bundle-tessdata-eng"]
-
-[[test]]
-name = "exit_cleanup_race"
-required-features = ["build-tesseract", "bundle-tessdata-eng"]
-
 [features]
 default = ["static-linking"]
 build-tesseract = ["cc", "cmake", "reqwest", "zip"]
@@ -92,3 +80,15 @@ libc = { workspace = true }
 sha2 = { workspace = true }
 tempfile = { workspace = true }
 zip = { version = "9.2.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+# The exit cleanup tests load the bundled English model, so cargo builds them only with
+# `bundle-tessdata-eng`. Without it they are not compiled and `cargo test` lists them as absent
+# instead of counting a run of zero tests as a pass. CI runs them in the all-features workspace leg, and
+# scripts/ci/rust/run-tesseract-exit-tests.sh fails that leg unless all three run and pass. ~keep
+[[test]]
+name = "exit_cleanup_leak"
+required-features = ["build-tesseract", "bundle-tessdata-eng"]
+
+[[test]]
+name = "exit_cleanup_race"
+required-features = ["build-tesseract", "bundle-tessdata-eng"]
