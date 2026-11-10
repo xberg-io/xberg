@@ -1953,6 +1953,217 @@ async fn nfc_normalization_applies_to_the_kept_text_layer() {
     assert_eq!(pages[0].content, "r\u{00e9}sum\u{00e9}");
 }
 
+/// Pages 1 to 3 of a plain document; page 2 holds characters that NFC shortens (#2851).
+/// The boundary values are placeholders: the derivation step re-locates each page's text in the
+/// content, so the ranges that reach NFC are exact for the pre-NFC content.
+#[cfg(feature = "quality")]
+fn three_page_doc_with_decomposed_page_two() -> InternalDocument {
+    use crate::types::{PageBoundary, PageStructure, PageUnitType};
+    let mut doc = InternalDocument::new("plain");
+    doc.mime_type = "text/plain".to_string();
+    for (page, text) in [
+        (1, "First page text"),
+        (2, "Second re\u{0301}sume\u{0301} and \u{2126} text"),
+        (3, "Third page text"),
+    ] {
+        doc.push_element(InternalElement::text(ElementKind::Paragraph, text, 0).with_page(page));
+    }
+    doc.metadata.pages = Some(PageStructure {
+        total_count: 3,
+        unit_type: PageUnitType::Page,
+        boundaries: Some(
+            (1..=3)
+                .map(|page_number| PageBoundary {
+                    byte_start: 0,
+                    byte_end: 0,
+                    page_number,
+                })
+                .collect(),
+        ),
+        pages: None,
+    });
+    doc
+}
+
+#[tokio::test]
+#[serial]
+#[cfg(feature = "quality")]
+async fn page_ranges_index_the_content_after_nfc_shortens_it() {
+    let config = ExtractionConfig {
+        postprocessor: Some(crate::core::config::PostProcessorConfig {
+            enabled: false,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let processed = run_pipeline(three_page_doc_with_decomposed_page_two(), &config)
+        .await
+        .unwrap();
+
+    assert!(
+        processed.content.contains("r\u{00e9}sum\u{00e9}"),
+        "NFC must have composed page two: {:?}",
+        processed.content
+    );
+    let boundaries = processed.metadata.pages.unwrap().boundaries.unwrap();
+    let pages = processed.pages.unwrap();
+    assert_eq!(boundaries.len(), 3);
+    for (boundary, page) in boundaries.iter().zip(&pages) {
+        assert!(
+            boundary.byte_end <= processed.content.len(),
+            "range {boundary:?} runs past the {} byte content",
+            processed.content.len()
+        );
+        assert_eq!(
+            processed.content.get(boundary.byte_start..boundary.byte_end),
+            Some(page.content.as_str()),
+            "page {} range must equal the page text",
+            page.page_number
+        );
+    }
+    assert!(
+        processed
+            .processing_warnings
+            .iter()
+            .all(|w| w.source != "page_boundaries"),
+        "an exact remap raises no page_boundaries warning"
+    );
+}
+
+#[tokio::test]
+#[serial]
+#[cfg(feature = "quality")]
+async fn page_ranges_of_a_document_without_nfc_changes_stay_put() {
+    let mut doc = three_page_doc_with_decomposed_page_two();
+    doc.elements[1].text = "Second page text".to_string();
+    let config = ExtractionConfig {
+        postprocessor: Some(crate::core::config::PostProcessorConfig {
+            enabled: false,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let processed = run_pipeline(doc, &config).await.unwrap();
+
+    let boundaries = processed.metadata.pages.unwrap().boundaries.unwrap();
+    let pages = processed.pages.unwrap();
+    for (boundary, page) in boundaries.iter().zip(&pages) {
+        assert_eq!(
+            processed.content.get(boundary.byte_start..boundary.byte_end),
+            Some(page.content.as_str())
+        );
+    }
+}
+
+#[cfg(feature = "quality")]
+fn result_with_one_range(content: &str, byte_start: usize, byte_end: usize) -> ExtractedDocument {
+    use crate::types::{PageBoundary, PageStructure, PageUnitType};
+    let mut result = ExtractedDocument {
+        content: content.to_string(),
+        ..Default::default()
+    };
+    result.metadata.pages = Some(PageStructure {
+        total_count: 1,
+        unit_type: PageUnitType::Page,
+        boundaries: Some(vec![PageBoundary {
+            byte_start,
+            byte_end,
+            page_number: 1,
+        }]),
+        pages: None,
+    });
+    result
+}
+
+#[test]
+#[cfg(feature = "quality")]
+fn nfc_omits_a_page_range_that_was_not_on_a_character_boundary_and_says_so() {
+    for (start, end) in [(0, 2), (0, 99)] {
+        let mut result = result_with_one_range("e\u{0301}ab", start, end);
+
+        normalize_nfc(&mut result);
+
+        assert_eq!(result.content, "\u{00e9}ab");
+        assert!(
+            result.metadata.pages.unwrap().boundaries.is_none(),
+            "range {start}..{end}"
+        );
+        assert!(result.processing_warnings.iter().any(|w| w.source == "page_boundaries"));
+    }
+}
+
+#[test]
+#[cfg(feature = "quality")]
+fn nfc_moves_a_page_range_past_the_text_it_shortened() {
+    let mut result = result_with_one_range("e\u{0301}ab", 3, 5);
+
+    normalize_nfc(&mut result);
+
+    let boundary = &result.metadata.pages.unwrap().boundaries.unwrap()[0];
+    assert_eq!(result.content.get(boundary.byte_start..boundary.byte_end), Some("ab"));
+}
+
+#[test]
+#[cfg(feature = "quality")]
+fn nfc_leaves_the_page_ranges_of_content_it_did_not_change_as_they_were() {
+    let mut result = result_with_one_range("ab", 0, 99);
+
+    normalize_nfc(&mut result);
+
+    let boundary = &result.metadata.pages.unwrap().boundaries.unwrap()[0];
+    assert_eq!((boundary.byte_start, boundary.byte_end), (0, 99));
+    assert!(result.processing_warnings.is_empty());
+}
+
+/// Ranges in reverse page order, a blank page (an empty range) and two ranges that share an
+/// offset all move with the text that precedes them (#2851).
+#[test]
+#[cfg(feature = "quality")]
+fn nfc_moves_unordered_empty_and_touching_page_ranges() {
+    use crate::types::PageBoundary;
+    let range = |byte_start, byte_end, page_number| PageBoundary {
+        byte_start,
+        byte_end,
+        page_number,
+    };
+    // "e\u{0301}" is 3 bytes before NFC and 2 after.
+    let mut result = result_with_one_range("e\u{0301}ab\ne\u{0301}", 0, 0);
+    result.metadata.pages.as_mut().unwrap().boundaries = Some(vec![
+        range(6, 9, 3),
+        range(3, 3, 2),
+        range(0, 3, 1),
+        range(3, 5, 4),
+        range(5, 6, 5),
+    ]);
+
+    normalize_nfc(&mut result);
+
+    assert_eq!(result.content, "\u{00e9}ab\n\u{00e9}");
+    let boundaries = result.metadata.pages.unwrap().boundaries.unwrap();
+    let slices: Vec<(u32, &str)> = boundaries
+        .iter()
+        .map(|b| (b.page_number, &result.content[b.byte_start..b.byte_end]))
+        .collect();
+    assert_eq!(
+        slices,
+        [(3, "\u{00e9}"), (2, ""), (1, "\u{00e9}"), (4, "ab"), (5, "\n")]
+    );
+}
+
+#[test]
+#[cfg(feature = "quality")]
+fn nfc_leaves_the_page_ranges_of_a_rendered_output_to_the_rendering_step() {
+    let mut result = result_with_one_range("e\u{0301}ab", 3, 5);
+    result.formatted_content = Some("# rendered".to_string());
+
+    normalize_nfc(&mut result);
+
+    let boundary = &result.metadata.pages.unwrap().boundaries.unwrap()[0];
+    assert_eq!((boundary.byte_start, boundary.byte_end), (3, 5));
+}
+
 #[tokio::test]
 #[serial]
 async fn test_run_pipeline_applies_output_format_last() {

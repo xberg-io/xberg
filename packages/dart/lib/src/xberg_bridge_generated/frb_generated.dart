@@ -22812,8 +22812,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   OcrQualityThresholds dco_decode_ocr_quality_thresholds(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 26)
-      throw Exception('unexpected arr length: expect 26 but see ${arr.length}');
+    if (arr.length != 27)
+      throw Exception('unexpected arr length: expect 27 but see ${arr.length}');
     return OcrQualityThresholds(
       minTotalNonWhitespace: dco_decode_i_64(arr[0]),
       minNonWhitespacePerPage: dco_decode_f_64(arr[1]),
@@ -22828,19 +22828,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       minWordsForOcrOutputCheck: dco_decode_i_64(arr[10]),
       maxOcrOutputDictInvalidWordRatio: dco_decode_f_64(arr[11]),
       discardSuspectedOcrNoise: dco_decode_bool(arr[12]),
-      minAvgWordLength: dco_decode_f_64(arr[13]),
-      minWordsForAvgLengthCheck: dco_decode_i_64(arr[14]),
-      minConsecutiveRepeatRatio: dco_decode_f_64(arr[15]),
-      minWordsForRepeatCheck: dco_decode_i_64(arr[16]),
-      substantiveMinChars: dco_decode_i_64(arr[17]),
-      nonTextMinChars: dco_decode_i_64(arr[18]),
-      alnumWsRatioThreshold: dco_decode_f_64(arr[19]),
-      pipelineMinQuality: dco_decode_f_64(arr[20]),
-      minUndecodableRatio: dco_decode_f_64(arr[21]),
-      enableProvenanceOcrRouting: dco_decode_bool(arr[22]),
-      minProvenanceFallbackRatio: dco_decode_f_64(arr[23]),
-      enablePlausibilityOcrRouting: dco_decode_bool(arr[24]),
-      minReliableLanguageChunkRatio: dco_decode_f_64(arr[25]),
+      pruneSymbolNoiseLines: dco_decode_bool(arr[13]),
+      minAvgWordLength: dco_decode_f_64(arr[14]),
+      minWordsForAvgLengthCheck: dco_decode_i_64(arr[15]),
+      minConsecutiveRepeatRatio: dco_decode_f_64(arr[16]),
+      minWordsForRepeatCheck: dco_decode_i_64(arr[17]),
+      substantiveMinChars: dco_decode_i_64(arr[18]),
+      nonTextMinChars: dco_decode_i_64(arr[19]),
+      alnumWsRatioThreshold: dco_decode_f_64(arr[20]),
+      pipelineMinQuality: dco_decode_f_64(arr[21]),
+      minUndecodableRatio: dco_decode_f_64(arr[22]),
+      enableProvenanceOcrRouting: dco_decode_bool(arr[23]),
+      minProvenanceFallbackRatio: dco_decode_f_64(arr[24]),
+      enablePlausibilityOcrRouting: dco_decode_bool(arr[25]),
+      minReliableLanguageChunkRatio: dco_decode_f_64(arr[26]),
     );
   }
 
@@ -33230,6 +33231,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_minWordsForOcrOutputCheck = sse_decode_i_64(deserializer);
     var var_maxOcrOutputDictInvalidWordRatio = sse_decode_f_64(deserializer);
     var var_discardSuspectedOcrNoise = sse_decode_bool(deserializer);
+    var var_pruneSymbolNoiseLines = sse_decode_bool(deserializer);
     var var_minAvgWordLength = sse_decode_f_64(deserializer);
     var var_minWordsForAvgLengthCheck = sse_decode_i_64(deserializer);
     var var_minConsecutiveRepeatRatio = sse_decode_f_64(deserializer);
@@ -33257,6 +33259,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       minWordsForOcrOutputCheck: var_minWordsForOcrOutputCheck,
       maxOcrOutputDictInvalidWordRatio: var_maxOcrOutputDictInvalidWordRatio,
       discardSuspectedOcrNoise: var_discardSuspectedOcrNoise,
+      pruneSymbolNoiseLines: var_pruneSymbolNoiseLines,
       minAvgWordLength: var_minAvgWordLength,
       minWordsForAvgLengthCheck: var_minWordsForAvgLengthCheck,
       minConsecutiveRepeatRatio: var_minConsecutiveRepeatRatio,
@@ -44024,6 +44027,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.minWordsForOcrOutputCheck, serializer);
     sse_encode_f_64(self.maxOcrOutputDictInvalidWordRatio, serializer);
     sse_encode_bool(self.discardSuspectedOcrNoise, serializer);
+    sse_encode_bool(self.pruneSymbolNoiseLines, serializer);
     sse_encode_f_64(self.minAvgWordLength, serializer);
     sse_encode_i_64(self.minWordsForAvgLengthCheck, serializer);
     sse_encode_f_64(self.minConsecutiveRepeatRatio, serializer);
