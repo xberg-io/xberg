@@ -863,12 +863,10 @@ fn row_lines_that_start_with_any_djot_list_marker_are_escaped() {
 #[test]
 fn row_lines_escape_punctuation_starts_but_not_hashtags_or_decimals() {
     let mut b = InternalDocumentBuilder::new("test");
-    b.push_element(marked_row_lines_element(
-        concat!(
-            "+ Pool .... 4\n* Park .... 7\n### Lot .... 2\n1.5 Units .... 3\n1.\n-\n---\n- - -\n***\n",
-            "#hashtag .... 1\nPlan A. .... 2\n--- Rule .... 6\n-5 .... 1\n::: note\n``` rust",
-        ),
-    ));
+    b.push_element(marked_row_lines_element(concat!(
+        "+ Pool .... 4\n* Park .... 7\n### Lot .... 2\n1.5 Units .... 3\n1.\n-\n---\n- - -\n***\n",
+        "#hashtag .... 1\nPlan A. .... 2\n--- Rule .... 6\n-5 .... 1\n::: note\n``` rust",
+    )));
     assert_eq!(
         render_djot(&b.build()),
         concat!(
@@ -1041,9 +1039,31 @@ fn a_row_that_opens_with_a_marker_and_a_delimiter_pair_keeps_its_text() {
     // On the unescaped row the opener holds the delimiter that follows it, so the pair stays text.
     // Escaping only the opener would free the pair to become emphasis, strong text or a superscript.
     for row in [
-        "{_!_", "{*#*", "{~a~", "{:+:", "{:a:", "[^!^", "[_]_", "![^]", "[]{}", ":_:_", "{_word_ .... 1",
+        "{_!_",
+        "{*#*",
+        "{~a~",
+        "{:+:",
+        "{:a:",
+        "[^!^",
+        "[_]_",
+        "![^]",
+        "[]{}",
+        ":_:_",
+        "{_word_ .... 1",
         "[^word^ .... 1",
     ] {
+        let layout = ["Intro .... 5", row, "Tail .... 9"];
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_element(marked_row_lines_element(&layout.join("\n")));
+        let output = render_djot(&b.build());
+        assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
+    }
+}
+
+#[test]
+fn a_row_that_opens_with_brackets_and_braces_keeps_its_text() {
+    // After an escaped `[` the `]` is plain, and a `{...}` that follows it would read as attributes.
+    for row in ["[]{}", "[]{.a}", "[]{#id}"] {
         let layout = ["Intro .... 5", row, "Tail .... 9"];
         let mut b = InternalDocumentBuilder::new("test");
         b.push_element(marked_row_lines_element(&layout.join("\n")));
