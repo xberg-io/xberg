@@ -309,6 +309,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Read an English page whose `ToUnicode` map sends its letters to another script, instead of keeping that layer.** (#2830)
+  A page with a lost glyph whose layer is in a script no OCR language reads, and which no cluster structure vouches for, was kept native on the layer's say-so. It is now read once in the configured languages; when the read holds at least half as many letters as the layer and none of its script, the page goes to OCR. A page really in that script yields no such read and stays native.
 - **(pdf): Read an underscore-joined `/Differences` glyph name as all its letters.** (#2689)
   With no `ToUnicode` map, a glyph named `f_f_i` extracted as `f`, so a word with an `ffi` glyph lost letters. The name now decodes by the Adobe Glyph List algorithm: everything from the first `.` is dropped, each `_` component maps to its letters (`f_f_i` is `ffi`, `f_l` is `fl`, `s_t` is `st`, `uni0066_uni0069` is `fi`), and empty or unknown components add nothing. A name in which no component maps keeps the letter its base encoding gives the code.
 - **(pdf): Keep a word whole when a producer sets the text matrix back over it before a large TJ offset.** (GH#2322)

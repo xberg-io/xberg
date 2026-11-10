@@ -3194,6 +3194,17 @@ impl PdfExtractor {
             #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
             let native_script_pages: Vec<u32> = Vec::new();
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            let ink_contradicted = unreadable_script::pages_whose_ink_contradicts_layer(
+                &decision,
+                &native_text,
+                boundaries.as_deref(),
+                pdf_metadata.pdf_specific.page_count,
+                content,
+                config,
+                layout_pages,
+            )
+            .await;
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             crate::core::diagnostics::dedup_extend_warnings(
                 &mut ocr_fallback_warnings,
                 unreadable_script::retain_unreadable_script_pages(
@@ -3203,6 +3214,7 @@ impl PdfExtractor {
                     pdf_metadata.pdf_specific.page_count,
                     content,
                     config,
+                    &ink_contradicted,
                 ),
             );
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
