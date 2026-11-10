@@ -633,11 +633,7 @@ pub(super) const MIN_SHARED_UNSPACED_BIGRAMS: usize = 6;
 /// the render dropped a letter from still matches its read. Words in unspaced scripts are left to
 /// `read_bigrams_in_native`. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
-pub(super) fn read_words_in_native(
-    native: &str,
-    read: &str,
-    thresholds: &OcrQualityThresholds,
-) -> (usize, bool) {
+pub(super) fn read_words_in_native(native: &str, read: &str, thresholds: &OcrQualityThresholds) -> (usize, bool) {
     use super::super::unmapped_glyphs::LOST_GLYPH_MARKER;
 
     let spaced = |word: &String| !word.chars().any(is_unspaced_script);
@@ -698,8 +694,8 @@ pub(super) fn native_spells_read(native: &str, read: &str, thresholds: &OcrQuali
     let (shared, alphabetic) = read_words_in_native(native, read, thresholds);
     let words = alphabetic && shared >= thresholds.min_meaningful_words.max(2);
     let (shared, distinct) = read_bigrams_in_native(native, read);
-    let bigrams = shared >= MIN_SHARED_UNSPACED_BIGRAMS
-        && shared as f64 >= distinct as f64 * MIN_READ_BIGRAM_SHARE_IN_NATIVE;
+    let bigrams =
+        shared >= MIN_SHARED_UNSPACED_BIGRAMS && shared as f64 >= distinct as f64 * MIN_READ_BIGRAM_SHARE_IN_NATIVE;
     words || bigrams
 }
 

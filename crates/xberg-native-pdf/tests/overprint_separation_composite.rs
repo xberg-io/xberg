@@ -65,7 +65,9 @@ fn centre(content: &str) -> [u8; 3] {
 /// How many pixels of the render are dark on every channel.
 fn dark_pixels(content: &str) -> usize {
     let (data, _) = render(content);
-    data.chunks_exact(4).filter(|px| px[..3].iter().all(|&v| v < 96)).count()
+    data.chunks_exact(4)
+        .filter(|px| px[..3].iter().all(|&v| v < 96))
+        .count()
 }
 
 fn plate_centre(content: &str, ink: &str) -> u8 {

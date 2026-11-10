@@ -192,7 +192,11 @@ fn a_visible_single_page_type0_layer_keeps_native_text_after_ink_loss() {
 fn a_speckled_type0_layer_keeps_native_text_after_ink_loss() {
     let result = extract(Layer::Speckled, true);
     let pages = result.pages.as_ref().unwrap();
-    assert!(pages[0].content.contains("committee met on Tuesd"), "{:?}", pages[0].content);
+    assert!(
+        pages[0].content.contains("committee met on Tuesd"),
+        "{:?}",
+        pages[0].content
+    );
     assert!(pages[1].content.contains("Second page text"), "{:?}", pages[1].content);
     assert!(notice(&result, MIXED_RETAINED), "{:?}", result.processing_warnings);
 }

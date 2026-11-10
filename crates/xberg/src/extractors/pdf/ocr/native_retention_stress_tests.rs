@@ -617,7 +617,12 @@ fn native_spells_read_needs_distinct_alphabetic_words_above_the_floor() {
         ),
         ("three shared of nine pass", native, &near_floor, true),
         ("three shared beside 26 noise words pass", native, &noisy, true),
-        ("two shared beside 26 noise words are under the floor", native, &noisy_two, false),
+        (
+            "two shared beside 26 noise words are under the floor",
+            native,
+            &noisy_two,
+            false,
+        ),
         ("digits alone are not alphabetic", native, "2024 2025 2026", false),
         (
             "shared digits and one word do not reach the floor",
