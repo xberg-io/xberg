@@ -328,3 +328,22 @@ fn direct_clamped_noisy_background_is_rejected_beside_legible_foreground() {
 fn pipeline_clamped_noisy_background_is_rejected_beside_legible_foreground() {
     assert_one_image_read_is_judged_on_its_own(true, BackgroundRead::Text(BACKGROUND_NOISE), SENTENCE);
 }
+
+fn assert_clamped_noisy_read_alone_is_rejected(pipeline: bool) {
+    let (result, seen) = run(pipeline, true, BackgroundRead::Text(BACKGROUND_NOISE), "", true);
+    assert_eq!(seen, vec![(1024, 768), (2048, 1536)]);
+    let error = result.expect_err("the only read of the page is a clamped read that is noise");
+    let message = format!("{error:?}");
+    assert!(message.contains("the retry read was rejected as noise"), "{message}");
+}
+
+#[test]
+#[serial_test::serial]
+fn direct_clamped_noisy_background_alone_is_still_rejected() {
+    assert_clamped_noisy_read_alone_is_rejected(false);
+}
+#[test]
+#[serial_test::serial]
+fn pipeline_clamped_noisy_background_alone_is_still_rejected() {
+    assert_clamped_noisy_read_alone_is_rejected(true);
+}
