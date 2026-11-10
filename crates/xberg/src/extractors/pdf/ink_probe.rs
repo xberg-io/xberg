@@ -145,16 +145,34 @@ fn read_is_confident(score: Option<f64>, thresholds: &crate::core::config::OcrQu
     score.is_some_and(|score| score >= gate)
 }
 
+/// Up to [`SENTINEL_PAGES`] pages spread over the sorted eligible pages: the first, the last and
+/// evenly spaced pages between, so a contradicted page late in the document is still probed.
+fn sentinels(eligible: &[u32]) -> Vec<u32> {
+    if eligible.len() <= SENTINEL_PAGES {
+        return eligible.to_vec();
+    }
+    let last = eligible.len() - 1;
+    let mut picked: Vec<u32> = (0..SENTINEL_PAGES)
+        .map(|i| eligible[i * last / (SENTINEL_PAGES - 1)])
+        .collect();
+    picked.dedup();
+    picked
+}
+
 /// The next pages to read: the sentinel pages first, then, once one of them was contradicted, the
-/// rest up to [`MAX_PROBED_PAGES`] in all. Empty when the check is over.
-fn next_batch(eligible: &[u32], probed: usize, any_contradicted: bool) -> &[u32] {
-    if probed == 0 {
-        &eligible[..eligible.len().min(SENTINEL_PAGES)]
+/// rest of the first [`MAX_PROBED_PAGES`] eligible pages. Empty when the check is over.
+fn next_batch(eligible: &[u32], probed: &[u32], any_contradicted: bool) -> Vec<u32> {
+    if probed.is_empty() {
+        sentinels(eligible)
     } else if any_contradicted {
-        let end = eligible.len().min(MAX_PROBED_PAGES);
-        &eligible[probed.min(end)..end]
+        eligible
+            .iter()
+            .take(MAX_PROBED_PAGES)
+            .copied()
+            .filter(|page| !probed.contains(page))
+            .collect()
     } else {
-        &[]
+        Vec::new()
     }
 }
 
@@ -201,21 +219,27 @@ pub(super) async fn contradicted_pages(
         )));
         return Ok(outcome);
     }
-    let Ok(document) = xberg_native_pdf::PdfDocument::from_bytes(content.to_vec()) else {
-        return Ok(outcome);
+    let document = match xberg_native_pdf::PdfDocument::from_bytes(content.to_vec()) {
+        Ok(document) => document,
+        Err(error) => {
+            tracing::debug!(%error, "script evidence skipped the ink probe: the PDF could not be opened");
+            return Ok(outcome);
+        }
     };
-    let eligible: Vec<u32> = candidates
+    let mut eligible: Vec<u32> = candidates
         .into_iter()
         .filter(|page| *page > 0 && !page_is_scan(&document, *page as usize - 1))
         .collect();
+    eligible.sort_unstable();
+    eligible.dedup();
     let (probe_config, thresholds) = discarding_noise(config);
-    let mut probed = 0;
+    let mut probed: Vec<u32> = Vec::new();
     loop {
-        let batch = next_batch(&eligible, probed, !outcome.contradicted.is_empty()).to_vec();
+        let batch = next_batch(&eligible, &probed, !outcome.contradicted.is_empty());
         if batch.is_empty() {
             return Ok(outcome);
         }
-        probed += batch.len();
+        probed.extend_from_slice(&batch);
         let run = super::ocr::extract_mixed_ocr_native_with_layout_pages(
             layer.text,
             boundaries,
@@ -244,6 +268,17 @@ pub(super) async fn contradicted_pages(
             outcome.warnings.push(warning(format!(
                 "The ink of pages {unread:?} could not be checked against their text layer (the OCR read \
                  failed); their native text is kept."
+            )));
+        }
+        let uncalibrated: Vec<u32> = batch
+            .iter()
+            .copied()
+            .filter(|page| confidence.get(page).is_some_and(|c| c.score.is_none()))
+            .collect();
+        if !uncalibrated.is_empty() {
+            outcome.warnings.push(warning(format!(
+                "The ink of pages {uncalibrated:?} could not be checked against their text layer because the \
+                 OCR backend reports no calibrated confidence; their native text is kept."
             )));
         }
         outcome.contradicted.extend(batch.iter().copied().filter(|page| {
@@ -343,17 +378,40 @@ mod tests {
     #[test]
     fn the_probe_reads_sentinel_pages_and_goes_on_only_after_a_contradiction() {
         let pages: Vec<u32> = (1..=300).collect();
-        assert_eq!(next_batch(&pages, 0, false), &pages[..SENTINEL_PAGES]);
+        let first = next_batch(&pages, &[], false);
+        assert_eq!(first, vec![1, 100, 200, 300], "first, last and evenly spaced between");
         assert!(
-            next_batch(&pages, SENTINEL_PAGES, false).is_empty(),
+            next_batch(&pages, &first, false).is_empty(),
             "no contradiction ends the check"
         );
+        let rest = next_batch(&pages, &first, true);
         assert_eq!(
-            next_batch(&pages, SENTINEL_PAGES, true),
-            &pages[SENTINEL_PAGES..MAX_PROBED_PAGES]
+            rest.len(),
+            MAX_PROBED_PAGES - 3,
+            "the cap counts from the first eligible page"
         );
-        assert!(next_batch(&pages, MAX_PROBED_PAGES, true).is_empty());
-        assert_eq!(next_batch(&pages[..2], 0, false), &pages[..2]);
-        assert!(next_batch(&pages[..2], 2, true).is_empty());
+        assert!(rest.iter().all(|page| !first.contains(page)));
+        assert_eq!(next_batch(&pages[..2], &[], false), vec![1, 2]);
+        assert!(next_batch(&pages[..2], &[1, 2], true).is_empty());
+    }
+
+    #[test]
+    fn a_contradicted_page_last_among_many_is_still_a_sentinel() {
+        let pages: Vec<u32> = (10..=30).collect();
+        assert!(sentinels(&pages).contains(&30));
+        assert!(sentinels(&pages).contains(&10));
+        assert_eq!(sentinels(&[7]), vec![7]);
+        assert_eq!(sentinels(&[7, 9, 11, 13, 15]), vec![7, 9, 11, 15]);
+    }
+
+    #[test]
+    fn a_short_english_page_with_few_long_words_and_capitals_is_not_prose() {
+        let layer = format!("\u{FFFD}{ARABIC}");
+        let short = "THE CAT SAT ON THE MAT AND ATE THE FISH";
+        let few_long = "the cat sat on a mat and ate the fish in a pan";
+        assert!(!read_is_prose(short), "all capitals are not plain words");
+        assert!(!read_is_prose(few_long), "twelve short words hold too few long ones");
+        assert!(!read_contradicts_layer(&layer, short));
+        assert!(!read_contradicts_layer(&layer, few_long));
     }
 }

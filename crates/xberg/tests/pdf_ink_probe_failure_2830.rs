@@ -7,6 +7,7 @@
 mod helpers;
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use xberg::core::config::{OcrStrategy, PageConfig};
 use xberg::plugins::{OcrBackend, OcrBackendType, Plugin, register_ocr_backend, unregister_ocr_backend};
 use xberg::types::ExtractedDocument;
@@ -14,7 +15,7 @@ use xberg::{ExtractionConfig, OcrConfig, OutputFormat};
 
 const WRONG_SCRIPT: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/arabic.pdf");
 
-struct Cancelling(xberg::cancellation::CancellationToken);
+struct Cancelling(xberg::cancellation::CancellationToken, Arc<AtomicUsize>);
 
 impl Plugin for Cancelling {
     fn name(&self) -> &str {
@@ -40,6 +41,7 @@ impl OcrBackend for Cancelling {
         true
     }
     async fn process_image(&self, _: &[u8], _: &OcrConfig) -> xberg::Result<ExtractedDocument> {
+        self.1.fetch_add(1, Ordering::SeqCst);
         self.0.cancel();
         Err(xberg::XbergError::Cancelled)
     }
@@ -56,7 +58,8 @@ impl Drop for Guard {
 fn a_run_cancelled_during_the_ink_probe_is_returned_as_cancelled() {
     let _guard = Guard;
     let token = xberg::cancellation::CancellationToken::new();
-    register_ocr_backend(Arc::new(Cancelling(token.clone()))).unwrap();
+    let calls = Arc::new(AtomicUsize::new(0));
+    register_ocr_backend(Arc::new(Cancelling(token.clone(), calls.clone()))).unwrap();
     let config = ExtractionConfig {
         use_cache: false,
         output_format: OutputFormat::Plain,
@@ -74,5 +77,10 @@ fn a_run_cancelled_during_the_ink_probe_is_returned_as_cancelled() {
         matches!(result, Err(xberg::XbergError::Cancelled)),
         "{:?}",
         result.map(|r| r.processing_warnings)
+    );
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        1,
+        "the probe was the first and only reader before the cancellation"
     );
 }
