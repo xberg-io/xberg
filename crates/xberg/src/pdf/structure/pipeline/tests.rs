@@ -1401,18 +1401,118 @@ fn dedup_without_page_text_keeps_row_disjoint_native_tables() {
 }
 
 #[test]
-fn overlap_evidence_reads_each_page_and_table_once() {
+fn overlap_evidence_follows_the_live_tables_when_arbitration_removes_one() {
     let grid = four_row_grid();
-    let partner = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["gamma", "3"]]);
-    let third = cell_table(1, (0.0, 50.0, 100.0, 100.0), &[&["delta", "4"]]);
-    let page = printed_cells(&[&grid, &partner, &third]);
-    let tables = [grid, partner, third];
+    let partner = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let page = printed_cells(&[&partner]);
+    let tables = [grid, partner];
     let mut evidence = OverlapEvidence::new(&page);
-    let removed = ahash::AHashSet::new();
-    for dropped in [1, 2, 1, 2] {
-        assert!(evidence.holds_unprinted_words(&tables, dropped, &removed).is_some());
+    let mut removed = ahash::AHashSet::new();
+    assert_eq!(
+        evidence.holds_unprinted_words(&tables, 1, &removed),
+        Some(false),
+        "the grid holds every word of the partner, and the page prints each of them once"
+    );
+    removed.insert(0);
+    assert_eq!(
+        evidence.holds_unprinted_words(&tables, 1, &removed),
+        Some(true),
+        "with the grid removed, the live set changes and the partner's words are the only copies"
+    );
+    removed.clear();
+    assert_eq!(
+        evidence.holds_unprinted_words(&tables, 1, &removed),
+        Some(false),
+        "a repeated question with the first live set gives the first answer"
+    );
+}
+
+fn kept_native_tables(tables: Vec<crate::types::Table>, page: &[Vec<SegmentData>]) -> Vec<crate::types::Table> {
+    use crate::core::config::layout::TableOverlapPreference;
+    let mut tables = tables;
+    let native_count = tables.len();
+    deduplicate_overlapping_tables(&mut tables, native_count, TableOverlapPreference::Content, page);
+    tables
+}
+
+#[test]
+fn dedup_counts_two_detections_of_one_region_once_whatever_their_order() {
+    let a = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha beta"], &["gamma delta"]]);
+    let b = cell_table(
+        1,
+        (0.0, 40.0, 100.0, 140.0),
+        &[&["alpha gamma epsilon"], &["beta delta zeta"]],
+    );
+    let tables = [a.clone(), b.clone(), b];
+    let page = vec![vec![
+        printed_at("alpha beta", 5.0, 5.0),
+        printed_at("gamma delta", 5.0, 15.0),
+        printed_at("alpha gamma epsilon", 5.0, 105.0),
+        printed_at("beta delta zeta", 5.0, 115.0),
+    ]];
+    for order in [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]] {
+        let kept = kept_native_tables(order.iter().map(|&index| tables[index].clone()).collect(), &page);
+        assert_eq!(kept.len(), 2, "order {order:?}: the table A and one copy of B stay");
+        assert!(kept.iter().any(|table| table.cells == a.cells), "order {order:?}: A stays");
     }
-    assert_eq!(evidence.reads, (1, 3), "one page and three tables, each read once");
+}
+
+fn joined_pair() -> (crate::types::Table, crate::types::Table) {
+    let small = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["PICCOLO21", "ASUMayo17"]]);
+    let large = cell_table(
+        1,
+        (0.0, 0.0, 100.0, 100.0),
+        &[&["PICCOLO21", "reference"], &["ASUMayo17", "context"]],
+    );
+    (small, large)
+}
+
+#[test]
+fn dedup_counts_an_exact_word_and_a_split_copy_of_it_as_two_printed_copies() {
+    let (small, large) = joined_pair();
+    let page = vec![vec![
+        printed_at("PICCOLO", 5.0, 80.0),
+        printed_at("21", 33.0, 80.0),
+        printed_at("ASUMayo", 49.0, 80.0),
+        printed_at("17", 77.0, 80.0),
+        printed_at("PICCOLO21", 5.0, 10.0),
+        printed_at("reference", 49.0, 10.0),
+        printed_at("ASUMayo17", 5.0, 25.0),
+        printed_at("context", 49.0, 25.0),
+    ]];
+    let kept = kept_native_tables(vec![large, small.clone()], &page);
+    assert_eq!(kept.len(), 2, "the page prints each joined word twice, once whole and once split");
+    assert!(kept.iter().any(|table| table.cells == small.cells));
+}
+
+#[test]
+fn dedup_counts_two_split_copies_and_drops_a_table_for_one_printed_copy() {
+    let (small, large) = joined_pair();
+    let split_twice = vec![vec![
+        printed_at("PICCOLO", 5.0, 80.0),
+        printed_at("21", 33.0, 80.0),
+        printed_at("ASUMayo", 49.0, 80.0),
+        printed_at("17", 77.0, 80.0),
+        printed_at("PICCOLO", 5.0, 10.0),
+        printed_at("21", 33.0, 10.0),
+        printed_at("reference", 49.0, 10.0),
+        printed_at("ASUMayo", 5.0, 25.0),
+        printed_at("17", 33.0, 25.0),
+        printed_at("context", 49.0, 25.0),
+    ]];
+    assert_eq!(
+        kept_native_tables(vec![large.clone(), small.clone()], &split_twice).len(),
+        2
+    );
+    let once = vec![vec![
+        printed_at("PICCOLO21", 5.0, 10.0),
+        printed_at("reference", 49.0, 10.0),
+        printed_at("ASUMayo17", 5.0, 25.0),
+        printed_at("context", 49.0, 25.0),
+    ]];
+    let kept = kept_native_tables(vec![large.clone(), small], &once);
+    assert_eq!(kept.len(), 1, "one printed copy cannot back two detections");
+    assert_eq!(kept[0].cells, large.cells);
 }
 
 /// Tables that the document build emits for one page of text and the given native tables.
