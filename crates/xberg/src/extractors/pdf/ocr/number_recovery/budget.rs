@@ -34,7 +34,7 @@ impl State {
             }
         })
     }
-    fn reserve(&mut self, index: usize, config: &ExtractionConfig) -> bool {
+    fn available(&mut self, index: usize, config: &ExtractionConfig) -> bool {
         let limits = self.limits(config);
         if self.pages.contains_key(&index) {
             return true;
@@ -43,13 +43,19 @@ impl State {
             self.limited = true;
             return false;
         }
-        self.pages.insert(index, false);
+        true
+    }
+    fn reserve(&mut self, index: usize, config: &ExtractionConfig) -> bool {
+        if !self.available(index, config) {
+            return false;
+        }
+        self.pages.entry(index).or_insert(false);
         true
     }
 }
 impl Budget {
-    pub(super) fn reserve_page(&self, index: usize, config: &ExtractionConfig) -> bool {
-        self.state.lock().reserve(index, config)
+    pub(super) fn page_available(&self, index: usize, config: &ExtractionConfig) -> bool {
+        self.state.lock().available(index, config)
     }
     pub(super) fn begin_page(&self, index: usize, config: &ExtractionConfig) -> bool {
         let mut state = self.state.lock();

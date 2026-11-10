@@ -16,6 +16,7 @@ mod budget;
 mod read_proof;
 mod shape_proof;
 pub(super) use read_proof::ReadProof;
+use shape_proof::Preparation;
 
 #[derive(Clone)]
 struct Number {
@@ -109,7 +110,7 @@ impl PreparedPage<'_> {
             missing_model_warning(read.warnings, source.index);
             return false;
         }
-        if !self.run.budget.reserve_page(source.index, self.config) {
+        if !self.run.budget.page_available(source.index, self.config) {
             budget_warning(self.run, read.warnings, source.index);
             return false;
         }
@@ -174,11 +175,7 @@ pub(super) async fn recover(
         return false;
     }
     let scale = (media.width / frame.0 as f32, media.height / frame.1 as f32);
-    let changed = insert(numbers, paragraphs, scale, proof_limits(config).max_iterations);
-    if changed {
-        *read = super::document::ocr_paragraphs_plain_text(paragraphs);
-    }
-    changed
+    insert_into_read(numbers, paragraphs, read, scale, proof_limits(config).max_iterations)
 }
 
 fn recovery_context(
@@ -253,18 +250,21 @@ fn source_numbers(
     index: usize,
     retained: usize,
     config: &ExtractionConfig,
-) -> crate::Result<Option<SourceProof>> {
+) -> crate::Result<Preparation<SourceProof>> {
     let info = document.get_page_info(index).map_err(proof_error)?;
     let media = info.media_box;
     if info.rotation != 0 || media.x != 0.0 || media.y != 0.0 || info.crop_box.is_some_and(|crop| crop != media) {
-        return Ok(None);
+        return Ok(Preparation::UnsupportedBeforeWork);
     }
     let limits = proof_limits(config);
     let budget = limits.max_content_size.saturating_sub(retained);
-    let Some((numbers, shape)) = shape_proof::prepare_source(document, index, budget, limits.max_iterations)? else {
-        return Ok(None);
-    };
-    Ok(Some(SourceProof { media, numbers, shape }))
+    Ok(
+        match shape_proof::prepare_source_accounted(document, index, budget, limits.max_iterations)? {
+            Preparation::Ready((numbers, shape)) => Preparation::Ready(SourceProof { media, numbers, shape }),
+            Preparation::UnsupportedBeforeWork => Preparation::UnsupportedBeforeWork,
+            Preparation::UnmeasuredDecline => Preparation::UnmeasuredDecline,
+        },
+    )
 }
 
 fn cancelled(config: &ExtractionConfig) -> bool {
@@ -304,8 +304,12 @@ fn verify_page(work: Verification) -> crate::Result<Option<(Vec<Number>, Rect)>>
     let mut bounded = config.clone();
     bounded.security_limits = Some(limits);
     let proof = match source_numbers(&document, index, raster.capacity(), &bounded) {
-        Ok(Some(proof)) => proof,
-        Ok(None) => {
+        Ok(Preparation::Ready(proof)) => proof,
+        Ok(Preparation::UnsupportedBeforeWork) => {
+            run.budget.settle_work(allowance, 0);
+            return Ok(None);
+        }
+        Ok(Preparation::UnmeasuredDecline) => {
             run.budget.retain_failed_work();
             return Ok(None);
         }
@@ -407,7 +411,7 @@ pub(super) fn prepare_read(
     if model_directory(config).is_none() {
         return (primary, false);
     }
-    if !run.budget.reserve_page(page, config) {
+    if !run.budget.page_available(page, config) {
         return (primary, false);
     }
     let options = primary.backend_options.get_or_insert_with(|| serde_json::json!({}));
@@ -705,7 +709,19 @@ fn crop_number(raster: &image::DynamicImage, media: Rect, bbox: Rect, budget: us
     Some(image::DynamicImage::ImageRgb8(padded))
 }
 
+#[cfg(test)]
 fn insert(numbers: Vec<Number>, paragraphs: &mut [PdfParagraph], scale: (f32, f32), max_work: usize) -> bool {
+    let mut read = super::document::ocr_paragraphs_plain_text(paragraphs);
+    insert_into_read(numbers, paragraphs, &mut read, scale, max_work)
+}
+
+fn insert_into_read(
+    numbers: Vec<Number>,
+    paragraphs: &mut [PdfParagraph],
+    read: &mut String,
+    scale: (f32, f32),
+    max_work: usize,
+) -> bool {
     if !scale.0.is_finite()
         || !scale.1.is_finite()
         || scale.0 <= 0.0
@@ -744,11 +760,17 @@ fn insert(numbers: Vec<Number>, paragraphs: &mut [PdfParagraph], scale: (f32, f3
         .collect::<Vec<_>>();
     let mut changed = false;
     for (paragraph, line, number, bbox) in planned {
+        let preceding = paragraphs[..paragraph]
+            .iter()
+            .flat_map(|paragraph| &paragraph.lines)
+            .flat_map(|line| &line.segments)
+            .map(|segment| segment.text.split_whitespace().count())
+            .sum::<usize>();
         let paragraph = &mut paragraphs[paragraph];
         let position = paragraph.lines[line]
             .segments
             .partition_point(|existing| existing.x <= bbox.x);
-        if !splice_paragraph_number(paragraph, line, position, &number.text) {
+        if !splice_paragraph_number(paragraph, line, position, &number.text, (read, preceding)) {
             continue;
         }
         let line = &mut paragraph.lines[line];
@@ -760,10 +782,13 @@ fn insert(numbers: Vec<Number>, paragraphs: &mut [PdfParagraph], scale: (f32, f3
     changed
 }
 
-fn splice_paragraph_number(paragraph: &mut PdfParagraph, line: usize, position: usize, number: &str) -> bool {
-    if paragraph.text.is_empty() {
-        return true;
-    }
+fn splice_paragraph_number(
+    paragraph: &mut PdfParagraph,
+    line: usize,
+    position: usize,
+    number: &str,
+    (read, page_words): (&mut String, usize),
+) -> bool {
     let preceding = paragraph.lines[..line]
         .iter()
         .flat_map(|line| &line.segments)
@@ -773,23 +798,33 @@ fn splice_paragraph_number(paragraph: &mut PdfParagraph, line: usize, position: 
     let before_word = paragraph.lines[line].segments[position..]
         .iter()
         .any(|segment| !segment.text.trim().is_empty());
-    let Some(index) = (if before_word {
-        Some(preceding)
-    } else {
-        preceding.checked_sub(1)
-    }) else {
+    let Some(page_offset) = number_offset(read, page_words + preceding, before_word) else {
         return false;
     };
-    let Some(range) = word_byte_range(&paragraph.text, index) else {
+    let local_offset = number_offset(&paragraph.text, preceding, before_word);
+    if !paragraph.text.is_empty() && local_offset.is_none() {
         return false;
-    };
-    let (offset, addition) = if before_word {
-        (range.start, format!("{number} "))
+    }
+    let addition = if before_word {
+        format!("{number} ")
     } else {
-        (range.end, format!(" {number}"))
+        format!(" {number}")
     };
-    paragraph.text.insert_str(offset, &addition);
+    if let Some(offset) = local_offset {
+        paragraph.text.insert_str(offset, &addition);
+    }
+    read.insert_str(page_offset, &addition);
     true
+}
+
+fn number_offset(text: &str, preceding: usize, before_word: bool) -> Option<usize> {
+    let index = if before_word {
+        preceding
+    } else {
+        preceding.checked_sub(1)?
+    };
+    let range = word_byte_range(text, index)?;
+    Some(if before_word { range.start } else { range.end })
 }
 
 fn word_byte_range(text: &str, index: usize) -> Option<std::ops::Range<usize>> {

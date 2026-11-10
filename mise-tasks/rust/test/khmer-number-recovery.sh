@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-#MISE description="Qualify native-number recovery with a pinned, already provisioned Khmer model"
+#MISE description="Verify native-number recovery with a pinned, already provisioned Khmer model"
 set -euo pipefail
 
-model="${XBERG_2408_KHM_MODEL:?Provide the pinned Khmer traineddata; this task never downloads models}"
+model="${XBERG_2408_KHM_MODEL:?Provide the already provisioned Khmer traineddata; this task verifies its pinned checksum}"
 python3 - "$model" <<'PY'
 from hashlib import sha256
 from pathlib import Path
@@ -88,6 +88,11 @@ unit_names=(
   run_controls_tests::should_observe_cancellation_during_shape_proof_before_native_engine_start
   run_controls_tests::should_prepare_numeric_source_on_a_blocking_worker
   run_controls_tests::should_retain_source_reservation_when_a_late_decline_fails_the_proof
+  run_controls_tests::should_recover_the_second_page_after_an_early_unsupported_source_decline
+  run_controls_tests::should_not_spend_source_page_slots_on_unaccepted_primary_reads
+  run_controls_tests::should_retain_source_reservation_after_content_decode_or_budget_decline
+  run_controls_tests::should_release_metadata_declines_without_consuming_source_work
+  run_controls_tests::should_splice_numbers_into_the_second_accepted_paragraph
   run_controls_tests::should_warn_without_a_model_even_when_accepted_geometry_is_unavailable
 )
 expected_units="${#unit_names[@]}"

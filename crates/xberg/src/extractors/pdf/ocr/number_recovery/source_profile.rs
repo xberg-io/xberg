@@ -29,9 +29,8 @@ pub(super) struct Admitted {
     pub(super) max_chars: usize,
 }
 
-pub(super) fn admit(document: &PdfDocument, page: usize, max_bytes: usize) -> ProofResult<Admitted> {
+pub(super) fn metadata(document: &PdfDocument, page: usize) -> ProofResult<()> {
     require(!document.is_encrypted(), "encrypted source content")?;
-    require(max_bytes >= FIXED_WORK_BYTES, "source working byte budget")?;
     require(
         document
             .trailer()
@@ -56,6 +55,14 @@ pub(super) fn admit(document: &PdfDocument, page: usize, max_bytes: usize) -> Pr
         !page.contains_key("StructParents") && !page.contains_key("ActualText"),
         "tagged source page",
     )?;
+    require(page.contains_key("Contents"), "missing source Contents")
+}
+
+pub(super) fn admit(document: &PdfDocument, page: usize, max_bytes: usize) -> ProofResult<Admitted> {
+    metadata(document, page)?;
+    require(max_bytes >= FIXED_WORK_BYTES, "source working byte budget")?;
+    let page = document.get_page(page)?;
+    let page = page.as_dict().ok_or(Failure::Declined("source page dictionary"))?;
     let mut decoder = Contents::new(document);
     decoder.visit(
         page.get("Contents")

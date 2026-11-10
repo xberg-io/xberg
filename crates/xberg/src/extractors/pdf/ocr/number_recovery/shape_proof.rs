@@ -126,13 +126,74 @@ fn bounded_source(document: &PdfDocument, page: usize, max_bytes: usize) -> Proo
     })
 }
 
+pub(super) enum Preparation<T> {
+    Ready(T),
+    UnsupportedBeforeWork,
+    UnmeasuredDecline,
+}
+
+pub(super) fn prepare_source_accounted(
+    document: &PdfDocument,
+    page: usize,
+    max_bytes: usize,
+    max_iterations: usize,
+) -> crate::Result<Preparation<(Vec<Number>, ShapeProof)>> {
+    if optional(preflight_source(document, page))?.is_none() {
+        return Ok(Preparation::UnsupportedBeforeWork);
+    }
+    Ok(
+        match optional(prepare_source_inner(document, page, max_bytes, max_iterations))? {
+            Some(proof) => Preparation::Ready(proof),
+            None => Preparation::UnmeasuredDecline,
+        },
+    )
+}
+
+fn preflight_source(document: &PdfDocument, page: usize) -> ProofResult<()> {
+    page_media(document, page)?;
+    source_profile::metadata(document, page)?;
+    // The render document already visited these dictionaries. Do not resolve XObjects, font ~keep
+    // descriptors or programs here: decoding/copying them makes a decline unmeasured work. ~keep
+    let resources = document.get_page_resources(page)?;
+    let fonts = resources
+        .as_dict()
+        .and_then(|dict| dict.get("Font"))
+        .ok_or(Failure::Declined("missing page fonts"))?;
+    let fonts = document.resolve_object(fonts)?;
+    let fonts = fonts.as_dict().ok_or(Failure::Declined("page fonts dictionary"))?;
+    require(!fonts.is_empty() && fonts.len() <= MAX_OBJECTS, "page font count")?;
+    for (name, font) in fonts {
+        require(
+            name.len() <= source_profile::MAX_NAME_BYTES,
+            "font resource name length",
+        )?;
+        let font = document.resolve_object(font)?;
+        let dict = font.as_dict().ok_or(Failure::Declined("font dictionary"))?;
+        require(
+            match dict.get("Subtype").and_then(Object::as_name) {
+                Some("TrueType") => true,
+                Some("Type1") => !dict.contains_key("FontDescriptor") && !dict.contains_key("ToUnicode"),
+                _ => false,
+            },
+            "unsupported page font subtype",
+        )?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
 pub(super) fn prepare_source(
     document: &PdfDocument,
     page: usize,
     max_bytes: usize,
     max_iterations: usize,
 ) -> crate::Result<Option<(Vec<Number>, ShapeProof)>> {
-    optional(prepare_source_inner(document, page, max_bytes, max_iterations))
+    Ok(
+        match prepare_source_accounted(document, page, max_bytes, max_iterations)? {
+            Preparation::Ready(proof) => Some(proof),
+            Preparation::UnsupportedBeforeWork | Preparation::UnmeasuredDecline => None,
+        },
+    )
 }
 fn prepare_source_inner(
     document: &PdfDocument,

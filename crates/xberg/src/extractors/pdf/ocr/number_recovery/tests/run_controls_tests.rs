@@ -187,6 +187,15 @@ fn should_prepare_numeric_source_on_a_blocking_worker() {
         )
         .await;
     });
+    assert_eq!(
+        run.budget.remaining(&config),
+        0,
+        "failed crop OCR must retain source work"
+    );
+    assert!(
+        run.budget.limited(),
+        "the deliberately invalid model failure must retain its charge"
+    );
     let captured = events.0.lock().unwrap();
     assert!(!captured.is_empty(), "the real native font preparation must run");
     assert!(
@@ -260,39 +269,25 @@ fn should_bound_page_admission_across_one_document_and_keep_reads() {
         max_iterations: 1,
         ..Default::default()
     });
-    let source = include_bytes!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/fixtures/pdf_khmer_number_2408/matching.pdf"
-    ));
-    let mut pdf = lopdf::Document::load_mem(source).unwrap();
-    let first = *pdf.get_pages().values().next().unwrap();
-    let mut page = pdf.get_dictionary(first).unwrap().clone();
-    let parent = page.get(b"Parent").unwrap().as_reference().unwrap();
-    page.set("Parent", parent);
-    let second = pdf.add_object(page);
-    let root = pdf.get_dictionary_mut(parent).unwrap();
-    root.set(
-        "Kids",
-        vec![lopdf::Object::Reference(first), lopdf::Object::Reference(second)],
-    );
-    root.set("Count", 2);
-    let mut bytes = Vec::new();
-    pdf.save_to(&mut bytes).unwrap();
-    let document = Arc::new(PdfDocument::from_bytes(bytes).unwrap());
+    let document = Arc::new(PdfDocument::from_bytes(early_decline_pages("rotation")).unwrap());
     assert_eq!(document.page_count().unwrap(), 2);
     let run = Arc::new(Run::default());
     let (_, admitted) = prepare_read(config.ocr.clone().unwrap(), &config, 0, 0, Some("ប០ប"), &run);
-    let (later, observed) = prepare_read(config.ocr.clone().unwrap(), &config, 1, 0, Some("ប០ប"), &run);
     assert!(admitted);
-    assert!(!observed, "page admission must stop before source or crop work");
-    assert_eq!(later.backend_options, config.ocr.as_ref().unwrap().backend_options);
     let events = FontEvents::default();
     let first = exercise_page(&document, 0, &config, &run);
     let second = exercise_page(&document, 1, &config, &run);
     with_runtime(events.clone(), async {
         let mut warnings = first.await;
         let initial = events.0.lock().unwrap().len();
-        assert!(initial > 0, "the first admitted page really performs source work");
+        assert_eq!(initial, 0, "the first source attempt declines at page metadata");
+        assert!(
+            run.budget.remaining(&config) > 0,
+            "early decline releases byte allowance"
+        );
+        let (later, observed) = prepare_read(config.ocr.clone().unwrap(), &config, 1, 0, Some("ប០ប"), &run);
+        assert!(!observed, "the attempted source page uses the single page slot");
+        assert_eq!(later.backend_options, config.ocr.as_ref().unwrap().backend_options);
         warnings.extend(second.await);
         assert_eq!(
             events.0.lock().unwrap().len(),
@@ -343,6 +338,11 @@ fn should_observe_cancellation_after_admission_before_engine_initialization() {
     assert!(
         run.processor.get().is_none(),
         "a cancellation during source proof must prevent engine initialization"
+    );
+    assert_eq!(
+        run.budget.remaining(&config),
+        0,
+        "cancellation after font work cannot refund its reservation"
     );
 }
 
@@ -554,9 +554,10 @@ fn should_retain_source_reservation_when_a_late_decline_fails_the_proof() {
     let shadow = PdfDocument::from_bytes(bytes).unwrap();
     let (raster, _, _) = verifier_fixture();
     assert!(
-        source_numbers(&shadow, 0, raster.capacity(), &config)
-            .unwrap()
-            .is_none(),
+        matches!(
+            source_numbers(&shadow, 0, raster.capacity(), &config).unwrap(),
+            Preparation::UnmeasuredDecline
+        ),
         "the real ambiguous-physical-byte profile must decline"
     );
     let run = Arc::new(Run::default());
@@ -594,4 +595,243 @@ fn should_retain_source_reservation_when_a_late_decline_fails_the_proof() {
             "the exhausted document budget is caller-visible exactly once"
         );
     });
+}
+
+fn early_decline_pages(profile: &str) -> Vec<u8> {
+    let source = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/pdf_khmer_number_2408/matching.pdf"
+    ));
+    let mut pdf = lopdf::Document::load_mem(source).unwrap();
+    let first = *pdf.get_pages().values().next().unwrap();
+    let page = pdf.get_dictionary(first).unwrap().clone();
+    let parent = page.get(b"Parent").unwrap().as_reference().unwrap();
+    let second = pdf.add_object(page);
+    match profile {
+        "rotation" => pdf.get_dictionary_mut(first).unwrap().set("Rotate", 90),
+        "crop" => pdf
+            .get_dictionary_mut(first)
+            .unwrap()
+            .set("CropBox", vec![1.into(), 1.into(), 10.into(), 10.into()]),
+        "actual_text" => pdf
+            .get_dictionary_mut(first)
+            .unwrap()
+            .set("ActualText", lopdf::Object::string_literal("hidden")),
+        "inline_actual_text" => {
+            let id = pdf
+                .get_dictionary(first)
+                .unwrap()
+                .get(b"Contents")
+                .unwrap()
+                .as_reference()
+                .unwrap();
+            pdf.get_object_mut(id)
+                .unwrap()
+                .as_stream_mut()
+                .unwrap()
+                .set_plain_content(b"/Span << /ActualText (hidden) >> BDC EMC".to_vec());
+        }
+        "form" => {
+            let form = pdf.add_object(lopdf::Stream::new(lopdf::dictionary! {"Subtype" => "Form"}, Vec::new()));
+            let resources = pdf.get_dictionary(first).unwrap().get(b"Resources").unwrap().clone();
+            let mut resources = match resources {
+                lopdf::Object::Reference(id) => pdf.get_dictionary(id).unwrap().clone(),
+                lopdf::Object::Dictionary(dict) => dict,
+                other => panic!("{other:?}"),
+            };
+            resources.set("XObject", lopdf::dictionary! {"Fm" => form});
+            pdf.get_dictionary_mut(first).unwrap().set("Resources", resources);
+        }
+        "budget" => {}
+        "font" => {
+            let font = pdf.add_object(lopdf::dictionary! {"Type" => "Font", "Subtype" => "Type0"});
+            pdf.get_dictionary_mut(first).unwrap().set(
+                "Resources",
+                lopdf::dictionary! {
+                    "Font" => lopdf::dictionary! {"F1" => font}
+                },
+            );
+        }
+        _ => panic!("unknown profile"),
+    }
+    let root = pdf.get_dictionary_mut(parent).unwrap();
+    root.set(
+        "Kids",
+        vec![lopdf::Object::Reference(first), lopdf::Object::Reference(second)],
+    );
+    root.set("Count", 2);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+#[test]
+#[ignore = "Run mise run rust:test:khmer-number-recovery with the pinned Khmer model"]
+fn should_recover_the_second_page_after_an_early_unsupported_source_decline() {
+    let (root, config) = invalid_auxiliary_models();
+    std::fs::copy(
+        std::env::var_os("XBERG_2408_KHM_MODEL").expect("pinned model"),
+        root.path().join("khm.traineddata"),
+    )
+    .unwrap();
+    let (raster, proof, character) = verifier_fixture();
+    let decoded = image::load_from_memory(&raster).unwrap();
+    let metadata = crate::types::Metadata::default();
+    for profile in ["rotation", "crop", "actual_text", "font"] {
+        let document = Arc::new(PdfDocument::from_bytes(early_decline_pages(profile)).unwrap());
+        assert_eq!(document.page_count().unwrap(), 2);
+        let run = Arc::new(Run::default());
+        let initial = run.budget.remaining(&config);
+        let first = exercise_page(&document, 0, &config, &run);
+        let events = FontEvents::default();
+        with_runtime(events.clone(), async {
+            let first = first.await;
+            assert!(
+                events.0.lock().unwrap().is_empty(),
+                "early {profile} must precede font loading"
+            );
+            assert_eq!(
+                run.budget.remaining(&config),
+                initial,
+                "early {profile} must release source reservation"
+            );
+            assert!(
+                !run.budget.limited(),
+                "early {profile} is unsupported, not budget exhaustion"
+            );
+            assert_eq!(first.len(), 1);
+            assert!(first[0].message.contains("could not be bound"));
+            let mut located = paragraph("VOU", "VOU");
+            let segment = &mut located.lines[0].segments[0];
+            let sx = decoded.width() as f32 / proof.media.width;
+            let sy = decoded.height() as f32 / proof.media.height;
+            segment.x = character.bbox.x * sx - 10.0;
+            segment.y = character.bbox.y * sy;
+            segment.width = character.bbox.width * sx + 20.0;
+            segment.height = character.bbox.height * sy;
+            let mut paragraphs = [located];
+            let mut read = "\n\tVOU \r\n".to_owned();
+            let mut warnings = Vec::new();
+            assert!(
+                recover(
+                    PageSource {
+                        document: document.clone(),
+                        index: 1,
+                        layer: "ប០ប",
+                        raster: raster.clone(),
+                        dimensions: (decoded.width(), decoded.height()),
+                        metadata: &metadata
+                    },
+                    &mut paragraphs,
+                    &mut read,
+                    &config,
+                    &run,
+                    &mut warnings
+                )
+                .await,
+                "supported page after {profile}"
+            );
+            assert_eq!(
+                read, "\n\tVOU ០ \r\n",
+                "painted zero must preserve accepted spacing after {profile}"
+            );
+            assert!(!events.0.lock().unwrap().is_empty(), "supported page must load fonts");
+            assert!(warnings.is_empty(), "{profile}: {warnings:?}");
+        });
+    }
+}
+
+#[test]
+fn should_not_spend_source_page_slots_on_unaccepted_primary_reads() {
+    let (_root, config) = invalid_auxiliary_models();
+    let run = Run::default();
+    for page in 0..16 {
+        let (_, observed) = prepare_read(config.ocr.clone().unwrap(), &config, page, 0, Some("ប០ប"), &run);
+        assert!(
+            observed,
+            "unaccepted read on page {page} must not spend a source proof slot"
+        );
+    }
+    assert!(
+        run.budget.begin_page(16, &config),
+        "accepted source work still has page allowance"
+    );
+}
+
+#[test]
+fn should_retain_source_reservation_after_content_decode_or_budget_decline() {
+    for profile in ["inline_actual_text", "form", "budget"] {
+        let (_root, mut config) = invalid_auxiliary_models();
+        if profile == "budget" {
+            config.security_limits = Some(crate::extractors::security::SecurityLimits {
+                max_content_size: 1024 * 1024,
+                ..Default::default()
+            });
+        }
+        let document = Arc::new(PdfDocument::from_bytes(early_decline_pages(profile)).unwrap());
+        let run = Arc::new(Run::default());
+        let warnings = with_runtime(FontEvents::default(), exercise_page(&document, 0, &config, &run));
+        assert_eq!(
+            run.budget.remaining(&config),
+            0,
+            "{profile} must retain unmeasured work"
+        );
+        assert!(run.budget.limited(), "{profile}");
+        assert!(run.processor.get().is_none(), "{profile} must stop before crop OCR");
+        assert_eq!(warnings.len(), 1, "{profile}: {warnings:?}");
+        assert!(warnings[0].message.contains("document budget"), "{profile}");
+    }
+}
+
+#[test]
+fn should_release_metadata_declines_without_consuming_source_work() {
+    let (_root, config) = invalid_auxiliary_models();
+    let expected = proof_limits(&config).max_content_size;
+    let mut observed = Vec::new();
+    for profile in ["rotation", "crop", "actual_text", "font"] {
+        let document = Arc::new(PdfDocument::from_bytes(early_decline_pages(profile)).unwrap());
+        let run = Arc::new(Run::default());
+        let future = exercise_page(&document, 0, &config, &run);
+        let events = FontEvents::default();
+        let warnings = with_runtime(events.clone(), future);
+        observed.push((profile, run.budget.remaining(&config), run.budget.limited()));
+        assert!(
+            events.0.lock().unwrap().is_empty(),
+            "{profile}: must precede native fonts"
+        );
+        assert!(run.processor.get().is_none(), "{profile}: must precede crop OCR");
+        assert_eq!(warnings.len(), 1, "{profile}");
+    }
+    assert_eq!(
+        observed,
+        vec![
+            ("rotation", expected, false),
+            ("crop", expected, false),
+            ("actual_text", expected, false),
+            ("font", expected, false)
+        ],
+        "every metadata-only decline must release its reservation"
+    );
+}
+
+#[test]
+fn should_splice_numbers_into_the_second_accepted_paragraph() {
+    let mut first = paragraph("first 1", "first 1");
+    first.lines[0].segments[0].y = 200.0;
+    let mut second = paragraph("left\t right", "left");
+    let mut right = segment("right");
+    right.x = 80.0;
+    second.lines[0].segments.push(right);
+    let mut paragraphs = [first, second];
+    let mut read = "\nfirst  1\r\n\r\nleft\t right\n".to_owned();
+    assert!(insert_into_read(
+        vec![number("០", 30.0)],
+        &mut paragraphs,
+        &mut read,
+        (1.0, 1.0),
+        100
+    ));
+    assert_eq!(paragraphs[0].text, "first 1");
+    assert_eq!(paragraphs[1].text, "left\t ០ right");
+    assert_eq!(read, "\nfirst  1\r\n\r\nleft\t ០ right\n");
 }
