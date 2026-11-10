@@ -7,7 +7,7 @@ fn page() -> PdfDocument {
 }
 
 #[test]
-fn explicit_preprocessing_raises_only_the_unconfigured_render_target() {
+fn configured_preprocessing_raises_only_the_unconfigured_render_target() {
     let pdf = page();
     let limits = SecurityLimits::default();
     assert_eq!(planned_pdf_ocr_render_dpi(&pdf, 0, None, &limits), (150, 150));
@@ -82,4 +82,18 @@ fn zero_render_budget_is_an_error_not_an_unbounded_fallback() {
         "{error}"
     );
     assert!(!exceeded, "canvas refusal must not claim a source-image overflow");
+}
+
+#[test]
+fn actual_scan_render_preserves_detected_source_density_before_preprocessing() {
+    let bytes = crate::pdf::render::build_full_page_raster_pdf((144.0, 144.0), (300, 300), 1.0, 0);
+    let pdf = PdfDocument::from_bytes(bytes).unwrap();
+    let limits = SecurityLimits::default();
+    assert_eq!(crate::pdf::scan_detect::full_page_raster_density(&pdf, 0), Some(150.0));
+    let mut exceeded = false;
+    let (rendered, _) =
+        crate::pdf::render::render_pdf_ocr_page_with_budget_evidence(&pdf, 0, None, &limits, &mut exceeded, Some(300))
+            .unwrap();
+    assert_eq!((rendered.width, rendered.height), (300, 300));
+    assert!(!exceeded);
 }

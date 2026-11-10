@@ -1,3 +1,4 @@
+#![allow(clippy::print_stdout)]
 #![cfg(all(
     feature = "pdf",
     feature = "ocr",
@@ -76,7 +77,7 @@ fn original_dimensions(document: &ExtractedDocument) -> (usize, usize) {
 }
 
 #[tokio::test]
-async fn explicit_preprocessing_density_preserves_source_words_before_resampling() {
+async fn configured_preprocessing_density_preserves_source_words_before_resampling() {
     let bytes = fixture::localized_pdf("gap-left");
     assert_eq!(
         hex::encode(Sha256::digest(&bytes)),
@@ -115,7 +116,7 @@ async fn explicit_image_density_keeps_precedence_over_preprocessing() {
 }
 
 #[tokio::test]
-async fn implicit_preprocessing_keeps_the_existing_render_density() {
+async fn absent_preprocessing_block_keeps_the_existing_render_density() {
     let document = read(fixture::localized_pdf("gap-left"), None, None).await;
     assert_eq!(original_dimensions(&document), (900, 450));
 }
@@ -131,4 +132,12 @@ async fn promoted_density_preserves_origin_and_glyph_phase_controls() {
         assert_eq!(words(&document.content), expected_words());
         assert_eq!(original_dimensions(&document), (1800, 900));
     }
+}
+
+#[tokio::test]
+async fn denoise_only_block_uses_its_default_target_density() {
+    let preprocessing: ImagePreprocessingConfig = serde_json::from_value(serde_json::json!({"denoise": true})).unwrap();
+    assert_eq!(preprocessing.target_dpi, 300);
+    let document = read(fixture::localized_pdf("gap-left"), None, Some(preprocessing)).await;
+    assert_eq!(original_dimensions(&document), (1800, 900));
 }

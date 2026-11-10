@@ -1557,8 +1557,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(markdown): Display math no longer opens an HTML block.** (GH#2793)
   A line of display math that starts with `<` (`<script`, `<div`, `<!--` and others) now gets a space after the `<`, as a `<` before a closing `>` already did, so no Markdown reader starts an HTML block there and drops the math.
 
-- **(pdf): Preserve source detail for explicitly configured Tesseract preprocessing.** Refs #2711.
-  Forced whole-document OCR with the built-in Tesseract backend now renders at an explicit higher preprocessing target DPI before normalization, within the existing render budget. This recovers a reproduced small-text word boundary lost by rendering at 150 DPI and then enlarging; explicit image settings and original full-page scan density retain precedence. Implicit defaults, selected-page OCR, prepared images and OCR pipelines keep their existing behavior.
+- **(pdf): Preserve source detail for configured Tesseract preprocessing.** Refs #2711 (partial).
+  Forced whole-document OCR with the registered built-in Tesseract backend, including the synthesized classical pipeline, renders native page content at a preprocessing target above 150 DPI within the existing budget. Any preprocessing block requests its target, including the default 300 DPI in a denoise-only block. This recovers a reproduced small-text word boundary; explicit image settings and original full-page scan density retain precedence. Without a preprocessing block the default remains 150 DPI. Selected pages, prepared rasters, custom backends, explicit pipelines and VLM fallback keep their source-render policy. The general 150-DPI glyph-shift issue remains open.
 
 ## [1.3.11] - 2026-10-16
 
