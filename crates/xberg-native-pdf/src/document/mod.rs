@@ -1856,6 +1856,8 @@ mod redaction;
 mod span_postprocess;
 mod spans_text;
 mod tables;
+#[doc(hidden)]
+pub use crate::extractors::text::{StackSpan, script_stack};
 pub use extract_api::order_on_script_base_lines;
 pub use key_value_rows::reorder_ltr_key_value_rows;
 mod text_assembly;

@@ -60,6 +60,46 @@ fn promoted_batch_reserves_the_page_cap_and_never_less_than_before() {
 }
 
 #[test]
+fn plain_mixed_route_promotes_the_configured_density() {
+    assert!(mixed_route_promotes_preprocessing_dpi(false, false));
+}
+
+#[test]
+fn mixed_route_with_layout_detection_keeps_the_source_render() {
+    assert!(!mixed_route_promotes_preprocessing_dpi(true, false));
+}
+
+#[test]
+fn mixed_route_probing_hidden_layer_keeps_the_source_render() {
+    assert!(!mixed_route_promotes_preprocessing_dpi(false, true));
+}
+
+#[test]
+fn promoted_mixed_route_batch_working_set_reserves_the_page_cap() {
+    let base = UNMEASURED_OCR_PAGE_WORKING_SET_BYTES;
+    assert_eq!(mixed_route_batch_working_set(base, None, base * 4), base);
+    assert_eq!(mixed_route_batch_working_set(base, Some(300), base * 4), base * 4);
+}
+
+#[test]
+fn preprocessing_render_reservation_bounds_the_promoted_working_set() {
+    let cap = 8 * 1024 * 1024;
+    assert_eq!(
+        preprocessing_render_reservation(None, cap),
+        UNMEASURED_OCR_PAGE_WORKING_SET_BYTES
+    );
+    assert_eq!(
+        preprocessing_render_reservation(Some(300), cap),
+        UNMEASURED_OCR_PAGE_WORKING_SET_BYTES.max(cap)
+    );
+    assert_eq!(
+        mixed_route_batch_working_set(0, Some(300), cap),
+        preprocessing_render_reservation(Some(300), cap)
+    );
+    assert_eq!(mixed_route_batch_working_set(0, None, cap), 0);
+}
+
+#[test]
 fn explicit_pipeline_and_vlm_keep_their_render_route() {
     let config = configuration();
     let mut ocr = config.ocr.as_ref().unwrap().clone();
@@ -210,5 +250,246 @@ async fn replacement_tesseract_keeps_actual_source_render_at_150() {
         public,
         (900, 450),
         "the public synthesized pipeline must preserve replacement identity"
+    );
+}
+
+// The helper tests above stay green if the call sites in
+// `extract_mixed_ocr_native_with_layout_inputs` stop consulting the helpers, so the pins
+// below drive that real mixed route. On the promoted route they assert the render the route
+// produced; on the excluded routes, where the supplied rasters and the probing config keep
+// the render regardless, they assert the batch width the promotion's reservation still
+// reaches.
+
+#[cfg(all(
+    feature = "bundle-tessdata-eng",
+    feature = "tokio-runtime",
+    feature = "layout-detection"
+))]
+fn prepared_layout_inputs(pdf: &[u8]) -> PreparedLayoutInputs {
+    let limits = crate::extractors::security::SecurityLimits::default();
+    let document = xberg_native_pdf::PdfDocument::from_bytes(pdf.to_vec()).unwrap();
+    let (rendered, _) = crate::pdf::render::render_pdf_ocr_page_with_dpi(&document, 0, None, &limits).unwrap();
+    let image =
+        crate::extraction::image_decode::decode_standard_image_with_security_limits(&rendered.data, &limits).unwrap();
+    (
+        vec![image],
+        vec![crate::layout::DetectionResult {
+            page_width: rendered.width,
+            page_height: rendered.height,
+            detections: Vec::new(),
+        }],
+    )
+}
+
+#[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
+async fn real_route_run(
+    #[cfg(feature = "layout-detection")] layout: Option<&PreparedLayoutInputs>,
+) -> MixedOcrRun {
+    let mut config = configuration();
+    config.concurrency = Some(crate::core::config::ConcurrencyConfig {
+        max_threads: Some(2),
+        ..Default::default()
+    });
+    let models = tempfile::tempdir().unwrap();
+    std::fs::write(
+        models.path().join("eng.traineddata"),
+        xberg_tesseract::bundled_eng_traineddata().unwrap(),
+    )
+    .unwrap();
+    let ocr = config.ocr.as_mut().unwrap();
+    ocr.tessdata_path = Some(models.path().to_path_buf());
+    ocr.tesseract_config.as_mut().unwrap().use_cache = false;
+    let bytes = fixture::localized_pdf("gap-left");
+    let boundaries = [crate::types::PageBoundary {
+        byte_start: 0,
+        byte_end: 0,
+        page_number: 1,
+    }];
+    extract_mixed_ocr_native_with_layout_inputs(
+        "",
+        &boundaries,
+        MixedOcrPageSelection {
+            ocr: &[1],
+            single_block: &[],
+            preserve_native: &[],
+            native_script: &[],
+            native_layers: None,
+            hidden_layer_backend: None,
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            single_native_type0_page: None,
+            raster_dpis: None,
+        },
+        &bytes,
+        &config,
+        AllPagesFailedPolicy::PreserveNative,
+        #[cfg(feature = "layout-detection")]
+        match layout {
+            Some(prepared) => MixedLayoutInputs::Prepared(Some(prepared)),
+            None => MixedLayoutInputs::Resolve(None),
+        },
+    )
+    .await
+    .unwrap()
+}
+
+#[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
+use std::sync::Arc;
+
+#[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
+use tracing_subscriber::layer::SubscriberExt as _;
+
+/// Pins the free-memory figure the mixed route sizes its batch from, and restores the real
+/// reading on drop, so the batch-width pins below assert the behaviour under test rather than
+/// whatever the machine running them happens to have free. Process-wide, hence `#[serial]`.
+#[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
+struct PinnedAvailableMemory(());
+
+#[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
+impl PinnedAvailableMemory {
+    /// 512 MiB above `usable`: the route reserves 512 MiB plus the document before dividing.
+    fn usable(usable_bytes: usize, document_bytes: usize) -> Self {
+        assert_ne!(usable_bytes, 0, "zero means 'not pinned', so it cannot be pinned");
+        TEST_AVAILABLE_MEMORY.store(
+            512 * 1024 * 1024 + document_bytes + usable_bytes,
+            std::sync::atomic::Ordering::SeqCst,
+        );
+        Self(())
+    }
+}
+
+#[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
+impl Drop for PinnedAvailableMemory {
+    fn drop(&mut self) {
+        TEST_AVAILABLE_MEMORY.store(0, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// Captures the mixed route's "Reduced the per-page OCR batch" events: the one observable the
+/// promotion's render reservation has on a run, and so the one that pins the call sites.
+#[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
+#[derive(Clone, Default)]
+struct BatchReductions(Arc<std::sync::Mutex<Vec<(usize, usize)>>>);
+
+#[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
+struct ReductionFields(std::collections::BTreeMap<String, String>);
+
+#[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
+impl tracing::field::Visit for ReductionFields {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        self.0.insert(field.name().to_owned(), format!("{value:?}"));
+    }
+}
+
+#[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
+impl<S> tracing_subscriber::Layer<S> for BatchReductions
+where
+    S: tracing::Subscriber,
+{
+    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        let mut fields = ReductionFields(Default::default());
+        event.record(&mut fields);
+        if fields.0.get("message").map(String::as_str) != Some("Reduced the per-page OCR batch to fit available memory")
+        {
+            return;
+        }
+        let parse = |name: &str| fields.0.get(name).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+        self.0.lock().unwrap().push((parse("configured"), parse("adapted")));
+    }
+}
+
+/// Drives the real mixed route under a pinned free-memory reading and the batch capture, and
+/// returns the run so a test can assert the batch width and the render it produced together.
+#[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
+fn under_batch_capture(
+    capture: &BatchReductions,
+    usable_bytes: usize,
+    document_bytes: usize,
+    run: impl std::future::Future<Output = MixedOcrRun>,
+) -> MixedOcrRun {
+    let _pin = PinnedAvailableMemory::usable(usable_bytes, document_bytes);
+    tracing::subscriber::with_default(tracing_subscriber::Registry::default().with(capture.clone()), || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(run)
+    })
+}
+
+/// The batch pin works on the promoted route: the reservation is what pushes a 150 DPI page's
+/// working set over the pinned headroom. This proves the capture sees a real reduction, and
+/// that removing the `mixed_route_batch_working_set(...)` argument at the call site breaks it.
+#[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
+#[test]
+#[serial_test::serial]
+fn promoted_mixed_route_sizes_the_batch_from_the_preprocessing_reservation() {
+    let capture = BatchReductions::default();
+    let bytes = fixture::localized_pdf("gap-left");
+    under_batch_capture(
+        &capture,
+        100 * 1024 * 1024,
+        bytes.len(),
+        real_route_run(#[cfg(feature = "layout-detection")] None),
+    );
+    assert_eq!(
+        capture.0.lock().unwrap().as_slice(),
+        [(2, 1)],
+        "a promoted page must shrink the 2-wide batch to 1 on 100 MiB of headroom"
+    );
+}
+
+#[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
+#[tokio::test]
+#[serial_test::serial]
+async fn plain_mixed_route_promotes_through_the_real_call() {
+    let metadata = real_route_run(#[cfg(feature = "layout-detection")] None)
+        .await
+        .output
+        .6
+        .remove(&1)
+        .unwrap();
+    assert_eq!(
+        (metadata.original_dimensions.width, metadata.original_dimensions.height),
+        (1800, 900),
+        "the plain mixed route must still render at the configured 300 DPI"
+    );
+}
+
+/// The wiring pin: with layout detection active the route keeps the source render and must not
+/// size its batch from a promotion reservation. On the prepared-layout path the route consumes
+/// the supplied rasters as-is, so the render dimension alone cannot see the promotion gate —
+/// the batch width is the one place the excluded promotion still reaches. Asserts no reduction
+/// event fired: restoring the promotion at the call site shrinks the batch and fires one.
+#[cfg(all(
+    feature = "bundle-tessdata-eng",
+    feature = "tokio-runtime",
+    feature = "layout-detection"
+))]
+#[test]
+#[serial_test::serial]
+fn layout_active_mixed_route_keeps_the_source_render_through_the_real_call() {
+    let capture = BatchReductions::default();
+    let bytes = fixture::localized_pdf("gap-left");
+    let prepared = prepared_layout_inputs(&bytes);
+    let mut run = under_batch_capture(
+        &capture,
+        100 * 1024 * 1024,
+        bytes.len(),
+        real_route_run(Some(&prepared)),
+    );
+    assert!(
+        capture.0.lock().unwrap().is_empty(),
+        "active layout detection must not let a promotion reservation shrink the batch: {:?}",
+        capture.0.lock().unwrap()
+    );
+    let metadata = run
+        .output
+        .6
+        .remove(&1)
+        .expect("the OCR page records its render provenance");
+    assert_eq!(
+        (metadata.original_dimensions.width, metadata.original_dimensions.height),
+        (900, 450),
+        "active layout detection must keep the 150 DPI source render"
     );
 }

@@ -9262,3 +9262,125 @@ mod table_header_metadata_tests {
         assert_eq!(markdown, "| A1 | B1 |\n| --- | --- |\n| A2 | B2 |\n");
     }
 }
+
+fn stack_seg(text: &str, x: f32, width: f32, font_size: f32, baseline: f32) -> SegmentData {
+    SegmentData {
+        text: text.to_string(),
+        x,
+        y: baseline,
+        width,
+        height: font_size,
+        font_size,
+        is_bold: false,
+        is_italic: false,
+        is_monospace: false,
+        baseline_y: baseline,
+        rotation_degrees: 0.0,
+        assigned_role: None,
+    }
+}
+
+fn stack_of(segments: &[SegmentData]) -> Vec<usize> {
+    script_stack_members(segments, 0)
+}
+
+#[test]
+fn should_find_every_member_of_a_two_size_stack_past_a_single_marks_reach() {
+    let segments = [
+        stack_seg("e", 100.0, 4.0, 10.0, 100.0),
+        stack_seg("c", 104.0, 3.0, 7.5, 104.2),
+        stack_seg("1", 107.0, 3.0, 6.0, 102.6),
+        stack_seg("\u{3c4}", 110.0, 3.7, 7.5, 104.2),
+    ];
+    assert_eq!(stack_of(&segments), [1, 2, 3]);
+}
+
+#[test]
+fn should_not_stack_a_sub_and_a_sup_of_one_size_on_one_base() {
+    let segments = [
+        stack_seg("x", 100.0, 5.0, 10.0, 100.0),
+        stack_seg("i", 105.0, 3.0, 7.0, 97.0),
+        stack_seg("2", 105.0, 3.5, 7.0, 104.2),
+    ];
+    assert!(stack_of(&segments).is_empty());
+}
+
+#[test]
+fn should_not_stack_a_footnote_marker_pair() {
+    let segments = [
+        stack_seg("word", 100.0, 20.0, 10.0, 100.0),
+        stack_seg("1", 120.0, 3.5, 6.0, 104.2),
+        stack_seg("2", 123.5, 3.5, 6.0, 104.2),
+    ];
+    assert!(stack_of(&segments).is_empty());
+}
+
+#[test]
+fn should_not_take_a_list_marker_as_a_stack_member() {
+    let segments = [
+        stack_seg("A", 100.0, 6.0, 10.0, 100.0),
+        stack_seg("\u{2022}", 106.0, 3.0, 7.0, 104.2),
+        stack_seg("1", 109.0, 3.0, 5.0, 104.2),
+    ];
+    assert!(stack_of(&segments).is_empty());
+}
+
+#[test]
+fn should_not_stack_the_scripts_of_a_chemical_formula() {
+    let water = [
+        stack_seg("H", 100.0, 7.0, 10.0, 100.0),
+        stack_seg("2", 107.0, 3.5, 7.0, 98.5),
+        stack_seg("O", 110.5, 7.0, 10.0, 100.0),
+    ];
+    assert!(stack_of(&water).is_empty());
+    let sulfate = [
+        stack_seg("SO", 100.0, 14.0, 10.0, 100.0),
+        stack_seg("4", 114.0, 3.5, 7.0, 98.5),
+        stack_seg("2\u{2212}", 114.0, 6.0, 5.0, 103.0),
+    ];
+    assert!(stack_of(&sulfate).is_empty());
+}
+
+#[test]
+fn should_not_stack_a_lone_raised_mark() {
+    let segments = [
+        stack_seg("e", 100.0, 4.0, 10.0, 100.0),
+        stack_seg("c", 104.0, 3.0, 7.5, 104.2),
+        stack_seg("tail", 107.0, 20.0, 10.0, 100.0),
+    ];
+    assert!(stack_of(&segments).is_empty());
+}
+
+#[test]
+fn should_end_a_stack_where_a_member_is_not_smaller_than_the_base() {
+    let segments = [
+        stack_seg("e", 100.0, 4.0, 10.0, 100.0),
+        stack_seg("c", 104.0, 3.0, 7.5, 104.2),
+        stack_seg("1", 107.0, 3.0, 6.0, 102.6),
+        stack_seg("d", 110.0, 5.0, 10.0, 100.0),
+        stack_seg("2", 115.0, 3.0, 6.0, 104.2),
+    ];
+    assert_eq!(stack_of(&segments), [1, 2]);
+}
+
+#[test]
+fn should_not_stack_the_body_that_follows_a_large_operator() {
+    let segments = [
+        stack_seg("\u{2211}", 100.0, 12.0, 16.0, 100.0),
+        stack_seg("k", 112.0, 4.0, 10.0, 97.0),
+        stack_seg("km", 116.0, 9.0, 7.0, 98.0),
+        stack_seg("!", 125.0, 3.0, 10.0, 103.0),
+    ];
+    assert!(stack_of(&segments).is_empty());
+}
+
+#[test]
+fn should_not_stack_text_set_on_the_line_after_a_large_bracket() {
+    let segments = [
+        stack_seg(")", 100.0, 4.0, 15.0, 100.0),
+        stack_seg("2", 104.0, 6.0, 12.0, 101.0),
+        stack_seg("\u{2212}", 110.0, 4.0, 7.0, 106.4),
+        stack_seg("m", 114.0, 4.0, 7.0, 106.4),
+    ];
+    assert!(stack_of(&segments).is_empty());
+}

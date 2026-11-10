@@ -2,23 +2,15 @@
 
 **+ −**
 
-**truncated forms,** ***N*** **(** ***ζ*** **) = max{0** ***,N*** **(** ***ζ*** **)} and** ***N*** **(** ***ζ*** **) = parameters. The time-varying gain** ***κ***~**∆**~**(** ***t*** **) is adaptively max{0** ***,*** **−** ***N*** **(** ***ζ*** **)}, respectively. The function satisfies the updated by**
-
-***T***
-
-**condition that** ***κ*** **(** ***t*** **) = −** ***αψ*** **ˆ(** ***t*** **)** ***φ*** **(** ***x*** **)** ***,*** **(10) ∆**
+**truncated forms,** ***N*** **(** ***ζ*** **) = max{0** ***,N*** **(** ***ζ*** **)} and** ***N*** **(** ***ζ*** **) = parameters. The time-varying gain** ***κ***~**∆**~**(** ***t*** **) is adaptively max{0** ***,*** **−** ***N*** **(** ***ζ*** **)}, respectively. The function satisfies the updated by condition that**
 
 **+ −**
 
-***N*** **(** ***ζ*** **) =** ***N*** **(** ***ζ*** **) −** ***N*** **(** ***ζ*** **)** ***,*** **(4) and the adaptive law for** ***ψ*** **ˆ(** ***t*** **) is given by ˙**
+***N*** **(** ***ζ*** **) =** ***N*** **(** ***ζ*** **) −** ***N*** **(** ***ζ*** **)** ***,*** **with the properties that for any** ***ζ*** **, ïZ** ***v*** **Z** ***v*** **ò 1**
 
-**2**
+**+ −**
 
-**with the properties that for any** ***ζ*** **, ˆ ˆ** ***ψ*** **(** ***t*** **) = −Γ (** ***αkΨ*** **(** ***t*** **)k** ***φ*** **(** ***x*** **) +** ***σψ*** **(** ***t*** **))** ***.*** **(11) ïZ** ***v*** **Z** ***v*** **ò 1**
-
-**+ −** ***T***
-
-**lim sup** ***N*** **(** ***ζ*** **)** ***dζ*** **−** ***N*** **(** ***ζ*** **)** ***dζ*** **= ∞** ***,*** **(5) with** ***α*** **and** ***φ*** **are positive control constants, and Γ = Γ** ***\>***
+**lim sup** ***N*** **(** ***ζ*** **)** ***dζ*** **−** ***N*** **(** ***ζ*** **)** ***dζ*** **=**
 
 ***v*** **→∞**
 
@@ -26,11 +18,11 @@
 
 **0 0**
 
-0. **ïZ** ***v*** **Z** ***v*** **ò**
+**ïZ** ***v*** **Z** ***v*** **ò 1**
 
-**2**
+**− +**
 
-**1 In this work, we choose** ***N*** **(** ***ζ*** **) =** ***ζ*** **cos(** ***ζ*** **) with the − + lim sup** ***N*** **(** ***ζ*** **)** ***dζ*** **−** ***N*** **(** ***ζ*** **)** ***dζ*** **= ∞** ***.*** **(6) property of** ***N*** **(0) = 0 as our Nussbaum function. The**
+**lim sup** ***N*** **(** ***ζ*** **)** ***dζ*** **−** ***N*** **(** ***ζ*** **)** ***dζ*** **=**
 
 ***v*** **→∞**
 
@@ -38,25 +30,37 @@
 
 **0 0**
 
-**updating law for** ***ζ*** **is given by A function that satisfies these conditions is utilized for**
+***T***
+
+***κ*** **(** ***t*** **) = −** ***αψ*** **ˆ(** ***t*** **)** ***φ*** **(** ***x*** **)** ***,*** **(10) ∆ (4) and the adaptive law for** ***ψ*** **ˆ(** ***t*** **) is given by ˙**
+
+**2**
+
+***ψ*** **ˆ(** ***t*** **) = −Γ (** ***αkΨ*** **(** ***t*** **)k** ***φ*** **(** ***x*** **) +** ***σψ*** **ˆ(** ***t*** **))** ***.*** **(11)**
+
+***T***
+
+**∞** ***,*** **(5) with** ***α*** **and** ***φ*** **are positive control constants, and Γ = Γ** ***\>*** **0.**
+
+**2**
+
+**In this work, we choose** ***N*** **(** ***ζ*** **) =** ***ζ*** **cos(** ***ζ*** **) with the ∞** ***.*** **(6) property of** ***N*** **(0) = 0 as our Nussbaum function. The updating law for** ***ζ*** **is given by A function that satisfies these conditions is utilized for**
 
 ***T***
 
 **managing the uncertainty in control direction, offering ˙** ***ζ*** **(** ***t*** **) = Ψ (** ***t*** **) (** ***k***~**∆**~**+** ***κ***~**∆**~**(** ***t*** **))Ψ (** ***t*** **)** ***.*** **(12) a robust approach to control system design. The above control framework, enhanced by adaptive** *Lemma 2:* **[16], [17] Let** ***V*** **(** ***t*** **) and** ***ζ*** **(** ***t*** **) be smooth laws based on the low complexity Nussbaum function functions defined over the interval [0** ***,t***~***f***~**) with** ***V*** **(** ***t*** **)** ***\>*** **0 PID control, provides us with an effective approach for all** ***t*** **∈ [0** ***,t***~***f***~**). Given** ***N*** **(** ***ζ*** **(** ***t*** **)) as a Nussbaum-type to robotic manipulator control, as formalized in the function, if for any** ***t*** **∈ [0** ***,t***~***f***~**), the following condition forthcoming theorem. is met: Z** *Theorem 1:* **Consider the robot manipulator system**
 
-***t*** **−** ***c***~**1**~***t c***~**1**~***τ***
+***t***
 
 **˙ described by (1) with the Properties 1-3, satisfying to**
 
-***V*** **(** ***t*** **)** ***\< c*** **+** ***e*** **(** ***gN*** **(** ***ζ*** **(** ***τ*** **)) + 1)** ***ζ*** **(** ***τ*** **)** ***e dτ,*** **(7)**
+***V*** **(** ***t*** **)** ***\< c*** **+** ***e*** <sup>**−**</sup> <sup>***c***</sup>~**1**~<sup>***t***</sup>
+
+**(** ***gN*** **(** ***ζ*** **(** ***τ*** **)) + 1)** ***ζ*** **(** ***τ*** **)** ***e***<sup>***c***</sup>~**1**~<sup>***τ***</sup>***dτ,*** **(7)**
 
 **0 0**
 
-**Assumptions 1 and 2. If the Nussbaum function-based where** ***c***~**0**~ ***\>*** **0 and** ***c***~**1**~ ***\>*** **0 are positive constants, and** ***g*** **PID-like control law (9), with the adaptive updating laws is a control parameter within closed intervals** ***L*** **= [** ***l***~**−**~***,l***~**+**~**] (11), and (12), and and Lemmas 1, and 2 is implemented, excluding zero (0** \< ***L*** **), then** ***V*** **(** ***t*** **),** ***ζ*** **(** ***t*** **), and the integral then, with the design parameters are properly chosen, R**~***t***~
-
-***c***~**1**~***τ***
-
-**˙ the closed-loop system remains stable, and all signals** ***gN*** **(** ***ζ*** **(** ***τ*** **))** ***ζ*** **(** ***τ*** **)** ***e dτ*** **are guaranteed to be bounded on**
+**Assumptions 1 and 2. If the Nussbaum function-based where** ***c***~**0**~ ***\>*** **0 and** ***c***~**1**~ ***\>*** **0 are positive constants, and** ***g*** **PID-like control law (9), with the adaptive updating laws is a control parameter within closed intervals** ***L*** **= [** ***l***~**−**~***,l***~**+**~**] (11), and (12), and and Lemmas 1, and 2 is implemented, excluding zero (0** \< ***L*** **), then** ***V*** **(** ***t*** **),** ***ζ*** **(** ***t*** **), and the integral then, with the design parameters are properly chosen, R**~***t***~ **˙ the closed-loop system remains stable, and all signals** ***gN*** **(** ***ζ*** **(** ***τ*** **))** ***ζ*** **(** ***τ*** **)** ***e***<sup>***c***</sup>~**1**~<sup>***τ***</sup>***dτ*** **are guaranteed to be bounded on**
 
 **0**
 
@@ -64,7 +68,7 @@
 
 - III. **Nussbaum Function-based Control Design and**
 
-**trajectory** ***q***~***d***~**(** ***t*** **), with the tracking error converging to a Stability Analysis small neighborhood around zero. We propose a Nussbaum function based PID-like con-** Proof: **Consider the Lyapunov candidate as trol input for robot manipulator control, delineated as:** ***u*** **(** ***t*** **) =(** ***k***~***π***~**+** ***κ***~***π***~**(** ***t*** **))** ***K***~***N***~**(** ***ζ*** **)** ***e*** **(** ***t*** **) + (** ***k***~***ι***~**+** ***κ***~***ι***~**(** ***t*** **))** ***K***~***N***~ ***d*** **+ (** ***k***~**∆**~**+** ***κ***~**∆**~**(** ***t*** **))** ***K***~***N***~**(** ***ζ*** **)** ***e*** **(** ***t*** **)** ***, dt*** **1 1 Z**
+**trajectory** ***q***~***d***~**(** ***t*** **), with the tracking error converging to a Stability Analysis small neighborhood around zero. We propose a Nussbaum function based PID-like con-** Proof: **Consider the Lyapunov candidate as trol input for robot manipulator control, delineated as: 1 1 Z**
 
 ***T T*** **−1**
 
@@ -74,11 +78,11 @@
 
 ***V*** **(** ***t*** **) = Ψ (** ***t*** **)** ***M*** **(** ***q*** **(** ***t*** **))Ψ (** ***t*** **) +** ***ψ*** **(** ***t*** **) Γ** ***ψ*** **(** ***t*** **)** ***,*** **(13)**
 
-**2 2 (** ***ζ*** **)** ***e*** **(** ***ρ*** **)** ***dρ***
+**2 2** ***u*** **(** ***t*** **) =(** ***k***~***π***~**+** ***κ***~***π***~**(** ***t*** **))** ***K***~***N***~**(** ***ζ*** **)** ***e*** **(** ***t*** **) + (** ***k***~***ι***~**+** ***κ***~***ι***~**(** ***t*** **))** ***K***~***N***~**(** ***ζ*** **)** ***e*** **(** ***ρ*** **)** ***dρ***
 
 **0 ∗ ∗**
 
-**where** ***ψ*** **˜(** ***t*** **) =** ***ψ*** **ˆ(** ***t*** **) −** ***ψ*** **with** ***ψ*** **(** ***t*** **) is the ideal constant weight vector of neural network approximation. The time derivative of the Lyapunov function** ***V*** **(** ***t*** **) can (8) be bounded as with** ***K***~***N***~**(** ***ζ*** **) = −** ***N*** **(** ***ζ*** **) is the related Nussbaum function 1**
+**where** ***ψ*** **˜(** ***t*** **) =** ***ψ*** **ˆ(** ***t*** **) −** ***ψ*** **with** ***ψ*** **(** ***t*** **) is the ideal constant** ***d*** **weight vector of neural network approximation. + (** ***k***~**∆**~**+** ***κ***~**∆**~**(** ***t*** **))** ***K***~***N***~**(** ***ζ*** **)** ***e*** **(** ***t*** **)** ***, dt*** **The time derivative of the Lyapunov function** ***V*** **(** ***t*** **) can (8) be bounded as with** ***K***~***N***~**(** ***ζ*** **) = −** ***N*** **(** ***ζ*** **) is the related Nussbaum function 1**
 
 **gain. In (8) we employed constant gains** ***k*** **,** ***k*** **, and** ***k*** **˙** ***T*** **˙** ***T*** **˙ ˜** ***T*** **−1 ˆ˙** ***π ι*** **∆** ***V*** **(** ***t*** **) = Ψ (** ***t*** **)** ***M*** **(** ***t*** **)Ψ (** ***t*** **) + Ψ (** ***t*** **)** ***M*** **(** ***t*** **)Ψ (** ***t*** **) +** ***ψ*** **(** ***t*** **) Γ** ***ψ*** **(** ***t*** **)** ***.*** **2 alongside their time-varying analogs** ***κ***~***π***~**(** ***t*** **),** ***κ***~***ι***~**(** ***t*** **), and (14)** ***κ***~**∆**~**(** ***t*** **). This strategy enhances traditional PID controls Considering dynamics (1) and the definition by integrating adaptive gains that adjust in real-time of the generalized error Ψ (** ***t*** **), one can obtain to the system's state. To further simplify parameter ˙** ***M*** **(** ***t*** **)Ψ (** ***t*** **) =** ***C*** **(** ***t*** **)** ***q*** **˙(** ***t*** **) +** ***G*** **(** ***t*** **) −** ***τ*** **(** ***t*** **) +** ***M*** **(** ***t*** **)** ***e*** **¯(·), where** ***k***~***π***~ ***k***~***ι***~
 
