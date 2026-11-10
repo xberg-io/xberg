@@ -7583,11 +7583,11 @@ pub(super) struct ProvenRead {
 
 /// Apply the page's recognition-noise policy to a retry read made at a proven resolution.
 ///
-/// The proven resolution lets the backend read an image the budget refused. Shrinking that image
-/// (a dimension clamp, the memory budget or the DPI target) can leave the glyphs illegible, and
-/// only the output shows it, so a noisy read of a possibly shrunk image is dropped. Any other read
-/// follows the caller's `discard_suspected_ocr_noise` like a page read: kept with the warning, or
-/// dropped when the caller asked for that. The assessment carries no confidence or dictionary
+/// The proven resolution lets the backend read an image the budget refused. A dimension clamp or a
+/// resolution below the legibility floor can leave the glyphs illegible, and only the output shows
+/// it, so a noisy read of such an image (or one with no preprocessing record) is dropped. Any other
+/// read, including a plain downscale, follows the caller's `discard_suspected_ocr_noise` like a
+/// page read: kept with the warning, or dropped when the caller asked for that. The assessment carries no confidence or dictionary
 /// signal, so only the fragmented-word test judges it.
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) fn judge_proven_read(

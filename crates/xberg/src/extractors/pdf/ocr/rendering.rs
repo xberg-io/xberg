@@ -529,13 +529,19 @@ pub(super) async fn collect_xobject_recovery_result(
     }));
     Ok(())
 }
-/// Whether the image behind a read may have been shrunk before recognition: a dimension clamp, a
-/// scale below one (the memory budget or the DPI target), or no record of what was done.
+/// The effective resolution below which a read of a proven-resolution image is judged by its
+/// output. ad9c80bf0b's clamped tall scan was read at 72 dpi and came back illegible; #2832's sheet
+/// is read at 120 dpi (a plain 0.4 downscale, not clamped) and stays legible. 100 sits between
+/// them with margin on both sides.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) const MIN_LEGIBLE_PROVEN_DPI: i32 = 100;
+
+/// Whether the glyphs of a read may be illegible because of how the image was prepared: a
+/// dimension clamp, an effective resolution below [`MIN_LEGIBLE_PROVEN_DPI`], or no record of what
+/// was done. A plain downscale that keeps the resolution at or above the floor is not suspect.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn read_may_be_shrunk(metadata: Option<&crate::types::ImagePreprocessingMetadata>) -> bool {
-    metadata.is_none_or(|metadata| {
-        metadata.dimension_clamped || metadata.scale_factor < 1.0 || metadata.final_dpi < metadata.target_dpi
-    })
+    metadata.is_none_or(|metadata| metadata.dimension_clamped || metadata.final_dpi < MIN_LEGIBLE_PROVEN_DPI)
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn append_xobject_text(
