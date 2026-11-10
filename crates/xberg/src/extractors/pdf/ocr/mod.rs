@@ -101,7 +101,8 @@ pub(crate) use rendering::render_selected_pages_for_ocr;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use document::{
     boundaries_after_replacements, clean_native_page_layers, merge_ocr_pages_into_internal_document,
-    merge_source_strip_frames, merge_structured_ocr_pages_into_internal_document,
+    merge_page_segmentation_modes, merge_source_strip_frames, merge_structured_ocr_pages_into_internal_document,
+    valid_page_boundary,
 };
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]

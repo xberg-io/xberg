@@ -51,7 +51,7 @@ fn complete_page_selection(
             .all(|(index, (bound, page))| {
                 usize::try_from(bound.page_number).ok() == Some(index + 1)
                     && bound.page_number == *page
-                    && native.get(bound.byte_start..bound.byte_end).is_some()
+                    && ocr::valid_page_boundary(native, bound)
             })
 }
 

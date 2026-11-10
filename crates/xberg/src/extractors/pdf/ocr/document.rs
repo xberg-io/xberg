@@ -1848,6 +1848,10 @@ pub(super) fn destructive_ocr_information_loss(
     let retained_ratio = ocr_stats.alnum as f64 / native_decision.stats.alnum.max(1) as f64;
     (retained_ratio < MIN_OCR_NATIVE_ALNUM_RETENTION_RATIO).then_some((native_decision.stats.alnum, ocr_stats.alnum))
 }
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn valid_page_boundary(native_text: &str, boundary: &crate::types::PageBoundary) -> bool {
+    boundary.page_number > 0 && native_text.get(boundary.byte_start..boundary.byte_end).is_some()
+}
 /// Keep only OCR results that can be applied consistently to every mixed-output
 /// representation: non-empty text with a matching, valid UTF-8 page boundary.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -1865,12 +1869,7 @@ pub(super) fn accepted_ocr_page_replacements(
     let mut valid_boundaries: Vec<&crate::types::PageBoundary> = boundaries
         .iter()
         .filter(|boundary| {
-            page_counts.get(&boundary.page_number) == Some(&1)
-                && boundary.page_number > 0
-                && boundary.byte_start <= boundary.byte_end
-                && boundary.byte_end <= native_text.len()
-                && native_text.is_char_boundary(boundary.byte_start)
-                && native_text.is_char_boundary(boundary.byte_end)
+            page_counts.get(&boundary.page_number) == Some(&1) && valid_page_boundary(native_text, boundary)
         })
         .collect();
     valid_boundaries.sort_unstable_by_key(|boundary| (boundary.byte_start, boundary.byte_end));
@@ -2048,9 +2047,18 @@ pub(crate) fn merge_structured_ocr_pages_into_internal_document(
             .get_or_insert_with(Vec::new)
             .extend(assets.ocr_elements);
     }
+    merge_page_segmentation_modes(doc, ocr_results, structured_pages);
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn merge_page_segmentation_modes(
+    doc: &mut crate::types::internal::InternalDocument,
+    ocr_results: &ahash::AHashMap<u32, String>,
+    structured_pages: &ahash::AHashMap<u32, crate::types::internal::InternalDocument>,
+) {
     let mut segmentation_modes = structured_pages
         .iter()
-        .filter(|(page_number, _)| replacements.contains_key(page_number))
+        .filter(|(page_number, _)| ocr_results.get(page_number).is_some_and(|text| !text.trim().is_empty()))
         .flat_map(|(_, page)| {
             page.metadata
                 .additional

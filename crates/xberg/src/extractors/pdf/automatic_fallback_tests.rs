@@ -233,3 +233,196 @@ fn native_khmer_number_candidates_keep_the_full_document_route() {
         );
     }
 }
+
+fn recognized_page(page_number: u32) -> crate::types::internal::InternalDocument {
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+    let mut page = InternalDocument::new("pdf");
+    let mut element = InternalElement::text(
+        ElementKind::OcrText {
+            level: crate::types::OcrElementLevel::Line,
+        },
+        "accepted OCR text",
+        0,
+    );
+    element.page = Some(page_number);
+    element.ocr_geometry = Some(crate::types::OcrBoundingGeometry::Rectangle {
+        left: 12,
+        top: 34,
+        width: 120,
+        height: 20,
+    });
+    element.ocr_confidence = Some(crate::types::OcrConfidence {
+        detection: Some(0.95),
+        recognition: 0.93,
+    });
+    page.push_element(element);
+    page.ocr_coordinate_frame = Some(crate::types::internal::OcrPageCoordinateFrame::new(
+        page_number,
+        640,
+        480,
+    ));
+    page.metadata.additional.insert(
+        crate::ocr_metadata_keys::OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY.into(),
+        serde_json::json!([{"page_number": page_number, "psm": 6}]),
+    );
+    page
+}
+
+#[test]
+fn plain_page_acceptance_keeps_only_accepted_segmentation_modes_in_page_order() {
+    let pages = ahash::AHashMap::from([
+        (3, recognized_page(3)),
+        (2, recognized_page(2)),
+        (1, recognized_page(1)),
+    ]);
+    let replacements = ahash::AHashMap::from([(2, "second".into()), (1, "first".into())]);
+    let bounds = [boundary(1, 0, 5), boundary(2, 7, 13)];
+    let (document, _, _) = super::select_pdf_document(
+        super::ExtractionMethod::Mixed,
+        "first\n\nsecond",
+        "application/pdf",
+        None,
+        None,
+        Some(&replacements),
+        Some(&pages),
+        Some(&bounds),
+        &crate::OutputFormat::Plain,
+    );
+    assert_eq!(crate::rendering::render_plain(&document).trim(), "first\n\nsecond");
+    assert_eq!(
+        document
+            .metadata
+            .additional
+            .get(crate::ocr_metadata_keys::OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY),
+        Some(&serde_json::json!([{"page_number": 1, "psm": 6}, {"page_number": 2, "psm": 6}]))
+    );
+}
+
+#[test]
+fn accepted_ocr_text_without_a_prebuilt_sidecar_keeps_its_derived_spatial_element() {
+    let page = recognized_page(2);
+    let control = crate::extraction::derive::derive_extraction_result(page.clone(), false, crate::OutputFormat::Plain);
+    assert_eq!(control.ocr_elements.as_ref().unwrap().len(), 1);
+    let pages = ahash::AHashMap::from([(2, page)]);
+    let replacements = ahash::AHashMap::from([(2, "accepted OCR text".into())]);
+    let (mut document, _, _) = super::select_pdf_document(
+        super::ExtractionMethod::Mixed,
+        "accepted OCR text",
+        "application/pdf",
+        None,
+        None,
+        Some(&replacements),
+        Some(&pages),
+        None,
+        &crate::OutputFormat::Plain,
+    );
+    document.prebuilt_ocr_elements = Some(super::accepted_mixed_ocr_elements(&pages));
+    let actual = crate::extraction::derive::derive_extraction_result(document, false, crate::OutputFormat::Plain);
+    assert_eq!(actual.content, control.content);
+    assert_eq!(
+        serde_json::to_value(&actual.ocr_elements).unwrap(),
+        serde_json::to_value(&control.ocr_elements).unwrap()
+    );
+    let frames = super::accepted_mixed_ocr_coordinate_frames(&pages);
+    assert_eq!(frames.len(), 1);
+    assert_eq!(frames[0].page_number, 2);
+    assert_eq!((frames[0].width, frames[0].height), (640, 480));
+}
+
+#[test]
+fn an_explicit_empty_ocr_sidecar_does_not_reconstruct_filtered_elements() {
+    let mut page = recognized_page(1);
+    page.prebuilt_ocr_elements = Some(Vec::new());
+    let pages = ahash::AHashMap::from([(1, page)]);
+    assert!(super::accepted_mixed_ocr_elements(&pages).is_empty());
+    assert!(super::accepted_mixed_ocr_coordinate_frames(&pages).is_empty());
+}
+
+#[test]
+fn all_rejected_pages_keep_native_tables_and_exclude_rejected_ocr_payload() {
+    let mut native = crate::types::internal::InternalDocument::new("pdf");
+    native.push_element(crate::types::internal::InternalElement::text(
+        crate::types::internal::ElementKind::Paragraph,
+        "native text",
+        0,
+    ));
+    native.tables.push(crate::types::Table {
+        markdown: "| native table |".into(),
+        page_number: 1,
+        ..Default::default()
+    });
+    let replacements = ahash::AHashMap::new();
+    let method = super::extraction_method_after_mixed_ocr(&replacements);
+    assert_eq!(method, super::ExtractionMethod::Native);
+    let (document, _, _) = super::select_pdf_document(
+        method,
+        "native text",
+        "application/pdf",
+        Some(native),
+        None,
+        Some(&replacements),
+        Some(&ahash::AHashMap::from([(1, recognized_page(1))])),
+        None,
+        &crate::OutputFormat::Plain,
+    );
+    assert_eq!(document.tables[0].markdown, "| native table |");
+    assert!(document.prebuilt_ocr_elements.is_none());
+    assert!(
+        !document
+            .metadata
+            .additional
+            .contains_key(crate::ocr_metadata_keys::OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY)
+    );
+    assert_eq!(crate::rendering::render_plain(&document).trim(), "native text");
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+#[serial_test::serial]
+fn a_registered_tesseract_replacement_does_not_gain_builtin_page_acceptance() {
+    struct RestoreBackend(std::sync::Arc<dyn crate::plugins::OcrBackend>);
+    impl Drop for RestoreBackend {
+        fn drop(&mut self) {
+            crate::plugins::registry::get_ocr_backend_registry()
+                .write()
+                .register(self.0.clone())
+                .expect("restore the original built-in backend");
+        }
+    }
+    let config = crate::ExtractionConfig {
+        ocr: Some(crate::OcrConfig::default()),
+        ..Default::default()
+    };
+    assert!(super::automatic_page_acceptance_supported(&config));
+    let registry = crate::plugins::registry::get_ocr_backend_registry();
+    let original = RestoreBackend(registry.read().get("tesseract").unwrap());
+    registry
+        .write()
+        .register(std::sync::Arc::new(
+            crate::ocr::tesseract_backend::TesseractBackend::new(),
+        ))
+        .unwrap();
+    assert!(super::ocr::native_preservation_is_automatic(&config, 1));
+    assert!(!super::automatic_page_acceptance_supported(&config));
+    drop(original);
+    assert!(super::automatic_page_acceptance_supported(&config));
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+#[serial_test::serial]
+fn automatic_page_acceptance_handles_all_auto_rotate_states() {
+    for auto_rotate in [None, Some(false), Some(true)] {
+        let config = crate::ExtractionConfig {
+            ocr: Some(crate::OcrConfig {
+                auto_rotate,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(
+            super::automatic_page_acceptance_supported(&config),
+            auto_rotate != Some(true)
+        );
+    }
+}

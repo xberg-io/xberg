@@ -107,9 +107,12 @@ fn accepted_mixed_ocr_elements(
     page_numbers
         .into_iter()
         .filter_map(|page_number| structured_pages.get(&page_number))
-        .filter_map(|page| page.prebuilt_ocr_elements.as_ref())
+        .filter_map(|page| {
+            page.prebuilt_ocr_elements
+                .clone()
+                .or_else(|| crate::extraction::derive::build_ocr_elements(page))
+        })
         .flatten()
-        .cloned()
         .collect()
 }
 
@@ -140,9 +143,14 @@ pub(crate) fn accepted_mixed_ocr_coordinate_frames(
         .into_iter()
         .filter_map(|page_number| structured_pages.get(&page_number))
         .filter(|page| {
-            page.prebuilt_ocr_elements
-                .as_ref()
-                .is_some_and(|elements| !elements.is_empty())
+            page.prebuilt_ocr_elements.as_ref().map_or_else(
+                || {
+                    page.elements
+                        .iter()
+                        .any(|element| matches!(element.kind, ElementKind::OcrText { .. }))
+                },
+                |elements| !elements.is_empty(),
+            )
         })
         .filter_map(|page| page.ocr_coordinate_frame)
         .collect()
@@ -664,6 +672,7 @@ fn select_pdf_document(
     {
         // Plain output can skip structural merging but still owns the accepted pages' diagnostics. ~keep
         ocr::merge_source_strip_frames(&mut doc, replacements, pages);
+        ocr::merge_page_segmentation_modes(&mut doc, replacements, pages);
     }
     doc.mime_type = mime_type.to_string();
     (doc, origin, structured)
@@ -3278,7 +3287,14 @@ impl PdfExtractor {
                 &decision,
                 &thresholds,
             );
-            let outcome = if automatic_page_acceptance_supported(config) {
+            // Unmapped native text keeps the whole-document route's segmentation hints and diagnostics. ~keep
+            let outcome = if automatic_page_acceptance_supported(config)
+                && pdf_metadata
+                    .pdf_specific
+                    .fabricated_text_pages
+                    .as_ref()
+                    .is_none_or(Vec::is_empty)
+            {
                 with_native_page_acceptance(
                     outcome,
                     &decision.failing_pages,
