@@ -3,11 +3,17 @@
 //! Provides extraction of text, metadata, tables, and images from PDF documents
 //! using xberg_native_pdf (pure Rust). Supports both native text extraction and OCR fallback.
 
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+mod automatic_fallback;
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+mod automatic_fallback_tests;
 mod extraction;
 #[cfg(feature = "layout-detection")]
 mod layout_hints;
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 mod layout_runner;
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+mod mixed_tables;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod unreadable_script;
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "tokio-runtime"))]
@@ -35,7 +41,16 @@ use async_trait::async_trait;
 #[cfg(feature = "tokio-runtime")]
 use std::path::Path;
 
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+use automatic_fallback::{automatic_page_acceptance_supported, with_native_page_acceptance};
 use extraction::extract_all_from_native_document;
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+use mixed_tables::merge_mixed_ocr_tables;
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn is_khmer_digit(character: char) -> bool {
+    ('\u{17e0}'..='\u{17e9}').contains(&character)
+}
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn extraction_method_after_mixed_ocr(replacements: &ahash::AHashMap<u32, String>) -> ExtractionMethod {
     if replacements.is_empty() {
@@ -97,9 +112,12 @@ fn accepted_mixed_ocr_elements(
     page_numbers
         .into_iter()
         .filter_map(|page_number| structured_pages.get(&page_number))
-        .filter_map(|page| page.prebuilt_ocr_elements.as_ref())
+        .filter_map(|page| {
+            page.prebuilt_ocr_elements
+                .clone()
+                .or_else(|| crate::extraction::derive::build_ocr_elements(page))
+        })
         .flatten()
-        .cloned()
         .collect()
 }
 
@@ -130,9 +148,14 @@ pub(crate) fn accepted_mixed_ocr_coordinate_frames(
         .into_iter()
         .filter_map(|page_number| structured_pages.get(&page_number))
         .filter(|page| {
-            page.prebuilt_ocr_elements
-                .as_ref()
-                .is_some_and(|elements| !elements.is_empty())
+            page.prebuilt_ocr_elements.as_ref().map_or_else(
+                || {
+                    page.elements
+                        .iter()
+                        .any(|element| matches!(element.kind, ElementKind::OcrText { .. }))
+                },
+                |elements| !elements.is_empty(),
+            )
         })
         .filter_map(|page| page.ocr_coordinate_frame)
         .collect()
@@ -654,6 +677,7 @@ fn select_pdf_document(
     {
         // Plain output can skip structural merging but still owns the accepted pages' diagnostics. ~keep
         ocr::merge_source_strip_frames(&mut doc, replacements, pages);
+        ocr::merge_page_segmentation_modes(&mut doc, replacements, pages);
     }
     doc.mime_type = mime_type.to_string();
     (doc, origin, structured)
@@ -1001,34 +1025,6 @@ fn replace_tables_with_ocr_output(tables: &mut Vec<crate::types::Table>, mut ocr
 
     ocr_tables.sort_by_key(|table| table.page_number);
     *tables = ocr_tables;
-}
-
-/// Merge OCR tables into the mixed path's table list, replacing only the tables of pages OCR
-/// itself produced a table for.
-///
-/// Unlike [`replace_tables_with_ocr_output`], which is right for full-document OCR (every page
-/// went through OCR, so there is no native page left to preserve), the mixed path sends only
-/// SOME pages to OCR. Before this, the mixed path called `replace_tables_with_ocr_output` too,
-/// which replaced the WHOLE document's table list with only the OCR pages' tables: on a long
-/// document where a handful of scanned pages produced even one OCR table, every native table on
-/// every page OCR never touched was silently dropped (GH#1670). A page whose OCR pass found no
-/// table keeps its native tables untouched, the same as `replace_tables_with_ocr_output` does
-/// when it finds none anywhere.
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn merge_mixed_ocr_tables(
-    tables: &mut Vec<crate::types::Table>,
-    structured_pages: &ahash::AHashMap<u32, InternalDocument>,
-) {
-    let mut ocr_tables = accepted_mixed_ocr_tables(structured_pages);
-    if ocr_tables.is_empty() {
-        return;
-    }
-
-    ocr_tables.sort_by_key(|table| table.page_number);
-    let ocr_pages: std::collections::HashSet<u32> = ocr_tables.iter().map(|table| table.page_number).collect();
-    tables.retain(|table| !ocr_pages.contains(&table.page_number));
-    tables.extend(ocr_tables);
-    tables.sort_by_key(|table| table.page_number);
 }
 
 #[cfg(all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-pipeline")))]
@@ -3289,13 +3285,30 @@ impl PdfExtractor {
                 1.0
             };
 
-            match ocr::evaluate_ocr_skip_gate(
+            let outcome = ocr::evaluate_ocr_skip_gate(
                 pre_rendered_doc.is_some(),
                 total_chars,
                 alnum_ws_ratio,
                 &decision,
                 &thresholds,
-            ) {
+            );
+            let outcome = if automatic_page_acceptance_supported(config) {
+                with_native_page_acceptance(
+                    outcome,
+                    &decision.failing_pages,
+                    boundaries.as_deref(),
+                    &native_text,
+                    pdf_metadata.pdf_specific.page_count,
+                    pdf_metadata
+                        .pdf_specific
+                        .fabricated_text_pages
+                        .as_deref()
+                        .unwrap_or(&[]),
+                )
+            } else {
+                outcome
+            };
+            match outcome {
                 ocr::OcrGateOutcome::SkipNonText => {
                     tracing::debug!(
                         alnum_ws_ratio,
@@ -3829,6 +3842,13 @@ impl PdfExtractor {
             );
         }
 
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        if extraction_method == ExtractionMethod::Mixed
+            && let Some(ref accepted_pages) = structured_ocr_pages
+        {
+            merge_mixed_ocr_tables(&mut tables, accepted_pages);
+        }
+
         let mut final_pages =
             assign_tables_and_images_to_pages(page_contents, &tables, images.as_deref().unwrap_or(&[]));
 
@@ -3895,7 +3915,6 @@ impl PdfExtractor {
             && let Some(ref accepted_pages) = structured_ocr_pages
         {
             ocr_elements = accepted_mixed_ocr_elements(accepted_pages);
-            merge_mixed_ocr_tables(&mut tables, accepted_pages);
             ocr_coordinate_frames = accepted_mixed_ocr_coordinate_frames(accepted_pages);
         }
         #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]

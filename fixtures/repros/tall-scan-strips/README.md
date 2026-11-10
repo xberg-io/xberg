@@ -33,6 +33,15 @@ uv run --no-project --with pillow==11.3.0 python generate.py . \
   ../../../crates/xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf --jpeg-only
 ```
 
+The mixed JPEG fixture puts the native page of the mixed document before the same
+grayscale JPEG scan. Generate it with the same font and Pillow version and
+`--jpeg-mixed-only`.
+
+```sh
+uv run --no-project --with pillow==11.3.0 python generate.py . \
+  ../../../crates/xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf --jpeg-mixed-only
+```
+
 The predictor and indexed fixtures use the same 40 lines at 20 px. The
 DeviceGray predictor declares PNG Up and alternates actual None and Up row
 tags. The one-bit Indexed image maps index zero to white and sets all five

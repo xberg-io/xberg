@@ -30,8 +30,10 @@ pub(crate) use formulas::strip_math_delimiters;
 pub(crate) use ocr_document::adopt_public_ocr_document;
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(crate) use ocr_document::is_invalid_public_ocr_document;
+pub(crate) use pages::build_ocr_elements;
 #[cfg(test)]
 use pages::build_pages;
+use pages::derive_pages;
 pub(crate) use pages::reconcile_page_boundaries;
 #[cfg(all(
     feature = "pdf",
@@ -40,7 +42,6 @@ pub(crate) use pages::reconcile_page_boundaries;
     not(target_arch = "wasm32")
 ))]
 pub(crate) use pages::render_plain_selected_pages;
-use pages::{build_ocr_elements, derive_pages};
 
 /// Cap on how many unresolvable keys a single warning names before it summarises
 /// the rest as a count, so a badly broken document cannot produce an unbounded

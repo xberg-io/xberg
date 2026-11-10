@@ -4,11 +4,11 @@ use comrak::nodes::{AstNode, NodeValue};
 use comrak::{Arena, Options, format_commonmark};
 use std::borrow::Cow;
 use std::ops::Range;
-use std::sync::LazyLock;
 
 use crate::types::annotations::PdfAnnotation;
 use crate::types::internal::InternalDocument;
 
+use super::arxiv_stamp::trailing_stamp_start;
 use super::common::{annotation_display_text, annotation_type_label};
 use super::comrak_bridge::{build_comrak_ast, keep_code_literal};
 
@@ -93,13 +93,6 @@ fn collapse_excess_newlines(input: &str) -> Cow<'_, str> {
 
     Cow::Owned(out)
 }
-
-static ARXIV_WATERMARK_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(
-        r"(?:\s+\S+(?:\s+\S+){0,8})?\s*arXiv:\d{4}\.\d{4,5}(?:v\d+)?(?:\s*\[[\w.-]+\])?\s*(?:\d{1,2}\s+\w+\s+\d{4})?",
-    )
-    .expect("static regex compiles")
-});
 
 pub(crate) fn markdown_tag_exemptions_are_owned(doc: &InternalDocument) -> bool {
     // Raw blocks and annotation values bypass Text escaping; parsing their tags cannot establish ownership. ~keep
@@ -335,13 +328,12 @@ fn finalize_annotations_appendix(annotations: Option<&[PdfAnnotation]>) -> Strin
     block
 }
 
-/// Strip arXiv watermark noise from the document's prose.
+/// Strip the arXiv margin stamp from the document's prose.
 ///
-/// LaTeX-generated PDFs often have a rotated sidebar with the arXiv identifier
-/// that the PDF extractor concatenates with body text. This strips patterns like:
-/// "Title N arXiv:NNNN.NNNNNvN [cat.SC] DD Mon YYYY" from the first pages.
-/// Only `Text` nodes are searched, so a removal can neither reach into code nor
-/// join two blocks.
+/// A stamp is the identifier with its version, the category and the date; see
+/// `arxiv_stamp::trailing_stamp_start`. It is removed only when it ends its block, so a citation that
+/// names an identifier stays whole. Only `Text` nodes are searched, so a removal can neither reach
+/// into code nor join two blocks. The search covers the first 6000 bytes of text.
 fn strip_arxiv_watermark_noise<'a>(root: &'a AstNode<'a>) {
     let mut searched = 0;
     for node in root.descendants() {
@@ -352,21 +344,19 @@ fn strip_arxiv_watermark_noise<'a>(root: &'a AstNode<'a>) {
         let NodeValue::Text(text) = &mut data.value else {
             continue;
         };
-        let search_limit = text.floor_char_boundary(text.len().min(6000 - searched));
         searched += text.len();
-        let Some(m) = ARXIV_WATERMARK_REGEX.find(&text[..search_limit]) else {
+        if !ends_its_block(node) {
+            continue;
+        }
+        let Some(start) = trailing_stamp_start(text) else {
             continue;
         };
-        let range = m.range();
-        let is_at_paragraph_boundary =
-            text[..range.start].ends_with('.') || (range.end == text.len() && ends_its_block(node));
-        if is_at_paragraph_boundary {
-            tracing::trace!(
-                stripped = %text[range.clone()].chars().take(80).collect::<String>(),
-                "stripping arXiv watermark from markdown output"
-            );
-            text.to_mut().replace_range(range, "");
-        }
+        tracing::trace!(
+            stripped = %text[start..].chars().take(80).collect::<String>(),
+            "stripping arXiv stamp from markdown output"
+        );
+        let kept = text[..start].trim_end().len();
+        text.to_mut().truncate(kept);
         return;
     }
 }
@@ -749,6 +739,77 @@ mod tests {
         let rendered = render_markdown(&document);
 
         assert!(rendered.contains("arXiv:2401.12345v2 [cs.CL] 9 Jan 2024"));
+    }
+
+    fn rendered_paragraphs(paragraphs: &[&str]) -> String {
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        for text in paragraphs {
+            builder.push_paragraph(text, vec![], None, None);
+        }
+        render_markdown(&builder.build())
+    }
+
+    #[test]
+    fn render_markdown_strips_only_the_stamp_from_the_end_of_a_block() {
+        let rendered = rendered_paragraphs(&["Research title 7 arXiv:2401.12345v2 [cs.CL] 9 Jan 2024"]);
+
+        assert!(rendered.contains("Research title 7"), "{rendered}");
+        assert!(!rendered.contains("arXiv"), "{rendered}");
+    }
+
+    #[test]
+    fn render_markdown_keeps_a_short_versioned_citation() {
+        let rendered = rendered_paragraphs(&["[12] A. Author, A title, arXiv:2107.09275v2 [hep-ph]."]);
+
+        assert!(
+            rendered.contains("A. Author, A title, arXiv:2107.09275v2"),
+            "{rendered}"
+        );
+    }
+
+    #[test]
+    fn render_markdown_keeps_a_short_unversioned_citation() {
+        let rendered = rendered_paragraphs(&["[11] J. Doe, A short title, arXiv:2107.09275 [hep-ph]."]);
+
+        assert!(
+            rendered.contains("J. Doe, A short title, arXiv:2107.09275"),
+            "{rendered}"
+        );
+    }
+
+    #[test]
+    fn render_markdown_keeps_a_citation_that_ends_at_the_bare_identifier() {
+        let citation = "The earlier study by Doe and Smith, Journal of Examples 12, 345 (2021), arXiv:2107.09275";
+        let rendered = rendered_paragraphs(&[citation]);
+
+        assert!(rendered.contains(citation), "{rendered}");
+    }
+
+    #[test]
+    fn render_markdown_removes_a_stamp_block_without_touching_the_block_before_it() {
+        let rendered = rendered_paragraphs(&["The first block ends here.", "arXiv:2206.01062v1 [cs.CV] 2 Jun 2022"]);
+
+        assert!(rendered.contains("The first block ends here."), "{rendered}");
+        assert!(!rendered.contains("arXiv"), "{rendered}");
+    }
+
+    #[test]
+    fn render_markdown_keeps_a_stamp_that_is_followed_by_more_text_in_its_block() {
+        use crate::types::document_structure::{AnnotationKind, TextAnnotation};
+
+        let text = "Body arXiv:2401.12345v2 [cs.CL] 9 Jan 2024 after";
+        let start = text.find("after").unwrap() as u32;
+        let bold = TextAnnotation {
+            start,
+            end: start + 5,
+            kind: AnnotationKind::Bold,
+        };
+        let mut builder = InternalDocumentBuilder::new("pdf");
+        builder.push_paragraph(text, vec![bold], None, None);
+
+        let rendered = render_markdown(&builder.build());
+
+        assert!(rendered.contains("arXiv:2401.12345v2"), "{rendered}");
     }
 
     #[test]

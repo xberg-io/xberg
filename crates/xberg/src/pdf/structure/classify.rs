@@ -5,6 +5,8 @@
 // these needs compiler-in-the-loop verification, not a mechanical pass. Delete this
 // note and the file's baseline entry together once it goes green. Help wanted.
 
+use crate::rendering::arxiv_stamp::{is_partial_stamp, trailing_stamp_start};
+
 use super::constants::{
     MAX_BOLD_HEADING_WORD_COUNT, MAX_HEADING_DISTANCE_MULTIPLIER, MAX_HEADING_WORD_COUNT, MAX_TITLE_WORD_COUNT,
     MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO, MIN_TABULAR_NUMERIC_TOKENS,
@@ -12,6 +14,7 @@ use super::constants::{
 };
 use super::regions::{looks_like_bare_url, looks_like_figure_label};
 use super::types::{LayoutHintClass, PdfParagraph};
+use crate::pdf::hierarchy::SegmentData;
 
 const SAL_DIRECTION_PREFIXES: [&str; 6] = [
     "__deref__inout",
@@ -1976,68 +1979,201 @@ fn is_greek_letter(c: char) -> bool {
     matches!(c, '\u{0391}'..='\u{03A9}' | '\u{03B1}'..='\u{03C9}')
 }
 
-/// Remove arXiv watermark/sidebar noise from paragraphs on the first pages.
+/// Remove the arXiv margin stamp from paragraphs on the first pages.
 ///
-/// The stamp arXiv prints always carries the version (`arXiv:2312.13591v2 [hep-ph] 6 Dec 2023`); a
-/// citation's identifier does not, and is body text. Handles two cases:
-///
-/// 1. Short standalone paragraphs that are just the arXiv identifier → mark as furniture.
-/// 2. arXiv identifier appended to the end of a longer paragraph (LaTeX sidebar
-///    text that the PDF extractor concatenates with body text) → strip the trailing noise.
+/// A paragraph that is only the stamp becomes page furniture. A paragraph that ends with the stamp
+/// (the extractor concatenated the rotated margin text with body text) loses the stamp and keeps
+/// every body word. A citation that names an identifier is body text: the stamp rule in
+/// `rendering::arxiv_stamp` needs the version, the category and the date, and the Markdown renderer
+/// calls the same rule. A stamp drawn in parts that each became a paragraph is handled by
+/// `mark_split_arxiv_stamp`.
 pub(super) fn mark_arxiv_noise(all_pages: &mut [Vec<PdfParagraph>]) {
-    let arxiv_re = regex::Regex::new(r"arXiv:\d{4}\.\d{4,5}v\d+").expect("valid regex");
-    let trailing_re = regex::Regex::new(
-        r"(?:\s+(?:\S+\s+){0,8})?arXiv:\d{4}\.\d{4,5}v\d+(?:\s*\[[\w.-]+\])?\s*(?:\d{1,2}\s+\w+\s+\d{4})?\s*$",
-    )
-    .expect("valid regex");
-
     for page in all_pages.iter_mut().take(2) {
+        mark_split_arxiv_stamp(page);
         for para in page.iter_mut() {
             if para.is_page_furniture {
                 continue;
             }
             let text = paragraph_plain_text(para);
             let trimmed = text.trim();
-            let word_count = trimmed.split_whitespace().count();
-
-            if !arxiv_re.is_match(trimmed) {
+            let Some(start) = trailing_stamp_start(trimmed) else {
                 continue;
-            }
-
-            if word_count <= 25 {
-                tracing::trace!(
-                    text = %trimmed.chars().take(80).collect::<String>(),
-                    "marking arXiv watermark as furniture"
-                );
+            };
+            if trimmed[..start].is_empty() {
+                tracing::trace!(text = %trimmed, "marking arXiv stamp as furniture");
                 para.is_page_furniture = true;
                 para.heading_level = None;
-            } else if let Some(m) = trailing_re.find(trimmed) {
-                let noise = &trimmed[m.start()..];
-                tracing::trace!(
-                    stripped = %noise.chars().take(80).collect::<String>(),
-                    "stripping trailing arXiv watermark from paragraph"
-                );
-                strip_trailing_text_from_paragraph(para, noise.trim());
+            } else {
+                let stamp = &trimmed[start..];
+                tracing::trace!(stripped = %stamp, "stripping trailing arXiv stamp from paragraph");
+                drop_trailing_words_from_paragraph(para, stamp.split_whitespace().count());
             }
         }
     }
 }
 
-/// Strip trailing noise text from the last segment(s) of a paragraph.
-fn strip_trailing_text_from_paragraph(para: &mut PdfParagraph, noise: &str) {
-    for line in para.lines.iter_mut().rev() {
-        for seg in line.segments.iter_mut().rev() {
-            if let Some(pos) = seg.text.find(noise) {
-                seg.text = seg.text[..pos].trim_end().to_string();
-                return;
-            }
-            let seg_trimmed = seg.text.trim();
-            if !seg_trimmed.is_empty() && noise.contains(seg_trimmed) {
-                seg.text.clear();
+/// Mark as furniture the paragraphs of a page that each hold only part of an arXiv stamp, when
+/// together they make one whole stamp and sit in one margin. The parts are joined in reading order
+/// and reversed, because the rotated stamp reads from the bottom of the page up. Only the order
+/// identifier, category, date (or its reverse) makes a stamp, so a page that reads category,
+/// identifier, date keeps its parts. A stamp holds three components and each part holds at least
+/// one, so the joined parts make a whole stamp only for two or three parts. With any other count
+/// nothing is marked, and no count check is needed.
+fn mark_split_arxiv_stamp(page: &mut [PdfParagraph]) {
+    let parts: Vec<(usize, String)> = page
+        .iter()
+        .enumerate()
+        .filter(|(_, para)| !para.is_page_furniture)
+        .filter_map(|(index, para)| {
+            let text = paragraph_plain_text(para);
+            is_partial_stamp(&text).then(|| (index, text.trim().to_string()))
+        })
+        .collect();
+    let forward = parts
+        .iter()
+        .map(|(_, text)| text.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let reversed = parts
+        .iter()
+        .rev()
+        .map(|(_, text)| text.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if trailing_stamp_start(&forward) != Some(0) && trailing_stamp_start(&reversed) != Some(0) {
+        return;
+    }
+    let part_paragraphs: Vec<&PdfParagraph> = parts.iter().map(|(index, _)| &page[*index]).collect();
+    if !share_one_margin(&part_paragraphs, page_extent(page)) {
+        return;
+    }
+    tracing::trace!(stamp = %forward, "marking a split arXiv stamp as furniture");
+    for (index, _) in parts {
+        page[index].is_page_furniture = true;
+        page[index].heading_level = None;
+    }
+}
+
+/// Whether text with this rotation reads up or down the page: a rotation nearer 90 or 270 degrees
+/// than 0 or 180.
+fn reads_up_or_down(rotation_degrees: f32) -> bool {
+    (rotation_degrees.rem_euclid(180.0) - 90.0).abs() < 45.0
+}
+
+/// The extent of a segment across its reading direction. `x` and `y` are the run's baseline origin and
+/// `height` extends perpendicular to the baseline (the extractor sizes a run turned up or down by its
+/// length in `width`), so the thickness is the height, or the font size where that is larger. The glyphs
+/// stand on the left of the baseline for text read bottom to top (matrix `0 1 -1 0 x y`, 90 degrees) and
+/// on the right for 270 degrees. Upright text stands above its baseline and text turned 180 degrees below.
+fn across_extent(segment: &SegmentData) -> (f32, f32) {
+    let thickness = segment.height.max(segment.font_size);
+    let flipped = (45.0..225.0).contains(&segment.rotation_degrees.rem_euclid(360.0));
+    let origin = if reads_up_or_down(segment.rotation_degrees) {
+        segment.x
+    } else {
+        segment.y
+    };
+    if flipped {
+        (origin - thickness, origin)
+    } else {
+        (origin, origin + thickness)
+    }
+}
+
+/// The right and top edge of a page, read from its text as the structure pipeline reads page heights:
+/// the far side of the text, and at least a US Letter page. The left and bottom edge are at zero. A run
+/// turned up or down reaches right by its thickness, not by its length. Text turned 180 degrees still
+/// reaches right by its width from `x`.
+fn page_extent(page: &[PdfParagraph]) -> (f32, f32) {
+    use super::pipeline::{FALLBACK_PAGE_HEIGHT_PTS, FALLBACK_PAGE_WIDTH_PTS};
+    let segments = page
+        .iter()
+        .flat_map(|para| para.lines.iter().flat_map(|line| line.segments.iter()));
+    segments.fold(
+        (FALLBACK_PAGE_WIDTH_PTS, FALLBACK_PAGE_HEIGHT_PTS),
+        |(right, top), s| {
+            let reach = if reads_up_or_down(s.rotation_degrees) {
+                across_extent(s).1
             } else {
-                return;
+                s.x + s.width
+            };
+            (right.max(reach), top.max(s.y + s.height))
+        },
+    )
+}
+
+/// Whether the paragraphs are the parts of one margin stamp. All parts are drawn with one rotation and
+/// sit on one line in their reading direction: text read up or down shares a band of x values, text read
+/// across shares a band of y values, each band measured by the thickness of the text. That line lies in
+/// a margin: the parts' extent across it lies within a tenth of the page from one page edge. Rotations
+/// are compared modulo 360 degrees, so 90 and -270 are one rotation.
+fn share_one_margin(parts: &[&PdfParagraph], (page_right, page_top): (f32, f32)) -> bool {
+    /// Rotations closer than this many degrees are one rotation.
+    const SAME_ROTATION_DEGREES: f32 = 0.5;
+    /// The share of the page, from each edge, that counts as a margin.
+    const MARGIN_ZONE: f32 = 0.1;
+    let mut rotation: Option<f32> = None;
+    // (lowest, highest) across the reading direction: the shared band, and the extent of all parts.
+    let mut band = (f32::NEG_INFINITY, f32::INFINITY);
+    let mut extent = (f32::INFINITY, f32::NEG_INFINITY);
+    let mut up_or_down = false;
+    for paragraph in parts {
+        let segments: Vec<_> = paragraph.lines.iter().flat_map(|line| line.segments.iter()).collect();
+        if segments.is_empty() {
+            return false;
+        }
+        for segment in &segments {
+            let degrees = segment.rotation_degrees.rem_euclid(360.0);
+            if let Some(known) = rotation {
+                let apart = (known - degrees).abs();
+                if apart.min(360.0 - apart) > SAME_ROTATION_DEGREES {
+                    return false;
+                }
+            } else {
+                rotation = Some(degrees);
+                up_or_down = reads_up_or_down(degrees);
             }
         }
+        let (low, high) = segments
+            .iter()
+            .map(|s| across_extent(s))
+            .fold((f32::INFINITY, f32::NEG_INFINITY), |(low, high), (l, h)| {
+                (low.min(l), high.max(h))
+            });
+        band = (band.0.max(low), band.1.min(high));
+        extent = (extent.0.min(low), extent.1.max(high));
+    }
+    if band.0 > band.1 {
+        return false;
+    }
+    let page_across = if up_or_down { page_right } else { page_top };
+    let zone = page_across * MARGIN_ZONE;
+    extent.0 <= zone || page_across - extent.1 <= zone
+}
+
+/// Remove the last `count` white-space separated words from the text of a paragraph.
+fn drop_trailing_words_from_paragraph(para: &mut PdfParagraph, mut count: usize) {
+    for seg in para
+        .lines
+        .iter_mut()
+        .rev()
+        .flat_map(|line| line.segments.iter_mut().rev())
+    {
+        if count == 0 {
+            return;
+        }
+        let words = seg.text.split_whitespace().count();
+        if words <= count {
+            count -= words;
+            seg.text.clear();
+            continue;
+        }
+        let mut kept = seg.text.trim_end();
+        for _ in 0..count {
+            kept = kept.trim_end_matches(|c: char| !c.is_whitespace()).trim_end();
+        }
+        seg.text.truncate(kept.len());
+        return;
     }
 }
 
@@ -2313,41 +2449,359 @@ mod tests {
         paragraph
     }
 
-    #[test]
-    fn arxiv_noise_marks_a_versioned_stamp_as_furniture() {
-        let mut pages = vec![vec![paragraph_with_text("arXiv:2312.13591v2 [hep-ph] 6 Dec 2023")]];
+    fn paragraph_of_segments(texts: &[&str]) -> PdfParagraph {
+        let mut paragraph = make_paragraph(10.0, texts.len());
+        for (segment, text) in paragraph.lines[0].segments.iter_mut().zip(texts) {
+            segment.text = (*text).to_string();
+        }
+        paragraph
+    }
+
+    fn marked_text(text: &str) -> (bool, String) {
+        let mut pages = vec![vec![paragraph_with_text(text)]];
         mark_arxiv_noise(&mut pages);
-        assert!(pages[0][0].is_page_furniture);
+        (pages[0][0].is_page_furniture, paragraph_plain_text(&pages[0][0]))
     }
 
     #[test]
-    fn arxiv_noise_keeps_a_short_citation_that_ends_in_an_unversioned_identifier() {
-        let mut pages = vec![vec![paragraph_with_text("82 , 419 (2022), arXiv:2107.09275 [hep-ph].")]];
-        mark_arxiv_noise(&mut pages);
-        assert!(!pages[0][0].is_page_furniture);
-        assert_eq!(
-            pages[0][0].lines[0].segments[0].text,
-            "82 , 419 (2022), arXiv:2107.09275 [hep-ph]."
-        );
+    fn arxiv_noise_marks_the_real_stamp_as_furniture() {
+        let (furniture, _) = marked_text("arXiv:2312.13591v2 [hep-ph] 6 Dec 2023");
+        assert!(furniture);
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_a_short_versioned_citation() {
+        let text = "[12] A. Author, A title, arXiv:2107.09275v2 [hep-ph].";
+        assert_eq!(marked_text(text), (false, text.to_string()));
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_a_short_unversioned_citation() {
+        let text = "[11] J. Doe, A short title, arXiv:2107.09275 [hep-ph].";
+        assert_eq!(marked_text(text), (false, text.to_string()));
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_a_citation_that_ends_at_the_bare_identifier() {
+        let text = "The earlier study by Doe and Smith, Journal of Examples 12, 345 (2021), arXiv:2107.09275";
+        assert_eq!(marked_text(text), (false, text.to_string()));
     }
 
     #[test]
     fn arxiv_noise_keeps_a_long_citation_that_ends_in_an_unversioned_identifier() {
-        let text = "[95] X. Liu, Y. Tan, X. Chen, D. Chen, H. Huang, and J. Ping, Investigation of the analog of the states, the doubly charmed molecular pentaquarks of strange quarks, mass spectra, radiative decays and magnetic moments, (2023), arXiv:2312.04390 [hep-ph].";
+        let text = "[95] X. Liu, Y. Tan, X. Chen, D. Chen, H. Huang, and J. Ping, Investigation of the analog of the \
+                    states, the doubly charmed molecular pentaquarks of strange quarks, mass spectra, radiative \
+                    decays and magnetic moments, (2023), arXiv:2312.04390 [hep-ph].";
         assert!(text.split_whitespace().count() > 25);
-        let mut pages = vec![vec![paragraph_with_text(text)]];
-        mark_arxiv_noise(&mut pages);
-        assert!(!pages[0][0].is_page_furniture);
-        assert_eq!(pages[0][0].lines[0].segments[0].text, text);
+        assert_eq!(marked_text(text), (false, text.to_string()));
+    }
+
+    #[test]
+    fn arxiv_noise_strips_only_the_stamp_from_the_end_of_a_longer_paragraph() {
+        let body = "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen \
+                    seventeen eighteen nineteen twenty twenty-one twenty-two twenty-three twenty-four twenty-five";
+        let (furniture, kept) = marked_text(&format!("{body} arXiv:2312.13591v2 [hep-ph] 6 Dec 2023"));
+        assert!(!furniture);
+        assert_eq!(kept, body);
     }
 
     #[test]
     fn arxiv_noise_strips_a_versioned_stamp_appended_to_a_longer_paragraph() {
-        let text = "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one twenty-two twenty-three twenty-four twenty-five twenty-six arXiv:2312.13591v2 [hep-ph] 6 Dec 2023";
-        let mut pages = vec![vec![paragraph_with_text(text)]];
+        let body = "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen \
+                    seventeen eighteen nineteen twenty twenty-one twenty-two twenty-three twenty-four twenty-five \
+                    twenty-six";
+        let (furniture, kept) = marked_text(&format!("{body} arXiv:2312.13591v2 [hep-ph] 6 Dec 2023"));
+        assert!(!furniture);
+        assert_eq!(kept, body);
+    }
+
+    #[test]
+    fn arxiv_noise_strips_a_stamp_that_the_extractor_split_into_segments() {
+        let mut pages = vec![vec![paragraph_of_segments(&[
+            "Body",
+            "words",
+            "stay",
+            "arXiv:2312.13591v2",
+            "[hep-ph]",
+            "6",
+            "Dec",
+            "2023",
+        ])]];
         mark_arxiv_noise(&mut pages);
         assert!(!pages[0][0].is_page_furniture);
-        assert!(!pages[0][0].lines[0].segments[0].text.contains("arXiv"));
+        assert_eq!(paragraph_plain_text(&pages[0][0]).trim(), "Body words stay");
+    }
+
+    /// A paragraph drawn as a stamp part is: turned 90 degrees in the left margin.
+    fn margin_paragraph(text: &str) -> PdfParagraph {
+        let mut paragraph = paragraph_with_text(text);
+        let segment = &mut paragraph.lines[0].segments[0];
+        (segment.x, segment.rotation_degrees) = (20.0, 90.0);
+        paragraph
+    }
+
+    fn furniture_of(texts: &[&str]) -> Vec<bool> {
+        let mut pages = vec![texts.iter().map(|text| margin_paragraph(text)).collect::<Vec<_>>()];
+        mark_arxiv_noise(&mut pages);
+        pages[0].iter().map(|para| para.is_page_furniture).collect()
+    }
+
+    #[test]
+    fn arxiv_noise_marks_a_stamp_whose_parts_are_paragraphs_in_reading_order() {
+        let texts = [
+            "Body words stay",
+            "arXiv:2312.13591v2",
+            "[hep-ph]",
+            "6 Dec 2023",
+            "More",
+        ];
+        assert_eq!(furniture_of(&texts), [false, true, true, true, false]);
+    }
+
+    #[test]
+    fn arxiv_noise_marks_a_stamp_whose_parts_read_bottom_to_top_between_body_paragraphs() {
+        let texts = [
+            "6 Dec 2023",
+            "Body words stay",
+            "[hep-ph]",
+            "More body words",
+            "arXiv:2312.13591v2",
+        ];
+        assert_eq!(furniture_of(&texts), [true, false, true, false, true]);
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_a_date_paragraph_after_a_citation() {
+        let texts = ["[12] A. Author, A title, arXiv:2107.09275v2 [hep-ph]", "6 Dec 2023"];
+        assert_eq!(furniture_of(&texts), [false, false]);
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_parts_that_do_not_make_one_stamp() {
+        assert_eq!(
+            furniture_of(&["arXiv:2312.13591v2", "Body words stay", "[hep-ph]"]),
+            [false; 3]
+        );
+        assert_eq!(
+            furniture_of(&["6 Dec 2023", "[hep-ph]", "7 Dec 2023", "arXiv:2312.13591v2"]),
+            [false; 4]
+        );
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_a_stamp_page_with_one_more_date_paragraph() {
+        let texts = [
+            "arXiv:2312.13591v2",
+            "[hep-ph]",
+            "6 Dec 2023",
+            "7 Dec 2023",
+            "Body words stay",
+        ];
+        assert_eq!(furniture_of(&texts), [false; 5]);
+    }
+
+    /// The three parts of a stamp with a position and a rotation for each: `(x, y, rotation)`.
+    fn placed_stamp_parts(places: [(f32, f32, f32); 3]) -> Vec<bool> {
+        placed_stamp_parts_of_width(places, 40.0)
+    }
+
+    /// The same, with every part as long as `width`: the extractor sizes a run turned up or down by its length.
+    fn placed_stamp_parts_of_width(places: [(f32, f32, f32); 3], width: f32) -> Vec<bool> {
+        let texts = ["arXiv:2312.13591v2", "[hep-ph]", "6 Dec 2023"];
+        let mut page: Vec<PdfParagraph> = texts.iter().map(|text| paragraph_with_text(text)).collect();
+        for (para, (x, y, rotation)) in page.iter_mut().zip(places) {
+            let segment = &mut para.lines[0].segments[0];
+            (segment.x, segment.y, segment.rotation_degrees) = (x, y, rotation);
+            segment.width = width;
+            segment.height = 20.0;
+            segment.font_size = 20.0;
+        }
+        let mut pages = vec![page];
+        mark_arxiv_noise(&mut pages);
+        pages[0].iter().map(|para| para.is_page_furniture).collect()
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_long_rotated_stamp_parts_in_the_middle_of_the_page() {
+        let at = |x: f32| [(x, 600.0, 90.0), (x, 400.0, 90.0), (x, 200.0, 90.0)];
+        assert_eq!(placed_stamp_parts_of_width(at(300.0), 178.0), [false; 3]);
+        assert_eq!(placed_stamp_parts_of_width(at(20.0), 178.0), [true; 3]);
+    }
+
+    #[test]
+    fn arxiv_noise_marks_a_long_stamp_turned_270_degrees_at_the_right_edge() {
+        let at = |x: f32| [(x, 600.0, 270.0), (x, 400.0, 270.0), (x, 200.0, 270.0)];
+        assert_eq!(placed_stamp_parts_of_width(at(585.0), 178.0), [true; 3]);
+        assert_eq!(placed_stamp_parts_of_width(at(300.0), 178.0), [false; 3]);
+    }
+
+    /// The glyphs of text turned 90 degrees stand left of the baseline origin, so a part at `x` covers
+    /// `x - 20 .. x`; the margin zone is a tenth of the 612 point page, 61.2 points.
+    #[test]
+    fn arxiv_noise_measures_a_stamp_turned_90_degrees_to_the_left_of_its_origin() {
+        let at = |x: f32| [(x, 600.0, 90.0), (x, 400.0, 90.0), (x, 200.0, 90.0)];
+        assert_eq!(placed_stamp_parts_of_width(at(80.0), 178.0), [true; 3]);
+        assert_eq!(placed_stamp_parts_of_width(at(82.0), 178.0), [false; 3]);
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_long_rotated_stamp_parts_that_do_not_share_a_line() {
+        let marked =
+            placed_stamp_parts_of_width([(20.0, 600.0, 90.0), (150.0, 400.0, 90.0), (20.0, 200.0, 90.0)], 178.0);
+        assert_eq!(marked, [false; 3]);
+    }
+
+    #[test]
+    fn arxiv_noise_marks_stamp_parts_that_stack_in_one_rotated_margin() {
+        let marked = placed_stamp_parts([(20.0, 600.0, 90.0), (20.0, 400.0, 90.0), (22.0, 200.0, 90.0)]);
+        assert_eq!(marked, [true; 3]);
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_stamp_parts_that_sit_far_apart_on_the_page() {
+        let marked = placed_stamp_parts([(50.0, 700.0, 0.0), (300.0, 400.0, 0.0), (500.0, 100.0, 0.0)]);
+        assert_eq!(marked, [false; 3]);
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_stamp_parts_that_differ_in_rotation() {
+        let marked = placed_stamp_parts([(20.0, 600.0, 90.0), (20.0, 400.0, 0.0), (20.0, 200.0, 90.0)]);
+        assert_eq!(marked, [false; 3]);
+    }
+
+    #[test]
+    fn arxiv_noise_reads_stamp_rotations_modulo_a_full_turn() {
+        let marked = placed_stamp_parts([(20.0, 600.0, 90.0), (20.0, 400.0, -270.0), (22.0, 200.0, 450.0)]);
+        assert_eq!(marked, [true; 3]);
+        let marked = placed_stamp_parts([(100.0, 10.0, 359.8), (250.0, 10.0, 0.1), (400.0, 12.0, 0.0)]);
+        assert_eq!(marked, [true; 3]);
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_stamp_parts_stacked_in_one_text_column() {
+        let marked = placed_stamp_parts([(72.0, 600.0, 0.0), (72.0, 588.0, 0.0), (72.0, 576.0, 0.0)]);
+        assert_eq!(marked, [false; 3]);
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_rotated_stamp_parts_away_from_the_page_edge() {
+        let marked = placed_stamp_parts([(300.0, 600.0, 90.0), (300.0, 400.0, 90.0), (302.0, 200.0, 90.0)]);
+        assert_eq!(marked, [false; 3]);
+    }
+
+    #[test]
+    fn arxiv_noise_marks_stamp_parts_along_the_bottom_or_the_right_edge() {
+        let marked = placed_stamp_parts([(100.0, 10.0, 0.0), (250.0, 10.0, 0.0), (400.0, 12.0, 0.0)]);
+        assert_eq!(marked, [true; 3]);
+        let marked = placed_stamp_parts([(580.0, 600.0, 270.0), (580.0, 400.0, 270.0), (582.0, 200.0, 270.0)]);
+        assert_eq!(marked, [true; 3]);
+    }
+
+    /// Paragraphs for each text, all turned 90 degrees in the left margin and stacked from the top down.
+    fn stamp_parts_in_left_margin(texts: &[&str]) -> Vec<bool> {
+        let mut page: Vec<PdfParagraph> = texts.iter().map(|text| paragraph_with_text(text)).collect();
+        for (index, para) in page.iter_mut().enumerate() {
+            let segment = &mut para.lines[0].segments[0];
+            (segment.x, segment.y, segment.rotation_degrees) = (20.0, 700.0 - 100.0 * index as f32, 90.0);
+        }
+        let mut pages = vec![page];
+        mark_arxiv_noise(&mut pages);
+        pages[0].iter().map(|para| para.is_page_furniture).collect()
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_all_six_parts_of_two_stamps_on_one_page() {
+        let one = ["arXiv:2312.13591v2", "[hep-ph]", "6 Dec 2023"];
+        // Control: the layout is a margin, so one stamp alone is marked.
+        assert_eq!(stamp_parts_in_left_margin(&one), [true; 3]);
+        let two = [
+            "arXiv:2312.13591v2",
+            "[hep-ph]",
+            "6 Dec 2023",
+            "arXiv:2107.09275v1",
+            "[cs.CL]",
+            "7 Dec 2023",
+        ];
+        assert_eq!(stamp_parts_in_left_margin(&two), [false; 6]);
+    }
+
+    #[test]
+    fn arxiv_noise_keeps_stamp_parts_that_read_category_first() {
+        assert_eq!(
+            furniture_of(&["[hep-ph]", "arXiv:2312.13591v2", "6 Dec 2023"]),
+            [false; 3]
+        );
+    }
+
+    #[test]
+    fn arxiv_noise_ends_the_heading_of_a_stamp_part() {
+        let mut page: Vec<PdfParagraph> = ["Body words stay", "arXiv:2312.13591v2", "[hep-ph]", "6 Dec 2023"]
+            .iter()
+            .map(|text| margin_paragraph(text))
+            .collect();
+        for para in page.iter_mut() {
+            para.heading_level = Some(2);
+        }
+        let mut pages = vec![page];
+        mark_arxiv_noise(&mut pages);
+        let levels: Vec<Option<u8>> = pages[0].iter().map(|para| para.heading_level).collect();
+        assert_eq!(levels, [Some(2), None, None, None]);
+    }
+
+    /// Mark the paragraph at each index in `removed` as page furniture before the stamp rule runs, then
+    /// return the furniture flag and the text of every paragraph.
+    fn furniture_and_text_after_removal(texts: &[&str], removed: &[usize]) -> Vec<(bool, String)> {
+        let mut page: Vec<PdfParagraph> = texts.iter().map(|text| margin_paragraph(text)).collect();
+        for index in removed {
+            page[*index].is_page_furniture = true;
+        }
+        let mut pages = vec![page];
+        mark_arxiv_noise(&mut pages);
+        pages[0]
+            .iter()
+            .map(|para| (para.is_page_furniture, paragraph_plain_text(para).trim().to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn arxiv_noise_does_not_join_or_count_a_stamp_part_that_is_already_furniture() {
+        // A removed piece is not a part: the two pieces left do not make a stamp, so both stay.
+        let page = furniture_and_text_after_removal(
+            &["Body words stay", "arXiv:2312.13591v2", "[hep-ph]", "6 Dec 2023"],
+            &[2],
+        );
+        let expected = [
+            (false, "Body words stay"),
+            (false, "arXiv:2312.13591v2"),
+            (true, "[hep-ph]"),
+            (false, "6 Dec 2023"),
+        ];
+        assert_eq!(page, expected.map(|(flag, text)| (flag, text.to_string())));
+        // A removed fourth piece is not counted: the three pieces left still make one stamp.
+        let page = furniture_and_text_after_removal(
+            &[
+                "arXiv:2312.13591v2",
+                "[hep-ph]",
+                "6 Dec 2023",
+                "7 Dec 2023",
+                "Body words stay",
+            ],
+            &[3],
+        );
+        let flags: Vec<bool> = page.iter().map(|(flag, _)| *flag).collect();
+        assert_eq!(flags, [true, true, true, true, false]);
+        assert_eq!(page[4].1, "Body words stay");
+    }
+
+    #[test]
+    fn arxiv_noise_leaves_stamps_after_the_second_page() {
+        let mut pages = vec![
+            Vec::new(),
+            Vec::new(),
+            vec![paragraph_with_text("arXiv:2312.13591v2 [hep-ph] 6 Dec 2023")],
+        ];
+        mark_arxiv_noise(&mut pages);
+        assert!(!pages[2][0].is_page_furniture);
     }
 
     #[test]

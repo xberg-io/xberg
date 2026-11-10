@@ -115,12 +115,18 @@ impl<'doc> TextExtractor<'doc> {
             // boundaries. In other words: the merge still happens exactly
             // as before on fallback-width fonts, but once we're inside the
             // merge branch we consult a more honest gap to decide whether
-            // a space is warranted. ~keep
-            let reliable_widths = self
-                .fonts
-                .get(&current.font_name)
-                .map(|f| f.has_explicit_widths())
-                .unwrap_or(true);
+            // a space is warranted.
+            //
+            // A span that starts where the previous `TJ` array left the pen (`pen_continuations`,
+            // GH#2664) sits at the producer's own pen: its gap is the real one and needs no
+            // correction. ~keep
+            let continues_pen = self.pen_continuations.contains(&SpanKey::of(&span));
+            let reliable_widths = continues_pen
+                || self
+                    .fonts
+                    .get(&current.font_name)
+                    .map(|f| f.has_explicit_widths())
+                    .unwrap_or(true);
             let space_gap = corrected_space_gap(
                 gap,
                 reliable_widths,

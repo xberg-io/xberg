@@ -1,3 +1,4 @@
+use super::super::is_khmer_digit;
 use crate::core::config::ExtractionConfig;
 use crate::ocr::processor::validation::{TessdataEnv, existing_tessdata_dir_for};
 use crate::ocr::processor::{ImageOcrPolicy, OcrProcessor};
@@ -56,10 +57,6 @@ pub(super) fn applicable(policy: PagePolicy<'_>) -> bool {
         && policy.raster.is_some_and(|raster| !raster.type0_ink_loss)
         && !policy.structured
         && policy.builtin
-}
-
-fn is_khmer_digit(character: char) -> bool {
-    ('\u{17e0}'..='\u{17e9}').contains(&character)
 }
 
 pub(super) struct PageSource<'a> {
