@@ -37,11 +37,11 @@ fn to_unicode_map(target_hex: &str) -> String {
 }
 
 /// One Letter page whose font draws code 1 as the `ffi` glyph, with `to_unicode` mapping it when given.
-fn build_pdf(content: &str, to_unicode: Option<&str>) -> Vec<u8> {
+fn build_pdf(content: &str, to_unicode: Option<&str>, glyph: &str) -> Vec<u8> {
     let widths: Vec<String> = (1u8..=126).map(|code| helvetica_width(code).to_string()).collect();
     let font = format!(
         "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /FirstChar 1 /LastChar 126 /Widths [{}] \
-         /Encoding << /Type /Encoding /BaseEncoding /WinAnsiEncoding /Differences [1 /ffi] >>{} >>",
+         /Encoding << /Type /Encoding /BaseEncoding /WinAnsiEncoding /Differences [1 /{glyph}] >>{} >>",
         widths.join(" "),
         if to_unicode.is_some() { " /ToUnicode 6 0 R" } else { "" }
     );
@@ -95,14 +95,14 @@ fn page_with(show: &str) -> String {
     page
 }
 
-fn last_line(show: &str, output_format: OutputFormat, to_unicode: Option<&str>) -> String {
+fn last_line(show: &str, output_format: OutputFormat, to_unicode: Option<&str>, glyph: &str) -> String {
     let config = ExtractionConfig {
         output_format,
         disable_ocr: true,
         use_cache: false,
         ..Default::default()
     };
-    let bytes = build_pdf(&page_with(show), to_unicode);
+    let bytes = build_pdf(&page_with(show), to_unicode, glyph);
     let result = extract_bytes_document_blocking(&bytes, "application/pdf", &config).expect("fixture must extract");
     assert!(
         result.content.contains("committee reviewed"),
@@ -119,20 +119,22 @@ fn last_line(show: &str, output_format: OutputFormat, to_unicode: Option<&str>) 
 /// The glyph is 8.4pt wide, so the placements sit at x = 99.57 and 109.97 on the baseline y = 664.
 const WORD_WITH_LIGATURE_ROOM: &str = "(The o) Tj ET\nBT /F1 10 Tf 1 0 0 1 99.57 664 Tm (\\001) Tj ET\nBT /F1 10 Tf 1 0 0 1 109.97 664 Tm (ce is open.) Tj";
 
-const MAPPINGS: [(&str, Option<&str>); 3] = [
-    ("U+FB03", Some("FB03")),
-    ("the letters ffi", Some("006600660069")),
-    ("no ToUnicode", None),
+/// The ToUnicode target (when any) and the glyph name the /Differences array gives code 1.
+const MAPPINGS: [(&str, Option<&str>, &str); 4] = [
+    ("U+FB03", Some("FB03"), "ffi"),
+    ("the letters ffi", Some("006600660069"), "ffi"),
+    ("glyph name ffi, no ToUnicode", None, "ffi"),
+    ("glyph name f_f_i, no ToUnicode", None, "f_f_i"),
 ];
 
 #[test]
 fn markdown_keeps_a_word_whole_around_an_ffi_glyph() {
     let lines: Vec<String> = MAPPINGS
         .iter()
-        .map(|(name, map)| {
+        .map(|(name, map, glyph)| {
             format!(
                 "{name}: {}",
-                last_line(WORD_WITH_LIGATURE_ROOM, OutputFormat::Markdown, *map)
+                last_line(WORD_WITH_LIGATURE_ROOM, OutputFormat::Markdown, *map, glyph)
             )
         })
         .collect();
@@ -143,10 +145,10 @@ fn markdown_keeps_a_word_whole_around_an_ffi_glyph() {
 fn plain_text_keeps_a_word_whole_around_an_ffi_glyph() {
     let lines: Vec<String> = MAPPINGS
         .iter()
-        .map(|(name, map)| {
+        .map(|(name, map, glyph)| {
             format!(
                 "{name}: {}",
-                last_line(WORD_WITH_LIGATURE_ROOM, OutputFormat::Plain, *map)
+                last_line(WORD_WITH_LIGATURE_ROOM, OutputFormat::Plain, *map, glyph)
             )
         })
         .collect();
@@ -158,6 +160,6 @@ fn plain_text_keeps_a_word_whole_around_an_ffi_glyph() {
 #[test]
 fn an_ffi_glyph_with_a_word_gap_on_each_side_stays_between_words() {
     let show = "(The o) Tj ET\nBT /F1 10 Tf 1 0 0 1 103.57 664 Tm (\\001) Tj ET\nBT /F1 10 Tf 1 0 0 1 118.97 664 Tm (ce is open.) Tj";
-    let line = last_line(show, OutputFormat::Markdown, Some("FB03"));
+    let line = last_line(show, OutputFormat::Markdown, Some("FB03"), "ffi");
     assert!(line.starts_with("The o ffi ce is open."), "{line:?}");
 }

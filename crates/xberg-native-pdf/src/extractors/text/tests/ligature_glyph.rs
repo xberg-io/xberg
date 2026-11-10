@@ -451,3 +451,25 @@ fn merging_joins_around_every_ligature_code_point() {
         );
     }
 }
+
+/// A font with no ToUnicode in which the byte 0x41 ("A") has `letters` in the compound-name table, where
+/// the parser of a /Differences array puts an underscore-joined glyph name.
+fn compound_name_font_decoding_a_to(letters: &str) -> FontInfo {
+    let mut font = create_test_font();
+    font.encoding = Encoding::Custom(HashMap::new());
+    font.multi_char_map.insert(0x41, letters.to_string());
+    font
+}
+
+/// The letters of an underscore-joined /Differences name (`f_f_i`) mark the span like a ToUnicode entry
+/// that gives them, so the 0.2 em join applies to the glyph (#2689).
+#[test]
+fn a_compound_glyph_name_code_marks_the_span() {
+    for letters in ["ff", "fi", "fl", "ffi", "ffl", "st"] {
+        let spans = spans_of(
+            compound_name_font_decoding_a_to(letters),
+            b"BT /F1 12 Tf 0 0 Td (A) Tj ET",
+        );
+        assert_eq!(spans, marked(letters), "{letters}");
+    }
+}
