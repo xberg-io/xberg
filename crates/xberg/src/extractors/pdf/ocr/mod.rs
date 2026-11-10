@@ -35,17 +35,26 @@ pub(super) use hidden_layer::VisibleRasterProof;
 #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
 pub(crate) use hidden_layer::embedded_gap_placement;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(in crate::extractors::pdf) use hidden_layer::preview_byte_limit;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod native_word_coverage;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod orientation_retry;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(crate) use orientation_retry::recognition_retry_eligible;
 mod pipeline;
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    any(paddle_ocr, all(feature = "ocr", not(target_arch = "wasm32")))
+))]
+pub(super) use pipeline::uses_default_ocr_pipeline;
 mod plausibility;
 mod rendering;
 mod scoring;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) mod stage_model_inputs;
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) mod symbol_noise_lines;
 #[cfg(all(
     feature = "ocr",
     feature = "pdf",
@@ -154,6 +163,8 @@ mod page_failure_cause_tests;
 mod photo_layer_tests;
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 mod plausibility_tests;
+#[cfg(all(test, feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+mod proven_read_tests;
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 mod recognition_noise_tests;
 #[cfg(all(test, feature = "ocr", feature = "tokio-runtime"))]

@@ -21,7 +21,7 @@ fn selected_page_retains_only_the_rgb_pixels_consumed_by_ocr() {
     let original = crate::extraction::image_decode::decode_standard_image_with_security_limits(&png, &limits).unwrap();
     assert!(original.to_rgba8().pixels().all(|pixel| pixel[3] == 255));
     let expected_rgb = original.to_rgb8();
-    let ((index, retained), _) = render_one_selected_page(&document, &rotations, 0, &limits, None).unwrap();
+    let ((index, retained), _) = render_one_selected_page(&document, &rotations, 0, &limits, None, None).unwrap();
     assert_eq!(index, 0);
     assert_eq!((retained.width(), retained.height()), (width, height));
     assert_eq!(retained.to_rgb8(), expected_rgb);

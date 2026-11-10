@@ -1,20 +1,200 @@
 //! Preflight dense worksheet allocation using the backend's streaming cell readers.
 
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
 use calamine::{DataRef, Reader};
 
-use crate::extractors::security::{SecurityBudget, SecurityLimits};
+use crate::extractors::security::{
+    SecurityBudget, SecurityError, SecurityLimits, StringGrowthValidator, TableValidator,
+};
 use crate::{Result, XbergError};
 
 mod legacy;
 mod ods;
 mod xlsb_framing;
 mod zip_metadata;
-pub(super) use legacy::validate_xls;
-pub(super) use ods::validate_ods;
+pub(super) use legacy::{drop_skipped_sheets as drop_skipped_xls_sheets, validate_xls};
+pub(super) use ods::{drop_skipped_sheets as drop_skipped_ods_sheets, validate_ods};
 pub(super) use xlsb_framing::validate_xlsb_parts;
 pub(super) use zip_metadata::validate_xlsx_string_parts;
+
+/// Worksheets whose cells did not fit in the workbook's remaining `max_table_cells` budget.
+///
+/// A sheet is identified by its position in the backend's sheet list. Skipping it keeps the
+/// preflight's guarantee (the sheet is never materialized) while the rest of the workbook is
+/// still extracted.
+#[derive(Debug, Default)]
+pub(super) struct SkippedSheets {
+    indices: HashSet<usize>,
+    max_cells: usize,
+    /// Names of every ODS sheet in document order. Calamine keys ranges by name, so a skipped
+    /// sheet sharing its name with another sheet is renamed in the rewritten input and reported
+    /// here under its original name.
+    names: Vec<String>,
+    /// `(observed, max)` of the cell-limit error each skipped sheet raised.
+    cell_limit_errors: HashMap<usize, (usize, usize)>,
+    /// BOUNDSHEET records the XLS preflight saw; the reader must report exactly this many sheets.
+    sheet_count: usize,
+}
+
+impl SkippedSheets {
+    fn new(limits: &SecurityLimits) -> Self {
+        Self {
+            indices: HashSet::new(),
+            max_cells: limits.max_table_cells,
+            names: Vec::new(),
+            cell_limit_errors: HashMap::new(),
+            sheet_count: 0,
+        }
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.indices.is_empty()
+    }
+
+    fn contains(&self, index: usize) -> bool {
+        self.indices.contains(&index)
+    }
+
+    #[cfg(test)]
+    fn sorted_indices(&self) -> Vec<usize> {
+        let mut indices: Vec<usize> = self.indices.iter().copied().collect();
+        indices.sort_unstable();
+        indices
+    }
+
+    /// How many sheets carry each name.
+    fn name_counts(&self) -> HashMap<&str, usize> {
+        let mut counts = HashMap::new();
+        for name in &self.names {
+            *counts.entry(name.as_str()).or_insert(0) += 1;
+        }
+        counts
+    }
+
+    /// The original cell-limit error, if a skipped sheet shares its name with another sheet.
+    ///
+    /// Calamine keys XLS sheets by name, so the later of two equally named sheets overwrites the
+    /// earlier one. `reader_names` must be the names the reader itself reports, because it decodes
+    /// them (byte-order marks, code pages) in ways a preflight cannot mirror exactly.
+    pub(super) fn name_collision_error(&self, reader_names: &[String]) -> Option<XbergError> {
+        if self.indices.is_empty() {
+            return None;
+        }
+        let mut counts: HashMap<&str, usize> = HashMap::new();
+        for name in reader_names {
+            *counts.entry(name.as_str()).or_insert(0) += 1;
+        }
+        let misaligned = reader_names.len() != self.sheet_count;
+        let culprit = self
+            .indices
+            .iter()
+            .copied()
+            .filter(|index| misaligned || reader_names.get(*index).is_none_or(|name| counts[name.as_str()] > 1))
+            .min()?;
+        let (cells, max) = self
+            .cell_limit_errors
+            .get(&culprit)
+            .copied()
+            .unwrap_or((self.max_cells.saturating_add(1), self.max_cells));
+        Some(XbergError::from(SecurityError::TooManyCells { cells, max }))
+    }
+
+    /// The empty sheet standing in for sheet `index` named `name`, with its warning recorded,
+    /// or `None` when that sheet was not skipped.
+    pub(super) fn placeholder(
+        &self,
+        index: usize,
+        name: &str,
+        warnings: &mut Vec<crate::types::ProcessingWarning>,
+    ) -> Option<crate::types::ExcelSheet> {
+        if !self.contains(index) {
+            return None;
+        }
+        let name = self
+            .names
+            .get(index)
+            .filter(|name| !name.is_empty())
+            .map_or(name, String::as_str);
+        let message = format!(
+            "Sheet '{name}' was skipped: its cells did not fit in the remaining table-cell budget \
+             (`security_limits.max_table_cells` is {}); raise the limit to extract it",
+            self.max_cells
+        );
+        crate::core::diagnostics::push_warning(warnings, "excel", message);
+        Some(super::empty_excel_sheet(name))
+    }
+}
+
+fn is_cell_limit(error: &XbergError) -> bool {
+    matches!(
+        error,
+        XbergError::Security { source: Some(source), .. }
+            if matches!(
+                source.downcast_ref::<SecurityError>(),
+                Some(SecurityError::TooManyCells { .. })
+            )
+    )
+}
+
+fn cell_limit_counts(error: &XbergError) -> Option<(usize, usize)> {
+    match error {
+        XbergError::Security {
+            source: Some(source), ..
+        } => match source.downcast_ref::<SecurityError>() {
+            Some(SecurityError::TooManyCells { cells, max }) => Some((*cells, *max)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// The part of a [`SecurityBudget`] that a skipped sheet gives back: its table-cell and text
+/// charges. The iteration and depth counters stay monotonic, so skipped sheets are not free
+/// against `max_iterations` (sheets can alias one oversized part and be preflighted repeatedly).
+struct Charges {
+    table: TableValidator,
+    growth: StringGrowthValidator,
+}
+
+impl Charges {
+    fn of(budget: &SecurityBudget) -> Self {
+        Self {
+            table: budget.table.clone(),
+            growth: budget.growth.clone(),
+        }
+    }
+
+    fn restore(self, budget: &mut SecurityBudget) {
+        budget.table = self.table;
+        budget.growth = self.growth;
+    }
+}
+
+/// Run one worksheet's preflight against `budget`. When the sheet alone trips the cell limit and
+/// `recoverable` is set, its cell and text charges are rolled back and the sheet is recorded in
+/// `skipped`; otherwise (and for any other failure) the error aborts the workbook.
+fn preflight_sheet(
+    index: usize,
+    budget: &mut SecurityBudget,
+    skipped: &mut SkippedSheets,
+    recoverable: bool,
+    sheet: impl FnOnce(&mut SecurityBudget) -> Result<()>,
+) -> Result<()> {
+    let before = Charges::of(budget);
+    match sheet(budget) {
+        Err(error) if recoverable && is_cell_limit(&error) => {
+            if let Some(counts) = cell_limit_counts(&error) {
+                skipped.cell_limit_errors.insert(index, counts);
+            }
+            before.restore(budget);
+            skipped.indices.insert(index);
+            Ok(())
+        }
+        result => result,
+    }
+}
 
 #[derive(Default)]
 struct SheetBounds {
@@ -81,50 +261,66 @@ impl SheetAllocation {
     }
 }
 
-pub(super) fn validate_xlsx<R: Read + Seek>(workbook: &mut calamine::Xlsx<R>, limits: &SecurityLimits) -> Result<()> {
+pub(super) fn validate_xlsx<R: Read + Seek>(
+    workbook: &mut calamine::Xlsx<R>,
+    limits: &SecurityLimits,
+) -> Result<SkippedSheets> {
     let mut budget = SecurityBudget::from_limits(limits);
-    for name in workbook.sheet_names() {
-        let mut bounds = SheetAllocation::default();
-        let mut shared_formula_capacity = 0usize;
-        let mut formula_budget = SecurityBudget::from_limits(limits);
-        let mut nonempty_shared = ahash::AHashSet::new();
-        let mut reader = match workbook.worksheet_cells_reader(&name) {
-            Ok(reader) => reader,
-            Err(calamine::XlsxError::NotAWorksheet(_) | calamine::XlsxError::WorksheetNotFound(_)) => continue,
-            Err(error) => {
-                return Err(XbergError::parsing(format!(
-                    "Failed to read worksheet '{name}': {error}"
-                )));
-            }
-        };
-        validate_cell_reserve(reader.dimensions(), false, limits)?;
-        while let Some(cell) = reader
-            .next_cell_with_formula_metadata()
-            .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?
+    let mut skipped = SkippedSheets::new(limits);
+    for (index, name) in workbook.sheet_names().into_iter().enumerate() {
+        preflight_sheet(index, &mut budget, &mut skipped, true, |budget| {
+            validate_xlsx_sheet(workbook, &name, limits, budget)
+        })?;
+    }
+    Ok(skipped)
+}
+
+fn validate_xlsx_sheet<R: Read + Seek>(
+    workbook: &mut calamine::Xlsx<R>,
+    name: &str,
+    limits: &SecurityLimits,
+    budget: &mut SecurityBudget,
+) -> Result<()> {
+    let mut bounds = SheetAllocation::default();
+    let mut shared_formula_capacity = 0usize;
+    let mut formula_budget = SecurityBudget::from_limits(limits);
+    let mut nonempty_shared = ahash::AHashSet::new();
+    let mut reader = match workbook.worksheet_cells_reader(name) {
+        Ok(reader) => reader,
+        Err(calamine::XlsxError::NotAWorksheet(_) | calamine::XlsxError::WorksheetNotFound(_)) => return Ok(()),
+        Err(error) => {
+            return Err(XbergError::parsing(format!(
+                "Failed to read worksheet '{name}': {error}"
+            )));
+        }
+    };
+    validate_cell_reserve(reader.dimensions(), false, limits)?;
+    while let Some(cell) = reader
+        .next_cell_with_formula_metadata()
+        .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?
+    {
+        if let Some(calamine::XlsxFormulaMetadata::Shared {
+            shared_index,
+            range: Some(_),
+            ..
+        }) = cell.formula.as_ref()
         {
-            if let Some(calamine::XlsxFormulaMetadata::Shared {
-                shared_index,
-                range: Some(_),
-                ..
-            }) = cell.formula.as_ref()
-            {
-                // ~keep Calamine0.37 expands this index into Vec<Option<SharedFormula>> during its later formula pass.
-                let bytes = shared_index
-                    .checked_add(1)
-                    .and_then(|count| count.checked_mul(std::mem::size_of::<Option<(String, calamine::Dimensions)>>()))
-                    .ok_or_else(|| XbergError::validation("Shared formula capacity overflow".to_string()))?;
-                if bytes > shared_formula_capacity {
-                    formula_budget.account_text(bytes - shared_formula_capacity)?;
-                    shared_formula_capacity = bytes;
-                }
+            // ~keep Calamine0.37 expands this index into Vec<Option<SharedFormula>> during its later formula pass.
+            let bytes = shared_index
+                .checked_add(1)
+                .and_then(|count| count.checked_mul(std::mem::size_of::<Option<(String, calamine::Dimensions)>>()))
+                .ok_or_else(|| XbergError::validation("Shared formula capacity overflow".to_string()))?;
+            if bytes > shared_formula_capacity {
+                formula_budget.account_text(bytes - shared_formula_capacity)?;
+                shared_formula_capacity = bytes;
             }
-            if !matches!(cell.value, DataRef::Empty) {
-                bounds.value(cell.pos, &mut budget)?;
-                account_xlsx_cell_text(&cell.value, &mut budget)?;
-            }
-            if formula_occupies_range(cell.formula.as_ref(), &mut nonempty_shared)? {
-                bounds.formula(cell.pos, &mut budget)?;
-            }
+        }
+        if !matches!(cell.value, DataRef::Empty) {
+            bounds.value(cell.pos, budget)?;
+            account_xlsx_cell_text(&cell.value, budget)?;
+        }
+        if formula_occupies_range(cell.formula.as_ref(), &mut nonempty_shared)? {
+            bounds.formula(cell.pos, budget)?;
         }
     }
     Ok(())
@@ -167,31 +363,47 @@ fn formula_occupies_range(
     }
 }
 
-pub(super) fn validate_xlsb<R: Read + Seek>(workbook: &mut calamine::Xlsb<R>, limits: &SecurityLimits) -> Result<()> {
+pub(super) fn validate_xlsb<R: Read + Seek>(
+    workbook: &mut calamine::Xlsb<R>,
+    limits: &SecurityLimits,
+) -> Result<SkippedSheets> {
     let mut budget = SecurityBudget::from_limits(limits);
-    for name in workbook.sheet_names() {
-        let mut bounds = SheetAllocation::default();
-        let mut reader = workbook
-            .worksheet_cells_reader(&name)
-            .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?;
-        validate_cell_reserve(reader.dimensions(), true, limits)?;
-        while let Some(cell) = reader
-            .next_cell()
-            .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?
-        {
-            if !matches!(cell.get_value(), DataRef::Empty) {
-                bounds.value(cell.get_position(), &mut budget)?;
-            }
+    let mut skipped = SkippedSheets::new(limits);
+    for (index, name) in workbook.sheet_names().into_iter().enumerate() {
+        preflight_sheet(index, &mut budget, &mut skipped, true, |budget| {
+            validate_xlsb_sheet(workbook, &name, limits, budget)
+        })?;
+    }
+    Ok(skipped)
+}
+
+fn validate_xlsb_sheet<R: Read + Seek>(
+    workbook: &mut calamine::Xlsb<R>,
+    name: &str,
+    limits: &SecurityLimits,
+    budget: &mut SecurityBudget,
+) -> Result<()> {
+    let mut bounds = SheetAllocation::default();
+    let mut reader = workbook
+        .worksheet_cells_reader(name)
+        .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?;
+    validate_cell_reserve(reader.dimensions(), true, limits)?;
+    while let Some(cell) = reader
+        .next_cell()
+        .map_err(|error| XbergError::parsing(format!("Failed to read worksheet '{name}': {error}")))?
+    {
+        if !matches!(cell.get_value(), DataRef::Empty) {
+            bounds.value(cell.get_position(), budget)?;
         }
-        drop(reader);
-        // ~keep Formula metadata is optional: the later collector preserves cached values when this backend parser fails.
-        let Ok(mut formulas) = workbook.worksheet_cells_reader(&name) else {
-            continue;
-        };
-        while let Ok(Some(cell)) = formulas.next_formula() {
-            if !cell.get_value().is_empty() {
-                bounds.formula(cell.get_position(), &mut budget)?;
-            }
+    }
+    drop(reader);
+    // ~keep Formula metadata is optional: the later collector preserves cached values when this backend parser fails.
+    let Ok(mut formulas) = workbook.worksheet_cells_reader(name) else {
+        return Ok(());
+    };
+    while let Ok(Some(cell)) = formulas.next_formula() {
+        if !cell.get_value().is_empty() {
+            bounds.formula(cell.get_position(), budget)?;
         }
     }
     Ok(())

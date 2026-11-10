@@ -734,3 +734,40 @@ fn standard_font_metrics_name_the_times_helvetica_and_courier_families() {
         assert_eq!(font.has_standard_font_metrics(), expected, "{name}");
     }
 }
+
+/// A run of "x" that holds 10 units of text-space width, started by an identity matrix.
+fn run_of_width_10() -> TjBuffer {
+    let extractor = TextExtractor::new();
+    let mut buffer = TjBuffer::new(extractor.state_stack.current(), None, None);
+    buffer.unicode.push('x');
+    buffer.char_widths.push(10.0);
+    buffer.accumulated_width = 10.0;
+    buffer
+}
+
+/// The origin of a stretching `Tm` may sit up to two ULPs of its coordinate past the pen and still start
+/// at it; three ULPs is a gap.
+#[test]
+fn stretched_tm_origin_is_at_the_pen_within_two_ulps_and_not_beyond() {
+    let buffer = run_of_width_10();
+    let pen = 10.0_f32;
+    let one = pen.next_up();
+    let two = one.next_up();
+    let three = two.next_up();
+    for (e, expected) in [(pen, true), (one, true), (two, true), (three, false)] {
+        assert_eq!(
+            TextExtractor::stretched_tm_starts_at_the_pen(&buffer, 2.0, e, -1.0),
+            expected,
+            "origin {e:?} against the pen {pen:?}"
+        );
+    }
+}
+
+/// A run with no text has no pen to start at, whatever its accumulated width.
+#[test]
+fn stretched_tm_does_not_start_at_the_pen_of_an_empty_run() {
+    let mut buffer = run_of_width_10();
+    assert!(TextExtractor::stretched_tm_starts_at_the_pen(&buffer, 2.0, 10.0, -1.0));
+    buffer.unicode.clear();
+    assert!(!TextExtractor::stretched_tm_starts_at_the_pen(&buffer, 2.0, 10.0, -1.0));
+}

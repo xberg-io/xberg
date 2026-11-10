@@ -1002,7 +1002,10 @@ impl XYCutStrategy {
                 .iter()
                 .copied()
                 .partition(|&i| all_spans[i].bbox.left() < gutter_x);
-            if !left.is_empty() && !right.is_empty() {
+            // A right block wholly above the left block would be read last by this cut; the
+            // rows are read top-down instead, as in `find_horizontal_split_indexed`. ~keep
+            if !left.is_empty() && !right.is_empty() && !Self::right_side_sits_above_left_side(all_spans, &left, &right)
+            {
                 tracing::trace!(
                     gutter_x,
                     left = left.len(),
@@ -5220,6 +5223,145 @@ mod tests {
         );
         let (l, r) = cut_of(&stack(509.0)).expect("one point of overlap shares a row");
         assert_eq!((l, r), ((0..4).collect::<Vec<_>>(), (4..8).collect::<Vec<_>>()));
+    }
+
+    /// The rule has no slack: a right block whose lowest edge is half a point under the left
+    /// block's highest edge shares that row and is cut. Half a point is exact in f32.
+    #[test]
+    fn a_half_point_of_overlap_with_the_left_block_shares_a_row_and_is_cut() {
+        let mut spans = column_lines(50.0, &[500.0, 480.0, 460.0, 440.0]);
+        spans.extend(column_lines(350.0, &[509.5, 529.5, 549.5, 569.5]));
+        let (l, r) = cut_of(&spans).expect("half a point of overlap shares a row");
+        assert_eq!((l, r), ((0..4).collect::<Vec<_>>(), (4..8).collect::<Vec<_>>()));
+    }
+
+    /// The left side's highest edge is the highest of all its spans, not the edge of its first
+    /// span. The first left span here is the lowest line (edge 450); the highest line reaches 510,
+    /// so a right block starting at 505 overlaps it and is cut.
+    #[test]
+    fn the_left_blocks_highest_edge_is_taken_over_all_its_spans_not_the_first() {
+        let mut spans = column_lines(50.0, &[440.0, 500.0, 460.0, 480.0]);
+        spans.extend(column_lines(350.0, &[505.0, 525.0, 545.0, 565.0]));
+        let (mut l, mut r) = cut_of(&spans).expect("the highest left line shares rows with the right block");
+        l.sort_unstable();
+        r.sort_unstable();
+        assert_eq!((l, r), ((0..4).collect::<Vec<_>>(), (4..8).collect::<Vec<_>>()));
+    }
+
+    /// Ten prose lines of one span each at x, from y 760 down at `leading`, prefixed `tag`.
+    fn prose_block(x: f32, tag: &str, y_top: f32, leading: f32) -> Vec<TextSpan> {
+        (0..10)
+            .map(|i| {
+                make_span_text(
+                    x,
+                    y_top - i as f32 * leading,
+                    240.0,
+                    12.0,
+                    &format!("{tag}{i} line of prose text in the block"),
+                    12.0,
+                )
+            })
+            .collect()
+    }
+
+    /// Ten word-per-span prose lines at x, from `y_top` down at 20 pt leading.
+    fn word_block(x: f32, tag: &str, y_top: f32) -> Vec<TextSpan> {
+        let mut spans = Vec::new();
+        for i in 0..10 {
+            let mut pen = x;
+            for (k, w) in ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"]
+                .iter()
+                .enumerate()
+            {
+                let width = w.len() as f32 * 5.4;
+                spans.push(make_span_text(
+                    pen,
+                    y_top - i as f32 * 20.0,
+                    width,
+                    12.0,
+                    &format!("{tag}{i}.{k}"),
+                    12.0,
+                ));
+                pen += width + 3.0;
+            }
+        }
+        spans
+    }
+
+    fn reading_order(spans: &[TextSpan]) -> Vec<String> {
+        XYCutStrategy::new()
+            .partition_region(spans, None)
+            .iter()
+            .flatten()
+            .map(|s| s.text.clone())
+            .collect()
+    }
+
+    fn block_order(tag: &str, count: usize) -> Vec<String> {
+        (0..count)
+            .map(|i| format!("{tag}{i} line of prose text in the block"))
+            .collect()
+    }
+
+    /// The two-column-prose branch cuts by left edge. A right block wholly above the left block, with
+    /// the same leading across the seam so no row gap separates them, is read first: the sides share
+    /// no rows, as for the main column gate.
+    #[test]
+    fn two_column_prose_branch_reads_a_right_block_above_the_left_block_first() {
+        let mut spans = prose_block(320.0, "R", 760.0, 20.0);
+        spans.extend(prose_block(50.0, "L", 760.0 - 200.0, 20.0));
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        let strategy = XYCutStrategy::new();
+        let kind = strategy.classify_region_kind(&spans, &indices);
+        assert_eq!(strategy.detect_two_column_prose(&spans, &indices, kind), Some(185.0));
+
+        let expected: Vec<String> = [block_order("R", 10), block_order("L", 10)].concat();
+        assert_eq!(reading_order(&spans), expected);
+    }
+
+    /// With a row gap between the blocks the Y-band peel reads them top-down.
+    #[test]
+    fn two_column_prose_branch_peels_a_right_block_above_the_left_block_across_a_row_gap() {
+        let mut spans = prose_block(320.0, "R", 760.0, 20.0);
+        spans.extend(prose_block(50.0, "L", 760.0 - 230.0, 20.0));
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        let strategy = XYCutStrategy::new();
+        let kind = strategy.classify_region_kind(&spans, &indices);
+        assert_eq!(strategy.detect_two_column_prose(&spans, &indices, kind), Some(185.0));
+
+        let expected: Vec<String> = [block_order("R", 10), block_order("L", 10)].concat();
+        assert_eq!(reading_order(&spans), expected);
+    }
+
+    /// Two columns on the same rows are still cut by the two-column-prose branch, left column first.
+    #[test]
+    fn two_column_prose_branch_still_cuts_columns_that_share_rows() {
+        let mut spans = prose_block(50.0, "L", 760.0, 20.0);
+        spans.extend(prose_block(320.0, "R", 760.0, 20.0));
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        let strategy = XYCutStrategy::new();
+        let kind = strategy.classify_region_kind(&spans, &indices);
+        assert_eq!(strategy.detect_two_column_prose(&spans, &indices, kind), Some(185.0));
+
+        let expected: Vec<String> = [block_order("L", 10), block_order("R", 10)].concat();
+        assert_eq!(reading_order(&spans), expected);
+    }
+
+    /// The narrow-gutter branch needs a gap at the gutter on at least twelve lines, so it cannot see
+    /// two blocks that share no row: it declines them and the main path reads them top-down.
+    #[test]
+    fn narrow_gutter_branch_does_not_fire_on_a_right_block_above_the_left_block() {
+        let mut spans = word_block(320.0, "R", 760.0);
+        spans.extend(word_block(50.0, "L", 760.0 - 230.0));
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        let strategy = XYCutStrategy::new();
+        let kind = strategy.classify_region_kind(&spans, &indices);
+        assert_eq!(strategy.detect_narrow_gutter_prose(&spans, &indices, kind), None);
+
+        let order = reading_order(&spans);
+        let last_right = order.iter().rposition(|t| t.starts_with('R')).unwrap();
+        let first_left = order.iter().position(|t| t.starts_with('L')).unwrap();
+        assert!(last_right < first_left, "right block must read first: {order:?}");
     }
 
     /// A left block above a right block (GH#1763 shape, a caption beside the body that starts

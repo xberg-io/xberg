@@ -48,9 +48,18 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
                 push_with_bq(&mut out, &block, bq_depth);
             }
             ElementKind::Paragraph => {
-                let text = render_djot_annotated(&elem.text, &elem.annotations);
-                let block = format!("{}\n\n", text);
-                push_with_bq(&mut out, &block, bq_depth);
+                if let Some(lines) =
+                    crate::rendering::common::marked_row_lines(&elem.text, &elem.annotations, elem.attributes.as_ref())
+                {
+                    for line in lines {
+                        let block = format!("{}\n\n", escape_leading_block_marker(&render_djot_annotated(line, &[])));
+                        push_with_bq(&mut out, &block, bq_depth);
+                    }
+                } else {
+                    let text = render_djot_annotated(&elem.text, &elem.annotations);
+                    let block = format!("{}\n\n", text);
+                    push_with_bq(&mut out, &block, bq_depth);
+                }
             }
             ElementKind::ListItem { ordered } => {
                 let list_depth = state.list_depth();
@@ -367,11 +376,69 @@ fn render_annotations_djot(annotations: &[PdfAnnotation]) -> String {
     out
 }
 
-/// Render text with djot inline annotations, normalizing inline text.
-///
-/// Plain text segments and annotated spans are normalized (whitespace collapsed,
-/// newlines replaced, control characters stripped) to match the markdown renderer.
-/// Code spans are left un-normalized to preserve literal content.
+/// Backslash-escapes the first character of a row that starts its own paragraph when that
+/// character could open Djot block syntax: a table, list, definition list, heading, quote,
+/// thematic break, div, code fence, footnote, link definition, caption or attribute line.
+/// Djot lets a backslash escape any ASCII punctuation character, so every punctuation start is
+/// escaped; only a `#` that is not a heading marker (`#hashtag`) stays plain. A row that
+/// starts with a letter or digit is escaped at the delimiter of a list label (`1.`, `a)`).
+fn escape_leading_block_marker(line: &str) -> String {
+    let Some(at) = leading_block_marker_at(line) else {
+        return line.to_string();
+    };
+    let (head, rest) = line.split_at(at);
+    let first = rest.chars().next().unwrap_or_default();
+    // After the first backtick or colon of a run is escaped, the rest of the run would still open
+    // a code span or an empty symbol, so the whole run is escaped.
+    let mut run = if matches!(first, '`' | ':') {
+        rest.len() - rest.trim_start_matches(first).len()
+    } else {
+        first.len_utf8()
+    };
+    // On the unescaped row, `{`, `[`, `!` and `:` hold the delimiters that follow them, so a row such as `{_!_`
+    // or `[]{}` stays text. Escaping only the opener would free those delimiters to become emphasis, a
+    // superscript or attributes, so the whole run of punctuation after the opener is escaped.
+    if matches!(first, '{' | '[' | '!' | ':') {
+        let extra = rest[run..]
+            .chars()
+            .take_while(|c| c.is_ascii_punctuation() && *c != '\\')
+            .count();
+        run += extra;
+    }
+    let escaped: String = rest[..run].chars().flat_map(|c| ['\\', c]).collect();
+    format!("{head}{escaped}{}", &rest[run..])
+}
+
+/// Byte offset of the character to escape when `line` could open Djot block syntax.
+fn leading_block_marker_at(line: &str) -> Option<usize> {
+    let first = line.chars().next()?;
+    if first.is_ascii_punctuation() {
+        // A backslash before punctuation already escapes it, and doubling it would free the next character.
+        if first == '\\' && line[1..].chars().next().is_some_and(|c| c.is_ascii_punctuation()) {
+            return None;
+        }
+        let hashtag = first == '#'
+            && line
+                .trim_start_matches('#')
+                .chars()
+                .next()
+                .is_some_and(|c| !c.is_whitespace());
+        return (!hashtag).then_some(0);
+    }
+    let end = line.find(['.', ')'])?;
+    let followed_by_space = line[end + 1..].chars().next().is_none_or(char::is_whitespace);
+    (is_list_label(&line[..end]) && followed_by_space).then_some(end)
+}
+
+/// A decimal number, a single letter or a roman numeral run: the labels Djot opens a list with.
+fn is_list_label(label: &str) -> bool {
+    let all = |accepts: &dyn Fn(char) -> bool| !label.is_empty() && label.chars().all(accepts);
+    all(&|c| c.is_ascii_digit())
+        || (label.chars().count() == 1 && all(&|c| c.is_ascii_alphabetic()))
+        || all(&|c| "ivxlcdm".contains(c))
+        || all(&|c| "IVXLCDM".contains(c))
+}
+
 /// Byte offset just past the text of the last block in `out`: before the newlines that close
 /// it and, inside a blockquote, before the quoted blank line (`> `) that follows it.
 fn block_text_end(out: &str, bq_depth: usize) -> usize {
@@ -389,6 +456,11 @@ fn block_text_end(out: &str, bq_depth: usize) -> usize {
     }
 }
 
+/// Render text with djot inline annotations, normalizing inline text.
+///
+/// Plain text segments and annotated spans are normalized (whitespace collapsed,
+/// newlines replaced, control characters stripped) to match the markdown renderer.
+/// Code spans are left un-normalized to preserve literal content.
 fn render_djot_annotated(text: &str, annotations: &[crate::types::document_structure::TextAnnotation]) -> String {
     if annotations
         .iter()

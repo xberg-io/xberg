@@ -96,6 +96,7 @@ use package_metadata::{
 
 mod datetime;
 mod table_budget;
+use table_budget::SkippedSheets;
 
 /// Format dispatch and the `read_excel_file`/`read_excel_bytes` entry points, split out to
 /// keep this file under the line-count limit.
@@ -119,12 +120,17 @@ fn process_xlsx_workbook<RS: Read + Seek>(
     mut workbook: calamine::Xlsx<RS>,
     office_metadata: Option<HashMap<String, String>>,
     warnings: &mut Vec<ProcessingWarning>,
+    skipped: &SkippedSheets,
 ) -> Result<ExcelWorkbook> {
     let sheet_names = workbook.sheet_names();
     let mut sheets = Vec::with_capacity(sheet_names.len());
     let mut extra_metadata: HashMap<String, String> = HashMap::new();
 
-    for name in &sheet_names {
+    for (index, name) in sheet_names.iter().enumerate() {
+        if let Some(sheet) = skipped.placeholder(index, name, warnings) {
+            sheets.push(sheet);
+            continue;
+        }
         match process_xlsx_sheet_safe(&mut workbook, name, warnings) {
             Ok(sheet) => sheets.push(sheet),
             Err(e) => {
@@ -479,6 +485,7 @@ fn process_workbook<RS, R>(
     mut workbook: R,
     office_metadata: Option<HashMap<String, String>>,
     warnings: &mut Vec<ProcessingWarning>,
+    skipped: &SkippedSheets,
 ) -> Result<ExcelWorkbook>
 where
     RS: std::io::Read + std::io::Seek,
@@ -487,7 +494,7 @@ where
     R::Error: std::fmt::Display,
 {
     let sheet_names = workbook.sheet_names();
-    let (sheets, extra_metadata) = process_named_sheets(&mut workbook, &sheet_names, warnings);
+    let (sheets, extra_metadata) = process_named_sheets(&mut workbook, &sheet_names, warnings, skipped);
 
     let mut metadata = extract_metadata(&workbook, &sheet_names, office_metadata);
     metadata.extend(extra_metadata);
@@ -515,6 +522,7 @@ fn process_named_sheets<RS, R>(
     workbook: &mut R,
     sheet_names: &[String],
     warnings: &mut Vec<ProcessingWarning>,
+    skipped: &SkippedSheets,
 ) -> (Vec<ExcelSheet>, HashMap<String, String>)
 where
     RS: std::io::Read + std::io::Seek,
@@ -526,7 +534,11 @@ where
     let mut sheets = Vec::with_capacity(sheet_names.len());
     let mut extra_metadata: HashMap<String, String> = HashMap::new();
 
-    for name in sheet_names {
+    for (index, name) in sheet_names.iter().enumerate() {
+        if let Some(sheet) = skipped.placeholder(index, name, warnings) {
+            sheets.push(sheet);
+            continue;
+        }
         match workbook.worksheet_range(name) {
             Ok(range) => sheets.push(process_sheet(name, &range, warnings)),
             Err(e) => {
