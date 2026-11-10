@@ -17,6 +17,9 @@ const HEBREW: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/h
 const BILINGUAL: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/bilingual.pdf");
 const THEN_SCANNED: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/arabic-then-scanned-english.pdf");
 const TWO_WRONG_SCRIPTS: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/arabic-and-bengali.pdf");
+const GREEK_MINORITY: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/greek-minority.pdf");
+const CYRILLIC_MINORITY: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/cyrillic-minority.pdf");
+const ARABIC_MINORITY: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/arabic-minority.pdf");
 const PHRASES: [&str; 3] = [
     "committee met on Tuesday",
     "parking area",
@@ -115,6 +118,48 @@ fn a_mostly_arabic_page_with_an_english_paragraph_keeps_its_arabic() {
         result.content,
         result.processing_warnings
     );
+}
+
+fn extract_without_ocr(source: &[u8]) -> ExtractedDocument {
+    let config = ExtractionConfig {
+        use_cache: false,
+        output_format: OutputFormat::Plain,
+        disable_ocr: true,
+        ..Default::default()
+    };
+    helpers::extract_bytes_document_blocking(source, "application/pdf", &config).unwrap()
+}
+
+/// An English page whose other script is a correctly mapped minority of its words keeps every letter
+/// of that script that the page holds with OCR off.
+fn assert_keeps_minority(source: &[u8], range: std::ops::RangeInclusive<char>) {
+    let native = letters_in(&extract_without_ocr(source).content, range.clone());
+    assert!(native > 80, "the control layer holds {native} letters of the script");
+    let models = models();
+    let result = extract(source, models.path());
+    assert_eq!(
+        letters_in(&result.content, range),
+        native,
+        "{:?} {:?}",
+        result.content,
+        result.processing_warnings
+    );
+    assert!(result.content.contains("clerks filed the"), "{:?}", result.content);
+}
+
+#[test]
+fn an_english_page_keeps_its_correctly_mapped_greek_minority() {
+    assert_keeps_minority(GREEK_MINORITY, '\u{0370}'..='\u{03FF}');
+}
+
+#[test]
+fn an_english_page_keeps_its_correctly_mapped_cyrillic_minority() {
+    assert_keeps_minority(CYRILLIC_MINORITY, '\u{0400}'..='\u{04FF}');
+}
+
+#[test]
+fn an_english_page_keeps_its_correctly_mapped_arabic_minority() {
+    assert_keeps_minority(ARABIC_MINORITY, '\u{0600}'..='\u{06FF}');
 }
 
 #[test]
