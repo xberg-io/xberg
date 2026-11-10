@@ -369,6 +369,61 @@ fn the_page_renderer_charges_two_planes_for_each_spot_ink() {
     );
 }
 
+/// A form XObject: `group` is the group dictionary entries, `body` its content, `/CS0` is bound.
+fn group_form(group: &str, body: &str) -> String {
+    format!(
+        "5 0 obj\n<< /Type /XObject /Subtype /Form /FormType 1 /BBox [0 0 100 100] \
+         /Resources << /ColorSpace << {SPOT_A} >> >> /Group << /Type /Group /S /Transparency {group} >> \
+         /Length {} >>\nstream\n{body}\nendstream\nendobj\n",
+        body.len()
+    )
+}
+
+/// A soft mask scales the backdrop-alpha plane of a spot lane the same way as the tint plane. A
+/// paint of tint 0.5 under a mask of 0.4 leaves a tint of 0.2 (51) and a backdrop alpha of 0.4
+/// (102); a mask that skips the alpha plane leaves 255 there.
+#[test]
+fn a_soft_mask_scales_the_backdrop_alpha_plane_of_a_spot_lane() {
+    let mask = group_form("/CS /DeviceGray", "0.4 g 0 0 100 100 re f");
+    let doc = build_page_with(
+        "/T gs /CS0 cs 0.5 scn 10 10 60 60 re f",
+        SPOT_A,
+        "/SMask << /Type /Mask /S /Luminosity /G 5 0 R >>",
+        &[&mask],
+    );
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(DPI).as_raw());
+    renderer.force_cmyk_sidecar = true;
+    renderer.render_page(&doc, 0).expect("render page");
+    let sidecar = renderer.take_cmyk_sidecar().expect("sidecar");
+    let state = sidecar.spot_state();
+    let plane = 100 * 100;
+    let px = ONLY_FIRST.1 * 100 + ONLY_FIRST.0;
+    assert_eq!(state.len(), 2 * plane, "one ink: a tint plane then an alpha plane");
+    assert_eq!(state[px], 51, "tint plane: 0.5 under a 0.4 mask");
+    assert_eq!(state[plane + px], 102, "alpha plane: a 0.4 mask over a full paint");
+}
+
+/// The knockout merge carries the backdrop-alpha plane out of the group as well as the tints. A
+/// Multiply over the group result at tint 0.5 gives ink 1 - 0.2 * 0.5 = 0.9 (about 230) only if
+/// the lane is marked painted; a lost alpha plane reads the lane as empty paper and gives 128.
+#[test]
+fn a_knockout_group_hands_its_backdrop_alpha_plane_to_the_paints_after_it() {
+    let group = group_form("/K true", "/CS0 cs 0.8 scn 10 10 60 60 re f");
+    let alone = plate_of("/F Do", "/BM /Normal", &[&group]);
+    assert_eq!(
+        at(&alone, ONLY_FIRST.0, ONLY_FIRST.1),
+        204,
+        "control: the group paints tint 0.8"
+    );
+    let after = plate_of(
+        "/F Do /CS0 cs /T gs 0.5 scn 10 10 60 60 re f",
+        "/BM /Multiply",
+        &[&group],
+    );
+    let ink = at(&after, ONLY_FIRST.0, ONLY_FIRST.1);
+    assert!((229..=230).contains(&ink), "Multiply over the group result: {ink}");
+}
+
 fn sidecar_allocated(state_body: &str) -> bool {
     let doc = build_page(state_body, &[]);
     let mut renderer = PageRenderer::new(RenderOptions::with_dpi(DPI).as_raw());
