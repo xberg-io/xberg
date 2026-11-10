@@ -70,7 +70,7 @@ mod tall_geometry;
 ))]
 mod tall_source;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-pub(super) use pipeline::probe_incomplete_hidden_layers;
+pub(super) use pipeline::{probe_incomplete_hidden_layers, read_mixed_ocr_native_with_layout_pages};
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use plausibility::scan_text_plausibility;

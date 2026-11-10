@@ -262,7 +262,7 @@ pub(super) async fn contradicted_pages(
             return Ok(outcome);
         }
         probed.extend_from_slice(&batch);
-        let run = super::ocr::extract_mixed_ocr_native_with_layout_pages(
+        let run = super::ocr::read_mixed_ocr_native_with_layout_pages(
             layer.text,
             boundaries,
             (&batch, &[]),
