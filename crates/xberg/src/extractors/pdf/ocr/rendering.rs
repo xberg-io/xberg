@@ -391,13 +391,15 @@ pub(super) struct XObjectRecoveryOutcome {
     pub(super) formulas: Vec<crate::types::Formula>,
     /// First preprocessing record in paint order, matching the per-page metadata surface.
     pub(super) image_preprocessing: Option<crate::types::ImagePreprocessingMetadata>,
+    /// Producing Tesseract mode, only when one image represents the recovered page.
+    pub(super) tesseract_psm: Option<i32>,
     /// Why each embedded image the backend rejected yielded nothing, in paint order.
     pub(super) failure_causes: Vec<String>,
     /// Whether any image was read at a resolution the page's placement proved rather than one
     /// the backend estimated.
     pub(super) used_proven_source_dpi: bool,
-    /// Whether a successfully read image with placement-proven DPI may be illegible after
-    /// preparation. Proof and preprocessing must describe that same image, not separate page images.
+    /// Whether a nonempty read of an image with placement-proven DPI may be illegible after
+    /// preparation. Text, proof and preprocessing must describe that same image, not separate page images.
     pub(super) possibly_illegible: bool,
 }
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -418,6 +420,7 @@ pub(super) async fn recover_image_xobjects(
         tables: Vec::new(),
         formulas: Vec::new(),
         image_preprocessing: None,
+        tesseract_psm: None,
         failure_causes: Vec::new(),
         used_proven_source_dpi: false,
         possibly_illegible: false,
@@ -513,6 +516,9 @@ pub(super) async fn collect_xobject_recovery_result(
             return Ok(());
         }
     };
+    if outcome.attempted == 1 {
+        outcome.tesseract_psm = super::pipeline::effective_tesseract_psm(&result.metadata, backend.name());
+    }
     append_xobject_text(&mut outcome.text, &result.content, budget)?;
     append_xobject_text(
         &mut outcome.text_outside_tables,
@@ -521,7 +527,8 @@ pub(super) async fn collect_xobject_recovery_result(
     )?;
     account_xobject_structured_output(&result, outcome.image_preprocessing.is_none(), budget)?;
     outcome.llm_usage.extend(result.llm_usage.unwrap_or_default());
-    outcome.possibly_illegible |= matches!(ocr_config, std::borrow::Cow::Owned(_))
+    outcome.possibly_illegible |= !result.content.trim().is_empty()
+        && matches!(ocr_config, std::borrow::Cow::Owned(_))
         && read_may_be_illegible(result.metadata.image_preprocessing.as_ref());
     if outcome.image_preprocessing.is_none() {
         outcome.image_preprocessing = result.metadata.image_preprocessing;

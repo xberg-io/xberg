@@ -1,3 +1,13 @@
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(paddle_ocr),
+    not(target_arch = "wasm32")
+))]
+#[path = "pipeline/direct_rgb_budget_recovery.rs"]
+mod direct_rgb_budget_recovery;
+
 #[cfg(all(any(feature = "ocr", feature = "ocr-wasm"), feature = "layout-detection"))]
 use super::document::assemble_ocr_page_paragraphs;
 #[cfg(all(
@@ -20,7 +30,14 @@ use super::document::{
 // `layout-detection` and neither OCR frontend (the `formula-recognition,pdf` CI leg) both
 // blocks compile out, so importing these under the enclosing function's plain
 // `any(ocr, ocr-pipeline)` gate is an unused import. ~keep
-#[cfg(all(paddle_ocr, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "pdf",
+    any(
+        paddle_ocr,
+        all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))
+    )
+))]
 use super::document::merge_structured_ocr_pages_into_internal_document;
 #[cfg(all(
     any(feature = "ocr", feature = "ocr-pipeline"),
@@ -1257,6 +1274,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     tables,
                     mut formulas,
                     image_preprocessing,
+                    tesseract_psm,
                     failure_causes,
                     used_proven_source_dpi,
                     possibly_illegible,
@@ -1292,6 +1310,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         if !ocr_results.contains_key(&page_number) {
                             table_only_xobject_recovery_pages.insert(page_number);
                         }
+                    }
+                    if let Some(psm) = tesseract_psm
+                        && let Some(page_doc) = structured_ocr_pages.get_mut(&page_number)
+                    {
+                        attach_page_segmentation_modes(page_doc, [(page_number, psm)]);
                     }
                     accumulated_llm_usage.append(&mut llm_usage);
                     accumulated_formulas.append(&mut formulas);
@@ -2315,6 +2338,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 tables,
                 mut formulas,
                 image_preprocessing,
+                tesseract_psm,
                 failure_causes,
                 used_proven_source_dpi,
                 possibly_illegible,
@@ -2373,6 +2397,12 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     }
                 }
                 recovered |= recovered_tables;
+                if recovered
+                    && let Some(psm) = tesseract_psm
+                    && let Some(page_doc) = structured_ocr_pages.get_mut(&page_number)
+                {
+                    attach_page_segmentation_modes(page_doc, [(page_number, psm)]);
+                }
                 accumulated_llm_usage.append(&mut llm_usage);
                 accumulated_formulas.append(&mut formulas);
                 if let Some(metadata) = image_preprocessing {
@@ -3029,7 +3059,14 @@ pub(super) fn formula_layout_inputs_for_replaced_pages(
     any_formula_page.then_some((images, detections))
 }
 
-#[cfg(all(paddle_ocr, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "pdf",
+    any(
+        paddle_ocr,
+        all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))
+    )
+))]
 fn full_document_page_seed(page_count: usize, config: &ExtractionConfig) -> (String, Vec<crate::types::PageBoundary>) {
     let marker_config = config.pages.as_ref().filter(|pages| pages.insert_page_markers);
     let mut text = String::new();
@@ -3117,7 +3154,14 @@ pub(crate) async fn accepted_single_page_first_pass(
     (score >= thresholds.pipeline_min_quality).then_some(output)
 }
 
-#[cfg(all(paddle_ocr, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "pdf",
+    any(
+        paddle_ocr,
+        all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))
+    )
+))]
 type PerPageOcrOutput = (
     String,
     Vec<crate::types::Table>,
@@ -3180,7 +3224,14 @@ pub(crate) async fn extract_full_document_ocr_pipeline_per_page(
     run
 }
 
-#[cfg(all(paddle_ocr, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "pdf",
+    any(
+        paddle_ocr,
+        all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))
+    )
+))]
 async fn extract_pages_with_per_page_pipeline(
     content: &[u8],
     config: &ExtractionConfig,
@@ -3395,6 +3446,19 @@ pub(crate) async fn extract_with_ocr_with_page_hints_and_evidence(
     if images.is_none()
         && let Err(failed) = &run
         && let Some(output) = try_gray_jpeg_render_recovery(content, config, failed).await?
+    {
+        return Ok((output, false));
+    }
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(paddle_ocr),
+        not(target_arch = "wasm32")
+    ))]
+    if images.is_none()
+        && let Err(failed) = &run
+        && let Some(output) = direct_rgb_budget_recovery::try_recovery(content, config, path, failed).await?
     {
         return Ok((output, false));
     }
@@ -3622,7 +3686,7 @@ impl PageOcrHints {
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn effective_tesseract_psm(metadata: &crate::types::Metadata, backend: &str) -> Option<i32> {
+pub(super) fn effective_tesseract_psm(metadata: &crate::types::Metadata, backend: &str) -> Option<i32> {
     if backend != "tesseract" {
         return None;
     }
@@ -5331,6 +5395,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         mut tables,
                         mut formulas,
                         image_preprocessing,
+                        tesseract_psm: _,
                         failure_causes: _,
                         used_proven_source_dpi: _,
                         possibly_illegible: _,
