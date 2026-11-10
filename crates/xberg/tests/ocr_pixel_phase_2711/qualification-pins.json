@@ -80,5 +80,23 @@
       "expected_words": 80,
       "source_text_sha256": "a381af08a513f8587bc578466b97b8c22d871cec5dd1867e62e6f852a1262bfc"
     }
+  ],
+  "reference_reports": [
+    {
+      "mode": "default",
+      "baseline_ocr_revision": "a33f39373e9446aa109776aa4986a3c91c1efbeb",
+      "native_revision": "e3830c5b5fe6d773082cc0ae1643367f0de5f985",
+      "recorded_ocr_revision": "e3830c5b5fe6d773082cc0ae1643367f0de5f985",
+      "baseline_sha256": "bdd1e3005b21cae7588e298e7b9e44cba336762aa6bdc6f5194b9840b98dc7ee",
+      "recorded_sha256": "63c206b7e23f89a3808d40b1214dcfdf94d5c252d7753b03db3f8496f17a1692"
+    },
+    {
+      "mode": "denoise",
+      "baseline_ocr_revision": "a33f39373e9446aa109776aa4986a3c91c1efbeb",
+      "native_revision": "e3830c5b5fe6d773082cc0ae1643367f0de5f985",
+      "recorded_ocr_revision": "e3830c5b5fe6d773082cc0ae1643367f0de5f985",
+      "baseline_sha256": "ec8e083030f575f3539ff875193cfeb6a4b8ff73353ffcb637d59ed11bfb580e",
+      "recorded_sha256": "b4769a6091c92679b236580f284251198e13380c756dccc3f909eb40461e8402"
+    }
   ]
 }

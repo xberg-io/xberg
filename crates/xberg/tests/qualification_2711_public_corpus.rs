@@ -7,6 +7,10 @@
 ))]
 #[path = "ocr_pixel_phase_2711/fixture.rs"]
 mod fixture;
+#[path = "ocr_pixel_phase_2711/qualification.rs"]
+mod qualification;
+#[path = "ocr_pixel_phase_2711/qualification_tests.rs"]
+mod qualification_tests;
 use sha2::{Digest, Sha256};
 use xberg::types::ImagePreprocessingConfig;
 use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, OcrConfig, PageConfig, TesseractConfig};
@@ -171,6 +175,17 @@ async fn paired_public_source_word_qualification() {
     let directory =
         std::path::PathBuf::from(std::env::var_os("XBERG_2711_QUALIFICATION").expect("external qualification dir"));
     let arm = std::env::var("XBERG_2711_ARM").expect("named baseline or treatment");
+    if let Some(path) = std::env::var_os("XBERG_2711_REPLAY") {
+        let report: qualification::Report = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        assert_eq!(report.mode, qualification::Mode::selected());
+        qualification::finish_report(&report, &directory.join(format!("{arm}.json"))).unwrap();
+        return;
+    }
+    let report = qualification::report(collect_qualification_rows().await);
+    qualification::finish_report(&report, &directory.join(format!("{arm}.json"))).unwrap();
+}
+
+async fn collect_qualification_rows() -> Vec<qualification::Row> {
     let models = tempfile::tempdir().unwrap();
     let model = xberg_tesseract::bundled_eng_traineddata().unwrap();
     assert_eq!(
@@ -192,13 +207,15 @@ async fn paired_public_source_word_qualification() {
             "{name} actual OCR"
         );
         assert!(!doc.content.is_empty());
-        println!("{arm} {name} words={}", doc.content.split_whitespace().count());
-        rows.push(serde_json::json!({"name":name,"sha256":hash,"expected":expected,"text":doc.content,"pages":doc.pages,"method":doc.extraction_method}));
-        std::fs::write(
-            directory.join(format!("{arm}.json")),
-            serde_json::to_vec_pretty(&rows).unwrap(),
-        )
-        .unwrap();
+        println!("{name} words={}", doc.content.split_whitespace().count());
+        rows.push(qualification::Row {
+            name: name.to_owned(),
+            sha256: hash,
+            expected,
+            text: doc.content,
+            pages: doc.pages,
+            method: doc.extraction_method,
+        });
     }
-    assert_eq!(rows.len(), 13);
+    rows
 }
