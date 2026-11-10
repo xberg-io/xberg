@@ -1856,6 +1856,17 @@ struct TjBuffer {
     /// the font expanded to a ligature's letters, else 0. The buffer is a lone ligature while its
     /// length still equals this: any later text ends the mark. Read by `is_lone_ligature`.
     ligature_len: usize,
+    /// Set by a `Tm` that continues the run: the length of `unicode`, the width that `Tm` set and the
+    /// width the run had before it. Read by `ends_at_continuing_tm`.
+    tm_extension: Option<TmExtension>,
+}
+
+/// The pen move of a `Tm` that continues a run, kept until the next glyph or width change. ~keep
+#[derive(Clone, Copy, Debug)]
+struct TmExtension {
+    text_len: usize,
+    width_set: f32,
+    width_before: f32,
 }
 
 /// The seam between a `TJ` array and the text after it, kept for one operator only (GH#2664).
@@ -2040,6 +2051,7 @@ impl TjBuffer {
             ligature_tail: false,
             pen_continuation: false,
             ligature_len: 0,
+            tm_extension: None,
         }
     }
 
@@ -2110,6 +2122,28 @@ impl TjBuffer {
     /// Whether the whole buffer is still the one ligature glyph that `record_decode` noted.
     fn is_lone_ligature(&self) -> bool {
         self.ligature_len != 0 && self.ligature_len == self.unicode.len()
+    }
+
+    /// Moves the run's width to the pen of a continuing `Tm` and records the width before it.
+    /// `text_len` is the length of `unicode` before the `Tm` added anything, so a space the `Tm`
+    /// inserted ends the record. A second continuing `Tm` with no glyph in between keeps the first
+    /// record, so the run still ends at its last glyph.
+    fn extend_to_continuing_tm(&mut self, advance: f32, text_len: usize) {
+        let before = self.ends_at_continuing_tm().unwrap_or(self.accumulated_width);
+        self.accumulated_width = advance;
+        self.tm_extension = Some(TmExtension {
+            text_len,
+            width_set: advance,
+            width_before: before,
+        });
+    }
+
+    /// The width at the run's last glyph when a continuing `Tm` moved the pen and no glyph or width
+    /// change came after it. That `Tm`'s width covers the gap to the next show, which is not the run's.
+    fn ends_at_continuing_tm(&self) -> Option<f32> {
+        self.tm_extension
+            .filter(|mark| mark.text_len == self.unicode.len() && mark.width_set == self.accumulated_width)
+            .map(|mark| mark.width_before)
     }
 
     /// Check if the buffer is empty.

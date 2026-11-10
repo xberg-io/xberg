@@ -1537,6 +1537,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(markdown): Display math no longer opens an HTML block.** (GH#2793)
   A line of display math that starts with `<` (`<script`, `<div`, `<!--` and others) now gets a space after the `<`, as a `<` before a closing `>` already did, so no Markdown reader starts an HTML block there and drops the math.
 
+- **(pdf): Words that a producer places one by one no longer run together.** (GH#2675)
+  A PDF that sets the text matrix before each word, often with a repeated font operator, kept the gap to the next word inside the previous word's width, so the words read as one. A run that a text matrix extends now ends at its last glyph. Pages with glyph-by-glyph text now measure a word gap against the font size of the word after it, not against the largest size on the line. Subscripts and raised indices stay on their symbol, and a gap next to a CJK character is measured as before.
+
 ## [1.3.11] - 2026-10-16
 
 ### Added

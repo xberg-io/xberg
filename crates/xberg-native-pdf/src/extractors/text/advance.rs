@@ -833,7 +833,9 @@ impl<'doc> TextExtractor<'doc> {
         if let Some(mut buffer) = self.tj_span_buffer.take()
             && !buffer.is_empty()
         {
-            let total_width = buffer.accumulated_width * buffer.user_h_scale;
+            // A run that ends at a continuing `Tm` ends at its last glyph, not at that `Tm`'s pen. ~keep
+            let width = buffer.ends_at_continuing_tm().unwrap_or(buffer.accumulated_width);
+            let total_width = width * buffer.user_h_scale;
 
             // Use pre-computed values from buffer creation (avoids
             // matrix multiply + sqrt + HashMap lookup per flush) ~keep

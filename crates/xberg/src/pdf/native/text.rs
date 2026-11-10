@@ -9,6 +9,7 @@ use crate::core::config::{ExtractionConfig, PageConfig};
 use crate::pdf::error::{PdfError, Result};
 use crate::pdf::metadata::PdfExtractionMetadata;
 use crate::pdf::structure::constants::{COALESCE_THRESHOLD, MAX_GLYPH_JITTER_PT, MIN_DISORDER_COUNT};
+use crate::pdf::structure::lines::is_cjk_char;
 use crate::pdf::text::{contains_html_markup, fix_pdf_control_chars};
 use crate::types::{PageBoundary, PageContent};
 use std::borrow::Cow;
@@ -540,7 +541,8 @@ fn is_fragmented_span_list(spans: &[xberg_native_pdf::layout::TextSpan]) -> bool
 ///    of the previous span belong to the same visual line.
 /// 3. Within each group sort by x-ascending (left-to-right reading order).
 /// 4. Concatenate, inserting a space wherever the x-gap between adjacent spans
-///    exceeds font_size * 0.5.
+///    exceeds 0.15 of the right span's font size, the test of the span assembler. A
+///    script or a CJK seam keeps half the line's largest font size (`keeps_line_word_gap`).
 fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpan]) -> String {
     if spans.is_empty() {
         return String::new();
@@ -570,16 +572,21 @@ fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpa
             result.push('\n');
         }
         let font_size = group.iter().map(|s| s.font_size).fold(0.0_f32, f32::max);
-        let space_threshold = font_size * 0.5;
+        let line_space_threshold = font_size * 0.5;
         let mut prev_end_x = f32::NEG_INFINITY;
-        let mut previous = None;
+        let mut previous: Option<&TextSpan> = None;
         for (index, span) in group.iter().enumerate() {
-            if (prev_end_x.is_finite() && span.bbox.x - prev_end_x > space_threshold)
-                || previous.is_some_and(|prev| {
-                    needs_numeric_script_boundary(prev, span, &notes, group.get(index + 1).copied())
-                })
-            {
-                result.push(' ');
+            if let Some(prev) = previous {
+                let gap = span.bbox.x - prev_end_x;
+                if needs_numeric_script_boundary(prev, span, &notes, group.get(index + 1).copied()) {
+                    result.push(' ');
+                } else if keeps_line_word_gap(prev, span) {
+                    if gap > line_space_threshold {
+                        result.push(' ');
+                    }
+                } else {
+                    append_visual_word_gap(&mut result, gap, span.font_size);
+                }
             }
             result.push_str(&span.text);
             prev_end_x = span.bbox.x + span.bbox.width;
@@ -587,6 +594,23 @@ fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpa
         }
     }
     result
+}
+
+/// Whether a seam of the fragmented rebuild keeps the line's word-gap test, half the line's largest
+/// font size, instead of the right span's own size: a script on its symbol, or a CJK character (Han,
+/// kana or Hangul) on either side. Both join at gaps that are wide in their own size. ~keep
+fn keeps_line_word_gap(prev: &TextSpan, span: &TextSpan) -> bool {
+    is_script_of(prev, span)
+        || prev.text.chars().next_back().is_some_and(is_cjk_char)
+        || span.text.chars().next().is_some_and(is_cjk_char)
+}
+
+/// A smaller span off its symbol's baseline, lowered or raised by its matrix or by `Ts`, is a script
+/// of that symbol, such as `c` with subscript `B`. The size and rise bounds are those of
+/// `needs_numeric_script_boundary`. ~keep
+fn is_script_of(base: &TextSpan, script: &TextSpan) -> bool {
+    script.font_size < base.font_size * 0.8
+        && (script.text_rise.abs() >= 0.10 || (script.bbox.y - base.bbox.y).abs() >= base.font_size * 0.1)
 }
 
 // A small digit beside another digit can be a footnote or a power. Require a
