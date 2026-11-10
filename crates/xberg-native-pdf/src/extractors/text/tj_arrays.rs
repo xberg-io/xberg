@@ -194,6 +194,7 @@ impl<'doc> TextExtractor<'doc> {
                 && let Some(mut run) = self.tj_span_buffer.take()
             {
                 self.end_set_back_run_at_drawn_end(&mut run);
+                run.keep_continuing_tm_width();
                 self.tj_span_buffer = Some(run);
             }
         }

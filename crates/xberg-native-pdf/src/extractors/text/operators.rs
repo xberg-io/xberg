@@ -22,6 +22,17 @@ impl<'doc> TextExtractor<'doc> {
                         && state.font_name.as_deref() == Some(font.as_str())
                         && self.cached_current_font.as_ref().map(Arc::as_ptr) == self.fonts.get(&font).map(Arc::as_ptr)
                 };
+                // A producer that writes `Tm /F Tf (word) Tj` for each word repeats the font at every
+                // word. After a continuing `Tm` and before any glyph, that `Tf` ends the run, so the
+                // word gap reaches the span merge as it does at a font change (#2675). ~keep
+                if same_font
+                    && self
+                        .tj_span_buffer
+                        .as_ref()
+                        .is_some_and(|buffer| buffer.ends_at_continuing_tm().is_some())
+                {
+                    self.flush_tj_span_buffer()?;
+                }
                 if !same_font {
                     // Flush Tj buffer before changing font — the buffer decodes bytes
                     // using the font set at creation time, so a font change requires a
@@ -113,6 +124,7 @@ impl<'doc> TextExtractor<'doc> {
                             // The pen's move in text space, the unit of the run's width. ~keep
                             let advance = Self::text_space_advance(buffer.start_matrix, buffer.wmode, e);
                             let raw_gap = advance - buffer.accumulated_width;
+                            let text_len = buffer.unicode.len();
                             if buffer.wmode == 0
                                 && buffer.is_monospace
                                 && !buffer.unicode.ends_with(|c: char| c.is_whitespace())
@@ -132,7 +144,7 @@ impl<'doc> TextExtractor<'doc> {
 
                             // Same line, same transform, LTR progression →
                             // update width to reflect actual visual extent ~keep
-                            buffer.accumulated_width = advance;
+                            buffer.extend_to_continuing_tm(advance, text_len);
                             // A new matrix sets the pen again: the pull-back after a ligature
                             // no longer refers to the glyph that ends the run. ~keep
                             buffer.ligature_tail = false;

@@ -1544,6 +1544,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Keep every OCR line that holds a numeral, and keep page ranges inside the content after Unicode normalization.** (GH#2851)
   The dictionary filter for noisy OCR lines no longer removes a line that holds a numeral, so its numbers stay in `content` and in the page text. Lines of letters only follow the filter as before. Page byte ranges in `metadata.pages.boundaries` now follow `content` when Unicode normalization shortens it; a range that cannot be mapped is omitted with a `page_boundaries` warning.
+- **(pdf): Words that a producer places one by one no longer run together.** (GH#2675)
+  A PDF that sets the text matrix before each word, often with a repeated font operator, kept the gap to the next word inside the previous word's width, so the words read as one. A run that a text matrix extends past its last glyph now ends at that glyph, unless a word-gap offset in the next text array marks the gap. Pages with glyph-by-glyph text now measure a word gap against the font size of the word after it, not against the largest size on the line. Subscripts and raised indices stay on their symbol, and a gap next to a CJK character (Han, kana or Hangul), CJK punctuation or a fullwidth form is measured as before.
 
 ## [1.3.11] - 2026-10-16
 
