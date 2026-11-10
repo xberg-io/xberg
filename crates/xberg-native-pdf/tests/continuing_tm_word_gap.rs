@@ -173,6 +173,84 @@ fn tz_tc_tw_ts_after_continuing_tm_split_at_a_word_gap() {
     assert_eq!(text("90 Tz 0 Tc 0 Tw 0 Ts 100 Tz /F1 12 Tf ", 0.278), "A B");
 }
 
+/// A scope that never closes: the later show inside it still adds width and ends the record, so the
+/// run `AB` reaches the pen when `ET` flushes it: 7.7 pt to `B`'s origin and `B`'s 7.2 pt, not `A`'s
+/// 7.2 pt alone.
+#[test]
+fn actualtext_later_show_in_an_unclosed_scope_ends_the_record() {
+    let content = "BT /F1 12 Tf /Span <</ActualText (AB)>> BDC 1 0 0 1 100 500 Tm (A) Tj \
+                   1 0 0 1 107.7 500 Tm (B) Tj ET";
+    let doc = PdfDocument::from_bytes(build(content.as_bytes())).expect("open fixture");
+    let spans = doc.extract_spans(0).expect("extract_spans");
+    let boxes: Vec<(String, f32, f32)> = spans.iter().map(|s| (s.text.clone(), s.bbox.x, s.bbox.width)).collect();
+    assert_eq!(boxes.len(), 1, "{boxes:?}");
+    assert_eq!(boxes[0].0.trim(), "AB", "{boxes:?}");
+    assert!((boxes[0].1 - 100.0).abs() < 0.05 && (boxes[0].2 - (7.7 + GLYPH)).abs() < 0.05, "{boxes:?}");
+}
+
+/// A nested scope: the inner scope's first show gives its own text `C` and adds width, which ends the
+/// record as a later show in one scope does, so the same-font `Tf` after both scopes does not end
+/// the run and `A` joins it.
+#[test]
+fn actualtext_nested_scope_show_after_continuing_tm_keeps_the_run() {
+    let content = "BT /F1 12 Tf /Span <</ActualText (AB)>> BDC 1 0 0 1 100 500 Tm (A) Tj \
+                   /Span <</ActualText (C)>> BDC 1 0 0 1 107.7 500 Tm (B) Tj EMC EMC /F1 12 Tf (A) Tj ET";
+    let doc = PdfDocument::from_bytes(build(content.as_bytes())).expect("open fixture");
+    assert_eq!(doc.extract_text(0).expect("extract_text").trim(), "ABCA");
+}
+
+/// A continuing `Tm` past `AB`, then a `Tm` set back into `AB` (GH#2690): the set-back records
+/// nothing and drops the first record, so the same-font `Tf` does not end the run and `A` joins it
+/// at the set-back pen, as at the base.
+#[test]
+fn set_back_tm_after_continuing_tm_drops_the_record_before_same_font_tf() {
+    let content = "BT /F1 12 Tf 1 0 0 1 100 500 Tm (AB) Tj 1 0 0 1 120 500 Tm 1 0 0 1 110 500 Tm \
+                   /F1 12 Tf 100 Tz (A) Tj ET";
+    let doc = PdfDocument::from_bytes(build(content.as_bytes())).expect("open fixture");
+    assert_eq!(doc.extract_text(0).expect("extract_text").trim(), "ABA");
+}
+
+/// `A` is 3.6 pt wide under `50 Tz`. After a continuing `Tm` one word gap past it and a `Tm` that
+/// restates the run twice as wide, the record still ends the run at `A`'s 3.6 pt when a new font
+/// ends it, and `B` is drawn 7.2 pt wide at the restated pen.
+#[test]
+fn stretched_tm_after_continuing_tm_under_tz_keeps_the_run_at_its_last_glyph() {
+    let x_b = 100.0 + 0.5 * GLYPH + 0.278 * SIZE;
+    let content = format!(
+        "BT /F1 {SIZE} Tf 50 Tz 1 0 0 1 100 500 Tm (A) Tj 1 0 0 1 {x_b} 500 Tm 2 0 0 1 {x_b} 500 Tm \
+         /F2 12 Tf (B) Tj ET"
+    );
+    let doc = PdfDocument::from_bytes(build(content.as_bytes())).expect("open fixture");
+    let spans = doc.extract_spans(0).expect("extract_spans");
+    let boxes: Vec<(String, f32, f32)> = spans.iter().map(|s| (s.text.clone(), s.bbox.x, s.bbox.width)).collect();
+    assert_eq!(boxes.len(), 2, "{boxes:?}");
+    for (span, (text, x, width)) in boxes.iter().zip([("A", 100.0, 0.5 * GLYPH), ("B", x_b, GLYPH)]) {
+        assert_eq!(span.0.trim(), text, "{boxes:?}");
+        assert!((span.1 - x).abs() < 0.05 && (span.2 - width).abs() < 0.05, "{boxes:?}");
+    }
+    assert_eq!(doc.extract_text(0).expect("extract_text").trim(), "A B");
+}
+
+/// The same `50 Tz` run and restating `Tm`, then a show inside an `ActualText` scope: its width ends
+/// the record, so the run reaches the pen in the restated unit, `B` and the `A` after the same-font
+/// `Tf` join it, and the one span spans the 6.936 pt to the pen and the two 7.2 pt glyphs.
+#[test]
+fn actualtext_show_after_stretched_tm_under_tz_reaches_the_pen() {
+    let x_b = 100.0 + 0.5 * GLYPH + 0.278 * SIZE;
+    let content = format!(
+        "BT /F1 {SIZE} Tf 50 Tz 1 0 0 1 100 500 Tm (A) Tj 1 0 0 1 {x_b} 500 Tm 2 0 0 1 {x_b} 500 Tm \
+         /Span <</ActualText (B)>> BDC (B) Tj EMC /F1 12 Tf (A) Tj ET"
+    );
+    let doc = PdfDocument::from_bytes(build(content.as_bytes())).expect("open fixture");
+    let spans = doc.extract_spans(0).expect("extract_spans");
+    let boxes: Vec<(String, f32, f32)> = spans.iter().map(|s| (s.text.clone(), s.bbox.x, s.bbox.width)).collect();
+    assert_eq!(boxes.len(), 1, "{boxes:?}");
+    assert_eq!(boxes[0].0.trim(), "ABA", "{boxes:?}");
+    let width = (x_b - 100.0) + 2.0 * GLYPH;
+    assert!((boxes[0].1 - 100.0).abs() < 0.05 && (boxes[0].2 - width).abs() < 0.05, "{boxes:?}");
+    assert_eq!(doc.extract_text(0).expect("extract_text").trim(), "ABA");
+}
+
 /// The `ToUnicode` map of `F3`: `A`, `B` and `C` only, so its `D` is a glyph with a width and no text.
 const TO_UNICODE_ABC: &[u8] = b"/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n\
     /CMapName /ABC def\n1 begincodespacerange\n<00> <FF>\nendcodespacerange\n\
