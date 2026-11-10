@@ -473,3 +473,28 @@ fn a_compound_glyph_name_code_marks_the_span() {
         assert_eq!(spans, marked(letters), "{letters}");
     }
 }
+
+/// A font whose ToUnicode maps the byte 0x41 ("A") to the C0 control U+0001 and whose /Differences names
+/// that code `glyph_name`: the glyph name decides the text (the ToUnicode recovery path of the font).
+fn c0_tounicode_font_naming_a(glyph_name: &str) -> FontInfo {
+    let mut font = simple_font_decoding_a_to("0001");
+    font.diff_glyph_names.insert(0x41, glyph_name.to_string());
+    font
+}
+
+/// The recovery from a C0 ToUnicode value reads an underscore-joined glyph name by the Adobe Glyph List
+/// algorithm too: suffix dropped first, empty and unknown components skipped.
+#[test]
+fn a_c0_tounicode_value_is_recovered_from_a_compound_glyph_name() {
+    for (name, letters) in [
+        ("f_f_i", "ffi"),
+        ("f__i", "fi"),
+        ("f_i.alt", "fi"),
+        ("f.alt_i", "f"),
+        ("zzz_i", "i"),
+    ] {
+        let spans = spans_of(c0_tounicode_font_naming_a(name), b"BT /F1 12 Tf 0 0 Td (A) Tj ET");
+        assert_eq!(spans.len(), 1, "{name}: {spans:?}");
+        assert_eq!(spans[0].0, letters, "{name}");
+    }
+}
