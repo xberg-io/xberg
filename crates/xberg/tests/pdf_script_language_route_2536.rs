@@ -20,14 +20,6 @@ fn khmer_count(text: &str) -> usize {
 }
 
 fn extract(source: &[u8], tessdata: &std::path::Path, tweak: impl FnOnce(&mut ExtractionConfig)) -> ExtractedDocument {
-    try_extract(source, tessdata, tweak).unwrap()
-}
-
-fn try_extract(
-    source: &[u8],
-    tessdata: &std::path::Path,
-    tweak: impl FnOnce(&mut ExtractionConfig),
-) -> Result<ExtractedDocument, xberg::XbergError> {
     let mut config = ExtractionConfig {
         use_cache: false,
         output_format: OutputFormat::Plain,
@@ -43,7 +35,7 @@ fn try_extract(
         ..Default::default()
     };
     tweak(&mut config);
-    helpers::extract_bytes_document_blocking(source, "application/pdf", &config)
+    helpers::extract_bytes_document_blocking(source, "application/pdf", &config).unwrap()
 }
 
 fn khm_only(config: &mut ExtractionConfig) {
@@ -237,6 +229,16 @@ fn the_kept_page_warning_of_a_page_without_lost_glyphs_does_not_say_glyphs_stay_
     assert!(warnings[0].contains("stay lost"), "{}", warnings[0]);
 }
 
+/// A model directory whose `khm.traineddata` is not a model. The tessdata search takes the first
+/// directory that holds a file for every requested language, and the configured directory comes
+/// before `TESSDATA_PREFIX`, the cache directory and the system directories. So a Khmer model on
+/// the host cannot be reached, and the Khmer stage cannot read a page on any host.
+fn english_model_and_unreadable_khmer() -> tempfile::TempDir {
+    let models = english_model();
+    std::fs::write(models.path().join("khm.traineddata"), b"not a model").unwrap();
+    models
+}
+
 fn khmer_model_dir() -> Option<tempfile::TempDir> {
     let candidates = std::env::var_os("TESSDATA_PREFIX")
         .map(std::path::PathBuf::from)
@@ -295,7 +297,7 @@ fn a_khmer_stage_before_an_english_stage_keeps_a_complete_layer() {
 
 #[test]
 fn a_khmer_stage_before_an_english_stage_keeps_page_one_and_reads_the_scanned_page_two() {
-    let models = english_model();
+    let models = english_model_and_unreadable_khmer();
     let native = extract(KHMER_THEN_SCANNED_ENGLISH, models.path(), |config| {
         config.disable_ocr = true
     });
@@ -306,22 +308,11 @@ fn a_khmer_stage_before_an_english_stage_keeps_page_one_and_reads_the_scanned_pa
     assert_eq!(pages[0].content, native_pages[0].content);
     assert_eq!(khmer_count(&pages[0].content), 222);
     assert!(native_pages[1].content.trim().is_empty(), "page 2 has no text layer");
-    // Whether the Khmer stage can read the scan depends on the Khmer model the host holds, which the
-    // tessdata search order finds outside `models`. The first stage that reads a page decides it, so
-    // page 2 equals the read of the Khmer stage alone when that stage reads it, and the read of the
-    // English stage otherwise.
-    let khmer_read = try_extract(KHMER_THEN_SCANNED_ENGLISH, models.path(), khm_only)
-        .ok()
-        .and_then(|document| document.pages.map(|pages| pages[1].content.clone()))
-        .filter(|content| !content.trim().is_empty());
-    match khmer_read {
-        Some(content) => assert_eq!(pages[1].content, content, "the Khmer stage reads the scan"),
-        None => assert!(
-            pages[1].content.contains("20,000 bottles of water"),
-            "the English stage reads the scan: {:?}",
-            pages[1].content
-        ),
-    }
+    assert!(
+        pages[1].content.contains("20,000 bottles of water"),
+        "the English stage reads the scan: {:?}",
+        pages[1].content
+    );
     assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Mixed));
 }
 
