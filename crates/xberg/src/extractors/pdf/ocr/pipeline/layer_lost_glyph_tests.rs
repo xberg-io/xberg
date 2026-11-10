@@ -255,3 +255,16 @@ async fn the_mixed_route_drops_a_misread_ocr_row_on_a_plain_page_only() {
         );
     }
 }
+
+#[test]
+fn a_native_layer_with_either_lost_glyph_marker_is_not_a_clean_ink_layer() {
+    let mut layers = ahash::AHashMap::new();
+    layers.insert(1, "clean words".to_string());
+    layers.insert(2, format!("lost{}words", super::super::super::unmapped_glyphs::LOST_GLYPH_MARKER));
+    layers.insert(3, format!("symbol{}words", super::super::super::unmapped_glyphs::LOST_SYMBOL_GLYPH_MARKER));
+    assert_eq!(clean_ink_layer_of(Some(&layers), &1), Some("clean words"));
+    assert_eq!(clean_ink_layer_of(Some(&layers), &2), None);
+    assert_eq!(clean_ink_layer_of(Some(&layers), &3), None);
+    assert_eq!(clean_ink_layer_of(Some(&layers), &4), None);
+    assert_eq!(clean_ink_layer_of(None, &1), None);
+}

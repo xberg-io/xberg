@@ -84,6 +84,15 @@ use crate::core::config::ExtractionConfig;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 use crate::core::config::OcrQualityThresholds;
 
+/// The native layer of a page when it holds no lost-glyph marker of either kind. ~keep
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn clean_ink_layer_of<'a>(layers: Option<&'a ahash::AHashMap<u32, String>>, page: &u32) -> Option<&'a str> {
+    layers
+        .and_then(|layers| layers.get(page))
+        .map(String::as_str)
+        .filter(|layer| !layer.contains(super::super::unmapped_glyphs::is_lost_glyph))
+}
+
 /// Whether `OcrConfig::numeric_repair` (GH#1789) is turned on for this extraction. Split out
 /// from the call site as its own function so the config-wiring path can be exercised in a unit
 /// test without running a real OCR page (see `pipeline_tests::numeric_repair_enabled_reads_the_
@@ -2594,10 +2603,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 geometry.page_boxes(*page_number, ocr_page_paragraphs.get(page_number), ocr_scale)
             });
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-            let clean_ink_layer = native_coverage_layers
-                .and_then(|layers| layers.get(page_number))
-                .map(String::as_str)
-                .filter(|layer| !layer.contains(super::super::unmapped_glyphs::is_lost_glyph));
+            let clean_ink_layer = clean_ink_layer_of(native_coverage_layers.map(|layers| &**layers), page_number);
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             if native_ink_owned_pages.contains(page_number)
                 && ink_proof_layout_free
