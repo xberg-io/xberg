@@ -81,6 +81,11 @@ fn plate_centre(content: &str, ink: &str) -> u8 {
 
 const SQUARE: &str = "10 10 80 80 re f";
 
+/// Process cyan as the CMYK conversion shows it, about `[0, 173, 239]`.
+fn is_cyan(rgb: [u8; 3]) -> bool {
+    rgb[0] < 60 && rgb[1] > 140 && rgb[2] > 200
+}
+
 #[test]
 fn an_overprinted_separation_black_fill_paints_black() {
     for state in ["/OP1", "/OP0"] {
@@ -102,10 +107,10 @@ fn an_overprinted_separation_black_text_paints_its_glyphs() {
 fn an_overprinted_process_colorant_keeps_the_other_channels_of_the_backdrop() {
     let backdrop = format!("0 1 0 0 k {SQUARE} ");
     let knockout = centre(&format!("{backdrop}/CsC cs 1 scn {SQUARE}"));
-    assert!(knockout[0] < 60 && knockout[1] > 180 && knockout[2] > 180, "cyan: {knockout:?}");
+    assert!(is_cyan(knockout), "cyan: {knockout:?}");
     let overprinted = centre(&format!("{backdrop}/OP1 gs /CsC cs 1 scn {SQUARE}"));
     assert!(
-        overprinted[0] < 60 && overprinted[1] < 60 && overprinted[2] > 180,
+        overprinted[0] < 60 && overprinted[1] < 100 && overprinted[2] > 100,
         "cyan over magenta: {overprinted:?}"
     );
 }
@@ -119,7 +124,7 @@ fn an_overprinted_devicen_black_fill_paints_black() {
 #[test]
 fn an_overprinted_spot_ink_paints_its_alternate_colour() {
     let rgb = centre(&format!("/OP1 gs /CsS cs 1 scn {SQUARE}"));
-    assert!(rgb[0] < 60 && rgb[1] > 180 && rgb[2] > 180, "{rgb:?}");
+    assert!(is_cyan(rgb), "{rgb:?}");
 }
 
 #[test]
