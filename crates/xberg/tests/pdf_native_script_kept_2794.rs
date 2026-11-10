@@ -17,7 +17,9 @@ const COMPLETE: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/cluster-
 const FIGURE: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-text-with-figure.pdf");
 const THEN_SCANNED: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-then-scanned-english.pdf");
 const AMONG_ENGLISH: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-among-english-pages.pdf");
+const ECHOED: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/echoed-khmer.pdf");
 const KHMER_PAGE_LETTERS: usize = 222;
+const ECHOED_KHMER_LETTERS: usize = 144;
 const ENGLISH: &str = "The quarterly report contains useful readable text about the country and its people.";
 const KHMER: &str = "ខ្ញុំស្រលាញ់ប្រទេសកម្ពុជា សួស្តីភ្នំពេញ ប្រទេសកម្ពុជាមានប្រជាជនច្រើន សៀវភៅសាលារៀន";
 
@@ -361,6 +363,53 @@ fn a_healthy_khmer_read_replaces_the_marked_page_beside_a_scan() {
             .processing_warnings
             .iter()
             .any(|w| w.message.contains("retained its native text")),
+        "{:?}",
+        automatic.processing_warnings
+    );
+}
+
+/// Reads the page with the default English OCR route: the first stage cannot read Khmer, so the
+/// script rule alone would keep the page native. `backend` stands in for Tesseract.
+fn read_default_route(source: &[u8], backend: Arc<dyn OcrBackend>, disable_ocr: bool) -> ExtractedDocument {
+    let _guard = Guard;
+    register_ocr_backend(backend).unwrap();
+    let config = ExtractionConfig {
+        use_cache: false,
+        output_format: OutputFormat::Plain,
+        pages: Some(PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ocr: Some(OcrConfig::default()),
+        ocr_strategy: OcrStrategy::Auto,
+        disable_ocr,
+        ..Default::default()
+    };
+    helpers::extract_bytes_document_blocking(source, "application/pdf", &config).unwrap()
+}
+
+#[test]
+#[serial_test::serial]
+fn a_khmer_page_whose_text_was_echoed_from_character_codes_goes_to_ocr_not_to_the_script_rule() {
+    let native = read_default_route(ECHOED, counting(ENGLISH, usize::MAX), true);
+    assert_eq!(
+        khmer_count(&native.content),
+        ECHOED_KHMER_LETTERS,
+        "{:?}",
+        native.content
+    );
+    let backend = counting(ENGLISH, usize::MAX);
+    let automatic = read_default_route(ECHOED, backend.clone(), false);
+    assert!(
+        backend.calls.load(Ordering::SeqCst) >= 1,
+        "the provenance flag is merged after the script rule, so OCR reads the page"
+    );
+    assert_eq!(automatic.content.trim(), ENGLISH, "{:?}", automatic.content);
+    assert!(
+        !automatic
+            .processing_warnings
+            .iter()
+            .any(|w| w.message.contains("OCR was skipped")),
         "{:?}",
         automatic.processing_warnings
     );

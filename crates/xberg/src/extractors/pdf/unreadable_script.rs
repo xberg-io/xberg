@@ -233,11 +233,15 @@ fn model_for(script: Script) -> &'static str {
 /// uses: pictures covering at least 80% of it, or covering a quarter with a text layer too short to
 /// be the page's body. A page with a figure beside a full text layer is not.
 fn page_is_scan(document: &xberg_native_pdf::PdfDocument, page_index: usize) -> bool {
-    crate::pdf::native::guard_native_panic(
-        || Ok::<_, String>(crate::pdf::scan_detect::full_page_raster_density(document, page_index).is_some()),
-        |message| message,
-    )
-    .unwrap_or_else(|error| {
+    scan_verdict(page_index, || {
+        crate::pdf::scan_detect::full_page_raster_density(document, page_index).is_some()
+    })
+}
+
+/// The verdict of a scan check, which is "a scan" when the check panics: a page whose raster cannot
+/// be inspected is left to OCR, the only reader of a picture.
+fn scan_verdict(page_index: usize, check: impl FnOnce() -> bool) -> bool {
+    crate::pdf::native::guard_native_panic(|| Ok::<_, String>(check()), |message| message).unwrap_or_else(|error| {
         tracing::debug!(%error, page_index, "script evidence assumes a scan: the page raster check failed");
         true
     })
@@ -1836,5 +1840,26 @@ mod tests {
     fn joiners_inside_an_indic_cluster_do_not_end_it() {
         let text = "क्\u{200D}ष र्\u{200D}क ज्\u{200C}ञ त्\u{200D}र नमस्ते हिन्दी";
         assert!(clusters_are_valid(text, Script::Devanagari));
+    }
+
+    #[test]
+    fn a_scan_check_that_panics_assumes_a_scan_and_one_that_returns_is_believed() {
+        assert!(scan_verdict(0, || panic!("raster check refused the page")));
+        assert!(scan_verdict(0, || true));
+        assert!(!scan_verdict(0, || false));
+    }
+
+    #[test]
+    fn a_marked_greek_page_with_three_latin_words_is_kept_native() {
+        let greek: String = "αβγδ ".repeat(40);
+        let page = format!("{greek}\u{FFFD} the report states");
+        assert_eq!(judged_scripts(&page, &langs(&["eng"])), Some(vec![Script::Greek]));
+        let (decision, warnings) = forced_failing(&page, &["eng"]);
+        assert!(decision.failing_pages.is_empty());
+        assert!(!decision.fallback);
+        assert!(!decision.whole_doc_failure);
+        assert_eq!(warnings.len(), 1);
+        let unmarked = page.replace('\u{FFFD}', "");
+        assert_eq!(judged_scripts(&unmarked, &langs(&["eng"])), None);
     }
 }
