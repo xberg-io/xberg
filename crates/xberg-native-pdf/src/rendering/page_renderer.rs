@@ -6425,10 +6425,9 @@ impl PageRenderer {
     ///    mode.
     /// 3. Compose the new tint per pixel:
     ///    `t_r = (1 - α') · t_b + α' · B(t_b, t_s)` where
-    ///    `α' = coverage · gs_alpha`, `t_b` is the stored backdrop tint
-    ///    (the tint times the backdrop alpha), `t_s` is the source tint,
-    ///    and `B(·, ·)` is the dispatched blend function, applied to the
-    ///    backdrop colour `t_b / a_b`. Per §11.3.5.2 Table 136 the separable
+    ///    `α' = coverage · gs_alpha`, `t_b` is the stored tint (times the
+    ///    backdrop alpha), `t_s` is the source tint, and `B(·, ·)` is the
+    ///    dispatched blend function. Per §11.3.5.2 Table 136 the separable
     ///    formulas operate on additive components, so
     ///    [`blend_subtractive_tint`](crate::rendering::sidecar::blend_subtractive_tint)
     ///    complements the tints before the blend and the result after
@@ -8797,8 +8796,7 @@ fn fit_png_dpi(
 
 fn png_working_bytes_fit(width: u32, height: u32, spot_names: Option<&[String]>, limit: usize) -> bool {
     // The canvas and PNG demultiply copy are both RGBA. Reserve the same per-pixel
-    // and fixed PNG allowance as Core image encoding, plus the live CMYK plane and, for each spot
-    // ink, a tint plane and a backdrop-alpha plane.
+    // and fixed PNG allowance as Core image encoding, plus the CMYK plane and two planes per spot ink.
     const RGBA_AND_PNG_BYTES_PER_PIXEL: usize = 12;
     const PNG_FIXED_OVERHEAD: usize = 256 * 1024;
     let sidecar_bytes_per_pixel = spot_names.map_or(Some(0), |names| names.len().checked_mul(2)?.checked_add(4));
