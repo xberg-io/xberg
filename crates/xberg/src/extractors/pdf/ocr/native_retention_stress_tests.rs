@@ -2143,6 +2143,25 @@ fn native_spells_read_needs_distinct_alphabetic_words_above_the_floor_and_share(
     assert_eq!(read_words_in_native(native, &under_share, &thresholds), (3, 13, true));
 }
 
+/// The extractor's two lost-glyph markers read the same: a marker inside a word of the native
+/// layer is removed before the words and the bigrams are matched, whichever marker it is. ~keep
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+fn the_symbol_marker_inside_a_native_word_is_removed_like_the_other_lost_glyph_marker() {
+    use super::super::document::{read_bigrams_in_native, read_words_in_native};
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let layer = |marker: char| format!("The commit{marker}tee met on Tuesd{marker}y to review the budget and design");
+    let read = "The committee met on Tuesday to review the budget and design";
+    let words = read_words_in_native(&layer('\u{FFFD}'), read, &thresholds);
+    assert!(words.0 > 0, "the control shares words: {words:?}");
+    assert_eq!(read_words_in_native(&layer(LOST_SYMBOL_GLYPH_MARKER), read, &thresholds), words);
+    let thai = |marker: char| format!("\u{0e2a}\u{0e27}{marker}\u{0e31}\u{0e2a}\u{0e14}\u{0e35}");
+    let read = "\u{0e2a}\u{0e27}\u{0e31}\u{0e2a}\u{0e14}\u{0e35}";
+    let bigrams = read_bigrams_in_native(&thai('\u{FFFD}'), read);
+    assert!(bigrams.0 > 0, "the control shares bigrams: {bigrams:?}");
+    assert_eq!(read_bigrams_in_native(&thai(LOST_SYMBOL_GLYPH_MARKER), read), bigrams);
+}
+
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 #[test]
 fn native_spells_read_rejects_a_read_whose_shared_words_are_all_numbers() {
