@@ -1504,7 +1504,10 @@ fn dedup_counts_two_detections_of_one_region_once_whatever_their_order() {
     for order in [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]] {
         let kept = kept_native_tables(order.iter().map(|&index| tables[index].clone()).collect(), &page);
         assert_eq!(kept.len(), 2, "order {order:?}: the table A and one copy of B stay");
-        assert!(kept.iter().any(|table| table.cells == a.cells), "order {order:?}: A stays");
+        assert!(
+            kept.iter().any(|table| table.cells == a.cells),
+            "order {order:?}: A stays"
+        );
     }
 }
 
@@ -1532,7 +1535,11 @@ fn dedup_counts_an_exact_word_and_a_split_copy_of_it_as_two_printed_copies() {
         printed_at("context", 49.0, 25.0),
     ]];
     let kept = kept_native_tables(vec![large, small.clone()], &page);
-    assert_eq!(kept.len(), 2, "the page prints each joined word twice, once whole and once split");
+    assert_eq!(
+        kept.len(),
+        2,
+        "the page prints each joined word twice, once whole and once split"
+    );
     assert!(kept.iter().any(|table| table.cells == small.cells));
 }
 

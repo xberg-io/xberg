@@ -5731,12 +5731,18 @@ fn near_coincident_groups(tables: &[crate::types::Table], members: &[usize]) -> 
     let mut group_of: Vec<usize> = (0..members.len()).collect();
     for left in 0..members.len() {
         for right in (left + 1)..members.len() {
-            let (Some(a), Some(b)) = (&tables[members[left]].bounding_box, &tables[members[right]].bounding_box) else {
+            let (Some(a), Some(b)) = (
+                &tables[members[left]].bounding_box,
+                &tables[members[right]].bounding_box,
+            ) else {
                 continue;
             };
             if boxes_near_coincident(a, b) {
                 let (keep, absorb) = (group_of[left], group_of[right]);
-                group_of.iter_mut().filter(|group| **group == absorb).for_each(|group| *group = keep);
+                group_of
+                    .iter_mut()
+                    .filter(|group| **group == absorb)
+                    .for_each(|group| *group = keep);
             }
         }
     }
@@ -5806,7 +5812,11 @@ impl<'a> OverlapEvidence<'a> {
 
     /// The text of the page that none of the live tables carries. Read again only when the live set changes.
     fn leftover(&mut self, tables: &[crate::types::Table], page_number: u32, live: &[usize]) -> &LeftoverText {
-        if self.leftovers.get(&page_number).is_none_or(|cached| cached.live != live) {
+        if self
+            .leftovers
+            .get(&page_number)
+            .is_none_or(|cached| cached.live != live)
+        {
             let page_index = page_number.saturating_sub(1) as usize;
             let coverage: Vec<&TableCoverage> = live
                 .iter()
@@ -5874,8 +5884,14 @@ impl<'a> OverlapEvidence<'a> {
         let mut rest = leftover.words.clone();
         let mut rest_joined = leftover.joined.clone();
         for group in near_coincident_groups(tables, &others) {
-            add_group_max(&mut rest, &group.iter().map(|index| &self.tables[index].words).collect::<Vec<_>>());
-            add_group_max(&mut rest_joined, &group.iter().map(|index| &self.tables[index].joined).collect::<Vec<_>>());
+            add_group_max(
+                &mut rest,
+                &group.iter().map(|index| &self.tables[index].words).collect::<Vec<_>>(),
+            );
+            add_group_max(
+                &mut rest_joined,
+                &group.iter().map(|index| &self.tables[index].joined).collect::<Vec<_>>(),
+            );
         }
         let count_of = |counts: &WordCounts, word: &String| counts.get(word).copied().unwrap_or(0);
         let mut new_words = 0usize;
