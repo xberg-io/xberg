@@ -579,7 +579,8 @@ fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpa
         for (index, span) in group.iter().enumerate() {
             if let Some(prev) = previous {
                 let gap = span.bbox.x - prev_end_x;
-                let script_boundary = needs_numeric_script_boundary(prev, span, &notes, group.get(index + 1).copied());
+                let script_boundary =
+                    needs_numeric_script_boundary(prev, span, &notes, group.get(index + 1).copied());
                 push_rebuild_seam(&mut result, prev, span, gap, line_space_threshold, script_boundary);
             }
             result.push_str(&span.text);
@@ -630,17 +631,12 @@ fn is_cjk_seam_char(c: char) -> bool {
     is_cjk_char(c) || matches!(c as u32, 0x3000..=0x303F | 0xFF00..=0xFFEF)
 }
 
-/// A span is small enough to be a script of its symbol below this fraction of the symbol's size. ~keep
-const SCRIPT_MAX_SIZE_FRACTION: f32 = 0.8;
-/// The smallest `Ts` rise that puts a span off its symbol's baseline. ~keep
-const SCRIPT_MIN_RISE: f32 = 0.10;
-
 /// A smaller span off its symbol's baseline, lowered or raised by its matrix or by `Ts`, is a script
 /// of that symbol, such as `c` with subscript `B`. The size and rise bounds are those of
 /// `needs_numeric_script_boundary`. ~keep
 fn is_script_of(base: &TextSpan, script: &TextSpan) -> bool {
-    script.font_size < base.font_size * SCRIPT_MAX_SIZE_FRACTION
-        && (script.text_rise.abs() >= SCRIPT_MIN_RISE || (script.bbox.y - base.bbox.y).abs() >= base.font_size * 0.1)
+    script.font_size < base.font_size * 0.8
+        && (script.text_rise.abs() >= 0.10 || (script.bbox.y - base.bbox.y).abs() >= base.font_size * 0.1)
 }
 
 // A small digit beside another digit can be a footnote or a power. Require a
@@ -714,7 +710,7 @@ pub(super) fn needs_numeric_script_boundary(
         || !is_ltr_writing_mode(script)
         || note.font_size >= base.font_size * 0.9
         || base.bbox.y - note.bbox.y < base.font_size * 1.5
-        || (script.font_size >= base.font_size * SCRIPT_MAX_SIZE_FRACTION && script.text_rise.abs() < SCRIPT_MIN_RISE)
+        || (script.font_size >= base.font_size * 0.8 && script.text_rise.abs() < 0.10)
     {
         return false;
     }
