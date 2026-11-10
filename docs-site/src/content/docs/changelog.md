@@ -311,6 +311,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep adaptive Primary word-boundary decisions consistent when a text matrix moves back into a run.** (#2845)
+  A leading TJ offset can change whether the preceding text looks justified. Run widths now use the same decision as offset processing, so a kern keeps the pen-move width and a word gap restores the drawn width. Glyph advances and the default word-boundary mode are unchanged.
+
 - **(ocr): Keep foreground text when a blank embedded background was clamped.** (#2842)
   During the JPEG-budget retry, an empty or whitespace-only read of a separate proven-resolution image no longer marks the page's other text as illegible. The clamp and resolution safeguards still apply to images that return text.
 - **(ocr): Keep page byte ranges when OCR page text and plain content render a table differently.** (#2825)
