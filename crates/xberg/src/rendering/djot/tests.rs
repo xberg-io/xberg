@@ -1090,6 +1090,30 @@ fn a_row_with_a_sign_after_a_brace_escapes_the_sign() {
 }
 
 #[test]
+fn a_row_leaves_the_characters_that_open_no_markup_as_typed() {
+    let rows = [
+        "Chapter 3: Introduction .... 5",
+        "A-B + C = D .... 1",
+        "Dr. Smith (b) |x| #5 $6 \"q\" 'r' !s >t .... 2",
+        "a:b .... 3",
+    ];
+    let output = render_rows(&rows);
+    assert_eq!(
+        output,
+        "Chapter 3: Introduction .... 5\n\nA-B + C = D .... 1\n\nDr. Smith (b) |x| #5 $6 \"q\" 'r' !s >t .... 2\n\na\\:b .... 3\n"
+    );
+}
+
+#[test]
+fn a_row_with_an_autolink_or_a_tag_keeps_its_text() {
+    for row in ["<https://a.example> .... 1", "[a] <b@c.d> .... 2", "x <b>y</b> .... 3"] {
+        let layout = ["Intro .... 5", row, "Tail .... 9"];
+        let output = render_rows(&layout);
+        assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
+    }
+}
+
+#[test]
 fn a_row_that_opens_with_a_marker_and_a_delimiter_pair_keeps_its_text() {
     // On the unescaped row the opener holds the delimiter that follows it, so the pair stays text.
     // Escaping only the opener would free the pair to become emphasis, strong text or a superscript.
