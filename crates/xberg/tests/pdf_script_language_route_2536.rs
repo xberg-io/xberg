@@ -285,9 +285,23 @@ fn a_khmer_stage_before_an_english_stage_keeps_page_one_and_reads_the_scanned_pa
         config.disable_ocr = true
     });
     let automatic = extract(KHMER_THEN_SCANNED_ENGLISH, models.path(), khm_then_eng);
+    let native_pages = native.pages.as_ref().unwrap();
     let pages = automatic.pages.as_ref().unwrap();
-    assert_eq!(pages[0].content, native.pages.as_ref().unwrap()[0].content);
+    assert_eq!(pages.len(), 2);
+    assert_eq!(pages[0].content, native_pages[0].content);
     assert_eq!(khmer_count(&pages[0].content), 222);
+    assert!(native_pages[1].content.trim().is_empty(), "page 2 has no text layer");
+    // With a Khmer model on the machine the `khm` stage reads the English scan first and writes
+    // Khmer-looking text, so the phrase is only expected from the English stage.
+    if khmer_model_dir().is_none() {
+        assert!(
+            pages[1].content.contains("20,000 bottles of water"),
+            "OCR read page 2: {:?}",
+            pages[1].content
+        );
+    } else {
+        assert!(!pages[1].content.trim().is_empty(), "OCR read page 2");
+    }
     assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Mixed));
 }
 

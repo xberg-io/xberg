@@ -157,6 +157,17 @@ fn unreadable_scripts(text: &str, languages: &[String]) -> Option<Vec<Script>> {
     )
 }
 
+/// Whether a character can be a letter or mark of a script: not whitespace, a lost-glyph marker, a
+/// numeral or punctuation. The candidate counts and the marker share count characters the same way,
+/// so padding a page with digits changes neither.
+fn is_script_letter(character: char) -> bool {
+    !character.is_whitespace()
+        && character != super::unmapped_glyphs::LOST_GLYPH_MARKER
+        && !character.is_numeric()
+        && !character.is_ascii_punctuation()
+        && !matches!(character as u32, 0x00A0..=0x00BF | 0x2000..=0x206F | 0x3000..=0x3003)
+}
+
 /// [`unreadable_scripts`] with the number of letters each script holds, largest first.
 fn uncovered_script_counts(text: &str, languages: &[String]) -> Option<Vec<(Script, usize)>> {
     if languages.is_empty() {
@@ -169,13 +180,7 @@ fn uncovered_script_counts(text: &str, languages: &[String]) -> Option<Vec<(Scri
     let mut counts: Vec<(Script, usize)> = Vec::new();
     let mut unattributed = 0usize;
     let mut covered_chars = 0usize;
-    for character in text.chars().filter(|character| {
-        !character.is_whitespace()
-            && *character != super::unmapped_glyphs::LOST_GLYPH_MARKER
-            && !character.is_numeric()
-            && !character.is_ascii_punctuation()
-            && !matches!(*character as u32, 0x00A0..=0x00BF | 0x2000..=0x206F | 0x3000..=0x3003)
-    }) {
+    for character in text.chars().filter(|character| is_script_letter(*character)) {
         match script_of(character) {
             Some(script) if covered.contains(&script) => covered_chars += 1,
             Some(script) => match counts.iter_mut().find(|(known, _)| *known == script) {
@@ -482,7 +487,9 @@ fn layer_is_lost(text: &str, languages: &[String]) -> bool {
         .collect();
     let letters = text
         .chars()
-        .filter(|character| script_of(*character).is_some_and(|script| structured.contains(&script)))
+        .filter(|character| {
+            is_script_letter(*character) && script_of(*character).is_some_and(|script| structured.contains(&script))
+        })
         .count();
     let markers = text.matches(super::unmapped_glyphs::LOST_GLYPH_MARKER).count();
     !structured.is_empty()
@@ -1702,6 +1709,25 @@ mod tests {
         );
         assert!(layer_is_lost(&page, &langs(&["eng"])));
         let (decision, warnings) = run(&[&page], ONE_PAGE, &khm_then_eng("khm", "eng"));
+        assert_eq!(decision.failing_pages, [1]);
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn digits_added_to_a_layer_that_lost_whole_clusters_do_not_make_it_complete() {
+        let lost = format!("{}{}", "កា ".repeat(10), "\u{FFFD}".repeat(30));
+        let padded = format!("{lost}{}", "០".repeat(30));
+        let eng = langs(&["eng"]);
+        assert!(
+            clusters_are_valid(&padded, Script::Khmer),
+            "the signs that remain still attach"
+        );
+        assert!(layer_is_lost(&lost, &eng));
+        assert!(
+            layer_is_lost(&padded, &eng),
+            "Khmer digits are not letters of the layer"
+        );
+        let (decision, warnings) = run(&[&padded], ONE_PAGE, &khm_then_eng("khm", "eng"));
         assert_eq!(decision.failing_pages, [1]);
         assert!(warnings.is_empty(), "{warnings:?}");
     }
