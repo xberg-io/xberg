@@ -21,6 +21,26 @@ const SINGLE_RETAINED: &str = "Page 1 OCR read omitted native text after its ren
 enum Layer {
     Covered,
     Visible,
+    /// The visible layer under 9000 small black squares: the render reads as noise, and the
+    /// native text is still what the page shows.
+    Speckled,
+}
+
+/// Squares of 2.2 points at pseudo-random places over the page, from a fixed linear congruential
+/// sequence so every run draws the same page.
+fn speckle(squares: usize) -> String {
+    let mut state: u32 = 1;
+    let mut next = |bound: u32| {
+        state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        (state >> 8) % bound
+    };
+    let mut ops = String::from("\nq 0 g\n");
+    for _ in 0..squares {
+        let (x, y) = (next(600), next(780));
+        ops.push_str(&format!("{x} {y} 2.2 2.2 re f\n"));
+    }
+    ops.push_str("Q\n");
+    ops
 }
 
 /// The Type0 page followed by an ordinary second page. In the covered variant a white fill paints
@@ -66,6 +86,15 @@ fn source_pdf(layer: Layer, second_page: bool) -> Vec<u8> {
             .get_mut(b"Font")
             .unwrap();
         fonts.as_dict_mut().unwrap().set("F9", helvetica);
+    }
+    if layer == Layer::Speckled {
+        let stream = pdf.get_object_mut(contents).unwrap().as_stream_mut().unwrap();
+        assert!(
+            stream.dict.get(b"Filter").is_err(),
+            "the source page stream must be unfiltered"
+        );
+        stream.content.extend_from_slice(speckle(9000).as_bytes());
+        stream.dict.set("Length", stream.content.len() as i64);
     }
     if second_page {
         let second_stream = pdf.add_object(Stream::new(
@@ -153,6 +182,24 @@ fn a_covered_single_page_type0_layer_does_not_outvote_the_short_visible_read() {
 #[test]
 fn a_visible_single_page_type0_layer_keeps_native_text_after_ink_loss() {
     let result = extract(Layer::Visible, false);
+    let page = &result.pages.as_ref().unwrap()[0].content;
+    assert!(page.contains("committee met on Tuesd"), "{page:?}");
+    assert!(single_page_type0_retained(&result), "{:?}", result.processing_warnings);
+    assert_eq!(result.extraction_method, Some(ExtractionMethod::Native));
+}
+
+#[test]
+fn a_speckled_type0_layer_keeps_native_text_after_ink_loss() {
+    let result = extract(Layer::Speckled, true);
+    let pages = result.pages.as_ref().unwrap();
+    assert!(pages[0].content.contains("committee met on Tuesd"), "{:?}", pages[0].content);
+    assert!(pages[1].content.contains("Second page text"), "{:?}", pages[1].content);
+    assert!(notice(&result, MIXED_RETAINED), "{:?}", result.processing_warnings);
+}
+
+#[test]
+fn a_speckled_single_page_type0_layer_keeps_native_text_after_ink_loss() {
+    let result = extract(Layer::Speckled, false);
     let page = &result.pages.as_ref().unwrap()[0].content;
     assert!(page.contains("committee met on Tuesd"), "{page:?}");
     assert!(single_page_type0_retained(&result), "{:?}", result.processing_warnings);

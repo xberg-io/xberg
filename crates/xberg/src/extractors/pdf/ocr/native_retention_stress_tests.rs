@@ -573,7 +573,7 @@ fn type0_retention_counts_meaningful_literal_occurrences_and_requires_markers() 
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 #[test]
-fn native_spells_read_needs_distinct_alphabetic_words_above_the_floor_and_share() {
+fn native_spells_read_needs_distinct_alphabetic_words_above_the_floor() {
     use super::super::document::{native_spells_read, read_words_in_native};
     let thresholds = crate::core::config::OcrQualityThresholds::default();
     let native = "Committee members reviewed budget design archive reader source library plans 2024";
@@ -590,8 +590,9 @@ fn native_spells_read_needs_distinct_alphabetic_words_above_the_floor_and_share(
             .join(" ")
     };
     let near_floor = format!("budget design archive {}", filler(6));
-    let under_share = format!("budget design archive {}", filler(10));
-    let cases: [(&str, &str, &str, bool); 13] = [
+    let noisy = format!("budget design archive {}", filler(26));
+    let noisy_two = format!("budget design {}", filler(26));
+    let cases: [(&str, &str, &str, bool); 14] = [
         ("empty read", native, "", false),
         ("short words only", native, "the and for new met", false),
         ("case is ignored", native, "COMMITTEE Members REVIEWED budget", true),
@@ -614,13 +615,9 @@ fn native_spells_read_needs_distinct_alphabetic_words_above_the_floor_and_share(
             "budget design alpha bravo",
             false,
         ),
-        ("three shared of nine is above the share", native, &near_floor, true),
-        (
-            "three shared of thirteen is under the share",
-            native,
-            &under_share,
-            false,
-        ),
+        ("three shared of nine pass", native, &near_floor, true),
+        ("three shared beside 26 noise words pass", native, &noisy, true),
+        ("two shared beside 26 noise words are under the floor", native, &noisy_two, false),
         ("digits alone are not alphabetic", native, "2024 2025 2026", false),
         (
             "shared digits and one word do not reach the floor",
@@ -645,7 +642,7 @@ fn native_spells_read_needs_distinct_alphabetic_words_above_the_floor_and_share(
         );
     }
     assert_eq!(read_words_in_native(native, &near_floor, &thresholds), (3, 9, true));
-    assert_eq!(read_words_in_native(native, &under_share, &thresholds), (3, 13, true));
+    assert_eq!(read_words_in_native(native, &noisy, &thresholds), (3, 29, true));
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
