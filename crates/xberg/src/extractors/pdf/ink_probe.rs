@@ -176,6 +176,24 @@ fn next_batch(eligible: &[u32], probed: &[u32], any_contradicted: bool) -> Vec<u
     }
 }
 
+/// The probed pages that have no score, split by cause: a backend that read words but reports no
+/// calibrated score (uncalibrated), and a read with no scored words at all (a blank read after
+/// noise discarding, for one), which says nothing about the backend.
+fn unscored_pages(
+    batch: &[u32],
+    confidence: &ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
+) -> (Vec<u32>, Vec<u32>) {
+    let (mut uncalibrated, mut unscored) = (Vec::new(), Vec::new());
+    for page in batch {
+        match confidence.get(page) {
+            Some(c) if c.score.is_none() && c.word_count > 0 => uncalibrated.push(*page),
+            Some(c) if c.score.is_none() => unscored.push(*page),
+            _ => {}
+        }
+    }
+    (uncalibrated, unscored)
+}
+
 /// The pages of a batch the OCR run reported no confidence for: it produced no read of them.
 fn unread_pages(batch: &[u32], confidence: &ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>) -> Vec<u32> {
     batch
@@ -200,6 +218,10 @@ fn warning(message: String) -> crate::types::ProcessingWarning {
 /// whose page confidence clears the acceptance gate counts. Scan pages are left out, since OCR
 /// reads them anyway. A document over the OCR preview size limit is not read, and a probe that
 /// fails leaves the layer native with a warning. Cancellation is returned as the error.
+///
+/// Up to four pages spread across the candidates (first, last, evenly spaced) are read first; the
+/// rest of the first [`MAX_PROBED_PAGES`] candidates only if one of them is contradicted. A sentinel
+/// outside those first candidates is read in addition to the cap.
 pub(super) async fn contradicted_pages(
     decision: &OcrFallbackDecision,
     layer: NativeLayer<'_>,
@@ -270,15 +292,17 @@ pub(super) async fn contradicted_pages(
                  failed); their native text is kept."
             )));
         }
-        let uncalibrated: Vec<u32> = batch
-            .iter()
-            .copied()
-            .filter(|page| confidence.get(page).is_some_and(|c| c.score.is_none()))
-            .collect();
+        let (uncalibrated, unscored) = unscored_pages(&batch, confidence);
         if !uncalibrated.is_empty() {
             outcome.warnings.push(warning(format!(
                 "The ink of pages {uncalibrated:?} could not be checked against their text layer because the \
                  OCR backend reports no calibrated confidence; their native text is kept."
+            )));
+        }
+        if !unscored.is_empty() {
+            outcome.warnings.push(warning(format!(
+                "The ink of pages {unscored:?} could not be checked against their text layer (the OCR read \
+                 had no scored words); their native text is kept."
             )));
         }
         outcome.contradicted.extend(batch.iter().copied().filter(|page| {
@@ -368,6 +392,22 @@ mod tests {
     }
 
     #[test]
+    fn a_score_less_page_is_uncalibrated_only_when_the_backend_read_words() {
+        let mut confidence = ahash::AHashMap::new();
+        let page = |score, word_count| crate::types::page::PageOcrConfidence {
+            score,
+            word_count,
+            backend: "paddleocr".to_owned(),
+        };
+        confidence.insert(1, page(None, 40));
+        confidence.insert(2, page(None, 0));
+        confidence.insert(3, page(Some(0.9), 40));
+        let (uncalibrated, unscored) = unscored_pages(&[1, 2, 3, 4], &confidence);
+        assert_eq!(uncalibrated, vec![1]);
+        assert_eq!(unscored, vec![2]);
+    }
+
+    #[test]
     fn a_page_the_ocr_run_reported_nothing_for_is_unread() {
         let mut confidence = ahash::AHashMap::new();
         confidence.insert(2, crate::types::page::PageOcrConfidence::default());
@@ -398,9 +438,11 @@ mod tests {
     #[test]
     fn a_contradicted_page_last_among_many_is_still_a_sentinel() {
         let pages: Vec<u32> = (10..=30).collect();
-        assert!(sentinels(&pages).contains(&30));
-        assert!(sentinels(&pages).contains(&10));
+        assert_eq!(sentinels(&pages), vec![10, 16, 23, 30]);
         assert_eq!(sentinels(&[7]), vec![7]);
+        assert_eq!(sentinels(&[7, 9]), vec![7, 9]);
+        assert_eq!(sentinels(&[7, 9, 11, 13]), vec![7, 9, 11, 13]);
+        assert_eq!(sentinels(&[7, 9, 11, 13, 15, 17]), vec![7, 9, 13, 17]);
         assert_eq!(sentinels(&[7, 9, 11, 13, 15]), vec![7, 9, 11, 15]);
     }
 
@@ -410,7 +452,7 @@ mod tests {
         let short = "THE CAT SAT ON THE MAT AND ATE THE FISH";
         let few_long = "the cat sat on a mat and ate the fish in a pan";
         assert!(!read_is_prose(short), "all capitals are not plain words");
-        assert!(!read_is_prose(few_long), "twelve short words hold too few long ones");
+        assert!(!read_is_prose(few_long), "thirteen short words hold too few long ones");
         assert!(!read_contradicts_layer(&layer, short));
         assert!(!read_contradicts_layer(&layer, few_long));
     }
