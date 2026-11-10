@@ -174,13 +174,32 @@ pub(crate) fn planned_pdf_ocr_render_dpi(
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
     security_limits: &crate::extractors::security::SecurityLimits,
 ) -> (i32, i32) {
+    planned_pdf_ocr_render_dpi_with_preprocessing(doc, page_idx, images_config, security_limits, None)
+}
+
+/// Preserve an explicit OCR normalization density in the source render before detail is lost.
+/// Explicit render configuration and a scan's original density retain their precedence. ~keep
+#[cfg(feature = "pdf")]
+pub(crate) fn planned_pdf_ocr_render_dpi_with_preprocessing(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_idx: usize,
+    images_config: Option<&crate::core::config::ImageExtractionConfig>,
+    security_limits: &crate::extractors::security::SecurityLimits,
+    preprocessing_dpi: Option<i32>,
+) -> (i32, i32) {
     let requested_dpi = if images_config.is_none()
         && let Some(density) = crate::pdf::scan_detect::full_page_raster_density(doc, page_idx)
     {
         scan_page_render_dpi(density)
     } else {
         let (page_width_pt, page_height_pt) = crate::pdf::render::get_page_dimensions_pt(doc, page_idx);
-        effective_pdf_render_dpi(images_config, f64::from(page_width_pt), f64::from(page_height_pt))
+        if images_config.is_none() {
+            preprocessing_dpi
+                .unwrap_or(DEFAULT_PDF_RENDER_DPI)
+                .max(DEFAULT_PDF_RENDER_DPI)
+        } else {
+            effective_pdf_render_dpi(images_config, f64::from(page_width_pt), f64::from(page_height_pt))
+        }
     };
     let (page_width_pt, page_height_pt) = crate::pdf::render::get_page_dimensions_pt(doc, page_idx);
     let capped_dpi = cap_pdf_ocr_render_dpi(
@@ -405,3 +424,7 @@ mod tests {
         assert!(dpi < 600, "auto_adjust_dpi must reduce, not raise, an oversized target");
     }
 }
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[path = "dpi/preprocessing_density_tests.rs"]
+mod preprocessing_density_tests;
