@@ -28,6 +28,7 @@ pub(super) struct Run {
 pub(super) struct PagePolicy<'a> {
     pub(super) accepted: bool,
     pub(super) scale_only: bool,
+    pub(super) deferred_structure: bool,
     pub(super) layout: bool,
     pub(super) transformed: bool,
     pub(super) raster: Option<&'a crate::pdf::render::OcrRasterDpi>,
@@ -38,6 +39,7 @@ pub(super) struct PagePolicy<'a> {
 pub(super) fn applicable(policy: PagePolicy<'_>) -> bool {
     policy.accepted
         && policy.scale_only
+        && !policy.deferred_structure
         && !policy.layout
         && !policy.transformed
         && policy.raster.is_some_and(|raster| !raster.type0_ink_loss)
@@ -65,7 +67,7 @@ pub(super) async fn recover(
     config: &ExtractionConfig,
     run: &std::sync::Arc<Run>,
     warnings: &mut Vec<crate::types::ProcessingWarning>,
-) {
+) -> bool {
     let count = source
         .layer
         .chars()
@@ -79,48 +81,62 @@ pub(super) async fn recover(
             .split_whitespace()
             .eq(read.split_whitespace())
     {
-        return;
+        return false;
     }
     // Model presence changes the result even when configuration and PDF bytes do not. ~keep
     crate::core::extractor::cacheability::invalidate_current();
     let Some(directory) = model_directory(config) else {
         missing_model_warning(warnings, source.index);
-        return;
+        return false;
     };
     let (media, numbers) = match source_numbers(&source) {
         Ok(Some(prepared)) => prepared,
-        Ok(None) => return,
+        Ok(None) => return false,
         Err(error) => {
             tracing::warn!(%error, "Cannot locate native numeric source crops");
-            return;
+            return false;
         }
     };
     let frame =
         super::document::resolved_ocr_layout_dimensions(source.metadata, source.dimensions.0, source.dimensions.1);
     if frame.0 == 0 || frame.1 == 0 {
-        return;
+        return false;
     }
     let scale = (media.width / frame.0 as f32, media.height / frame.1 as f32);
     let max_work = proof_limits(config).max_iterations;
     let numbers = recognize(source.raster, media, numbers, directory, config.clone(), run.clone()).await;
-    if insert(numbers, paragraphs, scale, max_work) {
-        *read = recovered_page_text(paragraphs, &config.output_format);
+    let changed = insert(numbers, paragraphs, scale, max_work);
+    if changed {
+        *read = super::document::ocr_paragraphs_plain_text(paragraphs);
     }
+    changed
 }
 
-fn recovered_page_text(paragraphs: &[PdfParagraph], format: &crate::OutputFormat) -> String {
+pub(super) fn synchronize_plain_pages(
+    document: &crate::types::internal::InternalDocument,
+    recovered: &[bool],
+    page_texts: &mut [String],
+    format: &crate::OutputFormat,
+) -> bool {
     if *format != crate::OutputFormat::Plain {
-        return super::document::ocr_paragraphs_plain_text(paragraphs);
+        return false;
     }
-    // Use the document's geometry-aware text assembly so page byte ranges share its rendering. ~keep
-    let document = crate::pdf::structure::assemble_internal_document(
-        vec![paragraphs.to_vec()],
-        &[],
-        None,
-        &[],
-        &Default::default(),
-    );
-    crate::rendering::render_plain(&document)
+    let requested: std::collections::BTreeSet<u32> = recovered
+        .iter()
+        .enumerate()
+        .filter(|(_, changed)| **changed)
+        .filter_map(|(index, _)| u32::try_from(index + 1).ok())
+        .collect();
+    if requested.is_empty() {
+        return false;
+    }
+    let mut rendered = crate::extraction::derive::render_plain_selected_pages(document, &requested);
+    for ((index, read), changed) in page_texts.iter_mut().enumerate().zip(recovered) {
+        if *changed && let Ok(page) = u32::try_from(index + 1) {
+            *read = rendered.remove(&page).unwrap_or_default();
+        }
+    }
+    true
 }
 
 fn source_numbers(source: &PageSource<'_>) -> crate::Result<Option<(Rect, Vec<Number>)>> {

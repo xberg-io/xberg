@@ -182,6 +182,47 @@ fn recovers_the_painted_zero_once_at_its_source_position() {
     }
     assert_plain_page_ranges(&result);
     assert_two_page_numbers(&config, 1);
+    assert_recovered_list_ranges(&config);
+}
+
+fn assert_recovered_list_ranges(config: &ExtractionConfig) {
+    let source = with_dash_list();
+    let mut markdown = config.clone();
+    markdown.output_format = xberg::OutputFormat::Markdown;
+    let formatted = extract(&source, &markdown);
+    assert!(
+        formatted.content.contains("- The office"),
+        "the painted marker must become a real list: {}",
+        formatted.content
+    );
+    for (index, input) in [source.clone(), duplicated_source(&source)].into_iter().enumerate() {
+        let result = helpers::extract_bytes_document_blocking(&input, "application/pdf", config).unwrap();
+        let pages = result.pages.as_ref().unwrap();
+        assert_eq!(pages.len(), index + 1, "one and two real list-bearing pages");
+        assert_eq!(
+            result.content.matches('០').count(),
+            pages.len(),
+            "recovery must actually fire"
+        );
+        assert!(PROSE.iter().all(|line| result.content.contains(line)));
+        assert_plain_page_ranges(&result);
+    }
+}
+
+fn with_dash_list() -> Vec<u8> {
+    let mut doc = lopdf::Document::load_mem(MATCHING).unwrap();
+    let mut raster = image::load_from_memory(&rendered(MATCHING)).unwrap().into_rgb8();
+    for center in [387, 450, 512] {
+        for y in center..center + 3 {
+            for x in 182..196 {
+                raster.put_pixel(x, y, image::Rgb([0; 3]));
+            }
+        }
+    }
+    replace_scan(&mut doc, raster);
+    let mut bytes = Vec::new();
+    doc.save_to(&mut bytes).unwrap();
+    bytes
 }
 
 fn assert_plain_page_ranges(result: &ExtractedDocument) {
@@ -265,7 +306,11 @@ fn english_only_keeps_the_unverified_ocr_read() {
 }
 
 fn duplicated_page() -> Vec<u8> {
-    let mut doc = lopdf::Document::load_mem(MATCHING).unwrap();
+    duplicated_source(MATCHING)
+}
+
+fn duplicated_source(input: &[u8]) -> Vec<u8> {
+    let mut doc = lopdf::Document::load_mem(input).unwrap();
     let page_id = *doc.get_pages().get(&1).unwrap();
     let page = doc.get_object(page_id).unwrap().as_dict().unwrap().clone();
     let parent_id = page.get(b"Parent").unwrap().as_reference().unwrap();

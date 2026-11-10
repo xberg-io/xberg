@@ -252,6 +252,38 @@ pub(super) fn apply_page_content_format(
     Some(pages)
 }
 
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(crate) fn render_plain_selected_pages(
+    doc: &InternalDocument,
+    requested: &std::collections::BTreeSet<u32>,
+) -> std::collections::BTreeMap<u32, String> {
+    let membership = compute_page_membership(doc);
+    let mut observer = ();
+    build_pages(doc, true)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|page| requested.contains(&page.page_number))
+        .enumerate()
+        .filter_map(|(index, page)| {
+            let indices = membership.get(&page.page_number)?;
+            let rendered = render_sub_page(
+                page,
+                indices,
+                doc,
+                Some(crate::rendering::render_plain),
+                (index, &crate::core::config::OutputFormat::Plain),
+                &mut observer,
+            );
+            Some((rendered.page_number, rendered.content))
+        })
+        .collect()
+}
+
 /// Which element indices belong to each page, keyed by page number.
 ///
 /// Container markers (`ListStart`/`ListEnd`, quotes, groups) are never page-tagged:

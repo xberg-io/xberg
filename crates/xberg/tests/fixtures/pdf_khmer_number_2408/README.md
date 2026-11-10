@@ -103,6 +103,8 @@ Recovery requires complete located paragraph text and exactly one geometric
 line owner. An overlapping line remains ambiguous even if its text, font scale
 or ordering makes it ineligible for insertion.
 
-Successfully recovered Plain pages use the existing structure assembly and Plain
-renderer for their page text, so their returned byte ranges index the same text
-as the document. The positive control checks exact slices on one and two pages.
+Successfully recovered Plain pages take their text from the finalized document
+through the existing page renderer, including list and document normalization.
+Only recovered pages are synchronized; stages that defer assembly remain
+unchanged. The positive control checks exact slices on one and two pages, with
+and without adjacent real OCR lists.

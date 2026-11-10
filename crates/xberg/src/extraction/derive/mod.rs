@@ -33,6 +33,13 @@ pub(crate) use ocr_document::is_invalid_public_ocr_document;
 #[cfg(test)]
 use pages::build_pages;
 pub(crate) use pages::reconcile_page_boundaries;
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(crate) use pages::render_plain_selected_pages;
 use pages::{build_ocr_elements, derive_pages};
 
 /// Cap on how many unresolvable keys a single warning names before it summarises

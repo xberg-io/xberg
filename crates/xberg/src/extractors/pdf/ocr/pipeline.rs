@@ -4202,6 +4202,13 @@ pub(super) async fn extract_with_ocr_for_page(
         not(target_arch = "wasm32")
     ))]
     let number_recovery = Arc::new(super::number_recovery::Run::default());
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let mut number_recovered_pages = vec![false; total_pages];
     let mut backend_additional_metadata: Option<ahash::AHashMap<std::borrow::Cow<'static, str>, serde_json::Value>> =
         None;
     let mut page_segmentation_modes = std::collections::BTreeMap::<u32, i32>::new();
@@ -5639,6 +5646,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 if super::number_recovery::applicable(super::number_recovery::PagePolicy {
                     accepted: !acceptance.discarded && acceptance.verdict.is_none(),
                     scale_only: number_frame_reads[offset],
+                    deferred_structure: skip_document_global_heuristic,
                     raster: raster_dpis.get(&page_idx),
                     layout: has_layout_detections,
                     transformed: tall_source_used
@@ -5664,7 +5672,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         .and_then(|layers| layers.get(&document_page_number)),
                     all_page_paragraphs[page_idx].as_mut(),
                 ) {
-                    super::number_recovery::recover(
+                    number_recovered_pages[page_idx] = super::number_recovery::recover(
                         super::number_recovery::PageSource {
                             document: pdf,
                             index: document_page_idx,
@@ -5786,6 +5794,7 @@ pub(super) async fn extract_with_ocr_for_page(
             if super::number_recovery::applicable(super::number_recovery::PagePolicy {
                 accepted: !acceptance.discarded && acceptance.verdict.is_none(),
                 scale_only: number_frame_reads[offset],
+                deferred_structure: skip_document_global_heuristic,
                 raster: raster_dpis.get(&page_idx),
                 layout: has_layout_detections,
                 transformed: tall_source_used
@@ -5811,7 +5820,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     .and_then(|layers| layers.get(&document_page_number)),
                 all_page_paragraphs[page_idx].as_mut(),
             ) {
-                super::number_recovery::recover(
+                number_recovered_pages[page_idx] = super::number_recovery::recover(
                     super::number_recovery::PageSource {
                         document: pdf,
                         index: document_page_idx,
@@ -5882,19 +5891,7 @@ pub(super) async fn extract_with_ocr_for_page(
         _ => None,
     };
 
-    let page_marker_cfg = config.pages.as_ref().filter(|p| p.insert_page_markers);
-    let mut result = String::new();
-    for (i, text) in page_texts.iter().enumerate() {
-        if let Some(cfg) = page_marker_cfg {
-            let marker = cfg
-                .marker_format
-                .replace("{page_num}", &(page_index_offset + i + 1).to_string());
-            result.push_str(&marker);
-        } else if i > 0 {
-            result.push_str("\n\n");
-        }
-        result.push_str(text);
-    }
+    let mut result = join_ocr_page_texts(&page_texts, config, page_index_offset);
 
     // A page the quality gate rejected must not keep its structured paragraphs either.
     //
@@ -6262,6 +6259,23 @@ pub(super) async fn extract_with_ocr_for_page(
     #[cfg(not(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32"))))]
     let discarded_visible_native_page = false;
 
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    if let Some(document) = ocr_doc.as_ref()
+        && super::number_recovery::synchronize_plain_pages(
+            document,
+            &number_recovered_pages,
+            &mut page_texts,
+            &config.output_format,
+        )
+    {
+        result = join_ocr_page_texts(&page_texts, config, page_index_offset);
+    }
+
     #[cfg(feature = "pdf")]
     let ocr_doc = {
         let mut warnings = image_fallback_warnings;
@@ -6346,6 +6360,24 @@ pub(super) async fn extract_with_ocr_for_page(
         },
     ))
 }
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn join_ocr_page_texts(page_texts: &[String], config: &ExtractionConfig, page_index_offset: usize) -> String {
+    let page_marker_cfg = config.pages.as_ref().filter(|p| p.insert_page_markers);
+    let mut result = String::new();
+    for (i, text) in page_texts.iter().enumerate() {
+        if let Some(cfg) = page_marker_cfg {
+            let marker = cfg
+                .marker_format
+                .replace("{page_num}", &(page_index_offset + i + 1).to_string());
+            result.push_str(&marker);
+        } else if i > 0 {
+            result.push_str("\n\n");
+        }
+        result.push_str(text);
+    }
+    result
+}
+
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 async fn certify_discarded_native_layer(
     render: Option<(xberg_native_pdf::PdfDocument, usize, Vec<u32>)>,

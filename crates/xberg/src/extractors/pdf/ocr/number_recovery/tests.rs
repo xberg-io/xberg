@@ -515,6 +515,7 @@ fn should_not_turn_verified_numbers_into_type0_page_corroboration() {
     let policy = |raster| PagePolicy {
         accepted: true,
         scale_only: true,
+        deferred_structure: false,
         layout: false,
         transformed: false,
         raster,
@@ -522,6 +523,12 @@ fn should_not_turn_verified_numbers_into_type0_page_corroboration() {
         builtin: true,
     };
     assert!(applicable(policy(Some(&intact))), "intact raster remains eligible");
+    let mut deferred = policy(Some(&intact));
+    deferred.deferred_structure = true;
+    assert!(
+        !applicable(deferred),
+        "a stage awaiting later document normalization cannot finalize page text"
+    );
     assert!(
         !applicable(policy(Some(&lost))),
         "numeric crops cannot certify a Type0 ink-loss page"
