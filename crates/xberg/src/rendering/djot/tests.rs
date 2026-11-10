@@ -1336,3 +1336,141 @@ fn paragraph_complex_attribute_prefix_preserves_literal_syntax_and_inline_suffix
         );
     }
 }
+
+#[test]
+fn repeated_attribute_spans_remain_visible_before_inline_markup() {
+    for (source, escaped) in [
+        ("{.a} {.b} x_y _z_", r"\{\.a\} \{\.b\} x_y _z_"),
+        ("{.a}{.b} x_y _z_", r"\{\.a\}\{\.b\} x_y _z_"),
+        ("{.a}\u{a0}{.b} x_y _z_", "\\{\\.a\\}\u{a0}\\{\\.b\\} x_y _z_"),
+    ] {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_paragraph(source, vec![], None, None);
+        let output = render_djot(&b.build());
+        assert_eq!(output, format!("{escaped}\n"));
+        let visible = source.strip_suffix("_z_").unwrap();
+        assert_eq!(
+            jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+            format!("<p>{visible}<em>z</em></p>\n")
+        );
+    }
+}
+
+#[test]
+fn ocr_block_openers_stay_in_paragraphs() {
+    use crate::types::ocr_elements::OcrElementLevel;
+
+    for (source, escaped) in [
+        ("::: note", r"\:\:\: note"),
+        ("# x", r"\# x"),
+        ("- x", r"\- x"),
+        ("| a | b |", r"\| a | b |"),
+        ("[ref]: http://a.example", r"[ref]\: http://a.example"),
+        ("> quote", r"\> quote"),
+        ("---", r"\-\-\-"),
+        ("```rust", r"\`\`\`rust"),
+        ("1. x", r"1\. x"),
+        ("[^1]: note", r"[\^1]\: note"),
+        ("{.a}", r"\{\.a\}"),
+    ] {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_paragraph(source, vec![], None, None);
+        b.push_paragraph("Tail", vec![], None, None);
+        let mut doc = b.build();
+        doc.elements[0].kind = ElementKind::OcrText {
+            level: OcrElementLevel::Line,
+        };
+        let output = render_djot(&doc);
+        assert_eq!(output, format!("{escaped}\n\nTail\n"));
+        assert_eq!(djot_paragraph_texts(&output), [source, "Tail"], "{output:?}");
+    }
+}
+
+#[test]
+fn block_openers_remain_literal_in_container_text() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_list(false);
+    b.push_list_item("# x", false, vec![], None, None);
+    b.end_list();
+    let output = render_djot(&b.build());
+    assert_eq!(output, "- \\# x\n");
+    assert_eq!(
+        jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+        "<ul>\n<li>\n# x\n</li>\n</ul>\n"
+    );
+
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_definition_term("# term", None);
+    b.push_definition_description("- description", None);
+    assert_eq!(render_djot(&b.build()), "\\# term\n: \\- description\n");
+
+    let mut b = InternalDocumentBuilder::new("test");
+    let index = b.push_admonition("note", None, None);
+    let mut doc = b.build();
+    doc.elements[index as usize].text = "::: body".into();
+    assert_eq!(render_djot(&doc), "::: note\n\\:\\:\\: body\n:::\n");
+}
+
+#[test]
+fn image_ocr_block_openers_stay_literal_on_every_line() {
+    let mut b = InternalDocumentBuilder::new("test");
+    let image = crate::types::ExtractedImage {
+        ocr_result: Some(Box::new(crate::types::ExtractedDocument {
+            content: "# x\n\n- y".into(),
+            ..Default::default()
+        })),
+        ..Default::default()
+    };
+    b.push_image(Some("Image"), image, None, None);
+    let output = render_djot(&b.build());
+    assert_eq!(output, "![Image]()\n\n\\# x\n\n\\- y\n");
+    assert_eq!(djot_paragraph_texts(&output), ["Image", "# x", "- y"]);
+}
+
+#[test]
+fn block_prefix_escapes_preserve_indentation_and_inline_text_exactly() {
+    for (source, expected) in [
+        (" {.a} _z_", r" \{\.a\} _z_"),
+        (" [ref]: target", r" [ref]\: target"),
+        ("[snake_case]: a_b", r"[snake_case]\: a_b"),
+        ("[snake_case] and a_b", "[snake_case] and a_b"),
+        ("[^snake_case]: note", r"[\^snake_case]\: note"),
+        ("```rust_lang", r"\`\`\`rust_lang"),
+        (":::note_class", r"\:\:\:note_class"),
+        (r#"{.a key="a\\*b"} x"#, r#"\{\.a key\=\"a\\\*b\"\} x"#),
+        ("\u{a0}^ caption", "\u{a0}\\^ caption"),
+    ] {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_paragraph(source, vec![], None, None);
+        assert_eq!(render_djot(&b.build()), format!("{expected}\n"), "{source:?}");
+    }
+}
+
+#[test]
+fn a_thematic_break_only_escapes_the_first_line() {
+    assert_eq!(escape_block_prefix("---\nx_y _z_", false), "\\-\\-\\-\nx_y _z_");
+}
+
+#[test]
+fn list_items_keep_their_inline_annotations() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_list(false);
+    b.push_list_item(
+        "bold",
+        false,
+        vec![TextAnnotation {
+            start: 0,
+            end: 4,
+            kind: AnnotationKind::Bold,
+        }],
+        None,
+        None,
+    );
+    b.end_list();
+    let output = render_djot(&b.build());
+    assert_eq!(output, "- *bold*\n");
+    assert_eq!(
+        jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+        "<ul>\n<li>\n<strong>bold</strong>\n</li>\n</ul>\n"
+    );
+}
