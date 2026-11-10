@@ -340,22 +340,31 @@ fn lighten_in_a_non_knockout_group_over_a_tint_zero_paint_gives_no_ink() {
     );
 }
 
-/// The PNG budget of the render entry charges a tint plane and an alpha plane for each spot
+/// The PNG budget of the page renderer charges a tint plane and an alpha plane for each spot
 /// ink. A 100 x 100 page with one ink costs 12 + 4 + 2 bytes per pixel plus the fixed allowance;
 /// a limit between that and the one-plane charge of 17 bytes per pixel refuses the page.
 #[test]
-fn the_render_entry_charges_two_planes_for_each_spot_ink() {
+fn the_page_renderer_charges_two_planes_for_each_spot_ink() {
+    use crate::rendering::page_renderer::PngRenderBudget;
     let doc = build_page("/BM /Multiply", &[]);
     let fixed = 256 * 1024;
     let two_planes = 10_000 * 18 + fixed;
     let one_plane = 10_000 * 17 + fixed;
-    let between = (one_plane + two_planes) / 2;
+    let render = |limit: usize| {
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(DPI).as_raw());
+        renderer.force_cmyk_sidecar = true;
+        let budget = PngRenderBudget {
+            max_working_bytes: limit,
+            minimum_dpi: DPI,
+        };
+        renderer.render_page_with_budget(0, &doc, Some(budget))
+    };
     assert!(
-        crate::rendering::render_png_page_with_budget(&doc, 0, DPI, between).is_err(),
+        render((one_plane + two_planes) / 2).is_err(),
         "a limit under the two-plane charge refuses the page"
     );
     assert!(
-        crate::rendering::render_png_page_with_budget(&doc, 0, DPI, two_planes).is_ok(),
+        render(two_planes).is_ok(),
         "control: the two-plane charge itself admits the page"
     );
 }

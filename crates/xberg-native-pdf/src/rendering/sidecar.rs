@@ -758,7 +758,7 @@ pub(crate) fn blend_subtractive_tint(mode: &str, t_b: f32, a_b: f32, t_s: f32) -
     if a_b == 0.0 {
         return t_s;
     }
-    let c_b = (t_b / a_b).min(1.0);
+    let c_b = t_b / a_b;
     let blended = 1.0 - separable_blend(mode, 1.0 - c_b, 1.0 - t_s);
     (1.0 - a_b) * t_s + a_b * blended
 }
@@ -2525,7 +2525,7 @@ mod tests {
         // alpha: 0.5 * 0.8 + 0.5 * 0.5 = 0.65. Reading 0.25 as the colour would give 0.525.
         let got = blend_subtractive_tint("Lighten", 0.25, 0.5, 0.8);
         assert!((got - 0.65).abs() < 1e-6, "{got}");
-        // A stored tint above the alpha cannot come from a paint; the colour clamps to 1.
+        // A stored tint above the alpha cannot come from a paint; the blend clamps the colour to 1.
         let clamped = blend_subtractive_tint("Multiply", 0.9, 0.5, 0.5);
         assert!((clamped - (0.5 * 0.5 + 0.5 * 1.0)).abs() < 1e-6, "{clamped}");
     }
