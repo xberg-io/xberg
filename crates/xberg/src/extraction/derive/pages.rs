@@ -366,7 +366,10 @@ fn build_sub_doc(elem_indices: &[usize], doc: &InternalDocument) -> InternalDocu
 
 /// Pages whose prebuilt text is not found in `content` (in page order) rendered from their
 /// own elements by `render_plain`; a page whose text is found keeps it. `None` when no page has
-/// elements or a re-rendered page is still not found.
+/// elements, a re-rendered page is empty, or a re-rendered page is still not found.
+///
+/// Pages are located with the leftmost `find` after the previous page, so short or repeated
+/// page text can match early, as in `reconcile_page_boundaries`.
 fn rerender_pages_plain(
     pages: Option<&[PageContent]>,
     doc: &InternalDocument,
@@ -390,7 +393,7 @@ fn rerender_pages_plain(
             }
             let indices = elements_by_page.get(&page.page_number)?;
             let rendered = crate::rendering::render_plain(&build_sub_doc(indices, doc));
-            let start = found(&rendered, search_offset)?;
+            let start = found(&rendered, search_offset).filter(|_| !rendered.is_empty())?;
             tracing::debug!(
                 page = page.page_number,
                 prebuilt_len = page.content.len(),
@@ -601,6 +604,7 @@ mod plain_page_rerender_tests {
             .as_ref()
             .and_then(|s| s.boundaries.as_ref())
             .expect("boundaries kept");
+        assert_eq!(boundaries.len(), pages.len());
         for (page, b) in pages.iter().zip(boundaries) {
             assert_eq!(content.get(b.byte_start..b.byte_end), Some(page.content.as_str()));
         }
@@ -661,6 +665,30 @@ mod plain_page_rerender_tests {
         let mut doc = doc_with(vec![page(1, "| one |"), page(2, "| two |")], &[(1, "one")]);
         let pages = derive(&mut doc, content);
         assert_eq!(pages[1].content, "| two |");
+        assert!(warned(&doc));
+        assert!(doc.metadata.pages.as_ref().unwrap().boundaries.is_none());
+    }
+
+    #[test]
+    fn a_page_found_in_the_content_keeps_its_text_even_when_its_elements_render_differently() {
+        let content = "kept page one\n\nx";
+        let mut doc = doc_with(
+            vec![page(1, "kept page one"), page(2, "| x |")],
+            &[(1, "other"), (2, "x")],
+        );
+        let pages = derive(&mut doc, content);
+        assert_eq!(pages[0].content, "kept page one");
+        assert_eq!(pages[1].content, "x");
+        assert!(!warned(&doc));
+        assert_ranges(&doc, content, &pages);
+    }
+
+    #[test]
+    fn an_empty_rerender_of_a_non_empty_page_counts_as_not_found() {
+        let content = "two";
+        let mut doc = doc_with(vec![page(1, "| a |"), page(2, "two")], &[(1, ""), (2, "two")]);
+        let pages = derive(&mut doc, content);
+        assert_eq!(pages[0].content, "| a |");
         assert!(warned(&doc));
         assert!(doc.metadata.pages.as_ref().unwrap().boundaries.is_none());
     }
