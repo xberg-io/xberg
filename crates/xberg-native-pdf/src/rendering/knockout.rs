@@ -7,6 +7,31 @@ use crate::object::Object;
 use std::collections::HashMap;
 use tiny_skia::{Pixmap, Transform};
 
+pub(super) fn page_is_knockout(doc: &PdfDocument, page_num: usize) -> bool {
+    let resolved = (|| {
+        let page = doc.get_page(page_num)?;
+        page.as_dict()
+            .and_then(|dict| dict.get("Group"))
+            .map(|group| doc.resolve_object(group))
+            .transpose()
+    })();
+    match resolved {
+        Ok(group) => group.as_ref().and_then(Object::as_dict).is_some_and(|group| {
+            group.get("S").and_then(Object::as_name) == Some("Transparency")
+                && matches!(group.get("K"), Some(Object::Boolean(true)))
+        }),
+        Err(error) => {
+            tracing::warn!(
+                error_code = error.telemetry_code(),
+                error_offset = ?error.telemetry_offset(),
+                "ignoring malformed optional page transparency group"
+            );
+            false
+        }
+    }
+}
+
+#[derive(Clone)]
 pub(super) struct KnockoutShape {
     dimensions: (u32, u32),
     coverage: Vec<u8>,
@@ -19,6 +44,25 @@ impl KnockoutShape {
             dimensions: (width, height),
             spots: HashMap::new(),
             coverage: vec![0; width as usize * height as usize],
+        }
+    }
+
+    pub(super) fn allocation_bytes(&self) -> Option<usize> {
+        super::knockout_resources::shape_bytes(self.coverage.len(), self.spots.len())
+    }
+
+    fn clear(&mut self) {
+        self.coverage.fill(0);
+        for coverage in self.spots.values_mut() {
+            coverage.fill(0);
+        }
+    }
+
+    pub(super) fn clip(&mut self, mask: &tiny_skia::Mask) {
+        for coverage in std::iter::once(&mut self.coverage).chain(self.spots.values_mut()) {
+            for (value, mask) in coverage.iter_mut().zip(mask.data()) {
+                *value = ((u32::from(*value) * u32::from(*mask) + 127) / 255) as u8;
+            }
         }
     }
 
@@ -83,6 +127,10 @@ pub(super) struct KnockoutBackdrop {
 
 impl KnockoutBackdrop {
     pub(super) fn capture(renderer: &PageRenderer, pixmap: &Pixmap) -> Self {
+        #[cfg(test)]
+        renderer
+            .rgba_snapshot_bytes
+            .fetch_add(pixmap.data().len(), std::sync::atomic::Ordering::Relaxed);
         Self {
             rgba: pixmap.data().to_vec(),
             cmyk: renderer.cmyk_sidecar.as_ref().map(|sidecar| sidecar.cmyk().to_vec()),
@@ -102,41 +150,6 @@ impl KnockoutBackdrop {
             if let Some(spots) = &self.spots {
                 sidecar.restore_spot_state(spots);
             }
-        }
-    }
-
-    pub(super) fn clear_sidecar(&self, renderer: &mut PageRenderer) {
-        if let Some(sidecar) = renderer.cmyk_sidecar.as_mut() {
-            if let Some(cmyk) = &self.cmyk {
-                sidecar.restore_cmyk(&vec![0; cmyk.len()]);
-            }
-            if let Some(spots) = &self.spots {
-                sidecar.restore_spot_state(&vec![0; spots.len()]);
-            }
-        }
-    }
-
-    pub(super) fn composite_sidecar(&self, renderer: &mut PageRenderer, group: &Pixmap) {
-        let Some(sidecar) = renderer.cmyk_sidecar.as_mut() else {
-            return;
-        };
-        let alpha: Vec<u8> = group.data().as_chunks::<4>().0.iter().map(|pixel| pixel[3]).collect();
-        if let Some(parent) = &self.cmyk {
-            let mut result = sidecar.cmyk().to_vec();
-            composite_lanes(&mut result, parent, &alpha, true);
-            sidecar.restore_cmyk(&result);
-        }
-        if let Some(parent) = &self.spots {
-            let mut result = sidecar.spot_state().to_vec();
-            let pixels = alpha.len();
-            let lanes = sidecar.spot_names().len();
-            for plane in 0..result.len() / pixels {
-                let range = plane * pixels..(plane + 1) * pixels;
-                let alpha_start = (lanes + plane % lanes) * pixels;
-                let lane_alpha = &sidecar.spot_state()[alpha_start..alpha_start + pixels];
-                composite_lanes(&mut result[range.clone()], &parent[range], lane_alpha, false);
-            }
-            sidecar.restore_spot_state(&result);
         }
     }
 
@@ -166,14 +179,6 @@ impl KnockoutBackdrop {
     }
 }
 
-fn composite_lanes(result: &mut [u8], parent: &[u8], alpha: &[u8], interleaved: bool) {
-    for (index, (result, parent)) in result.iter_mut().zip(parent).enumerate() {
-        let pixel = if interleaved { index / 4 } else { index % alpha.len() };
-        let contribution = (u32::from(*parent) * u32::from(255 - alpha[pixel]) + 127) / 255;
-        *result = (u32::from(*result) + contribution).min(255) as u8;
-    }
-}
-
 fn merge_lanes(accumulator: &mut [u8], scratch: &[u8], initial: &[u8], shape: &[u8], interleaved: bool) {
     for (index, ((accumulator, scratch), initial)) in accumulator.iter_mut().zip(scratch).zip(initial).enumerate() {
         let pixel = if interleaved { index / 4 } else { index % shape.len() };
@@ -182,6 +187,73 @@ fn merge_lanes(accumulator: &mut [u8], scratch: &[u8], initial: &[u8], shape: &[
         let retained = (1.0 - f32::from(shape[pixel]) / 255.0) * (f32::from(*accumulator) - f32::from(*initial));
         *accumulator = (f32::from(*scratch) + retained).round().clamp(0.0, 255.0) as u8;
     }
+}
+
+pub(super) struct KnockoutGroup {
+    backdrop: KnockoutBackdrop,
+    accumulator: KnockoutBackdrop,
+    shape: KnockoutShape,
+    pending_paint: bool,
+}
+
+impl KnockoutGroup {
+    fn new(renderer: &PageRenderer, pixmap: &Pixmap) -> Self {
+        Self {
+            backdrop: KnockoutBackdrop::capture(renderer, pixmap),
+            accumulator: KnockoutBackdrop::capture(renderer, pixmap),
+            shape: KnockoutShape::new(pixmap.width(), pixmap.height()),
+            pending_paint: false,
+        }
+    }
+
+    pub(super) fn before_operator(&mut self, renderer: &mut PageRenderer, pixmap: &mut Pixmap, operator: &Operator) {
+        self.finish_paint(renderer, pixmap);
+        if !is_paint_operator(operator) {
+            return;
+        }
+        self.backdrop.restore(renderer, pixmap);
+        if let Some(shape) = renderer.knockout_shape.as_mut() {
+            shape.clear();
+        } else {
+            renderer.knockout_shape = Some(KnockoutShape::new(pixmap.width(), pixmap.height()));
+        }
+        self.pending_paint = true;
+    }
+
+    pub(super) fn finish_paint(&mut self, renderer: &PageRenderer, pixmap: &Pixmap) {
+        if self.pending_paint {
+            if let Some(shape) = renderer.knockout_shape.as_ref() {
+                self.accumulator.merge(renderer, pixmap, &self.backdrop, shape);
+                self.shape.include_shape(shape);
+            }
+            self.pending_paint = false;
+        }
+    }
+}
+
+pub(super) fn is_path_paint(op: &Operator) -> bool {
+    matches!(
+        op,
+        Operator::Fill
+            | Operator::FillEvenOdd
+            | Operator::Stroke
+            | Operator::CloseStroke
+            | Operator::FillStroke
+            | Operator::FillStrokeEvenOdd
+            | Operator::CloseFillStroke
+            | Operator::CloseFillStrokeEvenOdd
+    )
+}
+
+fn path_pixels(pixmap: &Pixmap, path: &tiny_skia::Path, transform: Transform, padding: f64) -> usize {
+    let Some([left, top, right, bottom]) = crate::rendering::device_bounds(path, transform) else {
+        return 0;
+    };
+    let span = |lo: f64, hi: f64, size: u32| {
+        let limit = f64::from(size);
+        ((hi + padding).ceil().clamp(0.0, limit) - (lo - padding).floor().clamp(0.0, limit)) as usize
+    };
+    span(left, right, pixmap.width()) * span(top, bottom, pixmap.height())
 }
 
 impl PageRenderer {
@@ -256,6 +328,96 @@ impl PageRenderer {
         }
     }
 
+    pub(super) fn charge_path_work(
+        &mut self,
+        pixmap: &Pixmap,
+        path: &tiny_skia::Path,
+        transform: Transform,
+        gs: &GraphicsState,
+        op: &Operator,
+    ) -> Result<()> {
+        if !self.knockout_resources.active() {
+            return Ok(());
+        }
+        let full_surface = self.coverage_dimensions().is_some()
+            || gs.smask.is_some()
+            || gs.fill_overprint
+            || gs.stroke_overprint
+            || gs.fill_pattern_name.is_some()
+            || crate::rendering::pdf_blend_mode_is_nonseparable(&gs.blend_mode).is_some();
+        let pixels = if full_surface {
+            pixmap.data().len() / 4
+        } else {
+            let stroke = !matches!(op, Operator::Fill | Operator::FillEvenOdd);
+            let extent = if stroke {
+                let scale = (transform.sx.abs() + transform.kx.abs()).max(transform.ky.abs() + transform.sy.abs());
+                f64::from(gs.line_width.abs()) * f64::from(gs.miter_limit.max(1.0)) * f64::from(scale)
+            } else {
+                0.0
+            };
+            path_pixels(pixmap, path, transform, 1.0 + extent)
+        };
+        self.knockout_resources.raster(pixels)
+    }
+
+    pub(super) fn reserve_raster_workspace(
+        &mut self,
+        pixmap: &Pixmap,
+        gs: &GraphicsState,
+        coverage_bytes_per_pixel: usize,
+    ) -> Result<Option<super::knockout_resources::Reservation>> {
+        if !self.knockout_resources.active() {
+            return Ok(None);
+        }
+        let coverage = if self.coverage_dimensions().is_some() {
+            coverage_bytes_per_pixel
+        } else {
+            0
+        };
+        let snapshots = if self.cmyk_sidecar.is_some() {
+            2
+        } else if gs.fill_overprint || gs.stroke_overprint {
+            1
+        } else {
+            0
+        };
+        let blend = usize::from(crate::rendering::pdf_blend_mode_is_nonseparable(&gs.blend_mode).is_some());
+        let bytes = pixmap
+            .data()
+            .len()
+            .checked_mul(snapshots + blend)
+            .and_then(|value| (pixmap.data().len() / 4).checked_mul(coverage)?.checked_add(value));
+        if bytes == Some(0) {
+            return Ok(None);
+        }
+        self.knockout_resources.reserve(bytes).map(Some)
+    }
+
+    pub(super) fn reserve_operator_workspace(
+        &mut self,
+        pixmap: &Pixmap,
+        gs: &GraphicsState,
+        op: &Operator,
+    ) -> Result<Option<super::knockout_resources::Reservation>> {
+        let coverage = match op {
+            Operator::Fill | Operator::FillEvenOdd => 1,
+            Operator::FillStroke
+            | Operator::FillStrokeEvenOdd
+            | Operator::CloseFillStroke
+            | Operator::CloseFillStrokeEvenOdd => 6,
+            Operator::Stroke
+            | Operator::CloseStroke
+            | Operator::InlineImage { .. }
+            | Operator::PaintShading { .. }
+            | Operator::Tj { .. }
+            | Operator::TJ { .. }
+            | Operator::Quote { .. }
+            | Operator::DoubleQuote { .. } => 5,
+            _ => return Ok(None),
+        };
+        self.reserve_raster_workspace(pixmap, gs, coverage)
+    }
+
     pub(super) fn coverage_dimensions(&self) -> Option<(u32, u32)> {
         self.knockout_shape
             .as_ref()
@@ -272,38 +434,36 @@ impl PageRenderer {
         page_num: usize,
         resources: &Object,
     ) -> Result<()> {
-        let backdrop = KnockoutBackdrop::capture(self, pixmap);
-        let mut accumulator = KnockoutBackdrop::capture(self, pixmap);
+        let pixels = pixmap.width() as usize * pixmap.height() as usize;
+        let (sidecar_bytes, spot_count) = self.cmyk_sidecar.as_ref().map_or((0, 0), |sidecar| {
+            (
+                sidecar.cmyk().len() + sidecar.spot_state().len(),
+                sidecar.spot_names().len(),
+            )
+        });
+        let paints = operators.iter().filter(|operator| is_paint_operator(operator)).count();
+        if paints == 0 {
+            return Ok(());
+        }
+        let _workspace =
+            self.knockout_resources
+                .knockout(pixels, pixmap.data().len(), sidecar_bytes, spot_count, paints)?;
         let parent_shape = self.knockout_shape.take();
-        let mut group_shape = KnockoutShape::new(pixmap.width(), pixmap.height());
-        let result = (|| {
-            for (index, _) in operators.iter().enumerate().filter(|(_, op)| is_paint_operator(op)) {
-                let mut scratch = Pixmap::new(pixmap.width(), pixmap.height())
-                    .ok_or_else(|| Error::InvalidPdf("knockout scratch pixmap alloc failed".into()))?;
-                backdrop.restore(self, &mut scratch);
-                // Execute earlier paints too: their path consumption, clipping and text advances
-                // must survive. Only the selected paint sees the restored initial backdrop. ~keep
-                self.execute_operators_with_backdrop(
-                    &mut scratch,
-                    base_transform,
-                    &operators[..=index],
-                    doc,
-                    page_num,
-                    resources,
-                    Some(&backdrop),
-                )?;
-                if let Some(shape) = self.knockout_shape.take() {
-                    accumulator.merge(self, &scratch, &backdrop, &shape);
-                    group_shape.include_shape(&shape);
-                }
-            }
-            Ok(())
-        })();
+        let mut group = KnockoutGroup::new(self, pixmap);
+        let result = self.execute_operators_with_backdrop(
+            pixmap,
+            base_transform,
+            operators,
+            doc,
+            page_num,
+            resources,
+            Some(&mut group),
+        );
         self.knockout_shape = parent_shape;
         if let Some(parent) = self.knockout_shape.as_mut() {
-            parent.include_shape(&group_shape);
+            parent.include_shape(&group.shape);
         }
-        accumulator.restore(self, pixmap);
+        group.accumulator.restore(self, pixmap);
         result
     }
 }
@@ -425,5 +585,162 @@ mod tests {
             .render_page(&doc, 0)
             .expect("page without glyph ink");
         assert_eq!(hidden.data, expected);
+    }
+    fn knockout_document(paints: usize, size: u32, page_group: bool) -> PdfDocument {
+        let content = "0.2 g 0 0 256 256 re f ".repeat(paints);
+        knockout_document_with_content(&content, size, page_group)
+    }
+
+    fn knockout_document_with_content(content: &str, size: u32, page_group: bool) -> PdfDocument {
+        let group = "/Group << /S /Transparency /K true >>";
+        let page_content = if page_group { content } else { "/Fm Do" };
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+            format!(
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {size} {size}] /Contents 4 0 R {} /Resources << /XObject << /Fm 5 0 R >> >> >>",
+                if page_group { group } else { "" }
+            ),
+            format!(
+                "<< /Length {} >>\nstream\n{page_content}\nendstream",
+                page_content.len()
+            ),
+            format!(
+                "<< /Type /XObject /Subtype /Form /BBox [0 0 {size} {size}] /Group << /S /Transparency /I true /K false >> /Length {} >>\nstream\n{content}\nendstream",
+                content.len()
+            ),
+        ];
+        document_from_objects(&objects)
+    }
+
+    #[test]
+    fn knockout_paints_are_executed_once_as_the_group_grows() {
+        for paints in [8, 32, 128] {
+            let doc = knockout_document(paints, 16, true);
+            let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+            let image = renderer.render_page(&doc, 0).expect("render real knockout PDF");
+            assert_eq!(&image.data[..4], &[51, 51, 51, 255]);
+            assert_eq!(renderer.paint_operator_calls, paints, "each paint executes once");
+        }
+    }
+
+    #[test]
+    fn isolated_rgb_only_group_does_not_clone_parent_rgba() {
+        let doc = knockout_document(1, 16, false);
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+        let image = renderer.render_page(&doc, 0).expect("isolated RGB form");
+        assert_eq!(&image.data[..4], &[51, 51, 51, 255]);
+        assert!(renderer.cmyk_sidecar.is_none(), "RGB-only control has no sidecar");
+        assert_eq!(
+            renderer.rgba_snapshot_bytes.load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
+    }
+
+    #[test]
+    fn knockout_scratch_refuses_a_budget_that_only_fits_live_pixels() {
+        let doc = knockout_document(1, 512, true);
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+        let result = renderer.render_page_with_budget(
+            0,
+            &doc,
+            Some(super::super::PngRenderBudget {
+                max_working_bytes: 512 * 512 * 12 + 256 * 1024,
+                minimum_dpi: 72,
+            }),
+        );
+        assert!(
+            result.is_err(),
+            "new knockout scratch must fit the admitted working budget"
+        );
+    }
+    #[test]
+    fn first_knockout_stroke_scratch_must_fit_the_admitted_budget() {
+        let budget = || super::super::PngRenderBudget {
+            max_working_bytes: 15 * 512 * 512,
+            minimum_dpi: 72,
+        };
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+        let normal = knockout_document_with_content("0 G 8 w 0 256 m 512 256 l S", 512, false);
+        assert!(renderer.render_page_with_budget(0, &normal, Some(budget())).is_ok());
+        let knockout = knockout_document_with_content("0 G 8 w 0 256 m 512 256 l S", 512, true);
+        let refused = renderer.render_page_with_budget(0, &knockout, Some(budget()));
+        assert!(
+            refused.is_err(),
+            "first stroke allocates an RGBA scratch and alpha coverage"
+        );
+    }
+
+    #[test]
+    fn ordinary_rgb_group_budget_allows_many_small_fills() {
+        let body = "0.2 g 0 0 1 1 re f ".repeat(1_040);
+        let doc = knockout_document_with_content(&body, 1024, false);
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+        let result = renderer
+            .render_page_with_budget(
+                0,
+                &doc,
+                Some(super::super::PngRenderBudget {
+                    max_working_bytes: 15 * 1024 * 1024,
+                    minimum_dpi: 72,
+                }),
+            )
+            .expect("tiny fills do not rasterize the full surface");
+        assert_eq!(renderer.paint_operator_calls, 1_041);
+        let last_row = (1023 * 1024) * 4;
+        assert_eq!(&result.0.data[last_row..last_row + 4], &[51, 51, 51, 255]);
+    }
+
+    fn text_work_document(paints: usize, form: bool) -> PdfDocument {
+        let body = format!("0.2 g /Half gs BT /F1 8 Tf 0 8 Td {} ET", "(M) Tj ".repeat(paints));
+        let resources = "/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> /ExtGState << /Half << /ca 0.5 >> /Blend << /BM /Multiply >> >> /XObject << /Fm 5 0 R >>";
+        let page = if form { "/Blend gs /Fm Do" } else { body.as_str() };
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+            format!(
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 32 16] /Contents 4 0 R /Resources << {resources} >> {} >>",
+                if form {
+                    ""
+                } else {
+                    "/Group << /S /Transparency /K true >>"
+                }
+            ),
+            format!("<< /Length {} >>\nstream\n{page}\nendstream", page.len()),
+            format!(
+                "<< /Type /XObject /Subtype /Form /BBox [0 0 32 16] /Group << /S /Transparency /I false /K true >> /Length {} >>\nstream\n{body}\nendstream",
+                body.len()
+            ),
+        ];
+        document_from_objects(&objects)
+    }
+
+    #[test]
+    fn knockout_text_and_nonisolated_alpha_pass_have_linear_paint_counts() {
+        for form in [false, true] {
+            for paints in [8, 32, 128] {
+                let doc = text_work_document(paints, form);
+                let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+                let image = renderer.render_page(&doc, 0).expect("real glyph knockout render");
+                assert!(
+                    image.data.as_chunks::<4>().0.iter().any(|pixel| pixel[0] < 240),
+                    "visible glyph control must contain ink"
+                );
+                let expected = if form { 2 * paints + 1 } else { paints };
+                assert_eq!(renderer.paint_operator_calls, expected);
+            }
+        }
+    }
+
+    #[test]
+    fn excessive_knockout_surface_work_is_refused_before_the_first_paint() {
+        let doc = knockout_document(20_000, 256, true);
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+        let error = renderer
+            .render_page(&doc, 0)
+            .err()
+            .expect("work guard refuses oversized plan");
+        assert!(error.to_string().contains("surface work"));
+        assert_eq!(renderer.paint_operator_calls, 0, "refusal precedes all paints");
     }
 }
