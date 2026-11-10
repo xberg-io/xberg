@@ -711,19 +711,21 @@ pub(super) fn every_page_dropped_script(
         .all(|page| marked_page_dropped_script(*page, native_text, boundaries, page_texts))
 }
 
-/// Whether a whole-document read dropped the script of at least one marked page.
-pub(super) fn any_page_dropped_script(
+/// The marked pages whose native script the whole-document read dropped.
+pub(super) fn pages_that_dropped_script(
     marked: &[u32],
     native_text: &str,
     boundaries: Option<&[PageBoundary]>,
     page_texts: &[String],
-) -> bool {
+) -> Vec<u32> {
     let Some(boundaries) = boundaries else {
-        return false;
+        return Vec::new();
     };
     marked
         .iter()
-        .any(|page| marked_page_dropped_script(*page, native_text, boundaries, page_texts))
+        .copied()
+        .filter(|page| marked_page_dropped_script(*page, native_text, boundaries, page_texts))
+        .collect()
 }
 
 /// The warnings for the marked pages whose native text is kept because OCR did not write its script.

@@ -2453,8 +2453,23 @@ fn whole_document_ocr_hints(
     hints
 }
 
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "formula-recognition", feature = "liter-llm"),
+    any(feature = "ocr", feature = "ocr-pipeline")
+))]
+fn native_layout_readers_configured(config: &ExtractionConfig) -> bool {
+    let formula_reads =
+        cfg!(feature = "formula-recognition") && config.layout.as_ref().is_some_and(|l| l.formula_model.is_some());
+    #[cfg(feature = "liter-llm")]
+    let vlm_reads = region_vlm::region_vlm_config(config).is_some();
+    #[cfg(not(feature = "liter-llm"))]
+    let vlm_reads = false;
+    formula_reads || vlm_reads
+}
+
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-use unreadable_script::{any_page_dropped_script, dropped_script_warnings, every_page_dropped_script};
+use unreadable_script::{dropped_script_warnings, every_page_dropped_script, pages_that_dropped_script};
 
 #[cfg(all(
     any(feature = "ocr", feature = "ocr-pipeline"),
@@ -2468,8 +2483,8 @@ fn every_page_dropped_script(_: &[u32], _: &str, _: Option<&[crate::types::PageB
     any(feature = "ocr", feature = "ocr-pipeline"),
     not(all(feature = "ocr", not(target_arch = "wasm32")))
 ))]
-fn any_page_dropped_script(_: &[u32], _: &str, _: Option<&[crate::types::PageBoundary]>, _: &[String]) -> bool {
-    false
+fn pages_that_dropped_script(_: &[u32], _: &str, _: Option<&[crate::types::PageBoundary]>, _: &[String]) -> Vec<u32> {
+    Vec::new()
 }
 
 #[cfg(all(
@@ -3304,11 +3319,22 @@ impl PdfExtractor {
                     (native_text, ExtractionMethod::Native)
                 }
                 ocr::OcrGateOutcome::RunFallback => {
+                    // With marked pages the retry below may keep some pages native, and the formula and
+                    // region-VLM stages read their rasters, so the inputs are held until the retry is
+                    // decided. The whole read consumes the reusable Markdown inputs, so a clone is held
+                    // when a native reader is configured. ~keep
                     #[cfg(all(
                         feature = "layout-detection",
                         any(feature = "formula-recognition", feature = "liter-llm")
                     ))]
-                    drop(native_only_layout_inputs.take());
+                    let mut held_markdown_inputs = if native_script_pages.is_empty() {
+                        drop(native_only_layout_inputs.take());
+                        None
+                    } else if native_only_layout_inputs.is_none() && native_layout_readers_configured(config) {
+                        Some((markdown_layout_images.clone(), markdown_layout_detections.clone()))
+                    } else {
+                        None
+                    };
                     // `images.run_ocr_on_images` controls whether extracted images are
                     // separately OCR'd (`core/pipeline/mod.rs`); it does not gate this
                     // document-level page OCR fallback. Reading it here made any
@@ -3334,21 +3360,22 @@ impl PdfExtractor {
                     .await;
                     // Some marked pages lost their script to the whole read while others did not
                     // (a scan beside a native page): the pages go through the per-page route, which
-                    // keeps the native text of the marked ones. The whole read stays the fallback
-                    // when that run fails. ~keep
-                    let partial_script_drop = match (&whole_read, boundaries.as_deref()) {
+                    // keeps the native text of the marked ones. That is a second OCR run over the
+                    // document, and the per-page route reports its own warnings and page failures, so
+                    // those of the discarded whole read are dropped with it. When the retry fails the
+                    // whole read stays the fallback. ~keep
+                    let dropped_pages = match (&whole_read, boundaries.as_deref()) {
                         (Ok(read), Some(bounds)) if !bounds.is_empty() => {
                             let read_pages = &read.5;
-                            any_page_dropped_script(&native_script_pages, &native_text, Some(bounds), read_pages)
-                                && !every_page_dropped_script(
-                                    &native_script_pages,
-                                    &native_text,
-                                    Some(bounds),
-                                    read_pages,
-                                )
+                            if every_page_dropped_script(&native_script_pages, &native_text, Some(bounds), read_pages) {
+                                Vec::new()
+                            } else {
+                                pages_that_dropped_script(&native_script_pages, &native_text, Some(bounds), read_pages)
+                            }
                         }
-                        _ => false,
+                        _ => Vec::new(),
                     };
+                    let partial_script_drop = !dropped_pages.is_empty();
                     let targeted_retry = match boundaries.as_deref() {
                         Some(bounds) if partial_script_drop => Some(
                             ocr::extract_mixed_ocr_native_with_layout_pages(
@@ -3381,10 +3408,28 @@ impl PdfExtractor {
                                  using the whole-document read"
                             );
                             ensure_pdf_not_cancelled(config)?;
+                            ocr_fallback_warnings.push(crate::types::ProcessingWarning {
+                                source: std::borrow::Cow::Borrowed("ocr"),
+                                message: std::borrow::Cow::Owned(format!(
+                                    "Pages {dropped_pages:?} are in a script that the OCR read did not produce, \
+                                     and the targeted OCR that keeps their native text failed ({error}); \
+                                     their native text was replaced by the whole-document OCR read."
+                                )),
+                            });
                             None
                         }
                         None => None,
                     };
+                    #[cfg(all(
+                        feature = "layout-detection",
+                        any(feature = "formula-recognition", feature = "liter-llm")
+                    ))]
+                    if retried.is_some() {
+                        native_only_layout_inputs = native_only_layout_inputs.take().or(held_markdown_inputs.take());
+                    } else {
+                        drop(native_only_layout_inputs.take());
+                        drop(held_markdown_inputs.take());
+                    }
                     if let Some(retried) = retried {
                         retried
                     } else {
