@@ -1387,6 +1387,63 @@ mod tests {
         assert!(ocr_dropped_native_script(&page, "Latin only"));
     }
 
+    fn share_of(page: &str, script: Script) -> f64 {
+        let uncovered = page
+            .chars()
+            .filter(|c| script_of(*c).is_some_and(|s| s != Script::Latin))
+            .count();
+        let of_script = page.chars().filter(|c| script_of(*c) == Some(script)).count();
+        of_script as f64 / uncovered as f64
+    }
+
+    #[test]
+    fn a_script_under_a_tenth_of_the_uncovered_letters_is_not_dominant_and_one_above_it_is() {
+        let stray = format!("{KHMER_MARKED} {KHMER_MARKED} ครับ");
+        let share = share_of(&stray, Script::Thai);
+        assert!((f64::MIN_POSITIVE..MINOR_SCRIPT_SHARE).contains(&share), "{share}");
+        assert_eq!(dominant_scripts(&stray), Some(vec![Script::Khmer]));
+        assert!(
+            ocr_dropped_native_script(&stray, "สวัสดี"),
+            "a Thai read does not carry the page"
+        );
+        assert!(!ocr_dropped_native_script(&stray, "ស្រលាញ់ប្រទេស"));
+
+        let second = format!("{KHMER_MARKED} สวัสดีครับ");
+        let share = share_of(&second, Script::Thai);
+        assert!((MINOR_SCRIPT_SHARE..0.3).contains(&share), "{share}");
+        let scripts = dominant_scripts(&second).unwrap();
+        assert!(
+            scripts.contains(&Script::Khmer) && scripts.contains(&Script::Thai),
+            "{scripts:?}"
+        );
+        assert!(
+            !ocr_dropped_native_script(&second, "สวัสดี"),
+            "a Thai read carries a Thai script of the page"
+        );
+    }
+
+    /// Guards the combined rule: `dominant_scripts` and `uncovered_script_counts` both refuse a page
+    /// whose Latin letters are not outnumbered, so reverting either one alone leaves this passing.
+    #[test]
+    fn a_page_with_more_latin_than_uncovered_letters_has_no_dominant_script() {
+        let latin_heavy = format!(
+            "{KHMER_MARKED} The capital of Cambodia is Phnom Penh, a city on the banks of the Mekong river, \
+             and the royal palace stands beside the river."
+        );
+        let latin = latin_heavy
+            .chars()
+            .filter(|c| script_of(*c) == Some(Script::Latin))
+            .count();
+        let khmer = latin_heavy
+            .chars()
+            .filter(|c| script_of(*c) == Some(Script::Khmer))
+            .count();
+        assert!(latin > khmer, "{latin} Latin, {khmer} Khmer");
+        assert!(dominant_scripts(&latin_heavy).is_none());
+        assert!(!ocr_dropped_native_script(&latin_heavy, "English read of the page"));
+        assert!(dominant_scripts(KHMER_MARKED).is_some());
+    }
+
     #[test]
     fn a_whole_document_read_is_dropped_only_when_every_page_is_marked_and_read_without_the_script() {
         let (text, boundaries) = page_text(&[KHMER_MARKED, KHMER_MARKED]);

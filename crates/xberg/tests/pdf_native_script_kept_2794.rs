@@ -7,16 +7,28 @@
 mod helpers;
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use xberg::core::config::{OcrStrategy, PageConfig};
 use xberg::plugins::{OcrBackend, OcrBackendType, Plugin, register_ocr_backend, unregister_ocr_backend};
 use xberg::types::{ExtractedDocument, ExtractionMethod};
 use xberg::{ExtractionConfig, OcrConfig, OutputFormat};
 
 const COMPLETE: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/cluster-complete-mapped.pdf");
+const FIGURE: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-text-with-figure.pdf");
+const AMONG_ENGLISH: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-among-english-pages.pdf");
+const KHMER_PAGE_LETTERS: usize = 222;
 const ENGLISH: &str = "The quarterly report contains useful readable text about the country and its people.";
 const KHMER: &str = "ខ្ញុំស្រលាញ់ប្រទេសកម្ពុជា សួស្តីភ្នំពេញ ប្រទេសកម្ពុជាមានប្រជាជនច្រើន សៀវភៅសាលារៀន";
 
 struct Fixed(&'static str);
+
+/// Errors on its first `failing` calls and reads `text` afterwards, so a page raster fails and the
+/// image the fallback then reads from the same page succeeds.
+struct FailingFirst {
+    text: &'static str,
+    failing: usize,
+    calls: AtomicUsize,
+}
 
 impl Plugin for Fixed {
     fn name(&self) -> &str {
@@ -48,6 +60,39 @@ impl OcrBackend for Fixed {
     }
 }
 
+impl Plugin for FailingFirst {
+    fn name(&self) -> &str {
+        "tesseract"
+    }
+    fn version(&self) -> String {
+        "1.0.0".to_owned()
+    }
+    fn initialize(&self) -> xberg::Result<()> {
+        Ok(())
+    }
+    fn shutdown(&self) -> xberg::Result<()> {
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl OcrBackend for FailingFirst {
+    fn backend_type(&self) -> OcrBackendType {
+        OcrBackendType::Custom
+    }
+    fn supports_language(&self, _: &str) -> bool {
+        true
+    }
+    async fn process_image(&self, _: &[u8], _: &OcrConfig) -> xberg::Result<ExtractedDocument> {
+        if self.calls.fetch_add(1, Ordering::SeqCst) < self.failing {
+            return Err(xberg::XbergError::ocr("page raster refused"));
+        }
+        let mut document = ExtractedDocument::default();
+        document.content = self.text.to_owned();
+        Ok(document)
+    }
+}
+
 struct Guard;
 impl Drop for Guard {
     fn drop(&mut self) {
@@ -60,8 +105,12 @@ fn khmer_count(text: &str) -> usize {
 }
 
 fn read(backend_text: &'static str, disable_ocr: bool) -> ExtractedDocument {
+    read_with(COMPLETE, Arc::new(Fixed(backend_text)), disable_ocr)
+}
+
+fn read_with(source: &[u8], backend: Arc<dyn OcrBackend>, disable_ocr: bool) -> ExtractedDocument {
     let _guard = Guard;
-    register_ocr_backend(Arc::new(Fixed(backend_text))).unwrap();
+    register_ocr_backend(backend).unwrap();
     let pipeline = serde_json::json!({"stages": [
         {"backend": "tesseract", "priority": 100, "language": ["khm"]},
     ]});
@@ -80,7 +129,7 @@ fn read(backend_text: &'static str, disable_ocr: bool) -> ExtractedDocument {
         disable_ocr,
         ..Default::default()
     };
-    helpers::extract_bytes_document_blocking(COMPLETE, "application/pdf", &config).unwrap()
+    helpers::extract_bytes_document_blocking(source, "application/pdf", &config).unwrap()
 }
 
 #[test]
@@ -88,7 +137,7 @@ fn read(backend_text: &'static str, disable_ocr: bool) -> ExtractedDocument {
 fn a_khm_stage_that_reads_english_leaves_the_native_khmer_page() {
     let native = read(ENGLISH, true);
     let automatic = read(ENGLISH, false);
-    assert_eq!(khmer_count(&native.content), 222);
+    assert_eq!(khmer_count(&native.content), KHMER_PAGE_LETTERS);
     assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
     assert_eq!(automatic.content, native.content);
     let kept: Vec<_> = automatic
@@ -131,4 +180,58 @@ fn a_khm_stage_that_reads_khmer_replaces_the_native_page() {
         "{:?}",
         automatic.processing_warnings
     );
+}
+
+#[test]
+#[serial_test::serial]
+fn a_failed_page_read_whose_image_was_read_is_not_reported_as_recovered_when_the_native_page_is_kept() {
+    let backend = Arc::new(FailingFirst {
+        text: ENGLISH,
+        failing: 1,
+        calls: AtomicUsize::new(0),
+    });
+    let native = read_with(FIGURE, Arc::new(Fixed(ENGLISH)), true);
+    let automatic = read_with(FIGURE, backend.clone(), false);
+    assert!(
+        backend.calls.load(Ordering::SeqCst) >= 2,
+        "the failure and the retry must both run"
+    );
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
+    assert_eq!(khmer_count(&automatic.content), khmer_count(&native.content));
+    // The retry reads the page's embedded figure, and that text is appended after the native page as
+    // image text. The failed page read itself must add nothing, so the native page is unchanged.
+    assert_eq!(automatic.content, format!("{}\n\n{ENGLISH}", native.content));
+    let failures: Vec<_> = automatic.ocr_page_failures.iter().flatten().collect();
+    assert!(!failures.is_empty(), "{:?}", automatic.processing_warnings);
+    assert!(failures.iter().all(|failure| !failure.recovered), "{failures:?}");
+    assert!(
+        !automatic
+            .processing_warnings
+            .iter()
+            .any(|w| w.message.contains("was recovered from")),
+        "{:?}",
+        automatic.processing_warnings
+    );
+}
+
+#[test]
+#[serial_test::serial]
+fn only_the_marked_page_of_a_document_with_readable_pages_keeps_its_native_text() {
+    let native = read_with(AMONG_ENGLISH, Arc::new(Fixed(ENGLISH)), true);
+    let automatic = read_with(AMONG_ENGLISH, Arc::new(Fixed(ENGLISH)), false);
+    let native_pages = native.pages.as_ref().unwrap();
+    let pages = automatic.pages.as_ref().unwrap();
+    assert_eq!(pages.len(), 4);
+    assert_eq!(khmer_count(&native_pages[1].content), KHMER_PAGE_LETTERS);
+    assert_eq!(pages[1].content, native_pages[1].content);
+    assert_eq!(pages[0].content, native_pages[0].content);
+    assert_eq!(pages[2].content, native_pages[2].content);
+    assert!(native_pages[3].content.trim().is_empty(), "page 4 has no text layer");
+    assert_eq!(pages[3].content.trim(), ENGLISH);
+    let kept: Vec<_> = automatic
+        .processing_warnings
+        .iter()
+        .filter(|w| w.source == "ocr" && w.message.contains("Page 2 retained its native text"))
+        .collect();
+    assert_eq!(kept.len(), 1, "{:?}", automatic.processing_warnings);
 }
