@@ -16,45 +16,21 @@ We consider ODE models of the form
 
 _ ¼ **fðxðtÞ** *;* **θ** *;* **uÞ** *;* **xðt**~0~Þ¼ **x**~0~ðθ *;* **uÞ** *;* ð1Þ
 
-n n
+n~x~ n~y~
 
-in which **xðt** *;* **θ** *;* **uÞ** 2 R
+in which **xðt** *;* **θ** *;* **uÞ** 2 R is the vector of state variables, **θ** 2 R is the parameter vector, **u** 2 þ þ
 
-x
+n~u~
 
-is the vector of state variables, **θ** 2 R
+R is the vector of constant inputs and t 2 R is the time. The vector field of the ODE model is þ
 
-y
+n~x~ n~y~ n~u~ n~x~
 
-is the parameter vector, **u** 2
+**f** : R R R \! R , which is Lipschitz-continuous with respect to x, and the initial þ þ þ þ
 
-þ þ n
+n~y~ n~u~ n~x~
 
-R
-
-u
-
-is the vector of constant inputs and t 2 R is the time. The vector field of the ODE model is
-
-þ n n n n
-
-**f** : R
-
-x
-
-R
-
-y
-
-R
-
-u
-
-\! R
-
-x, which is Lipschitz-continuous with respect to x, and the initial þ þ þ þ n n n
-
-condition at t~0~is **x**~0~ : R~þ~ y R~þ~ u \! R~þ~ x. The ODE model determines the time evolution of the state variables, given the parameters. In case of biochemical reaction networks, this can be e.g., concentrations of biochemical species and reaction rate constants, respectively. The inputs ( **u** ) describe experimental conditions, e.g., regime of administration of a drug or composition of a cell culture medium. In many models, the state variables approach a steady-state **x** ( **θ** , **u** ) for large values of t: **x** ðθ *;* **uÞ** ¼ lim **xðt** *;* **x**~0~ðθ *;* **uÞ** *;* **θ** *;* **uÞ** *:* ð2Þ
+condition at t~0~is **x**~0~ : R~þ~ R~þ~ \! R~þ~. The ODE model determines the time evolution of the state variables, given the parameters. In case of biochemical reaction networks, this can be e.g., concentrations of biochemical species and reaction rate constants, respectively. The inputs ( **u** ) describe experimental conditions, e.g., regime of administration of a drug or composition of a cell culture medium. In many models, the state variables approach a steady-state **x** ( **θ** , **u** ) for large values of t: **x** ðθ *;* **uÞ** ¼ lim **xðt** *;* **x**~0~ðθ *;* **uÞ** *;* **θ** *;* **uÞ** *:* ð2Þ
 
 t\!1
 

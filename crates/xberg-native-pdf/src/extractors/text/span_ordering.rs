@@ -146,7 +146,11 @@ impl<'doc> TextExtractor<'doc> {
         // to its snapped y. Under `preserve_script_baselines` the caller renumbers the spans and
         // restores the original geometry, which the marks were taken at. ~keep
         let moves_marks = !self.preserve_script_baselines;
-        for (span, base_y) in self.spans.iter_mut().zip(snapped_script_baselines(&snapshot, 0.5)) {
+        for (span, base_y) in self
+            .spans
+            .iter_mut()
+            .zip(snapped_script_baselines(&snapshot, SnapReach::EXTRACTOR))
+        {
             if let Some(base_y) = base_y {
                 let marked = moves_marks && self.pen_continuations.remove(&SpanKey::of(span));
                 span.bbox.y = base_y;
@@ -720,7 +724,7 @@ impl<'doc> TextExtractor<'doc> {
 /// Base-line Y each span would snap to, by `(x, y, width, font_size)` snapshot, or `None`
 /// when the span is not a raised mark. Shared by the extractor's own sort and by the
 /// script-preserving row sort, so both agree on which marks stay inside their line.
-pub(crate) fn snapped_script_baselines(snapshot: &[(f32, f32, f32, f32)], max_shift_em: f32) -> Vec<Option<f32>> {
+pub(crate) fn snapped_script_baselines(snapshot: &[(f32, f32, f32, f32)], reach: SnapReach) -> Vec<Option<f32>> {
     let n = snapshot.len();
     let mut snapped = vec![None; n];
     if n < 2 {
@@ -737,7 +741,7 @@ pub(crate) fn snapped_script_baselines(snapshot: &[(f32, f32, f32, f32)], max_sh
     // O(n log n + n·window). The window is a strict superset of the
     // acceptable bases, so the result is identical to the full scan. ~keep
     let max_fs = snapshot.iter().map(|s| s.3).fold(0.0f32, f32::max);
-    let max_half_em = max_fs * max_shift_em;
+    let max_half_em = max_fs * reach.max_shift_em;
     let mut by_order: Vec<usize> = (0..n).collect();
     by_order.sort_by(|&a, &b| crate::utils::safe_float_cmp(snapshot[a].1, snapshot[b].1));
     let ys_sorted: Vec<f32> = by_order.iter().map(|&idx| snapshot[idx].1).collect();
@@ -747,7 +751,7 @@ pub(crate) fn snapped_script_baselines(snapshot: &[(f32, f32, f32, f32)], max_sh
         by_order: &by_order,
         ys_sorted: &ys_sorted,
         max_half_em,
-        max_shift_em,
+        reach,
     };
     for (i, slot) in snapped.iter_mut().enumerate() {
         if snapshot[i].3 > 0.0 {
@@ -755,6 +759,49 @@ pub(crate) fn snapped_script_baselines(snapshot: &[(f32, f32, f32, f32)], max_sh
         }
     }
     snapped
+}
+
+/// How far a raised mark may sit from its base and how much smaller it must be.
+#[derive(Clone, Copy)]
+pub(crate) struct SnapReach {
+    /// Largest rise above the base line, in ems of the base.
+    pub(crate) max_shift_em: f32,
+    /// The base font size must be at least the mark's times this factor.
+    pub(crate) min_base_size_factor: f32,
+    /// Largest gap between the base's right edge and the mark, in ems of the base.
+    pub(crate) max_gap_em: f32,
+}
+
+impl SnapReach {
+    /// The extractor's own snap, which runs before the spans are merged.
+    pub(crate) const EXTRACTOR: Self = Self {
+        max_shift_em: 0.5,
+        min_base_size_factor: 1.15,
+        max_gap_em: 1.0,
+    };
+    /// The reading-order snap for a single raised glyph: at most 0.8 of its base (0.8 itself
+    /// qualifies), abutting it. Prose at 0.83 of a bullet, or a word 17pt right of a caution
+    /// icon, is not a mark. ~keep
+    pub(crate) const ORDERING: Self = Self {
+        max_shift_em: 0.35,
+        min_base_size_factor: 1.25,
+        max_gap_em: 0.25,
+    };
+    /// The reading-order snap for a phrase (a space, or more than three characters): it keeps the
+    /// looser size ratio but only when it abuts its base, so a phrase that continues a line
+    /// ("Dependents (see instructions):") stays on it while a step label beside a wider space
+    /// glyph does not. ~keep
+    pub(crate) const ORDERING_PHRASE: Self = Self {
+        max_shift_em: 0.35,
+        min_base_size_factor: 1.15,
+        max_gap_em: 0.4,
+    };
+    /// What counts as raised at all when grouping glyphs into clusters.
+    pub(crate) const RAISED: Self = Self {
+        max_shift_em: 0.35,
+        min_base_size_factor: 1.15,
+        max_gap_em: 1.0,
+    };
 }
 
 /// Y-sorted view of the span geometry `snap_superscript_baselines` searches.
@@ -767,7 +814,7 @@ struct SnapBaseSearch<'a> {
     by_order: &'a [usize],
     ys_sorted: &'a [f32],
     max_half_em: f32,
-    max_shift_em: f32,
+    reach: SnapReach,
 }
 
 impl SnapBaseSearch<'_> {
@@ -787,11 +834,11 @@ impl SnapBaseSearch<'_> {
                 continue;
             }
             let (bx, by, bw, bfs) = self.snapshot[j];
-            if bfs <= sfs * 1.15 {
+            if bfs < sfs * self.reach.min_base_size_factor {
                 continue;
             }
             let y_offset = sy - by;
-            let half_em = bfs * self.max_shift_em;
+            let half_em = bfs * self.reach.max_shift_em;
             if y_offset.abs() > half_em {
                 continue;
             }
@@ -810,10 +857,10 @@ impl SnapBaseSearch<'_> {
             // left for kerning. Combining diacritics are
             // excluded by the size-ratio gate above (they
             // typically share font_size with their base
-            // letter, failing `bfs > sfs * 1.15`). ~keep
+            // letter, failing the size-ratio gate). ~keep
             let base_right = bx + bw;
             let dx = sx - base_right;
-            if dx < -bfs * 0.25 || dx > bfs {
+            if dx < -bfs * 0.25 || dx > bfs * self.reach.max_gap_em {
                 continue;
             }
             let abs_off = y_offset.abs();

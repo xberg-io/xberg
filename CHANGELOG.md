@@ -472,6 +472,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep raised exponents and footnote marks inside their sentence on native pages (#2647).**
   Row and column ordering of preserved-geometry spans now treats a mark raised by up to 0.35em as sitting on its base line, and a mark after a closing bracket can be attached as a suffix, so `(x + 3y)2` and a footnote mark no longer become paragraphs of their own.
 
+- **(pdf): Stop reading order from moving list items and words out of their sentence on native pages (GH#2658).**
+  Ordering on a base line now applies only to a mark at most 0.8 of its base size that abuts the base, and a run of raised glyphs such as `(*)` moves as one or not at all. Bullets, text of nearly the same size as a bullet, and text set apart from a larger icon keep their own line.
+
 - **(pdf): Keep unversioned arXiv identifiers in citations on the first pages (GH#2644).**
   Only a versioned identifier counts as the sidebar stamp, so a short citation ending in `arXiv:2107.09275` is no longer page furniture.
 
