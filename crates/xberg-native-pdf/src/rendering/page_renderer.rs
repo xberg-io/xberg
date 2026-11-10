@@ -6425,9 +6425,10 @@ impl PageRenderer {
     ///    mode.
     /// 3. Compose the new tint per pixel:
     ///    `t_r = (1 - α') · t_b + α' · B(t_b, t_s)` where
-    ///    `α' = coverage · gs_alpha`, `t_b` is the backdrop tint,
-    ///    `t_s` is the source tint, and `B(·, ·)` is the dispatched
-    ///    blend function. Per §11.3.5.2 Table 136 the separable
+    ///    `α' = coverage · gs_alpha`, `t_b` is the stored backdrop tint
+    ///    (the tint times the backdrop alpha), `t_s` is the source tint,
+    ///    and `B(·, ·)` is the dispatched blend function, applied to the
+    ///    backdrop colour `t_b / a_b`. Per §11.3.5.2 Table 136 the separable
     ///    formulas operate on additive components, so
     ///    [`blend_subtractive_tint`](crate::rendering::sidecar::blend_subtractive_tint)
     ///    complements the tints before the blend and the result after
