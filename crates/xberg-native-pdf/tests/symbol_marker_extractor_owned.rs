@@ -39,6 +39,11 @@ fn stream(data: &[u8]) -> Vec<u8> {
 
 /// One page, font `/F1` (Type1 `base_font`, WinAnsi, ToUnicode when given), `content` as the page.
 fn page(base_font: &str, to_unicode: Option<&[u8]>, content: &[u8]) -> Vec<u8> {
+    page_with_encoding(base_font, "/WinAnsiEncoding", to_unicode, content)
+}
+
+/// [`page`] with the font's `/Encoding` value given.
+fn page_with_encoding(base_font: &str, encoding: &str, to_unicode: Option<&[u8]>, content: &[u8]) -> Vec<u8> {
     let tu = if to_unicode.is_some() { " /ToUnicode 6 0 R" } else { "" };
     let mut out = b"%PDF-1.7\n".to_vec();
     let mut offsets = vec![0usize];
@@ -52,7 +57,7 @@ fn page(base_font: &str, to_unicode: Option<&[u8]>, content: &[u8]) -> Vec<u8> {
           /Resources << /Font << /F1 5 0 R >> >> >>",
     );
     object(&mut out, &mut offsets, 4, &stream(content));
-    let font = format!("<< /Type /Font /Subtype /Type1 /BaseFont /{base_font} /Encoding /WinAnsiEncoding{tu} >>");
+    let font = format!("<< /Type /Font /Subtype /Type1 /BaseFont /{base_font} /Encoding {encoding}{tu} >>");
     object(&mut out, &mut offsets, 5, font.as_bytes());
     object(
         &mut out,
@@ -157,4 +162,28 @@ fn actual_text_that_holds_fffe_is_not_the_marker() {
 fn a_to_unicode_entry_for_ffff_keeps_the_authored_character() {
     let text = simple("Helvetica", "FFFF", true);
     assert_eq!(text.matches('\u{FFFF}').count(), 2, "{text:?}");
+}
+
+/// A glyph that `/Differences` names by its ligature letters (`f_f_l`, `s_t`) decodes to those
+/// letters in a symbol font too: the extractor marks only a glyph without a Unicode value, so the
+/// marking of a symbol font never takes a ligature's letters (#2689). ~keep
+#[test]
+fn a_ligature_glyph_name_keeps_its_letters_in_a_symbol_font() {
+    let encoding = "<< /Type /Encoding /BaseEncoding /WinAnsiEncoding /Differences [65 /f_f_l /s_t] >>";
+    for base_font in ["Wingdings", "Helvetica"] {
+        for preserve in [false, true] {
+            let bytes = page_with_encoding(base_font, encoding, None, &two_lines(b"(ABC) Tj"));
+            let text = extract(bytes, preserve);
+            let letters: String = text.split_whitespace().collect();
+            assert!(
+                !text.contains(MARKER) && !text.contains('\u{FFFD}'),
+                "{base_font} preserve={preserve}: {text:?}"
+            );
+            assert_eq!(
+                letters.matches("fflstC").count(),
+                2,
+                "{base_font} preserve={preserve}: {text:?}"
+            );
+        }
+    }
 }
