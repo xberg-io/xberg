@@ -370,6 +370,48 @@ mod tests {
         }
     }
 
+    /// The table spans y 40 to 160. A table word keeps its centre and takes a box tall enough to
+    /// reach the edge, so only the edge decides. A taller word does not start a row of its own.
+    /// A box that ends on the edge is inside; a box one pixel past it is neither inside, above
+    /// nor below. Text above the table must end at y 40 or less, and text below must start at
+    /// y 160 or more: the same rule decides each side, and each row removes one clause.
+    #[test]
+    fn a_word_box_on_or_past_the_top_or_bottom_table_edge_decides_the_read() {
+        // (side, words moved together, box on the edge as (top, height), box one pixel past the edge)
+        let cases: [(&str, &[&str], (u32, u32), (u32, u32)); 4] = [
+            ("table top", &["Cash"], (40, 30), (39, 32)),
+            ("table bottom", &["71,433"], (70, 90), (69, 92)),
+            ("text above", &["Ledger", "Summary"], (30, 10), (31, 10)),
+            ("text below", &["Total", "9"], (160, 10), (159, 10)),
+        ];
+        let place = |texts: &[&str], (top, height): (u32, u32)| {
+            let mut read = candidate();
+            for text in texts {
+                rewrite(&mut read, text, |geometry| {
+                    if let OcrBoundingGeometry::Rectangle { top: t, height: h, .. } = geometry {
+                        (*t, *h) = (top, height);
+                    }
+                });
+            }
+            read
+        };
+        assert_eq!(
+            candidate().tables[0].bounding_box.map(|b| (b.y0, b.y1)),
+            Some((40.0, 160.0))
+        );
+        for (side, texts, on_edge, past_edge) in cases {
+            assert!(
+                complete_text(&place(texts, on_edge), 0.5).is_some(),
+                "{side}: box on the edge"
+            );
+            assert_eq!(
+                complete_text(&place(texts, past_edge), 0.5),
+                None,
+                "{side}: box past the edge"
+            );
+        }
+    }
+
     #[test]
     fn text_outside_the_table_needs_iterator_evidence_from_the_tesseract_iterator() {
         let mut read = candidate();
