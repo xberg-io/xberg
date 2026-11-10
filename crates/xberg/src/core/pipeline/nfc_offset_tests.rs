@@ -72,6 +72,47 @@ fn nfc_leaves_an_entity_span_that_was_not_on_a_character_boundary_as_it_was() {
     assert_eq!(result.entities.unwrap(), before);
 }
 
+/// A span that cuts a base letter from the mark that joins it lands inside the composed letter once
+/// they compose. It grows to hold the composed letter at either end, and the span after it still
+/// finds its text. Each case joins for another reason: an accent, Hangul jamo cut after the first
+/// and after the second one, and two Oriya vowel signs.
+#[test]
+fn nfc_grows_an_entity_span_that_splits_a_letter_from_the_mark_that_joins_it() {
+    for (decomposed, cut_after, composed) in [
+        ("e\u{0301}", 1, "\u{00e9}"),
+        ("\u{1100}\u{1161}", 1, "\u{ac00}"),
+        ("\u{1100}\u{1161}\u{11a8}", 2, "\u{ac01}"),
+        ("\u{0b47}\u{0b3e}", 1, "\u{0b4b}"),
+    ] {
+        let content = format!("Lyon, {decomposed} in Paris");
+        let letter = content.find(decomposed).unwrap();
+        let joint = letter + decomposed.chars().take(cut_after).map(char::len_utf8).sum::<usize>();
+        let span = |start: usize, end: usize| Entity {
+            start: start as u32,
+            end: end as u32,
+            ..location(&content, "Lyon")
+        };
+        let mut result = ExtractedDocument {
+            content: content.clone(),
+            entities: Some(vec![
+                span(letter, joint),
+                span(joint, letter + decomposed.len()),
+                location(&content, "Paris"),
+            ]),
+            ..Default::default()
+        };
+
+        normalize_nfc(&mut result);
+
+        assert_eq!(result.content, format!("Lyon, {composed} in Paris"));
+        assert_eq!(
+            mentions(&result),
+            [Some(composed), Some(composed), Some("Paris")],
+            "{decomposed:?}"
+        );
+    }
+}
+
 /// A Middle-stage processor that tags "Paris" in the text it is given, as the NER step does.
 #[cfg(feature = "tokio-runtime")]
 struct ParisTagger;
