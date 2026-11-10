@@ -5409,12 +5409,17 @@ fn filter_segments_by_table_bboxes(segments: Vec<SegmentData>, tables: &[TableCo
 
 /// Whether some table both covers a segment and carries its text. See [`filter_segments_by_table_bboxes`].
 fn segment_is_carried<'t>(seg: &SegmentData, tables: impl IntoIterator<Item = &'t TableCoverage>) -> bool {
+    segment_carrier(seg, tables).is_some()
+}
+
+/// The position of the first table that both covers a segment and carries its text.
+fn segment_carrier<'t>(seg: &SegmentData, tables: impl IntoIterator<Item = &'t TableCoverage>) -> Option<usize> {
     let seg_area = seg.width * seg.height;
     let seg_text = seg.text.trim();
     if seg_area <= 0.0 || seg_text.is_empty() {
-        return false;
+        return None;
     }
-    tables.into_iter().any(|table| {
+    tables.into_iter().position(|table| {
         let bb = &table.bbox;
         let inter_left = seg.x.max(bb.x0 as f32);
         let inter_right = (seg.x + seg.width).min(bb.x1 as f32);
@@ -5622,15 +5627,8 @@ type WordCounts = ahash::AHashMap<String, usize>;
 /// both sides, then each word reduced to lowercase letters and digits. ~keep
 fn count_words<'a>(texts: impl IntoIterator<Item = &'a str>) -> WordCounts {
     let mut counts = WordCounts::new();
-    for text in texts {
-        let expanded = expand_ligatures(text, false);
-        for word in expanded
-            .split_whitespace()
-            .map(normalize_for_table_coverage)
-            .filter(|word| !word.is_empty())
-        {
-            *counts.entry(word).or_default() += 1;
-        }
+    for word in word_sequence(texts) {
+        *counts.entry(word).or_default() += 1;
     }
     counts
 }
@@ -5639,7 +5637,8 @@ fn count_words<'a>(texts: impl IntoIterator<Item = &'a str>) -> WordCounts {
 /// ("Estimated" and "Increases"), not a line. ~keep
 const MAX_JOINED_PARTS: usize = 4;
 
-/// The words of the texts in reading order, normalized the way [`count_words`] counts them. ~keep
+/// The words of the texts in reading order: ligatures expanded, then each word reduced to lowercase
+/// letters and digits. [`count_words`] and [`count_occurrences`] count this one sequence. ~keep
 fn word_sequence<'a>(texts: impl IntoIterator<Item = &'a str>) -> Vec<String> {
     texts
         .into_iter()
@@ -5728,19 +5727,21 @@ struct TableText {
     coverage: Option<TableCoverage>,
 }
 
-/// The occurrences of the page text that no live table of the page carries, for one set of live tables.
+/// What the page prints, split by who carries it, for one set of live tables: the occurrences of
+/// the text that no live table carries, and the occurrences of the text that the live tables
+/// carry, each carrier counted in its own stream of page segments.
 struct LeftoverText {
     live: Vec<usize>,
     occurrences: WordCounts,
+    carried: WordCounts,
 }
 
-/// The reads for the overlap test. Each page and table is read once for the whole call. The text
-/// that no live table carries is read once for each set of live tables: it changes only when
-/// arbitration removes a table. What stays per pair is the sum over the tables other than the
-/// dropped one, because that sum depends on which table is dropped.
+/// The reads for the overlap test. Each table is read once for the whole call. The page text is
+/// read once for each set of live tables: the split between carriers changes only when arbitration
+/// removes a table. What stays per pair is the sum over the tables other than the dropped one,
+/// because that sum depends on which table is dropped.
 struct OverlapEvidence<'a> {
     page_segments: &'a [Vec<SegmentData>],
-    pages: ahash::AHashMap<usize, Option<WordCounts>>,
     tables: ahash::AHashMap<usize, TableText>,
     leftovers: ahash::AHashMap<u32, LeftoverText>,
 }
@@ -5802,23 +5803,9 @@ impl<'a> OverlapEvidence<'a> {
     fn new(page_segments: &'a [Vec<SegmentData>]) -> Self {
         Self {
             page_segments,
-            pages: ahash::AHashMap::new(),
             tables: ahash::AHashMap::new(),
             leftovers: ahash::AHashMap::new(),
         }
-    }
-
-    /// The occurrences of the page text, or `None` when the page has no words.
-    fn page(&mut self, page_index: usize) -> Option<&WordCounts> {
-        let page_segments = self.page_segments;
-        self.pages
-            .entry(page_index)
-            .or_insert_with(|| {
-                let segments = page_segments.get(page_index)?;
-                let words = word_sequence(segments.iter().map(|segment| segment.text.as_str()));
-                (!words.is_empty()).then(|| count_occurrences(&words))
-            })
-            .as_ref()
     }
 
     fn table(&mut self, tables: &[crate::types::Table], index: usize) -> &TableText {
@@ -5845,17 +5832,27 @@ impl<'a> OverlapEvidence<'a> {
                 .iter()
                 .filter_map(|&index| self.tables.get(&index).and_then(|table| table.coverage.as_ref()))
                 .collect();
-            let texts: Vec<&str> = self
-                .page_segments
-                .get(page_index)
-                .into_iter()
-                .flatten()
-                .filter(|segment| !segment_is_carried(segment, coverage.iter().copied()))
-                .map(|segment| segment.text.as_str())
-                .collect();
+            // Stream 0 is the text no live table carries. Stream k is the text that the k-th live
+            // table with a coverage carries, so a join never crosses from one carrier to another.
+            let mut streams: Vec<Vec<&str>> = vec![Vec::new(); coverage.len() + 1];
+            for segment in self.page_segments.get(page_index).into_iter().flatten() {
+                let stream = segment_carrier(segment, coverage.iter().copied()).map_or(0, |carrier| carrier + 1);
+                streams[stream].push(segment.text.as_str());
+            }
+            let mut counts = streams
+                .iter()
+                .map(|texts| count_occurrences(&word_sequence(texts.iter().copied())));
+            let occurrences = counts.next().unwrap_or_default();
+            let mut carried = WordCounts::new();
+            for stream in counts {
+                for (word, count) in stream {
+                    *carried.entry(word).or_default() += count;
+                }
+            }
             let leftover = LeftoverText {
                 live: live.to_vec(),
-                occurrences: count_occurrences(&word_sequence(texts.iter().copied())),
+                occurrences,
+                carried,
             };
             self.leftovers.insert(page_number, leftover);
         }
@@ -5871,11 +5868,13 @@ impl<'a> OverlapEvidence<'a> {
     /// when at least [`NEW_WORD_FRACTION`] of its words are new.
     ///
     /// A cell can join or repair words that the page prints apart (two segments in one cell, a
-    /// hyphen repair). The page prints a word once for each whole copy and once for each run of two
-    /// to four neighbouring page words that spell it. The page, the text no live table carries and
-    /// each table are counted by the same function, each in its own reading order, so one printed
-    /// copy is one occurrence however a table or the page splits it. A word that the page prints in
-    /// neither form is new, so a short word never matches inside a longer one. Live tables whose
+    /// hyphen repair). A stream prints a word once for each whole copy and once for each run of
+    /// two to four neighbouring words that spell it. The page is split into one stream for each
+    /// carrier, a live table or the text that none carries, and each table is one stream of its
+    /// cells. One function counts every stream, and a join never crosses from one carrier to
+    /// another, so a printed copy and a copy in the rest of the output are the same kind of
+    /// occurrence. A word that the page prints in neither form is new, so a short word never
+    /// matches inside a longer one. Live tables whose
     /// boxes nearly coincide are one region read twice and count once, so the order of the tables
     /// does not change the rest of the page. `None` means no evidence: the table has no cell text,
     /// the page has no text, or the page is not in the text.
@@ -5893,17 +5892,19 @@ impl<'a> OverlapEvidence<'a> {
         for &index in live.iter().chain(&[dropped]) {
             self.table(tables, index);
         }
-        self.page(page_index)?;
+        self.page_segments.get(page_index)?;
         self.leftover(page_number, &live);
-        let page = self.pages[&page_index].as_ref()?;
-        let leftover = &self.leftovers[&page_number];
+        let page = &self.leftovers[&page_number];
+        if page.occurrences.is_empty() && page.carried.is_empty() {
+            return None;
+        }
         let own = &self.tables[&dropped];
         let own_total: usize = own.words.values().sum();
         if own_total == 0 {
             return None;
         }
         let others: Vec<usize> = live.iter().copied().filter(|&index| index != dropped).collect();
-        let mut rest = leftover.occurrences.clone();
+        let mut rest = WordCounts::new();
         for group in near_coincident_groups(tables, &others) {
             add_group_max(
                 &mut rest,
@@ -5916,12 +5917,14 @@ impl<'a> OverlapEvidence<'a> {
         let count_of = |counts: &WordCounts, word: &String| counts.get(word).copied().unwrap_or(0);
         let mut new_words = 0usize;
         for (word, &count) in &own.words {
-            let printed = count_of(page, word);
-            if printed == 0 {
+            let carried = count_of(&page.carried, word);
+            if carried + count_of(&page.occurrences, word) == 0 {
                 new_words += count;
                 continue;
             }
-            new_words += count.min(printed.saturating_sub(count_of(&rest, word)));
+            // The text that no live table carries is in the page and in the rest of the output
+            // alike, so only the carried text is set against the other tables.
+            new_words += count.min(carried.saturating_sub(count_of(&rest, word)));
         }
         Some(new_words as f64 >= NEW_WORD_FRACTION * own_total as f64)
     }
