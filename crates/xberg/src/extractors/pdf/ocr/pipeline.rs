@@ -1139,9 +1139,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             && !probing_hidden_layer
             && !mixed_route_layout_active
             && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
-            && config.ocr.as_ref().is_some_and(|ocr| {
-                ocr.pipeline.is_none() && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
-            })
+            && config.ocr.as_ref().is_some_and(uses_default_ocr_pipeline)
     });
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut alternative_raster_pages = ahash::AHashSet::new();
@@ -2839,9 +2837,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     if !probing_hidden_layer
         && !mixed_route_layout_active
         && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
-        && config.ocr.as_ref().is_some_and(|ocr| {
-            ocr.pipeline.is_none() && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
-        })
+        && config.ocr.as_ref().is_some_and(uses_default_ocr_pipeline)
     {
         let direct_tesseract = native_preservation_enabled
             && backend.as_ref().is_some_and(|backend| {
@@ -7847,8 +7843,7 @@ async fn run_ocr_pipeline_stages(
     let mut preferred_recovery_config = None;
 
     let automatic_paddle = inputs.detached_page.is_some()
-        && ocr_config.pipeline.is_none()
-        && ocr_config.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
+        && uses_default_ocr_pipeline(ocr_config)
         && ocr_config.backend == "tesseract"
         && matches!(available_stages.as_slice(), [first, second]
             if first.backend == "tesseract" && second.backend == "paddleocr");
@@ -8963,8 +8958,8 @@ fn preprocessing_render_reservation(target: Option<i32>, page_cap: usize) -> usi
 #[path = "pipeline/preprocessing_density_tests.rs"]
 mod preprocessing_density_tests;
 
-#[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
-fn uses_default_ocr_pipeline(ocr: &crate::core::config::OcrConfig) -> bool {
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(in crate::extractors::pdf) fn uses_default_ocr_pipeline(ocr: &crate::core::config::OcrConfig) -> bool {
     ocr.pipeline.is_none() && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
 }
 
