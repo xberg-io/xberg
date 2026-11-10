@@ -555,7 +555,7 @@ impl<'doc> TextExtractor<'doc> {
     /// before them ends. Only a lead past the word-boundary threshold does this. The glyph widths in
     /// `char_widths` are untouched: the `Tm` continuation never added to them, so they already hold the glyph
     /// run that `accumulated_width` is restored to. ~keep
-    fn end_set_back_run_at_drawn_end(&self, buffer: &mut TjBuffer) {
+    pub(super) fn end_set_back_run_at_drawn_end(&self, buffer: &mut TjBuffer) {
         if self.pen_set_back_depth().is_some()
             && let Some(end) = self.current_drawn_end()
             && buffer.user_h_scale > 0.0
