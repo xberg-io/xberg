@@ -174,6 +174,18 @@ fn the_buffer_decoder_of_a_simple_font_marks_one_code_and_not_two() {
     assert_eq!((buffer.unicode.as_str(), buffer.is_lone_ligature()), ("ff", false));
 }
 
+/// The buffer's own simple-font decoder reads a UTF-8 literal like the inline decoder, and a U+FFFE
+/// in it is dropped: the symbol-loss marker is the extractor's alone.
+#[test]
+fn the_buffer_decoder_of_a_simple_font_drops_a_fffe_from_a_utf8_literal() {
+    let state = crate::content::graphics_state::GraphicsStateStack::new();
+    let mut font = create_test_font();
+    font.to_unicode = None;
+    let mut buffer = TjBuffer::new(state.current(), None, Some(Arc::new(font)));
+    buffer.append(b"\xef\xbf\xbe\xd0\x96BC").unwrap();
+    assert_eq!(buffer.unicode.as_str(), "\u{416}BC");
+}
+
 /// An `/ActualText` of "ff" or "fi" that replaces a sequence stands for one ligature glyph, so its
 /// run is marked like a decoded ligature, in a Tj and in a TJ array.
 #[test]
