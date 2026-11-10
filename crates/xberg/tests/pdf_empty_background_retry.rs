@@ -15,17 +15,21 @@ use xberg::{ExtractedDocument, ExtractionConfig, OcrConfig};
 
 const BACKEND: &str = "jpeg-budget-empty-background";
 const LABELS: &str = "A B C D E F G H I J K L M N O P Q R S T U V W X";
+const SENTENCE: &str = "The river runs past the old mill and into the lake below the town";
+const BACKGROUND_NOISE: &str = "Q R S T U V W X Y Z Q R S T U V W X Y Z Q R S T";
 
 #[derive(Clone, Copy)]
 enum BackgroundRead {
     Empty,
     Whitespace,
     Failed,
+    Text(&'static str),
 }
 
 struct LabelBackend {
     seen: Arc<Mutex<Vec<(u32, u32)>>>,
     background_read: BackgroundRead,
+    foreground_read: &'static str,
 }
 
 impl Plugin for LabelBackend {
@@ -76,10 +80,11 @@ impl OcrBackend for LabelBackend {
             });
         }
         let content = if !background {
-            LABELS
+            self.foreground_read
         } else {
             match self.background_read {
                 BackgroundRead::Whitespace => " \n\t",
+                BackgroundRead::Text(text) => text,
                 _ => "",
             }
         };
@@ -189,17 +194,20 @@ fn run(
     pipeline: bool,
     background: bool,
     background_read: BackgroundRead,
+    foreground_read: &'static str,
+    discard_noise: bool,
 ) -> (xberg::Result<ExtractedDocument>, Vec<(u32, u32)>) {
     let seen = Arc::new(Mutex::new(Vec::new()));
     register_ocr_backend(Arc::new(LabelBackend {
         seen: seen.clone(),
         background_read,
+        foreground_read,
     }))
     .unwrap();
     let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
         "use_cache": false, "force_ocr_pages": [1], "pages": {"extract_pages": true},
         "security_limits": {"max_content_size": 24 * 1024 * 1024},
-        "ocr": {"backend": BACKEND, "quality_thresholds": {"discard_suspected_ocr_noise": false},
+        "ocr": {"backend": BACKEND, "quality_thresholds": {"discard_suspected_ocr_noise": discard_noise},
             "pipeline": if pipeline {serde_json::json!({"stages": [{"backend": BACKEND}]})}
                 else {serde_json::Value::Null}},
     }))
@@ -211,7 +219,7 @@ fn run(
 }
 
 fn assert_background_retains_labels(pipeline: bool, background_read: BackgroundRead) {
-    let (control, seen) = run(pipeline, false, background_read);
+    let (control, seen) = run(pipeline, false, background_read, LABELS, false);
     assert!(
         control
             .expect("foreground alone retains labels")
@@ -219,7 +227,7 @@ fn assert_background_retains_labels(pipeline: bool, background_read: BackgroundR
             .contains(LABELS)
     );
     assert_eq!(seen, vec![(2048, 1536)]);
-    let (result, seen) = run(pipeline, true, background_read);
+    let (result, seen) = run(pipeline, true, background_read, LABELS, false);
     assert_eq!(
         seen,
         vec![(1024, 768), (2048, 1536)],
@@ -276,4 +284,47 @@ fn direct_failed_proven_background_retains_foreground_labels() {
 #[serial_test::serial]
 fn pipeline_failed_proven_background_retains_foreground_labels() {
     assert_background_retains_labels(true, BackgroundRead::Failed);
+}
+
+fn assert_one_image_read_is_judged_on_its_own(
+    pipeline: bool,
+    background_read: BackgroundRead,
+    foreground_read: &'static str,
+) {
+    let (result, seen) = run(pipeline, true, background_read, foreground_read, true);
+    assert_eq!(
+        seen,
+        vec![(1024, 768), (2048, 1536)],
+        "both original JPEGs reached the backend"
+    );
+    let doc = result.expect("one image's read must not reject the other image's text");
+    assert!(
+        doc.content.contains(SENTENCE),
+        "{:?} {:?}",
+        doc.content,
+        doc.processing_warnings
+    );
+    assert!(!doc.content.contains(LABELS), "{:?}", doc.content);
+    assert!(!doc.content.contains(BACKGROUND_NOISE), "{:?}", doc.content);
+}
+
+#[test]
+#[serial_test::serial]
+fn direct_clamped_legible_background_survives_noisy_foreground() {
+    assert_one_image_read_is_judged_on_its_own(false, BackgroundRead::Text(SENTENCE), LABELS);
+}
+#[test]
+#[serial_test::serial]
+fn pipeline_clamped_legible_background_survives_noisy_foreground() {
+    assert_one_image_read_is_judged_on_its_own(true, BackgroundRead::Text(SENTENCE), LABELS);
+}
+#[test]
+#[serial_test::serial]
+fn direct_clamped_noisy_background_is_rejected_beside_legible_foreground() {
+    assert_one_image_read_is_judged_on_its_own(false, BackgroundRead::Text(BACKGROUND_NOISE), SENTENCE);
+}
+#[test]
+#[serial_test::serial]
+fn pipeline_clamped_noisy_background_is_rejected_beside_legible_foreground() {
+    assert_one_image_read_is_judged_on_its_own(true, BackgroundRead::Text(BACKGROUND_NOISE), SENTENCE);
 }
