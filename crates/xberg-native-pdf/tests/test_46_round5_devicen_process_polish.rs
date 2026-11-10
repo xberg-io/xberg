@@ -103,9 +103,11 @@ pub const HONEST_GAP_DEVICEN_PROCESS_ICC_PROFILE_MISMATCH: &str = "HONEST_GAP_DE
 /// case (no /Process /ColorSpace lookup, no /Components filtering of
 /// the spot set). `extract_process_paint_cmyk` returns None (with a
 /// `log::warn!` for downstream tooling) and `extract_paint_spot_inks`
-/// surfaces every /Names entry as a spot colorant. The dispatcher
-/// then routes through the SeparationOrDeviceN class (process lanes
-/// preserve backdrop; named spot lanes get the tint).
+/// surfaces every /Names entry as a colorant. The dispatcher then
+/// routes through the SeparationOrDeviceN class: a /Names entry that
+/// is a process colorant name (Cyan, Magenta, Yellow, Black) marks its
+/// process plate (§8.6.6.4), the other process lanes preserve backdrop,
+/// and named spot lanes get the tint.
 ///
 /// The defensible alternates:
 ///  - silently substitute a 0 tint for the missing name (masks the
@@ -126,8 +128,9 @@ pub const HONEST_GAP_DEVICEN_PROCESS_MISMATCHED_NAMES: &str = "HONEST_GAP_DEVICE
      returns None (with a `log::warn!`) and `extract_paint_spot_inks` \
      surfaces every /Names entry as a spot colorant (no /Components \
      filtering). The dispatcher routes through SeparationOrDeviceN: \
-     process lanes preserve backdrop, named spot lanes receive the \
-     tint via the spot mirror. The defensible alternate readings — \
+     a process colorant name in /Names marks its process plate, the \
+     other process lanes preserve backdrop, named spot lanes receive \
+     the tint via the spot mirror. The defensible alternate readings — \
      silent zero substitution for missing names, or §10.3.5 \
      RGB-inverse fallback — are declined as either masking the \
      defect or destroying the K channel.";
@@ -704,31 +707,25 @@ fn a4_devicen_process_initial_colour_cmyk_byte_exact() {
 //   /Names = [/Cyan /Magenta /Yellow /Black]
 //   /Process /Components = [/Cyan /Magenta /Yellow /Iridescent]
 //   /Iridescent NOT in /Names → malformed.
-//   `extract_paint_spot_inks` returns ALL four /Names entries as spot
-//   inks (no /Components filtering): [(C, 0.5), (M, 0.2), (Y, 0.7),
-//   (K, 0.1)].
+//   `extract_paint_spot_inks` returns ALL four /Names entries as
+//   colorants (no /Components filtering): [(C, 0.5), (M, 0.2),
+//   (Y, 0.7), (K, 0.1)].
 //   `extract_process_paint_cmyk` returns None (logs warning).
 //   `source_for_overprint`: color_cmyk=None, spot_inks non-empty →
-//   SeparationOrDeviceN class. Process lanes preserve backdrop.
+//   SeparationOrDeviceN class. Each of the four names is a process
+//   colorant (§8.6.6.4), so each marks its own process channel.
 //
-// The spot mirror writes 0.5 to the "Cyan" spot plane, 0.2 to
-// "Magenta", etc — but those are SPOT planes (distinct from process
-// plates). The Cyan PROCESS plate (which `render_separations`
-// returns under the "Cyan" name when the sidecar exposes a process
-// channel) reads the CMYK sidecar's C channel, which preserved
-// backdrop = 0.4 → u8 102.
+// Expected plate bytes (§11.3.3 composite c_r = α·c_s + (1−α)·c_b,
+// α = 0.5):
+//   C plate = 0.5·0.5 + 0.5·0.4 = 0.45 → u8 115.
+//   M plate = 0.5·0.2           = 0.10 → u8 26.
+//   Y plate = 0.5·0.7           = 0.35 → u8 89.
+//   K plate = 0.5·0.1           = 0.05 → u8 13.
 //
-// Expected plate bytes (SeparationOrDeviceN preserve-backdrop on
-// process lanes, §11.3.3 composite c_r = α·c_b + (1−α)·c_b = c_b):
-//   C plate = backdrop C = 0.4 → u8 round(102) = 102.
-//   M plate = backdrop M = 0   → u8 0.
-//   Y plate = backdrop Y = 0   → u8 0.
-//   K plate = backdrop K = 0   → u8 0.
-//
-// (Alternate readings rejected by round 5:
-//   (a) Silent zero substitution for missing names → C=115 (the
-//       round-4 broad-read result with the malformed source treated
-//       as valid). Rejected: masks the defect.
+// (Alternate readings rejected:
+//   (a) Process lanes preserve backdrop → C=102, M=Y=K=0. Rejected:
+//       a colorant named Cyan is the cyan plate, and the composite
+//       render then loses the paint.
 //   (b) §10.3.5 RGB-inverse fallback → C=121, M=36, Y=93, K=0.
 //       Rejected: requires spot_inks=[] which discards the valid
 //       spot-tail intent embedded in the source.
@@ -764,41 +761,21 @@ fn a5_devicen_process_mismatched_names_treats_process_as_inert_byte_exact() {
     let y = centre(plate(&plates, "Yellow"));
     let k = centre(plate(&plates, "Black"));
 
-    // Byte-exact references: malformed /Process is INERT. The
-    // SeparationOrDeviceN class preserves backdrop on process lanes;
-    // the C plate carries the backdrop's 0.4 tint, M/Y/K stay at 0. ~keep
+    // Byte-exact references: malformed /Process is INERT, and each
+    // process colorant name in /Names marks its own process plate. ~keep
     assert_eq!(
-        c, 102,
-        "ISO 32000-1 §8.6.6.5 malformed /Components: round 5 treats \
-         /Process as inert. spot_inks include all four /Names entries \
-         (no /Components filtering), source_for_overprint routes \
-         through SeparationOrDeviceN (preserve backdrop on process \
-         lanes). Process C plate = backdrop C = 0.4 → u8 102. Got \
-         u8 {}. A regression to 115 indicates silent zero \
-         substitution fired (the alternate reading that masks the \
-         defect). A regression to 121 indicates the §10.3.5 \
-         RGB-inverse fallback fired (which would discard the valid \
-         spot-tail intent).",
+        c, 115,
+        "ISO 32000-1 §8.6.6.5 malformed /Components: /Process is inert \
+         and /Names entry /Cyan marks the C plate: 0.5·0.5 + 0.5·0.4 = \
+         0.45 → u8 115. Got u8 {}. A regression to 102 indicates the \
+         process lanes preserved backdrop and dropped the paint. A \
+         regression to 121 indicates the §10.3.5 RGB-inverse fallback \
+         fired.",
         c
     );
-    assert_eq!(
-        m, 0,
-        "Malformed /Components: M process plate = backdrop M = 0. \
-         Got u8 {}.",
-        m
-    );
-    assert_eq!(
-        y, 0,
-        "Malformed /Components: Y process plate = backdrop Y = 0. \
-         Got u8 {}.",
-        y
-    );
-    assert_eq!(
-        k, 0,
-        "Malformed /Components: K process plate = backdrop K = 0. \
-         Got u8 {}.",
-        k
-    );
+    assert_eq!(m, 26, "M plate = 0.5·0.2 = 0.10 → u8 round(25.5) = 26. Got u8 {}.", m);
+    assert_eq!(y, 89, "Y plate = 0.5·0.7 = 0.35 → u8 89. Got u8 {}.", y);
+    assert_eq!(k, 13, "K plate = 0.5·0.1 = 0.05 → u8 13. Got u8 {}.", k);
 
     // Pin the HONEST_GAP constant declaration so a textual grep finds
     // the open question. ~keep
