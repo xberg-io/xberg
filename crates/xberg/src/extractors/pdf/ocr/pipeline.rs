@@ -1141,9 +1141,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             && !probing_hidden_layer
             && !mixed_route_layout_active
             && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
-            && config.ocr.as_ref().is_some_and(|ocr| {
-                ocr.pipeline.is_none() && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
-            })
+            && config.ocr.as_ref().is_some_and(uses_default_ocr_pipeline)
     });
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut alternative_raster_pages = ahash::AHashSet::new();
@@ -2841,9 +2839,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     if !probing_hidden_layer
         && !mixed_route_layout_active
         && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
-        && config.ocr.as_ref().is_some_and(|ocr| {
-            ocr.pipeline.is_none() && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
-        })
+        && config.ocr.as_ref().is_some_and(uses_default_ocr_pipeline)
     {
         let direct_tesseract = native_preservation_enabled
             && backend.as_ref().is_some_and(|backend| {
@@ -3158,7 +3154,7 @@ pub(crate) async fn accepted_single_page_first_pass(
     if !render_budget_bounds_first_page(&document, config) {
         return None;
     }
-    let output = Box::pin(extract_with_ocr_with_page_hints_and_evidence(
+    let (output, discarded_visible_native_page, unpruned_text) = Box::pin(extract_with_ocr_with_unpruned_text(
         Some(content),
         None,
         #[cfg(feature = "layout-detection")]
@@ -3169,6 +3165,7 @@ pub(crate) async fn accepted_single_page_first_pass(
     ))
     .await
     .ok()?;
+    let output = (output, discarded_visible_native_page);
     let budget_bounded = output
         .0
         .9
@@ -3177,8 +3174,26 @@ pub(crate) async fn accepted_single_page_first_pass(
     if !budget_bounded {
         return None;
     }
-    let score = pipeline_stage_score(compute_quality_score(&output.0.0, thresholds), output.0.1);
-    (score >= thresholds.pipeline_min_quality).then_some(output)
+    first_pass_clears_quality_gate(&output.0.0, unpruned_text.as_deref(), output.0.1, thresholds).then_some(output)
+}
+
+/// Whether a first read clears the pipeline quality gate. The read is scored before symbol-noise
+/// pruning, so pruning cannot lift a noisy page over the gate and change the route (#2312).
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    any(paddle_ocr, all(test, feature = "ocr"))
+))]
+pub(super) fn first_pass_clears_quality_gate(
+    text: &str,
+    unpruned_text: Option<&str>,
+    mean_confidence: Option<f64>,
+    thresholds: &crate::core::config::OcrQualityThresholds,
+) -> bool {
+    let score = pipeline_stage_score(
+        compute_quality_score(unpruned_text.unwrap_or(text), thresholds),
+        mean_confidence,
+    );
+    score >= thresholds.pipeline_min_quality
 }
 
 #[cfg(all(
@@ -3446,6 +3461,30 @@ pub(crate) async fn extract_with_ocr_with_page_hints_and_evidence(
     path: Option<&std::path::Path>,
     page_ocr_hints: Option<PageOcrHints>,
 ) -> OcrRunResult<(WholeDirectOcrOutput, bool)> {
+    extract_with_ocr_with_unpruned_text(
+        content,
+        images,
+        #[cfg(feature = "layout-detection")]
+        layout_detections,
+        config,
+        path,
+        page_ocr_hints,
+    )
+    .await
+    .map(|(output, discarded_visible_native_page, _)| (output, discarded_visible_native_page))
+}
+
+/// [`extract_with_ocr_with_page_hints_and_evidence`] plus the page text as it was before
+/// symbol-noise pruning, when a page was pruned, for callers that score the read (#2312).
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+async fn extract_with_ocr_with_unpruned_text(
+    content: Option<&[u8]>,
+    images: Option<&[image::DynamicImage]>,
+    #[cfg(feature = "layout-detection")] layout_detections: Option<&[crate::layout::DetectionResult]>,
+    config: &ExtractionConfig,
+    path: Option<&std::path::Path>,
+    page_ocr_hints: Option<PageOcrHints>,
+) -> OcrRunResult<(WholeDirectOcrOutput, bool, Option<String>)> {
     let run_layers = page_ocr_hints
         .as_ref()
         .and_then(|hints| hints.native_page_layers.clone());
@@ -3474,7 +3513,7 @@ pub(crate) async fn extract_with_ocr_with_page_hints_and_evidence(
         && let Err(failed) = &run
         && let Some(output) = try_gray_jpeg_render_recovery(content, config, failed).await?
     {
-        return Ok((output, false));
+        return Ok((output, false, None));
     }
     #[cfg(all(
         feature = "pdf",
@@ -3487,7 +3526,7 @@ pub(crate) async fn extract_with_ocr_with_page_hints_and_evidence(
         && let Err(failed) = &run
         && let Some(output) = direct_rgb_budget_recovery::try_recovery(content, config, path, failed).await?
     {
-        return Ok((output, false));
+        return Ok((output, false, None));
     }
     let (
         text,
@@ -3534,6 +3573,7 @@ pub(crate) async fn extract_with_ocr_with_page_hints_and_evidence(
             ocr_confidence,
         ),
         read_evidence.discarded_visible_native_page,
+        read_evidence.unpruned_text,
     ))
 }
 
@@ -3730,6 +3770,9 @@ pub(super) struct OcrReadEvidence {
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     caption: Option<super::caption_conversion::CaptionRewrite>,
     no_admitted_images: bool,
+    /// The page text joined as it was before symbol-noise pruning, when any page was pruned, so
+    /// pipeline stage scoring judges the same text as without pruning (#2312).
+    pub(super) unpruned_text: Option<String>,
     original_tesseract_raster: bool,
     discarded_visible_native_page: bool,
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
@@ -5834,19 +5877,79 @@ pub(super) async fn extract_with_ocr_for_page(
         _ => None,
     };
 
-    let page_marker_cfg = config.pages.as_ref().filter(|p| p.insert_page_markers);
-    let mut result = String::new();
-    for (i, text) in page_texts.iter().enumerate() {
-        if let Some(cfg) = page_marker_cfg {
-            let marker = cfg
-                .marker_format
-                .replace("{page_num}", &(page_index_offset + i + 1).to_string());
-            result.push_str(&marker);
-        } else if i > 0 {
-            result.push_str("\n\n");
+    // Pages the verdict flagged but kept lose their symbol-noise lines only now, so the
+    // verdict, backend choice and table acceptance above judged the unpruned text (#2312).
+    // The pruned text is what this function returns; pipeline stage scoring reads
+    // `OcrReadEvidence::unpruned_text` instead, so pruning never changes stage selection.
+    let mut unpruned_page_texts: Vec<(usize, String)> = Vec::new();
+    for verdict in recognition_noise_verdicts.iter().filter(|verdict| !verdict.discarded) {
+        let Some(page_idx) = verdict.page_index.checked_sub(page_index_offset) else {
+            continue;
+        };
+        let page_number = (verdict.page_index + 1) as u32;
+        if page_idx >= page_texts.len()
+            || rejected_pages[page_idx]
+            || collected_tables.iter().any(|table| table.page_number == page_number)
+        {
+            continue;
         }
-        result.push_str(text);
+        if ocr_output_thresholds.prune_symbol_noise_lines
+            && super::symbol_noise_lines::page_is_dominated_by_noise_lines(page_texts[page_idx].lines())
+        {
+            let (pruned, removed) = super::symbol_noise_lines::prune_text(&page_texts[page_idx]);
+            unpruned_page_texts.push((page_idx, std::mem::replace(&mut page_texts[page_idx], pruned)));
+            if let Some(paragraphs) = all_page_paragraphs[page_idx].as_mut() {
+                super::symbol_noise_lines::prune_paragraphs(paragraphs);
+            }
+            recognition_noise_warnings.push(super::symbol_noise_lines::pruned_lines_warning(
+                verdict.page_index + 1,
+                removed,
+            ));
+        }
     }
+
+    let page_marker_cfg = config.pages.as_ref().filter(|p| p.insert_page_markers);
+    let join_pages = |texts: &[String]| {
+        let mut joined = String::new();
+        for (i, text) in texts.iter().enumerate() {
+            if let Some(cfg) = page_marker_cfg {
+                let marker = cfg
+                    .marker_format
+                    .replace("{page_num}", &(page_index_offset + i + 1).to_string());
+                joined.push_str(&marker);
+            } else if i > 0 {
+                joined.push_str("\n\n");
+            }
+            joined.push_str(text);
+        }
+        joined
+    };
+    #[cfg_attr(
+        not(all(
+            feature = "ocr",
+            feature = "pdf",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        )),
+        allow(unused_mut)
+    )]
+    let mut result = join_pages(&page_texts);
+    #[cfg_attr(
+        not(all(
+            feature = "ocr",
+            feature = "pdf",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        )),
+        allow(unused_mut)
+    )]
+    let mut unpruned_text = (!unpruned_page_texts.is_empty()).then(|| {
+        let mut texts = page_texts.clone();
+        for (page_idx, original) in &unpruned_page_texts {
+            texts[*page_idx] = original.clone();
+        }
+        join_pages(&texts)
+    });
 
     // A page the quality gate rejected must not keep its structured paragraphs either.
     //
@@ -6126,6 +6229,7 @@ pub(super) async fn extract_with_ocr_for_page(
             .await?
         {
             result.clone_from(page);
+            unpruned_text = None;
         }
         ocr_doc
     };
@@ -6276,6 +6380,7 @@ pub(super) async fn extract_with_ocr_for_page(
             #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
             caption,
             no_admitted_images,
+            unpruned_text,
             discarded_visible_native_page,
             #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
             complete_native_words,
@@ -7849,8 +7954,7 @@ async fn run_ocr_pipeline_stages(
     let mut preferred_recovery_config = None;
 
     let automatic_paddle = inputs.detached_page.is_some()
-        && ocr_config.pipeline.is_none()
-        && ocr_config.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
+        && uses_default_ocr_pipeline(ocr_config)
         && ocr_config.backend == "tesseract"
         && matches!(available_stages.as_slice(), [first, second]
             if first.backend == "tesseract" && second.backend == "paddleocr");
@@ -7914,7 +8018,11 @@ async fn run_ocr_pipeline_stages(
                 stage_recognition_noise_verdicts,
                 read_evidence,
             )) => {
-                let text_score = compute_quality_score(&text, &pipeline.quality_thresholds);
+                // Scored before pruning, so symbol-noise pruning never changes stage selection.
+                let text_score = compute_quality_score(
+                    read_evidence.unpruned_text.as_deref().unwrap_or(&text),
+                    &pipeline.quality_thresholds,
+                );
                 let score = pipeline_stage_score(text_score, mean_conf);
 
                 tracing::debug!(
@@ -8985,8 +9093,8 @@ fn mixed_route_batch_working_set(
 #[path = "pipeline/preprocessing_density_tests.rs"]
 mod preprocessing_density_tests;
 
-#[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
-fn uses_default_ocr_pipeline(ocr: &crate::core::config::OcrConfig) -> bool {
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(in crate::extractors::pdf) fn uses_default_ocr_pipeline(ocr: &crate::core::config::OcrConfig) -> bool {
     ocr.pipeline.is_none() && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
 }
 

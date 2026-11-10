@@ -3968,7 +3968,12 @@ fn build_document_structure_with_native(
     #[cfg(not(feature = "layout-detection"))]
     let overlap_preference = crate::core::config::layout::TableOverlapPreference::Content;
     let stitched_native_tables = stitch_fragmented_tables(tables.to_vec(), &all_page_segments, ruled_table_count);
-    let emitted_tables = prepare_emitted_tables(&stitched_native_tables, layout_tables, overlap_preference);
+    let emitted_tables = prepare_emitted_tables(
+        &stitched_native_tables,
+        layout_tables,
+        overlap_preference,
+        &all_page_segments,
+    );
 
     let table_members =
         crate::pdf::native::table::source_members::project(&all_page_segments, table_sources, &emitted_tables);
@@ -4860,6 +4865,7 @@ fn prepare_emitted_tables(
     native_tables: &[crate::types::Table],
     layout_tables: Vec<crate::types::Table>,
     overlap_preference: crate::core::config::layout::TableOverlapPreference,
+    page_segments: &[Vec<SegmentData>],
 ) -> Vec<crate::types::Table> {
     let mut emitted_tables: Vec<crate::types::Table> = native_tables.iter().cloned().chain(layout_tables).collect();
     emitted_tables.retain(|table| !table.markdown.trim().is_empty());
@@ -4867,7 +4873,7 @@ fn prepare_emitted_tables(
         .iter()
         .filter(|table| !table.markdown.trim().is_empty())
         .count();
-    deduplicate_overlapping_tables(&mut emitted_tables, native_count, overlap_preference);
+    deduplicate_overlapping_tables(&mut emitted_tables, native_count, overlap_preference, page_segments);
     normalize_sparse_currency_affix_columns(&mut emitted_tables);
     normalize_wrapped_financial_rows(&mut emitted_tables);
     deduplicate_identical_tables(&mut emitted_tables);
@@ -5339,26 +5345,7 @@ fn normalize_for_table_coverage(text: &str) -> String {
 fn table_bboxes_by_page(tables: &[crate::types::Table]) -> ahash::AHashMap<usize, Vec<TableCoverage>> {
     let mut coverage_by_page: ahash::AHashMap<usize, Vec<TableCoverage>> = ahash::AHashMap::new();
     for table in tables {
-        if let Some(bbox) = table.bounding_box {
-            // `cells` is authoritative when populated, but a table can reach here
-            // carrying only rendered `markdown` (layout-sourced tables, and the
-            // overlap-preference merge, both produce that shape). Falling back to the
-            // markdown keeps suppression working for those instead of silently
-            // disabling it, which would emit their contents twice. ~keep
-            let coverage = if table.cells.iter().any(|row| !row.is_empty()) {
-                TableCoverage::from_rows(
-                    bbox,
-                    table.cells.iter().map(|row| row.iter().map(String::as_str).collect()),
-                )
-            } else {
-                TableCoverage::from_rows(
-                    bbox,
-                    table
-                        .markdown
-                        .lines()
-                        .map(|line| line.split('|').collect::<Vec<&str>>()),
-                )
-            };
+        if let Some(coverage) = table_coverage(table) {
             coverage_by_page
                 .entry(table.page_number.saturating_sub(1) as usize)
                 .or_default()
@@ -5366,6 +5353,29 @@ fn table_bboxes_by_page(tables: &[crate::types::Table]) -> ahash::AHashMap<usize
         }
     }
     coverage_by_page
+}
+
+fn table_coverage(table: &crate::types::Table) -> Option<TableCoverage> {
+    let bbox = table.bounding_box?;
+    // `cells` is authoritative when populated, but a table can reach here
+    // carrying only rendered `markdown` (layout-sourced tables, and the
+    // overlap-preference merge, both produce that shape). Falling back to the
+    // markdown keeps suppression working for those instead of silently
+    // disabling it, which would emit their contents twice. ~keep
+    Some(if table.cells.iter().any(|row| !row.is_empty()) {
+        TableCoverage::from_rows(
+            bbox,
+            table.cells.iter().map(|row| row.iter().map(String::as_str).collect()),
+        )
+    } else {
+        TableCoverage::from_rows(
+            bbox,
+            table
+                .markdown
+                .lines()
+                .map(|line| line.split('|').collect::<Vec<&str>>()),
+        )
+    })
 }
 
 /// Filter out segments a table both COVERS and CARRIES.
@@ -5393,26 +5403,34 @@ fn filter_segments_by_table_bboxes(segments: Vec<SegmentData>, tables: &[TableCo
     }
     segments
         .into_iter()
-        .filter(|seg| {
-            let seg_area = seg.width * seg.height;
-            let seg_text = seg.text.trim();
-            if seg_area <= 0.0 || seg_text.is_empty() {
-                return true;
-            }
-            !tables.iter().any(|table| {
-                let bb = &table.bbox;
-                let inter_left = seg.x.max(bb.x0 as f32);
-                let inter_right = (seg.x + seg.width).min(bb.x1 as f32);
-                let inter_bottom = seg.y.max(bb.y0 as f32);
-                let inter_top = (seg.y + seg.height).min(bb.y1 as f32);
-                if inter_left >= inter_right || inter_bottom >= inter_top {
-                    return false;
-                }
-                let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
-                inter_area / seg_area >= 0.5 && table.carries(seg_text)
-            })
-        })
+        .filter(|seg| !segment_is_carried(seg, tables))
         .collect()
+}
+
+/// Whether some table both covers a segment and carries its text. See [`filter_segments_by_table_bboxes`].
+fn segment_is_carried<'t>(seg: &SegmentData, tables: impl IntoIterator<Item = &'t TableCoverage>) -> bool {
+    segment_carrier(seg, tables).is_some()
+}
+
+/// The position of the first table that both covers a segment and carries its text.
+fn segment_carrier<'t>(seg: &SegmentData, tables: impl IntoIterator<Item = &'t TableCoverage>) -> Option<usize> {
+    let seg_area = seg.width * seg.height;
+    let seg_text = seg.text.trim();
+    if seg_area <= 0.0 || seg_text.is_empty() {
+        return None;
+    }
+    tables.into_iter().position(|table| {
+        let bb = &table.bbox;
+        let inter_left = seg.x.max(bb.x0 as f32);
+        let inter_right = (seg.x + seg.width).min(bb.x1 as f32);
+        let inter_bottom = seg.y.max(bb.y0 as f32);
+        let inter_top = (seg.y + seg.height).min(bb.y1 as f32);
+        if inter_left >= inter_right || inter_bottom >= inter_top {
+            return false;
+        }
+        let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
+        inter_area / seg_area >= 0.5 && table.carries(seg_text)
+    })
 }
 
 /// Apply all 5 text repair passes in a single traversal over a segment's text.
@@ -5445,11 +5463,14 @@ fn fused_text_repairs<'a>(text: &'a str, witnesses: &TextRepairWitnesses) -> Cow
 /// the rest are layout (TATR/SLANeXT) tables. Complete side-by-side layout replacements
 /// are selected atomically before ordinary pairwise arbitration. Outside those replacements,
 /// `preference` decides mixed native/layout overlaps, while content weight decides same-origin
-/// overlaps and [`TableOverlapPreference::Content`].
+/// overlaps and [`TableOverlapPreference::Content`]. A mixed removal holds only while its winner
+/// stays: when a later pass removes the winner, the pair is set aside and the page is resolved
+/// again. Each round sets aside at least one new pair, so the rounds end.
 fn deduplicate_overlapping_tables(
     tables: &mut Vec<crate::types::Table>,
     native_count: usize,
     preference: crate::core::config::layout::TableOverlapPreference,
+    page_segments: &[Vec<SegmentData>],
 ) {
     use crate::core::config::layout::TableOverlapPreference;
 
@@ -5459,6 +5480,7 @@ fn deduplicate_overlapping_tables(
 
     let mut to_remove = ahash::AHashSet::new();
     let mut protected_layout_children = ahash::AHashSet::new();
+    let mut evidence = OverlapEvidence::new(page_segments);
 
     if preference != TableOverlapPreference::Native {
         // A complete split cohort is one structural alternative to its native source
@@ -5470,6 +5492,121 @@ fn deduplicate_overlapping_tables(
         }
     }
 
+    // A mixed decision removes its loser only while its winner survives. A later step can remove
+    // the winner, and then the pair is set aside and the page is resolved again with both tables.
+    // Each round sets aside at least one new pair, so the loop ends.
+    let replaced = to_remove.clone();
+    let mut set_aside = ahash::AHashSet::new();
+    loop {
+        let mut removed = replaced.clone();
+        let mut mixed_losses = Vec::new();
+        for pass in [OverlapPass::Mixed, OverlapPass::SameOrigin] {
+            resolve_overlaps(
+                tables,
+                native_count,
+                preference,
+                &protected_layout_children,
+                &mut evidence,
+                &mut removed,
+                OverlapRound {
+                    pass,
+                    set_aside: &set_aside,
+                    mixed_losses: &mut mixed_losses,
+                },
+            );
+        }
+        let orphaned: Vec<(usize, usize)> = mixed_losses
+            .into_iter()
+            .filter(|&(_, winner)| removed.contains(&winner))
+            .collect();
+        if orphaned.is_empty() {
+            to_remove = removed;
+            break;
+        }
+        set_aside.extend(orphaned);
+    }
+
+    let surviving_protected: Vec<_> = protected_layout_children
+        .iter()
+        .copied()
+        .filter(|index| !to_remove.contains(index))
+        .collect();
+    let affected_rows: Vec<_> = surviving_protected
+        .iter()
+        .filter_map(|&index| tables[index].bounding_box.map(|bbox| (tables[index].page_number, bbox)))
+        .collect();
+
+    let mut idx = 0;
+    tables.retain(|_| {
+        let keep = !to_remove.contains(&idx);
+        idx += 1;
+        keep
+    });
+    canonicalize_affected_table_rows(tables, affected_rows);
+}
+
+/// Which overlapping pairs of a page a pass decides.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OverlapPass {
+    /// A native table against a layout table.
+    Mixed,
+    /// Two native tables, or two layout tables.
+    SameOrigin,
+}
+
+/// What one pass shares with the loop that calls it.
+struct OverlapRound<'a> {
+    pass: OverlapPass,
+    /// Mixed pairs, as `(loser, winner)`, whose decision is set aside because the winner is removed.
+    set_aside: &'a ahash::AHashSet<(usize, usize)>,
+    /// The mixed pairs this pass decided, as `(loser, winner)`.
+    mixed_losses: &'a mut Vec<(usize, usize)>,
+}
+
+/// The table of an overlapping pair that goes, or `None` when both stay. `native_first` is `None`
+/// for a pair of one origin, and otherwise says whether the first table is the native one.
+/// `shares` is the part of each table that the overlap covers.
+fn overlap_loser(
+    tables: &[crate::types::Table],
+    preference: crate::core::config::layout::TableOverlapPreference,
+    protected_layout_children: &ahash::AHashSet<usize>,
+    (i, j): (usize, usize),
+    native_first: Option<bool>,
+    shares: (f64, f64),
+) -> Option<usize> {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    match (
+        protected_layout_children.contains(&i),
+        protected_layout_children.contains(&j),
+    ) {
+        (true, false) => Some(j),
+        (false, true) => Some(i),
+        (true, true) => {
+            let duplicate = shares.0 >= LAYOUT_CHILD_DUPLICATE_OVERLAP && shares.1 >= LAYOUT_CHILD_DUPLICATE_OVERLAP;
+            duplicate.then(|| lower_content_table(tables, i, j))
+        }
+        (false, false) => Some(match (preference, native_first) {
+            (TableOverlapPreference::Native, Some(true)) | (TableOverlapPreference::Layout, Some(false)) => j,
+            (TableOverlapPreference::Native, Some(false)) | (TableOverlapPreference::Layout, Some(true)) => i,
+            _ => lower_content_table(tables, i, j),
+        }),
+    }
+}
+
+/// One pass over the overlapping pairs of a page. The pass over the mixed native and layout pairs
+/// runs first: the preference decides them without the page text, so what they leave is the set of
+/// tables the output keeps. The pass over the same-origin pairs then counts words against that
+/// set, and a table that a later step removes never stands in for the words of another.
+fn resolve_overlaps(
+    tables: &[crate::types::Table],
+    native_count: usize,
+    preference: crate::core::config::layout::TableOverlapPreference,
+    protected_layout_children: &ahash::AHashSet<usize>,
+    evidence: &mut OverlapEvidence<'_>,
+    to_remove: &mut ahash::AHashSet<usize>,
+    round: OverlapRound<'_>,
+) {
     for i in 0..tables.len() {
         if to_remove.contains(&i) {
             continue;
@@ -5493,46 +5630,42 @@ fn deduplicate_overlapping_tables(
                     let i_is_native = i < native_count;
                     let j_is_native = j < native_count;
                     let mixed_origin = i_is_native != j_is_native;
-                    let near_coincident = intersection / area_a >= NEAR_COINCIDENT_OVERLAP
-                        && intersection / area_b >= NEAR_COINCIDENT_OVERLAP;
+                    let pair_pass = if mixed_origin {
+                        OverlapPass::Mixed
+                    } else {
+                        OverlapPass::SameOrigin
+                    };
+                    if pair_pass != round.pass {
+                        continue;
+                    }
+                    let near_coincident = boxes_near_coincident(a, b);
                     if i < native_count
                         && j < native_count
                         && !near_coincident
-                        && holds_distinct_rows(&tables[i], &tables[j])
+                        && keeps_overlapping_native_pair(evidence, tables, (i, j), to_remove)
                     {
                         continue;
                     }
-                    let i_is_protected = protected_layout_children.contains(&i);
-                    let j_is_protected = protected_layout_children.contains(&j);
-                    let remove = match (i_is_protected, j_is_protected) {
-                        (true, false) => Some(j),
-                        (false, true) => Some(i),
-                        (true, true) => {
-                            let duplicate = intersection / area_a >= LAYOUT_CHILD_DUPLICATE_OVERLAP
-                                && intersection / area_b >= LAYOUT_CHILD_DUPLICATE_OVERLAP;
-                            duplicate.then(|| lower_content_table(tables, i, j))
-                        }
-                        (false, false) => Some(match preference {
-                            TableOverlapPreference::Native if mixed_origin => {
-                                if i_is_native {
-                                    j
-                                } else {
-                                    i
-                                }
-                            }
-                            TableOverlapPreference::Layout if mixed_origin => {
-                                if i_is_native {
-                                    i
-                                } else {
-                                    j
-                                }
-                            }
-                            _ => lower_content_table(tables, i, j),
-                        }),
-                    };
-                    let Some(remove) = remove else {
+                    let shares = (intersection / area_a, intersection / area_b);
+                    let native_first = mixed_origin.then_some(i_is_native);
+                    let loser = overlap_loser(
+                        tables,
+                        preference,
+                        protected_layout_children,
+                        (i, j),
+                        native_first,
+                        shares,
+                    );
+                    let Some(remove) = loser else {
                         continue;
                     };
+                    if mixed_origin {
+                        let winner = if remove == i { j } else { i };
+                        if round.set_aside.contains(&(remove, winner)) {
+                            continue;
+                        }
+                        round.mixed_losses.push((remove, winner));
+                    }
                     to_remove.insert(remove);
                     if remove == i {
                         break;
@@ -5541,32 +5674,71 @@ fn deduplicate_overlapping_tables(
             }
         }
     }
-
-    let surviving_protected: Vec<_> = protected_layout_children
-        .iter()
-        .copied()
-        .filter(|index| !to_remove.contains(index))
-        .collect();
-    let affected_rows: Vec<_> = surviving_protected
-        .iter()
-        .filter_map(|&index| tables[index].bounding_box.map(|bbox| (tables[index].page_number, bbox)))
-        .collect();
-
-    let mut idx = 0;
-    tables.retain(|_| {
-        let keep = !to_remove.contains(&idx);
-        idx += 1;
-        keep
-    });
-    canonicalize_affected_table_rows(tables, affected_rows);
 }
 
+/// Share of a table's words that the page must still lack for the table to count as new content.
+const NEW_WORD_FRACTION: f64 = 0.5;
+
 /// Fraction of the smaller table's rows that must reappear in the larger one for the pair to
-/// count as two detections of the same region.
+/// count as two detections of the same region, when the page gives no text to count against.
 const SHARED_ROW_FRACTION: f64 = 0.5;
 
 /// Boxes covering this much of each other are one region read twice, whatever their rows say.
 const NEAR_COINCIDENT_OVERLAP: f64 = 0.8;
+
+type WordCounts = ahash::AHashMap<String, usize>;
+
+/// Count the words of the texts the way the page and the cells are compared: ligatures expanded on
+/// both sides, then each word reduced to lowercase letters and digits. ~keep
+fn count_words<'a>(texts: impl IntoIterator<Item = &'a str>) -> WordCounts {
+    let mut counts = WordCounts::new();
+    for word in word_sequence(texts) {
+        *counts.entry(word).or_default() += 1;
+    }
+    counts
+}
+
+/// The most whole words that one joined word can be made of. A cell joins a few page segments
+/// ("Estimated" and "Increases"), not a line. ~keep
+const MAX_JOINED_PARTS: usize = 4;
+
+/// The words of the texts in reading order: ligatures expanded, then each word reduced to lowercase
+/// letters and digits. [`count_words`] and [`count_occurrences`] count this one sequence. ~keep
+fn word_sequence<'a>(texts: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+    texts
+        .into_iter()
+        .flat_map(|text| {
+            expand_ligatures(text, false)
+                .split_whitespace()
+                .map(normalize_for_table_coverage)
+                .filter(|word| !word.is_empty())
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// The occurrences a reading order holds: every word once for each copy, and every word that two to
+/// [`MAX_JOINED_PARTS`] neighbouring words make when run together. A word that a cell joins or a
+/// hyphen repair rebuilds is one of these. The page, the text no table carries and every table
+/// are counted by this one function, each in its own reading order, so a segment seam on the page
+/// and a cell seam in a table are the same kind of seam and a representation is never counted
+/// twice. ~keep
+fn count_occurrences(words: &[String]) -> WordCounts {
+    let mut counts = WordCounts::new();
+    for start in 0..words.len() {
+        *counts.entry(words[start].clone()).or_default() += 1;
+        let mut joined = words[start].clone();
+        for next in words.iter().skip(start + 1).take(MAX_JOINED_PARTS - 1) {
+            joined.push_str(next);
+            *counts.entry(joined.clone()).or_default() += 1;
+        }
+    }
+    counts
+}
+
+fn table_word_counts(table: &crate::types::Table) -> WordCounts {
+    count_words(table.cells.iter().flatten().map(String::as_str))
+}
 
 fn row_words(row: &[String]) -> Vec<&str> {
     let mut words: Vec<&str> = row.iter().flat_map(|cell| cell.split_whitespace()).collect();
@@ -5576,9 +5748,9 @@ fn row_words(row: &[String]) -> Vec<&str> {
 
 /// Whether the smaller of two same-page native tables mostly holds rows the larger lacks.
 ///
-/// Box overlap cannot tell a repeated detection from an L-shaped grid whose boxed corner lies
-/// beside another table; only the rows can. A row is shared when its words fit inside one row of
-/// the other table, whatever the cell split. Tables without cell text give no evidence.
+/// The fallback for a page that gives no text to count words against (a scanned or recognized
+/// page). A row is shared when its words fit inside one row of the other table, whatever the
+/// cell split. Tables without cell text give no evidence.
 fn holds_distinct_rows(left: &crate::types::Table, right: &crate::types::Table) -> bool {
     let (small, large) = if left.cells.len() <= right.cells.len() {
         (left, right)
@@ -5611,6 +5783,224 @@ fn holds_distinct_rows(left: &crate::types::Table, right: &crate::types::Table) 
         })
         .count();
     (shared as f64) < SHARED_ROW_FRACTION * small_rows.len() as f64
+}
+
+/// What one table holds: its words, its occurrences in cell order, and where it carries page text.
+struct TableText {
+    words: WordCounts,
+    occurrences: WordCounts,
+    coverage: Option<TableCoverage>,
+}
+
+/// What the page prints, split by who carries it, for one set of live tables: the occurrences of
+/// the text that no live table carries, and the occurrences of the text that the live tables
+/// carry, each carrier counted in its own stream of page segments.
+struct PageSplit {
+    live: Vec<usize>,
+    occurrences: WordCounts,
+    carried: WordCounts,
+}
+
+/// The reads for the overlap test. Each table is read once for the whole call. The page text is
+/// read once for each set of live tables: the split between carriers changes only when arbitration
+/// removes a table. What stays per pair is the sum over the tables other than the dropped one,
+/// because that sum depends on which table is dropped.
+struct OverlapEvidence<'a> {
+    page_segments: &'a [Vec<SegmentData>],
+    tables: ahash::AHashMap<usize, TableText>,
+    splits: ahash::AHashMap<u32, PageSplit>,
+}
+
+/// Two boxes that cover nearly all of each other: one region, read twice.
+fn boxes_near_coincident(a: &crate::types::BoundingBox, b: &crate::types::BoundingBox) -> bool {
+    let inter_x = (a.x1.min(b.x1) - a.x0.max(b.x0)).max(0.0);
+    let inter_y = (a.y1.min(b.y1) - a.y0.max(b.y0)).max(0.0);
+    let intersection = inter_x * inter_y;
+    let area_a = (a.x1 - a.x0) * (a.y1 - a.y0);
+    let area_b = (b.x1 - b.x0) * (b.y1 - b.y0);
+    intersection / area_a >= NEAR_COINCIDENT_OVERLAP && intersection / area_b >= NEAR_COINCIDENT_OVERLAP
+}
+
+/// Group the tables into physical regions: tables whose boxes nearly coincide are one region,
+/// whatever their order. Each group lists its tables in ascending order.
+fn near_coincident_groups(tables: &[crate::types::Table], members: &[usize]) -> Vec<Vec<usize>> {
+    let mut group_of: Vec<usize> = (0..members.len()).collect();
+    for left in 0..members.len() {
+        for right in (left + 1)..members.len() {
+            let (Some(a), Some(b)) = (
+                &tables[members[left]].bounding_box,
+                &tables[members[right]].bounding_box,
+            ) else {
+                continue;
+            };
+            if boxes_near_coincident(a, b) {
+                let (keep, absorb) = (group_of[left], group_of[right]);
+                group_of
+                    .iter_mut()
+                    .filter(|group| **group == absorb)
+                    .for_each(|group| *group = keep);
+            }
+        }
+    }
+    let mut groups: Vec<Vec<usize>> = vec![Vec::new(); members.len()];
+    for (position, &member) in members.iter().enumerate() {
+        groups[group_of[position]].push(member);
+    }
+    groups.retain(|group| !group.is_empty());
+    groups
+}
+
+/// Add each word's highest count over the group's members: a region read twice prints its words once.
+fn add_group_max(counts: &mut WordCounts, members: &[&WordCounts]) {
+    let mut highest = WordCounts::new();
+    for member in members {
+        for (word, &count) in member.iter() {
+            let slot = highest.entry(word.clone()).or_default();
+            *slot = (*slot).max(count);
+        }
+    }
+    for (word, count) in highest {
+        *counts.entry(word).or_default() += count;
+    }
+}
+
+impl<'a> OverlapEvidence<'a> {
+    fn new(page_segments: &'a [Vec<SegmentData>]) -> Self {
+        Self {
+            page_segments,
+            tables: ahash::AHashMap::new(),
+            splits: ahash::AHashMap::new(),
+        }
+    }
+
+    fn table(&mut self, tables: &[crate::types::Table], index: usize) -> &TableText {
+        self.tables.entry(index).or_insert_with(|| {
+            let table = &tables[index];
+            let words = word_sequence(table.cells.iter().flatten().map(String::as_str));
+            TableText {
+                words: table_word_counts(table),
+                occurrences: count_occurrences(&words),
+                coverage: table_coverage(table),
+            }
+        })
+    }
+
+    /// The page split by carrier. Read again only when the live set changes.
+    fn page_split(&mut self, page_number: u32, live: &[usize]) -> &PageSplit {
+        if self.splits.get(&page_number).is_none_or(|cached| cached.live != live) {
+            let page_index = page_number.saturating_sub(1) as usize;
+            let coverage: Vec<&TableCoverage> = live
+                .iter()
+                .filter_map(|&index| self.tables.get(&index).and_then(|table| table.coverage.as_ref()))
+                .collect();
+            // Stream 0 is the text no live table carries. Stream k is the text that the k-th live
+            // table with a coverage carries, so a join never crosses from one carrier to another.
+            let mut streams: Vec<Vec<&str>> = vec![Vec::new(); coverage.len() + 1];
+            for segment in self.page_segments.get(page_index).into_iter().flatten() {
+                let stream = segment_carrier(segment, coverage.iter().copied()).map_or(0, |carrier| carrier + 1);
+                streams[stream].push(segment.text.as_str());
+            }
+            let mut counts = streams
+                .iter()
+                .map(|texts| count_occurrences(&word_sequence(texts.iter().copied())));
+            let occurrences = counts.next().unwrap_or_default();
+            let mut carried = WordCounts::new();
+            for stream in counts {
+                for (word, count) in stream {
+                    *carried.entry(word).or_default() += count;
+                }
+            }
+            let split = PageSplit {
+                live: live.to_vec(),
+                occurrences,
+                carried,
+            };
+            self.splits.insert(page_number, split);
+        }
+        &self.splits[&page_number]
+    }
+
+    /// Whether the table that overlap arbitration would drop holds words the page would otherwise lack.
+    ///
+    /// Box overlap cannot tell a repeated detection from an L-shaped grid whose boxed corner lies
+    /// beside another table. The page can: it prints each word a fixed number of times. A word counts
+    /// as new when the page text has more copies of it than the rest of the page output prints, that
+    /// is the other live tables on the page and the text no live table suppresses. The table stays
+    /// when at least [`NEW_WORD_FRACTION`] of its words are new.
+    ///
+    /// A cell can join or repair words that the page prints apart (two segments in one cell, a
+    /// hyphen repair). A stream prints a word once for each whole copy and once for each run of
+    /// two to four neighbouring words that spell it. The page is split into one stream for each
+    /// carrier, a live table or the text that none carries, and each table is one stream of its
+    /// cells. One function counts every stream, and a join never crosses from one carrier to
+    /// another, so a printed copy and a copy in the rest of the output are the same kind of
+    /// occurrence. A word that the page prints in neither form is new, so a short word never
+    /// matches inside a longer one. Live tables whose
+    /// boxes nearly coincide are one region read twice and count once, so the order of the tables
+    /// does not change the rest of the page. `None` means no evidence: the table has no cell text,
+    /// the page has no text, or the page is not in the text.
+    fn holds_unprinted_words(
+        &mut self,
+        tables: &[crate::types::Table],
+        dropped: usize,
+        removed: &ahash::AHashSet<usize>,
+    ) -> Option<bool> {
+        let page_number = tables[dropped].page_number;
+        let live: Vec<usize> = (0..tables.len())
+            .filter(|&index| tables[index].page_number == page_number && !removed.contains(&index))
+            .collect();
+        for &index in live.iter().chain(&[dropped]) {
+            self.table(tables, index);
+        }
+        self.page_split(page_number, &live);
+        let page = &self.splits[&page_number];
+        if page.occurrences.is_empty() && page.carried.is_empty() {
+            return None;
+        }
+        let own = &self.tables[&dropped];
+        let own_total: usize = own.words.values().sum();
+        if own_total == 0 {
+            return None;
+        }
+        let others: Vec<usize> = live.iter().copied().filter(|&index| index != dropped).collect();
+        let mut rest = WordCounts::new();
+        for group in near_coincident_groups(tables, &others) {
+            add_group_max(
+                &mut rest,
+                &group
+                    .iter()
+                    .map(|index| &self.tables[index].occurrences)
+                    .collect::<Vec<_>>(),
+            );
+        }
+        let count_of = |counts: &WordCounts, word: &String| counts.get(word).copied().unwrap_or(0);
+        let mut new_words = 0usize;
+        for (word, &count) in &own.words {
+            let carried = count_of(&page.carried, word);
+            if carried + count_of(&page.occurrences, word) == 0 {
+                new_words += count;
+                continue;
+            }
+            // The text that no live table carries is in the page and in the rest of the output
+            // alike, so only the carried text is set against the other tables.
+            new_words += count.min(carried.saturating_sub(count_of(&rest, word)));
+        }
+        Some(new_words as f64 >= NEW_WORD_FRACTION * own_total as f64)
+    }
+}
+
+/// Whether the pair's lower-content table holds words that the page would otherwise lack. A page
+/// without text falls back to comparing the rows of the two tables.
+fn keeps_overlapping_native_pair(
+    evidence: &mut OverlapEvidence<'_>,
+    tables: &[crate::types::Table],
+    pair: (usize, usize),
+    removed: &ahash::AHashSet<usize>,
+) -> bool {
+    let dropped = lower_content_table(tables, pair.0, pair.1);
+    evidence
+        .holds_unprinted_words(tables, dropped, removed)
+        .unwrap_or_else(|| holds_distinct_rows(&tables[pair.0], &tables[pair.1]))
 }
 
 /// Required containment for a layout child and, in one-to-one cohort matching,

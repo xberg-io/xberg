@@ -7,6 +7,7 @@
 ))]
 
 use sha2::{Digest, Sha256};
+use xberg::core::config::OcrQualityThresholds;
 use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, OcrConfig, OutputFormat, PageConfig, extract};
 
 const TITLE: &str = "SECTION TITLE";
@@ -17,7 +18,19 @@ const TABLE: &[u8] = include_bytes!("fixtures/ocr_photo_title_2312/table.png");
 const PARTIAL: &[u8] = include_bytes!("fixtures/ocr_photo_title_2312/partial.png");
 const NUMERIC: &[u8] = include_bytes!("fixtures/ocr_photo_title_2312/numeric.png");
 
+/// The configuration under which every title-placement assertion below reads the full, unpruned
+/// OCR body around the title.
 fn png_config() -> ExtractionConfig {
+    let mut config = pruned_config();
+    config.ocr.as_mut().unwrap().quality_thresholds = Some(OcrQualityThresholds {
+        prune_symbol_noise_lines: false,
+        ..OcrQualityThresholds::default()
+    });
+    config
+}
+
+/// The default configuration, which prunes symbol-noise lines from a flagged page.
+fn pruned_config() -> ExtractionConfig {
     ExtractionConfig {
         use_cache: false,
         ocr: Some(OcrConfig::default()),
@@ -163,7 +176,7 @@ async fn leaves_requested_document_structure_untouched() {
     let document = extract_png(PHOTO, &config).await;
     assert!(document.document.is_some(), "structured extraction was requested");
     assert!(!document.content.contains(TITLE));
-    assert!(!document.pages.unwrap()[0].content.contains(TITLE));
+    assert!(!document.pages.expect("requested pages")[0].content.contains(TITLE));
 }
 
 fn remove_markdown_title(document: &mut ExtractedDocument) {
@@ -437,4 +450,72 @@ async fn read_engine(engine: &xberg::engine::Engine, bytes: &[u8], config: &Extr
     assert!(batch.errors.is_empty(), "{:?}", batch.errors);
     assert_eq!(batch.results.len(), 1);
     batch.results.remove(0)
+}
+
+fn assert_only_the_title(document: &ExtractedDocument) {
+    assert_eq!(document.content.trim_end(), TITLE);
+    let page = &document.pages.as_ref().expect("requested pages")[0];
+    assert_eq!(page.content.trim_end(), TITLE);
+    assert_eq!(page.ocr_confidence.as_ref().unwrap().word_count, 215);
+}
+
+#[tokio::test]
+async fn pruning_leaves_the_recovered_title_as_the_only_text_of_the_photo() {
+    let document = extract_png(PHOTO, &pruned_config()).await;
+    assert_only_the_title(&document);
+    assert!(
+        document
+            .processing_warnings
+            .iter()
+            .any(|warning| { warning.message.contains("Page 1: removed 213 symbol-noise line(s)") }),
+        "{:?}",
+        document.processing_warnings
+    );
+}
+
+#[tokio::test]
+async fn pruning_in_markdown_keeps_the_title_and_drops_the_headings_made_of_noise() {
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Markdown,
+        ..pruned_config()
+    };
+    let document = extract_png(PHOTO, &config).await;
+    assert_only_the_title(&document);
+}
+
+#[tokio::test]
+async fn pruning_keeps_a_partial_sign_and_a_numeric_sign() {
+    let partial = extract_png(PARTIAL, &pruned_config()).await;
+    assert_eq!(partial.content, "NORTH");
+    let numeric = extract_png(NUMERIC, &pruned_config()).await;
+    assert_eq!(numeric.content, "NORTH GATE 42");
+}
+
+#[tokio::test]
+async fn pruning_can_be_switched_off_and_then_keeps_every_line() {
+    let document = extract_png(PHOTO, &png_config()).await;
+    assert!(document.content.lines().filter(|line| !line.trim().is_empty()).count() > 100);
+    assert!(
+        !document
+            .processing_warnings
+            .iter()
+            .any(|w| w.message.contains("symbol-noise"))
+    );
+}
+
+#[tokio::test]
+async fn a_requested_document_structure_is_pruned_together_with_the_text() {
+    let config = ExtractionConfig {
+        include_document_structure: true,
+        ..pruned_config()
+    };
+    let document = extract_png(PHOTO, &config).await;
+    assert!(document.document.is_some(), "structured extraction was requested");
+    assert_eq!(
+        document.content, "",
+        "the title proof is off here and every line was symbol noise"
+    );
+    assert!(document.pages.is_none(), "no text remains for a page");
+    let structure = serde_json::to_string(&document.document).unwrap();
+    assert!(!structure.contains("\"text\":\"ae\""), "{structure}");
 }
