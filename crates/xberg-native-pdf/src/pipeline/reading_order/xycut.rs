@@ -5222,6 +5222,29 @@ mod tests {
         assert_eq!((l, r), ((0..4).collect::<Vec<_>>(), (4..8).collect::<Vec<_>>()));
     }
 
+    /// The rule has no slack: a right block whose lowest edge is half a point under the left
+    /// block's highest edge shares that row and is cut. Half a point is exact in f32.
+    #[test]
+    fn a_half_point_of_overlap_with_the_left_block_shares_a_row_and_is_cut() {
+        let mut spans = column_lines(50.0, &[500.0, 480.0, 460.0, 440.0]);
+        spans.extend(column_lines(350.0, &[509.5, 529.5, 549.5, 569.5]));
+        let (l, r) = cut_of(&spans).expect("half a point of overlap shares a row");
+        assert_eq!((l, r), ((0..4).collect::<Vec<_>>(), (4..8).collect::<Vec<_>>()));
+    }
+
+    /// The left side's highest edge is the highest of all its spans, not the edge of its first
+    /// span. The first left span here is the lowest line (edge 450); the highest line reaches 510,
+    /// so a right block starting at 505 overlaps it and is cut.
+    #[test]
+    fn the_left_blocks_highest_edge_is_taken_over_all_its_spans_not_the_first() {
+        let mut spans = column_lines(50.0, &[440.0, 500.0, 460.0, 480.0]);
+        spans.extend(column_lines(350.0, &[505.0, 525.0, 545.0, 565.0]));
+        let (mut l, mut r) = cut_of(&spans).expect("the highest left line shares rows with the right block");
+        l.sort_unstable();
+        r.sort_unstable();
+        assert_eq!((l, r), ((0..4).collect::<Vec<_>>(), (4..8).collect::<Vec<_>>()));
+    }
+
     /// A left block above a right block (GH#1763 shape, a caption beside the body that starts
     /// below it) keeps its cut: the column order and the page order agree.
     #[test]
