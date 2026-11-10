@@ -29,7 +29,11 @@ fn build_page_with(content: &str, colour_spaces: &str, state_body: &str, extras:
     };
     push(&mut buf, "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
     push(&mut buf, "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
-    let xobjects = if content.contains("/F Do") { "/XObject << /F 5 0 R >>" } else { "" };
+    let xobjects = if content.contains("/F Do") {
+        "/XObject << /F 5 0 R >>"
+    } else {
+        ""
+    };
     push(
         &mut buf,
         &format!(

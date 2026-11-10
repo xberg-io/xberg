@@ -170,5 +170,9 @@ fn the_png_budget_charges_two_planes_for_each_spot_ink() {
     assert!(png_working_bytes_fit(1000, 1000, Some(&names), new_charge));
     assert!(!png_working_bytes_fit(1000, 1000, Some(&names), new_charge - 1));
     let live = CmykSidecar::new(1000, 1000, names).image_buffer_bytes() as usize;
-    assert_eq!(live, 1_000_000 * (4 + 4), "the sidecar allocates what the budget charges");
+    assert_eq!(
+        live,
+        1_000_000 * (4 + 4),
+        "the sidecar allocates what the budget charges"
+    );
 }
