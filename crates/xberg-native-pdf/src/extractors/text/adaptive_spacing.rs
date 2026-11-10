@@ -7,6 +7,8 @@
 
 use super::*;
 
+pub(super) const TJ_OFFSET_HISTORY_LIMIT: usize = 10_000;
+
 impl<'doc> TextExtractor<'doc> {
     /// Calculate adaptive TJ offset threshold based on font size and text justification.
     ///
@@ -42,6 +44,23 @@ impl<'doc> TextExtractor<'doc> {
             return self.config.space_insertion_threshold;
         }
 
+        self.adaptive_tj_threshold(self.analyze_tj_distribution())
+    }
+
+    pub(super) fn calculate_tj_threshold_after_offset(&self, offset: f32) -> f32 {
+        if !self.config.use_adaptive_tj_threshold || self.tj_offset_history.len() >= TJ_OFFSET_HISTORY_LIMIT {
+            return self.calculate_adaptive_tj_threshold();
+        }
+        let offset = f64::from(offset);
+        let distribution = Self::tj_distribution_from_stats(
+            self.tj_offset_history.len() + 1,
+            self.tj_sum + offset,
+            self.tj_sum_sq + offset * offset,
+        );
+        self.adaptive_tj_threshold(distribution)
+    }
+
+    fn adaptive_tj_threshold(&self, (is_justified, cv): (bool, f32)) -> f32 {
         let state = self.state_stack.current();
 
         let font_size = state.font_size;
@@ -52,8 +71,6 @@ impl<'doc> TextExtractor<'doc> {
             .and_then(|name| self.fonts.get(name))
             .map(|font| font.get_space_glyph_width())
             .unwrap_or(250.0); // Fallback: Times-Roman typical space width ~keep
-
-        let (is_justified, cv) = self.analyze_tj_distribution();
 
         let margin_ratio = if is_justified {
             self.config.word_margin_ratio * 3.0
@@ -129,6 +146,10 @@ impl<'doc> TextExtractor<'doc> {
             (s, sq)
         };
 
+        Self::tj_distribution_from_stats(n, sum, sum_sq)
+    }
+
+    fn tj_distribution_from_stats(n: usize, sum: f64, sum_sq: f64) -> (bool, f32) {
         let nf = n as f64;
         let mean = sum / nf;
         // Variance from accumulators: E[x²] − E[x]². Clamp to ≥0 to absorb
