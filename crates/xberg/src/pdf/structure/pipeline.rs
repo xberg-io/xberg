@@ -5490,16 +5490,38 @@ fn deduplicate_overlapping_tables(
         }
     }
 
-    for mixed_pass in [true, false] {
-        resolve_overlaps(
-            tables,
-            native_count,
-            preference,
-            &protected_layout_children,
-            &mut evidence,
-            &mut to_remove,
-            mixed_pass,
-        );
+    // A mixed decision removes its loser only while its winner survives. A later step can remove
+    // the winner, and then the pair is set aside and the page is resolved again with both tables.
+    // Each round sets aside at least one new pair, so the loop ends.
+    let replaced = to_remove.clone();
+    let mut set_aside = ahash::AHashSet::new();
+    loop {
+        let mut removed = replaced.clone();
+        let mut mixed_losses = Vec::new();
+        for pass in [OverlapPass::Mixed, OverlapPass::SameOrigin] {
+            resolve_overlaps(
+                tables,
+                native_count,
+                preference,
+                &protected_layout_children,
+                &mut evidence,
+                &mut removed,
+                OverlapRound {
+                    pass,
+                    set_aside: &set_aside,
+                    mixed_losses: &mut mixed_losses,
+                },
+            );
+        }
+        let orphaned: Vec<(usize, usize)> = mixed_losses
+            .into_iter()
+            .filter(|&(_, winner)| removed.contains(&winner))
+            .collect();
+        if orphaned.is_empty() {
+            to_remove = removed;
+            break;
+        }
+        set_aside.extend(orphaned);
     }
 
     let surviving_protected: Vec<_> = protected_layout_children
@@ -5521,10 +5543,28 @@ fn deduplicate_overlapping_tables(
     canonicalize_affected_table_rows(tables, affected_rows);
 }
 
+/// Which overlapping pairs of a page a pass decides.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OverlapPass {
+    /// A native table against a layout table.
+    Mixed,
+    /// Two native tables, or two layout tables.
+    SameOrigin,
+}
+
+/// What one pass shares with the loop that calls it.
+struct OverlapRound<'a> {
+    pass: OverlapPass,
+    /// Mixed pairs, as `(loser, winner)`, whose decision is set aside because the winner is removed.
+    set_aside: &'a ahash::AHashSet<(usize, usize)>,
+    /// The mixed pairs this pass decided, as `(loser, winner)`.
+    mixed_losses: &'a mut Vec<(usize, usize)>,
+}
+
 /// One pass over the overlapping pairs of a page. The pass over the mixed native and layout pairs
 /// runs first: the preference decides them without the page text, so what they leave is the set of
 /// tables the output keeps. The pass over the same-origin pairs then counts words against that
-/// set, and a table that a later step removes never stands in for the words of another. ~keep
+/// set, and a table that a later step removes never stands in for the words of another.
 fn resolve_overlaps(
     tables: &[crate::types::Table],
     native_count: usize,
@@ -5532,7 +5572,7 @@ fn resolve_overlaps(
     protected_layout_children: &ahash::AHashSet<usize>,
     evidence: &mut OverlapEvidence<'_>,
     to_remove: &mut ahash::AHashSet<usize>,
-    mixed_pass: bool,
+    mut round: OverlapRound<'_>,
 ) {
     use crate::core::config::layout::TableOverlapPreference;
 
@@ -5559,7 +5599,12 @@ fn resolve_overlaps(
                     let i_is_native = i < native_count;
                     let j_is_native = j < native_count;
                     let mixed_origin = i_is_native != j_is_native;
-                    if mixed_origin != mixed_pass {
+                    let pair_pass = if mixed_origin {
+                        OverlapPass::Mixed
+                    } else {
+                        OverlapPass::SameOrigin
+                    };
+                    if pair_pass != round.pass {
                         continue;
                     }
                     let near_coincident = boxes_near_coincident(a, b);
@@ -5601,6 +5646,13 @@ fn resolve_overlaps(
                     let Some(remove) = remove else {
                         continue;
                     };
+                    if mixed_origin {
+                        let winner = if remove == i { j } else { i };
+                        if round.set_aside.contains(&(remove, winner)) {
+                            continue;
+                        }
+                        round.mixed_losses.push((remove, winner));
+                    }
                     to_remove.insert(remove);
                     if remove == i {
                         break;
@@ -5730,7 +5782,7 @@ struct TableText {
 /// What the page prints, split by who carries it, for one set of live tables: the occurrences of
 /// the text that no live table carries, and the occurrences of the text that the live tables
 /// carry, each carrier counted in its own stream of page segments.
-struct LeftoverText {
+struct PageSplit {
     live: Vec<usize>,
     occurrences: WordCounts,
     carried: WordCounts,
@@ -5743,7 +5795,7 @@ struct LeftoverText {
 struct OverlapEvidence<'a> {
     page_segments: &'a [Vec<SegmentData>],
     tables: ahash::AHashMap<usize, TableText>,
-    leftovers: ahash::AHashMap<u32, LeftoverText>,
+    splits: ahash::AHashMap<u32, PageSplit>,
 }
 
 /// Two boxes that cover nearly all of each other: one region, read twice.
@@ -5804,7 +5856,7 @@ impl<'a> OverlapEvidence<'a> {
         Self {
             page_segments,
             tables: ahash::AHashMap::new(),
-            leftovers: ahash::AHashMap::new(),
+            splits: ahash::AHashMap::new(),
         }
     }
 
@@ -5820,10 +5872,10 @@ impl<'a> OverlapEvidence<'a> {
         })
     }
 
-    /// The text of the page that none of the live tables carries. Read again only when the live set changes.
-    fn leftover(&mut self, page_number: u32, live: &[usize]) -> &LeftoverText {
+    /// The page split by carrier. Read again only when the live set changes.
+    fn page_split(&mut self, page_number: u32, live: &[usize]) -> &PageSplit {
         if self
-            .leftovers
+            .splits
             .get(&page_number)
             .is_none_or(|cached| cached.live != live)
         {
@@ -5849,14 +5901,14 @@ impl<'a> OverlapEvidence<'a> {
                     *carried.entry(word).or_default() += count;
                 }
             }
-            let leftover = LeftoverText {
+            let split = PageSplit {
                 live: live.to_vec(),
                 occurrences,
                 carried,
             };
-            self.leftovers.insert(page_number, leftover);
+            self.splits.insert(page_number, split);
         }
-        &self.leftovers[&page_number]
+        &self.splits[&page_number]
     }
 
     /// Whether the table that overlap arbitration would drop holds words the page would otherwise lack.
@@ -5893,8 +5945,8 @@ impl<'a> OverlapEvidence<'a> {
             self.table(tables, index);
         }
         self.page_segments.get(page_index)?;
-        self.leftover(page_number, &live);
-        let page = &self.leftovers[&page_number];
+        self.page_split(page_number, &live);
+        let page = &self.splits[&page_number];
         if page.occurrences.is_empty() && page.carried.is_empty() {
             return None;
         }

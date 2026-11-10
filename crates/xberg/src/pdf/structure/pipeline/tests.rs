@@ -1620,24 +1620,19 @@ fn dedup_keeps_the_words_of_a_native_table_when_its_layout_copy_is_the_one_that_
     );
     let small = cell_table(1, (0.0, 40.0, 100.0, 100.0), &[&["omega", "7"], &["sigma", "8"]]);
     let page = printed_cells(&[&big, &small]);
-    let mut losses = Vec::new();
+    let mut wrong = Vec::new();
     for preference in [TableOverlapPreference::Native, TableOverlapPreference::Content] {
         let mut tables = vec![big.clone(), small.clone(), small.clone()];
         deduplicate_overlapping_tables(&mut tables, 2, preference, &page);
-        let words: ahash::AHashSet<&str> = tables
-            .iter()
-            .flat_map(|table| table.cells.iter().flatten())
-            .map(String::as_str)
-            .collect();
-        let lost: Vec<&str> = ["omega", "sigma", "7", "8"]
-            .into_iter()
-            .filter(|word| !words.contains(word))
-            .collect();
-        if !lost.is_empty() {
-            losses.push(format!("{preference:?}: no table holds {lost:?}"));
+        let survivors: Vec<&Vec<Vec<String>>> = tables.iter().map(|table| &table.cells).collect();
+        if survivors != [&big.cells, &small.cells] {
+            wrong.push(format!("{preference:?}: {survivors:?}"));
         }
     }
-    assert!(losses.is_empty(), "{losses:?}");
+    assert!(
+        wrong.is_empty(),
+        "the two native tables stay and the layout copy goes: {wrong:?}"
+    );
 }
 
 #[test]
@@ -1713,7 +1708,7 @@ fn dedup_keeps_the_sole_copy_when_neighbouring_tables_print_digits_that_join_int
             [("1", 305.0), ("2", 505.0), ("3", 705.0), ("4", 905.0)],
         ),
         (
-            "single cells, page order reversed",
+            "single cells, page order reversed (negative control: 4 3 2 1 forms neither 12 nor 34)",
             vec![
                 single("1", 300.0),
                 single("2", 500.0),
@@ -1791,12 +1786,21 @@ fn dedup_counts_a_word_a_table_holds_once_as_one_new_word_however_often_the_page
         printed_at("x", 5.0, 60.0),
         printed_at("x", 5.0, 70.0),
     ]];
-    let kept = kept_native_tables(vec![big, small], &page);
-    assert_eq!(
-        kept.len(),
-        1,
-        "one new word of four is under the fraction, whatever the page prints of it"
-    );
+    // The capped count is 1 new word of 4 and the uncapped count is 3 of 4. The test tells them
+    // apart only while the fraction lies between the two.
+    assert!(NEW_WORD_FRACTION * 4.0 > 1.0 && NEW_WORD_FRACTION * 4.0 <= 3.0);
+    for (name, tables) in [
+        ("big first", vec![big.clone(), small.clone()]),
+        ("small first", vec![small, big.clone()]),
+    ] {
+        let kept = kept_native_tables(tables, &page);
+        assert_eq!(
+            kept.len(),
+            1,
+            "{name}: one new word of four is under the fraction, whatever the page prints of it"
+        );
+        assert_eq!(kept[0].cells, big.cells, "{name}: the larger table stays");
+    }
 }
 
 #[test]
