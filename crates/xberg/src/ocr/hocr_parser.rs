@@ -2720,6 +2720,55 @@ mod tests {
             );
         }
 
+        /// A line whose letter words are all dictionary-invalid but which holds a numeral keeps
+        /// every word: a numeral is data, never noise (#2851). The letter-only twin of the same
+        /// line is still removed, so the numeral decides the outcome.
+        #[test]
+        fn a_noise_line_with_a_numeral_survives_and_its_letter_only_twin_does_not() {
+            let hocr = |third: &str| {
+                format!(
+                    r#"<div class="ocr_page" title="ppageno 0">
+                <p class="ocr_par">
+                    <span class="ocr_line">
+                        <span class="ocrx_word" title="bbox 10 10 100 40">Report</span>
+                    </span>
+                    <span class="ocr_line">
+                        <span class="ocrx_word" title="bbox 10 50 100 80">OWATS</span>
+                        <span class="ocrx_word" title="bbox 110 50 220 80">DNDEVET</span>
+                        <span class="ocrx_word" title="bbox 230 50 320 80">{third}</span>
+                    </span>
+                </p>
+            </div>"#
+                )
+            };
+            let invalid_unless_report = |word: &str| Some(word == "Report");
+            let filter = DictionaryLineFilter {
+                is_valid_word: &invalid_unless_report,
+                max_invalid_ratio: TEST_THRESHOLD,
+            };
+
+            let with_numeral =
+                parse_hocr_to_internal_document_with_page_offset_and_stats(&hocr("1,250.75"), Some(&filter), 1);
+            assert_eq!(with_numeral.dictionary_filtered_line_count, 0);
+            assert_eq!(with_numeral.document.elements[0].text, "Report\nOWATS DNDEVET 1,250.75");
+
+            let arabic_indic = parse_hocr_to_internal_document_with_page_offset_and_stats(
+                &hocr("\u{0661}\u{0662}\u{0663}"),
+                Some(&filter),
+                1,
+            );
+            assert_eq!(arabic_indic.dictionary_filtered_line_count, 0);
+            assert_eq!(
+                arabic_indic.document.elements[0].text,
+                "Report\nOWATS DNDEVET \u{0661}\u{0662}\u{0663}"
+            );
+
+            let letter_only =
+                parse_hocr_to_internal_document_with_page_offset_and_stats(&hocr("OPMENT"), Some(&filter), 1);
+            assert_eq!(letter_only.dictionary_filtered_line_count, 1);
+            assert_eq!(letter_only.document.elements[0].text, "Report");
+        }
+
         /// No filter at all (the plain [`parse_hocr_to_internal_document`] entry point,
         /// what every other test in this file uses) must behave exactly as before this
         /// feature existed: nothing is removed, no matter how garbled the text is.
