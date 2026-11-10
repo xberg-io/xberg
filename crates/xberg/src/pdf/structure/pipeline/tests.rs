@@ -1851,6 +1851,25 @@ fn dedup_counts_two_split_copies_and_drops_a_table_for_one_printed_copy() {
     assert_eq!(kept[0].cells, large.cells);
 }
 
+#[test]
+fn dedup_keeps_two_tables_when_a_split_copy_lies_where_they_overlap_in_either_order() {
+    // The page prints PICCOLO21 whole inside table B only, and a second copy in two pieces that table
+    // A covers and carries whole. B also covers the first piece, so a per-piece carrier splits the
+    // copy over two streams in the order B, A, and no stream prints the second PICCOLO21.
+    let a = cell_table(1, (40.0, 0.0, 140.0, 100.0), &[&["PICCOLO21"]]);
+    let b = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["PICCOLO21"]]);
+    let page = vec![vec![
+        printed_at("PICCOLO21", 5.0, 10.0),
+        printed_at("PICCOLO", 70.0, 10.0),
+        printed_at("21", 102.0, 10.0),
+    ]];
+    let counts: Vec<usize> = [vec![b.clone(), a.clone()], vec![a, b]]
+        .into_iter()
+        .map(|tables| kept_native_tables(tables, &page).len())
+        .collect();
+    assert_eq!(counts, [2, 2], "kept tables in the order B, A and in the order A, B");
+}
+
 /// Tables that the document build emits for one page of text and the given native tables.
 fn built_table_count(tables: &[crate::types::Table], page: Vec<Vec<SegmentData>>) -> usize {
     let document = build_document_structure(
