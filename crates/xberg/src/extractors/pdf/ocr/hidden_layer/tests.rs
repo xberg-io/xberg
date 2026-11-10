@@ -874,3 +874,71 @@ fn only_pages_whose_layer_is_not_judged_plausible_are_probed() {
     ];
     assert_eq!(super::pages_to_probe(decisions), [0, 2, 4]);
 }
+
+#[test]
+fn should_preserve_raw_and_ascii85_flate_stream_decoding_and_reject_other_chains() {
+    use super::{Object, stream_filters};
+
+    let expected = b"known stream samples ".repeat(8);
+    let chain = Object::Array(vec![
+        Object::Name("ASCII85Decode".into()),
+        Object::Name("FlateDecode".into()),
+    ]);
+    let filters = stream_filters(Some(&chain)).expect("supported ASCII85 then Flate stream");
+    assert!(matches!(filters, StreamFilters::Ascii85Flate));
+    assert_eq!(
+        decode_probe_stream(
+            b"Gaut&b:h1?-nZr@:!?Tc:<Y<28M*ua*diP>>amuu~>",
+            filters,
+            expected.len(),
+            4096
+        ),
+        Some(expected.clone())
+    );
+    assert_eq!(
+        decode_probe_stream(&expected, stream_filters(None).unwrap(), expected.len(), 4096),
+        Some(expected)
+    );
+    let unsupported = [
+        Object::Name("ASCII85Decode".into()),
+        Object::Reference(xberg_native_pdf::object::ObjectRef::new(1, 0)),
+        Object::Integer(1),
+        Object::Array(vec![]),
+        Object::Array(vec![Object::Name("ASCII85Decode".into())]),
+        Object::Array(vec![
+            Object::Name("FlateDecode".into()),
+            Object::Name("ASCII85Decode".into()),
+        ]),
+        Object::Array(vec![
+            Object::Name("FlateDecode".into()),
+            Object::Name("FlateDecode".into()),
+        ]),
+        Object::Array(vec![Object::Null]),
+    ];
+    for filter in unsupported {
+        assert_eq!(stream_filters(Some(&filter)), None, "{filter:?}");
+    }
+}
+
+#[test]
+fn should_decode_scalar_and_singleton_flate_streams_to_the_same_bytes() {
+    use super::{Object, stream_filters};
+
+    let expected = b"known stream samples ".repeat(8);
+    let mut stream = lopdf::Stream::new(lopdf::Dictionary::new(), expected.clone());
+    stream.compress().unwrap();
+    assert_eq!(stream.dict.get(b"Filter").unwrap().as_name().unwrap(), b"FlateDecode");
+    for filter in [
+        Object::Name("FlateDecode".into()),
+        Object::Array(vec![Object::Name("FlateDecode".into())]),
+    ] {
+        let filters = stream_filters(Some(&filter)).expect("supported Flate spelling");
+        assert!(matches!(filters, StreamFilters::Flate));
+        assert_eq!(
+            decode_probe_stream(&stream.content, filters, expected.len(), 4096),
+            Some(expected.clone())
+        );
+    }
+}
+
+mod predictor;
