@@ -74,4 +74,4 @@ blake3 = "9646553cc062e0821b6444652344d175e4b2823136f3b389925b372412622d68"
 [adrs."adrs/0014-gate-khmer-numeric-recovery-on-locally-provisioned-models.md"]
 number = 14
 status = "accepted"
-blake3 = "f5aaa30c664cd1f1d24b4f164bba0e64796da93706f1e81eefd81c5204e2d86f"
+blake3 = "594a0e191e5d87c4ac154cb6f77badb9b56574d352b3fb68ed387b54fcceb5c0"

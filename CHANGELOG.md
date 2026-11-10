@@ -85,7 +85,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The feature is qualified only for an English primary. Other primary languages, forced/custom OCR, detached or transformed
   stages, unsupported glyph evidence, ambiguous ownership and lines already containing numbers retain their ordinary read.
   Numeric insertion preserves neighboring OCR text and multiline paragraph bytes. Eligible pages bypass extraction caching;
-  with the auxiliary model present they also bypass primary OCR caching and perform bounded crop/shape verification.
+  with the auxiliary model present, admitted pages also bypass primary OCR caching. Serial blocking workers share one
+  document budget of at most eight attempted pages, 64 crops and 128 MiB of accounted verifier work; caller limits can
+  lower these bounds. Exhaustion retains accepted OCR text and reports the verification gap. Implicit deferred per-page
+  pipelines, including the usual full-feature route, are outside this capability and its missing-model warning.
   Accepted eligible pages warn once about a missing model or an unbound geometry proof. The original reporter page remains
   unavailable, so this is partial support. ADR 0014 records the activation policy and limits.
 
@@ -316,11 +319,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(pdf): Preserve recovered Plain page strings when final rendering omits a page, and retain valid page byte ranges.** (#2813)
-  Recovered pages follow the finalized document rendering, including list normalization; unavailable page renderings retain
-  their earlier accepted text. OCR Unicode numerals no longer count as native-prose script evidence in the shared retention
-  guard, across all supported scripts.
-
+- **(ocr): Exclude Unicode numerals from native-prose script evidence.**
+  Numeric-only OCR reads do not claim retention of native prose, across all supported scripts.
 - **(pdf): Keep a word whole when a producer sets the text matrix back over it before a large TJ offset.** (GH#2322)
   Some producers set the text matrix to the start of a run they already drew and reach the next glyph with a large leading offset in a TJ array. That offset no longer adds a space where the matrix points, so words such as `benefits` no longer come out as `benefi ts`. When the offset reaches past the end of that run by a word gap, the space goes at the end of the run. Otherwise the gap between the real letters on each side decides the space. A lead that follows such a matrix also ends the run at its glyphs when it is a lead at least as large as the word-boundary gap (GH#2690). Not covered: a space glyph that lands inside a ligature after the matrix is set back still splits the word (`defi ne`), tracked in GH#2322.
 - **(pdf): Keep every glyph of a text run that the renderer draws without font info.** (#2709)

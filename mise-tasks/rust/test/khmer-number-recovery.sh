@@ -78,6 +78,17 @@ unit_names=(
   should_refuse_when_the_provisioned_crop_model_disappears
   should_refuse_painted_latin_lookalikes_in_a_claimed_khmer_crop
   should_defer_missing_model_warnings_until_the_primary_page_is_accepted
+  run_controls_tests::should_allow_async_heartbeat_while_native_source_preparation_waits
+  run_controls_tests::should_bound_accounted_source_work_bytes_across_one_run
+  run_controls_tests::should_bound_crop_attempts_across_one_run
+  run_controls_tests::should_bound_page_admission_across_one_document_and_keep_reads
+  run_controls_tests::should_cancel_before_source_admission_and_processor_initialization
+  run_controls_tests::should_keep_offset_seven_primary_cache_policy_and_operation_cacheability
+  run_controls_tests::should_observe_cancellation_after_admission_before_engine_initialization
+  run_controls_tests::should_observe_cancellation_during_shape_proof_before_native_engine_start
+  run_controls_tests::should_prepare_numeric_source_on_a_blocking_worker
+  run_controls_tests::should_retain_source_reservation_when_a_late_decline_fails_the_proof
+  run_controls_tests::should_warn_without_a_model_even_when_accepted_geometry_is_unavailable
 )
 expected_units="${#unit_names[@]}"
 unit_listed="$(cargo "${unit_args[@]}" -- --include-ignored --list --color never)"
@@ -172,3 +183,32 @@ grep -qF "test result: ok. $expected_shapes passed; 0 failed; 0 ignored;" "$shap
   exit 1
 }
 echo "Native glyph-shape controls: expected $expected_shapes, passed $expected_shapes; log $shape_log"
+
+page_args=(test --locked -p xberg --no-default-features --features "$features" --lib number_recovery::page_ranges_tests::)
+page_names=(
+  synchronization_keeps_the_unrecovered_first_page_read
+  synchronized_second_page_survives_extraction_result_derivation
+  synchronized_second_page_survives_renderer_input_derivation
+  skipping_synchronization_leaves_stale_pages_and_drops_invalid_ranges
+)
+expected_pages="${#page_names[@]}"
+page_listed="$(cargo "${page_args[@]}" -- --list --color never)"
+printf '%s\n' "$page_listed"
+observed_pages="$(awk '/: test$/ { count++ } END { print count + 0 }' <<<"$page_listed")"
+[ "$observed_pages" -eq "$expected_pages" ] || {
+  echo "Expected $expected_pages model-free page controls; observed $observed_pages" >&2
+  exit 1
+}
+for name in "${page_names[@]}"; do
+  grep -qxF "extractors::pdf::ocr::number_recovery::page_ranges_tests::$name: test" <<<"$page_listed" || {
+    echo "Required model-free page control was not collected: $name" >&2
+    exit 1
+  }
+done
+page_log="$(mktemp "${TMPDIR:-/tmp}/xberg-2408-pages.XXXXXX")"
+cargo "${page_args[@]}" -- --test-threads=1 --color never 2>&1 | tee "$page_log"
+grep -qF "test result: ok. $expected_pages passed; 0 failed; 0 ignored;" "$page_log" || {
+  echo "Expected $expected_pages executed model-free page controls; inspect $page_log" >&2
+  exit 1
+}
+echo "Model-free page controls: expected $expected_pages, passed $expected_pages; log $page_log"

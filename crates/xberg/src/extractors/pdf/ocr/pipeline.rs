@@ -4504,9 +4504,11 @@ pub(super) async fn extract_with_ocr_for_page(
                             config_clone,
                             config,
                             page_index_offset + *page_idx,
+                            page_index_offset,
                             page_ocr_hints
                                 .as_ref()
                                 .and_then(|hints| hints.native_layer((page_index_offset + *page_idx + 1) as u32)),
+                            &number_recovery,
                         )
                     } else {
                         (config_clone, false)
@@ -4760,7 +4762,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         && let Ok(document) = &mut ocr_result
                         && let Some(source) = lazy_pdf_render_state
                             .as_ref()
-                            .map(|(pdf, _, _)| (pdf, page_idx))
+                            .map(|(pdf, _, _)| (pdf.as_ref(), page_idx))
                             .or_else(|| xobject_document.map(|pdf| (pdf, page_index_offset + page_idx)))
                     {
                         tall_source_used |= super::tall_source::try_replace(
@@ -4777,7 +4779,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         && let Ok(document) = &mut ocr_result
                         && let Some(source) = lazy_pdf_render_state
                             .as_ref()
-                            .map(|(pdf, _, _)| (pdf, page_idx))
+                            .map(|(pdf, _, _)| (pdf.as_ref(), page_idx))
                             .or_else(|| xobject_document.map(|pdf| (pdf, page_index_offset + page_idx)))
                     {
                         super::tall_source::note_unrecovered(
@@ -4978,7 +4980,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     .filter(|_| document_page_idx == 0 && super::document::native_preservation_is_automatic(config, 1));
                 let pdf = detached_page
                     .map(|source| source.document)
-                    .or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf));
+                    .or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf.as_ref()));
                 if let (Some(pdf), Some(layer)) = (pdf, coverage_layer.filter(|_| detached_page.is_some())) {
                     complete_native_words = super::native_word_coverage::covers_complete_native_page(
                         pdf,
@@ -5270,7 +5272,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 // table, so it opens its own handle rather than perturbing the rotation and
                 // points-per-pixel lookups that state is indexed for (#1444).
                 let render_doc = match lazy_pdf_render_state.as_ref() {
-                    Some((doc, _, _)) => Some(doc),
+                    Some((doc, _, _)) => Some(doc.as_ref()),
                     None => xobject_document.or_else(|| fallback_render_document(&mut fallback_pdf_state, content)),
                 };
                 if let Some(render_doc) = render_doc
@@ -5415,8 +5417,9 @@ pub(super) async fn extract_with_ocr_for_page(
                     structured: false,
                     builtin: get_ocr_backend_registry().read().is_builtin_tesseract(&backend),
                 },
-                source: xobject_document
-                    .or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf))
+                source: lazy_pdf_render_state
+                    .as_ref()
+                    .map(|(pdf, _, _)| Arc::clone(pdf))
                     .zip(
                         page_ocr_hints
                             .as_ref()
@@ -5869,7 +5872,14 @@ pub(super) async fn extract_with_ocr_for_page(
         _ => None,
     };
 
-    let mut result = join_ocr_page_texts(&page_texts, config, page_index_offset);
+    let result = join_ocr_page_texts(&page_texts, config, page_index_offset);
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let mut result: String = result;
 
     // A page the quality gate rejected must not keep its structured paragraphs either.
     //
@@ -6358,7 +6368,7 @@ fn join_ocr_page_texts(page_texts: &[String], config: &ExtractionConfig, page_in
 
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 async fn certify_discarded_native_layer(
-    render: Option<(xberg_native_pdf::PdfDocument, usize, Vec<u32>)>,
+    render: Option<super::rendering::FullPdfRenderState>,
     hints: Option<&PageOcrHints>,
     config: &ExtractionConfig,
 ) -> crate::Result<bool> {
@@ -7560,7 +7570,7 @@ fn processed_frame_px(metadata: &crate::types::ImagePreprocessingMetadata) -> Op
     any(not(feature = "layout-detection"), feature = "ocr", feature = "ocr-wasm")
 ))]
 fn run_page_ocr_scale(
-    #[cfg(feature = "pdf")] lazy_pdf_render_state: Option<&(xberg_native_pdf::PdfDocument, usize, Vec<u32>)>,
+    #[cfg(feature = "pdf")] lazy_pdf_render_state: Option<&super::rendering::FullPdfRenderState>,
     page_idx: usize,
     raster_px: (u32, u32),
 ) -> Option<(f32, f32)> {

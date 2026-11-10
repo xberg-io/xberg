@@ -12,6 +12,7 @@ const MAX_NATIVE_CHARS: usize = 32_768;
 const MAX_CROP_PIXELS: u64 = 1024 * 1024;
 const CROP_BORDER: u32 = 8;
 
+mod budget;
 mod read_proof;
 mod shape_proof;
 pub(super) use read_proof::ReadProof;
@@ -32,6 +33,9 @@ struct SourceProof {
 #[derive(Default)]
 pub(super) struct Run {
     processor: once_cell::sync::OnceCell<OcrProcessor>,
+    budget: budget::Budget,
+    worker: parking_lot::Mutex<()>,
+    budget_warning: std::sync::atomic::AtomicBool,
 }
 
 #[derive(Clone, Copy)]
@@ -60,7 +64,7 @@ pub(super) fn applicable(policy: PagePolicy<'_>) -> bool {
 }
 
 pub(super) struct PageSource<'a> {
-    pub(super) document: &'a PdfDocument,
+    pub(super) document: std::sync::Arc<PdfDocument>,
     pub(super) index: usize,
     pub(super) layer: &'a str,
     pub(super) raster: std::sync::Arc<Vec<u8>>,
@@ -101,7 +105,16 @@ impl PreparedPage<'_> {
         if !applicable(self.policy) || !eligible(self.config, source.index) || !has_bounded_numbers(source.layer) {
             return false;
         }
+        if model_directory(self.config).is_none() {
+            missing_model_warning(read.warnings, source.index);
+            return false;
+        }
+        if !self.run.budget.reserve_page(source.index, self.config) {
+            budget_warning(self.run, read.warnings, source.index);
+            return false;
+        }
         let Some(paragraphs) = read.paragraphs else {
+            unproved_read_warning(read.warnings, source.index);
             return false;
         };
         if !verified_frame && model_directory(self.config).is_some() {
@@ -129,42 +142,77 @@ pub(super) async fn recover(
     run: &std::sync::Arc<Run>,
     warnings: &mut Vec<crate::types::ProcessingWarning>,
 ) -> bool {
-    if !eligible(config, source.index)
-        || super::document::resolved_ocr_correction_degrees(source.metadata).is_some_and(|angle| angle != 0)
-        || !has_bounded_numbers(source.layer)
-        || !super::document::ocr_paragraphs_plain_text(paragraphs)
-            .split_whitespace()
-            .eq(read.split_whitespace())
-    {
-        return false;
-    }
-    // Model presence changes the result even when configuration and PDF bytes do not. ~keep
-    crate::core::extractor::cacheability::invalidate_current();
-    let Some(directory) = model_directory(config) else {
-        missing_model_warning(warnings, source.index);
+    let Some((directory, frame)) = recovery_context(&source, paragraphs, read, config, warnings) else {
         return false;
     };
-    let proof = match source_numbers(&source, config) {
-        Ok(Some(prepared)) => prepared,
-        Ok(None) => return false,
-        Err(error) => {
-            tracing::warn!(%error, "Cannot locate native numeric source crops");
-            return false;
+    if !run.budget.begin_page(source.index, config) {
+        budget_warning(run, warnings, source.index);
+        return false;
+    }
+    let index = source.index;
+    let Some((numbers, media)) = recognize(Verification {
+        document: source.document,
+        index,
+        raster: source.raster,
+        directory,
+        config: config.clone(),
+        run: run.clone(),
+    })
+    .await
+    else {
+        if run.budget.limited() {
+            budget_warning(run, warnings, index);
+        } else if !cancelled(config) {
+            unproved_read_warning(warnings, index);
         }
+        return false;
     };
-    let frame =
-        super::document::resolved_ocr_layout_dimensions(source.metadata, source.dimensions.0, source.dimensions.1);
-    if frame.0 == 0 || frame.1 == 0 {
+    if run.budget.limited() {
+        budget_warning(run, warnings, index);
+    }
+    if cancelled(config) {
         return false;
     }
-    let scale = (proof.media.width / frame.0 as f32, proof.media.height / frame.1 as f32);
-    let max_work = proof_limits(config).max_iterations;
-    let numbers = recognize(source.raster, proof, directory, config.clone(), run.clone()).await;
-    let changed = insert(numbers, paragraphs, scale, max_work);
+    let scale = (media.width / frame.0 as f32, media.height / frame.1 as f32);
+    let changed = insert(numbers, paragraphs, scale, proof_limits(config).max_iterations);
     if changed {
         *read = super::document::ocr_paragraphs_plain_text(paragraphs);
     }
     changed
+}
+
+fn recovery_context(
+    source: &PageSource<'_>,
+    paragraphs: &[PdfParagraph],
+    read: &str,
+    config: &ExtractionConfig,
+    warnings: &mut Vec<crate::types::ProcessingWarning>,
+) -> Option<(String, (u32, u32))> {
+    if !eligible(config, source.index)
+        || super::document::resolved_ocr_correction_degrees(source.metadata).is_some_and(|angle| angle != 0)
+        || !has_bounded_numbers(source.layer)
+    {
+        return None;
+    }
+    crate::core::extractor::cacheability::invalidate_current();
+    let Some(directory) = model_directory(config) else {
+        missing_model_warning(warnings, source.index);
+        return None;
+    };
+    if !super::document::ocr_paragraphs_plain_text(paragraphs)
+        .split_whitespace()
+        .eq(read.split_whitespace())
+    {
+        unproved_read_warning(warnings, source.index);
+        return None;
+    }
+    let frame =
+        super::document::resolved_ocr_layout_dimensions(source.metadata, source.dimensions.0, source.dimensions.1);
+    if frame.0 == 0 || frame.1 == 0 {
+        unproved_read_warning(warnings, source.index);
+        return None;
+    }
+    Some((directory, frame))
 }
 
 pub(super) fn synchronize_plain_pages(
@@ -200,39 +248,106 @@ pub(super) fn synchronize_plain_pages(
     changed
 }
 
-fn source_numbers(source: &PageSource<'_>, config: &ExtractionConfig) -> crate::Result<Option<SourceProof>> {
-    let info = source.document.get_page_info(source.index).map_err(proof_error)?;
+fn source_numbers(
+    document: &PdfDocument,
+    index: usize,
+    retained: usize,
+    config: &ExtractionConfig,
+) -> crate::Result<Option<SourceProof>> {
+    let info = document.get_page_info(index).map_err(proof_error)?;
     let media = info.media_box;
     if info.rotation != 0 || media.x != 0.0 || media.y != 0.0 || info.crop_box.is_some_and(|crop| crop != media) {
         return Ok(None);
     }
     let limits = proof_limits(config);
-    let budget = limits.max_content_size.saturating_sub(source.raster.capacity());
-    let Some((numbers, shape)) =
-        shape_proof::prepare_source(source.document, source.index, budget, limits.max_iterations)?
-    else {
+    let budget = limits.max_content_size.saturating_sub(retained);
+    let Some((numbers, shape)) = shape_proof::prepare_source(document, index, budget, limits.max_iterations)? else {
         return Ok(None);
     };
     Ok(Some(SourceProof { media, numbers, shape }))
 }
 
-async fn recognize(
+fn cancelled(config: &ExtractionConfig) -> bool {
+    config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled())
+}
+
+struct Verification {
+    document: std::sync::Arc<PdfDocument>,
+    index: usize,
     raster: std::sync::Arc<Vec<u8>>,
-    proof: SourceProof,
     directory: String,
     config: ExtractionConfig,
     run: std::sync::Arc<Run>,
-) -> Vec<Number> {
-    match tokio::task::spawn_blocking(move || verify_source(raster, &proof, &directory, &config, &run)).await {
-        Ok(Ok(numbers)) => numbers,
+}
+
+fn verify_page(work: Verification) -> crate::Result<Option<(Vec<Number>, Rect)>> {
+    let Verification {
+        document,
+        index,
+        raster,
+        directory,
+        config,
+        run,
+    } = work;
+    let _serial = run.worker.lock();
+    if cancelled(&config) {
+        return Ok(None);
+    }
+    if !run.budget.crop_available(&config) {
+        return Ok(None);
+    }
+    let Some(allowance) = run.budget.reserve_work(&config) else {
+        return Ok(None);
+    };
+    let mut limits = proof_limits(&config);
+    limits.max_content_size = allowance;
+    let mut bounded = config.clone();
+    bounded.security_limits = Some(limits);
+    let proof = match source_numbers(&document, index, raster.capacity(), &bounded) {
+        Ok(Some(proof)) => proof,
+        Ok(None) => {
+            run.budget.retain_failed_work();
+            return Ok(None);
+        }
+        Err(error) => {
+            run.budget.retain_failed_work();
+            return Err(error);
+        }
+    };
+    if cancelled(&config) {
+        return Ok(None);
+    }
+    let media = proof.media;
+    match verify_source(raster, &proof, &directory, &bounded, &run, Some(allowance)) {
+        Ok(numbers) => Ok(Some((numbers, media))),
+        Err(error) => {
+            run.budget.retain_failed_work();
+            Err(error)
+        }
+    }
+}
+
+async fn recognize(work: Verification) -> Option<(Vec<Number>, Rect)> {
+    let dispatcher = tracing::dispatcher::get_default(Clone::clone);
+    let worker = crate::core::extractor::cacheability::blocking(move || {
+        tracing::dispatcher::with_default(&dispatcher, || verify_page(work))
+    });
+    match tokio::task::spawn_blocking(worker).await {
+        Ok(Ok(result)) => result,
         Ok(Err(error)) => {
             tracing::warn!(%error, "Unable to verify native numeric source crops");
-            Vec::new()
+            None
         }
         Err(error) => {
             tracing::warn!(%error, "Native numeric source verification task failed");
-            Vec::new()
+            None
         }
+    }
+}
+
+fn budget_warning(run: &Run, warnings: &mut Vec<crate::types::ProcessingWarning>, index: usize) {
+    if !run.budget_warning.swap(true, std::sync::atomic::Ordering::AcqRel) {
+        recovery_warning(warnings, index.saturating_add(1), "Native Khmer number verification reached its document budget. Remaining accepted OCR reads are retained; some numbers may be missing.".into());
     }
 }
 
@@ -281,13 +396,18 @@ pub(super) fn prepare_read(
     mut primary: crate::core::config::OcrConfig,
     config: &ExtractionConfig,
     page: usize,
+    page_index_offset: usize,
     layer: Option<&str>,
+    run: &Run,
 ) -> (crate::core::config::OcrConfig, bool) {
-    if !eligible(config, page) || !layer.is_some_and(has_bounded_numbers) {
+    if page_index_offset != 0 || !eligible(config, page) || !layer.is_some_and(has_bounded_numbers) {
         return (primary, false);
     }
     crate::core::extractor::cacheability::invalidate_current();
     if model_directory(config).is_none() {
+        return (primary, false);
+    }
+    if !run.budget.reserve_page(page, config) {
         return (primary, false);
     }
     let options = primary.backend_options.get_or_insert_with(|| serde_json::json!({}));
@@ -375,9 +495,16 @@ fn verify_source(
     directory: &str,
     config: &ExtractionConfig,
     run: &Run,
+    reserved: Option<usize>,
 ) -> crate::Result<Vec<Number>> {
+    if cancelled(config) || !run.budget.crop_available(config) {
+        return Ok(Vec::new());
+    }
     let SourceProof { media, numbers, shape } = proof;
-    let limits = proof_limits(config);
+    let mut limits = proof_limits(config);
+    limits.max_content_size = limits
+        .max_content_size
+        .min(run.budget.remaining(config).saturating_add(reserved.unwrap_or(0)));
     if numbers.is_empty()
         || numbers.iter().map(|number| number.text.chars().count()).sum::<usize>() > MAX_NUMBER_GLYPHS
         || numbers.len() > limits.max_iterations
@@ -390,6 +517,13 @@ fn verify_source(
         u64::try_from(encoded.capacity().saturating_add(shape.retained_bytes())).unwrap_or(u64::MAX),
     )?;
     let raster = image::DynamicImage::ImageRgb8(raster);
+    let measured = encoded
+        .capacity()
+        .saturating_add(shape.retained_bytes())
+        .saturating_add(raster.as_bytes().len());
+    if cancelled(config) || (reserved.is_none() && !run.budget.charge(measured, config)) {
+        return Ok(Vec::new());
+    }
     let processor = run
         .processor
         .get_or_try_init(|| OcrProcessor::new(None).map_err(proof_error))?;
@@ -403,8 +537,16 @@ fn verify_source(
     let budget = CropBudget {
         limits: &limits,
         retained,
+        cancel_token: config.cancel_token.as_ref(),
     };
-    verify_numbers(proof, &raster, processor, &mut recognition, &budget, config)
+    let numbers = verify_numbers(proof, &raster, processor, &mut recognition, &budget, (config, run))?;
+    if cancelled(config) {
+        return Ok(Vec::new());
+    }
+    if reserved.is_some_and(|allowance| !run.budget.settle_work(allowance, measured)) {
+        return Ok(Vec::new());
+    }
+    Ok(numbers)
 }
 
 fn verify_numbers(
@@ -413,13 +555,14 @@ fn verify_numbers(
     processor: &OcrProcessor,
     recognition: &mut TesseractConfig,
     budget: &CropBudget<'_>,
-    config: &ExtractionConfig,
+    context: (&ExtractionConfig, &Run),
 ) -> crate::Result<Vec<Number>> {
+    let (config, run) = context;
     let limits = budget.limits;
     let source_retained = budget.retained.saturating_sub(proof.shape.retained_bytes());
     let mut verified = Vec::new();
     for (index, number) in proof.numbers.iter().enumerate() {
-        if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
+        if cancelled(config) || !run.budget.take_crop(config) {
             break;
         }
         if !proof.shape.corroborates(
@@ -430,6 +573,9 @@ fn verify_numbers(
             limits.max_content_size.saturating_sub(source_retained),
         )? {
             continue;
+        }
+        if cancelled(config) {
+            break;
         }
         if let Some(read) = recognize_crop(raster, proof.media, number.bbox, processor, recognition, budget)?
             && recognized_number_matches(&read.content, &number.text)
@@ -449,6 +595,7 @@ fn recognized_number_matches(read: &str, number: &str) -> bool {
 struct CropBudget<'a> {
     limits: &'a crate::extractors::security::SecurityLimits,
     retained: usize,
+    cancel_token: Option<&'a crate::cancellation::CancellationToken>,
 }
 
 fn recognize_crop(
@@ -459,6 +606,12 @@ fn recognize_crop(
     recognition: &mut TesseractConfig,
     budget: &CropBudget<'_>,
 ) -> crate::Result<Option<crate::types::OcrExtractionResult>> {
+    if budget
+        .cancel_token
+        .is_some_and(crate::cancellation::CancellationToken::is_cancelled)
+    {
+        return Ok(None);
+    }
     let limits = budget.limits;
     let retained = budget.retained;
     let Some(crop) = crop_number(raster, media, bbox, limits.max_content_size.saturating_sub(retained)) else {
@@ -477,6 +630,12 @@ fn recognize_crop(
     let mut crop_limits = limits.clone();
     crop_limits.max_content_size = remaining;
     recognition.security_limits = Some(crop_limits);
+    if budget
+        .cancel_token
+        .is_some_and(crate::cancellation::CancellationToken::is_cancelled)
+    {
+        return Ok(None);
+    }
     processor
         .process_image_with_policy(
             encoded.get_ref(),
@@ -718,6 +877,9 @@ fn line_geometrically_owns(line: &PdfLine, bbox: Rect) -> bool {
     };
     line_box(bounds).owns(&line_box(bbox))
 }
+
+#[cfg(test)]
+mod page_ranges_tests;
 
 #[cfg(test)]
 mod tests;

@@ -181,7 +181,7 @@ fn recovers_the_painted_zero_once_at_its_source_position() {
         assert!(text.find('០').unwrap() < text.find(PROSE[0]).unwrap(), "{text}");
     }
     assert_plain_page_ranges(&result);
-    assert_two_page_numbers(&config, 1);
+    assert_two_page_numbers(&config, 1, 0);
     assert_recovered_list_ranges(&config);
 }
 
@@ -273,10 +273,20 @@ fn provision_khmer(directory: &std::path::Path) {
 
 #[test]
 fn english_only_keeps_the_unverified_ocr_read() {
-    let (models, config) = config();
+    let (models, mut config) = config();
+    // The implicit per-page pipeline defers structure and is ineligible for numeric recovery.
+    // A bounded single-page render instead takes the accepted direct Tesseract route. ~keep
+    config.security_limits = Some(xberg::SecurityLimits {
+        max_content_size: 20 * 1024 * 1024,
+        ..Default::default()
+    });
     assert!(!models.path().join("khm.traineddata").exists());
     let result = extract(MATCHING, &config);
     assert_ocr_retains_prose(&result);
+    let page = &result.pages.as_ref().unwrap()[0];
+    let preprocessing = page.image_preprocessing.as_ref().expect("bounded direct OCR read");
+    assert!(preprocessing.final_dpi < preprocessing.target_dpi);
+    assert_eq!(page.ocr_confidence.as_ref().unwrap().backend, "tesseract");
     for text in [&result.content, &result.pages.as_ref().unwrap()[0].content] {
         assert_eq!(
             text.matches('០').count(),
@@ -301,8 +311,30 @@ fn english_only_keeps_the_unverified_ocr_read() {
         no_claim.content, result.content,
         "diagnostics must not change English OCR"
     );
+    assert_eq!(no_claim.pages.as_ref().unwrap()[0].content, page.content);
     assert_eq!(missing_model_warnings(&no_claim), 0, "no native script evidence");
-    assert_two_page_numbers(&config, 0);
+    // The single-page fast path cannot own a two-page document. ~keep
+    assert_two_page_numbers(&config, 0, if cfg!(paddle_ocr) { 0 } else { 2 });
+}
+
+#[cfg(paddle_ocr)]
+#[test]
+fn implicit_per_page_route_does_not_warn_about_missing_auxiliary_model() {
+    let (models, config) = config();
+    assert!(!models.path().join("khm.traineddata").exists());
+    let result = extract(MATCHING, &config);
+    assert_ocr_retains_prose(&result);
+    let page = &result.pages.as_ref().unwrap()[0];
+    let preprocessing = page.image_preprocessing.as_ref().unwrap();
+    assert_eq!(preprocessing.final_dpi, preprocessing.target_dpi);
+    assert_eq!(missing_model_warnings(&result), 0, "deferred structure is ineligible");
+    for text in [&result.content, &page.content] {
+        assert_eq!(text.matches('០').count(), 0);
+    }
+    let no_claim = extract(&without_native_claim(), &config);
+    assert_eq!(result.content, no_claim.content, "retain the English OCR read");
+    assert_eq!(page.content, no_claim.pages.as_ref().unwrap()[0].content);
+    assert_eq!(missing_model_warnings(&no_claim), 0);
 }
 
 fn duplicated_page() -> Vec<u8> {
@@ -326,7 +358,7 @@ fn duplicated_source(input: &[u8]) -> Vec<u8> {
     bytes
 }
 
-fn assert_two_page_numbers(config: &ExtractionConfig, count_per_page: usize) {
+fn assert_two_page_numbers(config: &ExtractionConfig, count_per_page: usize, expected_warnings: usize) {
     let result = helpers::extract_bytes_document_blocking(&duplicated_page(), "application/pdf", config).unwrap();
     let pages = result.pages.as_ref().unwrap();
     assert_eq!(pages.len(), 2);
@@ -338,7 +370,6 @@ fn assert_two_page_numbers(config: &ExtractionConfig, count_per_page: usize) {
     if config.output_format == xberg::OutputFormat::Plain {
         assert_plain_page_ranges(&result);
     }
-    let expected_warnings = if count_per_page == 0 { 2 } else { 0 };
     assert_eq!(missing_model_warnings(&result), expected_warnings);
     if expected_warnings != 0 {
         for page in [1, 2] {

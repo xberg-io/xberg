@@ -9,6 +9,8 @@ use super::pipeline::XObjectRecoveryContext;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) type EncodedPage = (usize, std::sync::Arc<Vec<u8>>, u32, u32);
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) type FullPdfRenderState = (std::sync::Arc<xberg_native_pdf::PdfDocument>, usize, Vec<u32>);
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 type RenderedPages = Vec<(usize, image::DynamicImage)>;
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 type PageRenderFailures = Vec<(usize, crate::XbergError)>;
@@ -142,7 +144,12 @@ pub(super) fn pre_rendered_page_source_dpi(
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-pub(super) fn open_pdf_for_full_ocr(content: &[u8]) -> crate::Result<(xberg_native_pdf::PdfDocument, usize, Vec<u32>)> {
+pub(super) fn open_pdf_for_full_ocr(content: &[u8]) -> crate::Result<FullPdfRenderState> {
+    let (document, count, rotations) = open_pdf_for_full_ocr_unshared(content)?;
+    Ok((std::sync::Arc::new(document), count, rotations))
+}
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn open_pdf_for_full_ocr_unshared(content: &[u8]) -> crate::Result<(xberg_native_pdf::PdfDocument, usize, Vec<u32>)> {
     let doc = xberg_native_pdf::PdfDocument::from_bytes(content.to_vec()).map_err(|e| crate::XbergError::Parsing {
         message: format!("Failed to open PDF for OCR streaming: {:?}", e),
         source: None,
@@ -677,7 +684,7 @@ pub(super) fn fallback_render_document<'a>(
 ) -> Option<&'a xberg_native_pdf::PdfDocument> {
     memo.get_or_insert_with(|| {
         let bytes = content?;
-        match open_pdf_for_full_ocr(bytes) {
+        match open_pdf_for_full_ocr_unshared(bytes) {
             Ok((doc, _, _)) => Some(doc),
             Err(error) => {
                 tracing::debug!("force_ocr fallback: reopening the PDF for XObject recovery failed: {error}");
@@ -701,7 +708,7 @@ pub(super) fn fallback_render_document<'a>(
 /// `lazy_pdf_render_state` is indexed for beyond the page's own raster geometry. ~keep
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn whole_page_raster_for_ocr_page(
-    lazy_pdf_render_state: Option<&(xberg_native_pdf::PdfDocument, usize, Vec<u32>)>,
+    lazy_pdf_render_state: Option<&FullPdfRenderState>,
     fallback_pdf_state: &mut Option<Option<xberg_native_pdf::PdfDocument>>,
     content: Option<&[u8]>,
     page_idx: usize,
@@ -723,7 +730,7 @@ pub(super) fn whole_page_raster_for_ocr_page(
 pub(super) fn single_block_for_ocr_page(
     single_block_pages: Option<&std::collections::HashSet<u32>>,
     page_number: usize,
-    lazy_pdf_render_state: Option<&(xberg_native_pdf::PdfDocument, usize, Vec<u32>)>,
+    lazy_pdf_render_state: Option<&FullPdfRenderState>,
     fallback_pdf_state: &mut Option<Option<xberg_native_pdf::PdfDocument>>,
     content: Option<&[u8]>,
     page_idx: usize,
@@ -738,7 +745,7 @@ pub(super) fn single_block_for_ocr_page(
 /// else the lazily opened fallback handle.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn ocr_page_document<'a>(
-    lazy_pdf_render_state: Option<&'a (xberg_native_pdf::PdfDocument, usize, Vec<u32>)>,
+    lazy_pdf_render_state: Option<&'a FullPdfRenderState>,
     fallback_pdf_state: &'a mut Option<Option<xberg_native_pdf::PdfDocument>>,
     content: Option<&[u8]>,
 ) -> Option<&'a xberg_native_pdf::PdfDocument> {

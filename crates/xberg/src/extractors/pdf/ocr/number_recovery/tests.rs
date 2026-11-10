@@ -450,6 +450,7 @@ fn should_reuse_one_lazy_processor_for_independent_page_verifications() {
             directory.path().to_str().unwrap(),
             &config,
             &run,
+            None,
         )
         .unwrap();
         assert_eq!(
@@ -702,12 +703,13 @@ fn should_refuse_when_the_provisioned_crop_model_disappears() {
         directory.path().to_str().unwrap(),
         &config,
         &run,
+        None,
     )
     .unwrap();
     assert_eq!(positive[0].text, "០");
     std::fs::remove_file(&model_path).unwrap();
     assert!(
-        verify_source(encoded, &proof, directory.path().to_str().unwrap(), &config, &run).is_err(),
+        verify_source(encoded, &proof, directory.path().to_str().unwrap(), &config, &run, None).is_err(),
         "a missing selected model must not fall back to another root or download a replacement"
     );
     assert!(!model_path.exists());
@@ -793,6 +795,7 @@ fn should_refuse_painted_latin_lookalikes_in_a_claimed_khmer_crop() {
         let budget = CropBudget {
             limits: &limits,
             retained: encoded.capacity() + raster.as_bytes().len(),
+            cancel_token: None,
         };
         let processor = run.processor.get_or_try_init(|| OcrProcessor::new(None)).unwrap();
         for language in ["khm", "eng"] {
@@ -801,9 +804,14 @@ fn should_refuse_painted_latin_lookalikes_in_a_claimed_khmer_crop() {
             let actual = recognize_crop(&raster, media, character.bbox, processor, &mut recognition, &budget)
                 .unwrap()
                 .unwrap();
-            eprintln!("{name}: {language} crop read={:?}", actual.content);
+            assert_eq!(
+                recognized_number_matches(&actual.content, "០"),
+                language == "khm" && name != "painted ASCII 0",
+                "pinned crop semantic precondition: {name}, {language}, read={:?}",
+                actual.content
+            );
         }
-        let verified = verify_source(encoded, &proof, directory.path().to_str().unwrap(), &config, &run).unwrap();
+        let verified = verify_source(encoded, &proof, directory.path().to_str().unwrap(), &config, &run, None).unwrap();
         observed.push((name, verified.len()));
     }
     assert_eq!(
@@ -834,13 +842,13 @@ async fn should_defer_missing_model_warnings_until_the_primary_page_is_accepted(
         }),
         ..Default::default()
     };
-    let (_, observe) = prepare_read(config.ocr.clone().unwrap(), &config, 0, Some("ប០ប"));
+    let (_, observe) = prepare_read(config.ocr.clone().unwrap(), &config, 0, 0, Some("ប០ប"), &Run::default());
     assert!(!observe);
     let input = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/tests/fixtures/pdf_khmer_number_2408/matching.pdf"
     ));
-    let document = PdfDocument::from_bytes(input.to_vec()).unwrap();
+    let document = std::sync::Arc::new(PdfDocument::from_bytes(input.to_vec()).unwrap());
     let (encoded, _, _) = verifier_fixture();
     let integrity = rendered_integrity(input);
     let metadata = primary_read().metadata;
@@ -858,7 +866,7 @@ async fn should_defer_missing_model_warnings_until_the_primary_page_is_accepted(
             builtin: true,
         },
         source: Some(PageSource {
-            document: &document,
+            document: std::sync::Arc::clone(&document),
             index: 0,
             layer: "ប០ប",
             raster: encoded.clone(),
@@ -918,3 +926,5 @@ async fn exercise_accepted_page_warnings<'a>(page: impl Fn() -> PreparedPage<'a>
     assert!(warnings[1].message.contains("proof limits"));
     assert_eq!(text, "VOU");
 }
+
+mod run_controls_tests;

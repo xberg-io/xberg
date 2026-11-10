@@ -116,7 +116,11 @@ only the verified number and its separator are inserted.
 
 One lazy processor is retained for the OCR run. Its bounded native pool reuses
 the initialized Khmer engine across pages, while crops remain serial with at
-most 64 native numeric glyphs per page. Every crop still incurs recognition,
+most 64 native numeric glyphs per page. Shared run limits additionally cap attempted pages
+at eight, crop attempts at 64 and cumulative accounted proof/raster work at 128 MiB;
+caller iteration/content limits can lower these bounds. The existing render document is
+shared without source copies or reopening; source preparation and recognition execute on
+blocking workers. An exhausted budget retains OCR reads and emits one document warning. Every crop still incurs recognition,
 image/config hashing and model-context resolution, even with result caching
 disabled. The independent numeral read is extra work on eligible pages only. Eligible
 native Khmer-number pages bypass both the primary OCR cache and extraction-result
@@ -177,3 +181,14 @@ script. The existing native-script retry and retention check excludes numerals
 from that evidence across all supported scripts, including numeric-only reads
 in another script block. This global letter-evidence correction is separate
 from the English-primary Khmer numeric recovery capability.
+
+The implicit deferred per-page pipeline, including the usual full-feature route, is
+outside the numeric recovery/warning capability. The English-only direct-route test uses
+a 20 MiB render limit and asserts its bounded raster and Tesseract backend; a separate
+full-feature negative pins the deferred route without inventing a missing-model warning.
+Core PDF/OCR maintainers own the conservative validators and budget limits; Native-PDF
+maintainers own the renderer/emission contracts they depend on (ADR 0014).
+
+Source preparation reserves its remaining document allowance before any font work.
+Only completed verification refunds unused allowance; an unmeasured failure may
+consume the remainder and stop numeric recovery while retaining accepted OCR text.

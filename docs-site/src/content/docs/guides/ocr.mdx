@@ -412,7 +412,15 @@ Tagged or ActualText content, Forms, custom graphics-state resources, composite
 outlines and unsupported encodings retain the ordinary OCR read. Source text
 and character memory are admitted before private extraction, which reuses one
 owned character buffer. See the fixture README for the exact font, content and
-work limits.
+work limits. Source preparation and crop recognition run serially on blocking workers sharing
+one document budget: at most eight attempted pages, 64 crops and 128 MiB of accounted
+verifier work, reduced by caller limits. Exhaustion retains accepted OCR reads and warns.
+Implicit deferred per-page pipelines (including the usual `full` feature route) are excluded
+from both recovery and its missing-model warning; the bounded direct route remains eligible.
+
+Source preparation reserves its remaining document allowance before any font work.
+Only completed verification refunds unused allowance; an unmeasured failure may
+consume the remainder and stop numeric recovery while retaining accepted OCR text.
 
 ### Force OCR
 
