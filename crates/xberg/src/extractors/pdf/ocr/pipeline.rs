@@ -5720,11 +5720,18 @@ pub(super) async fn extract_with_ocr_for_page(
         {
             continue;
         }
-        if let Some(pruned) = super::symbol_noise_lines::prune_symbol_noise_lines(&page_texts[page_idx]) {
+        if ocr_output_thresholds.prune_symbol_noise_lines
+            && super::symbol_noise_lines::page_is_dominated_by_noise_lines(page_texts[page_idx].lines())
+        {
+            let (pruned, removed) = super::symbol_noise_lines::prune_text(&page_texts[page_idx]);
             page_texts[page_idx] = pruned;
             if let Some(paragraphs) = all_page_paragraphs[page_idx].as_mut() {
-                super::symbol_noise_lines::prune_symbol_noise_paragraphs(paragraphs);
+                super::symbol_noise_lines::prune_paragraphs(paragraphs);
             }
+            recognition_noise_warnings.push(super::symbol_noise_lines::pruned_lines_warning(
+                verdict.page_index + 1,
+                removed,
+            ));
         }
     }
 

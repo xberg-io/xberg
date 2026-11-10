@@ -14348,8 +14348,9 @@ class OcrQualityThresholds {
   /// Measured over the 16 pages of a recorded municipal ordinance (13 prose pages, 3 scanned
   /// survey drawings): prose ran 0.04-0.28, the drawings 0.42-0.47. The default sits in that
   /// gap with margin on both sides. By default, crossing the threshold emits a processing
-  /// warning but retains the recognized text. Set [`Self::discard_suspected_ocr_noise`] to
-  /// `true` to restore destructive filtering.
+  /// warning and retains the recognized text, except for the symbol-noise lines that
+  /// [`Self::prune_symbol_noise_lines`] removes. Set [`Self::discard_suspected_ocr_noise`] to
+  /// `true` to restore destructive filtering of the whole page.
   final double maxOcrOutputFragmentedWordRatio;
 
   /// Minimum mean OCR confidence (0-100) below which a page is reported as suspected noise.
@@ -14397,8 +14398,21 @@ class OcrQualityThresholds {
   /// Discard non-empty OCR text when any configured recognition-noise signal fires.
   ///
   /// Defaults to `false`: suspected noise is retained and surfaced through
-  /// `processing_warnings`. Set to `true` to preserve the legacy destructive behavior.
+  /// `processing_warnings`, minus the symbol-noise lines [`Self::prune_symbol_noise_lines`]
+  /// removes. Set to `true` to preserve the legacy destructive behavior.
   final bool discardSuspectedOcrNoise;
+
+  /// Remove symbol-noise lines from a page flagged as suspected recognition noise but retained.
+  ///
+  /// Applies to any such page, not only photographs, when it has at least 8 non-blank lines
+  /// and at least half of them are symbol noise. A line is symbol noise when fewer than half
+  /// its tokens are word-shaped (3 or more letters; 4 or more for a one-token line), it holds
+  /// no run of 2 or more digits, and it is not written in a script whose words are not
+  /// space-delimited (CJK, Kana, Hangul, Thai, Lao, Khmer, Myanmar). Pages with tables and
+  /// pages discarded by [`Self::discard_suspected_ocr_noise`] are skipped. Each pruned page
+  /// adds a processing warning naming the page and the number of lines removed. Set to
+  /// `false` to keep every recognized line.
+  final bool pruneSymbolNoiseLines;
 
   /// Minimum average word length. Below this with enough words indicates garbled extraction.
   final double minAvgWordLength;
@@ -14478,6 +14492,7 @@ class OcrQualityThresholds {
     required this.minWordsForOcrOutputCheck,
     required this.maxOcrOutputDictInvalidWordRatio,
     required this.discardSuspectedOcrNoise,
+    required this.pruneSymbolNoiseLines,
     required this.minAvgWordLength,
     required this.minWordsForAvgLengthCheck,
     required this.minConsecutiveRepeatRatio,
@@ -14508,6 +14523,7 @@ class OcrQualityThresholds {
       minWordsForOcrOutputCheck.hashCode ^
       maxOcrOutputDictInvalidWordRatio.hashCode ^
       discardSuspectedOcrNoise.hashCode ^
+      pruneSymbolNoiseLines.hashCode ^
       minAvgWordLength.hashCode ^
       minWordsForAvgLengthCheck.hashCode ^
       minConsecutiveRepeatRatio.hashCode ^
@@ -14542,6 +14558,7 @@ class OcrQualityThresholds {
           maxOcrOutputDictInvalidWordRatio ==
               other.maxOcrOutputDictInvalidWordRatio &&
           discardSuspectedOcrNoise == other.discardSuspectedOcrNoise &&
+          pruneSymbolNoiseLines == other.pruneSymbolNoiseLines &&
           minAvgWordLength == other.minAvgWordLength &&
           minWordsForAvgLengthCheck == other.minWordsForAvgLengthCheck &&
           minConsecutiveRepeatRatio == other.minConsecutiveRepeatRatio &&

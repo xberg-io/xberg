@@ -14449,6 +14449,7 @@ const _: fn() = || {
         let _: i64 = OcrQualityThresholds.min_words_for_ocr_output_check;
         let _: f64 = OcrQualityThresholds.max_ocr_output_dict_invalid_word_ratio;
         let _: bool = OcrQualityThresholds.discard_suspected_ocr_noise;
+        let _: bool = OcrQualityThresholds.prune_symbol_noise_lines;
         let _: f64 = OcrQualityThresholds.min_avg_word_length;
         let _: i64 = OcrQualityThresholds.min_words_for_avg_length_check;
         let _: f64 = OcrQualityThresholds.min_consecutive_repeat_ratio;
@@ -22547,6 +22548,7 @@ impl SseDecode for crate::OcrQualityThresholds {
         let mut var_minWordsForOcrOutputCheck = <i64>::sse_decode(deserializer);
         let mut var_maxOcrOutputDictInvalidWordRatio = <f64>::sse_decode(deserializer);
         let mut var_discardSuspectedOcrNoise = <bool>::sse_decode(deserializer);
+        let mut var_pruneSymbolNoiseLines = <bool>::sse_decode(deserializer);
         let mut var_minAvgWordLength = <f64>::sse_decode(deserializer);
         let mut var_minWordsForAvgLengthCheck = <i64>::sse_decode(deserializer);
         let mut var_minConsecutiveRepeatRatio = <f64>::sse_decode(deserializer);
@@ -22574,6 +22576,7 @@ impl SseDecode for crate::OcrQualityThresholds {
             min_words_for_ocr_output_check: var_minWordsForOcrOutputCheck,
             max_ocr_output_dict_invalid_word_ratio: var_maxOcrOutputDictInvalidWordRatio,
             discard_suspected_ocr_noise: var_discardSuspectedOcrNoise,
+            prune_symbol_noise_lines: var_pruneSymbolNoiseLines,
             min_avg_word_length: var_minAvgWordLength,
             min_words_for_avg_length_check: var_minWordsForAvgLengthCheck,
             min_consecutive_repeat_ratio: var_minConsecutiveRepeatRatio,
@@ -32423,6 +32426,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::OcrQualityThresholds> {
                 .into_into_dart()
                 .into_dart(),
             self.0.discard_suspected_ocr_noise.into_into_dart().into_dart(),
+            self.0.prune_symbol_noise_lines.into_into_dart().into_dart(),
             self.0.min_avg_word_length.into_into_dart().into_dart(),
             self.0.min_words_for_avg_length_check.into_into_dart().into_dart(),
             self.0.min_consecutive_repeat_ratio.into_into_dart().into_dart(),
@@ -40188,6 +40192,7 @@ impl SseEncode for crate::OcrQualityThresholds {
         <i64>::sse_encode(self.min_words_for_ocr_output_check, serializer);
         <f64>::sse_encode(self.max_ocr_output_dict_invalid_word_ratio, serializer);
         <bool>::sse_encode(self.discard_suspected_ocr_noise, serializer);
+        <bool>::sse_encode(self.prune_symbol_noise_lines, serializer);
         <f64>::sse_encode(self.min_avg_word_length, serializer);
         <i64>::sse_encode(self.min_words_for_avg_length_check, serializer);
         <f64>::sse_encode(self.min_consecutive_repeat_ratio, serializer);

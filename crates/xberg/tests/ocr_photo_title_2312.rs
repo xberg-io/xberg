@@ -7,6 +7,7 @@
 ))]
 
 use sha2::{Digest, Sha256};
+use xberg::core::config::OcrQualityThresholds;
 use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, OcrConfig, OutputFormat, PageConfig, extract};
 
 const TITLE: &str = "SECTION TITLE";
@@ -17,7 +18,19 @@ const TABLE: &[u8] = include_bytes!("fixtures/ocr_photo_title_2312/table.png");
 const PARTIAL: &[u8] = include_bytes!("fixtures/ocr_photo_title_2312/partial.png");
 const NUMERIC: &[u8] = include_bytes!("fixtures/ocr_photo_title_2312/numeric.png");
 
+/// The configuration under which every title-placement assertion below reads the full, unpruned
+/// OCR body around the title.
 fn png_config() -> ExtractionConfig {
+    let mut config = pruned_config();
+    config.ocr.as_mut().unwrap().quality_thresholds = Some(OcrQualityThresholds {
+        prune_symbol_noise_lines: false,
+        ..OcrQualityThresholds::default()
+    });
+    config
+}
+
+/// The default configuration, which prunes symbol-noise lines from a flagged page.
+fn pruned_config() -> ExtractionConfig {
     ExtractionConfig {
         use_cache: false,
         ocr: Some(OcrConfig::default()),
@@ -59,15 +72,33 @@ fn assert_body(text: &str, expected_sha: &str) {
     assert_eq!(hex::encode(Sha256::digest(text.as_bytes())), expected_sha, "{text:?}");
 }
 
-fn assert_only_the_title(document: &ExtractedDocument) {
-    assert_eq!(document.content.trim_end(), TITLE);
-    assert_eq!(document.pages.as_ref().unwrap()[0].content.trim_end(), TITLE);
+fn remove_positioned_photo_title(content: &str) -> String {
+    let (before, after) = content
+        .split_once(TITLE_PARAGRAPH)
+        .expect("title is a separate paragraph");
+    assert_eq!(before.lines().filter(|line| !line.trim().is_empty()).count(), 103);
+    assert!(
+        after.starts_with('*'),
+        "the first recognized line below the source title"
+    );
+    assert!(!after.contains(TITLE));
+    format!("{before}{after}")
+}
+
+fn assert_addition(document: &ExtractedDocument, body_sha: &str, page_sha: &str) {
+    assert_body(&remove_positioned_photo_title(&document.content), body_sha);
+    let page = &document.pages.as_ref().unwrap()[0].content;
+    assert_body(&remove_positioned_photo_title(page.trim()), page_sha);
 }
 
 #[tokio::test]
-async fn recovers_the_photo_title_and_prunes_the_symbol_noise_around_it() {
+async fn recovers_the_photo_title_and_keeps_unrelated_primary_lines() {
     let document = extract_primary(PHOTO, 215, 0).await;
-    assert_only_the_title(&document);
+    assert_addition(
+        &document,
+        "0f5edadaac602317a553d4fce3f4473215abe745ad0b5005c916cd8c5540c1d9",
+        "77d64c8b58e3646f88fdaf16a6c2e783189194293da40a8c4a9efbc6d7ddfa0f",
+    );
 }
 
 #[tokio::test]
@@ -76,7 +107,12 @@ async fn certified_photo_title_does_not_repeat_its_source_glyph_as_a_separate_li
     let page = &document.pages.as_ref().unwrap()[0];
     for content in [&document.content, &page.content] {
         assert_eq!(content.matches(TITLE).count(), 1);
-        assert_eq!(content.lines().filter(|line| line.trim() == "I").count(), 0);
+        assert_eq!(
+            content.lines().filter(|line| line.trim() == "I").count(),
+            0,
+            "the primary I occupies the same source glyph recovered inside SECTION"
+        );
+        assert!(content.lines().any(|line| line.trim() == "*"));
     }
 }
 
@@ -119,7 +155,10 @@ async fn leaves_a_partially_recognized_sign_at_its_existing_location() {
     let document = extract_primary(PARTIAL, 21, 0).await;
     assert!(document.content.lines().any(|line| line == "NORTH"));
     assert!(!document.content.contains("NORTH GATE"));
-    assert_eq!(document.content, "NORTH");
+    assert_body(
+        &document.content,
+        "e0c04b85d5e3263df7e7302708b39bad37c54d6e322e74c1f3afa7f2ad202ff6",
+    );
 }
 
 #[tokio::test]
@@ -137,11 +176,16 @@ async fn leaves_requested_document_structure_untouched() {
     let document = extract_png(PHOTO, &config).await;
     assert!(document.document.is_some(), "structured extraction was requested");
     assert!(!document.content.contains(TITLE));
-    assert!(
-        document
-            .pages
-            .is_none_or(|pages| pages.iter().all(|page| !page.content.contains(TITLE)))
-    );
+    assert!(!document.pages.expect("requested pages")[0].content.contains(TITLE));
+}
+
+fn remove_markdown_title(document: &mut ExtractedDocument) {
+    document.content = remove_positioned_photo_title(&document.content);
+    let [page] = document.pages.as_deref_mut().expect("requested pages") else {
+        panic!("one standalone PNG page")
+    };
+    assert_eq!(page.page_number, 1);
+    page.content = remove_positioned_photo_title(&page.content);
 }
 
 fn markdown_config() -> ExtractionConfig {
@@ -158,22 +202,30 @@ async fn recovers_photo_title_in_markdown() {
     // The standalone extractor sets this same effective OCR format. Supplying it explicitly
     // disqualifies the optional title proof while leaving the ordinary Markdown read unchanged.
     reference_config.ocr.as_mut().unwrap().output_format = Some(OutputFormat::Markdown);
-    let reference = extract_png(PHOTO, &reference_config).await;
-    assert_eq!(
-        reference.content, "",
-        "the photo's symbol noise is pruned and nothing else was read"
+    let mut reference = extract_png(PHOTO, &reference_config).await;
+    assert_body(
+        &reference.content,
+        "b48f67548d303c58954cbe54c95bd7545eca1de64a73b45e59f4dafa8ae37fbf",
     );
-    let recovered = extract_png(PHOTO, &config).await;
-    assert!(recovered.tables.is_empty());
-    assert_only_the_title(&recovered);
+    assert_body(
+        &reference.pages.as_ref().unwrap()[0].content,
+        "2ab44fd7d097fd8353d7c6f346ce3a4ba370e64fec2871d7131de9382012507c",
+    );
     assert_eq!(
-        recovered.pages.as_ref().unwrap()[0]
+        reference.pages.as_ref().unwrap()[0]
             .ocr_confidence
             .as_ref()
             .unwrap()
             .word_count,
         215
     );
+    let mut recovered = extract_png(PHOTO, &config).await;
+    assert!(recovered.tables.is_empty());
+    remove_markdown_title(&mut recovered);
+    reference.content = reference.content.replacen("\n# I\n\n", "\n", 1);
+    let reference_page = &mut reference.pages.as_mut().unwrap()[0];
+    reference_page.content = reference_page.content.replacen("\nI\n\n", "\n", 1);
+    assert_same_document(&reference, &recovered);
 }
 
 #[tokio::test]
@@ -266,7 +318,11 @@ async fn check_photo_title_cache_paths(uncached: ExtractionConfig) {
     };
     assert!(config.use_cache, "exercise the default cache policy");
     let cold = read_engine(&engine, PHOTO, &config).await;
-    assert_cached_title(&cold);
+    if config.output_format == OutputFormat::Markdown {
+        remove_markdown_title(&mut cold.clone());
+    } else {
+        assert_cached_title(&cold);
+    }
     assert_eq!(cache.writes.load(Ordering::SeqCst), 1);
     assert_eq!(cache.hits.load(Ordering::SeqCst), 0);
     let first_lookup = lookups.0.lock().unwrap().clone();
@@ -304,7 +360,11 @@ async fn check_photo_title_cache_paths(uncached: ExtractionConfig) {
 }
 
 fn assert_cached_title(document: &ExtractedDocument) {
-    assert_only_the_title(document);
+    assert_addition(
+        document,
+        "0f5edadaac602317a553d4fce3f4473215abe745ad0b5005c916cd8c5540c1d9",
+        "77d64c8b58e3646f88fdaf16a6c2e783189194293da40a8c4a9efbc6d7ddfa0f",
+    );
     assert!(document.ocr_elements.is_none());
     assert!(document.tables.is_empty());
     let pages = document.pages.as_ref().expect("requested pages");
@@ -390,4 +450,72 @@ async fn read_engine(engine: &xberg::engine::Engine, bytes: &[u8], config: &Extr
     assert!(batch.errors.is_empty(), "{:?}", batch.errors);
     assert_eq!(batch.results.len(), 1);
     batch.results.remove(0)
+}
+
+fn assert_only_the_title(document: &ExtractedDocument) {
+    assert_eq!(document.content.trim_end(), TITLE);
+    let page = &document.pages.as_ref().expect("requested pages")[0];
+    assert_eq!(page.content.trim_end(), TITLE);
+    assert_eq!(page.ocr_confidence.as_ref().unwrap().word_count, 215);
+}
+
+#[tokio::test]
+async fn pruning_leaves_the_recovered_title_as_the_only_text_of_the_photo() {
+    let document = extract_png(PHOTO, &pruned_config()).await;
+    assert_only_the_title(&document);
+    assert!(
+        document
+            .processing_warnings
+            .iter()
+            .any(|warning| { warning.message.contains("Page 1: removed 213 symbol-noise line(s)") }),
+        "{:?}",
+        document.processing_warnings
+    );
+}
+
+#[tokio::test]
+async fn pruning_in_markdown_keeps_the_title_and_drops_the_headings_made_of_noise() {
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Markdown,
+        ..pruned_config()
+    };
+    let document = extract_png(PHOTO, &config).await;
+    assert_only_the_title(&document);
+}
+
+#[tokio::test]
+async fn pruning_keeps_a_partial_sign_and_a_numeric_sign() {
+    let partial = extract_png(PARTIAL, &pruned_config()).await;
+    assert_eq!(partial.content, "NORTH");
+    let numeric = extract_png(NUMERIC, &pruned_config()).await;
+    assert_eq!(numeric.content, "NORTH GATE 42");
+}
+
+#[tokio::test]
+async fn pruning_can_be_switched_off_and_then_keeps_every_line() {
+    let document = extract_png(PHOTO, &png_config()).await;
+    assert!(document.content.lines().filter(|line| !line.trim().is_empty()).count() > 100);
+    assert!(
+        !document
+            .processing_warnings
+            .iter()
+            .any(|w| w.message.contains("symbol-noise"))
+    );
+}
+
+#[tokio::test]
+async fn a_requested_document_structure_is_pruned_together_with_the_text() {
+    let config = ExtractionConfig {
+        include_document_structure: true,
+        ..pruned_config()
+    };
+    let document = extract_png(PHOTO, &config).await;
+    assert!(document.document.is_some(), "structured extraction was requested");
+    assert_eq!(
+        document.content, "",
+        "the title proof is off here and every line was symbol noise"
+    );
+    assert!(document.pages.is_none(), "no text remains for a page");
+    let structure = serde_json::to_string(&document.document).unwrap();
+    assert!(!structure.contains("\"text\":\"ae\""), "{structure}");
 }

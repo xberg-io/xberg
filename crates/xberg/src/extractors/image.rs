@@ -2972,6 +2972,31 @@ fn apply_public_image_ocr_element_policy(document: &mut InternalDocument, config
     document.prebuilt_ocr_elements = config.select_public_elements(document.prebuilt_ocr_elements.take());
 }
 
+/// Prunes a flagged standalone image's symbol-noise lines and records the warning. Returns whether
+/// any line was removed.
+#[cfg(all(feature = "ocr", feature = "pdf"))]
+fn prune_image_symbol_noise(
+    has_public_ocr_structure: bool,
+    content: &mut String,
+    document: Option<&mut InternalDocument>,
+    has_tables: bool,
+    thresholds: &crate::core::config::OcrQualityThresholds,
+    warnings: &mut Vec<crate::types::ProcessingWarning>,
+) -> bool {
+    if has_public_ocr_structure {
+        return false;
+    }
+    let removed = crate::extractors::pdf::ocr::symbol_noise_lines::prune_standalone_image_noise(
+        content, document, has_tables, thresholds,
+    );
+    if removed > 0 {
+        warnings.push(crate::extractors::pdf::ocr::symbol_noise_lines::pruned_lines_warning(
+            1, removed,
+        ));
+    }
+    removed > 0
+}
+
 /// GH#1789's numeric-token repair, applied to every string representation of a standalone
 /// image's OCR run that can end up in the final document.
 ///
@@ -3356,6 +3381,9 @@ impl ImageExtractor {
         let ocr_elements = ocr_result.ocr_elements;
         let ocr_formulas = ocr_result.formulas;
         let ocr_llm_usage = ocr_result.llm_usage;
+        #[cfg(all(feature = "ocr", feature = "pdf"))]
+        let mut processing_warnings = ocr_result.processing_warnings;
+        #[cfg(not(all(feature = "ocr", feature = "pdf")))]
         let processing_warnings = ocr_result.processing_warnings;
         // `ExtractedDocument::tables` (tables reconstructed by OCR table
         // detection) used to be dropped here entirely: nothing on the
@@ -3387,16 +3415,17 @@ impl ImageExtractor {
             );
         }
 
-        // #2312: a photograph read as symbol noise keeps only its word-shaped lines. The page
+        // #2312: a page flagged as symbol noise keeps only its word-shaped lines. The page
         // verdict and photo-title recovery above judged the unpruned run.
         #[cfg(all(feature = "ocr", feature = "pdf"))]
-        let pruned_symbol_noise = !has_public_ocr_structure
-            && crate::extractors::pdf::ocr::symbol_noise_lines::prune_standalone_image_noise(
-                &mut ocr_content,
-                ocr_internal_document.as_mut(),
-                !ocr_tables.is_empty(),
-                &ocr_config.quality_thresholds.clone().unwrap_or_default(),
-            );
+        let pruned_symbol_noise = prune_image_symbol_noise(
+            has_public_ocr_structure,
+            &mut ocr_content,
+            ocr_internal_document.as_mut(),
+            !ocr_tables.is_empty(),
+            &ocr_config.quality_thresholds.clone().unwrap_or_default(),
+            &mut processing_warnings,
+        );
         #[cfg(all(feature = "ocr", not(feature = "pdf")))]
         let pruned_symbol_noise = false;
 

@@ -121,7 +121,13 @@ fn is_default_english_profile(ocr: &OcrConfig) -> bool {
         && ocr.backend_options.is_none()
         && ocr.element_config.is_none()
         && ocr.output_format.is_none()
-        && ocr.quality_thresholds.is_none()
+        && ocr.quality_thresholds.as_ref().is_none_or(|thresholds| {
+            let default = crate::core::config::OcrQualityThresholds {
+                prune_symbol_noise_lines: thresholds.prune_symbol_noise_lines,
+                ..Default::default()
+            };
+            serde_json::to_value(thresholds).ok() == serde_json::to_value(&default).ok()
+        })
         && ocr.tessdata_path.is_none()
         && ocr.tessdata_bytes.is_none()
         && ocr.pipeline.is_none()

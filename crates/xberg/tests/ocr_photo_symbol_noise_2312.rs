@@ -7,6 +7,7 @@
 ))]
 
 use sha2::{Digest, Sha256};
+use xberg::core::config::OcrQualityThresholds;
 use xberg::{ExtractInput, ExtractionConfig, OcrConfig, OutputFormat, extract};
 
 const TITLE: &str = "SECTION TITLE";
@@ -14,6 +15,7 @@ const PHOTO_PNG: &[u8] = include_bytes!("fixtures/ocr_photo_title_2312/title.png
 const PHOTO_PDF: &[u8] = include_bytes!("fixtures/pdf/discarded-noise-2312/photo-title.pdf");
 const TABLE_PNG: &[u8] = include_bytes!("fixtures/ocr_photo_title_2312/table.png");
 const PROSE_PNG: &[u8] = include_bytes!("fixtures/ocr_photo_noise_2312/prose.png");
+const MIXED_PDF: &[u8] = include_bytes!("fixtures/ocr_photo_noise_2312/prose-then-photo.pdf");
 const PROSE_PDF: &[u8] = include_bytes!("fixtures/ocr_photo_noise_2312/prose.pdf");
 
 /// Characters of OCR output before the filter existed, measured on this tree's parent commit.
@@ -88,5 +90,62 @@ async fn short_table_scan_is_unchanged() {
     assert_eq!(
         hex::encode(Sha256::digest(content.as_bytes())),
         "e19005d542795b6b3dcb3ed3a4701452fe5fb31068ce7e3ef62decbaba03fdbc"
+    );
+}
+
+#[tokio::test]
+async fn a_pruned_pdf_page_carries_a_warning_naming_the_page_and_the_line_count() {
+    let mut batch = extract(
+        ExtractInput::from_bytes(PHOTO_PDF.to_vec(), "application/pdf", None),
+        &config(OutputFormat::Plain),
+    )
+    .await
+    .unwrap();
+    let document = batch.results.remove(0);
+    let warning = document
+        .processing_warnings
+        .iter()
+        .find(|warning| warning.message.contains("symbol-noise line(s)"))
+        .unwrap_or_else(|| panic!("{:?}", document.processing_warnings));
+    assert!(warning.message.starts_with("Page 1: removed "), "{}", warning.message);
+}
+
+#[tokio::test]
+async fn the_flag_off_keeps_every_line_of_the_photograph() {
+    let mut config = config(OutputFormat::Plain);
+    config.ocr.as_mut().unwrap().quality_thresholds = Some(OcrQualityThresholds {
+        prune_symbol_noise_lines: false,
+        ..OcrQualityThresholds::default()
+    });
+    let mut batch = extract(
+        ExtractInput::from_bytes(PHOTO_PDF.to_vec(), "application/pdf", None),
+        &config,
+    )
+    .await
+    .unwrap();
+    let document = batch.results.remove(0);
+    assert!(
+        noise_chars(&document.content) * 10 >= PDF_NOISE_BEFORE * 9,
+        "{:?}",
+        document.content
+    );
+    assert!(
+        !document
+            .processing_warnings
+            .iter()
+            .any(|w| w.message.contains("symbol-noise"))
+    );
+}
+
+/// Known gap: a photograph page that follows a native-text page is read by the mixed route, which
+/// does not prune. This pins today's behaviour so that closing the gap is a deliberate change.
+#[tokio::test]
+async fn the_mixed_route_does_not_prune_a_photograph_page_yet() {
+    let content = read(MIXED_PDF, "application/pdf", OutputFormat::Plain).await;
+    let (prose, photo) = content.split_once("next month.").expect("prose page");
+    assert!(prose.contains("annual budget"));
+    assert!(
+        photo.lines().filter(|line| !line.trim().is_empty()).count() >= 30,
+        "{photo:?}"
     );
 }
