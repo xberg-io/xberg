@@ -653,7 +653,7 @@ pub(super) fn ink_owned_table_structure_can_yield_to_native(
     read: &str,
     original_native_layer: Option<&str>,
 ) -> bool {
-    if original_native_layer.is_some_and(|layer| !layer.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER)) {
+    if original_native_layer.is_some_and(|layer| !layer.contains(super::super::unmapped_glyphs::is_lost_glyph)) {
         uses_only_certified_tesseract_text_and_tables(doc, read)
     } else {
         only_segments_certified_tesseract_text_and_tables(doc, read)

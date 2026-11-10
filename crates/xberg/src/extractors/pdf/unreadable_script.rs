@@ -558,7 +558,7 @@ pub(super) fn retain_unreadable_script_pages(
             let boundary = boundaries.iter().find(|boundary| boundary.page_number == *page)?;
             let text = native_text.get(boundary.byte_start..boundary.byte_end)?;
             let scripts = judged_scripts(text, &stage.languages)?;
-            Some((*page, scripts, text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER)))
+            Some((*page, scripts, text.contains(super::unmapped_glyphs::is_lost_glyph)))
         })
         .collect();
     if candidates.is_empty() {

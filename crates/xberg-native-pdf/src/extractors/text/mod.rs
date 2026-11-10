@@ -19,6 +19,7 @@ use crate::fonts::FontInfo;
 use crate::fonts::unicode_decode::fallback_char_to_unicode;
 use crate::fonts::unicode_decode::{
     DecodePolicy, TextCharIter, decode_text_to_unicode, fallback_extraction_char_to_unicode, strip_subset_prefix,
+    without_symbol_marker,
 };
 use crate::geometry::Rect;
 use crate::layout::{Color, FontWeight, TextChar, TextSpan};
@@ -68,6 +69,18 @@ pub fn set_preserve_unmapped_glyphs(preserve: bool) -> bool {
 #[inline]
 pub(crate) fn preserve_unmapped_glyphs() -> bool {
     PRESERVE_UNMAPPED_GLYPHS.load(Ordering::Relaxed)
+}
+
+/// The decoded text of one glyph of a simple font, with a preserved loss of a symbol font marked
+/// the way the Type0 decoder marks it. The marking is `mark_symbol_font_losses`, the only minter
+/// of the symbol marker. ~keep
+fn mark_inline_symbol_loss(text: String, font: &FontInfo) -> String {
+    use crate::fonts::unicode_decode::mark_symbol_font_losses;
+    let policy = DecodePolicy {
+        preserve_unmapped: preserve_unmapped_glyphs(),
+        ..DecodePolicy::default()
+    };
+    mark_symbol_font_losses(text, Some(font), policy)
 }
 
 /// Source of a space decision in the unified pipeline.
@@ -2103,7 +2116,7 @@ impl TjBuffer {
     /// ligature's letters stands for one ligature glyph, so an empty buffer becomes a lone ligature.
     fn push_actual_text(&mut self, actual_text: &str) {
         let len_before = self.unicode.len();
-        self.unicode.push_str(actual_text);
+        self.unicode.push_str(&without_symbol_marker(actual_text));
         self.record_decode(len_before, || true);
     }
 
@@ -2159,9 +2172,7 @@ impl TjBuffer {
                     && let Ok(decoded) = std::str::from_utf8(bytes)
                     && decoded.chars().any(|c| c as u32 > 0xFF)
                 {
-                    for ch in decoded.chars() {
-                        self.unicode.push(ch);
-                    }
+                    self.unicode.push_str(&without_symbol_marker(decoded));
                     return Ok(());
                 }
             }
@@ -2173,12 +2184,12 @@ impl TjBuffer {
                     self.unicode.push(c);
                 } else if let Some(s) = font.char_to_unicode(byte as u32) {
                     if s != "\u{FFFD}" || preserve_unmapped_glyphs() {
-                        Self::push_filtered_unicode(&mut self.unicode, &s);
+                        Self::push_filtered_unicode(&mut self.unicode, &mark_inline_symbol_loss(s, font));
                     }
                 } else {
                     let fb = fallback_extraction_char_to_unicode(self.unmapped_type3, byte as u32);
                     if fb != "\u{FFFD}" || preserve_unmapped_glyphs() {
-                        Self::push_filtered_unicode(&mut self.unicode, &fb);
+                        Self::push_filtered_unicode(&mut self.unicode, &mark_inline_symbol_loss(fb, font));
                     }
                 }
             }

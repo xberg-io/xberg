@@ -234,7 +234,7 @@ image-encode = ["dep:image"]
 # `language-detection`) depends only on `hashbrown`, so this is wasm/Android-safe -- both
 # `wasm-target` and `android-target` already carry `language-detection` independently via
 # `no-ort-target`. ~keep
-ocr-pipeline = ["dep:image", "image-encode", "dep:fast_image_resize", "language-detection"]
+ocr-pipeline = ["dep:image", "image-encode", "dep:fast_image_resize", "dep:strsim", "language-detection"]
 
 tree-sitter = ["dep:tree-sitter-language-pack"]
 tree-sitter-wasm = ["tree-sitter"]
@@ -1488,7 +1488,7 @@ simdutf8 = { version = "0.1", optional = true }
 similar = { workspace = true, optional = true }
 snap = { version = "1.1", optional = true }
 # The character similarity that tells an OCR row that misreads a native row from another row. ~keep
-strsim = "0.11.1"
+strsim = { version = "0.11.1", optional = true }
 strum = { version = "0.28", features = ["derive"], optional = true }
 # Symphonia: pure-Rust audio decoder for mp3, wav, m4a/mp4, webm etc.
 # MPL-2.0 (file-scoped copyleft, safe for our use). Exception granted in deny.toml.

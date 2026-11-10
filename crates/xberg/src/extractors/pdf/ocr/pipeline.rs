@@ -2597,7 +2597,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             let clean_ink_layer = native_coverage_layers
                 .and_then(|layers| layers.get(page_number))
                 .map(String::as_str)
-                .filter(|layer| !layer.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER));
+                .filter(|layer| !layer.contains(super::super::unmapped_glyphs::is_lost_glyph));
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             if native_ink_owned_pages.contains(page_number)
                 && ink_proof_layout_free

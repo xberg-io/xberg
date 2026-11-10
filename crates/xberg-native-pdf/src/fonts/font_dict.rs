@@ -4356,7 +4356,8 @@ impl FontInfo {
         }
         let result = self
             .char_to_unicode_uncached(char_code)
-            .map(|s| expand_ligature_forms(&normalize_cjk_radical_forms(&s)));
+            .map(|s| expand_ligature_forms(&normalize_cjk_radical_forms(&s)))
+            .map(|s| s.replace(crate::LOST_SYMBOL_GLYPH_MARKER, "\u{FFFD}"));
         if let Ok(mut memo) = self.type0_unicode_memo.lock() {
             memo.insert(char_code, result.clone());
         }

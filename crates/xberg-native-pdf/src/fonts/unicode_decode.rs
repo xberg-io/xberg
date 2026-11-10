@@ -140,6 +140,9 @@ pub(crate) fn fallback_char_to_unicode(char_code: u32) -> String {
         if (0xE000..=0xF8FF).contains(&char_code) {
             tracing::trace!("Private Use Area character: U+{:04X}", char_code);
         }
+        if ch == LOST_SYMBOL_GLYPH_MARKER {
+            return "\u{FFFD}".to_string();
+        }
         ch.to_string()
     } else {
         tracing::trace!("Character code 0x{:04X} is not a valid Unicode code point", char_code);
@@ -559,8 +562,9 @@ fn resolve_char(font: &FontInfo, code: u32, policy: DecodePolicy, unmapped_type3
 /// no bidi pass reorders a row that starts with it (U+FDD0 to U+FDEF sit inside Arabic
 /// Presentation Forms-A). A font program can decode a glyph to a noncharacter too (a ToUnicode
 /// entry, a CID read as its own code point: U+FFFF is common), so the extractor keeps this one for
-/// itself: [`decode_text_to_unicode`] reads a raw U+FFFE as a glyph without a Unicode value. Every
-/// other preserved loss stays U+FFFD. ~keep
+/// itself: [`FontInfo::char_to_unicode`] and [`fallback_char_to_unicode`] read a U+FFFE as a glyph
+/// without a Unicode value, and the content-stream readers drop it. Every other preserved loss
+/// stays U+FFFD. ~keep
 pub const LOST_SYMBOL_GLYPH_MARKER: char = '\u{FFFE}';
 
 /// Whether `c` is a marker a preserved decode leaves for a glyph without a Unicode value: U+FFFD,
@@ -588,25 +592,22 @@ pub(crate) fn decode_text_to_unicode(
         decode_latin1_fallback(bytes)
     };
 
-    let raw_result = reserve_symbol_marker(raw_result, policy);
     filter_decoded_text(&mark_symbol_font_losses(raw_result, font, policy), policy)
 }
 
-/// A glyph the font program decodes to [`LOST_SYMBOL_GLYPH_MARKER`] itself has no Unicode value:
-/// it becomes what the decoders make of an unmapped glyph (U+FFFD when losses are preserved,
-/// nothing otherwise), so the marker in a decode is always the extractor's. Runs before
-/// `mark_symbol_font_losses`, which may then make such a glyph of a symbol font the marker. ~keep
-fn reserve_symbol_marker(decoded: String, policy: DecodePolicy) -> String {
-    if !decoded.contains(LOST_SYMBOL_GLYPH_MARKER) {
-        return decoded;
+/// Text the content stream authors (a UTF-8 literal, `/ActualText`) without the marker: a PDF has
+/// no way to write the extractor's symbol-loss marker, so a U+FFFE in such text is dropped. ~keep
+pub(crate) fn without_symbol_marker(text: &str) -> std::borrow::Cow<'_, str> {
+    if text.contains(LOST_SYMBOL_GLYPH_MARKER) {
+        std::borrow::Cow::Owned(text.replace(LOST_SYMBOL_GLYPH_MARKER, ""))
+    } else {
+        std::borrow::Cow::Borrowed(text)
     }
-    let lost = if policy.preserve_unmapped { "\u{FFFD}" } else { "" };
-    decoded.replace(LOST_SYMBOL_GLYPH_MARKER, lost)
 }
 
 /// A preserved U+FFFD of a symbol font becomes [`LOST_SYMBOL_GLYPH_MARKER`]. Runs after the
 /// drop branch of each decoder, so a decode that drops unmapped glyphs never sees it. ~keep
-fn mark_symbol_font_losses(decoded: String, font: Option<&FontInfo>, policy: DecodePolicy) -> String {
+pub(crate) fn mark_symbol_font_losses(decoded: String, font: Option<&FontInfo>, policy: DecodePolicy) -> String {
     if policy.preserve_unmapped && font.is_some_and(FontInfo::is_symbol_font) && decoded.contains('\u{FFFD}') {
         decoded.replace('\u{FFFD}', &LOST_SYMBOL_GLYPH_MARKER.to_string())
     } else {

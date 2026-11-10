@@ -885,10 +885,10 @@ pub(super) fn read_words_in_native(
     read: &str,
     thresholds: &OcrQualityThresholds,
 ) -> (usize, usize, bool) {
-    use super::super::unmapped_glyphs::LOST_GLYPH_MARKER;
+    use super::super::unmapped_glyphs::is_lost_glyph;
 
     let spaced = |word: &String| !word.chars().any(is_unspaced_script);
-    let spelled: std::collections::HashSet<String> = whole_words(&native.replace(LOST_GLYPH_MARKER, ""))
+    let spelled: std::collections::HashSet<String> = whole_words(&native.replace(is_lost_glyph, ""))
         .filter(spaced)
         .collect();
     let distinct: std::collections::HashSet<String> = whole_words(read)
@@ -924,9 +924,9 @@ fn unspaced_bigrams(text: &str) -> std::collections::HashSet<(char, char)> {
 /// lost-glyph markers removed from the native text as for words. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 pub(super) fn read_bigrams_in_native(native: &str, read: &str) -> (usize, usize) {
-    use super::super::unmapped_glyphs::LOST_GLYPH_MARKER;
+    use super::super::unmapped_glyphs::is_lost_glyph;
 
-    let spelled = unspaced_bigrams(&native.replace(LOST_GLYPH_MARKER, ""));
+    let spelled = unspaced_bigrams(&native.replace(is_lost_glyph, ""));
     let distinct = unspaced_bigrams(read);
     (
         distinct.iter().filter(|bigram| spelled.contains(*bigram)).count(),
