@@ -11,12 +11,8 @@ pub(in super::super) fn supports(config: &ExtractionConfig, ocr: &OcrConfig) -> 
 }
 
 /// Names the first configuration choice that keeps strip recovery from running. Callers
-/// that report it have already excluded stored scans.
+/// that report it have already excluded layout detection and stored scans.
 pub(in super::super) fn unsupported_reason(config: &ExtractionConfig, ocr: &OcrConfig) -> Option<&'static str> {
-    #[cfg(feature = "layout-detection")]
-    if config.layout.is_some() {
-        return Some("layout detection is configured");
-    }
     if !matches!(config.output_format, OutputFormat::Plain | OutputFormat::Markdown) {
         return Some("the output format is not plain text or Markdown");
     }
@@ -126,7 +122,7 @@ mod tests {
 
     #[cfg(feature = "layout-detection")]
     #[test]
-    fn a_layout_configuration_blocks_recovery_for_every_caller_and_is_named() {
+    fn support_is_exactly_the_absence_of_an_unsupported_reason() {
         let ocr = OcrConfig {
             language: vec!["eng".into()],
             ..Default::default()
@@ -135,14 +131,13 @@ mod tests {
             layout: Some(Default::default()),
             ..Default::default()
         };
-        assert_eq!(
-            unsupported_reason(&layout, &ocr),
-            Some("layout detection is configured")
-        );
-        assert!(!supports(&layout, &ocr));
-        let plain = ExtractionConfig::default();
-        assert_eq!(unsupported_reason(&plain, &ocr), None);
-        assert!(supports(&plain, &ocr));
+        let structured = ExtractionConfig {
+            include_document_structure: true,
+            ..Default::default()
+        };
+        for config in [layout, structured, ExtractionConfig::default()] {
+            assert_eq!(supports(&config, &ocr), unsupported_reason(&config, &ocr).is_none());
+        }
     }
 
     const TALL_PAGE: &[u8] = include_bytes!(concat!(

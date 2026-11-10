@@ -82,8 +82,8 @@ fn line_lengths(paragraph: &str, keys: &[Option<usize>]) -> Option<Vec<usize>> {
 /// Text-sized evidence for a region, all measured in the upright frame.
 /// - The median line thickness must reach a page-relative floor, so uniformly tiny boxes (dust, grain) fail.
 /// - A box thinner than a third of the median is a mark (`-`, `.`, `•`); a few are tolerated, a share is not.
-/// - Most single-character boxes must be at least as long as they are thick, as words are and isolated strokes
-///   (`l I |`) are not; a word of two or more characters is never counted as a stroke.
+/// - Most boxes must be at least as long as they are thick, as words are and isolated strokes (`l I |`, or a
+///   run of them such as `Il`) are not.
 /// - Most tokens must carry a letter, so a grid of digits or marks is not read as prose.
 ///
 /// A region whose majority is a large heading font sets the median and thins the body words, so it is refused.
@@ -111,13 +111,17 @@ fn text_sized(words: &[HocrWord], dimensions: (u32, u32), angle: u16) -> bool {
         .count();
     let stroke = projected
         .iter()
-        .filter(|word| word.width < word.height && word.text.chars().nth(1).is_none())
+        .filter(|word| word.width < word.height && is_vertical_stroke(&word.text))
         .count();
     let lettered = words
         .iter()
         .filter(|word| word.text.chars().any(char::is_alphabetic))
         .count();
     median >= floor && thin * THIN_SHARE < count && stroke * 2 <= count && lettered * 2 >= count
+}
+
+fn is_vertical_stroke(text: &str) -> bool {
+    text.chars().nth(1).is_none() || text.chars().all(|character| "Ili1|!'".contains(character))
 }
 
 fn coherent_frame(words: &[HocrWord], groups: &[usize], dimensions: (u32, u32), angle: u16) -> bool {
@@ -354,20 +358,37 @@ mod tests {
         }
     }
 
+    fn narrow_paragraph(words: [&str; 5]) -> (ExtractedDocument, ExtractedDocument) {
+        let original = result(vec![word(words[2], 15, 53)], words[2], 1);
+        (original, candidate_with(words, [13; 5]))
+    }
+
+    fn text_sized_in_a_frame(original: &ExtractedDocument, candidate: &ExtractedDocument) -> bool {
+        let checked = checked_words(candidate).unwrap();
+        let paragraph = &candidate.ocr_internal_document.as_ref().unwrap().elements[0];
+        let bbox = paragraph_region(paragraph, original, &checked).unwrap();
+        let boxes: Vec<_> = checked.iter().map(|word| iterator_word(word, bbox).unwrap()).collect();
+        [90, 270].into_iter().any(|angle| text_sized(&boxes, (200, 200), angle))
+    }
+
     #[test]
     fn a_paragraph_of_two_letter_words_is_prose_even_when_each_box_is_narrower_than_tall() {
-        let words = ["is", "of", "to", "in", "on"];
-        let original = result(vec![word(words[2], 15, 53)], words[2], 1);
-        let narrow = candidate_with(words, [13; 5]);
-        let checked = checked_words(&narrow).unwrap();
-        let paragraph = &narrow.ocr_internal_document.as_ref().unwrap().elements[0];
-        let bbox = paragraph_region(paragraph, &original, &checked).unwrap();
-        let boxes: Vec<_> = checked.iter().map(|word| iterator_word(word, bbox).unwrap()).collect();
+        let (original, narrow) = narrow_paragraph(["is", "of", "to", "in", "on"]);
         assert!(
-            [90, 270].into_iter().any(|angle| text_sized(&boxes, (200, 200), angle)),
+            text_sized_in_a_frame(&original, &narrow),
             "two-letter words are not isolated strokes"
         );
         assert!(complete_region(&original, &narrow, (200, 200), &OcrQualityThresholds::default()).is_some());
+    }
+
+    #[test]
+    fn a_paragraph_of_vertical_stroke_glyph_runs_in_narrow_boxes_is_still_refused() {
+        let (original, narrow) = narrow_paragraph(["Il", "ll", "II", "li", "Il"]);
+        assert!(!text_sized_in_a_frame(&original, &narrow));
+        assert_eq!(
+            complete_region(&original, &narrow, (200, 200), &OcrQualityThresholds::default()),
+            None
+        );
     }
 
     #[test]

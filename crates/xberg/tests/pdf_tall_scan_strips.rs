@@ -578,3 +578,41 @@ fn the_mixed_route_names_the_configuration_that_blocked_strip_recovery() {
     assert!(strip_warning(&allowed));
     assert_eq!(not_used_warnings(&allowed), Vec::<&str>::new());
 }
+
+/// A layout request whose pass soft-failed (its models are unavailable) has no detections to lose:
+/// strip recovery stays on. The extraction runs in a child process with an empty offline model
+/// cache, so the cache variables reach no other test.
+#[cfg(feature = "layout-detection")]
+#[test]
+fn a_layout_request_whose_models_are_unavailable_still_recovers_the_tall_scan() {
+    const CHILD: &str = "XBERG_TEST_LAYOUT_UNAVAILABLE_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        let empty_cache = tempfile::tempdir().expect("empty model cache");
+        let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+            .args([
+                "--exact",
+                "a_layout_request_whose_models_are_unavailable_still_recovers_the_tall_scan",
+            ])
+            .args(["--test-threads=1", "--nocapture"])
+            .env(CHILD, "1")
+            .env("HF_HUB_CACHE", empty_cache.path())
+            .env("HF_HUB_OFFLINE", "1")
+            .output()
+            .expect("run the child test");
+        let report = String::from_utf8_lossy(&output.stdout).into_owned() + &String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{report}");
+        assert!(report.contains("1 passed"), "the child test did not run: {report}");
+        return;
+    }
+    let document = extract(TALL, &configured(serde_json::json!({"layout": {}})));
+    assert!(
+        document
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "layout" && warning.message.contains("layout detection failed")),
+        "{:?}",
+        document.processing_warnings
+    );
+    assert_image_text(&document, true);
+    assert_eq!(not_used_warnings(&document), Vec::<&str>::new());
+}

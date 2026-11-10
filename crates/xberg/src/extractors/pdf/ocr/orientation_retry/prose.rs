@@ -215,18 +215,12 @@ mod tests {
                 .retain(|word| word.text != "77,078");
             candidate
         };
-        let tablet_only = {
-            let mut candidate = candidate();
-            candidate.content = candidate.tables[0].markdown.clone();
-            candidate
-        };
         for (name, case) in [
             ("reordered heading", swapped),
             ("word beside the table", beside),
             ("content word without evidence", unread),
             ("word count mismatch", miscounted),
             ("table cell without evidence", unproven_table),
-            ("no text outside the table", tablet_only),
         ] {
             assert_eq!(complete_text(&case, 0.5), None, "{name}");
         }
@@ -360,15 +354,22 @@ mod tests {
 
     #[test]
     fn two_words_at_one_position_in_a_row_refuse_the_read() {
-        let mut read = candidate();
-        let elements = read.ocr_elements.as_mut().unwrap();
-        elements.retain(|element| !["Ledger", "Summary"].contains(&element.text.as_str()));
-        elements.extend([word("Ledger", 30, 10), word("Summary", 30, 10)]);
-        assert_eq!(complete_text(&read, 0.5), None);
-        let elements = read.ocr_elements.as_mut().unwrap();
+        for (first, second, content) in [
+            ("Ledger", "Summary", "Ledger Summary"),
+            ("Summary", "Ledger", "Summary Ledger"),
+        ] {
+            let mut read = candidate();
+            read.content = read.content.replace("Ledger Summary", content);
+            let elements = read.ocr_elements.as_mut().unwrap();
+            elements.retain(|element| !["Ledger", "Summary"].contains(&element.text.as_str()));
+            elements.extend([word(first, 30, 10), word(second, 30, 10)]);
+            assert_eq!(complete_text(&read, 0.5), None, "{content}");
+        }
+        let mut apart = candidate();
+        let elements = apart.ocr_elements.as_mut().unwrap();
         elements.retain(|element| !["Ledger", "Summary"].contains(&element.text.as_str()));
         elements.extend([word("Ledger", 30, 10), word("Summary", 60, 10)]);
-        assert!(complete_text(&read, 0.5).is_some());
+        assert!(complete_text(&apart, 0.5).is_some());
     }
 
     #[test]

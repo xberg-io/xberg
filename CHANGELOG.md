@@ -308,9 +308,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **(ocr): Read a sideways paragraph of short words as prose.** (#2670)
-  The text-size check counted every word box narrower than tall as a stroke, so a paragraph of two-letter words such as `is of to in on` was refused. Only a single-character box can now count as a stroke.
-- **(ocr): Keep a configured layout from running strip recovery on a refused single-page scan.** (#2670)
-  The single-page fallback refused strip recovery when layout detection was configured, but the other strip call sites tested only the detections of the page. The layout check now lives in the one policy function all of them call, so a layout configuration is also named in the "strips were not used" warning.
+  The text-size check counted every word box narrower than tall as a stroke, so a paragraph of two-letter words such as `is of to in on` was refused. Only a single-character box, or a run of vertical-stroke glyphs such as `Il`, now counts as a stroke.
 - **(pdf): Keep a word whole when a producer sets the text matrix back over it before a large TJ offset.** (GH#2322)
   Some producers set the text matrix to the start of a run they already drew and reach the next glyph with a large leading offset in a TJ array. That offset no longer adds a space where the matrix points, so words such as `benefits` no longer come out as `benefi ts`. When the offset reaches past the end of that run by a word gap, the space goes at the end of the run. Otherwise the gap between the real letters on each side decides the space. A lead that follows such a matrix also ends the run at its glyphs when it is a lead at least as large as the word-boundary gap (GH#2690). Not covered: a space glyph that lands inside a ligature after the matrix is set back still splits the word (`defi ne`), tracked in GH#2322.
 - **(pdf): Keep every glyph of a text run that the renderer draws without font info.** (#2709)
