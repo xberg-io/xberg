@@ -1856,8 +1856,8 @@ struct TjBuffer {
     /// the font expanded to a ligature's letters, else 0. The buffer is a lone ligature while its
     /// length still equals this: any later text ends the mark. Read by `is_lone_ligature`.
     ligature_len: usize,
-    /// Set by a `Tm` that continues the run: the length of `unicode`, the width that `Tm` set and the
-    /// width the run had before it. Read by `ends_at_continuing_tm`.
+    /// Set by a `Tm` that continues the run past its last glyph: the length of `unicode`, the width that
+    /// `Tm` set and the width the run had before it. Read by `ends_at_continuing_tm`.
     tm_extension: Option<TmExtension>,
 }
 
@@ -2124,18 +2124,25 @@ impl TjBuffer {
         self.ligature_len != 0 && self.ligature_len == self.unicode.len()
     }
 
-    /// Moves the run's width to the pen of a continuing `Tm` and records the width before it.
-    /// `text_len` is the length of `unicode` before the `Tm` added anything, so a space the `Tm`
-    /// inserted ends the record. A second continuing `Tm` with no glyph in between keeps the first
-    /// record, so the run still ends at its last glyph.
+    /// Moves the run's width to the pen of a continuing `Tm` and, when that pen lies past the run's last
+    /// glyph, records the width before it. `text_len` is the length of `unicode` before the `Tm` added
+    /// anything, so a space the `Tm` inserted ends the record. A second continuing `Tm` with no glyph in
+    /// between keeps the first record, so the run still ends at its last glyph. A `Tm` set back into the
+    /// run records nothing: the run keeps the pen move as its width (GH#2690).
     fn extend_to_continuing_tm(&mut self, advance: f32, text_len: usize) {
         let before = self.ends_at_continuing_tm().unwrap_or(self.accumulated_width);
         self.accumulated_width = advance;
-        self.tm_extension = Some(TmExtension {
+        self.tm_extension = (advance > before).then_some(TmExtension {
             text_len,
             width_set: advance,
             width_before: before,
         });
+    }
+
+    /// Keeps the width that a continuing `Tm` set, for a `TJ` whose leading offset marks the word gap
+    /// at that pen: the offset, not the run's width, then carries the gap.
+    fn keep_continuing_tm_width(&mut self) {
+        self.tm_extension = None;
     }
 
     /// The width at the run's last glyph when a continuing `Tm` moved the pen and no glyph or width

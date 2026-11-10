@@ -11,9 +11,8 @@ const GLYPH: f32 = 7.2;
 /// the second `Tm` and before `(B) Tj`.
 fn text(between: &str, gap_em: f32) -> String {
     let x_b = 100.0 + GLYPH + gap_em * SIZE;
-    let content = format!(
-        "BT /F1 {SIZE} Tf\n1 0 0 1 100 500 Tm 100 Tz (A) Tj\n1 0 0 1 {x_b} 500 Tm {between}(B) Tj\nET"
-    );
+    let content =
+        format!("BT /F1 {SIZE} Tf\n1 0 0 1 100 500 Tm 100 Tz (A) Tj\n1 0 0 1 {x_b} 500 Tm {between}(B) Tj\nET");
     let doc = PdfDocument::from_bytes(build(content.as_bytes())).expect("open fixture");
     doc.extract_text(0).expect("extract_text").trim().to_string()
 }
@@ -83,7 +82,11 @@ fn build(content: &[u8]) -> Vec<u8> {
         pdf.extend_from_slice(format!("{off:010} 00000 n\r\n").as_bytes());
     }
     pdf.extend_from_slice(
-        format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", offsets.len()).as_bytes(),
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
+            offsets.len()
+        )
+        .as_bytes(),
     );
     pdf
 }
