@@ -73,9 +73,10 @@ fn nfc_leaves_an_entity_span_that_was_not_on_a_character_boundary_as_it_was() {
 }
 
 /// A span that cuts a base letter from the mark that joins it lands inside the composed letter once
-/// they compose. It grows to hold the composed letter at either end, and the span after it still
-/// finds its text. Each case joins for another reason: an accent, Hangul jamo cut after the first
-/// and after the second one, and two Oriya vowel signs.
+/// they compose. It grows to hold the composed letter at either end, and every span after it still
+/// finds its text, whether the letter comes once or twice and whatever the order of the spans. Each
+/// case joins for another reason: an accent, Hangul jamo cut after the first and after the second
+/// one, and two Oriya vowel signs.
 #[test]
 fn nfc_grows_an_entity_span_that_splits_a_letter_from_the_mark_that_joins_it() {
     for (decomposed, cut_after, composed) in [
@@ -84,32 +85,44 @@ fn nfc_grows_an_entity_span_that_splits_a_letter_from_the_mark_that_joins_it() {
         ("\u{1100}\u{1161}\u{11a8}", 2, "\u{ac01}"),
         ("\u{0b47}\u{0b3e}", 1, "\u{0b4b}"),
     ] {
-        let content = format!("Lyon, {decomposed} in Paris");
-        let letter = content.find(decomposed).unwrap();
-        let joint = letter + decomposed.chars().take(cut_after).map(char::len_utf8).sum::<usize>();
+        let content = format!("Lyon, {decomposed} in Paris, {decomposed} again");
+        let first_cut = decomposed.chars().take(cut_after).map(char::len_utf8).sum::<usize>();
         let span = |start: usize, end: usize| Entity {
             start: start as u32,
             end: end as u32,
             ..location(&content, "Lyon")
         };
-        let mut result = ExtractedDocument {
-            content: content.clone(),
-            entities: Some(vec![
-                span(letter, joint),
-                span(joint, letter + decomposed.len()),
-                location(&content, "Paris"),
-            ]),
-            ..Default::default()
-        };
+        let letters: Vec<usize> = content.match_indices(decomposed).map(|(at, _)| at).collect();
+        let mut entities = vec![
+            span(letters[0], letters[0] + first_cut),
+            span(letters[0] + first_cut, letters[0] + decomposed.len()),
+            location(&content, "Paris"),
+            span(letters[1], letters[1] + first_cut),
+            span(letters[1] + first_cut, letters[1] + decomposed.len()),
+        ];
+        let mut expected = vec![
+            Some(composed),
+            Some(composed),
+            Some("Paris"),
+            Some(composed),
+            Some(composed),
+        ];
+        for reversed in [false, true] {
+            if reversed {
+                entities.reverse();
+                expected.reverse();
+            }
+            let mut result = ExtractedDocument {
+                content: content.clone(),
+                entities: Some(entities.clone()),
+                ..Default::default()
+            };
 
-        normalize_nfc(&mut result);
+            normalize_nfc(&mut result);
 
-        assert_eq!(result.content, format!("Lyon, {composed} in Paris"));
-        assert_eq!(
-            mentions(&result),
-            [Some(composed), Some(composed), Some("Paris")],
-            "{decomposed:?}"
-        );
+            assert_eq!(result.content, format!("Lyon, {composed} in Paris, {composed} again"));
+            assert_eq!(mentions(&result), expected, "{decomposed:?}, reversed {reversed}");
+        }
     }
 }
 
