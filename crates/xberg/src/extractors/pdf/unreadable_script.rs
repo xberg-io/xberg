@@ -251,10 +251,12 @@ enum LanguageSource {
     TesseractConfig,
 }
 
-/// The stage whose result a Tesseract route returns first, and where its languages come from.
-struct FirstStage {
+/// A Tesseract stage of the route: the models it reads, where they come from, and its position in
+/// run order (0 is the stage that reads first).
+struct RouteStage {
     languages: Vec<String>,
     source: LanguageSource,
+    position: usize,
 }
 
 /// Where `effective_tesseract_language_for` takes the languages from: `tesseract_config.language`
@@ -274,27 +276,32 @@ fn language_source(
     }
 }
 
-/// The stage that reads the page first, or `None` when the route makes no claim about what it reads.
-/// Only Tesseract stages make a claim: PaddleOCR, Sceptre, VLM and custom backends, an empty pipeline,
-/// and a `vlm_fallback` other than `Disabled` are "no claim", so a route that can reach one is never
-/// judged. The executor (`run_ocr_pipeline_stages`) runs the stages by descending priority, the first
-/// listed first among equals, and returns the first result that clears `pipeline_min_quality`. The
-/// first stage therefore decides when it succeeds and clears the gate: if it reads the script, OCR is
-/// the better reader; if it does not, it produces the page's text and replaces the native layer.
+/// The Tesseract stages of the route in the order the executor runs them, or `None` when the route
+/// makes no claim about what it reads. Only Tesseract stages make a claim: PaddleOCR, Sceptre, VLM
+/// and custom backends, an empty pipeline, and a `vlm_fallback` other than `Disabled` are "no claim",
+/// so a route that can reach one is never judged. The executor (`run_ocr_pipeline_stages`) runs the
+/// stages by descending priority, the first listed first among equals, and returns the first result
+/// that clears `pipeline_min_quality`. The first stage therefore decides when it succeeds and clears
+/// the gate: if it reads the script, OCR is the better reader; if it does not, it produces the
+/// page's text and replaces the native layer. A stage after the first that cannot read the script
+/// keeps the page unless its layer is lost (see [`layer_is_lost`]): a page whose signs still attach
+/// to letters is complete text that the first stage would only re-read with fewer words.
 ///
-/// Residual: when the first stage fails (a missing model), is unavailable or scores below
+/// Residual (#2794): when the first stage fails (a missing model), is unavailable or scores below
 /// `pipeline_min_quality`, the executor hands the page to the next stage and returns the best result
-/// of any stage. With `[khm, eng]` a failing `khm` stage therefore lets the `eng` stage replace the
-/// Khmer layer, and the native layer is not kept for that page. Keeping it whenever any later stage
-/// cannot read the script would instead keep it for every healthy `khm`-first pipeline (#2738).
-fn first_stage(ocr: &crate::OcrConfig) -> Option<FirstStage> {
+/// of any stage. With `[khm, eng]` a failing `khm` stage therefore lets the `eng` stage replace a lost
+/// Khmer layer.
+fn route(ocr: &crate::OcrConfig) -> Option<Vec<RouteStage>> {
     if !ocr.enabled || ocr.vlm_fallback != VlmFallbackPolicy::Disabled {
         return None;
     }
     let Some(pipeline) = &ocr.pipeline else {
-        return (ocr.backend == "tesseract").then(|| FirstStage {
-            languages: ocr.effective_tesseract_language(),
-            source: language_source(&ocr.language, false, ocr.tesseract_config.as_ref()),
+        return (ocr.backend == "tesseract").then(|| {
+            vec![RouteStage {
+                languages: ocr.effective_tesseract_language(),
+                source: language_source(&ocr.language, false, ocr.tesseract_config.as_ref()),
+                position: 0,
+            }]
         });
     };
     if !pipeline
@@ -304,19 +311,25 @@ fn first_stage(ocr: &crate::OcrConfig) -> Option<FirstStage> {
     {
         return None;
     }
-    let stage = pipeline
-        .stages
-        .iter()
-        .min_by_key(|stage| std::cmp::Reverse(stage.priority))?;
-    let inputs = StageModelInputs::new(ocr, stage);
-    Some(FirstStage {
-        languages: inputs.languages(),
-        source: language_source(
-            stage.language.as_deref().unwrap_or(&ocr.language),
-            stage.language.is_some(),
-            inputs.tesseract(),
-        ),
-    })
+    let mut stages: Vec<_> = pipeline.stages.iter().collect();
+    stages.sort_by_key(|stage| std::cmp::Reverse(stage.priority));
+    let route: Vec<_> = stages
+        .into_iter()
+        .enumerate()
+        .map(|(position, stage)| {
+            let inputs = StageModelInputs::new(ocr, stage);
+            RouteStage {
+                languages: inputs.languages(),
+                source: language_source(
+                    stage.language.as_deref().unwrap_or(&ocr.language),
+                    stage.language.is_some(),
+                    inputs.tesseract(),
+                ),
+                position,
+            }
+        })
+        .collect();
+    (!route.is_empty()).then_some(route)
 }
 
 /// Tells a letter that starts a cluster from a sign that attaches to one, for the scripts whose
@@ -426,18 +439,54 @@ fn judged_scripts(text: &str, languages: &[String]) -> Option<Vec<Script>> {
     if text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER) {
         return Some(counts.into_iter().map(|(script, _)| script).collect());
     }
-    let total: usize = counts.iter().map(|(_, count)| count).sum();
-    let weighty: Vec<Script> = counts
-        .into_iter()
-        .filter(|(_, count)| *count as f64 >= MINOR_SCRIPT_SHARE * total as f64)
-        .map(|(script, _)| script)
-        .collect();
+    let weighty = weighty_scripts(counts);
     // Many scripts of a few letters each leave none above the share: nothing is established.
     (!weighty.is_empty() && weighty.iter().all(|script| clusters_are_valid(text, *script))).then_some(weighty)
 }
 
+/// The scripts of `counts` that carry weight on the page (see [`MINOR_SCRIPT_SHARE`]).
+fn weighty_scripts(counts: Vec<(Script, usize)>) -> Vec<Script> {
+    let total: usize = counts.iter().map(|(_, count)| count).sum();
+    counts
+        .into_iter()
+        .filter(|(_, count)| *count as f64 >= MINOR_SCRIPT_SHARE * total as f64)
+        .map(|(script, _)| script)
+        .collect()
+}
+
+/// Whether the layer lost text of a script `languages` cannot read: it fails [`clusters_are_valid`]
+/// for a script that carries weight on the page and has cluster structure that [`part_of`] knows.
+/// A lost-glyph marker alone is not loss, because a layer can mark glyphs that only continue a
+/// cluster whose text is complete. Han, Greek and Cyrillic have no such structure and are never
+/// lost here. [`judged_scripts`] accepts a page without markers only when its clusters are valid.
+fn layer_is_lost(text: &str, languages: &[String]) -> bool {
+    uncovered_script_counts(text, languages).is_some_and(|counts| {
+        weighty_scripts(counts).into_iter().any(|script| {
+            let structured = text
+                .chars()
+                .any(|character| script_of(character) == Some(script) && part_of(script, character) != Part::Other);
+            structured && !clusters_are_valid(text, script)
+        })
+    })
+}
+
 /// A failing page, the unreadable scripts of its layer, and whether the layer holds lost-glyph markers.
 type Candidate = (u32, Vec<Script>, bool);
+
+/// The scripts of a failing page that the route cannot read, and the position of the stage that
+/// cannot. The first stage judges the page when it cannot read it. When it reads the script, a later
+/// stage that cannot read it keeps the page unless its layer is lost (see [`layer_is_lost`]): only a
+/// lost layer gains text from the stage that reads the script.
+fn judge_page(text: &str, route: &[RouteStage]) -> Option<(Vec<Script>, usize)> {
+    judged_scripts(text, &route[0].languages)
+        .map(|scripts| (scripts, 0))
+        .or_else(|| {
+            route.iter().skip(1).find_map(|stage| {
+                let scripts = judged_scripts(text, &stage.languages)?;
+                (!layer_is_lost(text, &stage.languages)).then_some((scripts, stage.position))
+            })
+        })
+}
 
 fn describe(pages: &[(u32, Vec<Script>)]) -> String {
     pages
@@ -462,11 +511,14 @@ fn warning(message: String) -> crate::types::ProcessingWarning {
 }
 
 /// Where the caller adds the model: the setting the shown languages were taken from.
-fn where_to_add(stage: &FirstStage) -> &'static str {
+fn where_to_add(stage: &RouteStage) -> String {
     match stage.source {
-        LanguageSource::StageLanguage => "the language of the first stage of ocr.pipeline",
-        LanguageSource::TesseractConfig => "tesseract_config.language",
-        LanguageSource::OcrLanguage => "ocr.language",
+        LanguageSource::StageLanguage if stage.position == 0 => {
+            "the language of the first stage of ocr.pipeline".into()
+        }
+        LanguageSource::StageLanguage => format!("the language of stage {} of ocr.pipeline", stage.position + 1),
+        LanguageSource::TesseractConfig => "tesseract_config.language".into(),
+        LanguageSource::OcrLanguage => "ocr.language".into(),
     }
 }
 
@@ -490,7 +542,7 @@ fn lost_glyphs_clause(kept: &[(u32, Vec<Script>, bool)]) -> String {
     }
 }
 
-fn kept_pages_warning(kept: &[(u32, Vec<Script>, bool)], stage: &FirstStage) -> crate::types::ProcessingWarning {
+fn kept_pages_warning(kept: &[(u32, Vec<Script>, bool)], stage: &RouteStage) -> crate::types::ProcessingWarning {
     let lost = lost_glyphs_clause(kept);
     let kept: Vec<_> = kept.iter().map(|(page, scripts, _)| (*page, scripts.clone())).collect();
     let kept = kept.as_slice();
@@ -504,7 +556,7 @@ fn kept_pages_warning(kept: &[(u32, Vec<Script>, bool)], stage: &FirstStage) -> 
     ))
 }
 
-fn read_pages_warning(read: &[(u32, Vec<Script>)], stage: &FirstStage) -> crate::types::ProcessingWarning {
+fn read_pages_warning(read: &[(u32, Vec<Script>)], stage: &RouteStage) -> crate::types::ProcessingWarning {
     warning(format!(
         "The native text of {} is in a script the configured OCR languages ({}) cannot read, and the \
          page is read by OCR because it carries a picture. Text that OCR reads in this script is \
@@ -549,17 +601,20 @@ pub(super) fn retain_unreadable_script_pages(
     }) else {
         return Vec::new();
     };
-    let Some(stage) = first_stage(ocr) else {
+    let Some(route) = route(ocr) else {
         return Vec::new();
     };
-    let candidates: Vec<Candidate> = decision
+    let candidates: Vec<(Candidate, usize)> = decision
         .failing_pages
         .iter()
         .filter_map(|page| {
             let boundary = boundaries.iter().find(|boundary| boundary.page_number == *page)?;
             let text = native_text.get(boundary.byte_start..boundary.byte_end)?;
-            let scripts = judged_scripts(text, &stage.languages)?;
-            Some((*page, scripts, text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER)))
+            let (scripts, stage) = judge_page(text, &route)?;
+            Some((
+                (*page, scripts, text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER)),
+                stage,
+            ))
         })
         .collect();
     if candidates.is_empty() {
@@ -572,21 +627,36 @@ pub(super) fn retain_unreadable_script_pages(
             return Vec::new();
         }
     };
+    // A scan is read by OCR, so only the stage that reads first can say its text is unreadable.
     let (read, kept): (Vec<_>, Vec<_>) = candidates
         .into_iter()
-        .partition(|(page, ..)| page_is_scan(&document, *page as usize - 1));
-    let read: Vec<_> = read.into_iter().map(|(page, scripts, _)| (page, scripts)).collect();
+        .map(|(candidate, stage)| (page_is_scan(&document, candidate.0 as usize - 1), candidate, stage))
+        .filter(|(scan, _, stage)| !scan || *stage == 0)
+        .partition(|(scan, ..)| *scan);
+    let read: Vec<_> = read
+        .into_iter()
+        .map(|(_, (page, scripts, _), _)| (page, scripts))
+        .collect();
     let mut warnings = Vec::new();
     if !kept.is_empty() {
         decision
             .failing_pages
-            .retain(|page| !kept.iter().any(|(kept_page, ..)| kept_page == page));
+            .retain(|page| !kept.iter().any(|(_, (kept_page, ..), _)| kept_page == page));
         decision.fallback = !decision.failing_pages.is_empty();
         decision.whole_doc_failure = decision.failing_pages.len() == boundaries.len();
-        warnings.push(kept_pages_warning(&kept, &stage));
+        for stage in &route {
+            let judged: Vec<Candidate> = kept
+                .iter()
+                .filter(|(_, _, judged_by)| *judged_by == stage.position)
+                .map(|(_, candidate, _)| candidate.clone())
+                .collect();
+            if !judged.is_empty() {
+                warnings.push(kept_pages_warning(&judged, stage));
+            }
+        }
     }
     if !read.is_empty() {
-        warnings.push(read_pages_warning(&read, &stage));
+        warnings.push(read_pages_warning(&read, &route[0]));
     }
     warnings
 }
@@ -928,19 +998,6 @@ mod tests {
                 {"backend": "tesseract", "priority": 100, "language": ["khm"]},
                 {"backend": "tesseract", "priority": 50, "language": ["eng", "khm"]},
             ]}),
-            // The `khm` stage reads first and the English stage is only the fallback.
-            serde_json::json!({"stages": [
-                {"backend": "tesseract", "priority": 100, "language": ["khm"]},
-                {"backend": "tesseract", "priority": 50},
-            ]}),
-            serde_json::json!({"stages": [
-                {"backend": "tesseract", "priority": 50},
-                {"backend": "tesseract", "priority": 100, "language": ["khm"]},
-            ]}),
-            serde_json::json!({"stages": [
-                {"backend": "tesseract", "priority": 100, "language": ["khm"]},
-                {"backend": "tesseract", "priority": 100},
-            ]}),
             serde_json::json!({"stages": [
                 {"backend": "tesseract", "priority": 100},
                 {"backend": "paddleocr", "priority": 50},
@@ -951,6 +1008,44 @@ mod tests {
             let (decision, warnings) = run(&[KHMER_MARKED], ONE_PAGE, &pipeline_config(pipeline.clone()));
             assert_eq!(decision.failing_pages, [1], "{pipeline}");
             assert!(warnings.is_empty(), "{pipeline}");
+        }
+    }
+
+    // The `khm` stage reads first and a later stage cannot read Khmer. The array order is not the run
+    // order, and equal priorities run in the order listed.
+    fn khm_first_pipelines() -> [serde_json::Value; 3] {
+        [
+            serde_json::json!({"stages": [
+                {"backend": "tesseract", "priority": 100, "language": ["khm"]},
+                {"backend": "tesseract", "priority": 50},
+            ]}),
+            serde_json::json!({"stages": [
+                {"backend": "tesseract", "priority": 50},
+                {"backend": "tesseract", "priority": 100, "language": ["khm"]},
+            ]}),
+            serde_json::json!({"stages": [
+                {"backend": "tesseract", "priority": 100, "language": ["khm"]},
+                {"backend": "tesseract", "priority": 100},
+            ]}),
+        ]
+    }
+
+    #[test]
+    fn a_khm_first_pipeline_leaves_a_page_that_lost_text_to_ocr() {
+        for pipeline in khm_first_pipelines() {
+            let (decision, warnings) = run(&[KHMER_LOST], ONE_PAGE, &pipeline_config(pipeline.clone()));
+            assert_eq!(decision.failing_pages, [1], "{pipeline}");
+            assert!(warnings.is_empty(), "{pipeline}");
+        }
+    }
+
+    #[test]
+    fn a_khm_first_pipeline_keeps_a_complete_page_although_it_holds_lost_glyph_markers() {
+        for pipeline in khm_first_pipelines() {
+            let (decision, warnings) = run(&[KHMER_MARKED], ONE_PAGE, &pipeline_config(pipeline.clone()));
+            assert!(decision.failing_pages.is_empty(), "{pipeline}");
+            assert_eq!(warnings.len(), 1, "{pipeline}");
+            assert!(warnings[0].message.contains("(eng"), "{}", warnings[0].message);
         }
     }
 
@@ -1077,9 +1172,10 @@ mod tests {
 
     #[test]
     fn the_lost_glyph_clause_names_the_marked_pages_unless_every_kept_page_is_marked() {
-        let stage = FirstStage {
+        let stage = RouteStage {
             languages: langs(&["eng"]),
             source: LanguageSource::OcrLanguage,
+            position: 0,
         };
         let page = |number, marked| (number, vec![Script::Khmer], marked);
         let mixed = kept_pages_warning(&[page(1, true), page(2, false), page(3, true)], &stage).message;
@@ -1140,9 +1236,88 @@ mod tests {
             {"backend": "tesseract", "priority": 100, "language": ["khm"]},
             {"backend": "tesseract", "priority": 50, "language": ["eng"]},
         ]}));
-        let (decision, warnings) = run(&[KHMER_MARKED], ONE_PAGE, &config);
+        let (decision, warnings) = run(&[KHMER_LOST], ONE_PAGE, &config);
         assert_eq!(decision.failing_pages, [1]);
         assert!(warnings.is_empty());
+    }
+
+    const UNMARKED: &str = "ខ្ញុំ ស្រលាញ់ ប្រទេស";
+    /// Letters whose signs were lost with the marked glyphs: the cluster check fails.
+    const KHMER_LOST: &str = "ក\u{FFFD}ខគ\u{FFFD} ឃង\u{FFFD}ច ឆជ\u{FFFD}ឈ ញដ\u{FFFD}";
+
+    fn khm_then_eng(first: &str, second: &str) -> ExtractionConfig {
+        pipeline_config(serde_json::json!({"stages": [
+            {"backend": "tesseract", "priority": 100, "language": [first]},
+            {"backend": "tesseract", "priority": 50, "language": [second]},
+        ]}))
+    }
+
+    #[test]
+    fn a_fully_mapped_page_stays_native_when_a_later_stage_cannot_read_its_script() {
+        let (decision, warnings) = run(&[UNMARKED], ONE_PAGE, &khm_then_eng("khm", "eng"));
+        assert!(decision.failing_pages.is_empty());
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        let message = &warnings[0].message;
+        assert!(
+            message.contains("(eng)") && message.contains("the language of stage 2"),
+            "{message}"
+        );
+        assert!(!message.contains("stay lost"), "{message}");
+    }
+
+    #[test]
+    fn a_page_with_lost_glyphs_goes_to_a_first_stage_that_reads_its_script() {
+        assert!(layer_is_lost(KHMER_LOST, &langs(&["eng"])));
+        let (decision, warnings) = run(&[KHMER_LOST], ONE_PAGE, &khm_then_eng("khm", "eng"));
+        assert_eq!(decision.failing_pages, [1]);
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn a_marked_page_whose_clusters_are_whole_stays_native_when_a_later_stage_cannot_read_its_script() {
+        assert!(!layer_is_lost(KHMER_MARKED, &langs(&["eng"])));
+        let (decision, warnings) = run(&[KHMER_MARKED], ONE_PAGE, &khm_then_eng("khm", "eng"));
+        assert!(decision.failing_pages.is_empty());
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        let message = &warnings[0].message;
+        assert!(
+            message.contains("the language of stage 2") && message.contains("stay lost"),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn a_marked_page_in_a_script_without_cluster_structure_stays_native_when_a_later_stage_cannot_read_it() {
+        let han = "中文\u{FFFD}文本\u{FFFD}内容\u{FFFD}测试\u{FFFD}文字\u{FFFD}页";
+        let (text, boundaries) = page_text(&[han]);
+        assert_eq!(decision_for(&text, &boundaries).failing_pages, [1]);
+        assert!(!layer_is_lost(han, &langs(&["eng"])));
+        let (decision, warnings) = run(&[han], ONE_PAGE, &khm_then_eng("chi_sim", "eng"));
+        assert!(decision.failing_pages.is_empty());
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+    }
+
+    #[test]
+    fn a_fully_mapped_page_goes_to_ocr_when_every_stage_reads_its_script() {
+        let (decision, warnings) = run(&[UNMARKED], ONE_PAGE, &khm_then_eng("khm", "khm"));
+        assert_eq!(decision.failing_pages, [1]);
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn a_scan_is_read_by_the_first_stage_whatever_a_later_stage_reads() {
+        let (decision, warnings) = run(&[UNMARKED], SCAN_WITH_OVERLAY, &khm_then_eng("khm", "eng"));
+        assert_eq!(decision.failing_pages, [1]);
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn a_complete_page_and_a_lost_page_are_judged_one_by_one() {
+        let (decision, warnings) = run(&[KHMER_MARKED, KHMER_LOST], TWO_PAGES, &khm_then_eng("khm", "eng"));
+        assert_eq!(decision.failing_pages, [2]);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].message.contains("page 1 ("), "{}", warnings[0].message);
+        assert!(!warnings[0].message.contains("page 2"), "{}", warnings[0].message);
     }
 
     #[test]

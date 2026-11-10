@@ -251,21 +251,83 @@ fn khm_then_eng(config: &mut ExtractionConfig) {
 }
 
 #[test]
+fn a_khmer_stage_before_an_english_stage_keeps_a_complete_layer() {
+    let models = english_model();
+    for (source, name) in [
+        (COMPLETE, "complete"),
+        (KHMER_SHORT_FULLY_MAPPED, "short"),
+        (KHMER_TEXT_WITH_FIGURE, "figure"),
+    ] {
+        let native = extract(source, models.path(), |config| config.disable_ocr = true);
+        let automatic = extract(source, models.path(), khm_then_eng);
+        assert!(khmer_count(&native.content) > 0, "{name}");
+        assert!(
+            automatic.content.starts_with(native.content.trim_end()),
+            "{name}: {:?}",
+            automatic.content
+        );
+        assert_eq!(khmer_count(&automatic.content), khmer_count(&native.content), "{name}");
+        assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native), "{name}");
+        let warnings = khmer_warnings(&automatic);
+        assert_eq!(warnings.len(), 1, "{name}: {:?}", automatic.processing_warnings);
+        assert!(
+            warnings[0].contains("the language of stage 2"),
+            "{name}: {}",
+            warnings[0]
+        );
+    }
+}
+
+#[test]
+fn a_khmer_stage_before_an_english_stage_keeps_page_one_and_reads_the_scanned_page_two() {
+    let models = english_model();
+    let native = extract(KHMER_THEN_SCANNED_ENGLISH, models.path(), |config| {
+        config.disable_ocr = true
+    });
+    let automatic = extract(KHMER_THEN_SCANNED_ENGLISH, models.path(), khm_then_eng);
+    let pages = automatic.pages.as_ref().unwrap();
+    assert_eq!(pages[0].content, native.pages.as_ref().unwrap()[0].content);
+    assert_eq!(khmer_count(&pages[0].content), 222);
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Mixed));
+}
+
+#[test]
 #[ignore = "needs khm.traineddata in TESSDATA_PREFIX or a system tessdata directory"]
 #[allow(clippy::print_stderr)]
-fn a_khmer_stage_before_an_english_stage_reads_the_khmer_page_with_ocr() {
+fn a_khmer_stage_before_an_english_stage_keeps_the_complete_page_when_the_khmer_model_is_installed() {
     let Some(models) = khmer_model_dir() else {
         eprintln!("skipped: khm.traineddata is not installed");
         return;
     };
+    let native = extract(COMPLETE, models.path(), |config| config.disable_ocr = true);
     let automatic = extract(COMPLETE, models.path(), khm_then_eng);
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
+    assert_eq!(automatic.content, native.content);
+}
+
+#[test]
+#[ignore = "needs khm.traineddata in TESSDATA_PREFIX or a system tessdata directory"]
+#[allow(clippy::print_stderr)]
+fn a_khmer_stage_before_an_english_stage_reads_a_page_that_lost_glyphs_with_ocr() {
+    let Some(models) = khmer_model_dir() else {
+        eprintln!("skipped: khm.traineddata is not installed");
+        return;
+    };
+    let native = extract(PARTIAL, models.path(), |config| config.disable_ocr = true);
+    let automatic = extract(PARTIAL, models.path(), khm_then_eng);
     assert_eq!(
         automatic.extraction_method,
         Some(ExtractionMethod::Ocr),
         "{:?}",
         automatic.content
     );
-    assert!(khmer_count(&automatic.content) > 0, "{:?}", automatic.content);
+    let words = |text: &str| text.split_whitespace().count();
+    assert!(
+        words(&automatic.content) > words(&native.content),
+        "{} words against {} native",
+        words(&automatic.content),
+        words(&native.content)
+    );
     assert!(
         khmer_warnings(&automatic).is_empty(),
         "{:?}",
