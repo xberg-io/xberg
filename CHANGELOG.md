@@ -309,6 +309,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Read a sideways paragraph of short words as prose.** (#2670)
+  The text-size check counted every word box narrower than tall as a stroke, so a paragraph of two-letter words such as `is of to in on` was refused. Only a single-character box, or a run of vertical-stroke glyphs such as `Il`, now counts as a stroke.
 - **(excel): Extract the sheets that fit when a workbook exceeds `security_limits.max_table_cells`.** (#2820)
   A workbook whose sheets together held more cells than the limit failed as a whole and returned no content. XLSX, XLSM, XLTM, XLAM, XLSB, XLS, XLA and ODS workbooks now skip only the sheet that does not fit, keep every other sheet, and record a warning naming the sheet and the limit. The limit and its default are unchanged.
 - **(pdf): Read an underscore-joined `/Differences` glyph name as all its letters.** (#2689)

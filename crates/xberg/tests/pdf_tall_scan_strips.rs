@@ -548,3 +548,99 @@ fn a_configuration_that_blocks_strip_recovery_is_named_in_the_result() {
         .expect("the skipped recovery is reported");
     assert!(warning.message.contains("document structure"), "{}", warning.message);
 }
+
+fn not_used_warnings(document: &ExtractedDocument) -> Vec<&str> {
+    document
+        .processing_warnings
+        .iter()
+        .map(|warning| warning.message.as_ref())
+        .filter(|message| message.contains("source-image strips were not used"))
+        .collect()
+}
+
+/// The mixed route retries nothing for a scan its configuration keeps from strip recovery, and says why.
+#[test]
+fn the_mixed_route_names_the_configuration_that_blocked_strip_recovery() {
+    let blocked = extract(
+        MIXED,
+        &configured(serde_json::json!({"include_document_structure": true})),
+    );
+    assert_eq!(blocked.extraction_method, Some(ExtractionMethod::Mixed));
+    assert!(!strip_warning(&blocked));
+    assert_eq!(
+        not_used_warnings(&blocked),
+        vec![
+            "Page 2 was read from a render downscaled to 130 DPI and its source-image strips were not used: \
+             per-element results or document structure were requested. The text may be incomplete."
+        ]
+    );
+    let allowed = extract(MIXED, &extraction_config());
+    assert!(strip_warning(&allowed));
+    assert_eq!(not_used_warnings(&allowed), Vec::<&str>::new());
+}
+
+/// A layout request whose pass soft-failed (its models are unavailable) has no detections to lose:
+/// strip recovery stays on. The extraction runs in a child process with an empty offline model
+/// cache, so the cache variables reach no other test.
+#[cfg(feature = "layout-detection")]
+#[test]
+fn a_layout_request_whose_models_are_unavailable_still_recovers_the_tall_scan() {
+    const CHILD: &str = "XBERG_TEST_LAYOUT_UNAVAILABLE_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        let empty_cache = tempfile::tempdir().expect("empty model cache");
+        let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+            .args([
+                "--exact",
+                "a_layout_request_whose_models_are_unavailable_still_recovers_the_tall_scan",
+            ])
+            .args(["--test-threads=1", "--nocapture"])
+            .env(CHILD, "1")
+            .env_remove("HUGGINGFACE_HUB_CACHE")
+            .env("HF_HOME", empty_cache.path())
+            .env("HF_HUB_CACHE", empty_cache.path())
+            .env("HF_HUB_OFFLINE", "1")
+            .output()
+            .expect("run the child test");
+        let report = String::from_utf8_lossy(&output.stdout).into_owned() + &String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{report}");
+        assert!(
+            report.contains("test result: ok. 1 passed; 0 failed; 0 ignored;"),
+            "the child test did not run: {report}"
+        );
+        return;
+    }
+    let document = extract(TALL, &configured(serde_json::json!({"layout": {}})));
+    assert!(
+        document
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "layout" && warning.message.contains("layout detection failed")),
+        "{:?}",
+        document.processing_warnings
+    );
+    assert_image_text(&document, true);
+    assert_eq!(not_used_warnings(&document), Vec::<&str>::new());
+}
+
+/// The render-failure fallback has no layout detections in scope, so a layout request alone keeps it
+/// from replacing the refusal with a source-image read.
+#[cfg(feature = "layout-detection")]
+#[test]
+fn a_layout_request_keeps_the_gray_jpeg_render_refusal() {
+    let config = configured(serde_json::json!({"layout": {}}));
+    let document = extract(TALL_JPEG, &config);
+    assert!(!strip_warning(&document));
+    assert!(
+        words(&document.content).len() < words(ORACLE).len() / 2,
+        "{:?}",
+        document.content.chars().take(80).collect::<String>()
+    );
+    assert!(
+        document
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "layout" && warning.message.contains("image working budget")),
+        "{:?}",
+        document.processing_warnings
+    );
+}
