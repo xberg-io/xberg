@@ -6654,8 +6654,21 @@ impl PageRenderer {
         // actually wrote. Used to invert the source-over alpha blend
         // and recover effective coverage·alpha per pixel. Mirrors the
         // `apply_cmyk_compose_after_paint` recovery for byte-identity
-        // with the compose-first path. ~keep
-        let src_rgb_ic = if let Some(transform) = icc_transform.as_ref() {
+        // with the compose-first path. A Separation or DeviceN paint
+        // wrote the alternate colour the pipeline resolved, so its
+        // recovery reads that. ~keep
+        let src_rgb_ic = if let SourceCsClass::SeparationOrDeviceN { .. } = source.class {
+            let side = if fill_side { PaintSide::Fill } else { PaintSide::Stroke };
+            let (r, g, b) = self.pipeline_resolve_rgba(doc, gs, side).map_or(
+                if fill_side {
+                    gs.fill_color_rgb
+                } else {
+                    gs.stroke_color_rgb
+                },
+                |(r, g, b, _)| (r, g, b),
+            );
+            [r, g, b]
+        } else if let Some(transform) = icc_transform.as_ref() {
             let c_u8 = (sc.clamp(0.0, 1.0) * 255.0).round() as u8;
             let m_u8 = (sm.clamp(0.0, 1.0) * 255.0).round() as u8;
             let y_u8 = (sy.clamp(0.0, 1.0) * 255.0).round() as u8;

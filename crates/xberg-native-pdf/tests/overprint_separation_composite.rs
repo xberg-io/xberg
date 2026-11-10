@@ -15,11 +15,13 @@ fn ramp(cmyk: [u8; 4]) -> String {
 }
 
 /// A 100 x 100 page with the colour spaces this file uses, the overprint state `/OP1`
-/// (OPM 1) and `/OP0` (OPM 0), and Helvetica as `/F1`.
+/// (OPM 1) and `/OP0` (OPM 0), and Helvetica as `/F1`. Object 5 maps the tints of
+/// `[/Black /SpotInk]` to the black channel of its `DeviceCMYK` alternate.
 fn page(content: &str) -> Vec<u8> {
     let resources = format!(
         "/ColorSpace << /CsK [/Separation /Black /DeviceCMYK {k}] /CsC [/Separation /Cyan /DeviceCMYK {c}] \
-         /CsS [/Separation /SpotInk /DeviceCMYK {c}] /CsNK [/DeviceN [/Black] /DeviceCMYK {k}] /CsA [/Separation /All /DeviceCMYK {c}] >> \
+         /CsS [/Separation /SpotInk /DeviceCMYK {c}] /CsNK [/DeviceN [/Black] /DeviceCMYK {k}] /CsA [/Separation /All /DeviceCMYK {c}] \
+         /CsKC [/Separation /Black /DeviceCMYK {c}] /CsNKS [/DeviceN [/Black /SpotInk] /DeviceCMYK 5 0 R] >> \
          /ExtGState << /OP1 << /Type /ExtGState /OP true /op true /OPM 1 >> \
          /OP0 << /Type /ExtGState /OP true /op true /OPM 0 >> >> \
          /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> >>",
@@ -33,17 +35,21 @@ fn page(content: &str) -> Vec<u8> {
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
         format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources << {resources} >> /Contents 4 0 R >>"),
         format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
+        format!(
+            "<< /FunctionType 4 /Domain [0 1 0 1] /Range [0 1 0 1 0 1 0 1] /Length {} >>\nstream\n{BLACK_OF_TWO}\nendstream",
+            BLACK_OF_TWO.len()
+        ),
     ];
     for (index, body) in bodies.iter().enumerate() {
         offsets.push(buf.len());
         buf.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", index + 1).as_bytes());
     }
     let xref = buf.len();
-    buf.extend_from_slice(b"xref\n0 5\n0000000000 65535 f \n");
+    buf.extend_from_slice(b"xref\n0 6\n0000000000 65535 f \n");
     for offset in offsets {
         buf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
     }
-    buf.extend_from_slice(format!("trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n").as_bytes());
+    buf.extend_from_slice(format!("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n").as_bytes());
     buf
 }
 
@@ -84,6 +90,9 @@ fn plate_centre(content: &str, ink: &str) -> u8 {
 }
 
 const SQUARE: &str = "10 10 80 80 re f";
+
+/// A PostScript function of two tints (black, spot) that returns `0 0 0 black`.
+const BLACK_OF_TWO: &str = "{ pop 0 0 0 4 -1 roll }";
 
 /// Process cyan as the CMYK conversion shows it, about `[0, 173, 239]`.
 fn is_cyan(rgb: [u8; 3]) -> bool {
@@ -149,4 +158,19 @@ fn an_overprinted_spot_ink_marks_its_own_plate_and_no_process_plate() {
     let content = format!("/OP1 gs /CsS cs 1 scn {SQUARE}");
     assert_eq!(plate_centre(&content, "SpotInk"), 255);
     assert_eq!(plate_centre(&content, "Cyan"), 0);
+}
+
+#[test]
+fn an_overprinted_process_colorant_with_another_alternate_marks_its_channel() {
+    let rgb = centre(&format!("/OP1 gs /CsKC cs 1 scn {SQUARE}"));
+    assert!(rgb.iter().all(|&v| v < 60), "{rgb:?}");
+}
+
+#[test]
+fn an_overprinted_devicen_of_black_and_a_spot_ink_paints_black() {
+    let content = format!("0 1 0 0 k {SQUARE} /OP1 gs /CsNKS cs 1 1 scn {SQUARE}");
+    let rgb = centre(&content);
+    assert!(rgb[0] < 60 && rgb[1] < 60 && rgb[2] < 60, "black over magenta: {rgb:?}");
+    assert_eq!(plate_centre(&content, "Black"), 255);
+    assert_eq!(plate_centre(&content, "Magenta"), 255);
 }
