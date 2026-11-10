@@ -131,7 +131,7 @@ mod tests {
                 ..Default::default()
             };
             let (_, mut failures, _) =
-                super::super::render_selected_pages_with_dpi(&document, &rotations, &[0], &limits, None);
+                super::super::render_selected_pages_with_dpi(&document, &rotations, &[0], &limits, None, None);
             assert_eq!(failures.len(), 1, "the actual RGB render must refuse the budget");
             return failures.pop().unwrap().1.into();
         }

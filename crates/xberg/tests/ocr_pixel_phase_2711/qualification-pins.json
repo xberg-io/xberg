@@ -1,0 +1,102 @@
+{
+  "font_sha256": "abdc775b21b1bc470d50c97e790d276f2054b7504e56e5bd3e64f48d68582322",
+  "tessdata_eng_sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+  "cases": [
+    {
+      "name": "narrow-gap",
+      "pdf_sha256": "b260b82cb305f91c23ba5575bdaf4bfb3943324b82389467773162fdc15b0937",
+      "expected_words": 40,
+      "source_text_sha256": "e4e603262cba2ba2af938d29c9ad9da8a09cca0a14de6840613807eb7859edf8"
+    },
+    {
+      "name": "I-right",
+      "pdf_sha256": "bd683e062c41553f2e335b8959bf6407362c044503d64af5fd13a1b98da35e6d",
+      "expected_words": 40,
+      "source_text_sha256": "e4e603262cba2ba2af938d29c9ad9da8a09cca0a14de6840613807eb7859edf8"
+    },
+    {
+      "name": "origin-base",
+      "pdf_sha256": "bc1d12bad0f6e5d9129ca3a013c4176e2fb2393f757248e3c41c00ba4d5d3524",
+      "expected_words": 40,
+      "source_text_sha256": "e4e603262cba2ba2af938d29c9ad9da8a09cca0a14de6840613807eb7859edf8"
+    },
+    {
+      "name": "origin-shift",
+      "pdf_sha256": "8b291d317c269bde13e2596162d5481fe0d57ad27c372f4375cd97e1ff9ef5df",
+      "expected_words": 40,
+      "source_text_sha256": "e4e603262cba2ba2af938d29c9ad9da8a09cca0a14de6840613807eb7859edf8"
+    },
+    {
+      "name": "cid-good",
+      "pdf_sha256": "391f7f2fede79ad81c2642f13b05267187fb026e28eea77714e426f353c7e9ec",
+      "expected_words": 245,
+      "source_text_sha256": "02a39e79c67c00c7daf3565e252f94afe6a62ac8cbb79720bee470f7dd2ec547"
+    },
+    {
+      "name": "cid-nul",
+      "pdf_sha256": "df8db9722d21fbccbdea10a91d87d15c5189e520e5629d0c5917cab2acf2588c",
+      "expected_words": 245,
+      "source_text_sha256": "02a39e79c67c00c7daf3565e252f94afe6a62ac8cbb79720bee470f7dd2ec547"
+    },
+    {
+      "name": "cid-missing",
+      "pdf_sha256": "9dc3fd580a22ac35f4616bc43affbf0767a374af4934c72a6021d628b9aee3fa",
+      "expected_words": 245,
+      "source_text_sha256": "02a39e79c67c00c7daf3565e252f94afe6a62ac8cbb79720bee470f7dd2ec547"
+    },
+    {
+      "name": "cid-partial",
+      "pdf_sha256": "1653545e9bc23c8d459737eb84f1d3dfc69d7e6c256aafa0ac0c1e8e4893885a",
+      "expected_words": 245,
+      "source_text_sha256": "02a39e79c67c00c7daf3565e252f94afe6a62ac8cbb79720bee470f7dd2ec547"
+    },
+    {
+      "name": "outlined-prose",
+      "pdf_sha256": "106b3839dbb131d5b0ee8bd5c065eeb10247e59dcf4b3927cf7f83a668bd82f6",
+      "expected_words": 69,
+      "source_text_sha256": "8b84973fb14f3530221f11186d53a5f9f270d3abc118bcd1ff947bbc1921e4d8"
+    },
+    {
+      "name": "raster-stubs",
+      "pdf_sha256": "034f408e5365d9da2b61c2aaf494b3332fac8ffd5815dcc8984110ee2d9f2d35",
+      "expected_words": 69,
+      "source_text_sha256": "8b84973fb14f3530221f11186d53a5f9f270d3abc118bcd1ff947bbc1921e4d8"
+    },
+    {
+      "name": "icc-raster-stubs",
+      "pdf_sha256": "5e72cb0a4a963583468c87a60a8b99f1865d7a7bfc67aafbe961bdc52b5dff3f",
+      "expected_words": 69,
+      "source_text_sha256": "8b84973fb14f3530221f11186d53a5f9f270d3abc118bcd1ff947bbc1921e4d8"
+    },
+    {
+      "name": "ligature-letters",
+      "pdf_sha256": "b16844ccfa86668ee216faad3438d9b12bbf192ebd176d1a816df26c3941d037",
+      "expected_words": 80,
+      "source_text_sha256": "a381af08a513f8587bc578466b97b8c22d871cec5dd1867e62e6f852a1262bfc"
+    },
+    {
+      "name": "ligature-codepoint",
+      "pdf_sha256": "942e329df0e11268ec853cc3ce67278acbacd20e17667f18ff0892d81aa375c3",
+      "expected_words": 80,
+      "source_text_sha256": "a381af08a513f8587bc578466b97b8c22d871cec5dd1867e62e6f852a1262bfc"
+    }
+  ],
+  "reference_reports": [
+    {
+      "mode": "default",
+      "baseline_ocr_revision": "a33f39373e9446aa109776aa4986a3c91c1efbeb",
+      "native_revision": "e3830c5b5fe6d773082cc0ae1643367f0de5f985",
+      "recorded_ocr_revision": "e3830c5b5fe6d773082cc0ae1643367f0de5f985",
+      "baseline_sha256": "bdd1e3005b21cae7588e298e7b9e44cba336762aa6bdc6f5194b9840b98dc7ee",
+      "recorded_sha256": "63c206b7e23f89a3808d40b1214dcfdf94d5c252d7753b03db3f8496f17a1692"
+    },
+    {
+      "mode": "denoise",
+      "baseline_ocr_revision": "a33f39373e9446aa109776aa4986a3c91c1efbeb",
+      "native_revision": "e3830c5b5fe6d773082cc0ae1643367f0de5f985",
+      "recorded_ocr_revision": "e3830c5b5fe6d773082cc0ae1643367f0de5f985",
+      "baseline_sha256": "ec8e083030f575f3539ff875193cfeb6a4b8ff73353ffcb637d59ed11bfb580e",
+      "recorded_sha256": "b4769a6091c92679b236580f284251198e13380c756dccc3f909eb40461e8402"
+    }
+  ]
+}

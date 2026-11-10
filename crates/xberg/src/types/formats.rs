@@ -406,14 +406,19 @@ pub struct OcrTableBoundingBox {
 pub struct ImagePreprocessingConfig {
     /// Target DPI for the image (300 is standard, 600 for small text).
     ///
-    /// For a PDF page, this resamples the already-rendered raster; it does not make the page
-    /// re-render at a higher native resolution. A value above what
-    /// `image::preprocessing::calculate_target_dpi`'s memory/dimension clamp allows is
-    /// silently capped (GH#1786: 400 and 600 both clamped to the same ~372 on a Letter page
-    /// and produced byte-identical output), so upscaling interpolated pixels this way adds no
-    /// detail. To change the actual PDF render resolution, set `images.target_dpi` on
-    /// [`ExtractionConfig`](crate::core::config::ExtractionConfig) instead
-    /// (`image::dpi::effective_pdf_render_dpi`).
+    /// Forced whole-document PDF OCR with the registered built-in Tesseract backend renders
+    /// native page content at this density before normalization when a preprocessing block
+    /// is configured and this value exceeds 150. This includes the synthesized classical
+    /// pipeline and a block that only sets another option: omitted `target_dpi` defaults to 300.
+    /// Without a preprocessing block, the default PDF render remains 150 DPI.
+    ///
+    /// Explicit `images` settings and detected full-page scan density take precedence.
+    /// Selected-page OCR, prepared rasters, custom backends, explicit OCR pipelines and VLM
+    /// fallback retain their source-render policy. Existing raster memory and dimension limits
+    /// can cap both rendering and normalization; increasing this value cannot recover detail
+    /// from a supplied raster. Set `images.target_dpi` on
+    /// [`ExtractionConfig`](crate::core::config::ExtractionConfig) to configure PDF rendering
+    /// independently of preprocessing.
     pub target_dpi: i32,
 
     /// Auto-detect and correct image rotation.
