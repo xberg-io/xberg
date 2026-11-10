@@ -5875,7 +5875,10 @@ impl<'a> OverlapEvidence<'a> {
         for group in near_coincident_groups(tables, &others) {
             add_group_max(
                 &mut rest,
-                &group.iter().map(|index| &self.tables[index].occurrences).collect::<Vec<_>>(),
+                &group
+                    .iter()
+                    .map(|index| &self.tables[index].occurrences)
+                    .collect::<Vec<_>>(),
             );
         }
         let count_of = |counts: &WordCounts, word: &String| counts.get(word).copied().unwrap_or(0);
