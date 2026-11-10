@@ -454,20 +454,40 @@ fn weighty_scripts(counts: Vec<(Script, usize)>) -> Vec<Script> {
         .collect()
 }
 
-/// Whether the layer lost text of a script `languages` cannot read: it fails [`clusters_are_valid`]
-/// for a script that carries weight on the page and has cluster structure that [`part_of`] knows.
-/// A lost-glyph marker alone is not loss, because a layer can mark glyphs that only continue a
-/// cluster whose text is complete. Han, Greek and Cyrillic have no such structure and are never
-/// lost here. [`judged_scripts`] accepts a page without markers only when its clusters are valid.
+/// Share of the markers among the markers and the letters of a script above which the layer lost
+/// text. A marker stands for a glyph without a Unicode value; a layer of whole text carries some
+/// (about 0.29 on the Khmer fixtures that map every cluster), while a layer that lost most of its
+/// letters carries many more (0.85 on the partial fixture). The bound sits between the two.
+const MAX_MARKER_SHARE: f64 = 0.5;
+
+/// Whether `script` has cluster structure that [`part_of`] knows in `text`.
+fn has_cluster_structure(text: &str, script: Script) -> bool {
+    text.chars()
+        .any(|character| script_of(character) == Some(script) && part_of(script, character) != Part::Other)
+}
+
+/// Whether the layer lost text of a script `languages` cannot read, for the scripts that carry
+/// weight on the page and have cluster structure that [`part_of`] knows. It is lost when the signs
+/// no longer attach to letters ([`clusters_are_valid`]), or when the markers outnumber the letters
+/// by more than [`MAX_MARKER_SHARE`]: a marker replaces a letter and its signs together, so a layer
+/// that lost whole clusters keeps valid clusters among the rest. Han, Greek and Cyrillic have no
+/// such structure, so this says nothing about them.
 fn layer_is_lost(text: &str, languages: &[String]) -> bool {
-    uncovered_script_counts(text, languages).is_some_and(|counts| {
-        weighty_scripts(counts).into_iter().any(|script| {
-            let structured = text
-                .chars()
-                .any(|character| script_of(character) == Some(script) && part_of(script, character) != Part::Other);
-            structured && !clusters_are_valid(text, script)
-        })
-    })
+    let Some(counts) = uncovered_script_counts(text, languages) else {
+        return false;
+    };
+    let structured: Vec<Script> = weighty_scripts(counts)
+        .into_iter()
+        .filter(|script| has_cluster_structure(text, *script))
+        .collect();
+    let letters = text
+        .chars()
+        .filter(|character| script_of(*character).is_some_and(|script| structured.contains(&script)))
+        .count();
+    let markers = text.matches(super::unmapped_glyphs::LOST_GLYPH_MARKER).count();
+    !structured.is_empty()
+        && (structured.iter().any(|script| !clusters_are_valid(text, *script))
+            || markers as f64 > MAX_MARKER_SHARE * (markers + letters) as f64)
 }
 
 /// A failing page, the unreadable scripts of its layer, and whether the layer holds lost-glyph markers.
@@ -475,15 +495,18 @@ type Candidate = (u32, Vec<Script>, bool);
 
 /// The scripts of a failing page that the route cannot read, and the position of the stage that
 /// cannot. The first stage judges the page when it cannot read it. When it reads the script, a later
-/// stage that cannot read it keeps the page unless its layer is lost (see [`layer_is_lost`]): only a
-/// lost layer gains text from the stage that reads the script.
+/// stage that cannot read it keeps the page when every script of the page has cluster structure and
+/// the layer is not lost (see [`layer_is_lost`]): only a lost layer gains text from the stage that
+/// reads the script. Scripts without cluster structure (Han, Cyrillic, Arabic) have no loss signal
+/// but the markers, so a later stage never keeps them and the page goes to OCR as before.
 fn judge_page(text: &str, route: &[RouteStage]) -> Option<(Vec<Script>, usize)> {
     judged_scripts(text, &route[0].languages)
         .map(|scripts| (scripts, 0))
         .or_else(|| {
             route.iter().skip(1).find_map(|stage| {
                 let scripts = judged_scripts(text, &stage.languages)?;
-                (!layer_is_lost(text, &stage.languages)).then_some((scripts, stage.position))
+                let structured = scripts.iter().all(|script| has_cluster_structure(text, *script));
+                (structured && !layer_is_lost(text, &stage.languages)).then_some((scripts, stage.position))
             })
         })
 }
@@ -1154,7 +1177,7 @@ mod tests {
             let (decision, warnings) = run(&[KHMER_MARKED], ONE_PAGE, &config);
             assert!(decision.failing_pages.is_empty(), "{stages}");
             assert_eq!(warnings.len(), 1, "{stages}");
-            assert!(warnings[0].message.contains("(eng"), "{}", warnings[0].message);
+            assert!(warnings[0].message.contains("(eng)"), "{}", warnings[0].message);
         }
     }
 
@@ -1213,7 +1236,7 @@ mod tests {
             let (decision, warnings) = run(&[KHMER_MARKED], ONE_PAGE, &pipeline_config(pipeline.clone()));
             assert!(decision.failing_pages.is_empty(), "{pipeline}");
             assert_eq!(warnings.len(), 1, "{pipeline}");
-            assert!(warnings[0].message.contains("(eng"), "{}", warnings[0].message);
+            assert!(warnings[0].message.contains("(eng)"), "{}", warnings[0].message);
         }
     }
 
@@ -1420,7 +1443,7 @@ mod tests {
             {"backend": "tesseract", "priority": 100, "language": ["khm"]},
             {"backend": "tesseract", "priority": 50, "language": ["eng"]},
         ]}));
-        let (failing, marked) = marked_for(&[KHMER_LOST], &config);
+        let (failing, marked) = marked_for(&[&khmer_with_clusters_replaced()], &config);
         assert_eq!(failing, [1]);
         assert_eq!(marked, [1]);
     }
@@ -1632,15 +1655,93 @@ mod tests {
         );
     }
 
+    /// A page of a script without cluster structure, marked, behind a first stage that reads it and a
+    /// later English stage. The markers are its only loss signal, so the page goes to OCR as before.
+    fn assert_marked_page_goes_to_the_first_stage(page: &str, first: &str) {
+        let (text, boundaries) = page_text(&[page]);
+        assert_eq!(decision_for(&text, &boundaries).failing_pages, [1], "{first}");
+        assert!(
+            !layer_is_lost(page, &langs(&["eng"])),
+            "{first}: no cluster structure to judge"
+        );
+        let (decision, warnings) = run(&[page], ONE_PAGE, &khm_then_eng(first, "eng"));
+        assert_eq!(decision.failing_pages, [1], "{first}");
+        assert!(warnings.is_empty(), "{first}: {warnings:?}");
+    }
+
     #[test]
-    fn a_marked_page_in_a_script_without_cluster_structure_stays_native_when_a_later_stage_cannot_read_it() {
+    fn a_marked_han_page_goes_to_a_first_stage_that_reads_han() {
         let han = "中文\u{FFFD}文本\u{FFFD}内容\u{FFFD}测试\u{FFFD}文字\u{FFFD}页";
-        let (text, boundaries) = page_text(&[han]);
-        assert_eq!(decision_for(&text, &boundaries).failing_pages, [1]);
-        assert!(!layer_is_lost(han, &langs(&["eng"])));
-        let (decision, warnings) = run(&[han], ONE_PAGE, &khm_then_eng("chi_sim", "eng"));
-        assert!(decision.failing_pages.is_empty());
-        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert_marked_page_goes_to_the_first_stage(han, "chi_sim");
+    }
+
+    #[test]
+    fn a_marked_cyrillic_page_goes_to_a_first_stage_that_reads_cyrillic() {
+        let cyrillic = "пр\u{FFFD}ив\u{FFFD}ет\u{FFFD} ми\u{FFFD}ро\u{FFFD}эт\u{FFFD}ое\u{FFFD}сл\u{FFFD}ой\u{FFFD}те\u{FFFD}кс\u{FFFD}";
+        assert_marked_page_goes_to_the_first_stage(cyrillic, "rus");
+    }
+
+    #[test]
+    fn a_marked_arabic_page_goes_to_a_first_stage_that_reads_arabic() {
+        let arabic =
+            "مر\u{FFFD}حب\u{FFFD}با\u{FFFD} بع\u{FFFD}ال\u{FFFD}مه\u{FFFD}ذا\u{FFFD}نص\u{FFFD}طو\u{FFFD}يل\u{FFFD}";
+        assert_marked_page_goes_to_the_first_stage(arabic, "ara");
+    }
+
+    /// Whole clusters replaced by markers: the letters left carry valid signs, yet most of the page is gone.
+    fn khmer_with_clusters_replaced() -> String {
+        format!("{UNMARKED} {}", "\u{FFFD}".repeat(40))
+    }
+
+    #[test]
+    fn a_layer_that_lost_whole_clusters_is_lost_by_the_marker_share_alone() {
+        let page = khmer_with_clusters_replaced();
+        assert!(
+            clusters_are_valid(&page, Script::Khmer),
+            "the clusters that remain are whole"
+        );
+        assert!(layer_is_lost(&page, &langs(&["eng"])));
+        let (decision, warnings) = run(&[&page], ONE_PAGE, &khm_then_eng("khm", "eng"));
+        assert_eq!(decision.failing_pages, [1]);
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    const COMPLETE_LAYER: &str = include_str!("../../../tests/fixtures/pdf/khmer-cluster-2536/layers/complete.txt");
+    const PARTIAL_LAYER: &str = include_str!("../../../tests/fixtures/pdf/khmer-cluster-2536/layers/partial.txt");
+    const SHORT_LAYER: &str = include_str!("../../../tests/fixtures/pdf/khmer-cluster-2536/layers/short.txt");
+
+    fn khmer_letters_and_markers(text: &str) -> (usize, usize) {
+        let letters = text.chars().filter(|c| script_of(*c) == Some(Script::Khmer)).count();
+        (
+            letters,
+            text.matches(super::super::unmapped_glyphs::LOST_GLYPH_MARKER).count(),
+        )
+    }
+
+    #[test]
+    fn the_fixture_layers_fall_on_the_side_of_the_marker_bound_their_pages_need() {
+        assert_eq!(khmer_letters_and_markers(COMPLETE_LAYER), (222, 92));
+        assert_eq!(khmer_letters_and_markers(PARTIAL_LAYER), (28, 158));
+        assert_eq!(khmer_letters_and_markers(SHORT_LAYER), (17, 0));
+        let eng = langs(&["eng"]);
+        assert!(!layer_is_lost(COMPLETE_LAYER, &eng));
+        assert!(!layer_is_lost(SHORT_LAYER, &eng));
+        assert!(layer_is_lost(PARTIAL_LAYER, &eng));
+        let (_, partial_markers) = khmer_letters_and_markers(PARTIAL_LAYER);
+        assert!(partial_markers as f64 > MAX_MARKER_SHARE * (partial_markers + 28) as f64);
+    }
+
+    #[test]
+    fn under_a_khm_stage_the_complete_fixture_layers_stay_native_and_the_partial_one_goes_to_ocr() {
+        let config = khm_then_eng("khm", "eng");
+        for (name, layer) in [("complete", COMPLETE_LAYER), ("short", SHORT_LAYER)] {
+            let (decision, warnings) = run(&[layer], ONE_PAGE, &config);
+            assert!(decision.failing_pages.is_empty(), "{name}");
+            assert_eq!(warnings.len(), 1, "{name}: {warnings:?}");
+        }
+        let (decision, warnings) = run(&[PARTIAL_LAYER], ONE_PAGE, &config);
+        assert_eq!(decision.failing_pages, [1]);
+        assert!(warnings.is_empty(), "{warnings:?}");
     }
 
     #[test]
