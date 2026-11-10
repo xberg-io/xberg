@@ -3930,6 +3930,15 @@ pub(super) async fn extract_with_ocr_for_page(
             OcrReadEvidence::default(),
         ));
     }
+    #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+    let preprocessing_render_dpi = explicit_preprocessing_render_dpi(
+        config,
+        base_ocr_config,
+        !has_layout_detections && !has_stored_scan && images.is_none(),
+        get_ocr_backend_registry().read().is_builtin_tesseract(&backend),
+    );
+    #[cfg(not(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32"))))]
+    let preprocessing_render_dpi: Option<i32> = None;
     let capture_rasters = config.images.as_ref().is_some_and(|c| c.include_page_rasters);
     let mut captured_rasters: Vec<crate::types::ExtractedImage> = Vec::new();
     let mut preprocessing_by_page: ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata> =
@@ -3964,7 +3973,14 @@ pub(super) async fn extract_with_ocr_for_page(
         adapt_batch_size_to_memory(
             configured_batch_size,
             content.map(|b| b.len()).unwrap_or(0),
-            UNMEASURED_OCR_PAGE_WORKING_SET_BYTES,
+            preprocessing_render_reservation(
+                preprocessing_render_dpi,
+                config
+                    .security_limits
+                    .as_ref()
+                    .unwrap_or(&Default::default())
+                    .max_content_size,
+            ),
         )
         .await
     } else {
@@ -4303,6 +4319,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         batch_start..batch_end,
                         security_limits,
                         config.images.as_ref(),
+                        preprocessing_render_dpi,
                     )
                 })?;
                 crate::core::diagnostics::dedup_extend_warnings(&mut render_warnings, warnings);
@@ -8746,3 +8763,44 @@ mod stored_scan_paint;
 #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
 #[path = "pipeline/stored_scan_retry.rs"]
 mod stored_scan_retry;
+
+/// A source render can preserve an explicitly requested normalization density, but only for
+/// the direct built-in backend; implicit defaults and prepared/pipeline images keep their route. ~keep
+#[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+fn explicit_preprocessing_render_dpi(
+    config: &ExtractionConfig,
+    ocr: &crate::core::config::OcrConfig,
+    direct_render: bool,
+    builtin_tesseract: bool,
+) -> Option<i32> {
+    if !config.force_ocr
+        || config.images.is_some()
+        || !direct_render
+        || !builtin_tesseract
+        || ocr.pipeline.is_some()
+        || ocr.vlm_fallback != crate::core::config::VlmFallbackPolicy::Disabled
+    {
+        return None;
+    }
+    ocr.tesseract_config
+        .as_ref()?
+        .preprocessing
+        .as_ref()
+        .map(|preprocessing| preprocessing.target_dpi)
+        .filter(|target| *target > crate::image::dpi::DEFAULT_PDF_RENDER_DPI)
+}
+
+/// Rendering may now hold more pixels before normalization. The page security cap bounds
+/// that raster/encode peak, so reserve at least that cap rather than the old fallback alone. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn preprocessing_render_reservation(target: Option<i32>, page_cap: usize) -> usize {
+    if target.is_some() {
+        UNMEASURED_OCR_PAGE_WORKING_SET_BYTES.max(page_cap)
+    } else {
+        UNMEASURED_OCR_PAGE_WORKING_SET_BYTES
+    }
+}
+
+#[cfg(all(test, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+#[path = "pipeline/preprocessing_density_tests.rs"]
+mod preprocessing_density_tests;
