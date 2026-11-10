@@ -247,7 +247,11 @@ fn color_dodge_and_color_burn_plates_keep_the_ink_over_paper_and_follow_the_addi
             second,
             "{mode}: ink is lost where only the second rectangle covers"
         );
-        assert_eq!(at(&blended, ONLY_FIRST.0, ONLY_FIRST.1), first, "{mode}: first rectangle");
+        assert_eq!(
+            at(&blended, ONLY_FIRST.0, ONLY_FIRST.1),
+            first,
+            "{mode}: first rectangle"
+        );
         assert_eq!(at(&blended, OVERLAP.0, OVERLAP.1), overlap, "{mode}: overlap");
     }
 }

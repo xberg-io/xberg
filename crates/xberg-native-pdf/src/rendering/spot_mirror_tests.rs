@@ -30,7 +30,13 @@ fn paint(renderer: &mut PageRenderer, mode: &str, tint: f32, alpha: f32, coverag
 }
 
 fn lane(renderer: &PageRenderer) -> Vec<u8> {
-    renderer.cmyk_sidecar.as_ref().expect("sidecar").spot_plane(0).expect("lane").to_vec()
+    renderer
+        .cmyk_sidecar
+        .as_ref()
+        .expect("sidecar")
+        .spot_plane(0)
+        .expect("lane")
+        .to_vec()
 }
 
 fn painted(renderer: &PageRenderer) -> Vec<u8> {
@@ -45,7 +51,11 @@ fn overlay_over_an_opaque_tint_zero_paint_gives_no_ink() {
     paint(&mut r, "Normal", 0.0, 1.0, [255; 3]);
     assert_eq!(lane(&r), vec![0; 3], "control: the tint-0 paint knocked the ink out");
     paint(&mut r, "Overlay", 0.5, 1.0, [255; 3]);
-    assert_eq!(lane(&r), vec![0; 3], "Overlay at tint 0.5 over a tint-0 backdrop gives no ink");
+    assert_eq!(
+        lane(&r),
+        vec![0; 3],
+        "Overlay at tint 0.5 over a tint-0 backdrop gives no ink"
+    );
 }
 
 #[test]
@@ -82,7 +92,11 @@ fn the_painted_plane_is_the_union_of_the_alphas_of_the_paints() {
     let mut r = renderer();
     assert_eq!(painted(&r), vec![0; 3]);
     paint(&mut r, "Normal", 0.0, 1.0, [255, 0, 0]);
-    assert_eq!(painted(&r), vec![255, 0, 0], "a tint-0 paint still marks the lane painted");
+    assert_eq!(
+        painted(&r),
+        vec![255, 0, 0],
+        "a tint-0 paint still marks the lane painted"
+    );
     paint(&mut r, "Normal", 0.5, 0.5, [0, 255, 255]);
     assert_eq!(painted(&r), vec![255, 128, 128]);
     paint(&mut r, "Normal", 0.5, 0.4, [0, 0, 255]);

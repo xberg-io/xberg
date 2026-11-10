@@ -2524,9 +2524,9 @@ mod tests {
         );
     }
 
+    /// Both modes are self-dual, B(1 - b, 1 - s) = 1 - B(b, s), so the round trip gives the raw value.
     #[test]
     fn overlay_and_hard_light_overlap_values_do_not_move_with_the_complement() {
-        // Both are self-dual: B(1 - b, 1 - s) = 1 - B(b, s), so the round trip gives the raw value.
         for mode in ["Overlay", "HardLight"] {
             for b in [0.1_f32, 0.3, 0.5, 0.8] {
                 for s in [0.2_f32, 0.5, 0.75] {
