@@ -1432,6 +1432,9 @@ fn fold_embedded_image_ocr_text_with_gap(
                 page.content.push_str("\n\n");
             }
             page.content.push_str(text);
+            if !doc.ocr_text_pages.contains(&page_number) {
+                doc.ocr_text_pages.push(page_number);
+            }
         }
 
         if anchored_image.is_none() {

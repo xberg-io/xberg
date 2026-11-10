@@ -269,6 +269,7 @@ pub struct InternalDocument {
     pub prebuilt_pages: Option<Vec<crate::types::PageContent>>,
 
     /// Pages whose prebuilt text an OCR route wrote; only these are re-rendered as plain. Not on the wire.
+    /// A plugin result fills it from the OCR extraction method or a page's `ocr_confidence`.
     #[serde(skip)]
     pub ocr_text_pages: Vec<u32>,
 
@@ -421,6 +422,14 @@ impl From<crate::types::extraction::ExtractedDocument> for InternalDocument {
         doc.processing_warnings = result.processing_warnings;
         doc.ocr_page_failures = result.ocr_page_failures.unwrap_or_default();
         doc.llm_usage = result.llm_usage;
+        let ocr_method = matches!(extraction_method, Some(crate::types::extraction::ExtractionMethod::Ocr));
+        if let Some(pages) = result.pages.as_ref() {
+            doc.ocr_text_pages = pages
+                .iter()
+                .filter(|page| ocr_method || page.ocr_confidence.is_some())
+                .map(|page| page.page_number)
+                .collect();
+        }
         doc.prebuilt_pages = result.pages;
         doc.prebuilt_ocr_elements = result.ocr_elements;
         doc.revisions = result.revisions;

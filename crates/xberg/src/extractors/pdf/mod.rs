@@ -2375,16 +2375,20 @@ fn replace_pages_with_ocr_page_texts(
     pages: &mut [crate::types::PageContent],
     ocr_page_texts: &[String],
     keep_native_content: bool,
-) {
+) -> Vec<u32> {
+    let mut replaced = Vec::new();
     for (page, text) in pages.iter_mut().zip(ocr_page_texts) {
         replace_page_content_with_ocr_text(page, text, keep_native_content);
+        replaced.push(page.page_number);
     }
 
     if ocr_page_texts.len() == 1 {
         for page in pages.iter_mut().skip(1) {
             replace_page_content_with_ocr_text(page, "", keep_native_content);
+            replaced.push(page.page_number);
         }
     }
+    replaced
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -3757,9 +3761,7 @@ impl PdfExtractor {
 
             if let Some(pts) = ocr_page_texts.as_ref() {
                 if let Some(ref mut pages) = page_contents {
-                    replace_pages_with_ocr_page_texts(pages, pts, keep_native_content);
-                    let replaced = if pts.len() == 1 { pages.len() } else { pts.len() };
-                    ocr_text_pages.extend(pages.iter().take(replaced).map(|page| page.page_number));
+                    ocr_text_pages.extend(replace_pages_with_ocr_page_texts(pages, pts, keep_native_content));
                 } else {
                     ocr_text_pages.extend((1..=pts.len() as u32).collect::<Vec<_>>());
                     page_contents = Some(
