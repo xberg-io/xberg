@@ -260,7 +260,11 @@ async fn replacement_tesseract_keeps_actual_source_render_at_150() {
 // the render regardless, they assert the batch width the promotion's reservation still
 // reaches.
 
-#[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
+#[cfg(all(
+    feature = "bundle-tessdata-eng",
+    feature = "tokio-runtime",
+    feature = "layout-detection"
+))]
 fn prepared_layout_inputs(pdf: &[u8]) -> PreparedLayoutInputs {
     let limits = crate::extractors::security::SecurityLimits::default();
     let document = xberg_native_pdf::PdfDocument::from_bytes(pdf.to_vec()).unwrap();
@@ -278,7 +282,9 @@ fn prepared_layout_inputs(pdf: &[u8]) -> PreparedLayoutInputs {
 }
 
 #[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
-async fn real_route_run(layout: Option<&PreparedLayoutInputs>) -> MixedOcrRun {
+async fn real_route_run(
+    #[cfg(feature = "layout-detection")] layout: Option<&PreparedLayoutInputs>,
+) -> MixedOcrRun {
     let mut config = configuration();
     config.concurrency = Some(crate::core::config::ConcurrencyConfig {
         max_threads: Some(2),
@@ -316,6 +322,7 @@ async fn real_route_run(layout: Option<&PreparedLayoutInputs>) -> MixedOcrRun {
         &bytes,
         &config,
         AllPagesFailedPolicy::PreserveNative,
+        #[cfg(feature = "layout-detection")]
         match layout {
             Some(prepared) => MixedLayoutInputs::Prepared(Some(prepared)),
             None => MixedLayoutInputs::Resolve(None),
@@ -418,7 +425,12 @@ fn under_batch_capture(
 fn promoted_mixed_route_sizes_the_batch_from_the_preprocessing_reservation() {
     let capture = BatchReductions::default();
     let bytes = fixture::localized_pdf("gap-left");
-    under_batch_capture(&capture, 100 * 1024 * 1024, bytes.len(), real_route_run(None));
+    under_batch_capture(
+        &capture,
+        100 * 1024 * 1024,
+        bytes.len(),
+        real_route_run(#[cfg(feature = "layout-detection")] None),
+    );
     assert_eq!(
         capture.0.lock().unwrap().as_slice(),
         [(2, 1)],
@@ -430,7 +442,12 @@ fn promoted_mixed_route_sizes_the_batch_from_the_preprocessing_reservation() {
 #[tokio::test]
 #[serial_test::serial]
 async fn plain_mixed_route_promotes_through_the_real_call() {
-    let metadata = real_route_run(None).await.output.6.remove(&1).unwrap();
+    let metadata = real_route_run(#[cfg(feature = "layout-detection")] None)
+        .await
+        .output
+        .6
+        .remove(&1)
+        .unwrap();
     assert_eq!(
         (metadata.original_dimensions.width, metadata.original_dimensions.height),
         (1800, 900),
@@ -443,7 +460,11 @@ async fn plain_mixed_route_promotes_through_the_real_call() {
 /// the supplied rasters as-is, so the render dimension alone cannot see the promotion gate —
 /// the batch width is the one place the excluded promotion still reaches. Asserts no reduction
 /// event fired: restoring the promotion at the call site shrinks the batch and fires one.
-#[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
+#[cfg(all(
+    feature = "bundle-tessdata-eng",
+    feature = "tokio-runtime",
+    feature = "layout-detection"
+))]
 #[test]
 #[serial_test::serial]
 fn layout_active_mixed_route_keeps_the_source_render_through_the_real_call() {
