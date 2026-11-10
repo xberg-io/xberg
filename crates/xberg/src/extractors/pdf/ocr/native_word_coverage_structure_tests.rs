@@ -107,6 +107,12 @@ fn lost_glyph_or_late_only_ink_ownership_cannot_omit_a_body_word() {
         read,
         Some(&lost_layer)
     ));
+    let symbol_layer = format!("{read}{}", crate::extractors::pdf::unmapped_glyphs::LOST_SYMBOL_GLYPH_MARKER);
+    assert!(!ink_owned_table_structure_can_yield_to_native(
+        &doc,
+        read,
+        Some(&symbol_layer)
+    ));
     assert!(!ink_owned_table_structure_can_yield_to_native(&doc, read, None));
     let exact_read = "The paragraph | Operand | 1 |";
     assert!(ink_owned_table_structure_can_yield_to_native(
