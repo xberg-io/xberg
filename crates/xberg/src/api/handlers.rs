@@ -2490,7 +2490,9 @@ mod tests {
         for run in 0..100 {
             let job_store = std::sync::Arc::new(crate::api::jobs::JobStore::new());
             let job_id = job_store.create_job().expect("slot available");
-            let token = job_store.cancellation_token(&job_id).expect("token registered on create");
+            let token = job_store
+                .cancellation_token(&job_id)
+                .expect("token registered on create");
             let guard = JobAbortGuard {
                 store: std::sync::Arc::clone(&job_store),
                 job_id: job_id.clone(),
@@ -2530,7 +2532,10 @@ mod tests {
             let observer = std::thread::spawn(move || {
                 let deadline = Instant::now() + Duration::from_secs(5);
                 loop {
-                    if observer_store.get(&observer_id).is_some_and(|s| s.state == JobState::Failed) {
+                    if observer_store
+                        .get(&observer_id)
+                        .is_some_and(|s| s.state == JobState::Failed)
+                    {
                         return Some(observer_token.is_cancelled());
                     }
                     if Instant::now() > deadline {
@@ -2541,7 +2546,10 @@ mod tests {
 
             drop(runtime);
 
-            assert!(work.join().unwrap(), "run {run}: blocking work never saw its token fire");
+            assert!(
+                work.join().unwrap(),
+                "run {run}: blocking work never saw its token fire"
+            );
             assert_eq!(
                 observer.join().unwrap(),
                 Some(true),

@@ -454,7 +454,10 @@ mod tests {
             }
             store.abort(&job_id, "task ended".to_string(), "2026-05-01T12:00:01Z".to_string());
 
-            assert!(observer.join().unwrap(), "run {run}: Failed was published before the token fired");
+            assert!(
+                observer.join().unwrap(),
+                "run {run}: Failed was published before the token fired"
+            );
         }
     }
 
