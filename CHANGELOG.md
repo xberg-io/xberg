@@ -1537,6 +1537,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(markdown): Display math no longer opens an HTML block.** (GH#2793)
   A line of display math that starts with `<` (`<script`, `<div`, `<!--` and others) now gets a space after the `<`, as a `<` before a closing `>` already did, so no Markdown reader starts an HTML block there and drops the math.
 
+- **(ocr): Keep every OCR line that holds a numeral, and keep page ranges inside the content after Unicode normalization.** (GH#2851)
+  The dictionary filter for noisy OCR lines no longer removes a line that holds a numeral, so its numbers stay in `content` and in the page text. Lines of letters only follow the filter as before. Page byte ranges in `metadata.pages.boundaries` now follow `content` when Unicode normalization shortens it; a range that cannot be mapped is omitted with a `page_boundaries` warning.
+
 ## [1.3.11] - 2026-10-16
 
 ### Added
