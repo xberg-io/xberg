@@ -456,3 +456,59 @@ fn sub_threshold_kern_across_the_drawn_end_does_not_keep_it() {
         );
     }
 }
+
+fn span_boxes_in_mode(mode: WordBoundaryMode, stream: &str) -> Vec<(String, f32, f32)> {
+    let config = TextExtractionConfig {
+        word_boundary_mode: mode,
+        ..TextExtractionConfig::default()
+    };
+    let mut extractor = TextExtractor::with_config(config);
+    extractor.add_font("F1".to_string(), half_em_font());
+    extractor.extract_spans = true;
+    extractor.run_content_stream(stream.as_bytes()).unwrap();
+    extractor.flush_tj_span_buffer().unwrap();
+    extractor.settle_span_holds();
+    let round = |v: f32| (v * 100.0).round() / 100.0;
+    extractor
+        .spans
+        .iter()
+        .map(|s| (s.text.clone(), round(s.bbox.x), round(s.bbox.width)))
+        .collect()
+}
+
+/// The Primary word-boundary mode ends the run at its drawn width after a `Tm` set back, as the default
+/// mode does (GH#2690). The `def` span sits at the pen move plus the lead, 30 points past it. ~keep
+#[test]
+fn primary_mode_tj_lead_after_a_tm_back_keeps_the_drawn_width() {
+    for (setup, back, space_width) in [
+        ("BT /F1 10 Tf 72 700 Td", "1 0 0 1 80 700 Tm", 2.5),
+        ("BT 10 0 0 10 72 700 Tm /F1 1 Tf", "10 0 0 10 80 700 Tm", 0.25),
+    ] {
+        let stream = format!("{setup} (abc) Tj {back} [-3000 (def)] TJ ET");
+        let spans = span_boxes_in_mode(WordBoundaryMode::Primary, &stream);
+        let default = span_boxes_in_mode(WordBoundaryMode::Tiebreaker, &stream);
+        assert_eq!(spans, default, "{setup}");
+        let expected = [
+            ("abc".to_string(), 72.0, 15.0),
+            (" ".to_string(), 87.0, space_width),
+            ("def".to_string(), 110.0, 15.0),
+        ];
+        assert_eq!(spans, expected, "{setup}");
+    }
+}
+
+/// Controls for Primary mode: a kern under the threshold keeps the pen move, and glyphs drawn at the pen
+/// continue the run from it. ~keep
+#[test]
+fn primary_mode_keeps_the_pen_move_for_a_kern_and_for_glyphs_at_the_pen() {
+    let kern = span_boxes_in_mode(
+        WordBoundaryMode::Primary,
+        "BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 80 700 Tm [-50 (def)] TJ ET",
+    );
+    assert_eq!(kern.first(), Some(&("abc".to_string(), 72.0, 8.0)), "{kern:?}");
+    let at_pen = span_boxes_in_mode(
+        WordBoundaryMode::Primary,
+        "BT /F1 10 Tf 72 700 Td (abc) Tj 1 0 0 1 80 700 Tm (d) Tj ET",
+    );
+    assert_eq!(at_pen, [("abcd".to_string(), 72.0, 13.0)]);
+}
