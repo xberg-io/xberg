@@ -63,6 +63,15 @@ run_type0_cases() {
   fi
 }
 
+run_number_budget_cases() {
+  local module='extractors::pdf::ocr::number_recovery::tests::run_controls_tests'
+  run_exact "${module}::should_allow_supported_source_work_after_bounded_late_declines" --lib
+  run_exact "${module}::should_exclude_unsupported_sources_from_eligible_page_limit" --lib
+  run_exact "${module}::should_keep_unmeasured_shares_within_the_frozen_document_limit" --lib
+  run_exact "${module}::should_enforce_source_reservation_as_an_allocation_ceiling" --lib
+  run_exact "${module}::should_fail_closed_when_measured_source_work_exceeds_its_reservation" --lib
+}
+
 run_api_cases() {
   run_exact 'api::handlers::tests::test_extract_async_then_poll_job_id' --lib
   run_exact 'api::jobs::tests::test_cancel_running_job_fires_token' --lib
@@ -72,8 +81,9 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=10
+  expected=15
   run_pdf_cases
+  run_number_budget_cases
   ;;
 api-jobs)
   expected=4

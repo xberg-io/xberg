@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 const MAX_RUN_PAGES: usize = 8;
 const MAX_RUN_CROPS: usize = 64;
 const MAX_RUN_WORK_BYTES: usize = 128 * 1024 * 1024;
+const SOURCE_WORK_SHARES: usize = 2;
 
 #[derive(Default)]
 pub(super) struct Budget {
@@ -78,17 +79,29 @@ impl Budget {
     pub(super) fn reserve_work(&self, config: &ExtractionConfig) -> Option<usize> {
         let mut state = self.state.lock();
         let limits = state.limits(config);
-        let allowance = limits.bytes.saturating_sub(state.spent);
+        let shares = limits.pages.min(SOURCE_WORK_SHARES);
+        if shares == 0 {
+            state.limited = true;
+            return None;
+        }
+        // A full unmeasured share stays charged; leave another share for a later page. ~keep
+        let allowance = limits
+            .bytes
+            .div_ceil(shares)
+            .min(limits.bytes.saturating_sub(state.spent));
         if allowance == 0 {
             state.limited = true;
             return None;
         }
-        state.spent = limits.bytes;
+        state.spent += allowance;
         Some(allowance)
     }
     pub(super) fn settle_work(&self, reserved: usize, measured: usize) -> bool {
         let mut state = self.state.lock();
         let Some(unused) = reserved.checked_sub(measured) else {
+            if let Some(limits) = state.limits {
+                state.spent = limits.bytes;
+            }
             state.limited = true;
             return false;
         };
@@ -96,7 +109,10 @@ impl Budget {
         true
     }
     pub(super) fn retain_failed_work(&self) {
-        self.state.lock().limited = true;
+        let mut state = self.state.lock();
+        if state.limits.is_some_and(|limits| state.spent >= limits.bytes) {
+            state.limited = true;
+        }
     }
     pub(super) fn charge(&self, bytes: usize, config: &ExtractionConfig) -> bool {
         let mut state = self.state.lock();

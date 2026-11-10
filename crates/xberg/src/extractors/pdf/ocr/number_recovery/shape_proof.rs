@@ -126,34 +126,58 @@ fn bounded_source(document: &PdfDocument, page: usize, max_bytes: usize) -> Proo
     })
 }
 
+pub(super) struct SourceMetadata<'a> {
+    document: &'a PdfDocument,
+    page: usize,
+    pub(super) media: Rect,
+}
+
+impl SourceMetadata<'_> {
+    pub(super) fn prepare(
+        self,
+        max_bytes: usize,
+        max_iterations: usize,
+    ) -> crate::Result<Option<(Vec<Number>, ShapeProof)>> {
+        optional(prepare_source_inner(
+            self.document,
+            self.page,
+            max_bytes,
+            max_iterations,
+        ))
+    }
+}
+
+pub(super) fn source_metadata(document: &PdfDocument, page: usize) -> crate::Result<Option<SourceMetadata<'_>>> {
+    Ok(optional(preflight_source(document, page))?.map(|media| SourceMetadata { document, page, media }))
+}
+
+#[cfg(test)]
 pub(super) enum Preparation<T> {
     Ready(T),
     UnsupportedBeforeWork,
     UnmeasuredDecline,
 }
 
+#[cfg(test)]
 pub(super) fn prepare_source_accounted(
     document: &PdfDocument,
     page: usize,
     max_bytes: usize,
     max_iterations: usize,
 ) -> crate::Result<Preparation<(Vec<Number>, ShapeProof)>> {
-    if optional(preflight_source(document, page))?.is_none() {
+    let Some(source) = source_metadata(document, page)? else {
         return Ok(Preparation::UnsupportedBeforeWork);
-    }
-    Ok(
-        match optional(prepare_source_inner(document, page, max_bytes, max_iterations))? {
-            Some(proof) => Preparation::Ready(proof),
-            None => Preparation::UnmeasuredDecline,
-        },
-    )
+    };
+    Ok(match source.prepare(max_bytes, max_iterations)? {
+        Some(proof) => Preparation::Ready(proof),
+        None => Preparation::UnmeasuredDecline,
+    })
 }
 
-fn preflight_source(document: &PdfDocument, page: usize) -> ProofResult<()> {
-    page_media(document, page)?;
+fn preflight_source(document: &PdfDocument, page: usize) -> ProofResult<Rect> {
+    let media = page_media(document, page)?;
     source_profile::metadata(document, page)?;
-    // The render document already visited these dictionaries. Do not resolve XObjects, font ~keep
-    // descriptors or programs here: decoding/copying them makes a decline unmeasured work. ~keep
+    // Only cached page/font dictionaries are metadata. Program or XObject resolution starts charged work. ~keep
     let resources = document.get_page_resources(page)?;
     let fonts = resources
         .as_dict()
@@ -178,7 +202,7 @@ fn preflight_source(document: &PdfDocument, page: usize) -> ProofResult<()> {
             "unsupported page font subtype",
         )?;
     }
-    Ok(())
+    Ok(media)
 }
 
 #[cfg(test)]

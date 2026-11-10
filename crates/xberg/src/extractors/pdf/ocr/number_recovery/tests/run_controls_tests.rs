@@ -91,6 +91,24 @@ fn exercise_page<'a>(
     ));
     let (raster, _, _) = verifier_fixture_from(input);
     let decoded = image::load_from_memory(&raster).unwrap();
+    exercise_source_page(
+        document,
+        index,
+        config,
+        run,
+        raster,
+        (decoded.width(), decoded.height()),
+    )
+}
+
+fn exercise_source_page<'a>(
+    document: &'a Arc<PdfDocument>,
+    index: usize,
+    config: &'a ExtractionConfig,
+    run: &'a Arc<Run>,
+    raster: Arc<Vec<u8>>,
+    dimensions: (u32, u32),
+) -> impl std::future::Future<Output = Vec<crate::types::ProcessingWarning>> + 'a {
     let metadata = crate::types::Metadata::default();
     async move {
         let mut paragraphs = [paragraph("VOU", "VOU")];
@@ -103,7 +121,7 @@ fn exercise_page<'a>(
                     index,
                     layer: "ប០ប",
                     raster,
-                    dimensions: (decoded.width(), decoded.height()),
+                    dimensions,
                     metadata: &metadata
                 },
                 &mut paragraphs,
@@ -189,12 +207,12 @@ fn should_prepare_numeric_source_on_a_blocking_worker() {
     });
     assert_eq!(
         run.budget.remaining(&config),
-        0,
-        "failed crop OCR must retain source work"
+        proof_limits(&config).max_content_size / 2,
+        "failed crop OCR must retain its full source share"
     );
     assert!(
-        run.budget.limited(),
-        "the deliberately invalid model failure must retain its charge"
+        !run.budget.limited(),
+        "one retained source share is not document exhaustion"
     );
     let captured = events.0.lock().unwrap();
     assert!(!captured.is_empty(), "the real native font preparation must run");
@@ -269,36 +287,32 @@ fn should_bound_page_admission_across_one_document_and_keep_reads() {
         max_iterations: 1,
         ..Default::default()
     });
-    let document = Arc::new(PdfDocument::from_bytes(early_decline_pages("rotation")).unwrap());
-    assert_eq!(document.page_count().unwrap(), 2);
+    let document = Arc::new(PdfDocument::from_bytes(early_decline_pages("budget")).unwrap());
     let run = Arc::new(Run::default());
-    let (_, admitted) = prepare_read(config.ocr.clone().unwrap(), &config, 0, 0, Some("ប០ប"), &run);
-    assert!(admitted);
+    assert!(run.budget.begin_page(0, &config));
+    assert!(run.budget.charge(1, &config));
+    assert_eq!(
+        run.budget.remaining(&config),
+        proof_limits(&config).max_content_size - 1
+    );
+    let (later, observed) = prepare_read(config.ocr.clone().unwrap(), &config, 1, 0, Some("ប០ប"), &run);
+    assert!(
+        !observed,
+        "an eligible source page uses the single slot despite remaining bytes"
+    );
+    assert_eq!(later.backend_options, config.ocr.as_ref().unwrap().backend_options);
+    let future = exercise_page(&document, 1, &config, &run);
     let events = FontEvents::default();
-    let first = exercise_page(&document, 0, &config, &run);
-    let second = exercise_page(&document, 1, &config, &run);
-    with_runtime(events.clone(), async {
-        let mut warnings = first.await;
-        let initial = events.0.lock().unwrap().len();
-        assert_eq!(initial, 0, "the first source attempt declines at page metadata");
-        assert!(
-            run.budget.remaining(&config) > 0,
-            "early decline releases byte allowance"
-        );
-        let (later, observed) = prepare_read(config.ocr.clone().unwrap(), &config, 1, 0, Some("ប០ប"), &run);
-        assert!(!observed, "the attempted source page uses the single page slot");
-        assert_eq!(later.backend_options, config.ocr.as_ref().unwrap().backend_options);
-        warnings.extend(second.await);
-        assert_eq!(
-            events.0.lock().unwrap().len(),
-            initial,
-            "a second page must not repeat native work after the run cap"
-        );
-        assert!(
-            warnings.iter().any(|warning| warning.message.contains("budget")),
-            "declining additional verification must be caller-visible"
-        );
-    });
+    let warnings = with_runtime(events.clone(), future);
+    assert!(
+        events.0.lock().unwrap().is_empty(),
+        "the page cap must stop before fonts"
+    );
+    assert!(
+        warnings
+            .iter()
+            .any(|warning| warning.message.contains("document budget"))
+    );
 }
 
 #[test]
@@ -341,8 +355,8 @@ fn should_observe_cancellation_after_admission_before_engine_initialization() {
     );
     assert_eq!(
         run.budget.remaining(&config),
-        0,
-        "cancellation after font work cannot refund its reservation"
+        proof_limits(&config).max_content_size / 2,
+        "cancellation after font work retains its entire bounded reservation"
     );
 }
 
@@ -471,14 +485,27 @@ fn should_observe_cancellation_during_shape_proof_before_native_engine_start() {
     config.cancel_token = Some(token.clone());
     let (raster, proof, _) = verifier_fixture();
     let run = Run::default();
+    let allowance = run.budget.reserve_work(&config).unwrap();
     let observed = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let subscriber = tracing_subscriber::registry().with(CancelOnShape(token, observed.clone()));
     let result = tracing::subscriber::with_default(subscriber, || {
-        verify_source(raster, &proof, root.path().to_str().unwrap(), &config, &run, None)
+        verify_source(
+            raster,
+            &proof,
+            root.path().to_str().unwrap(),
+            &config,
+            &run,
+            Some(allowance),
+        )
     });
     assert!(
         observed.load(std::sync::atomic::Ordering::SeqCst),
         "the real glyph shape renderer must run before cancellation"
+    );
+    assert_eq!(
+        run.budget.remaining(&config),
+        proof_limits(&config).max_content_size / 2,
+        "cancellation after glyph rendering must retain the whole source share"
     );
     assert!(
         result.is_ok_and(|numbers| numbers.is_empty()),
@@ -512,34 +539,35 @@ fn late_decline_pages() -> Vec<u8> {
     }
     assert_eq!(changed, 1);
     let first = *pdf.get_pages().values().next().unwrap();
-    let mut page = pdf.get_dictionary(first).unwrap().clone();
-    let parent = page.get(b"Parent").unwrap().as_reference().unwrap();
-    let resources = page.get(b"Resources").unwrap();
-    let mut resources = match resources {
-        lopdf::Object::Reference(id) => pdf.get_dictionary(*id).unwrap().clone(),
-        lopdf::Object::Dictionary(dict) => dict.clone(),
-        other => panic!("{other:?}"),
-    };
-    let fonts = resources.get(b"Font").unwrap();
-    let mut fonts = match fonts {
-        lopdf::Object::Reference(id) => pdf.get_dictionary(*id).unwrap().clone(),
-        lopdf::Object::Dictionary(dict) => dict.clone(),
-        other => panic!("{other:?}"),
-    };
-    for (_, font) in fonts.iter_mut() {
-        let old = font.as_reference().unwrap();
-        let copy = pdf.get_object(old).unwrap().clone();
-        *font = pdf.add_object(copy).into();
+    let original = pdf.get_dictionary(first).unwrap().clone();
+    let parent = original.get(b"Parent").unwrap().as_reference().unwrap();
+    let mut children = vec![lopdf::Object::Reference(first)];
+    for _ in 1..3 {
+        let mut page = original.clone();
+        let resources = page.get(b"Resources").unwrap();
+        let mut resources = match resources {
+            lopdf::Object::Reference(id) => pdf.get_dictionary(*id).unwrap().clone(),
+            lopdf::Object::Dictionary(dict) => dict.clone(),
+            other => panic!("{other:?}"),
+        };
+        let fonts = resources.get(b"Font").unwrap();
+        let mut fonts = match fonts {
+            lopdf::Object::Reference(id) => pdf.get_dictionary(*id).unwrap().clone(),
+            lopdf::Object::Dictionary(dict) => dict.clone(),
+            other => panic!("{other:?}"),
+        };
+        for (_, font) in fonts.iter_mut() {
+            let old = font.as_reference().unwrap();
+            let copy = pdf.get_object(old).unwrap().clone();
+            *font = pdf.add_object(copy).into();
+        }
+        resources.set("Font", fonts);
+        page.set("Resources", resources);
+        children.push(pdf.add_object(page).into());
     }
-    resources.set("Font", fonts);
-    page.set("Resources", resources);
-    let second = pdf.add_object(page);
     let root = pdf.get_dictionary_mut(parent).unwrap();
-    root.set(
-        "Kids",
-        vec![lopdf::Object::Reference(first), lopdf::Object::Reference(second)],
-    );
-    root.set("Count", 2);
+    root.set("Kids", children);
+    root.set("Count", 3);
     let mut bytes = Vec::new();
     pdf.save_to(&mut bytes).unwrap();
     bytes
@@ -550,7 +578,7 @@ fn should_retain_source_reservation_when_a_late_decline_fails_the_proof() {
     let (_root, config) = invalid_auxiliary_models();
     let bytes = late_decline_pages();
     let document = Arc::new(PdfDocument::from_bytes(bytes.clone()).unwrap());
-    assert_eq!(document.page_count().unwrap(), 2);
+    assert_eq!(document.page_count().unwrap(), 3);
     let shadow = PdfDocument::from_bytes(bytes).unwrap();
     let (raster, _, _) = verifier_fixture();
     assert!(
@@ -563,6 +591,7 @@ fn should_retain_source_reservation_when_a_late_decline_fails_the_proof() {
     let run = Arc::new(Run::default());
     let first = exercise_page(&document, 0, &config, &run);
     let second = exercise_page(&document, 1, &config, &run);
+    let third = exercise_page(&document, 2, &config, &run);
     let events = FontEvents::default();
     with_runtime(events.clone(), async {
         let mut warnings = first.await;
@@ -573,18 +602,29 @@ fn should_retain_source_reservation_when_a_late_decline_fails_the_proof() {
         );
         assert_eq!(
             run.budget.remaining(&config),
-            0,
-            "a late source decline cannot refund unmeasured preparation work"
+            proof_limits(&config).max_content_size / 2,
+            "a late source decline must retain its full bounded share"
         );
         warnings.extend(second.await);
+        let after_second = events.0.lock().unwrap().len();
+        assert!(
+            after_second > count,
+            "a second font proof may run only with another charged share"
+        );
+        assert_eq!(
+            run.budget.remaining(&config),
+            0,
+            "two unmeasured shares exhaust the run"
+        );
+        warnings.extend(third.await);
         assert_eq!(
             events.0.lock().unwrap().len(),
-            count,
-            "the next page must not repeat uncharged font/source work"
+            after_second,
+            "a third page must not repeat uncharged font work"
         );
         assert!(
             run.processor.get().is_none(),
-            "neither declined page may initialize the crop processor"
+            "declined pages must not initialize the crop processor"
         );
         assert_eq!(
             warnings
@@ -625,11 +665,10 @@ fn early_decline_pages(profile: &str) -> Vec<u8> {
                 .unwrap()
                 .as_reference()
                 .unwrap();
-            pdf.get_object_mut(id)
-                .unwrap()
-                .as_stream_mut()
-                .unwrap()
-                .set_plain_content(b"/Span << /ActualText (hidden) >> BDC EMC".to_vec());
+            let mut content = pdf.get_object(id).unwrap().as_stream().unwrap().clone();
+            content.set_plain_content(b"/Span << /ActualText (hidden) >> BDC EMC".to_vec());
+            let content = pdf.add_object(content);
+            pdf.get_dictionary_mut(first).unwrap().set("Contents", content);
         }
         "form" => {
             let form = pdf.add_object(lopdf::Stream::new(lopdf::dictionary! {"Subtype" => "Form"}, Vec::new()));
@@ -640,6 +679,41 @@ fn early_decline_pages(profile: &str) -> Vec<u8> {
                 other => panic!("{other:?}"),
             };
             resources.set("XObject", lopdf::dictionary! {"Fm" => form});
+            pdf.get_dictionary_mut(first).unwrap().set("Resources", resources);
+        }
+        "ambiguous_font" => {
+            let resources = pdf.get_dictionary(first).unwrap().get(b"Resources").unwrap().clone();
+            let mut resources = match resources {
+                lopdf::Object::Reference(id) => pdf.get_dictionary(id).unwrap().clone(),
+                lopdf::Object::Dictionary(dict) => dict,
+                other => panic!("{other:?}"),
+            };
+            let fonts = resources.get(b"Font").unwrap();
+            let mut fonts = match fonts {
+                lopdf::Object::Reference(id) => pdf.get_dictionary(*id).unwrap().clone(),
+                lopdf::Object::Dictionary(dict) => dict.clone(),
+                other => panic!("{other:?}"),
+            };
+            let mut changed = 0;
+            for (_, font) in fonts.iter_mut() {
+                let mut dictionary = pdf.get_dictionary(font.as_reference().unwrap()).unwrap().clone();
+                let Ok(cmap) = dictionary.get(b"ToUnicode") else {
+                    continue;
+                };
+                let cmap = cmap.as_reference().unwrap();
+                let mut cmap = pdf.get_object(cmap).unwrap().as_stream().unwrap().clone();
+                let text = String::from_utf8(cmap.decompressed_content().unwrap()).unwrap();
+                assert!(text.contains("<02> <17E0>"));
+                cmap.set_plain_content(
+                    text.replace("endcmap", "1 beginbfchar\n<03> <17E0>\nendbfchar\nendcmap")
+                        .into_bytes(),
+                );
+                dictionary.set("ToUnicode", pdf.add_object(cmap));
+                *font = pdf.add_object(dictionary).into();
+                changed += 1;
+            }
+            assert_eq!(changed, 1);
+            resources.set("Font", fonts);
             pdf.get_dictionary_mut(first).unwrap().set("Resources", resources);
         }
         "budget" => {}
@@ -677,7 +751,15 @@ fn should_recover_the_second_page_after_an_early_unsupported_source_decline() {
     let (raster, proof, character) = verifier_fixture();
     let decoded = image::load_from_memory(&raster).unwrap();
     let metadata = crate::types::Metadata::default();
-    for profile in ["rotation", "crop", "actual_text", "font"] {
+    for profile in [
+        "rotation",
+        "crop",
+        "actual_text",
+        "font",
+        "inline_actual_text",
+        "form",
+        "ambiguous_font",
+    ] {
         let document = Arc::new(PdfDocument::from_bytes(early_decline_pages(profile)).unwrap());
         assert_eq!(document.page_count().unwrap(), 2);
         let run = Arc::new(Run::default());
@@ -686,14 +768,22 @@ fn should_recover_the_second_page_after_an_early_unsupported_source_decline() {
         let events = FontEvents::default();
         with_runtime(events.clone(), async {
             let first = first.await;
-            assert!(
-                events.0.lock().unwrap().is_empty(),
-                "early {profile} must precede font loading"
-            );
+            let early = ["rotation", "crop", "actual_text", "font"].contains(&profile);
+            if early {
+                assert!(
+                    events.0.lock().unwrap().is_empty(),
+                    "early {profile} must precede fonts"
+                );
+            } else if profile == "ambiguous_font" {
+                assert!(
+                    !events.0.lock().unwrap().is_empty(),
+                    "late {profile} really loads fonts"
+                );
+            }
             assert_eq!(
                 run.budget.remaining(&config),
-                initial,
-                "early {profile} must release source reservation"
+                if early { initial } else { initial / 2 },
+                "{profile} must charge exactly its source phase"
             );
             assert!(
                 !run.budget.limited(),
@@ -773,13 +863,16 @@ fn should_retain_source_reservation_after_content_decode_or_budget_decline() {
         let warnings = with_runtime(FontEvents::default(), exercise_page(&document, 0, &config, &run));
         assert_eq!(
             run.budget.remaining(&config),
-            0,
-            "{profile} must retain unmeasured work"
+            proof_limits(&config).max_content_size / 2,
+            "{profile} must retain its entire bounded source share"
         );
-        assert!(run.budget.limited(), "{profile}");
+        assert!(
+            !run.budget.limited(),
+            "{profile}: a single share is not document exhaustion"
+        );
         assert!(run.processor.get().is_none(), "{profile} must stop before crop OCR");
         assert_eq!(warnings.len(), 1, "{profile}: {warnings:?}");
-        assert!(warnings[0].message.contains("document budget"), "{profile}");
+        assert!(warnings[0].message.contains("could not be bound"), "{profile}");
     }
 }
 
@@ -834,4 +927,232 @@ fn should_splice_numbers_into_the_second_accepted_paragraph() {
     assert_eq!(paragraphs[0].text, "first 1");
     assert_eq!(paragraphs[1].text, "left\t ០ right");
     assert_eq!(read, "\nfirst  1\r\n\r\nleft\t ០ right\n");
+}
+
+#[test]
+fn should_allow_supported_source_work_after_bounded_late_declines() {
+    let (_root, config) = invalid_auxiliary_models();
+    let (raster, _, _) = verifier_fixture();
+    let initial = proof_limits(&config).max_content_size;
+    let share = initial / 2;
+    let decoded = image::load_from_memory(&raster).unwrap();
+    let dimensions = (decoded.width(), decoded.height());
+    let mut observed = Vec::new();
+    for profile in ["inline_actual_text", "form", "ambiguous_font"] {
+        let bytes = early_decline_pages(profile);
+        let shadow = PdfDocument::from_bytes(bytes.clone()).unwrap();
+        assert!(
+            matches!(
+                source_numbers(&shadow, 0, raster.capacity(), &config).unwrap(),
+                Preparation::UnmeasuredDecline
+            ),
+            "{profile} must really decline after metadata admission"
+        );
+        assert!(
+            matches!(
+                source_numbers(&shadow, 1, raster.capacity(), &config).unwrap(),
+                Preparation::Ready(_)
+            ),
+            "{profile} successor must be a supported source"
+        );
+        let document = Arc::new(PdfDocument::from_bytes(bytes).unwrap());
+        let run = Arc::new(Run::default());
+        let events = FontEvents::default();
+        let first = exercise_source_page(&document, 0, &config, &run, raster.clone(), dimensions);
+        let second = exercise_source_page(&document, 1, &config, &run, raster.clone(), dimensions);
+        with_runtime(events.clone(), async {
+            let warnings = first.await;
+            let remaining = run.budget.remaining(&config);
+            let before = events.0.lock().unwrap().len();
+            let first_limited = run.budget.limited();
+            let _ = second.await;
+            observed.push((
+                profile,
+                remaining,
+                run.budget.remaining(&config),
+                first_limited,
+                warnings.len() == 1 && warnings[0].message.contains("could not be bound"),
+                events.0.lock().unwrap().len() > before,
+            ));
+        });
+    }
+    assert_eq!(
+        observed,
+        vec![
+            (
+                "inline_actual_text",
+                initial - share,
+                initial - 2 * share,
+                false,
+                true,
+                true
+            ),
+            ("form", initial - share, initial - 2 * share, false, true, true),
+            (
+                "ambiguous_font",
+                initial - share,
+                initial - 2 * share,
+                false,
+                true,
+                true
+            ),
+        ],
+        "late work must retain a full bounded share while a later supported page can perform charged work"
+    );
+}
+
+fn eight_unsupported_then_supported_pages(profile: &str) -> Vec<u8> {
+    let mut pdf = lopdf::Document::load_mem(&early_decline_pages(profile)).unwrap();
+    let pages = pdf.get_pages();
+    let first = *pages.get(&1).unwrap();
+    let last = *pages.get(&2).unwrap();
+    let page = pdf.get_dictionary(first).unwrap().clone();
+    let parent = page.get(b"Parent").unwrap().as_reference().unwrap();
+    let mut children = vec![lopdf::Object::Reference(first)];
+    for _ in 1..8 {
+        children.push(pdf.add_object(page.clone()).into());
+    }
+    children.push(last.into());
+    let root = pdf.get_dictionary_mut(parent).unwrap();
+    root.set("Kids", children);
+    root.set("Count", 9);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+#[test]
+fn should_exclude_unsupported_sources_from_eligible_page_limit() {
+    let (_root, config) = invalid_auxiliary_models();
+    let mut observed = Vec::new();
+    let (raster, _, _) = verifier_fixture();
+    let decoded = image::load_from_memory(&raster).unwrap();
+    let dimensions = (decoded.width(), decoded.height());
+    for profile in ["rotation", "crop", "actual_text", "font"] {
+        let document = Arc::new(PdfDocument::from_bytes(eight_unsupported_then_supported_pages(profile)).unwrap());
+        assert_eq!(document.page_count().unwrap(), 9);
+        let run = Arc::new(Run::default());
+        let events = FontEvents::default();
+        let early: Vec<_> = (0..8)
+            .map(|page| exercise_source_page(&document, page, &config, &run, raster.clone(), dimensions))
+            .collect();
+        let supported = exercise_source_page(&document, 8, &config, &run, raster.clone(), dimensions);
+        with_runtime(events.clone(), async {
+            for (page, future) in early.into_iter().enumerate() {
+                let warnings = future.await;
+                assert_eq!(warnings.len(), 1, "{profile} page {page}");
+                assert!(warnings[0].message.contains("could not be bound"));
+            }
+            assert!(
+                events.0.lock().unwrap().is_empty(),
+                "{profile}: early declines do no font work"
+            );
+            let available = run.budget.page_available(8, &config);
+            let warnings = supported.await;
+            observed.push((
+                profile,
+                available,
+                !events.0.lock().unwrap().is_empty(),
+                run.budget.limited(),
+                warnings
+                    .iter()
+                    .any(|warning| warning.message.contains("document budget")),
+            ));
+        });
+    }
+    assert_eq!(
+        observed,
+        vec![
+            ("rotation", true, true, false, false),
+            ("crop", true, true, false, false),
+            ("actual_text", true, true, false, false),
+            ("font", true, true, false, false),
+        ],
+        "eight metadata-only declines must not displace a supported page's proof slot"
+    );
+}
+
+#[test]
+fn should_keep_unmeasured_shares_within_the_frozen_document_limit() {
+    let mut config = ExtractionConfig {
+        security_limits: Some(crate::extractors::security::SecurityLimits {
+            max_content_size: 101,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let budget = budget::Budget::default();
+    assert_eq!(budget.reserve_work(&config), Some(51));
+    budget.retain_failed_work();
+    assert_eq!(budget.remaining(&config), 50);
+    assert!(!budget.limited(), "one retained share is not document exhaustion");
+    config.security_limits.as_mut().unwrap().max_content_size = 1024;
+    assert_eq!(
+        budget.reserve_work(&config),
+        Some(50),
+        "later config cannot enlarge the frozen ceiling"
+    );
+    budget.retain_failed_work();
+    assert_eq!(budget.remaining(&config), 0);
+    assert!(budget.limited(), "two full shares really exhaust the document bytes");
+    assert_eq!(budget.reserve_work(&config), None);
+}
+
+#[test]
+fn should_enforce_source_reservation_as_an_allocation_ceiling() {
+    let (root, config) = invalid_auxiliary_models();
+    let (raster, proof, _) = verifier_fixture();
+    let decoded = image::load_from_memory(&raster).unwrap();
+    let measured = raster.capacity() + proof.shape.retained_bytes() + decoded.to_rgb8().as_raw().len();
+    let total = measured + measured / 2;
+    let reserve_config = ExtractionConfig {
+        security_limits: Some(crate::extractors::security::SecurityLimits {
+            max_content_size: total,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    assert!(
+        crate::extraction::image_decode::decode_standard_rgb8_with_additional_live_bytes_and_security_limits(
+            &raster,
+            reserve_config.security_limits.as_ref().unwrap(),
+            (raster.capacity() + proof.shape.retained_bytes()) as u64,
+        )
+        .is_ok(),
+        "the fixture must fit the complete document allowance"
+    );
+    let run = Run::default();
+    let reserved = run.budget.reserve_work(&reserve_config).unwrap();
+    let result = verify_source(
+        raster,
+        &proof,
+        root.path().to_str().unwrap(),
+        &config,
+        &run,
+        Some(reserved),
+    );
+    assert!(result.is_err(), "the source raster cannot fit inside its reservation");
+    assert!(
+        run.processor.get().is_none(),
+        "refusal must precede native OCR initialization"
+    );
+    assert_eq!(
+        run.budget.remaining(&config),
+        total - reserved,
+        "refusal retains its whole reservation"
+    );
+}
+
+#[test]
+fn should_fail_closed_when_measured_source_work_exceeds_its_reservation() {
+    let config = ExtractionConfig::default();
+    let budget = budget::Budget::default();
+    let reserved = budget.reserve_work(&config).unwrap();
+    assert!(!budget.settle_work(reserved, reserved + 1));
+    assert_eq!(
+        budget.remaining(&config),
+        0,
+        "an unexpected accounting overrun must stop the run"
+    );
+    assert!(budget.limited());
 }

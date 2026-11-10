@@ -16,6 +16,7 @@ mod budget;
 mod read_proof;
 mod shape_proof;
 pub(super) use read_proof::ReadProof;
+#[cfg(test)]
 use shape_proof::Preparation;
 
 #[derive(Clone)]
@@ -146,10 +147,6 @@ pub(super) async fn recover(
     let Some((directory, frame)) = recovery_context(&source, paragraphs, read, config, warnings) else {
         return false;
     };
-    if !run.budget.begin_page(source.index, config) {
-        budget_warning(run, warnings, source.index);
-        return false;
-    }
     let index = source.index;
     let Some((numbers, media)) = recognize(Verification {
         document: source.document,
@@ -245,6 +242,7 @@ pub(super) fn synchronize_plain_pages(
     changed
 }
 
+#[cfg(test)]
 fn source_numbers(
     document: &PdfDocument,
     index: usize,
@@ -296,20 +294,24 @@ fn verify_page(work: Verification) -> crate::Result<Option<(Vec<Number>, Rect)>>
     if !run.budget.crop_available(&config) {
         return Ok(None);
     }
+    let Some(source) = shape_proof::source_metadata(&document, index)? else {
+        return Ok(None);
+    };
+    if cancelled(&config) || !run.budget.begin_page(index, &config) {
+        return Ok(None);
+    }
     let Some(allowance) = run.budget.reserve_work(&config) else {
         return Ok(None);
     };
     let mut limits = proof_limits(&config);
     limits.max_content_size = allowance;
     let mut bounded = config.clone();
+    let max_iterations = limits.max_iterations;
     bounded.security_limits = Some(limits);
-    let proof = match source_numbers(&document, index, raster.capacity(), &bounded) {
-        Ok(Preparation::Ready(proof)) => proof,
-        Ok(Preparation::UnsupportedBeforeWork) => {
-            run.budget.settle_work(allowance, 0);
-            return Ok(None);
-        }
-        Ok(Preparation::UnmeasuredDecline) => {
+    let media = source.media;
+    let proof = match source.prepare(allowance.saturating_sub(raster.capacity()), max_iterations) {
+        Ok(Some((numbers, shape))) => SourceProof { media, numbers, shape },
+        Ok(None) => {
             run.budget.retain_failed_work();
             return Ok(None);
         }
@@ -508,7 +510,7 @@ fn verify_source(
     let mut limits = proof_limits(config);
     limits.max_content_size = limits
         .max_content_size
-        .min(run.budget.remaining(config).saturating_add(reserved.unwrap_or(0)));
+        .min(reserved.unwrap_or_else(|| run.budget.remaining(config)));
     if numbers.is_empty()
         || numbers.iter().map(|number| number.text.chars().count()).sum::<usize>() > MAX_NUMBER_GLYPHS
         || numbers.len() > limits.max_iterations
