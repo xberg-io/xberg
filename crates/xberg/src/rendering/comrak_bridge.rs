@@ -330,13 +330,14 @@ fn write_backtick_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath, alone:
 /// The TeX holds no blank line, which would end the block, and no unescaped `$`.
 fn dollar_math_display(tex: &str, top_level: bool) -> Option<String> {
     let comment = has_tex_comment(tex);
-    let tex = neutralize_markup(&escape_math_dollars(&unix_lines(tex)), true);
+    let tex = escape_math_dollars(&unix_lines(tex));
+    let one_line = !top_level || tex.lines().any(opens_block);
+    let tex = neutralize_markup(&tex, true, !one_line);
     let lines: Vec<&str> = tex
         .lines()
         .map(str::trim_end)
         .filter(|line| !line.trim().is_empty())
         .collect();
-    let one_line = !top_level || lines.iter().any(|line| opens_block(line));
     match (one_line, comment) {
         (true, true) => None,
         (true, false) => Some(guard_trailing_backslash(
@@ -355,7 +356,11 @@ fn opens_block(line: &str) -> bool {
 
 /// Inline TeX on one line, without the edge whitespace that stops `$` from opening or closing math.
 fn dollar_math_inline(tex: &str) -> String {
-    guard_trailing_backslash(neutralize_markup(&escape_math_dollars(&join_tex_lines(tex)), false))
+    guard_trailing_backslash(neutralize_markup(
+        &escape_math_dollars(&join_tex_lines(tex)),
+        false,
+        false,
+    ))
 }
 
 /// An odd run of trailing backslashes would escape the closing "$".
@@ -384,14 +389,21 @@ fn escape_math_dollars(tex: &str) -> String {
 /// one. Display math fills its paragraph, so there a tag needs its `>` inside the TeX
 /// (`closed_inside`); inline math continues into the paragraph, whose text can close the tag, so
 /// every such `<` is spaced. The space is visible inside `\text{}` and `\mathrm{}`, and `$` to `\$` in
-/// `escape_math_dollars` is lossy there too.
-fn neutralize_markup(tex: &str, closed_inside: bool) -> String {
+/// `escape_math_dollars` is lossy there too. A line of display TeX written on its own line
+/// (`block_lines`) also gets the space when it starts with `<`: seven CommonMark HTML block start
+/// conditions begin so, and six of them need no `>`.
+fn neutralize_markup(tex: &str, closed_inside: bool, block_lines: bool) -> String {
     let mut out = String::with_capacity(tex.len());
+    let mut line_start = true;
     for (index, ch) in tex.char_indices() {
         out.push(ch);
+        if ch != '<' {
+            line_start = ch == '\n' || (line_start && ch.is_whitespace());
+            continue;
+        }
+        // "<" is one byte, so the rest starts on a character boundary. ~keep
         let rest = &tex[index + 1..];
-        if ch == '<'
-            && (!closed_inside || rest.contains('>'))
+        if (!closed_inside || rest.contains('>') || (block_lines && line_start))
             && rest
                 .chars()
                 .next()
@@ -399,6 +411,7 @@ fn neutralize_markup(tex: &str, closed_inside: bool) -> String {
         {
             out.push(' ');
         }
+        line_start = false;
     }
     out
 }
@@ -3123,6 +3136,95 @@ mod tests {
             end: start + span.len() as u32,
             kind: AnnotationKind::Code,
         }
+    }
+
+    /// The TeX of the one math node in `markdown`, read with each reader, failing on any raw HTML.
+    fn only_math_literal(markdown: &str) -> String {
+        let mut dollars = Options::default();
+        dollars.extension.math_dollars = true;
+        let mut read = Vec::new();
+        for options in [crate::rendering::markdown::comrak_options(), dollars] {
+            let maths: Vec<_> = literals(markdown, &options);
+            assert_eq!(maths.len(), 1, "{markdown}");
+            read.push(maths[0].clone());
+        }
+        assert_eq!(read[0], read[1], "{markdown}");
+        read.remove(0)
+    }
+
+    fn without_whitespace(text: &str) -> String {
+        text.split_whitespace().collect()
+    }
+
+    #[test]
+    fn should_write_non_ascii_math_in_inline_and_display_form() {
+        let mut builder = InternalDocumentBuilder::new("test");
+        push_math_paragraph(&mut builder, "Let $α+β$ hold ∑.", &["$α+β$"]);
+        push_math_paragraph(&mut builder, "Then $$∑ α<β$$ holds.", &["$$∑ α<β$$"]);
+        push_math_paragraph(&mut builder, "And $x<αy$ too.", &["$x<αy$"]);
+        builder.push_formula("α+β\nγ", None, None);
+        let markdown = crate::rendering::render_markdown(&builder.build());
+        assert_eq!(
+            markdown,
+            "Let $α+β$ hold ∑.\n\nThen $$∑ α<β$$ holds.\n\nAnd $x<αy$ too.\n\n$$\nα+β\nγ\n$$\n"
+        );
+    }
+
+    #[test]
+    fn should_not_let_display_math_open_an_html_block() {
+        let openers = [
+            "<script",
+            "<pre",
+            "<style",
+            "<textarea",
+            "<!--",
+            "</div",
+            "<div",
+            "<?php",
+            "<![CDATA[",
+            "<!DOCTYPE",
+            "<p",
+            "<table",
+            "<ul",
+            "<section",
+            "<h1",
+        ];
+        for tex in openers
+            .iter()
+            .flat_map(|opener| [format!("a\n{opener}\nb"), format!("{opener}\nb")])
+        {
+            let mut builder = InternalDocumentBuilder::new("test");
+            builder.push_formula(&tex, None, None);
+            let markdown = crate::rendering::render_markdown(&builder.build());
+            assert_no_html(&markdown, &Options::default());
+            assert_eq!(
+                without_whitespace(&only_math_literal(&markdown)),
+                without_whitespace(&tex),
+                "{markdown}"
+            );
+        }
+        let mut builder = InternalDocumentBuilder::new("test");
+        builder.push_formula("a\n<script\nb", None, None);
+        assert_eq!(
+            crate::rendering::render_markdown(&builder.build()),
+            "$$\na\n< script\nb\n$$\n"
+        );
+    }
+
+    #[test]
+    fn should_not_let_display_math_open_an_html_block_inside_a_container() {
+        let mut builder = InternalDocumentBuilder::new("test");
+        builder.push_quote_start();
+        builder.push_formula("α\n<div\nβ", None, None);
+        builder.push_quote_end();
+        builder.push_list(false);
+        builder.push_list_item("item", false, vec![], None, None);
+        builder.push_formula("α\n<script\nβ", None, None);
+        builder.end_list();
+        let markdown = crate::rendering::render_markdown(&builder.build());
+        assert_no_html(&markdown, &Options::default());
+        assert!(markdown.contains("> $$α <div β$$"), "{markdown}");
+        assert!(markdown.contains("  $$α <script β$$"), "{markdown}");
     }
 
     #[test]
