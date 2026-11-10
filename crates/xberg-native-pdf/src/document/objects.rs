@@ -344,6 +344,7 @@ impl PdfDocument {
                 .insert(ObjectRef::new(*stream_obj_num, 0), Arc::clone(&objects_map));
 
             let mut cache = self.object_cache.lock_or_recover();
+            let mut published = false;
             for (obj_num, object) in objects_map.iter() {
                 let cache_ref = ObjectRef::new(*obj_num, 0);
                 // Only overwrite entries we'd otherwise have resolved to
@@ -352,10 +353,16 @@ impl PdfDocument {
                 match cache.get(&cache_ref) {
                     Some(Object::Null) | None => {
                         cache.insert(cache_ref, object.clone());
+                        published |= cache
+                            .get(&cache_ref)
+                            .is_some_and(|value| !matches!(value, Object::Null));
                         recovered += 1;
                     }
                     _ => {}
                 }
+            }
+            if published {
+                self.object_recovery_epoch.fetch_add(1, Ordering::Release);
             }
         }
 
@@ -1325,6 +1332,7 @@ impl PdfDocument {
     }
 
     fn cache_object_stream_entries(&self, stream_obj_num: u32, objects_map: &HashMap<u32, Object>) {
+        let mut published = false;
         for (obj_num, object) in objects_map {
             let cache_ref = ObjectRef::new(*obj_num, 0);
             let should_cache = if let Some(entry) = self.xref.get(*obj_num) {
@@ -1333,7 +1341,13 @@ impl PdfDocument {
                 true
             };
             if should_cache {
-                self.object_cache.lock_or_recover().insert(cache_ref, object.clone());
+                let mut cache = self.object_cache.lock_or_recover();
+                let previously_missing = cache.get(&cache_ref).is_none_or(|value| matches!(value, Object::Null));
+                cache.insert(cache_ref, object.clone());
+                published |= previously_missing
+                    && cache
+                        .get(&cache_ref)
+                        .is_some_and(|value| !matches!(value, Object::Null));
             } else {
                 tracing::trace!(target: LOG_TARGET,
                     object_id = obj_num,
@@ -1341,6 +1355,9 @@ impl PdfDocument {
                     "not caching object from stream — xref points elsewhere"
                 );
             }
+        }
+        if published {
+            self.object_recovery_epoch.fetch_add(1, Ordering::Release);
         }
     }
 

@@ -7,6 +7,10 @@
 use rmcp::schemars;
 use serde::{Deserialize, Serialize};
 
+fn is_zero(value: &usize) -> bool {
+    *value == 0
+}
+
 /// Structured output for unified extraction.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ExtractionResult {
@@ -14,22 +18,22 @@ pub struct ExtractionResult {
     #[schemars(description = "Extraction results in discovery order")]
     pub results: Vec<serde_json::Value>,
     /// Non-fatal per-input errors.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(description = "Non-fatal per-input errors")]
     pub errors: Vec<serde_json::Value>,
     /// Aggregate extraction counts.
     #[schemars(description = "Aggregate extraction counts")]
     pub summary: ExtractionSummaryOutput,
     /// Final URLs reached after redirects during URL ingestion.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(description = "Final URLs reached after redirects during URL ingestion")]
     pub crawl_final_urls: Vec<String>,
     /// Total redirects followed while fetching or crawling URLs.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_zero")]
     #[schemars(description = "Total redirects followed while fetching or crawling URLs")]
     pub crawl_redirect_count: usize,
     /// Unique normalized URLs discovered by crawls.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(description = "Unique normalized URLs discovered by crawls")]
     pub crawl_unique_normalized_urls: Vec<String>,
 }

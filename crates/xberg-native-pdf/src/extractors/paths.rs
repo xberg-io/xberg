@@ -38,6 +38,7 @@
 //! let paths = extractor.finish();
 //! ```
 
+use crate::cache::MutexExt;
 use crate::content::graphics_state::{GraphicsState, Matrix};
 use crate::elements::{LineCap, LineJoin, PathContent, PathOperation, path_operations_bbox};
 use crate::geometry::Point;
@@ -51,6 +52,7 @@ pub(crate) struct PathGraphicsState {
     pub stroke_color_rgb: (f32, f32, f32),
     pub fill_color_rgb: (f32, f32, f32),
     pub line_width: f32,
+    pub stroke_alpha: f32,
     pub line_cap: u8,
     pub line_join: u8,
     /// `d` operand: on/off lengths in user space and phase; an empty array is solid.
@@ -64,6 +66,7 @@ impl PathGraphicsState {
             stroke_color_rgb: (0.0, 0.0, 0.0),
             fill_color_rgb: (0.0, 0.0, 0.0),
             line_width: 1.0,
+            stroke_alpha: 1.0,
             line_cap: 0,
             line_join: 0,
             dash: (Vec::new(), 0.0),
@@ -131,6 +134,34 @@ pub enum FillRule {
     EvenOdd,
 }
 
+/// The shared parser's result per `gs` name. Omitted fields stay `None` so each application
+/// inherits them from the current state. ~keep
+#[derive(Debug, Default)]
+pub(crate) struct PathExtGStateCache {
+    container: Option<crate::object::Object>,
+    states: std::collections::HashMap<String, CachedPathExtGState>,
+}
+
+#[derive(Debug)]
+struct CachedPathExtGState {
+    parsed: crate::rendering::ext_gstate::ParsedExtGState,
+    failures: Vec<crate::object::ObjectRef>,
+    checked_epoch: usize,
+}
+
+#[derive(Debug, Default)]
+struct PathReferenceFailures {
+    epochs: std::collections::HashMap<crate::object::ObjectRef, usize>,
+    current: Vec<crate::object::ObjectRef>,
+}
+
+impl PathReferenceFailures {
+    fn record(&mut self, reference: crate::object::ObjectRef, epoch: usize) {
+        self.epochs.insert(reference, epoch);
+        self.current.push(reference);
+    }
+}
+
 /// Path extractor for accumulating path operations from content streams.
 ///
 /// This struct maintains state during content stream processing and accumulates
@@ -162,6 +193,7 @@ pub struct PathExtractor {
     current_stroke_color: Option<Color>,
     current_fill_color: Option<Color>,
     current_line_width: f32,
+    current_stroke_alpha: f32,
     current_line_cap: LineCap,
     current_line_join: LineJoin,
     current_dash: (Vec<f32>, f32),
@@ -180,6 +212,11 @@ pub struct PathExtractor {
     max_xobject_depth: usize,
     /// Cached XObject name → ObjectRef mapping, built on first lookup.
     cached_xobject_dict: Option<std::collections::HashMap<String, crate::object::ObjectRef>>,
+    extgstate_cache: PathExtGStateCache,
+    /// Failed references are shared across resource scopes: aliases must not decode the same
+    /// broken stream repeatedly. Only actual object publication makes them retryable. ~keep
+    failed_path_references: std::sync::Mutex<PathReferenceFailures>,
+    path_recovery_epoch: usize,
     /// Stack of active Optional Content Group (PDF "layer") names. Each
     /// `BDC`/`BMC` operator (any tag) pushes one entry and each `EMC` pops
     /// one, so the depth tracks the marked-content nesting precisely
@@ -192,6 +229,13 @@ pub struct PathExtractor {
     oc_layer_stack: Vec<Option<String>>,
 }
 
+/// Resources, XObject name cache, and ExtGState caches of the scope a Form XObject replaced.
+pub(crate) type SavedResourceScope = (
+    Option<crate::object::Object>,
+    Option<std::collections::HashMap<String, crate::object::ObjectRef>>,
+    PathExtGStateCache,
+);
+
 impl PathExtractor {
     /// Create a new path extractor.
     pub fn new() -> Self {
@@ -203,6 +247,7 @@ impl PathExtractor {
             current_stroke_color: Some(Color::black()),
             current_fill_color: Some(Color::black()),
             current_line_width: 1.0,
+            current_stroke_alpha: 1.0,
             current_line_cap: LineCap::Butt,
             current_line_join: LineJoin::Miter,
             current_dash: (Vec::new(), 0.0),
@@ -212,6 +257,9 @@ impl PathExtractor {
             processed_xobjects: std::collections::HashSet::new(),
             max_xobject_depth: 100,
             cached_xobject_dict: None,
+            extgstate_cache: PathExtGStateCache::default(),
+            failed_path_references: std::sync::Mutex::default(),
+            path_recovery_epoch: 0,
             oc_layer_stack: Vec::new(),
         }
     }
@@ -265,6 +313,8 @@ impl PathExtractor {
     /// Set the page resources for XObject resolution.
     pub fn set_resources(&mut self, resources: crate::object::Object) {
         self.resources = Some(resources);
+        self.extgstate_cache = PathExtGStateCache::default();
+        *self.failed_path_references.lock_or_recover() = PathReferenceFailures::default();
     }
 
     /// The resource dictionary currently in scope — the page resources, or
@@ -276,8 +326,9 @@ impl PathExtractor {
     }
 
     /// Swap in a new resource scope for `Do` name lookups and return the
-    /// previous (resources, cached_dict) pair so the caller can restore it
-    /// after descending into a nested Form XObject. Clears the name→ref
+    /// previous scope so the caller can restore it after descending into a
+    /// nested Form XObject. The ExtGState caches belong to the scope, so they travel with
+    /// it and the entered scope starts empty. Clears the name→ref
     /// cache so the next `resolve_xobject_ref` call rebuilds it against the
     /// new scope.
     ///
@@ -286,29 +337,130 @@ impl PathExtractor {
     /// operators resolve against the parent scope and can trigger pathological
     /// cross-recursion between sibling forms whose local resource names happen
     /// to collide with parent form names.
-    pub(crate) fn swap_resources(
-        &mut self,
-        new_resources: Option<crate::object::Object>,
-    ) -> (
-        Option<crate::object::Object>,
-        Option<std::collections::HashMap<String, crate::object::ObjectRef>>,
-    ) {
+    pub(crate) fn swap_resources(&mut self, new_resources: Option<crate::object::Object>) -> SavedResourceScope {
         let prev_resources = std::mem::replace(&mut self.resources, new_resources);
         let prev_cache = self.cached_xobject_dict.take();
-        (prev_resources, prev_cache)
+        let prev_extgstates = std::mem::take(&mut self.extgstate_cache);
+        (prev_resources, prev_cache, prev_extgstates)
     }
 
-    /// Restore a (resources, cached_dict) pair previously returned by
+    /// Restore the scope previously returned by
     /// [`swap_resources`].
-    pub(crate) fn restore_resources(
-        &mut self,
-        saved: (
-            Option<crate::object::Object>,
-            Option<std::collections::HashMap<String, crate::object::ObjectRef>>,
-        ),
-    ) {
+    pub(crate) fn restore_resources(&mut self, saved: SavedResourceScope) {
         self.resources = saved.0;
         self.cached_xobject_dict = saved.1;
+        self.extgstate_cache = saved.2;
+    }
+
+    /// An epoch change permits a cheap availability check, not a retry: unrelated compressed
+    /// resources must not reopen a broken stream or invalidate an unaffected partial patch. ~keep
+    pub(crate) fn prepare_path_extgstates<F>(&mut self, name: &str, recovery_epoch: usize, mut available: F)
+    where
+        F: FnMut(crate::object::ObjectRef) -> bool,
+    {
+        self.path_recovery_epoch = recovery_epoch;
+        self.failed_path_references.lock_or_recover().current.clear();
+        let retry = self.extgstate_cache.states.get_mut(name).is_some_and(|cached| {
+            if cached.failures.is_empty() || cached.checked_epoch == recovery_epoch {
+                return false;
+            }
+            cached.checked_epoch = recovery_epoch;
+            cached.failures.iter().any(|reference| available(*reference))
+        });
+        if retry {
+            self.extgstate_cache.states.remove(name);
+        }
+    }
+
+    pub(crate) fn load_path_object<F, G>(
+        &self,
+        reference: crate::object::ObjectRef,
+        available: G,
+        load: F,
+    ) -> Option<crate::object::Object>
+    where
+        F: FnOnce(crate::object::ObjectRef) -> crate::error::Result<crate::object::Object>,
+        G: FnOnce(crate::object::ObjectRef) -> bool,
+    {
+        {
+            let mut failures = self.failed_path_references.lock_or_recover();
+            if let Some(failed_epoch) = failures.epochs.get(&reference).copied() {
+                if failed_epoch == self.path_recovery_epoch || !available(reference) {
+                    failures.record(reference, self.path_recovery_epoch);
+                    return None;
+                }
+                failures.epochs.remove(&reference);
+            }
+        }
+        match load(reference) {
+            Ok(crate::object::Object::Null) => {}
+            Ok(object) => return Some(object),
+            Err(error) => crate::error::trace_recovery("load_path_graphics_state", &error),
+        }
+        self.failed_path_references
+            .lock_or_recover()
+            .record(reference, self.path_recovery_epoch);
+        None
+    }
+
+    /// Load the scope's indirect `/ExtGState` container on first use and keep it, so each
+    /// `gs` name borrows it instead of re-cloning the whole dictionary.
+    pub(crate) fn extgstate_container<F, G>(&mut self, available: G, load: F) -> Option<&crate::object::Object>
+    where
+        F: FnOnce(crate::object::ObjectRef) -> crate::error::Result<crate::object::Object>,
+        G: FnOnce(crate::object::ObjectRef) -> bool,
+    {
+        if self.extgstate_cache.container.is_none() {
+            let loaded = self
+                .resources
+                .as_ref()
+                .and_then(|resources| resources.as_dict()?.get("ExtGState")?.as_reference())
+                .and_then(|reference| self.load_path_object(reference, available, load));
+            self.extgstate_cache.container = loaded;
+        }
+        self.loaded_extgstate_container()
+    }
+
+    /// The container cached by [`extgstate_container`], if it loaded.
+    pub(crate) fn loaded_extgstate_container(&self) -> Option<&crate::object::Object> {
+        self.extgstate_cache.container.as_ref()
+    }
+
+    pub(crate) fn cache_path_extgstate(&mut self, name: &str, parsed: crate::rendering::ext_gstate::ParsedExtGState) {
+        let failures = self.failed_path_references.lock_or_recover().current.clone();
+        self.extgstate_cache.states.insert(
+            name.to_owned(),
+            CachedPathExtGState {
+                parsed,
+                failures,
+                checked_epoch: self.path_recovery_epoch,
+            },
+        );
+    }
+
+    pub(crate) fn apply_cached_path_extgstate(&mut self, name: &str, state: &mut PathGraphicsState) -> bool {
+        let Some(cached) = self.extgstate_cache.states.get(name) else {
+            return false;
+        };
+        let parsed = &cached.parsed;
+        // The parser keeps CA as written; the path state keeps it inside 0..1. A NaN CA leaves the stroke
+        // opacity unchanged, because NaN survives a clamp and would hide every later stroke. An infinite
+        // value is clamped to 0 or 1, as is a finite CA beyond the f32 range, which parses to infinity. ~keep
+        let alpha = parsed
+            .stroke_alpha
+            .filter(|alpha| !alpha.is_nan())
+            .map(|alpha| alpha.clamp(0.0, 1.0));
+        if let Some((lengths, phase)) = &parsed.dash {
+            state.dash.0.clone_from(lengths);
+            state.dash.1 = *phase;
+            self.current_dash.0.clone_from(lengths);
+            self.current_dash.1 = *phase;
+        }
+        if let Some(alpha) = alpha {
+            state.stroke_alpha = alpha;
+            self.set_stroke_alpha(alpha);
+        }
+        true
     }
 
     /// Resolve an XObject name to its ObjectRef, caching the XObject dict on first call.
@@ -405,6 +557,7 @@ impl PathExtractor {
     pub fn update_from_state(&mut self, state: &GraphicsState) {
         self.ctm = state.ctm;
         self.current_line_width = state.line_width;
+        self.current_stroke_alpha = state.stroke_alpha;
 
         // Convert line cap (0=butt, 1=round, 2=square) ~keep
         self.current_line_cap = match state.line_cap {
@@ -432,6 +585,7 @@ impl PathExtractor {
     pub(crate) fn update_from_path_state(&mut self, state: &PathGraphicsState) {
         self.ctm = state.ctm;
         self.current_line_width = state.line_width;
+        self.current_stroke_alpha = state.stroke_alpha;
         self.current_line_cap = match state.line_cap {
             1 => LineCap::Round,
             2 => LineCap::Square,
@@ -452,6 +606,10 @@ impl PathExtractor {
     /// Set the line dash pattern (`d` operator); an empty array restores a solid line.
     pub fn set_dash(&mut self, array: Vec<f32>, phase: f32) {
         self.current_dash = (array, phase);
+    }
+
+    pub(crate) fn set_stroke_alpha(&mut self, alpha: f32) {
+        self.current_stroke_alpha = alpha;
     }
 
     /// Set stroke color.
@@ -632,7 +790,7 @@ impl PathExtractor {
         let mut path = PathContent::new(bbox);
         path.operations = std::mem::take(&mut self.current_operations);
 
-        if stroke {
+        if stroke && self.current_stroke_alpha > 0.0 {
             path.stroke_color = self.current_stroke_color;
             // The `w` operand is in user space while the path coordinates
             // above were CTM-transformed (§8.4.3.2: the line width is

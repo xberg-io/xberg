@@ -18,59 +18,57 @@ Algorithm I: DIFNet's pipeline
 
 *N*
 
-*s ft* + sin *ft*
+*s t* 2πβ *ft* + sin π *ft*
 
-( <sup>*t*</sup>)<sup>=</sup>
+( )<sup>=</sup>
 
-#### (<sup>*j*</sup> 2πβ( <sup>2</sup>π))
+exp(<sup>*j*</sup>
 
-## (<sup>*C*</sup> exp )
+###### ( <sup>2</sup> )
 
-wbi~sm~
+)
+
+## (<sup>*C*</sup> )
+
+wbi
 
 #### ∑ n
 
 *cn n*
 
-- A. *RFI signal model*
+- A. *RFI signal model* Common RFI can be categorized into narrowband interference, chirp broadband interference and sinusoidal = broadband interference [6]. The narrowband interference can be expressed as:
 
-*n* =1
+*N*
 
-Common RFI can be categorized into narrowband  *J f t* + 2 *mf t* (4)
+sm *n* =1
 
-###### ( <sup>β</sup>)<sup>sin</sup> (<sup>2</sup>ππ)
+ (4) *J* sin ππ *f t* + 2 *mf t*
+
+###### ( <sup>β</sup>) (<sup>2</sup> )
 
 *Nm* =∞ 2 *mn c n*
 
-=  *C* interference, chirp broadband interference and sinusoidal ~*n*~
+ *C*~*n*~
 
 #### ∑∑~*nm*~ ~=1 =−∞~
 
-\++ *J f t* 2 *mf t*
+\++ *J* cos ππ *f t* 2 *mf t*
 
-###### ( <sup>β</sup>) <sup>cos</sup>(<sup>2</sup>ππ)
+###### ( <sup>β</sup>) (<sup>2</sup> )
 
 2 *mn c n*
 
-broadband interference [6]. 
+
 
-*mk* +2
-
-The narrowband interference can be expressed as:
-
-*k* ∞
+*mk* +2 *k* ∞
 
 ( <sup>−</sup>1)
 
-β
-
-*N n*
-
-Where, *J*
+β~*n*~ Where, *J*
 
 ( <sup>β</sup> )<sup>=</sup>
 
-*s* exp + *jf* 2πτ (1) . According to
+*s A* exp + *jf* 2πτ (1) . According to
 
 ##### (<sup>τ</sup>)<sup>=</sup> (<sup>*jf*</sup> 2πτ )
 
@@ -80,9 +78,7 @@ Where, *J*
 
 nbi
 
-∑
-
-*A*~*n*~
+## ∑ n
 
 *cn k* =0 *n* =1
 
@@ -94,7 +90,7 @@ Where, *f*~*c*~ is the carrier frequency, *A*~*n*~ is the amplitude, *f*~*n*~ is
 
 *N* 2
 
-Formulas (1), (2), (4) can be uniformly expressed as: *s* exp *f* + *jk* πτ (2)
+Formulas (1), (2), (4) can be uniformly expressed as: *s B* exp *f* + *jk* πτ (2)
 
 (<sup>τ</sup> )<sup>=</sup>
 
@@ -102,23 +98,19 @@ Formulas (1), (2), (4) can be uniformly expressed as: *s* exp *f* + *jk* πτ (2
 
 wbi~cm~
 
-∑
-
-*B*~*n*~
+## ∑ n
 
 *cn n* =1 *N* 2
 
-*s* exp *ft* + *j k t* (5)
+*s D* exp ππ *ft* + *j k t* (5)
 
 ( <sup>*t*</sup>)<sup>=</sup>
 
-# (<sup>*j*</sup> 2ππ)
+# (<sup>*j*</sup> 2 )
 
 *RFI*
 
-∑
-
-*D*~*n*~
+## ∑ n
 
 *c RFI*
 
@@ -130,17 +122,17 @@ Where, *D*~*n*~ is the amplitude, *k*~*RFI*~is the tuning rate. When *k* The sin
 
 *N*
 
-*s* exp *ft* + sin *ft* large, RFI is a broadband interference.
+*s C* exp πβ *ft* + sin *ft* large, RFI is a broadband interference.
 
 ( <sup>*t*</sup>)<sup>=</sup>
 
-### (<sup>*j*</sup> 2πβ( <sup>2</sup>π)) <sup>(3)</sup>
+### (<sup>*j*</sup> 2
+
+( <sup>2</sup>π)) <sup>(3)</sup>
 
 wbi~sm~
 
-∑
-
-*C*~*n*~
+## ∑ n
 
 *cn n n* =1
 

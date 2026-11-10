@@ -1689,6 +1689,9 @@ public func lateInteractionModelTypeFromJson<GenericIntoRustString: IntoRustStri
 public func layoutClassFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> LayoutClass {
     try { let val = __swift_bridge__$layout_class_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return LayoutClass(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
 }
+public func layoutDetectionModelFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> LayoutDetectionModel {
+    try { let val = __swift_bridge__$layout_detection_model_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return LayoutDetectionModel(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
+}
 public func layoutStrategyFromJson<GenericIntoRustString: IntoRustString>(_ json: GenericIntoRustString) throws -> LayoutStrategy {
     try { let val = __swift_bridge__$layout_strategy_from_json({ let rustString = json.intoRustString(); rustString.isOwned = false; return rustString.ptr }()); if val.is_ok { return LayoutStrategy(ptr: val.ok_or_err!) } else { throw AlefBridgeError(ptr: val.ok_or_err!) } }()
 }
@@ -2859,6 +2862,9 @@ public func __alef_phantom_vec_keyword_algorithm() -> RustVec<KeywordAlgorithm> 
 public func __alef_phantom_vec_layout_class() -> RustVec<LayoutClass> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_layout_class())
 }
+public func __alef_phantom_vec_layout_detection_model() -> RustVec<LayoutDetectionModel> {
+    RustVec(ptr: __swift_bridge__$__alef_phantom_vec_layout_detection_model())
+}
 public func __alef_phantom_vec_layout_strategy() -> RustVec<LayoutStrategy> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_layout_strategy())
 }
@@ -2891,6 +2897,9 @@ public func __alef_phantom_vec_table_overlap_preference() -> RustVec<TableOverla
 }
 public func __alef_phantom_vec_whisper_model() -> RustVec<WhisperModel> {
     RustVec(ptr: __swift_bridge__$__alef_phantom_vec_whisper_model())
+}
+public func __alefCloneExtractInput(_ value: ExtractInputRef) -> ExtractInput {
+    ExtractInput(ptr: __swift_bridge__$__alef_clone_extract_input(value.ptr))
 }
 
 public class AlefBridgeError: AlefBridgeErrorRefMut {
@@ -16142,6 +16151,11 @@ extension LayoutDetectionConfig {
         self.init(ptr: __swift_bridge__$LayoutDetectionConfig$new({strategy.isOwned = false; return strategy.ptr;}(), confidence_threshold.intoFfiRepr(), apply_heuristics, {table_model.isOwned = false; return table_model.ptr;}(), { if let val = formula_model { val.isOwned = false; return val.ptr } else { return nil } }(), {table_overlap_preference.isOwned = false; return table_overlap_preference.ptr;}(), { if let val = acceleration { val.isOwned = false; return val.ptr } else { return nil } }(), enable_chart_understanding))
     }
 }
+extension LayoutDetectionConfig {
+    class public func new_with_fields(_ strategy: LayoutStrategy, _ confidence_threshold: Optional<Float>, _ apply_heuristics: Bool, _ table_model: TableModel, _ formula_model: Optional<FormulaModel>, _ table_overlap_preference: TableOverlapPreference, _ acceleration: Optional<AccelerationConfig>, _ enable_chart_understanding: Bool, _ model: LayoutDetectionModel) -> LayoutDetectionConfig {
+        LayoutDetectionConfig(ptr: __swift_bridge__$LayoutDetectionConfig$new_with_fields({strategy.isOwned = false; return strategy.ptr;}(), confidence_threshold.intoFfiRepr(), apply_heuristics, {table_model.isOwned = false; return table_model.ptr;}(), { if let val = formula_model { val.isOwned = false; return val.ptr } else { return nil } }(), {table_overlap_preference.isOwned = false; return table_overlap_preference.ptr;}(), { if let val = acceleration { val.isOwned = false; return val.ptr } else { return nil } }(), enable_chart_understanding, {model.isOwned = false; return model.ptr;}()))
+    }
+}
 public class LayoutDetectionConfigRefMut: LayoutDetectionConfigRef {
     public override init(ptr: UnsafeMutableRawPointer) {
         super.init(ptr: ptr)
@@ -16185,6 +16199,10 @@ extension LayoutDetectionConfigRef {
 
     public func enableChartUnderstanding() -> Bool {
         __swift_bridge__$LayoutDetectionConfig$enable_chart_understanding(ptr)
+    }
+
+    public func model() -> RustString {
+        RustString(ptr: __swift_bridge__$LayoutDetectionConfig$model(ptr))
     }
 }
 extension LayoutDetectionConfig: Vectorizable {
@@ -18389,8 +18407,8 @@ extension OcrConfigRef {
         { let val = __swift_bridge__$OcrConfig$pipeline(ptr); if val != nil { return OcrPipelineConfig(ptr: val!) } else { return nil } }()
     }
 
-    public func autoRotate() -> Bool {
-        __swift_bridge__$OcrConfig$auto_rotate(ptr)
+    public func autoRotate() -> Optional<Bool> {
+        __swift_bridge__$OcrConfig$auto_rotate(ptr).intoSwiftRepr()
     }
 
     public func vlmFallback() -> RustString {
@@ -19269,8 +19287,8 @@ public class OcrQualityThresholds: OcrQualityThresholdsRefMut {
     }
 }
 extension OcrQualityThresholds {
-    public convenience init(_ min_total_non_whitespace: UInt, _ min_non_whitespace_per_page: Double, _ min_meaningful_word_len: UInt, _ min_meaningful_words: UInt, _ min_alnum_ratio: Double, _ min_garbage_chars: UInt, _ max_fragmented_word_ratio: Double, _ critical_fragmented_word_ratio: Double, _ max_ocr_output_fragmented_word_ratio: Double, _ min_ocr_mean_confidence: Double, _ min_words_for_ocr_output_check: UInt, _ max_ocr_output_dict_invalid_word_ratio: Double, _ discard_suspected_ocr_noise: Bool, _ min_avg_word_length: Double, _ min_words_for_avg_length_check: UInt, _ min_consecutive_repeat_ratio: Double, _ min_words_for_repeat_check: UInt, _ substantive_min_chars: UInt, _ non_text_min_chars: UInt, _ alnum_ws_ratio_threshold: Double, _ pipeline_min_quality: Double, _ min_undecodable_ratio: Double, _ enable_provenance_ocr_routing: Bool, _ min_provenance_fallback_ratio: Double, _ enable_plausibility_ocr_routing: Bool, _ min_reliable_language_chunk_ratio: Double) {
-        self.init(ptr: __swift_bridge__$OcrQualityThresholds$new(min_total_non_whitespace, min_non_whitespace_per_page, min_meaningful_word_len, min_meaningful_words, min_alnum_ratio, min_garbage_chars, max_fragmented_word_ratio, critical_fragmented_word_ratio, max_ocr_output_fragmented_word_ratio, min_ocr_mean_confidence, min_words_for_ocr_output_check, max_ocr_output_dict_invalid_word_ratio, discard_suspected_ocr_noise, min_avg_word_length, min_words_for_avg_length_check, min_consecutive_repeat_ratio, min_words_for_repeat_check, substantive_min_chars, non_text_min_chars, alnum_ws_ratio_threshold, pipeline_min_quality, min_undecodable_ratio, enable_provenance_ocr_routing, min_provenance_fallback_ratio, enable_plausibility_ocr_routing, min_reliable_language_chunk_ratio))
+    public convenience init(_ min_total_non_whitespace: UInt, _ min_non_whitespace_per_page: Double, _ min_meaningful_word_len: UInt, _ min_meaningful_words: UInt, _ min_alnum_ratio: Double, _ min_garbage_chars: UInt, _ max_fragmented_word_ratio: Double, _ critical_fragmented_word_ratio: Double, _ max_ocr_output_fragmented_word_ratio: Double, _ min_ocr_mean_confidence: Double, _ min_words_for_ocr_output_check: UInt, _ max_ocr_output_dict_invalid_word_ratio: Double, _ discard_suspected_ocr_noise: Bool, _ prune_symbol_noise_lines: Bool, _ min_avg_word_length: Double, _ min_words_for_avg_length_check: UInt, _ min_consecutive_repeat_ratio: Double, _ min_words_for_repeat_check: UInt, _ substantive_min_chars: UInt, _ non_text_min_chars: UInt, _ alnum_ws_ratio_threshold: Double, _ pipeline_min_quality: Double, _ min_undecodable_ratio: Double, _ enable_provenance_ocr_routing: Bool, _ min_provenance_fallback_ratio: Double, _ enable_plausibility_ocr_routing: Bool, _ min_reliable_language_chunk_ratio: Double) {
+        self.init(ptr: __swift_bridge__$OcrQualityThresholds$new(min_total_non_whitespace, min_non_whitespace_per_page, min_meaningful_word_len, min_meaningful_words, min_alnum_ratio, min_garbage_chars, max_fragmented_word_ratio, critical_fragmented_word_ratio, max_ocr_output_fragmented_word_ratio, min_ocr_mean_confidence, min_words_for_ocr_output_check, max_ocr_output_dict_invalid_word_ratio, discard_suspected_ocr_noise, prune_symbol_noise_lines, min_avg_word_length, min_words_for_avg_length_check, min_consecutive_repeat_ratio, min_words_for_repeat_check, substantive_min_chars, non_text_min_chars, alnum_ws_ratio_threshold, pipeline_min_quality, min_undecodable_ratio, enable_provenance_ocr_routing, min_provenance_fallback_ratio, enable_plausibility_ocr_routing, min_reliable_language_chunk_ratio))
     }
 }
 public class OcrQualityThresholdsRefMut: OcrQualityThresholdsRef {
@@ -19336,6 +19354,10 @@ extension OcrQualityThresholdsRef {
 
     public func discardSuspectedOcrNoise() -> Bool {
         __swift_bridge__$OcrQualityThresholds$discard_suspected_ocr_noise(ptr)
+    }
+
+    public func pruneSymbolNoiseLines() -> Bool {
+        __swift_bridge__$OcrQualityThresholds$prune_symbol_noise_lines(ptr)
     }
 
     public func minAvgWordLength() -> Double {
@@ -32608,6 +32630,86 @@ extension LayoutClass: Vectorizable {
 
     public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
         __swift_bridge__$Vec_LayoutClass$len(vecPtr)
+    }
+}
+
+
+public class LayoutDetectionModel: LayoutDetectionModelRefMut {
+    public var isOwned: Bool = true
+
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+
+    deinit {
+        if isOwned {
+            __swift_bridge__$LayoutDetectionModel$_free(ptr)
+        }
+    }
+}
+public class LayoutDetectionModelRefMut: LayoutDetectionModelRef {
+    public override init(ptr: UnsafeMutableRawPointer) {
+        super.init(ptr: ptr)
+    }
+}
+public class LayoutDetectionModelRef {
+    public var ptr: UnsafeMutableRawPointer
+
+    public init(ptr: UnsafeMutableRawPointer) {
+        self.ptr = ptr
+    }
+}
+extension LayoutDetectionModelRef {
+    public func to_string() -> RustString {
+        RustString(ptr: __swift_bridge__$LayoutDetectionModel$to_string(ptr))
+    }
+}
+extension LayoutDetectionModel: Vectorizable {
+    public static func vecOfSelfNew() -> UnsafeMutableRawPointer {
+        __swift_bridge__$Vec_LayoutDetectionModel$new()
+    }
+
+    public static func vecOfSelfFree(vecPtr: UnsafeMutableRawPointer) {
+        __swift_bridge__$Vec_LayoutDetectionModel$drop(vecPtr)
+    }
+
+    public static func vecOfSelfPush(vecPtr: UnsafeMutableRawPointer, value: LayoutDetectionModel) {
+        __swift_bridge__$Vec_LayoutDetectionModel$push(vecPtr, {value.isOwned = false; return value.ptr;}())
+    }
+
+    public static func vecOfSelfPop(vecPtr: UnsafeMutableRawPointer) -> Optional<Self> {
+        let pointer = __swift_bridge__$Vec_LayoutDetectionModel$pop(vecPtr)
+        if pointer == nil {
+            return nil
+        } else {
+            return (LayoutDetectionModel(ptr: pointer!) as! Self)
+        }
+    }
+
+    public static func vecOfSelfGet(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<LayoutDetectionModelRef> {
+        let pointer = __swift_bridge__$Vec_LayoutDetectionModel$get(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return LayoutDetectionModelRef(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfGetMut(vecPtr: UnsafeMutableRawPointer, index: UInt) -> Optional<LayoutDetectionModelRefMut> {
+        let pointer = __swift_bridge__$Vec_LayoutDetectionModel$get_mut(vecPtr, index)
+        if pointer == nil {
+            return nil
+        } else {
+            return LayoutDetectionModelRefMut(ptr: pointer!)
+        }
+    }
+
+    public static func vecOfSelfAsPtr(vecPtr: UnsafeMutableRawPointer) -> UnsafePointer<LayoutDetectionModelRef> {
+        UnsafePointer<LayoutDetectionModelRef>(OpaquePointer(__swift_bridge__$Vec_LayoutDetectionModel$as_ptr(vecPtr)))
+    }
+
+    public static func vecOfSelfLen(vecPtr: UnsafeMutableRawPointer) -> UInt {
+        __swift_bridge__$Vec_LayoutDetectionModel$len(vecPtr)
     }
 }
 

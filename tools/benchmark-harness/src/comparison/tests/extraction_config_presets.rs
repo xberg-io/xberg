@@ -231,7 +231,10 @@ fn paddle_v6_presets_pin_model_tier_and_layout() {
             .expect("Paddle preset must pin model identity");
 
         assert_eq!(ocr.backend, "paddleocr", "unexpected backend for {}", pipeline.name());
-        assert!(!ocr.auto_rotate, "canonical Paddle preset must use the public default");
+        assert_eq!(
+            ocr.auto_rotate, None,
+            "canonical Paddle preset must use the public default"
+        );
         assert_eq!(
             paddle.model_version,
             PP_OCR_V6,
@@ -309,8 +312,8 @@ fn paddle_rotation_presets_differ_only_by_auto_rotate() {
     let auto_ocr = auto_rotate.ocr.expect("auto-rotate preset must configure OCR");
     let no_rotate_ocr = no_rotate.ocr.expect("no-rotate preset must configure OCR");
 
-    assert!(auto_ocr.auto_rotate);
-    assert!(!no_rotate_ocr.auto_rotate);
+    assert_eq!(auto_ocr.auto_rotate, Some(true));
+    assert_eq!(no_rotate_ocr.auto_rotate, None);
     assert_eq!(auto_ocr.backend, no_rotate_ocr.backend);
     assert_eq!(auto_ocr.paddle_ocr_settings, no_rotate_ocr.paddle_ocr_settings);
 }
@@ -382,7 +385,7 @@ fn sceptre_presets_pin_the_ort_inference_engine_and_backend() {
         );
         assert_eq!(
             ocr.auto_rotate,
-            expected_auto_rotate,
+            expected_auto_rotate.then_some(true),
             "unexpected auto_rotate for {}",
             pipeline.name()
         );
@@ -421,7 +424,10 @@ fn legacy_paddle_server_presets_pin_v5_server_models() {
             .as_ref()
             .expect("legacy server preset must pin model identity");
 
-        assert!(!ocr.auto_rotate, "canonical Paddle preset must use the public default");
+        assert_eq!(
+            ocr.auto_rotate, None,
+            "canonical Paddle preset must use the public default"
+        );
         assert_eq!(paddle.model_version, PP_OCR_V5);
         assert_eq!(paddle.model_tier, "server");
     }

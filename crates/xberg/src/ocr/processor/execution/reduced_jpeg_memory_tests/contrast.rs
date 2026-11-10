@@ -180,6 +180,19 @@ fn should_keep_no_resize_contrast_within_96_mib() {
     );
 }
 
+/// One byte below the modelled gray-route peak of the 2048 px candidate: the largest limit that candidate
+/// cannot be admitted under, so the reduction falls to 1/4 and cannot reach the 300 DPI target. The
+/// fixture is uniform gray, so the gray route's model applies. ~keep
+fn unaffordable_gray_limit(bytes: &[u8]) -> usize {
+    let candidate = u32::from(DIMENSION) / 2;
+    let policy = config().preprocessing;
+    let peak =
+        super::super::native_image_budget::known_gray_phase_peak(candidate, candidate, bytes.len(), policy.as_ref())
+            .expect("addressable gray contrast phase")
+            .expect("known contrast policy");
+    usize::try_from(peak).expect("peak fits usize") - 1
+}
+
 #[test]
 fn rejects_unaffordable_contrast_before_native_preprocessing() {
     const NAME: &str = "ocr::processor::execution::reduced_jpeg_memory_tests::contrast::rejects_unaffordable_contrast_before_native_preprocessing";
@@ -190,7 +203,7 @@ fn rejects_unaffordable_contrast_before_native_preprocessing() {
         let result = super::super::prepare_encoded_ocr_image(
             &bytes,
             &super::super::SecurityLimits {
-                max_content_size: 40 * MIB,
+                max_content_size: unaffordable_gray_limit(&bytes),
                 ..Default::default()
             },
             &config(),
@@ -228,4 +241,79 @@ fn rejects_unaffordable_contrast_before_native_preprocessing() {
         "{stdout}\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+const GRAY_CHILD: &str =
+    "ocr::processor::execution::reduced_jpeg_memory_tests::contrast::gray_route_peak_stays_within_its_model";
+
+fn measure_gray_route() {
+    let bytes = synthetic_gray_baseline();
+    pixel_memory::install();
+    let prepared = prepare(&bytes);
+    assert!(
+        crate::ocr::preprocessing::rgb_is_gray(&prepared.data),
+        "the fixture is genuinely gray"
+    );
+    let (width, height) = (prepared.width, prepared.height);
+    let mut rgb = prepared.data.clone();
+    drop(prepared);
+    let policy = config().preprocessing.expect("contrast policy");
+    assert_eq!(
+        pixel_memory::observation().allocations,
+        0,
+        "no Pix before the gray route"
+    );
+    let output = crate::ocr::preprocessing::preprocess_gray_contrast(&mut rgb, width, height, &policy)
+        .expect("the production gray route must succeed");
+    assert_eq!(
+        (output.width(), output.height(), output.depth()),
+        (width as i32, height as i32, 8)
+    );
+    assert_eq!(rgb.capacity(), 0, "the RGB is freed before the native phases");
+    drop(output);
+    let observed = pixel_memory::observation();
+    let model = super::super::native_image_budget::gray_route_native_peak(width, height).expect("addressable");
+    println!(
+        "GRAY_ROUTE_OBSERVATION={}",
+        serde_json::json!({
+            "width": width, "height": height, "native_peak": observed.peak, "model_native_peak": model,
+            "native_max_active": observed.max_active, "live_after_drop": observed.live,
+        })
+    );
+    assert_eq!(observed.live, 0, "native allocations were released");
+    assert!(
+        observed.peak as u64 <= model,
+        "measured {} exceeds the model {model}",
+        observed.peak
+    );
+    assert!(
+        observed.peak as u64 * 10 >= model * 9,
+        "the model is not tight: measured {} against {model}",
+        observed.peak
+    );
+}
+
+#[test]
+fn gray_route_peak_stays_within_its_model() {
+    if std::env::var(CHILD_ENV).as_deref() == Ok(GRAY_CHILD) {
+        measure_gray_route();
+        return;
+    }
+    let output = Command::new(std::env::current_exe().expect("current native executable"))
+        .args(["--exact", GRAY_CHILD, "--nocapture", "--test-threads=1"])
+        .env(CHILD_ENV, GRAY_CHILD)
+        .output()
+        .expect("run the isolated gray-route measurement");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("1 passed; 0 failed; 0 ignored;"),
+        "isolated gray route failed: {}\n{stdout}\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        stdout.contains("GRAY_ROUTE_OBSERVATION="),
+        "the native measurement did not fire"
+    );
+    print!("{stdout}");
 }

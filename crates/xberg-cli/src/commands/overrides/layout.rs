@@ -15,8 +15,10 @@ impl ExtractionOverrides {
         {
             bail!("Invalid layout confidence: {conf}. Value must be between 0.0 and 1.0.");
         }
-        if self.layout == Some(false) && (self.layout_confidence.is_some() || self.layout_table_model.is_some()) {
-            bail!("--layout false cannot be combined with --layout-confidence or --layout-table-model");
+        if self.layout == Some(false)
+            && (self.layout_confidence.is_some() || self.layout_table_model.is_some() || self.layout_model.is_some())
+        {
+            bail!("--layout false cannot be combined with --layout-confidence, --layout-table-model or --layout-model");
         }
         if self.layout == Some(false) && self.layout_strategy.is_some() {
             bail!("--layout false cannot be combined with --layout-strategy");
@@ -25,6 +27,11 @@ impl ExtractionOverrides {
             && strategy.parse::<xberg::LayoutStrategy>().is_err()
         {
             bail!("Invalid layout strategy: '{strategy}'. Valid: always, auto.");
+        }
+        if let Some(ref model) = self.layout_model
+            && let Err(error) = model.parse::<xberg::LayoutDetectionModel>()
+        {
+            bail!("Invalid layout model: {error}");
         }
         Ok(())
     }
@@ -45,6 +52,7 @@ impl ExtractionOverrides {
             let has_layout_flag = self.layout == Some(true)
                 || self.layout_confidence.is_some()
                 || self.layout_table_model.is_some()
+                || self.layout_model.is_some()
                 || self.layout_strategy.is_some()
                 || self.use_layout_for_markdown
                 || has_formula_flag;
@@ -55,6 +63,9 @@ impl ExtractionOverrides {
                 }
                 if let Some(ref table_model) = self.layout_table_model {
                     layout.table_model = table_model.parse().unwrap_or_default();
+                }
+                if let Some(ref model) = self.layout_model {
+                    layout.model = model.parse().unwrap_or_default();
                 }
                 if let Some(ref strategy) = self.layout_strategy {
                     layout.strategy = strategy.parse().unwrap_or_default();

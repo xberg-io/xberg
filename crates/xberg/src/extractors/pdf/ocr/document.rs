@@ -90,6 +90,7 @@ pub(super) fn assemble_mixed_ocr_page_document(
             &[],
             &Default::default(),
         );
+        copy_source_strip_frames(&doc.metadata, &mut assembled.metadata);
         assembled.processing_warnings = std::mem::take(&mut doc.processing_warnings);
         doc = assembled;
     }
@@ -161,6 +162,60 @@ pub(crate) fn clean_native_page_layers(
     }
     layers
 }
+
+/// Marker-bearing source is only an ink-proof candidate, never an ordinary clean layer. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn marker_native_ink_layers(
+    native_text: &str,
+    boundaries: &[crate::types::PageBoundary],
+    selected: &std::collections::HashSet<u32>,
+    page_count: usize,
+    thresholds: &OcrQualityThresholds,
+) -> ahash::AHashMap<u32, String> {
+    let mut ordered = boundaries.iter().collect::<Vec<_>>();
+    ordered.sort_unstable_by_key(|boundary| boundary.byte_start);
+    let mut seen = std::collections::HashSet::new();
+    let mut excluded = std::collections::HashSet::new();
+    let mut previous: Option<&crate::types::PageBoundary> = None;
+    for boundary in ordered {
+        if !seen.insert(boundary.page_number) {
+            excluded.insert(boundary.page_number);
+        }
+        if let Some(previous) = previous
+            && boundary.byte_start < previous.byte_end
+        {
+            excluded.extend([previous.page_number, boundary.page_number]);
+        }
+        if previous.is_none_or(|previous| boundary.byte_end > previous.byte_end) {
+            previous = Some(boundary);
+        }
+    }
+    let mut layers = ahash::AHashMap::new();
+    for boundary in boundaries {
+        if boundary.page_number == 0
+            || boundary.page_number as usize > page_count
+            || !selected.contains(&boundary.page_number)
+            || excluded.contains(&boundary.page_number)
+        {
+            continue;
+        }
+        let Some(layer) = native_text.get(boundary.byte_start..boundary.byte_end) else {
+            continue;
+        };
+        let mut cleaned = layer.to_owned();
+        if super::super::unmapped_glyphs::strip_native_fragment(&mut cleaned) > 0
+            && native_layer_decodes_cleanly(&cleaned, thresholds)
+        {
+            layers.insert(boundary.page_number, layer.to_owned());
+        }
+    }
+    layers
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+#[path = "marker_native_ink_layers_tests.rs"]
+mod marker_native_ink_layers_tests;
+
 /// Native rows without an equal whole OCR row, consuming each OCR occurrence once. Case and
 /// whitespace may differ; signs, units, punctuation and order remain source evidence. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -419,21 +474,45 @@ pub(super) fn ocr_page_only_segments_text_and_tables_with(
     read: &str,
     is_private_metadata: impl Fn(&str, &serde_json::Value) -> bool,
 ) -> bool {
+    ocr_page_matches_read_text_and_tables(doc, read, is_private_metadata, true)
+}
+
+/// A nonempty structure may omit any certified read words, including body text or table rows.
+/// The complete clean native page carries those words; retained occurrences and rich payload
+/// must still be accounted for. The caller must establish that native-page ink ownership. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn ocr_page_uses_only_read_text_and_tables_with(
+    doc: &crate::types::internal::InternalDocument,
+    read: &str,
+    is_private_metadata: impl Fn(&str, &serde_json::Value) -> bool,
+) -> bool {
+    ocr_page_matches_read_text_and_tables(doc, read, is_private_metadata, false)
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+fn sorted_ocr_table_words(text: &str) -> Vec<String> {
+    let mut words: Vec<String> = text
+        .split_whitespace()
+        .map(|word| word.chars().filter(|c| c.is_alphanumeric()).collect::<String>())
+        .filter(|word| !word.is_empty())
+        .collect();
+    words.sort_unstable();
+    words
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+fn ocr_page_matches_read_text_and_tables(
+    doc: &crate::types::internal::InternalDocument,
+    read: &str,
+    is_private_metadata: impl Fn(&str, &serde_json::Value) -> bool,
+    require_complete_read: bool,
+) -> bool {
     use crate::types::internal::ElementKind;
 
     let mut metadata = doc.metadata.clone();
     metadata.additional.retain(|key, value| {
         key != crate::ocr_metadata_keys::OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY && !is_private_metadata(key, value)
     });
-    let solid_words = |text: &str| {
-        let mut words: Vec<String> = text
-            .split_whitespace()
-            .map(|word| word.chars().filter(|c| c.is_alphanumeric()).collect::<String>())
-            .filter(|word| !word.is_empty())
-            .collect();
-        words.sort_unstable();
-        words
-    };
     let table_element = |element: &crate::types::internal::InternalElement| {
         matches!(element.kind, ElementKind::Table { .. })
             && element.layer == crate::types::document_structure::ContentLayer::Body
@@ -448,9 +527,17 @@ pub(super) fn ocr_page_only_segments_text_and_tables_with(
         .collect::<Vec<_>>()
         .join(" ");
     let cells_match_markdown = doc.tables.iter().all(|table| {
-        solid_words(&table.cells.iter().flatten().cloned().collect::<Vec<_>>().join(" "))
-            == solid_words(&table.markdown)
+        sorted_ocr_table_words(&table.cells.iter().flatten().cloned().collect::<Vec<_>>().join(" "))
+            == sorted_ocr_table_words(&table.markdown)
     });
+    let block_words = sorted_ocr_table_words(&block_text);
+    let read_words = sorted_ocr_table_words(read);
+    let mut remaining = read_words.iter();
+    let words_match = if require_complete_read {
+        block_words == read_words
+    } else {
+        !block_words.is_empty() && block_words.iter().all(|word| remaining.any(|source| source == word))
+    };
     !doc.tables.is_empty()
         && no_ocr_rich_assets_besides_tables(doc)
         && metadata.is_empty()
@@ -459,7 +546,7 @@ pub(super) fn ocr_page_only_segments_text_and_tables_with(
             .iter()
             .all(|element| segmenting_ocr_text(element) || table_element(element))
         && cells_match_markdown
-        && solid_words(&block_text) == solid_words(read)
+        && words_match
 }
 
 /// The final structure must independently retain exactly the raw OCR text. Word geometry is
@@ -498,7 +585,7 @@ pub(super) fn ocr_page_has_only_plain_payload_with(
 }
 
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
-pub(super) fn native_preservation_is_automatic(config: &ExtractionConfig, page: u32) -> bool {
+pub(in crate::extractors::pdf) fn native_preservation_is_automatic(config: &ExtractionConfig, page: u32) -> bool {
     #[cfg(feature = "layout-types")]
     if config.layout.is_some() {
         return false;
@@ -515,8 +602,124 @@ pub(super) fn native_preservation_is_automatic(config: &ExtractionConfig, page: 
                 && ocr.backend == "tesseract"
                 && ocr.pipeline.is_none()
                 && ocr.element_config.is_none()
-                && !ocr.auto_rotate
+                && ocr.auto_rotate != Some(true)
         })
+}
+
+/// The share of a read's distinct meaningful words the native text must also spell before the
+/// native layer counts as the page's visible content. It sits below the share the legitimate
+/// Type0 pages of `pdf_cid_glyph_raster_2309` reach and above none, which a covered layer beside
+/// a short visible line shares. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) const MIN_READ_WORD_SHARE_SPELLED_BY_NATIVE: f64 = 0.25;
+
+/// Scripts written without spaces: a line of them is one "word" to `whole_words`, so they are
+/// compared by character bigrams instead. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+fn is_unspaced_script(c: char) -> bool {
+    matches!(u32::from(c),
+        0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF | 0x20000..=0x2FA1F
+        | 0x3040..=0x30FF
+        | 0x1100..=0x11FF | 0x3130..=0x318F | 0xAC00..=0xD7AF
+        | 0x0E00..=0x0E7F
+        | 0x1780..=0x17FF)
+}
+
+/// How many distinct bigrams of unspaced-script characters a read must share with the native text.
+/// A bigram is a weaker witness than a word, so this floor sits above the word floor. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) const MIN_SHARED_UNSPACED_BIGRAMS: usize = 6;
+
+/// The distinct meaningful words of a read, how many the native text also spells, and whether any
+/// of those is alphabetic. Lost-glyph markers are removed from the native text first so a word
+/// the render dropped a letter from still matches its read. Words in unspaced scripts are left to
+/// `read_bigrams_in_native`. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn read_words_in_native(
+    native: &str,
+    read: &str,
+    thresholds: &OcrQualityThresholds,
+) -> (usize, usize, bool) {
+    use super::super::unmapped_glyphs::LOST_GLYPH_MARKER;
+
+    let spaced = |word: &String| !word.chars().any(is_unspaced_script);
+    let spelled: std::collections::HashSet<String> = whole_words(&native.replace(LOST_GLYPH_MARKER, ""))
+        .filter(spaced)
+        .collect();
+    let distinct: std::collections::HashSet<String> = whole_words(read)
+        .filter(spaced)
+        .filter(|word| word.chars().count() >= thresholds.min_meaningful_word_len)
+        .collect();
+    let shared: Vec<&String> = distinct.iter().filter(|word| spelled.contains(*word)).collect();
+    let alphabetic = shared.iter().any(|word| word.chars().any(char::is_alphabetic));
+    (shared.len(), distinct.len(), alphabetic)
+}
+
+/// The distinct character bigrams of the unspaced-script runs of a text. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+fn unspaced_bigrams(text: &str) -> std::collections::HashSet<(char, char)> {
+    let mut bigrams = std::collections::HashSet::new();
+    for word in whole_words(text) {
+        let mut previous: Option<char> = None;
+        for c in word.chars() {
+            if is_unspaced_script(c) {
+                if let Some(before) = previous {
+                    bigrams.insert((before, c));
+                }
+                previous = Some(c);
+            } else {
+                previous = None;
+            }
+        }
+    }
+    bigrams
+}
+
+/// The distinct unspaced-script bigrams of a read and how many the native text also holds, with
+/// lost-glyph markers removed from the native text as for words. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn read_bigrams_in_native(native: &str, read: &str) -> (usize, usize) {
+    use super::super::unmapped_glyphs::LOST_GLYPH_MARKER;
+
+    let spelled = unspaced_bigrams(&native.replace(LOST_GLYPH_MARKER, ""));
+    let distinct = unspaced_bigrams(read);
+    (
+        distinct.iter().filter(|bigram| spelled.contains(*bigram)).count(),
+        distinct.len(),
+    )
+}
+
+/// Whether the native text spells enough of the read to be the page's visible content. Spaced
+/// scripts need at least the quality floor of distinct shared words (never fewer than two), one of
+/// them alphabetic, and the minimum share of the read's distinct words; a short read cannot pass
+/// on one shared word. Unspaced scripts (Han, kana, Hangul, Thai, Khmer) need the minimum share of
+/// the read's distinct bigrams and at least `MIN_SHARED_UNSPACED_BIGRAMS` of them. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn native_spells_read(native: &str, read: &str, thresholds: &OcrQualityThresholds) -> bool {
+    let (shared, distinct, alphabetic) = read_words_in_native(native, read, thresholds);
+    let words = distinct > 0
+        && alphabetic
+        && shared >= thresholds.min_meaningful_words.max(2)
+        && shared as f64 >= distinct as f64 * MIN_READ_WORD_SHARE_SPELLED_BY_NATIVE;
+    let (shared, distinct) = read_bigrams_in_native(native, read);
+    let bigrams = shared >= MIN_SHARED_UNSPACED_BIGRAMS
+        && shared as f64 >= distinct as f64 * MIN_READ_WORD_SHARE_SPELLED_BY_NATIVE;
+    words || bigrams
+}
+
+/// A native layer that lost Type0 ink survives only when the page also shows it is visible
+/// content: it owns the read ink, its words are covered by the read, or it spells the read. The
+/// one rule serves both the mixed-page and the single-page retention. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn type0_native_is_corroborated(
+    native: &str,
+    read: &str,
+    thresholds: &OcrQualityThresholds,
+    ink_owned: bool,
+    words_covered: bool,
+) -> bool {
+    (ink_owned || words_covered || native_spells_read(native, read, thresholds))
+        && native_survives_type0_ink_loss(native, read, thresholds)
 }
 
 /// Compare recoverable native word occurrences only after the same page render lost Type0 ink. ~keep
@@ -984,6 +1187,75 @@ pub(super) fn attach_page_ocr_payload(
         doc.prebuilt_ocr_elements.get_or_insert_with(Vec::new).extend(elements);
     }
 }
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn source_strip_frames(metadata: &crate::types::Metadata) -> Vec<serde_json::Value> {
+    use crate::ocr_metadata_keys::{
+        OCR_SOURCE_STRIP_ORIGINAL_FRAME_METADATA_KEY, OCR_SOURCE_STRIP_ORIGINAL_FRAMES_METADATA_KEY,
+    };
+    if let Some(frames) = metadata
+        .additional
+        .get(OCR_SOURCE_STRIP_ORIGINAL_FRAMES_METADATA_KEY)
+        .and_then(serde_json::Value::as_array)
+    {
+        return frames.iter().filter(|frame| frame.is_object()).cloned().collect();
+    }
+    metadata
+        .additional
+        .get(OCR_SOURCE_STRIP_ORIGINAL_FRAME_METADATA_KEY)
+        .filter(|frame| frame.is_object())
+        .cloned()
+        .into_iter()
+        .collect()
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn store_source_strip_frames(metadata: &mut crate::types::Metadata, frames: Vec<serde_json::Value>) {
+    use crate::ocr_metadata_keys::{
+        OCR_SOURCE_STRIP_ORIGINAL_FRAME_METADATA_KEY, OCR_SOURCE_STRIP_ORIGINAL_FRAMES_METADATA_KEY,
+    };
+    if let Some(first) = frames.first() {
+        metadata
+            .additional
+            .insert(OCR_SOURCE_STRIP_ORIGINAL_FRAME_METADATA_KEY.into(), first.clone());
+        metadata
+            .additional
+            .insert(OCR_SOURCE_STRIP_ORIGINAL_FRAMES_METADATA_KEY.into(), frames.into());
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) fn copy_source_strip_frames(source: &crate::types::Metadata, target: &mut crate::types::Metadata) {
+    store_source_strip_frames(target, source_strip_frames(source));
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn merge_source_strip_frames(
+    doc: &mut crate::types::internal::InternalDocument,
+    replacements: &ahash::AHashMap<u32, String>,
+    pages: &ahash::AHashMap<u32, crate::types::internal::InternalDocument>,
+) {
+    let mut accepted = pages
+        .iter()
+        .filter(|(page, _)| replacements.get(page).is_some_and(|text| !text.trim().is_empty()))
+        .collect::<Vec<_>>();
+    accepted.sort_unstable_by_key(|(page, _)| **page);
+    let frames = accepted
+        .into_iter()
+        .flat_map(|(&page, document)| {
+            source_strip_frames(&document.metadata)
+                .into_iter()
+                .filter_map(move |frame| {
+                    let mut frame = frame.as_object()?.clone();
+                    // Detached stages number their lone page locally; the accepted page map owns
+                    // the document identity. ~keep
+                    frame.insert("page_number".into(), page.into());
+                    Some(serde_json::Value::Object(frame))
+                })
+        })
+        .collect();
+    store_source_strip_frames(&mut doc.metadata, frames);
+}
+
 /// Copy the payload fields that a page document already carried before the document-global
 /// restructuring heuristic (`heuristically_restructured_ocr_pages`, in `pipeline.rs`) rebuilt
 /// it: the heuristic's combined document has no notion of the backend's raw per-word OCR
@@ -1000,6 +1272,7 @@ pub(super) fn carry_page_ocr_payload_forward(
     new_page_doc.prebuilt_ocr_elements = existing.prebuilt_ocr_elements.clone();
     new_page_doc.processing_warnings = existing.processing_warnings.clone();
     new_page_doc.ocr_coordinate_frame = existing.ocr_coordinate_frame;
+    copy_source_strip_frames(&existing.metadata, &mut new_page_doc.metadata);
     if let Some(modes) = existing
         .metadata
         .additional
@@ -1575,6 +1848,10 @@ pub(super) fn destructive_ocr_information_loss(
     let retained_ratio = ocr_stats.alnum as f64 / native_decision.stats.alnum.max(1) as f64;
     (retained_ratio < MIN_OCR_NATIVE_ALNUM_RETENTION_RATIO).then_some((native_decision.stats.alnum, ocr_stats.alnum))
 }
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn valid_page_boundary(native_text: &str, boundary: &crate::types::PageBoundary) -> bool {
+    boundary.page_number > 0 && native_text.get(boundary.byte_start..boundary.byte_end).is_some()
+}
 /// Keep only OCR results that can be applied consistently to every mixed-output
 /// representation: non-empty text with a matching, valid UTF-8 page boundary.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -1592,12 +1869,7 @@ pub(super) fn accepted_ocr_page_replacements(
     let mut valid_boundaries: Vec<&crate::types::PageBoundary> = boundaries
         .iter()
         .filter(|boundary| {
-            page_counts.get(&boundary.page_number) == Some(&1)
-                && boundary.page_number > 0
-                && boundary.byte_start <= boundary.byte_end
-                && boundary.byte_end <= native_text.len()
-                && native_text.is_char_boundary(boundary.byte_start)
-                && native_text.is_char_boundary(boundary.byte_end)
+            page_counts.get(&boundary.page_number) == Some(&1) && valid_page_boundary(native_text, boundary)
         })
         .collect();
     valid_boundaries.sort_unstable_by_key(|boundary| (boundary.byte_start, boundary.byte_end));
@@ -1747,6 +2019,7 @@ pub(crate) fn merge_structured_ocr_pages_into_internal_document(
         return;
     }
 
+    merge_source_strip_frames(doc, ocr_results, structured_pages);
     let containers = analyze_container_markers(&doc.elements);
     let anchors = replacement_anchors(&doc.elements, &containers.inferred_pages, &replacements);
     // Assets carried by a per-page OCR document are re-indexed into the parent's
@@ -1774,9 +2047,18 @@ pub(crate) fn merge_structured_ocr_pages_into_internal_document(
             .get_or_insert_with(Vec::new)
             .extend(assets.ocr_elements);
     }
+    merge_page_segmentation_modes(doc, ocr_results, structured_pages);
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) fn merge_page_segmentation_modes(
+    doc: &mut crate::types::internal::InternalDocument,
+    ocr_results: &ahash::AHashMap<u32, String>,
+    structured_pages: &ahash::AHashMap<u32, crate::types::internal::InternalDocument>,
+) {
     let mut segmentation_modes = structured_pages
         .iter()
-        .filter(|(page_number, _)| replacements.contains_key(page_number))
+        .filter(|(page_number, _)| ocr_results.get(page_number).is_some_and(|text| !text.trim().is_empty()))
         .flat_map(|(_, page)| {
             page.metadata
                 .additional
@@ -3092,14 +3374,9 @@ const MIN_OCR_STRUCTURE_HEURISTIC_CHAR_RETENTION: f64 = 1.0;
 fn ocr_structure_heuristic_canonical_chars(text: &str) -> Vec<char> {
     text.chars()
         .filter(|character| character.is_alphanumeric())
-        .flat_map(|character| match character {
-            '\u{FB00}' => vec!['f', 'f'],
-            '\u{FB01}' => vec!['f', 'i'],
-            '\u{FB02}' => vec!['f', 'l'],
-            '\u{FB03}' => vec!['f', 'f', 'i'],
-            '\u{FB04}' => vec!['f', 'f', 'l'],
-            '\u{FB05}' | '\u{FB06}' => vec!['s', 't'],
-            other => other.to_lowercase().collect(),
+        .flat_map(|character| match crate::pdf::structure::ligature_letters(character) {
+            Some(letters) => letters.chars().collect::<Vec<_>>(),
+            None => character.to_lowercase().collect(),
         })
         .collect()
 }
@@ -3111,7 +3388,7 @@ fn ocr_structure_heuristic_canonical_chars(text: &str) -> Vec<char> {
 /// this is only the second call site (`avoid-duplication`: extract after the third). Unlike
 /// that word-token version, this compares characters (see the constant's doc comment for why).
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn ocr_structure_heuristic_char_retention(restructured_text: &str, baseline_text: &str) -> f64 {
+pub(super) fn ocr_structure_heuristic_char_retention(restructured_text: &str, baseline_text: &str) -> f64 {
     let baseline_chars = ocr_structure_heuristic_canonical_chars(baseline_text);
     if baseline_chars.is_empty() {
         return 1.0;
@@ -3769,3 +4046,7 @@ mod tests {
 #[cfg(all(test, feature = "pdf", feature = "ocr"))]
 #[path = "document/table_grid_geometry_tests.rs"]
 mod table_grid_geometry_tests;
+
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+#[path = "document/source_strip_frame_tests.rs"]
+mod source_strip_frame_tests;

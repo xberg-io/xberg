@@ -254,6 +254,9 @@ if ! {
     --all-targets \
     --verbose || exit
 
+  echo "=== cargo test -p xberg-tesseract exit cleanup tests (count check) ==="
+  bash "$SCRIPT_DIR/run-tesseract-exit-tests.sh" || exit
+
   echo "=== cargo test -p xberg-candle-ocr (explicit features, no device accel) ==="
   # Curated feature list, the same shape as the xberg-gliner leg below: every
   # per-model feature (trocr, paddleocr-vl, glm-ocr, deepseek-ocr) but none of

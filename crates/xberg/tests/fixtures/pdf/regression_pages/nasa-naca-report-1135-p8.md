@@ -145,11 +145,9 @@ wave and subsonic behind (the reverse possibility is ruled out by the requiremen
 
 ***p-_--(_+***
 
-- 1\) *p1-_-(5"--* 1) *p2* __ln(7M6--1\\ 6Mr' (101)
+- 1\) *p1-_-(5"--* 1) *p2* __ln(7M6--1\\ *[* 6Mr' \\ (101)
 
-# \- *)-_,*<sup>7,</sup>*n*
-
-*[*LM_) \\
+# \- *)-_,*<sup>7,</sup>*n* LM_)
 
 __~*p2--P,*~ 5"*p2+pt* [adiab, perf] (92) *p2--P,* 4(M, 2-1) 5(Mt2--1) (102)
 

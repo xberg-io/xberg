@@ -5,7 +5,7 @@
 use super::*;
 
 #[cfg(any(feature = "excel", feature = "excel-wasm"))]
-fn validate_legacy_xls_container<R: Read + Seek>(mut reader: R, limits: &SecurityLimits) -> Result<()> {
+fn validate_legacy_xls_container<R: Read + Seek>(mut reader: R, limits: &SecurityLimits) -> Result<SkippedSheets> {
     let container_size = reader.seek(std::io::SeekFrom::End(0))?;
     reader.seek(std::io::SeekFrom::Start(0))?;
     let mut compound = cfb::OpenOptions::new()
@@ -35,9 +35,9 @@ fn validate_legacy_xls_container<R: Read + Seek>(mut reader: R, limits: &Securit
     };
     if compound.is_stream(stream_name) {
         let mut workbook = compound.open_stream(stream_name)?;
-        super::table_budget::validate_xls(&mut workbook, limits)?;
+        return super::table_budget::validate_xls(&mut workbook, limits);
     }
-    Ok(())
+    Ok(SkippedSheets::default())
 }
 
 #[cfg(any(feature = "excel", feature = "excel-wasm"))]
@@ -314,6 +314,20 @@ fn has_row_only_xlsx_dimensions<R: Read + Seek>(reader: R, limits: &SecurityLimi
 }
 
 #[cfg(any(feature = "excel", feature = "excel-wasm"))]
+fn drop_skipped_ods_sheets(data: &[u8], limits: &SecurityLimits, skipped: &SkippedSheets) -> Result<Option<Vec<u8>>> {
+    if skipped.is_empty() {
+        return Ok(None);
+    }
+    rewrite_spreadsheet_zip(data, limits, |name, contents| {
+        if name == "content.xml" {
+            super::table_budget::drop_skipped_ods_sheets(contents, skipped, limits)
+        } else {
+            Ok((contents.to_vec(), false))
+        }
+    })
+}
+
+#[cfg(any(feature = "excel", feature = "excel-wasm"))]
 fn normalize_ods_row_whitespace(data: &[u8], limits: &SecurityLimits) -> Result<Option<Vec<u8>>> {
     rewrite_spreadsheet_zip(data, limits, |name, contents| {
         if name == "content.xml" {
@@ -354,7 +368,11 @@ fn normalize_ods_row_whitespace(data: &[u8], limits: &SecurityLimits) -> Result<
 /// then fail while resolving a member against the wrong container (#1938). Modern spreadsheet
 /// extensions retain ZIP validation even when their bytes begin with an OLE signature.
 #[cfg(any(feature = "excel", feature = "excel-wasm"))]
-fn validate_zip_container<R: Read + Seek>(mut reader: R, file_extension: &str, limits: &SecurityLimits) -> Result<()> {
+fn validate_zip_container<R: Read + Seek>(
+    mut reader: R,
+    file_extension: &str,
+    limits: &SecurityLimits,
+) -> Result<SkippedSheets> {
     const OLE_SIGNATURE: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
 
     let initial_position = reader.stream_position()?;
@@ -369,7 +387,7 @@ fn validate_zip_container<R: Read + Seek>(mut reader: R, file_extension: &str, l
 
     let mut archive = match zip::ZipArchive::new(reader) {
         Ok(archive) => archive,
-        Err(_) => return Ok(()),
+        Err(_) => return Ok(SkippedSheets::default()),
     };
     if archive.len() > limits.max_files_in_archive {
         return Err(XbergError::validation(format!(
@@ -386,13 +404,13 @@ fn validate_zip_container<R: Read + Seek>(mut reader: R, file_extension: &str, l
     if extension == ".xlsb" {
         super::table_budget::validate_xlsb_parts(&mut archive, limits)?;
     }
-    if extension == ".ods" {
-        super::table_budget::validate_ods(&mut archive, limits)?;
-    }
     if matches!(extension.as_str(), ".xlsx" | ".xlsm" | ".xltm" | ".xlam") {
         super::table_budget::validate_xlsx_string_parts(&mut archive, limits)?;
     }
-    Ok(())
+    if extension == ".ods" {
+        return super::table_budget::validate_ods(&mut archive, limits);
+    }
+    Ok(SkippedSheets::default())
 }
 
 pub(crate) fn read_excel_file(file_path: &str, limits: &SecurityLimits) -> Result<ExcelReadResult> {
@@ -407,17 +425,20 @@ pub(crate) fn read_excel_file(file_path: &str, limits: &SecurityLimits) -> Resul
     let warnings: Vec<ProcessingWarning> = Vec::new();
 
     #[cfg(any(feature = "excel", feature = "excel-wasm"))]
-    {
+    let skipped = {
         let check_file = std::fs::File::open(file_path)?;
         let file_extension = Path::new(file_path)
             .extension()
             .and_then(|extension| extension.to_str())
             .map(|extension| format!(".{extension}"))
             .unwrap_or_default();
-        validate_zip_container(std::io::BufReader::new(check_file), &file_extension, limits)?;
-    }
+        validate_zip_container(std::io::BufReader::new(check_file), &file_extension, limits)?
+    };
     #[cfg(not(any(feature = "excel", feature = "excel-wasm")))]
-    let _ = limits;
+    let skipped = {
+        let _ = limits;
+        SkippedSheets::default()
+    };
 
     #[cfg(feature = "office")]
     let office_metadata = if lower_path.ends_with(".xlsx")
@@ -442,19 +463,19 @@ pub(crate) fn read_excel_file(file_path: &str, limits: &SecurityLimits) -> Resul
         return read_xlam_file(file_path, office_metadata, warnings, limits);
     }
     if lower_path.ends_with(".xla") {
-        return read_xla_file(file_path, office_metadata, warnings);
+        return read_xla_file(file_path, office_metadata, warnings, limits, &skipped);
     }
     if lower_path.ends_with(".xlsb") {
         return read_xlsb_file(file_path, office_metadata, warnings, limits);
     }
     if lower_path.ends_with(".ods") {
-        return read_ods_file(file_path, office_metadata, warnings, limits);
+        return read_ods_file(file_path, office_metadata, warnings, limits, &skipped);
     }
 
     read_detected_spreadsheet_file(file_path, limits)
 }
 
-fn read_detected_spreadsheet_file(file_path: &str, limits: &SecurityLimits) -> Result<ExcelReadResult> {
+fn read_bounded_spreadsheet_file(file_path: &str, limits: &SecurityLimits) -> Result<Vec<u8>> {
     let file = std::fs::File::open(file_path)?;
     if file.metadata()?.len() > limits.max_archive_size as u64 {
         return Err(XbergError::validation(
@@ -469,6 +490,11 @@ fn read_detected_spreadsheet_file(file_path: &str, limits: &SecurityLimits) -> R
             "Spreadsheet file exceeds the configured archive size".to_string(),
         ));
     }
+    Ok(data)
+}
+
+fn read_detected_spreadsheet_file(file_path: &str, limits: &SecurityLimits) -> Result<ExcelReadResult> {
+    let data = read_bounded_spreadsheet_file(file_path, limits)?;
     const OLE_SIGNATURE: &[u8] = &[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
     let extension = if data.starts_with(OLE_SIGNATURE) {
         ".xls"
@@ -497,13 +523,13 @@ fn read_xlsx_family_file(
 ) -> Result<ExcelReadResult> {
     let check_file = std::fs::File::open(file_path)?;
     if has_row_only_xlsx_dimensions(std::io::BufReader::new(check_file), limits)? {
-        let bytes = std::fs::read(file_path)?;
+        let bytes = read_bounded_spreadsheet_file(file_path, limits)?;
         let normalized = normalize_xlsx_dimensions(&bytes, limits)?
             .ok_or_else(|| XbergError::parsing("Failed to normalize row-only XLSX worksheet dimensions".to_owned()))?;
         let mut workbook = calamine::Xlsx::new(Cursor::new(normalized))
             .map_err(|e| XbergError::parsing(format!("Failed to parse XLSX: {}", e)))?;
-        super::table_budget::validate_xlsx(&mut workbook, limits)?;
-        let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings)?;
+        let skipped = super::table_budget::validate_xlsx(&mut workbook, limits)?;
+        let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings, &skipped)?;
         result.revisions = extract_xlsx_revisions_from_file(file_path);
         if let Some(comments) = extract_xlsx_comments_from_file(file_path) {
             result.metadata.insert("comments".to_owned(), comments);
@@ -513,8 +539,8 @@ fn read_xlsx_family_file(
     let file = std::fs::File::open(file_path)?;
     let mut workbook = calamine::Xlsx::new(std::io::BufReader::new(file))
         .map_err(|e| XbergError::parsing(format!("Failed to parse XLSX: {}", e)))?;
-    super::table_budget::validate_xlsx(&mut workbook, limits)?;
-    let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings)?;
+    let skipped = super::table_budget::validate_xlsx(&mut workbook, limits)?;
+    let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings, &skipped)?;
     result.revisions = extract_xlsx_revisions_from_file(file_path);
     if let Some(comments) = extract_xlsx_comments_from_file(file_path) {
         result.metadata.insert("comments".to_owned(), comments);
@@ -534,8 +560,8 @@ fn read_xlam_file(
     let file = std::fs::File::open(file_path)?;
     match calamine::Xlsx::new(std::io::BufReader::new(file)) {
         Ok(mut workbook) => {
-            super::table_budget::validate_xlsx(&mut workbook, limits)?;
-            let result = process_xlsx_workbook(workbook, office_metadata, &mut warnings)?;
+            let skipped = super::table_budget::validate_xlsx(&mut workbook, limits)?;
+            let result = process_xlsx_workbook(workbook, office_metadata, &mut warnings, &skipped)?;
             Ok((result, warnings))
         }
         Err(e) => {
@@ -562,11 +588,18 @@ fn read_xla_file(
     file_path: &str,
     office_metadata: Option<HashMap<String, String>>,
     mut warnings: Vec<ProcessingWarning>,
+    limits: &SecurityLimits,
+    skipped: &SkippedSheets,
 ) -> Result<ExcelReadResult> {
+    if !skipped.is_empty() {
+        // The skipped sheets are dropped by rewriting the input, so the file is read once under the
+        // archive-size bound and that buffer is validated again and parsed.
+        return read_excel_bytes(&read_bounded_spreadsheet_file(file_path, limits)?, ".xla", limits);
+    }
     let file = std::fs::File::open(file_path)?;
     match calamine::Xls::new(std::io::BufReader::new(file)) {
         Ok(workbook) => {
-            let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+            let result = process_workbook(workbook, office_metadata, &mut warnings, skipped)?;
             Ok((result, warnings))
         }
         Err(e) => {
@@ -597,8 +630,8 @@ fn read_xlsb_file(
     let file = std::fs::File::open(file_path)?;
     let mut workbook = calamine::Xlsb::new(std::io::BufReader::new(file))
         .map_err(|e| XbergError::parsing(format!("Failed to parse XLSB: {}", e)))?;
-    super::table_budget::validate_xlsb(&mut workbook, limits)?;
-    let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+    let skipped = super::table_budget::validate_xlsb(&mut workbook, limits)?;
+    let result = process_workbook(workbook, office_metadata, &mut warnings, &skipped)?;
     Ok((result, warnings))
 }
 
@@ -606,9 +639,12 @@ pub(crate) fn read_excel_bytes(data: &[u8], file_extension: &str, limits: &Secur
     let warnings: Vec<ProcessingWarning> = Vec::new();
 
     #[cfg(any(feature = "excel", feature = "excel-wasm"))]
-    validate_zip_container(Cursor::new(data), file_extension, limits)?;
+    let skipped = validate_zip_container(Cursor::new(data), file_extension, limits)?;
     #[cfg(not(any(feature = "excel", feature = "excel-wasm")))]
-    let _ = limits;
+    let skipped = {
+        let _ = limits;
+        SkippedSheets::default()
+    };
 
     #[cfg(feature = "office")]
     let office_metadata = match file_extension.to_lowercase().as_str() {
@@ -623,10 +659,10 @@ pub(crate) fn read_excel_bytes(data: &[u8], file_extension: &str, limits: &Secur
     match file_extension.to_lowercase().as_str() {
         ".xlsx" | ".xlsm" | ".xltm" => read_xlsx_family_bytes(data, office_metadata, warnings, limits),
         ".xlam" => read_xlam_bytes(data, office_metadata, warnings, limits),
-        ".xls" => read_xls_bytes(data, office_metadata, warnings),
-        ".xla" => read_xla_bytes(data, office_metadata, warnings),
+        ".xls" => read_xls_bytes(data, office_metadata, warnings, limits, &skipped),
+        ".xla" => read_xla_bytes(data, office_metadata, warnings, limits, &skipped),
         ".xlsb" => read_xlsb_bytes(data, office_metadata, warnings, limits),
-        ".ods" => read_ods_bytes(data, office_metadata, warnings, limits),
+        ".ods" => read_ods_bytes(data, office_metadata, warnings, limits, &skipped),
         _ => Err(XbergError::parsing(format!(
             "Unsupported file extension: {}",
             file_extension
@@ -649,8 +685,8 @@ fn read_xlsx_family_bytes(
     let cursor = Cursor::new(normalized.as_deref().unwrap_or(data));
     let mut workbook =
         calamine::Xlsx::new(cursor).map_err(|e| XbergError::parsing(format!("Failed to parse XLSX: {}", e)))?;
-    super::table_budget::validate_xlsx(&mut workbook, limits)?;
-    let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings)?;
+    let skipped = super::table_budget::validate_xlsx(&mut workbook, limits)?;
+    let mut result = process_xlsx_workbook(workbook, office_metadata, &mut warnings, &skipped)?;
     result.revisions = extract_xlsx_revisions_from_bytes(data);
     if let Some(comments) = extract_xlsx_comments_from_bytes(data) {
         result.metadata.insert("comments".to_owned(), comments);
@@ -668,8 +704,8 @@ fn read_xlam_bytes(
     let cursor = Cursor::new(data);
     match calamine::Xlsx::new(cursor) {
         Ok(mut workbook) => {
-            super::table_budget::validate_xlsx(&mut workbook, limits)?;
-            let result = process_xlsx_workbook(workbook, office_metadata, &mut warnings)?;
+            let skipped = super::table_budget::validate_xlsx(&mut workbook, limits)?;
+            let result = process_xlsx_workbook(workbook, office_metadata, &mut warnings, &skipped)?;
             Ok((result, warnings))
         }
         Err(e) => {
@@ -695,11 +731,17 @@ fn read_xls_bytes(
     data: &[u8],
     office_metadata: Option<HashMap<String, String>>,
     mut warnings: Vec<ProcessingWarning>,
+    limits: &SecurityLimits,
+    skipped: &SkippedSheets,
 ) -> Result<ExcelReadResult> {
-    let cursor = Cursor::new(data);
+    let rewritten = super::table_budget::drop_skipped_xls_sheets(data, skipped, limits)?;
+    let cursor = Cursor::new(rewritten.as_deref().unwrap_or(data));
     let workbook =
         calamine::Xls::new(cursor).map_err(|e| XbergError::parsing(format!("Failed to parse XLS: {}", e)))?;
-    let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+    if let Some(error) = skipped.name_collision_error(&workbook.sheet_names()) {
+        return Err(error);
+    }
+    let result = process_workbook(workbook, office_metadata, &mut warnings, skipped)?;
     Ok((result, warnings))
 }
 
@@ -708,11 +750,17 @@ fn read_xla_bytes(
     data: &[u8],
     office_metadata: Option<HashMap<String, String>>,
     mut warnings: Vec<ProcessingWarning>,
+    limits: &SecurityLimits,
+    skipped: &SkippedSheets,
 ) -> Result<ExcelReadResult> {
-    let cursor = Cursor::new(data);
+    let rewritten = super::table_budget::drop_skipped_xls_sheets(data, skipped, limits)?;
+    let cursor = Cursor::new(rewritten.as_deref().unwrap_or(data));
     match calamine::Xls::new(cursor) {
         Ok(workbook) => {
-            let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+            if let Some(error) = skipped.name_collision_error(&workbook.sheet_names()) {
+                return Err(error);
+            }
+            let result = process_workbook(workbook, office_metadata, &mut warnings, skipped)?;
             Ok((result, warnings))
         }
         Err(e) => {
@@ -743,8 +791,8 @@ fn read_xlsb_bytes(
     let cursor = Cursor::new(data);
     let mut workbook =
         calamine::Xlsb::new(cursor).map_err(|e| XbergError::parsing(format!("Failed to parse XLSB: {}", e)))?;
-    super::table_budget::validate_xlsb(&mut workbook, limits)?;
-    let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+    let skipped = super::table_budget::validate_xlsb(&mut workbook, limits)?;
+    let result = process_workbook(workbook, office_metadata, &mut warnings, &skipped)?;
     Ok((result, warnings))
 }
 
@@ -753,11 +801,14 @@ fn read_ods_bytes(
     office_metadata: Option<HashMap<String, String>>,
     mut warnings: Vec<ProcessingWarning>,
     limits: &SecurityLimits,
+    skipped: &SkippedSheets,
 ) -> Result<ExcelReadResult> {
+    let rewritten = drop_skipped_ods_sheets(data, limits, skipped)?;
+    let data = rewritten.as_deref().unwrap_or(data);
     let cursor = Cursor::new(data);
     match calamine::Ods::new(cursor) {
         Ok(workbook) => {
-            let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+            let result = process_workbook(workbook, office_metadata, &mut warnings, skipped)?;
             Ok((result, warnings))
         }
         Err(original_error) => {
@@ -766,7 +817,7 @@ fn read_ods_bytes(
             };
             let workbook = calamine::Ods::new(Cursor::new(normalized))
                 .map_err(|error| XbergError::parsing(format!("Failed to parse ODS: {error}")))?;
-            let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+            let result = process_workbook(workbook, office_metadata, &mut warnings, skipped)?;
             Ok((result, warnings))
         }
     }
@@ -777,21 +828,25 @@ fn read_ods_file(
     office_metadata: Option<HashMap<String, String>>,
     mut warnings: Vec<ProcessingWarning>,
     limits: &SecurityLimits,
+    skipped: &SkippedSheets,
 ) -> Result<ExcelReadResult> {
+    if !skipped.is_empty() {
+        return read_excel_bytes(&read_bounded_spreadsheet_file(file_path, limits)?, ".ods", limits);
+    }
     let file = std::fs::File::open(file_path)?;
     match calamine::Ods::new(std::io::BufReader::new(file)) {
         Ok(workbook) => {
-            let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+            let result = process_workbook(workbook, office_metadata, &mut warnings, skipped)?;
             Ok((result, warnings))
         }
         Err(original_error) => {
-            let bytes = std::fs::read(file_path)?;
+            let bytes = read_bounded_spreadsheet_file(file_path, limits)?;
             let Some(normalized) = normalize_ods_row_whitespace(&bytes, limits)? else {
                 return Err(XbergError::parsing(format!("Failed to parse ODS: {original_error}")));
             };
             let workbook = calamine::Ods::new(Cursor::new(normalized))
                 .map_err(|error| XbergError::parsing(format!("Failed to parse ODS: {error}")))?;
-            let result = process_workbook(workbook, office_metadata, &mut warnings)?;
+            let result = process_workbook(workbook, office_metadata, &mut warnings, skipped)?;
             Ok((result, warnings))
         }
     }

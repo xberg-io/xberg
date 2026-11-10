@@ -118,7 +118,7 @@ fn is_code_block(content: &str) -> bool {
 }
 
 /// A ```` ```math ```` fence anywhere in the chunk, the form the Markdown writer gives display
-/// math. Parsed as CommonMark so fences inside other fences or indented code do not count, while
+/// math whose TeX holds a backtick; other display math is `$$` lines, which `is_formula` reads. Parsed as CommonMark so fences inside other fences or indented code do not count, while
 /// fences in block quotes and list items do.
 fn is_math_fence(content: &str) -> bool {
     if !content.contains("math") {
@@ -364,6 +364,8 @@ mod tests {
     fn test_formula_latex() {
         assert_eq!(classify(r"The result is $\frac{a}{b}$"), ChunkType::Formula);
         assert_eq!(classify(r"$$\sum_{i=0}^{n} x_i$$"), ChunkType::Formula);
+        assert_eq!(classify("$$\nx_i + y\n$$"), ChunkType::Formula);
+        assert_eq!(classify("Intro.\n\n$$\nx_i + y\n$$"), ChunkType::Formula);
         assert_eq!(classify("```math\nx_i + y\n```"), ChunkType::Formula);
         assert_eq!(classify("```math display\nx_i + y\n```"), ChunkType::Formula);
         assert_eq!(classify("Intro.\n\n```math\nx_i + y\n```"), ChunkType::Formula);

@@ -818,6 +818,7 @@ fn extract_cell(cell_elem: &StructElem, text_blocks: &[TextBlock], is_header: bo
             wmode: 0,
             text_rise: 0.0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         });
@@ -1343,6 +1344,7 @@ mod tests {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         }
@@ -1529,6 +1531,7 @@ mod tests {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         };
@@ -1609,6 +1612,7 @@ mod tests {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         };
@@ -1688,6 +1692,7 @@ mod tests {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         };
@@ -1823,6 +1828,7 @@ mod tests {
                 rotation_degrees: 0.0,
                 wmode: 0,
                 rtl_draw_logical: false,
+                ligature_glyph: false,
                 mirrored: false,
                 page_rotation_applied: 0,
             });
@@ -1880,6 +1886,7 @@ mod tests {
             rotation_degrees: 90.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
         };
 
         let result = extract_table_from_spans(&table_elem, &[span]).unwrap();
@@ -1951,6 +1958,7 @@ mod tests {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         };
@@ -2039,6 +2047,7 @@ mod tests {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         };

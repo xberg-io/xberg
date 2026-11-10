@@ -203,7 +203,7 @@ impl ExtractionOverrides {
             ocr.backend_options = Some(options);
         }
         if let Some(rotate) = self.ocr_auto_rotate {
-            ocr.auto_rotate = rotate;
+            ocr.auto_rotate = Some(rotate);
         }
         if let Some(no_cache) = self.ocr_no_cache {
             apply_ocr_no_cache(ocr, no_cache);
@@ -246,7 +246,7 @@ impl ExtractionOverrides {
                 element_config: None,
                 quality_thresholds: None,
                 pipeline: None,
-                auto_rotate: false,
+                auto_rotate: None,
                 vlm_config: None,
                 vlm_fallback: Default::default(),
                 vlm_prompt: None,

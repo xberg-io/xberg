@@ -6,6 +6,9 @@ on:
     paths:
       - ".cargo/**"
       - ".github/workflows/ci-focused-pr.yaml"
+      - ".github/workflows/ci-rust.yaml"
+      - ".github/actions/setup-onnx-runtime/**"
+      - "scripts/ci/actions/setup-onnx-runtime/**"
       - "crates/**"
       - "fixtures/**"
       - "vendored/**"
@@ -15,6 +18,8 @@ on:
       - "mise.toml"
       - "mise.lock"
       - "mise-tasks/rust.toml"
+      - "mise-tasks/nli/**"
+      - "tools/benchmark-harness/nli_qualification/**"
       - "scripts/ci/rust/run-focused-pr-tests.sh"
   workflow_dispatch:
 
@@ -47,12 +52,29 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [pdf-ocr, api-jobs]
+        suite: [pdf-ocr, api-jobs, nli]
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 2
+          submodules: ${{ matrix.suite == 'pdf-ocr' }}
+
+      - name: Fetch pinned NIST regression page
+        if: matrix.suite == 'pdf-ocr'
+        uses: xberg-io/actions/fetch-test-documents@v1
+        with:
+          include: pdf/regression_pages/nist-sp811-2008-p7.pdf
+          cache: "false"
+
+      - name: Verify NIST input for the public Type0 target
+        if: matrix.suite == 'pdf-ocr'
+        shell: bash
+        run: |
+          nist_fixture="$GITHUB_WORKSPACE/test_documents/pdf/regression_pages/nist-sp811-2008-p7.pdf"
+          printf '%s  %s\n' 71c2a76af332a9b796899a78e99ce2d835026d624048cf239069276fcacce79b \
+            "$nist_fixture" | sha256sum --check
+          printf 'XBERG_NIST_FIXTURE=%s\n' "$nist_fixture" >> "$GITHUB_ENV"
 
       - uses: xberg-io/actions/setup-rust@v1
         with:
@@ -62,8 +84,15 @@ jobs:
 
       - uses: xberg-io/actions/setup-mise@v1
         with:
-          install: "false"
+          install: ${{ matrix.suite == 'nli' && 'true' || 'false' }}
+          install-args: cargo-deny
           cache: "false"
+
+      - name: Setup ONNX Runtime for NLI admission tests
+        if: matrix.suite == 'nli'
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          verify-linux-archive: "true"
 
       - name: Install OCR build dependencies and pinned English data
         if: matrix.suite == 'pdf-ocr'
@@ -85,4 +114,9 @@ jobs:
         shell: bash
         env:
           FOCUSED_SUITE: ${{ matrix.suite }}
-        run: mise run rust:test:focused-pr "$FOCUSED_SUITE"
+        run: |
+          if [ "$FOCUSED_SUITE" = nli ]; then
+            mise run nli:ci
+          else
+            mise run rust:test:focused-pr "$FOCUSED_SUITE"
+          fi

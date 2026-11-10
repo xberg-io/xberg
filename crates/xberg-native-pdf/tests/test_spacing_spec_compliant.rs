@@ -44,6 +44,7 @@ fn create_test_span(text: &str, x: f32, y: f32, width: f32, height: f32) -> Text
         wmode: 0,
         text_rise: 0.0,
         rtl_draw_logical: false,
+        ligature_glyph: false,
         mirrored: false,
         page_rotation_applied: 0,
     }

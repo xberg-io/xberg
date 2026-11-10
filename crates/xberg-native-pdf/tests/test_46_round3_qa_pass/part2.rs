@@ -381,10 +381,10 @@ fn qa_11b_blend_mode_triggers_composite_dispatch() {
     let inka = plate(&plates, "InkA");
     assert_eq!(
         centre(inka),
-        61,
+        194,
         "page_declares_transparency must fire on /BM non-Normal even \
          without /ca. Composite path → Multiply(0.4, 0.6) at α=1 = \
-         0.24 → u8 61. Got {}.",
+         1 - 0.6·0.4 = 0.76 → u8 194. Got {}.",
         centre(inka)
     );
 }
@@ -409,7 +409,7 @@ fn qa_11c_blend_mode_array_form_triggers_composite_dispatch() {
     let inka = plate(&plates, "InkA");
     assert_eq!(
         centre(inka),
-        61,
+        194,
         "page_declares_transparency must fire on /BM array first-\
          recognised non-Normal. Got {}.",
         centre(inka)

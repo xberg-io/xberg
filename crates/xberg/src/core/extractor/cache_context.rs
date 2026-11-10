@@ -352,9 +352,23 @@ mod tests {
             .psm = Some(11);
         assert_eq!(context(&config).await.as_deref(), Some(""));
         config.ocr.as_mut().unwrap().tesseract_config = None;
-        config.ocr.as_mut().unwrap().auto_rotate = true;
-        assert_eq!(context(&config).await.as_deref(), Some(""));
-        config.ocr.as_mut().unwrap().auto_rotate = false;
+        for explicit in [Some(true), Some(false)] {
+            config.ocr.as_mut().unwrap().auto_rotate = explicit;
+            assert!(
+                CacheDependency::for_config(&config, Some("application/pdf"))
+                    .model
+                    .is_none(),
+                "{explicit:?} never reads OSD"
+            );
+            assert_eq!(context(&config).await.as_deref(), Some(""));
+        }
+        config.ocr.as_mut().unwrap().auto_rotate = None;
+        assert!(
+            CacheDependency::for_config(&config, Some("application/pdf"))
+                .model
+                .is_some(),
+            "an unset policy depends on the OSD pack"
+        );
         config.ocr.as_mut().unwrap().language = vec!["jpn_vert".into()];
         assert!(
             CacheDependency::for_config(&config, Some("application/pdf"))

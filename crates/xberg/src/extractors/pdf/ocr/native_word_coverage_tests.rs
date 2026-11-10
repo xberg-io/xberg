@@ -32,6 +32,74 @@ fn should_ignore_only_known_hocr_run_bookkeeping_in_a_plain_page() {
 }
 
 #[test]
+fn should_accept_the_count_of_words_tesseract_placed_in_non_text_blocks_as_run_bookkeeping() {
+    let mut doc = super::super::document::flat_ocr_page_document("real source words");
+    doc.metadata
+        .additional
+        .insert("non_text_block_word_count".into(), serde_json::json!(2));
+    assert!(has_only_certified_tesseract_text(&doc));
+
+    doc.metadata
+        .additional
+        .insert("non_text_block_word_count".into(), serde_json::json!("two"));
+    assert!(!has_only_certified_tesseract_text(&doc));
+}
+
+mod hanging_underscore {
+    use super::*;
+    use xberg_native_pdf::layout::TextLine;
+
+    fn rect(x: f32, y: f32, width: f32, height: f32) -> Rect {
+        Rect { x, y, width, height }
+    }
+
+    fn line_at(x: f32, y: f32, width: f32) -> TextLine {
+        let bbox = rect(x, y, width, 9.0);
+        TextLine {
+            words: Vec::new(),
+            bbox,
+            text: "_mm_mask_i64scatter_pd".into(),
+        }
+    }
+
+    fn read(text: &str, left: f32, top: f32, right: f32, bottom: f32) -> Vec<(String, LineBox)> {
+        vec![(
+            text.to_owned(),
+            LineBox {
+                left,
+                top,
+                right,
+                bottom,
+            },
+        )]
+    }
+
+    #[test]
+    fn should_place_an_underscore_that_hangs_just_below_its_line_on_that_line() {
+        let lines = [line_at(45.0, 138.0, 400.0)];
+        let placed = read_on_native_lines(&read("_", 276.5, 136.8, 280.3, 137.8), &lines).expect("placed");
+        assert!(
+            placed[0].1,
+            "a hanging underscore must show glyph ink, as a read over a native word does"
+        );
+    }
+
+    #[test]
+    fn should_not_place_other_words_that_miss_every_line() {
+        let lines = [line_at(45.0, 138.0, 400.0)];
+        assert!(read_on_native_lines(&read("x", 276.5, 136.8, 280.3, 137.8), &lines).is_none());
+        assert!(read_on_native_lines(&read("-", 276.5, 136.8, 280.3, 137.8), &lines).is_none());
+    }
+
+    #[test]
+    fn should_not_place_an_underscore_far_from_a_line_or_beside_it() {
+        let lines = [line_at(45.0, 138.0, 400.0)];
+        assert!(read_on_native_lines(&read("_", 276.5, 128.0, 280.3, 129.0), &lines).is_none());
+        assert!(read_on_native_lines(&read("_", 476.5, 136.8, 480.3, 137.8), &lines).is_none());
+    }
+}
+
+#[test]
 fn should_compare_a_table_read_to_its_words_without_the_table_markup() {
     let content = "| Value | Type |\n| --- | --- |\n| 00H | General |";
     let words = ["Value", "Type", "00H", "General", "|", "|"];
@@ -116,6 +184,281 @@ fn should_certify_a_page_of_text_and_tables_only_when_it_holds_exactly_the_read_
         &with_image,
         &page_read
     ));
+}
+
+mod glued_cells {
+    use super::*;
+
+    const HEIGHT: f32 = 10.0;
+
+    fn at(left: f32, right: f32) -> LineBox {
+        LineBox {
+            left,
+            top: 0.0,
+            right,
+            bottom: HEIGHT,
+        }
+    }
+
+    fn glues(native: LineBox, read: &[(&str, LineBox)]) -> bool {
+        glues_token("abcd", native, read)
+    }
+
+    fn glues_token(token: &str, native: LineBox, read: &[(&str, LineBox)]) -> bool {
+        let read: Vec<(String, LineBox)> = read.iter().map(|(text, place)| ((*text).to_owned(), *place)).collect();
+        native_word_glues_separate_cells(&[(token.to_owned(), native)], &read)
+    }
+
+    #[test]
+    fn should_not_veto_a_gap_just_below_the_box_height() {
+        assert!(!glues(
+            at(0.0, 100.0),
+            &[("ab", at(0.0, 40.0)), ("cd", at(49.9, 100.0))]
+        ));
+    }
+
+    #[test]
+    fn should_veto_a_gap_just_above_the_box_height() {
+        assert!(glues(at(0.0, 100.0), &[("ab", at(0.0, 40.0)), ("cd", at(50.1, 100.0))]));
+    }
+
+    #[test]
+    fn should_not_veto_a_split_inside_a_word() {
+        assert!(!glues(
+            at(0.0, 100.0),
+            &[("ab", at(0.0, 48.0)), ("cd", at(51.0, 100.0))]
+        ));
+    }
+
+    #[test]
+    fn should_not_veto_a_gap_that_punctuation_fills() {
+        let dots = ("....", at(30.0, 70.0));
+        assert!(!glues(
+            at(0.0, 100.0),
+            &[("ab", at(0.0, 30.0)), dots, ("cd", at(70.0, 100.0))]
+        ));
+        assert!(glues(at(0.0, 100.0), &[("ab", at(0.0, 30.0)), ("cd", at(70.0, 100.0))]));
+    }
+
+    #[test]
+    fn should_still_veto_a_gap_with_a_table_rule_read_in_it() {
+        let rule = ("|", at(47.0, 48.0));
+        assert!(glues(
+            at(0.0, 100.0),
+            &[("ab", at(0.0, 40.0)), rule, ("cd", at(55.0, 100.0))]
+        ));
+    }
+
+    #[test]
+    fn should_still_veto_a_gap_with_a_lone_dot_read_in_it() {
+        let dot = (".", at(47.0, 48.0));
+        assert!(glues(
+            at(0.0, 100.0),
+            &[("ab", at(0.0, 40.0)), dot, ("cd", at(55.0, 100.0))]
+        ));
+    }
+
+    #[test]
+    fn should_close_a_gap_with_a_leader_run_of_dots_or_an_ellipsis() {
+        for leader in ["...", "......", "\u{2026}", "_____", "-----"] {
+            assert!(
+                !glues(
+                    at(0.0, 100.0),
+                    &[("ab", at(0.0, 40.0)), (leader, at(42.0, 53.0)), ("cd", at(55.0, 100.0))]
+                ),
+                "{leader}"
+            );
+        }
+    }
+
+    #[test]
+    fn should_not_veto_a_label_joined_to_its_value_by_a_leader_the_read_dropped() {
+        let read = [("Introduction", at(0.0, 60.0)), ("12", at(90.0, 100.0))];
+        assert!(!glues_token("Introduction.........12", at(0.0, 100.0), &read));
+        assert!(!glues_token("Introduction\u{2026}12", at(0.0, 100.0), &read));
+        assert!(glues_token("Introduction12", at(0.0, 100.0), &read));
+    }
+
+    #[test]
+    fn should_veto_a_wide_gap_elsewhere_in_a_token_that_holds_a_leader_run() {
+        let read = [("ab", at(0.0, 20.0)), ("cd", at(60.0, 80.0)), ("ef", at(120.0, 140.0))];
+        assert!(glues_token("ab___cdef", at(0.0, 140.0), &read));
+    }
+
+    #[test]
+    fn should_not_veto_the_gap_at_the_run_of_a_token_that_holds_one() {
+        let at_run_only = [("ab", at(0.0, 20.0)), ("cdef", at(60.0, 100.0))];
+        assert!(!glues_token("ab___cdef", at(0.0, 100.0), &at_run_only));
+        let pmc = [("PMC0", at(0.0, 20.0)), ("PMC1", at(80.0, 100.0))];
+        assert!(!glues_token("PMC0___PMC1", at(0.0, 100.0), &pmc));
+    }
+
+    fn split_read<'a>(first: &'a str, second: &'a str) -> [(&'a str, LineBox); 2] {
+        [(first, at(0.0, 20.0)), (second, at(80.0, 100.0))]
+    }
+
+    #[test]
+    fn should_count_only_letters_and_digits_before_a_run() {
+        for (token, first, second) in [
+            ("a.b...cd", "ab", "cd"),
+            ("(ab)...cd", "ab", "cd"),
+            ("a-b---c", "ab", "c"),
+            ("a_b___c", "ab", "c"),
+        ] {
+            assert!(
+                !glues_token(token, at(0.0, 100.0), &split_read(first, second)),
+                "{token}"
+            );
+        }
+        assert!(glues_token("a.b...cd", at(0.0, 100.0), &split_read("a", "bcd")));
+        assert!(glues_token("(ab)...cd", at(0.0, 100.0), &split_read("abc", "d")));
+    }
+
+    #[test]
+    fn should_place_a_run_at_the_start_or_end_of_a_token_outside_every_gap() {
+        assert!(glues_token("...abc", at(0.0, 100.0), &split_read("a", "bc")));
+        assert!(glues_token("abc...", at(0.0, 100.0), &split_read("ab", "c")));
+    }
+
+    #[test]
+    fn should_exempt_the_gap_at_each_of_two_runs_in_one_token() {
+        let read = [("ab", at(0.0, 20.0)), ("cd", at(60.0, 80.0)), ("ef", at(120.0, 140.0))];
+        assert!(!glues_token("ab___cd___ef", at(0.0, 140.0), &read));
+        let off = [("abc", at(0.0, 30.0)), ("d", at(70.0, 80.0)), ("ef", at(120.0, 140.0))];
+        assert!(glues_token("ab___cd___ef", at(0.0, 140.0), &off));
+    }
+
+    #[test]
+    fn should_treat_mixed_leader_characters_as_one_run() {
+        assert!(!glues_token("a.._b", at(0.0, 100.0), &split_read("a", "b")));
+        assert!(glues_token("a.._bc", at(0.0, 100.0), &split_read("ab", "c")));
+    }
+
+    #[test]
+    fn should_count_a_letter_that_lowercases_to_two_characters_once() {
+        let read = [("\u{130}", at(0.0, 20.0)), ("x", at(80.0, 100.0))];
+        assert!(!glues_token("\u{130}___x", at(0.0, 100.0), &read));
+    }
+
+    #[test]
+    fn should_keep_the_ocr_read_when_a_miscounted_letter_precedes_a_dropped_leader() {
+        let read = [("Itern", at(0.0, 50.0)), ("5", at(90.0, 100.0))];
+        assert!(glues_token("Item...5", at(0.0, 100.0), &read));
+        let exact = [("Item", at(0.0, 40.0)), ("5", at(90.0, 100.0))];
+        assert!(!glues_token("Item...5", at(0.0, 100.0), &exact));
+    }
+
+    #[test]
+    fn should_let_a_read_leader_box_overlap_a_neighbour_by_a_tenth_of_the_line_height() {
+        let leader = |left: f32, right: f32| [("ab", at(0.0, 40.0)), ("...", at(left, right)), ("cd", at(55.0, 100.0))];
+        assert!(!glues(at(0.0, 100.0), &leader(39.0, 56.0)));
+        assert!(glues(at(0.0, 100.0), &leader(38.0, 53.0)));
+        assert!(glues(at(0.0, 100.0), &leader(41.0, 57.0)));
+    }
+
+    #[test]
+    fn should_not_close_a_gap_with_a_lone_two_dot_leader() {
+        let read = [
+            ("ab", at(0.0, 40.0)),
+            ("\u{2025}", at(42.0, 53.0)),
+            ("cd", at(55.0, 100.0)),
+        ];
+        assert!(glues(at(0.0, 100.0), &read));
+    }
+
+    #[test]
+    fn should_not_let_a_read_leader_that_spans_a_word_close_a_gap() {
+        let read = [
+            ("ab", at(0.0, 40.0)),
+            ("_____", at(0.0, 100.0)),
+            ("cd", at(60.0, 100.0)),
+        ];
+        assert!(glues(at(0.0, 100.0), &read));
+    }
+
+    #[test]
+    fn should_not_let_a_read_leader_that_overlaps_a_word_close_a_gap() {
+        let read = [
+            ("ab", at(0.0, 40.0)),
+            ("-----", at(30.0, 70.0)),
+            ("cd", at(60.0, 100.0)),
+        ];
+        assert!(glues(at(0.0, 100.0), &read));
+    }
+
+    #[test]
+    fn should_treat_a_run_of_three_leader_characters_as_the_smallest_leader() {
+        let read = [("a", at(0.0, 20.0)), ("b", at(80.0, 100.0))];
+        assert!(glues_token("a..b", at(0.0, 100.0), &read));
+        assert!(glues_token("a--b", at(0.0, 100.0), &read));
+        assert!(!glues_token("a...b", at(0.0, 100.0), &read));
+        let gap = [("a", at(0.0, 20.0)), ("..", at(30.0, 60.0)), ("b", at(80.0, 100.0))];
+        assert!(glues_token("ab", at(0.0, 100.0), &gap));
+    }
+
+    #[test]
+    fn should_veto_a_single_underscore_token_over_three_read_boxes() {
+        let read = [
+            ("Thread1", at(0.0, 50.0)),
+            ("Ovf", at(90.0, 120.0)),
+            ("PMC1", at(160.0, 200.0)),
+        ];
+        assert!(glues_token("Thread1Ovf_PMC1", at(0.0, 200.0), &read));
+    }
+
+    #[test]
+    fn should_not_veto_a_tight_pipe_read_between_two_words() {
+        let read = [("a", at(0.0, 10.0)), ("|", at(11.0, 12.0)), ("b", at(13.0, 23.0))];
+        assert!(!glues_token("a|b", at(0.0, 23.0), &read));
+    }
+
+    #[test]
+    fn should_accept_the_midline_ellipsis_and_the_two_dot_leader() {
+        let read = [("Item", at(0.0, 40.0)), ("5", at(90.0, 100.0))];
+        assert!(!glues_token("Item\u{22EF}5", at(0.0, 100.0), &read));
+        assert!(!glues_token("Item\u{2025}\u{2025}5", at(0.0, 100.0), &read));
+        let gap = [
+            ("Item", at(0.0, 40.0)),
+            ("\u{22EF}", at(50.0, 80.0)),
+            ("5", at(90.0, 100.0)),
+        ];
+        assert!(!glues_token("Item5", at(0.0, 100.0), &gap));
+    }
+
+    #[test]
+    fn should_measure_a_gap_from_the_furthest_edge_of_the_words_before_it() {
+        let read = [("wide", at(0.0, 100.0)), ("x", at(10.0, 20.0)), ("y", at(105.0, 115.0))];
+        assert!(!glues(at(0.0, 130.0), &read));
+        let far = [("wide", at(0.0, 100.0)), ("x", at(10.0, 20.0)), ("y", at(115.0, 125.0))];
+        assert!(glues(at(0.0, 130.0), &far));
+    }
+
+    #[test]
+    fn should_not_veto_a_box_without_height() {
+        let flat = LineBox {
+            top: 5.0,
+            bottom: 5.0,
+            ..at(0.0, 100.0)
+        };
+        assert!(!glues(flat, &[("ab", at(0.0, 30.0)), ("cd", at(70.0, 100.0))]));
+    }
+
+    #[test]
+    fn should_keep_the_prior_outcome_for_a_word_set_sideways() {
+        let tall = LineBox {
+            left: 0.0,
+            top: 0.0,
+            right: HEIGHT,
+            bottom: 100.0,
+        };
+        let part = |top: f32, bottom: f32| LineBox {
+            left: 0.0,
+            top,
+            right: HEIGHT,
+            bottom,
+        };
+        assert!(!glues(tall, &[("ab", part(0.0, 30.0)), ("cd", part(70.0, 100.0))]));
+    }
 }
 
 mod ink_ownership {
@@ -307,6 +650,56 @@ mod ink_ownership {
         let pdf = pdf_with("");
         assert!(owns(&pdf, None));
         assert!(owns(&pdf, Some(&["rnov", "eax.", "ebx", "ca11", "puts"])));
+    }
+
+    /// The read of `pdf` with its widest native word read as two words at its two ends, `apart`
+    /// or touching in the middle of the word.
+    fn read_splitting_widest_word(pdf: &PdfDocument, apart: bool) -> ExtractedDocument {
+        let boxes = native_word_boxes(pdf);
+        let widest = (0..boxes.len())
+            .max_by(|a, b| boxes[*a].1.width.total_cmp(&boxes[*b].1.width))
+            .unwrap();
+        let words = boxes
+            .iter()
+            .enumerate()
+            .flat_map(|(at, (text, placed))| {
+                if at != widest {
+                    return vec![iterator_word(text, *placed)];
+                }
+                let piece = if apart { placed.width * 0.2 } else { placed.width / 2.0 };
+                let (head, tail) = text.split_at(text.len() / 2);
+                vec![
+                    iterator_word(
+                        head,
+                        Rect {
+                            width: piece,
+                            ..*placed
+                        },
+                    ),
+                    iterator_word(
+                        tail,
+                        Rect {
+                            x: placed.x + placed.width - piece,
+                            width: piece,
+                            ..*placed
+                        },
+                    ),
+                ]
+            })
+            .collect();
+        read_of(words)
+    }
+
+    #[test]
+    fn should_not_own_a_native_word_that_glues_read_words_a_cell_apart() {
+        let pdf = pdf_with("");
+        assert!(!ink_owned(&pdf, LAYER, &read_splitting_widest_word(&pdf, true)));
+    }
+
+    #[test]
+    fn should_own_a_native_word_whose_read_words_touch() {
+        let pdf = pdf_with("");
+        assert!(ink_owned(&pdf, LAYER, &read_splitting_widest_word(&pdf, false)));
     }
 
     #[test]

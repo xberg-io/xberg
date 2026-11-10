@@ -76,6 +76,7 @@ async fn read_refused_page(with_pipeline: bool) -> OcrRunResult<MixedOcrRun> {
             ocr: &[1],
             single_block: &[],
             preserve_native: &[],
+            native_script: &[],
             native_layers: None,
             hidden_layer_backend: None,
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]

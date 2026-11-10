@@ -752,14 +752,14 @@ impl PdfDocument {
         // Typical space width is ~0.25em, so 0.15em catches gaps > 60% of a space.
         // This aligns with the text extractor's font-aware threshold (~50% of space width). ~keep
         // Only a ligature drawn as its own run is relaxed; a word-final ligature inside a
-        // longer run sits next to a real word gap that is nearly as narrow. ~keep
-        let mut prev_chars = prev.text.chars();
-        let prev_is_bare_ligature = matches!(
-            (prev_chars.next(), prev_chars.next()),
-            (Some(c), None) if ('\u{FB00}'..='\u{FB06}').contains(&c)
-        );
-        let bare_ligature_run =
-            prev_is_bare_ligature || crate::extractors::text::starts_with_agl_ligature(&current.text);
+        // longer run sits next to a real word gap that is nearly as narrow. A run is a ligature
+        // by its code point or by the mark the decoder set when it expanded the glyph to letters,
+        // never by its letters: real words contain `ff` and `fi`. The mark counts only while the
+        // text is still the expansion, so a run that gained text since the decode is no ligature. ~keep
+        let is_bare_ligature = |span: &TextSpan| {
+            span.is_expanded_ligature() || crate::extractors::text::starts_with_agl_ligature(&span.text)
+        };
+        let bare_ligature_run = is_bare_ligature(prev) || is_bare_ligature(current);
         let space_threshold = if bare_ligature_run {
             font_size * 0.15 * crate::extractors::text::LIGATURE_BOUNDARY_GAP_FACTOR
         } else {

@@ -2374,6 +2374,18 @@ pub(crate) fn vendored_model_manifests() -> Vec<(&'static str, &'static str)> {
     ))]
     manifests.push(("reranking", crate::reranking::RERANKER_SHA256_MANIFEST));
 
+    #[cfg(feature = "onnx-runtime")]
+    {
+        manifests.push((
+            "candidate_classification",
+            crate::candidate_models::CLASSIFICATION_SHA256_MANIFEST,
+        ));
+        manifests.push((
+            "candidate_captioning",
+            crate::candidate_models::CAPTIONING_SHA256_MANIFEST,
+        ));
+    }
+
     #[cfg(feature = "ner-onnx")]
     manifests.push(("gliner", crate::text::ner::gline::GLINER_SHA256_MANIFEST));
 
@@ -2639,7 +2651,7 @@ mod vendored_manifest_registry_tests {
     #[test]
     fn registry_never_panics_even_when_empty() {
         let manifests = vendored_model_manifests();
-        assert!(manifests.len() <= 7, "registry declares more families than expected");
+        assert!(manifests.len() <= 9, "registry declares more families than expected");
     }
 }
 

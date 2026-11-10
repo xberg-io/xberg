@@ -44,3 +44,8 @@ pub(crate) const OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY: &str = "ocr_page_segm
 
 /// Set by recognition-orientation OCR when every text block reports the page rotated 180 degrees.
 pub(crate) const OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY: &str = "ocr_recognition_page_down";
+
+/// Historical raster dimensions before source-strip recovery, in document page order.
+pub(crate) const OCR_SOURCE_STRIP_ORIGINAL_FRAMES_METADATA_KEY: &str = "ocr_source_strip_original_frames";
+/// Compatibility object for the first entry of `ocr_source_strip_original_frames`.
+pub(crate) const OCR_SOURCE_STRIP_ORIGINAL_FRAME_METADATA_KEY: &str = "ocr_source_strip_original_frame";

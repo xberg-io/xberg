@@ -29,6 +29,39 @@ pub(crate) fn annotated_math<'a>(span: &'a str, kind: &AnnotationKind) -> Option
     Some((literal, display))
 }
 
+/// Byte offset of the first `%` in a TeX line that starts a comment: one preceded by an even
+/// number of backslashes, since `\%` is a literal percent sign. Verbatim text such as
+/// `\verb|%|` is not understood: its `%` counts as a comment.
+pub(crate) fn tex_comment_start(line: &str) -> Option<usize> {
+    let mut backslashes = 0;
+    for (index, byte) in line.bytes().enumerate() {
+        if byte == b'%' && backslashes % 2 == 0 {
+            return Some(index);
+        }
+        backslashes = if byte == b'\\' { backslashes + 1 } else { 0 };
+    }
+    None
+}
+
+pub(crate) fn has_tex_comment(tex: &str) -> bool {
+    tex.lines().any(|line| tex_comment_start(line).is_some())
+}
+
+/// TeX on one line: a comment runs to the end of its line, so joining lines with a space would
+/// bring the next line into it. The comments, which render nothing, are dropped before the join.
+pub(crate) fn join_tex_lines(tex: &str) -> String {
+    tex.replace("\r\n", "\n")
+        .split(['\r', '\n'])
+        .map(|line| {
+            line.get(..tex_comment_start(line).unwrap_or(line.len()))
+                .unwrap_or(line)
+                .trim()
+        })
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 pub(crate) fn valid_math_annotation(text: &str, annotation: &TextAnnotation) -> bool {
     text.get(annotation.start as usize..annotation.end as usize)
         .and_then(|span| annotated_math(span, &annotation.kind))
@@ -781,6 +814,20 @@ pub(crate) fn external_link_target(url: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests;
+
+/// The non-empty trimmed lines of a paragraph marked as leader rows, each of which a renderer
+/// that folds paragraph line breaks into spaces (Markdown, HTML, Djot) emits as its own
+/// paragraph. `None` when the paragraph is unmarked or carries annotations.
+pub(crate) fn marked_row_lines<'a>(
+    text: &'a str,
+    annotations: &[crate::types::document_structure::TextAnnotation],
+    attributes: Option<&ahash::AHashMap<String, String>>,
+) -> Option<impl Iterator<Item = &'a str>> {
+    if !annotations.is_empty() || !attributes?.contains_key(crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE) {
+        return None;
+    }
+    Some(text.lines().map(str::trim).filter(|line| !line.is_empty()))
+}
 
 #[cfg(test)]
 mod retained_furniture_tests {

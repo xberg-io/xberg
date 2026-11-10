@@ -34,6 +34,7 @@ mod element_id;
 pub use element_id::InternalElementId;
 
 pub(crate) const MARKDOWN_PLAIN_TEXT_ATTRIBUTE: &str = "xberg:internal:markdown-plain-text";
+pub(crate) const MARKDOWN_ROW_LINES_ATTRIBUTE: &str = "xberg:internal:markdown-row-lines";
 pub(crate) const MARKDOWN_IMAGE_REFERENCE_ATTRIBUTE: &str = "xberg:internal:markdown-image-reference";
 pub(crate) const RETAINED_FURNITURE_RENDER_ATTRIBUTE: &str = "xberg:internal:render-retained-furniture";
 
@@ -793,6 +794,7 @@ impl InternalElement {
 /// `DocumentNode::attributes` surface.
 fn is_internal_only_attribute(key: &str) -> bool {
     key == MARKDOWN_PLAIN_TEXT_ATTRIBUTE
+        || key == MARKDOWN_ROW_LINES_ATTRIBUTE
         || key == MARKDOWN_IMAGE_REFERENCE_ATTRIBUTE
         || key == RETAINED_FURNITURE_RENDER_ATTRIBUTE
         || key == SUPPRESS_IMAGE_OCR_RENDER_ATTRIBUTE

@@ -5309,7 +5309,7 @@ mod tests {
             crate::core::config::OutputFormat::Markdown,
         );
         let markdown = result.formatted_content.as_deref().unwrap_or(&result.content);
-        assert!(markdown.starts_with("# Area[^1]\n\n```math\nx=1\n```"), "{markdown:?}");
+        assert!(markdown.starts_with("# Area[^1]\n\n$$\nx=1\n$$"), "{markdown:?}");
     }
 
     #[tokio::test]
@@ -5333,7 +5333,7 @@ mod tests {
         );
         assert_eq!(formula_latex(&result), ["x=1", "y=2"]);
         let markdown = result.formatted_content.as_deref().unwrap_or(&result.content);
-        assert!(markdown.contains("> ```math\n> y=2\n> ```"), "{markdown}");
+        assert!(markdown.contains("> $$y=2$$"), "{markdown}");
     }
 
     #[tokio::test]

@@ -1582,7 +1582,7 @@ impl OcrBackend for PaddleOcrBackend {
         let (paddle_lang, mut processing_warnings) = super::select_paddle_language(&languages);
 
         let mut rotation_outcome = None;
-        let ocr_image_bytes: Cow<'_, [u8]> = if config.auto_rotate {
+        let ocr_image_bytes: Cow<'_, [u8]> = if config.auto_rotate == Some(true) {
             let decoded_image = crate::extraction::image::load_image_for_ocr(image_bytes, &security_limits)
                 .map_err(|error| crate::XbergError::Ocr {
                     message: format!("Failed to decode PaddleOCR image for orientation detection: {error}"),
@@ -1798,7 +1798,7 @@ impl OcrBackend for PaddleOcrBackend {
             &effective_config.model_version,
             family,
             &effective_config.model_tier,
-            config.auto_rotate,
+            config.auto_rotate == Some(true),
         ) {
             Ok(artifacts) => {
                 let missing: Vec<&str> = artifacts
@@ -3020,7 +3020,7 @@ mod tests {
         let backend = PaddleOcrBackend::new().unwrap();
         let config = OcrConfig {
             backend: "paddle-ocr".to_string(),
-            auto_rotate: true,
+            auto_rotate: Some(true),
             paddle_ocr_config: Some(serde_json::json!({"det_db_thresh": "not a number"})),
             ..Default::default()
         };

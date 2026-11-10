@@ -284,6 +284,7 @@ fn regular_dot_runs(pixels: &[u8], width: usize, text_height: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ocr::processor::execution::tests::word_table_markup;
 
     #[test]
     fn raster_proof_requires_compact_regular_ink_runs() {
@@ -397,6 +398,102 @@ mod tests {
         }));
         let rows: Vec<&mut [Word]> = rows.iter_mut().map(Vec::as_mut_slice).collect();
         assert!(build_leader_grid(&rows, 100, |_, _| Some(())).is_none());
+    }
+
+    /// One scanned dot-leader table: a symbol header, and three rows of a two-word label, a run of
+    /// dots and three symbol values. Each cell is its own OCR line, as a sparse-text read gives.
+    struct LeaderScan {
+        tsv: String,
+        hocr: String,
+        content: String,
+        raster: Pix,
+    }
+
+    fn leader_scan(with_dots: bool) -> LeaderScan {
+        const HEADER: [(&str, u32); 4] = [("No.", 0), ("Qty", 200), ("$", 300), ("%", 400)];
+        const VALUES: [&str; 3] = ["$1,010", "3.2%", "-7"];
+        // (text, left, top, width, height, tesseract line)
+        let mut words: Vec<(&str, u32, u32, u32, u32, usize)> = Vec::new();
+        for (index, (text, left)) in HEADER.into_iter().enumerate() {
+            words.push((text, left, 10, 40, 20, index));
+        }
+        // Dark ink on white paper: the one-bit raster reads ink as 1. The speck keeps both classes present when a
+        // scan has no dots.
+        let mut dots = vec![255u8; 500 * 170];
+        dots[500 * 170 - 1] = 0;
+        for (row, top) in [50u32, 90, 130].into_iter().enumerate() {
+            let line = 10 * (row + 1);
+            words.push(("Item", 0, top, 30, 20, line));
+            words.push(("4(b)", 35, top, 25, 20, line));
+            words.push(("........", 70, top + 14, 100, 4, line + 1));
+            for (column, value) in VALUES.into_iter().enumerate() {
+                words.push((value, 200 + 100 * column as u32, top, 30, 20, line + 2 + column));
+            }
+            let columns = (73..160).step_by(12).flat_map(|x| x..x + 3);
+            let ink = columns.flat_map(|x| (top + 14..top + 17).map(move |y| y as usize * 500 + x));
+            for index in ink {
+                dots[index] = if with_dots { 0 } else { 255 };
+            }
+        }
+        let (hocr, tsv) = word_table_markup(words.iter().copied());
+        let content = words.iter().map(|word| word.0).collect::<Vec<_>>().join(" ");
+        let gray = Pix::from_grayscale_bytes(&dots, 500, 170).expect("grayscale canvas");
+        let raster = gray.otsu_threshold().expect("one-bit raster");
+        assert_eq!(raster.depth(), 1);
+        LeaderScan {
+            tsv,
+            hocr,
+            content,
+            raster,
+        }
+    }
+
+    fn recover_leader_scan(scan: &LeaderScan) -> Option<Vec<Vec<String>>> {
+        let document = crate::ocr::hocr_parser::parse_hocr_to_internal_document(&scan.hocr);
+        let region = OcrTableBoundingBox {
+            left: 0,
+            top: 0,
+            right: 500,
+            bottom: 170,
+        };
+        recover_dot_leader_rows(
+            &scan.tsv,
+            &scan.content,
+            &region,
+            &SecurityLimits::default(),
+            (&scan.hocr, &document),
+            &scan.raster,
+        )
+    }
+
+    #[test]
+    fn the_entry_reads_a_symbol_table_only_where_the_raster_shows_dots() {
+        let grid = recover_leader_scan(&leader_scan(true)).expect("dots on the raster prove every leader");
+        assert_eq!(grid.len(), 4);
+        assert_eq!(grid[0], ["No.", "Qty", "$", "%"]);
+        for row in &grid[1..] {
+            assert_eq!(row, &["Item 4(b)", "$1,010", "3.2%", "-7"]);
+        }
+        assert!(
+            recover_leader_scan(&leader_scan(false)).is_none(),
+            "a leader word with no dots under it is not a leader"
+        );
+    }
+
+    #[test]
+    fn the_entry_reads_a_leader_scan_only_where_every_hocr_word_matches_the_table() {
+        let mut scan = leader_scan(true);
+        assert!(
+            recover_leader_scan(&scan).is_some(),
+            "control: the hOCR words match the table"
+        );
+        let misread = scan.hocr.replacen(">Qty<", ">Qxy<", 1);
+        assert_ne!(misread, scan.hocr);
+        scan.hocr = misread;
+        assert!(
+            recover_leader_scan(&scan).is_none(),
+            "a table word that the hOCR reads differently is not claimed"
+        );
     }
 
     #[test]

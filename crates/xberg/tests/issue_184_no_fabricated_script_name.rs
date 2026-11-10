@@ -25,7 +25,7 @@ fn auto_rotate_config() -> ExtractionConfig {
         ocr: Some(OcrConfig {
             backend: "tesseract".to_string(),
             language: vec!["eng".to_string()],
-            auto_rotate: true,
+            auto_rotate: Some(true),
             ..Default::default()
         }),
         force_ocr: false,

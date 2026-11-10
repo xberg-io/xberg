@@ -47,6 +47,20 @@ run_pdf_cases() {
   run_exact tall_lower_density_plain_gray_flate_recovers_all_source_words_in_order --test pdf_tall_scan_strips
   run_exact png_predictor_panel_recovers_missing_line_without_changing_primary_ocr \
     --test pdf_embedded_psm6_addition_2327
+  run_type0_cases
+}
+
+run_type0_cases() {
+  local before="$passed"
+  run_exact should_preserve_unrecovered_type0_page_when_first_in_mixed_document --test pdf_type0_scope_2533
+  run_exact should_preserve_unrecovered_type0_page_when_second_in_mixed_document --test pdf_type0_scope_2533
+  run_exact should_force_only_the_requested_page_in_either_document_order --test pdf_type0_scope_2533
+  run_exact 'negative::should_choose_visible_outline_words_when_bad_marker_layer_is_first' --test pdf_type0_scope_2533
+  run_exact 'negative::should_choose_visible_outline_words_when_bad_marker_layer_is_second' --test pdf_type0_scope_2533
+  if [ "$((passed - before))" -ne 5 ]; then
+    printf 'Expected five executed public Type0 tests, observed %s\n' "$((passed - before))" >&2
+    exit 1
+  fi
 }
 
 run_api_cases() {
@@ -57,11 +71,17 @@ run_api_cases() {
 }
 
 case "$suite" in
-pdf-ocr) run_pdf_cases ;;
-api-jobs) run_api_cases ;;
+pdf-ocr)
+  expected=10
+  run_pdf_cases
+  ;;
+api-jobs)
+  expected=4
+  run_api_cases
+  ;;
 esac
-if [ "$passed" -lt 4 ]; then
-  printf 'Expected at least four executed focused tests, observed %s\n' "$passed" >&2
+if [ "$passed" -ne "$expected" ]; then
+  printf 'Expected %s executed focused tests, observed %s\n' "$expected" "$passed" >&2
   exit 1
 fi
 printf 'Focused %s suite passed %s exact tests\n' "$suite" "$passed"

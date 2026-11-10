@@ -12,6 +12,7 @@ variants = parser.add_mutually_exclusive_group()
 variants.add_argument("--bilevel-only", action="store_true")
 variants.add_argument("--neutral-rgb-only", action="store_true")
 variants.add_argument("--jpeg-only", action="store_true")
+variants.add_argument("--jpeg-mixed-only", action="store_true")
 variants.add_argument("--predictor-indexed-only", action="store_true")
 variants.add_argument("--lower-density-only", action="store_true")
 args = parser.parse_args()
@@ -164,6 +165,8 @@ elif args.neutral_rgb_only:
     _pdf("neutral-rgb-tall.pdf", 12000, packing="neutral-rgb")
 elif args.jpeg_only:
     _pdf("jpeg-tall.pdf", 12000, packing="jpeg")
+elif args.jpeg_mixed_only:
+    _pdf("jpeg-mixed.pdf", 12000, mixed=True, packing="jpeg")
 elif args.predictor_indexed_only:
     _pdf("predictor-mixed.pdf", 12000, packing="predictor")
     _pdf("indexed-inverted.pdf", 12000, packing="indexed")

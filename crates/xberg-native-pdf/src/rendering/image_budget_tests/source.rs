@@ -9,6 +9,43 @@ pub(super) fn jpeg(dimension: u32) -> Vec<u8> {
     bytes
 }
 
+pub(super) fn jpeg_of(width: u32, height: u32) -> Vec<u8> {
+    let pixels = vec![0; width as usize * height as usize * 3];
+    let mut bytes = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new(&mut bytes)
+        .encode(&pixels, width, height, image::ExtendedColorType::Rgb8)
+        .unwrap();
+    bytes
+}
+
+/// Offset of the SOF0 marker, found by walking the marker segments from the SOI.
+pub(super) fn sof_marker_position(jpeg: &[u8]) -> usize {
+    let mut position = 2;
+    while jpeg[position] == 0xff {
+        if jpeg[position + 1] == 0xc0 {
+            return position;
+        }
+        position += 2 + usize::from(u16::from_be_bytes([jpeg[position + 2], jpeg[position + 3]]));
+    }
+    panic!("no SOF0 segment before the scan");
+}
+
+/// A header-valid four-component sequential JPEG: an RGB frame whose SOF0 declares four components.
+/// Only the headers are read for admission.
+pub(super) fn cmyk_jpeg(dimension: u32) -> Vec<u8> {
+    let mut bytes = jpeg(dimension);
+    let frame = bytes.windows(2).position(|pair| pair == [0xff, 0xc0]).unwrap();
+    let length = usize::from(u16::from_be_bytes([bytes[frame + 2], bytes[frame + 3]]));
+    let mut segment = vec![0xff, 0xc0, 0, 8 + 4 * 3, 8];
+    segment.extend(&bytes[frame + 5..frame + 9]);
+    segment.push(4);
+    for id in 1..=4 {
+        segment.extend([id, 0x11, 0]);
+    }
+    bytes.splice(frame..frame + 2 + length, segment);
+    bytes
+}
+
 fn stream(entries: &str, bytes: &[u8]) -> Vec<u8> {
     let mut output = format!("<< {entries} /Length {} >>\nstream\n", bytes.len()).into_bytes();
     output.extend(bytes);
@@ -35,6 +72,24 @@ pub(super) fn document_with_paint(jpeg: &[u8], declared: u32, overlay: bool, ins
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 32 32] /Contents 4 0 R /Resources << /XObject << /Im0 5 0 R >> >> >>".to_vec(),
         stream("", &content),
         stream(&format!("/Type /XObject /Subtype /Image /Width {declared} /Height {declared} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode"), jpeg),
+    ];
+    from_objects(&objects)
+}
+
+/// A 32 pt page painting `/Im0` under `content`, with `entries` added to the image dictionary. The
+/// image is DCT-encoded unless `entries` names its own `/Filter`.
+pub(super) fn document_painting(jpeg: &[u8], declared: u32, content: &[u8], entries: &str) -> PdfDocument {
+    let filter = if entries.contains("/Filter") {
+        ""
+    } else {
+        "/Filter /DCTDecode"
+    };
+    let objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 32 32] /Contents 4 0 R /Resources << /XObject << /Im0 5 0 R >> >> >>".to_vec(),
+        stream("", content),
+        stream(&format!("/Type /XObject /Subtype /Image /Width {declared} /Height {declared} /ColorSpace /DeviceRGB /BitsPerComponent 8 {filter} {entries}"), jpeg),
     ];
     from_objects(&objects)
 }
@@ -89,7 +144,11 @@ fn mask_document_with_filter(mask: &[u8], dimension: u32, soft: bool, filter: &s
 }
 
 pub(super) fn gray_jpeg(dimension: u32) -> Vec<u8> {
-    let pixels = vec![255; dimension as usize * dimension as usize];
+    gray_jpeg_of(dimension, 255)
+}
+
+pub(super) fn gray_jpeg_of(dimension: u32, value: u8) -> Vec<u8> {
+    let pixels = vec![value; dimension as usize * dimension as usize];
     let mut bytes = Vec::new();
     image::codecs::jpeg::JpegEncoder::new(&mut bytes)
         .encode(&pixels, dimension, dimension, image::ExtendedColorType::L8)

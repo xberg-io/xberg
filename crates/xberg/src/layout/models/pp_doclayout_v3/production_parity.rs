@@ -13,7 +13,7 @@ use crate::extractors::security::SecurityLimits;
 use crate::inference::InferenceTensor;
 use crate::inference::recording::{Captures, record_session, with_profile};
 
-const MODEL_SHA256: &str = "93d1197e55f1c9cb6720275a89684e7ea61cd5830008a837d8c51b19d47926c1";
+const MODEL_SHA256: &str = "45bf71750b00739a41fc209f132eb104a4d6b5bb29483c9078164d8b87cf28ba";
 const PAGE_COUNT: usize = 2;
 const TENSORS_PER_FORWARD: usize = 3;
 
@@ -181,6 +181,77 @@ fn should_capture_two_production_v3_forwards() {
         serde_json::to_vec_pretty(&manifest).expect("capture JSON"),
     )
     .expect("capture manifest");
+}
+
+#[test]
+#[ignore = "downloads the pinned PP-DocLayout-V3 ONNX and runs one real forward on a corpus page (ORT)"]
+fn should_run_the_pinned_official_model_with_the_adapter_output_contract() {
+    let model_path = crate::layout::LayoutModelManager::new(None)
+        .ensure_pp_doclayout_v3_model()
+        .expect("pinned V3 artifact must download and verify");
+    assert_artifact_hash(&model_path, MODEL_SHA256, "pinned ONNX identity");
+    let page = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test_documents/images/doclaynet_page_01.jpg");
+    let image_bytes = fs::read(&page).expect("corpus page must be present for this ignored test");
+    let image =
+        decode_standard_rgb8_with_security_limits(&image_bytes, &SecurityLimits::default()).expect("valid corpus page");
+    let model = PpDocLayoutV3Model::from_file_with_thread_budget(model_path.to_str().expect("UTF-8 path"), None, 1)
+        .expect("official V3 session");
+    let (session, captures) = record_session(model.session);
+    let mut model = PpDocLayoutV3Model {
+        session,
+        input_names: model.input_names,
+    };
+    let detections = model.detect_with_threshold(&image, 0.5).expect("official V3 inference");
+    let forward = take_forward(&captures);
+    validate_outputs(&forward.outputs);
+    let described = |tensors: &[(String, InferenceTensor)]| -> Vec<(String, &'static str, Vec<usize>)> {
+        let mut rows: Vec<_> = tensors
+            .iter()
+            .map(|(name, tensor)| {
+                let (dtype, shape, _) = tensor_bytes(tensor);
+                (name.clone(), dtype, shape)
+            })
+            .collect();
+        rows.sort();
+        rows
+    };
+    let row = |name: &str, dtype: &'static str, shape: &[usize]| (name.to_string(), dtype, shape.to_vec());
+    assert_eq!(
+        described(&forward.inputs),
+        [
+            row("im_shape", "<f4", &[1, 2]),
+            row("image", "<f4", &[1, 3, 800, 800]),
+            row("scale_factor", "<f4", &[1, 2]),
+        ]
+    );
+    let outputs = described(&forward.outputs);
+    let raw_rows = outputs[0].2[0];
+    assert_eq!(
+        outputs,
+        [
+            row("fetch_name_0", "<f4", &[raw_rows, 7]),
+            row("fetch_name_1", "<i4", &[1]),
+            row("fetch_name_2", "<i4", &[raw_rows, 200, 200]),
+        ]
+    );
+    let InferenceTensor::F32(boxes) = &forward
+        .outputs
+        .iter()
+        .find(|(name, _)| name == "fetch_name_0")
+        .expect("fetch_name_0")
+        .1
+    else {
+        unreachable!("validate_outputs checked the dtype")
+    };
+    assert!(
+        boxes
+            .rows()
+            .into_iter()
+            .take(raw_rows)
+            .all(|row| row[0] >= 0.0 && row[0] < 25.0 && row[0].fract() == 0.0),
+        "every raw class id must be an integer in 0..25"
+    );
+    assert!(!detections.is_empty());
 }
 
 fn validate_inputs(inputs: &[Value]) {

@@ -261,6 +261,8 @@ pub(crate) struct PlausibilityScan {
     /// Pages (1-indexed) the check examined and could not judge: fewer than
     /// [`PLAUSIBILITY_MIN_PROSE_CHUNKS`] chunks of prose to read.
     pub unjudged: Vec<u32>,
+    /// Pages (1-indexed) the check judged and read as a real language.
+    pub plausible: Vec<u32>,
     /// How many pages the check judged, plausible or implausible together. Zero means the
     /// check produced no verdict anywhere in the document.
     pub judged: u32,
@@ -294,7 +296,10 @@ pub(crate) fn scan_text_plausibility(
                         scan.implausible.push(boundary.page_number);
                         scan.judged += 1;
                     }
-                    Some(PlausibilityVerdict::Plausible) => scan.judged += 1,
+                    Some(PlausibilityVerdict::Plausible) => {
+                        scan.plausible.push(boundary.page_number);
+                        scan.judged += 1;
+                    }
                     Some(PlausibilityVerdict::NotEvaluated) => scan.unjudged.push(boundary.page_number),
                     None => {}
                 }
@@ -307,7 +312,10 @@ pub(crate) fn scan_text_plausibility(
                     scan.implausible = (1..=pages).collect();
                     scan.judged = pages;
                 }
-                Some(PlausibilityVerdict::Plausible) => scan.judged = pages,
+                Some(PlausibilityVerdict::Plausible) => {
+                    scan.plausible = (1..=pages).collect();
+                    scan.judged = pages;
+                }
                 Some(PlausibilityVerdict::NotEvaluated) => scan.unjudged = (1..=pages).collect(),
                 None => {}
             }

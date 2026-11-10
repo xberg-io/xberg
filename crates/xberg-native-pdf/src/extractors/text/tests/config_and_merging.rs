@@ -804,6 +804,7 @@ fn snap_span(text: &str, x: f32, y: f32, w: f32, fs: f32, seq: usize) -> TextSpa
         rotation_degrees: 0.0,
         wmode: 0,
         rtl_draw_logical: false,
+        ligature_glyph: false,
         mirrored: false,
         page_rotation_applied: 0,
     }
@@ -874,10 +875,76 @@ fn test_extractor_prepare_for_span_extraction() {
     let mut extractor = TextExtractor::new();
     extractor.extract_spans = false;
     extractor.span_sequence_counter = 42;
+    extractor.pen_seam = Some(PenSeam::ContinuesPen);
+    extractor.pen_continuations.insert(SpanKey {
+        sequence: 7,
+        x_bits: 0,
+        y_bits: 0,
+    });
     extractor.prepare_for_span_extraction();
     assert!(extractor.extract_spans);
     assert_eq!(extractor.span_sequence_counter, 0);
     assert!(extractor.spans.is_empty());
+    assert_eq!(
+        extractor.pen_seam, None,
+        "a pen seam does not outlive the extraction it was set in"
+    );
+    assert!(
+        extractor.pen_continuations.is_empty(),
+        "pen marks do not outlive the extraction they were set in"
+    );
+}
+
+#[test]
+fn span_key_tells_two_spans_apart_that_differ_only_in_y() {
+    // A cached form replays spans with the sequence numbers of an earlier extraction, so a later
+    // span can share sequence and x with a marked one on another line.
+    let marked = snap_span("a", 100.0, 700.0, 10.0, 10.0, 3);
+    let later = snap_span("a", 100.0, 650.0, 10.0, 10.0, 3);
+    assert_ne!(SpanKey::of(&marked), SpanKey::of(&later));
+    assert_eq!(
+        SpanKey::of(&marked),
+        SpanKey::of(&snap_span("b", 100.0, 700.0, 4.0, 10.0, 3))
+    );
+}
+
+fn merged_text_with_a_slight_overlap(marked: bool) -> String {
+    let mut extractor = TextExtractor::new();
+    extractor.add_font("F1".to_string(), create_test_font());
+    let first = snap_span("Plan", 100.0, 700.0, 20.0, 10.0, 0);
+    let second = snap_span("area", 119.9, 700.0, 20.0, 10.0, 1);
+    if marked {
+        extractor.pen_continuations.insert(SpanKey::of(&second));
+    }
+    extractor.spans = vec![first, second];
+    extractor.merge_adjacent_spans();
+    extractor
+        .spans
+        .iter()
+        .map(|s| s.text.as_str())
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
+#[test]
+fn a_marked_pen_continuation_merges_with_the_raw_gap_and_an_unmarked_span_takes_the_width_fallback() {
+    assert_eq!(merged_text_with_a_slight_overlap(true), "Planarea");
+    assert_eq!(merged_text_with_a_slight_overlap(false), "Plan area");
+}
+
+#[test]
+fn the_script_snap_carries_the_pen_mark_to_the_snapped_span() {
+    let mut extractor = TextExtractor::new();
+    let raised = snap_span("2", 130.0, 704.0, 4.0, 6.0, 1);
+    extractor.pen_continuations.insert(SpanKey::of(&raised));
+    extractor.spans = vec![snap_span("x", 100.0, 700.0, 30.0, 12.0, 0), raised];
+    extractor.snap_superscript_baselines();
+    assert_eq!(extractor.spans[1].bbox.y, 700.0, "the raised glyph snaps to its base");
+    assert!(
+        extractor.pen_continuations.contains(&SpanKey::of(&extractor.spans[1])),
+        "the snapped span lost its pen mark"
+    );
+    assert_eq!(extractor.pen_continuations.len(), 1);
 }
 
 #[test]

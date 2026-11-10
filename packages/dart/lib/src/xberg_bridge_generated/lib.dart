@@ -9,9 +9,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'lib.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `try_convert_annotation_kind_from_core`, `try_convert_asset_category_from_core`, `try_convert_auth_config_from_core`, `try_convert_block_type_from_core`, `try_convert_boundary_reason_from_core`, `try_convert_browser_backend_from_core`, `try_convert_browser_mode_from_core`, `try_convert_browser_wait_from_core`, `try_convert_call_mode_from_core`, `try_convert_candle_deepseek_ocr_dtype_from_core`, `try_convert_candle_device_preference_from_core`, `try_convert_candle_trocr_variant_from_core`, `try_convert_caption_alt_text_mode_from_core`, `try_convert_chunk_sizing_from_core`, `try_convert_chunk_type_from_core`, `try_convert_chunker_type_from_core`, `try_convert_chunking_reason_from_core`, `try_convert_code_content_mode_from_core`, `try_convert_code_data_node_kind_from_core`, `try_convert_confidence_semantics_from_core`, `try_convert_content_filter_kind_from_core`, `try_convert_content_layer_from_core`, `try_convert_crawl_strategy_kind_from_core`, `try_convert_credential_provider_config_from_core`, `try_convert_diff_line_from_core`, `try_convert_document_content_encoding_from_core`, `try_convert_element_type_from_core`, `try_convert_embedding_model_type_from_core`, `try_convert_embeddings_embedding_backend_from_core`, `try_convert_entity_category_from_core`, `try_convert_execution_provider_type_from_core`, `try_convert_extract_input_kind_from_core`, `try_convert_extraction_method_from_core`, `try_convert_form_field_type_from_core`, `try_convert_format_metadata_from_core`, `try_convert_formula_model_from_core`, `try_convert_glm_ocr_layout_mode_from_core`, `try_convert_glm_ocr_task_kind_from_core`, `try_convert_host_matcher_from_core`, `try_convert_html_theme_from_core`, `try_convert_image_kind_from_core`, `try_convert_image_output_format_from_core`, `try_convert_image_type_from_core`, `try_convert_inline_type_from_core`, `try_convert_jupyter_cell_rendering_from_core`, `try_convert_keyword_algorithm_from_core`, `try_convert_late_interaction_model_type_from_core`, `try_convert_layout_class_from_core`, `try_convert_layout_strategy_from_core`, `try_convert_link_type_from_core`, `try_convert_merge_mode_from_core`, `try_convert_mime_detection_policy_from_core`, `try_convert_ner_backend_kind_from_core`, `try_convert_no_chunking_reason_from_core`, `try_convert_node_content_from_core`, `try_convert_ocr_backend_type_from_core`, `try_convert_ocr_bounding_geometry_from_core`, `try_convert_ocr_element_level_from_core`, `try_convert_ocr_strategy_from_core`, `try_convert_output_format_from_core`, `try_convert_paddle_inference_backend_from_core`, `try_convert_paddle_language_from_core`, `try_convert_paddle_ocr_vl_task_kind_from_core`, `try_convert_page_orientation_handling_from_core`, `try_convert_page_unit_type_from_core`, `try_convert_pdf_annotation_type_from_core`, `try_convert_pdf_backend_from_core`, `try_convert_pii_category_from_core`, `try_convert_preset_category_from_core`, `try_convert_probe_status_from_core`, `try_convert_processing_stage_from_core`, `try_convert_psm_mode_from_core`, `try_convert_redaction_offset_encoding_from_core`, `try_convert_redaction_strategy_from_core`, `try_convert_reduction_level_from_core`, `try_convert_region_kind_from_core`, `try_convert_relationship_kind_from_core`, `try_convert_reranker_head_from_core`, `try_convert_reranker_model_type_from_core`, `try_convert_result_format_from_core`, `try_convert_revision_anchor_from_core`, `try_convert_revision_kind_from_core`, `try_convert_schema_compliance_from_core`, `try_convert_sparse_embedding_model_type_from_core`, `try_convert_structured_data_type_from_core`, `try_convert_summary_strategy_from_core`, `try_convert_table_chunking_mode_from_core`, `try_convert_table_model_from_core`, `try_convert_table_overlap_preference_from_core`, `try_convert_text_direction_from_core`, `try_convert_tier_strategy_from_core`, `try_convert_uri_kind_from_core`, `try_convert_url_extraction_mode_from_core`, `try_convert_vlm_fallback_policy_from_core`, `try_convert_whisper_model_from_core`
+// These functions are ignored because they are not marked as `pub`: `try_convert_annotation_kind_from_core`, `try_convert_asset_category_from_core`, `try_convert_auth_config_from_core`, `try_convert_block_type_from_core`, `try_convert_boundary_reason_from_core`, `try_convert_browser_backend_from_core`, `try_convert_browser_mode_from_core`, `try_convert_browser_wait_from_core`, `try_convert_call_mode_from_core`, `try_convert_candle_deepseek_ocr_dtype_from_core`, `try_convert_candle_device_preference_from_core`, `try_convert_candle_trocr_variant_from_core`, `try_convert_caption_alt_text_mode_from_core`, `try_convert_chunk_sizing_from_core`, `try_convert_chunk_type_from_core`, `try_convert_chunker_type_from_core`, `try_convert_chunking_reason_from_core`, `try_convert_code_content_mode_from_core`, `try_convert_code_data_node_kind_from_core`, `try_convert_confidence_semantics_from_core`, `try_convert_content_filter_kind_from_core`, `try_convert_content_layer_from_core`, `try_convert_crawl_strategy_kind_from_core`, `try_convert_credential_provider_config_from_core`, `try_convert_diff_line_from_core`, `try_convert_document_content_encoding_from_core`, `try_convert_element_type_from_core`, `try_convert_embedding_model_type_from_core`, `try_convert_embeddings_embedding_backend_from_core`, `try_convert_entity_category_from_core`, `try_convert_execution_provider_type_from_core`, `try_convert_extract_input_kind_from_core`, `try_convert_extraction_method_from_core`, `try_convert_form_field_type_from_core`, `try_convert_format_metadata_from_core`, `try_convert_formula_model_from_core`, `try_convert_glm_ocr_layout_mode_from_core`, `try_convert_glm_ocr_task_kind_from_core`, `try_convert_host_matcher_from_core`, `try_convert_html_theme_from_core`, `try_convert_image_kind_from_core`, `try_convert_image_output_format_from_core`, `try_convert_image_type_from_core`, `try_convert_inline_type_from_core`, `try_convert_jupyter_cell_rendering_from_core`, `try_convert_keyword_algorithm_from_core`, `try_convert_late_interaction_model_type_from_core`, `try_convert_layout_class_from_core`, `try_convert_layout_detection_model_from_core`, `try_convert_layout_strategy_from_core`, `try_convert_link_type_from_core`, `try_convert_merge_mode_from_core`, `try_convert_mime_detection_policy_from_core`, `try_convert_ner_backend_kind_from_core`, `try_convert_no_chunking_reason_from_core`, `try_convert_node_content_from_core`, `try_convert_ocr_backend_type_from_core`, `try_convert_ocr_bounding_geometry_from_core`, `try_convert_ocr_element_level_from_core`, `try_convert_ocr_strategy_from_core`, `try_convert_output_format_from_core`, `try_convert_paddle_inference_backend_from_core`, `try_convert_paddle_language_from_core`, `try_convert_paddle_ocr_vl_task_kind_from_core`, `try_convert_page_orientation_handling_from_core`, `try_convert_page_unit_type_from_core`, `try_convert_pdf_annotation_type_from_core`, `try_convert_pdf_backend_from_core`, `try_convert_pii_category_from_core`, `try_convert_preset_category_from_core`, `try_convert_probe_status_from_core`, `try_convert_processing_stage_from_core`, `try_convert_psm_mode_from_core`, `try_convert_redaction_offset_encoding_from_core`, `try_convert_redaction_strategy_from_core`, `try_convert_reduction_level_from_core`, `try_convert_region_kind_from_core`, `try_convert_relationship_kind_from_core`, `try_convert_reranker_head_from_core`, `try_convert_reranker_model_type_from_core`, `try_convert_result_format_from_core`, `try_convert_revision_anchor_from_core`, `try_convert_revision_kind_from_core`, `try_convert_schema_compliance_from_core`, `try_convert_sparse_embedding_model_type_from_core`, `try_convert_structured_data_type_from_core`, `try_convert_summary_strategy_from_core`, `try_convert_table_chunking_mode_from_core`, `try_convert_table_model_from_core`, `try_convert_table_overlap_preference_from_core`, `try_convert_text_direction_from_core`, `try_convert_tier_strategy_from_core`, `try_convert_uri_kind_from_core`, `try_convert_url_extraction_mode_from_core`, `try_convert_vlm_fallback_policy_from_core`, `try_convert_whisper_model_from_core`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DocumentExtractorDartCallbacks`, `EmbeddingBackendDartCallbacks`, `OcrBackendDartCallbacks`, `PostProcessorDartCallbacks`, `RendererDartCallbacks`, `RerankerBackendDartCallbacks`, `TokenizerBackendDartCallbacks`, `ValidatorDartCallbacks`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `confidence_semantics`, `count_tokens`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `page_orientation_handling`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render_result`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages_for`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language_for`, `supports_language`, `supports_table_detection`, `try_from`, `try_from`, `try_from`, `try_from`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `backend_type`, `can_handle`, `confidence_semantics`, `count_tokens`, `dimensions`, `embed`, `emits_structured_markdown`, `estimated_duration_ms`, `extract`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `initialize`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `name`, `page_orientation_handling`, `priority`, `priority`, `priority`, `process_document`, `process_image_file`, `process_image`, `process`, `processing_stage`, `render_result`, `rerank`, `should_process`, `should_validate`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `shutdown`, `supported_languages_for`, `supported_languages`, `supported_mime_types`, `supports_document_processing`, `supports_language_for`, `supports_language`, `supports_table_detection`, `try_from`, `try_from`, `try_from`, `try_from`, `validate`, `version`, `version`, `version`, `version`, `version`, `version`, `version`, `version`
 
 /// Extract content from a single bytes or URI input.
 Future<ExtractionResult> extract({
@@ -1253,6 +1253,10 @@ Future<TableOverlapPreference> createTableOverlapPreferenceFromJson({
 
 Future<LayoutStrategy> createLayoutStrategyFromJson({required String json}) =>
     RustLib.instance.api.crateCreateLayoutStrategyFromJson(json: json);
+
+Future<LayoutDetectionModel> createLayoutDetectionModelFromJson({
+  required String json,
+}) => RustLib.instance.api.crateCreateLayoutDetectionModelFromJson(json: json);
 
 Future<CredentialProviderConfig> createCredentialProviderConfigFromJson({
   required String json,
@@ -11017,14 +11021,21 @@ sealed class ImageOutputFormat with _$ImageOutputFormat {
 class ImagePreprocessingConfig {
   /// Target DPI for the image (300 is standard, 600 for small text).
   ///
-  /// For a PDF page, this resamples the already-rendered raster; it does not make the page
-  /// re-render at a higher native resolution. A value above what
-  /// `image::preprocessing::calculate_target_dpi`'s memory/dimension clamp allows is
-  /// silently capped (GH#1786: 400 and 600 both clamped to the same ~372 on a Letter page
-  /// and produced byte-identical output), so upscaling interpolated pixels this way adds no
-  /// detail. To change the actual PDF render resolution, set `images.target_dpi` on
-  /// [`ExtractionConfig`](crate::core::config::ExtractionConfig) instead
-  /// (`image::dpi::effective_pdf_render_dpi`).
+  /// Forced whole-document PDF OCR with the registered built-in Tesseract backend renders
+  /// native page content at this density before normalization when a preprocessing block
+  /// is configured and this value exceeds 150. This includes the synthesized classical
+  /// pipeline and a block that only sets another option: omitted `target_dpi` defaults to 300.
+  /// Without a preprocessing block, the default PDF render remains 150 DPI.
+  ///
+  /// Explicit `images` settings and detected full-page scan density take precedence.
+  /// Selected-page OCR, prepared rasters, custom backends, explicit OCR pipelines and VLM
+  /// fallback retain their source-render policy. Mixed native-and-OCR routes likewise keep
+  /// the source render while layout detection is active or a hidden text layer is being
+  /// probed. Existing raster memory and dimension limits can cap both rendering and
+  /// normalization; increasing this value cannot recover detail from a supplied raster. Set
+  /// `images.target_dpi` on
+  /// [`ExtractionConfig`](crate::core::config::ExtractionConfig) to configure PDF rendering
+  /// independently of preprocessing.
   final PlatformInt64 targetDpi;
 
   /// Auto-detect and correct image rotation.
@@ -11959,6 +11970,12 @@ class LayoutDetectionConfig {
   /// opt-in and has no effect on standard text/table extraction scores.
   final bool enableChartUnderstanding;
 
+  /// Layout detection model.
+  ///
+  /// Defaults to [`LayoutDetectionModel::RtDetr`]. [`LayoutDetectionModel::PpDocLayoutV3`]
+  /// is experimental, ORT-only and bbox-only.
+  final LayoutDetectionModel model;
+
   const LayoutDetectionConfig({
     required this.strategy,
     this.confidenceThreshold,
@@ -11968,6 +11985,7 @@ class LayoutDetectionConfig {
     required this.tableOverlapPreference,
     this.acceleration,
     required this.enableChartUnderstanding,
+    this.model = LayoutDetectionModel.rtDetr,
   });
 
   @override
@@ -11979,7 +11997,8 @@ class LayoutDetectionConfig {
       formulaModel.hashCode ^
       tableOverlapPreference.hashCode ^
       acceleration.hashCode ^
-      enableChartUnderstanding.hashCode;
+      enableChartUnderstanding.hashCode ^
+      model.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -11993,7 +12012,24 @@ class LayoutDetectionConfig {
           formulaModel == other.formulaModel &&
           tableOverlapPreference == other.tableOverlapPreference &&
           acceleration == other.acceleration &&
-          enableChartUnderstanding == other.enableChartUnderstanding;
+          enableChartUnderstanding == other.enableChartUnderstanding &&
+          model == other.model;
+}
+
+/// Which layout detection model runs on each page.
+///
+/// Wire format is snake_case in all serializers (JSON, TOML, YAML).
+enum LayoutDetectionModel {
+  /// RT-DETR v2 -- default, 17 classes. Runs on the ORT and pure-Rust tract engines.
+  rtDetr,
+
+  /// PP-DocLayout-V3 -- experimental, 25 classes mapped to the canonical labels (~131MB download).
+  ///
+  /// Requires the ORT-backed `layout-detection` feature: selecting it on a tract-only
+  /// or WASM build is an error, never a silent fallback to RT-DETR. Only the
+  /// bounding boxes and classes are used; the model's masks and reading-order
+  /// output are ignored. Quality relative to RT-DETR has not been qualified.
+  ppDocLayoutV3,
 }
 
 /// A detected layout region on a page.
@@ -13674,19 +13710,23 @@ class OcrConfig {
   /// When None, uses the single `backend` field (same as today).
   final OcrPipelineConfig? pipeline;
 
-  /// Enable automatic page rotation based on orientation detection.
+  /// Page rotation policy based on orientation detection.
   ///
-  /// When enabled, page orientation (0/90/180/270 degrees) is detected with an
-  /// ONNX PP-LCNet document-orientation classifier — NOT Tesseract's own
-  /// `DetectOrientationScript()`/OSD, which this crate does not call. If the
-  /// page is rotated with high confidence, the image is corrected before
-  /// recognition. Applies to every OCR backend; the tesseract-only
-  /// `TesseractConfig::preprocessing` field of the same name is OR'd in on
-  /// top of this one and affects tesseract alone.
+  /// - `Some(true)`: always detect the page orientation (0/90/180/270 degrees) with an
+  ///   ONNX PP-LCNet document-orientation classifier -- NOT Tesseract's own
+  ///   `DetectOrientationScript()`/OSD, which this crate does not call -- and correct a
+  ///   confidently rotated page before recognition. Applies to every OCR backend; the
+  ///   tesseract-only `TesseractConfig::preprocessing` field of the same name is OR'd in on
+  ///   top of this one and affects tesseract alone.
+  /// - `Some(false)`: never rotate and never run the orientation retry.
+  /// - `None` (omitted): the default. Pages are read as-is, and a low-confidence whole-page
+  ///   read of a plain Tesseract block is retried with the orientation recovery that
+  ///   extraction without an `ocr` block uses (cached OSD when present, the ONNX classifier
+  ///   otherwise).
   ///
   /// Independent of a page's PDF `/Rotate` entry, which is handled separately
   /// on every OCR route regardless of this setting.
-  final bool autoRotate;
+  final bool? autoRotate;
 
   /// Ergonomic VLM fallback policy.
   ///
@@ -13795,7 +13835,7 @@ class OcrConfig {
     this.elementConfig,
     this.qualityThresholds,
     this.pipeline,
-    required this.autoRotate,
+    this.autoRotate,
     required this.vlmFallback,
     this.vlmConfig,
     this.vlmPrompt,
@@ -14315,8 +14355,9 @@ class OcrQualityThresholds {
   /// Measured over the 16 pages of a recorded municipal ordinance (13 prose pages, 3 scanned
   /// survey drawings): prose ran 0.04-0.28, the drawings 0.42-0.47. The default sits in that
   /// gap with margin on both sides. By default, crossing the threshold emits a processing
-  /// warning but retains the recognized text. Set [`Self::discard_suspected_ocr_noise`] to
-  /// `true` to restore destructive filtering.
+  /// warning and retains the recognized text, except for the symbol-noise lines that
+  /// [`Self::prune_symbol_noise_lines`] removes. Set [`Self::discard_suspected_ocr_noise`] to
+  /// `true` to restore destructive filtering of the whole page.
   final double maxOcrOutputFragmentedWordRatio;
 
   /// Minimum mean OCR confidence (0-100) below which a page is reported as suspected noise.
@@ -14364,8 +14405,42 @@ class OcrQualityThresholds {
   /// Discard non-empty OCR text when any configured recognition-noise signal fires.
   ///
   /// Defaults to `false`: suspected noise is retained and surfaced through
-  /// `processing_warnings`. Set to `true` to preserve the legacy destructive behavior.
+  /// `processing_warnings`, minus the symbol-noise lines [`Self::prune_symbol_noise_lines`]
+  /// removes. Set to `true` to preserve the legacy destructive behavior.
   final bool discardSuspectedOcrNoise;
+
+  /// Remove symbol-noise lines from a page flagged as suspected recognition noise but retained.
+  ///
+  /// Applies to any such page, not only photographs, when it has at least 8 non-blank lines
+  /// and at least half of them are symbol noise. A line is symbol noise when fewer than half
+  /// its whitespace-separated tokens are word-shaped (3 or more letters, 4 or more when the
+  /// line is a single token, after trimming surrounding punctuation) and none of these keeps
+  /// it:
+  ///
+  /// - it contains any digit;
+  /// - it contains a character of a script written without spaces (CJK ideographs, Kana,
+  ///   Hangul, Thai, Lao, Khmer, Myanmar), each of which counts as a word;
+  /// - a token holds a letter outside the Latin script (Arabic, Cyrillic, Greek, ...);
+  /// - an `=`, `+`, `<`, `>` or comparison/multiplication sign sits between two operands, each
+  ///   a word of 3 or more letters, a digit-bearing token, or one letter other than
+  ///   `i`, `l`, `j`, `o` (`x = y`, `a + b`; `oe = ie` and `i - l` are pruned);
+  /// - it is an English phrase: two or more alphabetic tokens that are each an English
+  ///   function word (`I`, `am`, `to`, ...) or a word of 3 or more letters with a vowel, with at
+  ///   least one function word of 2 or more letters (`I am.`, `Go to`, `IS IT`; `ee so` is
+  ///   pruned). This rule is English-only, so a 2-token or 3-token line in another language
+  ///   (`de la`, `de la gare`) is pruned;
+  /// - a token is an English contraction (`I'm`, `it's`).
+  ///
+  /// A single-token form answer such as `No.`, `Yes` or `Qty` has too little around it to
+  /// count as a word and is pruned on a flagged page, and so is an equation written without
+  /// spaces (`x=y`).
+  ///
+  /// Pages with tables and pages discarded by [`Self::discard_suspected_ocr_noise`] are not
+  /// pruned. Stage scoring in a multi-stage OCR pipeline and the single-page first-pass
+  /// quality gate read the text before pruning. Each pruned page adds a processing warning
+  /// naming the page and the number of lines removed. Set to `false` to keep every
+  /// recognized line.
+  final bool pruneSymbolNoiseLines;
 
   /// Minimum average word length. Below this with enough words indicates garbled extraction.
   final double minAvgWordLength;
@@ -14445,6 +14520,7 @@ class OcrQualityThresholds {
     required this.minWordsForOcrOutputCheck,
     required this.maxOcrOutputDictInvalidWordRatio,
     required this.discardSuspectedOcrNoise,
+    required this.pruneSymbolNoiseLines,
     required this.minAvgWordLength,
     required this.minWordsForAvgLengthCheck,
     required this.minConsecutiveRepeatRatio,
@@ -14475,6 +14551,7 @@ class OcrQualityThresholds {
       minWordsForOcrOutputCheck.hashCode ^
       maxOcrOutputDictInvalidWordRatio.hashCode ^
       discardSuspectedOcrNoise.hashCode ^
+      pruneSymbolNoiseLines.hashCode ^
       minAvgWordLength.hashCode ^
       minWordsForAvgLengthCheck.hashCode ^
       minConsecutiveRepeatRatio.hashCode ^
@@ -14509,6 +14586,7 @@ class OcrQualityThresholds {
           maxOcrOutputDictInvalidWordRatio ==
               other.maxOcrOutputDictInvalidWordRatio &&
           discardSuspectedOcrNoise == other.discardSuspectedOcrNoise &&
+          pruneSymbolNoiseLines == other.pruneSymbolNoiseLines &&
           minAvgWordLength == other.minAvgWordLength &&
           minWordsForAvgLengthCheck == other.minWordsForAvgLengthCheck &&
           minConsecutiveRepeatRatio == other.minConsecutiveRepeatRatio &&
@@ -17971,7 +18049,12 @@ class SecurityLimits {
   /// Maximum aggregate table cells per document (100,000).
   ///
   /// Raise this for trusted large tabular inputs. Higher values permit
-  /// proportionally more parsing work and output allocation.
+  /// proportionally more parsing work and output allocation. A spreadsheet
+  /// workbook (XLSX, XLSM, XLTM, XLAM, XLSB, XLS, XLA, ODS) over the limit is not rejected: each
+  /// sheet that does not fit the remaining budget is skipped with a warning
+  /// and returned empty, so a workbook whose every sheet is over the limit
+  /// yields placeholder sheets only. Other table formats fail with a
+  /// security error.
   final PlatformInt64 maxTableCells;
 
   /// Maximum number of pages (or slides, or frames) in a single document.

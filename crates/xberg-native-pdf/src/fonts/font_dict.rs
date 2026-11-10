@@ -683,6 +683,42 @@ impl FontInfo {
         names.get(gid as usize).and_then(|n| n.as_deref())
     }
 
+    /// The letters of a Type0 ligature glyph that /ToUnicode leaves unmapped (GH#2664): the
+    /// components of the embedded program's GSUB ligature rules for the code's glyph, each mapped
+    /// through /ToUnicode. `None` without a /ToUnicode map, an embedded program or such a rule.
+    /// Only a CIDFontType2 descendant qualifies: its CIDs are glyph indices (through the
+    /// CIDToGIDMap). A CIDFontType0 CID is a charset CID, so GSUB, which names glyph indices,
+    /// would be read at the wrong glyph and invent the letters of an unrelated ligature. ~keep
+    fn gsub_ligature_letters(&self, char_code: u32) -> Option<String> {
+        if self.cid_font_type.as_deref() != Some("CIDFontType2") {
+            return None;
+        }
+        let cid = u16::try_from(char_code).ok()?;
+        let cmap = self.to_unicode.as_ref()?.get()?;
+        let font_data = self.embedded_font_data.as_ref()?;
+        let gid = self.cid_to_gid_map.as_ref().map_or(cid, |map| map.get_gid(cid));
+        super::ligature_components::ligature_text(font_data, gid, |component| {
+            self.cids_of_gid(component).into_iter().find_map(|component_cid| {
+                cmap.get(&u32::from(component_cid))
+                    .filter(|text| {
+                        !text.is_empty()
+                            && !text
+                                .chars()
+                                .any(|c| c.is_control() || matches!(c, '\u{FFFD}' | '\u{FFFE}' | '\u{FFFF}'))
+                    })
+                    .map(std::borrow::Cow::into_owned)
+            })
+        })
+    }
+
+    /// Every CID whose glyph is `gid` under the font's CIDToGIDMap (CID == GID without one).
+    fn cids_of_gid(&self, gid: u16) -> Vec<u16> {
+        match &self.cid_to_gid_map {
+            Some(map @ CIDToGIDMap::Explicit(_)) => (0..=u16::MAX).filter(|&cid| map.get_gid(cid) == gid).collect(),
+            Some(CIDToGIDMap::Identity) | None => vec![gid],
+        }
+    }
+
     /// Authoritative glyph name for a *simple* font character code, in priority
     /// order (ISO 32000-1 §9.6.6.1 / §9.10.2):
     /// (a) the `/Differences` glyph name retained in `diff_glyph_names`;
@@ -2941,7 +2977,12 @@ impl FontInfo {
                     if current_code <= 255 {
                         diff_glyph_names.insert(current_code as u8, glyph_name.clone());
                     }
-                    if let Some(unicode_char) = glyph_name_to_unicode(glyph_name) {
+                    let components = glyph_name_components_to_string(glyph_name);
+                    let single = match components {
+                        Some(_) => None,
+                        None => glyph_name_to_unicode(glyph_name),
+                    };
+                    if let Some(unicode_char) = single {
                         if current_code <= 255 {
                             encoding_map.insert(current_code as u8, unicode_char);
                             if is_ligature_char(unicode_char) {
@@ -2954,10 +2995,13 @@ impl FontInfo {
                                 );
                             }
                         }
-                    } else if let Some(unicode_string) = glyph_name_to_unicode_string(glyph_name) {
+                    } else if let Some(unicode_string) = components.or_else(|| glyph_name_to_unicode_string(glyph_name))
+                    {
                         // Compound glyph name (e.g. f_f → "ff", f_f_i → "ffi")
                         // ~keep
                         if current_code <= 255 {
+                            // Decoding checks the single-character map first; a compound replaces that entry. ~keep
+                            encoding_map.remove(&(current_code as u8));
                             multi_char_map.insert(current_code as u8, unicode_string.clone());
                             tracing::debug!(
                                 "/Differences: code {} → /{} → {:?} (compound)",
@@ -4307,11 +4351,9 @@ impl FontInfo {
 
     /// Convert a character code to Unicode string.
     ///
-    /// Returns the faithful Unicode mapping per PDF Spec §9.10.2. Ligature
-    /// characters (U+FB00–FB06) are preserved here; expansion into component
-    /// letters is done by the text pipeline via `LigatureDecisionMaker`, which
-    /// inspects surrounding context (neighboring chars, word boundaries) to
-    /// decide whether to split — keeping font_dict a pure encoding layer.
+    /// Returns the Unicode mapping per PDF Spec §9.10.2. A glyph that maps to a
+    /// Latin ligature presentation form (U+FB00–FB06) yields its letters, so a
+    /// ligature takes the same path as a ToUnicode map to letter pairs.
     pub fn char_to_unicode(&self, char_code: u32) -> Option<String> {
         // Serve from the per-font memo. Read and write are separate lock scopes
         // so the decode in between never holds the lock. ~keep
@@ -4322,7 +4364,7 @@ impl FontInfo {
         }
         let result = self
             .char_to_unicode_uncached(char_code)
-            .map(|s| normalize_cjk_radical_forms(&s));
+            .map(|s| expand_ligature_forms(&normalize_cjk_radical_forms(&s)));
         if let Ok(mut memo) = self.type0_unicode_memo.lock() {
             memo.insert(char_code, result.clone());
         }
@@ -4375,8 +4417,8 @@ impl FontInfo {
                     // Fix B: filter bare C0 control characters (U+0000–U+001F except
                     // tab/LF/CR which are legitimate whitespace in extracted text).
                     // These are never valid visible text and typically indicate a
-                    // broken ToUnicode entry. Return U+FFFD and do NOT fall through
-                    // even for simple fonts — the CMap explicitly mapped this code. ~keep
+                    // broken ToUnicode entry. Return U+FFFD, unless the font's own glyph
+                    // name for the code decides it (below); do NOT fall through otherwise. ~keep
                     let is_c0_control = unicode
                         .chars()
                         .all(|c| matches!(c as u32, 0x00..=0x08 | 0x0B..=0x0C | 0x0E..=0x1F))
@@ -4391,6 +4433,17 @@ impl FontInfo {
                         return Some("\u{FFFD}".to_string());
                     }
                     if is_c0_control {
+                        // A C0 value is a miss: the /Differences name of the font decides. The embedded
+                        // program's name for the code is not used, because it can treat the code as a GID. ~keep
+                        if self.subtype != "Type0"
+                            && char_code <= 0xFF
+                            && let Some(named) = self
+                                .diff_glyph_names
+                                .get(&(char_code as u8))
+                                .and_then(|name| glyph_name_to_unicode_string(name))
+                        {
+                            return Some(named);
+                        }
                         tracing::trace!(
                             "ToUnicode CMap maps code 0x{:04X} to C0 control char(s) in font '{}' - returning U+FFFD",
                             char_code,
@@ -4878,6 +4931,18 @@ impl FontInfo {
                         }
                     }
 
+                    // PRIORITY 3d: a ligature glyph with no /ToUnicode entry and no usable glyph name
+                    // takes the letters of its GSUB components (GH#2664). ~keep
+                    if let Some(letters) = self.gsub_ligature_letters(char_code) {
+                        tracing::trace!(
+                            "Priority 3d (GSUB ligature components): font='{}' CID=0x{:04X} → '{}'",
+                            self.base_font,
+                            char_code,
+                            letters,
+                        );
+                        return Some(letters);
+                    }
+
                     // ==================================================================================
                     // PRIORITY 5: Adobe Glyph List Fallback (Phase 1.2)
                     // ==================================================================================
@@ -5181,6 +5246,12 @@ impl FontInfo {
         // Now: true when /Widths is present (simple fonts), or when /W has entries
         // (CID fonts), or when /DW was explicitly set in the CIDFont dictionary. ~keep
         self.widths.is_some() || self.cid_widths.is_some() || self.has_explicit_dw
+    }
+
+    /// Whether the glyph widths come from the Adobe metrics of a standard-14 Times, Helvetica or
+    /// Courier font when the font dictionary gives none, as [`Self::get_glyph_width`] does.
+    pub(crate) fn has_standard_font_metrics(&self) -> bool {
+        self.std14_memo.get_or_init(|| self.classify_std14()).is_some()
     }
 
     /// Check if this font is likely italic based on the font name.
@@ -5493,26 +5564,59 @@ pub(crate) fn glyph_name_to_unicode(glyph_name: &str) -> Option<char> {
     None
 }
 
+/// One `_` component of a glyph name: `uni` followed by a multiple of four hex digits is that
+/// sequence of code points (surrogates reject it, per the AGL specification); anything else is a
+/// single-name lookup.
+fn component_to_string(component: &str) -> Option<String> {
+    if let Some(hex) = component.strip_prefix("uni")
+        && !hex.is_empty()
+        && hex.len() % 4 == 0
+        && hex.bytes().all(|b| b.is_ascii_hexdigit())
+    {
+        let decoded: Option<String> = (0..hex.len())
+            .step_by(4)
+            .map(|start| {
+                u32::from_str_radix(&hex[start..start + 4], 16)
+                    .ok()
+                    .and_then(char::from_u32)
+            })
+            .collect();
+        if decoded.is_some() {
+            return decoded;
+        }
+    }
+    glyph_name_to_unicode(component).map(String::from)
+}
+
+/// The letters of an underscore-joined glyph name, by the Adobe Glyph List specification: drop
+/// everything from the first `.`, split on `_`, map each component (an AGL name, `uniXXXX` or
+/// `uXXXX`) and skip the empty and unknown ones. `None` when the name has neither an underscore nor
+/// several `uni` code points, or no component maps.
+fn glyph_name_components_to_string(glyph_name: &str) -> Option<String> {
+    let base = glyph_name.split('.').next().unwrap_or_default();
+    let multi_code_point_uni = base.strip_prefix("uni").is_some_and(|hex| hex.len() > 4);
+    if !glyph_name.contains('_') && !multi_code_point_uni {
+        return None;
+    }
+    let letters: String = base
+        .split('_')
+        .filter(|component| !component.is_empty())
+        .filter_map(component_to_string)
+        .collect();
+    (!letters.is_empty()).then_some(letters)
+}
+
 /// Resolve a glyph name to a Unicode string, handling compound names.
 ///
 /// Like `glyph_name_to_unicode` but returns a full String for compound glyph names
 /// (underscore-delimited per AGL spec, e.g. "f_f" → "ff", "f_f_i" → "ffi").
 pub(crate) fn glyph_name_to_unicode_string(glyph_name: &str) -> Option<String> {
-    if let Some(ch) = glyph_name_to_unicode(glyph_name) {
-        return Some(ch.to_string());
+    if let Some(joined) = glyph_name_components_to_string(glyph_name) {
+        return Some(joined);
     }
 
-    // Handle underscore-delimited compound names (AGL spec section 2) ~keep
-    if glyph_name.contains('_') {
-        let mut result = String::new();
-        for part in glyph_name.split('_') {
-            // If any component is unknown, fail entirely. ~keep
-            let ch = glyph_name_to_unicode(part)?;
-            result.push(ch);
-        }
-        if !result.is_empty() {
-            return Some(result);
-        }
+    if let Some(ch) = glyph_name_to_unicode(glyph_name) {
+        return Some(ch.to_string());
     }
 
     // Final fallback: unified chain — variant-suffix
@@ -5587,6 +5691,18 @@ fn is_non_sensible_symbol(s: &str) -> bool {
 /// ```ignore
 fn is_ligature_char(c: char) -> bool {
     matches!(c, 'ﬀ' | 'ﬁ' | 'ﬂ' | 'ﬃ' | 'ﬄ' | 'ﬅ' | 'ﬆ')
+}
+
+/// Replace each Latin ligature presentation form (U+FB00-U+FB06) in `s` with its letters.
+fn expand_ligature_forms(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match expand_ligature_char(c) {
+            Some(letters) => out.push_str(letters),
+            None => out.push(c),
+        }
+    }
+    out
 }
 
 /// Expand a ligature character to its ASCII equivalent.
@@ -9814,14 +9930,21 @@ mod tests {
 
     #[test]
     fn test_glyph_name_to_unicode_string_compound_ff() {
-        // glyph_name_to_unicode("f_f") returns Some('f') — first component via AGL
-        // So glyph_name_to_unicode_string wraps it as "f" (single-char short-circuit) ~keep
-        assert_eq!(glyph_name_to_unicode_string("f_f"), Some("f".to_string()));
+        assert_eq!(glyph_name_to_unicode_string("f_f"), Some("ff".to_string()));
+        for (name, letters) in [
+            ("f_f_i", "ffi"),
+            ("f_i", "fi"),
+            ("f_l", "fl"),
+            ("f_f_l", "ffl"),
+            ("s_t", "st"),
+        ] {
+            assert_eq!(glyph_name_to_unicode_string(name), Some(letters.to_string()), "{name}");
+        }
     }
 
     #[test]
     fn test_glyph_name_to_unicode_string_compound_all_known() {
-        assert_eq!(glyph_name_to_unicode_string("T_h"), Some("T".to_string()));
+        assert_eq!(glyph_name_to_unicode_string("T_h"), Some("Th".to_string()));
     }
 
     #[test]
@@ -11443,6 +11566,86 @@ mod tests {
             ]),
         );
         Object::Dictionary(enc)
+    }
+
+    fn encoding_naming_code_65(glyph_name: &str) -> Object {
+        let mut enc: HashMap<String, Object> = HashMap::new();
+        enc.insert(
+            "Differences".to_string(),
+            Object::Array(vec![Object::Integer(65), Object::Name(glyph_name.to_string())]),
+        );
+        Object::Dictionary(enc)
+    }
+
+    /// An underscore-joined /Differences name gives the letters of all its components, not the first
+    /// (Adobe Glyph List specification): `f_f_i` is `ffi` (#2689).
+    #[test]
+    fn test_differences_underscore_name_decodes_every_component() {
+        let doc = minimal_pdf_doc();
+        for (name, letters) in [
+            ("f_f_i", "ffi"),
+            ("f_f", "ff"),
+            ("f_i", "fi"),
+            ("f_l", "fl"),
+            ("f_f_l", "ffl"),
+            ("s_t", "st"),
+        ] {
+            let (_enc, multi, _names) =
+                FontInfo::parse_encoding(&encoding_naming_code_65(name), &doc, None, false).unwrap();
+            assert_eq!(multi.get(&65).map(String::as_str), Some(letters), "{name}");
+        }
+    }
+
+    /// The Adobe Glyph List algorithm: drop everything from the first `.`, split on `_`, map each
+    /// component and let the empty and unknown ones contribute nothing.
+    #[test]
+    fn test_glyph_name_to_unicode_string_follows_the_agl_algorithm() {
+        for (name, expected) in [
+            ("uni0066_uni0069", Some("fi")),
+            ("f_i.alt", Some("fi")),
+            ("f.alt_i", Some("f")),
+            ("f__i", Some("fi")),
+            ("_f", Some("f")),
+            ("zzz_i", Some("i")),
+            ("a_b", Some("ab")),
+            ("uni00660069", Some("fi")),
+            ("uni00660069_x", Some("fix")),
+            ("uni0066_uniD800_i", Some("fi")),
+            ("zzz_yyy", None),
+            ("_", None),
+        ] {
+            assert_eq!(glyph_name_to_unicode_string(name).as_deref(), expected, "{name}");
+        }
+    }
+
+    #[test]
+    fn test_differences_underscore_names_follow_the_agl_algorithm() {
+        let doc = minimal_pdf_doc();
+        for (name, letters) in [
+            ("uni0066_uni0069", "fi"),
+            ("f_i.alt", "fi"),
+            ("f.alt_i", "f"),
+            ("f__i", "fi"),
+            ("zzz_i", "i"),
+            ("a_b", "ab"),
+        ] {
+            let (_enc, multi, _names) =
+                FontInfo::parse_encoding(&encoding_naming_code_65(name), &doc, None, false).unwrap();
+            assert_eq!(multi.get(&65).map(String::as_str), Some(letters), "{name}");
+        }
+    }
+
+    /// Control: a name in which no component maps leaves the base encoding's letter for the code, as before.
+    #[test]
+    fn test_differences_underscore_name_with_no_known_component_keeps_the_base_letter() {
+        let doc = minimal_pdf_doc();
+        let (enc, multi, _names) =
+            FontInfo::parse_encoding(&encoding_naming_code_65("zzz_yyy"), &doc, None, false).unwrap();
+        assert!(multi.is_empty(), "{multi:?}");
+        assert!(
+            matches!(&enc, Encoding::Custom(map) if map.get(&65) == Some(&'A')),
+            "{enc:?}"
+        );
     }
 
     /// Task 1 verify: the /Differences glyph name survives parse time.

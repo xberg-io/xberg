@@ -9,6 +9,7 @@
 //! - `render_pdf` — PDF document, laid out from rendered Markdown
 //! - `render_plain` — Plain text (no formatting)
 
+pub(crate) mod arxiv_stamp;
 pub(crate) mod common;
 mod comrak_bridge;
 mod djot;

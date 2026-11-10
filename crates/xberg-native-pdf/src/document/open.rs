@@ -266,6 +266,7 @@ impl PdfDocument {
             xref,
             trailer,
             object_cache: Mutex::new(BoundedObjectCache::new(DEFAULT_OBJECT_CACHE_MAX_BYTES)),
+            object_recovery_epoch: AtomicUsize::new(0),
             object_stream_cache: Mutex::new(BoundedObjectStreamCache::new(DEFAULT_OBJECT_STREAM_CACHE_MAX_BYTES)),
             object_stream_telemetry_seen: Mutex::new(BoundedRecoveryTelemetry::new(
                 DEFAULT_OBJECT_STREAM_RECOVERY_MARKERS,

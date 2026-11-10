@@ -223,7 +223,7 @@ fn subscript_and_explicit_math_keep_their_existing_markdown_policy() {
         &document.elements[0].text,
         &document.elements[0].annotations[1],
     ));
-    assert_eq!(render_markdown(&document), "H~2~O $`x^2`$\n");
+    assert_eq!(render_markdown(&document), "H~2~O $x^2$\n");
 }
 
 #[test]

@@ -594,6 +594,14 @@ enum CacheCommands {
         )]
         all_table_models: bool,
 
+        /// Also download the weights of this layout model: rt_detr (always included) or pp_doc_layout_v3 (~131MB)
+        #[cfg(feature = "layout-detection")]
+        #[arg(
+            long,
+            help = "Also download the weights of this layout model: rt_detr (always included) or pp_doc_layout_v3 (~131MB)"
+        )]
+        layout_model: Option<String>,
+
         /// Download all tree-sitter grammar parsers
         #[cfg(feature = "tree-sitter")]
         #[arg(long)]
@@ -1050,6 +1058,8 @@ fn main() -> Result<()> {
                 embedding_model,
                 #[cfg(feature = "layout-detection")]
                 all_table_models,
+                #[cfg(feature = "layout-detection")]
+                layout_model,
                 #[cfg(feature = "tree-sitter")]
                 all_grammars,
                 #[cfg(feature = "tree-sitter")]
@@ -1070,6 +1080,8 @@ fn main() -> Result<()> {
                     embedding_model,
                     #[cfg(feature = "layout-detection")]
                     all_table_models,
+                    #[cfg(feature = "layout-detection")]
+                    layout_model,
                     #[cfg(feature = "tree-sitter")]
                     all_grammars,
                     #[cfg(feature = "tree-sitter")]

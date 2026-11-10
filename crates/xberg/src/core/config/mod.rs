@@ -55,7 +55,7 @@ pub use geojson::GeoJsonExtractionConfig;
 pub use html_output::{HtmlOutputConfig, HtmlTheme};
 pub use late_interaction::{LateInteractionConfig, LateInteractionModelType};
 #[cfg(feature = "layout-types")]
-pub use layout::{LayoutDetectionConfig, LayoutStrategy, TableModel};
+pub use layout::{LayoutDetectionConfig, LayoutDetectionModel, LayoutStrategy, TableModel};
 pub use llm::{
     BedrockConfig, CallMode, CredentialProviderConfig, LlmBudgetConfig, LlmCacheConfig, LlmConfig, LlmProviderConfig,
     LlmRateLimitConfig, MergeMode, StructuredExtractionConfig,

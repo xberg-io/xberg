@@ -1214,13 +1214,17 @@ async fn extract_one(input: ExtractInput, base_config: &ExtractionConfig, index:
     extract_one_resolved(input, &config, index).await
 }
 
-/// Validate the page settings of each input that overrides them.
+/// Validate the page settings and layout model of each input that overrides them.
 ///
 /// An override replaces the page settings of the base config as a whole, so its own values decide.
 fn validate_input_overrides<'a>(inputs: impl IntoIterator<Item = &'a ExtractInput>) -> Result<()> {
     for input in inputs {
         if let Some(pages) = input.config.as_ref().and_then(|overrides| overrides.pages.as_ref()) {
             pages.validate()?;
+        }
+        #[cfg(feature = "layout-types")]
+        if let Some(layout) = input.config.as_ref().and_then(|overrides| overrides.layout.as_ref()) {
+            layout.validate_backend()?;
         }
     }
     Ok(())

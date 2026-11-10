@@ -23,11 +23,9 @@
 
 **K**~**0**~ **= −R B P (24) The proof that (A, B) is exponentially stabilizable and**
 
-1
+1 2
 
-**(P**
-
-2**C, A) is exponentially detectable given V \< 0 is shown in [23]. Furthermore, P := Φ(z)I (25) where Φ(z) is the solution of the matrix Riccati differential equation given by dΦ ∗ ∗ −1 ∗**
+**(P C, A) is exponentially detectable given V \< 0 is shown in [23]. Furthermore, P := Φ(z)I (25) where Φ(z) is the solution of the matrix Riccati differential equation given by dΦ ∗ ∗ −1 ∗**
 
 **V = M Φ + ΦM + C Q**~**0**~ **C**~**0**~ **− ΦB R**~**0**~ **B**~**0**~ **0 Φ 0 dz (26) Φ(L) = 0 where Q**~**0**~ **is a positive matrix and R**~**0**~ **is a self-adjoint positive matrix. Thus, (24) becomes**
 
@@ -37,9 +35,7 @@
 
 - C. **LQ Control Deisgn for LWR Model with VSL In order to find Φ(z), we take (14) and transform it into ∂∆ρ ρ**~**0**~ **∂∆ρ = −b** ~**0**~**U**~**max**~ **1 − 2 − ∂t ρ**~**max**~ **∂z ρ**~**0**~ **∂∆b ρ U**~**0 max**~ **1 − (28) ρ**~**max**~ **∂z so that it is now in the form of (15). It follows that**
 
-**ρ**~**0**~
-
-**V = −b**~**0**~ **U**~**max**~ **1 − 2 ρ**~**max**~ **M = 0 (29) ρ**~**0**~ **B**~**0**~ **= −ρ U**~**0 max**~ **1 − ρ**~**max**~ **C**~**0**~ **= I**
+**ρ**~**0**~ **V = −b**~**0**~ **U**~**max**~ **1 − 2 ρ**~**max**~ **M = 0 (29) ρ**~**0**~ **B**~**0**~ **= −ρ U**~**0 max**~ **1 − ρ**~**max**~ **C**~**0**~ **= I**
 
 **1**
 

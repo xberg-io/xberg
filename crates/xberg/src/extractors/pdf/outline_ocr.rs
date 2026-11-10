@@ -6,8 +6,9 @@ use xberg_native_pdf::geometry::Rect;
 
 const MAX_NATIVE_NONSPACE: usize = 200;
 const MAX_CANDIDATE_PAGES: usize = 32;
-const MAX_PAGE_BYTES: usize = 512 * 1024;
-const MAX_PAGE_OPERATORS: usize = 12_000;
+// An outlined 12 pt serif row costs about 1600 operators and 55 KiB; the budget holds a full page of rows. ~keep
+const MAX_PAGE_BYTES: usize = 6 * 1024 * 1024;
+const MAX_PAGE_OPERATORS: usize = 160_000;
 const MIN_CONTOURS_PER_ROW: usize = 16;
 const MIN_PROSE_ROWS: usize = 3;
 const MIN_CONTOURS_PER_NATIVE_CHARACTER: usize = 2;

@@ -307,7 +307,16 @@ fn render_elements(doc: &InternalDocument, p: &str, buf: &mut String) {
             ElementKind::Heading { level } => render_heading(doc, elem, p, buf, level),
 
             ElementKind::Paragraph | ElementKind::OcrText { .. } => {
-                write!(buf, r#"<p class="{p}p">{}</p>"#, render_inline(doc, elem, p)).unwrap();
+                let rows = (elem.kind == ElementKind::Paragraph)
+                    .then(|| super::common::marked_row_lines(&elem.text, &elem.annotations, elem.attributes.as_ref()))
+                    .flatten();
+                if let Some(lines) = rows {
+                    for line in lines {
+                        write!(buf, r#"<p class="{p}p">{}</p>"#, esc(line)).unwrap();
+                    }
+                } else {
+                    write!(buf, r#"<p class="{p}p">{}</p>"#, render_inline(doc, elem, p)).unwrap();
+                }
             }
 
             ElementKind::ListStart { ordered } => {

@@ -8,11 +8,11 @@ use super::control::WorkerControl;
 use super::policy::invalid;
 use super::{LocalClassificationConfig, LocalNliModel};
 
-const MAX_GRAPH_BYTES: usize = 256 * 1024 * 1024;
-const MAX_EXTERNAL_BYTES: usize = 256 * 1024 * 1024;
-const MAX_TOKENIZER_BYTES: usize = 16 * 1024 * 1024;
-const MAX_METADATA_BYTES: usize = 1024 * 1024;
-const MAX_ARTIFACT_BYTES: usize = 512 * 1024 * 1024;
+pub(super) const MAX_GRAPH_BYTES: usize = 256 * 1024 * 1024;
+pub(super) const MAX_EXTERNAL_BYTES: usize = 256 * 1024 * 1024;
+pub(super) const MAX_TOKENIZER_BYTES: usize = 16 * 1024 * 1024;
+pub(super) const MAX_METADATA_BYTES: usize = 1024 * 1024;
+pub(super) const MAX_ARTIFACT_BYTES: usize = 512 * 1024 * 1024;
 const COMPANIONS: [&str; 4] = [
     "tokenizer.json",
     "config.json",

@@ -35,6 +35,7 @@ fn test_deduplicate_content_not_overlapping() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -65,6 +66,7 @@ fn test_deduplicate_content_not_overlapping() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -238,6 +240,7 @@ fn test_sort_spans_by_columns() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -268,6 +271,7 @@ fn test_sort_spans_by_columns() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -341,6 +345,7 @@ fn test_merge_prevents_double_space() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -371,6 +376,7 @@ fn test_merge_prevents_double_space() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -631,6 +637,7 @@ fn test_sort_spans_single_column() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -661,6 +668,7 @@ fn test_sort_spans_single_column() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -850,6 +858,7 @@ fn test_merge_offset_semantic_space_suppression() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -880,6 +889,7 @@ fn test_merge_offset_semantic_space_suppression() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         },
@@ -960,4 +970,37 @@ fn test_tj_buffer_does_not_mark_fira_sans_as_monospace() {
         !buffer.is_monospace,
         "Fira Sans is proportional prose text and must not be routed toward code fencing"
     );
+}
+
+/// A fixed-pitch run drawn one glyph per text matrix keeps its empty cell as a word gap when the text
+/// matrix scales the glyphs: the same layout in user space reads the same at either scale.
+#[test]
+fn fixed_pitch_empty_cell_under_a_scaled_text_matrix_is_a_word_gap() {
+    let text_of = |stream: &[u8]| -> String {
+        let mut font = create_test_font();
+        font.base_font = "Courier".to_string();
+        font.widths = Some(vec![600.0; 0x7F - 0x20]);
+        font.first_char = Some(0x20);
+        font.last_char = Some(0x7E);
+        let mut extractor = TextExtractor::new();
+        extractor.add_font("F1".to_string(), font);
+        let spans = extractor.extract_text_spans(stream).unwrap();
+        spans.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join("")
+    };
+    // Each cell is 6 points wide in user space; the third glyph skips one cell. ~keep
+    let stream = |scale: f32| {
+        let tm = |x: u32| format!("{scale} 0 0 {scale} {x} 700 Tm");
+        format!(
+            "BT /F1 {} Tf {} (A) Tj {} (B) Tj {} (C) Tj ET",
+            10.0 / scale,
+            tm(72),
+            tm(78),
+            tm(90)
+        )
+    };
+    let unscaled = text_of(stream(1.0).as_bytes());
+    let scaled = text_of(stream(0.5).as_bytes());
+    assert_eq!(unscaled, "AB C");
+    assert_eq!(scaled, unscaled);
+    assert_eq!(text_of(stream(10.0).as_bytes()), unscaled);
 }

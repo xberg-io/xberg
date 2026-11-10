@@ -353,6 +353,19 @@ fn finish_model_attempt(attempt: Option<AvailabilityAttempt<'_>>, succeeded: boo
 ))]
 static TATR_AVAILABILITY: ModelAvailability = ModelAvailability::new();
 
+/// Map the user-facing model selection to the engine backend.
+#[cfg(all(
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
+pub(crate) fn backend_for_model(model: crate::core::config::layout::LayoutDetectionModel) -> ModelBackend {
+    use crate::core::config::layout::LayoutDetectionModel;
+    match model {
+        LayoutDetectionModel::RtDetr => ModelBackend::RtDetr,
+        LayoutDetectionModel::PpDocLayoutV3 => ModelBackend::PpDocLayoutV3,
+    }
+}
+
 /// Convert a [`LayoutDetectionConfig`] into a [`LayoutEngineConfig`].
 #[cfg(all(
     feature = "layout-detection",
@@ -360,7 +373,7 @@ static TATR_AVAILABILITY: ModelAvailability = ModelAvailability::new();
 ))]
 pub(crate) fn config_from_extraction(layout_config: &LayoutDetectionConfig) -> LayoutEngineConfig {
     LayoutEngineConfig {
-        backend: ModelBackend::RtDetr,
+        backend: backend_for_model(layout_config.model),
         confidence_threshold: layout_config.confidence_threshold,
         apply_heuristics: layout_config.apply_heuristics,
         cache_dir: None,
@@ -384,13 +397,15 @@ pub(crate) fn take_or_create_engine(
     let desired_config = config_from_extraction(layout_config);
     let create_config = desired_config.clone();
     let thread_budget = thread_budget.max(1);
-    CACHED_ENGINE.take_or_create_matching(
+    let engine = CACHED_ENGINE.take_or_create_matching(
         |engine| engine.matches_config(&desired_config, thread_budget),
         || {
             crate::ort_discovery::ensure_ort_available();
             LayoutEngine::from_config_with_thread_budget(create_config, thread_budget)
         },
-    )
+    )?;
+    tracing::debug!(layout_model = engine.model_name(), "layout engine acquired");
+    Ok(engine)
 }
 
 /// Return a layout engine to the global cache for reuse by future extractions.
@@ -641,6 +656,31 @@ pub(crate) fn take_or_create_table_classifier(
             }
             None
         }
+    }
+}
+
+#[cfg(all(
+    test,
+    feature = "layout-detection",
+    any(feature = "pdf", feature = "ocr", feature = "ocr-wasm")
+))]
+mod model_selection_tests {
+    use super::*;
+    use crate::core::config::layout::LayoutDetectionModel;
+
+    #[test]
+    fn default_config_selects_the_rtdetr_backend() {
+        let engine_config = config_from_extraction(&LayoutDetectionConfig::default());
+        assert_eq!(engine_config.backend, ModelBackend::RtDetr);
+    }
+
+    #[test]
+    fn selected_model_reaches_the_engine_backend() {
+        let layout = LayoutDetectionConfig {
+            model: LayoutDetectionModel::PpDocLayoutV3,
+            ..LayoutDetectionConfig::default()
+        };
+        assert_eq!(config_from_extraction(&layout).backend, ModelBackend::PpDocLayoutV3);
     }
 }
 

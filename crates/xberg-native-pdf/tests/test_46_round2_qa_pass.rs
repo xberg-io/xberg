@@ -858,7 +858,7 @@ fn qa6_spot_mirror_fires_when_fill_color_cmyk_is_none() {
     // /Multiply per §11.7.4.2. fill_color_cmyk stays None throughout
     // because /Separation does not populate it. ~keep
     let content = "/CS_PMS cs\n0.8 scn\n0 0 100 100 re\nf\n\
-                   /Mult gs\n0.5 scn\n0 0 100 100 re\nf\n";
+                   /Mult gs\n0.4 scn\n0 0 100 100 re\nf\n";
     let resources = format!(
         "/ExtGState << /Mult << /Type /ExtGState /BM /Multiply >> >> \
          /ColorSpace << /CS_PMS [/Separation /InkA /DeviceCMYK {} ] >>",
@@ -872,13 +872,15 @@ fn qa6_spot_mirror_fires_when_fill_color_cmyk_is_none() {
     let plane = renderer.cmyk_sidecar_spot_plane(0).expect("InkA plane");
     let dims = renderer.cmyk_sidecar_dims().unwrap();
     let centre = ((dims.1 / 2) * dims.0 + dims.0 / 2) as usize;
-    // B(0.8, 0.5) = 0.4 → t_r at α=1 = 0.4 → u8 = 102. ~keep
-    let expected = 102u8;
+    // The backdrop 0.8 is stored as u8 204 (exactly 0.8). B(0.8, 0.4) = 1 - 0.2·0.6 = 0.88, so
+    // t_r at α=1 is 0.88 → 224.4, which rounds to 224 under rounding and under truncation. ~keep
+    let expected = ((1.0 - (1.0 - 204.0 / 255.0) * (1.0 - 0.4_f32)) * 255.0).round() as u8;
+    assert_eq!(expected, 224);
     assert_eq!(
         plane[centre], expected,
         "ISO 32000-1 §11.7.4.2: a /Separation paint's spot mirror \
          fires independently of fill_color_cmyk (None for Separation \
-         sources). /Multiply(0.8, 0.5) = 0.4 → u8 = {}. Got {}.",
+         sources). /Multiply(0.8, 0.4) = 0.88 → u8 = {}. Got {}.",
         expected, plane[centre]
     );
 }

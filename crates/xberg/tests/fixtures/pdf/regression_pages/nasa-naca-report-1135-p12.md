@@ -36,13 +36,9 @@ compressionsthroughsmallanglescanalsobecalculatedwith theaidof table II byregard
 
 ## Meyerexpansions(seelater section).The resultingnu-
 
-as well **as** normal shocks.
+oblique as well **as** normal shocks.
 
-mericalaccuracyisgreaterthanthatobtainedbyretaining
-
-oblique
-
-termsup to _2in theaboveseries,and nearlyequalto that obtainedby retainingtermsupto 63.
+mericalaccuracyisgreaterthanthatobtainedbyretaining termsup to _2in theaboveseries,and nearlyequalto that obtainedby retainingtermsupto 63.
 
 *Charts* 2, 3, and 4 show the variation of shock-wave angle, pressure coefficient across a shock wave, and downstream Much number with flow-deflection angle for various upstream Mach numbers.
 

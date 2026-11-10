@@ -1,10 +1,11 @@
 //! ODS repeat preflight before calamine's eager dense-range construction.
 
+use std::collections::HashSet;
 use std::io::{BufReader, Read, Seek};
 
 use quick_xml::events::{BytesStart, Event};
 
-use super::{SecurityBudget, SecurityLimits, SheetAllocation};
+use super::{Charges, SecurityBudget, SecurityLimits, SheetAllocation, SkippedSheets, is_cell_limit};
 use crate::{Result, XbergError};
 
 // ~keep Match calamine0.37's ODS row/column caps so formatted empty tails are not charged as dense data.
@@ -128,16 +129,22 @@ fn account_cell(sheet: &mut Sheet, cell: Cell, budget: &mut SecurityBudget) -> R
 pub(in crate::extraction::excel) fn validate_ods<R: Read + Seek>(
     archive: &mut zip::ZipArchive<R>,
     limits: &SecurityLimits,
-) -> Result<()> {
+) -> Result<SkippedSheets> {
     let member = archive.by_name("content.xml").map_err(xml_error)?;
     let mut reader = quick_xml::Reader::from_reader(BufReader::new(
         member.take((limits.max_archive_size as u64).saturating_add(1)),
     ));
     reader.config_mut().expand_empty_elements = true;
     let mut budget = SecurityBudget::from_limits(limits);
+    let mut skipped = SkippedSheets::new(limits);
     let mut sheet: Option<Sheet> = None;
     let mut cell: Option<Cell> = None;
     let mut buffer = Vec::new();
+    // Charges before the current sheet, given back if the sheet alone trips the cell limit.
+    let mut before_sheet: Option<Charges> = None;
+    let mut sheet_index = 0usize;
+    // Open `table:table` elements left to close while the over-budget sheet is being passed over.
+    let mut skipping_depth = 0usize;
     loop {
         budget.step()?;
         buffer.clear();
@@ -147,10 +154,146 @@ pub(in crate::extraction::excel) fn validate_ods<R: Read + Seek>(
                 "ODS content exceeds the configured archive size".to_string(),
             ));
         }
-        if handle_event(event, &mut sheet, &mut cell, &mut budget)? {
-            return Ok(());
+        if skipping_depth > 0 {
+            match &event {
+                Event::Start(start) if start.name().as_ref() == "table:table" => skipping_depth += 1,
+                Event::End(end) if end.name().as_ref() == "table:table" => skipping_depth -= 1,
+                Event::Eof => return Err(xml_error("unterminated table or cell")),
+                _ => {}
+            }
+            continue;
+        }
+        if matches!(&event, Event::Start(start) if start.name().as_ref() == "table:table")
+            && sheet.is_none()
+            && cell.is_none()
+        {
+            before_sheet = Some(Charges::of(&budget));
+            if let Event::Start(start) = &event {
+                skipped.names.push(table_name(start));
+            }
+        }
+        match handle_event(event, &mut sheet, &mut cell, &mut budget) {
+            Ok(true) => return Ok(skipped),
+            Ok(false) => {}
+            Err(error) if sheet.is_some() && is_cell_limit(&error) => {
+                if let Some(before) = before_sheet.take() {
+                    before.restore(&mut budget);
+                }
+                skipped.indices.insert(sheet_index);
+                sheet_index += 1;
+                sheet = None;
+                cell = None;
+                skipping_depth = 1;
+                continue;
+            }
+            Err(error) => return Err(error),
+        }
+        if sheet.is_none() && before_sheet.is_some() {
+            before_sheet = None;
+            sheet_index += 1;
         }
     }
+}
+
+/// Calamine builds every ODS range while constructing the reader, so a sheet that did not fit
+/// in the cell budget cannot be left out afterwards. Empty the body of each skipped
+/// `table:table` in `content.xml`, keeping its start tag so the sheet keeps its name and position.
+pub(in crate::extraction::excel) fn drop_skipped_sheets(
+    xml: &[u8],
+    skipped: &SkippedSheets,
+    limits: &SecurityLimits,
+) -> Result<(Vec<u8>, bool)> {
+    let mut budget = SecurityBudget::from_limits(limits);
+    let mut reader = quick_xml::Reader::from_reader(xml);
+    let mut writer = quick_xml::Writer::new(Vec::with_capacity(xml.len()));
+    let mut buffer = Vec::new();
+    let (mut sheet_index, mut table_depth, mut changed) = (0usize, 0usize, false);
+    let mut current_skipped = false;
+    let counts = skipped.name_counts();
+    let mut taken: HashSet<String> = skipped.names.iter().cloned().collect();
+    loop {
+        buffer.clear();
+        let event = reader.read_event_into(&mut buffer).map_err(xml_error)?;
+        match &event {
+            Event::Start(start) if start.name().as_ref() == "table:table" => {
+                if table_depth == 0 {
+                    current_skipped = skipped.contains(sheet_index);
+                    sheet_index += 1;
+                }
+                table_depth += 1;
+                if current_skipped && table_depth > 1 {
+                    changed = true;
+                    continue;
+                }
+                if current_skipped && counts.get(table_name(start).as_str()).is_some_and(|count| *count > 1) {
+                    let name = unused_name(&mut taken, sheet_index - 1, &mut budget)?;
+                    writer
+                        .write_event(Event::Start(renamed_table(start, &name)))
+                        .map_err(xml_error)?;
+                    changed = true;
+                    continue;
+                }
+            }
+            Event::Empty(start) if start.name().as_ref() == "table:table" && table_depth == 0 => {
+                sheet_index += 1;
+            }
+            Event::End(end) if end.name().as_ref() == "table:table" => {
+                table_depth = table_depth.saturating_sub(1);
+                if current_skipped && table_depth > 0 {
+                    continue;
+                }
+            }
+            Event::Eof => break,
+            _ if current_skipped && table_depth > 0 => {
+                changed = true;
+                continue;
+            }
+            _ => {}
+        }
+        writer.write_event(event.into_owned()).map_err(xml_error)?;
+    }
+    Ok((writer.into_inner(), changed))
+}
+
+/// A replacement sheet name that no sheet in the workbook (or earlier replacement) carries.
+/// Candidates are per-index (`xberg-skipped-sheet-{index}[-{attempt}]`), so a name already in the
+/// workbook can only push the attempts of one index; the total over all calls is bounded by the
+/// number of sheet names, and every attempt is charged to `budget`.
+fn unused_name(taken: &mut HashSet<String>, index: usize, budget: &mut SecurityBudget) -> Result<String> {
+    let mut candidate = format!("xberg-skipped-sheet-{index}");
+    let mut attempt = 0usize;
+    while taken.contains(&candidate) {
+        budget.step()?;
+        attempt += 1;
+        candidate = format!("xberg-skipped-sheet-{index}-{attempt}");
+    }
+    taken.insert(candidate.clone());
+    Ok(candidate)
+}
+
+fn renamed_table(start: &BytesStart<'_>, name: &str) -> BytesStart<'static> {
+    let mut renamed = BytesStart::new("table:table");
+    for attribute in start.attributes().flatten() {
+        if attribute.key.as_ref() == "table:name" {
+            renamed.push_attribute(("table:name", name));
+        } else {
+            renamed.push_attribute(attribute);
+        }
+    }
+    renamed
+}
+
+fn table_name(start: &BytesStart<'_>) -> String {
+    start
+        .attributes()
+        .flatten()
+        .find(|attribute| attribute.key.as_ref() == "table:name")
+        .and_then(|attribute| {
+            quick_xml::escape::unescape(&attribute.value)
+                .ok()
+                .map(|name| name.into_owned())
+        })
+        .unwrap_or_default()
 }
 
 fn active_string_cell(cell: &mut Option<Cell>) -> Option<&mut Cell> {

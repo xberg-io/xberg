@@ -57,9 +57,7 @@ with ξ. P P P
 
 are not greater than 2, 3, 11 respectively. The series n , n are divergent. P
 
-s t
-
-3. The series n /(n + a), where a \> 0, is convergent or divergent ac-P
+3. The series n<sup>s</sup>/(n<sup>t</sup> + a), where a \> 0, is convergent or divergent ac-P
 
 s−t
 
@@ -67,32 +65,9 @@ cording as t \> 1 + s or t ≦ 1 + s. [Compare with n .]
 
 4. Discuss the convergence or divergence of the series
 
-P
+P ( a 1 n s 1 + a 2 n s 2 +
 
-s s s t t t
-
-(a~1~n
-
-1
-
-\+ a~2~n
-
-2
-
-\+
-
-- \+ a k n
-
-k)/(b~1~n 1
-
-\+ b~2~n
-
-2
-
-\+
-
-- \+ b l n
-
-l),
+- \+ a k n s k ) / ( b 1 n t 1 + b 2 n t 2 +
+- \+ b l n t l ) ,
 
 where all the letters denote positive numbers and the s's and t's are rational and arranged in descending order of magnitude.

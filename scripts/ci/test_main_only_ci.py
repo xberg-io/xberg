@@ -15,9 +15,9 @@ if TYPE_CHECKING:
 
 WORKFLOWS = Path(__file__).parents[2] / ".github" / "workflows"
 MAIN_GUARD = ast.dump(ast.parse("github.ref == 'refs/heads/main'", mode="eval").body)
-EXPECTED_WORKFLOWS = 16
-EXPECTED_JOBS = 76
-EXPECTED_CHECKOUTS = 76
+EXPECTED_WORKFLOWS = 17
+EXPECTED_JOBS = 77
+EXPECTED_CHECKOUTS = 77
 # The one sanctioned pull-request workflow: fixed regression tests, for same-repository branches only.
 FOCUSED_PR_WORKFLOW = "ci-focused-pr.yaml"
 FOCUSED_PR_GUARDS = (
@@ -218,6 +218,25 @@ class MainOnlyCiTests(unittest.TestCase):
     def test_retains_pinned_external_dependency_checkouts(self) -> None:
         step = {"uses": "actions/checkout@v7", "with": {"repository": "xberg-io/crawlberg", "ref": "v1.0.0"}}
         assert checks_out_main_source(step)
+
+    def test_nli_advisories_remain_scheduled_main_only_without_model_builds(self) -> None:
+        workflow = yaml.safe_load((WORKFLOWS / "ci-nli-advisories.yaml").read_text())
+        triggers = workflow.get("on", workflow.get(True))
+        assert set(triggers) == {"schedule", "workflow_dispatch"}
+        assert triggers["schedule"] == [{"cron": "0 6 * * 1"}]
+        assert workflow["permissions"] == {"contents": "read"}
+        assert set(workflow["jobs"]) == {"audit"}
+        job = workflow["jobs"]["audit"]
+        assert requires_main(job["if"])
+        assert not requires_main(job["if"].replace("github.ref == 'refs/heads/main'", "true"))
+        commands = [step["run"] for step in job["steps"] if "run" in step]
+        assert commands == [
+            "mise run nli:audit -- --advisories",
+            "mise run nli:audit:advisory-control",
+        ]
+        setup = [step for step in job["steps"] if step.get("uses") == "xberg-io/actions/setup-mise@v1"]
+        assert len(setup) == 1 and setup[0]["with"]["install-args"] == "cargo-deny"
+        assert not any("onnx" in str(step.get("uses", "")) for step in job["steps"])
 
     def test_accepts_main_guard_with_existing_job_conditions(self) -> None:
         conditions = [

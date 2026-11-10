@@ -35,6 +35,7 @@ pub mod font_subsetter;
 pub mod form_fallback;
 /// Process-level cross-document font cache for batch processing.
 pub mod global_cache;
+mod ligature_components;
 pub mod non_text_detection;
 /// Adobe predefined CIDFont base-name registry for substitution when the PDF
 /// references one of the Adobe-Japan1 / Adobe-GB1 / Adobe-CNS1 / Adobe-Korea1

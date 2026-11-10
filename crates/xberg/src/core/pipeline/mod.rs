@@ -1671,11 +1671,18 @@ fn is_markdown_image_reference(text: &str) -> bool {
 ///
 /// Ensures consistent representation of composed characters (e.g., é vs e+combining accent)
 /// across all extraction backends (PDF, OCR, DOCX, HTML, etc.).
+///
+/// Page ranges in `metadata.pages.boundaries` index the plain `content`, so they follow it
+/// through the normalization (#2851). A rendering swapped in later re-locates them itself.
 fn normalize_nfc(result: &mut ExtractedDocument) {
     #[cfg(feature = "quality")]
     {
         use unicode_normalization::UnicodeNormalization;
-        result.content = result.content.nfc().collect();
+        let unnormalized = std::mem::take(&mut result.content);
+        result.content = unnormalized.nfc().collect();
+        if result.formatted_content.is_none() && result.content != unnormalized {
+            remap_page_boundaries_after_nfc(result, &unnormalized);
+        }
         if let Some(pages) = result.pages.as_mut() {
             for page in pages.iter_mut() {
                 page.content = page.content.nfc().collect();
@@ -1686,6 +1693,52 @@ fn normalize_nfc(result: &mut ExtractedDocument) {
         }
     }
     let _ = result;
+}
+
+/// Move each page range from `unnormalized` (the content before NFC) to the same text in
+/// `result.content`: a boundary lands after the NFC of the text that precedes it.
+///
+/// A range that cannot be moved onto a character boundary of the new content is omitted with a
+/// `page_boundaries` warning, as in derivation, rather than published wrong.
+#[cfg(feature = "quality")]
+fn remap_page_boundaries_after_nfc(result: &mut ExtractedDocument, unnormalized: &str) {
+    use unicode_normalization::UnicodeNormalization;
+    let Some(structure) = result.metadata.pages.as_mut() else {
+        return;
+    };
+    let Some(boundaries) = structure.boundaries.as_mut() else {
+        return;
+    };
+    let mut offsets: Vec<usize> = boundaries.iter().flat_map(|b| [b.byte_start, b.byte_end]).collect();
+    offsets.sort_unstable();
+    offsets.dedup();
+    let mut moved = std::collections::HashMap::with_capacity(offsets.len());
+    let (mut from, mut normalized_len) = (0, 0);
+    let mapped = offsets.iter().all(|&offset| {
+        let Some(segment) = unnormalized.get(from..offset) else {
+            return false;
+        };
+        normalized_len += segment.nfc().map(char::len_utf8).sum::<usize>();
+        from = offset;
+        moved.insert(offset, normalized_len);
+        true
+    });
+    if mapped {
+        for boundary in boundaries.iter_mut() {
+            boundary.byte_start = moved[&boundary.byte_start];
+            boundary.byte_end = moved[&boundary.byte_end];
+        }
+    }
+    if !mapped || crate::extraction::derive::drop_unusable_page_boundaries(&mut result.metadata, &result.content) {
+        if let Some(structure) = result.metadata.pages.as_mut() {
+            structure.boundaries = None;
+        }
+        crate::core::diagnostics::push_warning(
+            &mut result.processing_warnings,
+            "page_boundaries",
+            "Page byte ranges could not be mapped onto the Unicode-normalized content, so they were omitted",
+        );
+    }
 }
 
 /// Regression tests for #214: `measure_text_coverage` replaces the hardcoded

@@ -45,6 +45,7 @@ impl<'doc> TextExtractor<'doc> {
             spans: Vec::new(),
             preserve_script_baselines: false,
             chars: Vec::new(),
+            after_ligature: false,
             resources: None,
             document: None,
             processed_xobjects: HashSet::new(),
@@ -59,6 +60,8 @@ impl<'doc> TextExtractor<'doc> {
             extract_spans: true,
             tj_span_buffer: None,
             span_sequence_counter: 0,
+            pen_seam: None,
+            pen_continuations: HashSet::new(),
             marked_content_stack: Vec::new(),
             saw_reversed_chars: false,
             inside_artifact: false,
@@ -81,6 +84,9 @@ impl<'doc> TextExtractor<'doc> {
             tj_stats_len: 0,
             tj_character_array: Vec::new(),
             current_x_position: 0.0,
+            positioned_pen: None,
+            drawn_end: None,
+            lead_threshold: None,
             word_boundary_mode,
             cached_current_font: None,
             extraction_width_tables: HashMap::new(),
@@ -220,6 +226,9 @@ impl<'doc> TextExtractor<'doc> {
         self.extract_spans = true;
         self.spans.clear();
         self.span_sequence_counter = 0;
+        self.pen_seam = None;
+        self.forget_drawn_end();
+        self.pen_continuations.clear();
     }
 
     /// Public wrapper for execute_operator (normally private).

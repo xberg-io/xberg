@@ -143,7 +143,7 @@ pub(super) fn native_text_paints_all_read_ink(
         .flat_map(|line| &line.words)
         .map(|word| (word.text.clone(), native_box(word.bbox)))
         .collect();
-    let Some(placed) = read_on_native_lines(&read_boxes, &lines) else {
+    let Some(placed) = read_on_native_lines(&read_words, &lines) else {
         return false;
     };
     // The words are the unit because a lost glyph spoils the word it stands in, and a reader
@@ -165,7 +165,8 @@ pub(super) fn native_text_paints_all_read_ink(
     ) else {
         return false;
     };
-    agreement_share(&native_words, &read_words) >= MIN_NATIVE_READ_AGREEMENT
+    !native_word_glues_separate_cells(&native_words, &read_words)
+        && agreement_share(&native_words, &read_words) >= MIN_NATIVE_READ_AGREEMENT
         && ink_is_glyph_ink(&rasters, media, &placed, &read_words, &native_words)
 }
 
@@ -282,6 +283,119 @@ fn agreement_share(native: &[(String, LineBox)], read: &[(String, LineBox)]) -> 
     if total == 0 { 0.0 } else { agreed as f64 / total as f64 }
 }
 
+/// How far, as a share of the line height, a read leader's box may reach into a neighbouring read
+/// word and still count as lying in the gap: OCR boxes of a leader and its neighbours overlap by a
+/// pixel or two.
+const LEADER_BOX_SLACK: f32 = 0.1;
+
+/// The fewest leader characters that make a run a leader rather than punctuation.
+const MIN_LEADER_RUN: usize = 3;
+
+/// How many leader characters `c` counts for: dots, middle dots, underscores and hyphens count
+/// one, the two-dot leader two, and the ellipses a whole run. Anything else is not a leader.
+fn leader_weight(c: char) -> Option<usize> {
+    match c {
+        '.' | '·' | '_' | '-' => Some(1),
+        '\u{2025}' => Some(2),
+        '\u{2026}' | '\u{22EF}' => Some(MIN_LEADER_RUN),
+        _ => None,
+    }
+}
+
+/// Whether `text` is a run of the characters a table of contents or form sets between a label and
+/// its value. A lone `.` or a `|` is not one.
+fn is_leader_run(text: &str) -> bool {
+    text.chars()
+        .map(leader_weight)
+        .sum::<Option<usize>>()
+        .is_some_and(|weight| weight >= MIN_LEADER_RUN)
+}
+
+/// The letter-and-digit counts at which the token holds a leader run of [`MIN_LEADER_RUN`] or
+/// more leader characters in a row: where a leader joined a label to its value.
+fn leader_run_offsets(token: &str) -> Vec<usize> {
+    let (mut run, mut seen) = (0, 0);
+    let mut offsets = Vec::new();
+    for c in token.chars() {
+        match leader_weight(c) {
+            Some(weight) => {
+                let before = run;
+                run += weight;
+                if before < MIN_LEADER_RUN && run >= MIN_LEADER_RUN {
+                    offsets.push(seen);
+                }
+            }
+            None => {
+                run = 0;
+                seen += usize::from(c.is_alphanumeric());
+            }
+        }
+    }
+    offsets
+}
+
+/// Whether a native word glues read words that stand a cell apart. The native text joins cells
+/// that touch in its glyph stream (`1ThreadOvf_PMC1`) although the page sets them a column apart,
+/// so the words the read separates are not words of the native text, and the share cannot credit
+/// the token for them: the joined read words contain it, yet a reader of the native text never
+/// sees `Ovf_PMC1`. The gap is measured along the line from the furthest right edge of the read
+/// words before it. A gap under one line height is a break inside a word. A leader run read
+/// inside the gap (`.....`) closes it; a `|` or a lone `.` does not, since a ruled table reads its
+/// rules that way, and neither does a leader that overlaps a read word, which is a rule drawn
+/// through the word. A native token that holds a leader run is a label and its value joined by a
+/// leader whether or not the read kept the dots (`Introduction.........12`), so only the gap at
+/// the run, found by counting the letters and digits before it, is exempt and any other gap in
+/// the token still vetoes. That position is a count, so a read that miscounts the letters before
+/// the run (`rn` for `m`) while dropping the dots no longer matches it and keeps the OCR read,
+/// the safe side. Gaps are measured between read words only; a leader never moves the edge a
+/// gap is measured from. Words set sideways stack their read words vertically and are out of
+/// scope. ~keep
+fn native_word_glues_separate_cells(native: &[(String, LineBox)], read: &[(String, LineBox)]) -> bool {
+    native.iter().any(|(text, place)| {
+        let height = place.bottom - place.top;
+        if height <= 0.0 {
+            return false;
+        }
+        let run_offsets = leader_run_offsets(text);
+        let mut parts: Vec<(&LineBox, usize, bool)> = read
+            .iter()
+            .filter(|(word, at)| place.owns(at) && !word.trim().is_empty())
+            .map(|(word, at)| {
+                (
+                    at,
+                    word.chars().filter(|c| c.is_alphanumeric()).count(),
+                    is_leader_run(word),
+                )
+            })
+            .filter(|(_, letters, is_leader)| *letters > 0 || *is_leader)
+            .collect();
+        parts.sort_by(|a, b| a.0.left.total_cmp(&b.0.left));
+        let mut reach = f32::NEG_INFINITY;
+        let mut letters_before: Option<usize> = None;
+        let mut leader_right = f32::INFINITY;
+        let slack = height * LEADER_BOX_SLACK;
+        for (part, letters, is_leader) in parts {
+            if is_leader {
+                if part.left >= reach - slack {
+                    leader_right = leader_right.min(part.right);
+                }
+                continue;
+            }
+            if let Some(before) = letters_before
+                && part.left - reach > height
+                && leader_right > part.left + slack
+                && !run_offsets.contains(&before)
+            {
+                return true;
+            }
+            letters_before = Some(letters_before.unwrap_or(0) + letters);
+            leader_right = f32::INFINITY;
+            reach = reach.max(part.right);
+        }
+        false
+    })
+}
+
 fn pixel_window(
     rasters: &xberg_native_pdf::rendering::TextInkRasters,
     placed: &LineBox,
@@ -323,11 +437,30 @@ fn upright_media_box(pdf: &PdfDocument, page_index: usize) -> Option<Rect> {
         .then_some(media)
 }
 
+/// How far below or above its line, as a share of the line height, an underscore may lie and
+/// still belong to that line: a native line box spans the font's ascent and descent, and the
+/// underscore glyph is drawn under the baseline, so its ink can fall just outside that box.
+const UNDERSCORE_HANG: f32 = 0.25;
+
+/// Whether `placed` is an underscore run drawn just outside `line`, across the same stretch of it.
+fn is_underscore_hanging_from(text: &str, placed: &LineBox, line: &LineBox) -> bool {
+    let hang = (line.bottom - line.top) * UNDERSCORE_HANG;
+    let width = placed.right - placed.left;
+    !text.is_empty()
+        && text.chars().all(|c| c == '_')
+        && hang > 0.0
+        && width > 0.0
+        && placed.top >= line.top - hang
+        && placed.bottom <= line.bottom + hang
+        && placed.right.min(line.right) - placed.left.max(line.left) >= width / 2.0
+}
+
 /// Each read box with whether it lies over a native word that holds its own glyphs, or `None`
 /// when a box lies in no native line. A box over a lost glyph or in the gap between words is not
-/// over such a word.
+/// over such a word. An underscore run that hangs just outside a line counts as on that line, and
+/// as over a word, so that it must show glyph ink. ~keep
 fn read_on_native_lines(
-    read_boxes: &[LineBox],
+    read: &[(String, LineBox)],
     lines: &[xberg_native_pdf::layout::TextLine],
 ) -> Option<Vec<(LineBox, bool)>> {
     let line_boxes: Vec<LineBox> = lines.iter().map(|line| native_box(line.bbox)).collect();
@@ -337,13 +470,16 @@ fn read_on_native_lines(
         .filter(|word| !word.text.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER))
         .map(|word| native_box(word.bbox))
         .collect();
-    read_boxes
-        .iter()
-        .map(|placed| {
-            line_boxes
-                .iter()
-                .any(|line| line.owns(placed))
-                .then(|| (*placed, word_boxes.iter().any(|native| native.owns(placed))))
+    read.iter()
+        .map(|(text, placed)| {
+            if line_boxes.iter().any(|line| line.owns(placed)) {
+                Some((*placed, word_boxes.iter().any(|native| native.owns(placed))))
+            } else {
+                line_boxes
+                    .iter()
+                    .any(|line| is_underscore_hanging_from(text, placed, line))
+                    .then_some((*placed, true))
+            }
         })
         .collect()
 }
@@ -509,6 +645,27 @@ pub(super) fn only_segments_certified_tesseract_text_and_tables(doc: &InternalDo
         && super::document::ocr_page_only_segments_text_and_tables_with(doc, read, is_hocr_bookkeeping_with_tables)
 }
 
+/// Only for a complete read already certified by `native_text_paints_all_read_ink`: its final
+/// structure may omit words, but every retained occurrence and asset must remain certified. ~keep
+pub(super) fn uses_only_certified_tesseract_text_and_tables(doc: &InternalDocument, read: &str) -> bool {
+    doc.prebuilt_ocr_elements.is_none()
+        && super::document::ocr_page_uses_only_read_text_and_tables_with(doc, read, is_hocr_bookkeeping_with_tables)
+}
+
+/// Only an admission with a complete native layer may omit words from the final structure.
+/// Marker-bearing layers and later ink-only admissions retain exact matching. ~keep
+pub(super) fn ink_owned_table_structure_can_yield_to_native(
+    doc: &InternalDocument,
+    read: &str,
+    original_native_layer: Option<&str>,
+) -> bool {
+    if original_native_layer.is_some_and(|layer| !layer.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER)) {
+        uses_only_certified_tesseract_text_and_tables(doc, read)
+    } else {
+        only_segments_certified_tesseract_text_and_tables(doc, read)
+    }
+}
+
 fn is_hocr_bookkeeping_with_tables(key: &str, value: &serde_json::Value) -> bool {
     match key {
         "tables_detected" | "table_count" | "table_rows" | "table_cols" => value.as_u64().is_some(),
@@ -527,7 +684,7 @@ fn is_hocr_bookkeeping(key: &str, value: &serde_json::Value) -> bool {
         "mean_text_conf" | "p10_word_conf" | "median_word_conf" => {
             value.as_u64().is_some_and(|confidence| confidence <= 100)
         }
-        "word_count" | "low_conf_word_count" => value.as_u64().is_some(),
+        "word_count" | "low_conf_word_count" | "non_text_block_word_count" => value.as_u64().is_some(),
         "tables_detected" | "table_count" => value.as_u64() == Some(0),
         OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY | OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY => {
             valid_ocr_layout_dimension(value).is_some()
@@ -542,3 +699,7 @@ fn is_hocr_bookkeeping(key: &str, value: &serde_json::Value) -> bool {
 #[cfg(test)]
 #[path = "native_word_coverage_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "native_word_coverage_structure_tests.rs"]
+mod structure_tests;

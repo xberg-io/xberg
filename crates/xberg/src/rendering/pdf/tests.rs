@@ -194,6 +194,13 @@ fn should_set_code_math_as_text_rather_than_code() {
 }
 
 #[test]
+fn should_set_dollar_math_as_text_without_delimiters() {
+    let markdown = "Let $a<b$ hold.\n\n$$\nx^2\n$$\n";
+    assert!(all_runs(markdown).iter().all(|run| run.face == Face::Sans));
+    assert_eq!(text(markdown), "Let a<b hold. x^2");
+}
+
+#[test]
 fn should_draw_bold_and_italic_from_the_regular_face() {
     let runs = all_runs("**bold** *italic* plain\n");
     let flags: Vec<(&str, bool, bool)> = runs

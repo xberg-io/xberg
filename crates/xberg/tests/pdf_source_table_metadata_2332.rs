@@ -104,6 +104,63 @@ fn source_header_bands_and_merged_label_reach_the_html_and_public_grid() {
 
 #[test]
 #[ignore = "requires the reference-only ParseBench source PDF outside Git"]
+fn parsebench_repeated_sales_leaves_reach_html_and_grid_as_headers() {
+    let config = ExtractionConfig {
+        include_document_structure: true,
+        ..parsebench_html_config()
+    };
+    let result = extract_bytes_document_blocking(&parsebench_source(), "application/pdf", &config).unwrap();
+    assert_eq!(result.tables.len(), 2);
+    assert_eq!(result.tables[0].cells.len(), 8);
+    let upper_html = result.content.split_once("</table>").unwrap().0;
+    for (label, count) in [("Product Line", 1), ("Revenue", 3), ("Units", 3)] {
+        assert_eq!(upper_html.matches(&format!(">{label}</th>")).count(), count);
+        assert_eq!(upper_html.matches(&format!(">{label}</td>")).count(), 0);
+    }
+    let bounds = result.tables[0].bounding_box.unwrap();
+    assert_eq!(
+        (bounds.x0, bounds.y0, bounds.x1, bounds.y1),
+        (f64::from(88.2_f32), 518.0, f64::from(523.8_f32), 694.0)
+    );
+    let document = result.document.as_ref().unwrap();
+    let grids: Vec<_> = document
+        .nodes
+        .iter()
+        .filter_map(|node| match &node.content {
+            NodeContent::Table { grid } => Some(grid),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(grids.len(), 2);
+    assert_sales_header_grid(grids[0]);
+    assert_eq!(upper_html.matches("<td>Enterprise Software</td>").count(), 1);
+    assert_eq!(upper_html.matches("<td>Total</td>").count(), 1);
+}
+
+fn assert_sales_header_grid(grid: &xberg::TableGrid) {
+    assert_eq!((grid.rows, grid.cols), (8, 7));
+    assert_eq!(
+        grid.cells.iter().filter(|cell| cell.row == 1 && cell.is_header).count(),
+        7
+    );
+    assert!(
+        grid.cells
+            .iter()
+            .filter(|cell| cell.row >= 2)
+            .all(|cell| !cell.is_header)
+    );
+    let parents: Vec<_> = grid
+        .cells
+        .iter()
+        .filter(|cell| cell.row == 0)
+        .map(|cell| (cell.col, cell.row_span, cell.col_span))
+        .collect();
+    assert_eq!(parents, [(0, 1, 1), (1, 1, 2), (3, 1, 2), (5, 1, 2)]);
+    assert!(grid.cells.iter().all(|cell| cell.row_span == 1));
+}
+
+#[test]
+#[ignore = "requires the reference-only ParseBench source PDF outside Git"]
 fn parsebench_survey_leaf_band_remains_a_header_below_group_labels() {
     let bytes = parsebench_source();
     let result = extract_bytes_document_blocking(&bytes, "application/pdf", &parsebench_html_config()).unwrap();

@@ -491,6 +491,7 @@ impl PdfDocument {
                 wmode: 0,
                 text_rise: 0.0,
                 rtl_draw_logical: false,
+                ligature_glyph: false,
                 mirrored: false,
                 page_rotation_applied: 0,
             })

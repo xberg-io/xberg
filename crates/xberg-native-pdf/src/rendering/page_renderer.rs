@@ -824,6 +824,24 @@ impl PageRenderer {
 
     /// Load resources (fonts, color spaces) into local cache.
     fn load_resources(&mut self, doc: &PdfDocument, resources: &Object) -> Result<()> {
+        // A form's /Resources is often an indirect object; without resolving it the form's fonts are never
+        // loaded and its text is drawn without font metrics. ~keep
+        // A direct dictionary is read in place; only a reference is loaded. ~keep
+        let loaded = resources.as_reference().and_then(|reference| {
+            doc.load_object(reference)
+                .inspect_err(|error| {
+                    tracing::warn!(
+                        target: crate::LOG_TARGET_ROOT,
+                        operation = "load_render_resources",
+                        object_number = reference.id,
+                        error_code = error.telemetry_code(),
+                        error_offset = ?error.telemetry_offset(),
+                        "rendering without the resources of an unreadable object"
+                    );
+                })
+                .ok()
+        });
+        let resources = loaded.as_ref().unwrap_or(resources);
         if let Object::Dictionary(res_dict) = resources {
             tracing::debug!("Loading resources, keys: {:?}", res_dict.keys());
             if let Some(font_obj) = res_dict.get("Font") {
@@ -2899,7 +2917,7 @@ impl PageRenderer {
                     total += adv;
                 }
                 TextElement::Offset(offset) => {
-                    let shift = (-offset / 1000.0) * gs_local.font_size;
+                    let shift = crate::rendering::text_rasterizer::tj_offset_shift(*offset, &gs_local);
                     gs_local.advance_text_matrix(shift);
                     total += shift;
                 }
@@ -3726,15 +3744,35 @@ impl PageRenderer {
         mask_obj: Option<Object>,
         gs: &GraphicsState,
     ) -> Result<()> {
-        use crate::extractors::images::extract_image_from_xobject;
+        use crate::extractors::images::{ImageData, extract_image_from_xobject};
 
         let color_space_map = self.color_spaces.clone();
         let pdf_image = extract_image_from_xobject(Some(doc), xobject, obj_ref, Some(&color_space_map))?;
+        let mut reduction = 1;
+        let mut canvas = 0;
         if let Some(budget) = self.source_image_budget.as_mut() {
             let sidecar = self.cmyk_sidecar.as_ref().map_or(0, CmykSidecar::image_buffer_bytes);
-            budget.admit_jpeg(&pdf_image, sidecar.saturating_add(pixmap.data().len() as u64))?;
+            canvas = sidecar.saturating_add(pixmap.data().len() as u64);
+            // A colour-key /Mask and an in-data soft mask index the full-size samples. ~keep
+            if matches!(mask_obj, Some(Object::Array(_))) || pdf_image.soft_mask_in_data().is_some() {
+                budget.admit_jpeg(&pdf_image, canvas)?;
+            } else {
+                let painted = (transform.sx.hypot(transform.ky), transform.kx.hypot(transform.sy));
+                reduction = budget.admit_jpeg_reducing(&pdf_image, canvas, painted)?;
+            }
         }
-        let dynamic_image = pdf_image.to_dynamic_image()?;
+        let dynamic_image = match pdf_image.data() {
+            ImageData::Jpeg(bytes) if reduction > 1 => match image_budget::decode_reduced_jpeg(bytes, reduction) {
+                Ok(image) => image,
+                Err(error) => {
+                    if let Some(budget) = self.source_image_budget.as_mut() {
+                        budget.refuse_failed_reduction(&pdf_image, canvas);
+                    }
+                    return Err(error);
+                }
+            },
+            _ => pdf_image.to_dynamic_image()?,
+        };
         let mut rgba_image = dynamic_image.to_rgba8();
 
         // A referenced ImageMask uses stencil polarity: default /Decode [0 1]
@@ -4923,7 +4961,7 @@ impl PageRenderer {
     fn smask_spot_snapshot(&self, gs: &GraphicsState) -> Option<Vec<u8>> {
         gs.smask.as_ref()?;
         let sidecar = self.cmyk_sidecar.as_ref()?;
-        Some(sidecar.spots_all().to_vec())
+        Some(sidecar.spot_state().to_vec())
     }
 
     /// Predicate: should the CMYK compose-before-convert path fire for
@@ -6405,14 +6443,17 @@ impl PageRenderer {
     ///    mode.
     /// 3. Compose the new tint per pixel:
     ///    `t_r = (1 - α') · t_b + α' · B(t_b, t_s)` where
-    ///    `α' = coverage · gs_alpha`, `t_b` is the backdrop tint,
-    ///    `t_s` is the source tint, and `B(·, ·)` is the dispatched
-    ///    blend function on subtractive tints. Per §11.3.5.2 Table 136
-    ///    the separable formulas operate on additive components — for
-    ///    /Normal and the white-preserving modes the subtractive form
-    ///    is mathematically equivalent (the formulas are component-wise
-    ///    monotonic), so we apply them directly on tint values without
-    ///    the additive↔subtractive conversion round-trip.
+    ///    `α' = coverage · gs_alpha`, `t_b` is the stored tint (times the
+    ///    backdrop alpha), `t_s` is the source tint, and `B(·, ·)` is the
+    ///    dispatched blend function. Per §11.3.5.2 Table 136 the separable
+    ///    formulas operate on additive components, so
+    ///    [`blend_subtractive_tint`](crate::rendering::sidecar::blend_subtractive_tint)
+    ///    complements the tints before the blend and the result after
+    ///    it, and mixes the blend with the source by the lane's backdrop
+    ///    alpha (§11.3.6). Only /Normal skips the round trip: `B = c_s`
+    ///    holds in both representations. The backdrop alpha is the
+    ///    sidecar's per-lane painted plane, so an explicit tint-0 paint
+    ///    is a backdrop and untouched paper is not.
     ///
     /// Spot inks active on the source but with no plane in the sidecar
     /// (device does not carry the colorant per §8.6.6.3) are silently
@@ -6507,7 +6548,7 @@ impl PageRenderer {
             let Some(idx) = sidecar.spot_index(&name) else {
                 continue;
             };
-            let Some(plane) = sidecar.spot_plane_mut(idx) else {
+            let Some((plane, painted)) = sidecar.spot_lane_mut(idx) else {
                 continue;
             };
             // The `tint` value is the operator's component for this
@@ -6524,9 +6565,13 @@ impl PageRenderer {
                 let alpha = (cov as f32 / 255.0) * gs_alpha;
                 let alpha = alpha.clamp(0.0, 1.0);
                 let t_b = plane[px] as f32 / 255.0;
-                let blended = crate::rendering::sidecar::separable_blend(effective_bm, t_b, c_s);
+                let a_b = painted[px] as f32 / 255.0;
+                let blended = crate::rendering::sidecar::blend_subtractive_tint(effective_bm, t_b, a_b, c_s);
                 let t_r = (1.0 - alpha) * t_b + alpha * blended;
                 plane[px] = (t_r.clamp(0.0, 1.0) * 255.0).round() as u8;
+                // §11.3.3 union of the backdrop alpha and the source alpha. ~keep
+                let a_r = a_b + alpha - a_b * alpha;
+                painted[px] = (a_r.clamp(0.0, 1.0) * 255.0).round() as u8;
             }
         }
     }
@@ -6979,7 +7024,7 @@ impl PageRenderer {
         // the visible composite by exactly the SMask attenuation
         // factor. ~keep
         if let (Some(pre_spots), Some(sidecar)) = (spot_snapshot, self.cmyk_sidecar.as_mut()) {
-            let spots = sidecar.spots_all_mut();
+            let spots = sidecar.spot_state_mut();
             // The snapshot length tracks the page's spot plane count.
             // If the sidecar's plane count changed mid-paint (it
             // doesn't — fixed at page setup) the comparison would be
@@ -7050,7 +7095,7 @@ impl PageRenderer {
         // group semantics, NOT knockout. The brief calls this out as
         // the round-2 gap the secondary scope of round 3 closes. ~keep
         let sidecar_backdrop_cmyk: Option<Vec<u8>> = self.cmyk_sidecar.as_ref().map(|s| s.cmyk().to_vec());
-        let sidecar_backdrop_spots: Option<Vec<u8>> = self.cmyk_sidecar.as_ref().map(|s| s.spots_all().to_vec());
+        let sidecar_backdrop_spots: Option<Vec<u8>> = self.cmyk_sidecar.as_ref().map(|s| s.spot_state().to_vec());
 
         // Identify paint-operator indices. These define element
         // boundaries. ~keep
@@ -7099,7 +7144,7 @@ impl PageRenderer {
                 sidecar.restore_cmyk(cmyk_b);
             }
             if let (Some(sidecar), Some(spots_b)) = (self.cmyk_sidecar.as_mut(), sidecar_backdrop_spots.as_ref()) {
-                sidecar.restore_spots(spots_b);
+                sidecar.restore_spot_state(spots_b);
             }
 
             let element_ops: Vec<Operator> = operators[..=end_idx]
@@ -7166,7 +7211,7 @@ impl PageRenderer {
                 sidecar_accum_spots.as_mut(),
                 sidecar_backdrop_spots.as_ref(),
             ) {
-                let post = sidecar.spots_all();
+                let post = sidecar.spot_state();
                 debug_assert_eq!(post.len(), backdrop.len());
                 debug_assert_eq!(accum.len(), backdrop.len());
                 for i in 0..post.len() {
@@ -7191,7 +7236,7 @@ impl PageRenderer {
             sidecar.restore_cmyk(cmyk_a);
         }
         if let (Some(sidecar), Some(spots_a)) = (self.cmyk_sidecar.as_mut(), sidecar_accum_spots.as_ref()) {
-            sidecar.restore_spots(spots_a);
+            sidecar.restore_spot_state(spots_a);
         }
         Ok(())
     }
@@ -8769,10 +8814,10 @@ fn fit_png_dpi(
 
 fn png_working_bytes_fit(width: u32, height: u32, spot_names: Option<&[String]>, limit: usize) -> bool {
     // The canvas and PNG demultiply copy are both RGBA. Reserve the same per-pixel
-    // and fixed PNG allowance as Core image encoding, plus the live CMYK and spot planes.
+    // and fixed PNG allowance as Core image encoding, plus the CMYK plane and two planes per spot ink.
     const RGBA_AND_PNG_BYTES_PER_PIXEL: usize = 12;
     const PNG_FIXED_OVERHEAD: usize = 256 * 1024;
-    let sidecar_bytes_per_pixel = spot_names.map_or(Some(0), |names| 4_usize.checked_add(names.len()));
+    let sidecar_bytes_per_pixel = spot_names.map_or(Some(0), |names| names.len().checked_mul(2)?.checked_add(4));
     let charge = sidecar_bytes_per_pixel
         .and_then(|bytes| RGBA_AND_PNG_BYTES_PER_PIXEL.checked_add(bytes))
         .and_then(|bytes| (width as usize).checked_mul(height as usize)?.checked_mul(bytes))
@@ -10764,3 +10809,7 @@ mod tests {
 #[cfg(test)]
 #[path = "image_budget_tests.rs"]
 mod image_budget_tests;
+
+#[cfg(test)]
+#[path = "spot_mirror_tests.rs"]
+mod spot_mirror_tests;

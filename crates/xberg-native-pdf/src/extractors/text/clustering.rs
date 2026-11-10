@@ -126,6 +126,7 @@ impl<'doc> TextExtractor<'doc> {
                 0.0
             },
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: run_is_mirrored(&state.ctm.multiply(&state.text_matrix)),
             page_rotation_applied: 0,
         };

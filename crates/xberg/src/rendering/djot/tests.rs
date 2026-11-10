@@ -757,3 +757,582 @@ fn should_render_issue_2123_nested_math_as_native_djot() {
         1
     );
 }
+
+fn leader_paragraph_doc(text: &str, marked: bool) -> InternalDocument {
+    use crate::types::internal::{ElementKind, InternalElement, MARKDOWN_ROW_LINES_ATTRIBUTE};
+
+    let mut doc = InternalDocument::new("image");
+    let mut paragraph = InternalElement::text(ElementKind::Paragraph, text, 0);
+    if marked {
+        paragraph
+            .attributes
+            .get_or_insert_with(Default::default)
+            .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(), String::new());
+    }
+    doc.push_element(paragraph);
+    doc
+}
+
+#[test]
+fn a_row_lines_paragraph_renders_each_line_as_its_own_djot_paragraph() {
+    let marked = leader_paragraph_doc("Water .... 36\r\n\nStreet .... 17\nPool .... 16\n", true);
+    assert_eq!(
+        render_djot(&marked).trim_end(),
+        "Water .... 36\n\nStreet .... 17\n\nPool .... 16"
+    );
+}
+
+#[test]
+fn a_paragraph_without_the_row_lines_marker_keeps_joining_its_lines_in_djot() {
+    let unmarked = leader_paragraph_doc("Water .... 36\nStreet .... 17", false);
+    assert_eq!(render_djot(&unmarked).trim_end(), "Water .... 36 Street .... 17");
+}
+
+fn marked_row_lines_element(text: &str) -> crate::types::internal::InternalElement {
+    use crate::types::internal::{ElementKind, InternalElement, MARKDOWN_ROW_LINES_ATTRIBUTE};
+
+    let mut paragraph = InternalElement::text(ElementKind::Paragraph, text, 0);
+    paragraph
+        .attributes
+        .get_or_insert_with(Default::default)
+        .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(), String::new());
+    paragraph
+}
+
+#[test]
+fn a_footnote_ref_after_a_row_lines_paragraph_joins_its_last_row() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element("Water .... 36\nStreet .... 17"));
+    b.push_footnote_ref("1", "fn1", None);
+    let def = b.push_footnote_definition("A note.", "fn1", None);
+    b.set_layer(def, ContentLayer::Footnote);
+    assert_eq!(
+        render_djot(&b.build()),
+        "Water .... 36\n\nStreet .... 17[^1]\n\n\n[^1]: A note.\n"
+    );
+}
+
+#[test]
+fn row_lines_that_start_with_block_syntax_are_escaped() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element(
+        "1. Intro .... 5\n2) Scope .... 9\n| Water .... 36\n- Pool .... 4\n# Park .... 7\n> Lot .... 2\nPlain .... 1",
+    ));
+    assert_eq!(
+        render_djot(&b.build()),
+        "1\\. Intro .... 5\n\n2\\) Scope .... 9\n\n\\| Water .... 36\n\n\\- Pool .... 4\n\n\\# Park .... 7\n\n\\> Lot .... 2\n\nPlain .... 1\n"
+    );
+}
+
+#[test]
+fn a_row_lines_paragraph_with_annotations_keeps_its_single_paragraph_in_djot() {
+    let mut paragraph = marked_row_lines_element("Water .... 36\nStreet .... 17");
+    paragraph.annotations = vec![TextAnnotation {
+        start: 0,
+        end: 5,
+        kind: AnnotationKind::Bold,
+    }];
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(paragraph);
+    assert_eq!(render_djot(&b.build()), "*Water* .... 36 Street .... 17\n");
+}
+
+#[test]
+fn a_row_lines_paragraph_inside_a_blockquote_quotes_every_row() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_quote_start();
+    let mut paragraph = marked_row_lines_element("Water .... 36\nStreet .... 17");
+    paragraph.depth = 1;
+    b.push_element(paragraph);
+    b.push_quote_end();
+    assert_eq!(render_djot(&b.build()), "> Water .... 36\n> \n> Street .... 17\n>\n");
+}
+
+#[test]
+fn row_lines_that_start_with_any_djot_list_marker_are_escaped() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element(
+        "I. Introduction .... 3\nA. Appendix .... 40\niv. Index .... 9\na) Note .... 2\n(1) Aim .... 4\n(a) Scope .... 5\n(ii) Terms .... 6\n: Term .... 8",
+    ));
+    assert_eq!(
+        render_djot(&b.build()),
+        "I\\. Introduction .... 3\n\nA\\. Appendix .... 40\n\niv\\. Index .... 9\n\na\\) Note .... 2\n\n\\(1) Aim .... 4\n\n\\(a) Scope .... 5\n\n\\(ii) Terms .... 6\n\n\\: Term .... 8\n"
+    );
+}
+
+#[test]
+fn row_lines_escape_punctuation_starts_but_not_hashtags_or_decimals() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element(concat!(
+        "+ Pool .... 4\n* Park .... 7\n### Lot .... 2\n1.5 Units .... 3\n1.\n-\n---\n- - -\n***\n",
+        "#hashtag .... 1\nPlan A. .... 2\n--- Rule .... 6\n-5 .... 1\n::: note\n``` rust",
+    )));
+    assert_eq!(
+        render_djot(&b.build()),
+        concat!(
+            "\\+ Pool .... 4\n\n\\* Park .... 7\n\n\\### Lot .... 2\n\n1.5 Units .... 3\n\n1\\.\n\n\\-\n\n",
+            "\\---\n\n\\- - -\n\n\\***\n\n#hashtag .... 1\n\nPlan A. .... 2\n\n\\--- Rule .... 6\n\n",
+            "\\-5 .... 1\n\n\\:\\:\\: note\n\n\\`\\`\\` rust\n"
+        )
+    );
+}
+
+#[test]
+fn row_lines_of_ordinary_prose_are_not_escaped() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element(
+        "I am .... 1\nA big .... 2\ni.e. .... 3\nI.e. .... 4\nDr. Smith .... 5",
+    ));
+    assert_eq!(
+        render_djot(&b.build()),
+        "I am .... 1\n\nA big .... 2\n\ni.e. .... 3\n\nI.e. .... 4\n\nDr. Smith .... 5\n"
+    );
+}
+
+#[test]
+fn a_lowercase_roman_run_row_is_escaped_like_a_list_label() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element("mix. .... 6"));
+    assert_eq!(render_djot(&b.build()), "mix\\. .... 6\n");
+}
+
+/// Row texts that must each stay one paragraph with their text kept: every ASCII punctuation
+/// character as a whole row, before a word and before a space and a word, the block syntax the
+/// parser reads from a row start, and the label forms that must stay plain text.
+fn row_escape_matrix() -> Vec<String> {
+    let mut rows: Vec<String> = Vec::new();
+    for punctuation in (0u8..128).map(char::from).filter(char::is_ascii_punctuation) {
+        rows.push(punctuation.to_string());
+        rows.push(format!("{punctuation} word .... 1"));
+        rows.push(format!("{punctuation}word .... 1"));
+    }
+    rows.extend(
+        [
+            "::: note",
+            ":::",
+            "```",
+            "``` rust",
+            "````",
+            "~~~",
+            "~~~ x",
+            "[^1]: note .... 2",
+            "[^a]: note",
+            "[ref]: http://a.example",
+            "[ref]:",
+            "[a]: b",
+            "^ caption .... 3",
+            "{.a}",
+            "1. Intro .... 5",
+            "2) Scope .... 9",
+            "(1) Aim .... 4",
+            "(a) Scope .... 5",
+            "I. Introduction .... 3",
+            "iv. Index .... 9",
+            "a) Note .... 2",
+            "1.",
+            "- - -",
+            "--- Rule .... 6",
+            "### Lot .... 2",
+            "1.5 Units .... 3",
+            "#hashtag .... 1",
+            "I am .... 1",
+            "Plan A. .... 2",
+        ]
+        .map(String::from),
+    );
+    rows
+}
+
+/// Text of each paragraph that the Djot parser reads from `output`.
+fn djot_paragraph_texts(output: &str) -> Vec<String> {
+    let mut paragraphs: Vec<String> = Vec::new();
+    let mut open = false;
+    for event in jotdown::Parser::new(output) {
+        match event {
+            jotdown::Event::Start(jotdown::Container::Paragraph, _) => {
+                open = true;
+                paragraphs.push(String::new());
+            }
+            jotdown::Event::End(jotdown::Container::Paragraph) => open = false,
+            jotdown::Event::Str(value) if open => paragraphs.last_mut().unwrap().push_str(&value),
+            // The parser turns `...`, `--`, `---` and quotes into events of their own.
+            jotdown::Event::Ellipsis if open => paragraphs.last_mut().unwrap().push_str("..."),
+            jotdown::Event::EnDash if open => paragraphs.last_mut().unwrap().push_str("--"),
+            jotdown::Event::EmDash if open => paragraphs.last_mut().unwrap().push_str("---"),
+            jotdown::Event::LeftSingleQuote | jotdown::Event::RightSingleQuote if open => {
+                paragraphs.last_mut().unwrap().push('\'');
+            }
+            jotdown::Event::LeftDoubleQuote | jotdown::Event::RightDoubleQuote if open => {
+                paragraphs.last_mut().unwrap().push('"');
+            }
+            _ => {}
+        }
+    }
+    paragraphs
+}
+
+#[test]
+fn every_row_text_keeps_three_paragraphs_in_either_layout() {
+    let rows = row_escape_matrix();
+    assert!(rows.len() >= 95, "the matrix holds {} rows", rows.len());
+    let mut lost: Vec<String> = Vec::new();
+    for row in &rows {
+        for layout in [
+            ["Intro .... 5", row.as_str(), "Tail .... 9"],
+            [row.as_str(), "Intro .... 5", "Tail .... 9"],
+        ] {
+            let mut b = InternalDocumentBuilder::new("test");
+            b.push_element(marked_row_lines_element(&layout.join("\n")));
+            let output = render_djot(&b.build());
+            if djot_paragraph_texts(&output) != layout {
+                lost.push(format!("{layout:?} -> {output:?}"));
+            }
+        }
+    }
+    assert!(
+        lost.is_empty(),
+        "{} layouts changed the Djot structure:\n{}",
+        lost.len(),
+        lost.join("\n")
+    );
+}
+
+#[test]
+fn a_row_that_starts_with_an_escaped_delimiter_keeps_the_delimiter_literal() {
+    for delimiter in ["*", "_", "{", "[", "`", "~", "^", "=", "+", "-"] {
+        let closing = match delimiter {
+            "{" => "}",
+            "[" => "]",
+            // A closing backtick would open a code span of its own and swallow the rest of the row.
+            "`" => "",
+            other => other,
+        };
+        let row = format!("\\{delimiter}word{closing} .... 1");
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_element(marked_row_lines_element(&format!("Intro .... 5\n{row}\nTail .... 9")));
+        let output = render_djot(&b.build());
+        assert_eq!(
+            djot_paragraph_texts(&output),
+            [
+                "Intro .... 5".to_string(),
+                row[1..].to_string(),
+                "Tail .... 9".to_string()
+            ],
+            "row {row:?} -> {output:?}"
+        );
+    }
+}
+
+#[test]
+fn an_escaped_dash_row_reads_as_a_hyphen_and_an_en_dash() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element("--- Rule .... 6"));
+    let output = render_djot(&b.build());
+    assert_eq!(output, "\\--- Rule .... 6\n");
+    let events: Vec<_> = jotdown::Parser::new(&output).collect();
+    assert!(events.iter().any(|event| matches!(event, jotdown::Event::EnDash)));
+    assert!(!events.iter().any(|event| matches!(event, jotdown::Event::EmDash)));
+}
+
+#[test]
+fn a_row_that_opens_with_a_marker_and_a_delimiter_pair_keeps_its_text() {
+    // On the unescaped row the opener holds the delimiter that follows it, so the pair stays text.
+    // Escaping only the opener would free the pair to become emphasis, strong text or a superscript.
+    for row in [
+        "{_!_",
+        "{*#*",
+        "{~a~",
+        "{:+:",
+        "{:a:",
+        "[^!^",
+        "[_]_",
+        "![^]",
+        "[]{}",
+        ":_:_",
+        "{_word_ .... 1",
+        "[^word^ .... 1",
+    ] {
+        let layout = ["Intro .... 5", row, "Tail .... 9"];
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_element(marked_row_lines_element(&layout.join("\n")));
+        let output = render_djot(&b.build());
+        assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
+    }
+}
+
+#[test]
+fn a_row_that_opens_with_brackets_and_braces_keeps_its_text() {
+    // After an escaped `[` the `]` is plain, and a `{...}` that follows it would read as attributes.
+    for row in ["[]{}", "[]{.a}", "[]{#id}"] {
+        let layout = ["Intro .... 5", row, "Tail .... 9"];
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_element(marked_row_lines_element(&layout.join("\n")));
+        let output = render_djot(&b.build());
+        assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
+    }
+}
+
+#[test]
+fn the_punctuation_run_after_an_opener_stops_at_a_backslash_that_already_escapes() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element("{\\*x* .... 1\n[_]\\_x_ .... 2"));
+    assert_eq!(render_djot(&b.build()), "\\{\\*x* .... 1\n\n\\[\\_\\]\\_x_ .... 2\n");
+}
+
+fn paragraph_roundtrip_html(text: &str, annotations: Vec<TextAnnotation>) -> String {
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_paragraph(text, annotations, None, None);
+    builder.push_paragraph("Tail", vec![], None, None);
+    let output = render_djot(&builder.build());
+    jotdown::html::render_to_string(jotdown::Parser::new(&output))
+}
+
+#[test]
+fn paragraph_block_prefixes_keep_literal_text_and_tail() {
+    let cases = [
+        ("::: note", "::: note"),
+        ("::::", "::::"),
+        ("```rust", "```rust"),
+        ("~~~rust", "~~~rust"),
+        ("[ref]: target", "[ref]: target"),
+        ("[^1]: note", "[^1]: note"),
+        ("[snake_case]: a_b", "[snake_case]: a_b"),
+        ("- item", "- item"),
+        ("+ item", "+ item"),
+        ("* item", "* item"),
+        ("1. item", "1. item"),
+        ("a) item", "a) item"),
+        ("(iv) item", "(iv) item"),
+        ("# heading", "# heading"),
+        ("> quote", "&gt; quote"),
+        ("---", "---"),
+        ("* * *", "* * *"),
+        ("{.note}", "{.note}"),
+        ("{.snake_case key=\"a_b\"}", "{.snake_case key=\"a_b\"}"),
+        ("[ref name]: target", "[ref name]: target"),
+        ("[^snake_case]: note", "[^snake_case]: note"),
+        ("--- * ---", "--- * ---"),
+        (" ::: note", "::: note"),
+        ("| a |", "| a |"),
+        (": definition", ": definition"),
+        ("::: café 日本語", "::: café 日本語"),
+        ("1. café 日本語", "1. café 日本語"),
+        ("[réf]: café 日本語", "[réf]: café 日本語"),
+    ];
+    let failures: Vec<_> = cases
+        .iter()
+        .filter_map(|(source, expected)| {
+            let html = paragraph_roundtrip_html(source, vec![]);
+            let expected = format!("<p>{expected}</p>\n<p>Tail</p>\n");
+            (html != expected).then(|| format!("{source:?}: expected {expected:?}, got {html:?}"))
+        })
+        .collect();
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn paragraph_inline_syntax_keeps_its_interpretation() {
+    for (source, expected) in [
+        ("*bold*", "<strong>bold</strong>"),
+        ("|*bold*|", "|<strong>bold</strong>|"),
+        ("~~~*bold*", "~~~<strong>bold</strong>"),
+        (r"~~~a\*b*", "~~~a*b*"),
+        (
+            "|[link](https://example.com)|",
+            "|<a href=\"https://example.com\">link</a>|",
+        ),
+        (r"|a\*b*|", "|a*b*|"),
+        ("_emphasis_", "<em>emphasis</em>"),
+        ("`code`", "<code>code</code>"),
+        (
+            "[link](https://example.com)",
+            "<a href=\"https://example.com\">link</a>",
+        ),
+        (r"\*word*", "*word*"),
+        (r"\\word", r"\word"),
+        ("[snake_case] and a_b", "[snake_case] and a_b"),
+        ("#hashtag", "#hashtag"),
+        ("1.5", "1.5"),
+        ("日本語 _text_", "日本語 <em>text</em>"),
+        ("- item *bold*", "- item <strong>bold</strong>"),
+        ("# heading _em_", "# heading <em>em</em>"),
+    ] {
+        assert_eq!(
+            paragraph_roundtrip_html(source, vec![]),
+            format!("<p>{expected}</p>\n<p>Tail</p>\n"),
+            "{source:?}"
+        );
+    }
+}
+
+#[test]
+fn paragraph_annotations_keep_their_inline_markup() {
+    for (kind, expected) in [
+        (AnnotationKind::Bold, "<strong>text</strong>"),
+        (AnnotationKind::Italic, "<em>text</em>"),
+        (AnnotationKind::Code, "<code>text</code>"),
+        (
+            AnnotationKind::Link {
+                url: "https://example.com".into(),
+                title: None,
+            },
+            "<a href=\"https://example.com\">text</a>",
+        ),
+    ] {
+        let annotations = vec![TextAnnotation { start: 0, end: 4, kind }];
+        assert_eq!(
+            paragraph_roundtrip_html("text", annotations),
+            format!("<p>{expected}</p>\n<p>Tail</p>\n")
+        );
+    }
+}
+
+#[test]
+fn paragraph_block_prefix_keeps_a_following_annotation() {
+    let annotations = vec![TextAnnotation {
+        start: 2,
+        end: 6,
+        kind: AnnotationKind::Bold,
+    }];
+    assert_eq!(
+        paragraph_roundtrip_html("# text", annotations),
+        "<p># <strong>text</strong></p>\n<p>Tail</p>\n"
+    );
+}
+
+#[test]
+fn paragraph_compact_table_prefix_keeps_its_annotation() {
+    let annotations = vec![TextAnnotation {
+        start: 1,
+        end: 5,
+        kind: AnnotationKind::Bold,
+    }];
+    assert_eq!(
+        paragraph_roundtrip_html("|text|", annotations),
+        "<p>|<strong>text</strong>|</p>\n<p>Tail</p>\n"
+    );
+}
+
+#[test]
+fn paragraph_fence_prefix_keeps_its_annotation() {
+    let annotations = vec![TextAnnotation {
+        start: 3,
+        end: 7,
+        kind: AnnotationKind::Bold,
+    }];
+    assert_eq!(
+        paragraph_roundtrip_html("~~~text", annotations),
+        "<p>~~~<strong>text</strong></p>\n<p>Tail</p>\n"
+    );
+}
+
+#[test]
+fn paragraph_attribute_prefix_preserves_existing_escape_exactly() {
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_paragraph(r"{.a} 1\*2", vec![], None, None);
+    let output = render_djot(&builder.build());
+    assert_eq!(output, "\\{\\.a\\} 1\\*2\n");
+    assert_eq!(
+        jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+        "<p>{.a} 1*2</p>\n"
+    );
+}
+
+#[test]
+fn paragraph_attribute_prefix_preserves_inline_bold_exactly() {
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_paragraph("{.a} *bold*", vec![], None, None);
+    let output = render_djot(&builder.build());
+    assert_eq!(output, "\\{\\.a\\} *bold*\n");
+    assert_eq!(
+        jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+        "<p>{.a} <strong>bold</strong></p>\n"
+    );
+}
+
+#[test]
+fn paragraph_attribute_prefix_preserves_rendered_annotation_exactly() {
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_paragraph(
+        "{.a} text",
+        vec![TextAnnotation {
+            start: 5,
+            end: 9,
+            kind: AnnotationKind::Bold,
+        }],
+        None,
+        None,
+    );
+    let output = render_djot(&builder.build());
+    assert_eq!(output, "\\{\\.a\\} *text*\n");
+    assert_eq!(
+        jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+        "<p>{.a} <strong>text</strong></p>\n"
+    );
+}
+
+#[test]
+fn paragraph_braced_inline_syntax_keeps_its_interpretation() {
+    for (source, expected) in [
+        ("{-removed-}", "<del>removed</del>"),
+        ("{+inserted+}", "<ins>inserted</ins>"),
+        ("{=highlight=}", "<mark>highlight</mark>"),
+        ("{plain}", "{plain}"),
+        ("^caption", "^caption"),
+        (r"{\*x*}", "{*x*}"),
+    ] {
+        assert_eq!(
+            paragraph_roundtrip_html(source, vec![]),
+            format!("<p>{expected}</p>\n<p>Tail</p>\n"),
+            "{source:?}"
+        );
+    }
+}
+
+#[test]
+fn paragraph_caption_marker_after_a_real_table_stays_a_paragraph() {
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_table_from_cells(&[vec!["Header".into()], vec!["Cell".into()]], None, None);
+    builder.push_paragraph("^ caption", vec![], None, None);
+    builder.push_paragraph("Tail", vec![], None, None);
+    let output = render_djot(&builder.build());
+    assert_eq!(output, "| Header |\n| --- |\n| Cell |\n\n\\^ caption\n\nTail\n");
+    let html = jotdown::html::render_to_string(jotdown::Parser::new(&output));
+    assert!(html.contains("<table>"), "{html}");
+    assert!(html.contains("Header") && html.contains("Cell"), "{html}");
+    assert!(html.contains("</table>\n<p>^ caption</p>\n<p>Tail</p>"), "{html}");
+    assert!(!html.contains("<caption"), "{html}");
+}
+
+#[test]
+fn paragraph_thematic_breaks_remain_literal_exactly() {
+    for (source, expected) in [
+        ("---", "\\-\\-\\-\n"),
+        ("* * *", "\\* \\* \\*\n"),
+        ("--- * ---", "\\-\\-\\- \\* \\-\\-\\-\n"),
+    ] {
+        let mut builder = InternalDocumentBuilder::new("test");
+        builder.push_paragraph(source, vec![], None, None);
+        let output = render_djot(&builder.build());
+        assert_eq!(output, expected);
+        assert_eq!(djot_paragraph_texts(&output), [source]);
+    }
+}
+
+#[test]
+fn paragraph_complex_attribute_prefix_preserves_literal_syntax_and_inline_suffix() {
+    for (source, expected) in [
+        (
+            r#"{.snake_case key="a_b"} *bold*"#,
+            r#"{.snake_case key="a_b"} <strong>bold</strong>"#,
+        ),
+        (r#"{.a key="a}b"} 1\*2"#, r#"{.a key="a}b"} 1*2"#),
+        (r#"{.a key="a\*b"} *bold*"#, r#"{.a key="a*b"} <strong>bold</strong>"#),
+    ] {
+        assert_eq!(
+            paragraph_roundtrip_html(source, vec![]),
+            format!("<p>{expected}</p>\n<p>Tail</p>\n"),
+            "{source:?}"
+        );
+    }
+}

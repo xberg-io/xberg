@@ -93,6 +93,42 @@ fn test_layout_confidence_applied() {
     assert_eq!(layout.confidence_threshold, Some(0.7));
 }
 
+#[cfg(feature = "layout-detection")]
+#[test]
+fn test_layout_model_applied() {
+    let mut config = ExtractionConfig::default();
+    let overrides = ExtractionOverrides {
+        layout_model: Some("pp_doc_layout_v3".to_string()),
+        ..default_overrides()
+    };
+    overrides.apply(&mut config);
+    let layout = config.layout.unwrap();
+    assert_eq!(layout.model, xberg::LayoutDetectionModel::PpDocLayoutV3);
+}
+
+#[cfg(feature = "layout-detection")]
+#[test]
+fn test_layout_model_defaults_to_rtdetr() {
+    let mut config = ExtractionConfig::default();
+    let overrides = ExtractionOverrides {
+        layout: Some(true),
+        ..default_overrides()
+    };
+    overrides.apply(&mut config);
+    assert_eq!(config.layout.unwrap().model, xberg::LayoutDetectionModel::RtDetr);
+}
+
+#[cfg(feature = "layout-detection")]
+#[test]
+fn test_layout_model_rejects_unknown_value() {
+    let overrides = ExtractionOverrides {
+        layout_model: Some("yolo".to_string()),
+        ..default_overrides()
+    };
+    let error = overrides.validate().expect_err("unknown model must fail");
+    assert!(error.to_string().contains("Invalid layout model"));
+}
+
 /// Make every callsite in the process permanently interesting, once, so a
 /// `tracing::warn!` reached on some other test's thread first isn't cached as
 /// `Interest::never()` for the whole process and lost to `capture_logs` below.

@@ -8,6 +8,7 @@
 use xberg::{ExtractInput, ExtractedDocument, ExtractionConfig, ExtractionMethod, extract as extract_public};
 
 const TALL_JPEG: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/jpeg-tall.pdf");
+const MIXED_JPEG: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/jpeg-mixed.pdf");
 const TALL: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/strict-tall.pdf");
 const BILEVEL: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/bilevel-tall.pdf");
 const TALL_PREDICTOR: &[u8] = include_bytes!("../../../fixtures/repros/tall-scan-strips/predictor-mixed.pdf");
@@ -212,8 +213,10 @@ fn tall_gray_jpeg_keeps_the_existing_refusal_for_forced_or_very_low_budget_ocr()
     }
 }
 
+/// A single-page scan takes the whole-document route, which reads no embedded image after a render
+/// refusal: Djot output has no strip recovery, so it keeps the refusal as it is.
 #[test]
-fn tall_gray_jpeg_read_as_noise_keeps_the_refusal_under_automatic_djot_ocr() {
+fn tall_gray_jpeg_keeps_the_render_refusal_under_djot_output() {
     let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
         "use_cache": false,
         "output_format": "djot",
@@ -231,7 +234,7 @@ fn tall_gray_jpeg_read_as_noise_keeps_the_refusal_under_automatic_djot_ocr() {
     let error = match outcome {
         Err(error) => error,
         Ok(result) => panic!(
-            "the noisy retry read must not be reported as the page text: {:?}",
+            "the refused page must not be reported as read: {:?}",
             result
                 .results
                 .first()
@@ -245,13 +248,59 @@ fn tall_gray_jpeg_read_as_noise_keeps_the_refusal_under_automatic_djot_ocr() {
     else {
         panic!("expected the typed render refusal, got {error:?}");
     };
-    assert!(message.contains("the retry read was rejected as noise"), "{message}");
+    assert!(message.contains("image working budget"), "{message}");
     let native = source.downcast_ref::<xberg_native_pdf::Error>().or_else(|| {
         source
             .source()
             .and_then(|cause| cause.downcast_ref::<xberg_native_pdf::Error>())
     });
     assert!(matches!(native, Some(xberg_native_pdf::Error::Image(_))));
+}
+
+/// The retry of a refused page on its embedded image runs on the mixed route, where a native page
+/// precedes the scan. The dimension clamp leaves the read illegible, so the page stays unread and
+/// its failure names the noise instead of reporting the read as the page text.
+fn assert_noisy_retry_read_is_a_page_failure(config: &ExtractionConfig) {
+    let document = extract(MIXED_JPEG, config);
+    let native = "The native page remains unchanged.\n".repeat(10);
+    assert_eq!(words(&document.content), words(&native));
+    let pages = document.pages.as_ref().expect("two original PDF pages");
+    assert_eq!(pages.len(), 2);
+    assert!(pages[1].content.trim().is_empty(), "{:?}", pages[1].content);
+    let failures = document
+        .ocr_page_failures
+        .as_ref()
+        .expect("the refused page is recorded");
+    let [failure] = failures.as_slice() else {
+        panic!("expected one page failure, got {failures:?}");
+    };
+    assert_eq!(failure.page, 2);
+    assert!(!failure.recovered);
+    for part in ["image working budget", "the retry read was rejected as noise"] {
+        assert!(failure.error.contains(part), "{part}: {}", failure.error);
+    }
+}
+
+#[test]
+fn tall_gray_jpeg_page_read_as_noise_is_reported_as_a_failure_not_adopted() {
+    assert_noisy_retry_read_is_a_page_failure(&extraction_config());
+}
+
+/// An explicit pipeline takes its own retry on the refused page, with its own noise check.
+#[test]
+fn explicit_pipeline_reports_a_noisy_retry_read_as_a_page_failure_too() {
+    let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
+        "use_cache": false,
+        "ocr": {
+            "backend": "tesseract",
+            "language": ["eng"],
+            "pipeline": {"stages": [{"backend": "tesseract", "backend_options": {"use_cache": false}}]},
+        },
+        "pages": {"extract_pages": true},
+        "concurrency": {"max_threads": 1},
+    }))
+    .expect("one-thread explicit-pipeline Tesseract configuration");
+    assert_noisy_retry_read_is_a_page_failure(&config);
 }
 
 fn assert_exact_tall_source_text(source: &[u8]) {
@@ -498,4 +547,100 @@ fn a_configuration_that_blocks_strip_recovery_is_named_in_the_result() {
         .find(|warning| warning.message.contains("source-image strips were not used"))
         .expect("the skipped recovery is reported");
     assert!(warning.message.contains("document structure"), "{}", warning.message);
+}
+
+fn not_used_warnings(document: &ExtractedDocument) -> Vec<&str> {
+    document
+        .processing_warnings
+        .iter()
+        .map(|warning| warning.message.as_ref())
+        .filter(|message| message.contains("source-image strips were not used"))
+        .collect()
+}
+
+/// The mixed route retries nothing for a scan its configuration keeps from strip recovery, and says why.
+#[test]
+fn the_mixed_route_names_the_configuration_that_blocked_strip_recovery() {
+    let blocked = extract(
+        MIXED,
+        &configured(serde_json::json!({"include_document_structure": true})),
+    );
+    assert_eq!(blocked.extraction_method, Some(ExtractionMethod::Mixed));
+    assert!(!strip_warning(&blocked));
+    assert_eq!(
+        not_used_warnings(&blocked),
+        vec![
+            "Page 2 was read from a render downscaled to 130 DPI and its source-image strips were not used: \
+             per-element results or document structure were requested. The text may be incomplete."
+        ]
+    );
+    let allowed = extract(MIXED, &extraction_config());
+    assert!(strip_warning(&allowed));
+    assert_eq!(not_used_warnings(&allowed), Vec::<&str>::new());
+}
+
+/// A layout request whose pass soft-failed (its models are unavailable) has no detections to lose:
+/// strip recovery stays on. The extraction runs in a child process with an empty offline model
+/// cache, so the cache variables reach no other test.
+#[cfg(feature = "layout-detection")]
+#[test]
+fn a_layout_request_whose_models_are_unavailable_still_recovers_the_tall_scan() {
+    const CHILD: &str = "XBERG_TEST_LAYOUT_UNAVAILABLE_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        let empty_cache = tempfile::tempdir().expect("empty model cache");
+        let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+            .args([
+                "--exact",
+                "a_layout_request_whose_models_are_unavailable_still_recovers_the_tall_scan",
+            ])
+            .args(["--test-threads=1", "--nocapture"])
+            .env(CHILD, "1")
+            .env_remove("HUGGINGFACE_HUB_CACHE")
+            .env("HF_HOME", empty_cache.path())
+            .env("HF_HUB_CACHE", empty_cache.path())
+            .env("HF_HUB_OFFLINE", "1")
+            .output()
+            .expect("run the child test");
+        let report = String::from_utf8_lossy(&output.stdout).into_owned() + &String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{report}");
+        assert!(
+            report.contains("test result: ok. 1 passed; 0 failed; 0 ignored;"),
+            "the child test did not run: {report}"
+        );
+        return;
+    }
+    let document = extract(TALL, &configured(serde_json::json!({"layout": {}})));
+    assert!(
+        document
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "layout" && warning.message.contains("layout detection failed")),
+        "{:?}",
+        document.processing_warnings
+    );
+    assert_image_text(&document, true);
+    assert_eq!(not_used_warnings(&document), Vec::<&str>::new());
+}
+
+/// The render-failure fallback has no layout detections in scope, so a layout request alone keeps it
+/// from replacing the refusal with a source-image read.
+#[cfg(feature = "layout-detection")]
+#[test]
+fn a_layout_request_keeps_the_gray_jpeg_render_refusal() {
+    let config = configured(serde_json::json!({"layout": {}}));
+    let document = extract(TALL_JPEG, &config);
+    assert!(!strip_warning(&document));
+    assert!(
+        words(&document.content).len() < words(ORACLE).len() / 2,
+        "{:?}",
+        document.content.chars().take(80).collect::<String>()
+    );
+    assert!(
+        document
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "layout" && warning.message.contains("image working budget")),
+        "{:?}",
+        document.processing_warnings
+    );
 }

@@ -444,6 +444,7 @@ fn test_column_aware_reads_column1_before_column2() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         }
@@ -524,6 +525,7 @@ fn test_column_aware_sparse_two_column_follows_stream_order() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
         }
     }
 
@@ -595,6 +597,7 @@ fn test_column_aware_sparse_2x2_table_stays_row_major() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
         }
     }
 
@@ -658,6 +661,7 @@ fn test_rowspan_label_skips_spans_aligned_with_dense_column() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         }
@@ -730,6 +734,7 @@ fn test_rowspan_skips_numbered_reference_continuation() {
             rotation_degrees: 0.0,
             wmode: 0,
             rtl_draw_logical: false,
+            ligature_glyph: false,
             mirrored: false,
             page_rotation_applied: 0,
         }

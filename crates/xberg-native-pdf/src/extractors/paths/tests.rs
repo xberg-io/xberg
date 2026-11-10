@@ -383,3 +383,42 @@ fn move_to_followed_by_a_segment_still_contributes_both_points() {
     assert_eq!(bbox.width, 100.0);
     assert_eq!(bbox.height, 100.0);
 }
+
+#[test]
+fn cached_extgstate_keeps_the_stroke_opacity_inside_zero_to_one() {
+    for (written, kept) in [(1.7_f32, 1.0_f32), (-0.3, 0.0), (0.4, 0.4)] {
+        let mut extractor = PathExtractor::new();
+        let parsed = crate::rendering::ext_gstate::ParsedExtGState {
+            stroke_alpha: Some(written),
+            ..Default::default()
+        };
+        extractor.cache_path_extgstate("GS", parsed);
+        let mut state = PathGraphicsState::new();
+        assert!(extractor.apply_cached_path_extgstate("GS", &mut state));
+        assert_eq!(state.stroke_alpha, kept, "CA {written}");
+    }
+}
+
+#[test]
+fn cached_extgstate_ignores_a_nan_stroke_opacity() {
+    let mut extractor = PathExtractor::new();
+    let parsed = crate::rendering::ext_gstate::ParsedExtGState {
+        stroke_alpha: Some(f32::NAN),
+        ..Default::default()
+    };
+    extractor.cache_path_extgstate("GS", parsed);
+    let mut state = PathGraphicsState::new();
+    state.stroke_alpha = 0.5;
+    assert!(extractor.apply_cached_path_extgstate("GS", &mut state));
+    assert_eq!(state.stroke_alpha, 0.5);
+    extractor.move_to(0.0, 0.0);
+    extractor.line_to(10.0, 0.0);
+    extractor.set_stroke_color(Color::new(1.0, 0.0, 0.0));
+    extractor.stroke();
+    let paths = extractor.finish();
+    assert_eq!(paths.len(), 1);
+    assert!(
+        paths[0].stroke_color.is_some(),
+        "a stroke after a NaN CA keeps its colour"
+    );
+}

@@ -26,3 +26,5 @@ pub(crate) use list_marker::is_bullet_glyph;
 pub(crate) use pipeline::SegmentStructureConfig;
 #[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use pipeline::extract_document_structure_from_segments;
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) use text_repair::ligature_letters;

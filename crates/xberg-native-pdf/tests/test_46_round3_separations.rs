@@ -250,7 +250,9 @@ fn compose_normal(t_b: f32, t_s: f32, alpha: f32) -> f32 {
     (1.0 - alpha) * t_b + alpha * t_s
 }
 fn compose_multiply(t_b: f32, t_s: f32, alpha: f32) -> f32 {
-    let blended = t_b * t_s;
+    // Multiply is defined on additive values (ISO 32000-1 §11.3.5.2), so the
+    // subtractive tints are complemented before the product and after it. ~keep
+    let blended = 1.0 - (1.0 - t_b) * (1.0 - t_s);
     (1.0 - alpha) * t_b + alpha * blended
 }
 
@@ -290,8 +292,8 @@ fn centre(plate: &xberg_native_pdf::rendering::SeparationPlate) -> u8 {
 /// Byte-exact references:
 ///  - After backdrop: lane = compose_normal(0, 0.4, 1.0) = 0.4 → u8 102.
 ///  - After Multiply paint at α = 1·0.5 = 0.5:
-///    blend = Multiply(0.4, 0.6) = 0.24.
-///    lane = (1 - 0.5)·0.4 + 0.5·0.24 = 0.2 + 0.12 = 0.32 → u8 82.
+///    blend = 1 - (1 - 0.4)·(1 - 0.6) = 0.76 (Multiply on the additive complements).
+///    lane = (1 - 0.5)·0.4 + 0.5·0.76 = 0.2 + 0.38 = 0.58 → u8 148.
 #[test]
 fn round3_p1_separation_paint_with_multiply_and_alpha_composites_correctly() {
     let icc = build_constant_cmyk_icc(135);
@@ -312,21 +314,21 @@ fn round3_p1_separation_paint_with_multiply_and_alpha_composites_correctly() {
 
     // Reference computation:
     //   Backdrop lane = compose_normal(0, 0.4, α=1) = 0.4
-    //   B(t_b, t_s) = Multiply(0.4, 0.6) = 0.24
-    //   lane = (1 - 0.5)·0.4 + 0.5·0.24 = 0.20 + 0.12 = 0.32
-    //   tint_to_u8(0.32) = round(0.32·255) = round(81.6) = u8 82 ~keep
+    //   B(t_b, t_s) = 1 - (1 - 0.4)·(1 - 0.6) = 0.76
+    //   lane = (1 - 0.5)·0.4 + 0.5·0.76 = 0.20 + 0.38 = 0.58
+    //   tint_to_u8(0.58) = round(0.58·255) = round(147.9) = u8 148 ~keep
     let backdrop = compose_normal(0.0, 0.4, 1.0);
     assert_eq!(tint_to_u8(backdrop), 102);
     let after_mult = compose_multiply(backdrop, 0.6, 0.5);
     let expected = tint_to_u8(after_mult);
-    assert_eq!(expected, 82);
+    assert_eq!(expected, 148);
     assert_eq!(
         centre(inka),
         expected,
         "ISO 32000-1 §11.3.5.2 Multiply + §11.3.3 compose + §11.7.4.2 \
          (Multiply is separable AND white-preserving on spot lanes): \
-         backdrop 0.4, source 0.6, B = 0.4·0.6 = 0.24, α = 0.5, \
-         lane = 0.5·0.4 + 0.5·0.24 = 0.32 → u8 {}. Got {}.",
+         backdrop 0.4, source 0.6, B = 1 - 0.6·0.4 = 0.76, α = 0.5, \
+         lane = 0.5·0.4 + 0.5·0.76 = 0.58 → u8 {}. Got {}.",
         expected,
         centre(inka)
     );

@@ -34,8 +34,13 @@ impl<'doc> TextExtractor<'doc> {
         let line_thresholds = Self::bimodal_line_gap_thresholds(&spans);
         let mut merged = Vec::with_capacity(old_len);
         let mut current_span: Option<TextSpan> = None;
+        // Whether the last run folded into `current_span` is a ligature that the decoder expanded to
+        // letters. The flag on the span itself is cleared at a merge, so the fold keeps the tail here. ~keep
+        let mut tail_is_expanded_ligature = false;
 
         for (span_idx, span) in spans.into_iter().enumerate() {
+            let preceding_is_expanded_ligature =
+                std::mem::replace(&mut tail_is_expanded_ligature, span.is_expanded_ligature());
             if current_span.is_none() {
                 current_span = Some(span);
                 continue;
@@ -110,12 +115,18 @@ impl<'doc> TextExtractor<'doc> {
             // boundaries. In other words: the merge still happens exactly
             // as before on fallback-width fonts, but once we're inside the
             // merge branch we consult a more honest gap to decide whether
-            // a space is warranted. ~keep
-            let reliable_widths = self
-                .fonts
-                .get(&current.font_name)
-                .map(|f| f.has_explicit_widths())
-                .unwrap_or(true);
+            // a space is warranted.
+            //
+            // A span that starts where the previous `TJ` array left the pen (`pen_continuations`,
+            // GH#2664) sits at the producer's own pen: its gap is the real one and needs no
+            // correction. ~keep
+            let continues_pen = self.pen_continuations.contains(&SpanKey::of(&span));
+            let reliable_widths = continues_pen
+                || self
+                    .fonts
+                    .get(&current.font_name)
+                    .map(|f| f.has_explicit_widths())
+                    .unwrap_or(true);
             let space_gap = corrected_space_gap(
                 gap,
                 reliable_widths,
@@ -373,6 +384,7 @@ impl<'doc> TextExtractor<'doc> {
                         Some(&span.bbox),
                         current.font_size,
                         span.font_size,
+                        preceding_is_expanded_ligature || span.is_expanded_ligature(),
                     );
 
                     // Narrow-word-gap rescue. The fixed intra-word
@@ -487,6 +499,8 @@ impl<'doc> TextExtractor<'doc> {
                 // A merged span is logical-draw RTL if any of its glyph runs was
                 // drawn right-to-left (see `detect_rtl_draw_direction`). ~keep
                 current.rtl_draw_logical |= span.rtl_draw_logical;
+                // The merged run is no longer one glyph. ~keep
+                current.ligature_glyph = false;
                 let new_width = (span.bbox.x + span.bbox.width) - current.bbox.x;
                 let new_height = current.bbox.height.max(span.bbox.height);
 

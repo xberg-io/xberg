@@ -1069,7 +1069,7 @@ force_ocr_pages = [1, 3, 5]
 
 ### Auto-Rotate Pages
 
-Set `auto_rotate` on `OcrConfig` to detect page orientation (0/90/180/270 degrees) with Tesseract's orientation-and-script detection before recognition. Pages rotated with high confidence are corrected before OCR — important for rotated scans. Defaults to `false`.
+Set `auto_rotate` on `OcrConfig` to detect page orientation (0/90/180/270 degrees) with Tesseract's orientation-and-script detection before recognition. Pages rotated with high confidence are corrected before OCR — important for rotated scans. `true` always rotates, `false` never rotates and never retries, and leaving it unset (the default) keeps the automatic orientation retry for a plain Tesseract block.
 
 <Tabs syncKey="lang">
 <TabItem label="Python">
@@ -1108,7 +1108,7 @@ let config = ExtractionConfig {
     force_ocr: true,
     ocr: Some(OcrConfig {
         backend: "tesseract".into(),
-        auto_rotate: true,
+        auto_rotate: Some(true),
         ..Default::default()
     }),
     ..Default::default()

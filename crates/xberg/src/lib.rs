@@ -268,6 +268,12 @@ pub mod transcription;
 #[cfg(feature = "captioning")]
 pub mod captioning;
 
+/// Pinned inventory of experimental candidate models staged on owned Hugging Face repositories.
+#[cfg(feature = "onnx-runtime")]
+// No non-test consumer exists until the captioning adapters in #2335 and a supported preset land. ~keep
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) mod candidate_models;
+
 /// Experimental Rust-only CPU natural-language-inference classification with caller-pinned artifacts.
 #[cfg(feature = "classification-onnx-types")]
 pub mod local_classification;
@@ -387,7 +393,7 @@ pub use layout::model_manager::ModelManifestEntry;
 pub use cache::CacheStats;
 
 #[cfg(feature = "layout-types")]
-pub use core::config::{LayoutDetectionConfig, LayoutStrategy, TableModel};
+pub use core::config::{LayoutDetectionConfig, LayoutDetectionModel, LayoutStrategy, TableModel};
 
 #[cfg(feature = "layout-types")]
 pub use layout::types::{BBox, DetectionResult, LayoutClass, LayoutDetection};

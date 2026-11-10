@@ -116,7 +116,7 @@ pub(crate) fn segments_are_touching(
 }
 
 /// Returns true if the character is a CJK ideograph, Hiragana, Katakana, or Hangul.
-pub(super) fn is_cjk_char(c: char) -> bool {
+pub(crate) fn is_cjk_char(c: char) -> bool {
     let cp = c as u32;
     matches!(cp,
         0x4E00..=0x9FFF

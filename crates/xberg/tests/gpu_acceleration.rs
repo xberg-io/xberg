@@ -361,7 +361,7 @@ mod doc_orientation_cuda {
         let ocr_config = OcrConfig {
             backend: "paddle-ocr".to_string(),
             language: vec!["en".to_string()],
-            auto_rotate: true,
+            auto_rotate: Some(true),
             acceleration: Some(cuda_accel()),
             ..Default::default()
         };

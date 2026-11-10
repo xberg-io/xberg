@@ -269,7 +269,6 @@ cargo run --release -p benchmark-harness --bin xberg-runtime-responsiveness -- \
     "ocr": {
       "backend": "paddleocr",
       "language": ["eng"],
-      "auto_rotate": false,
       "paddle_ocr_config": {"model_version": "pp-ocrv6", "model_tier": "medium"}
     }
   }' \

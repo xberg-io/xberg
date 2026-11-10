@@ -224,12 +224,19 @@ impl<'doc> TextExtractor<'doc> {
                     cached.required_depth <= Self::MAX_XOBJECT_DEPTH - self.xobject_depth
                         && cached.matches_inherited_fonts(&self.fonts)
                 })
-                .map(|cached| (cached.required_depth, cached.spans.clone()));
-            if let Some((required_depth, spans)) = cached_spans {
+                .map(|cached| {
+                    (
+                        cached.required_depth,
+                        cached.spans.clone(),
+                        cached.pen_continuations.clone(),
+                    )
+                });
+            if let Some((required_depth, spans, pen_continuations)) = cached_spans {
                 self.xobject_subtree_depth = self.xobject_subtree_depth.map(|depth| depth.max(required_depth));
                 if let Some(spans) = spans {
                     self.spans.extend(spans);
                 }
+                self.pen_continuations.extend(pen_continuations);
                 return Ok(());
             }
         }
@@ -375,6 +382,7 @@ impl<'doc> TextExtractor<'doc> {
                 }
 
                 let spans_before = self.spans.len();
+                let pen_continuations_before = self.pen_continuations.clone();
                 // The /BBox clip below must prune the character layer on the
                 // same decision it prunes spans, or `extract_chars` reports
                 // marks `extract_text` correctly dropped. ~keep
@@ -554,10 +562,18 @@ impl<'doc> TextExtractor<'doc> {
                     } else {
                         None
                     };
-                    doc.xobject_spans_cache.lock_or_recover().insert(
-                        spans_cache_key,
-                        crate::document::CachedFormSpans::new(required_depth, new_spans, caller_fonts, &self.fonts),
-                    );
+                    // The replayed spans keep their sequence numbers, so their pen marks replay too. ~keep
+                    let new_continuations: Vec<SpanKey> = self
+                        .pen_continuations
+                        .difference(&pen_continuations_before)
+                        .copied()
+                        .collect();
+                    let cached =
+                        crate::document::CachedFormSpans::new(required_depth, new_spans, caller_fonts, &self.fonts)
+                            .with_pen_continuations(new_continuations);
+                    doc.xobject_spans_cache
+                        .lock_or_recover()
+                        .insert(spans_cache_key, cached);
                 }
 
                 // Restore graphics state (implicit Q per ISO 32000-1 §8.10.1) ~keep

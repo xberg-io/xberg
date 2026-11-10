@@ -301,7 +301,7 @@ mod tests {
 
     fn public_word_config(elements: &[OcrElement]) -> crate::core::config::OcrConfig {
         let config = crate::core::config::OcrConfig {
-            auto_rotate: true,
+            auto_rotate: Some(true),
             element_config: Some(crate::types::OcrElementConfig {
                 include_elements: true,
                 min_level: OcrElementLevel::Word,

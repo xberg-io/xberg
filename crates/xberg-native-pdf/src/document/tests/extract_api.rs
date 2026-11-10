@@ -88,9 +88,8 @@ fn test_apply_intelligent_text_processing_empty() {
 
 #[test]
 fn test_apply_intelligent_text_processing_ligature_preserved() {
-    // The pipeline preserves Unicode ligature characters that come
-    // from the font's ToUnicode map (U+FB01 = ﬁ). Expanding them to plain "fi"
-    // caused Jaccard mismatches against ground-truth corpora that keep ligatures. ~keep
+    // This stage leaves a ligature code point in a span alone (U+FB01 = ﬁ). The glyph stage
+    // already returns letters for a font glyph (GH#2322), so such a span comes from another source. ~keep
     let pdf = build_minimal_pdf(b"");
     let doc = PdfDocument::from_bytes(pdf).unwrap();
     let spans = vec![make_test_span("\u{FB01}nd", 0.0, 0.0, 50.0, 12.0)];
@@ -243,7 +242,7 @@ fn test_get_page_content_data_null_contents() {
 
 #[test]
 fn test_apply_intelligent_text_processing_fl_ligature_preserved() {
-    // Same as ﬁ: ﬂ (U+FB02) must be preserved, not expanded to "fl". ~keep
+    // Same as ﬁ: this stage leaves ﬂ (U+FB02) alone. ~keep
     let pdf = build_minimal_pdf(b"");
     let doc = PdfDocument::from_bytes(pdf).unwrap();
     let spans = vec![make_test_span("\u{FB02}oor", 0.0, 0.0, 50.0, 12.0)];
