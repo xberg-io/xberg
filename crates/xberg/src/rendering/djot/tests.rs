@@ -864,10 +864,29 @@ fn row_lines_that_start_with_any_djot_list_marker_are_escaped() {
 fn row_lines_escape_bare_markers_thematic_breaks_and_heading_runs_only() {
     let mut b = InternalDocumentBuilder::new("test");
     b.push_element(marked_row_lines_element(
-        "+ Pool .... 4\n* Park .... 7\n### Lot .... 2\n1.5 Units .... 3\n1.\n-\n---\n*** Rule\n#hashtag .... 1\nPlan A. .... 2",
+        "+ Pool .... 4\n* Park .... 7\n### Lot .... 2\n1.5 Units .... 3\n1.\n-\n---\n- - -\n***\n#hashtag .... 1\nPlan A. .... 2",
     ));
     assert_eq!(
         render_djot(&b.build()),
-        "\\+ Pool .... 4\n\n\\* Park .... 7\n\n\\### Lot .... 2\n\n1.5 Units .... 3\n\n1\\.\n\n\\-\n\n\\---\n\n\\*** Rule\n\n#hashtag .... 1\n\nPlan A. .... 2\n"
+        "\\+ Pool .... 4\n\n\\* Park .... 7\n\n\\### Lot .... 2\n\n1.5 Units .... 3\n\n1\\.\n\n\\-\n\n\\---\n\n\\- - -\n\n\\***\n\n#hashtag .... 1\n\nPlan A. .... 2\n"
     );
+}
+
+#[test]
+fn row_lines_of_ordinary_prose_are_not_escaped() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element(
+        "I am .... 1\nA big .... 2\ni.e. .... 3\nI.e. .... 4\nDr. Smith .... 5\n--- Rule .... 6",
+    ));
+    assert_eq!(
+        render_djot(&b.build()),
+        "I am .... 1\n\nA big .... 2\n\ni.e. .... 3\n\nI.e. .... 4\n\nDr. Smith .... 5\n\n--- Rule .... 6\n"
+    );
+}
+
+#[test]
+fn a_lowercase_roman_run_row_is_escaped_like_a_list_label() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element("mix. .... 6"));
+    assert_eq!(render_djot(&b.build()), "mix\\. .... 6\n");
 }

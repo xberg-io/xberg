@@ -389,7 +389,10 @@ fn escape_leading_block_marker(line: &str) -> String {
 fn leading_block_marker_at(line: &str) -> Option<usize> {
     let first = line.chars().next()?;
     let after = |len: usize| line[len..].chars().next().is_none_or(char::is_whitespace);
-    if matches!(first, '-' | '*') && line.starts_with(&first.to_string().repeat(3)) {
+    if matches!(first, '-' | '*')
+        && line.chars().all(|c| c == first || c == ' ')
+        && line.chars().filter(|&c| c == first).count() >= 3
+    {
         return Some(0);
     }
     match first {
