@@ -420,3 +420,34 @@ fn a_fixed_pitch_space_after_a_lone_ligature_leaves_the_span_unmarked() {
     assert!(spans[0].0.starts_with("ff"), "{spans:?}");
     assert!(!spans[0].1, "{spans:?}");
 }
+
+/// Every ligature a glyph can expand to joins the word around it in the merge pass once marked, `st`
+/// (what U+FB05 and U+FB06 decode to) included, and none of them does as plain letters (#2689).
+#[test]
+fn merging_joins_every_expanded_ligature_and_no_literal_letters() {
+    for letters in ["ff", "fi", "fl", "ffi", "ffl", "st"] {
+        assert_eq!(
+            merged_text_around(letters, true),
+            vec![format!("di{letters}erent")],
+            "{letters}"
+        );
+        assert_eq!(
+            merged_text_around(letters, false),
+            vec![format!("di {letters} erent")],
+            "literal {letters}"
+        );
+    }
+}
+
+/// A ligature code point on either side of a gap relaxes it across the whole block U+FB00..U+FB06.
+#[test]
+fn merging_joins_around_every_ligature_code_point() {
+    for code in '\u{FB00}'..='\u{FB06}' {
+        assert_eq!(
+            merged_text_around(&code.to_string(), false),
+            vec![format!("di{code}erent")],
+            "U+{:04X}",
+            code as u32
+        );
+    }
+}

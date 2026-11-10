@@ -309,6 +309,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Pin the ligature word-join rules: only a glyph the font decoded as one ligature relaxes the gap, for every ligature code and for `st`, on both sides.** (#2689)
+  A run of plain `fi`, `ff` or `st` letters keeps the ordinary word gap, a ligature glyph joins its word at 0.2 em for U+FB00 to U+FB06 and for the decoded letters `ff`, `fi`, `fl`, `ffi`, `ffl` and `st`, and a word with an `ffi` glyph stays whole in Markdown and plain output with OCR off. The behavior already held on main after the ligature provenance landed; these tests keep it from regressing.
 - **(pdf): Keep a word whole when a producer sets the text matrix back over it before a large TJ offset.** (GH#2322)
   Some producers set the text matrix to the start of a run they already drew and reach the next glyph with a large leading offset in a TJ array. That offset no longer adds a space where the matrix points, so words such as `benefits` no longer come out as `benefi ts`. When the offset reaches past the end of that run by a word gap, the space goes at the end of the run. Otherwise the gap between the real letters on each side decides the space. A lead that follows such a matrix also ends the run at its glyphs when it is a lead at least as large as the word-boundary gap (GH#2690). Not covered: a space glyph that lands inside a ligature after the matrix is set back still splits the word (`defi ne`), tracked in GH#2322.
 - **(pdf): Keep every glyph of a text run that the renderer draws without font info.** (#2709)
