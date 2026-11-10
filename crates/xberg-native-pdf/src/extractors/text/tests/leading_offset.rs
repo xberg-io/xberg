@@ -469,16 +469,23 @@ fn cm_that_puts_the_pen_past_the_drawn_run_keeps_the_space_at_the_pen() {
     );
 }
 
-/// `Q` restores the matrix that the run drawn last was not drawn under (GH#2322). The pen set back to 80 is
-/// not inside that run, which ended at 137: the space span goes at the pen. The `cm` comes before the glyphs,
-/// so only the `Q` can forget the run. ~keep
+/// `Q` restores the text matrix saved by `q`, which is a raw matrix of the run drawn before the `q`, read
+/// under the CTM that `q` restored (GH#2322). A pen set back to 80 sits 7 before that raw end, but the run
+/// drawn inside the `q` block (under a `cm` that comes before its glyphs) was the run drawn last: the space
+/// goes at the pen. Only the `Q` can forget the end here. ~keep
 #[test]
-fn q_that_restores_the_matrix_of_the_drawn_run_keeps_the_space_at_the_pen() {
-    let stream = "q 1 0 0 1 50 0 cm BT /F1 10 Tf 72 700 Td (abc) Tj ET Q \
-                  BT /F1 10 Tf 1 0 0 1 80 700 Tm [-700 (def)] TJ ET";
+fn q_that_restores_the_text_matrix_of_an_earlier_run_keeps_the_space_at_the_pen() {
+    let stream = "BT /F1 10 Tf 72 700 Td (abc) Tj ET \
+                  q 1 0 0 1 50 0 cm BT 1 0 0 1 72 300 Tm (xyz) Tj ET Q \
+                  BT 1 0 0 1 80 700 Tm [-700 (def)] TJ ET";
     assert_eq!(
         starts(stream),
-        [start("abc", 122.0), start(" ", 80.0), start("def", 87.0)]
+        [
+            start("abc", 72.0),
+            start("xyz", 122.0),
+            start(" ", 80.0),
+            start("def", 87.0)
+        ]
     );
 }
 
