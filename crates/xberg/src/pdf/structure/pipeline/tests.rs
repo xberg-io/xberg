@@ -1623,6 +1623,57 @@ fn dedup_keeps_the_words_of_a_native_table_when_its_layout_copy_is_the_one_that_
 }
 
 #[test]
+fn dedup_keeps_the_sole_copy_when_neighbouring_tables_print_digits_that_join_into_its_words() {
+    let sole = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["12", "34"]]);
+    let duplicate = cell_table(1, (0.0, 40.0, 100.0, 140.0), &[&["12", "34"]]);
+    let single = |digit: &str, x: f64| cell_table(1, (x, 0.0, x + 100.0, 100.0), &[&[digit]]);
+    let diagonal = |first: &str, second: &str, x: f64| {
+        cell_table(1, (x, 0.0, x + 100.0, 100.0), &[&[first, ""], &["", second]])
+    };
+    let scenarios = [
+        (
+            "single cells, joined in page order",
+            vec![single("1", 300.0), single("2", 500.0), single("3", 700.0), single("4", 900.0)],
+            [("1", 305.0), ("2", 505.0), ("3", 705.0), ("4", 905.0)],
+        ),
+        (
+            "single cells, page order reversed",
+            vec![single("1", 300.0), single("2", 500.0), single("3", 700.0), single("4", 900.0)],
+            [("4", 905.0), ("3", 705.0), ("2", 505.0), ("1", 305.0)],
+        ),
+        (
+            "diagonal cells, page order 1 2 3 4",
+            vec![diagonal("1", "2", 300.0), diagonal("3", "4", 700.0)],
+            [("1", 305.0), ("2", 305.0), ("3", 705.0), ("4", 705.0)],
+        ),
+        (
+            "diagonal cells, page order 2 1 4 3",
+            vec![diagonal("1", "2", 300.0), diagonal("3", "4", 700.0)],
+            [("2", 305.0), ("1", 305.0), ("4", 705.0), ("3", 705.0)],
+        ),
+    ];
+    let mut wrong = Vec::new();
+    for (name, neighbours, digits) in scenarios {
+        for duplicate_first in [false, true] {
+            let mut tables = if duplicate_first {
+                vec![duplicate.clone(), sole.clone()]
+            } else {
+                vec![sole.clone(), duplicate.clone()]
+            };
+            tables.extend(neighbours.clone());
+            let mut segments = vec![printed_at("12", 5.0, 5.0), printed_at("34", 40.0, 5.0)];
+            segments.extend(digits.iter().map(|&(digit, x)| printed_at(digit, x, 5.0)));
+            let kept = kept_native_tables(tables, &[segments]);
+            let copies = kept.iter().filter(|table| table.cells == sole.cells).count();
+            if copies != 1 || kept.len() != 1 + neighbours.len() {
+                wrong.push(format!("{name}, duplicate first {duplicate_first}: {copies} copies, {} tables", kept.len()));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:?}");
+}
+
+#[test]
 fn dedup_counts_two_split_copies_and_drops_a_table_for_one_printed_copy() {
     let (small, large) = joined_pair();
     let split_twice = vec![vec![
