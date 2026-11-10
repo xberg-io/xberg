@@ -86,8 +86,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stages, unsupported glyph evidence, ambiguous ownership and lines already containing numbers retain their ordinary read.
   Numeric insertion preserves neighboring OCR text and multiline paragraph bytes. Eligible pages bypass extraction caching;
   with the auxiliary model present, admitted pages also bypass primary OCR caching. Serial blocking workers share one
-  document budget of at most eight attempted pages, 64 crops and 128 MiB of accounted verifier work; caller limits can
-  lower these bounds. Exhaustion retains accepted OCR text and reports the verification gap. Implicit deferred per-page
+  document budget of at most eight metadata-supported pages, 64 crops and 128 MiB of accounted verifier work; caller limits
+  can lower these bounds. Each source proof reserves half the document allowance, rounded up (the full allowance for a one-page
+  limit); unmeasured late declines, errors and cancellation retain that share. Metadata-only unsupported pages use no page
+  slot or work allowance. Exhaustion retains accepted OCR text and reports the verification gap. Implicit deferred per-page
   pipelines, including the usual full-feature route, are outside this capability and its missing-model warning.
   Accepted eligible pages warn once about a missing model or an unbound geometry proof. The original reporter page remains
   unavailable, so this is partial support. ADR 0014 records the activation policy and limits.
@@ -323,8 +325,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Exclude Unicode numerals from native-prose script evidence.**
   Numeric-only OCR reads do not claim retention of native prose, across all supported scripts.
+- **(djot): Preserve paragraph text that begins with block syntax.** (#2856, #2869)
+  Escape block markers without changing following inline markup or existing backslash escapes.
+- **(pdf): Keep a nested superscript or subscript stack on its base's line.** (#2728)
+  A base glyph whose exponent carries a subscript or has two or more members (`e^{-c1 τ}`, `R^{n_x}`, `a1 n^{s1}`) printed its inner members away from the base, on a line of their own or at the end of the line. A stack of two or more small spans at two sizes, abutting the base, with one member beyond the reach of a single mark, is now ordered with its base and joins its row in paragraph assembly, keeping its sub/superscript markup. Changing the order of those spans shifts the column partition of some math-heavy pages: on arxiv-2403.01153 p3 equation (3) loses its `e<sup>jθ</sup>` markup and the line reads `jθ jθs jθm` apart from its base.
 - **(ocr): Drop the symbol-noise lines of a page flagged as OCR recognition noise.** (#2312)
   This applies to any page the recognition-noise verdict flags and `discard_suspected_ocr_noise` retains, not only photographs. The new `OcrQualityThresholds.prune_symbol_noise_lines` (default `true`; `false` keeps every line) removes lines in which fewer than half the tokens are word-shaped, only when the page has at least 8 non-blank lines and at least half of them are such lines. A line is kept if it has any digit, a CJK, Kana, Hangul, Thai, Lao, Khmer or Myanmar character, a non-Latin letter, an `=`/`+`/`<`/`>` between two operands (`x = y`, not `oe = ie` or `i - l`), or is an English phrase (`I am.`, `IS IT`, not `ee so`) or contraction (`I'm`); a single-token answer such as `No.`, `Yes` or `Qty`, a non-English short line such as `de la gare`, and `x=y` without spaces are pruned on a flagged page. Pruning runs after the verdict, backend choice and table acceptance, skips pages with tables, adds a warning naming the page and the number of lines removed, and covers standalone images and PDF OCR pages, including a photograph after native text; multi-stage pipeline scoring and the single-page first-pass gate read the text before pruning, and an annotation that crosses a line is dropped with its lines. Title recovery now also runs when `quality_thresholds` differs from the default only in this flag. A fixture photograph keeps 0 of 840 noise characters as an image and 169 of 1056 as a PDF page, where the lines with a digit stay.
+- **(pdf): Apply horizontal scaling (`Tz`) to a string's advance and glyph outlines in the page render; Type 3 glyph outlines are not stretched yet.** (#2677)
 - **(ocr): Retry an eligible RGB JPEG scan after a minimal-build render-budget refusal.** (#2849)
   A PDF/OCR build without Paddle can now recover an automatic single-page English Tesseract read from a certified whole-page RGB JPEG, using the existing bounded per-page coordinator. Unsupported composition or configuration keeps the typed refusal; budgets, noise-discard policy and clamp/resolution safeguards are unchanged. Mixed-route retries of one image also retain the producing Tesseract segmentation mode.
 - **(pdf): Keep adaptive Primary word-boundary decisions consistent when a text matrix moves back into a run.** (#2845)

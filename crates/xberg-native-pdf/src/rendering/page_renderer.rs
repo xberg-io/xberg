@@ -2917,7 +2917,7 @@ impl PageRenderer {
                     total += adv;
                 }
                 TextElement::Offset(offset) => {
-                    let shift = (-offset / 1000.0) * gs_local.font_size;
+                    let shift = crate::rendering::text_rasterizer::tj_offset_shift(*offset, &gs_local);
                     gs_local.advance_text_matrix(shift);
                     total += shift;
                 }

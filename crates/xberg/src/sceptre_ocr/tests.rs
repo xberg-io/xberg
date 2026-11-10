@@ -397,7 +397,7 @@ fn should_reject_non_cpu_acceleration() {
 #[test]
 fn should_reject_auto_rotate_without_capability() {
     let config = OcrConfig {
-        auto_rotate: true,
+        auto_rotate: Some(true),
         ..Default::default()
     };
 
