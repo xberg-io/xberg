@@ -2063,15 +2063,17 @@ fn reads_up_or_down(rotation_degrees: f32) -> bool {
 /// The extent of a segment across its reading direction. `x` and `y` are the run's baseline origin and
 /// `height` extends perpendicular to the baseline (the extractor sizes a run turned up or down by its
 /// length in `width`), so the thickness is the height, or the font size where that is larger. The glyphs
-/// stand on the left of the baseline for text read bottom to top (matrix `0 1 -1 0 x y`, 90 degrees) and
-/// on the right for 270 degrees. Upright text stands above its baseline and text turned 180 degrees below.
+/// stand on the side of the baseline that the axis of `reads_up_or_down` leaves open: left of it below 180
+/// degrees and right of it above for text read up or down (matrix `0 1 -1 0 x y` is 90 degrees), below it
+/// from 90 to 270 degrees and above it elsewhere for text read across.
 fn across_extent(segment: &SegmentData) -> (f32, f32) {
     let thickness = segment.height.max(segment.font_size);
-    let flipped = (45.0..225.0).contains(&segment.rotation_degrees.rem_euclid(360.0));
-    let origin = if reads_up_or_down(segment.rotation_degrees) {
-        segment.x
+    let degrees = segment.rotation_degrees.rem_euclid(360.0);
+    let up_or_down = reads_up_or_down(degrees);
+    let (origin, flipped) = if up_or_down {
+        (segment.x, degrees < 180.0)
     } else {
-        segment.y
+        (segment.y, (90.0..270.0).contains(&degrees))
     };
     if flipped {
         (origin - thickness, origin)
@@ -2633,6 +2635,100 @@ mod tests {
         let at = |x: f32| [(x, 600.0, 270.0), (x, 400.0, 270.0), (x, 200.0, 270.0)];
         assert_eq!(placed_stamp_parts_of_width(at(585.0), 178.0), [true; 3]);
         assert_eq!(placed_stamp_parts_of_width(at(300.0), 178.0), [false; 3]);
+    }
+
+    /// The glyphs of text turned 270 degrees stand right of the baseline origin, so a part at `x` covers
+    /// `x .. x + 20`; the right margin zone starts 61.2 points from the 612 point page edge.
+    #[test]
+    fn arxiv_noise_measures_a_stamp_turned_270_degrees_to_the_right_of_its_origin() {
+        let at = |x: f32| [(x, 600.0, 270.0), (x, 400.0, 270.0), (x, 200.0, 270.0)];
+        assert_eq!(placed_stamp_parts_of_width(at(530.0), 178.0), [false; 3]);
+        assert_eq!(placed_stamp_parts_of_width(at(532.0), 178.0), [true; 3]);
+    }
+
+    /// Text turned 180 degrees hangs below its baseline, so a part at `y` covers `y - 20 .. y`; the bottom
+    /// margin zone is 79.2 points of the 792 point page.
+    #[test]
+    fn arxiv_noise_measures_a_stamp_turned_180_degrees_below_its_origin() {
+        let at = |y: f32| [(100.0, y, 180.0), (250.0, y, 180.0), (400.0, y, 180.0)];
+        assert_eq!(placed_stamp_parts(at(98.0)), [true; 3]);
+        assert_eq!(placed_stamp_parts(at(100.0)), [false; 3]);
+    }
+
+    /// The side of the baseline the glyphs stand on follows the axis the stamp is measured along, so the
+    /// bands meet at 45, 135 and 225 degrees: text read up or down (more than 45 degrees from upright or
+    /// upside down) stands left of its baseline below 180 degrees and right of it above; text read across
+    /// stands below its baseline from 90 to 270 degrees and above it elsewhere. `across` is the x of a
+    /// stamp read up or down and the y of a stamp read across; the page is 612 by 792 points, 20 thick.
+    #[test]
+    fn arxiv_noise_places_a_stamp_on_the_same_side_of_its_baseline_on_both_sides_of_each_diagonal() {
+        let cases: [(f32, f32, bool); 24] = [
+            (44.9, 700.0, true),
+            (44.9, 690.0, false),
+            (45.0, 700.0, true),
+            (45.0, 690.0, false),
+            (45.1, 80.0, true),
+            (45.1, 83.0, false),
+            (134.9, 80.0, true),
+            (134.9, 83.0, false),
+            (135.0, 98.0, true),
+            (135.0, 100.0, false),
+            (135.1, 98.0, true),
+            (135.1, 100.0, false),
+            (224.9, 98.0, true),
+            (224.9, 100.0, false),
+            (225.0, 90.0, true),
+            (225.0, 100.0, false),
+            (225.1, 532.0, true),
+            (225.1, 530.0, false),
+            (314.9, 532.0, true),
+            (314.9, 530.0, false),
+            (315.0, 700.0, true),
+            (315.0, 690.0, false),
+            (359.9, 700.0, true),
+            (359.9, 690.0, false),
+        ];
+        let marked: Vec<bool> = cases
+            .iter()
+            .map(|&(angle, across, _)| {
+                let places = if reads_up_or_down(angle) {
+                    [(across, 600.0, angle), (across, 400.0, angle), (across, 200.0, angle)]
+                } else {
+                    [(100.0, across, angle), (250.0, across, angle), (400.0, across, angle)]
+                };
+                let all = placed_stamp_parts(places);
+                assert!(all.iter().all(|&m| m == all[0]), "parts disagree at {angle}");
+                all[0]
+            })
+            .collect();
+        let expected: Vec<bool> = cases.iter().map(|&(_, _, expected)| expected).collect();
+        assert_eq!(marked, expected, "cases {cases:?}");
+    }
+
+    /// Like `placed_stamp_parts_of_width`, with a run height and a font size that differ.
+    fn placed_stamp_parts_of_thickness(places: [(f32, f32, f32); 3], height: f32, font_size: f32) -> Vec<bool> {
+        let texts = ["arXiv:2312.13591v2", "[hep-ph]", "6 Dec 2023"];
+        let mut page: Vec<PdfParagraph> = texts.iter().map(|text| paragraph_with_text(text)).collect();
+        for (para, (x, y, rotation)) in page.iter_mut().zip(places) {
+            let segment = &mut para.lines[0].segments[0];
+            (segment.x, segment.y, segment.rotation_degrees) = (x, y, rotation);
+            segment.width = 178.0;
+            segment.height = height;
+            segment.font_size = font_size;
+        }
+        let mut pages = vec![page];
+        mark_arxiv_noise(&mut pages);
+        pages[0].iter().map(|para| para.is_page_furniture).collect()
+    }
+
+    /// The thickness of a rotated run is the larger of its height and its font size, whichever one that is.
+    /// A part at `x = 532` turned 270 degrees is in the margin only when it is 20 points thick.
+    #[test]
+    fn arxiv_noise_takes_the_thickness_of_a_run_from_the_larger_of_height_and_font_size() {
+        let at = [(532.0, 600.0, 270.0), (532.0, 400.0, 270.0), (532.0, 200.0, 270.0)];
+        assert_eq!(placed_stamp_parts_of_thickness(at, 5.0, 20.0), [true; 3]);
+        assert_eq!(placed_stamp_parts_of_thickness(at, 20.0, 5.0), [true; 3]);
+        assert_eq!(placed_stamp_parts_of_thickness(at, 5.0, 5.0), [false; 3]);
     }
 
     /// The glyphs of text turned 90 degrees stand left of the baseline origin, so a part at `x` covers
