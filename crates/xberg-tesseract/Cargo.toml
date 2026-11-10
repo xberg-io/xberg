@@ -15,16 +15,16 @@ categories = ["external-ffi-bindings", "computer-vision", "text-processing"]
 build = "build.rs"
 links = "xberg_tesseract"
 include = [
-    "/src/**",
-    "/Cargo.toml",
-    "/Cargo.lock",
-    "/LICENSE*",
-    "/README*",
-    "/build.rs",
-    "/build_support/**",
-    "/licenses/**",
-    "/patches/tesseract.diff",
-    "!/src/leptonica/tests.rs",
+  "/src/**",
+  "/Cargo.toml",
+  "/Cargo.lock",
+  "/LICENSE*",
+  "/README*",
+  "/build.rs",
+  "/build_support/**",
+  "/licenses/**",
+  "/patches/tesseract.diff",
+  "!/src/leptonica/tests.rs",
 ]
 
 [target.'cfg(target_os = "windows")'.dev-dependencies]
