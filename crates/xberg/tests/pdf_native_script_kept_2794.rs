@@ -321,8 +321,7 @@ fn a_marked_page_beside_a_scan_keeps_its_native_text_when_the_whole_document_rea
 
 #[test]
 #[serial_test::serial]
-fn a_retry_whose_page_reads_fail_keeps_the_native_page_and_reports_the_scan_as_failed() {
-    let native = read_with(THEN_SCANNED, Arc::new(Fixed(ENGLISH)), true);
+fn a_retry_that_cannot_read_a_scan_the_whole_read_read_keeps_the_whole_read_and_warns() {
     let backend = counting(ENGLISH, 2);
     let automatic = read_with(THEN_SCANNED, backend.clone(), false);
     assert!(
@@ -330,12 +329,13 @@ fn a_retry_whose_page_reads_fail_keeps_the_native_page_and_reports_the_scan_as_f
         "the whole-document read took the first two calls, so the retry ran and was refused"
     );
     let pages = automatic.pages.as_ref().unwrap();
-    assert_eq!(pages[0].content, native.pages.as_ref().unwrap()[0].content);
-    let failures: Vec<_> = automatic.ocr_page_failures.iter().flatten().collect();
-    assert!(
-        failures.iter().any(|failure| failure.page == 2 && !failure.recovered),
-        "{failures:?}"
-    );
+    assert_eq!(pages[1].content.trim(), ENGLISH);
+    let warned: Vec<_> = automatic
+        .processing_warnings
+        .iter()
+        .filter(|w| w.source == "ocr" && w.message.contains("Pages [1]"))
+        .collect();
+    assert_eq!(warned.len(), 1, "{:?}", automatic.processing_warnings);
 }
 
 #[test]

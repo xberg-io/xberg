@@ -2913,13 +2913,9 @@ impl PdfExtractor {
                 #[cfg(any(feature = "formula-recognition", feature = "liter-llm"))]
                 {
                     // Keep the rasters only when this run configures a native reader of them.
-                    let formula_reads = cfg!(feature = "formula-recognition")
-                        && config.layout.as_ref().is_some_and(|l| l.formula_model.is_some());
-                    #[cfg(feature = "liter-llm")]
-                    let vlm_reads = region_vlm::region_vlm_config(config).is_some();
-                    #[cfg(not(feature = "liter-llm"))]
-                    let vlm_reads = false;
-                    if (formula_reads || vlm_reads) && markdown_layout_usable_for_native(&markdown_page_rotations) {
+                    if native_layout_readers_configured(config)
+                        && markdown_layout_usable_for_native(&markdown_page_rotations)
+                    {
                         native_only_layout_inputs = Some(native_inputs);
                     }
                 }
@@ -3322,7 +3318,8 @@ impl PdfExtractor {
                     // With marked pages the retry below may keep some pages native, and the formula and
                     // region-VLM stages read their rasters, so the inputs are held until the retry is
                     // decided. The whole read consumes the reusable Markdown inputs, so a clone is held
-                    // when a native reader is configured. ~keep
+                    // when a native reader is configured; the clone holds every page raster a second time
+                    // until the retry is decided. ~keep
                     #[cfg(all(
                         feature = "layout-detection",
                         any(feature = "formula-recognition", feature = "liter-llm")
@@ -3399,7 +3396,40 @@ impl PdfExtractor {
                         _ => None,
                     };
                     let retried = match targeted_retry {
-                        Some(Ok(mixed_run)) => Some(apply_targeted_mixed_run!(mixed_run)),
+                        Some(Ok(mixed_run)) => {
+                            // A page the retry could not read that the whole read did read would come out
+                            // empty, so the retry is discarded and the whole read used. ~keep
+                            let loses_whole_read = whole_read.as_ref().is_ok_and(|read| {
+                                mixed_run.output.9.iter().any(|failure| {
+                                    !failure.recovered
+                                        && !dropped_pages.contains(&failure.page)
+                                        && failure
+                                            .page
+                                            .checked_sub(1)
+                                            .and_then(|index| read.5.get(index as usize))
+                                            .is_some_and(|text| !text.trim().is_empty())
+                                })
+                            });
+                            if loses_whole_read {
+                                tracing::warn!(
+                                    failing_pages = ?decision.failing_pages,
+                                    "Targeted OCR could not read a page the whole-document read had read; \
+                                     using the whole-document read"
+                                );
+                                ocr_fallback_warnings.push(crate::types::ProcessingWarning {
+                                    source: std::borrow::Cow::Borrowed("ocr"),
+                                    message: std::borrow::Cow::Owned(format!(
+                                        "Pages {dropped_pages:?} are in a script that the OCR read did not \
+                                         produce, and the targeted OCR that keeps their native text could not \
+                                         read every other page; their native text was replaced by the \
+                                         whole-document OCR read."
+                                    )),
+                                });
+                                None
+                            } else {
+                                Some(apply_targeted_mixed_run!(mixed_run))
+                            }
+                        }
                         Some(Err(error)) => {
                             tracing::warn!(
                                 error = %error,
