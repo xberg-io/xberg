@@ -2794,7 +2794,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     .is_some_and(|raster| raster.type0_ink_loss)
                 && accepted_replacements.contains_key(&page)
                 && let (Some(native), Some(read)) = (native, ocr_results.get(&page))
-                && super::document::native_survives_type0_ink_loss(native, read, &ocr_output_thresholds)
+                && super::document::type0_native_is_corroborated(
+                    native,
+                    read,
+                    &ocr_output_thresholds,
+                    native_ink_owned_pages.contains(&page),
+                    native_words_covered_pages.contains(&page),
+                )
             {
                 complete_native_pages.insert(page);
                 type0_loss_pages.insert(page);
@@ -6190,7 +6196,13 @@ pub(super) async fn extract_with_ocr_for_page(
         && ocr_doc
             .as_ref()
             .is_none_or(|doc| super::document::plain_ocr_page_can_yield_to_native(doc, read))
-        && super::document::native_survives_type0_ink_loss(native, read, &ocr_output_thresholds)
+        && super::document::type0_native_is_corroborated(
+            native,
+            read,
+            &ocr_output_thresholds,
+            native_ink_owned,
+            complete_native_words,
+        )
     {
         for warning in render_warnings {
             crate::pdf::render::record_render_warning(warning);
