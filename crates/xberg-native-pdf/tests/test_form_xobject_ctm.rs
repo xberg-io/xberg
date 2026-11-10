@@ -264,13 +264,24 @@ fn form_that_draws_nothing_leaves_the_drawn_run_alone() {
         let pdf = build_form_pdf(page_content.as_bytes(), b"BT /F1 10 Tf 300 100 Td ET");
         let doc = PdfDocument::from_bytes(pdf).expect("parse PDF");
         let spans = doc.extract_spans(0).expect("extract spans");
-        spans
-            .into_iter()
-            .map(|s| (s.text, s.bbox.x.round()))
-            .collect::<Vec<_>>()
+        spans.into_iter().map(|s| (s.text, s.bbox.x)).collect::<Vec<_>>()
     };
     let plain = spans(page(""));
-    assert!(plain.iter().any(|(text, _)| text.contains("def")), "{plain:?}");
+    let want = [("abc", 72.0), (" ", 150.0), ("def", 180.0)].map(|(t, x)| (t.to_string(), x));
+    assert_eq!(plain, want);
     assert_eq!(spans(page("/Fm0 Do ")), plain);
     assert_eq!(spans(page("/Fm0 Do /Fm0 Do ")), plain);
+}
+
+/// A form is another content stream: it does not see the run that the page drew before its `Do`. A pen that
+/// the form sets back into that run keeps its space span at the pen (GH#2322). ~keep
+#[test]
+fn a_form_does_not_see_the_run_drawn_before_its_do() {
+    let page = b"BT /F1 10 Tf 72 700 Td (abc) Tj ET /Fm0 Do";
+    let pdf = build_form_pdf(page, b"BT /F1 10 Tf 80 700 Td [-3000 (def)] TJ ET");
+    let doc = PdfDocument::from_bytes(pdf).expect("parse PDF");
+    let spans = doc.extract_spans(0).expect("extract spans");
+    let got: Vec<(String, f32)> = spans.into_iter().map(|s| (s.text, s.bbox.x)).collect();
+    let want = [("abc", 72.0), (" ", 80.0), ("def", 110.0)].map(|(t, x)| (t.to_string(), x));
+    assert_eq!(got, want);
 }
