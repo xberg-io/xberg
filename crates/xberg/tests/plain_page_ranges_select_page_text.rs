@@ -1,5 +1,6 @@
 //! A Plain page range selects exactly its page's text in `content`, or it is omitted with a
 //! `page_boundaries` warning (#2945, #2946).
+#![cfg(any(all(feature = "pdf", feature = "ocr"), feature = "office"))]
 
 mod helpers;
 
@@ -77,32 +78,43 @@ fn every_native_page_keeps_a_range_that_selects_its_text() {
     };
     let document = extract("pdf/regression_pages/irs-fw9--2024-p1.pdf", &config);
     let ranged = pages_with_exact_ranges(&document);
-    let pages: Vec<u32> = document
-        .pages
-        .as_deref()
-        .unwrap()
-        .iter()
-        .map(|p| p.page_number)
-        .collect();
-    assert_eq!(ranged, pages, "every native page keeps its range");
+    assert_eq!(ranged, page_numbers(&document), "every native page keeps its range");
     assert!(!warned(&document), "no page_boundaries warning on a native page");
 }
 
-#[cfg(feature = "office")]
-#[test]
-fn a_docx_page_range_selects_its_page_text_or_is_omitted_with_a_warning() {
-    let document = extract("docx/budget_fy2027_memo.docx", &plain_pages_config());
-    pages_with_exact_ranges(&document);
+/// The page numbers of `document`, in order.
+fn page_numbers(document: &ExtractedDocument) -> Vec<u32> {
+    document
+        .pages
+        .as_deref()
+        .unwrap_or(&[])
+        .iter()
+        .map(|page| page.page_number)
+        .collect()
 }
 
 #[cfg(feature = "office")]
 #[test]
-fn each_range_of_a_two_page_docx_selects_its_page_text_or_is_omitted_with_a_warning() {
+fn every_page_of_a_docx_memo_keeps_a_range_that_selects_its_page_text() {
+    let document = extract("docx/budget_fy2027_memo.docx", &plain_pages_config());
+    assert_eq!(pages_with_exact_ranges(&document), page_numbers(&document));
+    assert!(!warned(&document), "no page_boundaries warning");
+}
+
+#[cfg(feature = "office")]
+#[test]
+fn each_page_of_a_two_page_docx_keeps_a_range_that_selects_its_page_text() {
     let document = extract("docx/unit_test_headers.docx", &plain_pages_config());
-    assert_eq!(
-        document.pages.as_deref().map(<[_]>::len),
-        Some(2),
-        "the document has two pages"
-    );
-    pages_with_exact_ranges(&document);
+    assert_eq!(page_numbers(&document), [1, 2], "the document has two pages");
+    assert_eq!(pages_with_exact_ranges(&document), [1, 2]);
+    assert!(!warned(&document), "no page_boundaries warning");
+}
+
+#[cfg(feature = "office")]
+#[test]
+fn each_slide_of_a_pptx_keeps_a_range_that_selects_its_page_text() {
+    let document = extract("pptx/powerpoint_sample.pptx", &plain_pages_config());
+    assert_eq!(page_numbers(&document), [1, 2, 3], "the presentation has three slides");
+    assert_eq!(pages_with_exact_ranges(&document), [1, 2, 3]);
+    assert!(!warned(&document), "no page_boundaries warning");
 }

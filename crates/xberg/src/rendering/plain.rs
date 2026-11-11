@@ -22,36 +22,8 @@ pub(crate) fn render_plain(doc: &InternalDocument) -> String {
 
 pub(crate) fn render_plain_with_annotation_separator(doc: &InternalDocument) -> (String, Option<usize>) {
     let mut out = String::with_capacity(doc.elements.len() * 80);
-    let mut last_heading_depth = None;
     let footnotes = FootnoteCollector::new(doc);
-    let mut after_text_block = false;
-    for (i, elem) in doc.elements.iter().enumerate() {
-        if !is_body_element(elem) || elem.kind.is_container_start() || elem.kind.is_container_end() {
-            continue;
-        }
-        if elem.kind == ElementKind::FootnoteRef {
-            if let Some(n) = footnotes.ref_number(i as u32) {
-                append_footnote_marker(&mut out, n, after_text_block);
-                after_text_block = true;
-            }
-            continue;
-        }
-        render_element_plain(doc, elem, &mut out, &mut last_heading_depth);
-        let plain_text = elem
-            .attributes
-            .as_ref()
-            .and_then(|attributes| attributes.get(crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE))
-            .unwrap_or(&elem.text);
-        after_text_block = !plain_text.is_empty()
-            && matches!(
-                elem.kind,
-                ElementKind::Title
-                    | ElementKind::Heading { .. }
-                    | ElementKind::Paragraph
-                    | ElementKind::ListItem { .. }
-                    | ElementKind::DefinitionDescription
-            );
-    }
+    render_body_plain(doc, &footnotes, 0..doc.elements.len(), &mut out);
     append_definitions_plain(doc, ElementKind::FootnoteDefinition, Some(&footnotes), &mut out);
     append_definitions_plain(doc, ElementKind::CommentDefinition, None, &mut out);
     let mut annotation_separator = None;
@@ -67,6 +39,66 @@ pub(crate) fn render_plain_with_annotation_separator(doc: &InternalDocument) -> 
     }
     out.truncate(out.trim_end().len());
     (out, annotation_separator)
+}
+
+/// The Plain text of each page: the elements at the page's indices into `doc.elements`, written
+/// as `render_plain` writes them in the whole document. A note marker has its number in the whole
+/// document. The note and comment definitions and the annotations, which `render_plain` writes
+/// after the last page, are on no page.
+pub(crate) fn render_plain_pages(
+    doc: &InternalDocument,
+    elements_by_page: &std::collections::BTreeMap<u32, Vec<usize>>,
+) -> std::collections::BTreeMap<u32, String> {
+    let footnotes = FootnoteCollector::new(doc);
+    elements_by_page
+        .iter()
+        .map(|(&page_number, indices)| {
+            let mut out = String::new();
+            render_body_plain(doc, &footnotes, indices.iter().copied(), &mut out);
+            out.truncate(out.trim_end().len());
+            (page_number, out)
+        })
+        .collect()
+}
+
+/// Write the body elements at `indices`, in that order, with the note markers that `footnotes`
+/// numbers.
+fn render_body_plain(
+    doc: &InternalDocument,
+    footnotes: &FootnoteCollector,
+    indices: impl IntoIterator<Item = usize>,
+    out: &mut String,
+) {
+    let mut last_heading_depth = None;
+    let mut after_text_block = false;
+    for i in indices {
+        let Some(elem) = doc.elements.get(i) else { continue };
+        if !is_body_element(elem) || elem.kind.is_container_start() || elem.kind.is_container_end() {
+            continue;
+        }
+        if elem.kind == ElementKind::FootnoteRef {
+            if let Some(n) = footnotes.ref_number(i as u32) {
+                append_footnote_marker(out, n, after_text_block);
+                after_text_block = true;
+            }
+            continue;
+        }
+        render_element_plain(doc, elem, out, &mut last_heading_depth);
+        let plain_text = elem
+            .attributes
+            .as_ref()
+            .and_then(|attributes| attributes.get(crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE))
+            .unwrap_or(&elem.text);
+        after_text_block = !plain_text.is_empty()
+            && matches!(
+                elem.kind,
+                ElementKind::Title
+                    | ElementKind::Heading { .. }
+                    | ElementKind::Paragraph
+                    | ElementKind::ListItem { .. }
+                    | ElementKind::DefinitionDescription
+            );
+    }
 }
 
 fn render_element_plain(

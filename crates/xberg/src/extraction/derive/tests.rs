@@ -589,13 +589,12 @@ fn build_pages_gives_a_page_with_only_a_picture_the_ocr_text() {
 }
 
 #[test]
-fn build_pages_puts_the_ocr_text_after_the_text_of_the_picture_element() {
-    let page = only_page(&page_with_a_picture("A label on a crate", PICTURE_WORDS));
+fn build_pages_writes_a_labeled_picture_as_plain_content_writes_it() {
+    let doc = page_with_a_picture("A label on a crate", PICTURE_WORDS);
+    let page = only_page(&doc);
 
-    assert_eq!(
-        page.content,
-        format!("Stock list\n\nA label on a crate\n\n{PICTURE_WORDS}")
-    );
+    assert_eq!(page.content, format!("Stock list\n\n{PICTURE_WORDS}"));
+    assert_eq!(page.content, crate::rendering::render_plain(&doc));
 }
 
 #[test]
@@ -631,7 +630,7 @@ fn a_picture_with_empty_ocr_text_adds_no_empty_block_to_page_content_or_to_plain
     let mut doc = page_with_a_picture("A label on a crate", "");
     doc.push_element(InternalElement::text(ElementKind::Paragraph, "Bay plan", 0).with_page(1));
 
-    assert_eq!(only_page(&doc).content, "Stock list\n\nA label on a crate\n\nBay plan");
+    assert_eq!(only_page(&doc).content, "Stock list\n\nBay plan");
     let result = derive_extraction_result(doc, false, crate::core::config::OutputFormat::Plain);
     assert_eq!(result.content, "Stock list\n\nBay plan");
 }

@@ -39,6 +39,16 @@ pub(super) fn derive_pages(
             );
         }
     }
+    if !reconciled && let Some(omitted) = place_page_boundaries(doc, content, pages.as_deref()) {
+        crate::core::diagnostics::push_warning(
+            &mut doc.processing_warnings,
+            "page_boundaries",
+            format!(
+                "The page text of pages {omitted:?} is not found in the returned content, so their page byte \
+                 ranges were omitted"
+            ),
+        );
+    }
     if !reconciled && drop_unusable_page_boundaries(&mut doc.metadata, content) {
         crate::core::diagnostics::push_warning(
             &mut doc.processing_warnings,
@@ -46,28 +56,17 @@ pub(super) fn derive_pages(
             "Page byte ranges were measured on a different rendering of the text and could not be \
              mapped onto the returned content, so they were omitted",
         );
-    } else if !reconciled && let Some(omitted) = drop_mismatched_page_boundaries(doc, content, pages.as_deref()) {
-        crate::core::diagnostics::push_warning(
-            &mut doc.processing_warnings,
-            "page_boundaries",
-            format!(
-                "Page byte ranges of pages {omitted:?} select a different text of the returned content than \
-                 the page text, so they were omitted"
-            ),
-        );
     }
     pages
 }
 
-/// Omit each range of a page that is not OCR text (see `is_ocr_page_text`) when it does not
-/// select that page's own text in `content`. A PDF or OCR range keeps its measured place (#2128).
+/// Point the range of each page that is not OCR text (see `is_ocr_page_text`) at that page's text
+/// in `content`, and omit the range of a page whose text is not there. A range that already selects
+/// its page text stays. Any other range moves to the first place of its page text after the ranges
+/// before it, in the order of the ranges. A PDF or OCR range keeps its measured place (#2128).
 /// Returns the omitted page numbers, or `None` when nothing was omitted. When no range is left,
 /// the boundaries become `None`.
-fn drop_mismatched_page_boundaries(
-    doc: &mut InternalDocument,
-    content: &str,
-    pages: Option<&[PageContent]>,
-) -> Option<Vec<u32>> {
+fn place_page_boundaries(doc: &mut InternalDocument, content: &str, pages: Option<&[PageContent]>) -> Option<Vec<u32>> {
     let text_of: ahash::AHashMap<u32, &str> = pages?
         .iter()
         .filter(|page| !is_ocr_page_text(doc, page))
@@ -76,14 +75,27 @@ fn drop_mismatched_page_boundaries(
     let structure = doc.metadata.pages.as_mut()?;
     let boundaries = structure.boundaries.as_mut()?;
     let mut omitted = Vec::new();
-    boundaries.retain(|boundary| {
-        let mismatched = text_of
-            .get(&boundary.page_number)
-            .is_some_and(|text| content.get(boundary.byte_start..boundary.byte_end) != Some(*text));
-        if mismatched {
+    let mut search_offset = 0;
+    boundaries.retain_mut(|boundary| {
+        let Some(&text) = text_of.get(&boundary.page_number) else {
+            return true;
+        };
+        let start = if content.get(boundary.byte_start..boundary.byte_end) == Some(text) {
+            Some(boundary.byte_start)
+        } else {
+            content
+                .get(search_offset..)
+                .and_then(|rest| rest.find(text))
+                .map(|index| search_offset + index)
+        };
+        let Some(start) = start else {
             omitted.push(boundary.page_number);
-        }
-        !mismatched
+            return false;
+        };
+        boundary.byte_start = start;
+        boundary.byte_end = start + text.len();
+        search_offset = search_offset.max(boundary.byte_end);
+        true
     });
     if omitted.is_empty() {
         return None;
@@ -176,9 +188,9 @@ pub(crate) fn drop_unusable_page_boundaries(metadata: &mut crate::types::Metadat
 ///
 /// `content_is_plain` says that `result.content` is the plain rendering of the document:
 /// plain output, or a custom format name with no renderer, which falls back to plain. Then
-/// a page has the OCR text of a picture where `render_plain` writes it, so `pages[n].content`
-/// and `result.content` agree. For every other output a page has the text of its elements
-/// only. ~keep
+/// a page has the text that `render_plain` writes for the page's elements in the whole
+/// document, so `pages[n].content` is found in `result.content`. For every other output a page
+/// has the text of its elements only. ~keep
 pub(super) fn build_pages(doc: &InternalDocument, content_is_plain: bool) -> Option<Vec<PageContent>> {
     let mut page_map: std::collections::BTreeMap<u32, Vec<&InternalElement>> = std::collections::BTreeMap::new();
 
@@ -193,6 +205,8 @@ pub(super) fn build_pages(doc: &InternalDocument, content_is_plain: bool) -> Opt
     }
 
     let arc_tables: Vec<Arc<Table>> = doc.tables.iter().map(|t| Arc::new(t.clone())).collect();
+    let mut plain_texts =
+        content_is_plain.then(|| crate::rendering::render_plain_pages(doc, &compute_page_membership(doc)));
 
     let pages: Vec<PageContent> = page_map
         .into_iter()
@@ -210,7 +224,6 @@ pub(super) fn build_pages(doc: &InternalDocument, content_is_plain: bool) -> Opt
                 if elem.kind.is_container_start() || elem.kind.is_container_end() {
                     continue;
                 }
-                let mut picture_ocr_text = None;
                 match elem.kind {
                     ElementKind::Table { table_index } => {
                         if let Some(arc_table) = arc_tables.get(table_index as usize) {
@@ -219,23 +232,18 @@ pub(super) fn build_pages(doc: &InternalDocument, content_is_plain: bool) -> Opt
                     }
                     ElementKind::Image { image_index } if (image_index as usize) < doc.images.len() => {
                         image_indices.push(image_index);
-                        // The OCR text of a picture goes after the picture, as `render_plain`
-                        // writes it. An image element of a PDF document can hold that text as
-                        // its own text already. ~keep
-                        if content_is_plain {
-                            picture_ocr_text = crate::rendering::common::image_ocr_text(doc, elem, image_index)
-                                .filter(|ocr_text| *ocr_text != elem.text);
-                        }
                     }
                     _ => {}
                 }
-                let own_text = Some(elem.text.as_str()).filter(|text| !text.is_empty());
-                for block in [own_text, picture_ocr_text].into_iter().flatten() {
+                if plain_texts.is_none() && !elem.text.is_empty() {
                     if !content.is_empty() {
                         content.push_str("\n\n");
                     }
-                    content.push_str(block);
+                    content.push_str(&elem.text);
                 }
+            }
+            if let Some(texts) = plain_texts.as_mut() {
+                content = texts.remove(&page_num).unwrap_or_default();
             }
 
             PageContent {
@@ -933,5 +941,85 @@ mod plain_page_rerender_tests {
         derive(&mut doc, content);
         assert!(!warned(&doc));
         assert_eq!(boundary_pages(&doc), vec![1, 2]);
+    }
+
+    /// A DOCX document with a note reference on each of its two pages, and page ranges measured on
+    /// the text of the parser.
+    fn docx_with_a_note_on_each_page() -> InternalDocument {
+        let mut builder = crate::types::internal_builder::InternalDocumentBuilder::new("docx");
+        builder.push_paragraph("First page", Vec::new(), Some(1), None);
+        builder.push_footnote_ref("1", "fn1", Some(1));
+        builder.push_paragraph("Second page", Vec::new(), Some(2), None);
+        builder.push_footnote_ref("2", "fn2", Some(2));
+        builder.push_footnote_definition("Note one", "fn1", None);
+        builder.push_footnote_definition("Note two", "fn2", None);
+        let mut doc = builder.build();
+        doc.metadata.pages = Some(PageStructure {
+            total_count: 2,
+            unit_type: PageUnitType::Page,
+            boundaries: None,
+            pages: None,
+        });
+        set_boundaries(&mut doc, &[(1, 0, 13), (2, 13, 26)]);
+        doc
+    }
+
+    #[test]
+    fn a_plain_page_has_the_plain_text_of_its_elements_with_the_note_numbers_of_the_document() {
+        let mut doc = docx_with_a_note_on_each_page();
+        let content = crate::rendering::render_plain(&doc);
+        let pages = derive(&mut doc, &content);
+        let texts: Vec<&str> = pages.iter().map(|page| page.content.as_str()).collect();
+        assert_eq!(texts, ["First page[^1]", "Second page[^2]"]);
+        assert!(!warned(&doc));
+        assert_ranges(&doc, &content, &pages);
+    }
+
+    #[test]
+    fn a_page_range_that_does_not_select_its_page_text_moves_to_the_page_text() {
+        let content = "alpha (note)\n\nbeta";
+        let mut doc = doc_with(vec![page(1, "alpha\nnote"), page(2, "beta")], &[]);
+        doc.ocr_text_pages.clear();
+        doc.source_format = "docx".to_string();
+        set_boundaries(&mut doc, &[(1, 0, 12), (2, 0, 4)]);
+        derive(&mut doc, content);
+        assert!(warned(&doc));
+        let boundaries = doc.metadata.pages.as_ref().and_then(|s| s.boundaries.clone());
+        let kept: Vec<(u32, Option<&str>)> = boundaries
+            .iter()
+            .flatten()
+            .map(|b| (b.page_number, content.get(b.byte_start..b.byte_end)))
+            .collect();
+        assert_eq!(kept, [(2, Some("beta"))]);
+    }
+
+    #[test]
+    fn a_docx_range_that_selects_its_page_text_stays_where_it_is() {
+        let content = "two\n\none";
+        let mut doc = doc_with(vec![page(1, "one"), page(2, "two"), page(3, "gone")], &[]);
+        doc.ocr_text_pages.clear();
+        doc.source_format = "docx".to_string();
+        set_boundaries(&mut doc, &[(1, 5, 8), (2, 0, 3), (3, 0, 1)]);
+        derive(&mut doc, content);
+        assert!(warned(&doc));
+        assert_eq!(boundary_pages(&doc), vec![1, 2]);
+    }
+
+    #[test]
+    fn a_moved_page_range_starts_after_the_range_of_the_page_before_it() {
+        let content = "beta\n\nalpha\n\nbeta";
+        let mut doc = doc_with(vec![page(1, "alpha"), page(2, "beta"), page(3, "gamma")], &[]);
+        doc.ocr_text_pages.clear();
+        doc.source_format = "pptx".to_string();
+        set_boundaries(&mut doc, &[(1, 0, 3), (2, 0, 3), (3, 0, 3)]);
+        derive(&mut doc, content);
+        let boundaries = doc.metadata.pages.as_ref().and_then(|s| s.boundaries.clone());
+        let ranges: Vec<(u32, usize, usize)> = boundaries
+            .iter()
+            .flatten()
+            .map(|b| (b.page_number, b.byte_start, b.byte_end))
+            .collect();
+        assert_eq!(ranges, [(1, 6, 11), (2, 13, 17)]);
+        assert!(warned(&doc));
     }
 }

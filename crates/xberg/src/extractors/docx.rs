@@ -2220,12 +2220,12 @@ mod tests {
             .await
             .unwrap();
         let plain = crate::rendering::render_plain(&internal);
+        let cell_line = plain
+            .lines()
+            .find(|line| line.contains("Cell with note"))
+            .unwrap_or_else(|| panic!("the cell text is document text: {plain}"));
         assert!(
-            plain.contains("Cell with note"),
-            "the cell text is document text: {plain}"
-        );
-        assert!(
-            !plain.contains("[^"),
+            !cell_line.contains("[^"),
             "a Plain table cell carries no note marker: {plain}"
         );
     }
