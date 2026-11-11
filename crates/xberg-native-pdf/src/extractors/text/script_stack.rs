@@ -18,6 +18,17 @@ const MIN_DISPLACEMENT_EM: f32 = 0.1;
 /// Members differing in size by more than this fraction of the larger one sit at two levels. A
 /// numerator and denominator, `x_i^2`, a footnote-marker pair or a run of same-size glyphs do not.
 const MIN_SIZE_STEP: f32 = 0.1;
+/// Most members a stack holds. Paragraph grouping and markup look this many runs past a base for
+/// its members, so a longer stack could be placed but never rediscovered there.
+#[doc(hidden)]
+pub const MAX_STACK_MEMBERS: usize = 8;
+/// Two members form a fraction when their x ranges overlap by more than this share of the narrower.
+const MIN_FRACTION_OVERLAP: f32 = 0.5;
+/// Two stacked members form a fraction when their baselines differ by more than this many ems of
+/// the smaller member.
+const MIN_FRACTION_SEPARATION_EM: f32 = 0.5;
+/// Largest rise or drop of a numerator or denominator from the base line, in ems of the base.
+const MAX_FRACTION_PART_SHIFT_EM: f32 = 1.0;
 
 /// Whether `text` holds a piece of a large delimiter or operator (`⎛ ⎞ ⎝ ⎠`, integral extensions,
 /// over- and underbrackets). Such a glyph spans the line it sits on; it is not a script.
@@ -37,13 +48,52 @@ pub struct StackSpan<'a> {
     pub font_size: f32,
 }
 
+/// Whether a piece of text is compact enough to be a script: not blank, a list marker, a phrase or a
+/// piece of a large delimiter.
+fn is_compact(c: &StackSpan<'_>) -> bool {
+    c.font_size > 0.0
+        && !c.text.trim().is_empty()
+        && !is_list_marker(c.text)
+        && !is_phrase(c.text)
+        && !has_large_delimiter_piece(c.text)
+}
+
+/// Whether a member has a numerator or denominator partner: a compact span of its size over the same x
+/// range at a clearly different height, not across the base line from the member. A script pair on
+/// the two sides of the base (`H^Z_2`) has one member above the line and one below it. The partner
+/// may sit beyond a member's reach from the base line (a numerator raised above its denominator) or
+/// on it (the numerator of an index fraction is centred on the subscript line).
+fn holds_fraction(base: &StackSpan<'_>, candidates: &[StackSpan<'_>], members: &[usize]) -> bool {
+    let bfs = base.font_size;
+    members.iter().any(|&m| {
+        let member = &candidates[m];
+        candidates.iter().enumerate().any(|(i, partner)| {
+            let shift = partner.baseline - base.baseline;
+            let overlap = (member.x + member.width).min(partner.x + partner.width) - member.x.max(partner.x);
+            let narrower = member.width.min(partner.width);
+            let smaller = member.font_size.min(partner.font_size);
+            i != m
+                && is_compact(partner)
+                && bfs >= partner.font_size * MIN_BASE_SIZE_FACTOR
+                && shift.abs() <= bfs * MAX_FRACTION_PART_SHIFT_EM
+                && (shift.abs() <= bfs * MIN_DISPLACEMENT_EM || shift * (member.baseline - base.baseline) > 0.0)
+                && (member.font_size - partner.font_size).abs()
+                    <= member.font_size.max(partner.font_size) * MIN_SIZE_STEP
+                && narrower > 0.0
+                && overlap > narrower * MIN_FRACTION_OVERLAP
+                && (member.baseline - partner.baseline).abs() > smaller * MIN_FRACTION_SEPARATION_EM
+        })
+    })
+}
+
 /// Indices into `candidates` (sorted by `x`) of the members of the stack on `base`, or empty when
 /// they do not form one.
 ///
 /// A stack is two or more compact spans, smaller than the base, that abut the base or the member
 /// before them in x and sit between a tenth and half an em off the base line. It needs two sizes and a member
 /// beyond a single mark's reach, so a lone mark, a fraction, `x_i^2`, a marker pair and chemical
-/// scripts stay with the single-mark rules. List markers, phrases and pieces of a large delimiter (`⎞`)
+/// scripts stay with the single-mark rules, and so does a fraction in an exponent or index
+/// (`x^{-1/2}`, `f_{j+3/2}`), whose numerator and denominator share an x range. List markers, phrases and pieces of a large delimiter (`⎞`)
 /// are never members, and a base
 /// must end in a letter, digit or closing bracket: a large operator (`∑`) is followed by its body,
 /// not by scripts.
@@ -67,11 +117,7 @@ pub fn script_stack(base: &StackSpan<'_>, candidates: &[StackSpan<'_>]) -> Vec<u
         if c.x > edge + bfs * MAX_GAP_EM {
             break;
         }
-        let compact = c.font_size > 0.0
-            && !c.text.trim().is_empty()
-            && !is_list_marker(c.text)
-            && !is_phrase(c.text)
-            && !has_large_delimiter_piece(c.text);
+        let compact = is_compact(c);
         let shift = (c.baseline - base.baseline).abs();
         if compact
             && bfs >= c.font_size * MIN_BASE_SIZE_FACTOR
@@ -82,7 +128,7 @@ pub fn script_stack(base: &StackSpan<'_>, candidates: &[StackSpan<'_>]) -> Vec<u
             edge = edge.max(c.x + c.width);
         }
     }
-    if members.len() < 2 {
+    if members.len() < 2 || members.len() > MAX_STACK_MEMBERS || holds_fraction(base, candidates, &members) {
         return Vec::new();
     }
     let out_of_reach = members
@@ -95,5 +141,75 @@ pub fn script_stack(base: &StackSpan<'_>, candidates: &[StackSpan<'_>]) -> Vec<u
         members
     } else {
         Vec::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn span(text: &str, x: f32, baseline: f32, width: f32, font_size: f32) -> StackSpan<'_> {
+        StackSpan {
+            text,
+            x,
+            baseline,
+            width,
+            font_size,
+        }
+    }
+
+    #[test]
+    fn should_not_stack_a_fraction_in_an_exponent() {
+        let base = span("x", 100.0, 100.0, 5.0, 10.0);
+        let candidates = [
+            span("\u{2212}", 105.0, 104.0, 3.0, 7.0),
+            span("1", 108.5, 107.0, 3.0, 5.0),
+            span("2", 108.5, 101.5, 3.0, 5.0),
+        ];
+        assert!(script_stack(&base, &candidates).is_empty());
+    }
+
+    #[test]
+    fn should_not_stack_a_fraction_in_an_index() {
+        let base = span("f", 100.0, 100.0, 4.0, 10.0);
+        let candidates = [
+            span("j", 104.0, 97.0, 3.0, 7.0),
+            span("+", 107.0, 97.0, 4.0, 7.0),
+            span("3", 111.5, 99.8, 3.0, 5.0),
+            span("2", 111.5, 95.2, 3.0, 5.0),
+        ];
+        assert!(script_stack(&base, &candidates).is_empty());
+    }
+
+    #[test]
+    fn should_keep_a_superscript_and_subscript_pair_on_opposite_sides_of_the_base_in_a_stack() {
+        let base = span("H", 100.0, 100.0, 7.0, 10.0);
+        let candidates = [
+            span("Z", 107.0, 104.2, 4.0, 7.0),
+            span("2", 107.0, 96.0, 3.5, 5.0),
+            span("f", 111.0, 96.0, 3.0, 5.0),
+        ];
+        assert_eq!(script_stack(&base, &candidates), [0, 1, 2]);
+    }
+
+    #[test]
+    fn should_refuse_a_stack_longer_than_the_runs_grouping_searches() {
+        let base = span("e", 100.0, 100.0, 4.0, 10.0);
+        let build = |count: usize| -> Vec<(String, f32, f32)> {
+            (0..count)
+                .map(|n| {
+                    let size = if n % 2 == 0 { 7.0 } else { 5.0 };
+                    (n.to_string(), 104.0 + 3.0 * n as f32, size)
+                })
+                .collect()
+        };
+        for (count, stacked) in [(MAX_STACK_MEMBERS, true), (MAX_STACK_MEMBERS + 1, false)] {
+            let members = build(count);
+            let candidates: Vec<StackSpan<'_>> = members
+                .iter()
+                .map(|(text, x, size)| span(text, *x, 104.2, 3.0, *size))
+                .collect();
+            assert_eq!(!script_stack(&base, &candidates).is_empty(), stacked, "{count} members");
+        }
     }
 }

@@ -9471,3 +9471,42 @@ fn should_mark_the_members_of_a_stack_listed_ahead_of_its_base_as_scripts_on_one
         "the stack members carry sub/superscript markup"
     );
 }
+
+fn long_stack(count: usize) -> Vec<SegmentData> {
+    let mut segments = vec![stack_seg("e", 100.0, 4.0, 10.0, 100.0)];
+    segments.extend((0..count).map(|n| {
+        let size = if n % 2 == 0 { 7.0 } else { 5.0 };
+        stack_seg(&n.to_string(), 104.0 + 3.0 * n as f32, 3.0, size, 104.2)
+    }));
+    segments
+}
+
+#[test]
+fn should_place_and_rediscover_a_stack_of_the_most_members_grouping_searches() {
+    let count = SCRIPT_STACK_LOOKAHEAD;
+    let placed = place_script_stacks_after_bases(long_stack(count));
+    assert_eq!(script_stack_members(&placed, 0), (1..=count).collect::<Vec<_>>());
+}
+
+#[test]
+fn should_leave_a_stack_longer_than_the_grouping_search_unplaced_and_unmarked() {
+    let count = SCRIPT_STACK_LOOKAHEAD + 1;
+    let mut segments = long_stack(count);
+    segments.push(stack_seg("tail", 200.0, 20.0, 10.0, 100.0));
+    let before: Vec<String> = segments.iter().map(|segment| segment.text.clone()).collect();
+    assert!(script_stack_members(&segments, 0).is_empty());
+    assert_eq!(stack_texts(segments), before);
+}
+
+#[test]
+fn should_place_a_fraction_in_an_exponent_in_its_reading_order_without_a_stack() {
+    let segments = vec![
+        stack_seg("x", 100.0, 5.0, 10.0, 100.0),
+        stack_seg("\u{2212}", 105.0, 3.0, 7.0, 104.0),
+        stack_seg("1", 108.5, 3.0, 5.0, 107.0),
+        stack_seg("2", 108.5, 3.0, 5.0, 101.5),
+        stack_seg("tail", 113.0, 20.0, 10.0, 100.0),
+    ];
+    assert!(stack_of(&segments).is_empty());
+    assert_eq!(stack_texts(segments), ["x", "\u{2212}", "1", "2", "tail"]);
+}
