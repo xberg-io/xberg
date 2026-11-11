@@ -162,7 +162,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **(rust): Upgrade Crawlberg 1.13, html-to-markdown 3.22, Liter LLM 2.7, tree-sitter-language-pack 1.25, lopdf 0.47, hayro-jbig2 0.4, hayro-jpeg2000 0.5, unhwp 0.24 and sevenz-rust2 0.25, and drop the exact ort and jpeg-decoder pins.**
+- **(rust): Upgrade Crawlberg 1.13, html-to-markdown 3.22, Liter LLM 2.7, tree-sitter-language-pack 1.25, lopdf 0.47, hayro-jbig2 0.4, hayro-jpeg2000 0.5, unhwp 0.24 and sevenz-rust2 0.25, and drop the exact ort and jpeg-decoder pins.** HTML heading metadata (`headers[].text`) now carries plain text, without superscript or subscript markup.
 
 - **(pdf): Reuse matching built-in OCR reads from the ink probe.** (#2862)
   A final PDF page pass can reuse recognition from the ink probe when its image, settings,
