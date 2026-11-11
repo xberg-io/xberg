@@ -1861,10 +1861,11 @@ struct TjBuffer {
     tm_extension: Option<TmExtension>,
 }
 
-/// The pen move of a `Tm` that continues a run, kept until the next show. A show adds its width
-/// through `add_width`, which ends the record, text or not: a later show inside an `ActualText`
-/// scope and a glyph with no text end it as a glyph with text does. A `Tm` that restates the run
-/// under a new horizontal scale rescales it; a `TJ` lead that marks the gap clears it. ~keep
+/// The pen move of a `Tm` that continues a run, kept until the next show that moves the pen. A show
+/// adds its width through `add_width`, which ends the record, text or not: a later show inside an
+/// `ActualText` scope and a glyph with no text end it as a glyph with text does; an empty show does
+/// not. A `Tm` that restates the run under a new horizontal scale rescales it; a `TJ` lead that marks
+/// the gap clears it. ~keep
 #[derive(Clone, Copy, Debug)]
 struct TmExtension {
     text_len: usize,
@@ -2140,13 +2141,16 @@ impl TjBuffer {
         });
     }
 
-    /// Adds the width of a show to the run and ends the record a continuing `Tm` left: the show
-    /// moved the pen, so the run reaches the pen again. Every show adds its width here, with text
-    /// (a glyph), without text (a later show inside an `ActualText` scope, a glyph the font gives
-    /// no text, an offset in a `TJ` array) or with no width at all.
+    /// Adds the width of a show to the run and, when the show moved the pen, ends the record a
+    /// continuing `Tm` left: the run reaches the pen again. Every show adds its width here, with text
+    /// (a glyph) or without (a later show inside an `ActualText` scope, a glyph the font gives no
+    /// text, an offset in a `TJ` array). A show of no width, an empty string, draws nothing and moves
+    /// nothing, so the record stays.
     fn add_width(&mut self, width: f32) {
         self.accumulated_width += width;
-        self.tm_extension = None;
+        if width != 0.0 {
+            self.tm_extension = None;
+        }
     }
 
     /// Keeps the width that a continuing `Tm` set, for a `TJ` whose leading offset marks the word gap
