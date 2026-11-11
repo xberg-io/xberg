@@ -1308,7 +1308,7 @@ pub(super) fn segment_script(segments: &[&crate::pdf::hierarchy::SegmentData], i
     segments[..index]
         .iter()
         .rev()
-        .take(super::pipeline::SCRIPT_RUN_BASE_LOOKBACK.max(super::pipeline::SCRIPT_STACK_LOOKAHEAD))
+        .take(super::pipeline::SCRIPT_RUN_BASE_LOOKBACK.max(super::pipeline::SCRIPT_STACK_WINDOW))
         .enumerate()
         .find_map(|(back, base)| {
             // A stack member can sit further from its base than a single run's lookback: the
