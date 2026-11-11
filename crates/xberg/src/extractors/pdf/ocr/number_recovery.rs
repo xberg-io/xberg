@@ -16,7 +16,6 @@ mod budget;
 mod read_proof;
 mod shape_proof;
 pub(super) use read_proof::ReadProof;
-#[cfg(test)]
 use shape_proof::Preparation;
 
 #[derive(Clone)]
@@ -260,6 +259,7 @@ fn source_numbers(
         match shape_proof::prepare_source_accounted(document, index, budget, limits.max_iterations)? {
             Preparation::Ready((numbers, shape)) => Preparation::Ready(SourceProof { media, numbers, shape }),
             Preparation::UnsupportedBeforeWork => Preparation::UnsupportedBeforeWork,
+            Preparation::MeasuredDecline(bytes) => Preparation::MeasuredDecline(bytes),
             Preparation::UnmeasuredDecline => Preparation::UnmeasuredDecline,
         },
     )
@@ -310,11 +310,21 @@ fn verify_page(work: Verification) -> crate::Result<Option<(Vec<Number>, Rect)>>
     bounded.security_limits = Some(limits);
     let media = source.media;
     let proof = match source.prepare(allowance.saturating_sub(raster.capacity()), max_iterations) {
-        Ok(Some((numbers, shape))) => SourceProof { media, numbers, shape },
-        Ok(None) => {
+        Ok(Preparation::Ready((numbers, shape))) => SourceProof { media, numbers, shape },
+        Ok(Preparation::MeasuredDecline(bytes)) => {
+            let measured = raster.capacity().saturating_add(bytes);
+            if measured > allowance || !cancelled(&config) {
+                run.budget.settle_work(allowance, measured);
+                run.budget.retain_failed_work();
+            }
+            return Ok(None);
+        }
+        Ok(Preparation::UnmeasuredDecline) => {
             run.budget.retain_failed_work();
             return Ok(None);
         }
+        #[cfg(test)]
+        Ok(Preparation::UnsupportedBeforeWork) => return Ok(None),
         Err(error) => {
             run.budget.retain_failed_work();
             return Err(error);
@@ -549,8 +559,14 @@ fn verify_source(
     if cancelled(config) {
         return Ok(Vec::new());
     }
-    if reserved.is_some_and(|allowance| !run.budget.settle_work(allowance, measured)) {
-        return Ok(Vec::new());
+    if let Some(allowance) = reserved {
+        if measured > allowance || shape.can_settle_work() {
+            if !run.budget.settle_work(allowance, measured) {
+                return Ok(Vec::new());
+            }
+        } else {
+            run.budget.retain_failed_work();
+        }
     }
     Ok(numbers)
 }

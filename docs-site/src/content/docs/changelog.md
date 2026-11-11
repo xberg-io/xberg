@@ -329,6 +329,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Keep Khmer number recovery available after bounded source declines.** (#2905)
+  Completed declines charge the work already done, leaving room to verify supported pages later in the PDF.
+  Cancellation and failures whose work cannot be measured still retain their reservation.
 - **(ocr): Exclude Unicode numerals from native-prose script evidence.**
   Numeric-only OCR reads do not claim retention of native prose, across all supported scripts.
 - **(ocr): Re-render only OCR page text as plain, and keep DOCX and native page text.** (#2839, #2902)

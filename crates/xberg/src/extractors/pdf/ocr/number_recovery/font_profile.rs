@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) fn audit_truetype(document: &PdfDocument, dict: &HashMap<String, Object>) -> ProofResult<()> {
+pub(super) fn audit_truetype(document: &PdfDocument, dict: &HashMap<String, Object>, work: &Work) -> ProofResult<()> {
     let unsupported = ["Encoding", "FontMatrix", "DescendantFonts", "CIDToGIDMap"];
     require(
         !unsupported.iter().any(|key| dict.contains_key(*key)),
@@ -9,7 +9,7 @@ pub(super) fn audit_truetype(document: &PdfDocument, dict: &HashMap<String, Obje
     let descriptor = dict
         .get("FontDescriptor")
         .ok_or(Failure::Declined("missing font descriptor"))?;
-    let descriptor = document.resolve_object(descriptor)?;
+    let descriptor = work.resolve(document, descriptor)?;
     let descriptor = descriptor
         .as_dict()
         .ok_or(Failure::Declined("font descriptor dictionary"))?;
@@ -22,12 +22,12 @@ pub(super) fn audit_truetype(document: &PdfDocument, dict: &HashMap<String, Obje
     let program = descriptor
         .get("FontFile2")
         .ok_or(Failure::Declined("missing font program"))?;
-    let decoded = bounded_stream(document, program, MAX_FONT_BYTES)?;
+    let decoded = bounded_stream(document, program, MAX_FONT_BYTES, work)?;
     require(byte_indexed_truetype(&decoded), "unsupported embedded font cmap")?;
-    audit_unicode(document, dict)
+    audit_unicode(document, dict, work)
 }
-pub(super) fn bounded_stream(document: &PdfDocument, object: &Object, limit: usize) -> ProofResult<Vec<u8>> {
-    let Object::Stream { dict, data } = document.resolve_object(object)? else {
+fn bounded_stream(document: &PdfDocument, object: &Object, limit: usize, work: &Work) -> ProofResult<Vec<u8>> {
+    let Object::Stream { dict, data } = work.resolve(document, object)? else {
         return Err(Failure::Declined("font audit stream"));
     };
     let mut decoded = Vec::new();
@@ -41,14 +41,15 @@ pub(super) fn bounded_stream(document: &PdfDocument, object: &Object, limit: usi
         }
         _ => return Err(Failure::Declined("font audit stream filter")),
     }
+    work.charge(decoded.capacity())?;
     require(decoded.len() <= limit, "font byte budget")?;
     Ok(decoded)
 }
-pub(super) fn audit_unicode(document: &PdfDocument, dict: &HashMap<String, Object>) -> ProofResult<()> {
+fn audit_unicode(document: &PdfDocument, dict: &HashMap<String, Object>, work: &Work) -> ProofResult<()> {
     let unicode = dict
         .get("ToUnicode")
         .ok_or(Failure::Declined("missing explicit Unicode claim map"))?;
-    let decoded = bounded_stream(document, unicode, MAX_UNICODE_BYTES)?;
+    let decoded = bounded_stream(document, unicode, MAX_UNICODE_BYTES, work)?;
     let text = std::str::from_utf8(&decoded).map_err(|_| Failure::Declined("non-ASCII ToUnicode program"))?;
     require(
         !["beginbfrange", "beginnotdefrange", "usecmap"]
