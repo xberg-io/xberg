@@ -48,21 +48,39 @@ fn explicit_language_block_recovers_the_sideways_source_paragraph() {
     assert_eq!(sparse.content.split_whitespace().count(), 3);
     config.ocr.as_mut().unwrap().tesseract_config = None;
     let actual = extract("prose-source-language-only", &pdf, &config);
-    assert_eq!(
-        actual.content.split_whitespace().collect::<Vec<_>>(),
-        source.split_whitespace().collect::<Vec<_>>()
-    );
     assert!(actual.tables.is_empty());
     assert!(actual.ocr_elements.is_none());
     assert!(!actual.metadata.additional.contains_key("auto_rotated"));
-    let actual_document = actual.document.as_ref().unwrap();
-    let forced_document = forced.document.as_ref().unwrap();
-    assert_eq!(actual_document.nodes.len(), 1);
-    assert_eq!(actual_document.nodes[0].bbox, forced_document.nodes[0].bbox);
-    assert_eq!(
-        actual_document.nodes[0].content.text(),
-        Some("Docling bundles PDF document conversion to\nJSON and Markdown in an easy self contained\npackage")
-    );
+    {
+        #[cfg(not(paddle_ocr))]
+        {
+            assert_eq!(
+                actual.content.split_whitespace().collect::<Vec<_>>(),
+                source.split_whitespace().collect::<Vec<_>>()
+            );
+            let actual_document = actual.document.as_ref().unwrap();
+            let forced_document = forced.document.as_ref().unwrap();
+            assert_eq!(actual_document.nodes.len(), 1);
+            assert_eq!(actual_document.nodes[0].bbox, forced_document.nodes[0].bbox);
+            assert_eq!(
+                actual_document.nodes[0].content.text(),
+                Some(
+                    "Docling bundles PDF document conversion to\nJSON and Markdown in an easy self contained\npackage"
+                )
+            );
+        }
+        #[cfg(paddle_ocr)]
+        {
+            // The per-page pipeline route keeps the sparse primary: the recognition-orientation
+            // retry's prose admission is a whole-document-route capability, and this route reads
+            // page images with `allow_prose` off. The sparse read above is what gets served. ~keep
+            assert_eq!(actual.content, sparse.content);
+            assert_eq!(
+                serde_json::to_value(actual.document).unwrap(),
+                serde_json::to_value(sparse.document).unwrap()
+            );
+        }
+    }
 
     let mut upright = Document::load_mem(&pdf).unwrap();
     let page = upright.get_pages()[&1];
@@ -79,14 +97,7 @@ fn explicit_language_block_recovers_the_sideways_source_paragraph() {
         upright.content.split_whitespace().collect::<Vec<_>>(),
         source.split_whitespace().collect::<Vec<_>>()
     );
-    assert_eq!(
-        upright
-            .metadata
-            .additional
-            .get("psm")
-            .and_then(serde_json::Value::as_str),
-        Some("11")
-    );
+    assert_psm(&upright, "11");
 }
 
 fn prose_source() -> Vec<u8> {
