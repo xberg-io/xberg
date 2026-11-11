@@ -541,20 +541,20 @@ fn display_math_in_container(tex: &str, container: &str) -> InternalDocument {
 }
 
 #[tokio::test]
-async fn display_math_in_a_quote_is_redacted_on_one_line() {
-    assert_display_math_redactable(display_math_in_container("Jane Doe\nx", "quote"), "> $$Jane Doe x$$").await;
+async fn display_math_in_a_quote_is_redacted_between_dollar_lines() {
+    assert_display_math_redactable(display_math_in_container("Jane Doe\nx", "quote"), "> $$\n> Jane Doe\n> x\n> $$").await;
 }
 
 #[tokio::test]
-async fn display_math_in_a_list_item_is_redacted_on_one_line() {
-    assert_display_math_redactable(display_math_in_container("Jane Doe\nx", "list"), "  $$Jane Doe x$$").await;
+async fn display_math_in_a_list_item_is_redacted_between_dollar_lines() {
+    assert_display_math_redactable(display_math_in_container("Jane Doe\nx", "list"), "  $$\n  Jane Doe\n  x\n  $$").await;
 }
 
 #[tokio::test]
-async fn display_math_with_a_comment_in_a_quote_is_redacted_as_a_fence() {
+async fn display_math_with_a_comment_in_a_quote_is_redacted_between_dollar_lines() {
     assert_display_math_redactable(
         display_math_in_container("Jane Doe % note\nx", "quote"),
-        "> ```math\n> Jane Doe % note\n> x\n> ```",
+        "> $$\n> Jane Doe % note\n> x\n> $$",
     )
     .await;
 }
