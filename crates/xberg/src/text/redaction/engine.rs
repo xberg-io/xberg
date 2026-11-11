@@ -2130,6 +2130,43 @@ mod tests {
         assert!(!doc.content.contains("Zarnak Quorlim"), "content: {}", doc.content);
     }
 
+    /// The Markdown writer escapes math, so `x*y` in math is `x&#42;y` in the formatted text. The
+    /// redaction pass must read that text as `x*y`, find the term, and not keep the formatted
+    /// content with the term hidden behind a character reference.
+    #[tokio::test]
+    async fn should_not_keep_formatted_markdown_that_hides_a_term_in_escaped_math() {
+        let mut doc = ExtractedDocument {
+            content: "Take x*y and more.\n".to_string(),
+            formatted_content: Some("Take $x&#42;y$ and more.\n".to_string()),
+            ..Default::default()
+        };
+        let config = RedactionConfig {
+            strategy: crate::types::redaction::RedactionStrategy::Mask,
+            custom_terms: vec![crate::core::config::redaction::RedactionTerm::labeled("expr", "x*y")],
+            ..Default::default()
+        };
+
+        struct MarkdownSurfaces;
+        impl RedactionSurfaces for MarkdownSurfaces {
+            fn formatted_markdown(&self) -> bool {
+                true
+            }
+        }
+
+        redact_with_security_limits(&mut doc, &config, &SecurityLimits::default(), &MarkdownSurfaces)
+            .await
+            .expect("redaction must succeed");
+
+        assert!(!doc.content.contains("x*y"), "content: {}", doc.content);
+        assert!(
+            doc.formatted_content
+                .as_deref()
+                .is_none_or(|text| !text.contains("x&#42;y")),
+            "formatted: {:?}",
+            doc.formatted_content
+        );
+    }
+
     /// xberg-io/xberg#204 — the report must count findings from every field.
     #[test]
     fn report_counts_findings_from_secondary_fields() {
