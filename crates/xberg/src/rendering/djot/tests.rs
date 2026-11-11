@@ -1488,18 +1488,25 @@ fn block_openers_remain_literal_in_container_text() {
 
 #[test]
 fn image_ocr_block_openers_stay_literal_on_every_line() {
-    let mut b = InternalDocumentBuilder::new("test");
-    let image = crate::types::ExtractedImage {
-        ocr_result: Some(Box::new(crate::types::ExtractedDocument {
-            content: "# x\n\n- y".into(),
+    for (mime, format) in [("text/plain", None), ("text/markdown", Some("plain"))] {
+        let mut b = InternalDocumentBuilder::new("test");
+        let image = crate::types::ExtractedImage {
+            ocr_result: Some(Box::new(crate::types::ExtractedDocument {
+                content: "# x\n\n- y".into(),
+                mime_type: mime.into(),
+                metadata: crate::types::Metadata {
+                    output_format: format.map(str::to_owned),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })),
             ..Default::default()
-        })),
-        ..Default::default()
-    };
-    b.push_image(Some("Image"), image, None, None);
-    let output = render_djot(&b.build());
-    assert_eq!(output, "![Image]()\n\n\\# x\n\n\\- y\n");
-    assert_eq!(djot_paragraph_texts(&output), ["Image", "# x", "- y"]);
+        };
+        b.push_image(Some("Image"), image, None, None);
+        let output = render_djot(&b.build());
+        assert_eq!(output, "![Image]()\n\n\\# x\n\n\\- y\n", "{mime} {format:?}");
+        assert_eq!(djot_paragraph_texts(&output), ["Image", "# x", "- y"]);
+    }
 }
 
 #[test]
@@ -1560,7 +1567,12 @@ fn paragraph_and_ocr_line_breaks_cannot_open_a_new_block() {
             level: OcrElementLevel::Line,
         },
     ] {
-        for (source, html) in [("x\n# y", "<p>x # y</p>\n"), ("x\n- y", "<p>x - y</p>\n")] {
+        for (source, html) in [
+            ("x\n# y", "<p>x # y</p>\n"),
+            ("x\n- y", "<p>x - y</p>\n"),
+            ("x\n\n# y", "<p>x # y</p>\n"),
+            ("x\n\n- y", "<p>x - y</p>\n"),
+        ] {
             let mut b = InternalDocumentBuilder::new("test");
             b.push_paragraph(source, vec![], None, None);
             let mut doc = b.build();
