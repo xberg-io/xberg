@@ -331,6 +331,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): A sentence no longer reads out of order around an inline equation.** (GH#2925)
   A superscript sits in a line bucket of its own, so the gap it fills tore the line in two and let a column cut run through the paragraph; the straddling-line guard now reads such a gap as part of the line.
+- **(pdf): Mark a page as OCR text only when its whole-document OCR read was accepted into the output.** (#2939)
+  Since #2902, `InternalDocument::ocr_text_pages` decides which pages are re-rendered from their elements, and the PDF extractor marked every page of a whole-document OCR read, including one whose noisy read the recognition-noise gate discarded and whose native text the output keeps. A discarded (or otherwise empty) read no longer marks its page; accepted reads keep their marks exactly as before.
 - **(go): Ship usable static-link flags in the linux-x86_64 and linux-aarch64 Go release archives.** (GH#2988)
   `native-static-libs.txt` no longer ends with a terminal colour escape that cgo rejected, and the glibc-floor archive lists `-lc++ -lc++abi` instead of `-lstdc++`, matching the zig-built C++ objects.
 - **(pdf): Read each table's grid once per segment in the page split that finds the table carrying each split word.** (#2960)
