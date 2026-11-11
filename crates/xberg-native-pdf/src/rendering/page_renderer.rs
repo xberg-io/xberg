@@ -4662,6 +4662,7 @@ impl PageRenderer {
             if parent_shape.is_some() {
                 self.knockout_shape = Some(KnockoutShape::new(pixmap.width(), pixmap.height()));
             }
+            let mut work_fallback = None;
             let result = if is_knockout {
                 // §11.4.6.2: snapshot the initial backdrop, then composite
                 // each element separately against it. The accumulator
@@ -4676,6 +4677,9 @@ impl PageRenderer {
                     page_num,
                     &form_resources,
                 )
+                .map(|fallback| {
+                    work_fallback = fallback;
+                })
             } else {
                 self.execute_operators(
                     &mut group_pixmap,
@@ -4706,7 +4710,7 @@ impl PageRenderer {
                         doc,
                         page_num,
                         resources: &form_resources,
-                        knockout: is_knockout,
+                        knockout: is_knockout && work_fallback.is_none(),
                     },
                 );
                 if let Err(error) = recovered {

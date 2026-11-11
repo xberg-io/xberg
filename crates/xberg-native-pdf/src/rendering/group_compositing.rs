@@ -300,14 +300,47 @@ impl PageRenderer {
         let _workspace = self.knockout_resources.reserve(bytes)?;
         let mut alpha = Pixmap::new(group.width(), group.height())
             .ok_or_else(|| Error::InvalidPdf("group alpha allocation failed".into()))?;
+        let before_replay = self.knockout_resources.degradations();
+        let (mut alpha_sidecar, work_fallback) = self.render_source_alpha(&mut alpha, &replay)?;
+        let alpha_already_degraded = work_fallback.is_some();
+        if alpha_already_degraded || self.knockout_resources.degradations() != before_replay {
+            let _fallback = match work_fallback {
+                Some(fallback) => fallback,
+                None => self.knockout_resources.fallback()?,
+            };
+            self.rerender_group_without_knockout(parent, group, backdrop, &replay)?;
+            if !alpha_already_degraded {
+                // A descendant can have degraded after earlier alpha paints. Replay the entire
+                // source under the same ordinary compositing mode on both surfaces. ~keep
+                drop(alpha_sidecar.take());
+                alpha.data_mut().fill(0);
+                let ordinary = GroupReplay {
+                    knockout: false,
+                    ..replay
+                };
+                alpha_sidecar = self.render_source_alpha(&mut alpha, &ordinary)?.0;
+            }
+        }
+        recover_rgba(parent, group, &alpha);
+        if let Some(backdrop) = backdrop {
+            backdrop.recover_source(self, &alpha, alpha_sidecar.as_ref())?;
+        }
+        Ok(())
+    }
+
+    fn render_source_alpha(
+        &mut self,
+        alpha: &mut Pixmap,
+        replay: &GroupReplay<'_>,
+    ) -> Result<(Option<CmykSidecar>, Option<super::knockout_resources::WorkFallback>)> {
         let saved_sidecar = self.cmyk_sidecar.take();
         let saved_shape = self.knockout_shape.take();
         self.cmyk_sidecar = saved_sidecar
             .as_ref()
-            .map(|sidecar| CmykSidecar::new(group.width(), group.height(), sidecar.spot_names().to_vec()));
+            .map(|sidecar| CmykSidecar::new(alpha.width(), alpha.height(), sidecar.spot_names().to_vec()));
         let rendered = if replay.knockout {
             self.execute_knockout_group(
-                &mut alpha,
+                alpha,
                 replay.transform,
                 replay.operators,
                 replay.doc,
@@ -316,22 +349,42 @@ impl PageRenderer {
             )
         } else {
             self.execute_operators(
-                &mut alpha,
+                alpha,
                 replay.transform,
                 replay.operators,
                 replay.doc,
                 replay.page_num,
                 replay.resources,
             )
+            .map(|_| None)
         };
         let alpha_sidecar = self.cmyk_sidecar.take();
         self.cmyk_sidecar = saved_sidecar;
         self.knockout_shape = saved_shape;
-        rendered?;
-        recover_rgba(parent, group, &alpha);
+        Ok((alpha_sidecar, rendered?))
+    }
+
+    fn rerender_group_without_knockout(
+        &mut self,
+        parent: &Pixmap,
+        group: &mut Pixmap,
+        backdrop: Option<&GroupSidecar>,
+        replay: &GroupReplay<'_>,
+    ) -> Result<()> {
+        group.data_mut().copy_from_slice(parent.data());
         if let Some(backdrop) = backdrop {
-            backdrop.recover_source(self, &alpha, alpha_sidecar.as_ref())?;
+            backdrop.restore(self);
         }
-        Ok(())
+        let shape = self.knockout_shape.take();
+        let result = self.execute_operators(
+            group,
+            replay.transform,
+            replay.operators,
+            replay.doc,
+            replay.page_num,
+            replay.resources,
+        );
+        self.knockout_shape = shape;
+        result
     }
 }
