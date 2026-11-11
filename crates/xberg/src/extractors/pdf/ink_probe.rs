@@ -380,6 +380,16 @@ mod tests {
     }
 
     #[test]
+    fn a_layer_with_exactly_a_tenth_of_its_letters_in_a_read_script_is_not_left_to_the_probe() {
+        let eng = ["eng".to_string()];
+        let arabic: String = ARABIC.chars().filter(|c| !c.is_whitespace()).take(36).collect();
+        let at_a_tenth = format!("Note \u{FFFD}{arabic}");
+        assert_eq!(at_a_tenth.chars().filter(|c| c.is_alphabetic()).count(), 40);
+        assert!(layer_spells_read_scripts(&at_a_tenth, &eng));
+        assert!(!layer_spells_read_scripts(&format!("Not \u{FFFD}{arabic}"), &eng));
+    }
+
+    #[test]
     fn a_confident_prose_read_in_another_script_contradicts_the_layer() {
         let layer = format!("\u{FFFD}{ARABIC}");
         assert!(read_contradicts_layer(&layer, ENGLISH));
