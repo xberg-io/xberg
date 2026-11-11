@@ -64,20 +64,28 @@ pub(super) fn derive_pages(
 /// in `content`, and omit the range of a page whose text is not there. A range that already selects
 /// its page text stays. Any other range moves to the first place of its page text after the ranges
 /// before it, in the order of the ranges. A PDF or OCR range keeps its measured place (#2128).
-/// Returns the omitted page numbers, or `None` when nothing was omitted. When no range is left,
-/// the boundaries become `None`.
+/// The range of a page number that has no extracted page is omitted. Returns the omitted page
+/// numbers, sorted and without repeats, or `None` when nothing was omitted. When no range is
+/// left, the boundaries become `None`.
 fn place_page_boundaries(doc: &mut InternalDocument, content: &str, pages: Option<&[PageContent]>) -> Option<Vec<u32>> {
-    let text_of: ahash::AHashMap<u32, &str> = pages?
+    // `None` marks an OCR page, whose range keeps its measured place.
+    let text_of: ahash::AHashMap<u32, Option<&str>> = pages?
         .iter()
-        .filter(|page| !is_ocr_page_text(doc, page))
-        .map(|page| (page.page_number, page.content.as_str()))
+        .map(|page| {
+            let text = (!is_ocr_page_text(doc, page)).then_some(page.content.as_str());
+            (page.page_number, text)
+        })
         .collect();
     let structure = doc.metadata.pages.as_mut()?;
     let boundaries = structure.boundaries.as_mut()?;
     let mut omitted = Vec::new();
     let mut search_offset = 0;
     boundaries.retain_mut(|boundary| {
-        let Some(&text) = text_of.get(&boundary.page_number) else {
+        let Some(&page_text) = text_of.get(&boundary.page_number) else {
+            omitted.push(boundary.page_number);
+            return false;
+        };
+        let Some(text) = page_text else {
             return true;
         };
         let start = if content.get(boundary.byte_start..boundary.byte_end) == Some(text) {
@@ -103,6 +111,8 @@ fn place_page_boundaries(doc: &mut InternalDocument, content: &str, pages: Optio
     if boundaries.is_empty() {
         structure.boundaries = None;
     }
+    omitted.sort_unstable();
+    omitted.dedup();
     Some(omitted)
 }
 
@@ -1031,5 +1041,36 @@ mod plain_page_rerender_tests {
             .collect();
         assert_eq!(ranges, [(1, 6, 11), (2, 13, 17)]);
         assert!(warned(&doc));
+    }
+
+    #[test]
+    fn the_range_of_a_page_number_with_no_extracted_page_is_omitted_with_a_warning() {
+        let content = "one\n\ntwo";
+        let mut doc = doc_with(vec![page(1, "one")], &[]);
+        doc.ocr_text_pages.clear();
+        doc.source_format = "docx".to_string();
+        set_boundaries(&mut doc, &[(1, 0, 3), (2, 5, 8)]);
+        derive(&mut doc, content);
+        assert_eq!(boundary_pages(&doc), vec![1]);
+        assert!(warned(&doc));
+    }
+
+    #[test]
+    fn the_warning_names_a_page_with_two_omitted_ranges_one_time() {
+        let content = "one";
+        let mut doc = doc_with(vec![page(1, "one"), page(2, "gone")], &[]);
+        doc.ocr_text_pages.clear();
+        doc.source_format = "docx".to_string();
+        set_boundaries(&mut doc, &[(1, 0, 3), (2, 0, 1), (2, 1, 2)]);
+        derive(&mut doc, content);
+        assert_eq!(boundary_pages(&doc), vec![1]);
+        let messages: Vec<&str> = doc
+            .processing_warnings
+            .iter()
+            .filter(|w| w.source == "page_boundaries")
+            .map(|w| w.message.as_ref())
+            .collect();
+        assert_eq!(messages.len(), 1, "one page_boundaries warning: {messages:?}");
+        assert!(messages[0].contains("pages [2] "), "page 2 is named one time: {messages:?}");
     }
 }
