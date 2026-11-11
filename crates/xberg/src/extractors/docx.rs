@@ -5333,7 +5333,7 @@ mod tests {
         );
         assert_eq!(formula_latex(&result), ["x=1", "y=2"]);
         let markdown = result.formatted_content.as_deref().unwrap_or(&result.content);
-        assert!(markdown.contains("> $$\n> y=2\n> $$"), "{markdown}");
+        assert!(markdown.contains("> $$y=2$$"), "{markdown}");
     }
 
     #[tokio::test]
