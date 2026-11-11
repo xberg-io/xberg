@@ -342,7 +342,7 @@ impl ListFormats {
         if format.is_some_and(|format| format.nfc == NFC_NONE) {
             return None;
         }
-        let ordered = format.map_or(true, |format| format.nfc != NFC_BULLET);
+        let ordered = format.is_none_or(|format| format.nfc != NFC_BULLET);
 
         // The painted label: the level's `Xst` template, every placeholder
         // filled with the referenced level's counted number in that level's
@@ -380,14 +380,19 @@ impl ListFormats {
             // The override's first paragraph paints the overridden start
             // value itself, not an advance from the base.
             (true, Some(start)) => Some(start),
-            _ => state.counters.get(&key).copied().map(|count| count.saturating_add(1)).or_else(|| {
-                // No counter yet: the level's own start value, when it is in
-                // the [MS-DOC] range (2.9.27, 2.9.144 bound `iStartAt` to
-                // `0..=0x7FFF`). A malformed start starts no sequence.
-                format
-                    .filter(|format| (0..=START_AT_MAX).contains(&format.start_at))
-                    .map(|format| format.start_at as u32)
-            }),
+            _ => state
+                .counters
+                .get(&key)
+                .copied()
+                .map(|count| count.saturating_add(1))
+                .or_else(|| {
+                    // No counter yet: the level's own start value, when it is in
+                    // the [MS-DOC] range (2.9.27, 2.9.144 bound `iStartAt` to
+                    // `0..=0x7FFF`). A malformed start starts no sequence.
+                    format
+                        .filter(|format| (0..=START_AT_MAX).contains(&format.start_at))
+                        .map(|format| format.start_at as u32)
+                }),
         };
         if let Some(value) = value {
             state.counters.insert(key, value);
@@ -548,7 +553,7 @@ fn read_lfo_levels(plf_lfo: &[u8], mut at: usize, clfolvl: usize) -> (AHashMap<u
         levels.insert(
             ilvl,
             LfoLevelOverride {
-                start_at: (f_start_at && (0..=START_AT_MAX).contains(&i_start_at)).then(|| i_start_at as u32),
+                start_at: (f_start_at && (0..=START_AT_MAX).contains(&i_start_at)).then_some(i_start_at as u32),
                 embedded,
             },
         );
@@ -584,7 +589,7 @@ fn painted_number(value: u32, nfc: u8) -> Option<String> {
         NFC_DECIMAL => Some(value.to_string()),
         NFC_UPPER_ROMAN => roman_numeral(value),
         NFC_LOWER_ROMAN => roman_numeral(value).map(|numeral| numeral.to_ascii_lowercase()),
-        NFC_UPPER_LETTER => letter_run(value),
+        NFC_UPPER_LETTER => letter_run(value).map(|letters| letters.to_ascii_uppercase()),
         NFC_LOWER_LETTER => letter_run(value).map(|letters| letters.to_ascii_lowercase()),
         _ => None,
     }

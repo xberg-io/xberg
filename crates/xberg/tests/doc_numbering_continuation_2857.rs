@@ -47,6 +47,48 @@ fn item_lines(content: &str) -> Vec<&str> {
 }
 
 #[test]
+fn djot_renders_a_decimal_doc_list_as_an_ordered_list() {
+    // The Djot renderer's decimal marker is the same auto-incrementing `N.` the
+    // markdown bridge parses its source labels into
+    // (comrak_bridge/source_lists.rs::decimal_ordinal): a decimal source label must
+    // become the item's ordered marker, not a bullet with the number as visible
+    // text, or every numbered legacy .doc list demotes to an unordered list.
+    let content = extract("continuous", OutputFormat::Djot);
+    assert_eq!(
+        numbered_lines(&content),
+        vec![
+            "1. First paragraph.",
+            "2. Second paragraph.",
+            "3. Third paragraph.",
+            "4. Fourth paragraph.",
+            "5. Fifth paragraph.",
+            "6. Sixth paragraph.",
+        ],
+        "{content}"
+    );
+}
+
+#[test]
+fn djot_keeps_rich_doc_lists_decimal_items_ordered() {
+    // In the multi-level fixture the decimal levels keep their ordered markers
+    // (the nested level after a heading restarts at 1, as the markdown pins);
+    // roman labels stay a literal bullet text, as in markdown.
+    let content = extract("rich", OutputFormat::Djot);
+    assert_eq!(
+        item_lines(&content),
+        vec![
+            "- i. First roman item.",
+            "1. First nested item.",
+            "- ii. Second roman item.",
+            "1. First plain item.",
+            "- iii. Third roman item.",
+            "- iv. Fourth roman item.",
+        ],
+        "{content}"
+    );
+}
+
+#[test]
 fn numbered_doc_paragraphs_continue_across_three_headings() {
     for format in [OutputFormat::Markdown, OutputFormat::Plain] {
         let content = extract("continuous", format.clone());

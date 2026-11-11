@@ -10,6 +10,7 @@ use super::papx::ListBinding;
 
 const NFC_DECIMAL: u8 = 0;
 const NFC_UPPER_ROMAN: u8 = 1;
+const NFC_UPPER_LETTER: u8 = 3;
 const NFC_LOWER_LETTER: u8 = 4;
 const NFC_BULLET: u8 = 23;
 const NFC_NONE: u8 = 255;
@@ -191,6 +192,26 @@ fn roman_levels_paint_their_numbers() {
         walked(&formats, &[(1, 0), (1, 0)]),
         [label("I."), label("II.")],
         "the upper-roman scheme paints its numbers through the same label channel"
+    );
+}
+
+#[test]
+fn an_upper_letter_level_paints_uppercase_letters() {
+    // The review's `upper-letter` case: the letter helper writes the lowercase run and
+    // the DOCX counterpart applies the case the level's format names (`w:numFmt`
+    // `upperLetter`, `docx/parser.rs::format_list_counter`); the .doc scheme reads the
+    // same Word level table and must apply the same case, or `A.`/`B.` paint `a.`/`b.`.
+    let mut levels = decimal_levels(1);
+    levels[0] = LevelSpec {
+        nfc: NFC_UPPER_LETTER,
+        xst: placeholder_label(0),
+        ..decimal_level(1)
+    };
+    let formats = formats(&plf_lst(7, levels), &plf_lfo(7, &[(0, None)]));
+    assert_eq!(
+        walked(&formats, &[(1, 0), (1, 0)]),
+        [label("A."), label("B.")],
+        "the upper-letter scheme paints uppercase letters through the same label channel"
     );
 }
 
