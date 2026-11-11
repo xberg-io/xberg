@@ -1,5 +1,7 @@
 //! Render an `InternalDocument` to Djot markup.
 
+use std::borrow::Cow;
+
 use crate::types::annotations::PdfAnnotation;
 use crate::types::document_structure::AnnotationKind;
 use crate::types::internal::{ElementKind, InternalDocument};
@@ -52,12 +54,12 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
                     crate::rendering::common::marked_row_lines(&elem.text, &elem.annotations, elem.attributes.as_ref())
                 {
                     for line in lines {
-                        let block = format!("{}\n\n", escape_leading_block_marker(&render_djot_annotated(line, &[])));
+                        let block = format!("{}\n\n", escape_block_prefix(&render_djot_inline(line, &[]), true));
                         push_with_bq(&mut out, &block, bq_depth);
                     }
                 } else {
                     let text = render_djot_annotated(&elem.text, &elem.annotations);
-                    let block = format!("{}\n\n", text);
+                    let block = format!("{text}\n\n");
                     push_with_bq(&mut out, &block, bq_depth);
                 }
             }
@@ -160,7 +162,19 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
                     && let Some(ocr_result) = image.and_then(|img| img.ocr_result.as_ref())
                     && !ocr_result.content.is_empty()
                 {
-                    let block = format!("{}\n\n", ocr_result.content);
+                    let markup = match ocr_result.metadata.output_format.as_deref() {
+                        Some(format) => matches!(format, "markdown" | "djot"),
+                        None => matches!(
+                            ocr_result.mime_type.as_ref(),
+                            "text/markdown" | "text/djot" | "text/x-djot"
+                        ),
+                    };
+                    let content = if markup {
+                        Cow::Borrowed(ocr_result.content.as_str())
+                    } else {
+                        Cow::Owned(escape_text_lines(&ocr_result.content))
+                    };
+                    let block = format!("{content}\n\n");
                     push_with_bq(&mut out, &block, bq_depth);
                 }
             }
@@ -245,7 +259,7 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
                     block.push('\n');
                 }
                 if entries.is_empty() && !elem.text.is_empty() {
-                    block.push_str(&elem.text);
+                    block.push_str(&escape_text_lines(&elem.text));
                     ensure_trailing_newline(&mut block);
                 }
                 block.push('\n');
@@ -253,7 +267,7 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
             }
             ElementKind::OcrText { .. } => {
                 let text = render_djot_annotated(&elem.text, &elem.annotations);
-                let block = format!("{}\n\n", text);
+                let block = format!("{text}\n\n");
                 push_with_bq(&mut out, &block, bq_depth);
             }
             ElementKind::ListStart { ordered } => {
@@ -311,7 +325,7 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
             out.push_str("[^");
             out.push_str(key);
             out.push_str("]: ");
-            out.push_str(&elem.text);
+            out.push_str(&escape_text_lines(&elem.text));
             out.push_str("\n\n");
         }
     }
@@ -376,58 +390,144 @@ fn render_annotations_djot(annotations: &[PdfAnnotation]) -> String {
     out
 }
 
-/// Backslash-escapes the first character of a row that starts its own paragraph when that
-/// character could open Djot block syntax: a table, list, definition list, heading, quote,
-/// thematic break, div, code fence, footnote, link definition, caption or attribute line.
-/// Djot lets a backslash escape any ASCII punctuation character, so every punctuation start is
-/// escaped; only a `#` that is not a heading marker (`#hashtag`) stays plain. A row that
-/// starts with a letter or digit is escaped at the delimiter of a list label (`1.`, `a)`).
-fn escape_leading_block_marker(line: &str) -> String {
-    let Some(at) = leading_block_marker_at(line) else {
-        return line.to_string();
-    };
-    let (head, rest) = line.split_at(at);
-    let first = rest.chars().next().unwrap_or_default();
-    // After the first backtick or colon of a run is escaped, the rest of the run would still open
-    // a code span or an empty symbol, so the whole run is escaped.
-    let mut run = if matches!(first, '`' | ':') {
-        rest.len() - rest.trim_start_matches(first).len()
+/// Escape the first block opener. Marked rows also protect leading inline punctuation because
+/// the row text comes from a source that supplied no Djot markup.
+fn escape_block_prefix(text: &str, literal_row: bool) -> Cow<'_, str> {
+    let row_start = literal_row.then(|| literal_row_prefix(text)).flatten();
+    let range = if literal_row {
+        0..text.len()
     } else {
-        first.len_utf8()
+        let first_line = text.split_once('\n').map_or(text, |(line, _)| line);
+        let line = first_line.trim_start();
+        let indent = first_line.len() - line.len();
+        let prefix_end = line.find(char::is_whitespace).unwrap_or(line.len());
+        let prefix = &line[..prefix_end];
+        if !prefix.starts_with(|c: char| c.is_ascii_punctuation()) && !prefix.ends_with(['.', ')']) {
+            return text.into();
+        }
+
+        let mut events = jotdown::Parser::new(first_line).into_offset_iter();
+        let block = events.nth(1);
+        let paragraph = matches!(
+            block,
+            Some((jotdown::Event::Start(jotdown::Container::Paragraph, _), _))
+        );
+        let attributes_end = if line.starts_with('{') {
+            leading_attributes_end(first_line, indent, block.as_ref(), events)
+        } else {
+            indent
+        };
+        if attributes_end > indent {
+            indent..attributes_end
+        } else if !paragraph
+            && line.starts_with('[')
+            && let Some(end) = line.find("]:")
+        {
+            // Escaping the opening bracket can activate underscores inside the label. ~keep
+            let mut escaped = text.to_string();
+            escaped.insert(indent + end + 1, '\\');
+            if line.starts_with("[^") {
+                escaped.insert(indent + 1, '\\');
+            }
+            return escaped.into();
+        } else if paragraph && prefix != "^" {
+            return text.into();
+        } else {
+            let end = match line.chars().next() {
+                Some('|') => 1,
+                Some(first @ ('`' | '~' | ':')) => line.len() - line.trim_start_matches(first).len(),
+                _ if matches!(block, Some((jotdown::Event::ThematicBreak(_), _))) => line.len(),
+                _ => prefix_end,
+            };
+            indent..indent + end
+        }
     };
-    // On the unescaped row, `{`, `[`, `!` and `:` hold the delimiters that follow them, so a row such as `{_!_`
-    // or `[]{}` stays text. Escaping only the opener would free those delimiters to become emphasis, a
-    // superscript or attributes, so the whole run of punctuation after the opener is escaped.
-    if matches!(first, '{' | '[' | '!' | ':') {
-        let extra = rest[run..]
-            .chars()
-            .take_while(|c| c.is_ascii_punctuation() && *c != '\\')
-            .count();
-        run += extra;
+
+    let mut escaped = String::with_capacity(text.len() + range.len());
+    escaped.push_str(&text[..range.start]);
+    let mut already_escaped = false;
+    let mut previous = None;
+    let mut chars = text[range.clone()].char_indices().peekable();
+    while let Some((at, c)) = chars.next() {
+        let escape = if literal_row {
+            let before_text = chars.peek().is_some_and(|(_, next)| !next.is_whitespace());
+            row_start.as_ref().is_some_and(|run| run.contains(&at))
+                || matches!(c, '\\' | '`' | '*' | '_' | '{' | '}' | '[' | ']' | '^' | '~' | '<' | '"' | '\'')
+                || (matches!(c, '.' | '-')
+                    && (previous == Some(c) || chars.peek().is_some_and(|(_, next)| *next == c)))
+                || (c == ':' && before_text)
+                // djot.js opens these forms even after an escaped brace. ~keep
+                || (matches!(c, '+' | '=' | '-') && previous == Some('{'))
+        } else {
+            c.is_ascii_punctuation() && c != '\\' && !already_escaped
+        };
+        if escape {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+        previous = Some(c);
+        already_escaped = c == '\\' && !already_escaped;
     }
-    let escaped: String = rest[..run].chars().flat_map(|c| ['\\', c]).collect();
-    format!("{head}{escaped}{}", &rest[run..])
+    escaped.push_str(&text[range.end..]);
+    escaped.into()
 }
 
-/// Byte offset of the character to escape when `line` could open Djot block syntax.
-fn leading_block_marker_at(line: &str) -> Option<usize> {
-    let first = line.chars().next()?;
-    if first.is_ascii_punctuation() {
-        // A backslash before punctuation already escapes it, and doubling it would free the next character.
-        if first == '\\' && line[1..].chars().next().is_some_and(|c| c.is_ascii_punctuation()) {
-            return None;
+fn leading_attributes_end<'a>(
+    line: &'a str,
+    indent: usize,
+    block: Option<&(jotdown::Event<'_>, std::ops::Range<usize>)>,
+    events: impl Iterator<Item = (jotdown::Event<'a>, std::ops::Range<usize>)>,
+) -> usize {
+    use jotdown::{Container, Event};
+
+    if let Some((Event::Attributes(_), range)) = block {
+        return range.end;
+    }
+
+    let mut end = indent;
+    for (event, range) in events {
+        match event {
+            Event::Attributes(_) | Event::End(Container::Span)
+                if line
+                    .get(end..range.start)
+                    .is_some_and(|gap| gap.chars().all(char::is_whitespace)) =>
+            {
+                end = range.end;
+            }
+            Event::Str(space) if space.chars().all(char::is_whitespace) => {}
+            // Jotdown attaches attributes after Unicode whitespace to a span containing that space.
+            Event::Start(Container::Span, _) => {}
+            _ => break,
         }
+    }
+    end
+}
+
+fn literal_row_prefix(line: &str) -> Option<std::ops::Range<usize>> {
+    let first = line.chars().next()?;
+    let at = if first.is_ascii_punctuation() {
         let hashtag = first == '#'
             && line
                 .trim_start_matches('#')
                 .chars()
                 .next()
                 .is_some_and(|c| !c.is_whitespace());
-        return (!hashtag).then_some(0);
+        (!hashtag).then_some(0)?
+    } else {
+        let end = line.find(['.', ')'])?;
+        let followed_by_space = line[end + 1..].chars().next().is_none_or(char::is_whitespace);
+        (is_list_label(&line[..end]) && followed_by_space).then_some(end)?
+    };
+    let first = line[at..].chars().next()?;
+    Some(at..line.len() - line[at..].trim_start_matches(first).len())
+}
+
+fn escape_text_lines(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for line in text.split_inclusive('\n') {
+        escaped.push_str(&escape_block_prefix(line, false));
     }
-    let end = line.find(['.', ')'])?;
-    let followed_by_space = line[end + 1..].chars().next().is_none_or(char::is_whitespace);
-    (is_list_label(&line[..end]) && followed_by_space).then_some(end)
+    escaped
 }
 
 /// A decimal number, a single letter or a roman numeral run: the labels Djot opens a list with.
@@ -462,6 +562,14 @@ fn block_text_end(out: &str, bq_depth: usize) -> usize {
 /// newlines replaced, control characters stripped) to match the markdown renderer.
 /// Code spans are left un-normalized to preserve literal content.
 fn render_djot_annotated(text: &str, annotations: &[crate::types::document_structure::TextAnnotation]) -> String {
+    let inline = render_djot_inline(text, annotations);
+    match escape_block_prefix(&inline, false) {
+        Cow::Borrowed(_) => inline,
+        Cow::Owned(escaped) => escaped,
+    }
+}
+
+fn render_djot_inline(text: &str, annotations: &[crate::types::document_structure::TextAnnotation]) -> String {
     if annotations
         .iter()
         .any(|annotation| valid_math_annotation(text, annotation))

@@ -720,16 +720,10 @@ async fn should_retain_each_page_from_document_capable_backend_on_byte_input() {
     assert_eq!(pages[0].content, OCR_TEXT);
     assert!(pages[1].content.contains(OCR_TEXT));
     assert!(pages[1].content.contains(SECOND_PAGE_TEXT));
-    let joined_page_content = pages
-        .iter()
-        .map(|page| page.content.as_str())
-        .collect::<Vec<_>>()
-        .join("\n\n");
     assert_eq!((boundaries[0].byte_start, boundaries[0].byte_end), (0, OCR_TEXT.len()));
-    assert_eq!(boundaries[1].byte_start, OCR_TEXT.len() + 2);
     assert_eq!(
-        &joined_page_content[boundaries[1].byte_start..boundaries[1].byte_end],
-        pages[1].content
+        document.content.get(boundaries[1].byte_start..boundaries[1].byte_end),
+        Some(pages[1].content.as_str())
     );
 }
 

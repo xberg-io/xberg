@@ -2849,7 +2849,7 @@ pub(super) fn transform_ocr_elements_to_render_space(
     allow(dead_code)
 )]
 pub(super) fn ocr_points_per_pixel(
-    #[cfg(feature = "pdf")] lazy_pdf_render_state: Option<&(xberg_native_pdf::PdfDocument, usize, Vec<u32>)>,
+    #[cfg(feature = "pdf")] lazy_pdf_render_state: Option<&super::rendering::FullPdfRenderState>,
     page_idx: usize,
     page_height_px: u32,
 ) -> f32 {

@@ -162,6 +162,7 @@ values = [
   "crates/xberg/tests/fixtures/pdf/regression_pages/**",
   "skills/**",
   "adrs/**",
+  "crates/xberg/tests/fixtures/pdf/wrong-script-tounicode-2830/arabic-and-bengali.pdf",
   "packages/swift/Sources/RustBridge/xberg-swift.swift",
   "packages/zig/src/xberg.zig",
   "docs-site/src/content/docs/reference/api-*.md",
