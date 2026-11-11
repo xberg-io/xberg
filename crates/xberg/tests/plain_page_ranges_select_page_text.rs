@@ -94,3 +94,15 @@ fn a_docx_page_range_selects_its_page_text_or_is_omitted_with_a_warning() {
     let document = extract("docx/budget_fy2027_memo.docx", &plain_pages_config());
     pages_with_exact_ranges(&document);
 }
+
+#[cfg(feature = "office")]
+#[test]
+fn each_range_of_a_two_page_docx_selects_its_page_text_or_is_omitted_with_a_warning() {
+    let document = extract("docx/unit_test_headers.docx", &plain_pages_config());
+    assert_eq!(
+        document.pages.as_deref().map(<[_]>::len),
+        Some(2),
+        "the document has two pages"
+    );
+    pages_with_exact_ranges(&document);
+}
