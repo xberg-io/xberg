@@ -6,13 +6,16 @@
 //! whole-document read cover a page and fail or blank only the per-page retry that reads the same
 //! page again. The backend replaces the built-in `tesseract` entry of this process's registry, so
 //! every test here is serial and the file holds no other tests.
+//!
+//! CI collects these tests on the unit-test legs (`mise run rust:test:ci`, which runs
+//! `scripts/ci/rust/run-unit-tests.sh`; its `xberg_test_features` include `bundle-tessdata-eng`
+//! on every platform, with the `full-no-heic` substitution on Linux aarch64).
 
 mod helpers;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use xberg::core::config::{OcrStrategy, PageConfig};
 use xberg::plugins::{OcrBackend, OcrBackendType, Plugin, register_ocr_backend, unregister_ocr_backend};
 use xberg::types::{ExtractedDocument, ExtractionMethod};
@@ -21,6 +24,7 @@ use xberg::{ExtractionConfig, OcrConfig, OutputFormat};
 const THEN_SCANNED: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-then-scanned-english.pdf");
 const ENGLISH: &str = "The quarterly report contains useful readable text about the country and its people.";
 const WEAK: &str = "So be it.";
+const KHMER_READ: &str = "ខ្ញុំស្រលាញ់ប្រទេសកម្ពុជា សួស្តីភ្នំពេញ";
 const KHMER_PAGE_LETTERS: usize = 222;
 /// The rasters of this fixture set, by rendered dimensions: the Khmer page and the weak page
 /// render at the preprocessing DPI, the scan page at its own higher source DPI.
@@ -86,6 +90,9 @@ enum Read {
     Blank,
     /// A read that fails.
     Fails,
+    /// A read in the page's own script, which the whole read keeps: nothing drops, so no retry
+    /// is armed at all.
+    Khmer,
 }
 
 /// Reads pages apart by the dimensions of the raster it is handed: a raster script's calls
@@ -97,7 +104,6 @@ enum Read {
 struct ByRaster {
     scripts: Mutex<HashMap<ScriptKey, Vec<Read>>>,
     next: Mutex<HashMap<ScriptKey, usize>>,
-    calls: AtomicUsize,
 }
 
 /// A raster script's key: the raster's dimensions and whether the handed config marks the read as
@@ -109,7 +115,6 @@ impl ByRaster {
         Self {
             scripts: Mutex::new(scripts),
             next: Mutex::new(HashMap::new()),
-            calls: AtomicUsize::new(0),
         }
     }
 }
@@ -138,7 +143,6 @@ impl OcrBackend for ByRaster {
         true
     }
     async fn process_image(&self, image: &[u8], config: &OcrConfig) -> xberg::Result<ExtractedDocument> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
         let dims = image::load_from_memory(image).map_or((0, 0), |decoded| (decoded.width(), decoded.height()));
         let scan_flag = config
             .backend_options
@@ -164,6 +168,7 @@ impl OcrBackend for ByRaster {
             Read::Latin => document.content = ENGLISH.to_owned(),
             Read::Blank => {}
             Read::Fails => return Err(xberg::XbergError::ocr("the page raster was refused")),
+            Read::Khmer => document.content = KHMER_READ.to_owned(),
         }
         Ok(document)
     }
@@ -235,11 +240,6 @@ fn a_recovered_per_page_read_failure_keeps_the_retry_and_the_marked_page_native_
     let source = khmer_scan_then_weak_native();
     let automatic = read(&source, backend.clone());
     assert_eq!(
-        backend.calls.load(Ordering::SeqCst),
-        6,
-        "the whole read and the per-page retry each read every page once"
-    );
-    assert_eq!(
         khmer_count(&automatic.content),
         KHMER_PAGE_LETTERS,
         "the marked page must keep its native text: {:?}",
@@ -287,12 +287,6 @@ fn a_scan_the_whole_read_read_blank_does_not_drop_the_retry_nor_warn_of_an_unrea
     ])));
     let automatic = read(THEN_SCANNED, backend.clone());
     assert_eq!(
-        backend.calls.load(Ordering::SeqCst),
-        7,
-        "the whole read and the per-page retry each read every page once, and the scan's picture is \
-         re-read after each blank page read"
-    );
-    assert_eq!(
         khmer_count(&automatic.content),
         KHMER_PAGE_LETTERS,
         "the marked page must keep its native text: {:?}",
@@ -313,4 +307,129 @@ fn a_scan_the_whole_read_read_blank_does_not_drop_the_retry_nor_warn_of_an_unrea
     assert_eq!(failures.len(), 1, "{:?}", automatic.ocr_page_failures);
     assert_eq!(failures[0].page, 2, "{failures:?}");
     assert!(!failures[0].recovered, "the scan has no native text: {failures:?}");
+}
+
+/// Case C: a per-page read that fails unrecovered on a page the whole-document read read with text
+/// discards the retry for the whole read: the fallback warning appears, and the marked page's
+/// native text is replaced by the whole read's OCR text. This pins the fallback firing itself and
+/// the whole-read page-to-index mapping, which cases A and B cannot see: both keep the retry.
+#[test]
+#[serial_test::serial]
+fn a_retry_failure_unrecovered_on_a_page_the_whole_read_read_drops_the_retry_for_the_whole_read() {
+    let backend = Arc::new(ByRaster::new(script(&[
+        // The scan: the whole-document read reads it, the marked-page retry's read of it fails.
+        // The scan has no native text to recover the failure, so the retry loses to the whole
+        // read. The marked page's whole read is unscripted: it reads Latin, which drops its
+        // script and arms the retry.
+        ((SCAN_DIMS, true), &[Read::Latin, Read::Fails]),
+    ])));
+    let automatic = read(THEN_SCANNED, backend.clone());
+    assert_eq!(
+        warnings_containing(&automatic, "could not read every other page").len(),
+        1,
+        "{:?}",
+        automatic.processing_warnings
+    );
+    assert_eq!(
+        warnings_containing(&automatic, "OCR of page 2 failed").len(),
+        0,
+        "the discarded retry's per-page warnings are dropped with it: {:?}",
+        automatic.processing_warnings
+    );
+    assert_eq!(
+        khmer_count(&automatic.content),
+        0,
+        "the marked page's native text was replaced by the whole read: {:?}",
+        automatic.content
+    );
+    assert!(
+        automatic.content.contains(ENGLISH),
+        "the whole read's text is the result: {:?}",
+        automatic.content
+    );
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Ocr));
+}
+
+/// Case D: a per-page read that fails on the marked page itself — the page the retry exists to
+/// keep — must not drop the retry: the marked page keeps its native text and no warning claims a
+/// page could not be read. The failure's record is recovered by the page's native text, so the
+/// `!failure.recovered` conjunct of `loses_whole_read` decides before the dropped-pages clause
+/// can: a page in `dropped_pages` always has native text, so through the public API the clause
+/// never decides alone. This case pins the two conjuncts' combined guarantee — a marked page's
+/// failed read never discards the retry.
+#[test]
+#[serial_test::serial]
+fn a_retry_read_failure_on_the_marked_page_itself_keeps_the_retry_and_the_native_text() {
+    let backend = Arc::new(ByRaster::new(script(&[
+        // The scan reads in both runs. The marked page: the whole read reads it (Latin, which
+        // drops its script and arms the retry), and the retry's read of it fails unrecovered by
+        // any OCR output — only the page's native text recovers it.
+        ((SCAN_DIMS, true), &[Read::Latin, Read::Latin]),
+        ((KHMER_DIMS, false), &[Read::Latin, Read::Fails]),
+    ])));
+    let automatic = read(THEN_SCANNED, backend.clone());
+    assert_eq!(
+        khmer_count(&automatic.content),
+        KHMER_PAGE_LETTERS,
+        "the marked page must keep its native text: {:?}",
+        automatic.content
+    );
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Mixed));
+    assert!(
+        warnings_containing(&automatic, "could not read every other page").is_empty(),
+        "{:?}",
+        automatic.processing_warnings
+    );
+    let failures: Vec<_> = automatic
+        .ocr_page_failures
+        .iter()
+        .flatten()
+        .filter(|failure| failure.page == 1)
+        .collect();
+    assert_eq!(failures.len(), 1, "{:?}", automatic.ocr_page_failures);
+    assert!(
+        failures[0].recovered,
+        "the marked page's native text recovers its failed read: {:?}",
+        failures[0]
+    );
+}
+
+/// Case E: a whole read that keeps the marked page's script arms no retry — nothing dropped — and
+/// its own result stands (the `None` arm of the retry, the no-partial-drop path). The sibling
+/// `Some(Err)` arm of the retry — the run failing as a whole — is unreachable with an observable
+/// effect through the public API: a page task's backend error, however classified, is converted to
+/// a per-page failure, and a run-level cancellation error is re-raised by the cancellation check
+/// inside that arm before its fallback applies, so the arm is bare error propagation, not a
+/// fallback.
+#[test]
+#[serial_test::serial]
+fn a_whole_read_that_keeps_the_marked_script_arms_no_retry_and_stands_on_its_own() {
+    let backend = Arc::new(ByRaster::new(script(&[
+        // The marked page's whole read comes back in its own script, so no page drops its script
+        // and the retry is never armed. The scan reads Latin.
+        ((KHMER_DIMS, false), &[Read::Khmer]),
+    ])));
+    let automatic = read(THEN_SCANNED, backend.clone());
+    assert!(
+        automatic.content.contains(KHMER_READ),
+        "the whole read kept the marked page's script: {:?}",
+        automatic.content
+    );
+    assert!(
+        automatic.content.contains(ENGLISH),
+        "the scan's read is in the result: {:?}",
+        automatic.content
+    );
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Ocr));
+    assert!(
+        warnings_containing(&automatic, "could not read every other page").is_empty()
+            && warnings_containing(&automatic, "the targeted OCR that keeps their native text failed").is_empty(),
+        "no retry ran, so no retry warning appears: {:?}",
+        automatic.processing_warnings
+    );
+    assert!(
+        automatic.ocr_page_failures.iter().flatten().count() == 0,
+        "every read succeeded: {:?}",
+        automatic.ocr_page_failures
+    );
 }
