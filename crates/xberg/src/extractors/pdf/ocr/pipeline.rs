@@ -3038,28 +3038,23 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             .get(&page)
             .zip(ocr_results.get(&page))
             .is_some_and(|(doc, text)| {
-                if super::document::plain_ocr_page_can_yield_to_native(doc, text) {
-                    return true;
-                }
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                if native_words_covered_pages.contains(&page) {
-                    return super::native_word_coverage::has_only_certified_tesseract_text(doc)
-                        && super::document::ocr_elements_follow_text(doc, text);
-                }
-                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                if native_ink_owned_pages.contains(&page) {
-                    let clean_ink_layer = native_coverage_layers
-                        .filter(|_| clean_native_ink_pages.contains(&page))
-                        .and_then(|layers| layers.get(&page))
-                        .map(String::as_str);
-                    return super::native_word_coverage::only_segments_certified_tesseract_text(doc, text)
-                        || super::native_word_coverage::ink_owned_table_structure_can_yield_to_native(
-                            doc,
-                            text,
-                            clean_ink_layer,
-                        );
-                }
-                false
+                let yields_to_native = super::native_word_coverage::final_ocr_structure_can_yield_to_native(
+                    page,
+                    doc,
+                    text,
+                    super::native_word_coverage::FinalOcrStructureYieldSets {
+                        native_words_covered_pages: &native_words_covered_pages,
+                        native_ink_owned_pages: &native_ink_owned_pages,
+                        native_coverage_layers,
+                        clean_native_ink_pages: &clean_native_ink_pages,
+                    },
+                );
+                // Without the real OCR backends there are no admission sets to consult, so the
+                // fallback is the plain-acceptance route the gated helper opens with. ~keep
+                #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+                let yields_to_native = super::document::plain_ocr_page_can_yield_to_native(doc, text);
+                yields_to_native
             });
         let has_formula = accumulated_formulas
             .iter()
@@ -9680,6 +9675,10 @@ mod first_pass_route_tests;
 #[cfg(all(test, feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 #[path = "pipeline/native_script_kept_tests.rs"]
 mod native_script_kept_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+#[path = "pipeline/second_site_clean_admission_tests.rs"]
+mod second_site_clean_admission_tests;
 
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
 #[path = "pipeline/budget_refusal_tests.rs"]
