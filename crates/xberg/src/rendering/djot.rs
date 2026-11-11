@@ -39,13 +39,13 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
 
         match elem.kind {
             ElementKind::Title => {
-                let text = render_djot_annotated(&elem.text, &elem.annotations);
+                let text = render_djot_inline(&elem.text, &elem.annotations);
                 let block = format!("# {}\n\n", text);
                 push_with_bq(&mut out, &block, bq_depth);
             }
             ElementKind::Heading { level } => {
                 let hashes = "#".repeat(level as usize);
-                let text = render_djot_annotated(&elem.text, &elem.annotations);
+                let text = render_djot_inline(&elem.text, &elem.annotations);
                 let block = format!("{} {}\n\n", hashes, text);
                 push_with_bq(&mut out, &block, bq_depth);
             }
@@ -203,7 +203,7 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
                 if elem.text.is_empty() {
                     push_with_bq(&mut out, "\n---\n\n", bq_depth);
                 } else {
-                    let text = render_djot_annotated(&elem.text, &elem.annotations);
+                    let text = render_djot_inline(&elem.text, &elem.annotations);
                     let mut block = String::with_capacity(12 + text.len());
                     block.push_str("\n---\n\n## ");
                     block.push_str(&text);

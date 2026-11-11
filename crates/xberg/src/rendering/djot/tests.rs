@@ -1688,3 +1688,32 @@ fn footnotes_keep_inline_markup_and_smart_punctuation() {
     let html = jotdown::html::render_to_string(jotdown::Parser::new(&output));
     assert!(html.contains("<strong>bold</strong> … –"), "{html}");
 }
+
+#[test]
+fn test_render_djot_headings_titles_and_slide_titles_keep_block_start_text_unescaped() {
+    for text in ["1. Introduction", "A. Heading", "- x"] {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_title(text, None, None);
+        b.push_heading(2, text, None, None);
+        b.push_slide(1, Some(text), None);
+        let out = render_djot(&b.build());
+        assert!(!out.contains('\\'), "escape in heading text {text:?}: {out}");
+        for line in [format!("# {text}"), format!("## {text}")] {
+            assert!(out.lines().any(|l| l == line), "missing {line:?} in: {out}");
+        }
+        let headings: Vec<String> = {
+            let mut found = Vec::new();
+            let mut in_heading = false;
+            for event in jotdown::Parser::new(&out) {
+                match event {
+                    jotdown::Event::Start(jotdown::Container::Heading { .. }, _) => in_heading = true,
+                    jotdown::Event::End(jotdown::Container::Heading { .. }) => in_heading = false,
+                    jotdown::Event::Str(value) if in_heading => found.push(value.to_string()),
+                    _ => {}
+                }
+            }
+            found
+        };
+        assert_eq!(headings, [text, text, text], "round trip of {text:?}: {out}");
+    }
+}
