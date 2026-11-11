@@ -2226,6 +2226,44 @@ mod tests {
         );
     }
 
+    /// The file-path entry of the backend reads a page with one line kept for its numeral and one
+    /// removed. The removed line is reported and neither line count reaches the public metadata. The
+    /// test needs the bundled English data, as the byte-path integration test does.
+    #[cfg(all(
+        feature = "bundle-tessdata-eng",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    #[tokio::test]
+    async fn process_image_file_reports_the_removed_line_and_keeps_both_counts_out_of_the_metadata() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ocr_numeral_noise_2851/noise.png");
+        let document = TesseractBackend::new()
+            .process_image_file(&path, &OcrConfig::default())
+            .await
+            .expect("the file-path entry reads the page");
+
+        let warnings: Vec<&str> = document
+            .processing_warnings
+            .iter()
+            .map(|warning| warning.message.as_ref())
+            .collect();
+        assert!(document.content.contains("2024"), "{:?}", document.content);
+        assert_eq!(
+            warnings,
+            ["Tesseract removed 1 OCR line(s) because their dictionary-checkable words were mostly not real words"],
+            "for {:?}",
+            document.content
+        );
+        for key in ["dictionary_filtered_line_count", "dictionary_kept_numeral_line_count"] {
+            assert!(
+                !document.metadata.additional.contains_key(key),
+                "{key} leaked into the public metadata: {:?}",
+                document.metadata.additional
+            );
+        }
+    }
+
     /// A `word_iterator_skipped_count` of exactly zero must not produce a
     /// warning -- the metadata-insertion side already omits the key in that
     /// case, but this guards the consumption side independently (#309).
