@@ -42,7 +42,7 @@ async fn read(bytes: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
         .expect("extract stamped table pages")
 }
 
-fn assert_same_page_payload(actual: &ExtractedDocument, forced: &ExtractedDocument) {
+fn assert_same_tables(actual: &ExtractedDocument, forced: &ExtractedDocument) {
     assert_eq!(actual.tables.len(), 2, "all accepted OCR tables survive");
     let actual_pages = actual.pages.as_ref().unwrap();
     let forced_pages = forced.pages.as_ref().unwrap();
@@ -55,12 +55,24 @@ fn assert_same_page_payload(actual: &ExtractedDocument, forced: &ExtractedDocume
             serde_json::to_value(actual_page.tables[0].as_ref()).unwrap(),
             serde_json::to_value(forced_page.tables[0].as_ref()).unwrap()
         );
-        assert_eq!(actual_page.content, forced_page.content, "per-page OCR text survives");
     }
     assert_eq!(
         serde_json::to_value(&actual.tables).unwrap(),
         serde_json::to_value(&forced.tables).unwrap()
     );
+}
+
+fn assert_same_page_payload(actual: &ExtractedDocument, forced: &ExtractedDocument) {
+    assert_same_tables(actual, forced);
+    for (page, reference) in actual
+        .pages
+        .as_ref()
+        .unwrap()
+        .iter()
+        .zip(forced.pages.as_ref().unwrap())
+    {
+        assert_eq!(page.content, reference.content, "per-page OCR text survives");
+    }
 }
 
 async fn whole_document_control(bytes: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
@@ -74,6 +86,28 @@ async fn whole_document_control(bytes: &[u8], config: &ExtractionConfig) -> Extr
     .await;
     assert_eq!(forced.tables.len(), 2, "the control recognizes both tables");
     forced
+}
+
+async fn assert_rejects_changed_table_text(page: &xberg::types::PageContent, reference: &xberg::types::PageContent) {
+    let row = page
+        .content
+        .lines()
+        .find(|line| line.starts_with("| APPLES |"))
+        .unwrap();
+    let mut extra = page.clone();
+    extra.content = extra.content.replacen(row, &format!("{row} EXTRA-CELL |"), 1);
+    assert_ne!(extra.content, page.content);
+    assert!(
+        !super::plain_contract::scanned_table_body_is_complete(&extra, reference).await,
+        "extra cells must not disappear through Markdown canonicalization"
+    );
+    let mut missing = page.clone();
+    missing.content = missing.content.replacen("48,210", "", 1);
+    assert_ne!(missing.content, page.content);
+    assert!(
+        !super::plain_contract::scanned_table_body_is_complete(&missing, reference).await,
+        "missing recognized numeric text must fail despite intact table metadata"
+    );
 }
 
 #[tokio::test]
@@ -101,7 +135,19 @@ async fn automatic_all_pages_keeps_the_ocr_tables_and_page_texts() {
     let forced = whole_document_control(&bytes, &automatic).await;
     let actual = read(&bytes, &automatic).await;
     assert_eq!(actual.extraction_method, Some(xberg::types::ExtractionMethod::Mixed));
-    assert_same_page_payload(&actual, &forced);
+    assert_same_tables(&actual, &forced);
+    super::plain_contract::assert_page_ranges(&actual);
+    super::plain_contract::assert_page_ranges(&forced);
+    for (page, reference) in actual
+        .pages
+        .as_ref()
+        .unwrap()
+        .iter()
+        .zip(forced.pages.as_ref().unwrap())
+    {
+        super::plain_contract::assert_scanned_table_body(page, reference).await;
+        assert_rejects_changed_table_text(page, reference).await;
+    }
 }
 
 #[tokio::test]

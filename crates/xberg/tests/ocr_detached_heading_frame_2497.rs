@@ -50,7 +50,7 @@ fn assert_exact_payload(document: &ExtractedDocument, expected: &[Vec<String>]) 
     assert_eq!(table.cells.as_slice(), expected);
     assert_eq!(page_table.cells.as_slice(), expected);
     assert_eq!(page_table.bounding_box, table.bounding_box);
-    assert_eq!(page.content.trim(), format!("{HEADING}\n\n{}", table.markdown.trim()));
+    assert_eq!(page.content.trim(), document.content.trim());
     let words = HEADING
         .split_whitespace()
         .chain(expected.iter().flatten().flat_map(|cell| cell.split_whitespace()))
