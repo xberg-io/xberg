@@ -5264,28 +5264,33 @@ mod tests {
             .collect()
     }
 
-    /// Ten word-per-span prose lines at x, from `y_top` down at 20 pt leading.
-    fn word_block(x: f32, tag: &str, y_top: f32) -> Vec<TextSpan> {
-        let mut spans = Vec::new();
-        for i in 0..10 {
-            let mut pen = x;
-            for (k, w) in ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"]
-                .iter()
-                .enumerate()
-            {
-                let width = w.len() as f32 * 5.4;
-                spans.push(make_span_text(
-                    pen,
-                    y_top - i as f32 * 20.0,
-                    width,
-                    12.0,
-                    &format!("{tag}{i}.{k}"),
-                    12.0,
-                ));
-                pen += width + 3.0;
-            }
-        }
-        spans
+    /// Ten two-run prose lines at x, from `y_top` down at 20 pt leading: each line is a
+    /// left run and a right run, both `run_width` wide, separated by a `gap_pt` seam at
+    /// the same X on every line.
+    fn gap_block(x: f32, tag: &str, y_top: f32, run_width: f32, gap_pt: f32) -> Vec<TextSpan> {
+        (0..10)
+            .flat_map(|i| {
+                let y = y_top - i as f32 * 20.0;
+                [
+                    make_span_text(
+                        x,
+                        y,
+                        run_width,
+                        12.0,
+                        &format!("{tag}{i} left half of the stacked prose body"),
+                        12.0,
+                    ),
+                    make_span_text(
+                        x + run_width + gap_pt,
+                        y,
+                        run_width,
+                        12.0,
+                        &format!("{tag}{i} right half of the stacked prose body"),
+                        12.0,
+                    ),
+                ]
+            })
+            .collect()
     }
 
     fn reading_order(spans: &[TextSpan]) -> Vec<String> {
@@ -5319,15 +5324,55 @@ mod tests {
         assert_eq!(reading_order(&spans), expected);
     }
 
-    /// With a row gap between the blocks the Y-band peel reads them top-down.
+    /// With a row gap between the blocks the Y-band peel reads them top-down. The right
+    /// block's last line dips below the left block's top line, so the right side does not
+    /// sit wholly above the left side and the decline conjunct cannot order these blocks:
+    /// the band-wide row gap between the blocks is the only signal reading the right block
+    /// first, and turning the peel off flips the order to left-first.
     #[test]
     fn two_column_prose_branch_peels_a_right_block_above_the_left_block_across_a_row_gap() {
         let mut spans = prose_block(320.0, "R", 760.0, 20.0);
-        spans.extend(prose_block(50.0, "L", 760.0 - 230.0, 20.0));
+        // Re-emit the block's last line dipped below the left block's top line: the right
+        // side then shares a row band with the left side, so the decline conjunct no
+        // longer declines, and only the peel orders the blocks top-down. ~keep
+        spans.truncate(9);
+        spans.push(make_span_text(
+            320.0,
+            545.0,
+            240.0,
+            12.0,
+            "R9 line of prose text in the block",
+            12.0,
+        ));
+        spans.extend(prose_block(50.0, "L", 560.0, 20.0));
         let indices: Vec<usize> = (0..spans.len()).collect();
         let strategy = XYCutStrategy::new();
         let kind = strategy.classify_region_kind(&spans, &indices);
         assert_eq!(strategy.detect_two_column_prose(&spans, &indices, kind), Some(185.0));
+
+        let mut expected = block_order("R", 9);
+        expected.push("L0 line of prose text in the block".to_string());
+        expected.push("R9 line of prose text in the block".to_string());
+        expected.extend(block_order("L", 10).into_iter().skip(1));
+        assert_eq!(reading_order(&spans), expected);
+    }
+
+    /// The decline conjunct is decisive on its own: with the right block WHOLLY above the
+    /// left block and a seam no wider than the blocks' own line gaps, the Y-band peel
+    /// finds no band-wide row gap to peel, so only the conjunct's decline keeps the
+    /// column cut from reading the left block first; the top-down fallback reads the
+    /// right block first.
+    #[test]
+    fn two_column_prose_branch_declines_a_wholly_above_right_block_when_the_peel_cannot_fire() {
+        let mut spans = prose_block(320.0, "R", 760.0, 20.0);
+        // The 8 pt seam between the blocks matches the blocks' own leading gaps, so no
+        // horizontal valley reaches `min_valley_width` and the peel cannot fire. ~keep
+        spans.extend(prose_block(50.0, "L", 560.0, 20.0));
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        let strategy = XYCutStrategy::new();
+        let kind = strategy.classify_region_kind(&spans, &indices);
+        assert_eq!(strategy.detect_two_column_prose(&spans, &indices, kind), Some(185.0));
+        assert_eq!(strategy.find_vertical_split_indexed(&spans, &indices), None);
 
         let expected: Vec<String> = [block_order("R", 10), block_order("L", 10)].concat();
         assert_eq!(reading_order(&spans), expected);
@@ -5347,21 +5392,30 @@ mod tests {
         assert_eq!(reading_order(&spans), expected);
     }
 
-    /// The narrow-gutter branch needs a gap at the gutter on at least twelve lines, so it cannot see
-    /// two blocks that share no row: it declines them and the main path reads them top-down.
+    /// The narrow-gutter branch needs a gap at the gutter on at least twelve lines, so it
+    /// cannot see two blocks that share no row: it declines them and the main path reads
+    /// them top-down. Each line's own two runs are split by a 5.5 pt seam aligned at one X
+    /// across all twenty lines -- just under the detector's 6 pt `MIN_GAP_PT` -- so the
+    /// `None` verdict hangs on the gap rule alone: relaxing it fires the branch and
+    /// scrambles the top-down order into column halves.
     #[test]
     fn narrow_gutter_branch_does_not_fire_on_a_right_block_above_the_left_block() {
-        let mut spans = word_block(320.0, "R", 760.0);
-        spans.extend(word_block(50.0, "L", 760.0 - 230.0));
+        let mut spans = gap_block(50.0, "R", 760.0, 195.0, 5.5);
+        spans.extend(gap_block(50.0, "L", 530.0, 195.0, 5.5));
         let indices: Vec<usize> = (0..spans.len()).collect();
         let strategy = XYCutStrategy::new();
         let kind = strategy.classify_region_kind(&spans, &indices);
+        assert_eq!(kind, RegionKind::Prose);
         assert_eq!(strategy.detect_narrow_gutter_prose(&spans, &indices, kind), None);
 
-        let order = reading_order(&spans);
-        let last_right = order.iter().rposition(|t| t.starts_with('R')).unwrap();
-        let first_left = order.iter().position(|t| t.starts_with('L')).unwrap();
-        assert!(last_right < first_left, "right block must read first: {order:?}");
+        let mut expected: Vec<String> = Vec::new();
+        for tag in ["R", "L"] {
+            for i in 0..10 {
+                expected.push(format!("{tag}{i} left half of the stacked prose body"));
+                expected.push(format!("{tag}{i} right half of the stacked prose body"));
+            }
+        }
+        assert_eq!(reading_order(&spans), expected);
     }
 
     /// A left block above a right block (GH#1763 shape, a caption beside the body that starts
