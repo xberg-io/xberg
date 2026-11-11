@@ -5765,6 +5765,34 @@ pub(super) async fn extract_with_ocr_for_page(
                 &mut ocr_result,
                 config.security_limits.as_ref().unwrap_or(&Default::default()),
             )?;
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            if batch_upright_correction[offset].0 == 0
+                && !complete_native_words
+                && !native_ink_owned
+                && !pages_with_recovered_xobject_payload[page_idx]
+                && super::document::resolved_ocr_correction_degrees(&ocr_result.metadata).is_none_or(|angle| angle == 0)
+                && super::document::native_preservation_is_automatic(config, document_page_number)
+                && get_ocr_backend_registry().read().is_builtin_tesseract(&backend)
+                && let Some(pdf) = detached_page
+                    .map(|source| source.document)
+                    .or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf.as_ref()))
+            {
+                super::layer_token_recovery::recover_page(
+                    pdf,
+                    document_page_idx,
+                    &mut ocr_result,
+                    super::native_word_coverage::InkProofLimits {
+                        thresholds: &ocr_output_thresholds,
+                        max_working_bytes: super::hidden_layer::preview_byte_limit(config),
+                        cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
+                    },
+                );
+            }
             if let Some(psm) = effective_tesseract_psm(&ocr_result.metadata, &backend_name) {
                 page_segmentation_modes.insert(document_page_number, psm);
             }
