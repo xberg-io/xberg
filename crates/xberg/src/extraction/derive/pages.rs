@@ -840,4 +840,52 @@ mod plain_page_rerender_tests {
             Some("three")
         );
     }
+
+    fn set_boundaries(doc: &mut InternalDocument, ranges: &[(u32, usize, usize)]) {
+        let structure = doc.metadata.pages.as_mut().unwrap();
+        structure.boundaries = Some(
+            ranges
+                .iter()
+                .map(|&(page_number, byte_start, byte_end)| PageBoundary {
+                    byte_start,
+                    byte_end,
+                    page_number,
+                })
+                .collect(),
+        );
+    }
+
+    #[test]
+    fn a_docx_page_whose_range_selects_other_content_text_loses_the_range_with_a_warning() {
+        let content = "Memo (style_name: heading 1)\n\nBody";
+        let mut doc = doc_with(vec![page(1, "Memo\n\nBody")], &[(1, "Memo"), (1, "Body")]);
+        doc.ocr_text_pages.clear();
+        doc.source_format = "docx".to_string();
+        set_boundaries(&mut doc, &[(1, 0, content.len())]);
+        let pages = derive(&mut doc, content);
+        assert_eq!(pages[0].content, "Memo\n\nBody");
+        assert!(warned(&doc));
+        assert!(doc.metadata.pages.as_ref().unwrap().boundaries.is_none());
+    }
+
+    #[test]
+    fn a_range_that_selects_its_page_stays_when_another_page_has_no_elements_to_rerender() {
+        let content = "one\n\ntwo (note)";
+        let mut doc = doc_with(vec![page(1, "one"), page(2, "two\nnote")], &[]);
+        set_boundaries(&mut doc, &[(1, 0, 3), (2, 5, content.len())]);
+        let pages = derive(&mut doc, content);
+        assert_eq!(pages[1].content, "two\nnote");
+        assert!(warned(&doc));
+        assert_eq!(boundary_pages(&doc), vec![1]);
+    }
+
+    #[test]
+    fn exact_ranges_of_pages_that_are_not_located_in_order_stay_without_a_warning() {
+        let content = "two\n\none";
+        let mut doc = doc_with(vec![page(1, "one"), page(2, "two")], &[]);
+        set_boundaries(&mut doc, &[(1, 5, 8), (2, 0, 3)]);
+        derive(&mut doc, content);
+        assert!(!warned(&doc));
+        assert_eq!(boundary_pages(&doc), vec![1, 2]);
+    }
 }
