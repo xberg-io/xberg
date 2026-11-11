@@ -761,6 +761,7 @@ impl<'a> FontGraph<'a> {
                 let decoder = flate2::read::ZlibDecoder::new(data);
                 let decoded = std::io::copy(&mut decoder.take(remaining as u64 + 1), &mut std::io::sink())?;
                 let decoded = usize::try_from(decoded).unwrap_or(usize::MAX);
+                // Charge first so a source overrun is recorded and classified as measured. ~keep
                 self.work.charge(decoded.saturating_mul(MEMORY_FACTOR))?;
                 self.admit_bytes(decoded)?;
             }
