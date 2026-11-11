@@ -5310,9 +5310,10 @@ mod tests {
 
     /// The two-column-prose branch cuts by left edge. A right block wholly above the left block, with
     /// the same leading across the seam so no row gap separates them, is read first: the sides share
-    /// no rows, as for the main column gate. The 8 pt seam between the blocks matches the blocks' own
-    /// leading gaps, so no horizontal valley reaches `min_valley_width` and the Y-band peel cannot
-    /// fire: the `None` split pins the decline conjunct (right side wholly above left) as the only
+    /// no rows, as for the main column gate. The blocks' 8 pt gap is the vertical leading gap (one
+    /// 20 pt leading step minus the 12 pt line height), the same gap as between the blocks' own
+    /// lines, and stays under `min_valley_width`, so the Y-band peel cannot fire; the column gap is
+    /// 30 pt. The `None` split pins the decline conjunct (right side wholly above left) as the only
     /// signal keeping the left-first cut away, the top-down fallback reading the right block first.
     #[test]
     fn two_column_prose_branch_reads_a_right_block_above_the_left_block_first() {
@@ -5329,20 +5330,25 @@ mod tests {
     }
 
     /// With a row gap between the blocks the Y-band peel reads them top-down. The right
-    /// block's last line dips below the left block's top line, so the right side does not
-    /// sit wholly above the left side and the decline conjunct cannot order these blocks:
-    /// the band-wide row gap between the blocks is the only signal reading the right block
-    /// first, and turning the peel off flips the order to left-first.
+    /// block's last line spills one leading step below the left block's bottom line, so
+    /// the right side does not sit wholly above the left side and the decline conjunct
+    /// cannot order these blocks: the band-wide row gap between the blocks is the only
+    /// signal reading the right block first, and turning the peel off flips the order
+    /// to left-first. No line sits inside that row gap, so the below half -- the left
+    /// block plus the spilled line -- has no split of its own and the flat row-banded
+    /// fallback reads it L0..L9 then R9.
     #[test]
     fn two_column_prose_branch_peels_a_right_block_above_the_left_block_across_a_row_gap() {
         let mut spans = prose_block(320.0, "R", 760.0, 20.0);
-        // Re-emit the block's last line dipped below the left block's top line: the right
-        // side then shares a row band with the left side, so the decline conjunct no
-        // longer declines, and only the peel orders the blocks top-down. ~keep
+        // Re-emit the block's last line one leading step below the left block's bottom
+        // line: the right side then does not sit wholly above the left side, so the
+        // decline conjunct no longer declines, and only the peel orders the blocks
+        // top-down. The spilled line sits clear of every left line, so nothing rides
+        // the row gap and the below half reads as one flat row-banded run. ~keep
         spans.truncate(9);
         spans.push(make_span_text(
             320.0,
-            545.0,
+            360.0,
             240.0,
             12.0,
             "R9 line of prose text in the block",
@@ -5355,13 +5361,12 @@ mod tests {
         assert_eq!(strategy.detect_two_column_prose(&spans, &indices, kind), Some(185.0));
         assert!(
             strategy.find_vertical_split_indexed(&spans, &indices).is_some(),
-            "the dipped last line must leave a band-wide row gap the Y-band peel can fire on"
+            "the block-to-block row gap must be band-wide so the Y-band peel can fire on it"
         );
 
         let mut expected = block_order("R", 9);
-        expected.push("L0 line of prose text in the block".to_string());
+        expected.extend(block_order("L", 10));
         expected.push("R9 line of prose text in the block".to_string());
-        expected.extend(block_order("L", 10).into_iter().skip(1));
         assert_eq!(reading_order(&spans), expected);
     }
 
@@ -5379,13 +5384,11 @@ mod tests {
         assert_eq!(reading_order(&spans), expected);
     }
 
-    /// The narrow-gutter branch needs a gap at the gutter on at least twelve lines, so it
-    /// cannot see two stacked blocks that share no row: it declines them and the main path
-    /// reads them top-down. Each line's own two runs are split by a 5.5 pt seam aligned at
-    /// one X across all twenty lines -- just under the detector's 6 pt `MIN_GAP_PT` -- so
-    /// the `None` verdict hangs on the gap rule alone: relaxing it fires the branch and
-    /// scrambles the top-down order into column halves. Crate line coverage sits at about
-    /// 84.7% against the 80% gate, so this decline path has that margin to spare.
+    /// The narrow-gutter branch needs at least twelve lines whose largest within-line gap
+    /// reaches the detector's 6 pt `MIN_GAP_PT`, clustered at one X. Each line here is two
+    /// runs split by a 5.5 pt seam aligned at one X across all twenty lines, so the branch
+    /// declines on the gap rule alone and the main path reads the stacked blocks top-down:
+    /// relaxing the rule fires the branch and scrambles that order into column halves.
     #[test]
     fn narrow_gutter_branch_declines_a_seam_just_under_min_gap() {
         let mut spans = gap_block(50.0, "R", 760.0, 195.0, 5.5);
