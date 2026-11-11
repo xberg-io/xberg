@@ -12,6 +12,8 @@ const DOWNSCALED_LABEL_SCAN: &[u8] =
     include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-downscaled.pdf");
 const MIXED_LABEL_SCAN: &[u8] =
     include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-mixed.pdf");
+const TWO_PAGE_LABEL_SCAN: &[u8] =
+    include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-two-pages.pdf");
 const LOW_DPI_LABEL_SCAN: &[u8] =
     include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-low-dpi.pdf");
 
@@ -225,4 +227,34 @@ fn explicit_pipeline_leaves_a_noisy_read_below_the_legibility_floor_unread_like_
         assert!(message.contains("image working budget"), "{message}");
         assert!(!message.contains(RECOVERY_CLAIM), "{message}");
     }
+}
+
+/// A document of two scans, each refused by the render budget, gets one suspected-noise warning
+/// per page on the default route. An explicit pipeline reads every page through the whole-document
+/// recovery and returns the same text and the same warnings, with none repeated.
+#[test]
+fn explicit_pipeline_warns_once_per_page_of_a_two_scan_document_like_the_default_route() {
+    let default_route = extract(TWO_PAGE_LABEL_SCAN, &config(false, false));
+    let explicit = extract(TWO_PAGE_LABEL_SCAN, &config(false, true));
+    for document in [&default_route, &explicit] {
+        let pages = document.pages.as_ref().expect("page records");
+        assert_eq!(pages.len(), 2);
+        assert!(pages.iter().all(|page| page.content.contains("GENERAL NOTES")), "{pages:?}");
+    }
+    assert_eq!(explicit.content, default_route.content);
+    let noise = |document: &ExtractedDocument| {
+        let mut messages = warnings_containing(document, "suspected OCR recognition noise");
+        messages.sort_unstable();
+        messages
+    };
+    let explicit_noise = noise(&explicit);
+    assert_eq!(explicit_noise.len(), 2, "{:?}", explicit.processing_warnings);
+    assert_eq!(explicit_noise, noise(&default_route));
+    assert_eq!(
+        explicit.processing_warnings.len(),
+        default_route.processing_warnings.len(),
+        "{:?} against {:?}",
+        explicit.processing_warnings,
+        default_route.processing_warnings
+    );
 }

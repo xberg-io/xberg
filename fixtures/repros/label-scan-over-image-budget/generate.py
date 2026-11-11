@@ -1,7 +1,9 @@
-"""usage: generate.py OUT.pdf WIDTH_IN HEIGHT_IN DPI [--mixed] [--lettered]
+"""usage: generate.py OUT.pdf WIDTH_IN HEIGHT_IN DPI [--mixed | --twice] [--lettered]
 
 Writes an image-only PDF of a site plan: mostly one or two character labels and a notes block,
-stored as one DeviceRGB JPEG covering the page. With --mixed, a native text page precedes the scan. With --lettered, each lot label is a two letter code, so a read of the sheet is mostly short words.
+stored as one DeviceRGB JPEG covering the page. With --mixed, a native text page precedes the scan.
+With --twice, the document has two scan pages, each with its own copy of the image. With --lettered,
+each lot label is a two letter code, so a read of the sheet is mostly short words.
 """
 
 import hashlib
@@ -74,7 +76,7 @@ def stream(fields: bytes, data: bytes) -> bytes:
     return b"<< " + fields + b" /Length %d >>\nstream\n" % len(data) + data + b"\nendstream"
 
 
-def build(jpeg: bytes, w_in: float, h_in: float, dpi: int, mixed: bool) -> bytes:
+def build(jpeg: bytes, w_in: float, h_in: float, dpi: int, mixed: bool, twice: bool = False) -> bytes:
     pw, ph = w_in * 72, h_in * 72
     width, height = int(w_in * dpi), int(h_in * dpi)
     paint = f"q {pw:.2f} 0 0 {ph:.2f} 0 0 cm /Im0 Do Q".encode()
@@ -82,10 +84,10 @@ def build(jpeg: bytes, w_in: float, h_in: float, dpi: int, mixed: bool) -> bytes
         f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {pw:.2f} {ph:.2f}] "
         f"/Resources << /XObject << /Im0 5 0 R >> >> /Contents 4 0 R >>"
     ).encode()
-    kids = b"[6 0 R 3 0 R]" if mixed else b"[3 0 R]"
+    kids = b"[6 0 R 3 0 R]" if mixed else b"[3 0 R 6 0 R]" if twice else b"[3 0 R]"
     objs = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids " + kids + b" /Count %d >>" % (2 if mixed else 1),
+        b"<< /Type /Pages /Kids " + kids + b" /Count %d >>" % (2 if mixed or twice else 1),
         scan_page,
         stream(b"", paint),
         stream(
@@ -101,6 +103,15 @@ def build(jpeg: bytes, w_in: float, h_in: float, dpi: int, mixed: bool) -> bytes
             stream(b"", NATIVE_TEXT),
             b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
         ]
+    if twice:
+        image = (
+            b"/Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB "
+            b"/BitsPerComponent 8 /Filter /DCTDecode" % (width, height)
+        )
+        objs += [
+            scan_page.replace(b"/Im0 5 0 R", b"/Im0 7 0 R"),
+            stream(image, jpeg),
+        ]
     pdf = bytearray(b"%PDF-1.5\n%\xe2\xe3\xcf\xd3\n")
     offsets = []
     for number, body in enumerate(objs, 1):
@@ -114,11 +125,15 @@ def build(jpeg: bytes, w_in: float, h_in: float, dpi: int, mixed: bool) -> bytes
 
 
 def main() -> None:
-    args = [arg for arg in sys.argv[1:] if arg not in ("--mixed", "--lettered")]
+    flags = ("--mixed", "--twice", "--lettered")
+    args = [arg for arg in sys.argv[1:] if arg not in flags]
     if len(args) != 4:
         raise SystemExit(__doc__)
     out, w_in, h_in, dpi = args[0], float(args[1]), float(args[2]), int(args[3])
-    Path(out).write_bytes(build(render(w_in, h_in, dpi, "--lettered" in sys.argv), w_in, h_in, dpi, "--mixed" in sys.argv))
+    if "--mixed" in sys.argv and "--twice" in sys.argv:
+        raise SystemExit(__doc__)
+    jpeg = render(w_in, h_in, dpi, "--lettered" in sys.argv)
+    Path(out).write_bytes(build(jpeg, w_in, h_in, dpi, "--mixed" in sys.argv, "--twice" in sys.argv))
 
 
 if __name__ == "__main__":

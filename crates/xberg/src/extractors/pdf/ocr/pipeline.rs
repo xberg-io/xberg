@@ -6986,7 +6986,7 @@ pub(super) struct XObjectRecoveryContext<'a> {
 }
 
 /// The recognition-noise thresholds every route judges a page read or an image retry read by.
-#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn route_noise_thresholds(config: &ExtractionConfig) -> crate::core::config::OcrQualityThresholds {
     config
         .ocr
@@ -7022,7 +7022,9 @@ impl<'a> XObjectRecoveryContext<'a> {
     }
 
     /// The context of a route that reads an embedded image at its proven resolution and judges each
-    /// read for noise by `thresholds`, warning about a read it keeps.
+    /// read for noise by `thresholds`, warning about a read it keeps. The whole-document recovery
+    /// never passes its text through the page-level noise check, so its reads warn here; the
+    /// mixed route's retry of a page does pass through it and sets `warn_when_kept` to false.
     fn with_proven_reads(mut self, thresholds: &'a crate::core::config::OcrQualityThresholds) -> Self {
         self.use_proven_source_dpi = true;
         self.proven_read = Some(ProvenReadPolicy {
@@ -7552,11 +7554,7 @@ fn run_merge_geometry(
 ) -> ahash::AHashMap<u32, super::document::PageLineBoxes> {
     let mut boxes = ahash::AHashMap::new();
     let mut geometry = run.content.map(|content| MergeGeometrySession::new(content, config));
-    let thresholds = config
-        .ocr
-        .as_ref()
-        .and_then(|ocr| ocr.quality_thresholds.clone())
-        .unwrap_or_default();
+    let thresholds = route_noise_thresholds(config);
     for (&page_number, layer) in layers {
         if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
             break;
