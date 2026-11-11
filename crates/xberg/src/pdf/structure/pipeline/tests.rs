@@ -1952,6 +1952,209 @@ fn split_carrier_reads_one_table_per_segment_when_no_seam_joins_pieces() {
     );
 }
 
+/// The grid test as it read every row and cell of the table for each segment.
+fn reference_carries(table: &TableCoverage, text: &str) -> bool {
+    let normalized = normalize_for_table_coverage(text);
+    if normalized.is_empty() {
+        return true;
+    }
+    let text_words: Vec<String> = text
+        .split_whitespace()
+        .map(normalize_for_table_coverage)
+        .filter(|word| !word.is_empty())
+        .collect();
+    if normalized.chars().count() < MIN_CROSS_CELL_RUN_GLYPHS {
+        return text_words.iter().all(|word| table.words.contains(word)) || {
+            let piece = alphanumeric_runs(text);
+            table.cell_runs.iter().any(|runs| runs_spell(runs, &piece))
+        };
+    }
+    table.rows.iter().any(|row| row.contains(&normalized))
+        || table
+            .row_words
+            .iter()
+            .any(|row| text_words.iter().all(|word| row.contains(word)))
+}
+
+fn reference_covers_and_carries(seg: &SegmentData, table: &TableCoverage) -> bool {
+    let seg_area = seg.width * seg.height;
+    let seg_text = seg.text.trim();
+    if seg_area <= 0.0 || seg_text.is_empty() {
+        return false;
+    }
+    let bb = &table.bbox;
+    let inter_left = seg.x.max(bb.x0 as f32);
+    let inter_right = (seg.x + seg.width).min(bb.x1 as f32);
+    let inter_bottom = seg.y.max(bb.y0 as f32);
+    let inter_top = (seg.y + seg.height).min(bb.y1 as f32);
+    if inter_left >= inter_right || inter_bottom >= inter_top {
+        return false;
+    }
+    let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
+    inter_area / seg_area >= 0.5 && reference_carries(table, seg_text)
+}
+
+/// The carriers as the page split assigned them when it read every table for every segment.
+fn reference_carriers(segments: &[SegmentData], holders: &[(&TableCoverage, &WordCounts)]) -> Vec<Option<usize>> {
+    let mut carriers = Vec::with_capacity(segments.len());
+    let mut run_start = 0;
+    let mut run: Vec<usize> = Vec::new();
+    let words: Vec<Vec<String>> = segments
+        .iter()
+        .map(|segment| word_sequence([segment.text.as_str()]))
+        .collect();
+    let seam_holders = seam_holders(&words, holders);
+    for (index, segment) in segments.iter().enumerate() {
+        let own: Vec<usize> = (0..holders.len())
+            .filter(|&holder| reference_covers_and_carries(segment, holders[holder].0))
+            .collect();
+        let joined: Vec<usize> = run
+            .iter()
+            .copied()
+            .filter(|holder| own.contains(holder) && seam_holders[index].contains(holder))
+            .collect();
+        if joined.is_empty() {
+            carriers.extend(std::iter::repeat_n(run.first().copied(), index - run_start));
+            run_start = index;
+            run = own;
+        } else {
+            run = joined;
+        }
+    }
+    carriers.extend(std::iter::repeat_n(run.first().copied(), segments.len() - run_start));
+    carriers
+}
+
+fn next_random(state: &mut u64) -> u64 {
+    *state ^= *state << 13;
+    *state ^= *state >> 7;
+    *state ^= *state << 17;
+    *state
+}
+
+#[test]
+fn split_carriers_match_the_full_table_read_on_varied_pages() {
+    // Plain and punctuated words, short and long, so the run index, the word index and the row
+    // search each decide some segments.
+    let vocabulary = [
+        "alpha",
+        "b2",
+        "piccolo21",
+        "x",
+        "12",
+        "covid-19",
+        "covid 19",
+        "a-b",
+        "x.5",
+        "7",
+        "northwind",
+        "quarterly",
+        "ab12cd",
+        "no.",
+        "3.14",
+        "report",
+    ];
+    let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+    let (mut with_carrier, mut joined_choice, mut cases) = (0usize, 0usize, 0usize);
+    for _ in 0..120 {
+        let table_count = 1 + (next_random(&mut state) % 5) as usize;
+        let tables: Vec<crate::types::Table> = (0..table_count)
+            .map(|_| {
+                let rows: Vec<Vec<String>> = (0..1 + next_random(&mut state) % 3)
+                    .map(|_| {
+                        (0..1 + next_random(&mut state) % 4)
+                            .map(|_| {
+                                let mut cell = vocabulary[(next_random(&mut state) % 16) as usize].to_string();
+                                if next_random(&mut state) % 3 == 0 {
+                                    cell.push(' ');
+                                    cell.push_str(vocabulary[(next_random(&mut state) % 16) as usize]);
+                                }
+                                cell
+                            })
+                            .collect()
+                    })
+                    .collect();
+                let refs: Vec<Vec<&str>> = rows
+                    .iter()
+                    .map(|row| row.iter().map(String::as_str).collect())
+                    .collect();
+                let slices: Vec<&[&str]> = refs.iter().map(Vec::as_slice).collect();
+                let left = (next_random(&mut state) % 60) as f64;
+                cell_table(
+                    1,
+                    (left, 0.0, left + 40.0 + (next_random(&mut state) % 120) as f64, 100.0),
+                    &slices,
+                )
+            })
+            .collect();
+        let mut segments: Vec<SegmentData> = Vec::new();
+        let mut x = 5.0_f32;
+        for _ in 0..4 + next_random(&mut state) % 12 {
+            let word = vocabulary[(next_random(&mut state) % 16) as usize];
+            let mut texts: Vec<String> = vec![word.to_string()];
+            match next_random(&mut state) % 4 {
+                0 if word.is_ascii() && word.len() > 3 => {
+                    let at = 1 + (next_random(&mut state) as usize % (word.len() - 1));
+                    texts = vec![word[..at].to_string(), word[at..].to_string()];
+                }
+                1 => texts[0].push_str(&format!(" {}", vocabulary[(next_random(&mut state) % 16) as usize])),
+                _ => {}
+            }
+            for text in texts {
+                segments.push(printed_at(&text, x, 10.0));
+                x += 7.0;
+            }
+        }
+        let coverage: Vec<TableCoverage> = tables.iter().map(|table| table_coverage(table).expect("box")).collect();
+        let counts: Vec<WordCounts> = tables.iter().map(table_word_counts).collect();
+        let holders: Vec<(&TableCoverage, &WordCounts)> = coverage.iter().zip(&counts).collect();
+        let expected = reference_carriers(&segments, &holders);
+        let actual = occurrence_carriers(&segments, &holders);
+        assert_eq!(
+            actual,
+            expected,
+            "carriers of {:?}",
+            segments.iter().map(|s| s.text.as_str()).collect::<Vec<_>>()
+        );
+        cases += 1;
+        with_carrier += actual.iter().filter(|carrier| carrier.is_some()).count();
+        let first_covering: Vec<Option<usize>> = segments
+            .iter()
+            .map(|segment| (0..holders.len()).find(|&holder| reference_covers_and_carries(segment, holders[holder].0)))
+            .collect();
+        joined_choice += usize::from(first_covering != actual);
+    }
+    assert_eq!(cases, 120);
+    assert!(
+        with_carrier > 300,
+        "the pages must give tables segments to carry, got {with_carrier}"
+    );
+    assert!(
+        joined_choice > 0,
+        "some page must have a seam change a carrier, or no join was exercised"
+    );
+}
+
+#[test]
+fn split_carrier_reads_only_the_table_that_holds_the_seam() {
+    // Seven tables hold PICCOLO and 21 as two words and one holds PICCOLO21, so only that last table
+    // holds the seam. The first piece goes to the first table that carries it and is read in the
+    // seam's holder; the second is read once, in that holder.
+    let two: Vec<crate::types::Table> = (0..7)
+        .map(|_| cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["PICCOLO", "21"]]))
+        .collect();
+    let one = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["PICCOLO21"]]);
+    let tables: Vec<crate::types::Table> = two.into_iter().chain(std::iter::once(one)).collect();
+    let pieces = [printed_at("PICCOLO", 10.0, 10.0), printed_at("21", 30.0, 10.0)];
+    CARRY_CHECKS.with(|checks| checks.set(0));
+    assert_eq!(split_carriers(&tables, &pieces), [Some(7); 2]);
+    let reads = CARRY_CHECKS.with(std::cell::Cell::get);
+    assert!(
+        reads <= 4,
+        "16 reads before, one table's worth each for the seam, got {reads}"
+    );
+}
+
 #[test]
 fn a_segment_that_only_a_later_table_carries_is_suppressed() {
     let elsewhere = table_coverage(&cell_table(1, (200.0, 0.0, 300.0, 100.0), &[&["other"]])).expect("box");
