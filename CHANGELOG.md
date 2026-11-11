@@ -331,6 +331,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(go): Ship usable static-link flags in the linux-x86_64 and linux-aarch64 Go release archives.** (GH#2988)
   `native-static-libs.txt` no longer ends with a terminal colour escape that cgo rejected, and the glibc-floor archive lists `-lc++ -lc++abi` instead of `-lstdc++`, matching the zig-built C++ objects.
+- **(pdf): Read each table's grid once per segment in the page split that finds the table carrying each split word.** (#2960)
+  A run of segments with no seam that a table holds goes to the first table that covers and carries it, and only the tables that can join the next segment are read further. Each table now indexes its rows by word and its cells by run, and the page's long segments are searched in every table's rows once, so a read no longer scans the whole table. The carriers are unchanged: a test compares them with the full read on varied pages. In a debug test build, a page of 2000 words and 3 tables with different words took about 380 ms on main and 160 ms after, the same as before the join rule.
 - **(ocr): Keep Khmer number recovery available after bounded source declines.** (#2905)
   Completed declines charge the work already done, leaving room to verify supported pages later in the PDF.
   Cancellation and failures whose work cannot be measured still retain their reservation.
@@ -496,7 +498,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Resolve an indirect page `/ExtGState` once per resource scope in native path extraction.** (#2744)
   Each distinct `gs` name used to clone the whole dictionary, so thousands of names cost quadratic allocations; the container is now loaded once and borrowed, and returning from a Form XObject restores the page's parsed states instead of discarding them.
 - **(pdf): Print a table once when two overlapping table detections hold the same words.** (#2739)
-  When two native tables overlapped, the check that keeps both compared only the table with fewer rows, so a copy that regrouped its words into fewer, merged rows counted as new content and the page printed its words twice. The check now keeps a second table only when at least half of its words are words the rest of the page does not already print. When the page prints a word in two pieces and one table covers both pieces and holds the word, the pieces count as one printed copy of that table, whichever table the check reads first. A page with no text, such as a scanned page, has no words to count, so the check compares the rows of the two tables instead.
+  When two native tables overlapped, the check that keeps both compared only the table with fewer rows, so a copy that regrouped its words into fewer, merged rows counted as new content and the page printed its words twice. The check now keeps a second table only when at least half of its words are words the rest of the page does not already print. When the page prints a word in two pieces and one table covers both pieces and holds a word that contains the two pieces run together, the pieces count as one printed copy of that table, whichever table the check reads first. A page with no text, such as a scanned page, has no words to count, so the check compares the rows of the two tables instead.
 
 - **(ocr): Recover sideways scans containing two stacked tables and independently proved prose.** (#2497)
   Retain source words once, preserve both grids, and return table boxes in the source PDF frame.
