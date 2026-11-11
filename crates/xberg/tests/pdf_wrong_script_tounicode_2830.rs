@@ -222,7 +222,7 @@ fn a_document_of_wrong_script_pages_is_read_whole() {
 fn a_wrong_mapped_layer_drawn_over_a_full_page_picture_is_still_read_by_ocr() {
     let models = models();
     let result = extract(
-        &with_full_page_picture(ARABIC, PicturePlacement::UnderText),
+        &with_full_page_picture(ARABIC, PicturePlacement::Background),
         models.path(),
     );
     for phrase in PHRASES {
@@ -240,7 +240,7 @@ fn a_wrong_mapped_layer_drawn_over_a_full_page_picture_is_still_read_by_ocr() {
 fn a_genuine_arabic_layer_drawn_over_a_full_page_picture_stays_native() {
     let models = models();
     let result = extract(
-        &with_full_page_picture(GENUINE_ARABIC, PicturePlacement::UnderText),
+        &with_full_page_picture(GENUINE_ARABIC, PicturePlacement::Background),
         models.path(),
     );
     assert!(skipped(&result), "{:?}", result.processing_warnings);

@@ -901,10 +901,13 @@ fn raster_page_with_content(content: &str) -> PdfDocument {
     raster_page_with_forms(content, &[])
 }
 
-/// [`raster_page_with_content`], plus form XObjects `(name, matrix, content)` that use the page's
-/// resources.
+/// One form XObject of [`raster_page_with_forms`]: its name, `/Matrix` and content.
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-fn raster_page_with_forms(content: &str, forms: &[(&str, [f32; 6], &str)]) -> PdfDocument {
+type FormSpec<'a> = (&'a str, [f32; 6], &'a str);
+
+/// [`raster_page_with_content`], plus form XObjects that use the page's resources.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn raster_page_with_forms(content: &str, forms: &[FormSpec]) -> PdfDocument {
     use lopdf::dictionary;
 
     let mut source = lopdf::Document::load_mem(&crate::pdf::render::build_full_page_raster_pdf(
@@ -983,7 +986,7 @@ fn text_and_picture_inside_form_xobjects_are_seen_in_paint_order() {
     let picture = "q 100 0 0 100 0 0 cm /Im0 Do Q";
     let text = "BT /F1 4 Tf 2 80 Td (Line of the native text) Tj ET";
     let invisible = "3 Tr BT /F1 4 Tf 2 80 Td (Line of the native text) Tj ET";
-    let cases: [(&str, &str, Vec<(&str, [f32; 6], &str)>, bool); 6] = [
+    let cases: [(&str, &str, Vec<FormSpec>, bool); 6] = [
         (
             "picture form then text form",
             "/Fp Do /Ft Do",

@@ -4,12 +4,12 @@ use lopdf::{Document, Object, Stream, dictionary};
 #[derive(Clone, Copy, Debug)]
 pub enum PicturePlacement {
     /// The picture is painted first and the text layer is drawn over it, as on a flyer.
-    UnderText,
+    Background,
     /// The text layer is drawn first and the picture is painted over it.
-    OverText,
+    Cover,
     /// The picture is painted first and the text layer is drawn over it invisibly (render mode 3),
     /// as a scan's OCR sidecar is.
-    UnderInvisibleText,
+    BehindInvisibleLayer,
 }
 
 /// The first page of `source` with a light, textured picture that covers the whole media box,
@@ -53,9 +53,9 @@ pub fn with_full_page_picture(source: &[u8], placement: PicturePlacement) -> Vec
     .into_bytes();
     let layer = document.get_page_content(page);
     let content = match placement {
-        PicturePlacement::UnderText => [paint.as_slice(), b"q\n", &layer, b"\nQ\n"].concat(),
-        PicturePlacement::OverText => [b"q\n".as_slice(), &layer, b"\nQ\n", &paint].concat(),
-        PicturePlacement::UnderInvisibleText => [paint.as_slice(), b"q 3 Tr\n", &layer, b"\nQ\n"].concat(),
+        PicturePlacement::Background => [paint.as_slice(), b"q\n", &layer, b"\nQ\n"].concat(),
+        PicturePlacement::Cover => [b"q\n".as_slice(), &layer, b"\nQ\n", &paint].concat(),
+        PicturePlacement::BehindInvisibleLayer => [paint.as_slice(), b"q 3 Tr\n", &layer, b"\nQ\n"].concat(),
     };
     document
         .change_page_content(page, content)

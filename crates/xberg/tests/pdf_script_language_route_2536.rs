@@ -419,7 +419,7 @@ fn picture_warning(document: &ExtractedDocument) -> bool {
 #[test]
 fn automatic_english_ocr_keeps_a_khmer_layer_drawn_over_a_full_page_picture() {
     let models = english_model();
-    let flyer = with_full_page_picture(COMPLETE, PicturePlacement::UnderText);
+    let flyer = with_full_page_picture(COMPLETE, PicturePlacement::Background);
     let native = extract(&flyer, models.path(), |config| config.disable_ocr = true);
     assert_eq!(khmer_count(&native.content), 222, "{:?}", native.content);
     for keep_native_content in [false, true] {
@@ -442,7 +442,7 @@ fn automatic_english_ocr_keeps_a_khmer_layer_drawn_over_a_full_page_picture() {
 #[test]
 fn automatic_english_ocr_still_reads_a_picture_over_or_under_an_invisible_khmer_layer() {
     let models = english_model();
-    for placement in [PicturePlacement::OverText, PicturePlacement::UnderInvisibleText] {
+    for placement in [PicturePlacement::Cover, PicturePlacement::BehindInvisibleLayer] {
         let source = with_full_page_picture(COMPLETE, placement);
         // The warning names a Khmer layer the rule saw, so the layer was read and the picture won. ~keep
         let automatic = extract(&source, models.path(), |_| {});
