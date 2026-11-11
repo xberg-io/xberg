@@ -2339,3 +2339,22 @@ fn misread_rows_run_about_one_similarity_test_each() {
     assert!(calls <= 2 * count, "{count} rows ran {calls} similarity tests");
     assert_eq!(merged, native, "each misread row leaves and each native row prints once");
 }
+
+/// The OCR text holds a misread row twice, before and after the rows it shares with the native
+/// text. The native row takes the nearer one in reading order, and the page text drops that line,
+/// not the first line with the same text. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_misread_row_leaves_the_page_text_at_its_own_line() {
+    use super::super::document::{PlainOcrRows, layer_lines_to_put_first, text_with_layer_first};
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let native = "alpha\nbeta\ngamma\ntotal 12 cm3";
+    let read = "total 12 cm\u{2019}\nalpha\nbeta\ngamma\ntotal 12 cm\u{2019}";
+    let first = layer_lines_to_put_first(native, read, true, &thresholds, None, PlainOcrRows::every())
+        .expect("the native row is put first");
+    assert_eq!(
+        text_with_layer_first(read, &first),
+        "total 12 cm3\n\ntotal 12 cm\u{2019}\nalpha\nbeta\ngamma",
+        "the misread row after the shared rows leaves; the one before them stays"
+    );
+}
