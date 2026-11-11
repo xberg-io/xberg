@@ -1100,7 +1100,10 @@ fn a_row_leaves_the_characters_that_open_no_markup_as_typed() {
     let output = render_rows(&rows);
     assert_eq!(
         output,
-        "Chapter 3: Introduction .... 5\n\nA-B + C = D .... 1\n\nDr. Smith (b) |x| #5 $6 \"q\" 'r' !s >t .... 2\n\na\\:b .... 3\n"
+        concat!(
+            "Chapter 3: Introduction .... 5\n\nA-B + C = D .... 1\n\n",
+            "Dr. Smith (b) |x| #5 $6 \"q\" 'r' !s >t .... 2\n\na\\:b .... 3\n"
+        )
     );
 }
 
