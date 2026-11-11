@@ -330,3 +330,38 @@ fn plate_skipped_text_without_a_font_uses_the_rasterizer_point_six_em_estimate()
         "advance {advance}, expected {expected}"
     );
 }
+
+#[test]
+fn plate_skipped_text_in_vertical_writing_advances_down_by_w1y_and_char_space_without_th() {
+    let font = make_vertical_test_font();
+    let mut gs = gs_at(50.0);
+    gs.text_wmode = 1;
+    gs.char_space = 2.0;
+    // Two Identity-V codes at w1y -1000: each is -1000 * 40 / 1000 + 2, and Tz does not reach the vertical axis.
+    let advance = plate_advance(&[0x00, 0x01, 0x00, 0x02], Some(font), &mut gs);
+    assert!((advance - -76.0).abs() < 0.01, "advance {advance}, expected -76");
+}
+
+#[test]
+fn plate_skipped_text_in_a_type3_font_advances_by_the_font_matrix_scale() {
+    let mut font = simple_font();
+    font.subtype = "Type3".to_string();
+    font.font_matrix_a = 0.01;
+    let mut gs = gs_at(50.0);
+    gs.char_space = 2.0;
+    // A 100-unit-em Type 3 font: each glyph is 500 * 40 * 0.01 + 2, scaled by Th 0.5.
+    let advance = plate_advance(b"ab", Some(font), &mut gs);
+    assert!((advance - 202.0).abs() < 0.01, "advance {advance}, expected 202");
+}
+
+#[test]
+fn plate_skipped_text_in_a_type0_font_counts_one_code_per_multibyte_character() {
+    let mut font = make_vertical_test_font();
+    font.wmode = 0;
+    font.encoding = crate::fonts::Encoding::Standard("UniFull-UTF8-H".to_string());
+    let mut gs = gs_at(50.0);
+    gs.char_space = 2.0;
+    // U+00E9 is two bytes and U+20AC three: two codes of 1000 * 40 / 1000 + 2, scaled by Th 0.5.
+    let advance = plate_advance("\u{e9}\u{20ac}".as_bytes(), Some(font), &mut gs);
+    assert!((advance - 42.0).abs() < 0.01, "advance {advance}, expected 42");
+}
