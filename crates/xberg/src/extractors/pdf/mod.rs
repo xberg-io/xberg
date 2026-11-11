@@ -3732,20 +3732,8 @@ impl PdfExtractor {
                     )
                     .await?;
                     if let Some(mixed_run) = probe {
-                        let (
-                            text,
-                            replacements,
-                            documents,
-                            _,
-                            _,
-                            _,
-                            preprocessing,
-                            confidence,
-                            warnings,
-                            page_failures,
-                        ) = mixed_run.output;
-                        // The stock hidden-layer probe requests text and disables table detection. ~keep
-                        debug_assert!(documents.values().all(|document| document.tables.is_empty()));
+                        let (text, replacements, _, _, _, _, preprocessing, confidence, warnings, page_failures) =
+                            mixed_run.output;
                         let method = extraction_method_after_mixed_ocr(&replacements);
                         ocr_preprocessing_by_page.extend(
                             preprocessing
@@ -3774,14 +3762,19 @@ impl PdfExtractor {
         let (mut text, extraction_method) = (native_text, ExtractionMethod::Native);
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        if extraction_method == ExtractionMethod::Mixed
-            && let (Some(bounds), Some(replacements), Some(documents)) = (
-                boundaries.as_deref(),
-                ocr_results_map.as_mut(),
-                structured_ocr_pages.as_ref(),
-            )
-        {
-            ocr::render_mixed_plain_pages(&mut text, bounds, replacements, documents, &config.output_format);
+        if let (Some(bounds), Some(replacements), Some(documents)) = (
+            boundaries.as_deref(),
+            ocr_results_map.as_mut(),
+            structured_ocr_pages.as_ref(),
+        ) {
+            ocr::render_mixed_plain_pages(
+                extraction_method,
+                &mut text,
+                bounds,
+                replacements,
+                documents,
+                &config.output_format,
+            );
         }
 
         // The routing gates above have read the lost-glyph markers. Pages that stay native must not
