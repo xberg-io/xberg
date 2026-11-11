@@ -5973,7 +5973,7 @@ impl PageRenderer {
     /// The snapshot fires for every source colour space class
     /// classified by [`source_for_overprint`] — DeviceCMYK direct,
     /// DeviceGray/RGB/CIE/ICCBased process spaces, and
-    /// Separation/DeviceN that names a process colorant. The per-channel blend function dispatches
+    /// Separation/DeviceN. The per-channel blend function dispatches
     /// on the source class; without the snapshot the painted region
     /// could not be identified for compositing.
     fn overprint_snapshot(&self, pixmap: &Pixmap, gs: &GraphicsState, fill_side: bool) -> Option<Vec<u8>> {
@@ -6654,21 +6654,8 @@ impl PageRenderer {
         // actually wrote. Used to invert the source-over alpha blend
         // and recover effective coverage·alpha per pixel. Mirrors the
         // `apply_cmyk_compose_after_paint` recovery for byte-identity
-        // with the compose-first path. A Separation or DeviceN paint
-        // wrote the alternate colour the pipeline resolved, so its
-        // recovery reads that. ~keep
-        let src_rgb_ic = if let SourceCsClass::SeparationOrDeviceN { .. } = source.class {
-            let side = if fill_side { PaintSide::Fill } else { PaintSide::Stroke };
-            let (r, g, b) = self.pipeline_resolve_rgba(doc, gs, side).map_or(
-                if fill_side {
-                    gs.fill_color_rgb
-                } else {
-                    gs.stroke_color_rgb
-                },
-                |(r, g, b, _)| (r, g, b),
-            );
-            [r, g, b]
-        } else if let Some(transform) = icc_transform.as_ref() {
+        // with the compose-first path. ~keep
+        let src_rgb_ic = if let Some(transform) = icc_transform.as_ref() {
             let c_u8 = (sc.clamp(0.0, 1.0) * 255.0).round() as u8;
             let m_u8 = (sm.clamp(0.0, 1.0) * 255.0).round() as u8;
             let y_u8 = (sy.clamp(0.0, 1.0) * 255.0).round() as u8;
@@ -9150,13 +9137,14 @@ enum SourceCsClass {
     /// in the graphics state when the current colour space is
     /// DeviceCMYK").
     OtherProcess,
-    /// `Separation` or non-process `DeviceN` that names at least one
-    /// process colorant (`Cyan`, `Magenta`, `Yellow`, `Black`, or `All`,
-    /// which names all four). Table 149 row 3: a named colorant carries
-    /// `c_s`, every other process channel preserves backdrop (`B = c_b`). `named` holds one flag per
-    /// channel in C, M, Y, K order. A paint that names only spot inks
-    /// never reaches this class: [`source_for_overprint`] skips it.
-    SeparationOrDeviceN { named: [bool; 4] },
+    /// `Separation` or non-process `DeviceN`. Table 149 row 3: process
+    /// colour components preserve backdrop (`B = c_b`); the named-spot
+    /// lanes carry `c_s`; unnamed spot lanes preserve backdrop. The
+    /// process-side override is the dispositive difference from the
+    /// process-CS classes — a Separation paint must NOT mark process
+    /// plates even when its alternate colour space rasterised an RGB
+    /// approximation into the composite buffer.
+    SeparationOrDeviceN,
 }
 
 /// One of the four DeviceCMYK process channels. Used by
@@ -9176,8 +9164,8 @@ enum ProcessChannel {
 /// regardless of the original colour space — for DeviceGray it is
 /// `(0, 0, 0, 1-g)`, for DeviceRGB it is the §10.3.5 additive-clamp
 /// inverse, and for Separation/DeviceN it is the alternate-space
-/// evaluation, or, for a Separation/DeviceN that names process colorants,
-/// the tint of each named colorant on its channel and 0 elsewhere.
+/// evaluation (or `(0, 0, 0, 0)` when the alternate path produces
+/// nothing — in that case the process-lane preserve rule does the work).
 #[derive(Debug, Clone, Copy)]
 struct OverprintSource {
     class: SourceCsClass,
@@ -9187,8 +9175,7 @@ struct OverprintSource {
 /// Determine the §11.7.4.3 source colour for an overprint paint.
 ///
 /// Returns `None` when no `B(c_b, c_s)` would fire — the caller should
-/// skip the per-channel pass. A Separation/DeviceN paint that names only
-/// spot inks returns `None`: its paint keeps the alternate colour.
+/// skip the per-channel pass.
 ///
 /// The dispatch reads `gs.fill_color_space` / `gs.stroke_color_space`
 /// to classify the source. For DeviceCMYK direct we also require
@@ -9285,15 +9272,10 @@ fn source_for_overprint(gs: &GraphicsState, fill_side: bool) -> Option<Overprint
             //    process tints are sourced from the same `scn` and
             //    contribute to the C/M/Y/K plates.
             //
-            // 2. `spot_inks` non-empty (no process CMYK) — Separation or
-            //    DeviceN with NO process attribution. A colorant named
-            //    Cyan, Magenta, Yellow or Black is that process plate
-            //    (§8.6.6.4), and All is every plate: a named channel
-            //    carries the tint, the others preserve backdrop. A paint that names only spot inks
-            //    returns None: the composite keeps the alternate colour
-            //    the rasteriser painted, as a viewer shows it, and the
-            //    process plates keep their backdrop because nothing
-            //    rewrites them. The spot mirror writes the spot lanes.
+            // 2. `spot_inks` non-empty (no process CMYK) — pure
+            //    Separation or DeviceN with NO process attribution.
+            //    Process lanes preserve backdrop per Table 149 row 3;
+            //    the named spot lanes are handled by the spot mirror.
             //
             // 3. Otherwise — ICCBased / Pattern / Indexed / DeviceN
             //    /Process whose /Process /ColorSpace the dispatcher
@@ -9310,24 +9292,9 @@ fn source_for_overprint(gs: &GraphicsState, fill_side: bool) -> Option<Overprint
                     cmyk,
                 })
             } else if !spot_inks.is_empty() {
-                let mut named = [false; 4];
-                let mut tints = [0.0_f32; 4];
-                for (ink, tint) in spot_inks {
-                    let channels = if ink == "All" {
-                        0..4
-                    } else if let Some(channel) = sidecar_mod::process_colorant_channel(ink) {
-                        channel..channel + 1
-                    } else {
-                        continue;
-                    };
-                    for channel in channels {
-                        named[channel] = true;
-                        tints[channel] = tint.clamp(0.0, 1.0);
-                    }
-                }
-                named.contains(&true).then_some(OverprintSource {
-                    class: SourceCsClass::SeparationOrDeviceN { named },
-                    cmyk: (tints[0], tints[1], tints[2], tints[3]),
+                Some(OverprintSource {
+                    class: SourceCsClass::SeparationOrDeviceN,
+                    cmyk: (0.0, 0.0, 0.0, 0.0),
                 })
             } else {
                 let (r, g, b) = color_rgb;
@@ -9359,7 +9326,7 @@ fn source_for_overprint(gs: &GraphicsState, fill_side: bool) -> Option<Overprint
 /// - `alpha` — effective shape × opacity for the pixel.
 fn compose_overprint_channel(
     class: SourceCsClass,
-    channel: ProcessChannel,
+    _channel: ProcessChannel,
     c_s: f32,
     c_b: f32,
     opm: u8,
@@ -9378,17 +9345,11 @@ fn compose_overprint_channel(
             // component of the group CS regardless of OPM. ~keep
             c_s
         }
-        SourceCsClass::SeparationOrDeviceN { named } => {
-            // Table 149 row 3: a process colorant the source names takes
-            // c_s; the others preserve backdrop. Spot lanes are written
-            // by the spot sidecar mirror, not by this pass. ~keep
-            let index = match channel {
-                ProcessChannel::C => 0,
-                ProcessChannel::M => 1,
-                ProcessChannel::Y => 2,
-                ProcessChannel::K => 3,
-            };
-            if named[index] { c_s } else { c_b }
+        SourceCsClass::SeparationOrDeviceN => {
+            // Table 149 row 3: process colour components preserve
+            // backdrop. The named-spot lanes are handled by the spot
+            // sidecar mirror, not by this per-process-channel pass. ~keep
+            c_b
         }
     };
     let alpha = alpha.clamp(0.0, 1.0);
