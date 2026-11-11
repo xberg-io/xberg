@@ -315,8 +315,8 @@ fn verify_page(work: Verification) -> crate::Result<Option<(Vec<Number>, Rect)>>
             let measured = raster.capacity().saturating_add(bytes);
             if measured > allowance || !cancelled(&config) {
                 run.budget.settle_work(allowance, measured);
-                run.budget.retain_failed_work();
             }
+            run.budget.retain_failed_work();
             return Ok(None);
         }
         Ok(Preparation::UnmeasuredDecline) => {

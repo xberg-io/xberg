@@ -64,7 +64,17 @@ fn audit_unicode(document: &PdfDocument, dict: &HashMap<String, Object>, work: &
     require(
         (0..=255).all(|code| cmap.get(&code).is_none_or(|claim| claim.chars().count() == 1)),
         "non-scalar ToUnicode claim",
-    )
+    )?;
+    let mut claimed_digits = HashSet::new();
+    let digits = (0..=255)
+        .filter_map(|code| cmap.get(&code)?.chars().next())
+        .filter(|&character| super::super::is_khmer_digit(character));
+    for digit in digits {
+        if !claimed_digits.insert(digit) {
+            return Err(Failure::MeasuredDecline("ambiguous physical character code"));
+        }
+    }
+    Ok(())
 }
 pub(super) fn scalar_hex_tokens(text: &str) -> ProofResult<()> {
     for token in text.split('<').skip(1) {

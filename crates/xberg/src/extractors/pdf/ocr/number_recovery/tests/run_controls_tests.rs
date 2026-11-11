@@ -532,10 +532,10 @@ fn late_decline_pages() -> Vec<u8> {
         let Ok(content) = String::from_utf8(content) else {
             continue;
         };
-        if content.contains("<02> <17E0>") {
+        if content.contains("1 0 0 1 100 650 Tm") {
             stream.set_plain_content(
                 content
-                    .replace("endcmap", "1 beginbfchar\n<03> <17E0>\nendbfchar\nendcmap")
+                    .replace("1 0 0 1 100 650 Tm", "1.1 0 0 1 100 650 Tm")
                     .into_bytes(),
             );
             changed += 1;
@@ -590,7 +590,7 @@ fn should_retain_source_reservation_when_a_late_decline_fails_the_proof() {
             source_numbers(&shadow, 0, raster.capacity(), &config).unwrap(),
             Preparation::UnmeasuredDecline
         ),
-        "the real ambiguous-physical-byte profile must decline"
+        "the transformed glyph must decline after opaque font loading"
     );
     let run = Arc::new(Run::default());
     let first = exercise_page(&document, 0, &config, &run);
@@ -641,16 +641,18 @@ fn should_retain_source_reservation_when_a_late_decline_fails_the_proof() {
     });
 }
 
-fn warm_native_number_fonts(document: &PdfDocument, pages: usize) {
-    for index in 0..pages {
-        assert!(
-            document
-                .extract_chars(index)
-                .unwrap()
-                .iter()
-                .any(|glyph| glyph.char == '០')
-        );
-    }
+fn assert_cold_source_fonts(document: &PdfDocument, index: usize) {
+    let resources = document.get_page_resources(index).unwrap();
+    let fonts = document
+        .resolve_object(resources.as_dict().unwrap().get("Font").unwrap())
+        .unwrap();
+    assert!(
+        fonts
+            .as_dict()
+            .unwrap()
+            .values()
+            .all(|font| document.cached_font_for_proof(font).is_none())
+    );
 }
 
 fn early_decline_pages(profile: &str) -> Vec<u8> {
@@ -796,22 +798,8 @@ fn should_recover_the_second_page_after_an_early_unsupported_source_decline() {
         "form",
         "ambiguous_font",
     ] {
-        let bytes = early_decline_pages(profile);
-        let document = Arc::new(PdfDocument::from_bytes(bytes.clone()).unwrap());
+        let document = Arc::new(PdfDocument::from_bytes(early_decline_pages(profile)).unwrap());
         assert_eq!(document.page_count().unwrap(), 2);
-        let measured_font_charge = if profile == "ambiguous_font" {
-            warm_native_number_fonts(&document, 1);
-            let shadow = PdfDocument::from_bytes(bytes).unwrap();
-            warm_native_number_fonts(&shadow, 1);
-            let Preparation::MeasuredDecline(measured) =
-                source_numbers(&shadow, 0, raster.capacity(), &config).unwrap()
-            else {
-                panic!("the native font pass must leave a measurable ambiguous-font decline");
-            };
-            Some(measured + raster.capacity())
-        } else {
-            None
-        };
         let run = Arc::new(Run::default());
         let initial = run.budget.remaining(&config);
         let first = exercise_source_page(
@@ -835,12 +823,6 @@ fn should_recover_the_second_page_after_an_early_unsupported_source_decline() {
             let remaining = run.budget.remaining(&config);
             if early {
                 assert_eq!(remaining, initial, "{profile} is metadata-only");
-            } else if let Some(charge) = measured_font_charge {
-                assert_eq!(
-                    remaining,
-                    initial - charge,
-                    "only the measured font proof may be charged"
-                );
             } else {
                 assert!(
                     remaining > initial / 2 && remaining < initial,
@@ -1023,10 +1005,8 @@ fn should_allow_supported_source_work_after_bounded_late_declines() {
     for profile in ["inline_actual_text", "form", "ambiguous_font"] {
         let bytes = two_late_then_supported_pages(profile);
         let shadow = PdfDocument::from_bytes(bytes.clone()).unwrap();
-        if profile == "ambiguous_font" {
-            warm_native_number_fonts(&shadow, 2);
-        }
         for index in 0..2 {
+            assert_cold_source_fonts(&shadow, index);
             assert!(
                 matches!(
                     source_numbers(&shadow, index, raster.capacity(), &config).unwrap(),
@@ -1034,6 +1014,7 @@ fn should_allow_supported_source_work_after_bounded_late_declines() {
                 ),
                 "{profile} page {index} must decline after admission"
             );
+            assert_cold_source_fonts(&shadow, index);
         }
         assert!(
             matches!(
@@ -1043,9 +1024,6 @@ fn should_allow_supported_source_work_after_bounded_late_declines() {
             "{profile} third page must be a supported source"
         );
         let document = Arc::new(PdfDocument::from_bytes(bytes).unwrap());
-        if profile == "ambiguous_font" {
-            warm_native_number_fonts(&document, 2);
-        }
         let run = Arc::new(Run::default());
         let events = FontEvents::default();
         with_runtime(events.clone(), async {
@@ -1053,9 +1031,11 @@ fn should_allow_supported_source_work_after_bounded_late_declines() {
             let mut charged = true;
             let mut unproved = true;
             for index in 0..2 {
+                assert_cold_source_fonts(&document, index);
                 let warnings = exercise_source_page(&document, index, &config, &run, raster.clone(), dimensions).await;
+                assert_cold_source_fonts(&document, index);
                 let remaining = run.budget.remaining(&config);
-                charged &= remaining < before;
+                charged &= remaining < before && before - remaining < initial / 2;
                 before = remaining;
                 unproved &= warnings.len() == 1 && warnings[0].message.contains("could not be bound");
             }
@@ -1252,9 +1232,6 @@ fn should_recover_the_third_page_after_two_late_source_declines() {
     for profile in ["inline_actual_text", "form", "ambiguous_font"] {
         let document = Arc::new(PdfDocument::from_bytes(two_late_then_supported_pages(profile)).unwrap());
         assert_eq!(document.page_count().unwrap(), 3);
-        if profile == "ambiguous_font" {
-            warm_native_number_fonts(&document, 2);
-        }
         let run = Arc::new(Run::default());
         let initial = run.budget.remaining(&config);
         let events = FontEvents::default();
@@ -1313,7 +1290,21 @@ fn should_recover_the_third_page_after_two_late_source_declines() {
                 "painted zero must preserve accepted spacing after {profile}"
             );
             assert!(!events.0.lock().unwrap().is_empty(), "supported page must load fonts");
-            assert!(warnings.is_empty(), "{profile}: {warnings:?}");
+            assert_eq!(
+                run.budget.limited(),
+                run.budget.remaining(&config) == 0,
+                "{profile}: the supported fixture can only reach the byte limit"
+            );
+            assert_eq!(
+                warnings.len(),
+                usize::from(run.budget.limited()),
+                "{profile}: {warnings:?}"
+            );
+            assert!(
+                warnings
+                    .iter()
+                    .all(|warning| warning.message.contains("document budget"))
+            );
         });
     }
 }
@@ -1384,9 +1375,9 @@ fn should_not_settle_a_cancelled_measured_decline() {
     let (_root, mut config) = invalid_auxiliary_models();
     let token = crate::cancellation::CancellationToken::new();
     config.cancel_token = Some(token.clone());
-    let document = Arc::new(PdfDocument::from_bytes(late_decline_pages()).unwrap());
-    warm_native_number_fonts(&document, 1);
+    let document = Arc::new(PdfDocument::from_bytes(two_late_then_supported_pages("inline_actual_text")).unwrap());
     let run = Arc::new(Run::default());
+    assert!(run.budget.charge(proof_limits(&config).max_content_size / 2, &config));
     let subscriber = tracing_subscriber::registry().with(CancelMeasured(token.clone()));
     tracing::subscriber::with_default(subscriber, || {
         tokio::runtime::Builder::new_current_thread()
@@ -1401,8 +1392,12 @@ fn should_not_settle_a_cancelled_measured_decline() {
     );
     assert_eq!(
         run.budget.remaining(&config),
-        proof_limits(&config).max_content_size / 2,
+        0,
         "cancellation at measured disposition must retain the whole share"
+    );
+    assert!(
+        run.budget.limited(),
+        "the cancelled final share exhausts the document budget"
     );
     assert!(run.processor.get().is_none());
 }
