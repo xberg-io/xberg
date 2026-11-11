@@ -12,8 +12,13 @@ pub(super) struct KnockoutResources {
     live: Arc<AtomicUsize>,
     depth: Arc<AtomicUsize>,
     surface_work: u64,
+    ordinary_work: u64,
     paint_operations: usize,
     failure: Option<String>,
+    work_exhausted: bool,
+    degradations: usize,
+    native: Arc<AtomicUsize>,
+    degraded: Arc<AtomicUsize>,
 }
 
 impl Default for KnockoutResources {
@@ -23,8 +28,13 @@ impl Default for KnockoutResources {
             live: Arc::new(AtomicUsize::new(0)),
             depth: Arc::new(AtomicUsize::new(0)),
             surface_work: 0,
+            ordinary_work: 0,
             paint_operations: 0,
             failure: None,
+            work_exhausted: false,
+            degradations: 0,
+            native: Arc::new(AtomicUsize::new(0)),
+            degraded: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
@@ -42,14 +52,41 @@ impl Drop for Reservation {
     }
 }
 
+pub(super) struct KnockoutReservation {
+    _workspace: Reservation,
+    native: Arc<AtomicUsize>,
+}
+
+impl Drop for KnockoutReservation {
+    fn drop(&mut self) {
+        self.native.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
+pub(super) struct WorkFallback {
+    _scope: Reservation,
+    degraded: Arc<AtomicUsize>,
+}
+
+impl Drop for WorkFallback {
+    fn drop(&mut self) {
+        self.degraded.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
 impl KnockoutResources {
     pub(super) fn reset(&mut self, limit: Option<usize>) {
         self.limit = limit.unwrap_or(MAX_WORKING_BYTES).min(MAX_WORKING_BYTES);
         self.live.store(0, Ordering::Relaxed);
         self.depth.store(0, Ordering::Relaxed);
         self.surface_work = 0;
+        self.ordinary_work = 0;
         self.paint_operations = 0;
         self.failure = None;
+        self.work_exhausted = false;
+        self.degradations = 0;
+        self.native.store(0, Ordering::Relaxed);
+        self.degraded.store(0, Ordering::Relaxed);
     }
 
     pub(super) fn canvas(&mut self, bytes: usize) {
@@ -71,10 +108,39 @@ impl KnockoutResources {
     }
 
     pub(super) fn check(&self) -> Result<()> {
-        match &self.failure {
-            Some(message) => Err(Error::InvalidOperation(message.clone())),
-            None => Ok(()),
+        if let Some(message) = &self.failure {
+            return Err(Error::InvalidOperation(message.clone()));
         }
+        if self.work_exhausted {
+            return Err(Error::InvalidOperation(
+                "PDF knockout surface work exceeds render working limits".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub(super) fn work_exhausted(&self) -> bool {
+        self.work_exhausted && self.failure.is_none()
+    }
+
+    pub(super) fn degradations(&self) -> usize {
+        self.degradations
+    }
+
+    pub(super) fn fallback(&mut self) -> Result<WorkFallback> {
+        if self.failure.is_some() {
+            self.check()?;
+        }
+        // Only the handled work refusal is cleared; fatal resource refusals stay latched. ~keep
+        self.work_exhausted = false;
+        let scope = self.reserve(Some(0))?;
+        if self.degraded.fetch_add(1, Ordering::Relaxed) == 0 {
+            self.degradations = self.degradations.saturating_add(1);
+        }
+        Ok(WorkFallback {
+            _scope: scope,
+            degraded: Arc::clone(&self.degraded),
+        })
     }
 
     pub(super) fn reserve(&mut self, required: Option<usize>) -> Result<Reservation> {
@@ -105,18 +171,33 @@ impl KnockoutResources {
         sidecar_bytes: usize,
         spot_count: usize,
         paints: usize,
-    ) -> Result<Reservation> {
+    ) -> Result<Option<KnockoutReservation>> {
+        if self.failure.is_some() {
+            self.check()?;
+        }
+        if self.degraded.load(Ordering::Relaxed) > 0 || self.surface_work > MAX_SURFACE_WORK {
+            return Ok(None);
+        }
         let work = (pixels as u64)
             .checked_mul(paints as u64)
             .and_then(|value| value.checked_add(self.surface_work));
-        if work.is_none_or(|value| value > MAX_SURFACE_WORK) {
-            return self.refuse("surface work");
+        let Some(work) = work else {
+            return self.refuse("surface work arithmetic");
+        };
+        if work > MAX_SURFACE_WORK {
+            return Ok(None);
         }
         let bytes = rgba_bytes
             .checked_add(sidecar_bytes)
             .and_then(|value| value.checked_mul(2))
             .and_then(|value| shape_bytes(pixels, spot_count)?.checked_mul(2)?.checked_add(value));
-        self.reserve(bytes)
+        let reservation = self.reserve(bytes)?;
+        self.surface_work = work;
+        self.native.fetch_add(1, Ordering::Relaxed);
+        Ok(Some(KnockoutReservation {
+            _workspace: reservation,
+            native: Arc::clone(&self.native),
+        }))
     }
 
     pub(super) fn paint(&mut self, pixels: usize) -> Result<()> {
@@ -128,11 +209,20 @@ impl KnockoutResources {
     }
 
     pub(super) fn raster(&mut self, pixels: usize) -> Result<()> {
-        let work = self.surface_work.checked_add(pixels as u64);
-        if work.is_none_or(|value| value > MAX_SURFACE_WORK) {
-            return self.refuse("surface work");
+        self.check()?;
+        if self.degraded.load(Ordering::Relaxed) > 0 {
+            return Ok(());
         }
-        self.surface_work = work.expect("checked surface work");
+        self.surface_work = self.surface_work.saturating_add(pixels as u64);
+        if self.native.load(Ordering::Relaxed) > 0 {
+            self.work_exhausted = self.surface_work > MAX_SURFACE_WORK;
+        } else {
+            // Knockout plans and native raster passes cannot spend ordinary siblings' allowance. ~keep
+            self.ordinary_work = self.ordinary_work.saturating_add(pixels as u64);
+            if self.ordinary_work > MAX_SURFACE_WORK {
+                return self.refuse("ordinary surface work");
+            }
+        }
         self.check()
     }
 
@@ -232,3 +322,7 @@ mod tests {
         drop(group);
     }
 }
+
+#[cfg(test)]
+#[path = "knockout_work_tests.rs"]
+mod work_tests;

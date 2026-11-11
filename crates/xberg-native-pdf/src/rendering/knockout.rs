@@ -433,7 +433,7 @@ impl PageRenderer {
         doc: &PdfDocument,
         page_num: usize,
         resources: &Object,
-    ) -> Result<()> {
+    ) -> Result<Option<super::knockout_resources::WorkFallback>> {
         let pixels = pixmap.width() as usize * pixmap.height() as usize;
         let (sidecar_bytes, spot_count) = self.cmyk_sidecar.as_ref().map_or((0, 0), |sidecar| {
             (
@@ -443,11 +443,14 @@ impl PageRenderer {
         });
         let paints = operators.iter().filter(|operator| is_paint_operator(operator)).count();
         if paints == 0 {
-            return Ok(());
+            return Ok(None);
         }
-        let _workspace =
+        let workspace =
             self.knockout_resources
                 .knockout(pixels, pixmap.data().len(), sidecar_bytes, spot_count, paints)?;
+        let Some(workspace) = workspace else {
+            return self.execute_without_knockout(pixmap, base_transform, operators, doc, page_num, resources);
+        };
         let parent_shape = self.knockout_shape.take();
         let mut group = KnockoutGroup::new(self, pixmap);
         let result = self.execute_operators_with_backdrop(
@@ -460,11 +463,38 @@ impl PageRenderer {
             Some(&mut group),
         );
         self.knockout_shape = parent_shape;
+        if self.knockout_resources.work_exhausted() {
+            group.backdrop.restore(self, pixmap);
+            drop(group);
+            drop(workspace);
+            return self.execute_without_knockout(pixmap, base_transform, operators, doc, page_num, resources);
+        }
         if let Some(parent) = self.knockout_shape.as_mut() {
             parent.include_shape(&group.shape);
         }
         group.accumulator.restore(self, pixmap);
-        result
+        result.map(|_| None)
+    }
+
+    fn execute_without_knockout(
+        &mut self,
+        pixmap: &mut Pixmap,
+        transform: Transform,
+        operators: &[Operator],
+        doc: &PdfDocument,
+        page_num: usize,
+        resources: &Object,
+    ) -> Result<Option<super::knockout_resources::WorkFallback>> {
+        let before = self.knockout_resources.degradations();
+        let fallback = self.knockout_resources.fallback()?;
+        if self.knockout_resources.degradations() != before {
+            tracing::warn!(
+                page_num,
+                "knockout surface work limit reached; using non-knockout compositing"
+            );
+        }
+        self.execute_operators(pixmap, transform, operators, doc, page_num, resources)?;
+        Ok(Some(fallback))
     }
 }
 
@@ -733,14 +763,20 @@ mod tests {
     }
 
     #[test]
-    fn excessive_knockout_surface_work_is_refused_before_the_first_paint() {
-        let doc = knockout_document(20_000, 256, true);
+    fn excessive_knockout_surface_work_degrades_without_snapshotting_each_paint() {
+        let doc = knockout_document_with_content(&"0.2 g 0 0 1 1 re f ".repeat(20_000), 256, true);
         let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
-        let error = renderer
+        renderer
             .render_page(&doc, 0)
-            .err()
-            .expect("work guard refuses oversized plan");
-        assert!(error.to_string().contains("surface work"));
-        assert_eq!(renderer.paint_operator_calls, 0, "refusal precedes all paints");
+            .expect("work-limited group remains renderable");
+        assert_eq!(
+            renderer.paint_operator_calls, 20_000,
+            "normal fallback executes every paint once"
+        );
+        assert_eq!(
+            renderer.rgba_snapshot_bytes.load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "preflight degradation allocates no knockout backdrops"
+        );
     }
 }
