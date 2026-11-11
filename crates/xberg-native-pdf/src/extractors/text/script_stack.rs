@@ -225,7 +225,9 @@ mod tests {
     fn should_not_take_an_unrelated_span_outside_the_stack_window_for_a_fraction_partner() {
         let base = span("e", 100.0, 100.0, 4.0, 10.0);
         let candidates = [
-            span("a wide note", 95.0, 107.5, 30.0, 6.0),
+            // Compact, same size as `1`, overlapping it by more than half but starting before the
+            // base ends: only the page-wide search would take it for the numerator.
+            span("q", 95.0, 107.5, 14.5, 6.0),
             span("c", 104.0, 104.2, 3.0, 7.5),
             span("1", 107.0, 102.6, 3.0, 6.0),
         ];
