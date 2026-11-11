@@ -141,7 +141,18 @@ fn should_read_all_reporter_words_from_a_local_pdf_through_default_ocr() {
         let config = serde_json::from_str(json).unwrap();
         let result = helpers::extract_uri_document_blocking(&fixture, None, &config).unwrap();
         let actual = words(&result.content);
-        assert_eq!(result.extraction_method, Some(ExtractionMethod::Ocr));
+        // Default OCR keeps the eligible native pages beside the OCR read (#2779); only force_ocr
+        // replaces every page.
+        let method = if force_ocr {
+            ExtractionMethod::Ocr
+        } else {
+            ExtractionMethod::Mixed
+        };
+        assert_eq!(
+            result.extraction_method,
+            Some(method),
+            "method with force_ocr={force_ocr}"
+        );
         assert_eq!(actual.len(), 245, "source word count with force_ocr={force_ocr}");
         assert_eq!(actual, expected, "ordered source words with force_ocr={force_ocr}");
     }

@@ -3,7 +3,8 @@ use super::*;
 const WIDTH: usize = 100;
 const BASE_PNG_CHARGE: usize = WIDTH * WIDTH * 12 + 256 * 1024;
 const CMYK_PNG_CHARGE: usize = BASE_PNG_CHARGE + WIDTH * WIDTH * 4;
-const SPOT_PNG_CHARGE: usize = CMYK_PNG_CHARGE + WIDTH * WIDTH;
+// Each spot ink holds a tint plane and an alpha plane, one byte per pixel each.
+const SPOT_PNG_CHARGE: usize = CMYK_PNG_CHARGE + 2 * WIDTH * WIDTH;
 
 fn synthetic_cmyk_profile() -> Vec<u8> {
     // Constant-Lab ICC v2 CMYK input LUT, like the native compositor fixtures.
@@ -168,10 +169,12 @@ fn fitted_native_dpi_accounts_for_spot_planes_before_rendering() {
     let pdf = cmyk_page(true);
     native_png_and_sidecar(&pdf, true);
     let doc = xberg_native_pdf::PdfDocument::from_bytes(pdf).expect("open press-target PDF");
-    let (image, dpi) = render_png_page_with_dpi_budget(&doc, 0, DPI, 69, CMYK_PNG_CHARGE).expect("96px with spot fits");
+    let fits_96px_with_spot = 96 * 96 * 18 + 256 * 1024;
+    let (image, dpi) =
+        render_png_page_with_dpi_budget(&doc, 0, DPI, 69, fits_96px_with_spot).expect("96px with spot fits");
     assert_eq!((image.width, image.height, dpi), (96, 96, 69));
 
-    let error = render_png_page_with_dpi_budget(&doc, 0, DPI, 70, CMYK_PNG_CHARGE)
+    let error = render_png_page_with_dpi_budget(&doc, 0, DPI, 70, fits_96px_with_spot)
         .err()
         .expect("98px with spot exceeds the budget");
     assert!(

@@ -870,8 +870,8 @@ fn row_lines_escape_punctuation_starts_but_not_hashtags_or_decimals() {
     assert_eq!(
         render_djot(&b.build()),
         concat!(
-            "\\+ Pool .... 4\n\n\\* Park .... 7\n\n\\### Lot .... 2\n\n1.5 Units .... 3\n\n1\\.\n\n\\-\n\n",
-            "\\---\n\n\\- - -\n\n\\***\n\n#hashtag .... 1\n\nPlan A. .... 2\n\n\\--- Rule .... 6\n\n",
+            "\\+ Pool .... 4\n\n\\* Park .... 7\n\n\\#\\#\\# Lot .... 2\n\n1.5 Units .... 3\n\n1\\.\n\n\\-\n\n",
+            "\\-\\-\\-\n\n\\- - -\n\n\\*\\*\\*\n\n#hashtag .... 1\n\nPlan A. .... 2\n\n\\-\\-\\- Rule .... 6\n\n",
             "\\-5 .... 1\n\n\\:\\:\\: note\n\n\\`\\`\\` rust\n"
         )
     );
@@ -905,6 +905,11 @@ fn row_escape_matrix() -> Vec<String> {
         rows.push(punctuation.to_string());
         rows.push(format!("{punctuation} word .... 1"));
         rows.push(format!("{punctuation}word .... 1"));
+    }
+    for punctuation in (0u8..128).map(char::from).filter(char::is_ascii_punctuation) {
+        rows.push(format!("a{punctuation}b .... 1"));
+        rows.push(format!("[word] {punctuation}x{punctuation} .... 1"));
+        rows.push(format!("[word_a] {punctuation}x{punctuation}y_z .... 1"));
     }
     rows.extend(
         [
@@ -997,8 +1002,14 @@ fn every_row_text_keeps_three_paragraphs_in_either_layout() {
     );
 }
 
+fn render_rows(rows: &[&str]) -> String {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_element(marked_row_lines_element(&rows.join("\n")));
+    render_djot(&b.build())
+}
+
 #[test]
-fn a_row_that_starts_with_an_escaped_delimiter_keeps_the_delimiter_literal() {
+fn a_row_that_starts_with_an_escaped_delimiter_shows_its_own_backslash() {
     for delimiter in ["*", "_", "{", "[", "`", "~", "^", "=", "+", "-"] {
         let closing = match delimiter {
             "{" => "}",
@@ -1008,30 +1019,101 @@ fn a_row_that_starts_with_an_escaped_delimiter_keeps_the_delimiter_literal() {
             other => other,
         };
         let row = format!("\\{delimiter}word{closing} .... 1");
-        let mut b = InternalDocumentBuilder::new("test");
-        b.push_element(marked_row_lines_element(&format!("Intro .... 5\n{row}\nTail .... 9")));
-        let output = render_djot(&b.build());
-        assert_eq!(
-            djot_paragraph_texts(&output),
-            [
-                "Intro .... 5".to_string(),
-                row[1..].to_string(),
-                "Tail .... 9".to_string()
-            ],
-            "row {row:?} -> {output:?}"
-        );
+        let layout = ["Intro .... 5", row.as_str(), "Tail .... 9"];
+        let output = render_rows(&layout);
+        assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
     }
+    assert_eq!(render_rows(&["\\*note* .... 3"]), "\\\\\\*note\\* .... 3\n");
 }
 
 #[test]
-fn an_escaped_dash_row_reads_as_a_hyphen_and_an_en_dash() {
-    let mut b = InternalDocumentBuilder::new("test");
-    b.push_element(marked_row_lines_element("--- Rule .... 6"));
-    let output = render_djot(&b.build());
-    assert_eq!(output, "\\--- Rule .... 6\n");
+fn a_row_with_a_bracketed_word_keeps_the_underscores_and_stars_after_it() {
+    for row in [
+        "[snake_case] and a_b .... 3",
+        "[ref_1] see ref_2 .... 5",
+        "[file_name] report_final .... 7",
+        "[x*] y*z .... 3",
+    ] {
+        let layout = ["Intro .... 5", row, "Tail .... 9"];
+        let output = render_rows(&layout);
+        assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
+    }
+    assert_eq!(
+        render_rows(&["[snake_case] and a_b .... 3"]),
+        "\\[snake\\_case\\] and a\\_b .... 3\n"
+    );
+}
+
+#[test]
+fn a_row_with_a_bracketed_word_and_attributes_keeps_its_text() {
+    for row in ["[a]{.x} .... 1", "word{.x} .... 1"] {
+        let layout = ["Intro .... 5", row, "Tail .... 9"];
+        let output = render_rows(&layout);
+        assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
+    }
+    assert_eq!(render_rows(&["[a]{.x} .... 1"]), "\\[a\\]\\{.x\\} .... 1\n");
+}
+
+#[test]
+fn a_backslash_in_a_row_is_shown_and_frees_no_delimiter() {
+    for row in ["{\\*x* .... 1", "[_]\\_x_ .... 2"] {
+        let layout = ["Intro .... 5", row, "Tail .... 9"];
+        let output = render_rows(&layout);
+        assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
+    }
+    assert_eq!(
+        render_rows(&["{\\*x* .... 1", "[_]\\_x_ .... 2"]),
+        "\\{\\\\\\*x\\* .... 1\n\n\\[\\_\\]\\\\\\_x\\_ .... 2\n"
+    );
+}
+
+#[test]
+fn a_row_that_starts_with_hyphens_escapes_each_hyphen() {
+    let output = render_rows(&["--- Rule .... 6"]);
+    assert_eq!(output, "\\-\\-\\- Rule .... 6\n");
     let events: Vec<_> = jotdown::Parser::new(&output).collect();
-    assert!(events.iter().any(|event| matches!(event, jotdown::Event::EnDash)));
+    assert!(!events.iter().any(|event| matches!(event, jotdown::Event::EnDash)));
     assert!(!events.iter().any(|event| matches!(event, jotdown::Event::EmDash)));
+}
+
+#[test]
+fn a_row_with_a_sign_after_a_brace_escapes_the_sign() {
+    for row in ["{+ins+} .... 1", "{=mark=} .... 2", "{-del-} .... 3"] {
+        let layout = ["Intro .... 5", row, "Tail .... 9"];
+        let output = render_rows(&layout);
+        assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
+    }
+    assert_eq!(
+        render_rows(&["{+ins+} .... 1", "x {=m=} .... 2", "{-d-} .... 3"]),
+        "\\{\\+ins+\\} .... 1\n\nx \\{\\=m=\\} .... 2\n\n\\{\\-d-\\} .... 3\n"
+    );
+}
+
+#[test]
+fn a_row_leaves_the_characters_that_open_no_markup_as_typed() {
+    let rows = [
+        "Chapter 3: Introduction .... 5",
+        "A-B + C = D .... 1",
+        "Dr. Smith (b) |x| #5 $6 \"q\" 'r' !s >t .... 2",
+        "a:b .... 3",
+    ];
+    let output = render_rows(&rows);
+    assert_eq!(
+        output,
+        concat!(
+            "Chapter 3: Introduction .... 5\n\nA-B + C = D .... 1\n\n",
+            "Dr. Smith (b) |x| #5 $6 \"q\" 'r' !s >t .... 2\n\na\\:b .... 3\n"
+        )
+    );
+}
+
+#[test]
+fn a_row_with_an_autolink_or_a_tag_keeps_its_text() {
+    for row in ["<https://a.example> .... 1", "[a] <b@c.d> .... 2", "x <b>y</b> .... 3"] {
+        let layout = ["Intro .... 5", row, "Tail .... 9"];
+        let output = render_rows(&layout);
+        assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
+    }
 }
 
 #[test]
@@ -1072,9 +1154,260 @@ fn a_row_that_opens_with_brackets_and_braces_keeps_its_text() {
     }
 }
 
+fn paragraph_roundtrip_html(text: &str, annotations: Vec<TextAnnotation>) -> String {
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_paragraph(text, annotations, None, None);
+    builder.push_paragraph("Tail", vec![], None, None);
+    let output = render_djot(&builder.build());
+    jotdown::html::render_to_string(jotdown::Parser::new(&output))
+}
+
 #[test]
-fn the_punctuation_run_after_an_opener_stops_at_a_backslash_that_already_escapes() {
-    let mut b = InternalDocumentBuilder::new("test");
-    b.push_element(marked_row_lines_element("{\\*x* .... 1\n[_]\\_x_ .... 2"));
-    assert_eq!(render_djot(&b.build()), "\\{\\*x* .... 1\n\n\\[\\_\\]\\_x_ .... 2\n");
+fn paragraph_block_prefixes_keep_literal_text_and_tail() {
+    let cases = [
+        ("::: note", "::: note"),
+        ("::::", "::::"),
+        ("```rust", "```rust"),
+        ("~~~rust", "~~~rust"),
+        ("[ref]: target", "[ref]: target"),
+        ("[^1]: note", "[^1]: note"),
+        ("[snake_case]: a_b", "[snake_case]: a_b"),
+        ("- item", "- item"),
+        ("+ item", "+ item"),
+        ("* item", "* item"),
+        ("1. item", "1. item"),
+        ("a) item", "a) item"),
+        ("(iv) item", "(iv) item"),
+        ("# heading", "# heading"),
+        ("> quote", "&gt; quote"),
+        ("---", "---"),
+        ("* * *", "* * *"),
+        ("{.note}", "{.note}"),
+        ("{.snake_case key=\"a_b\"}", "{.snake_case key=\"a_b\"}"),
+        ("[ref name]: target", "[ref name]: target"),
+        ("[^snake_case]: note", "[^snake_case]: note"),
+        ("--- * ---", "--- * ---"),
+        (" ::: note", "::: note"),
+        ("| a |", "| a |"),
+        (": definition", ": definition"),
+        ("::: café 日本語", "::: café 日本語"),
+        ("1. café 日本語", "1. café 日本語"),
+        ("[réf]: café 日本語", "[réf]: café 日本語"),
+    ];
+    let failures: Vec<_> = cases
+        .iter()
+        .filter_map(|(source, expected)| {
+            let html = paragraph_roundtrip_html(source, vec![]);
+            let expected = format!("<p>{expected}</p>\n<p>Tail</p>\n");
+            (html != expected).then(|| format!("{source:?}: expected {expected:?}, got {html:?}"))
+        })
+        .collect();
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn paragraph_inline_syntax_keeps_its_interpretation() {
+    for (source, expected) in [
+        ("*bold*", "<strong>bold</strong>"),
+        ("|*bold*|", "|<strong>bold</strong>|"),
+        ("~~~*bold*", "~~~<strong>bold</strong>"),
+        (r"~~~a\*b*", "~~~a*b*"),
+        (
+            "|[link](https://example.com)|",
+            "|<a href=\"https://example.com\">link</a>|",
+        ),
+        (r"|a\*b*|", "|a*b*|"),
+        ("_emphasis_", "<em>emphasis</em>"),
+        ("`code`", "<code>code</code>"),
+        (
+            "[link](https://example.com)",
+            "<a href=\"https://example.com\">link</a>",
+        ),
+        (r"\*word*", "*word*"),
+        (r"\\word", r"\word"),
+        ("[snake_case] and a_b", "[snake_case] and a_b"),
+        ("#hashtag", "#hashtag"),
+        ("1.5", "1.5"),
+        ("日本語 _text_", "日本語 <em>text</em>"),
+        ("- item *bold*", "- item <strong>bold</strong>"),
+        ("# heading _em_", "# heading <em>em</em>"),
+    ] {
+        assert_eq!(
+            paragraph_roundtrip_html(source, vec![]),
+            format!("<p>{expected}</p>\n<p>Tail</p>\n"),
+            "{source:?}"
+        );
+    }
+}
+
+#[test]
+fn paragraph_annotations_keep_their_inline_markup() {
+    for (kind, expected) in [
+        (AnnotationKind::Bold, "<strong>text</strong>"),
+        (AnnotationKind::Italic, "<em>text</em>"),
+        (AnnotationKind::Code, "<code>text</code>"),
+        (
+            AnnotationKind::Link {
+                url: "https://example.com".into(),
+                title: None,
+            },
+            "<a href=\"https://example.com\">text</a>",
+        ),
+    ] {
+        let annotations = vec![TextAnnotation { start: 0, end: 4, kind }];
+        assert_eq!(
+            paragraph_roundtrip_html("text", annotations),
+            format!("<p>{expected}</p>\n<p>Tail</p>\n")
+        );
+    }
+}
+
+#[test]
+fn paragraph_block_prefix_keeps_a_following_annotation() {
+    let annotations = vec![TextAnnotation {
+        start: 2,
+        end: 6,
+        kind: AnnotationKind::Bold,
+    }];
+    assert_eq!(
+        paragraph_roundtrip_html("# text", annotations),
+        "<p># <strong>text</strong></p>\n<p>Tail</p>\n"
+    );
+}
+
+#[test]
+fn paragraph_compact_table_prefix_keeps_its_annotation() {
+    let annotations = vec![TextAnnotation {
+        start: 1,
+        end: 5,
+        kind: AnnotationKind::Bold,
+    }];
+    assert_eq!(
+        paragraph_roundtrip_html("|text|", annotations),
+        "<p>|<strong>text</strong>|</p>\n<p>Tail</p>\n"
+    );
+}
+
+#[test]
+fn paragraph_fence_prefix_keeps_its_annotation() {
+    let annotations = vec![TextAnnotation {
+        start: 3,
+        end: 7,
+        kind: AnnotationKind::Bold,
+    }];
+    assert_eq!(
+        paragraph_roundtrip_html("~~~text", annotations),
+        "<p>~~~<strong>text</strong></p>\n<p>Tail</p>\n"
+    );
+}
+
+#[test]
+fn paragraph_attribute_prefix_preserves_existing_escape_exactly() {
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_paragraph(r"{.a} 1\*2", vec![], None, None);
+    let output = render_djot(&builder.build());
+    assert_eq!(output, "\\{\\.a\\} 1\\*2\n");
+    assert_eq!(
+        jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+        "<p>{.a} 1*2</p>\n"
+    );
+}
+
+#[test]
+fn paragraph_attribute_prefix_preserves_inline_bold_exactly() {
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_paragraph("{.a} *bold*", vec![], None, None);
+    let output = render_djot(&builder.build());
+    assert_eq!(output, "\\{\\.a\\} *bold*\n");
+    assert_eq!(
+        jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+        "<p>{.a} <strong>bold</strong></p>\n"
+    );
+}
+
+#[test]
+fn paragraph_attribute_prefix_preserves_rendered_annotation_exactly() {
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_paragraph(
+        "{.a} text",
+        vec![TextAnnotation {
+            start: 5,
+            end: 9,
+            kind: AnnotationKind::Bold,
+        }],
+        None,
+        None,
+    );
+    let output = render_djot(&builder.build());
+    assert_eq!(output, "\\{\\.a\\} *text*\n");
+    assert_eq!(
+        jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+        "<p>{.a} <strong>text</strong></p>\n"
+    );
+}
+
+#[test]
+fn paragraph_braced_inline_syntax_keeps_its_interpretation() {
+    for (source, expected) in [
+        ("{-removed-}", "<del>removed</del>"),
+        ("{+inserted+}", "<ins>inserted</ins>"),
+        ("{=highlight=}", "<mark>highlight</mark>"),
+        ("{plain}", "{plain}"),
+        ("^caption", "^caption"),
+        (r"{\*x*}", "{*x*}"),
+    ] {
+        assert_eq!(
+            paragraph_roundtrip_html(source, vec![]),
+            format!("<p>{expected}</p>\n<p>Tail</p>\n"),
+            "{source:?}"
+        );
+    }
+}
+
+#[test]
+fn paragraph_caption_marker_after_a_real_table_stays_a_paragraph() {
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_table_from_cells(&[vec!["Header".into()], vec!["Cell".into()]], None, None);
+    builder.push_paragraph("^ caption", vec![], None, None);
+    builder.push_paragraph("Tail", vec![], None, None);
+    let output = render_djot(&builder.build());
+    assert_eq!(output, "| Header |\n| --- |\n| Cell |\n\n\\^ caption\n\nTail\n");
+    let html = jotdown::html::render_to_string(jotdown::Parser::new(&output));
+    assert!(html.contains("<table>"), "{html}");
+    assert!(html.contains("Header") && html.contains("Cell"), "{html}");
+    assert!(html.contains("</table>\n<p>^ caption</p>\n<p>Tail</p>"), "{html}");
+    assert!(!html.contains("<caption"), "{html}");
+}
+
+#[test]
+fn paragraph_thematic_breaks_remain_literal_exactly() {
+    for (source, expected) in [
+        ("---", "\\-\\-\\-\n"),
+        ("* * *", "\\* \\* \\*\n"),
+        ("--- * ---", "\\-\\-\\- \\* \\-\\-\\-\n"),
+    ] {
+        let mut builder = InternalDocumentBuilder::new("test");
+        builder.push_paragraph(source, vec![], None, None);
+        let output = render_djot(&builder.build());
+        assert_eq!(output, expected);
+        assert_eq!(djot_paragraph_texts(&output), [source]);
+    }
+}
+
+#[test]
+fn paragraph_complex_attribute_prefix_preserves_literal_syntax_and_inline_suffix() {
+    for (source, expected) in [
+        (
+            r#"{.snake_case key="a_b"} *bold*"#,
+            r#"{.snake_case key="a_b"} <strong>bold</strong>"#,
+        ),
+        (r#"{.a key="a}b"} 1\*2"#, r#"{.a key="a}b"} 1*2"#),
+        (r#"{.a key="a\*b"} *bold*"#, r#"{.a key="a*b"} <strong>bold</strong>"#),
+    ] {
+        assert_eq!(
+            paragraph_roundtrip_html(source, vec![]),
+            format!("<p>{expected}</p>\n<p>Tail</p>\n"),
+            "{source:?}"
+        );
+    }
 }

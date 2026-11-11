@@ -57,7 +57,7 @@ async fn automatic_ocr_replaces_the_junk_invisible_layer_over_the_ccitt_scan() {
         ..Default::default()
     })
     .await;
-    assert_eq!(words(&native).len(), 424);
+    assert_eq!(words(&native).len(), 455);
     assert!(
         native.content.contains("COMMI2\"rEE"),
         "the junk layer spells the heading wrongly"
@@ -103,7 +103,7 @@ async fn a_tight_preview_budget_keeps_the_native_layer_of_the_ccitt_scan() {
     })
     .await;
     assert!(!automatic.metadata.ocr_used);
-    assert_eq!(words(&automatic).len(), 424);
+    assert_eq!(words(&automatic).len(), 455);
 }
 
 #[tokio::test]

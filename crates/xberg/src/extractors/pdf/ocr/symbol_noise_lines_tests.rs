@@ -1,0 +1,294 @@
+use super::*;
+
+fn noise_filler(count: usize) -> Vec<&'static str> {
+    ["a", "oe", "# =", "ae", "\"", "ee", "=|", "rs", "~", "ie"]
+        .into_iter()
+        .cycle()
+        .take(count)
+        .collect()
+}
+
+fn page(real: &[&str], filler: usize) -> String {
+    let mut lines: Vec<&str> = real.to_vec();
+    lines.extend(noise_filler(filler));
+    lines.join("\n\n")
+}
+
+fn pruned(real: &[&str], filler: usize) -> String {
+    let text = page(real, filler);
+    assert!(
+        page_is_dominated_by_noise_lines(text.lines()),
+        "gate must pass: {text:?}"
+    );
+    prune_text(&text).0
+}
+
+fn assert_kept_exactly(real: &[&str]) {
+    assert_eq!(pruned(real, 12), real.join("\n\n"), "{real:?}");
+}
+
+#[test]
+fn keeps_word_shaped_lines_numbers_and_titles() {
+    for line in [
+        "SECTION TITLE",
+        "Chapter 1",
+        "Page 12",
+        "99",
+        "NORTH GATE 42",
+        "Figure 3 sunset",
+        "$5",
+        "1.",
+    ] {
+        assert!(!is_symbol_noise_line(line), "{line}");
+    }
+}
+
+#[test]
+fn flags_fragment_and_symbol_lines() {
+    for line in [
+        "a",
+        "mal",
+        "# ae",
+        "ef \"ae Car Sa % ey Bo ary \"dl",
+        "~",
+        "I",
+        "ie ee",
+        "ha >",
+        "i. =",
+    ] {
+        assert!(is_symbol_noise_line(line), "{line}");
+    }
+}
+
+#[test]
+fn keeps_cjk_kana_hangul_and_thai_lines_of_two_or_three_characters() {
+    assert_kept_exactly(&[
+        "\u{5546}\u{54c1}",
+        "\u{5408}\u{8a08}\u{984d}",
+        "\u{3053}\u{3093}\u{306b}\u{3061}\u{306f}",
+        "\u{c548}\u{b155}",
+        "\u{0e2a}\u{0e27}\u{0e31}\u{0e2a}\u{0e14}\u{0e35}",
+    ]);
+}
+
+#[test]
+fn keeps_arabic_and_cyrillic_lines() {
+    assert_kept_exactly(&[
+        "\u{645}\u{631}\u{62d}\u{628}\u{627}",
+        "\u{641}\u{64a} \u{627}\u{644}",
+        "\u{43f}\u{440}\u{438}\u{432}\u{435}\u{442}",
+        "\u{434}\u{430} \u{43d}\u{435}\u{442}",
+        "\u{44f}",
+    ]);
+}
+
+#[test]
+fn keeps_short_codes_and_amounts() {
+    assert_kept_exactly(&["A1", "B2", "$5", "1.", "7"]);
+}
+
+#[test]
+fn keeps_equations_between_variables_and_sums() {
+    assert_kept_exactly(&["x = y", "a + b", "n < m", "total = cost"]);
+}
+
+#[test]
+fn keeps_accented_and_non_english_latin_lines() {
+    assert_kept_exactly(&[
+        "go f\u{ff}r",
+        "Gr\u{fc}n",
+        "\u{c9}t\u{e9}",
+        "de la gare",
+        "Mairie du I",
+        "a du LouvRe",
+        "Th\u{e9}atre",
+    ]);
+}
+
+#[test]
+fn keeps_single_token_answers_and_unspaced_equations() {
+    assert_kept_exactly(&["No.", "Yes", "Qty", "x=y", "ABC", "pqr", "LouvRe"]);
+}
+
+#[test]
+fn keeps_labels_and_capitalized_short_lines() {
+    assert_kept_exactly(&["Go to Al", "b) to go", "c) if so", "Mr X Is In", "X= Y"]);
+}
+
+#[test]
+fn keeps_assignments_and_calls_with_a_dangling_or_glued_operator() {
+    assert_kept_exactly(&["f(x) = x", "X= Y", "a=", "C=", "n=", "Z=", "x=y", "a+b"]);
+}
+
+#[test]
+fn prunes_a_digit_with_a_stray_quotation_or_section_mark_and_keeps_a_quoted_number() {
+    for line in ["\u{201c}9", "\u{ab}5%", "5\u{a7}", "\"4"] {
+        assert!(is_symbol_noise_line(line), "{line}");
+    }
+    for line in [
+        "\u{201c}9\u{201d}",
+        "\"4\"",
+        "$5",
+        "#3",
+        "A1",
+        "7",
+        "Page 12",
+        "we go \u{201c}9",
+        "\u{2018}9\u{2019}",
+        "\"5 items",
+        "\u{201c}3 days\u{201d}",
+        "\"10 Downing",
+        "\u{a7}12",
+        "Siehe \u{a7}12",
+    ] {
+        assert!(!is_symbol_noise_line(line), "{line}");
+    }
+}
+
+#[test]
+fn two_lowercase_trigrams_together_count_as_text_but_one_alone_does_not() {
+    assert!(!is_symbol_noise_line("mal cad"));
+    assert!(is_symbol_noise_line("mal"));
+}
+
+#[test]
+fn prunes_lowercase_trigrams_and_symbol_runs_the_photograph_produces() {
+    for line in ["\u{201c}P", "ee pe", "ta gM", "r ,", "co FF", "we SY"] {
+        assert!(is_symbol_noise_line(line), "{line}");
+    }
+    for line in ["cad", "rtf", "Ne", "He"] {
+        assert!(is_symbol_noise_line(line), "{line}");
+    }
+}
+
+#[test]
+fn prunes_fragment_operator_fragment_lines() {
+    for line in ["ae - ee", "i - l", "oe = ie", "a * e", "= -", "ee + oe"] {
+        assert!(is_symbol_noise_line(line), "{line}");
+    }
+    let text = page(&["x = y"], 12) + "\n\nae - ee\n\ni - l\n\noe = ie";
+    assert_eq!(prune_text(&text).0, "x = y");
+}
+
+#[test]
+fn keeps_english_phrases_with_punctuation_case_and_contractions() {
+    assert_kept_exactly(&[
+        "I am",
+        "Go to",
+        "I am.",
+        "Go to.",
+        "I'm",
+        "IS IT",
+        "We go to",
+        "\"Go to\"",
+        "it\u{2019}s",
+    ]);
+}
+
+#[test]
+fn prunes_a_function_word_beside_a_fragment() {
+    for line in ["ee so", "rs or", "ie it", "oe of", "a a", "zz to"] {
+        assert!(is_symbol_noise_line(line), "{line}");
+    }
+    let text = page(&["Go to."], 12) + "\n\nee so\n\nrs or";
+    assert_eq!(prune_text(&text).0, "Go to.");
+}
+
+#[test]
+fn a_page_of_seven_lines_is_never_pruned_and_eight_is_judged() {
+    let seven: Vec<&str> = noise_filler(7);
+    assert!(!page_is_dominated_by_noise_lines(seven.into_iter()));
+    let eight: Vec<&str> = noise_filler(8);
+    assert!(page_is_dominated_by_noise_lines(eight.into_iter()));
+}
+
+#[test]
+fn exactly_half_noise_is_pruned_and_one_fewer_is_not() {
+    let real = ["alpha beta", "gamma delta", "epsilon zeta", "theta iota"];
+    let half = page(&real, 4);
+    assert!(page_is_dominated_by_noise_lines(half.lines()));
+    let below = page(&real, 3);
+    let below_with_extra_real = format!("{below}\n\nkappa lambda");
+    assert!(!page_is_dominated_by_noise_lines(below_with_extra_real.lines()));
+    assert_eq!(
+        prune_text(&half).0,
+        "alpha beta\n\ngamma delta\n\nepsilon zeta\n\ntheta iota"
+    );
+}
+
+#[test]
+fn a_prose_page_with_a_few_short_lines_is_not_dominated() {
+    let mut lines = vec![
+        "The quick brown fox",
+        "jumps over",
+        "the lazy dog",
+        "and then",
+        "runs far away",
+    ];
+    lines.extend(["a", "b", "c"]);
+    let text = lines.join("\n");
+    assert!(!page_is_dominated_by_noise_lines(text.lines()));
+}
+
+#[test]
+fn prunes_a_noise_page_and_keeps_its_real_lines() {
+    assert_eq!(pruned(&["SECTION TITLE", "page 12"], 10), "SECTION TITLE\n\npage 12");
+}
+
+#[test]
+fn paragraph_text_loses_the_same_lines_as_the_page_text() {
+    let mut paragraph = crate::pdf::structure::types::PdfParagraph {
+        text: "oe\nSECTION TITLE\nae".to_string(),
+        lines: vec![],
+        dominant_font_size: 12.0,
+        heading_level: None,
+        is_bold: false,
+        is_list_item: false,
+        is_code_block: false,
+        is_formula: false,
+        is_page_furniture: false,
+        layout_class: None,
+        layout_region_path: None,
+        caption_for: None,
+        block_bbox: None,
+        word_count: 4,
+    };
+    let mut paragraphs = vec![paragraph.clone()];
+    prune_paragraphs(&mut paragraphs);
+    assert_eq!(paragraphs[0].text, "SECTION TITLE");
+    assert_eq!(paragraphs[0].word_count, 2);
+    paragraph.text = "oe\nae".to_string();
+    let mut emptied = vec![paragraph];
+    prune_paragraphs(&mut emptied);
+    assert!(emptied.is_empty());
+}
+
+#[cfg(all(feature = "ocr", feature = "pdf"))]
+#[test]
+fn annotations_on_surviving_lines_move_with_their_line() {
+    use crate::types::document_structure::{AnnotationKind, TextAnnotation};
+    use crate::types::internal::{ElementKind, InternalElement};
+
+    let mut element = InternalElement::text(ElementKind::Paragraph, "oe\nSECTION TITLE\nae\nlast line", 0);
+    element.annotations = vec![
+        TextAnnotation {
+            start: 3,
+            end: 10,
+            kind: AnnotationKind::Bold,
+        },
+        TextAnnotation {
+            start: 20,
+            end: 24,
+            kind: AnnotationKind::Bold,
+        },
+        TextAnnotation {
+            start: 0,
+            end: 2,
+            kind: AnnotationKind::Bold,
+        },
+    ];
+    assert!(prune_element_text(&mut element));
+    assert_eq!(element.text, "SECTION TITLE\nlast line");
+    let spans: Vec<(u32, u32)> = element.annotations.iter().map(|a| (a.start, a.end)).collect();
+    assert_eq!(spans, vec![(0, 7), (14, 18)]);
+}

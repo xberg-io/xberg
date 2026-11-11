@@ -252,6 +252,7 @@ re
 
 TOTAL
 
+EDC CIMB NIAGA No: xx7730
 0.000
 
 Cee wwe we ee me wane e
@@ -296,6 +297,8 @@ re
 60.000
 
 TOTAL
+
+- EDC CIMB NIAGA No: xx7730
 
 0.000
 

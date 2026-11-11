@@ -3319,6 +3319,48 @@ mod embedded_image_ocr_text_fold_tests {
     }
 
     #[test]
+    fn a_page_that_took_image_ocr_text_is_marked_as_ocr_and_keeps_its_boundary() {
+        let mut document = one_page_document(text_only_anchor(0, 1), Some(PICTURE_WORDS));
+        document.source_format = "docx".to_string();
+        document.prebuilt_pages = Some(vec![page(1, "| native |")]);
+        assert!(document.ocr_text_pages.is_empty());
+
+        fold_embedded_image_ocr_text(&mut document);
+        assert_eq!(document.ocr_text_pages, vec![1]);
+
+        document.metadata.pages = Some(crate::types::PageStructure {
+            total_count: 1,
+            unit_type: crate::types::PageUnitType::Page,
+            boundaries: Some(vec![crate::types::PageBoundary {
+                byte_start: 0,
+                byte_end: 1,
+                page_number: 1,
+            }]),
+            pages: None,
+        });
+        let result = crate::extraction::derive::derive_extraction_result(
+            document,
+            true,
+            crate::core::config::OutputFormat::Plain,
+        );
+        let page = &result.pages.as_ref().expect("pages")[0];
+        assert_eq!(page.content, format!("{NATIVE_TEXT}\n\n{PICTURE_WORDS}"));
+        let boundary = &result
+            .metadata
+            .pages
+            .as_ref()
+            .unwrap()
+            .boundaries
+            .as_ref()
+            .expect("boundary kept")[0];
+        assert_eq!(
+            result.content.get(boundary.byte_start..boundary.byte_end),
+            Some(page.content.as_str())
+        );
+        assert!(!result.processing_warnings.iter().any(|w| w.source == "page_boundaries"));
+    }
+
+    #[test]
     fn a_recovered_line_replaces_the_text_only_when_the_anchor_is_on_its_page() {
         const RECOVERED: &str = "CRATE 17 KEEP DRY\nRELAY SERVICE STARTS MONDAY";
         for (gap_page, expected) in [(1, RECOVERED), (2, PICTURE_WORDS)] {
