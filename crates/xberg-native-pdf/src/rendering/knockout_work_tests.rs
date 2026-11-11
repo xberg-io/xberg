@@ -202,7 +202,7 @@ fn degraded_groups_keep_memory_depth_and_operation_failures_fatal() {
     let fallback = resources.fallback().expect("degraded scope");
     assert!(
         resources
-            .knockout(1, 0, 0, 0, 1)
+            .knockout(1, 0, 0, 0, 1, 1)
             .expect("inherited degradation")
             .is_none()
     );
@@ -231,14 +231,16 @@ fn degraded_groups_keep_memory_depth_and_operation_failures_fatal() {
 #[test]
 fn planned_work_is_committed_only_after_successful_native_admission() {
     let mut resources = KnockoutResources::default();
-    resources.surface_work = MAX_SURFACE_WORK - 10;
+    resources.surface_work = MAX_SURFACE_WORK - 20;
     let admitted = resources
-        .knockout(10, 0, 0, 0, 1)
+        .knockout(10, 0, 0, 0, 1, 1)
         .expect("exact threshold")
         .expect("native");
+    assert_eq!(resources.surface_work, MAX_SURFACE_WORK - 10);
+    resources.raster(10).expect("the pass spends its planned floor");
     assert_eq!(resources.surface_work, MAX_SURFACE_WORK);
     drop(admitted);
-    assert!(resources.knockout(1, 0, 0, 0, 1).expect("graceful excess").is_none());
+    assert!(resources.knockout(1, 0, 0, 0, 1, 1).expect("graceful excess").is_none());
     let fallback = resources.fallback().expect("work-only fallback");
     resources
         .raster(usize::MAX)
@@ -252,7 +254,7 @@ fn planned_work_is_committed_only_after_successful_native_admission() {
         "normal charging resumes after scope drop"
     );
     resources.reset(Some(1));
-    assert!(resources.knockout(1, 1, 0, 0, 1).is_err(), "failed memory admission");
+    assert!(resources.knockout(1, 1, 0, 0, 1, 1).is_err(), "failed memory admission");
     assert_eq!(resources.surface_work, 0, "a failed memory reservation charges no work");
 }
 
@@ -351,7 +353,7 @@ fn ordinary_alpha_replay_can_start_after_its_knockout_child_fills_the_work_ledge
 fn successful_knockout_does_not_disable_the_ordinary_surface_work_ceiling() {
     let mut resources = KnockoutResources::default();
     let native = resources
-        .knockout(10, 40, 0, 0, 1)
+        .knockout(10, 40, 0, 0, 1, 1)
         .expect("small knockout admission")
         .expect("native frame");
     resources
@@ -367,4 +369,36 @@ fn successful_knockout_does_not_disable_the_ordinary_surface_work_ceiling() {
         "ordinary work beyond its ceiling must still fail"
     );
     drop(ordinary);
+}
+
+#[test]
+fn plan_is_refused_before_the_pass_when_its_in_pass_floor_passes_the_limit() {
+    let pixels = 1 << 20;
+    let mut resources = KnockoutResources::default();
+    let fits = resources
+        .knockout(pixels, 0, 0, 0, 500, 500)
+        .expect("plan and floor of 500 surfaces fit")
+        .expect("native");
+    assert_eq!(resources.surface_work, 500 << 20);
+    drop(fits);
+
+    resources.reset(None);
+    assert!(
+        resources
+            .knockout(pixels, 0, 0, 0, 600, 600)
+            .expect("graceful degradation")
+            .is_none(),
+        "600 surfaces plan within the limit and charge 600 more while running"
+    );
+    assert_eq!(resources.surface_work, 0, "a refused plan commits no work");
+    assert_eq!(resources.native.load(Ordering::Relaxed), 0);
+
+    assert!(
+        resources
+            .knockout(pixels, 0, 0, 0, 300, 800)
+            .expect("graceful degradation")
+            .is_none(),
+        "text that also charges a coverage surface raises the floor above the plan"
+    );
+    assert!(resources.knockout(pixels, 0, 0, 0, 300, 600).expect("fits").is_some());
 }

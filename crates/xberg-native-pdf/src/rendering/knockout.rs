@@ -7,6 +7,14 @@ use crate::object::Object;
 use std::collections::HashMap;
 use tiny_skia::{Pixmap, Transform};
 
+/// Whether a resolved `/Group` dictionary is a transparency group with `/K true`; pages and forms share it.
+pub(super) fn group_is_knockout(group: &Object) -> bool {
+    group.as_dict().is_some_and(|group| {
+        group.get("S").and_then(Object::as_name) == Some("Transparency")
+            && matches!(group.get("K"), Some(Object::Boolean(true)))
+    })
+}
+
 pub(super) fn page_is_knockout(doc: &PdfDocument, page_num: usize) -> bool {
     let resolved = (|| {
         let page = doc.get_page(page_num)?;
@@ -16,10 +24,7 @@ pub(super) fn page_is_knockout(doc: &PdfDocument, page_num: usize) -> bool {
             .transpose()
     })();
     match resolved {
-        Ok(group) => group.as_ref().and_then(Object::as_dict).is_some_and(|group| {
-            group.get("S").and_then(Object::as_name) == Some("Transparency")
-                && matches!(group.get("K"), Some(Object::Boolean(true)))
-        }),
+        Ok(group) => group.as_ref().is_some_and(group_is_knockout),
         Err(error) => {
             tracing::warn!(
                 error_code = error.telemetry_code(),
@@ -245,6 +250,13 @@ pub(super) fn is_path_paint(op: &Operator) -> bool {
     )
 }
 
+fn is_text_show(op: &Operator) -> bool {
+    matches!(
+        op,
+        Operator::Tj { .. } | Operator::TJ { .. } | Operator::Quote { .. } | Operator::DoubleQuote { .. }
+    )
+}
+
 fn path_pixels(pixmap: &Pixmap, path: &tiny_skia::Path, transform: Transform, padding: f64) -> usize {
     let Some([left, top, right, bottom]) = crate::rendering::device_bounds(path, transform) else {
         return 0;
@@ -445,9 +457,16 @@ impl PageRenderer {
         if paints == 0 {
             return Ok(None);
         }
-        let workspace =
-            self.knockout_resources
-                .knockout(pixels, pixmap.data().len(), sidecar_bytes, spot_count, paints)?;
+        // Showing text charges its page-sized coverage raster in addition to the paint itself. ~keep
+        let surfaces_in_pass = paints + operators.iter().filter(|operator| is_text_show(operator)).count();
+        let workspace = self.knockout_resources.knockout(
+            pixels,
+            pixmap.data().len(),
+            sidecar_bytes,
+            spot_count,
+            paints,
+            surfaces_in_pass,
+        )?;
         let Some(workspace) = workspace else {
             return self.execute_without_knockout(pixmap, base_transform, operators, doc, page_num, resources);
         };
@@ -760,6 +779,31 @@ mod tests {
                 assert_eq!(renderer.paint_operator_calls, expected);
             }
         }
+    }
+
+    #[test]
+    fn knockout_plan_that_cannot_finish_degrades_before_the_pass_and_paints_once() {
+        // 13_700 fills of a 256x256 page plan 898M pixels and then charge 898M more while they run,
+        // past the 1G limit. The pass used to run for about 1_700 paints before the limit stopped it
+        // and every paint ran again without knockout, so the paints executed were more than the page has.
+        let paints = 13_700;
+        let doc = knockout_document_with_content(&"0.2 g 0 0 1 1 re f ".repeat(paints), 256, true);
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+        // The degradation warns; a subscriber keeps that callsite enabled for tests that read it. ~keep
+        let subscriber = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::WARN)
+            .with_writer(std::io::sink)
+            .finish();
+        let image = tracing::subscriber::with_default(subscriber, || renderer.render_page(&doc, 0))
+            .expect("work-limited group remains renderable");
+        let corner = 255 * 256 * 4;
+        assert_eq!(&image.data[corner..corner + 4], &[51, 51, 51, 255]);
+        assert_eq!(renderer.paint_operator_calls, paints, "each paint executes once");
+        assert_eq!(
+            renderer.rgba_snapshot_bytes.load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "the degradation is decided before any knockout backdrop is captured"
+        );
     }
 
     #[test]

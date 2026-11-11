@@ -4606,15 +4606,7 @@ impl PageRenderer {
             // rather than against the accumulated paint from earlier
             // elements. Later elements override earlier ones in regions
             // where both contribute. ~keep
-            let is_knockout = dict
-                .get("Group")
-                .and_then(|g| g.as_dict())
-                .and_then(|gd| gd.get("K"))
-                .map(|k| match k {
-                    Object::Boolean(b) => *b,
-                    _ => false,
-                })
-                .unwrap_or(false);
+            let is_knockout = dict.get("Group").is_some_and(knockout::group_is_knockout);
 
             tracing::trace!(
                 "Rendering transparency group (isolated={}, knockout={})",
