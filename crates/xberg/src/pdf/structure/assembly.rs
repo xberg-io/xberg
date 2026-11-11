@@ -1308,11 +1308,14 @@ pub(super) fn segment_script(segments: &[&crate::pdf::hierarchy::SegmentData], i
     segments[..index]
         .iter()
         .rev()
-        .take(super::pipeline::SCRIPT_RUN_BASE_LOOKBACK)
+        .take(super::pipeline::SCRIPT_RUN_BASE_LOOKBACK.max(super::pipeline::SCRIPT_STACK_WINDOW))
         .enumerate()
         .find_map(|(back, base)| {
+            // A stack member can sit further from its base than a single run's lookback: the
+            // later members of `H^{Z_2}_{<xy>,f}` are five runs behind `H`.
             if script.font_size >= base.font_size
-                || !(super::pipeline::is_script_run_of(base, script)
+                || !((back < super::pipeline::SCRIPT_RUN_BASE_LOOKBACK
+                    && super::pipeline::is_script_run_of(base, script))
                     || super::pipeline::script_stack_members(segments, index - 1 - back).contains(&index))
             {
                 return None;

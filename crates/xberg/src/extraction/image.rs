@@ -405,7 +405,7 @@ pub(crate) fn is_jbig2(bytes: &[u8]) -> bool {
 /// The decoder converts black/white pixels to grayscale (0/255) for OCR processing.
 #[cfg(feature = "ocr")]
 fn decode_jbig2_to_gray_with_security_limits(bytes: &[u8], limits: &SecurityLimits) -> Result<image::GrayImage> {
-    use hayro_jbig2::{Decoder, Image};
+    use hayro_jbig2::{DecodeSettings, Decoder, File, FormatError::MissingPageInfo};
 
     struct GrayDecoder {
         pixels: Vec<u8>,
@@ -443,7 +443,9 @@ fn decode_jbig2_to_gray_with_security_limits(bytes: &[u8], limits: &SecurityLimi
     }
 
     validate_encoded_image_input(bytes, limits)?;
-    let jbig2_image = Image::new(bytes).map_err(|e| XbergError::parsing(format!("JBIG2 decode failed: {e}")))?;
+    let jbig2_error = |e: hayro_jbig2::DecodeError| XbergError::parsing(format!("JBIG2 decode failed: {e}"));
+    let jbig2_file = File::new(bytes, &DecodeSettings::default()).map_err(jbig2_error)?;
+    let jbig2_image = jbig2_file.page(0).ok_or_else(|| jbig2_error(MissingPageInfo.into()))?;
     let width = jbig2_image.width();
     let height = jbig2_image.height();
     let decoded_bytes = decoded_byte_count(width, height, u64::from(image::ColorType::L8.bytes_per_pixel()))?;
@@ -461,9 +463,7 @@ fn decode_jbig2_to_gray_with_security_limits(bytes: &[u8], limits: &SecurityLimi
         max_pixels,
         exceeded_dimensions: false,
     };
-    jbig2_image
-        .decode(&mut decoder)
-        .map_err(|e| XbergError::parsing(format!("JBIG2 decode failed: {e}")))?;
+    jbig2_image.decode(&mut decoder).map_err(jbig2_error)?;
     if decoder.exceeded_dimensions {
         return Err(XbergError::Validation {
             message: format!("JBIG2 decompressed beyond its declared {width}x{height} image dimensions"),

@@ -4,7 +4,9 @@ mod helpers;
 
 use xberg::core::config::{ExtractionConfig, OutputFormat};
 
-fn page_lines(name: &str) -> Option<Vec<String>> {
+/// `None` only for the local opt-out `XBERG_REGRESSION_PAGES_SKIP=1`, which panics when `CI` is set;
+/// a skipped suite therefore fails loudly in CI and nowhere else.
+fn page_markdown(name: &str) -> Option<String> {
     if std::env::var_os("XBERG_REGRESSION_PAGES_SKIP").is_some_and(|value| value == "1") {
         assert!(
             std::env::var_os("CI").is_none(),
@@ -26,8 +28,12 @@ fn page_lines(name: &str) -> Option<Vec<String>> {
     };
     let document = helpers::extract_uri_document_blocking(&path, Some("application/pdf"), &config)
         .expect("regression page extracts");
-    let stripped = document
-        .content
+    Some(document.content)
+}
+
+fn page_lines(name: &str) -> Option<Vec<String>> {
+    let content = page_markdown(name)?;
+    let stripped = content
         .replace("<sup>", "")
         .replace("</sup>", "")
         .replace("<sub>", "")
@@ -70,5 +76,113 @@ fn should_keep_a_series_term_exponent_with_its_base_in_gutenberg_38769_exercise_
 
 #[test]
 fn should_keep_a_subscripted_exponent_with_its_base_in_plos_1010783_state_space() {
-    assert_one_line("plos-journal.pcbi.1010783-p4", "2 Rnþx is the vector");
+    assert_one_line("plos-journal.pcbi.1010783-p4", "2 Rnxþ is the vector");
+}
+
+fn assert_markup(name: &str, fragment: &str) {
+    let Some(markdown) = page_markdown(name) else {
+        return;
+    };
+    assert!(
+        markdown.contains(fragment),
+        "{fragment:?} is not in the Markdown of {name}:\n{markdown}"
+    );
+}
+
+fn assert_no_markup(name: &str, fragment: &str) {
+    let Some(markdown) = page_markdown(name) else {
+        return;
+    };
+    assert!(
+        !markdown.contains(fragment),
+        "{fragment:?} is in the Markdown of {name}:\n{markdown}"
+    );
+}
+
+#[test]
+fn should_keep_the_superscript_and_subscript_of_a_stack_in_separate_runs_in_arxiv_02305_equation_3() {
+    assert_markup("arxiv-2305.08917v2-p2", "H<sup>Z</sup>~2 ⟨xy⟩,f~ = t c s");
+    assert_markup(
+        "arxiv-2305.08917v2-p2",
+        "H<sup>Z</sup>~2~<sup>,des</sup> ~⟨xy⟩,f~ = −2t",
+    );
+}
+
+#[test]
+fn should_mark_the_scripts_of_s_and_sigma_in_arxiv_02305() {
+    assert_markup(
+        "arxiv-2305.08917v2-p2",
+        "s<sup>1</sup> = σ<sup>1</sup>/2 couples to fermions",
+    );
+}
+
+#[test]
+fn should_not_take_the_closing_bracket_piece_for_a_superscript_in_openstax_business_statistics() {
+    assert_no_markup("openstax-introductory-business-statistics-1e-p362", "<sup>⎞");
+}
+
+#[test]
+fn should_hold_the_exponent_n_in_the_superscript_of_r_in_plos_1010783() {
+    assert_markup("plos-journal.pcbi.1010783-p4", "2 R<sup>n</sup>");
+    assert_no_markup("plos-journal.pcbi.1010783-p4", "\nn~x~ n~y~\n");
+}
+
+#[test]
+fn should_keep_the_stack_scripts_of_arxiv_01153_equations_2_and_3_on_their_base() {
+    assert_markup("arxiv-2403.01153v1-p3", "· e<sup>iθ</sup> (2)");
+    assert_markup("arxiv-2403.01153v1-p3", "∥H(f, t)∥ · e<sup>jθ</sup>\n");
+    assert_markup("arxiv-2403.01153v1-p3", "= ∥H~s~(f, t)∥ · e<sup>jθs</sup>");
+    assert_markup("arxiv-2403.01153v1-p3", "\\+ ∥H~m~(f, t)∥ · e<sup>jθm</sup> (3)");
+    assert_no_markup("arxiv-2403.01153v1-p3", "\njθs\n\n∥H");
+}
+
+#[test]
+fn should_keep_the_subscript_of_psi_in_nist_sp800_22_p49() {
+    assert_markup("nist-sp800-22r1a-p49", "- (3) Compute: ψ~*m*~ = ∑");
+}
+
+/// The sources set a fraction in each exponent or index: the glyph stream of gutenberg-33283-p84 reads
+/// `x`, `−`, `1`, `2` for x^{−1/2}, p161 `z`, `−`, `2`, `3` for z^{−2/3}, and arxiv-2405.00569 p4 `f`,
+/// `j`, `+`, `3`, `2` for f_{j+3/2}. A numerator over a denominator is no script stack, so none of
+/// them may read as an integer power or index.
+#[test]
+fn should_not_flatten_the_fractional_powers_of_gutenberg_33283_p84_and_p161_into_integers() {
+    assert_no_markup("gutenberg-33283-p84", "x<sup>−");
+    assert_no_markup("gutenberg-33283-p84", "<sup>− 2</sup>");
+    assert_one_line("gutenberg-33283-p84", "θ=3a2x");
+    assert_no_markup("gutenberg-33283-p161", "z<sup>−");
+    assert_no_markup("gutenberg-33283-p161", "<sup>− 3</sup>");
+}
+
+#[test]
+fn should_not_move_a_denominator_into_the_half_cell_index_of_arxiv_00569_p4() {
+    assert_no_markup("arxiv-2405.00569v2-p4", "f~j+2~ 3");
+    assert_no_markup("arxiv-2405.00569v2-p4", "f~j+2~ 1");
+    assert_one_line("arxiv-2405.00569v2-p4", "(2.5)f");
+}
+
+#[test]
+fn should_not_flatten_the_half_power_of_the_root_in_gutenberg_38769_p500() {
+    assert_no_markup("gutenberg-38769-p500", "2π</sup>");
+}
+
+/// Glyph boxes of plos-journal.pcbi.1010783 p4 (pdftotext -bbox, pt) for the first dimension: `R`
+/// x 284.49 to 291.71 y 522.59 to 532.59; `n` x 291.69 to 294.88 y 521.69 to 527.69 (raised); `þ`
+/// x 291.69 to 296.30 y 529.05 to 534.45 (lowered); `x` x 294.92 to 297.28 y 523.89 to 528.89, whose
+/// bottom edge is above `R`'s, so it is raised with `n` (the subscript of the exponent). The raised
+/// level reads `n`, `x` in x order and the lowered level `þ`, so the dimension reads `Rnxþ`, which
+/// is also the order of the content stream. Every dimension keeps it.
+#[test]
+fn should_keep_the_glyph_stream_order_of_the_dimension_in_plos_1010783() {
+    for dimension in [
+        "Rnxþ is the vector of state",
+        "Rnyþ is the parameter vector",
+        "Rnuþ is the vector of constant",
+    ] {
+        assert_one_line("plos-journal.pcbi.1010783-p4", dimension);
+    }
+    assert_markup(
+        "plos-journal.pcbi.1010783-p4",
+        "R<sup>n</sup>~x þ~ is the vector of state variables",
+    );
 }
