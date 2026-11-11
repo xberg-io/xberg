@@ -329,6 +329,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(djot): Preserve straight quotes, apostrophes, and runs of dots or dashes in marked rows.** (#2913)
+  Djot readers show the row punctuation as written.
 - **(djot): Preserve block-like text in rendered paragraphs, lists, and OCR output.** (#2891)
   Keep repeated leading attributes visible and preserve markup when nested OCR declares Markdown or Djot.
 - **(ocr): Prune symbol-noise lines on the direct PDF read of a flagged page, not only in the layout and pipeline routes.** (#2921)

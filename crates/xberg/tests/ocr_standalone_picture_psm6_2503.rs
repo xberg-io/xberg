@@ -147,6 +147,13 @@ fn assert_rows_are_own_lines(format: OutputFormat) {
     let djot_text;
     if is_djot {
         djot_text = jotdown::Parser::new(&result.content)
+            .inspect(|event| {
+                assert!(
+                    !matches!(event, jotdown::Event::Softbreak | jotdown::Event::Hardbreak),
+                    "expected each Djot row to be a separate paragraph, got an inline break:\n{}",
+                    result.content
+                );
+            })
             .filter_map(|event| match event {
                 jotdown::Event::Str(text) => Some(text),
                 jotdown::Event::End(jotdown::Container::Paragraph) => Some(std::borrow::Cow::Borrowed("\n")),
