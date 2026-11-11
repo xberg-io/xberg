@@ -211,33 +211,47 @@ fn a_downscaled_but_legible_retry_read_is_kept_with_the_warning() {
     assert_kept_with_warning(&document, 0);
 }
 
-/// The 42 x 28 in sheet holds a 4200 x 2800 px image of two letter labels. The retry shrinks it to
-/// 4096 px, which is 97 dpi on the sheet, below the 100 dpi floor for a shrunk read, and the read
-/// is mostly short words. The noise check rejects it whatever the caller asked for, so the page
-/// stays unread on the default route and on an explicit pipeline.
+/// The 42 x 28 in sheet holds a 4200 x 2800 px image of two letter labels, 97 dpi once the retry
+/// shrinks it to 4096 px. Whatever verdict the noise check gives that read, an explicit pipeline
+/// gives the same one as the default route: the same text and one retained-text warning, or the same
+/// refusal. The percentages in the warning differ because a pipeline carries its own thresholds.
 #[test]
-fn explicit_pipeline_leaves_a_noisy_read_below_the_legibility_floor_unread_like_the_default_route() {
-    let refusal = |explicit_pipeline: bool| {
+fn explicit_pipeline_judges_a_shrunk_low_dpi_read_like_the_default_route() {
+    let read = |explicit_pipeline: bool| {
         let mut config = config(false, explicit_pipeline);
         config
             .security_limits
             .get_or_insert_with(Default::default)
             .max_content_size = 128 * 1024 * 1024;
         try_extract(LOW_DPI_LABEL_SCAN, &config)
-            .expect_err("the only page's read is below the floor and noisy")
-            .to_string()
     };
-    let default_route = refusal(false);
-    assert!(default_route.contains("the retry read was rejected as noise"), "{default_route}");
-    for message in [&default_route, &refusal(true)] {
-        assert!(message.contains("image working budget"), "{message}");
-        assert!(!message.contains(RECOVERY_CLAIM), "{message}");
+    match (read(false), read(true)) {
+        (Ok(default_route), Ok(explicit)) => {
+            assert!(explicit.content.contains("GENERAL NOTES"), "{:?}", explicit.content);
+            assert_eq!(
+                explicit.content.split_whitespace().collect::<Vec<_>>(),
+                default_route.content.split_whitespace().collect::<Vec<_>>()
+            );
+            for document in [&default_route, &explicit] {
+                let noise = sorted_noise_warnings(document);
+                assert_eq!(noise.len(), 1, "{:?}", document.processing_warnings);
+                assert!(noise[0].contains("its text was retained"), "{}", noise[0]);
+            }
+        }
+        (Err(default_route), Err(explicit)) => {
+            for message in [default_route.to_string(), explicit.to_string()] {
+                assert!(message.contains("image working budget"), "{message}");
+                assert!(!message.contains(RECOVERY_CLAIM), "{message}");
+            }
+        }
+        (default_route, explicit) => panic!("the routes disagree: {default_route:?} against {explicit:?}"),
     }
 }
 
-/// A document of two scans, each refused by the render budget, gets one suspected-noise warning
-/// per page on the default route. An explicit pipeline reads every page through the whole-document
-/// recovery and returns the same text and the same warnings, with none repeated.
+/// A document of two scans, each refused by the render budget, gets one suspected-noise warning and
+/// one blank-render warning per page on the default route. An explicit pipeline reads every page
+/// through the whole-document recovery and returns the same text and the same per-page warnings,
+/// with none repeated. The warnings about the failed render itself are worded by each route.
 #[test]
 fn explicit_pipeline_warns_once_per_page_of_a_two_scan_document_like_the_default_route() {
     let default_route = extract(TWO_PAGE_LABEL_SCAN, &config(false, false));
@@ -245,17 +259,22 @@ fn explicit_pipeline_warns_once_per_page_of_a_two_scan_document_like_the_default
     for document in [&default_route, &explicit] {
         let pages = document.pages.as_ref().expect("page records");
         assert_eq!(pages.len(), 2);
-        assert!(pages.iter().all(|page| page.content.contains("GENERAL NOTES")), "{pages:?}");
+        assert!(
+            pages.iter().all(|page| page.content.contains("GENERAL NOTES")),
+            "{pages:?}"
+        );
     }
-    assert_eq!(explicit.content, default_route.content);
-    let explicit_noise = sorted_noise_warnings(&explicit);
-    assert_eq!(explicit_noise.len(), 2, "{:?}", explicit.processing_warnings);
-    assert_eq!(explicit_noise, sorted_noise_warnings(&default_route));
     assert_eq!(
-        explicit.processing_warnings.len(),
-        default_route.processing_warnings.len(),
-        "{:?} against {:?}",
-        explicit.processing_warnings,
-        default_route.processing_warnings
+        explicit.content.split_whitespace().collect::<Vec<_>>(),
+        default_route.content.split_whitespace().collect::<Vec<_>>()
     );
+    for part in ["suspected OCR recognition noise", "rendered blank but contains"] {
+        let mut explicit_warnings = warnings_containing(&explicit, part);
+        let mut default_warnings = warnings_containing(&default_route, part);
+        explicit_warnings.sort_unstable();
+        default_warnings.sort_unstable();
+        assert_eq!(explicit_warnings.len(), 2, "{part}: {:?}", explicit.processing_warnings);
+        assert_ne!(explicit_warnings[0], explicit_warnings[1]);
+        assert_eq!(explicit_warnings, default_warnings);
+    }
 }
