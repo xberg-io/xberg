@@ -5,19 +5,24 @@ use std::io::Write;
 use std::sync::{Arc, Mutex};
 
 fn document(content: &str, knockout: bool, form: Option<&str>) -> PdfDocument {
+    sized_document(content, knockout, form, "72 72")
+}
+
+fn sized_document(content: &str, knockout: bool, form: Option<&str>, size: &str) -> PdfDocument {
     let group = format!("/Group << /S /Transparency /I true /K {knockout} >>");
-    let resources = "/ExtGState << /Half << /ca 0.5 >> >> /XObject << /Fm 5 0 R >>";
+    let resources = "/ExtGState << /Half << /ca 0.5 >> >> /XObject << /Fm 5 0 R >> \
+        /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >>";
     let stream = |dict: &str, data: &str| format!("<< {dict} /Length {} >>\nstream\n{data}\nendstream", data.len());
     let objects = [
         "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
         format!(
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 72] /Contents 4 0 R /Resources << {resources} >> {} >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {size}] /Contents 4 0 R /Resources << {resources} >> {} >>",
             if form.is_none() { group.as_str() } else { "" }
         ),
         stream("", content),
         stream(
-            &format!("/Type /XObject /Subtype /Form /BBox [0 0 72 72] /Resources << {resources} >> {group}"),
+            &format!("/Type /XObject /Subtype /Form /BBox [0 0 {size}] /Resources << {resources} >> {group}"),
             form.unwrap_or(""),
         ),
     ];
@@ -247,9 +252,8 @@ fn planned_work_is_committed_only_after_successful_native_admission() {
     drop(fallback);
     resources.raster(1).expect("ordinary siblings remain renderable");
     assert_eq!(
-        resources.surface_work,
-        MAX_SURFACE_WORK + 1,
-        "normal charging resumes after scope drop"
+        resources.surface_work, MAX_SURFACE_WORK,
+        "work outside a native knockout pass is not charged"
     );
     resources.reset(Some(1));
     assert!(resources.knockout(1, 1, 0, 0, 1).is_err(), "failed memory admission");
@@ -348,7 +352,7 @@ fn ordinary_alpha_replay_can_start_after_its_knockout_child_fills_the_work_ledge
 }
 
 #[test]
-fn successful_knockout_does_not_disable_the_ordinary_surface_work_ceiling() {
+fn ordinary_group_paints_spend_no_knockout_work_or_operation_allowance() {
     let mut resources = KnockoutResources::default();
     let native = resources
         .knockout(10, 40, 0, 0, 1)
@@ -358,13 +362,84 @@ fn successful_knockout_does_not_disable_the_ordinary_surface_work_ceiling() {
         .raster(10)
         .expect("one real surface pass under the native frame");
     drop(native);
+    assert_eq!(resources.surface_work, 20, "the native pass is charged");
     let ordinary = resources.group(40, Some(0)).expect("ordinary sibling workspace");
-    resources
-        .raster(MAX_SURFACE_WORK as usize)
-        .expect("ordinary sibling has its own work allowance");
-    assert!(
-        resources.raster(1).is_err(),
-        "ordinary work beyond its ceiling must still fail"
+    resources.paint_operations = MAX_PAINT_OPERATIONS;
+    for _ in 0..3 {
+        resources
+            .paint(usize::MAX)
+            .expect("an ordinary group has no work or paint operation ceiling");
+    }
+    resources.raster(usize::MAX).expect("ordinary raster is not charged");
+    assert_eq!(
+        resources.surface_work, 20,
+        "ordinary paints leave the knockout ledger alone"
     );
+    assert_eq!(resources.paint_operations, MAX_PAINT_OPERATIONS);
+    resources.check().expect("no refusal is latched");
     drop(ordinary);
+}
+
+#[test]
+fn native_knockout_keeps_its_operation_cap_and_a_degraded_child_charges_nothing() {
+    let mut resources = KnockoutResources::default();
+    let native = resources
+        .knockout(10, 0, 0, 0, 1)
+        .expect("small knockout admission")
+        .expect("native frame");
+    let child = resources.fallback().expect("degraded child under the native frame");
+    resources
+        .raster(usize::MAX)
+        .expect("a degraded child renders without knockout work");
+    assert_eq!(resources.surface_work, 10, "only the planned native work is charged");
+    drop(child);
+    resources.paint_operations = MAX_PAINT_OPERATIONS;
+    assert!(
+        resources.paint(0).is_err(),
+        "the paint operation cap holds in a native pass"
+    );
+    drop(native);
+}
+
+#[test]
+fn text_runs_are_charged_in_a_knockout_group_and_not_in_an_ordinary_one() {
+    let form = "BT /F1 4 Tf 10 10 Td (a) Tj (a) Tj ET";
+    let charges = |knockout: bool| {
+        let doc = document("/Fm Do", knockout, Some(form));
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+        renderer.render_page(&doc, 0).expect("small group renders");
+        let resources = &renderer.knockout_resources;
+        (resources.paint_operations, resources.surface_work)
+    };
+    let page = 72 * 72;
+    let (operations, work) = charges(true);
+    assert_eq!(operations, 2, "each text run in the knockout pass is counted");
+    assert!(
+        work >= 4 * page,
+        "planned work plus one page per text run is charged: {work}"
+    );
+    assert_eq!(charges(false), (0, 0), "an ordinary group is not charged");
+}
+
+#[test]
+fn ordinary_group_with_a_thousand_text_runs_renders_at_300_dpi() {
+    let runs = 1000;
+    let form = format!("BT /F1 4 Tf 10 400 Td {} ET 0 g 0 0 20 20 re f", "(a) Tj ".repeat(runs));
+    let doc = sized_document("/Fm Do", false, Some(&form), "612 792");
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(300).as_raw());
+    let image = renderer
+        .render_page(&doc, 0)
+        .expect("an ordinary transparency group renders at any size");
+    assert_eq!((image.width, image.height), (2550, 3300));
+    assert_eq!(
+        renderer.paint_operator_calls,
+        runs + 2,
+        "the Do, every text run and the fill ran"
+    );
+    let bottom_left = (image.height as usize - 1) * image.width as usize * 4;
+    assert_eq!(
+        &image.data[bottom_left..bottom_left + 4],
+        &[0, 0, 0, 255],
+        "the fill after the text runs reached the page"
+    );
 }

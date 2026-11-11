@@ -12,7 +12,6 @@ pub(super) struct KnockoutResources {
     live: Arc<AtomicUsize>,
     depth: Arc<AtomicUsize>,
     surface_work: u64,
-    ordinary_work: u64,
     paint_operations: usize,
     failure: Option<String>,
     work_exhausted: bool,
@@ -28,7 +27,6 @@ impl Default for KnockoutResources {
             live: Arc::new(AtomicUsize::new(0)),
             depth: Arc::new(AtomicUsize::new(0)),
             surface_work: 0,
-            ordinary_work: 0,
             paint_operations: 0,
             failure: None,
             work_exhausted: false,
@@ -80,7 +78,6 @@ impl KnockoutResources {
         self.live.store(0, Ordering::Relaxed);
         self.depth.store(0, Ordering::Relaxed);
         self.surface_work = 0;
-        self.ordinary_work = 0;
         self.paint_operations = 0;
         self.failure = None;
         self.work_exhausted = false;
@@ -200,29 +197,28 @@ impl KnockoutResources {
         }))
     }
 
+    fn knockout_scope(&self) -> bool {
+        self.native.load(Ordering::Relaxed) > 0 || self.degraded.load(Ordering::Relaxed) > 0
+    }
+
     pub(super) fn paint(&mut self, pixels: usize) -> Result<()> {
-        if self.paint_operations >= MAX_PAINT_OPERATIONS {
-            return self.refuse("paint operations");
+        if self.knockout_scope() {
+            if self.paint_operations >= MAX_PAINT_OPERATIONS {
+                return self.refuse("paint operations");
+            }
+            self.paint_operations += 1;
         }
-        self.paint_operations += 1;
         self.raster(pixels)
     }
 
     pub(super) fn raster(&mut self, pixels: usize) -> Result<()> {
         self.check()?;
-        if self.degraded.load(Ordering::Relaxed) > 0 {
+        // Only a native knockout pass is charged: ordinary groups render as they do without knockout. ~keep
+        if self.degraded.load(Ordering::Relaxed) > 0 || self.native.load(Ordering::Relaxed) == 0 {
             return Ok(());
         }
         self.surface_work = self.surface_work.saturating_add(pixels as u64);
-        if self.native.load(Ordering::Relaxed) > 0 {
-            self.work_exhausted = self.surface_work > MAX_SURFACE_WORK;
-        } else {
-            // Knockout plans and native raster passes cannot spend ordinary siblings' allowance. ~keep
-            self.ordinary_work = self.ordinary_work.saturating_add(pixels as u64);
-            if self.ordinary_work > MAX_SURFACE_WORK {
-                return self.refuse("ordinary surface work");
-            }
-        }
+        self.work_exhausted = self.surface_work > MAX_SURFACE_WORK;
         self.check()
     }
 
