@@ -406,10 +406,12 @@ fn build_sub_doc(elem_indices: &[usize], doc: &InternalDocument) -> InternalDocu
     sub_doc
 }
 
-/// Whether `page`'s prebuilt text is OCR text. A DOCX page with its notes or a native PDF page
-/// is not, and its text is deliberately not the plain rendering of its elements.
+/// Whether `page`'s prebuilt text may be replaced by the plain rendering of its elements: every
+/// page of a PDF, image or OCR source (a native page's text layer differs from the plain content
+/// by spacing alone), and a page of another format that took OCR text. A DOCX page with its
+/// notes is not, and its text is deliberately not the plain rendering of its elements.
 fn is_ocr_page_text(doc: &InternalDocument, page: &PageContent) -> bool {
-    matches!(doc.source_format.as_str(), "image" | "ocr") || doc.ocr_text_pages.contains(&page.page_number)
+    matches!(doc.source_format.as_str(), "pdf" | "image" | "ocr") || doc.ocr_text_pages.contains(&page.page_number)
 }
 
 /// OCR pages whose prebuilt text is not found in `content` (in page order) rendered from their
@@ -806,6 +808,7 @@ mod plain_page_rerender_tests {
         }));
         let mut doc = doc_with(vec![native], &[(1, "Body")]);
         doc.ocr_text_pages.clear();
+        doc.source_format = "docx".to_string();
         let pages = derive(&mut doc, content);
         assert_eq!(pages[0].content, native_text);
         assert!(warned(&doc));
@@ -820,6 +823,7 @@ mod plain_page_rerender_tests {
             &[(1, "one"), (2, "two"), (3, "three")],
         );
         doc.ocr_text_pages = vec![1, 3];
+        doc.source_format = "docx".to_string();
         let pages = derive(&mut doc, content);
         assert_eq!(pages[0].content, "one");
         assert_eq!(pages[1].content, "native | two");
