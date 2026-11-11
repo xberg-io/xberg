@@ -13,6 +13,9 @@ mod page_markers;
 #[cfg(all(test, feature = "quality"))]
 mod normalization_tests;
 
+#[cfg(all(test, feature = "quality"))]
+mod nfc_offset_tests;
+
 #[cfg(test)]
 mod tests;
 
@@ -1432,6 +1435,9 @@ fn fold_embedded_image_ocr_text_with_gap(
                 page.content.push_str("\n\n");
             }
             page.content.push_str(text);
+            if !doc.ocr_text_pages.contains(&page_number) {
+                doc.ocr_text_pages.push(page_number);
+            }
         }
 
         if anchored_image.is_none() {
@@ -1672,16 +1678,20 @@ fn is_markdown_image_reference(text: &str) -> bool {
 /// Ensures consistent representation of composed characters (e.g., é vs e+combining accent)
 /// across all extraction backends (PDF, OCR, DOCX, HTML, etc.).
 ///
-/// Page ranges in `metadata.pages.boundaries` index the plain `content`, so they follow it
-/// through the normalization (#2851). A rendering swapped in later re-locates them itself.
+/// Page ranges in `metadata.pages.boundaries` and entity spans index the plain `content`, so
+/// they follow it through the normalization. A rendering swapped in later re-locates
+/// the page ranges itself.
 fn normalize_nfc(result: &mut ExtractedDocument) {
     #[cfg(feature = "quality")]
     {
         use unicode_normalization::UnicodeNormalization;
         let unnormalized = std::mem::take(&mut result.content);
         result.content = unnormalized.nfc().collect();
-        if result.formatted_content.is_none() && result.content != unnormalized {
-            remap_page_boundaries_after_nfc(result, &unnormalized);
+        if result.content != unnormalized {
+            remap_entity_spans_after_nfc(result, &unnormalized);
+            if result.formatted_content.is_none() {
+                remap_page_boundaries_after_nfc(result, &unnormalized);
+            }
         }
         if let Some(pages) = result.pages.as_mut() {
             for page in pages.iter_mut() {
@@ -1702,34 +1712,22 @@ fn normalize_nfc(result: &mut ExtractedDocument) {
 /// `page_boundaries` warning, as in derivation, rather than published wrong.
 #[cfg(feature = "quality")]
 fn remap_page_boundaries_after_nfc(result: &mut ExtractedDocument, unnormalized: &str) {
-    use unicode_normalization::UnicodeNormalization;
     let Some(structure) = result.metadata.pages.as_mut() else {
         return;
     };
     let Some(boundaries) = structure.boundaries.as_mut() else {
         return;
     };
-    let mut offsets: Vec<usize> = boundaries.iter().flat_map(|b| [b.byte_start, b.byte_end]).collect();
-    offsets.sort_unstable();
-    offsets.dedup();
-    let mut moved = std::collections::HashMap::with_capacity(offsets.len());
-    let (mut from, mut normalized_len) = (0, 0);
-    let mapped = offsets.iter().all(|&offset| {
-        let Some(segment) = unnormalized.get(from..offset) else {
-            return false;
-        };
-        normalized_len += segment.nfc().map(char::len_utf8).sum::<usize>();
-        from = offset;
-        moved.insert(offset, normalized_len);
-        true
-    });
-    if mapped {
+    let moved = nfc_offsets(unnormalized, boundaries.iter().flat_map(|b| [b.byte_start, b.byte_end]));
+    if let Some(moved) = &moved {
         for boundary in boundaries.iter_mut() {
             boundary.byte_start = moved[&boundary.byte_start];
             boundary.byte_end = moved[&boundary.byte_end];
         }
     }
-    if !mapped || crate::extraction::derive::drop_unusable_page_boundaries(&mut result.metadata, &result.content) {
+    if moved.is_none()
+        || crate::extraction::derive::drop_unusable_page_boundaries(&mut result.metadata, &result.content)
+    {
         if let Some(structure) = result.metadata.pages.as_mut() {
             structure.boundaries = None;
         }
@@ -1739,6 +1737,82 @@ fn remap_page_boundaries_after_nfc(result: &mut ExtractedDocument, unnormalized:
             "Page byte ranges could not be mapped onto the Unicode-normalized content, so they were omitted",
         );
     }
+}
+
+/// Move each entity span from `unnormalized` to the same text in `result.content`. A span with an
+/// end that is not on a character boundary of `unnormalized` indexes no text, so that span stays as
+/// it was and the others still move. A span that cuts a letter from its combining accent first grows
+/// to hold both, so the entity keeps its text and no offset lands inside a composed letter.
+#[cfg(feature = "quality")]
+fn remap_entity_spans_after_nfc(result: &mut ExtractedDocument, unnormalized: &str) {
+    let Some(entities) = result.entities.as_mut() else {
+        return;
+    };
+    let on_boundary = |offset: u32| unnormalized.is_char_boundary(offset as usize);
+    let mut movable: Vec<_> = entities
+        .iter_mut()
+        .filter(|e| on_boundary(e.start) && on_boundary(e.end))
+        .collect();
+    let grown: Vec<(usize, usize)> = movable
+        .iter()
+        .map(|e| {
+            (
+                nfc_stable_offset(unnormalized, e.start as usize, false),
+                nfc_stable_offset(unnormalized, e.end as usize, true),
+            )
+        })
+        .collect();
+    let Some(moved) = nfc_offsets(unnormalized, grown.iter().flat_map(|&(start, end)| [start, end])) else {
+        return;
+    };
+    for (entity, (start, end)) in movable.iter_mut().zip(grown) {
+        entity.start = moved[&start] as u32;
+        entity.end = moved[&end] as u32;
+    }
+}
+
+/// The nearest offset to `offset` (after it when `forward`, else before it) that no NFC
+/// composition reaches across: its next character does not join the character before it.
+#[cfg(feature = "quality")]
+fn nfc_stable_offset(text: &str, mut offset: usize, forward: bool) -> usize {
+    use unicode_normalization::char::{canonical_combining_class, compose};
+    let joins_previous = |offset: usize| {
+        let (Some(previous), Some(next)) = (text[..offset].chars().next_back(), text[offset..].chars().next()) else {
+            return false;
+        };
+        // U+1161 to U+11FF are the Hangul vowel and final jamo, which compose with the syllable before. ~keep
+        let hangul_tail = ('\u{1161}'..='\u{11ff}').contains(&next);
+        hangul_tail || canonical_combining_class(next) != 0 || compose(previous, next).is_some()
+    };
+    while joins_previous(offset) {
+        offset = if forward {
+            offset + text[offset..].chars().next().map_or(0, char::len_utf8)
+        } else {
+            offset - text[..offset].chars().next_back().map_or(0, char::len_utf8)
+        };
+    }
+    offset
+}
+
+/// Where each byte offset of `unnormalized` lands in its NFC form: after the NFC of the text
+/// that precedes it. `None` when an offset is not on a character boundary of `unnormalized`.
+#[cfg(feature = "quality")]
+fn nfc_offsets(
+    unnormalized: &str,
+    offsets: impl IntoIterator<Item = usize>,
+) -> Option<std::collections::HashMap<usize, usize>> {
+    use unicode_normalization::UnicodeNormalization;
+    let mut offsets: Vec<usize> = offsets.into_iter().collect();
+    offsets.sort_unstable();
+    offsets.dedup();
+    let mut moved = std::collections::HashMap::with_capacity(offsets.len());
+    let (mut from, mut normalized_len) = (0, 0);
+    for offset in offsets {
+        normalized_len += unnormalized.get(from..offset)?.nfc().map(char::len_utf8).sum::<usize>();
+        from = offset;
+        moved.insert(offset, normalized_len);
+    }
+    Some(moved)
 }
 
 /// Regression tests for #214: `measure_text_coverage` replaces the hardcoded

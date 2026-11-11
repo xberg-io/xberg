@@ -1017,7 +1017,7 @@ fn segments_to_paragraphs(
     paragraph_gap_ys: &[f32],
     witnesses: &TextRepairWitnesses,
 ) -> Vec<PdfParagraph> {
-    let segments = order_segments_in_reading_frames(segments);
+    let segments = place_script_stacks_after_bases(order_segments_in_reading_frames(segments));
     let mut paragraphs = blocks_to_paragraphs(segments, heading_map, paragraph_gap_ys);
     apply_text_repair_to_structure_tree_paragraphs(&mut paragraphs, true, witnesses);
     reattach_detached_list_markers(&mut paragraphs, DetachedMarkerFrame::Native);
@@ -2066,6 +2066,12 @@ impl<'a> ParagraphVisualRow<'a> {
     }
 
     fn carries_script(&self, script: &SegmentData) -> bool {
+        self.carries_script_within(script, false)
+    }
+
+    /// Whether `script` reads as a script of this row. A member of a nested stack sits past the reach
+    /// of a single mark, so `stacked` widens the offset to the stack's.
+    fn carries_script_within(&self, script: &SegmentData, stacked: bool) -> bool {
         let base = self.anchor;
         // A bullet glyph is set apart from the text beside it, not under it: that text is the
         // item's body, never a script run of the glyph. Other markers, such as the label `(0)`,
@@ -2096,17 +2102,19 @@ impl<'a> ParagraphVisualRow<'a> {
         {
             return false;
         }
-        is_script_run_offset(
-            base,
-            script,
-            (base.upright_baseline() - script.upright_baseline()).abs(),
-            base.font_size,
-        ) && crate::script_run::is_script_run_forward_gap(
-            self.left,
-            self.right,
-            script.upright_advance_extent().0,
-            base.font_size,
-        )
+        let delta = (base.upright_baseline() - script.upright_baseline()).abs();
+        let offset_fits = if stacked {
+            crate::script_run::is_script_row_baseline_offset(delta, base.font_size, script.font_size)
+        } else {
+            is_script_run_offset(base, script, delta, base.font_size)
+        };
+        offset_fits
+            && crate::script_run::is_script_run_forward_gap(
+                self.left,
+                self.right,
+                script.upright_advance_extent().0,
+                base.font_size,
+            )
     }
 
     fn include(&mut self, segment: &'a SegmentData) {
@@ -2176,9 +2184,24 @@ fn blocks_to_paragraphs(
     let mut current_is_single_visual_line = true;
     let mut prev_idx = 0usize;
     let mut visual_row: Option<ParagraphVisualRow<'_>> = None;
+    let mut stack_end: Option<usize> = None;
+    let mut stack_members: Vec<usize> = Vec::new();
 
     for (line_idx, line) in lines.iter().enumerate() {
-        let is_row_script = visual_row.as_ref().is_some_and(|row| row.carries_script(line));
+        // The members of a nested script stack on the previous run join its row past a single mark's
+        // reach; the stack ends at its last member. ~keep
+        if stack_end.is_none_or(|end| line_idx > end) {
+            stack_members = line_idx
+                .checked_sub(1)
+                .map(|base| script_stack_members(&lines, base))
+                .filter(|members| members.contains(&line_idx))
+                .unwrap_or_default();
+            stack_end = stack_members.iter().copied().max();
+        }
+        let in_stack = stack_members.contains(&line_idx);
+        let is_row_script = visual_row
+            .as_ref()
+            .is_some_and(|row| row.carries_script_within(line, in_stack));
         let should_break = if current_lines.is_empty() {
             false
         } else {
@@ -2522,6 +2545,100 @@ pub(crate) fn is_script_run_of(previous: &SegmentData, next: &SegmentData) -> bo
     let (next_start, _) = next.upright_advance_extent();
     is_script_run_offset(previous, next, baseline_delta, font_size)
         && crate::script_run::is_script_run_forward_gap(previous_start, previous_end, next_start, font_size)
+}
+
+/// How many runs after a base are searched for the members of its script stack: one more than the
+/// longest stack, so a longer one is seen as too long and refused, not cut short.
+pub(super) const SCRIPT_STACK_WINDOW: usize = xberg_native_pdf::document::MAX_STACK_MEMBERS + 1;
+
+/// Indices into `segments` of the members of the nested script stack on `segments[base]`, in reading
+/// order, or none. The rule is `xberg_native_pdf::document::script_stack`, shared with reading-order
+/// snapping.
+pub(super) fn script_stack_members<T: std::borrow::Borrow<SegmentData>>(segments: &[T], base: usize) -> Vec<usize> {
+    use xberg_native_pdf::document::{StackSpan, script_stack};
+
+    let span = |segment: &SegmentData| {
+        let (x, right) = segment.upright_advance_extent();
+        (x, right - x, segment.upright_baseline())
+    };
+    let Some(base_segment) = segments.get(base).map(std::borrow::Borrow::borrow) else {
+        return Vec::new();
+    };
+    let window = (base + 1)..segments.len().min(base + 1 + SCRIPT_STACK_WINDOW);
+    let mut order: Vec<usize> = window.collect();
+    order.sort_by(|&a, &b| span(segments[a].borrow()).0.total_cmp(&span(segments[b].borrow()).0));
+    fn to_stack<'a>(segment: &'a SegmentData, span: &impl Fn(&SegmentData) -> (f32, f32, f32)) -> StackSpan<'a> {
+        let (x, width, baseline) = span(segment);
+        StackSpan {
+            text: segment.text.as_str(),
+            x,
+            baseline,
+            width,
+            font_size: segment.font_size,
+        }
+    }
+    let candidates: Vec<StackSpan<'_>> = order.iter().map(|&i| to_stack(segments[i].borrow(), &span)).collect();
+    script_stack(&to_stack(base_segment, &span), &candidates)
+        .into_iter()
+        .map(|i| order[i])
+        .collect()
+}
+
+/// Moves the members of each nested script stack to directly after their base: the raised members
+/// in x order, then the lowered ones, so each side reads as one run.
+///
+/// A member sits off its base's line, so reading order leaves it among the neighbouring rows. The
+/// page is already ordered and its gap statistics measured, so the move changes only which runs
+/// the paragraph grouper and the markup pass see next to the base. A page with a rotated run is left as is.
+fn place_script_stacks_after_bases(segments: Vec<SegmentData>) -> Vec<SegmentData> {
+    use xberg_native_pdf::document::{StackSpan, script_stacks};
+
+    if segments.iter().any(|segment| !segment.is_unrotated()) {
+        return segments;
+    }
+    let spans: Vec<StackSpan<'_>> = segments
+        .iter()
+        .map(|segment| {
+            let (x, right) = segment.upright_advance_extent();
+            StackSpan {
+                text: segment.text.as_str(),
+                x,
+                baseline: segment.upright_baseline(),
+                width: right - x,
+                font_size: segment.font_size,
+            }
+        })
+        .collect();
+    let after_base: std::collections::HashMap<usize, Vec<usize>> = script_stacks(&spans)
+        .into_iter()
+        .map(|(base, members)| {
+            let (raised, lowered): (Vec<usize>, Vec<usize>) = members
+                .into_iter()
+                .partition(|&member| spans[member].baseline > spans[base].baseline);
+            (base, [raised, lowered].concat())
+        })
+        .collect();
+    drop(spans);
+    if after_base.is_empty() {
+        return segments;
+    }
+    let mut moved = vec![false; segments.len()];
+    for &member in after_base.values().flatten() {
+        moved[member] = true;
+    }
+    let mut slots: Vec<Option<SegmentData>> = segments.into_iter().map(Some).collect();
+    let mut placed = Vec::with_capacity(slots.len());
+    for index in 0..slots.len() {
+        if moved[index] {
+            continue;
+        }
+        placed.extend(slots[index].take());
+        for &member in after_base.get(&index).into_iter().flatten() {
+            placed.extend(slots[member].take());
+        }
+    }
+    placed.extend(slots.into_iter().flatten());
+    placed
 }
 
 /// Whether `line` reads as the wrapped continuation of the numbered-heading
@@ -5409,28 +5526,100 @@ fn filter_segments_by_table_bboxes(segments: Vec<SegmentData>, tables: &[TableCo
 
 /// Whether some table both covers a segment and carries its text. See [`filter_segments_by_table_bboxes`].
 fn segment_is_carried<'t>(seg: &SegmentData, tables: impl IntoIterator<Item = &'t TableCoverage>) -> bool {
-    segment_carrier(seg, tables).is_some()
+    tables.into_iter().any(|table| covers_and_carries(seg, table))
 }
 
-/// The position of the first table that both covers a segment and carries its text.
-fn segment_carrier<'t>(seg: &SegmentData, tables: impl IntoIterator<Item = &'t TableCoverage>) -> Option<usize> {
+/// Whether a table covers at least half of a segment and carries its text.
+fn covers_and_carries(seg: &SegmentData, table: &TableCoverage) -> bool {
     let seg_area = seg.width * seg.height;
     let seg_text = seg.text.trim();
     if seg_area <= 0.0 || seg_text.is_empty() {
-        return None;
+        return false;
     }
-    tables.into_iter().position(|table| {
-        let bb = &table.bbox;
-        let inter_left = seg.x.max(bb.x0 as f32);
-        let inter_right = (seg.x + seg.width).min(bb.x1 as f32);
-        let inter_bottom = seg.y.max(bb.y0 as f32);
-        let inter_top = (seg.y + seg.height).min(bb.y1 as f32);
-        if inter_left >= inter_right || inter_bottom >= inter_top {
-            return false;
+    let bb = &table.bbox;
+    let inter_left = seg.x.max(bb.x0 as f32);
+    let inter_right = (seg.x + seg.width).min(bb.x1 as f32);
+    let inter_bottom = seg.y.max(bb.y0 as f32);
+    let inter_top = (seg.y + seg.height).min(bb.y1 as f32);
+    if inter_left >= inter_right || inter_bottom >= inter_top {
+        return false;
+    }
+    let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
+    inter_area / seg_area >= 0.5 && table.carries(seg_text)
+}
+
+/// The carrier of each page segment, as a position in `holders`. A run of neighbouring segments goes to
+/// the first table that covers and carries each of them and holds a word containing each seam, so no
+/// carrier splits one printed copy; any other segment goes to its first covering table.
+fn occurrence_carriers(segments: &[SegmentData], holders: &[(&TableCoverage, &WordCounts)]) -> Vec<Option<usize>> {
+    let mut carriers = Vec::with_capacity(segments.len());
+    let mut run_start = 0;
+    let mut run: Vec<usize> = Vec::new();
+    let words: Vec<Vec<String>> = segments
+        .iter()
+        .map(|segment| word_sequence([segment.text.as_str()]))
+        .collect();
+    let seam_holders = seam_holders(&words, holders);
+    for (index, segment) in segments.iter().enumerate() {
+        let own: Vec<usize> = (0..holders.len())
+            .filter(|&holder| covers_and_carries(segment, holders[holder].0))
+            .collect();
+        let joined: Vec<usize> = run
+            .iter()
+            .copied()
+            .filter(|holder| own.contains(holder) && seam_holders[index].contains(holder))
+            .collect();
+        if joined.is_empty() {
+            carriers.extend(std::iter::repeat_n(run.first().copied(), index - run_start));
+            run_start = index;
+            run = own;
+        } else {
+            run = joined;
         }
-        let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
-        inter_area / seg_area >= 0.5 && table.carries(seg_text)
-    })
+    }
+    carriers.extend(std::iter::repeat_n(run.first().copied(), segments.len() - run_start));
+    carriers
+}
+
+/// For each segment, the positions in `holders` of the tables that hold a word containing its seam: the
+/// last word of the segment before it run into its own first word. One automaton over the page's
+/// seams reads each table's words once, so the cost grows with the page and the tables, not their product.
+fn seam_holders(words: &[Vec<String>], holders: &[(&TableCoverage, &WordCounts)]) -> Vec<Vec<usize>> {
+    let mut ids: ahash::AHashMap<String, usize> = ahash::AHashMap::new();
+    let mut seam_of: Vec<Option<usize>> = vec![None; words.len()];
+    for index in 1..words.len() {
+        if let (Some(last), Some(first)) = (words[index - 1].last(), words[index].first()) {
+            let next = ids.len();
+            seam_of[index] = Some(*ids.entry(format!("{last}{first}")).or_insert(next));
+        }
+    }
+    let mut patterns = vec![""; ids.len()];
+    for (seam, &id) in &ids {
+        patterns[id] = seam.as_str();
+    }
+    // The build fails only past the automaton's size limits; then no seam joins two segments and
+    // each segment goes to its first covering table, the carrier it had before seams were read. ~keep
+    let automaton = match aho_corasick::AhoCorasick::new(&patterns) {
+        Ok(automaton) if !patterns.is_empty() => automaton,
+        _ => return vec![Vec::new(); words.len()],
+    };
+    let held: Vec<ahash::AHashSet<usize>> = holders
+        .iter()
+        .map(|(_, table_words)| {
+            table_words
+                .keys()
+                .flat_map(|word| automaton.find_overlapping_iter(word.as_str()))
+                .map(|found| found.pattern().as_usize())
+                .collect()
+        })
+        .collect();
+    seam_of
+        .iter()
+        .map(|seam| match seam {
+            Some(id) => (0..holders.len()).filter(|&holder| held[holder].contains(id)).collect(),
+            None => Vec::new(),
+        })
+        .collect()
 }
 
 /// Apply all 5 text repair passes in a single traversal over a segment's text.
@@ -5889,16 +6078,17 @@ impl<'a> OverlapEvidence<'a> {
     fn page_split(&mut self, page_number: u32, live: &[usize]) -> &PageSplit {
         if self.splits.get(&page_number).is_none_or(|cached| cached.live != live) {
             let page_index = page_number.saturating_sub(1) as usize;
-            let coverage: Vec<&TableCoverage> = live
+            let holders: Vec<(&TableCoverage, &WordCounts)> = live
                 .iter()
-                .filter_map(|&index| self.tables.get(&index).and_then(|table| table.coverage.as_ref()))
+                .filter_map(|&index| self.tables.get(&index))
+                .filter_map(|table| table.coverage.as_ref().map(|coverage| (coverage, &table.words)))
                 .collect();
+            let segments = self.page_segments.get(page_index).map_or(&[][..], Vec::as_slice);
             // Stream 0 is the text no live table carries. Stream k is the text that the k-th live
             // table with a coverage carries, so a join never crosses from one carrier to another.
-            let mut streams: Vec<Vec<&str>> = vec![Vec::new(); coverage.len() + 1];
-            for segment in self.page_segments.get(page_index).into_iter().flatten() {
-                let stream = segment_carrier(segment, coverage.iter().copied()).map_or(0, |carrier| carrier + 1);
-                streams[stream].push(segment.text.as_str());
+            let mut streams: Vec<Vec<&str>> = vec![Vec::new(); holders.len() + 1];
+            for (segment, carrier) in segments.iter().zip(occurrence_carriers(segments, &holders)) {
+                streams[carrier.map_or(0, |carrier| carrier + 1)].push(segment.text.as_str());
             }
             let mut counts = streams
                 .iter()

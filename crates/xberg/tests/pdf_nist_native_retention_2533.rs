@@ -81,7 +81,14 @@ fn automatic_ocr_preserves_the_mapped_expression_on_the_nist_checklist() {
         );
         assert!(!automatic.content.contains(char::REPLACEMENT_CHARACTER), "{format:?}");
         assert_eq!(automatic.content, native.content, "{format:?}");
-        for fragment in ["did not recover the 8 glyphs", "have no Unicode value"] {
+        // Only the Plain route reports the OCR read's lost-glyph count; Markdown keeps the native
+        // page through its own branch and carries the PDF-level warning.
+        let fragments: &[&str] = if format == OutputFormat::Plain {
+            &["8 glyphs have no Unicode value", "did not recover them"]
+        } else {
+            &["have no Unicode value"]
+        };
+        for fragment in fragments {
             assert!(
                 automatic
                     .processing_warnings

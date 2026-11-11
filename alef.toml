@@ -450,6 +450,8 @@ exclude = [
 # which is why it was missed when the sibling Xberg.swift was excluded. This is
 # generator output, not a size regression to fix. ~keep
 file-safety-exclude = [
+  # Main's licensed two-page font fixture is 688 KiB; retain its exact regression bytes. ~keep
+  "crates/xberg/tests/fixtures/pdf/wrong-script-tounicode-2830/arabic-and-bengali.pdf",
   "packages/swift/Sources/RustBridge/xberg-swift.swift",
   # Alef emits the complete Zig API as one generated source file; adding a public type pushed it
   # past the generic 500 KiB guard, and splitting it requires a generator change. ~keep
