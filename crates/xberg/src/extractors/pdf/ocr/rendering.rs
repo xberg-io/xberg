@@ -17,7 +17,7 @@ type PageRenderFailures = Vec<(usize, crate::XbergError)>;
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 mod raster_dpi;
-#[cfg(all(test, feature = "ocr", feature = "tokio-runtime"))]
+#[cfg(all(test, feature = "ocr", feature = "pdf", feature = "tokio-runtime"))]
 #[path = "retained_read_metadata_tests.rs"]
 mod retained_read_metadata_tests;
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -634,10 +634,13 @@ async fn collect_xobject_recovery_result(
         }
     };
     account_xobject_structured_output(&result, context.budget)?;
-    account_xobject_preprocessing(
-        result.metadata.image_preprocessing.as_ref(),
-        &mut context.budget.growth.clone(),
-    )?;
+    if let Some(metadata) = &result.metadata.image_preprocessing {
+        let size = metadata
+            .resample_method
+            .len()
+            .saturating_add(metadata.resize_error.as_ref().map_or(0, String::len));
+        context.budget.growth.check_additional(size)?;
+    }
     outcome.llm_usage.extend(result.llm_usage.take().unwrap_or_default());
     let judged = judge_xobject_read(&result, used_proven_source_dpi, page_idx, context.proven_read, outcome);
     let rejected = judged.as_ref().is_some_and(|(verdict, _)| verdict.trim().is_empty());

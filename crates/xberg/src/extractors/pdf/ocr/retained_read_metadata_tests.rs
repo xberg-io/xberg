@@ -180,6 +180,19 @@ async fn small_legible_read_survives_garbage_in_the_same_pool() {
     }
 }
 
+#[test]
+fn counts_two_character_fragments_regardless_of_utf8_width() {
+    use super::super::scoring::small_read_has_fragmented_words;
+
+    let thresholds = OcrQualityThresholds {
+        max_ocr_output_fragmented_word_ratio: 0.5,
+        ..Default::default()
+    };
+    assert!(small_read_has_fragmented_words("ab cd ef gh", &thresholds));
+    assert!(small_read_has_fragmented_words("éa üö ña åb", &thresholds));
+    assert!(!small_read_has_fragmented_words("été über mañana åter", &thresholds));
+}
+
 #[tokio::test]
 async fn tiny_garbage_reads_are_still_rejected_when_their_pool_has_enough_words() {
     let reads = (0..4).map(|_| read("ab cd ef gh ij kl", "noise", true)).collect();
