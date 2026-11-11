@@ -30,7 +30,14 @@ fn document_with_profile(
     generation: u16,
     profile: Option<&[u8]>,
 ) -> PdfDocument {
-    let resources = "/ColorSpace << /Ink [/Separation /TestInk /DeviceGray \
+    // Objects 1..8 are the fixed catalog/pages/page/contents/form/group/
+    // state/pattern set below; a profile takes object 9, then the fixture
+    // font's FontFile2 stream and its FontDescriptor (which the font loader
+    // only reads through an indirect reference) follow.
+    let font_object_id = 9 + usize::from(profile.is_some());
+    let descriptor_object_id = font_object_id + 1;
+    let resources = format!(
+        "/ColorSpace << /Ink [/Separation /TestInk /DeviceGray \
         << /FunctionType 2 /Domain [0 1] /C0 [1] /C1 [0] /N 1 >>] \
         /Flat [/Separation /TestInk /DeviceGray << /FunctionType 2 /Domain [0 1] /C0 [0.5] /C1 [0.5] /N 1 >>] \
         /Other [/Separation /OtherInk /DeviceGray << /FunctionType 2 /Domain [0 1] /C0 [1] /C1 [0] /N 1 >>] >> \
@@ -40,8 +47,11 @@ fn document_with_profile(
         /Difference << /BM /Difference >> /Exclusion << /BM /Exclusion >> \
         /Hue << /BM /Hue >> /Saturation << /BM /Saturation >> /Color << /BM /Color >> /Luminosity << /BM /Luminosity >> \
         /Mask << /SMask << /S /Luminosity /G 6 0 R >> >> >> \
-        /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> \
-        /XObject << /Fm 5 0 R >> /Pattern << /P 8 0 R >>";
+        /Font << /F1 << /Type /Font /Subtype /TrueType /BaseFont /FixtureBox \
+        /FirstChar 77 /LastChar 77 /Widths [500] \
+        /FontDescriptor {descriptor_object_id} 0 R >> >> \
+        /XObject << /Fm 5 0 R >> /Pattern << /P 8 0 R >>"
+    );
     let resources = resources.replace("/G 6 0 R", &format!("/G 6 {generation} R"));
     let catalog = if profile.is_some() {
         "/OutputIntents [<< /S /GTS_PDFX /DestOutputProfile 9 0 R >>]"
@@ -82,6 +92,19 @@ fn document_with_profile(
         stream.extend_from_slice(b"\nendstream");
         objects.push(stream);
     }
+    let font = fixture_font();
+    let mut stream = format!("<< /Length {} /Length1 {} >>\nstream\n", font.len(), font.len()).into_bytes();
+    stream.extend_from_slice(&font);
+    stream.extend_from_slice(b"\nendstream");
+    objects.push(stream);
+    objects.push(
+        format!(
+            "<< /Type /FontDescriptor /FontName /FixtureBox /Flags 4 \
+             /FontBBox [250 0 750 800] /ItalicAngle 0 /Ascent 800 /Descent -200 \
+             /CapHeight 800 /StemV 80 /FontFile2 {font_object_id} 0 R >>"
+        )
+        .into_bytes(),
+    );
     let mut bytes = b"%PDF-1.4\n".to_vec();
     let mut offsets = Vec::new();
     for (i, object) in objects.iter().enumerate() {
@@ -555,8 +578,142 @@ fn group_process_mirror_uses_evenodd_and_combined_path_coverage() {
     }
 }
 
+/// A synthetic embedded TrueType font, so the glyph-pixel tests do not depend
+/// on the host's font database. A non-embedded Helvetica resolves through
+/// `fontdb::Database::load_system_fonts()`, and the glyph that stands in for
+/// it — therefore the sampled pixel row — differs between machines (issue
+/// #2954). Embedded font programs bypass the system database entirely.
+///
+/// The fixture font maps only `M` (byte 0x4D, through a byte-indexed (1, 0)
+/// cmap, the same shape `gh1632_whitespace_inferred_glyph` uses) to glyph 1: a
+/// filled rectangle spanning x 250..750, y 0..800 of a 1000-unit em. At 14 pt
+/// from `Td 4 2` its edges land on half-pixel boundaries (7.5 and 14.5), so a
+/// 4 pt stroke centred on the outline covers whole pixels on both sides of
+/// every edge — the row preconditions the tests below assert on.
+fn fixture_font() -> Vec<u8> {
+    fn be16(v: u16) -> [u8; 2] {
+        v.to_be_bytes()
+    }
+    fn be32(v: u32) -> [u8; 4] {
+        v.to_be_bytes()
+    }
+
+    // Glyph 1: one contour, four on-curve points tracing the rectangle.
+    let mut glyf: Vec<u8> = Vec::new();
+    glyf.extend(be16(1));
+    for v in [250u16, 0, 750, 800] {
+        glyf.extend(be16(v));
+    }
+    glyf.extend(be16(3));
+    glyf.extend(be16(0));
+    glyf.extend([0x01; 4]);
+    for dx in [250i16, 500, 0, -500] {
+        glyf.extend(dx.to_be_bytes());
+    }
+    for dy in [0i16, 0, 800, 0] {
+        glyf.extend(dy.to_be_bytes());
+    }
+
+    // loca, short format (offset/2): glyph 0 empty, glyph 1 = all of glyf. ~keep
+    let mut loca: Vec<u8> = Vec::new();
+    loca.extend(be16(0));
+    loca.extend(be16(0));
+    loca.extend(be16((glyf.len() / 2) as u16));
+
+    let mut head: Vec<u8> = Vec::new();
+    head.extend(be32(0x0001_0000));
+    head.extend(be32(0));
+    head.extend(be32(0));
+    head.extend(be32(0x5F0F_3CF5));
+    head.extend(be16(0));
+    head.extend(be16(1000));
+    head.extend([0u8; 16]);
+    for v in [250u16, 0, 750, 800] {
+        head.extend(be16(v));
+    }
+    head.extend(be16(0));
+    head.extend(be16(8));
+    head.extend(be16(2));
+    head.extend(be16(0));
+    head.extend(be16(0));
+
+    let mut hhea: Vec<u8> = Vec::new();
+    hhea.extend(be32(0x0001_0000));
+    hhea.extend(be16(800));
+    hhea.extend((-200i16).to_be_bytes());
+    hhea.extend(be16(0));
+    hhea.extend(be16(500));
+    for _ in 0..2 {
+        hhea.extend(be16(0));
+    }
+    hhea.extend(be16(750));
+    hhea.extend(be16(1));
+    hhea.extend(be16(0));
+    hhea.extend(be16(0));
+    hhea.extend([0u8; 8]);
+    hhea.extend(be16(0));
+    hhea.extend(be16(2));
+
+    let mut hmtx: Vec<u8> = Vec::new();
+    for lsb in [0u16, 250] {
+        hmtx.extend(be16(500));
+        hmtx.extend(be16(lsb));
+    }
+
+    let mut maxp: Vec<u8> = Vec::new();
+    maxp.extend(be32(0x0001_0000));
+    maxp.extend(be16(2));
+    maxp.extend([0u8; 26]);
+
+    let mut cmap: Vec<u8> = Vec::new();
+    cmap.extend(be16(0));
+    cmap.extend(be16(1));
+    cmap.extend(be16(1));
+    cmap.extend(be16(0));
+    cmap.extend(be32(12));
+    cmap.extend(be16(0));
+    cmap.extend(be16(262));
+    cmap.extend(be16(0));
+    let mut glyph_ids = [0u8; 256];
+    glyph_ids[usize::from(b'M')] = 1;
+    cmap.extend(glyph_ids);
+
+    let tables: [(&[u8; 4], &Vec<u8>); 7] = [
+        (b"cmap", &cmap),
+        (b"glyf", &glyf),
+        (b"head", &head),
+        (b"hhea", &hhea),
+        (b"hmtx", &hmtx),
+        (b"loca", &loca),
+        (b"maxp", &maxp),
+    ];
+    let num_tables = tables.len() as u16;
+    let mut font: Vec<u8> = Vec::new();
+    font.extend(be32(0x0001_0000));
+    font.extend(be16(num_tables));
+    let entry_selector = 15 - num_tables.leading_zeros() as u16;
+    let search_range = (1u16 << entry_selector) * 16;
+    font.extend(be16(search_range));
+    font.extend(be16(entry_selector));
+    font.extend(be16(num_tables * 16 - search_range));
+
+    let mut offset = 12 + 16 * tables.len();
+    for (tag, data) in &tables {
+        font.extend_from_slice(*tag);
+        font.extend(be32(0));
+        font.extend(be32(offset as u32));
+        font.extend(be32(data.len() as u32));
+        offset += data.len().div_ceil(4) * 4;
+    }
+    for (_, data) in &tables {
+        font.extend_from_slice(data);
+        font.extend(std::iter::repeat_n(0u8, data.len().div_ceil(4) * 4 - data.len()));
+    }
+    font
+}
+
 fn opaque_glyph_row(mode: u8) -> Vec<u8> {
-    let content = format!("0 g 0 G 2 w {mode} Tr BT /F1 14 Tf 4 2 Td (M) Tj ET");
+    let content = format!("0 g 0 G 4 w {mode} Tr BT /F1 14 Tf 4 2 Td (M) Tj ET");
     let doc = document("", &content, "", "");
     let image = PageRenderer::new(RenderOptions::with_dpi(72).as_raw())
         .render_page(&doc, 0)
@@ -578,7 +735,7 @@ fn group_process_text_mirror_respects_fill_and_stroke_order() {
                 .expect("fully covered real glyph pixel");
             let (fill_tint, stroke_tint) = if mode == 1 { ("0.1", "0.6") } else { ("0.6", "0.1") };
             let body = format!(
-                "/Half gs 0 0 0 {fill_tint} k 0 0 0 {stroke_tint} K 2 w {mode} Tr BT /F1 14 Tf 4 2 Td (M) Tj ET"
+                "/Half gs 0 0 0 {fill_tint} k 0 0 0 {stroke_tint} K 4 w {mode} Tr BT /F1 14 Tf 4 2 Td (M) Tj ET"
             );
             let doc = form(Ink::Black, true, knockout, "/Half gs", &body);
             let expected = if mode == 2 {
@@ -617,7 +774,7 @@ fn glyph_fill_and_stroke_write_only_their_own_spot_ink() {
     for knockout in [false, true] {
         for mode in [1, 2] {
             let body =
-                format!("/Ink cs 0.8 scn /Other CS 0.6 SCN /Half gs 2 w {mode} Tr BT /F1 14 Tf 4 2 Td (M) Tj ET");
+                format!("/Ink cs 0.8 scn /Other CS 0.6 SCN /Half gs 4 w {mode} Tr BT /F1 14 Tf 4 2 Td (M) Tj ET");
             let doc = document(
                 "",
                 "/Fm Do",
@@ -698,7 +855,7 @@ fn build_constant_cmyk_icc(l_byte: u8) -> Vec<u8> {
 #[test]
 fn icc_text_stroke_preserves_opaque_fill_on_process_plate() {
     let profile = build_constant_cmyk_icc(155);
-    let content = "/StrokeHalf gs 0 0 0 1 k 1 0 0 0 K 2 w 2 Tr BT /F1 14 Tf 4 2 Td (M) Tj ET";
+    let content = "/StrokeHalf gs 0 0 0 1 k 1 0 0 0 K 4 w 2 Tr BT /F1 14 Tf 4 2 Td (M) Tj ET";
     let doc = document_with_profile("", content, "", "", 0, Some(&profile));
     let fill = opaque_glyph_row(0);
     let stroke = opaque_glyph_row(1);
