@@ -197,17 +197,12 @@ impl KnockoutResources {
         }))
     }
 
-    fn knockout_scope(&self) -> bool {
-        self.native.load(Ordering::Relaxed) > 0 || self.degraded.load(Ordering::Relaxed) > 0
-    }
-
     pub(super) fn paint(&mut self, pixels: usize) -> Result<()> {
-        if self.knockout_scope() {
-            if self.paint_operations >= MAX_PAINT_OPERATIONS {
-                return self.refuse("paint operations");
-            }
-            self.paint_operations += 1;
+        // Every group counts paints, so nested form fan-out stays bounded; only pixel work is knockout-only. ~keep
+        if self.paint_operations >= MAX_PAINT_OPERATIONS {
+            return self.refuse("paint operations");
         }
+        self.paint_operations += 1;
         self.raster(pixels)
     }
 
