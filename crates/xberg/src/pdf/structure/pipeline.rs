@@ -5525,28 +5525,100 @@ fn filter_segments_by_table_bboxes(segments: Vec<SegmentData>, tables: &[TableCo
 
 /// Whether some table both covers a segment and carries its text. See [`filter_segments_by_table_bboxes`].
 fn segment_is_carried<'t>(seg: &SegmentData, tables: impl IntoIterator<Item = &'t TableCoverage>) -> bool {
-    segment_carrier(seg, tables).is_some()
+    tables.into_iter().any(|table| covers_and_carries(seg, table))
 }
 
-/// The position of the first table that both covers a segment and carries its text.
-fn segment_carrier<'t>(seg: &SegmentData, tables: impl IntoIterator<Item = &'t TableCoverage>) -> Option<usize> {
+/// Whether a table covers at least half of a segment and carries its text.
+fn covers_and_carries(seg: &SegmentData, table: &TableCoverage) -> bool {
     let seg_area = seg.width * seg.height;
     let seg_text = seg.text.trim();
     if seg_area <= 0.0 || seg_text.is_empty() {
-        return None;
+        return false;
     }
-    tables.into_iter().position(|table| {
-        let bb = &table.bbox;
-        let inter_left = seg.x.max(bb.x0 as f32);
-        let inter_right = (seg.x + seg.width).min(bb.x1 as f32);
-        let inter_bottom = seg.y.max(bb.y0 as f32);
-        let inter_top = (seg.y + seg.height).min(bb.y1 as f32);
-        if inter_left >= inter_right || inter_bottom >= inter_top {
-            return false;
+    let bb = &table.bbox;
+    let inter_left = seg.x.max(bb.x0 as f32);
+    let inter_right = (seg.x + seg.width).min(bb.x1 as f32);
+    let inter_bottom = seg.y.max(bb.y0 as f32);
+    let inter_top = (seg.y + seg.height).min(bb.y1 as f32);
+    if inter_left >= inter_right || inter_bottom >= inter_top {
+        return false;
+    }
+    let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
+    inter_area / seg_area >= 0.5 && table.carries(seg_text)
+}
+
+/// The carrier of each page segment, as a position in `holders`. A run of neighbouring segments goes to
+/// the first table that covers and carries each of them and holds a word containing each seam, so no
+/// carrier splits one printed copy; any other segment goes to its first covering table.
+fn occurrence_carriers(segments: &[SegmentData], holders: &[(&TableCoverage, &WordCounts)]) -> Vec<Option<usize>> {
+    let mut carriers = Vec::with_capacity(segments.len());
+    let mut run_start = 0;
+    let mut run: Vec<usize> = Vec::new();
+    let words: Vec<Vec<String>> = segments
+        .iter()
+        .map(|segment| word_sequence([segment.text.as_str()]))
+        .collect();
+    let seam_holders = seam_holders(&words, holders);
+    for (index, segment) in segments.iter().enumerate() {
+        let own: Vec<usize> = (0..holders.len())
+            .filter(|&holder| covers_and_carries(segment, holders[holder].0))
+            .collect();
+        let joined: Vec<usize> = run
+            .iter()
+            .copied()
+            .filter(|holder| own.contains(holder) && seam_holders[index].contains(holder))
+            .collect();
+        if joined.is_empty() {
+            carriers.extend(std::iter::repeat_n(run.first().copied(), index - run_start));
+            run_start = index;
+            run = own;
+        } else {
+            run = joined;
         }
-        let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
-        inter_area / seg_area >= 0.5 && table.carries(seg_text)
-    })
+    }
+    carriers.extend(std::iter::repeat_n(run.first().copied(), segments.len() - run_start));
+    carriers
+}
+
+/// For each segment, the positions in `holders` of the tables that hold a word containing its seam: the
+/// last word of the segment before it run into its own first word. One automaton over the page's
+/// seams reads each table's words once, so the cost grows with the page and the tables, not their product.
+fn seam_holders(words: &[Vec<String>], holders: &[(&TableCoverage, &WordCounts)]) -> Vec<Vec<usize>> {
+    let mut ids: ahash::AHashMap<String, usize> = ahash::AHashMap::new();
+    let mut seam_of: Vec<Option<usize>> = vec![None; words.len()];
+    for index in 1..words.len() {
+        if let (Some(last), Some(first)) = (words[index - 1].last(), words[index].first()) {
+            let next = ids.len();
+            seam_of[index] = Some(*ids.entry(format!("{last}{first}")).or_insert(next));
+        }
+    }
+    let mut patterns = vec![""; ids.len()];
+    for (seam, &id) in &ids {
+        patterns[id] = seam.as_str();
+    }
+    // The build fails only past the automaton's size limits; then no seam joins two segments and
+    // each segment goes to its first covering table, the carrier it had before seams were read. ~keep
+    let automaton = match aho_corasick::AhoCorasick::new(&patterns) {
+        Ok(automaton) if !patterns.is_empty() => automaton,
+        _ => return vec![Vec::new(); words.len()],
+    };
+    let held: Vec<ahash::AHashSet<usize>> = holders
+        .iter()
+        .map(|(_, table_words)| {
+            table_words
+                .keys()
+                .flat_map(|word| automaton.find_overlapping_iter(word.as_str()))
+                .map(|found| found.pattern().as_usize())
+                .collect()
+        })
+        .collect();
+    seam_of
+        .iter()
+        .map(|seam| match seam {
+            Some(id) => (0..holders.len()).filter(|&holder| held[holder].contains(id)).collect(),
+            None => Vec::new(),
+        })
+        .collect()
 }
 
 /// Apply all 5 text repair passes in a single traversal over a segment's text.
@@ -6005,16 +6077,17 @@ impl<'a> OverlapEvidence<'a> {
     fn page_split(&mut self, page_number: u32, live: &[usize]) -> &PageSplit {
         if self.splits.get(&page_number).is_none_or(|cached| cached.live != live) {
             let page_index = page_number.saturating_sub(1) as usize;
-            let coverage: Vec<&TableCoverage> = live
+            let holders: Vec<(&TableCoverage, &WordCounts)> = live
                 .iter()
-                .filter_map(|&index| self.tables.get(&index).and_then(|table| table.coverage.as_ref()))
+                .filter_map(|&index| self.tables.get(&index))
+                .filter_map(|table| table.coverage.as_ref().map(|coverage| (coverage, &table.words)))
                 .collect();
+            let segments = self.page_segments.get(page_index).map_or(&[][..], Vec::as_slice);
             // Stream 0 is the text no live table carries. Stream k is the text that the k-th live
             // table with a coverage carries, so a join never crosses from one carrier to another.
-            let mut streams: Vec<Vec<&str>> = vec![Vec::new(); coverage.len() + 1];
-            for segment in self.page_segments.get(page_index).into_iter().flatten() {
-                let stream = segment_carrier(segment, coverage.iter().copied()).map_or(0, |carrier| carrier + 1);
-                streams[stream].push(segment.text.as_str());
+            let mut streams: Vec<Vec<&str>> = vec![Vec::new(); holders.len() + 1];
+            for (segment, carrier) in segments.iter().zip(occurrence_carriers(segments, &holders)) {
+                streams[carrier.map_or(0, |carrier| carrier + 1)].push(segment.text.as_str());
             }
             let mut counts = streams
                 .iter()
