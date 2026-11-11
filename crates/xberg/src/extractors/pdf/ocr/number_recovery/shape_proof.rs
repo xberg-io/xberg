@@ -857,9 +857,11 @@ impl ShapeProof {
             .map_err(|_| Failure::Declined("cumulative glyph pixel budget"))?;
         let painted = painted_mask(raster, (x, y, width, height))?;
         let rendered = rendering::render_png_page_with_budget(&self.document, index, dpi, remaining)?;
-        let expected = image::load_from_memory(&rendered.data)
-            .map_err(|error| Failure::Io(std::io::Error::other(format!("decoding bounded glyph raster: {error}"))))?
-            .into_luma8();
+        let expected = crate::extraction::image_decode::decode_standard_luma8_with_security_limits(
+            &rendered.data,
+            &crate::extractors::security::SecurityLimits::default(),
+        )
+        .map_err(|error| Failure::Io(std::io::Error::other(format!("decoding bounded glyph raster: {error}"))))?;
         let phase = crop_phase(media, candidate.frame, dpi, (x, y));
         let coverage = mask_coverage(&expected, &painted, phase);
         tracing::debug!(index, ?coverage, "Native glyph shape ink coverage");
