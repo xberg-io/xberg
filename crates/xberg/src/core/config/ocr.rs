@@ -213,8 +213,8 @@ pub struct OcrQualityThresholds {
     ///   consecutive letters (`ABC`, `pqr`), is a capitalized word of 2 or 3 letters ending in a
     ///   full stop, `!` or `?` (`No.`, `Yes.`), or is a capitalized 3-letter word with a letter
     ///   outside ASCII (`Été`); `mal`, `Ne`, `Tee`, `CAS` and `a` are pruned;
-    /// - a line of several tokens is kept when at least half of its tokens are words of 3 or
-    ///   more letters (`Annual report q z`, `were ee`);
+    /// - a line of several tokens is kept when it holds at least two words of 3 or more letters
+    ///   and they are at least half of its tokens (`Annual report q z`); `were ee` is pruned;
     /// - a line of several tokens is also kept when at least two thirds of its tokens are plausible
     ///   text and it holds a word of 3 or more letters or two function words (`Go to Al`,
     ///   `b) to go`, `Mr X Is In`, `de la gare`, `Mairie du I`). A token is plausible text when it

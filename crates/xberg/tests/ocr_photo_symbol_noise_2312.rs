@@ -22,9 +22,9 @@ const PROSE_PDF: &[u8] = include_bytes!("fixtures/ocr_photo_noise_2312/prose.pdf
 /// Characters of OCR output before the filter existed, measured on this tree's parent commit.
 const PNG_NOISE_BEFORE: usize = 840;
 const PDF_NOISE_BEFORE: usize = 1056;
-const PDF_NOISE_AFTER_PLAIN: usize = 194;
+const PDF_NOISE_AFTER_PLAIN: usize = 157;
 const PDF_NOISE_PLATFORM_SLACK: usize = 24;
-const PDF_PRUNED_LINES: usize = 194;
+const PDF_PRUNED_LINES: usize = 204;
 
 const PROSE: &str = "The committee met on Tuesday to review the annual budget.\n\n\
 Members agreed that the library needs a new roof before winter.\n\n\
@@ -74,12 +74,12 @@ async fn photograph_pdf_keeps_at_most_a_quarter_of_its_symbol_noise() {
         let content = read(PHOTO_PDF, "application/pdf", format).await;
         assert!(noise_chars(&content) * 4 <= PDF_NOISE_BEFORE, "{content:?}");
         if plain {
-            // Lines with a digit are kept (`$5`, `1.`) and so are capitalized trigrams (`Qty`, `Yes`),
-            // which is why 194 bytes of the 1056 stay, under the quarter bound of 264.
-            // The OCR read differs by platform in a few lines the keep rules retain
-            // (macOS 194, Linux CI 212), so the count is a band, not a point.
+            // Lines with a digit are kept (`$5`, `1.`), which is why 157 bytes of the 1056 stay on
+            // Linux, under the quarter bound of 264. A bare capitalized trigram (`Qty`) is pruned.
+            // The OCR read differs by platform in a few lines the keep rules retain (before the
+            // trigram rule: macOS 194, Linux 212), so the count is a band around the Linux read.
             assert!(
-                (PDF_NOISE_AFTER_PLAIN..=PDF_NOISE_AFTER_PLAIN + PDF_NOISE_PLATFORM_SLACK)
+                (PDF_NOISE_AFTER_PLAIN - PDF_NOISE_PLATFORM_SLACK..=PDF_NOISE_AFTER_PLAIN + PDF_NOISE_PLATFORM_SLACK)
                     .contains(&noise_chars(&content)),
                 "{content:?}"
             );
@@ -159,8 +159,9 @@ async fn a_photograph_page_after_native_text_is_pruned_like_the_pdf_route() {
 #[tokio::test]
 async fn a_pruned_pdf_page_carries_a_warning_naming_the_page_and_the_line_count() {
     let document = document(PHOTO_PDF, "application/pdf", &config(OutputFormat::Plain)).await;
-    // The OCR read differs by platform by a line or two (macOS 194 pruned lines, Linux CI 193),
-    // so the count is checked against a narrow band and the rest of the message exactly.
+    // The OCR read differs by platform by a line or two (Linux 204 pruned lines; before the
+    // trigram rule macOS pruned one more than Linux), so the count is checked against a narrow
+    // band and the rest of the message exactly.
     let warnings = prune_warnings(&document);
     assert_eq!(warnings.len(), 1, "{warnings:?}");
     let pruned = (PDF_PRUNED_LINES - 2..=PDF_PRUNED_LINES + 2)

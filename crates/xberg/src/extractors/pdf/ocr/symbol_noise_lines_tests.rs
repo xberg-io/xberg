@@ -112,7 +112,7 @@ fn keeps_single_token_answers_and_unspaced_equations() {
 
 #[test]
 fn prunes_a_lone_capitalized_trigram_without_a_closing_mark_and_keeps_an_accented_one() {
-    for line in ["Tee", "Ces", "Jot", "Bid", "CAS", "NOo", "Yes", "Qty"] {
+    for line in ["Tee", "Ces", "Jot", "Bid", "CAS", "NOo", "Yes", "Qty", "\u{e9}t\u{e9}"] {
         assert!(is_symbol_noise_line(line), "{line}");
     }
     for line in ["Yes.", "Qty?", "Bid!", "\u{c9}t\u{e9}", "ABC", "pqr"] {
@@ -149,8 +149,15 @@ fn keeps_real_words_beside_stray_glyphs() {
         "Annual report q z",
         "Harbour Lights x y",
         "Quarterly budget summary ~ ~",
-        "were ee",
+        "Red box q z",
     ]);
+}
+
+#[test]
+fn prunes_one_word_beside_stray_glyphs() {
+    for line in ["were ee", "Rays ae", "Settee e", "tail) \u{ab}"] {
+        assert!(is_symbol_noise_line(line), "{line}");
+    }
 }
 
 #[test]
@@ -371,4 +378,46 @@ fn a_document_with_relationships_is_not_prunable_and_keeps_its_elements() {
     prune_document_elements(&mut document);
     assert_eq!(document.elements.len(), 2);
     assert_eq!(document.elements[0].text, "oe\nae");
+}
+
+#[test]
+fn the_word_rule_needs_two_words_that_are_at_least_half_the_tokens() {
+    // Two words of four tokens is the boundary that keeps; one of two and two of five are pruned.
+    assert_kept_exactly(&["Annual report q z", "north gate"]);
+    for line in ["were ee", "xyz ~", "Tee ~", "Annual report q z ~"] {
+        assert!(is_symbol_noise_line(line), "{line}");
+    }
+}
+
+#[cfg(all(feature = "ocr", feature = "pdf"))]
+#[test]
+fn the_page_level_pruners_drop_a_lone_capitalized_trigram_and_keep_a_marked_one() {
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+
+    let mut paragraphs = vec![crate::pdf::structure::types::PdfParagraph {
+        text: "Tee\nSECTION TITLE\nYes.".to_string(),
+        lines: vec![],
+        dominant_font_size: 12.0,
+        heading_level: None,
+        is_bold: false,
+        is_list_item: false,
+        is_code_block: false,
+        is_formula: false,
+        is_page_furniture: false,
+        layout_class: None,
+        layout_region_path: None,
+        caption_for: None,
+        block_bbox: None,
+        word_count: 4,
+    }];
+    prune_paragraphs(&mut paragraphs);
+    assert_eq!(paragraphs[0].text, "SECTION TITLE\nYes.");
+    let mut document = InternalDocument::new("pdf");
+    document.elements = vec![
+        InternalElement::text(ElementKind::Paragraph, "CAS\nSECTION TITLE", 0),
+        InternalElement::text(ElementKind::Paragraph, "Bid", 0),
+    ];
+    prune_document_elements(&mut document);
+    let texts: Vec<&str> = document.elements.iter().map(|element| element.text.as_str()).collect();
+    assert_eq!(texts, vec!["SECTION TITLE"]);
 }

@@ -153,10 +153,11 @@ fn is_plausible_lone_token(token: &str) -> bool {
             })
 }
 
-/// Whether a line reads as text: a lone plausible token; a line of which at least half the tokens
-/// are words of 3 or more letters (`Annual report q z`, `were ee`); or a line of which at least two
-/// thirds of the tokens are plausible and which holds a word of 3 or more letters or two function
-/// words, one of them of 2 or more letters (`a a` and `we SY` are not text).
+/// Whether a line reads as text: a lone plausible token; a line with at least two words of 3 or
+/// more letters that are at least half its tokens (`Annual report q z`; one word, as in `were ee`,
+/// is not enough); or a line of which at least two thirds of the tokens are plausible and which
+/// holds a word of 3 or more letters or two function words, one of them of 2 or more letters
+/// (`a a` and `we SY` are not text).
 fn is_plausible_text(tokens: &[&str]) -> bool {
     if let [token] = tokens {
         return is_plausible_lone_token(token);
@@ -165,7 +166,7 @@ fn is_plausible_text(tokens: &[&str]) -> bool {
         .iter()
         .filter(|token| is_word_like(token, MIN_WORD_LETTERS))
         .count();
-    if words * 2 >= tokens.len() {
+    if words >= 2 && words * 2 >= tokens.len() {
         return true;
     }
     let plausible = tokens.iter().filter(|token| is_plausible_token(token)).count();
