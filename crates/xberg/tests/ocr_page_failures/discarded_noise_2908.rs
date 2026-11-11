@@ -1,3 +1,5 @@
+use lopdf::dictionary;
+
 use super::*;
 
 fn noise_config(pipeline: bool, whole_document: bool, discard: bool) -> ExtractionConfig {
@@ -56,6 +58,7 @@ fn assert_noisy_recovery(pipeline: bool, whole_document: bool, discard: bool) {
     );
     if discard {
         assert!(result.content.trim().is_empty(), "{:?}", result.content);
+        assert_backend_failure_warning(&result);
     } else {
         assert!(!result.content.trim().is_empty());
     }
@@ -95,4 +98,76 @@ fn discarded_noisy_whole_document_retry_has_no_recovery_claim() {
 #[serial_test::serial]
 fn retained_noisy_whole_document_retry_keeps_its_recovery_claim() {
     assert_noisy_recovery(false, true, false);
+}
+
+fn assert_backend_failure_warning(result: &ExtractedDocument) {
+    assert!(
+        result.processing_warnings.iter().any(|warning| {
+            warning.message.contains("OCR of page 2 failed") && warning.message.contains("stub render failure")
+        }),
+        "{:?}",
+        result.processing_warnings
+    );
+}
+
+fn pdf_with_native_text_and_image() -> Vec<u8> {
+    let mut doc = lopdf::Document::load_mem(&pdf_with_image_on_page_two()).unwrap();
+    let page = doc.get_pages()[&2];
+    let font = doc.add_object(lopdf::dictionary! {
+        "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica",
+    });
+    let page = doc.get_object_mut(page).unwrap().as_dict_mut().unwrap();
+    let contents = page.get(b"Contents").unwrap().as_reference().unwrap();
+    page.get_mut(b"Resources")
+        .unwrap()
+        .as_dict_mut()
+        .unwrap()
+        .set("Font", lopdf::dictionary! { "F1" => font });
+    let stream = doc.get_object_mut(contents).unwrap().as_stream_mut().unwrap();
+    let mut content = std::mem::take(&mut stream.content);
+    content.extend_from_slice(
+        b"
+BT /F1 12 Tf 10 180 Td (The original native words stay.) Tj ET
+",
+    );
+    stream.set_content(content);
+    let mut pdf = Vec::new();
+    doc.save_to(&mut pdf).unwrap();
+    pdf
+}
+
+#[test]
+#[serial_test::serial]
+fn discarded_noisy_retry_reports_native_text_kept() {
+    let result = extract_from_pdf(
+        DIRECT_BACKEND,
+        RenderOutcome::Fails,
+        RasterOutcome::Noise,
+        &noise_config(false, false, true),
+        &pdf_with_native_text_and_image(),
+    );
+    assert_eq!(result.content.trim(), "The original native words stay.");
+    let failures = result.ocr_page_failures.as_ref().unwrap();
+    assert_eq!(failures.as_slice(), recovered_page_two().as_slice());
+    assert_backend_failure_warning(&result);
+    assert!(
+        result
+            .processing_warnings
+            .iter()
+            .any(|warning| { warning.message.contains("the page's native text was kept") }),
+        "{:?}",
+        result.processing_warnings
+    );
+    assert!(
+        result
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.message.contains("its text was discarded"))
+    );
+    assert!(
+        result
+            .processing_warnings
+            .iter()
+            .all(|warning| !warning.message.contains("was recovered from"))
+    );
 }

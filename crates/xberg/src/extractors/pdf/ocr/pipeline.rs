@@ -1397,13 +1397,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     } else {
                         "content"
                     };
-                    recovery_warnings.push((page_number, crate::types::ProcessingWarning {
+                    accumulated_warnings.push(crate::types::ProcessingWarning {
                         source: std::borrow::Cow::Borrowed("ocr"),
                         message: std::borrow::Cow::Owned(format!(
                             "OCR of page {page_number} failed ({error}); its {recovered_kind} was recovered from the \
                              page's embedded image XObjects instead."
                         )),
-                    }));
+                    });
                     merge_ocr_page_failures(
                         &mut page_failures,
                         vec![crate::types::OcrPageFailure {
@@ -2617,8 +2617,20 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     for (page, warning) in recovery_warnings {
         if discarded_recovery_pages.contains(&page) {
             let native_recovered = mixed_native_page_has_content(native_text, boundaries, (page - 1) as usize);
+            let outcome = if native_recovered {
+                "the page's native text was kept"
+            } else {
+                "the page had no native text to retain"
+            };
             for failure in page_failures.iter_mut().filter(|failure| failure.page == page) {
                 failure.recovered = native_recovered;
+                crate::core::diagnostics::push_warning_deduped(
+                    &mut accumulated_warnings,
+                    crate::core::diagnostics::warning(
+                        "ocr",
+                        format!("OCR of page {page} failed ({}); {outcome}.", failure.error),
+                    ),
+                );
             }
         } else {
             accumulated_warnings.push(warning);
@@ -6134,6 +6146,13 @@ pub(super) async fn extract_with_ocr_for_page(
             let page = (page_index_offset + page_idx + 1) as u32;
             for failure in page_failures.iter_mut().filter(|failure| failure.page == page) {
                 failure.recovered = false;
+                page_failure_warnings.push(crate::core::diagnostics::warning(
+                    "ocr",
+                    format!(
+                        "OCR of page {page} failed ({}); its embedded-image retry was discarded.",
+                        failure.error
+                    ),
+                ));
             }
         } else {
             page_failure_warnings.push(warning);
