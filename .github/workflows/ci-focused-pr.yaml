@@ -120,3 +120,13 @@ jobs:
           else
             mise run rust:test:focused-pr "$FOCUSED_SUITE"
           fi
+
+      - name: Verify retained image-read metadata and small-read isolation
+        if: matrix.suite == 'pdf-ocr'
+        shell: bash
+        run: |
+          cargo test --locked --offline -p xberg --no-default-features \
+            --features pdf,ocr,tokio-runtime,bundle-tessdata-eng --lib \
+            retained_read_metadata_tests -- --test-threads=1 --color never 2>&1 | tee retained-reads.log
+          grep -Fxq 'running 10 tests' retained-reads.log
+          grep -Fq 'test result: ok. 10 passed; 0 failed; 0 ignored;' retained-reads.log
