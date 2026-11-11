@@ -335,8 +335,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Since #2839, a DOCX page whose notes or math are not in the plain content, and a native PDF page of a mixed document, were replaced by the plain rendering of their elements, losing the footnote definitions and the equation spacing. A page that is not found in the content is now re-rendered only when an OCR route produced its text; any other page keeps its text, and only its page range is omitted, with the `page_boundaries` warning.
 - **(docx): Keep style notes, link targets and image placeholders out of Plain content.** (GH#2947)
   Plain output of a DOCX file wrote the paragraph style after each heading (`(style_name: heading 1)`), the Markdown of links in table cells, and a `[Image: ...]` line for each drawing. Plain content now holds the document text only; Markdown, Djot and HTML output are unchanged.
-- **(pages): Omit a Plain DOCX page range that selects a different text than its page.** (GH#2946)
-  Since #2902, a DOCX page that keeps its own text could keep a page range into `content` that selects a different text, with no warning. In Plain output the range of such a page now selects exactly its page's text, or it is omitted with the `page_boundaries` warning; the other pages keep their ranges. PDF and OCR page ranges are unchanged.
+- **(pages): Omit a Plain office page range that selects a different text than its page.** (GH#2946)
+  Since #2902, a DOCX or PPTX page that keeps its own text could keep a page range into `content` that selects a different text, with no warning. In Plain output the range of such a page now selects exactly its page's text, or it is omitted with the `page_boundaries` warning; the other pages keep their ranges. PDF and OCR page ranges are unchanged.
 - **(djot): Preserve paragraph text that begins with block syntax.** (#2856, #2869)
   Escape block markers without changing following inline markup or existing backslash escapes.
 - **(pdf): Keep a nested superscript or subscript stack on its base's line.** (#2728)
