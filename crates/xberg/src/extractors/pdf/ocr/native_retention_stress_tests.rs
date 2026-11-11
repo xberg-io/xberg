@@ -2307,7 +2307,9 @@ fn tagged_rows(count: usize, tag: &str, unit: &str) -> String {
 /// The row similarity tests that putting the native rows first runs on a page. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn similarity_tests_of(native: &str, read: &str) -> (usize, String) {
-    use super::super::document::{MISREAD_SIMILARITY_CALLS, PlainOcrRows, layer_lines_to_put_first, text_with_layer_first};
+    use super::super::document::{
+        MISREAD_SIMILARITY_CALLS, PlainOcrRows, layer_lines_to_put_first, text_with_layer_first,
+    };
     let thresholds = crate::core::config::OcrQualityThresholds::default();
     let before = MISREAD_SIMILARITY_CALLS.with(std::cell::Cell::get);
     let first = layer_lines_to_put_first(native, read, true, &thresholds, None, PlainOcrRows::every())

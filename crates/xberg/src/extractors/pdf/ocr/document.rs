@@ -1758,8 +1758,9 @@ pub(super) fn insert_layer_into_document(
 
 /// Restore native rows on a structured OCR document. The OCR rows that misread a restored row
 /// leave the plain OCR text elements of `page` (of every page when `page` is `None`), each only
-/// on the page it was matched on, an element left without text leaves the document, and the restored rows go first. Every other OCR row,
-/// annotation, anchor and rich payload is unchanged. ~keep
+/// on the page it was matched on, an element left without text leaves the document, and the
+/// restored rows go first. Every other OCR row, annotation, anchor and rich payload is unchanged.
+/// ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn put_layer_first_in_document(
     doc: &mut crate::types::internal::InternalDocument,
@@ -1772,8 +1773,8 @@ pub(super) fn put_layer_first_in_document(
     insert_layer_into_document(doc, page, &first.lines);
 }
 /// Remove each of `rows` once from the text of the plain OCR text elements of `page` and of the
-/// page the row was matched on, and remove an element left without text. Relationships of a removed element go with it; the others move
-/// down by the elements removed before them. ~keep
+/// page the row was matched on, and remove an element left without text. Relationships of a
+/// removed element go with it; the others move down by the elements removed before them. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn remove_misread_rows_from_document(
     doc: &mut crate::types::internal::InternalDocument,
