@@ -63,8 +63,17 @@ fn markdown_table_cell_keeps_its_link() {
 fn plain_image_carries_no_placeholder() {
     let content = extract_content("docx/test_emf_docx.docx", OutputFormat::Plain);
     assert!(
-        !content.contains("[Image:"),
-        "Plain content must not carry an image placeholder: {content}"
+        !content.contains("[Image: Picture"),
+        "Plain content must not carry the shape name of a drawing: {content}"
+    );
+}
+
+#[test]
+fn plain_image_keeps_its_description() {
+    let content = extract_content("docx/word_sample.docx", OutputFormat::Plain);
+    assert!(
+        content.contains("A cartoon duck holding a paper"),
+        "the description of a drawing is document text: {content}"
     );
 }
 

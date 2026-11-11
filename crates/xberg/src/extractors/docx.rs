@@ -61,6 +61,15 @@ fn drawing_alt_text(drawing: &crate::extraction::docx::drawing::Drawing) -> Opti
         .or_else(|| properties.name.clone().filter(|name| !name.is_empty()))
 }
 
+/// Whether the drawing carries a description written by the author or by Word, not only a shape name.
+fn drawing_has_description(drawing: &crate::extraction::docx::drawing::Drawing) -> bool {
+    drawing
+        .doc_properties
+        .as_ref()
+        .and_then(|properties| properties.description.as_deref())
+        .is_some_and(|description| !description.is_empty())
+}
+
 /// Anchor key shared by a note's reference and its definition.
 ///
 /// Word numbers footnotes and endnotes independently, so footnote 1 and endnote 1
@@ -442,13 +451,15 @@ fn build_internal_document(
                 if !attrs.is_empty() {
                     builder.set_attributes(img_elem_idx, attrs);
                 }
-                // The element text is the drawing's alt text or shape name, not text of the page, so Plain
-                // output shows only the text OCR reads from the image. ~keep
-                builder.merge_attribute(
-                    img_elem_idx,
-                    crate::types::internal::MARKDOWN_IMAGE_REFERENCE_ATTRIBUTE,
-                    "true",
-                );
+                // A drawing with no description carries only its shape name (`Picture 1`), which is
+                // not document text, so Plain output shows only the text OCR reads from it. ~keep
+                if !drawing_has_description(drawing) {
+                    builder.merge_attribute(
+                        img_elem_idx,
+                        crate::types::internal::MARKDOWN_IMAGE_REFERENCE_ATTRIBUTE,
+                        "true",
+                    );
+                }
             }
             crate::extraction::docx::parser::DocumentElement::PageBreak => {
                 builder.push_page_break_with_page(Some(current_page));
@@ -2182,6 +2193,40 @@ mod tests {
         assert!(
             !doc.relationships.is_empty(),
             "Should have footnote relationships in DocumentStructure"
+        );
+    }
+
+    #[tokio::test]
+    async fn plain_table_cell_carries_no_footnote_marker() {
+        let document_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr><w:tc><w:p><w:r><w:t>Cell with note</w:t></w:r><w:r><w:footnoteReference w:id="1"/></w:r></w:p></w:tc></w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>"#;
+        let footnotes_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:footnote w:id="1"><w:p><w:r><w:t>The footnote.</w:t></w:r></w:p></w:footnote>
+</w:footnotes>"#;
+        let data = build_test_docx_with_parts(document_xml, None, Some(footnotes_xml), None, None, None, None);
+        let internal = DocxExtractor::new()
+            .extract_content(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &ExtractionConfig::default(),
+            )
+            .await
+            .unwrap();
+        let plain = crate::rendering::render_plain(&internal);
+        assert!(
+            plain.contains("Cell with note"),
+            "the cell text is document text: {plain}"
+        );
+        assert!(
+            !plain.contains("[^"),
+            "a Plain table cell carries no note marker: {plain}"
         );
     }
 
