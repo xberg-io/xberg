@@ -329,6 +329,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Prune symbol-noise lines on the direct PDF read of a flagged page, not only in the layout and pipeline routes.** (#2921)
+  Without layout detection the PDF route reads each page straight from the OCR backend and never reached the pruning, so a photograph page kept every noise line and carried no pruning warning. The direct read now prunes the page text, its paragraphs and its text elements together after the verdict and the native-replacement decision have judged the unpruned read.
 - **(ocr): Exclude Unicode numerals from native-prose script evidence.**
   Numeric-only OCR reads do not claim retention of native prose, across all supported scripts.
 - **(ocr): Re-render only OCR page text as plain, and keep DOCX and native page text.** (#2839, #2902)
