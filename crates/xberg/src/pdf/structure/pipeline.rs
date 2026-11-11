@@ -5313,7 +5313,7 @@ struct TableCoverage {
     run_index: ahash::AHashMap<String, Vec<(u32, u32)>>,
 }
 
-/// Normalized length, in characters, at which [`TableCoverage::carries`] stops matching a segment against the
+/// Normalized length, in characters, at which [`TableCoverage::carries_with`] stops matching a segment against the
 /// whole table and matches it against one row. A shorter run (an item number, a price) is only
 /// ever carried by whole cell words: its digits also occur, by accident, across the seam of two
 /// neighbouring numeric cells (#2171). A longer one is only ever carried by one row: every word of
