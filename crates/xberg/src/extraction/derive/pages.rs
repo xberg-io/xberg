@@ -46,8 +46,51 @@ pub(super) fn derive_pages(
             "Page byte ranges were measured on a different rendering of the text and could not be \
              mapped onto the returned content, so they were omitted",
         );
+    } else if !reconciled
+        && let Some(omitted) = drop_mismatched_page_boundaries(&mut doc.metadata, content, pages.as_deref())
+    {
+        crate::core::diagnostics::push_warning(
+            &mut doc.processing_warnings,
+            "page_boundaries",
+            format!(
+                "Page byte ranges of pages {omitted:?} select a different text of the returned content than \
+                 the page text, so they were omitted"
+            ),
+        );
     }
     pages
+}
+
+/// Omit each page range that does not select its own page's text in `content`: a Plain range is
+/// exact or absent. Returns the omitted page numbers, or `None` when nothing was omitted or there
+/// are no pages to compare with. When no range is left, the boundaries become `None`.
+fn drop_mismatched_page_boundaries(
+    metadata: &mut crate::types::Metadata,
+    content: &str,
+    pages: Option<&[PageContent]>,
+) -> Option<Vec<u32>> {
+    let pages = pages?;
+    let structure = metadata.pages.as_mut()?;
+    let boundaries = structure.boundaries.as_mut()?;
+    let text_of: ahash::AHashMap<u32, &str> =
+        pages.iter().map(|page| (page.page_number, page.content.as_str())).collect();
+    let mut omitted = Vec::new();
+    boundaries.retain(|boundary| {
+        let exact = text_of
+            .get(&boundary.page_number)
+            .is_some_and(|text| content.get(boundary.byte_start..boundary.byte_end) == Some(*text));
+        if !exact {
+            omitted.push(boundary.page_number);
+        }
+        exact
+    });
+    if omitted.is_empty() {
+        return None;
+    }
+    if boundaries.is_empty() {
+        structure.boundaries = None;
+    }
+    Some(omitted)
 }
 
 /// Re-point `metadata.pages.boundaries` at `content` by locating each page's text in it, in
