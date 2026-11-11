@@ -250,11 +250,25 @@ pub(super) fn is_path_paint(op: &Operator) -> bool {
     )
 }
 
-fn is_text_show(op: &Operator) -> bool {
-    matches!(
-        op,
-        Operator::Tj { .. } | Operator::TJ { .. } | Operator::Quote { .. } | Operator::DoubleQuote { .. }
-    )
+/// Whether `font` resolves in the resources to a font that is not Type 3: a Type 3 glyph is a
+/// content stream and never reaches the text coverage raster.
+fn font_is_not_type3(doc: &PdfDocument, resources: &Object, font: &str) -> bool {
+    let Some(fonts) = resources
+        .as_dict()
+        .and_then(|resources| resources.get("Font"))
+        .and_then(|fonts| doc.resolve_object(fonts).ok())
+    else {
+        return false;
+    };
+    fonts
+        .as_dict()
+        .and_then(|fonts| fonts.get(font))
+        .and_then(|font| doc.resolve_object(font).ok())
+        .and_then(|font| {
+            font.as_dict()
+                .map(|font| font.get("Subtype").and_then(Object::as_name) != Some("Type3"))
+        })
+        .unwrap_or(false)
 }
 
 fn path_pixels(pixmap: &Pixmap, path: &tiny_skia::Path, transform: Transform, padding: f64) -> usize {
@@ -437,6 +451,64 @@ impl PageRenderer {
             .or_else(|| self.cmyk_sidecar.as_ref().map(|sidecar| sidecar.dims()))
     }
 
+    /// How many text-show operators certainly charge a page-sized coverage raster, on top of the
+    /// paint itself, while the pass runs: those that paint a side, in a font that is not Type 3,
+    /// outside any optional-content layer, which may be excluded. The render mode is tracked through
+    /// `q` and `Q`; `initial_text_mode` is the mode the group starts in, `None` where it inherits one
+    /// this scan cannot see. Whatever cannot be shown to paint is left out, so the count never
+    /// exceeds what the pass charges.
+    pub(super) fn painting_text_shows(
+        &self,
+        operators: &[Operator],
+        doc: &PdfDocument,
+        resources: &Object,
+        initial_text_mode: Option<u8>,
+    ) -> usize {
+        if self.text_ink_suppressed {
+            return 0;
+        }
+        #[derive(Clone, Copy)]
+        struct TextState {
+            mode: Option<u8>,
+            font_paints: bool,
+        }
+        let mut state = TextState {
+            mode: initial_text_mode,
+            font_paints: false,
+        };
+        let mut saved: Vec<TextState> = Vec::new();
+        // Whether each open marked-content section is an optional-content layer, which may be excluded.
+        let mut layers: Vec<bool> = Vec::new();
+        let mut shows = 0;
+        for operator in operators {
+            match operator {
+                Operator::SaveState => saved.push(state),
+                Operator::RestoreState => {
+                    state = saved.pop().unwrap_or(TextState {
+                        mode: None,
+                        font_paints: false,
+                    });
+                }
+                Operator::Tr { render } => state.mode = Some(*render),
+                Operator::Tf { font, .. } => state.font_paints = font_is_not_type3(doc, resources, font),
+                Operator::BeginMarkedContent { .. } => layers.push(false),
+                Operator::BeginMarkedContentDict { tag, .. } => layers.push(tag == "OC"),
+                Operator::EndMarkedContent => {
+                    layers.pop();
+                }
+                operator if super::is_text_show_operator(operator) => {
+                    shows += usize::from(
+                        !layers.contains(&true)
+                            && state.font_paints
+                            && matches!(state.mode, Some(0 | 1 | 2 | 4 | 5 | 6)),
+                    );
+                }
+                _ => {}
+            }
+        }
+        shows
+    }
+
     pub(super) fn execute_knockout_group(
         &mut self,
         pixmap: &mut Pixmap,
@@ -445,6 +517,7 @@ impl PageRenderer {
         doc: &PdfDocument,
         page_num: usize,
         resources: &Object,
+        initial_text_mode: Option<u8>,
     ) -> Result<Option<super::knockout_resources::WorkFallback>> {
         let pixels = pixmap.width() as usize * pixmap.height() as usize;
         let (sidecar_bytes, spot_count) = self.cmyk_sidecar.as_ref().map_or((0, 0), |sidecar| {
@@ -457,8 +530,7 @@ impl PageRenderer {
         if paints == 0 {
             return Ok(None);
         }
-        // Showing text charges its page-sized coverage raster in addition to the paint itself. ~keep
-        let surfaces_in_pass = paints + operators.iter().filter(|operator| is_text_show(operator)).count();
+        let surfaces_in_pass = paints + self.painting_text_shows(operators, doc, resources, initial_text_mode);
         let workspace = self.knockout_resources.knockout(
             pixels,
             pixmap.data().len(),
@@ -784,7 +856,7 @@ mod tests {
     #[test]
     fn knockout_plan_that_cannot_finish_degrades_before_the_pass_and_paints_once() {
         // 13_700 fills of a 256x256 page plan 898M pixels and then charge 898M more while they run,
-        // past the 1G limit. The pass used to run for about 1_700 paints before the limit stopped it
+        // past the 1G limit. The pass used to run for about 2_700 paints (2^30 less 13_700 x 65_536, over 65_536) before the limit stopped it
         // and every paint ran again without knockout, so the paints executed were more than the page has.
         let paints = 13_700;
         let doc = knockout_document_with_content(&"0.2 g 0 0 1 1 re f ".repeat(paints), 256, true);

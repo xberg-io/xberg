@@ -332,7 +332,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **(pdf): Stop a page with a knockout group from rendering the whole page twice when its work cannot fit the limit.** (#2955)
-  Each paint in a knockout group plans one page-sized surface and charges at least one more while it runs, and text charges a second for its coverage. A page whose planned work plus that floor already passes the render work limit now renders without knockout from the start, instead of running the knockout pass until the limit stops it and then painting everything again. Output and limits are unchanged. Pages and forms also share one knockout check.
+  Each paint in a knockout group plans one page-sized surface and charges at least one more while it runs, and text that paints a side charges a second for its coverage. Invisible text (Tr 3 and 7), Type 3 text and text in an optional-content layer are left out of that count. A page whose planned work plus that floor already passes the render work limit now renders without knockout from the start, instead of running the knockout pass until the limit stops it and then painting everything again. Output and limits are unchanged. Pages and forms also share one knockout check.
 
 - **(ocr): Keep Khmer number recovery available after bounded source declines.** (#2905)
   Completed declines charge the work already done, leaving room to verify supported pages later in the PDF.

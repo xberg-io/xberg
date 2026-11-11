@@ -6,7 +6,10 @@ use std::sync::{Arc, Mutex};
 
 fn document(content: &str, knockout: bool, form: Option<&str>) -> PdfDocument {
     let group = format!("/Group << /S /Transparency /I true /K {knockout} >>");
-    let resources = "/ExtGState << /Half << /ca 0.5 >> >> /XObject << /Fm 5 0 R >>";
+    let resources = "/ExtGState << /Half << /ca 0.5 >> >> /XObject << /Fm 5 0 R >> \
+        /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> \
+        /F3 << /Type /Font /Subtype /Type3 /FontBBox [0 0 1 1] /FontMatrix [1 0 0 1 0 0] /CharProcs << >> \
+        /Encoding << /Type /Encoding /Differences [] >> /FirstChar 0 /LastChar 0 /Widths [0] >> >>";
     let stream = |dict: &str, data: &str| format!("<< {dict} /Length {} >>\nstream\n{data}\nendstream", data.len());
     let objects = [
         "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
@@ -148,6 +151,7 @@ fn runtime_work_exhaustion_restarts_the_group_from_its_initial_backdrop() {
             &doc,
             0,
             &resources,
+            Some(0),
         )
         .expect("runtime work exhaustion degrades transactionally");
     assert!(
@@ -182,6 +186,7 @@ fn ordinary_group_after_work_fallback_can_still_render() {
                 &doc,
                 0,
                 &resources,
+                Some(0),
             )
             .expect("first group degrades"),
     );
@@ -411,4 +416,101 @@ fn plan_is_refused_before_the_pass_when_its_in_pass_floor_passes_the_limit() {
         "text that also charges a coverage surface raises the floor above the plan"
     );
     assert!(resources.knockout(pixels, 0, 0, 0, 300, 600).expect("fits").is_some());
+}
+
+fn text_shows(content: &str, initial: Option<u8>) -> usize {
+    let doc = document(content, true, None);
+    let renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    let resources = doc.get_page_resources(0).expect("page resources");
+    let operators = crate::content::parse_content_stream(content.as_bytes()).expect("real text operators");
+    renderer.painting_text_shows(&operators, &doc, &resources, initial)
+}
+
+#[test]
+fn only_text_that_certainly_paints_a_side_raises_the_floor() {
+    let show = "(M) Tj (M) Tj";
+    let cases: [(&str, Option<u8>, usize); 14] = [
+        ("BT /F1 8 Tf 0 Tr (M) Tj (M) Tj ET", Some(0), 2),
+        ("BT /F1 8 Tf (M) Tj ET", Some(0), 1),
+        ("BT /F1 8 Tf (M) Tj ET", None, 0),
+        ("BT /F1 8 Tf 3 Tr (M) Tj (M) Tj ET", Some(0), 0),
+        ("BT /F1 8 Tf 7 Tr (M) Tj ET", Some(0), 0),
+        ("BT /F1 8 Tf 2 Tr (M) Tj ET", None, 1),
+        ("BT /F1 8 Tf 1 Tr (M) Tj ET", None, 1),
+        ("q 3 Tr Q BT /F1 8 Tf (M) Tj ET", Some(0), 1),
+        ("q BT /F1 8 Tf 3 Tr (M) Tj ET Q BT /F1 8 Tf (M) Tj ET", Some(0), 1),
+        ("/OC /Layer BDC BT /F1 8 Tf (M) Tj ET EMC", Some(0), 0),
+        ("/Span BMC BT /F1 8 Tf (M) Tj ET EMC", Some(0), 1),
+        ("BT /F3 8 Tf (M) Tj ET", Some(0), 0),
+        ("BT /F9 8 Tf (M) Tj ET", Some(0), 0),
+        ("BT (M) Tj ET", Some(0), 0),
+    ];
+    for (content, initial, expected) in cases {
+        assert_eq!(
+            text_shows(content, initial),
+            expected,
+            "{content} starting in mode {initial:?}"
+        );
+    }
+    assert_eq!(text_shows(&format!("BT /F1 8 Tf 3 Tr {show} 0 Tr {show} ET"), None), 2);
+}
+
+/// Runs `content` as a knockout group on a 72x72 page whose work ledger leaves room for exactly the
+/// plan and the in-pass floor of `shows` paints, and returns whether it stayed native, with the
+/// paint operators executed.
+fn native_with_room_for_floor(content: &str, shows: usize, initial: Option<u8>) -> (bool, usize) {
+    let doc = document(content, true, None);
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    let resources = doc.get_page_resources(0).expect("page resources");
+    renderer.load_resources(&doc, &resources).expect("load resources");
+    let operators = crate::content::parse_content_stream(content.as_bytes()).expect("real text operators");
+    let mut pixmap = tiny_skia::Pixmap::new(72, 72).expect("initial backdrop");
+    pixmap.fill(tiny_skia::Color::WHITE);
+    renderer.knockout_resources.canvas(pixmap.data().len());
+    renderer.knockout_resources.surface_work = MAX_SURFACE_WORK - 2 * (shows * 72 * 72) as u64;
+    let fallback = renderer
+        .execute_knockout_group(
+            &mut pixmap,
+            tiny_skia::Transform::identity(),
+            &operators,
+            &doc,
+            0,
+            &resources,
+            initial,
+        )
+        .expect("group renders");
+    (fallback.is_none(), renderer.paint_operator_calls)
+}
+
+#[test]
+fn invisible_text_stays_native_where_its_plan_and_floor_fit() {
+    let shows = 40;
+    let invisible = format!("BT /F1 8 Tf 3 Tr {} ET", "(M) Tj ".repeat(shows));
+    assert_eq!(
+        native_with_room_for_floor(&invisible, shows, Some(0)),
+        (true, shows),
+        "mode 3 charges the paint only, so its plan and floor of {shows} surfaces each fit"
+    );
+    let visible = format!("BT /F1 8 Tf 0 Tr {} ET", "(M) Tj ".repeat(shows));
+    assert!(
+        !native_with_room_for_floor(&visible, shows, Some(0)).0,
+        "visible text also charges its coverage raster, which the same room does not hold"
+    );
+}
+
+#[test]
+fn a_knockout_form_with_invisible_text_stays_native_where_its_plan_and_floor_fit() {
+    let shows = 40;
+    let invisible = format!("BT /F1 8 Tf 3 Tr {} ET", "(M) Tj ".repeat(shows));
+    assert_eq!(native_with_room_for_floor(&invisible, shows, None), (true, shows));
+    let doc = document("/Fm Do", true, Some(&invisible));
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    renderer
+        .render_page(&doc, 0)
+        .expect("knockout form with invisible text renders");
+    assert_eq!(
+        renderer.paint_operator_calls,
+        shows + 1,
+        "the Do and every show execute once"
+    );
 }
