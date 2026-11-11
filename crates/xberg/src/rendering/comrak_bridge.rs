@@ -362,6 +362,8 @@ fn escape_tex_for_markdown(tex: &str) -> String {
                 let stripped = next.is_some_and(|next| "_[]()*=-#".contains(next));
                 out.push_str(if stripped { "&#92;" } else { "\\\\" });
             }
+            // A dollar must stay escaped for a reader that unescapes before it looks for math.
+            '$' => out.push_str("\\$"),
             '*' | '[' | ']' => out.push_str(&format!("&#{};", ch as u32)),
             '_' if !before.is_some_and(char::is_alphanumeric) => out.push_str("&#95;"),
             '~' => out.push_str("\\~"),

@@ -67,7 +67,7 @@ pub(crate) fn join_tex_lines(tex: &str) -> String {
 /// The writer escapes inline and one-line math as CommonMark text, since a GitHub-style reader
 /// applies those escapes before it looks for math, and comrak keeps the escapes in the literal.
 /// Display math between `$$` lines and code math are written as they are.
-#[cfg(any(test, feature = "office", feature = "pdf", feature = "redaction"))]
+#[cfg(any(feature = "office", feature = "pdf"))]
 pub(crate) fn math_node_tex(math: &comrak::nodes::NodeMath) -> String {
     if math.dollar_math && !markdown_math_is_unescaped(math) {
         join_tex_lines(&unescape_markdown_text(&math.literal))

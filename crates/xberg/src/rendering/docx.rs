@@ -728,6 +728,12 @@ mod tests {
     }
 
     #[test]
+    fn should_write_the_tex_that_the_markdown_writer_escaped() {
+        let document = part(r"Let $a \\\ b \\{c\\} \\% x&#42;y$ hold.", "word/document.xml");
+        assert_eq!(body_text(&document), r"Let a \\ b \{c\} \% x*y hold.");
+    }
+
+    #[test]
     fn should_write_display_math_on_one_line_without_its_comments() {
         let document = part("$$\na % note\nb\n$$\n", "word/document.xml");
         assert_eq!(body_text(&document), "a b");

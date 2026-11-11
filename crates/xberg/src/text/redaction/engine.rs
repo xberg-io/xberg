@@ -499,7 +499,7 @@ impl<'a> RedactionPass<'a> {
             if source.is_some_and(|source| source.text == *text) {
                 continue;
             }
-            let projection = crate::rendering::VisibleMarkdown::parse(text, limits).ok_or_else(unproved)?;
+            let projection = crate::rendering::VisibleMarkdown::parse(text, limits, false).ok_or_else(unproved)?;
             if source.is_some_and(|source| {
                 source.styled_metadata.as_deref() == Some(text)
                     && projection.text != source.text
@@ -532,7 +532,7 @@ impl<'a> RedactionPass<'a> {
         limits: &SecurityLimits,
     ) -> Result<FormattedPlan> {
         let invalid = || crate::XbergError::validation("Cannot prove complete generated Markdown redaction coverage");
-        let projection = crate::rendering::VisibleMarkdown::parse(text, limits).ok_or_else(invalid)?;
+        let projection = crate::rendering::VisibleMarkdown::parse(text, limits, true).ok_or_else(invalid)?;
         let sensitive = match_ranges(&self.applicable_matches(&projection.text));
         if let Some(matches) = content_matches(text, self.applicable_matches(text), tag_exemptions, owned_tags)
             && projection.covered(&sensitive, &match_ranges(&matches))

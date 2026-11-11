@@ -66,10 +66,14 @@ pub(crate) struct VisibleMarkdown {
     origins: Vec<Origin>,
     atoms: Vec<PlainAtom>,
     budget: Budget,
+    /// The Markdown is xberg's own output, whose dollar math is escaped as Markdown text.
+    written_by_xberg: bool,
 }
 
 impl VisibleMarkdown {
-    pub fn parse(markdown: &str, limits: &SecurityLimits) -> Option<Self> {
+    /// `written_by_xberg` is true only for Markdown that the Markdown writer produced. Other text
+    /// keeps its dollar math as written, since a backslash there is the author's own.
+    pub fn parse(markdown: &str, limits: &SecurityLimits, written_by_xberg: bool) -> Option<Self> {
         if markdown.len() > limits.max_content_size {
             return None;
         }
@@ -92,6 +96,7 @@ impl VisibleMarkdown {
             origins: Vec::new(),
             atoms: Vec::new(),
             budget,
+            written_by_xberg,
         };
         for node in root.descendants() {
             let depth = node.ancestors().take(limits.max_nesting_depth.checked_add(1)?).count();
@@ -210,7 +215,7 @@ impl VisibleMarkdown {
                 && payload.strip_prefix(' ')?.strip_suffix(' ')? == math.literal)
                 .then_some(start + 1..range.end - closing.len() - 1)
         });
-        let escaped = !super::common::markdown_math_is_unescaped(math);
+        let escaped = self.written_by_xberg && !super::common::markdown_math_is_unescaped(math);
         let visible = if escaped {
             super::common::unescape_markdown_text(&math.literal)
         } else {
@@ -428,6 +433,7 @@ impl VisibleMarkdown {
             origins: Vec::new(),
             atoms: Vec::new(),
             budget: self.budget.clone(),
+            written_by_xberg: self.written_by_xberg,
         };
         if !self.text.starts_with(char::is_whitespace) {
             while let Some((_, character)) = source.next_if(|(_, character)| character.is_whitespace()) {
@@ -547,7 +553,7 @@ mod tests {
         let limits = SecurityLimits::default();
         let markdown = "Jane **Doe**\n\n## Annotations\n\n- **Link** (page 1): safe";
         let plain = "  Jane Doe\n\nAnnotations:\nLink (page 1): safe";
-        let projection = VisibleMarkdown::parse(markdown, &limits).unwrap();
+        let projection = VisibleMarkdown::parse(markdown, &limits, true).unwrap();
         let separator = plain.find(":\n").unwrap();
 
         assert!(projection.on_plain(plain, None).is_none());
@@ -562,5 +568,15 @@ mod tests {
             projection.on_plain(fake, Some(fake.rfind(":\n").unwrap())).is_none(),
             "a colon in the source body cannot borrow the appendix certificate"
         );
+    }
+
+    #[test]
+    fn math_backslashes_are_unescaped_only_for_markdown_the_writer_produced() {
+        let limits = SecurityLimits::default();
+        let markdown = r"Let $a \\ b$ hold.";
+        let written = VisibleMarkdown::parse(markdown, &limits, true).unwrap();
+        let foreign = VisibleMarkdown::parse(markdown, &limits, false).unwrap();
+        assert!(written.text.contains(r"a \ b"), "{:?}", written.text);
+        assert!(foreign.text.contains(r"a \\ b"), "{:?}", foreign.text);
     }
 }
