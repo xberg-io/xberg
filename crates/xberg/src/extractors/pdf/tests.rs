@@ -925,6 +925,529 @@ fn should_preserve_tables_without_injecting_text_when_plain_mixed_skips_structur
     assert!(!crate::rendering::render_plain(&plain).contains(table_markdown));
 }
 
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn mixed_plain_admits_rendered_inline_prose_beside_a_table() {
+    let root = tempfile::tempdir().unwrap();
+    crate::utils::test_support::run_child_test(
+        "extractors::pdf::tests::mixed_plain_inline_with_diagnostic_child",
+        "XBERG_MIXED_PLAIN_DIAGNOSTIC_ROOT",
+        root.path(),
+        |_| {},
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+#[ignore = "run in an isolated subprocess to capture debug diagnostics"]
+fn mixed_plain_inline_with_diagnostic_child() {
+    let Some(root) = crate::utils::test_support::child_test_root("XBERG_MIXED_PLAIN_DIAGNOSTIC_ROOT") else {
+        return;
+    };
+    use crate::core::config::OutputFormat;
+    use crate::types::PageBoundary;
+
+    let source = r#"# Status
+
+**Gross**
+
+# **Typed heading**
+
+- **Typed item**
+
+  ```
+  raw code
+  ```
+
+> **Quoted total**
+> **Quoted due**
+
+**Total** &nbsp; for a\_b and [review notes][review], literal **raw labels**. Value >**10**. \
+Continues here.
+
+| Name | Count |
+| --- | --- |
+| North\\| **Gross** |
+
+After: `a b`.
+
+- Reference note.
+
+  [review]: https://example.org "keep - > this""#;
+    let mut text = source.to_owned();
+    let bounds = [PageBoundary {
+        page_number: 1,
+        byte_start: 0,
+        byte_end: source.len(),
+    }];
+    let mut replacements = ahash::AHashMap::from([(1, text.clone())]);
+    let documents = ahash::AHashMap::from([(1, mixed_plain_inline_document())]);
+
+    let odd_pipe = source.replace(r"North\\|", r"North\|");
+    assert_mixed_plain_declines_with_diagnostic(
+        &odd_pipe,
+        &documents,
+        &root,
+        "Plain page omitted or changed accepted table cells",
+    );
+    let mut incomplete = documents.clone();
+    incomplete.get_mut(&1).unwrap().elements.last_mut().unwrap().text =
+        r#"[review]: https://example.org "keep - this""#.into();
+    assert_mixed_plain_declines_with_diagnostic(source, &incomplete, &root, "Plain page omitted accepted prose");
+
+    for method in [ExtractionMethod::Native, ExtractionMethod::Ocr] {
+        ocr::render_mixed_plain_pages(
+            method,
+            &mut text,
+            &bounds,
+            &mut replacements,
+            &documents,
+            &OutputFormat::Plain,
+        );
+        assert_eq!(text, source);
+        assert_eq!(replacements[&1], source);
+    }
+
+    ocr::render_mixed_plain_pages(
+        ExtractionMethod::Mixed,
+        &mut text,
+        &bounds,
+        &mut replacements,
+        &documents,
+        &OutputFormat::Plain,
+    );
+    assert_eq!(
+        text,
+        "# Status\n\nGross\n\nTyped heading\nTyped item\n```\nraw code\n```\n\nQuoted total Quoted due\n\nTotal for a_b and review notes, literal **raw labels**. Value >10. Continues here.\n\nName Count\nNorth\\\\ **Gross**\n\nAfter: a b.\n\nReference note.\n[review]: https://example.org \"keep - > this\""
+    );
+    assert_eq!(replacements[&1], text);
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn mixed_plain_inline_document() -> InternalDocument {
+    use crate::types::Table;
+
+    let mut document = InternalDocument::new("pdf");
+    for (kind, text) in [
+        (ElementKind::Paragraph, "# Status"),
+        (ElementKind::Paragraph, "Gross"),
+        (ElementKind::Heading { level: 1 }, "Typed heading"),
+        (ElementKind::ListItem { ordered: false }, "Typed item"),
+        (ElementKind::RawBlock, "```\nraw code\n```"),
+        (ElementKind::Paragraph, "Quoted total Quoted due"),
+    ] {
+        document.push_element(InternalElement::text(kind, text, 0).with_page(1));
+    }
+    document.push_element(
+        InternalElement::text(
+            ElementKind::Paragraph,
+            "Total for a_b and review notes, literal **raw labels**. Value >10. Continues here.",
+            0,
+        )
+        .with_page(1),
+    );
+    let table_index = document.push_table(Table {
+        cells: vec![
+            vec!["Name".into(), "Count".into()],
+            vec![r"North\\".into(), "**Gross**".into()],
+        ],
+        page_number: 1,
+        ..Default::default()
+    });
+    document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(1));
+    document.push_element(InternalElement::text(ElementKind::Paragraph, "After: a b.", 0).with_page(1));
+    document.push_element(
+        InternalElement::text(ElementKind::ListItem { ordered: false }, "Reference note.", 0).with_page(1),
+    );
+    document.push_element(
+        InternalElement::text(
+            ElementKind::Paragraph,
+            r#"[review]: https://example.org "keep - > this""#,
+            0,
+        )
+        .with_page(1),
+    );
+    document
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn mixed_plain_declines_elements_that_add_words_to_the_accepted_table() {
+    let root = tempfile::tempdir().unwrap();
+    crate::utils::test_support::run_child_test(
+        "extractors::pdf::tests::mixed_plain_added_words_with_diagnostic_child",
+        "XBERG_MIXED_PLAIN_ADDED_WORDS_ROOT",
+        root.path(),
+        |_| {},
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+#[ignore = "run in an isolated subprocess to capture debug diagnostics"]
+fn mixed_plain_added_words_with_diagnostic_child() {
+    use crate::types::Table;
+
+    let Some(root) = crate::utils::test_support::child_test_root("XBERG_MIXED_PLAIN_ADDED_WORDS_ROOT") else {
+        return;
+    };
+    let cells: Vec<Vec<String>> = vec![vec!["Name".into(), "Count".into()], vec!["North".into(), "2".into()]];
+    let source = crate::rendering::common::render_table_markdown(&cells);
+    let source = source.trim_end();
+    let document = |before: Option<&str>, after: Option<&str>| {
+        let mut document = InternalDocument::new("pdf");
+        if let Some(text) = before {
+            document.push_element(InternalElement::text(ElementKind::Paragraph, text, 0).with_page(1));
+        }
+        let table_index = document.push_table(Table {
+            cells: cells.clone(),
+            page_number: 1,
+            ..Default::default()
+        });
+        document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(1));
+        if let Some(text) = after {
+            document.push_element(InternalElement::text(ElementKind::Paragraph, text, 0).with_page(1));
+        }
+        ahash::AHashMap::from([(1, document)])
+    };
+
+    // A cell the table assembly failed to suppress repeats as its own paragraph.
+    assert_mixed_plain_declines_with_diagnostic(
+        source,
+        &document(Some("Name"), None),
+        &root,
+        "Plain page omitted or changed accepted table cells",
+    );
+    assert_mixed_plain_declines_with_diagnostic(
+        source,
+        &document(None, Some("North")),
+        &root,
+        "Plain page added text absent from the accepted transcript",
+    );
+
+    // A word inside a code span's group continues neither its literal nor its projected spelling.
+    let prose = format!("Before `a b` after.\n\n{source}");
+    assert_mixed_plain_declines_with_diagnostic(
+        &prose,
+        &document(Some("Before a x b after."), None),
+        &root,
+        "Plain page omitted accepted prose",
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn mixed_plain_accepts_a_heading_marker_whether_or_not_the_element_spells_it() {
+    use crate::core::config::OutputFormat;
+    use crate::types::{PageBoundary, Table};
+
+    let cells: Vec<Vec<String>> = vec![vec!["Name".into(), "Count".into()], vec!["North".into(), "2".into()]];
+    let source = format!(
+        "# Status\n\n{}",
+        crate::rendering::common::render_table_markdown(&cells).trim_end()
+    );
+    let render = |heading: InternalElement| {
+        let mut document = InternalDocument::new("pdf");
+        document.push_element(heading.with_page(1));
+        let table_index = document.push_table(Table {
+            cells: cells.clone(),
+            page_number: 1,
+            ..Default::default()
+        });
+        document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(1));
+        let mut text = source.clone();
+        let bounds = [PageBoundary {
+            page_number: 1,
+            byte_start: 0,
+            byte_end: text.len(),
+        }];
+        let mut replacements = ahash::AHashMap::from([(1, text.clone())]);
+        ocr::render_mixed_plain_pages(
+            ExtractionMethod::Mixed,
+            &mut text,
+            &bounds,
+            &mut replacements,
+            &ahash::AHashMap::from([(1, document)]),
+            &OutputFormat::Plain,
+        );
+        text
+    };
+
+    assert_eq!(
+        render(InternalElement::text(ElementKind::Paragraph, "# Status", 0)),
+        "# Status\n\nName Count\nNorth 2"
+    );
+    assert_eq!(
+        render(InternalElement::text(ElementKind::Heading { level: 1 }, "Status", 0)),
+        "Status\nName Count\nNorth 2"
+    );
+    // A different marker is not the accepted one, so the page keeps its transcript.
+    assert_eq!(
+        render(InternalElement::text(ElementKind::Paragraph, "## Status", 0)),
+        source
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn mixed_plain_admits_shared_writer_cell_with_backslash_and_pipe() {
+    use crate::core::config::OutputFormat;
+    use crate::types::{PageBoundary, Table};
+
+    let cells = vec![vec!["Name".into(), "Count".into()], vec![r"A\|B".into(), "2".into()]];
+    let mut text = crate::rendering::common::render_table_markdown(&cells)
+        .trim_end()
+        .to_owned();
+    let bounds = [PageBoundary {
+        page_number: 1,
+        byte_start: 0,
+        byte_end: text.len(),
+    }];
+    let mut replacements = ahash::AHashMap::from([(1, text.clone())]);
+    let mut document = InternalDocument::new("pdf");
+    let table_index = document.push_table(Table {
+        cells,
+        page_number: 1,
+        ..Default::default()
+    });
+    document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(1));
+    ocr::render_mixed_plain_pages(
+        ExtractionMethod::Mixed,
+        &mut text,
+        &bounds,
+        &mut replacements,
+        &ahash::AHashMap::from([(1, document)]),
+        &OutputFormat::Plain,
+    );
+    assert_eq!(text, "Name Count\nA\\|B 2");
+    assert_eq!(replacements[&1], text);
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn assert_mixed_plain_declines_with_diagnostic(
+    source: &str,
+    documents: &ahash::AHashMap<u32, InternalDocument>,
+    root: &std::path::Path,
+    reason: &str,
+) {
+    use crate::core::config::OutputFormat;
+    use crate::types::PageBoundary;
+
+    let log = tempfile::NamedTempFile::new_in(root).unwrap();
+    let subscriber = tracing_subscriber::fmt()
+        .with_ansi(false)
+        .with_max_level(tracing::Level::DEBUG)
+        .with_writer(log.reopen().unwrap())
+        .finish();
+    let bounds = [PageBoundary {
+        page_number: 1,
+        byte_start: 0,
+        byte_end: source.len(),
+    }];
+    let mut text = source.to_owned();
+    let mut replacements = ahash::AHashMap::from([(1, text.clone())]);
+    tracing::subscriber::with_default(subscriber, || {
+        ocr::render_mixed_plain_pages(
+            ExtractionMethod::Mixed,
+            &mut text,
+            &bounds,
+            &mut replacements,
+            documents,
+            &OutputFormat::Plain,
+        );
+    });
+    assert_eq!(text, source);
+    assert_eq!(replacements[&1], source);
+    let log = std::fs::read_to_string(log.path()).unwrap();
+    assert!(log.contains("Declined mixed OCR Plain page rendering"), "{log}");
+    assert!(
+        log.contains(" WARN "),
+        "a declined page is reported as degraded output: {log}"
+    );
+    assert!(log.contains("page=1"), "{log}");
+    assert!(log.contains(reason), "{log}");
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn mixed_plain_derives_prose_and_tables_from_elements_and_reconciles_following_pages() {
+    use crate::core::config::OutputFormat;
+    use crate::types::{PageBoundary, Table};
+
+    let table = Table {
+        cells: vec![
+            vec!["Name".into(), "Count".into()],
+            vec!["A|B \n South".into(), "<br> literal".into()],
+        ],
+        markdown: "| Name | Count |\n| --- | --- |\n| A\\|B <br> South | <br> literal |".into(),
+        page_number: 2,
+        ..Default::default()
+    };
+    let raw_table_page = format!("Lead | prose\n\n{}\n\n| Status --- pending |", table.markdown);
+    let raw_ocr_page = "Raw OCR line one\nRaw OCR line two";
+    let native_page = "Native neighbor";
+    let bodies = [raw_ocr_page, raw_table_page.as_str(), native_page];
+    let mut text = bodies.join("\n\n");
+    let boundaries: Vec<_> = bodies
+        .iter()
+        .enumerate()
+        .scan(0, |start, (index, body)| {
+            let boundary = PageBoundary {
+                page_number: index as u32 + 1,
+                byte_start: *start,
+                byte_end: *start + body.len(),
+            };
+            *start = boundary.byte_end + 2;
+            Some(boundary)
+        })
+        .collect();
+
+    let mut table_page = InternalDocument::new("pdf");
+    table_page.push_element(InternalElement::text(ElementKind::Paragraph, "Lead | prose", 0).with_page(2));
+    let table_index = table_page.push_table(table);
+    table_page.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(2));
+    table_page.push_element(InternalElement::text(ElementKind::Paragraph, "| Status --- pending |", 0).with_page(2));
+    let mut non_table_page = InternalDocument::new("pdf");
+    non_table_page
+        .push_element(InternalElement::text(ElementKind::Paragraph, "Structured OCR alternative", 0).with_page(1));
+    let pages = ahash::AHashMap::from([(2, table_page), (1, non_table_page)]);
+    let mut replacements = ahash::AHashMap::from([(2, raw_table_page.clone()), (1, raw_ocr_page.to_owned())]);
+
+    let original = text.clone();
+    for format in [OutputFormat::Markdown, OutputFormat::Html, OutputFormat::Djot] {
+        ocr::render_mixed_plain_pages(
+            ExtractionMethod::Mixed,
+            &mut text,
+            &boundaries,
+            &mut replacements,
+            &pages,
+            &format,
+        );
+        assert_eq!(text, original);
+        assert_eq!(replacements[&2], raw_table_page);
+    }
+
+    let mut incomplete = pages.clone();
+    incomplete.get_mut(&2).unwrap().elements.last_mut().unwrap().text = "Status pending".into();
+    ocr::render_mixed_plain_pages(
+        ExtractionMethod::Mixed,
+        &mut text,
+        &boundaries,
+        &mut replacements,
+        &incomplete,
+        &OutputFormat::Plain,
+    );
+    assert_eq!(
+        text, original,
+        "unrepresented accepted prose must retain its transcript"
+    );
+
+    ocr::render_mixed_plain_pages(
+        ExtractionMethod::Mixed,
+        &mut text,
+        &boundaries,
+        &mut replacements,
+        &pages,
+        &OutputFormat::Plain,
+    );
+    let expected = [
+        raw_ocr_page,
+        "Lead | prose\n\nName Count\nA|B \n South <br> literal\n\n| Status --- pending |",
+        native_page,
+    ];
+    assert_eq!(text, expected.join("\n\n"));
+    assert_mixed_plain_marker_keeps_repeated_neighbor(&raw_table_page, expected[1], &pages);
+    let boundaries = ocr::boundaries_after_replacements(&boundaries, &replacements);
+    let (document, _, _) = select_pdf_document(
+        ExtractionMethod::Mixed,
+        &text,
+        "application/pdf",
+        None,
+        None,
+        Some(&replacements),
+        Some(&pages),
+        Some(&boundaries),
+        &OutputFormat::Plain,
+    );
+    assert_mixed_plain_public_page_ranges(document, boundaries, expected);
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn assert_mixed_plain_marker_keeps_repeated_neighbor(
+    raw_table_page: &str,
+    plain_table_page: &str,
+    pages: &ahash::AHashMap<u32, InternalDocument>,
+) {
+    use crate::core::config::OutputFormat;
+    use crate::types::PageBoundary;
+
+    let marker = "[3] ";
+    let mut marked = format!("{raw_table_page}{marker}{raw_table_page}");
+    let marked_bounds = [
+        PageBoundary {
+            page_number: 2,
+            byte_start: 0,
+            byte_end: raw_table_page.len(),
+        },
+        PageBoundary {
+            page_number: 3,
+            byte_start: raw_table_page.len() + marker.len(),
+            byte_end: marked.len(),
+        },
+    ];
+    let mut marked_replacements = ahash::AHashMap::from([(2, raw_table_page.to_owned())]);
+    ocr::render_mixed_plain_pages(
+        ExtractionMethod::Mixed,
+        &mut marked,
+        &marked_bounds,
+        &mut marked_replacements,
+        pages,
+        &OutputFormat::Plain,
+    );
+    assert_eq!(marked, format!("{}{marker}{raw_table_page}", plain_table_page));
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn assert_mixed_plain_public_page_ranges(
+    mut document: InternalDocument,
+    boundaries: Vec<crate::types::PageBoundary>,
+    expected: [&str; 3],
+) {
+    use crate::types::{ExtractedDocument, PageStructure, PageUnitType};
+
+    document.ocr_text_pages = vec![1, 2];
+    document.prebuilt_pages = Some(
+        expected
+            .iter()
+            .enumerate()
+            .map(|(index, body)| {
+                serde_json::from_value(serde_json::json!({"page_number": index + 1, "content": body})).unwrap()
+            })
+            .collect(),
+    );
+    document.metadata.pages = Some(PageStructure {
+        total_count: 3,
+        unit_type: PageUnitType::Page,
+        boundaries: Some(boundaries),
+        pages: None,
+    });
+
+    let public = ExtractedDocument::from(document);
+    assert_eq!(public.content, expected.join("\n\n"));
+    let public_pages = public.pages.as_ref().unwrap();
+    let ranges = public.metadata.pages.as_ref().unwrap().boundaries.as_ref().unwrap();
+    assert_eq!(public_pages.len(), expected.len());
+    assert_eq!(ranges.len(), expected.len());
+    for ((page, range), expected_body) in public_pages.iter().zip(ranges).zip(expected) {
+        assert_eq!(page.page_number, range.page_number);
+        assert_eq!(page.content, expected_body);
+        assert_eq!(
+            public.content.get(range.byte_start..range.byte_end),
+            Some(expected_body)
+        );
+    }
+}
+
 #[cfg(all(feature = "pdf", feature = "ocr", feature = "chunking"))]
 fn assert_occurs_once(haystack: &str, needle: &str, projection: &str) {
     assert_eq!(

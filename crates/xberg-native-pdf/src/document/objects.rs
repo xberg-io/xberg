@@ -6,7 +6,106 @@
 
 use super::*;
 
+// Covers bounded object parsing and its temporary buffers. ~keep
+const PROOF_OBJECT_PARSE_FACTOR: usize = 256;
+const MAX_PROOF_OBJECT_INPUT: usize = 64 * 1024;
+const PROOF_OBJECT_COPY_OVERHEAD: usize = 128;
+const MAX_PROOF_OBJECT_COPY_DEPTH: usize = 16;
+
+fn proof_copy_charge(object: &Object, remaining: &mut usize, depth: usize) -> Option<()> {
+    if depth == 0 {
+        return None;
+    }
+    *remaining = remaining.checked_sub(PROOF_OBJECT_COPY_OVERHEAD)?;
+    match object {
+        Object::String(bytes) => *remaining = remaining.checked_sub(bytes.capacity())?,
+        Object::Name(name) => *remaining = remaining.checked_sub(name.capacity())?,
+        Object::Array(items) => {
+            *remaining = remaining.checked_sub(items.capacity().saturating_mul(std::mem::size_of::<Object>()))?;
+            for item in items {
+                proof_copy_charge(item, remaining, depth - 1)?;
+            }
+        }
+        Object::Dictionary(dict) | Object::Stream { dict, .. } => {
+            *remaining = remaining.checked_sub(dict.capacity().saturating_mul(PROOF_OBJECT_COPY_OVERHEAD))?;
+            for (key, value) in dict {
+                *remaining = remaining.checked_sub(key.capacity())?;
+                proof_copy_charge(value, remaining, depth - 1)?;
+            }
+        }
+        _ => {}
+    }
+    Some(())
+}
+
+fn proof_clone(object: &Object, max_bytes: usize) -> Option<(Object, usize)> {
+    let mut remaining = max_bytes;
+    proof_copy_charge(object, &mut remaining, MAX_PROOF_OBJECT_COPY_DEPTH)?;
+    Some((object.clone(), max_bytes - remaining))
+}
+
 impl PdfDocument {
+    /// Resolve an object whose copy or ordinary uncompressed read fits a proof work budget.
+    /// Returns `None` for opaque recovery paths or work without a certified bound.
+    #[doc(hidden)]
+    pub fn resolve_object_for_proof(&self, object: &Object, max_bytes: usize) -> Result<Option<(Object, usize)>> {
+        let Some(reference) = object.as_reference() else {
+            return Ok(proof_clone(object, max_bytes));
+        };
+        {
+            let cache = self.object_cache.lock_or_recover();
+            if let Some(cached) = cache.get(&reference) {
+                return Ok(proof_clone(cached, max_bytes));
+            }
+        }
+        let Some((offset, bytes)) = self.proof_object_span(reference, max_bytes) else {
+            return Ok(None);
+        };
+        let object = self.read_uncompressed_object(reference, offset, true, false)?;
+        Ok(Some((object, bytes)))
+    }
+
+    /// Read a font already loaded by the native page pass, without inserting into a cache.
+    #[doc(hidden)]
+    pub fn cached_font_for_proof(&self, object: &Object) -> Option<Arc<crate::fonts::FontInfo>> {
+        self.font_cache.lock_or_recover().get(&object.as_reference()?).cloned()
+    }
+
+    fn proof_object_span(&self, reference: ObjectRef, max_bytes: usize) -> Option<(u64, usize)> {
+        if self.is_encrypted() || self.xref_reconstructed {
+            return None;
+        }
+        let entry = self.xref.get(reference.id)?;
+        if !entry.in_use
+            || entry.entry_type != crate::xref::XRefEntryType::Uncompressed
+            || entry.generation != reference.generation
+        {
+            return None;
+        }
+        let tail = self
+            .source_bytes
+            .as_slice()
+            .get(usize::try_from(entry.offset).ok()?..)?;
+        let input = &tail[..tail
+            .len()
+            .min(MAX_PROOF_OBJECT_INPUT)
+            .min(max_bytes / PROOF_OBJECT_PARSE_FACTOR)];
+        let header_end = input.iter().position(|&byte| byte == b'\n')?;
+        let mut header = std::str::from_utf8(&input[..header_end]).ok()?.split_ascii_whitespace();
+        if header.next()?.parse::<u32>().ok()? != reference.id
+            || header.next()?.parse::<u16>().ok()? != reference.generation
+            || header.next()? != "obj"
+        {
+            return None;
+        }
+        // The ordinary loader reads whole lines through the first endobj marker. ~keep
+        let body = &input[header_end + 1..];
+        let marker = find_substring(body, b"endobj")?;
+        let last_line = body[marker..].iter().position(|&byte| byte == b'\n')?;
+        let extent = header_end + marker + last_line + 2;
+        Some((entry.offset, extent * PROOF_OBJECT_PARSE_FACTOR))
+    }
+
     /// Get the PDF version.
     ///
     /// Returns a tuple (major, minor) representing the PDF version.
@@ -902,6 +1001,16 @@ impl PdfDocument {
         offset: u64,
         already_corrected: bool,
     ) -> Result<Object> {
+        self.read_uncompressed_object(obj_ref, offset, already_corrected, true)
+    }
+
+    fn read_uncompressed_object(
+        &self,
+        obj_ref: ObjectRef,
+        offset: u64,
+        already_corrected: bool,
+        cache: bool,
+    ) -> Result<Object> {
         // The header and the body are read through ONE cursor, private to this
         // call, over the document's own bytes. The body read continues from where
         // the header read stopped, so the two must not be separable: a cursor any
@@ -1214,7 +1323,9 @@ impl PdfDocument {
             }
         }
 
-        self.object_cache.lock_or_recover().insert(obj_ref, obj.clone());
+        if cache {
+            self.object_cache.lock_or_recover().insert(obj_ref, obj.clone());
+        }
 
         Ok(obj)
     }

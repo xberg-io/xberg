@@ -1857,12 +1857,15 @@ struct TjBuffer {
     /// length still equals this: any later text ends the mark. Read by `is_lone_ligature`.
     ligature_len: usize,
     /// Set by a `Tm` that continues the run past its last glyph: the length of `unicode` and the width
-    /// the run had before it. Read by `ends_at_continuing_tm`.
+    /// the run had before it. Read by `ends_at_continuing_tm`; `add_width` ends it.
     tm_extension: Option<TmExtension>,
 }
 
-/// The pen move of a `Tm` that continues a run, kept until the next glyph. A `Tm` that restates the
-/// run under a new horizontal scale rescales it; a `TJ` lead that marks the gap clears it. ~keep
+/// The pen move of a `Tm` that continues a run, kept until the next show that moves the pen. A show
+/// adds its width through `add_width`, which ends the record, text or not: a later show inside an
+/// `ActualText` scope and a glyph with no text end it as a glyph with text does; an empty show does
+/// not. A `Tm` that restates the run under a new horizontal scale rescales it; a `TJ` lead that marks
+/// the gap clears it. ~keep
 #[derive(Clone, Copy, Debug)]
 struct TmExtension {
     text_len: usize,
@@ -2138,22 +2141,37 @@ impl TjBuffer {
         });
     }
 
+    /// Adds the width of a show to the run and, when the show moved the pen, ends the record a
+    /// continuing `Tm` left: the run reaches the pen again. Every show adds its width here, with text
+    /// (a glyph) or without (a later show inside an `ActualText` scope, a glyph the font gives no
+    /// text, an offset in a `TJ` array). A show of no width, an empty string, draws nothing and moves
+    /// nothing, so the record stays.
+    fn add_width(&mut self, width: f32) {
+        self.accumulated_width += width;
+        if width != 0.0 {
+            self.tm_extension = None;
+        }
+    }
+
     /// Keeps the width that a continuing `Tm` set, for a `TJ` whose leading offset marks the word gap
     /// at that pen: the offset, not the run's width, then carries the gap.
     fn keep_continuing_tm_width(&mut self) {
         self.tm_extension = None;
     }
 
-    /// Restates the recorded width in the unit of a new horizontal scale, by the same ratio as the
-    /// glyph widths, so that the run still ends at its last glyph after a stretched `Tm` (GH#2664).
-    fn rescale_continuing_tm_record(&mut self, ratio: f32) {
+    /// Restates the run under a stretched `Tm` (GH#2664): the run's width becomes `pen`, the pen read
+    /// under the new matrix, and the record a continuing `Tm` left scales by `ratio`, the same ratio as
+    /// the glyph widths, so the run still ends at its last glyph in the new unit.
+    fn restate_width_under_stretched_tm(&mut self, ratio: f32, pen: f32) {
+        self.accumulated_width = pen;
         if let Some(mark) = &mut self.tm_extension {
             mark.width_before *= ratio;
         }
     }
 
-    /// The width at the run's last glyph when a continuing `Tm` moved the pen and no glyph came after
-    /// it. That `Tm`'s width covers the gap to the next show, which is not the run's.
+    /// The width at the run's last glyph when a continuing `Tm` moved the pen and no show came after
+    /// it. That `Tm`'s width covers the gap to the next show, which is not the run's. A show ends the
+    /// record in `add_width`; a space the `Tm` inserted ends it here, by the text length.
     fn ends_at_continuing_tm(&self) -> Option<f32> {
         self.tm_extension
             .filter(|mark| mark.text_len == self.unicode.len())
@@ -2660,6 +2678,6 @@ mod span_merging;
 mod span_ordering;
 pub use ordering_snap::script_stacks;
 pub(crate) use ordering_snap::{OrderingSpan, ordering_script_baselines};
-pub use script_stack::{MAX_STACK_MEMBERS, StackSpan, script_stack};
+pub use script_stack::{MAX_STACK_MEMBERS, StackSpan, script_stack, stack_parents, stack_reading_order};
 mod tj_arrays;
 mod xobjects;

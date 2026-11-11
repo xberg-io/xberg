@@ -2109,7 +2109,7 @@ pub(crate) fn tj_offset_shift(offset: f32, gs: &GraphicsState) -> f32 {
 /// `Th` is `horizontal_scaling / 100` (used in horizontal mode only — per
 /// §9.3.4 horizontal scaling is along the writing direction).
 ///
-/// When no font metrics are available we fall back to a half-em estimate per
+/// When no font metrics are available we fall back to a 0.6 em estimate per
 /// character — same constant `render_text_fallback` uses for the visible path,
 /// so the suppressed branch stays consistent with the painted branch.
 pub(crate) fn measure_text_bytes(bytes: &[u8], gs: &GraphicsState, font_info: Option<&crate::fonts::FontInfo>) -> f32 {
@@ -2169,7 +2169,7 @@ pub(crate) fn measure_text_bytes(bytes: &[u8], gs: &GraphicsState, font_info: Op
             }
         }
     } else {
-        // No font info — half-em estimate per byte. Match the wmode-aware
+        // No font info — 0.6 em estimate per byte. Match the wmode-aware
         // arm above by omitting h_scale in vertical mode. ~keep
         let char_width = font_size * 0.6;
         for &b in bytes {

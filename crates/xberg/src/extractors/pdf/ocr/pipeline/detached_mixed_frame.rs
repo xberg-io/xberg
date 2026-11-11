@@ -153,25 +153,55 @@ fn in_frame(bbox: BoundingBox, (width, height): (u32, u32)) -> bool {
 impl RunPageParagraphs {
     /// Detached paragraph geometry is carried separately from the already assembled document.
     pub(super) fn place_detached_in_points(&mut self) -> bool {
-        let Some((sx, sy)) = self.detached_ocr_scale.take() else {
+        let Some(scale) = self.detached_ocr_scale.take() else {
             return false;
         };
-        for paragraph in &mut self.paragraphs {
-            if let Some((left, bottom, right, top)) = paragraph.block_bbox {
-                paragraph.block_bbox = Some((left * sx, bottom * sy, right * sx, top * sy));
-            }
-            for line in &mut paragraph.lines {
-                line.baseline_y *= sy;
-                for segment in &mut line.segments {
-                    segment.x *= sx;
-                    segment.width *= sx;
-                    segment.y *= sy;
-                    segment.height *= sy;
-                    segment.baseline_y *= sy;
-                }
+        scale_paragraph_geometry(&mut self.paragraphs, scale);
+        true
+    }
+}
+
+/// Scale top-left table rectangles from the frame recognition read (`processed`) into the
+/// render raster. Returns whether anything was scaled; a degenerate or identical frame is left
+/// alone.
+pub(super) fn scale_tables_into_render(
+    tables: &mut [crate::types::Table],
+    processed: (u32, u32),
+    render: (u32, u32),
+) -> bool {
+    if processed == render || [processed.0, processed.1, render.0, render.1].contains(&0) {
+        return false;
+    }
+    let scale_x = f64::from(render.0) / f64::from(processed.0);
+    let scale_y = f64::from(render.1) / f64::from(processed.1);
+    for bbox in tables.iter_mut().filter_map(|table| table.bounding_box.as_mut()) {
+        bbox.x0 *= scale_x;
+        bbox.x1 *= scale_x;
+        bbox.y0 *= scale_y;
+        bbox.y1 *= scale_y;
+    }
+    true
+}
+
+/// Scale bottom-left paragraph geometry per axis, e.g. from a raster's pixels to PDF points.
+pub(super) fn scale_paragraph_geometry(
+    paragraphs: &mut [crate::pdf::structure::types::PdfParagraph],
+    (sx, sy): (f32, f32),
+) {
+    for paragraph in paragraphs {
+        if let Some((left, bottom, right, top)) = paragraph.block_bbox {
+            paragraph.block_bbox = Some((left * sx, bottom * sy, right * sx, top * sy));
+        }
+        for line in &mut paragraph.lines {
+            line.baseline_y *= sy;
+            for segment in &mut line.segments {
+                segment.x *= sx;
+                segment.width *= sx;
+                segment.y *= sy;
+                segment.height *= sy;
+                segment.baseline_y *= sy;
             }
         }
-        true
     }
 }
 
@@ -406,5 +436,41 @@ mod tests {
         page.detached_ocr_scale = Some((0.24, 0.24));
         assert!(page.place_detached_in_points());
         assert!(!page.place_detached_in_points());
+    }
+
+    #[test]
+    fn general_detached_tables_move_from_the_recognition_frame_into_the_render() {
+        let table = || Table {
+            bounding_box: Some(BoundingBox {
+                x0: 273.0,
+                y0: 267.0,
+                x1: 2237.0,
+                y1: 1450.0,
+            }),
+            ..Default::default()
+        };
+        let boxes = |tables: &[Table]| tables.iter().map(|table| table.bounding_box).collect::<Vec<_>>();
+        // A 196 dpi render that preprocessing resampled to 300 dpi before recognition; three
+        // tables are outside every shape-specific normalizer. ~keep
+        let mut tables = vec![table(), table(), table()];
+        assert!(scale_tables_into_render(&mut tables, (2550, 3298), (1667, 2156)));
+        for bbox in boxes(&tables).into_iter().flatten() {
+            let expected = [
+                273.0 * 1667.0 / 2550.0,
+                267.0 * 2156.0 / 3298.0,
+                2237.0 * 1667.0 / 2550.0,
+                1450.0 * 2156.0 / 3298.0,
+            ];
+            for (actual, expected) in [bbox.x0, bbox.y0, bbox.x1, bbox.y1].into_iter().zip(expected) {
+                assert!((actual - expected).abs() < 1e-9, "{bbox:?}");
+            }
+            assert!(bbox.x1 <= 1667.0 && bbox.y1 <= 2156.0);
+        }
+
+        let placed = boxes(&tables);
+        assert!(!scale_tables_into_render(&mut tables, (1667, 2156), (1667, 2156)));
+        assert!(!scale_tables_into_render(&mut tables, (2550, 3298), (0, 2156)));
+        assert!(!scale_tables_into_render(&mut tables, (0, 3298), (1667, 2156)));
+        assert_eq!(boxes(&tables), placed);
     }
 }
