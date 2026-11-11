@@ -19459,7 +19459,7 @@ enum TierStrategy {
   /// to Tier-2.
   auto,
 
-  /// Always use the Tier-2 (`tl::parse` + walk) path, skipping Tier-1.
+  /// Always use the Tier-2 (DOM parse + walk) path, skipping Tier-1.
   tier2,
 }
 
