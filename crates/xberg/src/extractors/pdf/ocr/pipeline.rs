@@ -427,19 +427,43 @@ fn mixed_native_page_has_content(
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn merge_returned_page_failures(
     failures: &mut Vec<crate::types::OcrPageFailure>,
-    returned: Vec<crate::types::OcrPageFailure>,
+    returned: &mut crate::types::internal::InternalDocument,
+    page_text: &str,
     native_text: &str,
     boundaries: &[crate::types::PageBoundary],
 ) {
-    let returned = returned
-        .into_iter()
-        .map(|failure| crate::types::OcrPageFailure {
-            recovered: failure.recovered
-                || mixed_native_page_has_content(native_text, boundaries, failure.page.saturating_sub(1) as usize),
-            ..failure
-        })
-        .collect();
-    merge_ocr_page_failures(failures, returned);
+    for failure in &mut returned.ocr_page_failures {
+        let native_kept =
+            mixed_native_page_has_content(native_text, boundaries, failure.page.saturating_sub(1) as usize);
+        if native_kept && !failure.recovered && page_text.trim().is_empty() {
+            let discarded = discarded_xobject_retry_warning(failure, false);
+            if let Some(warning) = returned
+                .processing_warnings
+                .iter_mut()
+                .find(|warning| warning.source == discarded.source && warning.message == discarded.message)
+            {
+                *warning = discarded_xobject_retry_warning(failure, true);
+            }
+        }
+        failure.recovered |= native_kept;
+    }
+    merge_ocr_page_failures(failures, std::mem::take(&mut returned.ocr_page_failures));
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn discarded_xobject_retry_warning(
+    failure: &crate::types::OcrPageFailure,
+    native_kept: bool,
+) -> crate::types::ProcessingWarning {
+    let outcome = if native_kept {
+        "its embedded-image retry was discarded and the page's native text was kept"
+    } else {
+        "its embedded-image retry was discarded"
+    };
+    crate::core::diagnostics::warning(
+        "ocr",
+        format!("OCR of page {} failed ({}); {outcome}.", failure.page, failure.error),
+    )
 }
 
 /// Records for an OCR run that failed as a whole: one for each page the run was asked to read.
@@ -1657,15 +1681,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         raster_size_px,
                         page_size_pt,
                     ) {
+                        merge_returned_page_failures(&mut page_failures, &mut d, &page_text, native_text, boundaries);
                         crate::core::diagnostics::dedup_extend_warnings(
                             &mut accumulated_warnings,
                             std::mem::take(&mut d.processing_warnings),
-                        );
-                        merge_returned_page_failures(
-                            &mut page_failures,
-                            std::mem::take(&mut d.ocr_page_failures),
-                            native_text,
-                            boundaries,
                         );
                         structured_ocr_pages.insert(page_number, d);
                     }
@@ -1818,15 +1837,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         (image.width(), image.height()),
                         page_dimensions_pt(&render_doc, *page_idx),
                     ) {
+                        merge_returned_page_failures(&mut page_failures, &mut d, &page_text, native_text, boundaries);
                         crate::core::diagnostics::dedup_extend_warnings(
                             &mut accumulated_warnings,
                             std::mem::take(&mut d.processing_warnings),
-                        );
-                        merge_returned_page_failures(
-                            &mut page_failures,
-                            std::mem::take(&mut d.ocr_page_failures),
-                            native_text,
-                            boundaries,
                         );
                         structured_ocr_pages.insert(page_number, d);
                     }
@@ -6179,13 +6193,7 @@ pub(super) async fn extract_with_ocr_for_page(
             let page = (page_index_offset + page_idx + 1) as u32;
             for failure in page_failures.iter_mut().filter(|failure| failure.page == page) {
                 failure.recovered = false;
-                page_failure_warnings.push(crate::core::diagnostics::warning(
-                    "ocr",
-                    format!(
-                        "OCR of page {page} failed ({}); its embedded-image retry was discarded.",
-                        failure.error
-                    ),
-                ));
+                page_failure_warnings.push(discarded_xobject_retry_warning(failure, false));
             }
         } else {
             page_failure_warnings.push(warning);

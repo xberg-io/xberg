@@ -28,7 +28,17 @@ fn noise_config(pipeline: bool, whole_document: bool, discard: bool) -> Extracti
 fn assert_noisy_recovery(pipeline: bool, whole_document: bool, discard: bool) {
     let config = noise_config(pipeline, whole_document, discard);
     let name = if pipeline { "tesseract" } else { DIRECT_BACKEND };
-    let result = extract_with(name, RenderOutcome::Fails, RasterOutcome::Noise, &config);
+    let result = if pipeline && whole_document {
+        extract_from_pdf(
+            name,
+            RenderOutcome::Fails,
+            RasterOutcome::Noise,
+            &config,
+            &pdf_with_native_text_and_image(),
+        )
+    } else {
+        extract_with(name, RenderOutcome::Fails, RasterOutcome::Noise, &config)
+    };
     let policy_message = if discard {
         "its text was discarded"
     } else {
@@ -49,6 +59,9 @@ fn assert_noisy_recovery(pipeline: bool, whole_document: bool, discard: bool) {
         .count();
     let failures = result.ocr_page_failures.as_ref().unwrap();
     assert_eq!(failures.len(), if whole_document { 2 } else { 1 });
+    if whole_document {
+        assert_eq!((failures[0].page, failures[0].recovered), (1, false));
+    }
     let failure = failures.iter().find(|failure| failure.page == 2).unwrap();
     assert_eq!(
         (claims, failure.recovered),
@@ -56,6 +69,7 @@ fn assert_noisy_recovery(pipeline: bool, whole_document: bool, discard: bool) {
         "{:?} {failures:?}",
         result.processing_warnings
     );
+    assert_eq!(result.tables.len(), usize::from(!discard));
     if discard {
         assert!(result.content.trim().is_empty(), "{:?}", result.content);
         assert_backend_failure_warning(&result);
@@ -139,14 +153,31 @@ BT /F1 12 Tf 10 180 Td (The original native words stay.) Tj ET
 #[test]
 #[serial_test::serial]
 fn discarded_noisy_retry_reports_native_text_kept() {
+    assert_discarded_retry_keeps_native(false);
+}
+
+#[test]
+#[serial_test::serial]
+fn discarded_noisy_pipeline_retry_reports_native_text_kept() {
+    assert_discarded_retry_keeps_native(true);
+}
+
+#[test]
+#[serial_test::serial]
+fn discarded_noisy_all_pages_pipeline_retry_has_no_recovery_claim() {
+    assert_noisy_recovery(true, true, true);
+}
+
+fn assert_discarded_retry_keeps_native(pipeline: bool) {
     let result = extract_from_pdf(
-        DIRECT_BACKEND,
+        if pipeline { "tesseract" } else { DIRECT_BACKEND },
         RenderOutcome::Fails,
         RasterOutcome::Noise,
-        &noise_config(false, false, true),
+        &noise_config(pipeline, false, true),
         &pdf_with_native_text_and_image(),
     );
     assert_eq!(result.content.trim(), "The original native words stay.");
+    assert!(result.tables.is_empty());
     let failures = result.ocr_page_failures.as_ref().unwrap();
     assert_eq!(failures.as_slice(), recovered_page_two().as_slice());
     assert_backend_failure_warning(&result);

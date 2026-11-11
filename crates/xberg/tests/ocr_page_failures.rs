@@ -85,15 +85,15 @@ impl OcrBackend for StubBackend {
             let mut recovered = ExtractedDocument::default();
             match self.raster {
                 RasterOutcome::Word => recovered.content = RECOVERED_WORD.to_string(),
-                RasterOutcome::Noise => {
-                    recovered.content = "A B C D E F G H I J K L M N O P Q R S T U V W X ".repeat(8)
-                }
-                RasterOutcome::TableOnly => {
+                RasterOutcome::Noise | RasterOutcome::TableOnly => {
+                    if matches!(self.raster, RasterOutcome::Noise) {
+                        recovered.content = "A B C D E F G H I J K L M N O P Q R S T U V W X ".repeat(8);
+                    }
                     recovered.tables = vec![xberg::types::Table {
                         cells: vec![vec!["Item".to_string(), "Amount".to_string()]],
                         markdown: "| Item | Amount |\n| --- | --- |\n".to_string(),
                         ..Default::default()
-                    }]
+                    }];
                 }
             }
             return Ok(recovered);
