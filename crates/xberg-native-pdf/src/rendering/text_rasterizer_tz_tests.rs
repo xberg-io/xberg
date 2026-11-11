@@ -19,6 +19,10 @@ fn gs_at(tz: f32) -> GraphicsState {
     gs
 }
 
+fn glyph_paint(gs: &GraphicsState) -> GlyphPaint {
+    GlyphPaint::new(gs, None)
+}
+
 fn base() -> Transform {
     Transform::from_scale(1.0, -1.0).post_translate(ORIGIN_X, 70.0)
 }
@@ -73,17 +77,19 @@ fn unicode_route(text: &str, paint_missing_glyphs: bool) -> impl Fn(&mut Pixmap,
     move |pixmap, gs| {
         rasterizer()
             .render_unicode_text(
-                pixmap,
+                &mut GlyphTarget::Paint {
+                    pixmap,
+                    paint: &glyph_paint(gs),
+                    clip: None,
+                },
                 &text,
                 text.as_bytes(),
                 None,
                 None,
                 dejavu(),
                 0,
-                &Paint::default(),
                 base(),
                 gs,
-                None,
                 "synthetic",
                 false,
                 paint_missing_glyphs,
@@ -121,15 +127,17 @@ fn cid_direct_route_applies_horizontal_scaling() {
     assert_route_halves(move |pixmap, gs| {
         rasterizer()
             .render_cid_direct(
-                pixmap,
+                &mut GlyphTarget::Paint {
+                    pixmap,
+                    paint: &glyph_paint(gs),
+                    clip: None,
+                },
                 &bytes,
                 &font,
                 &font_bytes,
                 0,
-                &Paint::default(),
                 base(),
                 gs,
-                None,
             )
             .unwrap()
     });
@@ -154,14 +162,16 @@ fn substituted_cjk_route_applies_horizontal_scaling() {
     assert_route_halves(|pixmap, gs| {
         rasterizer()
             .render_substituted_cjk(
-                pixmap,
+                &mut GlyphTarget::Paint {
+                    pixmap,
+                    paint: &glyph_paint(gs),
+                    clip: None,
+                },
                 &CJK_CODES,
                 &font,
                 crate::fonts::predefined_cidfont::CharacterCollection::AdobeJapan1,
-                &Paint::default(),
                 base(),
                 gs,
-                None,
             )
             .unwrap()
     });
@@ -184,7 +194,16 @@ fn measure_only_cjk_route_applies_horizontal_scaling() {
 fn text_fallback_route_stretches_the_box_with_the_pitch() {
     assert_route_halves(|pixmap, gs| {
         rasterizer()
-            .render_text_fallback(pixmap, "HHH", &Paint::default(), base(), gs, None)
+            .render_text_fallback(
+                &mut GlyphTarget::Paint {
+                    pixmap,
+                    paint: &glyph_paint(gs),
+                    clip: None,
+                },
+                "HHH",
+                base(),
+                gs,
+            )
             .unwrap()
     });
 }
@@ -192,8 +211,18 @@ fn text_fallback_route_stretches_the_box_with_the_pitch() {
 #[test]
 fn text_fallback_route_draws_nothing_at_zero_scaling() {
     let mut pixmap = Pixmap::new(400, 100).unwrap();
+    let gs = gs_at(0.0);
     let advance = rasterizer()
-        .render_text_fallback(&mut pixmap, "HHH", &Paint::default(), base(), &gs_at(0.0), None)
+        .render_text_fallback(
+            &mut GlyphTarget::Paint {
+                pixmap: &mut pixmap,
+                paint: &glyph_paint(&gs),
+                clip: None,
+            },
+            "HHH",
+            base(),
+            &gs,
+        )
         .unwrap();
     assert_eq!(advance, 0.0);
     assert!(ink_columns(&pixmap).is_none(), "Tz 0 must draw nothing");
@@ -201,11 +230,20 @@ fn text_fallback_route_draws_nothing_at_zero_scaling() {
 
 #[test]
 fn text_fallback_route_mirrors_to_the_left_at_negative_scaling() {
-    let paint = Paint::default();
     let ink_at = |tz: f32| {
         let mut pixmap = Pixmap::new(400, 100).unwrap();
+        let gs = gs_at(tz);
         rasterizer()
-            .render_text_fallback(&mut pixmap, "HHH", &paint, base(), &gs_at(tz), None)
+            .render_text_fallback(
+                &mut GlyphTarget::Paint {
+                    pixmap: &mut pixmap,
+                    paint: &glyph_paint(&gs),
+                    clip: None,
+                },
+                "HHH",
+                base(),
+                &gs,
+            )
             .unwrap();
         pixmap
     };
