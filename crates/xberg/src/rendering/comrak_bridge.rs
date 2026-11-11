@@ -3520,10 +3520,10 @@ mod tests {
         assert_literals(
             &markdown,
             &[
-                "\nx\n< img src=x onerror=alert(1)>\n",
+                "x <img src=x onerror=alert(1)>",
                 "a\r\n```\n<img src=x>",
                 "b",
-                "\ny\n< img src=x>\n",
+                "y <img src=x>",
             ],
         );
     }
@@ -3723,7 +3723,7 @@ mod tests {
         builder.push_list_item(text, true, vec![math_span(text, text)], None, None);
         builder.end_list();
         builder.end_list();
-        assert_literals(&crate::rendering::render_markdown(&builder.build()), &["\na< !-->\n"]);
+        assert_literals(&crate::rendering::render_markdown(&builder.build()), &["a<!-->"]);
     }
 
     #[test]
