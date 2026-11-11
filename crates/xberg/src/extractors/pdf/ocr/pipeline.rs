@@ -5825,7 +5825,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     #[cfg(auto_rotate)]
                     let processed = if normalize_recovered_table { render } else { processed };
                     detached_table_pair = detached_table_pair::normalize(&mut ocr_result.tables, processed, render);
-                    tables_in_render = detached_table_pair;
+                    tables_in_render |= detached_table_pair;
                 }
             }
             // #1575: capture once, from the first page that has any -- see this function's
