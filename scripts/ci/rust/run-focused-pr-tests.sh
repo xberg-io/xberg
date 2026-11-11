@@ -48,6 +48,34 @@ run_pdf_cases() {
   run_exact png_predictor_panel_recovers_missing_line_without_changing_primary_ocr \
     --test pdf_embedded_psm6_addition_2327
   run_type0_cases
+  run_budget_retry_cases
+}
+
+run_budget_retry_cases() {
+  run_exact tall_gray_jpeg_recovers_every_source_word_after_render_budget_refusal --test pdf_tall_scan_strips
+  local module='extractors::pdf::ocr::pipeline::direct_rgb_budget_recovery::tests'
+  local test_name
+  for test_name in \
+    only_a_typed_source_budget_failure_is_eligible_for_the_direct_rgb_retry \
+    retry_admission_rejects_each_nondefault_request \
+    retry_admission_requires_the_registered_builtin_tesseract \
+    rgb_certificate_rejects_a_source_one_byte_over_the_limit \
+    rgb_certificate_requires_matching_encoded_and_placed_dimensions \
+    a_second_physical_page_disqualifies_an_otherwise_certified_rgb_source \
+    rgb_certificate_rejects_a_stored_gray_jpeg \
+    rgb_certificate_rejects_a_second_painted_image \
+    two_image_reads_do_not_report_one_page_segmentation_mode \
+    a_budget_failure_without_original_pdf_bytes_is_not_recovered; do
+    run_exact "$module::$test_name" --lib
+  done
+  for test_name in \
+    automatic_direct_rgb_budget_retry_retains_text_with_default_recognition_policy \
+    explicitly_forced_minimal_direct_ocr_keeps_its_budget_refusal \
+    minimal_direct_retry_does_not_omit_visible_paint_beside_the_rgb_scan \
+    direct_rgb_budget_retry_retains_the_producing_tesseract_segmentation_mode \
+    mixed_pipeline_retry_records_segmentation_mode_for_the_recovered_page; do
+    run_exact "$test_name" --test pdf_direct_rgb_budget_recovery
+  done
 }
 
 run_type0_cases() {
@@ -134,7 +162,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=53
+  expected=69
   run_pdf_cases
   run_number_budget_cases
   run_ink_probe_cases
