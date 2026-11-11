@@ -201,6 +201,11 @@ fn should_set_dollar_math_as_text_without_delimiters() {
 }
 
 #[test]
+fn should_set_display_math_on_one_line_without_its_comments() {
+    assert_eq!(text("$$\na % note\nb\n$$\n"), "a b");
+}
+
+#[test]
 fn should_draw_bold_and_italic_from_the_regular_face() {
     let runs = all_runs("**bold** *italic* plain\n");
     let flags: Vec<(&str, bool, bool)> = runs

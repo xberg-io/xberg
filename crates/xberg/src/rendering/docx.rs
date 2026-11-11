@@ -728,6 +728,12 @@ mod tests {
     }
 
     #[test]
+    fn should_write_display_math_on_one_line_without_its_comments() {
+        let document = part("$$\na % note\nb\n$$\n", "word/document.xml");
+        assert_eq!(body_text(&document), "a b");
+    }
+
+    #[test]
     fn should_escape_markup_and_drop_characters_xml_cannot_hold() {
         let document = part("a < b & \"c\" 'd' \u{1}e\u{FFFE}f\n", "word/document.xml");
         assert_eq!(body_text(&document), "a < b & \"c\" 'd' ef");
