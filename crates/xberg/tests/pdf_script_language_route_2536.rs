@@ -2,6 +2,8 @@
 
 mod helpers;
 
+use helpers::pdf_picture::{PicturePlacement, with_full_page_picture, with_invisible_text};
+
 use xberg::core::config::{OcrStrategy, PageConfig};
 use xberg::types::{ExtractedDocument, ExtractionMethod};
 use xberg::{ExtractionConfig, OcrConfig, OutputFormat};
@@ -105,18 +107,31 @@ fn forced_ocr_still_replaces_the_page_so_the_automatic_result_is_the_routing() {
 }
 
 #[test]
-fn automatic_english_ocr_still_reads_a_scanned_page_that_carries_a_khmer_text_overlay() {
+fn automatic_english_ocr_still_reads_a_scanned_page_whose_khmer_layer_is_invisible() {
     let models = english_model();
-    let native = extract(SCANNED_ENGLISH_KHMER_OVERLAY, models.path(), |config| {
-        config.disable_ocr = true
-    });
+    let sidecar = with_invisible_text(SCANNED_ENGLISH_KHMER_OVERLAY);
+    let native = extract(&sidecar, models.path(), |config| config.disable_ocr = true);
     assert!(khmer_count(&native.content) > 0 && !native.content.contains("bottles"));
-    let automatic = extract(SCANNED_ENGLISH_KHMER_OVERLAY, models.path(), |_| {});
+    let automatic = extract(&sidecar, models.path(), |_| {});
     assert!(
         automatic.content.contains("20,000 bottles of water"),
         "the rasterised English body was not read: {:?}",
         automatic.content
     );
+}
+
+/// #2826: a Khmer stamp printed visibly over a scanned page is page content, so English OCR does
+/// not replace it. Whether the English body of the picture is to be read beside it is open.
+#[test]
+fn automatic_english_ocr_keeps_a_khmer_stamp_drawn_over_a_scanned_page() {
+    let models = english_model();
+    let native = extract(SCANNED_ENGLISH_KHMER_OVERLAY, models.path(), |config| {
+        config.disable_ocr = true
+    });
+    assert_eq!(khmer_count(&native.content), 222, "{:?}", native.content);
+    let automatic = extract(SCANNED_ENGLISH_KHMER_OVERLAY, models.path(), |_| {});
+    assert_eq!(khmer_count(&automatic.content), 222, "{:?}", automatic.content);
+    assert!(!picture_warning(&automatic), "{:?}", automatic.processing_warnings);
 }
 
 #[test]
@@ -165,7 +180,11 @@ fn automatic_ocr_through_an_english_only_pipeline_keeps_the_khmer_page() {
 #[test]
 fn a_scanned_page_with_a_khmer_layer_read_with_english_warns_to_add_khm() {
     let models = english_model();
-    let automatic = extract(SCANNED_ENGLISH_KHMER_OVERLAY, models.path(), |_| {});
+    let automatic = extract(
+        &with_invisible_text(SCANNED_ENGLISH_KHMER_OVERLAY),
+        models.path(),
+        |_| {},
+    );
     let warnings: Vec<_> = automatic
         .processing_warnings
         .iter()
@@ -207,7 +226,8 @@ fn the_scan_page_warning_names_the_stage_language_when_the_first_stage_sets_one(
     let pipeline = serde_json::json!({"stages": [
         {"backend": "tesseract", "priority": 100, "language": ["eng"]},
     ]});
-    let automatic = extract(SCANNED_ENGLISH_KHMER_OVERLAY, models.path(), |config| {
+    let sidecar = with_invisible_text(SCANNED_ENGLISH_KHMER_OVERLAY);
+    let automatic = extract(&sidecar, models.path(), |config| {
         config.ocr.as_mut().unwrap().pipeline = Some(serde_json::from_value(pipeline).unwrap());
     });
     let warnings = khmer_warnings(&automatic);
@@ -387,4 +407,55 @@ fn a_khmer_stage_before_an_english_stage_reads_a_page_that_lost_glyphs_with_ocr(
         "{:?}",
         automatic.processing_warnings
     );
+}
+
+fn picture_warning(document: &ExtractedDocument) -> bool {
+    document
+        .processing_warnings
+        .iter()
+        .any(|w| w.source == "ocr" && w.message.contains("carries a picture"))
+}
+
+#[test]
+fn automatic_english_ocr_keeps_a_khmer_layer_drawn_over_a_full_page_picture() {
+    let models = english_model();
+    let flyer = with_full_page_picture(COMPLETE, PicturePlacement::UnderText);
+    let native = extract(&flyer, models.path(), |config| config.disable_ocr = true);
+    assert_eq!(khmer_count(&native.content), 222, "{:?}", native.content);
+    for keep_native_content in [false, true] {
+        let automatic = extract(&flyer, models.path(), |config| {
+            config.pages.as_mut().unwrap().keep_native_content = keep_native_content;
+        });
+        let pages = automatic.pages.as_ref().unwrap();
+        assert_eq!(khmer_count(&pages[0].content), 222, "{:?}", automatic.content);
+        assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
+        assert!(!picture_warning(&automatic), "{:?}", automatic.processing_warnings);
+        assert_eq!(
+            khmer_warnings(&automatic).len(),
+            1,
+            "{:?}",
+            automatic.processing_warnings
+        );
+    }
+}
+
+#[test]
+fn automatic_english_ocr_still_reads_a_picture_over_or_under_an_invisible_khmer_layer() {
+    let models = english_model();
+    for placement in [PicturePlacement::OverText, PicturePlacement::UnderInvisibleText] {
+        let source = with_full_page_picture(COMPLETE, placement);
+        // The warning names a Khmer layer the rule saw, so the layer was read and the picture won. ~keep
+        let automatic = extract(&source, models.path(), |_| {});
+        assert!(
+            picture_warning(&automatic),
+            "{placement:?}: {:?}",
+            automatic.processing_warnings
+        );
+        assert_eq!(
+            khmer_count(&automatic.content),
+            0,
+            "{placement:?}: {:?}",
+            automatic.content
+        );
+    }
 }

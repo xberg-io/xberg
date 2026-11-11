@@ -6,6 +6,8 @@
 
 mod helpers;
 
+use helpers::pdf_picture::{PicturePlacement, with_full_page_picture};
+
 use xberg::core::config::{OcrStrategy, PageConfig};
 use xberg::types::{ExtractedDocument, ExtractionMethod};
 use xberg::{ExtractionConfig, OcrConfig, OutputFormat};
@@ -214,4 +216,34 @@ fn a_document_of_wrong_script_pages_is_read_whole() {
         }
     }
     assert!(!skipped(&result), "{:?}", result.processing_warnings);
+}
+
+#[test]
+fn a_wrong_mapped_layer_drawn_over_a_full_page_picture_is_still_read_by_ocr() {
+    let models = models();
+    let result = extract(
+        &with_full_page_picture(ARABIC, PicturePlacement::UnderText),
+        models.path(),
+    );
+    for phrase in PHRASES {
+        assert!(
+            result.content.contains(phrase),
+            "missing {phrase:?} in {:?}",
+            result.content
+        );
+    }
+    assert!(!skipped(&result), "{:?}", result.processing_warnings);
+    assert_eq!(arabic_letters(&result.content), 0);
+}
+
+#[test]
+fn a_genuine_arabic_layer_drawn_over_a_full_page_picture_stays_native() {
+    let models = models();
+    let result = extract(
+        &with_full_page_picture(GENUINE_ARABIC, PicturePlacement::UnderText),
+        models.path(),
+    );
+    assert!(skipped(&result), "{:?}", result.processing_warnings);
+    assert_eq!(result.extraction_method, Some(ExtractionMethod::Native));
+    assert!(arabic_letters(&result.content) > 100, "{:?}", result.content);
 }

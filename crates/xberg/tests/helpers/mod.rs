@@ -393,3 +393,6 @@ mod tests {
 
 #[cfg(feature = "pdf")]
 pub mod pdf_panels;
+
+#[cfg(feature = "pdf")]
+pub mod pdf_picture;
