@@ -121,6 +121,18 @@ fn prunes_a_lone_capitalized_trigram_without_a_closing_mark_and_keeps_an_accente
 }
 
 #[test]
+fn a_lone_capitalized_trigram_is_dropped_from_a_noise_page_but_does_not_make_one() {
+    let real = ["alpha beta", "gamma delta", "epsilon zeta", "theta iota"];
+    let mut lines = real.to_vec();
+    lines.extend(noise_filler(3));
+    lines.push("Tee");
+    let text = lines.join("\n\n");
+    assert!(!page_is_dominated_by_noise_lines(text.lines()), "{text:?}");
+    let noisy = page(&["SECTION TITLE"], 12) + "\n\nTee\n\nBid";
+    assert_eq!(prune_text(&noisy).0, "SECTION TITLE");
+}
+
+#[test]
 fn keeps_real_words_beside_stray_glyphs() {
     assert_kept_exactly(&[
         "Annual report q z",
