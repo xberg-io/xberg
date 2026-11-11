@@ -406,8 +406,14 @@ fn build_sub_doc(elem_indices: &[usize], doc: &InternalDocument) -> InternalDocu
     sub_doc
 }
 
-pub(crate) fn render_plain_elements(elem_indices: &[usize], doc: &InternalDocument) -> String {
-    crate::rendering::render_plain(&build_sub_doc(elem_indices, doc))
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(crate) fn render_plain_page_elements(doc: &InternalDocument, page: u32) -> Option<String> {
+    let membership = compute_page_membership(doc);
+    membership.get(&page).map(|indices| render_plain_elements(indices, doc))
+}
+
+fn render_plain_elements(indices: &[usize], doc: &InternalDocument) -> String {
+    crate::rendering::render_plain(&build_sub_doc(indices, doc))
 }
 
 /// Whether `page`'s prebuilt text may be replaced by the plain rendering of its elements: every

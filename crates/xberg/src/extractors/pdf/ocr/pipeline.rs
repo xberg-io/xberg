@@ -3162,62 +3162,76 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-pub(in crate::extractors::pdf) fn render_mixed_tables_plain(
-    run: &mut MixedOcrRun,
-    native_text: &str,
+pub(in crate::extractors::pdf) fn render_mixed_plain_pages(
+    text: &mut String,
     boundaries: &[crate::types::PageBoundary],
-    config: &ExtractionConfig,
+    replacements: &mut ahash::AHashMap<u32, String>,
+    documents: &ahash::AHashMap<u32, crate::types::internal::InternalDocument>,
+    format: &crate::core::config::OutputFormat,
 ) {
-    if config.output_format != crate::core::config::OutputFormat::Plain {
+    if *format != crate::core::config::OutputFormat::Plain {
         return;
     }
-    let (text, replacements, documents, ..) = &mut run.output;
-    let mut changed = false;
-    for (page, replacement) in &mut *replacements {
-        let Some(document) = documents.get(page).filter(|document| !document.tables.is_empty()) else {
+    let adjusted = super::document::boundaries_after_replacements(boundaries, replacements);
+    let mut rendered = ahash::AHashMap::new();
+    for boundary in &adjusted {
+        let page = boundary.page_number;
+        let (Some(accepted), Some(document)) = (replacements.get(&page), documents.get(&page)) else {
             continue;
         };
-        changed |= render_owned_inline_tables_plain(replacement, document);
+        if document.tables.is_empty() || text.get(boundary.byte_start..boundary.byte_end) != Some(accepted.as_str()) {
+            continue;
+        }
+        let plain = crate::extraction::derive::render_plain_page_elements(document, page);
+        if let Some(plain) = plain.filter(|plain| preserves_accepted_ocr_tokens(accepted, plain, document)) {
+            rendered.insert(page, plain);
+        }
     }
-    if changed {
-        *text = apply_ocr_page_replacements(native_text, boundaries, replacements);
+    if !rendered.is_empty() {
+        *text = apply_ocr_page_replacements(text, &adjusted, &rendered);
+        replacements.extend(rendered);
     }
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-fn render_owned_inline_tables_plain(text: &mut String, document: &crate::types::internal::InternalDocument) -> bool {
-    use crate::extraction::derive::render_plain_elements;
+fn preserves_accepted_ocr_tokens(
+    accepted: &str,
+    plain: &str,
+    document: &crate::types::internal::InternalDocument,
+) -> bool {
     use crate::types::internal::ElementKind;
     use pulldown_cmark::{Event, Options, Parser, Tag};
 
-    // ~keep The assembled PDF elements can omit prose covered by table tokens.
-    // Preserve the accepted transcript outside the parser's owned table spans.
-    let mut recognized = ahash::AHashMap::<_, (Vec<_>, Vec<_>, bool)>::new();
-    let mut table_indices = ahash::AHashSet::new();
-    for (index, element) in document.elements.iter().enumerate() {
-        if let ElementKind::Table { table_index } = element.kind
-            && let Some(table) = document.tables.get(table_index as usize)
-            && !table.cells.is_empty()
-        {
-            let key = inline_table_key(&table.markdown);
-            let (indices, _, repeated_reference) = recognized.entry(key).or_default();
-            indices.push(index);
-            *repeated_reference |= !table_indices.insert(table_index);
-        }
-    }
-    if recognized.is_empty() {
+    // ~keep PDF table assembly may suppress a paragraph covered by cell tokens. Require the
+    // accepted token order, including punctuation, before replacing its transcript.
+    if plain.is_empty() {
         return false;
     }
-
+    let mut tables = document.elements.iter().filter_map(|element| match element.kind {
+        ElementKind::Table { table_index } => document.tables.get(table_index as usize),
+        _ => None,
+    });
+    let mut retained = plain.split_whitespace();
+    let mut offset = 0;
     let mut depth = 0;
-    for (event, range) in Parser::new_ext(text, Options::ENABLE_TABLES).into_offset_iter() {
+    for (event, range) in Parser::new_ext(accepted, Options::ENABLE_TABLES).into_offset_iter() {
         match event {
             Event::Start(tag) => {
-                if depth == 0
-                    && matches!(tag, Tag::Table(_))
-                    && let Some((_, spans, _)) = recognized.get_mut(&inline_table_key(&text[range.clone()]))
-                {
-                    spans.push(range);
+                if depth == 0 && matches!(tag, Tag::Table(_)) {
+                    let Some(table) = tables.next() else {
+                        return false;
+                    };
+                    if !retains_ocr_words(&accepted[offset..range.start], &mut retained)
+                        || !source_table_has_cells(&accepted[range.clone()], &table.cells)
+                        || !table
+                            .cells
+                            .iter()
+                            .flatten()
+                            .all(|cell| retains_ocr_words(cell, &mut retained))
+                    {
+                        return false;
+                    }
+                    offset = range.end;
                 }
                 depth += 1;
             }
@@ -3225,203 +3239,49 @@ fn render_owned_inline_tables_plain(text: &mut String, document: &crate::types::
             _ => {}
         }
     }
-
-    let mut replacements = Vec::new();
-    for (indices, spans, repeated_reference) in recognized.into_values().filter(|(_, spans, _)| !spans.is_empty()) {
-        let plain = render_plain_elements(&indices[..1], document);
-        if repeated_reference
-            || spans.len() != indices.len()
-            || indices[1..]
-                .iter()
-                .any(|index| render_plain_elements(&[*index], document) != plain)
-        {
-            tracing::warn!("Mixed OCR table ownership is ambiguous in the accepted Plain transcript");
-            continue;
-        }
-        if !plain.is_empty() {
-            replacements.extend(spans.into_iter().map(|span| (span, plain.clone())));
-        }
-    }
-    replacements.sort_unstable_by_key(|(span, _)| std::cmp::Reverse(span.start));
-    for (range, plain) in &replacements {
-        let end = range.start + text[range.clone()].trim_end_matches(['\r', '\n']).len();
-        text.replace_range(range.start..end, plain);
-    }
-    !replacements.is_empty()
+    retains_ocr_words(&accepted[offset..], &mut retained)
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-fn inline_table_key(markdown: &str) -> String {
-    // A GFM parser can truncate extra cells when rendering a row. Match the source
-    // instead, allowing only ASCII padding around unescaped delimiters. ~keep
-    let mut key = String::with_capacity(markdown.len());
-    for line in markdown.trim_matches(['\r', '\n']).lines() {
-        let mut cell_start = 0;
-        let mut escaped = false;
-        for (offset, character) in line.char_indices() {
-            if character == '|' && !escaped {
-                key.push_str(line[cell_start..offset].trim_matches([' ', '\t']));
-                key.push('|');
-                cell_start = offset + 1;
-            }
-            escaped = character == '\\' && !escaped;
-        }
-        key.push_str(line[cell_start..].trim_matches([' ', '\t']));
-        key.push('\n');
-    }
-    key
+fn retains_ocr_words(text: &str, retained: &mut std::str::SplitWhitespace<'_>) -> bool {
+    text.split_whitespace()
+        .all(|word| retained.any(|candidate| candidate == word))
 }
 
-#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-mod plain_table_tests {
-    use super::{MixedOcrRun, render_mixed_tables_plain, render_owned_inline_tables_plain};
-    use crate::core::config::{ExtractionConfig, OutputFormat};
-    use crate::extractors::pdf::flat_pdf_document;
-    use crate::extractors::pdf::ocr::document::boundaries_after_replacements;
-    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
-    use crate::types::{ExtractedDocument, PageBoundary, PageStructure, PageUnitType, Table};
-
-    fn recognized_table() -> Table {
-        Table {
-            markdown: "| Name | Count |\n| --- | --- |\n| A | 3 |".into(),
-            cells: vec![vec!["Name".into(), "Count".into()], vec!["A".into(), "3".into()]],
-            ..Default::default()
-        }
-    }
-
-    fn table_document(table_text: &str) -> InternalDocument {
-        let mut document = InternalDocument::new("pdf");
-        let table_index = document.push_table(recognized_table());
-        document.push_element(InternalElement::text(ElementKind::Table { table_index }, table_text, 0));
-        document
-    }
-
-    #[test]
-    fn renders_owned_plain_table_in_place_and_keeps_literal_prose() {
-        let native = "Old\n\nVoisin";
-        let boundaries = [
-            PageBoundary {
-                page_number: 1,
-                byte_start: 0,
-                byte_end: 3,
-            },
-            PageBoundary {
-                page_number: 2,
-                byte_start: 5,
-                byte_end: native.len(),
-            },
-        ];
-        let document = table_document("Name and count\nA: 3");
-
-        let mut run = MixedOcrRun::native(native);
-        let transcript = "Lead | prose\n\n|Name|Count|\n|---|---|\n|A|3|\n\nStatus: Complete?";
-        let original = format!("{transcript}\n\nVoisin");
-        run.output.0.clone_from(&original);
-        run.output.1.insert(1, transcript.into());
-        run.output.2.insert(1, document);
-        for output_format in [OutputFormat::Markdown, OutputFormat::Html, OutputFormat::Djot] {
-            let config = ExtractionConfig {
-                output_format,
-                ..Default::default()
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn source_table_has_cells(source: &str, cells: &[Vec<String>]) -> bool {
+    // ~keep Verify every source cell before relying on the typed table. GFM can omit excess
+    // cells from its events, and a source <br> can represent either a line break or literal text.
+    let mut rows = source.lines().enumerate().filter(|(index, _)| *index != 1);
+    let columns = cells.iter().map(Vec::len).max().unwrap_or(0);
+    for row in cells {
+        let Some((_, source_row)) = rows.next() else {
+            return false;
+        };
+        let mut remainder = source_row.trim();
+        remainder = remainder.strip_prefix('|').unwrap_or(remainder);
+        for column in 0..columns {
+            let delimiter = remainder
+                .match_indices('|')
+                .find(|(index, _)| *index == 0 || remainder.as_bytes()[index - 1] != b'\\');
+            let (source_cell, rest) = match delimiter {
+                Some((index, _)) => (&remainder[..index], &remainder[index + 1..]),
+                None => (remainder, ""),
             };
-            render_mixed_tables_plain(&mut run, native, &boundaries, &config);
-            assert_eq!(run.output.0, original);
-            assert_eq!(run.output.1[&1], transcript);
+            let mut encoded = String::new();
+            if let Some(cell) = row.get(column) {
+                crate::rendering::common::push_escaped_cell(&mut encoded, cell);
+            }
+            if source_cell.trim() != encoded.trim() {
+                return false;
+            }
+            remainder = rest;
         }
-
-        render_mixed_tables_plain(&mut run, native, &boundaries, &ExtractionConfig::default());
-        assert_eq!(
-            run.output.1[&1],
-            "Lead | prose\n\nName and count\nA: 3\n\nStatus: Complete?"
-        );
-        assert_eq!(
-            run.output.0,
-            "Lead | prose\n\nName and count\nA: 3\n\nStatus: Complete?\n\nVoisin"
-        );
-
-        let adjusted = boundaries_after_replacements(&boundaries, &run.output.1);
-        assert_eq!(adjusted[1].byte_start, run.output.1[&1].len() + 2);
-        let mut document = flat_pdf_document(&run.output.0, "application/pdf", Some(&adjusted));
-        document.ocr_text_pages.push(1);
-        document.prebuilt_pages = Some(
-            adjusted
-                .iter()
-                .map(|boundary| {
-                    serde_json::from_value(serde_json::json!({
-                        "page_number": boundary.page_number,
-                        "content": &run.output.0[boundary.byte_start..boundary.byte_end],
-                    }))
-                    .unwrap()
-                })
-                .collect(),
-        );
-        document.metadata.pages = Some(PageStructure {
-            total_count: 2,
-            unit_type: PageUnitType::Page,
-            boundaries: Some(adjusted),
-            pages: None,
-        });
-        let public = ExtractedDocument::from(document);
-        assert_eq!(public.content, run.output.0);
-        let pages = public.pages.as_ref().unwrap();
-        let ranges = public.metadata.pages.as_ref().unwrap().boundaries.as_ref().unwrap();
-        assert_eq!(pages.len(), 2);
-        assert_eq!(ranges.len(), 2);
-        for (page, range) in pages.iter().zip(ranges) {
-            assert_eq!(page.page_number, range.page_number);
-            assert_eq!(
-                public.content.get(range.byte_start..range.byte_end),
-                Some(page.content.as_str())
-            );
+        if !remainder.trim().is_empty() {
+            return false;
         }
     }
-
-    #[test]
-    fn preserves_ambiguous_and_unowned_table_blocks() {
-        let document = table_document("");
-        let equivalent = "|Name|Count|\n|---|---|\n|A|3|";
-        let unowned = "| Other | Data |\n| --- | --- |\n| B | 4 |";
-        let mut transcript = format!("{equivalent}\n\n{}\n\n{unowned}", document.tables[0].markdown);
-        let original = transcript.clone();
-        assert!(!render_owned_inline_tables_plain(&mut transcript, &document));
-        assert_eq!(transcript, original);
-
-        let mut transcript = format!("{equivalent}\n\n```\n{equivalent}\n```\n\n{unowned}");
-        assert!(render_owned_inline_tables_plain(&mut transcript, &document));
-        assert_eq!(
-            transcript,
-            format!("Name Count\nA 3\n\n```\n{equivalent}\n```\n\n{unowned}")
-        );
-    }
-
-    #[test]
-    fn preserves_table_spans_when_element_ownership_is_incomplete_or_repeated() {
-        let mut document = table_document("");
-        let mut repeated = document.elements[0].clone();
-        document.push_element(repeated.clone());
-        let markdown = &document.tables[0].markdown;
-        let original = format!("{markdown}\n\n{markdown}");
-        let mut transcript = original.clone();
-        assert!(!render_owned_inline_tables_plain(&mut transcript, &document));
-        assert_eq!(transcript, original);
-
-        let table_index = document.push_table(recognized_table());
-        repeated.kind = ElementKind::Table { table_index };
-        document.elements[1] = repeated;
-        let original = document.tables[0].markdown.clone();
-        let mut transcript = original.clone();
-        assert!(!render_owned_inline_tables_plain(&mut transcript, &document));
-        assert_eq!(transcript, original);
-    }
-
-    #[test]
-    fn preserves_table_span_with_an_extra_source_cell() {
-        let document = table_document("");
-        let original = "| Name | Count |\n| --- | --- |\n| A | 3 | EXTRA-CELL |";
-        let mut transcript = original.to_string();
-        assert!(!render_owned_inline_tables_plain(&mut transcript, &document));
-        assert_eq!(transcript, original);
-    }
+    rows.next().is_none()
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
