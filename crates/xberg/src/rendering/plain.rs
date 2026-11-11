@@ -161,7 +161,9 @@ fn append_heading_attributes_plain(elem: &InternalElement, out: &mut String) {
     let mut filtered: Vec<_> = attrs
         .iter()
         .filter(|(key, value)| {
-            !key.starts_with("xmlns") && !value.is_empty() && key.as_str() != crate::types::internal::STYLE_NAME_ATTRIBUTE
+            !key.starts_with("xmlns")
+                && !value.is_empty()
+                && key.as_str() != crate::types::internal::STYLE_NAME_ATTRIBUTE
         })
         .collect();
     filtered.sort_by_key(|(key, _)| key.as_str());
@@ -653,7 +655,10 @@ mod tests {
         b.set_attributes(
             heading,
             AHashMap::from_iter([
-                (crate::types::internal::STYLE_NAME_ATTRIBUTE.to_string(), "heading 1".to_string()),
+                (
+                    crate::types::internal::STYLE_NAME_ATTRIBUTE.to_string(),
+                    "heading 1".to_string(),
+                ),
                 ("role".to_string(), "contract".to_string()),
             ]),
         );

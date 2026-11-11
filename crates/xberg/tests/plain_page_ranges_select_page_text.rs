@@ -29,7 +29,10 @@ fn plain_pages_config() -> ExtractionConfig {
 }
 
 fn warned(document: &ExtractedDocument) -> bool {
-    document.processing_warnings.iter().any(|w| w.source == "page_boundaries")
+    document
+        .processing_warnings
+        .iter()
+        .any(|w| w.source == "page_boundaries")
 }
 
 /// The pages whose range is kept. Every kept range selects its page's text exactly, and a page
@@ -57,7 +60,10 @@ fn pages_with_exact_ranges(document: &ExtractedDocument) -> Vec<u32> {
     }
     let ranged: Vec<u32> = boundaries.iter().map(|boundary| boundary.page_number).collect();
     if pages.iter().any(|page| !ranged.contains(&page.page_number)) {
-        assert!(warned(document), "a page lost its range without a page_boundaries warning");
+        assert!(
+            warned(document),
+            "a page lost its range without a page_boundaries warning"
+        );
     }
     ranged
 }
@@ -71,7 +77,13 @@ fn every_native_page_keeps_a_range_that_selects_its_text() {
     };
     let document = extract("pdf/regression_pages/irs-fw9--2024-p1.pdf", &config);
     let ranged = pages_with_exact_ranges(&document);
-    let pages: Vec<u32> = document.pages.as_deref().unwrap().iter().map(|p| p.page_number).collect();
+    let pages: Vec<u32> = document
+        .pages
+        .as_deref()
+        .unwrap()
+        .iter()
+        .map(|p| p.page_number)
+        .collect();
     assert_eq!(ranged, pages, "every native page keeps its range");
     assert!(!warned(&document), "no page_boundaries warning on a native page");
 }

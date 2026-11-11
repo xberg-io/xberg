@@ -46,9 +46,7 @@ pub(super) fn derive_pages(
             "Page byte ranges were measured on a different rendering of the text and could not be \
              mapped onto the returned content, so they were omitted",
         );
-    } else if !reconciled
-        && let Some(omitted) = drop_mismatched_page_boundaries(doc, content, pages.as_deref())
-    {
+    } else if !reconciled && let Some(omitted) = drop_mismatched_page_boundaries(doc, content, pages.as_deref()) {
         crate::core::diagnostics::push_warning(
             &mut doc.processing_warnings,
             "page_boundaries",
