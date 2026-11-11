@@ -570,13 +570,24 @@ fn render_djot_annotated(text: &str, annotations: &[crate::types::document_struc
 }
 
 /// Render the text of a title, heading or slide title. These sit after their `#` marks, so the
-/// block-start escape does not apply, but a leading `{` still opens an attribute. ~keep
+/// block-start escape does not apply, but a leading `{` still opens an attribute. A leading
+/// `{-` or `{=` that a strikethrough or highlight annotation wrote is markup and stays. ~keep
 fn render_djot_heading_text(text: &str, annotations: &[crate::types::document_structure::TextAnnotation]) -> String {
     let inline = render_djot_inline(text, annotations);
-    if text.starts_with('{') && !annotations.iter().any(|annotation| annotation.start == 0) {
-        format!("\\{inline}")
-    } else {
-        inline
+    let rendered = inline.trim_start();
+    let marks_text = |kind: &AnnotationKind| matches!(kind, AnnotationKind::Strikethrough | AnnotationKind::Highlight);
+    let opens_with_marker = (rendered.starts_with("{-") || rendered.starts_with("{="))
+        && annotations
+            .iter()
+            .any(|annotation| annotation.start == 0 && marks_text(&annotation.kind));
+    if !rendered.starts_with('{') || opens_with_marker {
+        return inline;
+    }
+    let escaped = escape_block_prefix(&inline, false).into_owned();
+    // The block escape covers attribute runs. A brace that starts a mark still needs its own.
+    match escaped.find(|c: char| !c.is_whitespace()) {
+        Some(at) if escaped[at..].starts_with('{') => format!("{}\\{}", &escaped[..at], &escaped[at..]),
+        _ => escaped,
     }
 }
 

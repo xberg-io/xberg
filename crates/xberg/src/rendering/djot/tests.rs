@@ -1768,3 +1768,86 @@ fn test_render_djot_heading_keeps_an_annotation_that_starts_with_a_brace() {
     }
     assert_eq!(render_djot(&doc), "## {-{x}-} tail\n");
 }
+
+#[test]
+fn test_render_djot_heading_keeps_brace_text_after_whitespace_or_a_second_attribute_group() {
+    let mut failures = Vec::new();
+    for text in [
+        " {.x} Intro",
+        "\t{.x} Intro",
+        "\u{1}{.x} Intro",
+        "  {#id} Intro",
+        "\u{c}{#id} Intro",
+        "{.a} {.b} z",
+        "{.x}{#y} z",
+    ] {
+        let expected: String = text.chars().filter(|c| !c.is_control() || *c == '\t').collect();
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_title(text, None, None);
+        b.push_heading(2, text, None, None);
+        b.push_slide(1, Some(text), None);
+        let out = render_djot(&b.build());
+        let texts: Vec<String> = heading_texts(&out).iter().map(|t| t.trim().to_string()).collect();
+        let want = expected.trim().to_string();
+        if texts != [want.clone(), want.clone(), want] {
+            failures.push(format!("round trip of {text:?}: {out:?} gave {texts:?}"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn test_render_djot_heading_keeps_brace_text_under_an_annotation_that_writes_no_marker() {
+    let kinds = [
+        AnnotationKind::Color { value: "red".into() },
+        AnnotationKind::FontSize { value: "12pt".into() },
+        AnnotationKind::Custom {
+            name: "style".into(),
+            value: None,
+        },
+    ];
+    for kind in kinds {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_heading(2, "{.x} tail", None, None);
+        let mut doc = b.build();
+        for element in doc.elements.iter_mut() {
+            if matches!(element.kind, ElementKind::Heading { .. }) {
+                element.annotations = vec![TextAnnotation {
+                    start: 0,
+                    end: 4,
+                    kind: kind.clone(),
+                }];
+            }
+        }
+        let out = render_djot(&doc);
+        assert_eq!(heading_texts(&out), ["{.x} tail"], "{kind:?}: {out:?}");
+    }
+}
+
+#[test]
+fn test_render_djot_heading_keeps_plain_text_that_looks_like_an_annotation_marker() {
+    for text in ["{=x=} y", "{-x-} y"] {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_heading(2, text, None, None);
+        let out = render_djot(&b.build());
+        assert_eq!(heading_texts(&out), [text], "{out:?}");
+    }
+}
+
+#[test]
+fn test_render_djot_heading_escapes_a_brace_when_a_marker_annotation_writes_nothing() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_heading(2, "{.x} tail", None, None);
+    let mut doc = b.build();
+    for element in doc.elements.iter_mut() {
+        if matches!(element.kind, ElementKind::Heading { .. }) {
+            element.annotations = vec![TextAnnotation {
+                start: 0,
+                end: 0,
+                kind: AnnotationKind::Strikethrough,
+            }];
+        }
+    }
+    let out = render_djot(&doc);
+    assert_eq!(heading_texts(&out), ["{.x} tail"], "{out:?}");
+}
