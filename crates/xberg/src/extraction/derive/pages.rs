@@ -47,7 +47,7 @@ pub(super) fn derive_pages(
              mapped onto the returned content, so they were omitted",
         );
     } else if !reconciled
-        && let Some(omitted) = drop_mismatched_page_boundaries(&mut doc.metadata, content, pages.as_deref())
+        && let Some(omitted) = drop_mismatched_page_boundaries(doc, content, pages.as_deref())
     {
         crate::core::diagnostics::push_warning(
             &mut doc.processing_warnings,
@@ -61,28 +61,31 @@ pub(super) fn derive_pages(
     pages
 }
 
-/// Omit each page range that does not select its own page's text in `content`: a Plain range is
-/// exact or absent. Returns the omitted page numbers, or `None` when nothing was omitted or there
-/// are no pages to compare with. When no range is left, the boundaries become `None`.
+/// Omit each range of a page that is not OCR text (see `is_ocr_page_text`) when it does not
+/// select that page's own text in `content`. A PDF or OCR range keeps its measured place (#2128).
+/// Returns the omitted page numbers, or `None` when nothing was omitted. When no range is left,
+/// the boundaries become `None`.
 fn drop_mismatched_page_boundaries(
-    metadata: &mut crate::types::Metadata,
+    doc: &mut InternalDocument,
     content: &str,
     pages: Option<&[PageContent]>,
 ) -> Option<Vec<u32>> {
-    let pages = pages?;
-    let structure = metadata.pages.as_mut()?;
+    let text_of: ahash::AHashMap<u32, &str> = pages?
+        .iter()
+        .filter(|page| !is_ocr_page_text(doc, page))
+        .map(|page| (page.page_number, page.content.as_str()))
+        .collect();
+    let structure = doc.metadata.pages.as_mut()?;
     let boundaries = structure.boundaries.as_mut()?;
-    let text_of: ahash::AHashMap<u32, &str> =
-        pages.iter().map(|page| (page.page_number, page.content.as_str())).collect();
     let mut omitted = Vec::new();
     boundaries.retain(|boundary| {
-        let exact = text_of
+        let mismatched = text_of
             .get(&boundary.page_number)
-            .is_some_and(|text| content.get(boundary.byte_start..boundary.byte_end) == Some(*text));
-        if !exact {
+            .is_some_and(|text| content.get(boundary.byte_start..boundary.byte_end) != Some(*text));
+        if mismatched {
             omitted.push(boundary.page_number);
         }
-        exact
+        !mismatched
     });
     if omitted.is_empty() {
         return None;
@@ -915,6 +918,8 @@ mod plain_page_rerender_tests {
     fn a_range_that_selects_its_page_stays_when_another_page_has_no_elements_to_rerender() {
         let content = "one\n\ntwo (note)";
         let mut doc = doc_with(vec![page(1, "one"), page(2, "two\nnote")], &[]);
+        doc.ocr_text_pages.clear();
+        doc.source_format = "docx".to_string();
         set_boundaries(&mut doc, &[(1, 0, 3), (2, 5, content.len())]);
         let pages = derive(&mut doc, content);
         assert_eq!(pages[1].content, "two\nnote");
