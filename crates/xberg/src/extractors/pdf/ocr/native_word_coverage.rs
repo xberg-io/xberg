@@ -119,30 +119,20 @@ pub(super) fn native_text_paints_all_read_ink(
     {
         return false;
     }
-    let Some(raster) = processed_ocr_layout_dimensions(&read.metadata) else {
+    let Some(placement) = ReadPlacement::of(pdf, page_index, read) else {
         return false;
     };
-    let (Some(media), Ok(lines)) = (upright_media_box(pdf, page_index), pdf.extract_text_lines(page_index)) else {
-        return false;
-    };
-    let Some(read_boxes) = words()
-        .map(|word| ocr_word_in_page_points(word, raster, media))
+    let Some(read_words) = words()
+        .map(|word| placement.read_word(word))
         .collect::<Option<Vec<_>>>()
     else {
         return false;
     };
-    let read_words: Vec<(String, LineBox)> = words()
-        .map(|w| w.text.clone())
-        .zip(read_boxes.iter().copied())
-        .collect();
+    let ReadPlacement { media, lines, .. } = placement;
     if !lost_glyphs_leave_native_text(&lines, lost, &read_words) {
         return false;
     }
-    let native_words: Vec<(String, LineBox)> = lines
-        .iter()
-        .flat_map(|line| &line.words)
-        .map(|word| (word.text.clone(), native_box(word.bbox)))
-        .collect();
+    let native_words = native_words_with_boxes(&lines);
     let Some(placed) = read_on_native_lines(&read_words, &lines) else {
         return false;
     };
@@ -168,6 +158,75 @@ pub(super) fn native_text_paints_all_read_ink(
     !native_word_glues_separate_cells(&native_words, &read_words)
         && agreement_share(&native_words, &read_words) >= MIN_NATIVE_READ_AGREEMENT
         && ink_is_glyph_ink(&rasters, media, &placed, &read_words, &native_words)
+}
+
+/// What places a Tesseract read on its page: the raster its word boxes are in, the page's upright
+/// media box and the page's native text lines. The ink proof and the placed-word count both build
+/// their word boxes from it. ~keep
+struct ReadPlacement {
+    raster: (u32, u32),
+    media: Rect,
+    lines: Vec<xberg_native_pdf::layout::TextLine>,
+}
+
+impl ReadPlacement {
+    /// The placement of a read with a raster size on an unrotated, uncropped page with text lines.
+    fn of(pdf: &PdfDocument, page_index: usize, read: &ExtractedDocument) -> Option<Self> {
+        let raster = processed_ocr_layout_dimensions(&read.metadata)?;
+        let media = upright_media_box(pdf, page_index)?;
+        let lines = pdf.extract_text_lines(page_index).ok()?;
+        Some(Self { raster, media, lines })
+    }
+
+    /// A read word with its box in page points, or none when its box falls outside the raster.
+    fn read_word(&self, word: &OcrElement) -> Option<(String, LineBox)> {
+        ocr_word_in_page_points(word, self.raster, self.media).map(|placed| (word.text.clone(), placed))
+    }
+}
+
+/// The page's native words with their boxes, in line order.
+fn native_words_with_boxes(lines: &[xberg_native_pdf::layout::TextLine]) -> Vec<(String, LineBox)> {
+    lines
+        .iter()
+        .flat_map(|line| &line.words)
+        .map(|word| (word.text.clone(), native_box(word.bbox)))
+        .collect()
+}
+
+/// The words of a read that Tesseract shows at a native word's own place: the iterator word's box
+/// lies inside the box of a native word with the same letters and digits. They are keyed as the
+/// Type0 keep rule keys a read's words, so the rule counts them among the words it shares with
+/// the layer. A read without iterator words or a raster size, and a rotated or cropped page, place
+/// no word. ~keep
+pub(super) fn read_words_at_native_place(
+    pdf: &PdfDocument,
+    page_index: usize,
+    read: &ExtractedDocument,
+) -> std::collections::HashSet<String> {
+    let mut placed_words = std::collections::HashSet::new();
+    let (Some(elements), Some(placement)) = (read.ocr_elements.as_deref(), ReadPlacement::of(pdf, page_index, read))
+    else {
+        return placed_words;
+    };
+    let native_keys: Vec<(String, LineBox)> = native_words_with_boxes(&placement.lines)
+        .into_iter()
+        .map(|(text, place)| (alnum_key(&text), place))
+        .collect();
+    for (text, placed) in elements
+        .iter()
+        .filter(|element| element.level == OcrElementLevel::Word && is_iterator_word(element))
+        .filter_map(|word| placement.read_word(word))
+    {
+        let key = alnum_key(&text);
+        if !key.is_empty()
+            && native_keys
+                .iter()
+                .any(|(native, place)| *native == key && place.owns(&placed))
+        {
+            placed_words.extend(super::document::whole_words(&text));
+        }
+    }
+    placed_words
 }
 
 /// Whether the read's text is the iterator words and nothing else. A read that Tesseract laid out

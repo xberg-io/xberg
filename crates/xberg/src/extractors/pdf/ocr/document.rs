@@ -235,7 +235,7 @@ pub(crate) fn layer_lines_absent_from_ocr(layer: &str, ocr_text: &str) -> Option
 }
 /// The whole words of a text: runs of letters and digits, lowercase. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn whole_words(text: &str) -> impl Iterator<Item = String> + '_ {
+pub(super) fn whole_words(text: &str) -> impl Iterator<Item = String> + '_ {
     text.split(|c: char| !c.is_alphanumeric())
         .filter(|word| !word.is_empty())
         .map(str::to_lowercase)
@@ -636,10 +636,12 @@ pub(in crate::extractors::pdf) fn native_preservation_is_automatic(config: &Extr
         })
 }
 
-/// The share of a read's distinct unspaced-script bigrams the native text must also hold before
-/// the native layer counts as the page's visible content. ~keep
+/// The share of a read's distinct meaningful words the native text must also spell before the
+/// native layer counts as the page's visible content. It sits below the share the legitimate
+/// Type0 pages of `pdf_cid_glyph_raster_2309` reach and above none, which a covered layer beside
+/// a short visible line shares. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
-pub(super) const MIN_READ_BIGRAM_SHARE_IN_NATIVE: f64 = 0.25;
+pub(super) const MIN_READ_WORD_SHARE_SPELLED_BY_NATIVE: f64 = 0.25;
 
 /// Scripts written without spaces: a line of them is one "word" to `whole_words`, so they are
 /// compared by character bigrams instead. ~keep
@@ -658,12 +660,29 @@ fn is_unspaced_script(c: char) -> bool {
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 pub(super) const MIN_SHARED_UNSPACED_BIGRAMS: usize = 6;
 
-/// How many distinct meaningful words of a read the native text also spells, and whether any of
-/// those is alphabetic. Lost-glyph markers are removed from the native text first so a word
-/// the render dropped a letter from still matches its read. Words in unspaced scripts are left to
-/// `read_bigrams_in_native`. ~keep
+/// How a read's distinct meaningful words meet the native layer: how many the native text also
+/// spells, how many of those the read shows at a native word's own place, how many distinct words
+/// the read has, and whether any shared word is alphabetic. Lost-glyph markers are removed from the
+/// native text first so a word the render dropped a letter from still matches its read. Words in
+/// unspaced scripts are left to `read_bigrams_in_native`. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
-pub(super) fn read_words_in_native(native: &str, read: &str, thresholds: &OcrQualityThresholds) -> (usize, bool) {
+#[derive(Debug, PartialEq, Eq)]
+pub(super) struct ReadWordsInNative {
+    pub(super) shared: usize,
+    pub(super) placed: usize,
+    pub(super) distinct: usize,
+    pub(super) alphabetic: bool,
+}
+
+/// See [`ReadWordsInNative`]. `placed_words` holds the read's words that a word box shows at a
+/// native word's own place; only those the native text also spells are counted. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn read_words_in_native(
+    native: &str,
+    read: &str,
+    placed_words: &std::collections::HashSet<String>,
+    thresholds: &OcrQualityThresholds,
+) -> ReadWordsInNative {
     use super::super::unmapped_glyphs::LOST_GLYPH_MARKER;
 
     let spaced = |word: &String| !word.chars().any(is_unspaced_script);
@@ -675,8 +694,12 @@ pub(super) fn read_words_in_native(native: &str, read: &str, thresholds: &OcrQua
         .filter(|word| word.chars().count() >= thresholds.min_meaningful_word_len)
         .collect();
     let shared: Vec<&String> = distinct.iter().filter(|word| spelled.contains(*word)).collect();
-    let alphabetic = shared.iter().any(|word| word.chars().any(char::is_alphabetic));
-    (shared.len(), alphabetic)
+    ReadWordsInNative {
+        shared: shared.len(),
+        placed: shared.iter().filter(|word| placed_words.contains(**word)).count(),
+        distinct: distinct.len(),
+        alphabetic: shared.iter().any(|word| word.chars().any(char::is_alphabetic)),
+    }
 }
 
 /// The distinct character bigrams of the unspaced-script runs of a text. ~keep
@@ -715,18 +738,41 @@ pub(super) fn read_bigrams_in_native(native: &str, read: &str) -> (usize, usize)
 
 /// Whether the native text spells enough of the read to be the page's visible content. Spaced
 /// scripts need at least the quality floor of distinct shared words (never fewer than two), one of
-/// them alphabetic; a short read cannot pass on one shared word. The words of the read that the
-/// native text does not spell do not count against it: noise in the render adds them while the
-/// layer stays right. Unspaced scripts (Han, kana, Hangul, Thai, Khmer) need the minimum share of
-/// the read's distinct bigrams and at least `MIN_SHARED_UNSPACED_BIGRAMS` of them. ~keep
+/// them alphabetic, so a short read cannot pass on one shared word. Then either the shared words
+/// are the minimum share of the read's distinct words, or at least the floor of them are read at
+/// a native word's own place: noise in the render adds words to the read and lowers the share
+/// while the layer stays right, and a covered layer that spells a few visible words by chance has
+/// them elsewhere on the page. Unspaced scripts (Han, kana, Hangul, Thai, Khmer) need the minimum
+/// share of the read's distinct bigrams and at least `MIN_SHARED_UNSPACED_BIGRAMS` of them; they
+/// have no whole words to place, so the share alone decides. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
-pub(super) fn native_spells_read(native: &str, read: &str, thresholds: &OcrQualityThresholds) -> bool {
-    let (shared, alphabetic) = read_words_in_native(native, read, thresholds);
-    let words = alphabetic && shared >= thresholds.min_meaningful_words.max(2);
+pub(super) fn native_spells_read(
+    native: &str,
+    read: &str,
+    placed_words: &std::collections::HashSet<String>,
+    thresholds: &OcrQualityThresholds,
+) -> bool {
+    let words = read_words_in_native(native, read, placed_words, thresholds);
+    let floor = thresholds.min_meaningful_words.max(2);
+    let spelled = words.distinct > 0
+        && words.alphabetic
+        && words.shared >= floor
+        && (words.shared as f64 >= words.distinct as f64 * MIN_READ_WORD_SHARE_SPELLED_BY_NATIVE
+            || words.placed >= floor);
     let (shared, distinct) = read_bigrams_in_native(native, read);
-    let bigrams =
-        shared >= MIN_SHARED_UNSPACED_BIGRAMS && shared as f64 >= distinct as f64 * MIN_READ_BIGRAM_SHARE_IN_NATIVE;
-    words || bigrams
+    let bigrams = shared >= MIN_SHARED_UNSPACED_BIGRAMS
+        && shared as f64 >= distinct as f64 * MIN_READ_WORD_SHARE_SPELLED_BY_NATIVE;
+    spelled || bigrams
+}
+
+/// What the page's geometry says about a Type0 native layer and its read: whether the layer owns
+/// the read ink, whether the read covers its words, and the read's words shown at a native word's
+/// own place. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) struct Type0ReadEvidence<'a> {
+    pub(super) ink_owned: bool,
+    pub(super) words_covered: bool,
+    pub(super) placed_words: &'a std::collections::HashSet<String>,
 }
 
 /// A native layer that lost Type0 ink survives only when the page also shows it is visible
@@ -737,10 +783,11 @@ pub(super) fn type0_native_is_corroborated(
     native: &str,
     read: &str,
     thresholds: &OcrQualityThresholds,
-    ink_owned: bool,
-    words_covered: bool,
+    evidence: Type0ReadEvidence<'_>,
 ) -> bool {
-    (ink_owned || words_covered || native_spells_read(native, read, thresholds))
+    (evidence.ink_owned
+        || evidence.words_covered
+        || native_spells_read(native, read, evidence.placed_words, thresholds))
         && native_survives_type0_ink_loss(native, read, thresholds)
 }
 

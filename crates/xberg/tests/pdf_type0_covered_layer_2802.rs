@@ -10,6 +10,13 @@ use xberg::types::ExtractionMethod;
 /// those glyphs: its native text is the true content, and the render lost Type0 ink.
 const TYPE0_PAGE: &[u8] = include_bytes!("../../xberg-native-pdf/tests/fixtures/cid_glyph_raster_2309/custom.pdf");
 const SHORT_LINE: &str = "Quarterly revenue improved";
+/// Visible lines of real words that share three words with the covered layer (committee, budget,
+/// winter) among sixteen: the layer spells a few of them by chance, not the page.
+const SHARING_LINES: [&str; 3] = [
+    "Quarterly revenue improved in every region",
+    "while the committee kept the budget steady",
+    "and shipping costs fell before winter ended",
+];
 /// What the source's text layer says the short line reads, which its ink contradicts.
 const CONTRADICTING_TEXT: &str = "Ledger entries pending";
 /// Each retention site words its notice differently; both name the lost Type0 ink, so a match
@@ -20,6 +27,8 @@ const SINGLE_RETAINED: &str = "Page 1 OCR read omitted native text after its ren
 #[derive(Clone, Copy, PartialEq)]
 enum Layer {
     Covered,
+    /// The covered layer beside visible lines that share a few words with it by chance.
+    CoveredSharing,
     Visible,
     /// The visible layer under this many small black squares: the render reads as noise, and the
     /// native text is still what the page shows.
@@ -65,10 +74,18 @@ fn source_pdf(layer: Layer, second_page: bool) -> Vec<u8> {
         .unwrap()
         .as_reference()
         .unwrap();
-    if layer == Layer::Covered {
+    if matches!(layer, Layer::Covered | Layer::CoveredSharing) {
+        let shown = if layer == Layer::Covered {
+            format!("/F9 28 Tf 40 300 Td ({SHORT_LINE}) Tj")
+        } else {
+            format!(
+                "/F9 20 Tf 40 400 Td 30 TL ({}) Tj T* ({}) Tj T* ({}) Tj",
+                SHARING_LINES[0], SHARING_LINES[1], SHARING_LINES[2]
+            )
+        };
         let cover = format!(
             "\nq 1 g 0 0 612 792 re f Q\n/Span << /ActualText ({CONTRADICTING_TEXT}) >> BDC \
-             BT /F9 28 Tf 40 300 Td ({SHORT_LINE}) Tj ET EMC\n"
+             BT {shown} ET EMC\n"
         );
         let stream = pdf.get_object_mut(contents).unwrap().as_stream_mut().unwrap();
         assert!(
@@ -162,6 +179,26 @@ fn a_covered_type0_layer_does_not_outvote_the_short_visible_read() {
     assert!(page.contains("Quarterly revenue improved"), "{page:?}");
     assert!(!page.contains("committee"), "{page:?}");
     assert!(!notice(&result, MIXED_RETAINED), "{:?}", result.processing_warnings);
+}
+
+/// The negative control of the share rule: three words the covered layer spells by chance do not
+/// make it the page's content, so the visible lines go to OCR on both routes.
+#[test]
+fn a_covered_type0_layer_sharing_a_few_words_with_the_visible_read_goes_to_ocr() {
+    for second_page in [false, true] {
+        let result = extract(Layer::CoveredSharing, second_page);
+        let page = &result.pages.as_ref().unwrap()[0].content;
+        assert!(
+            page.contains("shipping costs fell"),
+            "second page {second_page}: {page:?}"
+        );
+        assert!(!page.contains("Tuesd"), "second page {second_page}: {page:?}");
+        assert!(
+            !single_page_type0_retained(&result),
+            "second page {second_page}: {:?}",
+            result.processing_warnings
+        );
+    }
 }
 
 #[test]
