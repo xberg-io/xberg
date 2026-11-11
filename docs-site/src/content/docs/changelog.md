@@ -331,8 +331,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(pdf): Keep the page split that finds the table carrying each split word linear in the words of a page.** (#2960)
-  A run of segments with no seam that a table holds is carried by the first table that covers and carries it, and only the tables that can join the next segment are read further, so the cost no longer grows with the number of tables times the number of words. The carriers are unchanged.
+- **(pdf): Read each table's grid once per segment in the page split that finds the table carrying each split word.** (#2960)
+  A run of segments with no seam that a table holds goes to the first table that covers and carries it, and only the tables that can join the next segment are read further. Each table now indexes its rows by word and its cells by run, and the page's long segments are searched in every table's rows once, so a read no longer scans the whole table. The carriers are unchanged: a test compares them with the full read on varied pages. In a debug test build, a page of 2000 words and 3 tables with different words took about 380 ms on main and 160 ms after, the same as before the join rule.
 
 - **(ocr): Keep Khmer number recovery available after bounded source declines.** (#2905)
   Completed declines charge the work already done, leaving room to verify supported pages later in the PDF.

@@ -5379,12 +5379,9 @@ impl TableCoverage {
     /// longer one when one row holds it, either as a run inside that row's cells or as every word a whole cell word of
     /// that row. A run is not matched against the whole table's concatenated glyphs, which lets
     /// digits straddling unrelated cells stand in for it.
-    fn carries(&self, text: &str) -> bool {
-        self.carries_with(text, |normalized| self.rows.iter().any(|row| row.contains(normalized)))
-    }
-
-    /// [`Self::carries`], where `row_holds` says whether one row holds the normalized text as a
-    /// substring, so a caller that has read the rows once can answer it without reading them again.
+    ///
+    /// `row_holds` says whether one row holds the normalized text as a substring, so a caller that
+    /// has read the rows once can answer it without reading them again.
     fn carries_with(&self, text: &str, row_holds: impl FnOnce(&str) -> bool) -> bool {
         let normalized = normalize_for_table_coverage(text);
         if normalized.is_empty() {

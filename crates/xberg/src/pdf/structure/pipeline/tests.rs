@@ -2065,7 +2065,7 @@ fn split_carriers_match_the_full_table_read_on_varied_pages() {
                         (0..1 + next_random(&mut state) % 4)
                             .map(|_| {
                                 let mut cell = vocabulary[(next_random(&mut state) % 16) as usize].to_string();
-                                if next_random(&mut state) % 3 == 0 {
+                                if next_random(&mut state).is_multiple_of(3) {
                                     cell.push(' ');
                                     cell.push_str(vocabulary[(next_random(&mut state) % 16) as usize]);
                                 }
