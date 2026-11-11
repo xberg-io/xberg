@@ -2,9 +2,10 @@
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
-suite="${1:?expected pdf-ocr or api-jobs}"
+suite="${1:?expected pdf-ocr, office-pages or api-jobs}"
 case "$suite" in
 pdf-ocr) features="pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types" ;;
+office-pages) features="office,tokio-runtime" ;;
 api-jobs) features="api,tokio-runtime" ;;
 *)
   printf 'Unknown focused test suite: %s\n' "$suite" >&2
@@ -201,6 +202,36 @@ run_discarded_recovery_cases() {
   fi
 }
 
+run_office_page_cases() {
+  local test_name
+  for test_name in \
+    plain_heading_carries_no_style_note \
+    plain_table_cell_keeps_link_text_and_drops_the_target \
+    markdown_table_cell_keeps_its_link \
+    plain_image_carries_no_placeholder \
+    plain_image_keeps_its_description \
+    plain_table_cell_keeps_its_math_delimiters; do
+    run_exact "$test_name" --test docx_plain_content
+  done
+  for test_name in \
+    every_page_of_a_docx_memo_keeps_a_range_that_selects_its_page_text \
+    each_page_of_a_two_page_docx_keeps_a_range_that_selects_its_page_text \
+    each_slide_of_a_pptx_keeps_a_range_that_selects_its_page_text; do
+    run_exact "$test_name" --test plain_page_ranges_select_page_text
+  done
+  run_exact 'extractors::docx::tests::plain_table_cell_carries_no_footnote_marker' --lib
+  local module='extraction::derive::pages::plain_page_rerender_tests'
+  for test_name in \
+    a_plain_page_has_the_plain_text_of_its_elements_with_the_note_numbers_of_the_document \
+    a_page_range_that_does_not_select_its_page_text_moves_to_the_page_text \
+    a_docx_range_that_selects_its_page_text_stays_where_it_is \
+    a_moved_page_range_starts_after_the_range_of_the_page_before_it \
+    the_range_of_a_page_number_with_no_extracted_page_is_omitted_with_a_warning \
+    the_warning_names_a_page_with_two_omitted_ranges_one_time; do
+    run_exact "${module}::$test_name" --lib
+  done
+}
+
 run_api_cases() {
   run_exact 'api::handlers::tests::test_extract_async_then_poll_job_id' --lib
   run_exact 'api::jobs::tests::test_cancel_running_job_fires_token' --lib
@@ -217,6 +248,10 @@ pdf-ocr)
   run_number_budget_cases
   run_ink_probe_cases
   run_discarded_recovery_cases
+  ;;
+office-pages)
+  expected=16
+  run_office_page_cases
   ;;
 api-jobs)
   expected=4

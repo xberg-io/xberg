@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [pdf-ocr, api-jobs, nli]
+        suite: [pdf-ocr, office-pages, api-jobs, nli]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -75,6 +75,20 @@ jobs:
           printf '%s  %s\n' 71c2a76af332a9b796899a78e99ce2d835026d624048cf239069276fcacce79b \
             "$nist_fixture" | sha256sum --check
           printf 'XBERG_NIST_FIXTURE=%s\n' "$nist_fixture" >> "$GITHUB_ENV"
+
+      - name: Fetch the public office documents of the page tests
+        if: matrix.suite == 'office-pages'
+        uses: xberg-io/actions/fetch-test-documents@v1
+        with:
+          include: |
+            docx/budget_fy2027_memo.docx
+            docx/docx_tables.docx
+            docx/test_emf_docx.docx
+            docx/unit_test_headers.docx
+            docx/word_sample.docx
+            vendored/docling/docx/table_with_equations.docx
+            pptx/powerpoint_sample.pptx
+          cache: "false"
 
       - uses: xberg-io/actions/setup-rust@v1
         with:
