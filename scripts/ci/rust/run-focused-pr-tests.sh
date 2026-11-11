@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 suite="${1:?expected pdf-ocr or api-jobs}"
 case "$suite" in
-pdf-ocr) features="pdf,ocr,tokio-runtime,bundle-tessdata-eng" ;;
+pdf-ocr) features="pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types" ;;
 api-jobs) features="api,tokio-runtime" ;;
 *)
   printf 'Unknown focused test suite: %s\n' "$suite" >&2
@@ -71,6 +71,7 @@ run_budget_retry_cases() {
   for test_name in \
     automatic_direct_rgb_budget_retry_retains_text_with_default_recognition_policy \
     explicitly_forced_minimal_direct_ocr_keeps_its_budget_refusal \
+    layout_request_keeps_the_original_rgb_render_budget_refusal \
     minimal_direct_retry_does_not_omit_visible_paint_beside_the_rgb_scan \
     direct_rgb_budget_retry_retains_the_producing_tesseract_segmentation_mode \
     mixed_pipeline_retry_records_segmentation_mode_for_the_recovered_page; do
@@ -162,7 +163,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=69
+  expected=70
   run_pdf_cases
   run_number_budget_cases
   run_ink_probe_cases

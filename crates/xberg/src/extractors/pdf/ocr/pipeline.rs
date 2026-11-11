@@ -3693,6 +3693,8 @@ fn budget_retry_backend(
     ocr: &crate::core::config::OcrConfig,
     failed: &FailedOcrRun,
 ) -> Option<std::sync::Arc<dyn crate::plugins::OcrBackend>> {
+    // Native preservation excludes explicit layout: the refused render produced no detections
+    // to validate before a source retry could replace the read. ~keep
     if !render_refused_by_source_image_budget(&failed.error)
         || config.ocr_strategy != crate::core::config::OcrStrategy::Auto
         || !super::document::native_preservation_is_automatic(config, 1)
