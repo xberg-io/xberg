@@ -2658,40 +2658,49 @@ mod tests {
     /// The side of the baseline the glyphs stand on follows the axis the stamp is measured along, so the
     /// bands meet at 45, 135 and 225 degrees: text read up or down (more than 45 degrees from upright or
     /// upside down) stands left of its baseline below 180 degrees and right of it above; text read across
-    /// stands below its baseline from 90 to 270 degrees and above it elsewhere. `across` is the x of a
-    /// stamp read up or down and the y of a stamp read across; the page is 612 by 792 points, 20 thick.
+    /// stands below its baseline from 90 to 270 degrees and above it elsewhere. Each row pins the axis
+    /// `reads_up_or_down` decides for its angle today: an angle outside 0 to 360 expects the axis of the
+    /// angle it normalizes to modulo a full turn. `across` is the x of a stamp read up or down and the y
+    /// of a stamp read across; the page is 612 by 792 points, 20 thick.
     #[test]
     fn arxiv_noise_places_a_stamp_on_the_same_side_of_its_baseline_on_both_sides_of_each_diagonal() {
-        let cases: [(f32, f32, bool); 24] = [
-            (44.9, 700.0, true),
-            (44.9, 690.0, false),
-            (45.0, 700.0, true),
-            (45.0, 690.0, false),
-            (45.1, 80.0, true),
-            (45.1, 83.0, false),
-            (134.9, 80.0, true),
-            (134.9, 83.0, false),
-            (135.0, 98.0, true),
-            (135.0, 100.0, false),
-            (135.1, 98.0, true),
-            (135.1, 100.0, false),
-            (224.9, 98.0, true),
-            (224.9, 100.0, false),
-            (225.0, 90.0, true),
-            (225.0, 100.0, false),
-            (225.1, 532.0, true),
-            (225.1, 530.0, false),
-            (314.9, 532.0, true),
-            (314.9, 530.0, false),
-            (315.0, 700.0, true),
-            (315.0, 690.0, false),
-            (359.9, 700.0, true),
-            (359.9, 690.0, false),
+        let cases: [(f32, f32, bool, bool); 30] = [
+            // (angle, across, reads up or down, marked as furniture)
+            (44.9, 700.0, false, true),
+            (44.9, 690.0, false, false),
+            (45.0, 700.0, false, true),
+            (45.0, 690.0, false, false),
+            (45.1, 80.0, true, true),
+            (45.1, 83.0, true, false),
+            (134.9, 80.0, true, true),
+            (134.9, 83.0, true, false),
+            (135.0, 98.0, false, true),
+            (135.0, 100.0, false, false),
+            (135.1, 98.0, false, true),
+            (135.1, 100.0, false, false),
+            (224.9, 98.0, false, true),
+            (224.9, 100.0, false, false),
+            (225.0, 90.0, false, true),
+            (225.0, 100.0, false, false),
+            (225.1, 532.0, true, true),
+            (225.1, 530.0, true, false),
+            (314.9, 532.0, true, true),
+            (314.9, 530.0, true, false),
+            (315.0, 700.0, false, true),
+            (315.0, 690.0, false, false),
+            (359.9, 700.0, false, true),
+            (359.9, 690.0, false, false),
+            (-135.0, 90.0, false, true),
+            (-135.0, 100.0, false, false),
+            (405.0, 700.0, false, true),
+            (405.0, 690.0, false, false),
+            (-45.0, 700.0, false, true),
+            (-45.0, 690.0, false, false),
         ];
         let marked: Vec<bool> = cases
             .iter()
-            .map(|&(angle, across, _)| {
-                let places = if reads_up_or_down(angle) {
+            .map(|&(angle, across, up_or_down, _)| {
+                let places = if up_or_down {
                     [(across, 600.0, angle), (across, 400.0, angle), (across, 200.0, angle)]
                 } else {
                     [(100.0, across, angle), (250.0, across, angle), (400.0, across, angle)]
@@ -2701,7 +2710,7 @@ mod tests {
                 all[0]
             })
             .collect();
-        let expected: Vec<bool> = cases.iter().map(|&(_, _, expected)| expected).collect();
+        let expected: Vec<bool> = cases.iter().map(|&(_, _, _, expected)| expected).collect();
         assert_eq!(marked, expected, "cases {cases:?}");
     }
 
