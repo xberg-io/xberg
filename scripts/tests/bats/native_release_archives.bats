@@ -12,7 +12,7 @@ setup() {
 	printf 'license bytes\n' >LICENSE
 	printf 'usage bytes\n' >README.md
 	printf 'public header\n' >crates/xberg-ffi/include/xberg.h
-	unset TARGET GLIBC_FLOOR CARGO_STATUS ALEF_STATUS OMIT_ARCHIVE OMIT_METADATA DOCKER_STATUS EMPTY_DOCKER_OUTPUT
+	unset TARGET GLIBC_FLOOR ALEF_NATIVE_LIBS CARGO_STATUS ALEF_STATUS OMIT_ARCHIVE OMIT_METADATA DOCKER_STATUS EMPTY_DOCKER_OUTPUT
 	export GO_TARGET=aarch64-apple-darwin GO_PLATFORM=macos-arm64 GO_SHARED=libxberg_ffi.dylib GO_STATIC=libxberg_ffi.a
 	xberg_stub cargo \
 		'printf "cargo %s\n" "$*" >>"$XBERG_TRACE"' \
@@ -23,11 +23,11 @@ setup() {
 	xberg_stub alef \
 		'printf "alef %s\n" "$*" >>"$XBERG_TRACE"' \
 		'[ "${ALEF_STATUS:-0}" = 0 ] || exit "$ALEF_STATUS"' \
-		'if [ "$2" = build ]; then mkdir -p "target/$GO_TARGET/release"; printf "generic shared\\n" >"target/$GO_TARGET/release/$GO_SHARED"; printf "generic static\\n" >"target/$GO_TARGET/release/$GO_STATIC"; exit 0; fi' \
+		'if [ "$2" = build ]; then mkdir -p "target/$GO_TARGET/release"; printf "generic shared\\n" >"target/$GO_TARGET/release/$GO_SHARED"; printf "generic static\\n" >"target/$GO_TARGET/release/$GO_STATIC"; [ -z "${ALEF_NATIVE_LIBS:-}" ] || printf "%b\\n" "$ALEF_NATIVE_LIBS" >"target/$GO_TARGET/release/native-static-libs.txt"; exit 0; fi' \
 		'[ "${OMIT_ARCHIVE:-false}" != true ] || exit 0' \
 		'mkdir -p "alef-stage/$GO_PLATFORM/lib"' \
 		'cp "target/$GO_TARGET/release/$GO_SHARED" "target/$GO_TARGET/release/$GO_STATIC" "alef-stage/$GO_PLATFORM/lib/"' \
-		'if [ "${OMIT_METADATA:-false}" != true ]; then printf -- "-lpthread\\n" >"alef-stage/$GO_PLATFORM/lib/native-static-libs.txt"; fi' \
+		'if [ "${OMIT_METADATA:-false}" != true ]; then if [ -f "target/$GO_TARGET/release/native-static-libs.txt" ]; then cp "target/$GO_TARGET/release/native-static-libs.txt" "alef-stage/$GO_PLATFORM/lib/"; else printf -- "-lpthread\\n" >"alef-stage/$GO_PLATFORM/lib/native-static-libs.txt"; fi; fi' \
 		'tar -czf "output/xberg-go-v1.4.0-$GO_PLATFORM.tar.gz" -C alef-stage "$GO_PLATFORM"'
 	xberg_stub git 'printf "revision123\\n"'
 	xberg_stub docker \
@@ -92,6 +92,25 @@ alef publish package --lang go --target $GO_TARGET --version 1.4.0 --output $XBE
 	xberg_assert_file "extracted/$GO_PLATFORM/lib/$GO_STATIC" 'generic static'
 	xberg_assert_file "extracted/$GO_PLATFORM/lib/native-static-libs.txt" '-lpthread'
 	[ "$(find extracted -type f | wc -l | tr -d '[:space:]')" -eq 3 ]
+}
+
+@test "Go release packaging should ship link flags without terminal escapes and with libc++ for the zig-built Linux archive" {
+	export GO_TARGET=x86_64-unknown-linux-gnu GO_PLATFORM=linux-x86_64 GO_SHARED=libxberg_ffi.so GLIBC_FLOOR=2.28
+	export ALEF_NATIVE_LIBS='-lstdc++ -lstdc++fs -lpthread -lstdc++ -lonnxruntime -lstdc++ -lgcc_s -lc\033[0m'
+	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/package-go-release.sh" "$GO_TARGET" 1.4.0 "$XBERG_WORK/output"
+	xberg_assert_status 0
+	mkdir extracted
+	tar -xzf "output/xberg-go-v1.4.0-$GO_PLATFORM.tar.gz" -C extracted
+	[ "$(cat "extracted/$GO_PLATFORM/lib/native-static-libs.txt")" = '-lc++ -lc++abi -lpthread -lonnxruntime -lgcc_s -lc' ]
+}
+
+@test "Go release packaging should strip terminal escapes from macOS link flags and keep libc++ untouched" {
+	export ALEF_NATIVE_LIBS='-framework Security -lc++ -lc\033[0m'
+	run "$BASH" "$REPOSITORY_ROOT/scripts/ci/package-go-release.sh" "$GO_TARGET" 1.4.0 "$XBERG_WORK/output"
+	xberg_assert_status 0
+	mkdir extracted
+	tar -xzf "output/xberg-go-v1.4.0-$GO_PLATFORM.tar.gz" -C extracted
+	[ "$(cat "extracted/$GO_PLATFORM/lib/native-static-libs.txt")" = '-framework Security -lc++ -lc' ]
 }
 
 @test "Go release packaging should restore both glibc-floor libraries after the generic build overwrites them" {

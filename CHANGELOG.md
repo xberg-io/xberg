@@ -329,6 +329,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(go): Ship usable static-link flags in the linux-x86_64 and linux-aarch64 Go release archives.** (GH#2988)
+  `native-static-libs.txt` no longer ends with a terminal colour escape that cgo rejected, and the glibc-floor archive lists `-lc++ -lc++abi` instead of `-lstdc++`, matching the zig-built C++ objects.
 - **(ocr): Keep Khmer number recovery available after bounded source declines.** (#2905)
   Completed declines charge the work already done, leaving room to verify supported pages later in the PDF.
   Cancellation and failures whose work cannot be measured still retain their reservation.

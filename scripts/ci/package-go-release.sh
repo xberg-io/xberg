@@ -53,6 +53,25 @@ fi
   echo "shared library not found: $SHARED_PATH" >&2
   exit 1
 }
+
+# alef records rustc's coloured `native-static-libs` note, so strip terminal escapes (cgo rejects them).
+# The glibc-floor archive is built by zig, whose C++ objects reference libc++ rather than the libstdc++
+# the host-built note lists, so swap it for -lc++ -lc++abi. ~keep
+NATIVE_LIBS="$RELEASE_DIR/native-static-libs.txt"
+if [ -f "$NATIVE_LIBS" ]; then
+  NORMALIZED_LIBS="$(mktemp)"
+  sed -E $'s/\x1b\\[[0-9;]*[A-Za-z]//g' "$NATIVE_LIBS" | tr -s '[:space:]' '\n' |
+    awk -v zig="$([[ "$TARGET" == *-unknown-linux-gnu ]] && echo 1 || echo 0)" '
+      NF == 0 { next }
+      zig == 1 && ($0 == "-lstdc++" || $0 == "-lstdc++fs") {
+        if (!seen++) { out[n++] = "-lc++"; out[n++] = "-lc++abi" }
+        next
+      }
+      { out[n++] = $0 }
+      END { for (i = 0; i < n; i++) printf "%s%s", out[i], (i + 1 < n ? " " : "\n") }
+    ' >"$NORMALIZED_LIBS"
+  mv "$NORMALIZED_LIBS" "$NATIVE_LIBS"
+fi
 alef publish package --lang go --target "$TARGET" --version "$VERSION" --output "$OUTPUT_DIR"
 
 PLATFORM=""
