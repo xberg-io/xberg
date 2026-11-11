@@ -315,6 +315,8 @@ async fn real_route_run(#[cfg(feature = "layout-detection")] layout: Option<&Pre
             hidden_layer_backend: None,
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             single_native_type0_page: None,
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            probe_reads: None,
             raster_dpis: None,
         },
         &bytes,

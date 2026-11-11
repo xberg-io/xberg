@@ -16,15 +16,27 @@ The reference distribution for the test statistic is the χ distribution.
 
 For example, given *n = 10* and ε *= 0011011101* . If *m = 3* , then ε *´* = *001101110100* . If *m = 2* , then ε *´* = *00110111010* . If *m = 1* , then ε *´* = the original sequence *0011011101* .
 
-- (2) Determine the frequency of all possible overlapping *m* -bit blocks, all possible overlapping ( *m-1)* bit blocks and all possible overlapping *(m-2)* -bit blocks. Let *v* denote the frequency of the *m*i ~*1*~ *...i*~*m*~
+- (2) Determine the frequency of all possible overlapping *m* -bit blocks, all possible overlapping ( *m-1)* bit blocks and all possible overlapping *(m-2)* -bit blocks. Let *v*~*i1*~
 
-bit pattern *i*~*1*~*…i ;* ~*m*~ let *v* denote the frequency of the ( *m-1)* -bit pattern *i …i*~*1 m-1*~*;* and let *i*~*1*~ *...i*~*m*~ − *1 v* denote the frequency of the ( *m-2)* -bit pattern *i*~*1*~*…i*~*m-2*~*. i*~*1*~ *...i*~*m*~ − *2* For the example in this section, when *m = 3* , then ( *m-1* ) = 2, and ( *m-2* ) = 1. The frequency of all 3-bit blocks is: *v*~*000*~ *= 0, v*~*001*~ *= 1, v*~*010*~ *= 1, v*~*011*~ *= 2, v*~*100*~ *= 1, v*~*101*~ *= 2*~*, 110*~ *v = 2, v*~*111*~ *= 0.* The frequency of all possible ( *m-1* )-bit blocks is: *v*~*00*~ *= 1, v*~*01*~ *= 3, v*~*10*~ *= 3*~*, 11*~ *v = 3.* The frequency of all ( *m-2* )-bit blocks is: *v*~*0*~ *= 4, v*~*1*~ *= 6.*
+denote the frequency of the *m* -
+
+*...i*~*m*~
+
+bit pattern *i*~*1*~*…i ;* ~*m*~ let *v*~*i1*~ denote the frequency of the ( *m-1)* -bit pattern *i …i*~*1 m-1*~*;* and let
+
+*...i*~*m*~ − *1*
+
+*v*~*i1*~ denote the frequency of the ( *m-2)* -bit pattern *i*~*1*~*…i*~*m-2*~*.*
+
+*...i*~*m*~ − *2*
+
+For the example in this section, when *m = 3* , then ( *m-1* ) = 2, and ( *m-2* ) = 1. The frequency of all 3-bit blocks is: *v*~*000*~ *= 0, v*~*001*~ *= 1, v*~*010*~ *= 1, v*~*011*~ *= 2, v*~*100*~ *= 1, v*~*101*~ *= 2*~*, 110*~ *v = 2, v*~*111*~ *= 0.* The frequency of all possible ( *m-1* )-bit blocks is: *v*~*00*~ *= 1, v*~*01*~ *= 3, v*~*10*~ *= 3*~*, 11*~ *v = 3.* The frequency of all ( *m-2* )-bit blocks is: *v*~*0*~ *= 4, v*~*1*~ *= 6.*
 
 *m 2 2* 
 
-- (3) Compute: ψ
+- (3) Compute: ψ~*m*~ = ∑
 
-= ∑  *v*~*i1*~ *m ...i n i*~*1*~ *...i*~*m*~ *2 n*  *2*<sup>*m*</sup> *2* −  = ∑ − *n*
+ *v*~*i1*~*...i n i*~*1*~ *...i*~*m*~ *2 n*  *2*<sup>*m*</sup> *2* −  = ∑ − *n*
 
 *m*
 
@@ -32,7 +44,7 @@ bit pattern *i*~*1*~*…i ;* ~*m*~ let *v* denote the frequency of the ( *m-1)* 
 
 *m 2*  *n i*~*1*~ *...i*~*m*~ *m* − *1 2*
 
-*2* ψ~*m*~ = ∑ − *1 n i*~*1*~ *...i*~*m*~ − *1 2*  *n*   *v*~*i*~ −  = ~*1*~ *...i*~*m*~ − *1 m* − *1*  *2*  *m* − *1 2 2* ∑ − *n v*~*i1 ...im*~ − *1 n i*~*1*~ *...i*~*m*~ − *1 m* − *2 2 2* ψ = ∑ ~*m*~ − *2 n i*~*1*~ *...i*~*m*~ − *2*  *n*   *v*~*i*~ − ~*1 ...im*~ − *2 m* − *2*  *2 2 m* − *2 2 2*  = ∑ − *n v*~*i*~ *...i*~*m*~
+*2* ψ~*m*~ = ∑ − *1 n i*~*1*~ *...i*~*m*~ − *1 2*  *n*   *v*~*i1*~ −  = *...i*~*m*~ − *1 m* − *1*  *2*  *m* − *1 2 2* ∑ − *n v*~*i1 ...im*~ − *1 n i*~*1*~ *...i*~*m*~ − *1 m* − *2 2 2* ψ = ∑ ~*m*~ − *2 n i*~*1*~ *...i*~*m*~ − *2*  *n*   *v*~*i1*~ − ~*...im*~ − *2 m* − *2*  *2 2 m* − *2 2 2*  = ∑ − *n v*~*i*~ *...i*~*m*~
 
 *1* − *2*
 

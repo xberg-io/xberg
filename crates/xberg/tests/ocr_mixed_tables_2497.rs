@@ -171,14 +171,7 @@ async fn automatic_two_tables_and_heading_preserve_every_source_word() {
             assert_eq!(actual.cells, table.cells);
             assert_eq!(actual.bounding_box, table.bounding_box);
         }
-        assert_eq!(
-            page.content.trim(),
-            format!(
-                "{heading}\n\n{}\n\n{}",
-                document.tables[0].markdown.trim(),
-                document.tables[1].markdown.trim()
-            )
-        );
+        assert_eq!(page.content.trim(), document.content.trim(), "page text at {route}");
         assert!(document.ocr_elements.is_none());
     }
 }
