@@ -2925,7 +2925,14 @@ impl PdfExtractor {
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         macro_rules! apply_targeted_mixed_run {
             ($mixed_run:expr) => {{
-                let mixed_run = $mixed_run;
+                let mut mixed_run = $mixed_run;
+                // Render only accepted output; ink probes and retained raw reads must stay unchanged. ~keep
+                ocr::render_mixed_tables_plain(
+                    &mut mixed_run,
+                    &native_text,
+                    boundaries.as_deref().unwrap_or(&[]),
+                    config,
+                );
                 #[cfg(feature = "formula-recognition")]
                 {
                     mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
@@ -3014,7 +3021,7 @@ impl PdfExtractor {
             if !ocr_pages.is_empty() {
                 if let Some(ref bounds) = boundaries {
                     if !bounds.is_empty() {
-                        let mixed_run = ocr::extract_mixed_ocr_native_with_layout_pages(
+                        let mut mixed_run = ocr::extract_mixed_ocr_native_with_layout_pages(
                             &native_text,
                             bounds,
                             (ocr_pages, &[]),
@@ -3024,6 +3031,7 @@ impl PdfExtractor {
                             (&[], &[]),
                         )
                         .await?;
+                        ocr::render_mixed_tables_plain(&mut mixed_run, &native_text, bounds, config);
                         #[cfg(feature = "formula-recognition")]
                         {
                             mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
@@ -3100,7 +3108,8 @@ impl PdfExtractor {
                 )
                 .await
                 {
-                    Ok(mixed_run) => {
+                    Ok(mut mixed_run) => {
+                        ocr::render_mixed_tables_plain(&mut mixed_run, &native_text, bounds, config);
                         #[cfg(feature = "formula-recognition")]
                         {
                             mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;

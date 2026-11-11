@@ -57,7 +57,7 @@ async fn read(bytes: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
         .unwrap()
 }
 
-async fn assert_mixed_tables(actual: &ExtractedDocument, native: &ExtractedDocument, forced: &ExtractedDocument) {
+fn assert_mixed_tables(actual: &ExtractedDocument, native: &ExtractedDocument, forced: &ExtractedDocument) {
     let pages = actual.pages.as_ref().unwrap();
     let last = pages.len() - 1;
     let source = native.pages.as_ref().unwrap();
@@ -74,7 +74,7 @@ async fn assert_mixed_tables(actual: &ExtractedDocument, native: &ExtractedDocum
             &source[index]
         };
         if index == last {
-            super::plain_contract::assert_scanned_table_body(page, reference).await;
+            super::plain_contract::assert_scanned_table_body(page, reference);
         } else {
             assert_eq!(page.content, reference.content);
         }
@@ -132,7 +132,7 @@ async fn check_mixed_tables(source_pages: &[u32], stamp: bool, force_scan: bool)
         config.force_ocr_pages = Some(vec![u32::try_from(source_pages.len() + 1).unwrap()]);
     }
     let actual = read(&bytes, &config).await;
-    assert_mixed_tables(&actual, &native, &forced).await;
+    assert_mixed_tables(&actual, &native, &forced);
 }
 
 #[tokio::test]

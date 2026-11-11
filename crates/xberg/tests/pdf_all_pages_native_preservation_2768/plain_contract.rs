@@ -1,6 +1,10 @@
-use xberg::{ExtractedDocument, ExtractionConfig, types::PageContent};
+use xberg::{ExtractedDocument, types::PageContent};
 
 pub(super) fn assert_page_ranges(document: &ExtractedDocument) {
+    assert!(
+        !document.content.contains("| --- |"),
+        "Plain document has no table separator"
+    );
     let pages = document.pages.as_ref().expect("requested page payload");
     let structure = document.metadata.pages.as_ref().expect("page structure");
     let boundaries = structure.boundaries.as_ref().expect("Plain page byte ranges");
@@ -11,6 +15,7 @@ pub(super) fn assert_page_ranges(document: &ExtractedDocument) {
     for (page, boundary) in pages.iter().zip(boundaries) {
         assert_eq!(boundary.page_number, page.page_number);
         assert!(!page.content.is_empty());
+        assert!(!page.content.contains("| --- |"), "Plain page has no table separator");
         let gap = document
             .content
             .get(end..boundary.byte_start)
@@ -32,35 +37,29 @@ pub(super) fn assert_page_ranges(document: &ExtractedDocument) {
     );
 }
 
-async fn plain(markdown: &str) -> String {
-    super::helpers::extract_bytes_document(
-        markdown.as_bytes(),
-        "text/markdown",
-        &ExtractionConfig {
-            use_cache: false,
-            disable_ocr: true,
-            ..Default::default()
-        },
-    )
-    .await
-    .expect("independent public Markdown-to-Plain rendering")
-    .content
-}
-
-pub(super) async fn scanned_table_body_is_complete(actual: &PageContent, recognized: &PageContent) -> bool {
+fn expected_scanned_table_body(recognized: &PageContent) -> String {
     assert_eq!(recognized.tables.len(), 1);
     let table = &recognized.tables[0];
     for witness in ["Six-Year Summary", "48,210", "102,228"] {
         assert!(table.markdown.contains(witness), "the source table contains {witness}");
     }
-    let canonical = plain(&table.markdown).await;
-    // Picture OCR can retain a table body while page elements render its cells as Plain. ~keep
-    actual.content == table.markdown.trim_end_matches('\n') || actual.content == canonical
+    // Markdown parsing can change OCR punctuation, such as straight quotes. ~keep
+    table
+        .cells
+        .iter()
+        .map(|row| row.join(" "))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
-pub(super) async fn assert_scanned_table_body(actual: &PageContent, recognized: &PageContent) {
-    assert!(
-        scanned_table_body_is_complete(actual, recognized).await,
-        "the complete scanned body equals the independent source table or its canonical Plain rendering"
+pub(super) fn scanned_table_body_is_complete(actual: &PageContent, recognized: &PageContent) -> bool {
+    actual.content == expected_scanned_table_body(recognized).trim()
+}
+
+pub(super) fn assert_scanned_table_body(actual: &PageContent, recognized: &PageContent) {
+    assert_eq!(
+        actual.content,
+        expected_scanned_table_body(recognized).trim(),
+        "the complete scanned body equals the recognized Plain table rows"
     );
 }
