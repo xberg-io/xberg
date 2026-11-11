@@ -2658,6 +2658,7 @@ mod script_stack;
 mod setup;
 mod span_merging;
 mod span_ordering;
+pub use ordering_snap::script_stacks;
 pub(crate) use ordering_snap::{OrderingSpan, ordering_script_baselines};
 pub use script_stack::{StackSpan, script_stack};
 mod tj_arrays;
