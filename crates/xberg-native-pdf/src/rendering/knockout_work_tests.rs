@@ -95,12 +95,22 @@ fn oversized_knockout_pages_warn_and_match_normal_compositing_at_300_and_600_dpi
             .with_max_level(tracing::Level::WARN)
             .with_writer(move || writer.clone())
             .finish();
-        let actual = tracing::subscriber::with_default(subscriber, || render(&knockout))
-            .expect("oversized legitimate group degrades instead of failing the page");
+        // tracing-core caches a callsite's Interest from the live dispatchers, and with exactly one
+        // registered it consults only the registering thread's default. A parallel test that first hits
+        // the degradation warning without a subscriber would cache "never" for this test's capture too.
+        // A second live dispatcher makes registration read every dispatcher, and the rebuild replaces an
+        // Interest cached earlier. ~keep
+        let keepalive = tracing::Dispatch::new(tracing_subscriber::fmt().with_writer(std::io::sink).finish());
+        let actual = tracing::subscriber::with_default(subscriber, || {
+            tracing::callsite::rebuild_interest_cache();
+            render(&knockout)
+        })
+        .expect("oversized legitimate group degrades instead of failing the page");
         assert_eq!(
             actual.data, expected.data,
             "fallback follows ordinary paint order at {dpi} dpi"
         );
+        drop(keepalive);
         let warnings = String::from_utf8(log.0.lock().expect("warning log").clone()).expect("UTF8 warning");
         assert!(
             warnings.contains("knockout") && warnings.contains("non-knockout"),

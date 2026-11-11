@@ -789,12 +789,8 @@ mod tests {
         let paints = 13_700;
         let doc = knockout_document_with_content(&"0.2 g 0 0 1 1 re f ".repeat(paints), 256, true);
         let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
-        // The degradation warns; a subscriber keeps that callsite enabled for tests that read it. ~keep
-        let subscriber = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::WARN)
-            .with_writer(std::io::sink)
-            .finish();
-        let image = tracing::subscriber::with_default(subscriber, || renderer.render_page(&doc, 0))
+        let image = renderer
+            .render_page(&doc, 0)
             .expect("work-limited group remains renderable");
         let corner = 255 * 256 * 4;
         assert_eq!(&image.data[corner..corner + 4], &[51, 51, 51, 255]);
