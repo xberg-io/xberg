@@ -3213,7 +3213,9 @@ pub(in crate::extractors::pdf) fn render_mixed_plain_pages(
             Ok(plain) => {
                 rendered.insert(page, plain);
             }
-            Err(reason) => tracing::debug!(page, reason, "Declined mixed OCR Plain page rendering"),
+            // ~keep The page keeps its Markdown transcript in Plain output, so the decline is a
+            // degraded result, not routine flow.
+            Err(reason) => tracing::warn!(page, reason, "Declined mixed OCR Plain page rendering"),
         }
     }
     if !rendered.is_empty() {

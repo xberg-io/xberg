@@ -1124,6 +1124,68 @@ fn mixed_plain_added_words_with_diagnostic_child() {
         &root,
         "Plain page added text absent from the accepted transcript",
     );
+
+    // A word inside a code span's group continues neither its literal nor its projected spelling.
+    let prose = format!("Before `a b` after.\n\n{source}");
+    assert_mixed_plain_declines_with_diagnostic(
+        &prose,
+        &document(Some("Before a x b after."), None),
+        &root,
+        "Plain page omitted accepted prose",
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn mixed_plain_accepts_a_heading_marker_whether_or_not_the_element_spells_it() {
+    use crate::core::config::OutputFormat;
+    use crate::types::{PageBoundary, Table};
+
+    let cells: Vec<Vec<String>> = vec![vec!["Name".into(), "Count".into()], vec!["North".into(), "2".into()]];
+    let source = format!(
+        "# Status\n\n{}",
+        crate::rendering::common::render_table_markdown(&cells).trim_end()
+    );
+    let render = |heading: InternalElement| {
+        let mut document = InternalDocument::new("pdf");
+        document.push_element(heading.with_page(1));
+        let table_index = document.push_table(Table {
+            cells: cells.clone(),
+            page_number: 1,
+            ..Default::default()
+        });
+        document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(1));
+        let mut text = source.clone();
+        let bounds = [PageBoundary {
+            page_number: 1,
+            byte_start: 0,
+            byte_end: text.len(),
+        }];
+        let mut replacements = ahash::AHashMap::from([(1, text.clone())]);
+        ocr::render_mixed_plain_pages(
+            ExtractionMethod::Mixed,
+            &mut text,
+            &bounds,
+            &mut replacements,
+            &ahash::AHashMap::from([(1, document)]),
+            &OutputFormat::Plain,
+        );
+        text
+    };
+
+    assert_eq!(
+        render(InternalElement::text(ElementKind::Paragraph, "# Status", 0)),
+        "# Status\n\nName Count\nNorth 2"
+    );
+    assert_eq!(
+        render(InternalElement::text(ElementKind::Heading { level: 1 }, "Status", 0)),
+        "Status\nName Count\nNorth 2"
+    );
+    // A different marker is not the accepted one, so the page keeps its transcript.
+    assert_eq!(
+        render(InternalElement::text(ElementKind::Paragraph, "## Status", 0)),
+        source
+    );
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -1198,6 +1260,10 @@ fn assert_mixed_plain_declines_with_diagnostic(
     assert_eq!(replacements[&1], source);
     let log = std::fs::read_to_string(log.path()).unwrap();
     assert!(log.contains("Declined mixed OCR Plain page rendering"), "{log}");
+    assert!(
+        log.contains(" WARN "),
+        "a declined page is reported as degraded output: {log}"
+    );
     assert!(log.contains("page=1"), "{log}");
     assert!(log.contains(reason), "{log}");
 }
