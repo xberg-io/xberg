@@ -427,19 +427,43 @@ fn mixed_native_page_has_content(
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn merge_returned_page_failures(
     failures: &mut Vec<crate::types::OcrPageFailure>,
-    returned: Vec<crate::types::OcrPageFailure>,
+    returned: &mut crate::types::internal::InternalDocument,
+    page_text: &str,
     native_text: &str,
     boundaries: &[crate::types::PageBoundary],
 ) {
-    let returned = returned
-        .into_iter()
-        .map(|failure| crate::types::OcrPageFailure {
-            recovered: failure.recovered
-                || mixed_native_page_has_content(native_text, boundaries, failure.page.saturating_sub(1) as usize),
-            ..failure
-        })
-        .collect();
-    merge_ocr_page_failures(failures, returned);
+    for failure in &mut returned.ocr_page_failures {
+        let native_kept =
+            mixed_native_page_has_content(native_text, boundaries, failure.page.saturating_sub(1) as usize);
+        if native_kept && !failure.recovered && page_text.trim().is_empty() {
+            let discarded = discarded_xobject_retry_warning(failure, false);
+            if let Some(warning) = returned
+                .processing_warnings
+                .iter_mut()
+                .find(|warning| warning.source == discarded.source && warning.message == discarded.message)
+            {
+                *warning = discarded_xobject_retry_warning(failure, true);
+            }
+        }
+        failure.recovered |= native_kept;
+    }
+    merge_ocr_page_failures(failures, std::mem::take(&mut returned.ocr_page_failures));
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn discarded_xobject_retry_warning(
+    failure: &crate::types::OcrPageFailure,
+    native_kept: bool,
+) -> crate::types::ProcessingWarning {
+    let outcome = if native_kept {
+        "its embedded-image retry was discarded and the page's native text was kept"
+    } else {
+        "its embedded-image retry was discarded"
+    };
+    crate::core::diagnostics::warning(
+        "ocr",
+        format!("OCR of page {} failed ({}); {outcome}.", failure.page, failure.error),
+    )
 }
 
 /// Records for an OCR run that failed as a whole: one for each page the run was asked to read.
@@ -1225,6 +1249,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut accumulated_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
     let mut accumulated_formulas: Vec<crate::types::Formula> = Vec::new();
     let mut accumulated_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
+    let mut recovery_warnings = Vec::new();
+    let mut discarded_recovery_pages = ahash::AHashSet::new();
     let mut page_failures: Vec<crate::types::OcrPageFailure> = Vec::new();
     let mut failed_page_errors: ahash::AHashMap<usize, crate::XbergError> = ahash::AHashMap::new();
     #[cfg(feature = "layout-detection")]
@@ -1655,15 +1681,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         raster_size_px,
                         page_size_pt,
                     ) {
+                        merge_returned_page_failures(&mut page_failures, &mut d, &page_text, native_text, boundaries);
                         crate::core::diagnostics::dedup_extend_warnings(
                             &mut accumulated_warnings,
                             std::mem::take(&mut d.processing_warnings),
-                        );
-                        merge_returned_page_failures(
-                            &mut page_failures,
-                            std::mem::take(&mut d.ocr_page_failures),
-                            native_text,
-                            boundaries,
                         );
                         structured_ocr_pages.insert(page_number, d);
                     }
@@ -1816,15 +1837,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         (image.width(), image.height()),
                         page_dimensions_pt(&render_doc, *page_idx),
                     ) {
+                        merge_returned_page_failures(&mut page_failures, &mut d, &page_text, native_text, boundaries);
                         crate::core::diagnostics::dedup_extend_warnings(
                             &mut accumulated_warnings,
                             std::mem::take(&mut d.processing_warnings),
-                        );
-                        merge_returned_page_failures(
-                            &mut page_failures,
-                            std::mem::take(&mut d.ocr_page_failures),
-                            native_text,
-                            boundaries,
                         );
                         structured_ocr_pages.insert(page_number, d);
                     }
@@ -2521,13 +2537,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 } else {
                     "content"
                 };
-                accumulated_warnings.push(crate::types::ProcessingWarning {
+                recovery_warnings.push((page_number, crate::types::ProcessingWarning {
                     source: std::borrow::Cow::Borrowed("ocr"),
                     message: std::borrow::Cow::Owned(format!(
                         "OCR of page {page_number} failed ({error}); its {recovered_kind} was recovered from the page's \
                          embedded image XObjects instead."
                     )),
-                });
+                }));
                 merge_ocr_page_failures(
                     &mut page_failures,
                     vec![crate::types::OcrPageFailure {
@@ -2593,6 +2609,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 confidence_semantics,
                 confidence,
             );
+            if acceptance.discarded {
+                discarded_recovery_pages.insert(*page_number);
+            }
             // The verdict decides whether the page keeps its text layer (see below). A page
             // the noise gate discarded has blank text and keeps the layer already. ~keep
             if acceptance.verdict.is_some() && !acceptance.discarded {
@@ -2605,6 +2624,30 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 dictionary_noise_pages.insert(*page_number);
             }
             *text = acceptance.content;
+        }
+    }
+
+    // Recovery claims describe retained reads, after the caller's noise policy ran. ~keep
+    for (page, warning) in recovery_warnings {
+        if discarded_recovery_pages.contains(&page) {
+            let native_recovered = mixed_native_page_has_content(native_text, boundaries, (page - 1) as usize);
+            let outcome = if native_recovered {
+                "the page's native text was kept"
+            } else {
+                "the page had no native text to retain"
+            };
+            for failure in page_failures.iter_mut().filter(|failure| failure.page == page) {
+                failure.recovered = native_recovered;
+                crate::core::diagnostics::push_warning_deduped(
+                    &mut accumulated_warnings,
+                    crate::core::diagnostics::warning(
+                        "ocr",
+                        format!("OCR of page {page} failed ({}); {outcome}.", failure.error),
+                    ),
+                );
+            }
+        } else {
+            accumulated_warnings.push(warning);
         }
     }
 
@@ -4440,6 +4483,7 @@ pub(super) async fn extract_with_ocr_for_page(
     // recovered still returns an error.
     let mut page_backend_errors: Vec<(usize, String)> = Vec::new();
     let mut page_failure_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
+    let mut pending_page_failure_warnings = Vec::new();
     let mut page_failures: Vec<crate::types::OcrPageFailure> = Vec::new();
     // #1673: page numbers (1-based) whose embedded-image retry ran (attempted at least one
     // image) but the backend returned successfully with empty content on every one of them --
@@ -5660,7 +5704,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 if !recovered && xobject_retry_ran_empty {
                     pages_with_empty_xobject_retry.push(document_page_number);
                 }
-                page_failure_warnings.push(crate::types::ProcessingWarning {
+                let warning = crate::types::ProcessingWarning {
                     source: std::borrow::Cow::Borrowed("ocr"),
                     message: std::borrow::Cow::Owned(if recovered {
                         let recovered_kind = if ocr_result.content.trim().is_empty() {
@@ -5685,7 +5729,8 @@ pub(super) async fn extract_with_ocr_for_page(
                             document_page_number
                         )
                     }),
-                });
+                };
+                pending_page_failure_warnings.push((page_idx, recovered, warning));
                 page_failures.push(crate::types::OcrPageFailure {
                     page: document_page_number,
                     error: error.clone(),
@@ -6142,6 +6187,18 @@ pub(super) async fn extract_with_ocr_for_page(
     #[cfg(feature = "layout-detection")]
     if let Some(model) = tatr_model.take() {
         crate::layout::return_tatr(model);
+    }
+
+    for (page_idx, recovered, warning) in pending_page_failure_warnings {
+        if recovered && rejected_pages[page_idx] {
+            let page = (page_index_offset + page_idx + 1) as u32;
+            for failure in page_failures.iter_mut().filter(|failure| failure.page == page) {
+                failure.recovered = false;
+                page_failure_warnings.push(discarded_xobject_retry_warning(failure, false));
+            }
+        } else {
+            page_failure_warnings.push(warning);
+        }
     }
 
     // A cancelled run fails every page by design, which the #1444 guard below would report as
