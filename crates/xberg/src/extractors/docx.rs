@@ -8,7 +8,7 @@ use crate::extraction::office_metadata;
 use crate::extractors::security::SecurityBudget;
 use crate::plugins::{InternalDocumentExtractor, Plugin};
 use crate::types::ExtractedImage;
-use crate::types::internal::InternalDocument;
+use crate::types::internal::{InternalDocument, STYLE_NAME_ATTRIBUTE};
 use crate::types::internal_builder::InternalDocumentBuilder;
 use crate::types::{
     DocxMetadata, FormatMetadata, Metadata, PageBoundary, PageContent, PageInfo, PageStructure, PageUnitType, Table,
@@ -39,10 +39,6 @@ impl Default for DocxExtractor {
         Self::new()
     }
 }
-
-/// Attribute key under which the resolved DOCX paragraph style name (`w:pStyle` ->
-/// `styles.xml` `w:name`, walking `w:basedOn`) is exposed on `Element.metadata.additional`.
-const STYLE_NAME_ATTRIBUTE: &str = "style_name";
 
 /// Attribute key set to `"true"` on every element that belongs to a table of contents
 /// (a `w:sdt` with a `Table of Contents` doc-part gallery, or a `TOC` field code).
@@ -341,15 +337,28 @@ fn build_internal_document(
                 // consumer sees must not diverge from the one `Table::to_markdown` already
                 // renders correctly (xberg-io/xberg#1549). ~keep
                 let table_note_refs = doc.note_refs_by_table.get(idx);
-                let grid = match table_note_refs {
-                    Some(_) => table_without_note_markers(table).to_markdown_cell_grid_with_math(),
-                    None => table.to_markdown_cell_grid_with_math(),
+                let without_note_markers;
+                let grid_table = match table_note_refs {
+                    Some(_) => {
+                        without_note_markers = table_without_note_markers(table);
+                        &without_note_markers
+                    }
+                    None => table,
                 };
+                let grid = grid_table.to_markdown_cell_grid_with_math();
                 let (cells, math) = crate::rendering::table_math::split_cell_grid(grid);
                 if !cells.is_empty() {
                     let cell_styles = resolve_table_cell_styles(doc, table);
                     let element_index =
                         builder.push_table_from_cells_with_styles(&cells, &cell_styles, Some(current_page), None);
+                    // The cells hold Markdown (links, emphasis); Plain output holds the same grid as text. ~keep
+                    builder.merge_attribute(
+                        element_index,
+                        crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE,
+                        crate::rendering::common::render_table_plain(
+                            &grid_table.to_cell_grid(crate::extraction::docx::parser::Paragraph::to_text),
+                        ),
+                    );
                     if let Some(encoded) = math {
                         builder.set_table_math_annotations(element_index, encoded);
                     }
@@ -432,6 +441,13 @@ fn build_internal_document(
                 if !attrs.is_empty() {
                     builder.set_attributes(img_elem_idx, attrs);
                 }
+                // The element text is the drawing's alt text or shape name, not text of the page, so Plain
+                // output shows only the text OCR reads from the image. ~keep
+                builder.merge_attribute(
+                    img_elem_idx,
+                    crate::types::internal::MARKDOWN_IMAGE_REFERENCE_ATTRIBUTE,
+                    "true",
+                );
             }
             crate::extraction::docx::parser::DocumentElement::PageBreak => {
                 builder.push_page_break_with_page(Some(current_page));
