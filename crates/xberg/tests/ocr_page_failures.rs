@@ -53,6 +53,7 @@ fn png_size(bytes: &[u8]) -> Option<(u32, u32)> {
 #[derive(Clone, Copy)]
 enum RasterOutcome {
     Word,
+    Noise,
     TableOnly,
 }
 
@@ -84,12 +85,15 @@ impl OcrBackend for StubBackend {
             let mut recovered = ExtractedDocument::default();
             match self.raster {
                 RasterOutcome::Word => recovered.content = RECOVERED_WORD.to_string(),
-                RasterOutcome::TableOnly => {
+                RasterOutcome::Noise | RasterOutcome::TableOnly => {
+                    if matches!(self.raster, RasterOutcome::Noise) {
+                        recovered.content = "A B C D E F G H I J K L M N O P Q R S T U V W X ".repeat(8);
+                    }
                     recovered.tables = vec![xberg::types::Table {
                         cells: vec![vec!["Item".to_string(), "Amount".to_string()]],
                         markdown: "| Item | Amount |\n| --- | --- |\n".to_string(),
                         ..Default::default()
-                    }]
+                    }];
                 }
             }
             return Ok(recovered);
@@ -205,10 +209,19 @@ fn extract_with(
     raster: RasterOutcome,
     config: &ExtractionConfig,
 ) -> ExtractedDocument {
-    let pdf = pdf_with_image_on_page_two();
+    extract_from_pdf(name, render, raster, config, &pdf_with_image_on_page_two())
+}
+
+fn extract_from_pdf(
+    name: &'static str,
+    render: RenderOutcome,
+    raster: RasterOutcome,
+    config: &ExtractionConfig,
+    pdf: &[u8],
+) -> ExtractedDocument {
     let _ = unregister_ocr_backend(name);
     register_ocr_backend(Arc::new(StubBackend { name, render, raster })).expect("the stub backend registers");
-    let result = extract_bytes_document_blocking(&pdf, "application/pdf", config);
+    let result = extract_bytes_document_blocking(pdf, "application/pdf", config);
     unregister_ocr_backend(name).expect("the stub backend unregisters");
     result.expect("the retry must recover the page, so extraction must not error")
 }
@@ -945,3 +958,6 @@ fn a_cancelled_whole_document_fallback_adds_no_record() {
     );
     assert_eq!(result.ocr_page_failures, None);
 }
+
+#[path = "ocr_page_failures/discarded_noise_2908.rs"]
+mod discarded_noise_2908;

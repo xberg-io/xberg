@@ -1,4 +1,4 @@
-use super::ocr;
+use super::{is_khmer_digit, ocr};
 use crate::core::config::ExtractionConfig;
 
 pub(super) fn automatic_page_acceptance_supported(config: &ExtractionConfig) -> bool {
@@ -95,10 +95,7 @@ pub(super) fn with_native_page_acceptance(
     // Even one native Khmer digit in otherwise English text keeps the original whole-document fallback. ~keep
     // This preserves #2408 glyph/raster proofs, missing-model warnings and model-cache behavior; the tradeoff ~keep
     // is withholding native-page acceptance for the entire document when the whole-document gate requests OCR. ~keep
-    if native
-        .chars()
-        .any(|character| ('\u{17e0}'..='\u{17e9}').contains(&character))
-    {
+    if native.chars().any(is_khmer_digit) {
         return outcome;
     }
     // Every page still needs OCR; using page acceptance also retains native text when its read duplicates it. ~keep
