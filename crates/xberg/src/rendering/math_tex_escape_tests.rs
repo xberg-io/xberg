@@ -138,8 +138,49 @@ fn should_keep_display_form_for_display_math_in_a_list_item() {
     builder.push_formula(r"a \\ b", None, None);
     builder.end_list();
     let markdown = super::render_markdown(&builder.build());
-    assert!(
-        markdown.lines().any(|line| line.trim() == "$$"),
-        "display math in a list item must open and close on its own lines: {markdown:?}"
+    let lines: Vec<&str> = markdown.lines().map(str::trim).collect();
+    let open = lines.iter().position(|line| *line == "$$").expect(&markdown);
+    assert_eq!(
+        lines[open..].iter().take(3).copied().collect::<Vec<_>>(),
+        ["$$", r"a \\ b", "$$"],
+        "display math in a list item must be the TeX between two `$$` lines: {markdown:?}"
     );
+}
+
+#[test]
+fn should_keep_a_dollar_in_tex_inside_its_math_for_a_reader_with_math() {
+    // A "$" in the TeX is escaped for the reader, and the escaping must not turn into a bare "$"
+    // that closes the math early.
+    for tex in [r"a \$ b", r"\$5 + \$6", r"a $ b", r"\$\$"] {
+        let source = format!("Let ${tex}$ hold, then.");
+        let markdown = math_paragraph(&source, &[&format!("${tex}$")]);
+        let arena = Arena::new();
+        let root = parse_document(&arena, &markdown, &super::markdown::comrak_options());
+        let math: Vec<_> = root
+            .descendants()
+            .filter_map(|node| match &node.data.borrow().value {
+                NodeValue::Math(math) => Some(math.literal.clone()),
+                _ => None,
+            })
+            .collect();
+        let stray: Vec<_> = root
+            .descendants()
+            .filter_map(|node| match &node.data.borrow().value {
+                NodeValue::Text(text) if text.contains('$') => Some(text.to_string()),
+                _ => None,
+            })
+            .collect();
+        let inner = &markdown[markdown.find('$').unwrap() + 1..markdown.rfind('$').unwrap()];
+        for (at, _) in inner.match_indices('$') {
+            let run = inner[..at].bytes().rev().take_while(|byte| *byte == b'\\').count();
+            assert!(run % 2 == 1, "a bare dollar closes the math early in {markdown:?}");
+        }
+        assert_eq!(math.len(), 1, "markdown: {markdown:?}");
+        assert!(stray.is_empty(), "markdown: {markdown:?}, stray: {stray:?}");
+        assert_eq!(
+            super::common::unescape_markdown_text(&math[0]).replace(r"\$", "$"),
+            tex.replace(r"\$", "$"),
+            "markdown: {markdown:?}"
+        );
+    }
 }
