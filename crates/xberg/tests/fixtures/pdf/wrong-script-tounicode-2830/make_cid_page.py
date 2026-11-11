@@ -3,6 +3,9 @@
 equal to glyph IDs) under a Helvetica title. The letter "q" has no ToUnicode entry (one lost glyph).
   arabic:  the ToUnicode map sends each Latin letter to an Arabic code point.
   bengali: the ToUnicode map sends each Latin letter to a Bengali code point.
+  arabic-footer: as arabic, plus a correctly mapped English footer in a second font, so 15.8% of the
+           letters are Latin and the wrong map holds the rest (control: the accepted trade-off of the
+           letter-share rule, a page that stays native).
   genuine: the body is real Arabic text, its ToUnicode map is correct, and the letter qaf has no entry (control: a
            page whose ink really is Arabic).
   hebrew:  the body is real Hebrew text with a correct map and the letter qof lost (control: a script no eng model reads).
@@ -95,9 +98,15 @@ lines = [line for paragraph in PARAGRAPHS for line in wrap(paragraph)]
 ops = ["BT /F1 14 Tf 50 750 Td (Library Planning Notes) Tj ET", "BT /F2 10 Tf 50 720 Td 13 TL"]
 ops += ["<" + "".join(f"{gid[c]:04X}" for c in line) + "> Tj T*" for line in lines]
 ops.append("ET")
+FOOTER = [
+    "Minutes approved by the board. Copies are available from the front desk during opening hours.",
+    "Please contact the office with any comments before the next meeting. Thank you for reading. See the notes.",
+]
+if variant == "arabic-footer":
+    ops += [f"BT /F1 10 Tf 50 {100 - 13 * i} Td ({line}) Tj ET" for i, line in enumerate(FOOTER)]
 content = "\n".join(ops).encode()
 
-BASES = {"arabic": 0x0627, "bengali": 0x0985}
+BASES = {"arabic": 0x0627, "arabic-footer": 0x0627, "bengali": 0x0985}
 
 
 def unicode_of(c: str) -> int:

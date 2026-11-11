@@ -20,6 +20,7 @@ const TWO_WRONG_SCRIPTS: &[u8] = include_bytes!("fixtures/pdf/wrong-script-touni
 const GREEK_MINORITY: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/greek-minority.pdf");
 const CYRILLIC_MINORITY: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/cyrillic-minority.pdf");
 const ARABIC_MINORITY: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/arabic-minority.pdf");
+const ARABIC_FOOTER: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/arabic-footer.pdf");
 const PHRASES: [&str; 3] = [
     "committee met on Tuesday",
     "parking area",
@@ -160,6 +161,19 @@ fn an_english_page_keeps_its_correctly_mapped_cyrillic_minority() {
 #[test]
 fn an_english_page_keeps_its_correctly_mapped_arabic_minority() {
     assert_keeps_minority(ARABIC_MINORITY, '\u{0600}'..='\u{06FF}');
+}
+
+/// The accepted trade-off of the letter-share rule: a wrong-mapped body with a correctly mapped
+/// English footer (15.8% of the letters) is not probed, so the page stays native and OCR is skipped.
+#[test]
+fn a_wrong_mapped_page_with_a_correctly_mapped_english_footer_stays_native() {
+    let models = models();
+    let result = extract(ARABIC_FOOTER, models.path());
+    assert!(skipped(&result), "{:?}", result.processing_warnings);
+    assert_eq!(result.extraction_method, Some(ExtractionMethod::Native));
+    assert!(arabic_letters(&result.content) > 500, "{:?}", result.content);
+    assert!(!result.content.contains(PHRASES[0]), "{:?}", result.content);
+    assert!(result.content.contains("Minutes approved by the board"), "{:?}", result.content);
 }
 
 #[test]
