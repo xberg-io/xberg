@@ -1751,3 +1751,20 @@ fn test_render_djot_paragraph_still_escapes_block_start_text() {
         assert_eq!(out, format!("{escaped}\n"));
     }
 }
+
+#[test]
+fn test_render_djot_heading_keeps_an_annotation_that_starts_with_a_brace() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_heading(2, "{x} tail", None, None);
+    let mut doc = b.build();
+    for element in doc.elements.iter_mut() {
+        if matches!(element.kind, ElementKind::Heading { .. }) {
+            element.annotations = vec![TextAnnotation {
+                start: 0,
+                end: 3,
+                kind: AnnotationKind::Strikethrough,
+            }];
+        }
+    }
+    assert_eq!(render_djot(&doc), "## {-{x}-} tail\n");
+}
