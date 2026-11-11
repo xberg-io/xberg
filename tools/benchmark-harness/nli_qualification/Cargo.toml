@@ -17,7 +17,7 @@ serde_json = "1.0.154"
 sha2 = "0.11"
 xberg = { path = "../../../crates/xberg", default-features = false, features = ["classification-onnx-types"] }
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "time"], optional = true }
-ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "api-18"], optional = true }
+ort = { version = "2.0.0-rc.15", default-features = false, features = ["std", "api-18"], optional = true }
 
 [dev-dependencies]
 tempfile = "3.27"
