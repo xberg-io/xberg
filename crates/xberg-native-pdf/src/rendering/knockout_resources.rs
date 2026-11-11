@@ -171,6 +171,7 @@ impl KnockoutResources {
         sidecar_bytes: usize,
         spot_count: usize,
         paints: usize,
+        surfaces_in_pass: usize,
     ) -> Result<Option<KnockoutReservation>> {
         if self.failure.is_some() {
             self.check()?;
@@ -185,6 +186,15 @@ impl KnockoutResources {
             return self.refuse("surface work arithmetic");
         };
         if work > MAX_SURFACE_WORK {
+            return Ok(None);
+        }
+        // Running the planned paints charges at least `surfaces_in_pass` full surfaces, so a plan
+        // whose floor already passes the limit would exhaust the work part-way and render the
+        // whole group a second time. Decide that before the pass. ~keep
+        let floor = (pixels as u64)
+            .checked_mul(surfaces_in_pass as u64)
+            .and_then(|pass| pass.checked_add(work));
+        if floor.is_none_or(|floor| floor > MAX_SURFACE_WORK) {
             return Ok(None);
         }
         let bytes = rgba_bytes
@@ -288,7 +298,7 @@ mod tests {
     #[test]
     fn surface_work_overflow_is_refused_before_buffers_are_allocated() {
         let mut resources = KnockoutResources::default();
-        assert!(resources.knockout(usize::MAX, 0, 0, 0, usize::MAX).is_err());
+        assert!(resources.knockout(usize::MAX, 0, 0, 0, usize::MAX, usize::MAX).is_err());
         assert_eq!(resources.live.load(Ordering::Relaxed), 0);
     }
 

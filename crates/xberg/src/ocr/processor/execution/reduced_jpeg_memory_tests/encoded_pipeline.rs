@@ -92,28 +92,31 @@ async fn measure(extraction_mib: usize, ocr_mib: usize, affordable: bool) {
             "image_bytes":image_bytes, "affordable":affordable
         })
     );
-    if affordable {
-        let result = result.expect("affordable actual built-in pipeline");
-        assert!(result.errors.is_empty(), "{rendered}");
-        assert_eq!(result.results.len(), 1);
-        fixture::assert_words(&result.results[0].content);
-        assert!(observed.allocations > 0 && observed.peak > 0 && observed.max_active >= 5);
-        assert_eq!(observed.live, 0);
-        assert_eq!(observed.allocations, observed.frees);
-        assert!(
-            image_bytes <= budget,
-            "live image buffers {image_bytes} exceed {budget}"
-        );
-    } else {
-        assert!(
-            retained_rgb + observed.peak <= budget,
-            "actual pipeline RGB plus native lower bound {} exceeds {}",
-            retained_rgb + observed.peak,
-            budget
-        );
-        assert_eq!(observed.allocations, 0, "refusal must precede native image allocation");
-        assert!(rendered.contains("max_content_size"), "{rendered}");
-    }
+    let result = result.expect("actual built-in pipeline must complete within the limit");
+    assert!(result.errors.is_empty(), "{rendered}");
+    assert_eq!(result.results.len(), 1);
+    let document = &result.results[0];
+    fixture::assert_words(&document.content);
+    assert_eq!(observed.live, 0);
+    assert_eq!(observed.allocations, observed.frees);
+    assert!(observed.allocations > 0 && observed.peak > 0 && observed.max_active >= 5);
+    assert!(
+        image_bytes <= budget,
+        "live image buffers {image_bytes} exceed {budget}"
+    );
+    let processed = |key: &str| {
+        document
+            .metadata
+            .additional
+            .get(key)
+            .and_then(serde_json::Value::as_u64)
+    };
+    let full_resolution = processed("ocr_processed_image_width") == Some(DIMENSION.into())
+        && processed("ocr_processed_image_height") == Some(DIMENSION.into());
+    assert_eq!(
+        full_resolution, affordable,
+        "the page is read at full resolution only when its workspace fits the limit: {rendered}"
+    );
 }
 
 async fn isolated(name: &str, extraction_mib: usize, ocr_mib: usize, affordable: bool) {

@@ -276,6 +276,15 @@ const MIN_PEELED_FULL_WIDTH_LINES: usize = 2;
 // across a column cut. A row's two cells are separated by the gutter (several ems); a
 // legend's own font runs abut at normal word/kern spacing.
 const MAX_INTRA_LINE_GAP_EM: f32 = 1.0;
+// A span at most this fraction of a line's font size is a script mark, and it may sit in the
+// line's gap within this slack of the gap's edges.
+const SCRIPT_FONT_RATIO: f32 = 0.8;
+const SCRIPT_GAP_SLACK_PTS: f32 = 1.0;
+// A script mark sits within one em of its base line: a superscript's top rises at most about that
+// far above the baseline, and anything further off belongs to another line.
+const SCRIPT_VERTICAL_TOLERANCE_EM: f32 = 1.0;
+// What is left of the gap once the script is taken out is at most a word space or two.
+const SCRIPT_GAP_REMAINDER_EM: f32 = 0.75;
 // A run narrower than this many ems is a label, a marker or a cell rather than a prose line.
 const LABEL_RUN_MAX_EM: f32 = 8.0;
 const MIN_LABEL_VALUE_ROWS: usize = 3;
@@ -291,6 +300,13 @@ const MIN_STRADDLING_INK_PTS: f32 = 60.0;
 /// returned by this function is therefore a genuinely CONTINUOUS run of ink, which is what
 /// both `peel_full_width_line_bands` and `partition_lines_at` need "line" to mean. ~keep
 fn group_indices_into_lines(all_spans: &[TextSpan], indices: &[usize]) -> Vec<Vec<usize>> {
+    group_lines(all_spans, indices, false)
+}
+
+/// `group_indices_into_lines`, optionally reading a gap that a script mark fills as part of the
+/// line (`bridge_scripts`). Only the straddling-line guard asks for it: bridging everywhere moves
+/// the line bands and column assignments of unrelated pages.
+fn group_lines(all_spans: &[TextSpan], indices: &[usize], bridge_scripts: bool) -> Vec<Vec<usize>> {
     if let Some(lines) = source_stepped_prose_lines(all_spans, indices) {
         return lines;
     }
@@ -325,7 +341,16 @@ fn group_indices_into_lines(all_spans: &[TextSpan], indices: &[usize]) -> Vec<Ve
             if let Some(&last) = run.last() {
                 let gap = all_spans[index].bbox.left() - run_right;
                 let max_font = all_spans[last].font_size.max(all_spans[index].font_size);
-                if gap > max_font * MAX_INTRA_LINE_GAP_EM {
+                if gap > max_font * MAX_INTRA_LINE_GAP_EM
+                    && !(bridge_scripts
+                        && script_fills_gap(
+                            all_spans,
+                            indices,
+                            (run_right, all_spans[index].bbox.left()),
+                            all_spans[last].bbox.y,
+                            max_font,
+                        ))
+                {
                     lines.push(std::mem::take(&mut run));
                     run_right = f32::MIN;
                 }
@@ -338,6 +363,29 @@ fn group_indices_into_lines(all_spans: &[TextSpan], indices: &[usize]) -> Vec<Ve
         }
     }
     lines
+}
+
+/// Whether a script-sized span (a superscript or subscript, which sorts into a `y` bucket of
+/// its own) sits in the horizontal `gap` beside a line at `baseline_y` set in `font_size`.
+/// Without it the gap reads as a break in the line, because the script that fills it was
+/// bucketed away: an inline equation's `e^{i theta}` then tears the sentence around it in
+/// two, and a column cut can run through the middle of the paragraph. GH#2925. ~keep
+fn script_fills_gap(
+    all_spans: &[TextSpan],
+    indices: &[usize],
+    gap: (f32, f32),
+    baseline_y: f32,
+    font_size: f32,
+) -> bool {
+    indices.iter().any(|&i| {
+        let span = &all_spans[i];
+        span.font_size > 0.0
+            && span.font_size <= font_size * SCRIPT_FONT_RATIO
+            && (span.bbox.y - baseline_y).abs() <= font_size * SCRIPT_VERTICAL_TOLERANCE_EM
+            && span.bbox.left() >= gap.0 - SCRIPT_GAP_SLACK_PTS
+            && span.bbox.right() <= gap.1 + SCRIPT_GAP_SLACK_PTS
+            && (gap.1 - gap.0) - span.bbox.width <= font_size * SCRIPT_GAP_REMAINDER_EM
+    })
 }
 
 const MIN_STEPPED_PROSE_LINES: usize = 4;
@@ -1827,7 +1875,7 @@ impl XYCutStrategy {
     }
 
     fn straddling_line_count(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> usize {
-        group_indices_into_lines(all_spans, indices)
+        group_lines(all_spans, indices, true)
             .iter()
             .filter(|line| {
                 let (left_ink, right_ink) = line.iter().fold((0.0f32, 0.0f32), |(left, right), &i| {
@@ -2796,6 +2844,91 @@ mod tests {
             mirrored: false,
             page_rotation_applied: 0,
         }
+    }
+
+    /// GH#2925: a superscript sorts into a `y` bucket of its own, so the gap it fills read as a
+    /// break and an inline equation tore the sentence around it into two lines.
+    #[test]
+    fn a_script_filling_a_gap_keeps_the_line_whole_gh2925() {
+        let spans = vec![
+            make_span_text(59.0, 643.4, 100.0, 10.0, "Where e", 10.0),
+            make_span_text(162.0, 647.0, 7.0, 7.0, "iθ", 7.0),
+            make_span_text(172.0, 643.4, 100.0, 10.0, "symbolize the amplitude", 10.0),
+        ];
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        let lines = group_lines(&spans, &indices, true);
+        assert!(
+            lines.iter().any(|line| line.contains(&0) && line.contains(&2)),
+            "the sentence must stay one line: {lines:?}"
+        );
+
+        let without_script = vec![spans[0].clone(), spans[2].clone()];
+        let lines = group_lines(&without_script, &[0, 1], true);
+        assert_eq!(
+            lines.len(),
+            2,
+            "a gap with no script in it still breaks the line: {lines:?}"
+        );
+        let lines = group_lines(&spans, &indices, false);
+        assert!(
+            !lines.iter().any(|line| line.contains(&0) && line.contains(&2)),
+            "ordinary line grouping is unchanged: {lines:?}"
+        );
+    }
+
+    fn bridged(script_font: f32, script_width: f32, next_left: f32) -> bool {
+        let spans = vec![
+            make_span_text(59.0, 643.4, 100.0, 10.0, "Where e", 10.0),
+            make_span_text(162.0, 647.0, script_width, 7.0, "iθ", script_font),
+            make_span_text(next_left, 643.4, 100.0, 10.0, "symbolize the amplitude", 10.0),
+        ];
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        group_lines(&spans, &indices, true)
+            .iter()
+            .any(|line| line.contains(&0) && line.contains(&2))
+    }
+
+    #[test]
+    fn a_script_larger_than_the_ratio_does_not_bridge_a_gap_gh2925() {
+        assert!(bridged(7.0, 7.0, 172.0));
+        assert!(!bridged(9.0, 7.0, 172.0));
+    }
+
+    #[test]
+    fn a_gap_wider_than_the_script_plus_remainder_is_not_bridged_gh2925() {
+        assert!(bridged(7.0, 7.0, 172.0));
+        assert!(!bridged(7.0, 7.0, 180.0));
+    }
+
+    #[test]
+    fn a_small_span_in_a_column_gutter_neither_bridges_nor_adds_a_straddling_line_gh2925() {
+        let strategy = XYCutStrategy::new();
+        let mut spans = Vec::new();
+        for row in 0..4 {
+            let y = 700.0 - row as f32 * 12.0;
+            spans.push(make_span_text(40.0, y, 100.0, 10.0, "left column prose", 10.0));
+            spans.push(make_span_text(156.0, y + 3.0, 7.0, 7.0, "n", 7.0));
+            spans.push(make_span_text(172.0, y, 100.0, 10.0, "right column prose", 10.0));
+        }
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        let lines = group_lines(&spans, &indices, true);
+        assert!(
+            !lines.iter().any(|line| line.contains(&0) && line.contains(&2)),
+            "a 16pt gutter with a small span in it is still a break: {lines:?}"
+        );
+        assert_eq!(strategy.straddling_line_count(&spans, &indices, 156.0), 0);
+    }
+
+    #[test]
+    fn a_script_off_the_line_by_more_than_an_em_does_not_bridge_gh2925() {
+        let spans = vec![
+            make_span_text(59.0, 643.4, 100.0, 10.0, "Where e", 10.0),
+            make_span_text(162.0, 665.0, 7.0, 7.0, "iθ", 7.0),
+            make_span_text(172.0, 643.4, 100.0, 10.0, "symbolize the amplitude", 10.0),
+        ];
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        let lines = group_lines(&spans, &indices, true);
+        assert!(!lines.iter().any(|line| line.contains(&0) && line.contains(&2)));
     }
 
     #[test]
@@ -5264,28 +5397,33 @@ mod tests {
             .collect()
     }
 
-    /// Ten word-per-span prose lines at x, from `y_top` down at 20 pt leading.
-    fn word_block(x: f32, tag: &str, y_top: f32) -> Vec<TextSpan> {
-        let mut spans = Vec::new();
-        for i in 0..10 {
-            let mut pen = x;
-            for (k, w) in ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"]
-                .iter()
-                .enumerate()
-            {
-                let width = w.len() as f32 * 5.4;
-                spans.push(make_span_text(
-                    pen,
-                    y_top - i as f32 * 20.0,
-                    width,
-                    12.0,
-                    &format!("{tag}{i}.{k}"),
-                    12.0,
-                ));
-                pen += width + 3.0;
-            }
-        }
-        spans
+    /// Ten two-run prose lines at x, from `y_top` down at 20 pt leading: each line is a
+    /// left run and a right run, both `run_width` wide, separated by a `gap_pt` seam at
+    /// the same X on every line.
+    fn gap_block(x: f32, tag: &str, y_top: f32, run_width: f32, gap_pt: f32) -> Vec<TextSpan> {
+        (0..10)
+            .flat_map(|i| {
+                let y = y_top - i as f32 * 20.0;
+                [
+                    make_span_text(
+                        x,
+                        y,
+                        run_width,
+                        12.0,
+                        &format!("{tag}{i} left half of the stacked prose body"),
+                        12.0,
+                    ),
+                    make_span_text(
+                        x + run_width + gap_pt,
+                        y,
+                        run_width,
+                        12.0,
+                        &format!("{tag}{i} right half of the stacked prose body"),
+                        12.0,
+                    ),
+                ]
+            })
+            .collect()
     }
 
     fn reading_order(spans: &[TextSpan]) -> Vec<String> {
@@ -5305,7 +5443,11 @@ mod tests {
 
     /// The two-column-prose branch cuts by left edge. A right block wholly above the left block, with
     /// the same leading across the seam so no row gap separates them, is read first: the sides share
-    /// no rows, as for the main column gate.
+    /// no rows, as for the main column gate. The blocks' 8 pt gap is the vertical leading gap (one
+    /// 20 pt leading step minus the 12 pt line height), the same gap as between the blocks' own
+    /// lines, and stays under `min_valley_width`, so the Y-band peel cannot fire; the column gap is
+    /// 30 pt. The `None` split pins the decline conjunct (right side wholly above left) as the only
+    /// signal keeping the left-first cut away, the top-down fallback reading the right block first.
     #[test]
     fn two_column_prose_branch_reads_a_right_block_above_the_left_block_first() {
         let mut spans = prose_block(320.0, "R", 760.0, 20.0);
@@ -5314,22 +5456,50 @@ mod tests {
         let strategy = XYCutStrategy::new();
         let kind = strategy.classify_region_kind(&spans, &indices);
         assert_eq!(strategy.detect_two_column_prose(&spans, &indices, kind), Some(185.0));
+        assert_eq!(strategy.find_vertical_split_indexed(&spans, &indices), None);
 
         let expected: Vec<String> = [block_order("R", 10), block_order("L", 10)].concat();
         assert_eq!(reading_order(&spans), expected);
     }
 
-    /// With a row gap between the blocks the Y-band peel reads them top-down.
+    /// With a row gap between the blocks the Y-band peel reads them top-down. The right
+    /// block's last line spills one leading step below the left block's bottom line, so
+    /// the right side does not sit wholly above the left side and the decline conjunct
+    /// cannot order these blocks: the band-wide row gap between the blocks is the only
+    /// signal reading the right block first, and turning the peel off flips the order
+    /// to left-first. No line sits inside that row gap, so the below half -- the left
+    /// block plus the spilled line -- has no split of its own and the flat row-banded
+    /// fallback reads it L0..L9 then R9.
     #[test]
     fn two_column_prose_branch_peels_a_right_block_above_the_left_block_across_a_row_gap() {
         let mut spans = prose_block(320.0, "R", 760.0, 20.0);
-        spans.extend(prose_block(50.0, "L", 760.0 - 230.0, 20.0));
+        // Re-emit the block's last line one leading step below the left block's bottom
+        // line: the right side then does not sit wholly above the left side, so the
+        // decline conjunct no longer declines, and only the peel orders the blocks
+        // top-down. The spilled line sits clear of every left line, so nothing rides
+        // the row gap and the below half reads as one flat row-banded run. ~keep
+        spans.truncate(9);
+        spans.push(make_span_text(
+            320.0,
+            360.0,
+            240.0,
+            12.0,
+            "R9 line of prose text in the block",
+            12.0,
+        ));
+        spans.extend(prose_block(50.0, "L", 560.0, 20.0));
         let indices: Vec<usize> = (0..spans.len()).collect();
         let strategy = XYCutStrategy::new();
         let kind = strategy.classify_region_kind(&spans, &indices);
         assert_eq!(strategy.detect_two_column_prose(&spans, &indices, kind), Some(185.0));
+        assert!(
+            strategy.find_vertical_split_indexed(&spans, &indices).is_some(),
+            "the block-to-block row gap must be band-wide so the Y-band peel can fire on it"
+        );
 
-        let expected: Vec<String> = [block_order("R", 10), block_order("L", 10)].concat();
+        let mut expected = block_order("R", 9);
+        expected.extend(block_order("L", 10));
+        expected.push("R9 line of prose text in the block".to_string());
         assert_eq!(reading_order(&spans), expected);
     }
 
@@ -5347,21 +5517,29 @@ mod tests {
         assert_eq!(reading_order(&spans), expected);
     }
 
-    /// The narrow-gutter branch needs a gap at the gutter on at least twelve lines, so it cannot see
-    /// two blocks that share no row: it declines them and the main path reads them top-down.
+    /// The narrow-gutter branch needs at least twelve lines whose largest within-line gap
+    /// reaches the detector's 6 pt `MIN_GAP_PT`, clustered at one X. Each line here is two
+    /// runs split by a 5.5 pt seam aligned at one X across all twenty lines, so the branch
+    /// declines on the gap rule alone and the main path reads the stacked blocks top-down:
+    /// relaxing the rule fires the branch and scrambles that order into column halves.
     #[test]
-    fn narrow_gutter_branch_does_not_fire_on_a_right_block_above_the_left_block() {
-        let mut spans = word_block(320.0, "R", 760.0);
-        spans.extend(word_block(50.0, "L", 760.0 - 230.0));
+    fn narrow_gutter_branch_declines_a_seam_just_under_min_gap() {
+        let mut spans = gap_block(50.0, "R", 760.0, 195.0, 5.5);
+        spans.extend(gap_block(50.0, "L", 530.0, 195.0, 5.5));
         let indices: Vec<usize> = (0..spans.len()).collect();
         let strategy = XYCutStrategy::new();
         let kind = strategy.classify_region_kind(&spans, &indices);
+        assert_eq!(kind, RegionKind::Prose);
         assert_eq!(strategy.detect_narrow_gutter_prose(&spans, &indices, kind), None);
 
-        let order = reading_order(&spans);
-        let last_right = order.iter().rposition(|t| t.starts_with('R')).unwrap();
-        let first_left = order.iter().position(|t| t.starts_with('L')).unwrap();
-        assert!(last_right < first_left, "right block must read first: {order:?}");
+        let mut expected: Vec<String> = Vec::new();
+        for tag in ["R", "L"] {
+            for i in 0..10 {
+                expected.push(format!("{tag}{i} left half of the stacked prose body"));
+                expected.push(format!("{tag}{i} right half of the stacked prose body"));
+            }
+        }
+        assert_eq!(reading_order(&spans), expected);
     }
 
     /// A left block above a right block (GH#1763 shape, a caption beside the body that starts
