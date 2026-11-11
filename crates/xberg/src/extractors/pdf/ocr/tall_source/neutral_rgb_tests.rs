@@ -143,15 +143,41 @@ fn is_ink_row(y: u32) -> bool {
     INK_ROWS.contains(&(y % LINE_PITCH))
 }
 
-/// The first bar starts at row 20, as many blank rows as the uncertified rule needs above it.
+/// The first bar starts `MIN_BLANK_ROWS` rows down: as many blank rows above it as the
+/// uncertified rule needs, then a bar as tall as the fixture's ink rows.
 fn is_ink_row_after_a_full_blank_band(y: u32) -> bool {
-    (20..30).contains(&(y % LINE_PITCH)) && y < HEIGHT - 50
+    (MIN_BLANK_ROWS..MIN_BLANK_ROWS + (INK_ROWS.end - INK_ROWS.start)).contains(&(y % LINE_PITCH)) && y < HEIGHT - 50
 }
 
 /// Bars 10 rows tall with 10 blank rows between them, apart from one 70 row blank band that
 /// lets the page be cut in two.
 fn is_ink_row_between_short_gaps(y: u32) -> bool {
     (5..15).contains(&(y % 20)) && !(2180..2240).contains(&y)
+}
+
+/// Ink line runs of a scan, counted from the fixture constants.
+fn source_lines(ink_row: fn(u32) -> bool) -> usize {
+    (0..HEIGHT)
+        .filter(|&y| ink_row(y) && (y == 0 || !ink_row(y - 1)))
+        .count()
+}
+
+/// Blank bands of at least `min` rows, as the certified `blank_bands` reports them.
+fn certified_blank_bands(ink_row: fn(u32) -> bool, min: u32) -> Vec<Range<u32>> {
+    let mut bands = Vec::new();
+    let mut start = 0;
+    for y in 0..HEIGHT {
+        if ink_row(y) {
+            if y - start >= min {
+                bands.push(start..y);
+            }
+            start = y + 1;
+        }
+    }
+    if HEIGHT - start >= min {
+        bands.push(start..HEIGHT);
+    }
+    bands
 }
 
 fn flate(bytes: &[u8]) -> Vec<u8> {
@@ -384,12 +410,16 @@ async fn short_blank_gaps_between_bars_are_separate_lines_of_a_certified_scan() 
     );
     let (replaced, original, _, heights) = replace_reporting(&document, RENDERED, None, Lines::Exact).await;
     assert!(replaced);
-    assert_eq!(original.content.lines().filter(|line| !line.is_empty()).count(), 217);
     assert_eq!(
-        heights,
-        [2210, 2190],
-        "the only band of 20 rows or more is cut in the middle"
+        original.content.lines().filter(|line| !line.is_empty()).count(),
+        source_lines(is_ink_row_between_short_gaps)
     );
+    let bands = certified_blank_bands(is_ink_row_between_short_gaps, MIN_BLANK_ROWS);
+    let [band] = bands.as_slice() else {
+        panic!("the fixture has exactly one band of {MIN_BLANK_ROWS} blank rows or more: {bands:?}");
+    };
+    let cut = band.start + (band.end - band.start) / 2;
+    assert_eq!(heights, [cut, HEIGHT - cut], "the only wide band is cut in the middle");
 }
 
 #[tokio::test]
@@ -411,7 +441,10 @@ async fn a_gray_scan_below_150_dpi_is_refused_unless_every_strip_returns_its_lin
     let (replaced, original, asked, _) = replace_reporting(&document, RENDERED, None, Lines::Exact).await;
     assert!(replaced);
     assert_eq!(asked, [true, true]);
-    assert_eq!(original.content.lines().filter(|line| !line.is_empty()).count(), 110);
+    assert_eq!(
+        original.content.lines().filter(|line| !line.is_empty()).count(),
+        source_lines(is_ink_row)
+    );
     assert_eq!(
         original.processing_warnings.last().unwrap().message,
         "Page 1 OCR used 2 source-image strips."
@@ -432,13 +465,17 @@ async fn a_gray_scan_below_150_dpi_is_refused_when_a_strip_omits_or_misplaces_a_
 #[tokio::test]
 async fn a_gray_scan_at_150_dpi_keeps_its_strips_when_the_lines_are_not_certified() {
     let document = scan_pdf_at(GRAY, &gray_samples(is_ink_row), 150.0);
-    let (replaced, original, asked, _) = replace_reporting(&document, RENDERED, None, Lines::OmitLast).await;
+    let (replaced, original, asked, heights) = replace_reporting(&document, RENDERED, None, Lines::OmitLast).await;
     assert!(
         replaced,
         "at 150 DPI a failed certificate only withholds the complete-rows evidence"
     );
     assert_eq!(asked, [false, false]);
-    assert_eq!(original.content.lines().filter(|line| !line.is_empty()).count(), 108);
+    // OmitLast drops each strip's last line from the elements and the text.
+    assert_eq!(
+        original.content.lines().filter(|line| !line.is_empty()).count(),
+        source_lines(is_ink_row) - heights.len()
+    );
 }
 
 #[tokio::test]
@@ -461,5 +498,8 @@ async fn short_gaps_in_a_gray_scan_below_150_dpi_are_certified_line_by_line() {
     let (replaced, original, asked, _) = replace_reporting(&document, RENDERED, None, Lines::Exact).await;
     assert!(replaced);
     assert_eq!(asked, [true, true]);
-    assert_eq!(original.content.lines().filter(|line| !line.is_empty()).count(), 217);
+    assert_eq!(
+        original.content.lines().filter(|line| !line.is_empty()).count(),
+        source_lines(is_ink_row_between_short_gaps)
+    );
 }
