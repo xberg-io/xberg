@@ -234,9 +234,21 @@ fn should_decline_oversized_raw_and_compressed_font_streams() {
             stream.set_plain_content(vec![0; MAX_FONT_BYTES + 1]);
             if compressed {
                 stream.compress().unwrap();
+                assert!(stream.content.len() < MAX_FONT_BYTES);
             }
         });
-        assert_declined(&input, "font byte budget");
+        let document = PdfDocument::from_bytes(input).unwrap();
+        let source = source_metadata(&document, 0).unwrap().unwrap();
+        let work = Work::new(BUDGET);
+        match audit_page(&source, BUDGET, &work) {
+            Err(Failure::Declined("font byte budget")) => {}
+            Err(Failure::Declined("source work byte budget")) if compressed => {
+                // Decoded bytes count against the source budget before the font graph cap. ~keep
+                assert!(work.bytes.get() > BUDGET, "compressed work must record the overrun");
+            }
+            Err(error) => panic!("wrong budget decline for compressed={compressed}: {error}"),
+            Ok(_) => panic!("oversized font stream admitted for compressed={compressed}"),
+        }
     }
 }
 
