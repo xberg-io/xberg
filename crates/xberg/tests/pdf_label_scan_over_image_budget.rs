@@ -12,6 +12,8 @@ const DOWNSCALED_LABEL_SCAN: &[u8] =
     include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-downscaled.pdf");
 const MIXED_LABEL_SCAN: &[u8] =
     include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-mixed.pdf");
+const LOW_DPI_LABEL_SCAN: &[u8] =
+    include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-low-dpi.pdf");
 
 /// The page render needs about 93 MB of image working memory and the budget below is 80 MiB, so the
 /// render is refused and OCR retries on the embedded image at its proven 300 dpi. That image fits
@@ -199,4 +201,28 @@ fn a_downscaled_but_legible_retry_read_is_kept_with_the_warning() {
     assert!((preprocessing.scale_factor - 0.91).abs() < 0.01, "{preprocessing:?}");
     assert!((preprocessing.final_dpi - 273).abs() <= 2, "{preprocessing:?}");
     assert_kept_with_warning(&document, 0);
+}
+
+/// The 42 x 28 in sheet holds a 4200 x 2800 px image. The retry shrinks it to 4096 px, which is
+/// 97 dpi on the sheet, below the 100 dpi floor for a shrunk read, so a read that trips the noise
+/// check is rejected whatever the caller asked for. An explicit pipeline reaches the same floor as
+/// the default route.
+#[test]
+fn explicit_pipeline_rejects_a_noisy_read_below_the_legibility_floor_like_the_default_route() {
+    let budget = 128 * 1024 * 1024;
+    let refusal = |explicit_pipeline: bool| {
+        let mut config = config(false, explicit_pipeline);
+        config
+            .security_limits
+            .get_or_insert_with(Default::default)
+            .max_content_size = budget;
+        try_extract(LOW_DPI_LABEL_SCAN, &config).expect_err("the only page's read is below the floor and noisy")
+    };
+    let default_route = refusal(false).to_string();
+    let explicit = refusal(true).to_string();
+    for message in [&default_route, &explicit] {
+        assert!(message.contains("image working budget"), "{message}");
+        assert!(message.contains("the retry read was rejected as noise"), "{message}");
+        assert!(!message.contains(RECOVERY_CLAIM), "{message}");
+    }
 }
