@@ -408,13 +408,82 @@ fn qa_text_multi_font_run_paints_red() {
 // `pipeline_resolve_text_gs` short-circuits Tr=3 to None, resolves fill for
 // 0/2/4/6 and stroke for 1/2/5/6. Tr=4-7 add to the current clipping path
 // in the spec; the current text rasteriser does NOT implement clip-add for
-// text, so today these modes paint just like 0-2 and don't accumulate
-// clip state. These tests pin that the pipeline drives those modes into
-// the rasteriser without colour or geometry corruption.
+// text, so these modes draw like 0-2 and don't accumulate clip state. Modes
+// 1, 2, 5 and 6 stroke the glyph outline in the stroke colour (stroke after
+// fill, ISO 32000-1 9.3.6 Table 106). These tests pin that the pipeline
+// drives those modes into the rasteriser without colour or geometry
+// corruption.
 //
 // If the implementation later adds clip-from-text support, these tests
 // will still hold, just with additional clip-state assertions layered
 // on top. ~keep
+
+/// Page with a 90 pt `M` under text render mode `tr`: red fill, blue stroke, 4 pt line width, so the
+/// stem is wide enough to hold a fill interior between two stroke bands.
+fn tr_stroke_page(tr: u8) -> Vec<u8> {
+    let content = format!("BT 1 0 0 rg 0 0 1 RG 4 w /F1 90 Tf {tr} Tr 8 20 Td (M) Tj ET\n");
+    let doc = PdfDocument::from_bytes(build_pdf_text(&content, "")).expect("PDF parses");
+    render_with_pipeline(&doc, true)
+}
+
+/// Run-length classes of one pixel row after its first ink pixel: `B` solid stroke blue, `R` solid fill
+/// red, `W` white. Anti-aliased and blended edge pixels are dropped, so runs only count solid colour.
+fn solid_runs(rgba: &[u8], y: u32) -> Vec<(char, usize)> {
+    let mut runs: Vec<(char, usize)> = Vec::new();
+    let mut started = false;
+    for x in 0..100u32 {
+        let o = ((y * 100 + x) * 4) as usize;
+        let (r, g, b) = (rgba[o], rgba[o + 1], rgba[o + 2]);
+        let class = if r >= 250 && g >= 250 && b >= 250 {
+            'W'
+        } else if r >= 235 && g <= 20 && b <= 20 {
+            'R'
+        } else if b >= 235 && r <= 20 && g <= 20 {
+            'B'
+        } else {
+            started = true;
+            continue;
+        };
+        if class == 'W' && !started {
+            continue;
+        }
+        started = true;
+        match runs.last_mut() {
+            Some((last, n)) if *last == class => *n += 1,
+            _ => runs.push((class, 1)),
+        }
+    }
+    runs
+}
+
+/// A stem of a fill-and-stroke glyph is blue, red, blue across (stroke band, fill interior, stroke
+/// band), and the outer stroke band is as wide as a stroke-only glyph's, so the stroke covers the fill
+/// edge instead of the fill covering the stroke's inner half (ISO 32000-1 9.3.6 Table 106).
+fn assert_fill_then_stroke(tr: u8) {
+    let both = solid_runs(&tr_stroke_page(tr), 40);
+    let stroke_only = solid_runs(&tr_stroke_page(1), 40);
+    assert!(
+        matches!(both.as_slice(), [('B', e1), ('R', f), ('B', e2), ..] if *e1 >= 3 && *f >= 2 && *e2 >= 3),
+        "Tr={tr} stem must read stroke blue, fill red, stroke blue, got {both:?}"
+    );
+    assert_eq!(
+        both[0], stroke_only[0],
+        "Tr={tr} outer stroke band must be as wide as a stroke-only glyph's, so the stroke paints after the fill"
+    );
+}
+
+/// A stroke-only glyph is a hollow outline: stroke bands around white, and no fill red anywhere.
+fn assert_hollow_stroke(tr: u8) {
+    let runs = solid_runs(&tr_stroke_page(tr), 40);
+    assert!(
+        matches!(runs.as_slice(), [('B', e1), ('W', gap), ('B', e2), ..] if *e1 >= 3 && *gap >= 2 && *e2 >= 3),
+        "Tr={tr} must draw a hollow blue outline, got {runs:?}"
+    );
+    assert!(
+        runs.iter().all(|(class, _)| *class != 'R'),
+        "Tr={tr} must not paint the fill colour, got {runs:?}"
+    );
+}
 
 /// Probe 5a — Tr=0 (fill-only): the pipeline must paint a plain DeviceRGB
 /// fill on a `Tj` glyph as the expected RGB.
@@ -433,37 +502,16 @@ fn qa_text_tr0_fill_only_paints_red() {
     );
 }
 
-/// Probe 5b — Tr=1 (stroke-only). Pipeline resolves the stroke side only.
-/// The current text rasteriser doesn't emit per-glyph strokes, so the
-/// painted page is blank; the invariant is no-panic plus a full pixmap
-/// (no spurious paint introduced by the pipeline path).
+/// Probe 5b — Tr=1 (stroke-only). The glyph is a hollow outline in the stroke colour.
 #[test]
-fn qa_text_tr1_stroke_only_no_panic() {
-    let content = "BT 1 0 0 RG /F1 40 Tf 1 Tr 10 30 Td (M) Tj ET\n";
-    let bytes = build_pdf_text(content, "");
-    let doc = PdfDocument::from_bytes(bytes).expect("PDF parses");
-    let on = render_with_pipeline(&doc, true);
-    assert_eq!(on.len(), 100 * 100 * 4, "Tr=1 must produce a full pixmap");
+fn qa_text_tr1_stroke_only_draws_a_hollow_outline() {
+    assert_hollow_stroke(1);
 }
 
-/// Probe 5c — Tr=2 (fill+stroke). Pipeline resolves BOTH sides; the
-/// rasteriser today only paints the fill side. Painted ink must be the
-/// FILL colour.
+/// Probe 5c — Tr=2 (fill then stroke): fill interior in the fill colour, stroke over its edge.
 #[test]
-fn qa_text_tr2_fill_and_stroke_paints_fill_color() {
-    // Tr=2 fill+stroke: pipeline resolves BOTH sides but the
-    // rasteriser paints fill only. The painted ink must be the FILL
-    // colour (red), not the stroke colour (blue). ~keep
-    let content = "BT 1 0 0 rg 0 0 1 RG /F1 40 Tf 2 Tr 10 30 Td (M) Tj ET\n";
-    let bytes = build_pdf_text(content, "");
-    let doc = PdfDocument::from_bytes(bytes).expect("PDF parses");
-    let on = render_with_pipeline(&doc, true);
-    let avg = average_ink_rgb(&on, 0, 0, 100, 100);
-    let (r, g, b) = avg.expect("Tr=2 must paint glyph ink");
-    assert!(
-        r > 180.0 && r > g + 60.0 && r > b + 60.0,
-        "Tr=2 ink must be FILL red, not stroke blue, got ({r:.1}, {g:.1}, {b:.1})"
-    );
+fn qa_text_tr2_fills_the_interior_and_strokes_the_edge() {
+    assert_fill_then_stroke(2);
 }
 
 /// Probe 5d — Tr=3 (invisible). Pipeline short-circuits to None — no
@@ -503,41 +551,16 @@ fn qa_text_tr4_fill_plus_clip_paints_fill_side() {
     assert!(avg.is_some(), "Tr=4 must paint the fill side (red glyph)");
 }
 
-/// Probe 5f — Tr=5 (stroke + add to clip path). Pipeline resolves the
-/// stroke side. Rasteriser doesn't paint strokes for text; the page
-/// must render as a full pixmap with no spurious paint.
+/// Probe 5f — Tr=5 (stroke, then add to the clip path): drawn as a hollow outline.
 #[test]
-fn qa_text_tr5_stroke_plus_clip_renders_without_panic() {
-    // Tr=5 (stroke + clip-from-text). The text rasteriser today
-    // paints the glyph outline as a side effect of the dispatch
-    // even though the rendered colour is not the stroke fill —
-    // clip-from-text and per-glyph stroke colour are documented
-    // capability gaps in the rasteriser. Pin the no-panic / full
-    // pixmap invariant. ~keep
-    let content = "BT 1 0 0 RG /F1 40 Tf 5 Tr 10 30 Td (M) Tj ET\n";
-    let bytes = build_pdf_text(content, "");
-    let doc = PdfDocument::from_bytes(bytes).expect("PDF parses");
-    let on = render_with_pipeline(&doc, true);
-    assert_eq!(on.len(), 100 * 100 * 4, "Tr=5 must produce a full pixmap");
+fn qa_text_tr5_stroke_plus_clip_draws_a_hollow_outline() {
+    assert_hollow_stroke(5);
 }
 
-/// Probe 5g — Tr=6 (fill + stroke + add to clip path). Pipeline resolves
-/// BOTH sides; rasteriser paints fill only. Painted ink must be the
-/// fill colour, not the stroke colour.
+/// Probe 5g — Tr=6 (fill, stroke, then add to the clip path): painted like Tr=2.
 #[test]
-fn qa_text_tr6_fill_stroke_plus_clip_paints_fill_color() {
-    let content = "BT 1 0 0 rg 0 0 1 RG /F1 40 Tf 6 Tr 10 30 Td (M) Tj ET\n";
-    let bytes = build_pdf_text(content, "");
-    let doc = PdfDocument::from_bytes(bytes).expect("PDF parses");
-    let on = render_with_pipeline(&doc, true);
-    // Tr=6 (fill+stroke+clip): both sides resolved; rasteriser
-    // paints fill only. Ink must be FILL red, not stroke blue. ~keep
-    let avg = average_ink_rgb(&on, 0, 0, 100, 100);
-    let (r, g, b) = avg.expect("Tr=6 must paint the fill side");
-    assert!(
-        r > 180.0 && r > g + 60.0 && r > b + 60.0,
-        "Tr=6 painted ink must be FILL red, not stroke blue, got ({r:.1}, {g:.1}, {b:.1})"
-    );
+fn qa_text_tr6_fills_strokes_and_adds_to_the_clip() {
+    assert_fill_then_stroke(6);
 }
 
 /// Probe 5h — Tr=7 (add to clip path only). Per the spec Tr=7 is a
