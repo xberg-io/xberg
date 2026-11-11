@@ -349,7 +349,7 @@ mod tests {
         let base = span("H", 100.0, 100.0, 7.0, 10.0);
         let candidates = [
             span("Z", 107.0, 104.2, 4.0, 8.6),
-            span("q", 107.0, 100.5, 4.0, 9.4),
+            span("q", 107.0, 99.5, 4.0, 9.4),
             span("2", 111.0, 96.0, 3.5, 5.0),
             span("f", 114.5, 96.0, 3.0, 5.0),
         ];
@@ -365,6 +365,12 @@ mod tests {
     #[test]
     fn should_take_a_same_size_span_on_the_base_line_across_it_from_a_member_for_a_fraction_partner() {
         let (candidates, base) = h_stack_with(span("q", 107.0, 99.5, 4.0, 7.0));
+        kept(&base, &candidates, &[]);
+    }
+
+    #[test]
+    fn should_take_a_same_size_span_raised_beyond_the_members_reach_for_a_fraction_partner() {
+        let (candidates, base) = h_stack_with(span("q", 107.0, 107.9, 4.0, 7.0));
         kept(&base, &candidates, &[]);
     }
 
