@@ -346,7 +346,9 @@ fn write_escaped_math<'a>(node: &'a AstNode<'a>, delimiter: &str, tex: &str) {
 /// TeX as Markdown text that a reader applying the CommonMark escapes turns back into `tex`.
 ///
 /// A backslash before ASCII punctuation is an escape, so it is doubled; one before a letter is
-/// not, and stays. Emphasis, link, strikethrough, tag and entity openers are escaped. A pipe in a
+/// not, and stays. A dollar is written `\$`, after the doubled backslash of a `\$` in the TeX, so
+/// that no bare dollar closes the math. Emphasis, link, strikethrough, tag and entity openers are
+/// escaped. A pipe in a
 /// table cell is escaped by comrak's table writer. comrak's own text escaping is not used: `finish_markdown`
 /// strips `\*`, `\_`, `\[` and `\]` from the whole output and corrupts `\\` before them, so those
 /// are written as numeric character references, which a reader decodes after the inline rules.
