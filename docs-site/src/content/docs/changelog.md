@@ -351,6 +351,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Re-render only OCR page text as plain, and keep DOCX and native page text.** (#2839, #2902)
   Since #2839, a DOCX page whose notes or math are not in the plain content, and a native PDF page of a mixed document, were replaced by the plain rendering of their elements, losing the footnote definitions and the equation spacing. A page that is not found in the content is now re-rendered only when an OCR route produced its text; any other page keeps its text, and only its page range is omitted, with the `page_boundaries` warning.
 - **(pdf): Render recognized tables as plain text on the mixed OCR route.** (#2903)
+- **(pdf): Place OCR tables in page points when recognition read a resampled page image.** (#2990)
+  The per-page OCR pipeline route scaled table rectangles by the rendered page's size instead of the resampled image recognition ran on, so a table on a scan below 300 dpi landed partly off the page and did not cover the cell paragraphs it carries; mixed Plain output repeated those cells as paragraphs.
 - **(djot): Preserve paragraph text that begins with block syntax.** (#2856, #2869)
   Escape block markers without changing following inline markup or existing backslash escapes.
 - **(pdf): Keep a nested superscript or subscript stack on its base's line.** (#2728)
