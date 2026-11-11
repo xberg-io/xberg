@@ -9554,3 +9554,68 @@ fn should_mark_the_members_of_a_stack_listed_ahead_of_its_base_as_scripts_on_one
         "the stack members carry sub/superscript markup"
     );
 }
+
+use xberg_native_pdf::document::MAX_STACK_MEMBERS;
+
+fn long_stack(count: usize) -> Vec<SegmentData> {
+    let mut segments = vec![stack_seg("e", 100.0, 4.0, 10.0, 100.0)];
+    segments.extend((0..count).map(|n| {
+        let size = if n % 2 == 0 { 7.0 } else { 5.0 };
+        stack_seg(&n.to_string(), 104.0 + 3.0 * n as f32, 3.0, size, 104.2)
+    }));
+    segments
+}
+
+#[test]
+fn should_place_and_rediscover_a_stack_of_the_most_members_grouping_searches() {
+    let count = MAX_STACK_MEMBERS;
+    let placed = place_script_stacks_after_bases(long_stack(count));
+    assert_eq!(script_stack_members(&placed, 0), (1..=count).collect::<Vec<_>>());
+}
+
+#[test]
+fn should_leave_a_stack_longer_than_the_grouping_search_unplaced_and_unmarked() {
+    let count = MAX_STACK_MEMBERS + 1;
+    let mut segments = long_stack(count);
+    segments.push(stack_seg("tail", 200.0, 20.0, 10.0, 100.0));
+    let before: Vec<String> = segments.iter().map(|segment| segment.text.clone()).collect();
+    assert!(script_stack_members(&segments, 0).is_empty());
+    assert_eq!(stack_texts(segments), before);
+}
+
+#[test]
+fn should_place_a_fraction_in_an_exponent_in_its_reading_order_without_a_stack() {
+    let segments = vec![
+        stack_seg("x", 100.0, 5.0, 10.0, 100.0),
+        stack_seg("\u{2212}", 105.0, 3.0, 7.0, 104.0),
+        stack_seg("1", 108.5, 3.0, 5.0, 107.0),
+        stack_seg("2", 108.5, 3.0, 5.0, 101.5),
+        stack_seg("tail", 113.0, 20.0, 10.0, 100.0),
+    ];
+    assert!(stack_of(&segments).is_empty());
+    assert_eq!(stack_texts(segments), ["x", "\u{2212}", "1", "2", "tail"]);
+}
+
+fn marked_scripts(segments: Vec<SegmentData>) -> usize {
+    let paragraphs = segments_to_paragraphs(segments, &[], &[], &TextRepairWitnesses::default());
+    let document = crate::pdf::structure::assembly::assemble_internal_document(
+        vec![paragraphs],
+        &[],
+        None,
+        &[],
+        &Default::default(),
+    );
+    document.elements.iter().map(|element| element.annotations.len()).sum()
+}
+
+#[test]
+fn should_mark_every_member_of_a_stack_of_the_most_members_and_none_of_a_longer_one() {
+    let most = MAX_STACK_MEMBERS;
+    assert!(marked_scripts(long_stack(most)) > 0, "{most} members carry markup");
+    assert_eq!(
+        marked_scripts(long_stack(most + 1)),
+        0,
+        "{} members carry none",
+        most + 1
+    );
+}
