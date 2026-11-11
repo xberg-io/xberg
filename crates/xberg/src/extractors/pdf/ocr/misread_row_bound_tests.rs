@@ -161,6 +161,32 @@ fn a_native_row_reads_the_longer_ocr_row_first_at_an_equal_distance_in_length() 
     assert_eq!(merged(&native, &read).lines().collect::<Vec<_>>(), expected);
 }
 
+/// Two equal native rows each have a misread OCR row, and the first misread is the better one for
+/// both. The first native row takes it and it leaves the pool, so the second native row takes the
+/// other misread and no misread row stays in the page text. ~keep
+#[test]
+fn a_misread_row_that_one_native_row_takes_is_not_taken_again() {
+    let total = "alpha bravo charlie 12 cm3".to_string();
+    let native = vec![
+        total.clone(),
+        "delta one".to_string(),
+        "echo two".to_string(),
+        total.clone(),
+    ];
+    let read = vec![
+        "alpha bravo charlie 12 cm\u{2019}".to_string(),
+        "delta one".to_string(),
+        "echo two".to_string(),
+        "alpha bravo charlie 12 cm\u{2019}\u{2019}".to_string(),
+    ];
+    let text = merged(&native, &read);
+    assert!(
+        !text.contains('\u{2019}'),
+        "a misread OCR row stays in the page text:\n{text}"
+    );
+    assert_eq!(text.lines().filter(|line| *line == total).count(), 2, "{text}");
+}
+
 /// Forty OCR rows of one length each misread only the native row at their own place, after twelve
 /// OCR rows of that length that misread no native row. A native row reads the rows nearest to its
 /// place too, so each takes its own misread although its reads by length stop at the first rows of
