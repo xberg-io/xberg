@@ -234,22 +234,40 @@ fn should_decline_oversized_raw_and_compressed_font_streams() {
             stream.set_plain_content(vec![0; MAX_FONT_BYTES + 1]);
             if compressed {
                 stream.compress().unwrap();
-                assert!(stream.content.len() < MAX_FONT_BYTES);
+                assert_compressed_font_work_overrun(&stream.content);
             }
         });
         let document = PdfDocument::from_bytes(input).unwrap();
         let source = source_metadata(&document, 0).unwrap().unwrap();
-        let work = Work::new(BUDGET);
-        match audit_page(&source, BUDGET, &work) {
-            Err(Failure::Declined("font byte budget")) => {}
-            Err(Failure::Declined("source work byte budget")) if compressed => {
-                // Decoded bytes count against the source budget before the font graph cap. ~keep
-                assert!(work.bytes.get() > BUDGET, "compressed work must record the overrun");
-            }
-            Err(error) => panic!("wrong budget decline for compressed={compressed}: {error}"),
-            Ok(_) => panic!("oversized font stream admitted for compressed={compressed}"),
-        }
+        let budget = 4 * BUDGET;
+        let work = Work::new(budget);
+        assert!(
+            matches!(
+                audit_page(&source, budget, &work),
+                Err(Failure::Declined("font byte budget"))
+            ),
+            "the font cap must reject the oversized stream with work headroom (compressed={compressed})"
+        );
+        assert!(work.bytes.get() <= budget);
     }
+}
+
+fn assert_compressed_font_work_overrun(encoded: &[u8]) {
+    let graph_limit = 64 * 1024;
+    assert!(encoded.len() < graph_limit);
+    let document = PdfDocument::from_bytes(MATCHING.to_vec()).unwrap();
+    let work = Work::new(BUDGET);
+    // The stored bytes plus the bounded inflation exceed the graph cap by one byte. ~keep
+    let charge = (graph_limit + 1) * MEMORY_FACTOR;
+    work.reserve(BUDGET - charge + 1).unwrap();
+    let mut graph = FontGraph::new(&document, graph_limit, &work);
+    let dict = HashMap::from([("Filter".into(), Object::Name("FlateDecode".into()))]);
+    let error = graph.copy_stream(&dict, encoded, 0).unwrap_err();
+    assert!(
+        matches!(error, Failure::Declined("source work byte budget")),
+        "expected source work byte budget, got {error}"
+    );
+    assert_eq!(work.bytes.get(), BUDGET + 1, "compressed work must record the overrun");
 }
 
 #[test]
