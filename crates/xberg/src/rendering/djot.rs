@@ -382,64 +382,77 @@ fn render_annotations_djot(annotations: &[PdfAnnotation]) -> String {
 /// Escape the first block opener. Marked rows also protect leading inline punctuation because
 /// the row text comes from a source that supplied no Djot markup.
 fn escape_block_prefix(text: &str, literal_row: bool) -> Cow<'_, str> {
-    let first_line = text.split_once('\n').map_or(text, |(line, _)| line);
-    let line = first_line.trim_start();
-    let indent = first_line.len() - line.len();
-    let prefix_end = line.find(char::is_whitespace).unwrap_or(line.len());
-    let prefix = &line[..prefix_end];
-    if !prefix.starts_with(|c: char| c.is_ascii_punctuation()) && !prefix.ends_with(['.', ')']) {
-        return text.into();
-    }
-
-    let mut events = jotdown::Parser::new(first_line).into_offset_iter();
-    let block = events.nth(1);
-    let paragraph = matches!(
-        block,
-        Some((jotdown::Event::Start(jotdown::Container::Paragraph, _), _))
-    );
-    let attributes_end = if line.starts_with('{') {
-        leading_attributes_end(first_line, indent, block.as_ref(), events)
+    let row_start = literal_row.then(|| literal_row_prefix(text)).flatten();
+    let range = if literal_row {
+        0..text.len()
     } else {
-        indent
-    };
-    let range = if attributes_end > indent {
-        indent..attributes_end
-    } else if !paragraph
-        && line.starts_with('[')
-        && let Some(end) = line.find("]:")
-    {
-        // Escaping the opening bracket can activate underscores inside the label. ~keep
-        let mut escaped = text.to_string();
-        escaped.insert(indent + end + 1, '\\');
-        if line.starts_with("[^") {
-            escaped.insert(indent + 1, '\\');
-        }
-        return escaped.into();
-    } else if literal_row {
-        let Some(range) = literal_row_prefix(line) else {
+        let first_line = text.split_once('\n').map_or(text, |(line, _)| line);
+        let line = first_line.trim_start();
+        let indent = first_line.len() - line.len();
+        let prefix_end = line.find(char::is_whitespace).unwrap_or(line.len());
+        let prefix = &line[..prefix_end];
+        if !prefix.starts_with(|c: char| c.is_ascii_punctuation()) && !prefix.ends_with(['.', ')']) {
             return text.into();
+        }
+
+        let mut events = jotdown::Parser::new(first_line).into_offset_iter();
+        let block = events.nth(1);
+        let paragraph = matches!(
+            block,
+            Some((jotdown::Event::Start(jotdown::Container::Paragraph, _), _))
+        );
+        let attributes_end = if line.starts_with('{') {
+            leading_attributes_end(first_line, indent, block.as_ref(), events)
+        } else {
+            indent
         };
-        indent + range.start..indent + range.end
-    } else if paragraph && prefix != "^" {
-        return text.into();
-    } else {
-        let end = match line.chars().next() {
-            Some('|') => 1,
-            Some(first @ ('`' | '~' | ':')) => line.len() - line.trim_start_matches(first).len(),
-            _ if matches!(block, Some((jotdown::Event::ThematicBreak(_), _))) => line.len(),
-            _ => prefix_end,
-        };
-        indent..indent + end
+        if attributes_end > indent {
+            indent..attributes_end
+        } else if !paragraph
+            && line.starts_with('[')
+            && let Some(end) = line.find("]:")
+        {
+            // Escaping the opening bracket can activate underscores inside the label. ~keep
+            let mut escaped = text.to_string();
+            escaped.insert(indent + end + 1, '\\');
+            if line.starts_with("[^") {
+                escaped.insert(indent + 1, '\\');
+            }
+            return escaped.into();
+        } else if paragraph && prefix != "^" {
+            return text.into();
+        } else {
+            let end = match line.chars().next() {
+                Some('|') => 1,
+                Some(first @ ('`' | '~' | ':')) => line.len() - line.trim_start_matches(first).len(),
+                _ if matches!(block, Some((jotdown::Event::ThematicBreak(_), _))) => line.len(),
+                _ => prefix_end,
+            };
+            indent..indent + end
+        }
     };
 
     let mut escaped = String::with_capacity(text.len() + range.len());
     escaped.push_str(&text[..range.start]);
     let mut already_escaped = false;
-    for (i, c) in text[range.clone()].chars().enumerate() {
-        if c.is_ascii_punctuation() && (c != '\\' || literal_row && i == 0) && !already_escaped {
+    let mut previous = None;
+    let mut chars = text[range.clone()].char_indices().peekable();
+    while let Some((at, c)) = chars.next() {
+        let escape = if literal_row {
+            let before_text = chars.peek().is_some_and(|(_, next)| !next.is_whitespace());
+            row_start.as_ref().is_some_and(|run| run.contains(&at))
+                || matches!(c, '\\' | '`' | '*' | '_' | '{' | '}' | '[' | ']' | '^' | '~' | '<')
+                || (c == ':' && before_text)
+                // djot.js opens these forms even after an escaped brace. ~keep
+                || (matches!(c, '+' | '=' | '-') && previous == Some('{'))
+        } else {
+            c.is_ascii_punctuation() && c != '\\' && !already_escaped
+        };
+        if escape {
             escaped.push('\\');
         }
         escaped.push(c);
+        previous = Some(c);
         already_escaped = c == '\\' && !already_escaped;
     }
     escaped.push_str(&text[range.end..]);
@@ -479,36 +492,21 @@ fn leading_attributes_end<'a>(
 
 fn literal_row_prefix(line: &str) -> Option<std::ops::Range<usize>> {
     let first = line.chars().next()?;
-    if first.is_ascii_punctuation() {
-        if (first == '\\' && line.as_bytes().get(1).is_some_and(u8::is_ascii_punctuation))
-            || (first == '#'
-                && line
-                    .trim_start_matches('#')
-                    .chars()
-                    .next()
-                    .is_some_and(|c| !c.is_whitespace()))
-        {
-            return None;
-        }
-        let run = if matches!(first, '`' | ':') {
-            line.len() - line.trim_start_matches(first).len()
-        } else {
-            1
-        };
-        // Escaping only the opener can free delimiters it held to become inline markup.
-        let extra = if matches!(first, '{' | '[' | '!' | ':') {
-            line[run..]
-                .bytes()
-                .take_while(|c| c.is_ascii_punctuation() && *c != b'\\')
-                .count()
-        } else {
-            0
-        };
-        return Some(0..run + extra);
-    }
-    let end = line.find(['.', ')'])?;
-    let followed_by_space = line[end + 1..].chars().next().is_none_or(char::is_whitespace);
-    (is_list_label(&line[..end]) && followed_by_space).then_some(end..end + 1)
+    let at = if first.is_ascii_punctuation() {
+        let hashtag = first == '#'
+            && line
+                .trim_start_matches('#')
+                .chars()
+                .next()
+                .is_some_and(|c| !c.is_whitespace());
+        (!hashtag).then_some(0)?
+    } else {
+        let end = line.find(['.', ')'])?;
+        let followed_by_space = line[end + 1..].chars().next().is_none_or(char::is_whitespace);
+        (is_list_label(&line[..end]) && followed_by_space).then_some(end)?
+    };
+    let first = line[at..].chars().next()?;
+    Some(at..line.len() - line[at..].trim_start_matches(first).len())
 }
 
 fn escape_text_lines(text: &str) -> String {
