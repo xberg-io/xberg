@@ -2984,7 +2984,13 @@ fn decode_jbig2_image(
         d.decode_stream_with_encryption(&globals_obj, globals_ref).ok()
     })();
 
-    let image = hayro_jbig2::Image::new_embedded(&jbig2_bytes, globals.as_deref())
+    let settings = hayro_jbig2::DecodeSettings::default();
+    let globals = globals
+        .as_deref()
+        .map(|data| hayro_jbig2::Globals::new(data, &settings))
+        .transpose()
+        .map_err(|e| Error::Image(format!("JBIG2 decode error: {e}")))?;
+    let image = hayro_jbig2::Page::new_embedded(&jbig2_bytes, globals.as_ref(), &settings)
         .map_err(|e| Error::Image(format!("JBIG2 decode error: {e}")))?;
 
     struct PixelCollector {

@@ -948,9 +948,11 @@ mod tests {
             crate::extraction::html::convert_html_to_markdown_with_tables(html, None, None).unwrap();
         let metadata = metadata.unwrap();
         let structure = structure.unwrap();
-        assert_eq!(metadata.headers[0].text, "Jane ^Doe^");
+        // html-to-markdown-rs 3.22 already reports the heading as plain text. ~keep
+        assert_eq!(metadata.headers[0].text, "Jane Doe");
 
         let mut matching = metadata.clone();
+        matching.headers[0].text = "Jane ^Doe^".to_string();
         normalize_redaction_headings(&mut matching, &structure);
         assert_eq!(matching.headers[0].text, "Jane Doe");
 
