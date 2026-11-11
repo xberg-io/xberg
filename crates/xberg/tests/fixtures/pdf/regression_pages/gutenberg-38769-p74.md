@@ -32,8 +32,8 @@ x + x − 1 + x
 
 x + u + v + w , x − u + v − w
 
-u<sup>2</sup> = x, v<sup>2</sup> = x + u, w<sup>3</sup> = 1 + x, and we have only to eliminate u, v, w between these equations in order to We are therefore led to give the following definition: a function y = f(x) will be said to be an algebraical function of x if it is the root of an equation such as (1), i.e. the root of an equation of the m coefficients are rational functions of x. There is plainly no loss of generality in supposing the first coefficient to be unity.
+u<sup>2</sup> = x, v<sup>2</sup> = x + u, w<sup>3</sup> = 1 + x, and we have only to eliminate u, v, w between these equations in order to We are therefore led to give the following definition: a function y = f(x) will be said to be an algebraical function of x if it is the root of an equation
 
 th
 
-degree in y, whose
+such as (1), i.e. the root of an equation of the m degree in y, whose coefficients are rational functions of x. There is plainly no loss of generality in supposing the first coefficient to be unity.
