@@ -356,7 +356,8 @@ fn build_internal_document(
                         element_index,
                         crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE,
                         crate::rendering::common::render_table_plain(
-                            &grid_table.to_cell_grid(crate::extraction::docx::parser::Paragraph::to_text),
+                            &grid_table
+                                .to_cell_grid(crate::extraction::docx::parser::Paragraph::to_text_with_math_delimiters),
                         ),
                     );
                     if let Some(encoded) = math {
