@@ -144,9 +144,9 @@ fn actualtext_offset_only_tj_after_continuing_tm_keeps_the_run() {
     assert_eq!(doc.extract_text(0).expect("extract_text").trim(), "AB");
 }
 
-/// `F3`'s `D` has a width and no text (its `ToUnicode` map misses the code, the control row). After
-/// the continuing `Tm` it adds width without text, which ends the record: the same-font `Tf` after it
-/// does not end the run, so `B` joins it, as at the base.
+/// `F3`'s `D` has a width and no text (its `ToUnicode` map gives the code U+FFFD, which the extractor
+/// drops; the control row). After the continuing `Tm` it adds width without text, which ends the
+/// record: the same-font `Tf` after it does not end the run, so `B` joins it.
 #[test]
 fn glyph_without_text_after_continuing_tm_ends_the_record() {
     let control = "BT /F3 12 Tf 1 0 0 1 100 500 Tm (A) Tj (D) Tj ET";
@@ -264,14 +264,15 @@ fn actualtext_show_after_stretched_tm_under_tz_ends_the_run_at_its_rescaled_widt
     assert_eq!(doc.extract_text(0).expect("extract_text").trim(), "A BA");
 }
 
-/// The `ToUnicode` map of `F3`: `A`, `B` and `C` only, so its `D` is a glyph with a width and no text.
-const TO_UNICODE_ABC: &[u8] = b"/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n\
-    /CMapName /ABC def\n1 begincodespacerange\n<00> <FF>\nendcodespacerange\n\
-    3 beginbfchar\n<41> <0041>\n<42> <0042>\n<43> <0043>\nendbfchar\nendcmap\n\
+/// The `ToUnicode` map of `F3`: `A`, `B` and `C` to themselves and `D` to U+FFFD, so `D` is a glyph
+/// with a width and no text. A code the map misses falls back to the font's encoding, which names `D`.
+const TO_UNICODE_F3: &[u8] = b"/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n\
+    /CMapName /F3 def\n1 begincodespacerange\n<00> <FF>\nendcodespacerange\n\
+    4 beginbfchar\n<41> <0041>\n<42> <0042>\n<43> <0043>\n<44> <FFFD>\nendbfchar\nendcmap\n\
     CMapName currentdict /CMap defineresource pop\nend\nend\n";
 
 /// One page with three Helvetica-metric fonts: `F1` and `F2`, whose `A` and `B` are 600/1000 em wide
-/// and whose `C` has no width, and `F3`, the same with a 600/1000 em `D` that `TO_UNICODE_ABC` gives
+/// and whose `C` has no width, and `F3`, the same with a 600/1000 em `D` that `TO_UNICODE_F3` gives
 /// no text.
 fn build(content: &[u8]) -> Vec<u8> {
     let mut pdf = b"%PDF-1.4\n".to_vec();
@@ -295,7 +296,7 @@ fn build(content: &[u8]) -> Vec<u8> {
                 .to_string(),
             None,
         ),
-        (String::new(), Some(TO_UNICODE_ABC)),
+        (String::new(), Some(TO_UNICODE_F3)),
     ];
     for (i, (dict, stream)) in objs.iter().enumerate() {
         offsets.push(pdf.len());
