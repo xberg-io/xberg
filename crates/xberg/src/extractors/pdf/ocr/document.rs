@@ -220,8 +220,8 @@ mod marker_native_ink_layers_tests;
 
 /// Native rows without an equal whole OCR row, consuming each OCR occurrence once. Case and
 /// whitespace may differ; signs, units, punctuation and order remain source evidence. A native row
-/// put first takes with it the unused OCR row that misreads it best, so that row is not printed
-/// (`MisreadCandidates::best`). ~keep
+/// put first takes with it the unused OCR row that misreads it best of the few nearest to it in
+/// length, so that row is not printed (`MisreadCandidates::take_best`). ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn layer_lines_absent_from_ocr<'a>(layer: &'a str, ocr_text: &str) -> Option<RowsToRestore<'a>> {
     // Each OCR row key with the index of its line in `ocr_text`. ~keep
@@ -262,13 +262,13 @@ pub(crate) fn layer_lines_absent_from_ocr<'a>(layer: &'a str, ocr_text: &str) ->
         }
     }
     let candidates = MisreadCandidates::new(ocr.iter().map(String::as_str));
+    let mut pool = candidates.pool(&used);
     let mut misread = Vec::new();
     for (row, line) in rows.iter().enumerate() {
         if covered[row] {
             continue;
         }
-        if let Some(at) = candidates.best(&NativeRow::new(&line_key(line), true), &used, row) {
-            used[at] = true;
+        if let Some(at) = candidates.take_best(&mut pool, &NativeRow::new(&line_key(line), true), row) {
             misread.push(MisreadOcrRow::at_line(lines[at], &ocr[at]));
         }
     }
@@ -413,52 +413,83 @@ impl NativeRow {
         (score >= MISREAD_ROW_SIMILARITY).then_some(score)
     }
 }
-/// The OCR rows of a page that a native row can misread, each read once, and their indices in
-/// order of their folded length: a native row looks only at the rows whose length can reach the
-/// similarity, unless it has a glued pattern, which ignores the length. ~keep
+/// How many unused OCR rows one native row reads for its misread: half of them the rows nearest
+/// to it in folded length, the rest the rows nearest to its place in reading order. The cap bounds
+/// the work of a page to this many similarity tests per native row, whatever its rows. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+const MISREAD_CANDIDATE_CAP: usize = 16;
+/// The OCR rows of a page that a native row can misread, each read once. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 struct MisreadCandidates<'k> {
     keys: Vec<&'k str>,
     shapes: Vec<RowShape>,
-    by_length: Vec<(usize, usize)>,
+}
+/// The OCR rows that no native row has taken yet, by `(folded length, row)` and by row: a native
+/// row reads the rows nearest to its own length and place, and the row it takes leaves the pool. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+struct MisreadPool {
+    by_length: std::collections::BTreeSet<(usize, usize)>,
+    by_place: std::collections::BTreeSet<usize>,
 }
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 impl<'k> MisreadCandidates<'k> {
     fn new(keys: impl IntoIterator<Item = &'k str>) -> Self {
         let keys: Vec<&str> = keys.into_iter().collect();
         let shapes: Vec<RowShape> = keys.iter().map(|key| RowShape::new(key)).collect();
-        let mut by_length: Vec<(usize, usize)> = shapes.iter().map(|shape| shape.length).zip(0..).collect();
-        by_length.sort_unstable();
-        Self {
-            keys,
-            shapes,
-            by_length,
-        }
+        Self { keys, shapes }
     }
     /// Whether OCR row `at` misreads `native`. ~keep
     fn misreads(&self, native: &NativeRow, at: usize) -> bool {
         native.misread_score(self.keys[at], &self.shapes[at]).is_some()
     }
-    /// The unused OCR row that misreads `native` best: the highest score, then the least distance
-    /// from `row`, the native row's place in reading order. ~keep
-    fn best(&self, native: &NativeRow, used: &[bool], row: usize) -> Option<usize> {
+    /// The OCR rows that `used` leaves free, for the native rows that look for their misread. ~keep
+    fn pool(&self, used: &[bool]) -> MisreadPool {
+        let by_place: std::collections::BTreeSet<usize> = (0..self.shapes.len())
+            .filter(|at| !used.get(*at).copied().unwrap_or(true))
+            .collect();
+        let by_length = by_place.iter().map(|&at| (self.shapes[at].length, at)).collect();
+        MisreadPool { by_length, by_place }
+    }
+    /// The OCR row of `pool` that misreads `native` best, taken out of the pool. A native row reads
+    /// at most `MISREAD_CANDIDATE_CAP` rows. The first half are the rows of the lengths nearest to
+    /// its folded length (the longer on a tie); only lengths that can reach the similarity count,
+    /// unless it has a glued pattern, which ignores the length. The rest are the rows nearest to
+    /// `row`, its place in reading order. Of the rows read, the highest score wins, then the least
+    /// distance from `row`. ~keep
+    fn take_best(&self, pool: &mut MisreadPool, native: &NativeRow, row: usize) -> Option<usize> {
         let length = native.shape.length;
-        let reaches = |read: usize| similarity_bound(length, read) >= MISREAD_ROW_SIMILARITY;
-        let (from, to) = if native.glued.is_some() {
-            (0, self.by_length.len())
-        } else {
-            (
-                self.by_length
-                    .partition_point(|(read, _)| *read < length && !reaches(*read)),
-                self.by_length
-                    .partition_point(|(read, _)| *read <= length || reaches(*read)),
-            )
-        };
+        let glued = native.glued.is_some();
+        let reaches = |read: usize| glued || similarity_bound(length, read) >= MISREAD_ROW_SIMILARITY;
+        let mut read: Vec<usize> = Vec::with_capacity(MISREAD_CANDIDATE_CAP);
+        let mut longer = pool.length_from(length).filter(|next| reaches(*next));
+        let mut shorter = pool.length_below(length).filter(|next| reaches(*next));
+        while read.len() < MISREAD_CANDIDATE_CAP / 2 {
+            let level = match (longer, shorter) {
+                (Some(long), Some(short)) if long - length > length - short => short,
+                (Some(long), _) => long,
+                (None, Some(short)) => short,
+                (None, None) => break,
+            };
+            let room = MISREAD_CANDIDATE_CAP / 2 - read.len();
+            read.extend(pool.at_length(level).take(room));
+            if level >= length {
+                longer = pool.length_above(level).filter(|next| reaches(*next));
+            } else {
+                shorter = pool.length_below(level).filter(|next| reaches(*next));
+            }
+        }
+        let room = MISREAD_CANDIDATE_CAP - read.len();
+        let near: Vec<usize> = pool
+            .nearest_in_place(row)
+            .filter(|at| !read.contains(at))
+            .take(room)
+            .collect();
+        read.extend(near);
         let mut best: Option<(f64, usize, usize)> = None;
-        for &(_, at) in &self.by_length[from..to.max(from)] {
+        for at in read {
             #[cfg(test)]
-            MISREAD_CANDIDATES_READ.with(|read| read.set(read.get() + 1));
-            if used.get(at).copied().unwrap_or(true) {
+            MISREAD_CANDIDATES_READ.with(|count| count.set(count.get() + 1));
+            if !reaches(self.shapes[at].length) {
                 continue;
             }
             let Some(score) = native.misread_score(self.keys[at], &self.shapes[at]) else {
@@ -469,8 +500,55 @@ impl<'k> MisreadCandidates<'k> {
                 best = Some((score, distance, at));
             }
         }
-        best.map(|(_, _, at)| at)
+        let (_, _, at) = best?;
+        pool.by_length.remove(&(self.shapes[at].length, at));
+        pool.by_place.remove(&at);
+        Some(at)
     }
+}
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl MisreadPool {
+    /// The least folded length in the pool that is `length` or more. ~keep
+    fn length_from(&self, length: usize) -> Option<usize> {
+        self.by_length.range((length, 0)..).next().map(|(read, _)| *read)
+    }
+    /// The least folded length in the pool above `length`. ~keep
+    fn length_above(&self, length: usize) -> Option<usize> {
+        length.checked_add(1).and_then(|next| self.length_from(next))
+    }
+    /// The greatest folded length in the pool below `length`. ~keep
+    fn length_below(&self, length: usize) -> Option<usize> {
+        self.by_length.range(..(length, 0)).next_back().map(|(read, _)| *read)
+    }
+    /// The rows of folded length `length`, in reading order. ~keep
+    fn at_length(&self, length: usize) -> impl Iterator<Item = usize> + '_ {
+        self.by_length
+            .range((length, 0)..=(length, usize::MAX))
+            .map(|(_, at)| *at)
+    }
+    /// The rows of the pool, the nearest to `row` first. ~keep
+    fn nearest_in_place(&self, row: usize) -> impl Iterator<Item = usize> + '_ {
+        nearest_first(
+            row,
+            self.by_place.range(row..).copied(),
+            self.by_place.range(..row).rev().copied(),
+        )
+    }
+}
+/// The rows of `after` (from `row` up) and `before` (from below `row` down), merged so that the
+/// nearest to `row` comes first, the earlier on a tie. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn nearest_first(
+    row: usize,
+    after: impl Iterator<Item = usize>,
+    before: impl Iterator<Item = usize>,
+) -> impl Iterator<Item = usize> {
+    let (mut after, mut before) = (after.peekable(), before.peekable());
+    std::iter::from_fn(move || match (after.peek(), before.peek()) {
+        (Some(&late), Some(&early)) if late - row >= row - early => before.next(),
+        (Some(_), _) => after.next(),
+        (None, _) => before.next(),
+    })
 }
 /// The runs of letters in a text, lowercase, one letter included: `12 cm3` holds the one run `cm`,
 /// and `c total` the runs `c` and `total`. ~keep
@@ -1378,9 +1456,9 @@ fn owned_row_covers_source(source: &str, read: &str) -> bool {
 /// owned OCR line) is missing unless one OCR line holds it whole in words that no other layer
 /// line took. A line-wise test keeps the words of a layer line spread over several OCR lines
 /// from masking the layer line. A missing line takes with it the OCR line that misreads it: its
-/// owned line, or for an unplaced line the unused OCR line that misreads it best
-/// (`MisreadCandidates`); every other OCR line remains. `row_lines` holds the line of each OCR
-/// row in the page's OCR text (`boxed_row_lines`). ~keep
+/// owned line, or for an unplaced line the unused OCR line that misreads it best of the few
+/// nearest to it in length (`MisreadCandidates::take_best`); every other OCR line remains.
+/// `row_lines` holds the line of each OCR row in the page's OCR text (`boxed_row_lines`). ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn layer_lines_missing_and_owned<'a>(
     layer: &'a str,
@@ -1442,14 +1520,14 @@ fn layer_lines_missing_and_owned<'a>(
     let (marked, unmarked): (Vec<_>, Vec<_>) = unplaced
         .into_iter()
         .partition(|(_, line)| line.contains(super::super::unmapped_glyphs::is_lost_glyph));
+    let mut pool = candidates.pool(&ocr_used);
     for (row, line) in unmarked.into_iter().chain(marked) {
         let key = line_key(line);
         if read.take_whole(&key) {
             continue;
         }
         missing.push((row, line));
-        if let Some(at) = candidates.best(&NativeRow::new(&key, false), &ocr_used, row) {
-            ocr_used[at] = true;
+        if let Some(at) = candidates.take_best(&mut pool, &NativeRow::new(&key, false), row) {
             misread.push(misread_at(at));
         }
     }

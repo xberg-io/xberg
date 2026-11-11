@@ -9,6 +9,9 @@ use crate::types::PageBoundary;
 #[path = "native_retention_stress_tests.rs"]
 mod native_retention_stress_tests;
 
+#[path = "misread_row_bound_tests.rs"]
+mod misread_row_bound_tests;
+
 #[path = "photo_layer_tests/review_2505.rs"]
 mod review_2505;
 
