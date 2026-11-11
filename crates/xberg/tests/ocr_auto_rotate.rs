@@ -479,7 +479,12 @@ fn assert_detached_table(
     assert_eq!(table.cells, direct.cells);
     assert_eq!(table.markdown, direct.markdown);
     // Plain output renders the recovered table as plain rows, not Markdown (#2903). ~keep
-    let plain_rows = table.cells.iter().map(|row| row.join(" ")).collect::<Vec<_>>().join("\n");
+    let plain_rows = table
+        .cells
+        .iter()
+        .map(|row| row.join(" "))
+        .collect::<Vec<_>>()
+        .join("\n");
     assert_eq!(recovered.content.trim(), plain_rows);
     assert_eq!(
         table
