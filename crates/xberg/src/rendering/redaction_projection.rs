@@ -71,9 +71,18 @@ pub(crate) struct VisibleMarkdown {
 }
 
 impl VisibleMarkdown {
-    /// `written_by_xberg` is true only for Markdown that the Markdown writer produced. Other text
-    /// keeps its dollar math as written, since a backslash there is the author's own.
-    pub fn parse(markdown: &str, limits: &SecurityLimits, written_by_xberg: bool) -> Option<Self> {
+    /// Text that the Markdown writer did not produce. Its dollar math stays as written, since a
+    /// backslash there is the author's own.
+    pub fn parse(markdown: &str, limits: &SecurityLimits) -> Option<Self> {
+        Self::parse_with(markdown, limits, false)
+    }
+
+    /// Markdown that the Markdown writer produced, whose dollar math is escaped as Markdown text.
+    pub fn parse_written(markdown: &str, limits: &SecurityLimits) -> Option<Self> {
+        Self::parse_with(markdown, limits, true)
+    }
+
+    fn parse_with(markdown: &str, limits: &SecurityLimits, written_by_xberg: bool) -> Option<Self> {
         if markdown.len() > limits.max_content_size {
             return None;
         }
@@ -553,7 +562,7 @@ mod tests {
         let limits = SecurityLimits::default();
         let markdown = "Jane **Doe**\n\n## Annotations\n\n- **Link** (page 1): safe";
         let plain = "  Jane Doe\n\nAnnotations:\nLink (page 1): safe";
-        let projection = VisibleMarkdown::parse(markdown, &limits, true).unwrap();
+        let projection = VisibleMarkdown::parse(markdown, &limits).unwrap();
         let separator = plain.find(":\n").unwrap();
 
         assert!(projection.on_plain(plain, None).is_none());
@@ -574,8 +583,8 @@ mod tests {
     fn math_backslashes_are_unescaped_only_for_markdown_the_writer_produced() {
         let limits = SecurityLimits::default();
         let markdown = r"Let $a \\ b$ hold.";
-        let written = VisibleMarkdown::parse(markdown, &limits, true).unwrap();
-        let foreign = VisibleMarkdown::parse(markdown, &limits, false).unwrap();
+        let written = VisibleMarkdown::parse_written(markdown, &limits).unwrap();
+        let foreign = VisibleMarkdown::parse(markdown, &limits).unwrap();
         assert!(written.text.contains(r"a \ b"), "{:?}", written.text);
         assert!(foreign.text.contains(r"a \\ b"), "{:?}", foreign.text);
     }
