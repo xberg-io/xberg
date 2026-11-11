@@ -630,7 +630,10 @@ mod tests {
     #[test]
     fn scales_both_recovered_table_boxes_into_the_same_raster() {
         let (mut candidate, _) = two_table_candidate();
-        super::super::scale_recovered_table_to_raster(&mut candidate, (100, 100));
+        assert!(super::super::scale_recovered_table_to_raster(
+            &mut candidate,
+            (100, 100)
+        ));
         let boxes = candidate
             .tables
             .iter()
