@@ -160,6 +160,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(rust): Upgrade Crawlberg 1.13, html-to-markdown 3.22, Liter LLM 2.7, tree-sitter-language-pack 1.25, lopdf 0.47, hayro-jbig2 0.4, hayro-jpeg2000 0.5, unhwp 0.24 and sevenz-rust2 0.25, and drop the exact ort and jpeg-decoder pins.** HTML heading metadata (`headers[].text`) now carries plain text, without superscript or subscript markup.
+
 - **(pdf): Reuse matching built-in OCR reads from the ink probe.** (#2862)
   A final PDF page pass can reuse recognition from the ink probe when its image, settings,
   and model files match. The final pass still applies its own quality checks and retries.
@@ -327,6 +329,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(go): Ship usable static-link flags in the linux-x86_64 and linux-aarch64 Go release archives.** (GH#2988)
+  `native-static-libs.txt` no longer ends with a terminal colour escape that cgo rejected, and the glibc-floor archive lists `-lc++ -lc++abi` instead of `-lstdc++`, matching the zig-built C++ objects.
+- **(ocr): Keep Khmer number recovery available after bounded source declines.** (#2905)
+  Completed declines charge the work already done, leaving room to verify supported pages later in the PDF.
+  Cancellation and failures whose work cannot be measured still retain their reservation.
 - **(djot): Preserve straight quotes, apostrophes, and runs of dots or dashes in marked rows.** (#2913)
   Djot readers show the row punctuation as written.
 - **(djot): Preserve block-like text in rendered paragraphs, lists, and OCR output.** (#2891)
@@ -337,6 +344,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Numeric-only OCR reads do not claim retention of native prose, across all supported scripts.
 - **(ocr): Re-render only OCR page text as plain, and keep DOCX and native page text.** (#2839, #2902)
   Since #2839, a DOCX page whose notes or math are not in the plain content, and a native PDF page of a mixed document, were replaced by the plain rendering of their elements, losing the footnote definitions and the equation spacing. A page that is not found in the content is now re-rendered only when an OCR route produced its text; any other page keeps its text, and only its page range is omitted, with the `page_boundaries` warning.
+- **(pdf): Render recognized tables as plain text on the mixed OCR route.** (#2903)
 - **(djot): Preserve paragraph text that begins with block syntax.** (#2856, #2869)
   Escape block markers without changing following inline markup or existing backslash escapes.
 - **(pdf): Keep a nested superscript or subscript stack on its base's line.** (#2728)
@@ -349,6 +357,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Page renders and separations handle translucent paints and paints whose RGB appearance matches the backdrop. Paint operators execute once per knockout pass, group scratch and work are bounded, and Form opacity, blend modes and soft masks apply consistently to RGB and ink plates. Planned knockout work accumulates across sibling groups. When its surface-work limit is exhausted, the affected group renders with non-knockout compositing and a warning.
 - **(pdf): Keep a fraction in an exponent or index out of a script stack, and cap a stack at the runs grouping searches.** (#2931)
   A numerator and denominator share an x range at two heights, so since #2922 the stack rule took them for scripts: `x^{-1/2}` read `x^{-2}`, `z^{-2/3}` read `z^{-3}`, and the index `j + 3/2` of arxiv-2405.00569 p4 read `j+2 3`. A member that shares an x range, within the stack's own x window, with a same-size span at a clearly different height now marks a fraction, and the run keeps the neutral reading order. The partner may sit beyond a member's reach from the base line (a numerator) or on the base line (the numerator of an index fraction), and it must not lie across the base line from the member, so `H^Z_2` stays a stack. The same rule restores gutenberg-38769 p500, whose exponent `1/2 π` read `<sup>2π</sup>`. A stack of more than eight members is no longer placed, and paragraph grouping and markup search one run more than that for a stack, so placement and markup agree.
+- **(pdf): Keep the correctly mapped Greek, Cyrillic or Arabic text of an English page that has a lost glyph.** (#2861)
+  Since #2830, a page whose layer was mostly in a script no OCR language reads, with a lost glyph, was read once in the configured languages and sent to OCR when that read was confident prose. An English page with long identifiers in another script passed that test, because the read found the English the layer already held, and the other script was lost with no warning. Such a page is now probed only when fewer than a tenth of its letters are in scripts the configured languages read; a wrong map leaves almost none, since it sends every letter of its font to the other script.
 - **(ocr): Drop the symbol-noise lines of a page flagged as OCR recognition noise.** (#2312)
   This applies to any page the recognition-noise verdict flags and `discard_suspected_ocr_noise` retains, not only photographs. The new `OcrQualityThresholds.prune_symbol_noise_lines` (default `true`; `false` keeps every line) removes lines in which fewer than half the tokens are word-shaped, only when the page has at least 8 non-blank lines and at least half of them are such lines. A line is kept if it has any digit, a CJK, Kana, Hangul, Thai, Lao, Khmer or Myanmar character, a non-Latin letter, an `=`/`+`/`<`/`>` between two operands (`x = y`, not `oe = ie` or `i - l`), or is an English phrase (`I am.`, `IS IT`, not `ee so`) or contraction (`I'm`); a single-token answer such as `No.`, `Yes` or `Qty`, a non-English short line such as `de la gare`, and `x=y` without spaces are pruned on a flagged page. Pruning runs after the verdict, backend choice and table acceptance, skips pages with tables, adds a warning naming the page and the number of lines removed, and covers standalone images and PDF OCR pages, including a photograph after native text; multi-stage pipeline scoring and the single-page first-pass gate read the text before pruning, and an annotation that crosses a line is dropped with its lines. Title recovery now also runs when `quality_thresholds` differs from the default only in this flag. A fixture photograph keeps 0 of 840 noise characters as an image and 169 of 1056 as a PDF page, where the lines with a digit stay.
 - **(ocr): Drop the symbol-noise lines of a page flagged as OCR recognition noise.** (#2312, #2887)
@@ -1635,6 +1645,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The byte offsets of an entity move with its text when normalization shortens `content`. A span that cuts a letter from the mark that joins it grows to hold the composed letter.
 - **(pdf): Words that a producer places one by one no longer run together.** (GH#2675)
   A PDF that sets the text matrix before each word, often with a repeated font operator, kept the gap to the next word inside the previous word's width, so the words read as one. A run that a text matrix extends past its last glyph now ends at that glyph, unless a word-gap offset in the next text array marks the gap. Pages with glyph-by-glyph text now measure a word gap against the font size of the word after it, not against the largest size on the line. Subscripts and raised indices stay on their symbol, and a gap next to a CJK character (Han, kana or Hangul), CJK punctuation or a fullwidth form is measured as before.
+- **(pdf): A word that a later show inside an `ActualText` scope widens no longer ends before that show.** (GH#2875)
+  When a producer sets the text matrix before each word, the extractor records the run's width before the matrix move, so a font operator that follows ends the word at its last glyph. A show that comes after the move, such as a second show inside an `ActualText` scope or a glyph the font gives no text, now ends that record, so the word reaches the pen again and its width covers the later glyphs, as it did before the record existed.
 - **(pdf): Preserve source detail for configured Tesseract preprocessing.** Refs #2711 (partial).
   Forced whole-document OCR with the registered built-in Tesseract backend, including the synthesized classical pipeline, renders native page content at a preprocessing target above 150 DPI within the existing budget. Any preprocessing block requests its target, including the default 300 DPI in a denoise-only block. This recovers a reproduced small-text word boundary; explicit image settings and original full-page scan density retain precedence. Without a preprocessing block the default remains 150 DPI. Selected pages, prepared rasters, custom backends, explicit pipelines and VLM fallback keep their source-render policy. The general 150-DPI glyph-shift issue remains open.
 

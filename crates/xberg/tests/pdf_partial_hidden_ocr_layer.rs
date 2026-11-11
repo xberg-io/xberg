@@ -805,13 +805,14 @@ fn probe_log() -> &'static ProbeDecisions {
     })
 }
 
-async fn probe_decisions(case: &str, pdf: &[u8]) -> Vec<(String, String, String)> {
+async fn extract_with_probe_decisions(case: &str, pdf: &[u8]) -> (ExtractedDocument, Vec<(String, String, String)>) {
     use tracing::Instrument as _;
     let log = probe_log();
-    extract(pdf, &default_tesseract())
+    let document = extract(pdf, &default_tesseract())
         .instrument(tracing::info_span!("probe", case = case))
         .await;
-    log.0
+    let decisions = log
+        .0
         .lock()
         .expect("decision lock")
         .iter()
@@ -823,15 +824,38 @@ async fn probe_decisions(case: &str, pdf: &[u8]) -> Vec<(String, String, String)
                 fields.0["probed"].clone(),
             )
         })
-        .collect()
+        .collect();
+    (document, decisions)
 }
 
 #[tokio::test]
 async fn the_probe_decision_follows_the_language_check_on_a_covered_layer() {
     let raster = make_raster();
-    let judged = probe_decisions("prose", &covered_prose_layer_scan(&raster)).await;
+    let (_, judged) = extract_with_probe_decisions("prose", &covered_prose_layer_scan(&raster)).await;
     assert_eq!(judged, [("1".into(), "true".into(), "false".into())]);
 
-    let abstained = probe_decisions("junk", &junk_layer_scan(&raster, COMPLETE, 3)).await;
+    let (_, abstained) = extract_with_probe_decisions("junk", &junk_layer_scan(&raster, COMPLETE, 3)).await;
     assert_eq!(abstained, [("1".into(), "false".into(), "true".into())]);
+}
+
+#[tokio::test]
+async fn stock_use_native_probe_publishes_text_without_tables_and_keeps_page_ranges() {
+    let raster = make_raster();
+    let (document, decisions) =
+        extract_with_probe_decisions("use-native-text", &junk_layer_scan(&raster, COMPLETE, 3)).await;
+    assert_eq!(decisions, [("1".into(), "false".into(), "true".into())]);
+    assert_eq!(document.extraction_method, Some(ExtractionMethod::Mixed));
+    assert_eq!(words(&document), expected(COMPLETE));
+    assert!(document.tables.is_empty());
+    let page = &document.pages.as_ref().unwrap()[0];
+    assert!(page.tables.is_empty());
+    assert!(!document.content.contains("| --- |"));
+    let boundaries = document.metadata.pages.as_ref().unwrap().boundaries.as_ref().unwrap();
+    assert_eq!(boundaries.len(), 1);
+    let boundary = &boundaries[0];
+    assert_eq!(boundary.page_number, page.page_number);
+    assert_eq!(
+        document.content.get(boundary.byte_start..boundary.byte_end),
+        Some(page.content.as_str())
+    );
 }

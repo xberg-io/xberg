@@ -88,24 +88,20 @@ async fn whole_document_control(bytes: &[u8], config: &ExtractionConfig) -> Extr
     forced
 }
 
-async fn assert_rejects_changed_table_text(page: &xberg::types::PageContent, reference: &xberg::types::PageContent) {
-    let row = page
-        .content
-        .lines()
-        .find(|line| line.starts_with("| APPLES |"))
-        .unwrap();
+fn assert_rejects_changed_table_text(page: &xberg::types::PageContent, reference: &xberg::types::PageContent) {
+    let row = page.content.lines().find(|line| line.contains("48,210")).unwrap();
     let mut extra = page.clone();
-    extra.content = extra.content.replacen(row, &format!("{row} EXTRA-CELL |"), 1);
+    extra.content = extra.content.replacen(row, &format!("{row} EXTRA-CELL"), 1);
     assert_ne!(extra.content, page.content);
     assert!(
-        !super::plain_contract::scanned_table_body_is_complete(&extra, reference).await,
-        "extra cells must not disappear through Markdown canonicalization"
+        !super::plain_contract::scanned_table_body_is_complete(&extra, reference),
+        "extra cells must fail despite intact table metadata"
     );
     let mut missing = page.clone();
     missing.content = missing.content.replacen("48,210", "", 1);
     assert_ne!(missing.content, page.content);
     assert!(
-        !super::plain_contract::scanned_table_body_is_complete(&missing, reference).await,
+        !super::plain_contract::scanned_table_body_is_complete(&missing, reference),
         "missing recognized numeric text must fail despite intact table metadata"
     );
 }
@@ -145,8 +141,8 @@ async fn automatic_all_pages_keeps_the_ocr_tables_and_page_texts() {
         .iter()
         .zip(forced.pages.as_ref().unwrap())
     {
-        super::plain_contract::assert_scanned_table_body(page, reference).await;
-        assert_rejects_changed_table_text(page, reference).await;
+        super::plain_contract::assert_scanned_table_body(page, reference);
+        assert_rejects_changed_table_text(page, reference);
     }
 }
 

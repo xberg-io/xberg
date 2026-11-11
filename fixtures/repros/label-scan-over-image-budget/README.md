@@ -9,7 +9,10 @@ The issue (#2832) hit the same path with a 34 × 24 in sheet at the 512 MiB defa
 
 `label-scan-downscaled.pdf` is the same sheet at 15 × 10 in (4500 × 3000 px). With `max_content_size` at 112 MiB the render is refused and the retry reads the image downscaled to 4096 px (scale 0.91, 273 dpi), not clamped.
 
-Regenerate with Pillow 13.0.0 and the vendored DejaVu Sans (SHA-256 checked); the grain is seeded:
+Regenerate with Pillow 13.0.0 and the vendored DejaVu Sans (SHA-256 checked); the grain is seeded.
+Byte-identical output only holds on macOS, where the committed PDFs were generated: on Linux the
+same commands produced PDFs 302 bytes smaller, with 395537 of 9180000 pixels different, so a
+regeneration there is not drop-in.
 
 ```sh
 uv run --no-project --with pillow==13.0.0 python generate.py label-scan.pdf 12 8.5 300
