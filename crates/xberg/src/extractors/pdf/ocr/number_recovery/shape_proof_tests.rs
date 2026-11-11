@@ -125,7 +125,14 @@ fn should_decline_unbounded_unicode_ranges_before_native_character_decode() {
 #[test]
 fn should_decline_ambiguous_physical_code_even_when_claim_is_unchanged() {
     let input = appended_cmap("1 beginbfchar\n<03> <17E0>\nendbfchar\n");
-    assert_declined(&input, "ambiguous physical character code");
+    let document = PdfDocument::from_bytes(input).unwrap();
+    let source = source_metadata(&document, 0).unwrap().unwrap();
+    let work = Work::new(BUDGET);
+    let result = audit_page(&source, BUDGET, &work);
+    assert!(matches!(
+        result,
+        Err(Failure::MeasuredDecline("ambiguous physical character code"))
+    ));
 }
 
 #[test]
