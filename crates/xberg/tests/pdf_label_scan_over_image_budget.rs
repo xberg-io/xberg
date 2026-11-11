@@ -212,11 +212,13 @@ fn a_downscaled_but_legible_retry_read_is_kept_with_the_warning() {
 }
 
 /// The 42 x 28 in sheet holds a 4200 x 2800 px image of two letter labels, 97 dpi once the retry
-/// shrinks it to 4096 px. Whatever verdict the noise check gives that read, an explicit pipeline
-/// gives the same one as the default route: the same text and one retained-text warning, or the same
-/// refusal. The percentages in the warning differ because a pipeline carries its own thresholds.
+/// shrinks it to 4096 px. Real Tesseract reads it and the noise check keeps the read, so the
+/// refusal below the legibility floor is not reached; the proven read unit tests pin that floor.
+/// This test guards the parity of the two routes: the same text and one retained-text warning, or the
+/// same refusal. The percentages in the warning differ because a pipeline carries its own thresholds.
+/// It passes before the fix too, because both routes already read this sheet.
 #[test]
-fn explicit_pipeline_judges_a_shrunk_low_dpi_read_like_the_default_route() {
+fn a_shrunk_low_dpi_read_gets_the_same_verdict_on_both_routes() {
     let read = |explicit_pipeline: bool| {
         let mut config = config(false, explicit_pipeline);
         config
