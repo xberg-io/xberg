@@ -292,3 +292,35 @@ fn annotations_on_surviving_lines_move_with_their_line() {
     let spans: Vec<(u32, u32)> = element.annotations.iter().map(|a| (a.start, a.end)).collect();
     assert_eq!(spans, vec![(0, 7), (14, 18)]);
 }
+
+#[test]
+fn pruning_a_pruned_page_removes_nothing_more() {
+    let text = page(&["SECTION TITLE", "Chapter 1"], 12);
+    let (once, removed) = prune_text(&text);
+    assert_eq!(removed, 12);
+    assert_eq!(prune_text(&once), (once.clone(), 0));
+}
+
+#[cfg(all(feature = "ocr", feature = "pdf"))]
+#[test]
+fn a_document_with_relationships_is_not_prunable_and_keeps_its_elements() {
+    use crate::types::internal::{
+        ElementKind, InternalDocument, InternalElement, Relationship, RelationshipKind, RelationshipTarget,
+    };
+
+    let mut document = InternalDocument::new("pdf");
+    document.elements = vec![
+        InternalElement::text(ElementKind::Paragraph, "oe\nae", 0),
+        InternalElement::text(ElementKind::Paragraph, "SECTION TITLE", 0),
+    ];
+    assert!(elements_are_prunable(&document));
+    document.relationships = vec![Relationship {
+        source: 1,
+        target: RelationshipTarget::Index(0),
+        kind: RelationshipKind::FootnoteReference,
+    }];
+    assert!(!elements_are_prunable(&document));
+    prune_document_elements(&mut document);
+    assert_eq!(document.elements.len(), 2);
+    assert_eq!(document.elements[0].text, "oe\nae");
+}

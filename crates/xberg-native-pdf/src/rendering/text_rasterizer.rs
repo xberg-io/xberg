@@ -15,7 +15,7 @@
 // these needs compiler-in-the-loop verification, not a mechanical pass. Delete this
 // note and the file's baseline entry together once it goes green. Help wanted.
 
-use super::{create_fill_paint, guarded_fill_path};
+use super::{create_fill_paint, create_stroke_paint, guarded_fill_path, guarded_stroke_path};
 use crate::content::GraphicsState;
 use crate::content::operators::TextElement;
 use crate::document::PdfDocument;
@@ -365,54 +365,66 @@ fn cached_face(id: fontdb::ID, data: Arc<Vec<u8>>, index: u32) -> Option<Arc<Cac
 /// Before this cache, every glyph that fell through to the CJK path called
 /// `load_cjk_fallback()`, which iterated 7+ fontdb queries and cloned a
 /// 10–20 MB Noto CJK binary. Now that work is done exactly once.
+#[cfg(not(test))]
 static CJK_FALLBACK: std::sync::OnceLock<Option<(fontdb::ID, Arc<Vec<u8>>, u32)>> = std::sync::OnceLock::new();
 
+fn find_cjk_fallback(db: &fontdb::Database) -> Option<(fontdb::ID, Arc<Vec<u8>>, u32)> {
+    let prioritized_variants = [
+        "Noto Sans CJK SC",
+        "Noto Serif CJK SC",
+        "Droid Sans Fallback",
+        "SimSun",
+        "WenQuanYi Micro Hei",
+        "Noto Sans CJK JP",
+        "Noto Serif CJK JP",
+    ];
+    for variant in prioritized_variants {
+        let query = fontdb::Query {
+            families: &[fontdb::Family::Name(variant)],
+            weight: fontdb::Weight::NORMAL,
+            stretch: fontdb::Stretch::Normal,
+            style: fontdb::Style::Normal,
+        };
+        if let Some(id) = db.query(&query) {
+            if let Some((arc, idx)) = cached_font_bytes(id, db) {
+                tracing::debug!(
+                    "CJK fallback: matched '{}', idx={}, size={} bytes",
+                    variant,
+                    idx,
+                    arc.len()
+                );
+                return Some((id, arc, idx));
+            }
+        }
+    }
+    let query = fontdb::Query {
+        families: &[fontdb::Family::SansSerif],
+        weight: fontdb::Weight::NORMAL,
+        stretch: fontdb::Stretch::Normal,
+        style: fontdb::Style::Normal,
+    };
+    if let Some(id) = db.query(&query) {
+        if let Some((arc, idx)) = cached_font_bytes(id, db) {
+            return Some((id, arc, idx));
+        }
+    }
+    None
+}
+
+/// Tests run in one process against differently populated databases, so the
+/// process-wide cache is bypassed there and each lookup sees its own database. ~keep
 fn get_cjk_fallback_cached(db: &fontdb::Database) -> Option<(fontdb::ID, Arc<Vec<u8>>, u32)> {
-    CJK_FALLBACK
-        .get_or_init(|| {
-            let prioritized_variants = [
-                "Noto Sans CJK SC",
-                "Noto Serif CJK SC",
-                "Droid Sans Fallback",
-                "SimSun",
-                "WenQuanYi Micro Hei",
-                "Noto Sans CJK JP",
-                "Noto Serif CJK JP",
-            ];
-            for variant in prioritized_variants {
-                let query = fontdb::Query {
-                    families: &[fontdb::Family::Name(variant)],
-                    weight: fontdb::Weight::NORMAL,
-                    stretch: fontdb::Stretch::Normal,
-                    style: fontdb::Style::Normal,
-                };
-                if let Some(id) = db.query(&query) {
-                    if let Some((arc, idx)) = cached_font_bytes(id, db) {
-                        tracing::debug!(
-                            "CJK fallback: matched '{}', idx={}, size={} bytes",
-                            variant,
-                            idx,
-                            arc.len()
-                        );
-                        return Some((id, arc, idx));
-                    }
-                }
-            }
-            let query = fontdb::Query {
-                families: &[fontdb::Family::SansSerif],
-                weight: fontdb::Weight::NORMAL,
-                stretch: fontdb::Stretch::Normal,
-                style: fontdb::Style::Normal,
-            };
-            if let Some(id) = db.query(&query) {
-                if let Some((arc, idx)) = cached_font_bytes(id, db) {
-                    return Some((id, arc, idx));
-                }
-            }
-            None
-        })
-        .as_ref()
-        .map(|(id, arc, idx)| (*id, Arc::clone(arc), *idx))
+    #[cfg(test)]
+    {
+        find_cjk_fallback(db)
+    }
+    #[cfg(not(test))]
+    {
+        CJK_FALLBACK
+            .get_or_init(|| find_cjk_fallback(db))
+            .as_ref()
+            .map(|(id, arc, idx)| (*id, Arc::clone(arc), *idx))
+    }
 }
 
 /// Process-wide cache for the bundled Droid Sans Fallback face used by the
@@ -463,6 +475,111 @@ pub struct TextRasterizer {
     /// (#991 asked for once per font).
     warned_fonts: std::sync::Mutex<std::collections::HashSet<(String, &'static str)>>,
     type0_ink_loss: std::sync::atomic::AtomicBool,
+}
+
+pub(crate) struct GlyphPaint {
+    fill: Option<Paint<'static>>,
+    stroke: Option<(Paint<'static>, tiny_skia::Stroke)>,
+}
+
+impl GlyphPaint {
+    pub(crate) fn new(gs: &GraphicsState, colors: Option<&super::page_renderer::ResolvedColors>) -> Self {
+        let color = |mut paint: Paint<'static>, rgba: Option<(f32, f32, f32, f32)>| {
+            if let Some((r, g, b, a)) = rgba {
+                paint.set_color(tiny_skia::Color::from_rgba(r, g, b, a).unwrap_or(tiny_skia::Color::BLACK));
+            }
+            paint
+        };
+        let fill = matches!(gs.render_mode, 0 | 2 | 4 | 6)
+            .then(|| color(create_fill_paint(gs, "Normal"), colors.and_then(|c| c.fill)));
+        let stroke = matches!(gs.render_mode, 1 | 2 | 5 | 6).then(|| {
+            let paint = color(create_stroke_paint(gs, "Normal"), colors.and_then(|c| c.stroke));
+            let stroke = tiny_skia::Stroke {
+                width: gs.line_width,
+                line_cap: match gs.line_cap {
+                    1 => tiny_skia::LineCap::Round,
+                    2 => tiny_skia::LineCap::Square,
+                    _ => tiny_skia::LineCap::Butt,
+                },
+                line_join: match gs.line_join {
+                    1 => tiny_skia::LineJoin::Round,
+                    2 => tiny_skia::LineJoin::Bevel,
+                    _ => tiny_skia::LineJoin::Miter,
+                },
+                miter_limit: gs.miter_limit,
+                dash: tiny_skia::StrokeDash::new(gs.dash_pattern.0.clone(), gs.dash_pattern.1),
+            };
+            (paint, stroke)
+        });
+        Self { fill, stroke }
+    }
+
+    fn draw(
+        &self,
+        dest: &mut Pixmap,
+        path: &tiny_skia::Path,
+        glyph: Transform,
+        user: Transform,
+        clip: Option<&tiny_skia::Mask>,
+    ) {
+        self.draw_side(dest, path, glyph, user, clip, true);
+        self.draw_side(dest, path, glyph, user, clip, false);
+    }
+
+    pub(crate) fn draw_side(
+        &self,
+        dest: &mut Pixmap,
+        path: &tiny_skia::Path,
+        glyph: Transform,
+        user: Transform,
+        clip: Option<&tiny_skia::Mask>,
+        fill_side: bool,
+    ) {
+        if fill_side {
+            if let Some(fill) = &self.fill {
+                guarded_fill_path(dest, path, fill, tiny_skia::FillRule::Winding, glyph, clip);
+            }
+        } else if let Some((paint, stroke)) = &self.stroke
+            && let Some(path) = glyph_in_user_space(path, glyph, user)
+        {
+            guarded_stroke_path(dest, &path, paint, stroke, user, clip);
+        }
+    }
+}
+
+pub(crate) fn glyph_user_inverse(user: Transform) -> Option<Transform> {
+    user.invert().filter(Transform::is_finite)
+}
+
+fn glyph_in_user_space(path: &tiny_skia::Path, glyph: Transform, user: Transform) -> Option<tiny_skia::Path> {
+    // Line width and dash lengths are in user space, independent of the text matrix. ~keep
+    path.clone().transform(glyph_user_inverse(user)?.pre_concat(glyph))
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum TextRun<'a> {
+    String(&'a [u8]),
+    Array(&'a [TextElement]),
+}
+
+type GlyphVisitor<'a> = dyn FnMut(&tiny_skia::Path, Transform, Transform) + 'a;
+
+enum GlyphTarget<'a> {
+    Paint {
+        pixmap: &'a mut Pixmap,
+        paint: &'a GlyphPaint,
+        clip: Option<&'a tiny_skia::Mask>,
+    },
+    Visit(&'a mut GlyphVisitor<'a>),
+}
+
+impl GlyphTarget<'_> {
+    fn glyph(&mut self, path: &tiny_skia::Path, glyph: Transform, user: Transform) {
+        match self {
+            Self::Paint { pixmap, paint, clip } => paint.draw(pixmap, path, glyph, user, *clip),
+            Self::Visit(visit) => visit(path, glyph, user),
+        }
+    }
 }
 
 impl TextRasterizer {
@@ -583,13 +700,7 @@ impl TextRasterizer {
     /// Render a text string (Tj operator).
     /// Returns the total horizontal advance in PDF points.
     ///
-    /// `color_override` carries the resolution-pipeline output: the
-    /// fill RGBA replaces the value `gs` would supply when present, so
-    /// the operator arm doesn't have to clone `gs` purely to splice a
-    /// colour. Stroke override is accepted for forward compatibility —
-    /// the text rasteriser does not currently paint stroked glyphs, so
-    /// the stroke channel is recorded but not yet observable on the
-    /// pixmap.
+    /// Resolved pipeline colors override the corresponding fill and stroke in `gs`.
     #[allow(unused_variables)]
     pub fn render_text(
         &self,
@@ -601,6 +712,40 @@ impl TextRasterizer {
         _resources: &Object,
         doc: &PdfDocument,
         clip_mask: Option<&tiny_skia::Mask>,
+        font_cache: &HashMap<String, Arc<crate::fonts::FontInfo>>,
+    ) -> Result<f32> {
+        let paint = GlyphPaint::new(gs, color_override);
+        let mut target = GlyphTarget::Paint {
+            pixmap,
+            paint: &paint,
+            clip: clip_mask,
+        };
+        self.layout_text(&mut target, text, base_transform, gs, doc, font_cache)
+    }
+
+    pub(crate) fn visit_text_glyphs(
+        &self,
+        run: TextRun<'_>,
+        transform: Transform,
+        gs: &GraphicsState,
+        doc: &PdfDocument,
+        fonts: &HashMap<String, Arc<crate::fonts::FontInfo>>,
+        visitor: &mut impl FnMut(&tiny_skia::Path, Transform, Transform),
+    ) -> Result<f32> {
+        let mut target = GlyphTarget::Visit(visitor);
+        match run {
+            TextRun::String(bytes) => self.layout_text(&mut target, bytes, transform, gs, doc, fonts),
+            TextRun::Array(array) => self.layout_tj_array(&mut target, array, transform, gs, doc, fonts),
+        }
+    }
+
+    fn layout_text(
+        &self,
+        target: &mut GlyphTarget<'_>,
+        text: &[u8],
+        base_transform: Transform,
+        gs: &GraphicsState,
+        _doc: &PdfDocument,
         font_cache: &HashMap<String, Arc<crate::fonts::FontInfo>>,
     ) -> Result<f32> {
         let font_info = if let Some(font_name) = &gs.font_name {
@@ -623,25 +768,6 @@ impl TextRasterizer {
         // subset of runs that actually degrade. ~keep
         tracing::trace!("Decoded PDF text for rendering");
 
-        // Create paint from fill color, then apply the pipeline-resolved
-        // override when present. `create_fill_paint` reads gs.fill_*
-        // unconditionally; the override stamp afterwards is the only
-        // place the resolved RGBA needs to land for visible-glyph paint. ~keep
-        let mut paint = create_fill_paint(gs, "Normal");
-        if let Some(overrides) = color_override {
-            if let Some((r, g, b, a)) = overrides.fill {
-                paint.set_color(tiny_skia::Color::from_rgba(r, g, b, a).unwrap_or(tiny_skia::Color::BLACK));
-            }
-        }
-        // Text rendering mode 3 = invisible text (searchable OCR layers).
-        // Mode 7 = add-to-clip-path only, with NO painting (ISO 32000-1
-        // §9.3.6); it previously fell through and painted glyphs visibly. The
-        // clip-path accumulation itself (modes 4–7) is not yet applied, but
-        // mode-7 glyphs must at minimum not paint. (WS1.5) ~keep
-        if gs.render_mode == 3 || gs.render_mode == 7 {
-            paint.set_color(tiny_skia::Color::from_rgba(0.0, 0.0, 0.0, 0.0).unwrap());
-        }
-
         // Predefined CIDFont substitution path: if this font was flagged
         // at load time as an Adobe predefined CIDFont with no embedded
         // outlines (Ryumin-Light, GothicBBB-Medium, STSong-Light,
@@ -662,16 +788,7 @@ impl TextRasterizer {
                     "Routing PDF font through CJK substitution path (collection {:?})",
                     collection
                 );
-                return self.render_substituted_cjk(
-                    pixmap,
-                    text,
-                    info,
-                    collection,
-                    &paint,
-                    base_transform,
-                    gs,
-                    clip_mask,
-                );
+                return self.render_substituted_cjk(target, text, info, collection, base_transform, gs);
             }
         }
 
@@ -698,17 +815,7 @@ impl TextRasterizer {
                     let (is_byte_indexed, has_unicode_cmap) = classify_embedded_font(embedded);
                     if info.subtype != "Type0" && is_byte_indexed {
                         tracing::trace!("Using embedded PDF font with byte-indexed cmap (simple TrueType subset)");
-                        return self.render_cid_direct(
-                            pixmap,
-                            text,
-                            info,
-                            embedded,
-                            0,
-                            &paint,
-                            base_transform,
-                            gs,
-                            clip_mask,
-                        );
+                        return self.render_cid_direct(target, text, info, embedded, 0, base_transform, gs);
                     }
 
                     let cid_truetype = info.subtype == "Type0"
@@ -782,15 +889,13 @@ impl TextRasterizer {
                 // Direct CIDToGIDMap/CFF rendering — bypass harfrust, use `OutlineFace`
                 // (skrifa) for glyph outlines ~keep
                 match self.render_cid_direct(
-                    pixmap,
+                    target,
                     text,
                     font_info.as_deref().unwrap(),
                     &font_data,
                     index,
-                    &paint,
                     base_transform,
                     gs,
-                    clip_mask,
                 ) {
                     Ok(advance) => return Ok(advance),
                     Err(error) => {
@@ -804,17 +909,15 @@ impl TextRasterizer {
                                 self.report_omitted_drops(&decode_drops, info);
                             }
                             return self.render_unicode_text(
-                                pixmap,
+                                target,
                                 &unicode_text,
                                 text,
                                 font_info.as_deref(),
                                 Some(fb_id),
                                 fallback_data,
                                 fallback_idx,
-                                &paint,
                                 base_transform,
                                 gs,
-                                clip_mask,
                                 pdf_font_name,
                                 false,
                                 false,
@@ -827,17 +930,15 @@ impl TextRasterizer {
                 self.report_omitted_drops(&decode_drops, info);
             }
             Ok(self.render_unicode_text(
-                pixmap,
+                target,
                 &unicode_text,
                 text,
                 font_info.as_deref(),
                 font_id,
                 font_data,
                 index,
-                &paint,
                 base_transform,
                 gs,
-                clip_mask,
                 pdf_font_name,
                 true,
                 using_bundled_latin,
@@ -848,7 +949,7 @@ impl TextRasterizer {
             if let Some(ref info) = font_info {
                 self.report_omitted_drops(&decode_drops, info);
             }
-            Ok(self.render_text_fallback(pixmap, &unicode_text, &paint, base_transform, gs, clip_mask)?)
+            Ok(self.render_text_fallback(target, &unicode_text, base_transform, gs)?)
         }
     }
 
@@ -950,9 +1051,27 @@ impl TextRasterizer {
         base_transform: Transform,
         gs: &GraphicsState,
         color_override: Option<&crate::rendering::page_renderer::ResolvedColors>,
-        resources: &Object,
+        _resources: &Object,
         doc: &PdfDocument,
         clip_mask: Option<&tiny_skia::Mask>,
+        font_cache: &HashMap<String, Arc<crate::fonts::FontInfo>>,
+    ) -> Result<f32> {
+        let paint = GlyphPaint::new(gs, color_override);
+        let mut target = GlyphTarget::Paint {
+            pixmap,
+            paint: &paint,
+            clip: clip_mask,
+        };
+        self.layout_tj_array(&mut target, array, base_transform, gs, doc, font_cache)
+    }
+
+    fn layout_tj_array(
+        &self,
+        target: &mut GlyphTarget<'_>,
+        array: &[TextElement],
+        base_transform: Transform,
+        gs: &GraphicsState,
+        doc: &PdfDocument,
         font_cache: &HashMap<String, Arc<crate::fonts::FontInfo>>,
     ) -> Result<f32> {
         let mut current_gs = gs.clone();
@@ -961,17 +1080,7 @@ impl TextRasterizer {
         for element in array {
             match element {
                 TextElement::String(text) => {
-                    let advance = self.render_text(
-                        pixmap,
-                        text,
-                        base_transform,
-                        &current_gs,
-                        color_override,
-                        resources,
-                        doc,
-                        clip_mask,
-                        font_cache,
-                    )?;
+                    let advance = self.layout_text(target, text, base_transform, &current_gs, doc, font_cache)?;
                     current_gs.advance_text_matrix(advance);
                     total_advance += advance;
                 }
@@ -1125,17 +1234,15 @@ impl TextRasterizer {
     /// Returns the total horizontal advance in PDF points.
     fn render_unicode_text(
         &self,
-        pixmap: &mut Pixmap,
+        target: &mut GlyphTarget<'_>,
         text: &str,
         bytes: &[u8],
         font_info: Option<&crate::fonts::FontInfo>,
         font_id: Option<fontdb::ID>,
         font_data: Arc<Vec<u8>>,
         index: u32,
-        paint: &Paint,
         base_transform: Transform,
         gs: &GraphicsState,
-        clip_mask: Option<&tiny_skia::Mask>,
         pdf_font_name: &str,
         allow_fallback: bool,
         paint_missing_glyphs: bool,
@@ -1174,24 +1281,22 @@ impl TextRasterizer {
                     Self::warn_invalid_embedded_font(pdf_font_name);
                     if let Some((fb_id, fallback_data, fallback_index)) = self.load_font_data(pdf_font_name) {
                         return self.render_unicode_text(
-                            pixmap,
+                            target,
                             text,
                             bytes,
                             font_info,
                             Some(fb_id),
                             fallback_data,
                             fallback_index,
-                            paint,
                             base_transform,
                             gs,
-                            clip_mask,
                             pdf_font_name,
                             false,
                             false,
                         );
                     }
                 }
-                return self.render_text_fallback(pixmap, text, paint, base_transform, gs, clip_mask);
+                return self.render_text_fallback(target, text, base_transform, gs);
             }
             shaping_font = font_opt.unwrap();
             local_outline_bytes = outlineable_font_bytes(&font_data, index);
@@ -1231,7 +1336,7 @@ impl TextRasterizer {
                 error = %err,
                 "text shaping was rejected; using fallback text rendering"
             );
-            return self.render_text_fallback(pixmap, text, paint, base_transform, gs, clip_mask);
+            return self.render_text_fallback(target, text, base_transform, gs);
         }
         let info = buffer.glyph_infos();
         let pos = buffer.glyph_positions();
@@ -1437,14 +1542,7 @@ impl TextRasterizer {
                     let py = y_cursor + y_offset + paint_origin_dy + rise_y;
                     let glyph_transform = combined_base.pre_translate(px, py).pre_scale(scale * h_scale, scale);
 
-                    guarded_fill_path(
-                        pixmap,
-                        &path,
-                        paint,
-                        tiny_skia::FillRule::Winding,
-                        glyph_transform,
-                        clip_mask,
-                    );
+                    target.glyph(&path, glyph_transform, base_transform);
                 }
             } else {
                 // FALLBACK PATH: If primary font fails, use the cluster offset to find the original character
@@ -1503,14 +1601,7 @@ impl TextRasterizer {
                                     let cjk_transform = combined_base
                                         .pre_translate(px, py)
                                         .pre_scale(cjk_scale * h_scale, cjk_scale);
-                                    guarded_fill_path(
-                                        pixmap,
-                                        &cjk_path,
-                                        paint,
-                                        tiny_skia::FillRule::Winding,
-                                        cjk_transform,
-                                        clip_mask,
-                                    );
+                                    target.glyph(&cjk_path, cjk_transform, base_transform);
                                     has_outline = true;
 
                                     if let Some(adv) = cjk_face.glyph_hor_advance(cjk_glyph_id)
@@ -1535,7 +1626,7 @@ impl TextRasterizer {
                             let px = (x_cursor + x_offset + paint_origin_dx) * h_scale + rise_x;
                             let py = y_cursor + y_offset + paint_origin_dy + rise_y;
                             let transform = combined_base.pre_translate(px, py).pre_scale(scale * h_scale, scale);
-                            guarded_fill_path(pixmap, &path, paint, tiny_skia::FillRule::Winding, transform, clip_mask);
+                            target.glyph(&path, transform, base_transform);
                         }
                     }
                     let reason = if glyph_id == 0 {
@@ -1585,15 +1676,13 @@ impl TextRasterizer {
     /// Per PDF spec section 9.7.4, CIDToGIDMap maps CIDs to glyph indices in the TrueType font.
     fn render_cid_direct(
         &self,
-        pixmap: &mut Pixmap,
+        target: &mut GlyphTarget<'_>,
         bytes: &[u8],
         font_info: &crate::fonts::FontInfo,
         font_data: &[u8],
         index: u32,
-        paint: &Paint,
         base_transform: Transform,
         gs: &GraphicsState,
-        clip_mask: Option<&tiny_skia::Mask>,
     ) -> Result<f32> {
         let font_size = gs.font_size;
         let h_scale = gs.horizontal_scaling / 100.0;
@@ -1715,14 +1804,7 @@ impl TextRasterizer {
                         let px = (x_cursor + paint_origin_dx) * h_scale + rise_x;
                         let py = y_cursor + paint_origin_dy + rise_y;
                         let glyph_transform = combined_base.pre_translate(px, py).pre_scale(scale * h_scale, scale);
-                        guarded_fill_path(
-                            pixmap,
-                            &path,
-                            paint,
-                            tiny_skia::FillRule::Winding,
-                            glyph_transform,
-                            clip_mask,
-                        );
+                        target.glyph(&path, glyph_transform, base_transform);
                     }
                 }
             }
@@ -1778,14 +1860,12 @@ impl TextRasterizer {
     #[cfg(feature = "cjk-render-fallback")]
     fn render_substituted_cjk(
         &self,
-        pixmap: &mut Pixmap,
+        target: &mut GlyphTarget<'_>,
         bytes: &[u8],
         font_info: &crate::fonts::FontInfo,
         collection: crate::fonts::predefined_cidfont::CharacterCollection,
-        paint: &Paint,
         base_transform: Transform,
         gs: &GraphicsState,
-        clip_mask: Option<&tiny_skia::Mask>,
     ) -> Result<f32> {
         let face = match render_cjk_fallback_face() {
             Some(f) => f,
@@ -1890,14 +1970,7 @@ impl TextRasterizer {
                         let px = (x_cursor + paint_origin_dx) * h_scale + rise_x;
                         let py = y_cursor + paint_origin_dy + rise_y;
                         let glyph_transform = combined_base.pre_translate(px, py).pre_scale(scale * h_scale, scale);
-                        guarded_fill_path(
-                            pixmap,
-                            &path,
-                            paint,
-                            tiny_skia::FillRule::Winding,
-                            glyph_transform,
-                            clip_mask,
-                        );
+                        target.glyph(&path, glyph_transform, base_transform);
                         glyphs_painted += 1;
                     }
                 }
@@ -1961,12 +2034,10 @@ impl TextRasterizer {
     /// Returns the total horizontal advance in PDF points.
     fn render_text_fallback(
         &self,
-        pixmap: &mut Pixmap,
+        target: &mut GlyphTarget<'_>,
         text: &str,
-        paint: &Paint,
         base_transform: Transform,
         gs: &GraphicsState,
-        clip_mask: Option<&tiny_skia::Mask>,
     ) -> Result<f32> {
         let font_size = gs.font_size;
         let char_width = font_size * 0.6;
@@ -1981,17 +2052,16 @@ impl TextRasterizer {
             gs.text_matrix.e,
             gs.text_matrix.f,
         );
-        let transform = base_transform.pre_concat(text_transform);
+        // Th stretches the box along with the pitch; a negative Th mirrors it. ~keep
+        let transform = base_transform.pre_concat(text_transform).pre_scale(h_scale, 1.0);
 
         for c in text.chars() {
             if !c.is_whitespace() {
                 let mut pb = PathBuilder::new();
-                if let Some(rect) =
-                    tiny_skia::Rect::from_xywh(x_cursor * h_scale, 0.0, char_width * 0.8, font_size * 0.8)
-                {
+                if let Some(rect) = tiny_skia::Rect::from_xywh(x_cursor, 0.0, char_width * 0.8, font_size * 0.8) {
                     pb.push_rect(rect);
                     if let Some(path) = pb.finish() {
-                        guarded_fill_path(pixmap, &path, paint, tiny_skia::FillRule::Winding, transform, clip_mask);
+                        target.glyph(&path, transform, base_transform);
                     }
                 }
             }
@@ -2042,7 +2112,7 @@ pub(crate) fn tj_offset_shift(offset: f32, gs: &GraphicsState) -> f32 {
 /// When no font metrics are available we fall back to a half-em estimate per
 /// character — same constant `render_text_fallback` uses for the visible path,
 /// so the suppressed branch stays consistent with the painted branch.
-fn measure_text_bytes(bytes: &[u8], gs: &GraphicsState, font_info: Option<&crate::fonts::FontInfo>) -> f32 {
+pub(crate) fn measure_text_bytes(bytes: &[u8], gs: &GraphicsState, font_info: Option<&crate::fonts::FontInfo>) -> f32 {
     let font_size = gs.font_size;
     let h_scale = gs.horizontal_scaling / 100.0;
     let wmode = gs.text_wmode;
@@ -2214,19 +2284,22 @@ mod tests {
             ..Default::default()
         };
         let events = capture_events(|| {
+            let mut target = GlyphTarget::Paint {
+                pixmap: &mut pixmap,
+                paint: &GlyphPaint::new(&gs, None),
+                clip: None,
+            };
             rasterizer
                 .render_unicode_text(
-                    &mut pixmap,
+                    &mut target,
                     text,
                     text.as_bytes(),
                     None,
                     None,
                     Arc::new(font),
                     0,
-                    &Paint::default(),
                     Transform::from_scale(1.0, -1.0).post_translate(8.0, 64.0),
                     &gs,
-                    None,
                     "synthetic",
                     false,
                     false,
@@ -2466,7 +2539,7 @@ mod tests {
     /// All horizontal widths are 1000 (one full em) and vertical metrics
     /// default to [`VerticalMetrics::SPEC_DEFAULT`] (`w1y = -1000`,
     /// `v_x = 500`, `v_y = 880`). Identity-V signals vertical writing.
-    fn make_vertical_test_font() -> FontInfo {
+    pub(super) fn make_vertical_test_font() -> FontInfo {
         FontInfo {
             base_font: "TestVertical".to_string(),
             subtype: "Type0".to_string(),
@@ -2909,7 +2982,6 @@ mod tests {
 
         let rasterizer = TextRasterizer::with_fontdb(std::sync::Arc::new(fontdb::Database::new()));
         let mut pixmap = Pixmap::new(16, 16).expect("pixmap");
-        let paint = Paint::default();
         // CID 1200 (一) twice — default width 1000 ⇒ 10 pt per glyph at Tfs 10. ~keep
         let bytes: &[u8] = &[0x04, 0xB0, 0x04, 0xB0];
 
@@ -2918,16 +2990,19 @@ mod tests {
             gs.font_size = 10.0;
             gs.text_wmode = 0;
             gs.horizontal_scaling = h_scaling;
+            let mut target = GlyphTarget::Paint {
+                pixmap,
+                paint: &GlyphPaint::new(&gs, None),
+                clip: None,
+            };
             rasterizer
                 .render_substituted_cjk(
-                    pixmap,
+                    &mut target,
                     bytes,
                     &font,
                     crate::fonts::predefined_cidfont::CharacterCollection::AdobeJapan1,
-                    &paint,
                     Transform::identity(),
                     &gs,
-                    None,
                 )
                 .expect("substituted render")
         };
@@ -2942,3 +3017,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "text_rasterizer_tz_tests.rs"]
+mod tz_route_tests;
