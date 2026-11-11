@@ -506,6 +506,17 @@ fn text_runs_charge_the_operator_loop_only_in_a_knockout_group() {
 }
 
 #[test]
+fn paint_operation_count_starts_again_on_each_page() {
+    let doc = document("/Fm Do", false, Some("BT /F1 4 Tf 10 10 Td (a) Tj (a) Tj ET"));
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    renderer.knockout_resources.paint_operations = MAX_PAINT_OPERATIONS;
+    renderer
+        .render_page(&doc, 0)
+        .expect("a page does not inherit the paint count of an earlier page");
+    assert_eq!(renderer.knockout_resources.paint_operations, 2);
+}
+
+#[test]
 fn knockout_and_ordinary_groups_nested_either_way_charge_only_the_native_pass() {
     let fill = "0 g 0 0 10 10 re f ";
     let charges = |outer: bool| {
