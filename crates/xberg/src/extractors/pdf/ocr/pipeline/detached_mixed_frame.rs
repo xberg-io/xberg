@@ -438,6 +438,55 @@ mod tests {
         assert!(!page.place_detached_in_points());
     }
 
+    /// Only the zero render size guard refuses these placements: the preprocessing block agrees
+    /// with the processed frame and the boxes, so a zero render dimension is the only refusal.
+    #[test]
+    fn a_zero_render_dimension_refuses_detached_table_placement() {
+        let mut read = two_table_frame();
+        assert_eq!(
+            place_table_in_render(&mut read, (400, 800), (200., 400.)),
+            Some((1., 1.)),
+            "the matching render must place the tables"
+        );
+        for (original, render) in [
+            ((0usize, 800usize), (0u32, 800u32)),
+            ((400usize, 0usize), (400u32, 0u32)),
+        ] {
+            let mut read = two_table_frame();
+            read.metadata.image_preprocessing.as_mut().unwrap().original_dimensions = original.into();
+            let before = read.clone();
+            assert_eq!(
+                place_table_in_render(&mut read, render, (200., 400.)),
+                None,
+                "a zero render dimension must refuse placement"
+            );
+            assert_eq!(
+                serde_json::to_value(&read).unwrap(),
+                serde_json::to_value(&before).unwrap(),
+                "a refused placement must not rescale any table"
+            );
+        }
+    }
+
+    /// Only the table order guard refuses this placement: both boxes sit inside the processed
+    /// frame, the text is above both, and the refused placement leaves the read untouched.
+    #[test]
+    fn reversed_table_order_refuses_detached_table_placement() {
+        let mut read = two_table_frame();
+        read.tables.reverse();
+        let before = read.clone();
+        assert_eq!(
+            place_table_in_render(&mut read, (400, 800), (200., 400.)),
+            None,
+            "tables must be placed in vertical reading order"
+        );
+        assert_eq!(
+            serde_json::to_value(&read).unwrap(),
+            serde_json::to_value(&before).unwrap(),
+            "a refused placement must not rescale any table"
+        );
+    }
+
     #[test]
     fn general_detached_tables_move_from_the_recognition_frame_into_the_render() {
         let table = || Table {
