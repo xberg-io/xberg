@@ -158,21 +158,32 @@ fn every_separable_mode_matches_the_spec_over_a_partly_transparent_backdrop() {
 #[test]
 fn the_png_budget_charges_two_planes_for_each_spot_ink() {
     // 1000 x 1000 pixels, two inks: RGBA and PNG copies 12, CMYK 4, tints and alphas 2 * 2.
+    let side = 1000_u32;
+    let pixels = side as usize * side as usize;
     let names = vec!["InkA".to_string(), "InkB".to_string()];
+    let inks = names.len();
     let fixed = 256 * 1024;
-    let old_charge = 1_000_000 * (12 + 4 + 2) + fixed;
-    let new_charge = 1_000_000 * (12 + 4 + 4) + fixed;
-    let between = (old_charge + new_charge) / 2;
+    let planes_per_ink = 2; // a tint and an alpha lane per ink
+    let sidecar_per_pixel = 4 + planes_per_ink * inks;
+    let old_charge = pixels * (12 + 4 + inks) + fixed; // one lane per ink, before #2819
+    let live_charge = pixels * (12 + sidecar_per_pixel) + fixed;
+    let peak_charge = pixels * (12 + 2 * sidecar_per_pixel) + fixed; // one transient snapshot copy
     assert!(
-        !png_working_bytes_fit(1000, 1000, Some(&names), between),
+        !png_working_bytes_fit(side, side, Some(&names), 0, (old_charge + live_charge) / 2),
         "a limit between the one-plane and two-plane charge does not fit"
     );
-    assert!(png_working_bytes_fit(1000, 1000, Some(&names), new_charge));
-    assert!(!png_working_bytes_fit(1000, 1000, Some(&names), new_charge - 1));
-    let live = CmykSidecar::new(1000, 1000, names).image_buffer_bytes() as usize;
+    assert!(png_working_bytes_fit(side, side, Some(&names), 0, live_charge));
+    assert!(!png_working_bytes_fit(side, side, Some(&names), 0, live_charge - 1));
+    assert!(
+        !png_working_bytes_fit(side, side, Some(&names), 1, (live_charge + peak_charge) / 2),
+        "a limit between the live and peak charge does not fit: masks and knockout groups can hold one more copy of every plate"
+    );
+    assert!(png_working_bytes_fit(side, side, Some(&names), 1, peak_charge));
+    assert!(!png_working_bytes_fit(side, side, Some(&names), 1, peak_charge - 1));
+    let live = CmykSidecar::new(side, side, names).image_buffer_bytes() as usize;
     assert_eq!(
         live,
-        1_000_000 * (4 + 4),
+        pixels * (4 + planes_per_ink * inks),
         "the sidecar allocates what the budget charges"
     );
 }

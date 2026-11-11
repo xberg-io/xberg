@@ -327,6 +327,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Charge the transient copies of the spot-plate buffer to the PNG render budget.** (#2870)
+  Since #2819 the budget admitted only the live sidecar planes (`4 + 2·n` bytes per pixel), while a masked paint or knockout group can hold one more transient copy of every plate. A page with spot plates is now fitted against that peak, so a mask or knockout group can lower the admitted DPI; pages without spot plates are unchanged.
 - **(ocr): Exclude Unicode numerals from native-prose script evidence.**
   Numeric-only OCR reads do not claim retention of native prose, across all supported scripts.
 - **(ocr): Re-render only OCR page text as plain, and keep DOCX and native page text.** (#2839, #2902)

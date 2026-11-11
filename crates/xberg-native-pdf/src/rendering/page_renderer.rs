@@ -674,7 +674,11 @@ impl PageRenderer {
             .map(|budget| {
                 let resources = doc.get_page_resources(page_num)?;
                 let spots = self.page_sidecar_spots(doc, page_num, &resources);
-                dpi = fit_png_dpi(dpi, &budget, spots.as_deref(), dimensions_at_dpi)?;
+                // A mask or knockout group can hold one more copy of every plate than
+                // the live sidecar; there is no cheap mask-presence detector, so charge
+                // that peak whenever spot plates are admitted.
+                let transient_copies = usize::from(spots.is_some());
+                dpi = fit_png_dpi(dpi, &budget, spots.as_deref(), transient_copies, dimensions_at_dpi)?;
                 Ok::<_, Error>((resources, spots))
             })
             .transpose()?;
@@ -8777,11 +8781,12 @@ fn fit_png_dpi(
     requested: u32,
     budget: &PngRenderBudget,
     spot_names: Option<&[String]>,
+    transient_copies: usize,
     dimensions: impl Fn(u32) -> (u32, u32),
 ) -> Result<u32> {
     let fits = |dpi| {
         let (width, height) = dimensions(dpi);
-        png_working_bytes_fit(width, height, spot_names, budget.max_working_bytes)
+        png_working_bytes_fit(width, height, spot_names, transient_copies, budget.max_working_bytes)
     };
     if fits(requested) {
         return Ok(requested);
@@ -8812,13 +8817,22 @@ fn fit_png_dpi(
     Ok(low)
 }
 
-fn png_working_bytes_fit(width: u32, height: u32, spot_names: Option<&[String]>, limit: usize) -> bool {
+fn png_working_bytes_fit(
+    width: u32,
+    height: u32,
+    spot_names: Option<&[String]>,
+    transient_copies: usize,
+    limit: usize,
+) -> bool {
     // The canvas and PNG demultiply copy are both RGBA. Reserve the same per-pixel
     // and fixed PNG allowance as Core image encoding, plus the CMYK plane and two planes per spot ink.
+    // A masked paint or knockout group can hold one more transient copy of every
+    // plane than the live sidecar, so the charge admits that peak.
     const RGBA_AND_PNG_BYTES_PER_PIXEL: usize = 12;
     const PNG_FIXED_OVERHEAD: usize = 256 * 1024;
     let sidecar_bytes_per_pixel = spot_names.map_or(Some(0), |names| names.len().checked_mul(2)?.checked_add(4));
     let charge = sidecar_bytes_per_pixel
+        .and_then(|bytes| transient_copies.checked_add(1)?.checked_mul(bytes))
         .and_then(|bytes| RGBA_AND_PNG_BYTES_PER_PIXEL.checked_add(bytes))
         .and_then(|bytes| (width as usize).checked_mul(height as usize)?.checked_mul(bytes))
         .and_then(|bytes| bytes.checked_add(PNG_FIXED_OVERHEAD));
