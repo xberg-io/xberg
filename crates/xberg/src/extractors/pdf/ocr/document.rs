@@ -446,8 +446,10 @@ impl<'k> MisreadCandidates<'k> {
             (0, self.by_length.len())
         } else {
             (
-                self.by_length.partition_point(|(read, _)| *read < length && !reaches(*read)),
-                self.by_length.partition_point(|(read, _)| *read <= length || reaches(*read)),
+                self.by_length
+                    .partition_point(|(read, _)| *read < length && !reaches(*read)),
+                self.by_length
+                    .partition_point(|(read, _)| *read <= length || reaches(*read)),
             )
         };
         let mut best: Option<(f64, usize, usize)> = None;

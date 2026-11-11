@@ -2256,12 +2256,18 @@ fn each_native_row_takes_its_best_misread_not_the_first() {
     let mut read = base.clone();
     read.splice(3..4, [x.clone(), y.clone()]);
     let merged = merged_page(&native.join("\n"), &read.join("\n"), None);
-    assert!(merged.lines().any(|line| line == b) && merged.lines().any(|line| line == a), "{merged:?}");
+    assert!(
+        merged.lines().any(|line| line == b) && merged.lines().any(|line| line == a),
+        "{merged:?}"
+    );
     assert!(
         !merged.lines().any(|line| line == y),
         "y is the misread of B and leaves with it: {merged:?}"
     );
-    assert!(!merged.lines().any(|line| line == x), "x is the misread of A: {merged:?}");
+    assert!(
+        !merged.lines().any(|line| line == x),
+        "x is the misread of A: {merged:?}"
+    );
 }
 
 /// Two pages hold the same OCR row and page 2 misreads a native row with it: only the row of
@@ -2288,7 +2294,11 @@ fn a_misread_row_leaves_only_the_page_it_was_matched_on() {
             .filter(|element| element.page == Some(page) && element.text == misread)
             .count()
     };
-    assert_eq!(rows_of(1), 1, "the row of page 1 stays: the misread was matched on page 2");
+    assert_eq!(
+        rows_of(1),
+        1,
+        "the row of page 1 stays: the misread was matched on page 2"
+    );
     assert_eq!(rows_of(2), 0, "the misread row of page 2 leaves");
 }
 
@@ -2324,7 +2334,10 @@ fn similarity_tests_of(native: &str, read: &str) -> (usize, String) {
 #[test]
 fn rows_that_share_no_words_run_no_similarity_test() {
     for count in [300, 600] {
-        let (native, read) = (tagged_rows(count, "native", "cm3"), tagged_rows(count, "scanned", "cm3"));
+        let (native, read) = (
+            tagged_rows(count, "native", "cm3"),
+            tagged_rows(count, "scanned", "cm3"),
+        );
         let (calls, _) = similarity_tests_of(&native, &read);
         assert_eq!(calls, 0, "{count} rows ran {calls} similarity tests");
     }
@@ -2336,10 +2349,16 @@ fn rows_that_share_no_words_run_no_similarity_test() {
 #[test]
 fn misread_rows_run_about_one_similarity_test_each() {
     let count = 300;
-    let (native, read) = (tagged_rows(count, "native", "cm3"), tagged_rows(count, "native", "cm\u{2019}"));
+    let (native, read) = (
+        tagged_rows(count, "native", "cm3"),
+        tagged_rows(count, "native", "cm\u{2019}"),
+    );
     let (calls, merged) = similarity_tests_of(&native, &read);
     assert!(calls <= 2 * count, "{count} rows ran {calls} similarity tests");
-    assert_eq!(merged, native, "each misread row leaves and each native row prints once");
+    assert_eq!(
+        merged, native,
+        "each misread row leaves and each native row prints once"
+    );
 }
 
 /// The OCR text holds a misread row twice, before and after the rows it shares with the native
