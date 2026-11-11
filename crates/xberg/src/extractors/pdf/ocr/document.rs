@@ -1692,19 +1692,13 @@ fn rows_the_ocr_text_lacks_too<'a>(
     }
     let joined = rows.join("\n");
     let from_text = layer_lines_absent_from_ocr(&joined, &unboxed).map_or_else(Vec::new, |found| found.misread);
-    // A row of the unboxed text names its line in `ocr_text`; a line both checks name leaves the
-    // text once. ~keep
+    // A row of the unboxed text names its line in `ocr_text`. The geometry names boxed lines
+    // only, so no line is named twice. ~keep
     let mut misread = geometry.misread;
-    let named: ahash::AHashSet<usize> = misread.iter().filter_map(|row| row.line).collect();
-    misread.extend(
-        from_text
-            .into_iter()
-            .map(|row| MisreadOcrRow {
-                line: row.line.and_then(|at| unboxed_lines.get(at).copied()),
-                ..row
-            })
-            .filter(|row| row.line.is_none_or(|line| !named.contains(&line))),
-    );
+    misread.extend(from_text.into_iter().map(|row| MisreadOcrRow {
+        line: row.line.and_then(|at| unboxed_lines.get(at).copied()),
+        ..row
+    }));
     Some(RowsToRestore { rows, misread })
 }
 /// The line of each OCR row of `boxes` in the page's OCR text: the n-th row with a key is the n-th
