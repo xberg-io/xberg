@@ -276,6 +276,12 @@ const MIN_PEELED_FULL_WIDTH_LINES: usize = 2;
 // across a column cut. A row's two cells are separated by the gutter (several ems); a
 // legend's own font runs abut at normal word/kern spacing.
 const MAX_INTRA_LINE_GAP_EM: f32 = 1.0;
+// A span at most this fraction of a line's font size is a script mark, and it may sit in the
+// line's gap within this slack of the gap's edges.
+const SCRIPT_FONT_RATIO: f32 = 0.8;
+const SCRIPT_GAP_SLACK_PTS: f32 = 1.0;
+// What is left of the gap once the script is taken out is at most a word space or two.
+const SCRIPT_GAP_REMAINDER_EM: f32 = 0.75;
 // A run narrower than this many ems is a label, a marker or a cell rather than a prose line.
 const LABEL_RUN_MAX_EM: f32 = 8.0;
 const MIN_LABEL_VALUE_ROWS: usize = 3;
@@ -291,6 +297,13 @@ const MIN_STRADDLING_INK_PTS: f32 = 60.0;
 /// returned by this function is therefore a genuinely CONTINUOUS run of ink, which is what
 /// both `peel_full_width_line_bands` and `partition_lines_at` need "line" to mean. ~keep
 fn group_indices_into_lines(all_spans: &[TextSpan], indices: &[usize]) -> Vec<Vec<usize>> {
+    group_lines(all_spans, indices, false)
+}
+
+/// `group_indices_into_lines`, optionally reading a gap that a script mark fills as part of the
+/// line (`bridge_scripts`). Only the straddling-line guard asks for it: bridging everywhere moves
+/// the line bands and column assignments of unrelated pages.
+fn group_lines(all_spans: &[TextSpan], indices: &[usize], bridge_scripts: bool) -> Vec<Vec<usize>> {
     if let Some(lines) = source_stepped_prose_lines(all_spans, indices) {
         return lines;
     }
@@ -325,7 +338,16 @@ fn group_indices_into_lines(all_spans: &[TextSpan], indices: &[usize]) -> Vec<Ve
             if let Some(&last) = run.last() {
                 let gap = all_spans[index].bbox.left() - run_right;
                 let max_font = all_spans[last].font_size.max(all_spans[index].font_size);
-                if gap > max_font * MAX_INTRA_LINE_GAP_EM {
+                if gap > max_font * MAX_INTRA_LINE_GAP_EM
+                    && !(bridge_scripts
+                        && script_fills_gap(
+                            all_spans,
+                            indices,
+                            (run_right, all_spans[index].bbox.left()),
+                            all_spans[last].bbox.y,
+                            max_font,
+                        ))
+                {
                     lines.push(std::mem::take(&mut run));
                     run_right = f32::MIN;
                 }
@@ -338,6 +360,29 @@ fn group_indices_into_lines(all_spans: &[TextSpan], indices: &[usize]) -> Vec<Ve
         }
     }
     lines
+}
+
+/// Whether a script-sized span (a superscript or subscript, which sorts into a `y` bucket of
+/// its own) sits in the horizontal `gap` beside a line at `baseline_y` set in `font_size`.
+/// Without it the gap reads as a break in the line, because the script that fills it was
+/// bucketed away: an inline equation's `e^{i theta}` then tears the sentence around it in
+/// two, and a column cut can run through the middle of the paragraph. GH#2925. ~keep
+fn script_fills_gap(
+    all_spans: &[TextSpan],
+    indices: &[usize],
+    gap: (f32, f32),
+    baseline_y: f32,
+    font_size: f32,
+) -> bool {
+    indices.iter().any(|&i| {
+        let span = &all_spans[i];
+        span.font_size > 0.0
+            && span.font_size <= font_size * SCRIPT_FONT_RATIO
+            && (span.bbox.y - baseline_y).abs() <= font_size
+            && span.bbox.left() >= gap.0 - SCRIPT_GAP_SLACK_PTS
+            && span.bbox.right() <= gap.1 + SCRIPT_GAP_SLACK_PTS
+            && (gap.1 - gap.0) - span.bbox.width <= font_size * SCRIPT_GAP_REMAINDER_EM
+    })
 }
 
 const MIN_STEPPED_PROSE_LINES: usize = 4;
@@ -1827,7 +1872,7 @@ impl XYCutStrategy {
     }
 
     fn straddling_line_count(&self, all_spans: &[TextSpan], indices: &[usize], split_x: f32) -> usize {
-        group_indices_into_lines(all_spans, indices)
+        group_lines(all_spans, indices, true)
             .iter()
             .filter(|line| {
                 let (left_ink, right_ink) = line.iter().fold((0.0f32, 0.0f32), |(left, right), &i| {
@@ -2796,6 +2841,36 @@ mod tests {
             mirrored: false,
             page_rotation_applied: 0,
         }
+    }
+
+    /// GH#2925: a superscript sorts into a `y` bucket of its own, so the gap it fills read as a
+    /// break and an inline equation tore the sentence around it into two lines.
+    #[test]
+    fn a_script_filling_a_gap_keeps_the_line_whole_gh2925() {
+        let spans = vec![
+            make_span_text(59.0, 643.4, 100.0, 10.0, "Where e", 10.0),
+            make_span_text(162.0, 647.0, 7.0, 7.0, "iθ", 7.0),
+            make_span_text(172.0, 643.4, 100.0, 10.0, "symbolize the amplitude", 10.0),
+        ];
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        let lines = group_lines(&spans, &indices, true);
+        assert!(
+            lines.iter().any(|line| line.contains(&0) && line.contains(&2)),
+            "the sentence must stay one line: {lines:?}"
+        );
+
+        let without_script = vec![spans[0].clone(), spans[2].clone()];
+        let lines = group_lines(&without_script, &[0, 1], true);
+        assert_eq!(
+            lines.len(),
+            2,
+            "a gap with no script in it still breaks the line: {lines:?}"
+        );
+        let lines = group_lines(&spans, &indices, false);
+        assert!(
+            !lines.iter().any(|line| line.contains(&0) && line.contains(&2)),
+            "ordinary line grouping is unchanged: {lines:?}"
+        );
     }
 
     #[test]

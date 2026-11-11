@@ -329,6 +329,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): A sentence no longer reads out of order around an inline equation.** (GH#2925)
+  A superscript sits in a line bucket of its own, so the gap it fills tore the line in two and let a column cut run through the paragraph; the straddling-line guard now reads such a gap as part of the line.
 - **(go): Ship usable static-link flags in the linux-x86_64 and linux-aarch64 Go release archives.** (GH#2988)
   `native-static-libs.txt` no longer ends with a terminal colour escape that cgo rejected, and the glibc-floor archive lists `-lc++ -lc++abi` instead of `-lstdc++`, matching the zig-built C++ objects.
 - **(ocr): Keep Khmer number recovery available after bounded source declines.** (#2905)
