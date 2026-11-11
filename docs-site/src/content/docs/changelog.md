@@ -331,6 +331,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Keep Khmer number recovery available after bounded source declines.** (#2905)
+  Completed declines charge the work already done, leaving room to verify supported pages later in the PDF.
+  Cancellation and failures whose work cannot be measured still retain their reservation.
 - **(djot): Preserve straight quotes, apostrophes, and runs of dots or dashes in marked rows.** (#2913)
   Djot readers show the row punctuation as written.
 - **(djot): Preserve block-like text in rendered paragraphs, lists, and OCR output.** (#2891)
