@@ -2584,14 +2584,15 @@ pub(super) fn script_stack_members<T: std::borrow::Borrow<SegmentData>>(segments
         .collect()
 }
 
-/// Moves the members of each nested script stack to directly after their base: the raised members
-/// in x order, then the lowered ones, so each side reads as one run.
+/// Moves the members of each nested script stack to directly after their base: the members of the
+/// base in x order, each followed by the members that hang from it, so each script of one base reads
+/// as one run.
 ///
 /// A member sits off its base's line, so reading order leaves it among the neighbouring rows. The
 /// page is already ordered and its gap statistics measured, so the move changes only which runs
 /// the paragraph grouper and the markup pass see next to the base. A page with a rotated run is left as is.
 fn place_script_stacks_after_bases(segments: Vec<SegmentData>) -> Vec<SegmentData> {
-    use xberg_native_pdf::document::{StackSpan, script_stacks};
+    use xberg_native_pdf::document::{StackSpan, script_stacks, stack_reading_order};
 
     if segments.iter().any(|segment| !segment.is_unrotated()) {
         return segments;
@@ -2612,10 +2613,9 @@ fn place_script_stacks_after_bases(segments: Vec<SegmentData>) -> Vec<SegmentDat
     let after_base: std::collections::HashMap<usize, Vec<usize>> = script_stacks(&spans)
         .into_iter()
         .map(|(base, members)| {
-            let (raised, lowered): (Vec<usize>, Vec<usize>) = members
-                .into_iter()
-                .partition(|&member| spans[member].baseline > spans[base].baseline);
-            (base, [raised, lowered].concat())
+            let member_spans: Vec<StackSpan<'_>> = members.iter().map(|&member| spans[member]).collect();
+            let order = stack_reading_order(&spans[base], &member_spans);
+            (base, order.into_iter().map(|i| members[i]).collect())
         })
         .collect();
     drop(spans);
@@ -5305,9 +5305,15 @@ struct TableCoverage {
     /// Each cell's alphanumeric runs, kept apart per cell, so a piece is tested against one cell
     /// and never across the seam of two.
     cell_runs: Vec<Vec<TextRun>>,
+    /// For each normalized word, the rows whose cells hold it, so a segment's words meet in one row
+    /// by walking the shortest list instead of every row.
+    word_rows: ahash::AHashMap<String, Vec<u32>>,
+    /// For each run, every place a cell has it: the cell in `cell_runs` and the position in it, so a
+    /// piece is tested only where its first run occurs instead of in every cell.
+    run_index: ahash::AHashMap<String, Vec<(u32, u32)>>,
 }
 
-/// Normalized length, in characters, at which [`TableCoverage::carries`] stops matching a segment against the
+/// Normalized length, in characters, at which [`TableCoverage::carries_with`] stops matching a segment against the
 /// whole table and matches it against one row. A shorter run (an item number, a price) is only
 /// ever carried by whole cell words: its digits also occur, by accident, across the seam of two
 /// neighbouring numeric cells (#2171). A longer one is only ever carried by one row: every word of
@@ -5341,6 +5347,21 @@ impl TableCoverage {
             words.extend(this_row_words.iter().cloned());
             row_words.push(this_row_words);
         }
+        let mut word_rows: ahash::AHashMap<String, Vec<u32>> = ahash::AHashMap::new();
+        for (row, row_words) in row_words.iter().enumerate() {
+            for word in row_words {
+                word_rows.entry(word.clone()).or_default().push(row as u32);
+            }
+        }
+        let mut run_index: ahash::AHashMap<String, Vec<(u32, u32)>> = ahash::AHashMap::new();
+        for (cell, runs) in cell_runs.iter().enumerate() {
+            for (position, run) in runs.iter().enumerate() {
+                run_index
+                    .entry(run.run.clone())
+                    .or_default()
+                    .push((cell as u32, position as u32));
+            }
+        }
         Self {
             bbox,
             cell_text: row_texts.concat(),
@@ -5348,6 +5369,8 @@ impl TableCoverage {
             row_words,
             words,
             cell_runs,
+            word_rows,
+            run_index,
         }
     }
 
@@ -5356,7 +5379,10 @@ impl TableCoverage {
     /// longer one when one row holds it, either as a run inside that row's cells or as every word a whole cell word of
     /// that row. A run is not matched against the whole table's concatenated glyphs, which lets
     /// digits straddling unrelated cells stand in for it.
-    fn carries(&self, text: &str) -> bool {
+    ///
+    /// `row_holds` says whether one row holds the normalized text as a substring, so a caller that
+    /// has read the rows once can answer it without reading them again.
+    fn carries_with(&self, text: &str, row_holds: impl FnOnce(&str) -> bool) -> bool {
         let normalized = normalize_for_table_coverage(text);
         if normalized.is_empty() {
             return true;
@@ -5369,16 +5395,41 @@ impl TableCoverage {
         if normalized.chars().count() < MIN_CROSS_CELL_RUN_GLYPHS {
             // A marker or a sign splits one printed cell into several segments while the grid holds
             // it whole, so a piece made of whole runs of one cell is that cell's text. ~keep
-            return text_words.iter().all(|word| self.words.contains(word)) || {
-                let piece = alphanumeric_runs(text);
-                self.cell_runs.iter().any(|runs| runs_spell(runs, &piece))
-            };
+            return text_words.iter().all(|word| self.words.contains(word))
+                || self.cell_spells(&alphanumeric_runs(text));
         }
-        self.rows.iter().any(|row| row.contains(&normalized))
-            || self
-                .row_words
-                .iter()
-                .any(|row| text_words.iter().all(|word| row.contains(word)))
+        row_holds(&normalized) || self.row_holds_every_word(&text_words)
+    }
+
+    /// Whether one cell's runs contain `piece` as consecutive whole runs, as a cell's own runs
+    /// would, read through the places the piece's first run occurs.
+    fn cell_spells(&self, piece: &[TextRun]) -> bool {
+        let Some(first) = piece.first() else {
+            return false;
+        };
+        self.run_index.get(&first.run).is_some_and(|places| {
+            places.iter().any(|&(cell, position)| {
+                let cell = &self.cell_runs[cell as usize][position as usize..];
+                cell.len() >= piece.len() && runs_match(cell, piece)
+            })
+        })
+    }
+
+    /// Whether one row holds every word, read through the shortest list of rows that hold one.
+    fn row_holds_every_word(&self, words: &[String]) -> bool {
+        let mut shortest: Option<&Vec<u32>> = None;
+        for word in words {
+            let Some(rows) = self.word_rows.get(word) else {
+                return false;
+            };
+            if shortest.is_none_or(|best| rows.len() < best.len()) {
+                shortest = Some(rows);
+            }
+        }
+        shortest.is_some_and(|rows| {
+            rows.iter()
+                .any(|&row| words.iter().all(|word| self.row_words[row as usize].contains(word)))
+        })
     }
 }
 
@@ -5430,16 +5481,19 @@ fn alphanumeric_runs(text: &str) -> Vec<TextRun> {
 /// Whether consecutive whole runs of one cell, joined by the same separators, are exactly
 /// `piece`. A piece the cell never broke at that sign, such as `COVID-19` against `COVID 19`,
 /// is not the cell's text.
+#[cfg(test)]
 fn runs_spell(cell: &[TextRun], piece: &[TextRun]) -> bool {
-    !piece.is_empty()
-        && cell.windows(piece.len()).any(|window| {
-            window
-                .iter()
-                .zip(piece)
-                .enumerate()
-                .all(|(index, (cell_run, piece_run))| {
-                    cell_run.run == piece_run.run && (index == 0 || cell_run.separator == piece_run.separator)
-                })
+    !piece.is_empty() && cell.windows(piece.len()).any(|window| runs_match(window, piece))
+}
+
+/// Whether `window` starts with `piece`'s runs, joined by the same separators.
+fn runs_match(window: &[TextRun], piece: &[TextRun]) -> bool {
+    window
+        .iter()
+        .zip(piece)
+        .enumerate()
+        .all(|(index, (cell_run, piece_run))| {
+            cell_run.run == piece_run.run && (index == 0 || cell_run.separator == piece_run.separator)
         })
 }
 
@@ -5531,6 +5585,13 @@ fn segment_is_carried<'t>(seg: &SegmentData, tables: impl IntoIterator<Item = &'
 
 /// Whether a table covers at least half of a segment and carries its text.
 fn covers_and_carries(seg: &SegmentData, table: &TableCoverage) -> bool {
+    covers_and_carries_with(seg, table, |normalized| {
+        table.rows.iter().any(|row| row.contains(normalized))
+    })
+}
+
+/// [`covers_and_carries`], with `row_holds` answering [`TableCoverage::carries_with`].
+fn covers_and_carries_with(seg: &SegmentData, table: &TableCoverage, row_holds: impl FnOnce(&str) -> bool) -> bool {
     let seg_area = seg.width * seg.height;
     let seg_text = seg.text.trim();
     if seg_area <= 0.0 || seg_text.is_empty() {
@@ -5545,40 +5606,130 @@ fn covers_and_carries(seg: &SegmentData, table: &TableCoverage) -> bool {
         return false;
     }
     let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
-    inter_area / seg_area >= 0.5 && table.carries(seg_text)
+    if inter_area / seg_area < 0.5 {
+        return false;
+    }
+    #[cfg(test)]
+    CARRY_CHECKS.with(|checks| checks.set(checks.get() + 1));
+    table.carries_with(seg_text, row_holds)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times a table's grid was read for a segment, to bound the page split's work.
+    static CARRY_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The carrier of each page segment, as a position in `holders`. A run of neighbouring segments goes to
 /// the first table that covers and carries each of them and holds a word containing each seam, so no
-/// carrier splits one printed copy; any other segment goes to its first covering table.
+/// carrier splits one printed copy; any other segment goes to its first covering table. The page's
+/// seams and its long segments are each searched in every table's text once, and a table's grid is
+/// read for a segment only where the run or the next seam can still use it.
 fn occurrence_carriers(segments: &[SegmentData], holders: &[(&TableCoverage, &WordCounts)]) -> Vec<Option<usize>> {
     let mut carriers = Vec::with_capacity(segments.len());
     let mut run_start = 0;
+    let mut run_first: Option<usize> = None;
     let mut run: Vec<usize> = Vec::new();
+    let mut joined_any = false;
     let words: Vec<Vec<String>> = segments
         .iter()
         .map(|segment| word_sequence([segment.text.as_str()]))
         .collect();
     let seam_holders = seam_holders(&words, holders);
+    let row_hits = RowHits::new(segments, holders);
+    let mut stamp = vec![usize::MAX; holders.len()];
+    let mut value = vec![false; holders.len()];
     for (index, segment) in segments.iter().enumerate() {
-        let own: Vec<usize> = (0..holders.len())
-            .filter(|&holder| covers_and_carries(segment, holders[holder].0))
-            .collect();
+        let mut covers = |holder: usize| -> bool {
+            if stamp[holder] != index {
+                stamp[holder] = index;
+                value[holder] = covers_and_carries_with(segment, holders[holder].0, |normalized| {
+                    row_hits.holds(holder, normalized, holders[holder].0)
+                });
+            }
+            value[holder]
+        };
         let joined: Vec<usize> = run
             .iter()
             .copied()
-            .filter(|holder| own.contains(holder) && seam_holders[index].contains(holder))
+            .filter(|&holder| seam_holders[index].binary_search(&holder).is_ok() && covers(holder))
             .collect();
         if joined.is_empty() {
-            carriers.extend(std::iter::repeat_n(run.first().copied(), index - run_start));
+            let finished = if joined_any { run.first().copied() } else { run_first };
+            carriers.extend(std::iter::repeat_n(finished, index - run_start));
             run_start = index;
-            run = own;
+            joined_any = false;
+            // The first covering table is the carrier of a run that never joins, so only that one is
+            // searched for. The tables that can join the next segment are the only others kept. ~keep
+            run_first = (0..holders.len()).find(|&holder| covers(holder));
+            run = match seam_holders.get(index + 1) {
+                Some(next) if !next.is_empty() => next.iter().copied().filter(|&holder| covers(holder)).collect(),
+                _ => Vec::new(),
+            };
         } else {
             run = joined;
+            joined_any = true;
         }
     }
-    carriers.extend(std::iter::repeat_n(run.first().copied(), segments.len() - run_start));
+    let finished = if joined_any { run.first().copied() } else { run_first };
+    carriers.extend(std::iter::repeat_n(finished, segments.len() - run_start));
     carriers
+}
+
+/// Which of the page's long segments each table's rows hold, found by one automaton over the
+/// segments' normalized texts run over every row once, so a long segment is not searched for in every
+/// row of every table.
+struct RowHits {
+    ids: ahash::AHashMap<String, usize>,
+    held: Vec<ahash::AHashSet<usize>>,
+    found: bool,
+}
+
+impl RowHits {
+    fn new(segments: &[SegmentData], holders: &[(&TableCoverage, &WordCounts)]) -> Self {
+        let mut ids: ahash::AHashMap<String, usize> = ahash::AHashMap::new();
+        let mut patterns: Vec<String> = Vec::new();
+        for segment in segments {
+            let normalized = normalize_for_table_coverage(segment.text.trim());
+            if normalized.chars().count() >= MIN_CROSS_CELL_RUN_GLYPHS && !ids.contains_key(&normalized) {
+                ids.insert(normalized.clone(), patterns.len());
+                patterns.push(normalized);
+            }
+        }
+        // The build fails only past the automaton's size limits; then every row is searched as it
+        // was before, one segment at a time. ~keep
+        let Some(automaton) = (!patterns.is_empty())
+            .then(|| aho_corasick::AhoCorasick::new(&patterns).ok())
+            .flatten()
+        else {
+            return Self {
+                ids: ahash::AHashMap::new(),
+                held: Vec::new(),
+                found: false,
+            };
+        };
+        let held = holders
+            .iter()
+            .map(|(table, _)| {
+                table
+                    .rows
+                    .iter()
+                    .flat_map(|row| automaton.find_overlapping_iter(row.as_str()))
+                    .map(|found| found.pattern().as_usize())
+                    .collect()
+            })
+            .collect();
+        Self { ids, held, found: true }
+    }
+
+    fn holds(&self, holder: usize, normalized: &str, table: &TableCoverage) -> bool {
+        if !self.found {
+            return table.rows.iter().any(|row| row.contains(normalized));
+        }
+        self.ids
+            .get(normalized)
+            .is_some_and(|id| self.held[holder].contains(id))
+    }
 }
 
 /// For each segment, the positions in `holders` of the tables that hold a word containing its seam: the
