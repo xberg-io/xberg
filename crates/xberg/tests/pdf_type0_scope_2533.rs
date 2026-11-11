@@ -12,7 +12,7 @@ mod marker_probe;
 #[path = "pdf_type0_scope_2533/negative.rs"]
 mod negative;
 
-use lopdf::{Document, Object, Stream, dictionary};
+use lopdf::{Document, Object, ObjectId, Stream, dictionary};
 use sha2::{Digest, Sha256};
 use xberg::core::config::OutputFormat;
 use xberg::types::ExtractionMethod;
@@ -35,6 +35,39 @@ enum Mode {
     Automatic,
     Forced,
     Selected(u32),
+}
+
+/// A Type0 font whose `ToUnicode` leaves CID 0x44 without a Unicode value, the marker source the
+/// covered-layer tests use; each shown code becomes one replacement character. ~keep
+fn marker_font(pdf: &mut Document) -> ObjectId {
+    let program = include_bytes!("../../xberg-native-pdf/tests/fixtures/fonts/DejaVuSansMono.ttf");
+    assert_eq!(
+        hex::encode(Sha256::digest(program)),
+        "0f5db4f1749979d961019838b160bec74abdf7f9eca69553fe1aa856bbff49a4"
+    );
+    let file = pdf.add_object(Stream::new(
+        dictionary! { "Length1" => program.len() as i64 },
+        program.to_vec(),
+    ));
+    let descriptor = pdf.add_object(dictionary! {
+        "Type" => "FontDescriptor", "FontName" => "ABCDEF+Probe", "Flags" => 4, "FontFile2" => file,
+        "FontBBox" => vec![0.into(), (-200).into(), 1000.into(), 800.into()],
+        "ItalicAngle" => 0, "Ascent" => 800, "Descent" => -200, "CapHeight" => 700, "StemV" => 80,
+    });
+    let cid = pdf.add_object(dictionary! {
+        "Type" => "Font", "Subtype" => "CIDFontType2", "BaseFont" => "ABCDEF+Probe",
+        "CIDSystemInfo" => dictionary! { "Registry" => Object::string_literal("Adobe"),
+            "Ordering" => Object::string_literal("Identity"), "Supplement" => 0 },
+        "FontDescriptor" => descriptor, "DW" => 600, "CIDToGIDMap" => "Identity",
+    });
+    let cmap = b"begincmap /CMapName /Probe def /CMapType 2 def \
+        1 begincodespacerange <0000> <FFFF> endcodespacerange \
+        1 beginbfchar <0044> <0000> endbfchar endcmap";
+    let unicode = pdf.add_object(Stream::new(dictionary! {}, cmap.to_vec()));
+    pdf.add_object(
+        dictionary! { "Type" => "Font", "Subtype" => "Type0", "BaseFont" => "ABCDEF+Probe",
+        "Encoding" => "Identity-H", "DescendantFonts" => vec![cid.into()], "ToUnicode" => unicode },
+    )
 }
 
 fn pinned_source() -> Vec<u8> {

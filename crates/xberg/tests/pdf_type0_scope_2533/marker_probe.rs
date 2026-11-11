@@ -103,37 +103,6 @@ fn raster_stream() -> Stream {
     )
 }
 
-/// A Type0 font whose `ToUnicode` leaves CID 0x44 without a Unicode value, the marker source the
-/// covered-layer tests use; each shown code becomes one replacement character.
-fn marker_font(document: &mut Document) -> lopdf::ObjectId {
-    let program = include_bytes!("../../../xberg-native-pdf/tests/fixtures/fonts/DejaVuSansMono.ttf");
-    let file = document.add_object(Stream::new(
-        dictionary! { "Length1" => program.len() as i64 },
-        program.to_vec(),
-    ));
-    let descriptor = document.add_object(dictionary! {
-        "Type" => "FontDescriptor", "FontName" => "ABCDEF+Probe", "Flags" => 4, "FontFile2" => file,
-        "FontBBox" => vec![0.into(), (-200).into(), 1000.into(), 800.into()],
-        "ItalicAngle" => 0, "Ascent" => 800, "Descent" => -200, "CapHeight" => 700, "StemV" => 80,
-    });
-    let cid = document.add_object(dictionary! {
-        "Type" => "Font", "Subtype" => "CIDFontType2", "BaseFont" => "ABCDEF+Probe",
-        "CIDSystemInfo" => dictionary! { "Registry" => Object::string_literal("Adobe"),
-            "Ordering" => Object::string_literal("Identity"), "Supplement" => 0 },
-        "FontDescriptor" => descriptor, "DW" => 600, "CIDToGIDMap" => "Identity",
-    });
-    let cmap = b"begincmap /CMapName /Probe def /CMapType 2 def \
-        1 begincodespacerange <0000> <FFFF> endcodespacerange \
-        1 beginbfchar <0044> <0000> endbfchar endcmap";
-    // The shown marker code stays out of the map: a miss against a present CMap is what keeps a
-    // glyph without a Unicode value on this extraction route.
-    let unicode = document.add_object(Stream::new(dictionary! {}, cmap.to_vec()));
-    document.add_object(
-        dictionary! { "Type" => "Font", "Subtype" => "Type0", "BaseFont" => "ABCDEF+Probe",
-        "Encoding" => "Identity-H", "DescendantFonts" => vec![cid.into()], "ToUnicode" => unicode },
-    )
-}
-
 /// Two scanned pages. Page 1 holds an invisible partial layer, so the probe reads its raster.
 /// Page 2 holds an invisible complete layer whose extra words are set beside glyphs without a
 /// Unicode value; the marker layer covers its picture but the probe never reads it.
@@ -144,7 +113,7 @@ fn scanned_pages() -> Vec<u8> {
     let font = document.add_object(dictionary! {
         "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica", "Encoding" => "WinAnsiEncoding",
     });
-    let markers = marker_font(&mut document);
+    let markers = super::marker_font(&mut document);
     let mut children = Vec::new();
     for (index, rows) in [(0, PARTIAL_ROWS), (1, COMPLETE_ROWS)] {
         let mut operators = format!("q {PAGE_WIDTH} 0 0 {PAGE_HEIGHT} 0 0 cm /Scan Do Q\n");
