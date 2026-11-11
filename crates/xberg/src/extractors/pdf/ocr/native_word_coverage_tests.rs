@@ -367,7 +367,7 @@ mod glued_cells {
     }
 
     #[test]
-    fn should_not_let_a_read_leader_that_spans_a_word_close_a_gap() {
+    fn should_not_let_a_read_leader_that_starts_before_the_previous_word_ends_close_a_gap() {
         let read = [
             ("ab", at(0.0, 40.0)),
             ("_____", at(0.0, 100.0)),
@@ -377,13 +377,38 @@ mod glued_cells {
     }
 
     #[test]
-    fn should_not_let_a_read_leader_that_overlaps_a_word_close_a_gap() {
+    fn should_not_let_a_read_leader_that_starts_inside_the_previous_word_close_a_gap() {
         let read = [
             ("ab", at(0.0, 40.0)),
             ("-----", at(30.0, 70.0)),
             ("cd", at(60.0, 100.0)),
         ];
         assert!(glues(at(0.0, 100.0), &read));
+    }
+
+    /// A leader that starts after the previous word passes the left-edge check, so only the
+    /// position clause judges it: past the next word's left edge by more than the slack it is a
+    /// rule drawn through the word and the gap still vetoes, within the slack it closes the gap.
+    #[test]
+    fn should_measure_a_read_leader_that_starts_after_the_previous_word_by_how_far_past_the_next_word_it_ends() {
+        let leader = |right: f32| {
+            [
+                ("ab", at(0.0, 40.0)),
+                (".....", at(41.0, right)),
+                ("cd", at(60.0, 100.0)),
+            ]
+        };
+        assert!(glues(at(0.0, 100.0), &leader(61.5)));
+        assert!(!glues(at(0.0, 100.0), &leader(60.5)));
+    }
+
+    /// The head accepts a short leader read fully inside a wide gap: it closes the gap.
+    #[test]
+    fn should_close_a_wide_gap_with_a_short_leader_read_inside_it() {
+        assert!(!glues(
+            at(0.0, 100.0),
+            &[("ab", at(0.0, 40.0)), ("...", at(48.0, 51.0)), ("cd", at(60.0, 100.0))]
+        ));
     }
 
     #[test]
