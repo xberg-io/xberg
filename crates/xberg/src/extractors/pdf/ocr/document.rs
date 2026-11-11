@@ -298,6 +298,11 @@ fn misread_of<'a>(key: &'a str, whole: bool) -> impl Fn(&str) -> bool + 'a {
 /// misread of a native row. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 const MISREAD_ROW_SIMILARITY: f64 = 0.9;
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+thread_local! {
+    /// How many row similarity tests this thread ran: the work a page's misread matching costs. ~keep
+    pub(crate) static MISREAD_SIMILARITY_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 /// Whether an OCR row is a misread of a native row that is put first, so the OCR row is not
 /// printed beside it. The two rows must agree on their letters and digits, with case, punctuation
 /// and whitespace folded away, to a similarity of at least `MISREAD_ROW_SIMILARITY` (`cm3` reads
@@ -316,10 +321,12 @@ fn ocr_row_misreads_native_row(native_key: &str, ocr_key: &str) -> bool {
             .collect()
     };
     let (native_folded, ocr_folded) = (folded(&native), folded(ocr_key));
-    if native_folded.is_empty()
-        || ocr_folded.is_empty()
-        || strsim::normalized_levenshtein(&native_folded, &ocr_folded) < MISREAD_ROW_SIMILARITY
-    {
+    if native_folded.is_empty() || ocr_folded.is_empty() {
+        return false;
+    }
+    #[cfg(test)]
+    MISREAD_SIMILARITY_CALLS.with(|calls| calls.set(calls.get() + 1));
+    if strsim::normalized_levenshtein(&native_folded, &ocr_folded) < MISREAD_ROW_SIMILARITY {
         return false;
     }
     let native_runs: std::collections::HashSet<String> = letter_runs(&native).into_iter().collect();

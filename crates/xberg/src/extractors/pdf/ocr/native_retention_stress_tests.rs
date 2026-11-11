@@ -2215,3 +2215,117 @@ fn native_spells_read_compares_unspaced_scripts_by_bigrams() {
     ));
     assert!(!native_spells_read(native, "我们的委员", &thresholds));
 }
+
+/// An OCR row that adds a one-letter word to a native row is no misread of it: it prints beside
+/// the native row, so the letter stays on the page. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn an_ocr_row_with_one_more_letter_than_the_native_row_stays() {
+    let native = forty_rows();
+    let mut read = native.clone();
+    read[3] = format!("c {}", native[3]);
+    let merged = merged_page(&native.join("\n"), &read.join("\n"), None);
+    assert!(
+        merged.lines().any(|line| line == format!("c {}", native[3])),
+        "the OCR row with the extra letter stays: {merged:?}"
+    );
+}
+
+/// Native row B comes before native row A. OCR row x misreads A and also passes for B; OCR row y
+/// misreads only B. Each native row takes its best misread, so both x and y leave. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn each_native_row_takes_its_best_misread_not_the_first() {
+    let base = forty_rows();
+    let a = format!("{} 12 cm3", base[3]);
+    let b = format!("{} 12 cm3 now", base[3]);
+    let x = format!("{} 12 cm\u{2019}", base[3]);
+    let y = format!("{} 12 cm\u{2019} now", base[3]);
+    let mut native = base.clone();
+    native.splice(3..4, [b.clone(), a.clone()]);
+    let mut read = base.clone();
+    read.splice(3..4, [x.clone(), y.clone()]);
+    let merged = merged_page(&native.join("\n"), &read.join("\n"), None);
+    assert!(merged.lines().any(|line| line == b) && merged.lines().any(|line| line == a), "{merged:?}");
+    assert!(
+        !merged.lines().any(|line| line == y),
+        "y is the misread of B and leaves with it: {merged:?}"
+    );
+    assert!(!merged.lines().any(|line| line == x), "x is the misread of A: {merged:?}");
+}
+
+/// Two pages hold the same OCR row and page 2 misreads a native row with it: only the row of
+/// page 2 leaves the structured document, even when the caller names no page. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_misread_row_leaves_only_the_page_it_was_matched_on() {
+    use super::super::document::{PlainOcrRows, layer_lines_to_put_first};
+    let misread = "total 12 cm\u{2019}";
+    let mut doc = InternalDocument::new("pdf");
+    for page in [1, 2] {
+        let mut element = InternalElement::text(ElementKind::Paragraph, misread, 0);
+        element.page = Some(page);
+        doc.push_element(element);
+    }
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let plain_rows = PlainOcrRows::of_page(Some(&doc), Some(2));
+    let first = layer_lines_to_put_first("total 12 cm3", misread, true, &thresholds, None, plain_rows)
+        .expect("the native row is put first");
+    put_layer_first_in_document(&mut doc, None, &first);
+    let rows_of = |page: u32| {
+        doc.elements
+            .iter()
+            .filter(|element| element.page == Some(page) && element.text == misread)
+            .count()
+    };
+    assert_eq!(rows_of(1), 1, "the row of page 1 stays: the misread was matched on page 2");
+    assert_eq!(rows_of(2), 0, "the misread row of page 2 leaves");
+}
+
+/// The rows of a page, each with a tag word, two row words, a number and a unit. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn tagged_rows(count: usize, tag: &str, unit: &str) -> String {
+    (0..count)
+        .map(|n| {
+            let (one, two) = (ROW_WORDS[n % 20], ROW_WORDS[(n * 7) % 20]);
+            format!("{tag} row {n} {one} {two} total {} {unit}", n * 3)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The row similarity tests that putting the native rows first runs on a page. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn similarity_tests_of(native: &str, read: &str) -> (usize, String) {
+    use super::super::document::{MISREAD_SIMILARITY_CALLS, PlainOcrRows, layer_lines_to_put_first, text_with_layer_first};
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let before = MISREAD_SIMILARITY_CALLS.with(std::cell::Cell::get);
+    let first = layer_lines_to_put_first(native, read, true, &thresholds, None, PlainOcrRows::every())
+        .expect("the native rows are put first");
+    let calls = MISREAD_SIMILARITY_CALLS.with(std::cell::Cell::get) - before;
+    (calls, text_with_layer_first(read, &first))
+}
+
+/// A page whose OCR rows read no native row runs no similarity test: a cheap check of the words
+/// rejects each pair first, so the work grows with the rows and not with their square. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn rows_that_share_no_words_run_no_similarity_test() {
+    for count in [300, 600] {
+        let (native, read) = (tagged_rows(count, "native", "cm3"), tagged_rows(count, "scanned", "cm3"));
+        let (calls, _) = similarity_tests_of(&native, &read);
+        assert_eq!(calls, 0, "{count} rows ran {calls} similarity tests");
+    }
+}
+
+/// A page whose every OCR row misreads one native row runs about one similarity test per row, and
+/// every misread row leaves. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn misread_rows_run_about_one_similarity_test_each() {
+    let count = 300;
+    let (native, read) = (tagged_rows(count, "native", "cm3"), tagged_rows(count, "native", "cm\u{2019}"));
+    let (calls, merged) = similarity_tests_of(&native, &read);
+    assert!(calls <= 2 * count, "{count} rows ran {calls} similarity tests");
+    assert_eq!(merged, native, "each misread row leaves and each native row prints once");
+}
