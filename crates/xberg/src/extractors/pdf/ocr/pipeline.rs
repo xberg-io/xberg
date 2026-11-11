@@ -1189,18 +1189,21 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut native_ink_owned_pages = ahash::AHashSet::new();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    let ink_coverage_layers = {
-        let markers = if !probing_hidden_layer && all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative {
-            super::document::marker_native_ink_layers(
-                native_text,
-                boundaries,
-                &ocr_set,
-                page_count,
-                &ocr_output_thresholds,
-            )
-        } else {
-            ahash::AHashMap::new()
-        };
+    // The one guard for marker-bearing ink-proof layers (#2900): every condition that decides
+    // whether a marker layer may be offered at all, checked where the layers are built. ~keep
+    let native_coverage_layers = if all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative
+        && !probing_hidden_layer
+        && !mixed_route_layout_active
+        && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
+        && config.ocr.as_ref().is_some_and(uses_default_ocr_pipeline)
+    {
+        let markers = super::document::marker_native_ink_layers(
+            native_text,
+            boundaries,
+            &ocr_set,
+            page_count,
+            &ocr_output_thresholds,
+        );
         if markers.is_empty() {
             page_layers.clone()
         } else {
@@ -1208,15 +1211,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             layers.extend(markers);
             Some(std::sync::Arc::new(layers))
         }
+    } else {
+        None
     };
-    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    let native_coverage_layers = ink_coverage_layers.as_ref().filter(|_| {
-        all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative
-            && !probing_hidden_layer
-            && !mixed_route_layout_active
-            && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
-            && config.ocr.as_ref().is_some_and(uses_default_ocr_pipeline)
-    });
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut alternative_raster_pages = ahash::AHashSet::new();
     // Tesseract's own mean confidence for each page it read, 0-100. Captured here because
@@ -1492,6 +1489,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         native_page_layers: None,
                         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                         native_coverage_layers: native_coverage_layers
+                            .as_ref()
                             .filter(|_| {
                                 super::document::native_preservation_is_automatic(config, (page_idx + 1) as u32)
                             })
@@ -1711,6 +1709,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         native_page_layers: None,
                         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                         native_coverage_layers: native_coverage_layers
+                            .as_ref()
                             .filter(|_| {
                                 super::document::native_preservation_is_automatic(config, (*page_idx + 1) as u32)
                             })
@@ -2139,6 +2138,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 if correction_degrees == 0
                     && !alternative_raster_pages.contains(&((page_idx + 1) as u32))
                     && let Some(layer) = native_coverage_layers
+                        .as_ref()
                         .filter(|_| super::document::native_preservation_is_automatic(config, (page_idx + 1) as u32))
                         .and_then(|layers| layers.get(&((page_idx + 1) as u32)))
                     && crate::plugins::registry::get_ocr_backend_registry()
@@ -2794,6 +2794,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             });
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             let clean_ink_layer = native_coverage_layers
+                .as_ref()
                 .and_then(|layers| layers.get(page_number))
                 .map(String::as_str)
                 .filter(|layer| !layer.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER));
@@ -3046,7 +3047,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     super::native_word_coverage::FinalOcrStructureYieldSets {
                         native_words_covered_pages: &native_words_covered_pages,
                         native_ink_owned_pages: &native_ink_owned_pages,
-                        native_coverage_layers,
+                        native_coverage_layers: native_coverage_layers.as_ref(),
                         clean_native_ink_pages: &clean_native_ink_pages,
                     },
                 );
