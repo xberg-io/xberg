@@ -338,7 +338,7 @@ fn is_direct_decoder_path(path: &str) -> bool {
             | "image::ImageReader::new"
             | "image::ImageReader::with_format"
             | "image::ImageReader::open"
-            | "hayro_jbig2::Image::new"
+            | "hayro_jbig2::File::new"
             | "hayro_jpeg2000::Image::new"
             | "tiff::decoder::Decoder::new"
             | "sceptre::Image::from_bytes"
@@ -599,7 +599,7 @@ fn approved_decoder_guard(relative: &str, function: &str, path: &str) -> Option<
         }
         ("extraction/image_decode.rs", "standard_image_is_single_frame", _) => Some("header-only"),
         ("extraction/image.rs", "decode_jp2_to_rgb_with_security_limits", "hayro_jpeg2000::Image::new")
-        | ("extraction/image.rs", "decode_jbig2_to_gray_with_security_limits", "hayro_jbig2::Image::new") => {
+        | ("extraction/image.rs", "decode_jbig2_to_gray_with_security_limits", "hayro_jbig2::File::new") => {
             Some("validate_encoded_image_input")
         }
         ("extraction/image.rs", "decode_jp2_to_rgb_with_security_limits", "decoder::decode")

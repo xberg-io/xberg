@@ -84,6 +84,14 @@ fn explicitly_forced_minimal_direct_ocr_keeps_its_budget_refusal() {
 }
 
 #[test]
+#[cfg(all(feature = "layout-types", not(paddle_ocr)))]
+fn layout_request_keeps_the_original_rgb_render_budget_refusal() {
+    let mut config = config();
+    config.layout = Some(Default::default());
+    assert_original_budget_error(SCAN, &config);
+}
+
+#[test]
 #[cfg(not(paddle_ocr))]
 fn minimal_direct_retry_does_not_omit_visible_paint_beside_the_rgb_scan() {
     let mut pdf = lopdf::Document::load_mem(SCAN).expect("valid baseline PDF");
@@ -122,4 +130,29 @@ fn direct_rgb_budget_retry_retains_the_producing_tesseract_segmentation_mode() {
         .get("ocr_page_segmentation_modes")
         .expect("the page records its producing backend's actual PSM");
     assert_eq!(modes, &serde_json::json!([{"page_number": 1, "psm": 11}]));
+}
+
+#[test]
+fn mixed_pipeline_retry_records_segmentation_mode_for_the_recovered_page() {
+    const MIXED: &[u8] = include_bytes!("../../../fixtures/repros/label-scan-over-image-budget/label-scan-mixed.pdf");
+    let mut value = serde_json::to_value(config()).unwrap();
+    value["ocr"]["pipeline"] = serde_json::json!({
+        "stages": [{"backend": "tesseract", "tesseract_config": {"psm": 11}}],
+    });
+    let config: ExtractionConfig = serde_json::from_value(value).unwrap();
+    let document = run(MIXED, &config).expect("the mixed PDF should retain native and recovered text");
+    let pages = document.pages.as_ref().expect("page records");
+    assert_eq!(pages.len(), 2);
+    assert!(pages[0].content.contains("native page remains unchanged"));
+    assert!(pages[1].content.contains("GENERAL"), "{}", pages[1].content);
+    assert!(
+        document
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.message.contains(RECOVERED))
+    );
+    assert_eq!(
+        document.metadata.additional.get("ocr_page_segmentation_modes"),
+        Some(&serde_json::json!([{"page_number": 2, "psm": 11}])),
+    );
 }
