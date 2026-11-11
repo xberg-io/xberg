@@ -278,6 +278,19 @@ fn extract_all_page_texts(
     options: NativePageTextOptions,
     cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> Result<(Vec<String>, NativeTextEvidence)> {
+    extract_page_texts_until(doc, options, cancel_token, |_| {
+        cancel_token.is_some_and(crate::cancellation::CancellationToken::stop_requested)
+    })
+}
+
+/// [`extract_all_page_texts`] with the stop decision injected: `stop(page_idx)` is asked before each
+/// page, and a `true` ends the loop with the pages read so far.
+fn extract_page_texts_until(
+    doc: &xberg_native_pdf::PdfDocument,
+    options: NativePageTextOptions,
+    cancel_token: Option<&crate::cancellation::CancellationToken>,
+    stop: impl Fn(usize) -> bool,
+) -> Result<(Vec<String>, NativeTextEvidence)> {
     let page_count = doc
         .page_count()
         .map_err(|e| PdfError::TextExtractionFailed(format!("Failed to get page count: {}", e)))?;
@@ -291,10 +304,20 @@ fn extract_all_page_texts(
         ..Default::default()
     };
 
+    if let Some(token) = cancel_token {
+        token.register_page_loop();
+    }
     let mut texts = Vec::with_capacity(page_count);
     for page_idx in 0..page_count {
         if cancel_token.is_some_and(crate::cancellation::CancellationToken::is_cancelled) {
             return Err(PdfError::Cancelled);
+        }
+        // The extraction time limit asks for the pages read so far instead of a failure.
+        if stop(page_idx) {
+            if let Some(token) = cancel_token {
+                token.note_unread_page((page_idx + 1) as u32);
+            }
+            break;
         }
         let page = extract_one_page_text(doc, page_idx, &excluded_layers, options)?;
         texts.push(page.text);
@@ -7662,6 +7685,45 @@ mod tests {
             .expect_err("a cancelled extraction must not read any page text");
 
         assert!(matches!(error, PdfError::Cancelled));
+    }
+
+    #[test]
+    fn native_page_text_returns_the_finished_pages_when_the_time_limit_stops_it() {
+        let pdf = build_paged_text_pdf(4, 10);
+        let doc = NativeDocument::open_bytes(&pdf).expect("fixture must open");
+        let (all_pages, _) = extract_all_page_texts(&doc.doc, NativePageTextOptions::default(), None)
+            .expect("an unlimited extraction must succeed");
+        assert_eq!(all_pages.len(), 4);
+
+        let token = crate::cancellation::CancellationToken::new();
+        let (finished, _) =
+            extract_page_texts_until(&doc.doc, NativePageTextOptions::default(), Some(&token), |page_idx| {
+                page_idx >= 2
+            })
+            .expect("a stop is not an error");
+
+        assert_eq!(
+            finished,
+            all_pages[..2],
+            "the pages read before the stop must be returned"
+        );
+        assert_eq!(token.first_unread_page(), Some(3));
+        assert!(token.page_loop_registered());
+        assert!(!token.is_cancelled());
+    }
+
+    #[test]
+    fn native_page_text_returns_nothing_unread_when_stopped_before_the_first_page() {
+        let pdf = build_paged_text_pdf(2, 10);
+        let doc = NativeDocument::open_bytes(&pdf).expect("fixture must open");
+        let token = crate::cancellation::CancellationToken::new();
+        token.request_stop();
+
+        let (finished, _) = extract_all_page_texts(&doc.doc, NativePageTextOptions::default(), Some(&token))
+            .expect("a stop is not an error");
+
+        assert!(finished.is_empty());
+        assert_eq!(token.first_unread_page(), Some(1));
     }
 
     /// #1744: the provenance pass in `pdf/scan_detect.rs` used to read every page's text a

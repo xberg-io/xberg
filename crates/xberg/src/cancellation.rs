@@ -37,7 +37,7 @@
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 /// A lightweight, cloneable, one-shot cancellation token.
 ///
@@ -70,7 +70,32 @@ use std::sync::atomic::{AtomicBool, Ordering};
 #[derive(Debug, Clone, Default)]
 pub struct CancellationToken {
     cancelled: Arc<AtomicBool>,
+    stop: Arc<StopState>,
 }
+
+/// Soft-stop state shared by every clone of a token.
+///
+/// A soft stop is the extraction time limit asking page loops to finish the page in hand and
+/// return what they hold, where [`CancellationToken::cancel`] makes them fail. It is internal:
+/// only the timeout wrapper requests it and only page loops observe it.
+#[derive(Debug)]
+struct StopState {
+    requested: AtomicBool,
+    page_loop_registered: AtomicBool,
+    first_unread_page: AtomicU32,
+}
+
+impl Default for StopState {
+    fn default() -> Self {
+        Self {
+            requested: AtomicBool::new(false),
+            page_loop_registered: AtomicBool::new(false),
+            first_unread_page: AtomicU32::new(NO_UNREAD_PAGE),
+        }
+    }
+}
+
+const NO_UNREAD_PAGE: u32 = u32::MAX;
 
 impl CancellationToken {
     /// Create a new, uncancelled token.
@@ -101,6 +126,42 @@ impl CancellationToken {
     pub fn is_cancelled(&self) -> bool {
         self.cancelled.load(Ordering::Relaxed)
     }
+
+    /// Ask page loops to stop at the next page boundary and return the pages they hold.
+    #[cfg(any(test, all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+    pub(crate) fn request_stop(&self) {
+        self.stop.requested.store(true, Ordering::Relaxed);
+    }
+
+    /// Returns `true` once [`request_stop`](Self::request_stop) was called on any clone.
+    pub(crate) fn stop_requested(&self) -> bool {
+        self.stop.requested.load(Ordering::Relaxed)
+    }
+
+    /// Record that a page loop that honours [`stop_requested`](Self::stop_requested) is running,
+    /// so the timeout wrapper knows waiting for it can return a partial result.
+    pub(crate) fn register_page_loop(&self) {
+        self.stop.page_loop_registered.store(true, Ordering::Relaxed);
+    }
+
+    #[cfg(any(test, all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+    pub(crate) fn page_loop_registered(&self) -> bool {
+        self.stop.page_loop_registered.load(Ordering::Relaxed)
+    }
+
+    /// Record that a page loop stopped before reading `page` (1-based). The lowest page wins.
+    pub(crate) fn note_unread_page(&self, page: u32) {
+        self.stop.first_unread_page.fetch_min(page, Ordering::Relaxed);
+    }
+
+    /// The lowest page (1-based) a stopped page loop did not read, if any loop stopped early.
+    #[cfg(any(test, all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+    pub(crate) fn first_unread_page(&self) -> Option<u32> {
+        match self.stop.first_unread_page.load(Ordering::Relaxed) {
+            NO_UNREAD_PAGE => None,
+            page => Some(page),
+        }
+    }
 }
 
 impl Serialize for CancellationToken {
@@ -121,6 +182,7 @@ impl<'de> Deserialize<'de> for CancellationToken {
         let cancelled = bool::deserialize(deserializer)?;
         Ok(CancellationToken {
             cancelled: Arc::new(AtomicBool::new(cancelled)),
+            stop: Arc::default(),
         })
     }
 }

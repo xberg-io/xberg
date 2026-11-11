@@ -1266,7 +1266,35 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut preprocessing_by_page: ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata> =
         ahash::AHashMap::new();
     let mut xobject_recovery_budget = crate::extractors::security::SecurityBudget::from_config(config);
+    if let Some(token) = config.cancel_token.as_ref() {
+        token.register_page_loop();
+    }
     for batch_start in (0..total).step_by(batch_size) {
+        // The extraction time limit asks for the pages read so far: the pages of the batches
+        // that finished stay in the result and every later page is recorded as unread.
+        if let Some(token) = config.cancel_token.as_ref().filter(|token| token.stop_requested()) {
+            if let Some(&first_unread) = page_indices.get(batch_start) {
+                token.note_unread_page((first_unread + 1) as u32);
+            }
+            for &page_idx in &page_indices[batch_start..] {
+                merge_ocr_page_failures(
+                    &mut page_failures,
+                    vec![crate::types::OcrPageFailure {
+                        page: (page_idx + 1) as u32,
+                        error: "the extraction time limit was reached before the page was read".to_string(),
+                        recovered: mixed_native_page_has_content(native_text, boundaries, page_idx),
+                    }],
+                );
+                failed_page_errors.insert(
+                    page_idx,
+                    crate::XbergError::Timeout {
+                        elapsed_ms: 0,
+                        limit_ms: 0,
+                    },
+                );
+            }
+            break;
+        }
         let batch_end = (batch_start + batch_size).min(total);
         let default_security_limits = crate::extractors::security::SecurityLimits::default();
         let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);

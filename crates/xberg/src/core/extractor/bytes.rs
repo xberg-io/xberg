@@ -105,18 +105,18 @@ pub(crate) async fn extract_bytes_with_layout_pages(
     // not enough — explicitly exclude wasm32 here, matching `run_timed_extraction` in
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let result = if let Some(secs) = config.extraction_timeout_secs {
-        let start = std::time::Instant::now();
-        match tokio::time::timeout(std::time::Duration::from_secs(secs), extraction_future).await {
+        let started = std::time::Instant::now();
+        let mut extraction_future = extraction_future;
+        match tokio::time::timeout(std::time::Duration::from_secs(secs), &mut extraction_future).await {
             Ok(inner) => inner,
-            Err(_elapsed) => {
-                if let Some(ref token) = config.cancel_token {
-                    token.cancel();
+            Err(_elapsed) => match super::time_limit::begin_grace(config.cancel_token.as_ref(), secs, started) {
+                Ok(token) => {
+                    let outcome =
+                        tokio::time::timeout(super::time_limit::PARTIAL_RESULT_GRACE, &mut extraction_future).await;
+                    super::time_limit::finish_grace(outcome, token, secs, started)
                 }
-                Err(crate::XbergError::Timeout {
-                    elapsed_ms: start.elapsed().as_millis() as u64,
-                    limit_ms: secs * 1000,
-                })
-            }
+                Err(timeout) => Err(timeout),
+            },
         }
     } else {
         extraction_future.await
