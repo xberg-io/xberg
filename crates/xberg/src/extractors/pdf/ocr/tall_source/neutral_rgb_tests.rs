@@ -1,15 +1,13 @@
+use super::strip_fixture::{
+    BILEVEL, GRAY, HEIGHT, INK_COLUMNS, INK_ROWS, LINE_PITCH, WIDTH, bilevel_samples, gray_samples, ink_runs, is_ink,
+    is_ink_row, recognized, scan_pdf_at, source_lines,
+};
 use super::*;
 use crate::ocr_metadata_keys::{OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY};
 use crate::plugins::{OcrBackendType, Plugin};
 use crate::types::OcrElementLevel;
-use std::io::Write;
 use std::sync::Mutex;
 
-const WIDTH: u32 = 1200;
-const HEIGHT: u32 = 4400;
-const LINE_PITCH: u32 = 40;
-const INK_ROWS: Range<u32> = 10..20;
-const INK_COLUMNS: Range<usize> = 96..904;
 const WORDS: &str = "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa \
                      quebec romeo sierra tango";
 
@@ -47,28 +45,6 @@ impl Plugin for StripBackend {
     }
 }
 
-fn recognized(content: &str, mean: f64, invalid: f64, words: u32) -> ExtractedDocument {
-    let mut result = ExtractedDocument {
-        content: content.into(),
-        ..Default::default()
-    };
-    result.metadata.format = Some(crate::types::FormatMetadata::Ocr(crate::types::OcrMetadata {
-        language: "eng".into(),
-        psm: 11,
-        output_format: "markdown".into(),
-        table_count: 0,
-        table_rows: None,
-        table_cols: None,
-    }));
-    result.metadata.additional.extend([
-        (Cow::Borrowed("mean_text_conf"), mean.into()),
-        (Cow::Borrowed("word_count"), words.into()),
-        (Cow::Borrowed("low_conf_word_count"), 0.into()),
-        (Cow::Borrowed(DICTIONARY_INVALID), invalid.into()),
-    ]);
-    result
-}
-
 #[async_trait::async_trait]
 impl OcrBackend for StripBackend {
     fn backend_type(&self) -> OcrBackendType {
@@ -98,15 +74,7 @@ impl OcrBackend for StripBackend {
 fn line_report(png: &[u8], lines: Lines) -> ExtractedDocument {
     let strip = image::load_from_memory(png).unwrap().to_luma8();
     let (width, height) = strip.dimensions();
-    let mut runs: Vec<Range<u32>> = Vec::new();
-    for y in 0..height {
-        if (0..width).any(|x| strip.get_pixel(x, y).0[0] < 128) {
-            match runs.last_mut() {
-                Some(run) if run.end == y => run.end += 1,
-                _ => runs.push(y..y + 1),
-            }
-        }
-    }
+    let mut runs = ink_runs(&strip);
     if lines == Lines::OmitLast {
         runs.pop();
     }
@@ -139,10 +107,6 @@ fn line_report(png: &[u8], lines: Lines) -> ExtractedDocument {
     result
 }
 
-fn is_ink_row(y: u32) -> bool {
-    INK_ROWS.contains(&(y % LINE_PITCH))
-}
-
 /// The first bar starts `MIN_BLANK_ROWS` rows down: as many blank rows above it as the
 /// uncertified rule needs, then a bar as tall as the fixture's ink rows.
 fn is_ink_row_after_a_full_blank_band(y: u32) -> bool {
@@ -153,13 +117,6 @@ fn is_ink_row_after_a_full_blank_band(y: u32) -> bool {
 /// lets the page be cut in two.
 fn is_ink_row_between_short_gaps(y: u32) -> bool {
     (5..15).contains(&(y % 20)) && !(2180..2240).contains(&y)
-}
-
-/// Ink line runs of a scan, counted from the fixture constants.
-fn source_lines(ink_row: fn(u32) -> bool) -> usize {
-    (0..HEIGHT)
-        .filter(|&y| ink_row(y) && (y == 0 || !ink_row(y - 1)))
-        .count()
 }
 
 /// Blank bands of at least `min` rows, as the certified `blank_bands` reports them.
@@ -180,16 +137,6 @@ fn certified_blank_bands(ink_row: fn(u32) -> bool, min: u32) -> Vec<Range<u32>> 
     bands
 }
 
-fn flate(bytes: &[u8]) -> Vec<u8> {
-    let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::fast());
-    encoder.write_all(bytes).unwrap();
-    encoder.finish().unwrap()
-}
-
-fn is_ink(y: u32, x: usize, ink_row: fn(u32) -> bool) -> bool {
-    ink_row(y) && INK_COLUMNS.contains(&x)
-}
-
 /// Text-line-like black bars on white, three equal samples per pixel.
 fn neutral_rgb_samples(ink_row: fn(u32) -> bool) -> Vec<u8> {
     let mut samples = Vec::with_capacity(WIDTH as usize * HEIGHT as usize * 3);
@@ -201,75 +148,7 @@ fn neutral_rgb_samples(ink_row: fn(u32) -> bool) -> Vec<u8> {
     samples
 }
 
-fn gray_samples(ink_row: fn(u32) -> bool) -> Vec<u8> {
-    let mut samples = Vec::with_capacity(WIDTH as usize * HEIGHT as usize);
-    for y in 0..HEIGHT {
-        samples.extend((0..WIDTH as usize).map(|x| if is_ink(y, x, ink_row) { 0 } else { 255 }));
-    }
-    samples
-}
-
-fn bilevel_samples(ink_row: fn(u32) -> bool) -> Vec<u8> {
-    let mut samples = Vec::new();
-    for y in 0..HEIGHT {
-        for byte in 0..WIDTH as usize / 8 {
-            let ink = is_ink(y, byte * 8, ink_row) && is_ink(y, byte * 8 + 7, ink_row);
-            samples.push(if ink { 0x00 } else { 0xff });
-        }
-    }
-    samples
-}
-
-fn stream(entries: &str, bytes: &[u8]) -> Vec<u8> {
-    let mut output = format!("<< {entries} /Length {} >>\nstream\n", bytes.len()).into_bytes();
-    output.extend(bytes);
-    output.extend(b"\nendstream");
-    output
-}
-
-/// One scan image of `dpi` painted over the whole page.
-fn scan_pdf_at(color: &str, samples: &[u8], dpi: f64) -> PdfDocument {
-    let (page_width, page_height) = (f64::from(WIDTH) * 72.0 / dpi, f64::from(HEIGHT) * 72.0 / dpi);
-    let image = stream(
-        &format!("/Type /XObject /Subtype /Image /Width {WIDTH} /Height {HEIGHT} {color} /Filter /FlateDecode"),
-        &flate(samples),
-    );
-    let objects = [
-        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
-        format!(
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {page_width} {page_height}] /Contents 4 0 R /Resources << /XObject << /Im0 5 0 R >> >> >>"
-        )
-        .into_bytes(),
-        stream("", format!("q {page_width} 0 0 {page_height} 0 0 cm /Im0 Do Q").as_bytes()),
-        image,
-    ];
-    let mut bytes = b"%PDF-1.4\n".to_vec();
-    let mut offsets = Vec::new();
-    for object in &objects {
-        offsets.push(bytes.len());
-        bytes.extend(format!("{} 0 obj\n", offsets.len()).as_bytes());
-        bytes.extend(object);
-        bytes.extend(b"\nendobj\n");
-    }
-    let xref = bytes.len();
-    bytes.extend(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
-    for offset in offsets {
-        bytes.extend(format!("{offset:010} 00000 n \n").as_bytes());
-    }
-    bytes.extend(
-        format!(
-            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
-            objects.len() + 1
-        )
-        .as_bytes(),
-    );
-    PdfDocument::from_bytes(bytes).unwrap()
-}
-
 const RGB: &str = "/ColorSpace /DeviceRGB /BitsPerComponent 8";
-const GRAY: &str = "/ColorSpace /DeviceGray /BitsPerComponent 8";
-const BILEVEL: &str = "/ColorSpace /DeviceGray /BitsPerComponent 1";
 
 fn neutral_rgb_scan() -> PdfDocument {
     scan_pdf_at(RGB, &neutral_rgb_samples(is_ink_row), 150.0)
