@@ -643,43 +643,6 @@ pub(crate) async fn extract_mixed_ocr_native_with_layout_pages(
     content: &[u8],
     config: &ExtractionConfig,
     layout_pages: Option<&crate::core::layout_pages::LayoutPageSelection>,
-    keep_native_pages: (&[u32], &[u32]),
-) -> crate::Result<MixedOcrRun> {
-    let mut run = read_mixed_ocr_native_with_layout_pages(
-        native_text,
-        boundaries,
-        selected_pages,
-        content,
-        config,
-        layout_pages,
-        keep_native_pages,
-    )
-    .await?;
-    // ~keep Backend page text can inline table Markdown. Render the recognized table
-    // transcripts after acceptance, keeping the surrounding text on the mixed Plain route.
-    if config.output_format == crate::core::config::OutputFormat::Plain {
-        let (text, replacements, documents, ..) = &mut run.output;
-        let mut changed = false;
-        for (page, replacement) in &mut *replacements {
-            if let Some(document) = documents.get(page) {
-                changed |= render_inline_tables_plain(replacement, &document.tables);
-            }
-        }
-        if changed {
-            *text = apply_ocr_page_replacements(native_text, boundaries, replacements);
-        }
-    }
-    Ok(run)
-}
-
-#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-pub(in crate::extractors::pdf) async fn read_mixed_ocr_native_with_layout_pages(
-    native_text: &str,
-    boundaries: &[crate::types::PageBoundary],
-    selected_pages: (&[u32], &[u32]),
-    content: &[u8],
-    config: &ExtractionConfig,
-    layout_pages: Option<&crate::core::layout_pages::LayoutPageSelection>,
     (preserve_native, native_script): (&[u32], &[u32]),
 ) -> crate::Result<MixedOcrRun> {
     let (ocr_page_numbers, single_block_page_numbers) = selected_pages;
@@ -3128,6 +3091,28 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(in crate::extractors::pdf) fn render_mixed_tables_plain(
+    run: &mut MixedOcrRun,
+    native_text: &str,
+    boundaries: &[crate::types::PageBoundary],
+    config: &ExtractionConfig,
+) {
+    if config.output_format != crate::core::config::OutputFormat::Plain {
+        return;
+    }
+    let (text, replacements, documents, ..) = &mut run.output;
+    let mut changed = false;
+    for (page, replacement) in &mut *replacements {
+        if let Some(document) = documents.get(page) {
+            changed |= render_inline_tables_plain(replacement, &document.tables);
+        }
+    }
+    if changed {
+        *text = apply_ocr_page_replacements(native_text, boundaries, replacements);
+    }
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn render_inline_tables_plain(text: &mut String, tables: &[crate::types::Table]) -> bool {
     let mut changed = false;
     let mut tables = tables
@@ -3142,18 +3127,28 @@ fn render_inline_tables_plain(text: &mut String, tables: &[crate::types::Table])
             let end = start + markdown.len();
             (start == 0 || text.as_bytes()[start - 1] == b'\n') && (end == text.len() || text.as_bytes()[end] == b'\n')
         });
-        if let Some(start) = matches.next() {
-            let remaining_tables = tables[index + 1..]
-                .iter()
-                .filter(|table| table.markdown.trim() == markdown)
-                .count();
-            // ~keep An extra identical block could be literal prose.
-            if matches.nth(remaining_tables).is_none() {
-                let rows = crate::rendering::common::render_table_plain(&table.cells);
-                text.replace_range(start..start + markdown.len(), rows.trim_end_matches('\n'));
-                changed = true;
-            }
+        let Some(start) = matches.next() else {
+            tracing::warn!(
+                table_index = index,
+                "Mixed OCR table transcript was not found for Plain rendering"
+            );
+            continue;
+        };
+        let remaining_tables = tables[index + 1..]
+            .iter()
+            .filter(|table| table.markdown.trim() == markdown)
+            .count();
+        // ~keep An extra identical block could be literal prose.
+        if matches.nth(remaining_tables).is_some() {
+            tracing::warn!(
+                table_index = index,
+                "Mixed OCR table transcript is ambiguous for Plain rendering"
+            );
+            continue;
         }
+        let rows = crate::rendering::common::render_table_plain(&table.cells);
+        text.replace_range(start..start + markdown.len(), rows.trim_end_matches('\n'));
+        changed = true;
     }
     changed
 }
