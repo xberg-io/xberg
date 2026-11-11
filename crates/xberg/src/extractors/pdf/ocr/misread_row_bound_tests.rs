@@ -312,6 +312,30 @@ fn a_boxed_misread_row_with_one_copy_leaves() {
     );
 }
 
+/// The taken-row test on a page with line boxes: the two equal native rows have no box, so the
+/// geometry cannot place them, and the second must take the other misread. ~keep
+#[test]
+fn a_misread_row_that_an_unplaced_native_row_takes_is_not_taken_again() {
+    let total = "alpha bravo charlie delta 12 cm3 cm3";
+    let (better, worse) = (
+        "alpha bravo charlie delta 12 cm3 cm",
+        "alpha bravo charlie delta 12 cm cm",
+    );
+    let layer = [total, "echo one", "foxtrot two", total].join("\n");
+    let read = [better, "echo one", "foxtrot two", worse].join("\n");
+    let boxes = PageLineBoxes {
+        layer: vec![line_at("echo one", 1), line_at("foxtrot two", 2)],
+        ocr: read.lines().enumerate().map(|(row, text)| line_at(text, row)).collect(),
+    };
+    let text = merged_with_boxes(&layer, &read, &boxes);
+    let lines: Vec<&str> = text.lines().collect();
+    assert!(
+        !lines.contains(&better) && !lines.contains(&worse),
+        "a misread OCR row stays in the page text:\n{text}"
+    );
+    assert_eq!(lines.iter().filter(|line| **line == total).count(), 2, "{text}");
+}
+
 /// OCR lines without a box (a recognised table) hold the same misread text twice, after the boxed
 /// lines. The native row takes the nearer copy in reading order, and that line of the page text
 /// leaves, found through its place among all the lines of the page. ~keep
