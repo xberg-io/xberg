@@ -3229,8 +3229,9 @@ fn check_accepted_ocr_tokens(
     use crate::types::internal::ElementKind;
     use pulldown_cmark::{Event, Options, Parser, Tag};
 
-    // ~keep PDF table assembly may suppress a paragraph covered by cell tokens. Require the
-    // accepted token order, including punctuation, before replacing its transcript.
+    // ~keep PDF table assembly may suppress a paragraph covered by cell tokens, or keep one it
+    // failed to match to a table. Require exactly the accepted token order, including
+    // punctuation, before replacing its transcript: no word dropped, none added.
     let mut tables = document.elements.iter().filter_map(|element| match element.kind {
         ElementKind::Table { table_index } => document.tables.get(table_index as usize),
         _ => None,
@@ -3285,9 +3286,14 @@ fn check_accepted_ocr_tokens(
             _ => {}
         }
     }
-    retains_ocr_words(&accepted[offset..], &mut retained)
+    if !retains_ocr_words(&accepted[offset..], &mut retained) {
+        return Err("Plain page omitted accepted prose");
+    }
+    retained
+        .next()
+        .is_none()
         .then_some(())
-        .ok_or("Plain page omitted accepted prose")
+        .ok_or("Plain page added text absent from the accepted transcript")
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -3428,15 +3434,24 @@ fn retains_inline_group(
     let mut literal = source.split_whitespace().peekable();
     let mut projected = visible.split_whitespace().peekable();
     if projected.peek().is_none() {
+        // ~keep A block marker projects to nothing, but a Plain element may still spell it.
+        let mut spelled = retained.clone();
+        if source.split_whitespace().all(|word| spelled.next() == Some(word)) {
+            *retained = spelled;
+        }
         return true;
     }
-    // ~keep Advance both alternatives together so a failed literal match cannot
-    // repeatedly rescan the remainder of the page.
+    // ~keep Advance both alternatives together; each Plain word must continue one of them,
+    // so a word the accepted group lacks fails the group instead of being skipped.
+    let (mut literal_live, mut projected_live) = (true, true);
     for candidate in retained {
-        if literal.next_if_eq(&candidate).is_some() && literal.peek().is_none()
-            || projected.next_if_eq(&candidate).is_some() && projected.peek().is_none()
-        {
+        literal_live &= literal.next_if_eq(&candidate).is_some();
+        projected_live &= projected.next_if_eq(&candidate).is_some();
+        if literal_live && literal.peek().is_none() || projected_live && projected.peek().is_none() {
             return true;
+        }
+        if !literal_live && !projected_live {
+            return false;
         }
     }
     false
@@ -3495,8 +3510,7 @@ fn record_block_markers(
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn retains_ocr_words(text: &str, retained: &mut std::str::SplitWhitespace<'_>) -> bool {
-    text.split_whitespace()
-        .all(|word| retained.any(|candidate| candidate == word))
+    text.split_whitespace().all(|word| retained.next() == Some(word))
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]

@@ -1072,6 +1072,62 @@ fn mixed_plain_inline_document() -> InternalDocument {
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[test]
+fn mixed_plain_declines_elements_that_add_words_to_the_accepted_table() {
+    let root = tempfile::tempdir().unwrap();
+    crate::utils::test_support::run_child_test(
+        "extractors::pdf::tests::mixed_plain_added_words_with_diagnostic_child",
+        "XBERG_MIXED_PLAIN_ADDED_WORDS_ROOT",
+        root.path(),
+        |_| {},
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+#[ignore = "run in an isolated subprocess to capture debug diagnostics"]
+fn mixed_plain_added_words_with_diagnostic_child() {
+    use crate::types::Table;
+
+    let Some(root) = crate::utils::test_support::child_test_root("XBERG_MIXED_PLAIN_ADDED_WORDS_ROOT") else {
+        return;
+    };
+    let cells: Vec<Vec<String>> = vec![vec!["Name".into(), "Count".into()], vec!["North".into(), "2".into()]];
+    let source = crate::rendering::common::render_table_markdown(&cells);
+    let source = source.trim_end();
+    let document = |before: Option<&str>, after: Option<&str>| {
+        let mut document = InternalDocument::new("pdf");
+        if let Some(text) = before {
+            document.push_element(InternalElement::text(ElementKind::Paragraph, text, 0).with_page(1));
+        }
+        let table_index = document.push_table(Table {
+            cells: cells.clone(),
+            page_number: 1,
+            ..Default::default()
+        });
+        document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(1));
+        if let Some(text) = after {
+            document.push_element(InternalElement::text(ElementKind::Paragraph, text, 0).with_page(1));
+        }
+        ahash::AHashMap::from([(1, document)])
+    };
+
+    // A cell the table assembly failed to suppress repeats as its own paragraph.
+    assert_mixed_plain_declines_with_diagnostic(
+        source,
+        &document(Some("Name"), None),
+        &root,
+        "Plain page omitted or changed accepted table cells",
+    );
+    assert_mixed_plain_declines_with_diagnostic(
+        source,
+        &document(None, Some("North")),
+        &root,
+        "Plain page added text absent from the accepted transcript",
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
 fn mixed_plain_admits_shared_writer_cell_with_backslash_and_pipe() {
     use crate::core::config::OutputFormat;
     use crate::types::{PageBoundary, Table};
