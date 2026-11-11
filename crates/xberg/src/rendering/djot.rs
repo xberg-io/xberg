@@ -71,10 +71,10 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
                 let mut block = String::with_capacity(indent.len() + text.len() + 8);
                 block.push_str(&indent);
                 if ordered {
-                    block.push_str(&djot_ordered_marker(state.next_list_number(), source_label.as_deref()));
+                    block.push_str(&djot_ordered_marker(state.next_list_number(), source_label));
                 } else if let Some(label) = source_label {
                     block.push_str("- ");
-                    block.push_str(&label);
+                    block.push_str(label);
                     block.push(' ');
                 } else {
                     block.push_str("- ");
