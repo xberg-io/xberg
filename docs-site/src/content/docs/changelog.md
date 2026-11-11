@@ -332,6 +332,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Keep Khmer number recovery available after bounded source declines.** (#2905)
   Completed declines charge the work already done, leaving room to verify supported pages later in the PDF.
   Cancellation and failures whose work cannot be measured still retain their reservation.
+- **(djot): Preserve straight quotes, apostrophes, and runs of dots or dashes in marked rows.** (#2913)
+  Djot readers show the row punctuation as written.
+- **(djot): Preserve block-like text in rendered paragraphs, lists, and OCR output.** (#2891)
+  Keep repeated leading attributes visible and preserve markup when nested OCR declares Markdown or Djot.
 - **(ocr): Prune symbol-noise lines on the direct PDF read of a flagged page, not only in the layout and pipeline routes.** (#2921)
   Without layout detection the PDF route reads each page straight from the OCR backend and never reached the pruning, so a photograph page kept every noise line and carried no pruning warning. The direct read now prunes the page text, its paragraphs and its text elements together after the verdict and the native-replacement decision have judged the unpruned read.
 - **(ocr): Exclude Unicode numerals from native-prose script evidence.**
@@ -366,12 +370,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   During the JPEG-budget retry, an empty or whitespace-only read of a separate proven-resolution image no longer marks the page's other text as illegible. The clamp and resolution safeguards still apply to images that return text.
 - **(ocr): Judge each scanned image's noise verdict on its own read.** (GH#2853)
   On a page with several images, one image's clamp or low resolution no longer decides the noise verdict for the text of the other images. A clamped image that reads as legible text keeps it beside a noisy image, and a clamped image whose own read is noise is still dropped, with its tables and formulas. Several small reads on one page that are noise together are dropped as one read.
+- **(ocr): Report preprocessing and Tesseract mode only from retained embedded-image reads.** (#2918)
+  Blank OCR reads no longer supply `image_preprocessing`.
+  A discarded read no longer supplies the page's OCR metadata. When several small reads are rejected as noise together, a member whose own text is below the configured fragmentation threshold keeps its text, tables and formulas.
 - **(ocr): Keep page byte ranges when OCR page text and plain content render a table differently.** (#2825)
   Under `OutputFormat::Plain` the per-page OCR text kept tables as markdown and its own block separators, so it never matched the plain content and `page_boundaries` was dropped with a warning. A page whose text cannot be found in the content is now rendered from its own elements with the plain renderer, so page text equals its content range. When the re-render succeeds, `pages[].content` under Plain OCR no longer carries markdown tables; the structured tables stay in `pages[].tables`.
 - **(pdf): Honor compound glyph names at printable font codes.** (GH#2834)
   A `/Differences` mapping such as `65 /f_f_i` now extracts `ffi` instead of the base encoding's `A`. Explicit `ToUnicode` mappings keep precedence.
 - **(ocr): Keep the text a large scanned page's embedded-image retry reads when the read trips the noise check.** (#2832)
   A one-page JPEG scan whose render exceeded the image working budget was read from its embedded image at the proven resolution, and the read was dropped whenever the fragmented-word test judged it noise, so the page came back blank. The read now follows `discard_suspected_ocr_noise` like any page read, kept with the suspected-noise warning unless the caller asked to discard it. A noisy read is still dropped when the image was clamped to `max_image_dimension`, was shrunk to below 100 dpi, or has no preprocessing record. The recovery warning says text when text was kept.
+- **(ocr): Report embedded-image recovery only when the read survives the noise check.** (#2908)
+  A discarded retry reports the noise verdict and the original OCR failure without claiming recovery. Label noise in tables from retained reads remains an open issue.
 - **(ocr): Read a sideways paragraph of short words as prose.** (#2670)
   The text-size check counted every word box narrower than tall as a stroke, so a paragraph of two-letter words such as `is of to in on` was refused. Only a single-character box, or a run of vertical-stroke glyphs such as `Il`, now counts as a stroke.
 - **(excel): Extract the sheets that fit when a workbook exceeds `security_limits.max_table_cells`.** (#2820)
