@@ -16,7 +16,11 @@ pub(super) fn derive_pages(
     content_is_plain: bool,
     observer: &mut impl super::surfaces::DerivationObserver,
 ) -> Option<Vec<PageContent>> {
-    let raw_pages = doc.prebuilt_pages.take().or_else(|| build_pages(doc, content_is_plain));
+    let raw_pages = match doc.prebuilt_pages.take() {
+        Some(prebuilt) if content_is_plain => Some(with_plain_page_text(doc, prebuilt)),
+        Some(prebuilt) => Some(prebuilt),
+        None => build_pages(doc, content_is_plain),
+    };
     let mut pages = apply_page_content_format(raw_pages, doc, output_format, observer);
     let mut reconciled = !content_is_plain || reconcile_page_boundaries(&mut doc.metadata, content, pages.as_deref());
     // ~keep Prebuilt page text (OCR) renders tables and block separators its own way, so it
@@ -56,6 +60,25 @@ pub(super) fn derive_pages(
             "Page byte ranges were measured on a different rendering of the text and could not be \
              mapped onto the returned content, so they were omitted",
         );
+    }
+    pages
+}
+
+/// Give each prebuilt page that is not OCR text (see `is_ocr_page_text`), and that has elements,
+/// its part of the plain content, as `render_plain_pages` writes it. A DOCX page keeps its notes:
+/// the definitions are part of the last page, as in the text of the parser. Every other field of
+/// the page stays.
+fn with_plain_page_text(doc: &InternalDocument, mut pages: Vec<PageContent>) -> Vec<PageContent> {
+    if pages.iter().all(|page| is_ocr_page_text(doc, page)) {
+        return pages;
+    }
+    let mut texts = crate::rendering::render_plain_pages(doc, &compute_page_membership(doc));
+    for page in &mut pages {
+        if !is_ocr_page_text(doc, page)
+            && let Some(text) = texts.remove(&page.page_number)
+        {
+            page.content = text;
+        }
     }
     pages
 }
@@ -480,8 +503,8 @@ fn render_plain_elements(indices: &[usize], doc: &InternalDocument) -> String {
 
 /// Whether `page`'s prebuilt text may be replaced by the plain rendering of its elements: every
 /// page of a PDF, image or OCR source (a native page's text layer differs from the plain content
-/// by spacing alone), and a page of another format that took OCR text. A DOCX page with its
-/// notes is not, and its text is deliberately not the plain rendering of its elements.
+/// by spacing alone), and a page of another format that took OCR text. A DOCX page is not: in
+/// plain output it already has its part of the plain content (`with_plain_page_text`).
 fn is_ocr_page_text(doc: &InternalDocument, page: &PageContent) -> bool {
     matches!(doc.source_format.as_str(), "pdf" | "image" | "ocr") || doc.ocr_text_pages.contains(&page.page_number)
 }
@@ -870,7 +893,7 @@ mod plain_page_rerender_tests {
     }
 
     #[test]
-    fn a_native_page_with_its_own_table_markdown_and_a_note_keeps_its_text() {
+    fn a_docx_page_with_its_own_table_markdown_gets_its_part_of_the_plain_content() {
         let content = "Body\n\nplain two";
         let native_text = "| a | b |\n| --- | --- |\n| 1 | 2 |[^1]\n\n1: THE NOTE";
         let mut native = page(1, native_text);
@@ -882,13 +905,14 @@ mod plain_page_rerender_tests {
         doc.ocr_text_pages.clear();
         doc.source_format = "docx".to_string();
         let pages = derive(&mut doc, content);
-        assert_eq!(pages[0].content, native_text);
-        assert!(warned(&doc));
-        assert!(doc.metadata.pages.as_ref().unwrap().boundaries.is_none());
+        assert_eq!(pages[0].content, "Body");
+        assert_eq!(pages[0].tables.len(), 1, "the page keeps its tables");
+        assert!(!warned(&doc));
+        assert_ranges(&doc, content, &pages);
     }
 
     #[test]
-    fn a_native_page_keeps_its_text_while_the_ocr_pages_of_a_mixed_document_are_rerendered() {
+    fn a_docx_page_gets_its_plain_text_while_the_ocr_pages_of_a_mixed_document_are_rerendered() {
         let content = "one\n\ntwo\n\nthree";
         let mut doc = doc_with(
             vec![page(1, "| one |"), page(2, "native | two"), page(3, "| three |")],
@@ -898,19 +922,10 @@ mod plain_page_rerender_tests {
         doc.source_format = "docx".to_string();
         let pages = derive(&mut doc, content);
         assert_eq!(pages[0].content, "one");
-        assert_eq!(pages[1].content, "native | two");
+        assert_eq!(pages[1].content, "two");
         assert_eq!(pages[2].content, "three");
-        assert!(warned(&doc));
-        assert_eq!(boundary_pages(&doc), vec![1, 3]);
-        let boundaries = doc.metadata.pages.as_ref().unwrap().boundaries.as_ref().unwrap();
-        assert_eq!(
-            content.get(boundaries[0].byte_start..boundaries[0].byte_end),
-            Some("one")
-        );
-        assert_eq!(
-            content.get(boundaries[1].byte_start..boundaries[1].byte_end),
-            Some("three")
-        );
+        assert!(!warned(&doc));
+        assert_ranges(&doc, content, &pages);
     }
 
     fn set_boundaries(doc: &mut InternalDocument, ranges: &[(u32, usize, usize)]) {
@@ -990,9 +1005,37 @@ mod plain_page_rerender_tests {
         let content = crate::rendering::render_plain(&doc);
         let pages = derive(&mut doc, &content);
         let texts: Vec<&str> = pages.iter().map(|page| page.content.as_str()).collect();
-        assert_eq!(texts, ["First page[^1]", "Second page[^2]"]);
+        assert_eq!(texts.len(), 2);
+        assert_eq!(texts[0], "First page[^1]");
+        let (body, notes) = texts[1].split_once("\n\n").expect("the last page has the note definitions");
+        assert_eq!(body, "Second page[^2]");
+        assert!(notes.contains("Note one") && notes.contains("Note two"), "{notes}");
+        assert_eq!(content.find(texts[1]).map(|start| start + texts[1].len()), Some(content.len()));
         assert!(!warned(&doc));
         assert_ranges(&doc, &content, &pages);
+    }
+
+    #[test]
+    fn a_prebuilt_docx_page_has_its_part_of_the_plain_content_and_keeps_its_notes() {
+        let mut doc = docx_with_a_note_on_each_page();
+        doc.prebuilt_pages = Some(vec![page(1, "First page"), page(2, "Second page\n\nNote one\nNote two")]);
+        let content = crate::rendering::render_plain(&doc);
+        let pages = derive(&mut doc, &content);
+        assert_eq!(pages[0].content, "First page[^1]");
+        assert!(pages[1].content.starts_with("Second page[^2]"));
+        assert!(pages[1].content.contains("Note one") && pages[1].content.contains("Note two"));
+        assert!(!warned(&doc));
+        assert_ranges(&doc, &content, &pages);
+    }
+
+    #[test]
+    fn a_prebuilt_pdf_page_keeps_its_text() {
+        let mut doc = docx_with_a_note_on_each_page();
+        doc.source_format = "pdf".to_string();
+        doc.prebuilt_pages = Some(vec![page(1, "First page"), page(2, "Second page")]);
+        let content = crate::rendering::render_plain(&doc);
+        let pages = derive(&mut doc, &content);
+        assert_eq!(pages[0].content, "First page");
     }
 
     #[test]

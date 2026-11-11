@@ -23,81 +23,103 @@ pub(crate) fn render_plain(doc: &InternalDocument) -> String {
 pub(crate) fn render_plain_with_annotation_separator(doc: &InternalDocument) -> (String, Option<usize>) {
     let mut out = String::with_capacity(doc.elements.len() * 80);
     let footnotes = FootnoteCollector::new(doc);
-    render_body_plain(doc, &footnotes, 0..doc.elements.len(), &mut out);
-    append_definitions_plain(doc, ElementKind::FootnoteDefinition, Some(&footnotes), &mut out);
-    append_definitions_plain(doc, ElementKind::CommentDefinition, None, &mut out);
-    let mut annotation_separator = None;
-    if let Some(annotations) = doc.annotations.as_deref() {
-        let block = render_annotations_plain(annotations);
-        if !block.is_empty() {
-            if !out.trim_end().is_empty() {
-                out.push_str("\n\n");
-            }
-            annotation_separator = Some(out.len() + ANNOTATIONS_TITLE.len());
-            out.push_str(&block);
-        }
-    }
+    render_body_plain(doc, &footnotes, &mut out, None);
+    let annotation_separator = append_tail_plain(doc, &footnotes, &mut out);
     out.truncate(out.trim_end().len());
     (out, annotation_separator)
 }
 
-/// The Plain text of each page: the elements at the page's indices into `doc.elements`, written
-/// as `render_plain` writes them in the whole document. A note marker has its number in the whole
-/// document. The note and comment definitions and the annotations, which `render_plain` writes
-/// after the last page, are on no page.
+/// Write the note and comment definitions and the annotations after the body. Returns the
+/// offset of the annotations after their title.
+fn append_tail_plain(doc: &InternalDocument, footnotes: &FootnoteCollector, out: &mut String) -> Option<usize> {
+    append_definitions_plain(doc, ElementKind::FootnoteDefinition, Some(footnotes), out);
+    append_definitions_plain(doc, ElementKind::CommentDefinition, None, out);
+    let annotations = doc.annotations.as_deref()?;
+    let block = render_annotations_plain(annotations);
+    if block.is_empty() {
+        return None;
+    }
+    if !out.trim_end().is_empty() {
+        out.push_str("\n\n");
+    }
+    let annotation_separator = out.len() + ANNOTATIONS_TITLE.len();
+    out.push_str(&block);
+    Some(annotation_separator)
+}
+
+/// The Plain text of each page: the part of the `render_plain` output that the page's elements
+/// (indices into `doc.elements`) write, so each page text is found in that output. The page
+/// whose elements end last also has the note and comment definitions and the annotations, which
+/// `render_plain` writes after the body.
 pub(crate) fn render_plain_pages(
     doc: &InternalDocument,
     elements_by_page: &std::collections::BTreeMap<u32, Vec<usize>>,
 ) -> std::collections::BTreeMap<u32, String> {
+    let mut out = String::with_capacity(doc.elements.len() * 80);
     let footnotes = FootnoteCollector::new(doc);
+    let mut spans = vec![None; doc.elements.len()];
+    render_body_plain(doc, &footnotes, &mut out, Some(&mut spans));
+    let body_end = out.len();
+    append_tail_plain(doc, &footnotes, &mut out);
+    out.truncate(out.trim_end().len());
     elements_by_page
         .iter()
         .map(|(&page_number, indices)| {
-            let mut out = String::new();
-            render_body_plain(doc, &footnotes, indices.iter().copied(), &mut out);
-            out.truncate(out.trim_end().len());
-            (page_number, out)
+            let page_spans = || indices.iter().filter_map(|&i| spans.get(i).copied().flatten());
+            let text = match (page_spans().map(|(start, _)| start).min(), page_spans().map(|(_, end)| end).max()) {
+                (Some(start), Some(end)) => {
+                    let end = if end == body_end { out.len() } else { end.min(out.len()) };
+                    out.get(start.min(end)..end).unwrap_or_default().trim()
+                }
+                _ => "",
+            };
+            (page_number, text.to_string())
         })
         .collect()
 }
 
-/// Write the body elements at `indices`, in that order, with the note markers that `footnotes`
-/// numbers.
+/// Write the body elements in document order, with the note markers that `footnotes` numbers.
+/// With `spans`, record the output range that each element writes, at the element's index.
 fn render_body_plain(
     doc: &InternalDocument,
     footnotes: &FootnoteCollector,
-    indices: impl IntoIterator<Item = usize>,
     out: &mut String,
+    mut spans: Option<&mut Vec<Option<(usize, usize)>>>,
 ) {
     let mut last_heading_depth = None;
     let mut after_text_block = false;
-    for i in indices {
-        let Some(elem) = doc.elements.get(i) else { continue };
+    for (i, elem) in doc.elements.iter().enumerate() {
         if !is_body_element(elem) || elem.kind.is_container_start() || elem.kind.is_container_end() {
             continue;
         }
+        let start = out.len();
         if elem.kind == ElementKind::FootnoteRef {
             if let Some(n) = footnotes.ref_number(i as u32) {
                 append_footnote_marker(out, n, after_text_block);
                 after_text_block = true;
             }
-            continue;
+        } else {
+            render_element_plain(doc, elem, out, &mut last_heading_depth);
+            let plain_text = elem
+                .attributes
+                .as_ref()
+                .and_then(|attributes| attributes.get(crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE))
+                .unwrap_or(&elem.text);
+            after_text_block = !plain_text.is_empty()
+                && matches!(
+                    elem.kind,
+                    ElementKind::Title
+                        | ElementKind::Heading { .. }
+                        | ElementKind::Paragraph
+                        | ElementKind::ListItem { .. }
+                        | ElementKind::DefinitionDescription
+                );
         }
-        render_element_plain(doc, elem, out, &mut last_heading_depth);
-        let plain_text = elem
-            .attributes
-            .as_ref()
-            .and_then(|attributes| attributes.get(crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE))
-            .unwrap_or(&elem.text);
-        after_text_block = !plain_text.is_empty()
-            && matches!(
-                elem.kind,
-                ElementKind::Title
-                    | ElementKind::Heading { .. }
-                    | ElementKind::Paragraph
-                    | ElementKind::ListItem { .. }
-                    | ElementKind::DefinitionDescription
-            );
+        if let Some(span) = spans.as_deref_mut().and_then(|spans| spans.get_mut(i))
+            && out.len() > start
+        {
+            *span = Some((start, out.len()));
+        }
     }
 }
 
