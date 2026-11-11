@@ -5495,22 +5495,20 @@ fn occurrence_carriers(segments: &[SegmentData], holders: &[(&TableCoverage, &Wo
     let mut carriers = Vec::with_capacity(segments.len());
     let mut run_start = 0;
     let mut run: Vec<usize> = Vec::new();
-    let mut last_word: Option<String> = None;
+    let words: Vec<Vec<String>> = segments
+        .iter()
+        .map(|segment| word_sequence([segment.text.as_str()]))
+        .collect();
+    let seam_holders = seam_holders(&words, holders);
     for (index, segment) in segments.iter().enumerate() {
-        let words = word_sequence([segment.text.as_str()]);
         let own: Vec<usize> = (0..holders.len())
             .filter(|&holder| covers_and_carries(segment, holders[holder].0))
             .collect();
-        let joined: Vec<usize> = match (&last_word, words.first()) {
-            (Some(last), Some(first)) => {
-                let seam = format!("{last}{first}");
-                run.iter()
-                    .copied()
-                    .filter(|holder| own.contains(holder) && holders[*holder].1.keys().any(|word| word.contains(&seam)))
-                    .collect()
-            }
-            _ => Vec::new(),
-        };
+        let joined: Vec<usize> = run
+            .iter()
+            .copied()
+            .filter(|holder| own.contains(holder) && seam_holders[index].contains(holder))
+            .collect();
         if joined.is_empty() {
             carriers.extend(std::iter::repeat_n(run.first().copied(), index - run_start));
             run_start = index;
@@ -5518,10 +5516,50 @@ fn occurrence_carriers(segments: &[SegmentData], holders: &[(&TableCoverage, &Wo
         } else {
             run = joined;
         }
-        last_word = words.last().cloned();
     }
     carriers.extend(std::iter::repeat_n(run.first().copied(), segments.len() - run_start));
     carriers
+}
+
+/// For each segment, the positions in `holders` of the tables that hold a word containing its seam: the
+/// last word of the segment before it run into its own first word. One automaton over the page's
+/// seams reads each table's words once, so the cost grows with the page and the tables, not their product.
+fn seam_holders(words: &[Vec<String>], holders: &[(&TableCoverage, &WordCounts)]) -> Vec<Vec<usize>> {
+    let mut ids: ahash::AHashMap<String, usize> = ahash::AHashMap::new();
+    let mut seam_of: Vec<Option<usize>> = vec![None; words.len()];
+    for index in 1..words.len() {
+        if let (Some(last), Some(first)) = (words[index - 1].last(), words[index].first()) {
+            let next = ids.len();
+            seam_of[index] = Some(*ids.entry(format!("{last}{first}")).or_insert(next));
+        }
+    }
+    let mut patterns = vec![""; ids.len()];
+    for (seam, &id) in &ids {
+        patterns[id] = seam.as_str();
+    }
+    // The build fails only past the automaton's size limits; then no seam joins two segments and
+    // each segment goes to its first covering table, the carrier it had before seams were read. ~keep
+    let automaton = match aho_corasick::AhoCorasick::new(&patterns) {
+        Ok(automaton) if !patterns.is_empty() => automaton,
+        _ => return vec![Vec::new(); words.len()],
+    };
+    let held: Vec<ahash::AHashSet<usize>> = holders
+        .iter()
+        .map(|(_, table_words)| {
+            table_words
+                .keys()
+                .flat_map(|word| automaton.find_overlapping_iter(word.as_str()))
+                .map(|found| found.pattern().as_usize())
+                .collect()
+        })
+        .collect();
+    seam_of
+        .iter()
+        .map(|seam| match seam {
+            Some(id) => (0..holders.len()).filter(|&holder| held[holder].contains(id)).collect(),
+            None => Vec::new(),
+        })
+        .collect()
 }
 
 /// Apply all 5 text repair passes in a single traversal over a segment's text.
