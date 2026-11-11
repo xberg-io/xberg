@@ -2343,6 +2343,20 @@ fn rows_that_share_no_words_run_no_similarity_test() {
     }
 }
 
+/// A native row reads only the OCR rows whose length can reach the similarity: OCR rows far longer
+/// than every native row are never read. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn ocr_rows_too_long_to_misread_a_native_row_are_not_read() {
+    use super::super::document::MISREAD_CANDIDATES_READ;
+    let native = tagged_rows(300, "native", "cm3");
+    let read = tagged_rows(300, "scanned and a far longer tail of other words", "cm3");
+    let before = MISREAD_CANDIDATES_READ.with(std::cell::Cell::get);
+    let _ = similarity_tests_of(&native, &read);
+    let rows = MISREAD_CANDIDATES_READ.with(std::cell::Cell::get) - before;
+    assert_eq!(rows, 0, "the native rows read {rows} OCR rows");
+}
+
 /// A page whose every OCR row misreads one native row runs about one similarity test per row, and
 /// every misread row leaves. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]

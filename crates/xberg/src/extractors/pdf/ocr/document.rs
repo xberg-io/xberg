@@ -316,6 +316,8 @@ const MISREAD_ROW_SIMILARITY: f64 = 0.9;
 thread_local! {
     /// How many row similarity tests this thread ran: the work a page's misread matching costs. ~keep
     pub(crate) static MISREAD_SIMILARITY_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many OCR rows the native rows of this thread read as misread candidates. ~keep
+    pub(crate) static MISREAD_CANDIDATES_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 /// The parts of a row that the misread test compares: its letters and digits with case,
 /// punctuation and whitespace folded away, their count, its letter runs (`letter_runs`) and its
@@ -454,6 +456,8 @@ impl<'k> MisreadCandidates<'k> {
         };
         let mut best: Option<(f64, usize, usize)> = None;
         for &(_, at) in &self.by_length[from..to.max(from)] {
+            #[cfg(test)]
+            MISREAD_CANDIDATES_READ.with(|read| read.set(read.get() + 1));
             if used.get(at).copied().unwrap_or(true) {
                 continue;
             }
