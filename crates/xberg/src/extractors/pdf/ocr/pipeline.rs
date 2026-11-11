@@ -2897,14 +2897,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     page,
                     doc,
                     text,
-                    &native_words_covered_pages,
-                    &native_ink_owned_pages,
-                    native_coverage_layers,
-                    &clean_native_ink_pages,
+                    super::native_word_coverage::FinalOcrStructureYieldSets {
+                        native_words_covered_pages: &native_words_covered_pages,
+                        native_ink_owned_pages: &native_ink_owned_pages,
+                        native_coverage_layers,
+                        clean_native_ink_pages: &clean_native_ink_pages,
+                    },
                 );
+                // Without the real OCR backends there are no admission sets to consult, so the
+                // fallback is the plain-acceptance route the gated helper opens with. ~keep
                 #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
-                let yields_to_native =
-                    super::native_word_coverage::final_ocr_structure_can_yield_to_native(page, doc, text);
+                let yields_to_native = super::document::plain_ocr_page_can_yield_to_native(doc, text);
                 yields_to_native
             });
         let has_formula = accumulated_formulas

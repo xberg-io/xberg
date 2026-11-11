@@ -1,4 +1,4 @@
-use super::super::native_word_coverage::final_ocr_structure_can_yield_to_native;
+use super::super::native_word_coverage::{FinalOcrStructureYieldSets, final_ocr_structure_can_yield_to_native};
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
 
 const PAGE: u32 = 7;
@@ -40,10 +40,12 @@ impl FinalPage {
             PAGE,
             &self.document,
             READ,
-            &self.words_covered,
-            &self.ink_owned,
-            Some(&self.layers),
-            &self.clean_admissions,
+            FinalOcrStructureYieldSets {
+                native_words_covered_pages: &self.words_covered,
+                native_ink_owned_pages: &self.ink_owned,
+                native_coverage_layers: Some(&self.layers),
+                clean_native_ink_pages: &self.clean_admissions,
+            },
         )
     }
 }

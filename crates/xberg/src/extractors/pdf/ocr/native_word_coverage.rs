@@ -666,6 +666,16 @@ pub(super) fn ink_owned_table_structure_can_yield_to_native(
     }
 }
 
+/// The admission sets the pipeline consults for the final yield decision; the module (and its
+/// callers) only compile where `ocr` is on and the target is not wasm32, so the fields need no
+/// feature gates. ~keep
+pub(super) struct FinalOcrStructureYieldSets<'a> {
+    pub(super) native_words_covered_pages: &'a ahash::AHashSet<u32>,
+    pub(super) native_ink_owned_pages: &'a ahash::AHashSet<u32>,
+    pub(super) native_coverage_layers: Option<&'a std::sync::Arc<ahash::AHashMap<u32, String>>>,
+    pub(super) clean_native_ink_pages: &'a std::collections::HashSet<u32>,
+}
+
 /// The pipeline's final call on whether a `complete_native_pages` member yields its OCR page to the
 /// native replacement: plain acceptance first, then the words-covered route, then ink ownership —
 /// whose clean layer reaches the check only for pages the clean-ink admission accepted. The formula
@@ -674,24 +684,18 @@ pub(super) fn final_ocr_structure_can_yield_to_native(
     page: u32,
     doc: &InternalDocument,
     read: &str,
-    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))] native_words_covered_pages: &ahash::AHashSet<u32>,
-    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))] native_ink_owned_pages: &ahash::AHashSet<u32>,
-    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))] native_coverage_layers: Option<
-        &std::sync::Arc<ahash::AHashMap<u32, String>>,
-    >,
-    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))] clean_native_ink_pages: &std::collections::HashSet<u32>,
+    sets: FinalOcrStructureYieldSets<'_>,
 ) -> bool {
     if super::document::plain_ocr_page_can_yield_to_native(doc, read) {
         return true;
     }
-    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    if native_words_covered_pages.contains(&page) {
+    if sets.native_words_covered_pages.contains(&page) {
         return has_only_certified_tesseract_text(doc) && super::document::ocr_elements_follow_text(doc, read);
     }
-    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    if native_ink_owned_pages.contains(&page) {
-        let clean_ink_layer = native_coverage_layers
-            .filter(|_| clean_native_ink_pages.contains(&page))
+    if sets.native_ink_owned_pages.contains(&page) {
+        let clean_ink_layer = sets
+            .native_coverage_layers
+            .filter(|_| sets.clean_native_ink_pages.contains(&page))
             .and_then(|layers| layers.get(&page))
             .map(String::as_str);
         return only_segments_certified_tesseract_text(doc, read)
