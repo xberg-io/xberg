@@ -15,7 +15,7 @@ use xberg::{ExtractionConfig, OcrConfig, PageConfig};
 
 const SCAN_SHA256: &str = "874bada67b7bf700d42df25265823799955ae37ba3ec0e283747d1f2cd5d94f7";
 const ENGLISH_SHA256: &str = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2";
-const PAGE_PREFIX_SHA256: &str = "31c5f60c88e8a7dbdb271039dc3e9d253ce8ca6f243fb32ed04a02bcafeaec63";
+const PAGE_PREFIX_SHA256: &str = "31b3370b6a7dd56e6c2364a53f450b3f1431f8996ecdb87ad4e340597e68e934";
 const CAPTION_START: &str = "Figure 4:";
 
 #[derive(serde::Deserialize)]
@@ -83,9 +83,17 @@ fn preserves_the_full_docling_caption_as_prose_on_page_nine_and_in_structure() {
         .map(|line| line.text.as_str())
         .collect::<Vec<_>>()
         .join("\n");
+    assert!(
+        plain_caption.split_whitespace().eq(line_text.split_whitespace()),
+        "the caption is exactly the six same-attempt lines"
+    );
+    assert!(
+        document.content.ends_with(&page.content),
+        "page nine is the plain rendering that ends the document"
+    );
     let preserved_prefix = page
         .content
-        .strip_suffix(&line_text)
+        .strip_suffix(plain_caption.trim_end())
         .expect("render the six same-attempt lines as prose on page nine");
     assert_eq!(hex::encode(Sha256::digest(preserved_prefix)), PAGE_PREFIX_SHA256);
 
@@ -109,12 +117,18 @@ fn preserves_the_full_docling_caption_as_prose_on_page_nine_and_in_structure() {
         serde_json::to_value(&document.tables[0]).unwrap()
     );
     assert_eq!(control.tables.len(), 2, "the separate control keeps its original grid");
-    assert!(original_pages[8].content.contains(source.table.markdown.trim()));
+    assert!(
+        original_pages[8]
+            .tables
+            .iter()
+            .any(|table| table.markdown.trim() == source.table.markdown.trim())
+    );
     assert_eq!(
         original_pages[8]
             .content
-            .replace(source.table.markdown.trim(), &line_text),
-        page.content,
+            .strip_suffix(plain_caption.trim_end())
+            .expect("the control page text is the plain rendering that ends with the grid's rows"),
+        preserved_prefix,
     );
 
     let structure = document.document.expect("requested document structure");

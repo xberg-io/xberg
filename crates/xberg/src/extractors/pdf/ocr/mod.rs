@@ -38,10 +38,16 @@ pub(crate) use hidden_layer::embedded_gap_placement;
 pub(in crate::extractors::pdf) use hidden_layer::preview_byte_limit;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod native_word_coverage;
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+mod number_recovery;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod orientation_retry;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(crate) use orientation_retry::recognition_retry_eligible;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) mod read_reuse;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) use pipeline::extract_mixed_ocr_native_with_probe_reads;
 mod pipeline;
 #[cfg(all(
     any(feature = "ocr", feature = "ocr-pipeline"),

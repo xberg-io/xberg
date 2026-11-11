@@ -3,8 +3,11 @@
 //! Tesseract reads a photograph as a long run of one- and two-letter fragments and stray
 //! symbols, one per line. [`super::scoring::is_ocr_recognition_noise`] flags such a page, but
 //! with `discard_suspected_ocr_noise` off the text is retained whole. This module prunes only
-//! the lines that carry no word-shaped token, and runs after the page verdict, so every
-//! backend, table and quality decision still sees the unpruned text. The page decision is
+//! the lines made of symbols and fragments, and runs after the page verdict, so every
+//! backend, table and quality decision still sees the unpruned text. A line is pruned only
+//! when it is dominated by tokens that are not plausible text; any line that reads as words,
+//! a list label or an equation is kept. Two 3-letter lowercase tokens together count as
+//! plausible (`mal cad` is kept); a lone one does not. The page decision is
 //! made once by [`page_is_dominated_by_noise_lines`]; the pruners below apply it without
 //! re-deciding, so a page's text and its paragraphs always lose the same lines.
 
@@ -16,16 +19,17 @@ const MIN_LINES: usize = 8;
 const MIN_WORD_LETTERS: usize = 3;
 /// A line made of one token needs one more letter: nothing around it vouches for a bare trigram.
 const MIN_LONE_WORD_LETTERS: usize = 4;
-/// English function words that let a short line such as `I am` or `Go to` count as a phrase.
-/// English-only: the same short words of another Latin-script language (`de la`) are pruned.
-const FUNCTION_WORDS: [&str; 26] = [
+/// Short function words of English and the other Latin-script languages Tesseract commonly reads,
+/// which let a short line such as `I am`, `Go to` or `du Louvre` count as text.
+const FUNCTION_WORDS: [&str; 43] = [
     "a", "am", "an", "as", "at", "be", "by", "do", "go", "he", "i", "if", "in", "is", "it", "me", "my", "no", "of",
-    "on", "or", "so", "to", "up", "us", "we",
+    "on", "or", "so", "to", "up", "us", "we", "de", "la", "le", "les", "du", "des", "un", "une", "et", "en", "au",
+    "aux", "el", "los", "las", "der", "die",
 ];
 /// Operators that, between two operands, make a line an equation or a sum. `-`, `*` and `/` are
 /// left out: Tesseract draws them from rules and specks, giving `fragment - fragment` noise.
-const OPERATORS: [&str; 9] = [
-    "=", "+", "<", ">", "\u{2264}", "\u{2265}", "\u{d7}", "\u{f7}", "\u{2260}",
+const OPERATORS: [char; 9] = [
+    '=', '+', '<', '>', '\u{2264}', '\u{2265}', '\u{d7}', '\u{f7}', '\u{2260}',
 ];
 /// Single letters that look like a vertical stroke or a ring and are what texture reads as, so
 /// they do not count as an equation variable (`i - l`).
@@ -66,14 +70,6 @@ fn letter_count(token: &str) -> usize {
     token.chars().filter(|c| c.is_alphabetic()).count()
 }
 
-fn has_vowel(token: &str) -> bool {
-    token.chars().any(|c| {
-        c.to_lowercase().any(|lower| {
-            "aeiouy\u{e0}\u{e1}\u{e2}\u{e3}\u{e4}\u{e5}\u{e6}\u{e8}\u{e9}\u{ea}\u{eb}\u{ec}\u{ed}\u{ee}\u{ef}\u{f2}\u{f3}\u{f4}\u{f5}\u{f6}\u{f8}\u{f9}\u{fa}\u{fb}\u{fc}\u{fd}\u{ff}\u{153}".contains(lower)
-        })
-    })
-}
-
 fn is_function_word(token: &str) -> bool {
     FUNCTION_WORDS.iter().any(|word| word.eq_ignore_ascii_case(token))
 }
@@ -96,53 +92,149 @@ fn is_word_like(token: &str, min_letters: usize) -> bool {
         || is_contraction(token)
 }
 
-/// An English phrase: two or more purely alphabetic tokens, each a function word or a word of 3 or
-/// more letters with a vowel, and at least one of them a function word of 2 or more letters. The
-/// vowel and length conditions keep `fragment word` junk such as `ee so` or `rs or` out.
-fn is_english_phrase(tokens: &[&str]) -> bool {
-    let cores: Vec<&str> = tokens.iter().map(|token| core(token)).collect();
-    cores.len() >= 2
-        && cores.iter().all(|c| {
-            c.chars().all(char::is_alphabetic)
-                && (is_function_word(c) || (letter_count(c) >= MIN_WORD_LETTERS && has_vowel(c)))
-        })
-        && cores.iter().any(|c| c.chars().count() >= 2 && is_function_word(c))
+/// A token of letters only, allowing an interior apostrophe, hyphen or dot (`don't`, `e-mail`, `U.S.A`).
+fn is_alphabetic_token(token: &str) -> bool {
+    !token.is_empty()
+        && token
+            .chars()
+            .all(|c| c.is_alphabetic() || matches!(c, '\'' | '\u{2019}' | '-' | '.'))
 }
 
-/// An operand of an equation: a digit-bearing token, a word of 3 or more letters, or one letter
-/// that is not a stroke-like glyph (`x`, `y`, `a`, `b`).
-fn is_operand(token: &str) -> bool {
-    let token = core(token);
-    let mut letters = token.chars().filter(|c| c.is_alphabetic());
+fn is_capitalized(token: &str) -> bool {
+    token.chars().next().is_some_and(char::is_uppercase)
+}
+
+/// A run of consecutive alphabet letters (`ABC`, `pqr`), which texture noise does not produce.
+fn is_alphabet_run(token: &str) -> bool {
+    let letters: Vec<u32> = token.chars().map(|c| u32::from(c.to_ascii_lowercase())).collect();
+    token.is_ascii()
+        && letters.len() >= MIN_WORD_LETTERS
+        && token.chars().all(|c| c.is_ascii_alphabetic())
+        && letters.windows(2).all(|pair| pair[1] == pair[0] + 1)
+}
+
+/// A list label such as `b)` or `c.`: one letter followed by a closing mark.
+fn is_list_label(token: &str) -> bool {
+    let mut chars = token.chars();
+    chars.next().is_some_and(char::is_alphabetic) && matches!(chars.as_str(), ")" | "." | ":")
+}
+
+/// A token that reads as text inside a multi-token line: a word of 3 or more letters, a function
+/// word, a capitalized initial or abbreviation of 1 or 2 letters (`X`, `Mr`, `Al`), a list label,
+/// a contraction, or a letter of a script Tesseract does not hallucinate.
+fn is_plausible_token(token: &str) -> bool {
+    if is_list_label(token) {
+        return true;
+    }
+    let stem = core(token);
+    stem.chars().any(|c| is_unspaced_script(c) || is_non_latin_letter(c))
+        || is_contraction(stem)
+        || (is_alphabetic_token(stem)
+            && (letter_count(stem) >= MIN_WORD_LETTERS
+                || is_function_word(stem)
+                || (is_capitalized(stem) && letter_count(stem) <= 2)))
+}
+
+/// A lone token has nothing around it to vouch for it, so it needs 4 letters, a capital or an
+/// alphabet run at 3 (`Qty`, `Yes`, `ABC`, `pqr`), or a capital and a closing mark at 2 (`No.`).
+fn is_plausible_lone_token(token: &str) -> bool {
+    let stem = core(token);
+    is_word_like(token, MIN_LONE_WORD_LETTERS)
+        || (is_alphabetic_token(stem)
+            && match letter_count(stem) {
+                MIN_WORD_LETTERS => is_capitalized(stem) || is_alphabet_run(stem),
+                2 => is_capitalized(stem) && token.ends_with(['.', '!', '?']),
+                _ => false,
+            })
+}
+
+/// Whether a line reads as text: a lone plausible token, or a line of which at least two thirds
+/// of the tokens are plausible and which holds a word of 3 or more letters or two function words,
+/// one of them of 2 or more letters (`a a` and `we SY` are not text).
+fn is_plausible_text(tokens: &[&str]) -> bool {
+    if let [token] = tokens {
+        return is_plausible_lone_token(token);
+    }
+    let plausible = tokens.iter().filter(|token| is_plausible_token(token)).count();
+    let function_words: Vec<&str> = tokens
+        .iter()
+        .map(|token| core(token))
+        .filter(|stem| is_function_word(stem))
+        .collect();
+    plausible * 3 >= tokens.len() * 2
+        && (tokens.iter().any(|token| is_word_like(token, MIN_WORD_LETTERS))
+            || (function_words.len() >= 2 && function_words.iter().any(|word| word.chars().count() >= 2)))
+}
+
+/// A token with a digit and a stray quotation mark or a trailing section mark (`\u{201c}9`,
+/// `\u{ab}5%`, `5\u{a7}`), which is what a photograph's texture reads as. A quoted number closes
+/// its quote (`\u{201c}9\u{201d}`, `\u{2018}9\u{2019}`) and `\u{a7}12` is a section reference.
+fn is_junk_digit_token(token: &str) -> bool {
+    let balance = |openers: &[char], closers: &[char]| {
+        token.chars().filter(|c| openers.contains(c)).count() != token.chars().filter(|c| closers.contains(c)).count()
+    };
     token.chars().any(|c| c.is_numeric())
-        || letter_count(token) >= MIN_WORD_LETTERS
-        || (token.chars().count() == 1 && letters.next().is_some_and(|c| !STROKE_LETTERS.contains(&c)))
+        && (token.ends_with('\u{a7}')
+            || balance(&['\u{201c}', '\u{ab}', '\u{2018}'], &['\u{201d}', '\u{bb}', '\u{2019}'])
+            || token.matches('"').count() % 2 == 1)
 }
 
-fn has_operator_between_operands(tokens: &[&str]) -> bool {
-    tokens
-        .windows(3)
-        .any(|w| OPERATORS.contains(&w[1]) && is_operand(w[0]) && is_operand(w[2]))
+/// A line with a digit is noise only when every token that carries a digit is junk-shaped and no
+/// other token is plausible text, so `"5 items`, `Siehe \u{a7}12` and `\u{201c}3 days\u{201d}` stay.
+fn is_junk_digit_line(tokens: &[&str]) -> bool {
+    tokens.iter().all(|token| {
+        if token.chars().any(|c| c.is_numeric()) {
+            is_junk_digit_token(token)
+        } else {
+            !is_plausible_token(token)
+        }
+    })
 }
 
-/// A line is symbol noise when fewer than half its tokens are word-shaped and it holds no digit,
-/// no character of an unspaced script, no equation (`x = y`) and is not an English phrase.
-fn is_symbol_noise_line(line: &str) -> bool {
-    let tokens: Vec<&str> = line.split_whitespace().collect();
-    if tokens.is_empty()
-        || line.chars().any(|c| c.is_numeric() || is_unspaced_script(c))
-        || has_operator_between_operands(&tokens)
-        || is_english_phrase(&tokens)
+/// An operand of an equation: a word of 3 or more letters, one letter that is not a stroke-like
+/// glyph (`x`, `y`, `a`, `b`), or a call such as `f(x)`.
+fn is_operand(segment: &str) -> bool {
+    if let Some((name, rest)) = segment.split_once('(')
+        && let Some(argument) = rest.strip_suffix(')')
     {
+        return !name.is_empty()
+            && name.chars().all(char::is_alphabetic)
+            && !argument.is_empty()
+            && argument.chars().all(char::is_alphanumeric);
+    }
+    let token = core(segment);
+    token.chars().all(char::is_alphabetic)
+        && (letter_count(token) >= MIN_WORD_LETTERS
+            || (token.chars().count() == 1 && token.chars().all(|c| !STROKE_LETTERS.contains(&c))))
+}
+
+/// An equation or sum, spaced or not (`x = y`, `x=y`, `a=`, `f(x) = x`): an operator with at
+/// least one operand beside it and nothing but operands on either side.
+fn is_equation(line: &str) -> bool {
+    if !line.contains(OPERATORS) {
         return false;
     }
-    let min_letters = if tokens.len() == 1 {
-        MIN_LONE_WORD_LETTERS
-    } else {
-        MIN_WORD_LETTERS
-    };
-    let words = tokens.iter().filter(|token| is_word_like(token, min_letters)).count();
-    words * 2 < tokens.len()
+    let mut operands = line
+        .split(OPERATORS)
+        .map(str::trim)
+        .filter(|segment| !segment.is_empty());
+    let first = operands.next();
+    first.is_some_and(is_operand) && operands.all(is_operand)
+}
+
+/// A line is symbol noise when it holds no character of an unspaced script, no equation
+/// (`x = y`) and its tokens are not plausible text, or when it has a digit and every digit
+/// token is a digit with a stray quotation or section mark and no other token is plausible
+/// text. Any other line with a digit is kept.
+fn is_symbol_noise_line(line: &str) -> bool {
+    let tokens: Vec<&str> = line.split_whitespace().collect();
+    if tokens.is_empty() || line.chars().any(is_unspaced_script) {
+        return false;
+    }
+    if line.chars().any(|c| c.is_numeric()) {
+        return is_junk_digit_line(&tokens);
+    }
+    !(is_equation(line) || is_plausible_text(&tokens))
 }
 
 /// Whether symbol-noise lines are at least half of a page's non-blank lines, on a page with at
@@ -314,255 +406,5 @@ pub(crate) fn pruned_lines_warning(page_number: usize, removed: usize) -> crate:
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn noise_filler(count: usize) -> Vec<&'static str> {
-        ["a", "oe", "# =", "ae", "\"", "ee", "=|", "rs", "~", "ie"]
-            .into_iter()
-            .cycle()
-            .take(count)
-            .collect()
-    }
-
-    fn page(real: &[&str], filler: usize) -> String {
-        let mut lines: Vec<&str> = real.to_vec();
-        lines.extend(noise_filler(filler));
-        lines.join("\n\n")
-    }
-
-    fn pruned(real: &[&str], filler: usize) -> String {
-        let text = page(real, filler);
-        assert!(
-            page_is_dominated_by_noise_lines(text.lines()),
-            "gate must pass: {text:?}"
-        );
-        prune_text(&text).0
-    }
-
-    fn assert_kept_exactly(real: &[&str]) {
-        assert_eq!(pruned(real, 12), real.join("\n\n"), "{real:?}");
-    }
-
-    #[test]
-    fn keeps_word_shaped_lines_numbers_and_titles() {
-        for line in [
-            "SECTION TITLE",
-            "Chapter 1",
-            "Page 12",
-            "99",
-            "NORTH GATE 42",
-            "Figure 3 sunset",
-            "$5",
-            "1.",
-        ] {
-            assert!(!is_symbol_noise_line(line), "{line}");
-        }
-    }
-
-    #[test]
-    fn flags_fragment_and_symbol_lines() {
-        for line in [
-            "a",
-            "mal",
-            "# ae",
-            "ef \"ae Car Sa % ey Bo ary \"dl",
-            "~",
-            "I",
-            "ie ee",
-            "No.",
-        ] {
-            assert!(is_symbol_noise_line(line), "{line}");
-        }
-    }
-
-    #[test]
-    fn keeps_cjk_kana_hangul_and_thai_lines_of_two_or_three_characters() {
-        assert_kept_exactly(&[
-            "\u{5546}\u{54c1}",
-            "\u{5408}\u{8a08}\u{984d}",
-            "\u{3053}\u{3093}\u{306b}\u{3061}\u{306f}",
-            "\u{c548}\u{b155}",
-            "\u{0e2a}\u{0e27}\u{0e31}\u{0e2a}\u{0e14}\u{0e35}",
-        ]);
-    }
-
-    #[test]
-    fn keeps_arabic_and_cyrillic_lines() {
-        assert_kept_exactly(&[
-            "\u{645}\u{631}\u{62d}\u{628}\u{627}",
-            "\u{641}\u{64a} \u{627}\u{644}",
-            "\u{43f}\u{440}\u{438}\u{432}\u{435}\u{442}",
-            "\u{434}\u{430} \u{43d}\u{435}\u{442}",
-            "\u{44f}",
-        ]);
-    }
-
-    #[test]
-    fn keeps_short_codes_and_amounts() {
-        assert_kept_exactly(&["A1", "B2", "$5", "1.", "7"]);
-    }
-
-    #[test]
-    fn keeps_equations_between_variables_and_sums() {
-        assert_kept_exactly(&["x = y", "a + b", "n < m", "total = cost"]);
-    }
-
-    #[test]
-    fn accented_latin_vowels_count_as_vowels() {
-        for word in ["f\u{ff}r", "Gr\u{fc}n", "\u{c9}t\u{e9}", "p\u{e5}st", "s\u{153}ur"] {
-            assert!(has_vowel(word), "{word}");
-        }
-        assert!(!has_vowel("pst"));
-        assert!(
-            !is_symbol_noise_line("go f\u{ff}r"),
-            "a vowel-bearing accented word makes the phrase"
-        );
-    }
-
-    #[test]
-    fn prunes_a_three_token_non_english_line_on_a_gated_page() {
-        assert!(is_symbol_noise_line("de la gare"));
-        let text = page(&["Go to."], 12) + "\n\nde la gare";
-        assert_eq!(prune_text(&text).0, "Go to.");
-    }
-
-    #[test]
-    fn prunes_a_single_token_answer_and_an_unspaced_equation() {
-        for line in ["No.", "Yes", "Qty", "x=y"] {
-            assert!(is_symbol_noise_line(line), "{line}");
-        }
-    }
-
-    #[test]
-    fn prunes_fragment_operator_fragment_lines() {
-        for line in ["ae - ee", "i - l", "oe = ie", "a * e", "= -", "ee + oe"] {
-            assert!(is_symbol_noise_line(line), "{line}");
-        }
-        let text = page(&["x = y"], 12) + "\n\nae - ee\n\ni - l\n\noe = ie";
-        assert_eq!(prune_text(&text).0, "x = y");
-    }
-
-    #[test]
-    fn keeps_english_phrases_with_punctuation_case_and_contractions() {
-        assert_kept_exactly(&[
-            "I am",
-            "Go to",
-            "I am.",
-            "Go to.",
-            "I'm",
-            "IS IT",
-            "We go to",
-            "\"Go to\"",
-            "it\u{2019}s",
-        ]);
-    }
-
-    #[test]
-    fn prunes_a_function_word_beside_a_fragment() {
-        for line in ["ee so", "rs or", "ie it", "oe of", "a a", "de la", "zz to"] {
-            assert!(is_symbol_noise_line(line), "{line}");
-        }
-        let text = page(&["Go to."], 12) + "\n\nee so\n\nrs or";
-        assert_eq!(prune_text(&text).0, "Go to.");
-    }
-
-    #[test]
-    fn a_page_of_seven_lines_is_never_pruned_and_eight_is_judged() {
-        let seven: Vec<&str> = noise_filler(7);
-        assert!(!page_is_dominated_by_noise_lines(seven.into_iter()));
-        let eight: Vec<&str> = noise_filler(8);
-        assert!(page_is_dominated_by_noise_lines(eight.into_iter()));
-    }
-
-    #[test]
-    fn exactly_half_noise_is_pruned_and_one_fewer_is_not() {
-        let real = ["alpha beta", "gamma delta", "epsilon zeta", "theta iota"];
-        let half = page(&real, 4);
-        assert!(page_is_dominated_by_noise_lines(half.lines()));
-        let below = page(&real, 3);
-        let below_with_extra_real = format!("{below}\n\nkappa lambda");
-        assert!(!page_is_dominated_by_noise_lines(below_with_extra_real.lines()));
-        assert_eq!(
-            prune_text(&half).0,
-            "alpha beta\n\ngamma delta\n\nepsilon zeta\n\ntheta iota"
-        );
-    }
-
-    #[test]
-    fn a_prose_page_with_a_few_short_lines_is_not_dominated() {
-        let mut lines = vec![
-            "The quick brown fox",
-            "jumps over",
-            "the lazy dog",
-            "and then",
-            "runs far away",
-        ];
-        lines.extend(["a", "b", "c"]);
-        let text = lines.join("\n");
-        assert!(!page_is_dominated_by_noise_lines(text.lines()));
-    }
-
-    #[test]
-    fn prunes_a_noise_page_and_keeps_its_real_lines() {
-        assert_eq!(pruned(&["SECTION TITLE", "page 12"], 10), "SECTION TITLE\n\npage 12");
-    }
-
-    #[test]
-    fn paragraph_text_loses_the_same_lines_as_the_page_text() {
-        let mut paragraph = crate::pdf::structure::types::PdfParagraph {
-            text: "oe\nSECTION TITLE\nae".to_string(),
-            lines: vec![],
-            dominant_font_size: 12.0,
-            heading_level: None,
-            is_bold: false,
-            is_list_item: false,
-            is_code_block: false,
-            is_formula: false,
-            is_page_furniture: false,
-            layout_class: None,
-            layout_region_path: None,
-            caption_for: None,
-            block_bbox: None,
-            word_count: 4,
-        };
-        let mut paragraphs = vec![paragraph.clone()];
-        prune_paragraphs(&mut paragraphs);
-        assert_eq!(paragraphs[0].text, "SECTION TITLE");
-        assert_eq!(paragraphs[0].word_count, 2);
-        paragraph.text = "oe\nae".to_string();
-        let mut emptied = vec![paragraph];
-        prune_paragraphs(&mut emptied);
-        assert!(emptied.is_empty());
-    }
-
-    #[cfg(all(feature = "ocr", feature = "pdf"))]
-    #[test]
-    fn annotations_on_surviving_lines_move_with_their_line() {
-        use crate::types::document_structure::{AnnotationKind, TextAnnotation};
-        use crate::types::internal::{ElementKind, InternalElement};
-
-        let mut element = InternalElement::text(ElementKind::Paragraph, "oe\nSECTION TITLE\nae\nlast line", 0);
-        element.annotations = vec![
-            TextAnnotation {
-                start: 3,
-                end: 10,
-                kind: AnnotationKind::Bold,
-            },
-            TextAnnotation {
-                start: 20,
-                end: 24,
-                kind: AnnotationKind::Bold,
-            },
-            TextAnnotation {
-                start: 0,
-                end: 2,
-                kind: AnnotationKind::Bold,
-            },
-        ];
-        assert!(prune_element_text(&mut element));
-        assert_eq!(element.text, "SECTION TITLE\nlast line");
-        let spans: Vec<(u32, u32)> = element.annotations.iter().map(|a| (a.start, a.end)).collect();
-        assert_eq!(spans, vec![(0, 7), (14, 18)]);
-    }
-}
+#[path = "symbol_noise_lines_tests.rs"]
+mod tests;

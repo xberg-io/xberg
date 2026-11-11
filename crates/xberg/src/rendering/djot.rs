@@ -436,47 +436,37 @@ fn escape_paragraph_block_prefix(text: &str) -> std::borrow::Cow<'_, str> {
     escaped.into()
 }
 
-/// Backslash-escapes the first character of a row that starts its own paragraph when that
-/// character could open Djot block syntax: a table, list, definition list, heading, quote,
-/// thematic break, div, code fence, footnote, link definition, caption or attribute line.
-/// Djot lets a backslash escape any ASCII punctuation character, so every punctuation start is
-/// escaped; only a `#` that is not a heading marker (`#hashtag`) stays plain. A row that
-/// starts with a letter or digit is escaped at the delimiter of a list label (`1.`, `a)`).
+/// Backslash-escapes every character of a leader row that Djot could read as markup, one test per
+/// character: the row start (with its run of one character), each inline delimiter, a colon before
+/// text and a sign after a brace. No escape frees a later delimiter, so the row text stays the row.
 fn escape_leading_block_marker(line: &str) -> String {
-    let Some(at) = leading_block_marker_at(line) else {
-        return line.to_string();
-    };
-    let (head, rest) = line.split_at(at);
-    let first = rest.chars().next().unwrap_or_default();
-    // After the first backtick or colon of a run is escaped, the rest of the run would still open
-    // a code span or an empty symbol, so the whole run is escaped.
-    let mut run = if matches!(first, '`' | ':') {
-        rest.len() - rest.trim_start_matches(first).len()
-    } else {
-        first.len_utf8()
-    };
-    // On the unescaped row, `{`, `[`, `!` and `:` hold the delimiters that follow them, so a row such as `{_!_`
-    // or `[]{}` stays text. Escaping only the opener would free those delimiters to become emphasis, a
-    // superscript or attributes, so the whole run of punctuation after the opener is escaped.
-    if matches!(first, '{' | '[' | '!' | ':') {
-        let extra = rest[run..]
-            .chars()
-            .take_while(|c| c.is_ascii_punctuation() && *c != '\\')
-            .count();
-        run += extra;
+    let start = leading_block_marker_at(line).map(|at| {
+        let first = line[at..].chars().next().unwrap_or_default();
+        at..line.len() - line[at..].trim_start_matches(first).len()
+    });
+    let mut escaped = String::with_capacity(line.len() + 8);
+    let mut previous = None;
+    let mut chars = line.char_indices().peekable();
+    while let Some((at, c)) = chars.next() {
+        let before_text = chars.peek().is_some_and(|(_, next)| !next.is_whitespace());
+        let escape = start.as_ref().is_some_and(|run| run.contains(&at))
+            || matches!(c, '\\' | '`' | '*' | '_' | '{' | '}' | '[' | ']' | '^' | '~' | '<')
+            || (c == ':' && before_text)
+            // djot.js opens `{+`, `{=` and `{-` even after an escaped brace. ~keep
+            || (matches!(c, '+' | '=' | '-') && previous == Some('{'));
+        if escape {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+        previous = Some(c);
     }
-    let escaped: String = rest[..run].chars().flat_map(|c| ['\\', c]).collect();
-    format!("{head}{escaped}{}", &rest[run..])
+    escaped
 }
 
 /// Byte offset of the character to escape when `line` could open Djot block syntax.
 fn leading_block_marker_at(line: &str) -> Option<usize> {
     let first = line.chars().next()?;
     if first.is_ascii_punctuation() {
-        // A backslash before punctuation already escapes it, and doubling it would free the next character.
-        if first == '\\' && line[1..].chars().next().is_some_and(|c| c.is_ascii_punctuation()) {
-            return None;
-        }
         let hashtag = first == '#'
             && line
                 .trim_start_matches('#')
