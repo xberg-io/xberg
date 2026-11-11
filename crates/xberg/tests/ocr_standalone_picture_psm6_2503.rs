@@ -132,17 +132,37 @@ fn a_dot_leader_table_of_contents_is_not_read_again_as_a_table() {
 }
 
 fn assert_rows_are_own_lines(format: OutputFormat) {
+    let is_djot = matches!(format, OutputFormat::Djot);
     let mut rendered = config(None);
     rendered.output_format = format;
     let result = helpers::extract_bytes_document_blocking(PICTURE_11PX, "image/png", &rendered).unwrap();
     assert_eq!(recorded_psm(&result), "6");
-    let lines: Vec<_> = result.content.lines().filter(|line| !line.trim().is_empty()).collect();
+    let mut lines: Vec<_> = result.content.lines().filter(|line| !line.trim().is_empty()).collect();
     assert_eq!(
         lines.len(),
         13,
         "header plus 12 rows, one per line:\n{}",
         result.content
     );
+    let djot_text;
+    if is_djot {
+        djot_text = jotdown::Parser::new(&result.content)
+            .inspect(|event| {
+                assert!(
+                    !matches!(event, jotdown::Event::Softbreak | jotdown::Event::Hardbreak),
+                    "expected each Djot row to be a separate paragraph, got an inline break:\n{}",
+                    result.content
+                );
+            })
+            .filter_map(|event| match event {
+                jotdown::Event::Str(text) => Some(text),
+                jotdown::Event::End(jotdown::Container::Paragraph) => Some(std::borrow::Cow::Borrowed("\n")),
+                _ => None,
+            })
+            .collect::<String>();
+        lines = djot_text.lines().collect();
+        assert_eq!(lines.len(), 13, "header plus 12 parsed Djot paragraphs:\n{djot_text}");
+    }
     let mut kept = 0;
     let mut next = 0;
     for row in PICTURE_11PX_ROWS.lines() {
