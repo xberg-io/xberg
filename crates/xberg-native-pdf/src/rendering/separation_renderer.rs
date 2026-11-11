@@ -2418,11 +2418,14 @@ fn measure_text_advance(text: &[u8], gs: &GraphicsState, fonts: &HashMap<String,
     // multiplied by font_size, plus per-char Tc spacing. ~keep
     let mut units: f32 = 0.0;
     let mut count: usize = 0;
+    // Tw applies only to the single-byte code 32 (§9.3.3), never to a Type0 CID. ~keep
+    let mut spaces: usize = 0;
     if let Some(info) = font_info.as_ref() {
         if info.subtype != "Type0" {
             for &b in text {
                 units += info.get_glyph_width(b as u16);
                 count += 1;
+                spaces += usize::from(b == 0x20);
             }
         } else {
             // Type0: iterate 2-byte codes (approx). GH #1631: the code read
@@ -2439,12 +2442,13 @@ fn measure_text_advance(text: &[u8], gs: &GraphicsState, fonts: &HashMap<String,
             }
         }
     } else {
-        for _ in text {
+        for &b in text {
             units += 500.0;
             count += 1;
+            spaces += usize::from(b == 0x20);
         }
     }
-    let advance = units * gs.font_size / 1000.0 + (count as f32) * gs.char_space;
+    let advance = units * gs.font_size / 1000.0 + (count as f32) * gs.char_space + (spaces as f32) * gs.word_space;
     Ok(if gs.text_wmode == 0 {
         advance * gs.horizontal_scaling / 100.0
     } else {

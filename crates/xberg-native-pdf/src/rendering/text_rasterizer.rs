@@ -1981,14 +1981,13 @@ impl TextRasterizer {
             gs.text_matrix.e,
             gs.text_matrix.f,
         );
-        let transform = base_transform.pre_concat(text_transform);
+        // Th stretches the box along with the pitch; a negative Th mirrors it. ~keep
+        let transform = base_transform.pre_concat(text_transform).pre_scale(h_scale, 1.0);
 
         for c in text.chars() {
             if !c.is_whitespace() {
                 let mut pb = PathBuilder::new();
-                if let Some(rect) =
-                    tiny_skia::Rect::from_xywh(x_cursor * h_scale, 0.0, char_width * 0.8, font_size * 0.8)
-                {
+                if let Some(rect) = tiny_skia::Rect::from_xywh(x_cursor, 0.0, char_width * 0.8, font_size * 0.8) {
                     pb.push_rect(rect);
                     if let Some(path) = pb.finish() {
                         guarded_fill_path(pixmap, &path, paint, tiny_skia::FillRule::Winding, transform, clip_mask);
@@ -2466,7 +2465,7 @@ mod tests {
     /// All horizontal widths are 1000 (one full em) and vertical metrics
     /// default to [`VerticalMetrics::SPEC_DEFAULT`] (`w1y = -1000`,
     /// `v_x = 500`, `v_y = 880`). Identity-V signals vertical writing.
-    fn make_vertical_test_font() -> FontInfo {
+    pub(super) fn make_vertical_test_font() -> FontInfo {
         FontInfo {
             base_font: "TestVertical".to_string(),
             subtype: "Type0".to_string(),
@@ -2942,3 +2941,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "text_rasterizer_tz_tests.rs"]
+mod tz_route_tests;
