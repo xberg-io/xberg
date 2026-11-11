@@ -329,6 +329,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Keep a Khmer text layer printed over a full-page picture.** (GH#2826)
+  Automatic OCR in a language that cannot read the layer's script now keeps the layer when it is drawn visibly over a
+  background picture, as on a flyer. A page whose text is invisible or sits under the picture still goes to OCR.
+
 - **(ocr): Keep Khmer number recovery available after bounded source declines.** (#2905)
   Completed declines charge the work already done, leaving room to verify supported pages later in the PDF.
   Cancellation and failures whose work cannot be measured still retain their reservation.

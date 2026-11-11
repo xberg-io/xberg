@@ -8,7 +8,7 @@
 //! when the read is confident prose that spells none of the layer's script.
 
 use super::unreadable_script::{
-    NativeLayer, first_stage, judgeable_boundaries, ocr_dropped_native_script, page_is_scan, script_letters,
+    NativeLayer, first_stage, judgeable_boundaries, ocr_dropped_native_script, page_reads_as_scan, script_letters,
     structured_scripts, uncovered_script_counts,
 };
 use crate::core::config::ExtractionConfig;
@@ -235,9 +235,10 @@ fn warning(message: String) -> crate::types::ProcessingWarning {
 /// contradicts (see [`read_contradicts_layer`]): the script rule must leave them to OCR.
 ///
 /// The read goes through the ordinary page route with noise discarding forced on, and only a read
-/// whose page confidence clears the acceptance gate counts. Scan pages are left out, since OCR
-/// reads them anyway. A document over the OCR preview size limit is not read, and a probe that
-/// fails leaves the layer native with a warning. Cancellation is returned as the error.
+/// whose page confidence clears the acceptance gate counts. Scan pages (see [`page_reads_as_scan`])
+/// are left out, since OCR reads them anyway. A document over the OCR preview size limit is not
+/// read, and a probe that fails leaves the layer native with a warning. Cancellation is returned as
+/// the error.
 ///
 /// Up to four pages spread across the candidates (first, last, evenly spaced) are read first; the
 /// rest of the first [`MAX_PROBED_PAGES`] candidates only if one of them is contradicted. A sentinel
@@ -270,7 +271,7 @@ pub(super) async fn contradicted_pages(
     };
     let mut eligible: Vec<u32> = candidates
         .into_iter()
-        .filter(|page| *page > 0 && !page_is_scan(&document, *page as usize - 1))
+        .filter(|page| *page > 0 && !page_reads_as_scan(&document, *page as usize - 1))
         .collect();
     eligible.sort_unstable();
     eligible.dedup();

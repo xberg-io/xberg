@@ -264,10 +264,21 @@ fn model_for(script: Script) -> &'static str {
 /// Whether the page is a scan or a page that carries one, by the rule the scanned-page detector
 /// uses: pictures covering at least 80% of it, or covering a quarter with a text layer too short to
 /// be the page's body. A page with a figure beside a full text layer is not.
-pub(super) fn page_is_scan(document: &xberg_native_pdf::PdfDocument, page_index: usize) -> bool {
+fn page_is_scan(document: &xberg_native_pdf::PdfDocument, page_index: usize) -> bool {
     scan_verdict(page_index, || {
         crate::pdf::scan_detect::full_page_raster_density(document, page_index).is_some()
     })
+}
+
+/// Whether the script rule leaves the page to OCR as a scan: it carries a picture (see
+/// [`page_is_scan`]) and its text layer is not drawn over a full-page picture. A layer printed
+/// visibly on a background picture is page content, which the completeness and ink checks judge
+/// like any other layer (#2826); a sidecar or text under the picture stays with the scan.
+pub(super) fn page_reads_as_scan(document: &xberg_native_pdf::PdfDocument, page_index: usize) -> bool {
+    page_is_scan(document, page_index)
+        && scan_verdict(page_index, || {
+            !crate::pdf::scan_detect::text_drawn_over_full_page_picture(document, page_index)
+        })
 }
 
 /// The verdict of a scan check, which is "a scan" when the check panics: a page whose raster cannot
@@ -645,9 +656,9 @@ fn read_pages_warning(read: &[(u32, Vec<Script>)], stage: &RouteStage) -> crate:
 /// languages covers (see [`unreadable_scripts`]). Pages that stay failing are unchanged, and the
 /// document-level flags follow from what remains.
 ///
-/// A page that is a scan or carries one (see [`page_is_scan`]) stays failing: its text layer says
-/// nothing about the picture, which OCR is the only reader of. Returns `ocr` warnings: one for the
-/// kept pages and one for the pages that stay failing although their layer is in an unreadable
+/// A page that is a scan or carries one (see [`page_reads_as_scan`]) stays failing: its text layer
+/// says nothing about the picture, which OCR is the only reader of. Returns `ocr` warnings: one for
+/// the kept pages and one for the pages that stay failing although their layer is in an unreadable
 /// script, so a caller whose scan is in Khmer is told to add `khm`. A page is in at most one.
 ///
 /// `ink_contradicted` lists pages whose ink an OCR read contradicted (see
@@ -700,7 +711,13 @@ pub(super) fn retain_unreadable_script_pages(
     // A scan is read by OCR, so only the stage that reads first can say its text is unreadable.
     let (read, kept): (Vec<_>, Vec<_>) = candidates
         .into_iter()
-        .map(|(candidate, stage)| (page_is_scan(&document, candidate.0 as usize - 1), candidate, stage))
+        .map(|(candidate, stage)| {
+            (
+                page_reads_as_scan(&document, candidate.0 as usize - 1),
+                candidate,
+                stage,
+            )
+        })
         .filter(|(scan, _, stage)| !scan || *stage == 0)
         .partition(|(scan, ..)| *scan);
     let read: Vec<_> = read
@@ -940,6 +957,20 @@ mod tests {
     const TEXT_WITH_FIGURE: &[u8] =
         include_bytes!("../../../tests/fixtures/pdf/khmer-cluster-2536/khmer-text-with-figure.pdf");
 
+    /// [`SCAN_WITH_OVERLAY`] with its Khmer layer drawn invisibly (render mode 3), as a scan's OCR
+    /// sidecar is: the picture is the page, and the layer is not drawn over it.
+    fn scan_with_sidecar() -> Vec<u8> {
+        let mut source = lopdf::Document::load_mem(SCAN_WITH_OVERLAY).expect("load the overlay fixture");
+        let page = *source.get_pages().get(&1).expect("the fixture has a page");
+        let content = [b"3 Tr\n".as_slice(), &source.get_page_content(page)].concat();
+        source
+            .change_page_content(page, content)
+            .expect("replace the page content");
+        let mut bytes = Vec::new();
+        source.save_to(&mut bytes).expect("serialize the fixture");
+        bytes
+    }
+
     const KHMER_MARKED: &str = concat!(
         "ខ្ញុំ\u{FFFD}\u{FFFD} ស្រលាញ់\u{FFFD} ",
         "ប្រទេស\u{FFFD}\u{FFFD} កម្ពុជា\u{FFFD} ",
@@ -1148,8 +1179,8 @@ mod tests {
     }
 
     #[test]
-    fn a_page_a_picture_covers_stays_failing_so_its_body_is_read() {
-        let (decision, warnings) = run(&[KHMER_MARKED], SCAN_WITH_OVERLAY, &config_with(&["eng"]));
+    fn a_scan_with_an_invisible_layer_stays_failing_so_its_body_is_read() {
+        let (decision, warnings) = run(&[KHMER_MARKED], &scan_with_sidecar(), &config_with(&["eng"]));
         assert_eq!(decision.failing_pages, [1]);
         assert!(decision.fallback);
         assert_eq!(warnings.len(), 1, "{warnings:?}");
@@ -1157,6 +1188,17 @@ mod tests {
             assert!(warnings[0].message.contains(part), "{part}: {}", warnings[0].message);
         }
         assert!(!warnings[0].message.contains("kept"));
+    }
+
+    /// #2826: a Khmer layer printed visibly over the picture that covers the page is page content.
+    #[test]
+    fn a_layer_drawn_visibly_over_a_full_page_picture_is_kept() {
+        let document = xberg_native_pdf::PdfDocument::from_bytes(SCAN_WITH_OVERLAY.to_vec()).unwrap();
+        assert!(page_is_scan(&document, 0), "the picture covers the page");
+        let (decision, warnings) = run(&[KHMER_MARKED], SCAN_WITH_OVERLAY, &config_with(&["eng"]));
+        assert!(decision.failing_pages.is_empty(), "{:?}", decision.failing_pages);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].message.contains("kept"), "{}", warnings[0].message);
     }
 
     #[test]
@@ -1408,7 +1450,8 @@ mod tests {
         let inherits = serde_json::json!({"backend": "tesseract", "priority": 100});
         let other = serde_json::json!({"backend": "tesseract", "priority": 50, "language": ["eng"]});
         let after_inheriting = serde_json::json!({"backend": "tesseract", "priority": 50});
-        for content in [ONE_PAGE, SCAN_WITH_OVERLAY] {
+        let sidecar = scan_with_sidecar();
+        for content in [ONE_PAGE, sidecar.as_slice()] {
             let (_, named) = run(&[KHMER_MARKED], content, &stages(own.clone(), after_inheriting.clone()));
             assert_eq!(named.len(), 1);
             assert!(
@@ -1441,7 +1484,8 @@ mod tests {
             {"backend": "tesseract", "priority": 100, "language": ["fra"]},
         ]}));
         with_tesseract_language(&mut stage_language, "deu");
-        for content in [ONE_PAGE, SCAN_WITH_OVERLAY] {
+        let sidecar = scan_with_sidecar();
+        for content in [ONE_PAGE, sidecar.as_slice()] {
             for config in [&inherited, &plain, &stage_eng] {
                 let (_, warnings) = run(&[KHMER_MARKED], content, config);
                 assert_eq!(warnings.len(), 1);
@@ -1901,7 +1945,7 @@ mod tests {
 
     #[test]
     fn a_scan_is_read_by_the_first_stage_whatever_a_later_stage_reads() {
-        let (decision, warnings) = run(&[UNMARKED], SCAN_WITH_OVERLAY, &khm_then_eng("khm", "eng"));
+        let (decision, warnings) = run(&[UNMARKED], &scan_with_sidecar(), &khm_then_eng("khm", "eng"));
         assert_eq!(decision.failing_pages, [1]);
         assert!(warnings.is_empty(), "{warnings:?}");
     }

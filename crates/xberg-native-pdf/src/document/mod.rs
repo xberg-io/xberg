@@ -1850,6 +1850,7 @@ mod objects;
 mod open;
 mod pages;
 mod paths;
+mod picture_text;
 mod reading_order;
 mod rect_api;
 mod redaction;
