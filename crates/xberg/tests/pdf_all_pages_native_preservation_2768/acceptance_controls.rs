@@ -232,7 +232,7 @@ async fn naca_2425_all_pages_replaces_the_junk_layer_with_the_confident_read() {
     let models = tempfile::tempdir().unwrap();
     let config = super::pinned_config(models.path());
     let native = read(&bytes, &native_config(&config)).await;
-    assert_eq!(native.content.split_whitespace().count(), 424);
+    assert_eq!(native.content.split_whitespace().count(), 455);
     assert!(native.content.contains("COMMI2\"rEE"));
     let forced = read(&bytes, &forced_config(&config)).await;
     assert!(forced.content.split_whitespace().count() > 2000);

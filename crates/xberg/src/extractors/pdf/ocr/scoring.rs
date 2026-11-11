@@ -1049,6 +1049,11 @@ pub(crate) fn is_ocr_recognition_noise(text: &str, thresholds: &OcrQualityThresh
     }
     stats.fragmented_word_ratio >= thresholds.max_ocr_output_fragmented_word_ratio
 }
+/// Whether the text has too few words for [`is_ocr_recognition_noise`] to judge it.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn is_below_noise_check_minimum(text: &str, thresholds: &OcrQualityThresholds) -> bool {
+    ocr_output_stats(text, thresholds).word_count < thresholds.min_words_for_ocr_output_check
+}
 /// Whether a page's Tesseract dictionary-invalid-word ratio crosses the configured
 /// threshold, supplementing [`is_ocr_recognition_noise`] rather than replacing it.
 ///

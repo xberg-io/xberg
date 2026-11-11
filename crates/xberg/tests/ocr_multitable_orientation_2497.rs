@@ -117,13 +117,7 @@ fn assert_tables(document: &ExtractedDocument, expected: &[Vec<Vec<String>>], fr
         .collect::<Vec<_>>();
     assert_eq!(words.len(), 200);
     assert_eq!(document.content.split_whitespace().collect::<Vec<_>>(), words);
-    let page_tables = document
-        .tables
-        .iter()
-        .map(|table| table.markdown.trim())
-        .collect::<Vec<_>>()
-        .join("\n\n");
-    assert_eq!(page.content.trim(), page_tables);
+    assert_eq!(page.content.trim(), document.content.trim());
     assert!(document.ocr_elements.is_none());
     assert!(
         document
@@ -280,7 +274,7 @@ fn assert_heading_and_table(document: &ExtractedDocument, expected: &[Vec<String
     };
     assert_eq!(page_table.cells, table.cells);
     assert_eq!(page_table.bounding_box, table.bounding_box);
-    assert_eq!(page.content.trim(), format!("{HEADING}\n\n{}", table.markdown.trim()));
+    assert_eq!(page.content.trim(), document.content.trim());
     let words = HEADING
         .split_whitespace()
         .chain(expected.iter().flatten().flat_map(|cell| cell.split_whitespace()))

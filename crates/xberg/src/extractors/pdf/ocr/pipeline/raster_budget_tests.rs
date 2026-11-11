@@ -164,6 +164,8 @@ async fn read_mixed(
         "",
         &boundaries,
         MixedOcrPageSelection {
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            probe_reads: None,
             ocr: selected,
             single_block: &[],
             preserve_native: &[],
