@@ -183,6 +183,23 @@ pub(super) fn scale_tables_into_render(
     true
 }
 
+/// Whether recognition certified this page as read sideways (90 or 270 degrees) by auto-rotate.
+pub(super) fn read_sideways(metadata: &crate::types::Metadata) -> bool {
+    use crate::ocr_metadata_keys::{OCR_AUTO_ROTATED_METADATA_KEY, OCR_ORIENTATION_DEGREES_METADATA_KEY};
+    metadata
+        .additional
+        .get(OCR_AUTO_ROTATED_METADATA_KEY)
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+        && matches!(
+            metadata
+                .additional
+                .get(OCR_ORIENTATION_DEGREES_METADATA_KEY)
+                .and_then(serde_json::Value::as_i64),
+            Some(90 | 270)
+        )
+}
+
 /// Scale bottom-left paragraph geometry per axis, e.g. from a raster's pixels to PDF points.
 pub(super) fn scale_paragraph_geometry(
     paragraphs: &mut [crate::pdf::structure::types::PdfParagraph],
@@ -472,5 +489,21 @@ mod tests {
         assert!(!scale_tables_into_render(&mut tables, (2550, 3298), (0, 2156)));
         assert!(!scale_tables_into_render(&mut tables, (0, 3298), (1667, 2156)));
         assert_eq!(boxes(&tables), placed);
+    }
+
+    #[test]
+    fn only_an_auto_rotated_quarter_turn_reads_sideways() {
+        let metadata = |auto: bool, degrees: i64| {
+            let mut metadata = crate::types::Metadata::default();
+            metadata.additional.insert("auto_rotated".into(), auto.into());
+            metadata.additional.insert("orientation_degrees".into(), degrees.into());
+            metadata
+        };
+        assert!(read_sideways(&metadata(true, 90)));
+        assert!(read_sideways(&metadata(true, 270)));
+        assert!(!read_sideways(&metadata(true, 180)));
+        assert!(!read_sideways(&metadata(true, 0)));
+        assert!(!read_sideways(&metadata(false, 90)));
+        assert!(!read_sideways(&crate::types::Metadata::default()));
     }
 }
