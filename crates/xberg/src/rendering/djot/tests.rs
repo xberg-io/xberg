@@ -1689,31 +1689,65 @@ fn footnotes_keep_inline_markup_and_smart_punctuation() {
     assert!(html.contains("<strong>bold</strong> … –"), "{html}");
 }
 
+fn heading_texts(output: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut current: Option<String> = None;
+    for event in jotdown::Parser::new(output) {
+        match event {
+            jotdown::Event::Start(jotdown::Container::Heading { .. }, _) => current = Some(String::new()),
+            jotdown::Event::End(jotdown::Container::Heading { .. }) => found.extend(current.take()),
+            jotdown::Event::Str(value) => {
+                if let Some(text) = current.as_mut() {
+                    text.push_str(&value);
+                }
+            }
+            _ => {}
+        }
+    }
+    found
+}
+
 #[test]
 fn test_render_djot_headings_titles_and_slide_titles_keep_block_start_text_unescaped() {
-    for text in ["1. Introduction", "A. Heading", "- x"] {
+    let mut failures = Vec::new();
+    for text in ["1. Introduction", "A. Heading", "- x", "# x", "> x", "1) x", "+ x"] {
         let mut b = InternalDocumentBuilder::new("test");
         b.push_title(text, None, None);
         b.push_heading(2, text, None, None);
         b.push_slide(1, Some(text), None);
         let out = render_djot(&b.build());
-        assert!(!out.contains('\\'), "escape in heading text {text:?}: {out}");
-        for line in [format!("# {text}"), format!("## {text}")] {
-            assert!(out.lines().any(|l| l == line), "missing {line:?} in: {out}");
+        if out.contains('\\') {
+            failures.push(format!("escape in heading text {text:?}: {out}"));
         }
-        let headings: Vec<String> = {
-            let mut found = Vec::new();
-            let mut in_heading = false;
-            for event in jotdown::Parser::new(&out) {
-                match event {
-                    jotdown::Event::Start(jotdown::Container::Heading { .. }, _) => in_heading = true,
-                    jotdown::Event::End(jotdown::Container::Heading { .. }) => in_heading = false,
-                    jotdown::Event::Str(value) if in_heading => found.push(value.to_string()),
-                    _ => {}
-                }
-            }
-            found
-        };
-        assert_eq!(headings, [text, text, text], "round trip of {text:?}: {out}");
+        if heading_texts(&out) != [text, text, text] {
+            failures.push(format!("round trip of {text:?}: {out}"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn test_render_djot_headings_titles_and_slide_titles_keep_a_leading_brace_as_text() {
+    let mut failures = Vec::new();
+    for text in ["{.x} Intro", "{#id} Intro", "{=fmt} Intro", "{ Intro"] {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_title(text, None, None);
+        b.push_heading(2, text, None, None);
+        b.push_slide(1, Some(text), None);
+        let out = render_djot(&b.build());
+        if heading_texts(&out) != [text, text, text] {
+            failures.push(format!("round trip of {text:?}: {out}"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn test_render_djot_paragraph_still_escapes_block_start_text() {
+    for (text, escaped) in [("1. Introduction", "1\\. Introduction"), ("# x", "\\# x")] {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_paragraph(text, vec![], None, None);
+        let out = render_djot(&b.build());
+        assert_eq!(out, format!("{escaped}\n"));
     }
 }

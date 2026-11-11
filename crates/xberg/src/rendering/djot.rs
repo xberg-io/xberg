@@ -39,13 +39,13 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
 
         match elem.kind {
             ElementKind::Title => {
-                let text = render_djot_inline(&elem.text, &elem.annotations);
+                let text = render_djot_heading_text(&elem.text, &elem.annotations);
                 let block = format!("# {}\n\n", text);
                 push_with_bq(&mut out, &block, bq_depth);
             }
             ElementKind::Heading { level } => {
                 let hashes = "#".repeat(level as usize);
-                let text = render_djot_inline(&elem.text, &elem.annotations);
+                let text = render_djot_heading_text(&elem.text, &elem.annotations);
                 let block = format!("{} {}\n\n", hashes, text);
                 push_with_bq(&mut out, &block, bq_depth);
             }
@@ -203,7 +203,7 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
                 if elem.text.is_empty() {
                     push_with_bq(&mut out, "\n---\n\n", bq_depth);
                 } else {
-                    let text = render_djot_inline(&elem.text, &elem.annotations);
+                    let text = render_djot_heading_text(&elem.text, &elem.annotations);
                     let mut block = String::with_capacity(12 + text.len());
                     block.push_str("\n---\n\n## ");
                     block.push_str(&text);
@@ -566,6 +566,17 @@ fn render_djot_annotated(text: &str, annotations: &[crate::types::document_struc
     match escape_block_prefix(&inline, false) {
         Cow::Borrowed(_) => inline,
         Cow::Owned(escaped) => escaped,
+    }
+}
+
+/// Render the text of a title, heading or slide title. These sit after their `#` marks, so the
+/// block-start escape does not apply, but a leading `{` still opens an attribute. ~keep
+fn render_djot_heading_text(text: &str, annotations: &[crate::types::document_structure::TextAnnotation]) -> String {
+    let inline = render_djot_inline(text, annotations);
+    if text.starts_with('{') && !annotations.iter().any(|annotation| annotation.start == 0) {
+        format!("\\{inline}")
+    } else {
+        inline
     }
 }
 
