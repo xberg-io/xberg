@@ -11143,6 +11143,7 @@ version = "1.4.0"
 dependencies = [
  "aes-gcm",
  "ahash",
+ "aho-corasick",
  "async-trait",
  "auto_enums",
  "axum",

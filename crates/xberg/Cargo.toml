@@ -1333,6 +1333,7 @@ cli = ["services", "chunking", "url-ingestion"]
 [dependencies]
 aes-gcm = { version = "0.11", optional = true }
 ahash = { workspace = true }
+aho-corasick = "1.1.5"
 async-trait = { workspace = true }
 auto_enums = { version = "0.8", optional = true }
 axum = { version = "0.8", features = ["macros", "json", "multipart"], optional = true }

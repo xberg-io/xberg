@@ -4015,6 +4015,7 @@ name = "xberg"
 version = "1.4.0"
 dependencies = [
  "ahash",
+ "aho-corasick",
  "async-trait",
  "base64 0.23.1",
  "bitvec",
