@@ -1,7 +1,7 @@
-"""usage: generate.py OUT.pdf WIDTH_IN HEIGHT_IN DPI [--mixed]
+"""usage: generate.py OUT.pdf WIDTH_IN HEIGHT_IN DPI [--mixed] [--lettered]
 
 Writes an image-only PDF of a site plan: mostly one or two character labels and a notes block,
-stored as one DeviceRGB JPEG covering the page. With --mixed, a native text page precedes the scan.
+stored as one DeviceRGB JPEG covering the page. With --mixed, a native text page precedes the scan. With --lettered, each lot label is a two letter code, so a read of the sheet is mostly short words.
 """
 
 import hashlib
@@ -28,7 +28,7 @@ STREETS = ["OAK ST", "ELM DR", "PINE CT", "CEDAR LN", "MAPLE AVE", "BIRCH WAY", 
 NATIVE_TEXT = b"BT /F1 12 Tf 16 TL 72 720 Td " + b"(The native page remains unchanged.) ' " * 10 + b"ET"
 
 
-def render(w_in: float, h_in: float, dpi: int) -> bytes:
+def render(w_in: float, h_in: float, dpi: int, lettered: bool = False) -> bytes:
     if hashlib.sha256(FONT.read_bytes()).hexdigest() != FONT_SHA256:
         raise SystemExit(f"{FONT} does not match the pinned font")
     width, height = int(w_in * dpi), int(h_in * dpi)
@@ -45,7 +45,8 @@ def render(w_in: float, h_in: float, dpi: int) -> bytes:
             for row in (0, 1):
                 y0 = gy + row * cell
                 d.rectangle([gx, y0, gx + cell, y0 + cell], outline=0, width=max(1, int(4 * s)))
-                d.text((gx + cell // 3, y0 + cell // 3), str(lot), font=font(70), fill=0)
+                label = chr(65 + lot // 26 % 26) + chr(65 + lot % 26) if lettered else str(lot)
+                d.text((gx + cell // 3, y0 + cell // 3), label, font=font(70), fill=0)
                 if lot % 4 == 0:
                     d.text((gx + 20 * s, y0 + cell - 70 * s), "B" + str(lot % 9), font=font(40), fill=0)
                 lot += 1
@@ -113,11 +114,11 @@ def build(jpeg: bytes, w_in: float, h_in: float, dpi: int, mixed: bool) -> bytes
 
 
 def main() -> None:
-    args = [arg for arg in sys.argv[1:] if arg != "--mixed"]
+    args = [arg for arg in sys.argv[1:] if arg not in ("--mixed", "--lettered")]
     if len(args) != 4:
         raise SystemExit(__doc__)
     out, w_in, h_in, dpi = args[0], float(args[1]), float(args[2]), int(args[3])
-    Path(out).write_bytes(build(render(w_in, h_in, dpi), w_in, h_in, dpi, "--mixed" in sys.argv))
+    Path(out).write_bytes(build(render(w_in, h_in, dpi, "--lettered" in sys.argv), w_in, h_in, dpi, "--mixed" in sys.argv))
 
 
 if __name__ == "__main__":
