@@ -154,7 +154,10 @@ fn scan_pdf(aux: bool) -> Vec<u8> {
     ));
     let page = pdf.add_object(dictionary! {
         "Type" => "Page", "Parent" => pages, "MediaBox" => vec![0.into(), 0.into(), 983.04.into(), 737.28.into()],
-        "Resources" => dictionary! { "XObject" => dictionary! { "Scan" => raster,"Aux"=>auxiliary } }, "Contents" => content,
+        "Resources" => dictionary! {
+            "XObject" => dictionary! { "Scan" => raster, "Aux" => auxiliary }
+        },
+        "Contents" => content,
     });
     pdf.objects.insert(
         pages,
@@ -181,8 +184,13 @@ fn run(
         "use_cache": false, "force_ocr_pages": [1], "pages": {"extract_pages": true},
         "security_limits": {"max_content_size": budget_mib * 1024 * 1024},
         "ocr": {"backend": BACKEND, "quality_thresholds": {"discard_suspected_ocr_noise": discard},
-            "pipeline": if pipeline { serde_json::json!({"stages": [{"backend": BACKEND}]}) } else { serde_json::Value::Null }},
-    })).unwrap();
+            "pipeline": if pipeline {
+                serde_json::json!({"stages": [{"backend": BACKEND}]})
+            } else {
+                serde_json::Value::Null
+            }},
+    }))
+    .unwrap();
     let outcome = helpers::extract_bytes_document_blocking(&scan_pdf(aux), "application/pdf", &config);
     unregister_ocr_backend(BACKEND).unwrap();
     let observations = seen.lock().unwrap().clone();
