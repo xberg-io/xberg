@@ -163,6 +163,21 @@ mod tests {
                 panic!("invalid control for {path}: {error}");
             });
             let ocr = super::super::super::resolve_ocr_config(&config);
+            if path == "/force_ocr" {
+                assert!(!super::super::super::document::native_preservation_is_automatic(
+                    &config, 1
+                ));
+                assert!(super::super::super::tall_source::supports(&config, &ocr));
+            }
+            if path == "/ocr/language" {
+                assert!(super::super::super::document::native_preservation_is_automatic(
+                    &config, 1
+                ));
+                assert_eq!(
+                    super::super::super::tall_source::unsupported_reason(&config, &ocr),
+                    Some("the OCR language is not English only")
+                );
+            }
             if super::super::budget_retry_backend(&config, &ocr, &failed).is_some() {
                 admitted.push(path);
             }

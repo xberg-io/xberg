@@ -84,6 +84,14 @@ fn explicitly_forced_minimal_direct_ocr_keeps_its_budget_refusal() {
 }
 
 #[test]
+#[cfg(all(feature = "layout-types", not(paddle_ocr)))]
+fn layout_request_keeps_the_original_rgb_render_budget_refusal() {
+    let mut config = config();
+    config.layout = Some(Default::default());
+    assert_original_budget_error(SCAN, &config);
+}
+
+#[test]
 #[cfg(not(paddle_ocr))]
 fn minimal_direct_retry_does_not_omit_visible_paint_beside_the_rgb_scan() {
     let mut pdf = lopdf::Document::load_mem(SCAN).expect("valid baseline PDF");
