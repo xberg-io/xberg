@@ -4,11 +4,10 @@
 //! about `(text, x, baseline, width, font size)`, so they share this predicate and cannot drift.
 
 use super::ordering_snap::{is_list_marker, is_phrase};
+use super::span_ordering::SnapReach;
 
 /// Largest rise or drop of a stack member from its base line, in ems of the base.
 const MAX_SHIFT_EM: f32 = 0.5;
-/// Largest rise or drop of a lone mark (`SnapReach::ORDERING`); a stack needs a member beyond it.
-const SINGLE_MARK_REACH_EM: f32 = 0.35;
 /// Largest gap between a member and the right edge of the base or the stack so far, in ems of the base.
 const MAX_GAP_EM: f32 = 0.25;
 /// A member must be smaller than its base by at least this factor.
@@ -19,6 +18,13 @@ const MIN_DISPLACEMENT_EM: f32 = 0.1;
 /// Members differing in size by more than this fraction of the larger one sit at two levels. A
 /// numerator and denominator, `x_i^2`, a footnote-marker pair or a run of same-size glyphs do not.
 const MIN_SIZE_STEP: f32 = 0.1;
+
+/// Whether `text` holds a piece of a large delimiter or operator (`⎛ ⎞ ⎝ ⎠`, integral extensions,
+/// over- and underbrackets). Such a glyph spans the line it sits on; it is not a script.
+fn has_large_delimiter_piece(text: &str) -> bool {
+    text.chars()
+        .any(|c| matches!(c, '\u{2320}' | '\u{2321}' | '\u{239B}'..='\u{23B6}' | '\u{23DC}'..='\u{23E1}'))
+}
 
 /// One span as the stack rule sees it.
 #[doc(hidden)]
@@ -37,7 +43,8 @@ pub struct StackSpan<'a> {
 /// A stack is two or more compact spans, smaller than the base, that abut the base or the member
 /// before them in x and sit between a tenth and half an em off the base line. It needs two sizes and a member
 /// beyond a single mark's reach, so a lone mark, a fraction, `x_i^2`, a marker pair and chemical
-/// scripts stay with the single-mark rules. List markers and phrases are never members, and a base
+/// scripts stay with the single-mark rules. List markers, phrases and pieces of a large delimiter (`⎞`)
+/// are never members, and a base
 /// must end in a letter, digit or closing bracket: a large operator (`∑`) is followed by its body,
 /// not by scripts.
 #[doc(hidden)]
@@ -60,7 +67,11 @@ pub fn script_stack(base: &StackSpan<'_>, candidates: &[StackSpan<'_>]) -> Vec<u
         if c.x > edge + bfs * MAX_GAP_EM {
             break;
         }
-        let compact = c.font_size > 0.0 && !c.text.trim().is_empty() && !is_list_marker(c.text) && !is_phrase(c.text);
+        let compact = c.font_size > 0.0
+            && !c.text.trim().is_empty()
+            && !is_list_marker(c.text)
+            && !is_phrase(c.text)
+            && !has_large_delimiter_piece(c.text);
         let shift = (c.baseline - base.baseline).abs();
         if compact
             && bfs >= c.font_size * MIN_BASE_SIZE_FACTOR
@@ -76,7 +87,7 @@ pub fn script_stack(base: &StackSpan<'_>, candidates: &[StackSpan<'_>]) -> Vec<u
     }
     let out_of_reach = members
         .iter()
-        .any(|&i| (candidates[i].baseline - base.baseline).abs() > bfs * SINGLE_MARK_REACH_EM);
+        .any(|&i| (candidates[i].baseline - base.baseline).abs() > bfs * SnapReach::ORDERING.max_shift_em);
     let (min_fs, max_fs) = members.iter().fold((f32::MAX, 0.0f32), |(lo, hi), &i| {
         (lo.min(candidates[i].font_size), hi.max(candidates[i].font_size))
     });

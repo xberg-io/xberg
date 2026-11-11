@@ -30,3 +30,22 @@ runs:
     - name: Qualify native Khmer retention after English OCR
       shell: bash
       run: mise run rust:test:khmer-native-retention
+
+    - name: Cache pinned Khmer qualification model
+      uses: actions/cache@v6
+      with:
+        path: ${{ runner.temp }}/xberg-khm-87416418657359cb
+        key: native-number-khm-47f110575341b322052f3becbefee61a3ecf
+
+    - name: Qualify native Khmer numeric recovery
+      shell: bash
+      run: |
+        export XBERG_2408_KHM_MODEL="${RUNNER_TEMP:?}/xberg-khm-87416418657359cb/khm.traineddata"
+        if [ ! -s "$XBERG_2408_KHM_MODEL" ]; then
+          source scripts/lib/tessdata.sh
+          mkdir -p "$(dirname "$XBERG_2408_KHM_MODEL")"
+          revision=87416418657359cb625c412a48b6e1d6d41c29bd
+          model_base=https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast
+          download_traineddata khm "$XBERG_2408_KHM_MODEL" "${model_base}/${revision}/khm.traineddata"
+        fi
+        mise run rust:test:khmer-number-recovery
