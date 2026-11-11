@@ -343,12 +343,22 @@ fn upright_osd_preserves_its_existing_cells_and_content() {
 
 const NO_OSD_ORIGINAL_SHA256: &str = "ecd2f9eadd62662614e11e74d43ebac8286a993c812cb5fc3a2a4ca1f93259f9";
 
+/// The symbol-noise pruning of flagged pages (#2846) is a separate default; these tests pin the
+/// unrotated read itself, which that pruning would shrink to a few words.
+fn keep_every_line() -> xberg::core::config::OcrQualityThresholds {
+    xberg::core::config::OcrQualityThresholds {
+        prune_symbol_noise_lines: false,
+        ..Default::default()
+    }
+}
+
 fn no_osd_config(models: &std::path::Path, auto_rotate: Option<bool>) -> ExtractionConfig {
     let (_, mut config) = controls();
     seed_english(models);
     config.ocr = Some(OcrConfig {
         tessdata_path: Some(models.into()),
         auto_rotate,
+        quality_thresholds: Some(keep_every_line()),
         ..Default::default()
     });
     config
@@ -430,6 +440,7 @@ fn explicit_false_keeps_the_original_read_with_and_without_cached_osd() {
     let (_, mut cached) = controls();
     cached.ocr = Some(OcrConfig {
         auto_rotate: Some(false),
+        quality_thresholds: Some(keep_every_line()),
         ..Default::default()
     });
     assert_original_read(&extract("false-cached-osd", PDF, &cached));
@@ -471,6 +482,7 @@ fn cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
     std::fs::write(&source, PDF).unwrap();
     config.ocr = Some(OcrConfig {
         tessdata_path: Some(models.clone()),
+        quality_thresholds: Some(keep_every_line()),
         ..Default::default()
     });
     config.use_cache = true;
@@ -583,6 +595,7 @@ fn cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_config
     seed_english(models.path());
     config.ocr = Some(OcrConfig {
         tessdata_path: Some(models.path().into()),
+        quality_thresholds: Some(keep_every_line()),
         ..Default::default()
     });
     config.use_cache = true;
@@ -629,6 +642,7 @@ fn cached_context_changed_during_extraction_is_not_written() {
     seed_english(models.path());
     config.ocr = Some(OcrConfig {
         tessdata_path: Some(models.path().into()),
+        quality_thresholds: Some(keep_every_line()),
         ..Default::default()
     });
     config.use_cache = true;
