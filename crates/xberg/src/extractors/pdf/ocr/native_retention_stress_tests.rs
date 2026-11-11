@@ -6,6 +6,16 @@ use crate::extractors::pdf::unmapped_glyphs::{LOST_SYMBOL_GLYPH_MARKER, is_lost_
 use crate::types::document_structure::{AnnotationKind, TextAnnotation};
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
 
+/// A misread OCR row with no page and no line: it leaves the first plain row with its key. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn misread_row(key: &str) -> super::super::document::MisreadOcrRow {
+    super::super::document::MisreadOcrRow {
+        page: None,
+        line: None,
+        key: key.to_string(),
+    }
+}
+
 fn repeated_rows(count: usize) -> (InternalDocument, LayerFirst, InternalElement) {
     let mut document = InternalDocument::new("pdf");
     let mut source = Vec::new();
@@ -1525,7 +1535,7 @@ fn a_misread_ocr_row_leaves_the_structured_page_once_and_an_emptied_element_leav
     let first = LayerFirst {
         lines: "total 12 cm3".to_string(),
         lost_glyphs: 0,
-        misread_ocr_rows: vec!["total 12 cm\u{2019}".to_string()],
+        misread_ocr_rows: vec![misread_row("total 12 cm\u{2019}")],
     };
     put_layer_first_in_document(&mut doc, Some(1), &first);
     let texts: Vec<&str> = doc.elements.iter().map(|element| element.text.as_str()).collect();
@@ -1571,7 +1581,7 @@ fn a_misread_row_leaves_the_plain_paragraph_and_not_the_heading_with_the_same_te
         let first = LayerFirst {
             lines: "total 12 cm3".to_string(),
             lost_glyphs: 0,
-            misread_ocr_rows: vec![misread.to_string()],
+            misread_ocr_rows: vec![misread_row(misread)],
         };
         put_layer_first_in_document(&mut doc, Some(1), &first);
         let kinds: Vec<&str> = doc.elements.iter().map(|element| element.kind.discriminant()).collect();
