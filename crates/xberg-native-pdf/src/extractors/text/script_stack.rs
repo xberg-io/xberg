@@ -164,7 +164,9 @@ pub fn script_stack(base: &StackSpan<'_>, candidates: &[StackSpan<'_>]) -> Vec<u
 #[must_use]
 pub fn stack_parents(base: &StackSpan<'_>, members: &[StackSpan<'_>]) -> Vec<Option<usize>> {
     debug_assert!(
-        members.windows(2).all(|pair| pair[0].x <= pair[1].x),
+        members
+            .windows(2)
+            .all(|pair| pair[0].x.partial_cmp(&pair[1].x) != Some(std::cmp::Ordering::Greater)),
         "stack members must be sorted by x"
     );
     let reach = base.font_size * MAX_GAP_EM;
