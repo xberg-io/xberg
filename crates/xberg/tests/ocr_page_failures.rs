@@ -209,10 +209,19 @@ fn extract_with(
     raster: RasterOutcome,
     config: &ExtractionConfig,
 ) -> ExtractedDocument {
-    let pdf = pdf_with_image_on_page_two();
+    extract_from_pdf(name, render, raster, config, &pdf_with_image_on_page_two())
+}
+
+fn extract_from_pdf(
+    name: &'static str,
+    render: RenderOutcome,
+    raster: RasterOutcome,
+    config: &ExtractionConfig,
+    pdf: &[u8],
+) -> ExtractedDocument {
     let _ = unregister_ocr_backend(name);
     register_ocr_backend(Arc::new(StubBackend { name, render, raster })).expect("the stub backend registers");
-    let result = extract_bytes_document_blocking(&pdf, "application/pdf", config);
+    let result = extract_bytes_document_blocking(pdf, "application/pdf", config);
     unregister_ocr_backend(name).expect("the stub backend unregisters");
     result.expect("the retry must recover the page, so extraction must not error")
 }
