@@ -215,7 +215,10 @@ fn set_back_tm_after_continuing_tm_drops_the_record_before_same_font_tf() {
     let boxes: Vec<(String, f32, f32)> = spans.iter().map(|s| (s.text.clone(), s.bbox.x, s.bbox.width)).collect();
     assert_eq!(boxes.len(), 1, "{boxes:?}");
     assert_eq!(boxes[0].0.trim(), "ABA", "{boxes:?}");
-    assert!((boxes[0].1 - 100.0).abs() < 0.05 && (boxes[0].2 - (10.0 + GLYPH)).abs() < 0.05, "{boxes:?}");
+    assert!(
+        (boxes[0].1 - 100.0).abs() < 0.05 && (boxes[0].2 - (10.0 + GLYPH)).abs() < 0.05,
+        "{boxes:?}"
+    );
     assert_eq!(doc.extract_text(0).expect("extract_text").trim(), "ABA");
 }
 
@@ -260,7 +263,10 @@ fn actualtext_show_after_stretched_tm_under_tz_ends_the_run_at_its_rescaled_widt
     assert_eq!(boxes.len(), 1, "{boxes:?}");
     assert_eq!(boxes[0].0.trim(), "A BA", "{boxes:?}");
     let width = (x_b - 100.0) + 2.0 * GLYPH;
-    assert!((boxes[0].1 - 100.0).abs() < 0.05 && (boxes[0].2 - width).abs() < 0.05, "{boxes:?}");
+    assert!(
+        (boxes[0].1 - 100.0).abs() < 0.05 && (boxes[0].2 - width).abs() < 0.05,
+        "{boxes:?}"
+    );
     assert_eq!(doc.extract_text(0).expect("extract_text").trim(), "A BA");
 }
 
@@ -292,8 +298,11 @@ fn build(content: &[u8]) -> Vec<u8> {
         (font.to_string(), None),
         (font.replace("Helvetica", "Times-Roman"), None),
         (
-            font.replace("/LastChar 67 /Widths [600 600 0]", "/LastChar 68 /Widths [600 600 0 600] /ToUnicode 8 0 R")
-                .to_string(),
+            font.replace(
+                "/LastChar 67 /Widths [600 600 0]",
+                "/LastChar 68 /Widths [600 600 0 600] /ToUnicode 8 0 R",
+            )
+            .to_string(),
             None,
         ),
         (String::new(), Some(TO_UNICODE_F3)),
