@@ -107,7 +107,32 @@ fn keeps_accented_and_non_english_latin_lines() {
 
 #[test]
 fn keeps_single_token_answers_and_unspaced_equations() {
-    assert_kept_exactly(&["No.", "Yes", "Qty", "x=y", "ABC", "pqr", "LouvRe"]);
+    assert_kept_exactly(&["No.", "Yes.", "Qty?", "x=y", "ABC", "pqr", "LouvRe"]);
+}
+
+#[test]
+fn prunes_a_lone_capitalized_trigram_without_a_closing_mark_and_keeps_an_accented_one() {
+    for line in ["Tee", "Ces", "Jot", "Bid", "CAS", "NOo", "Yes", "Qty"] {
+        assert!(is_symbol_noise_line(line), "{line}");
+    }
+    for line in ["Yes.", "Qty?", "Bid!", "\u{c9}t\u{e9}", "ABC", "pqr"] {
+        assert!(!is_symbol_noise_line(line), "{line}");
+    }
+}
+
+#[test]
+fn keeps_real_words_beside_stray_glyphs() {
+    assert_kept_exactly(&[
+        "Annual report q z",
+        "Harbour Lights x y",
+        "Quarterly budget summary ~ ~",
+        "were ee",
+    ]);
+}
+
+#[test]
+fn a_list_label_a_contraction_and_an_unspaced_word_each_keep_a_line_of_stray_glyphs() {
+    assert_kept_exactly(&["a) b) and c)", "a i'm to ~", "~ \u{5546}\u{54c1} ~ ~"]);
 }
 
 #[test]
