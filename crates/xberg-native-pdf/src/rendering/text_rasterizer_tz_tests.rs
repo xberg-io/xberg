@@ -320,7 +320,7 @@ fn plate_skipped_text_applies_word_spacing_to_a_one_byte_space_in_a_type0_font()
 }
 
 #[test]
-fn plate_skipped_text_without_a_font_uses_the_rasterizer_half_em_estimate() {
+fn plate_skipped_text_without_a_font_uses_the_rasterizer_point_six_em_estimate() {
     let mut gs = gs_at(50.0);
     gs.char_space = 2.0;
     let advance = plate_advance(b"ab", None, &mut gs);
