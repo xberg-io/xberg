@@ -67,3 +67,12 @@ fn plain_image_carries_no_placeholder() {
         "Plain content must not carry an image placeholder: {content}"
     );
 }
+
+#[test]
+fn plain_table_cell_keeps_its_math_delimiters() {
+    let content = extract_content("vendored/docling/docx/table_with_equations.docx", OutputFormat::Plain);
+    assert!(
+        content.contains(r"$$A=\pi r^{2}$$"),
+        "a Plain table cell keeps the notation of its equation: {content}"
+    );
+}
