@@ -59,7 +59,7 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
                     }
                 } else {
                     let text = render_djot_annotated(&elem.text, &elem.annotations);
-                    let block = format!("{}\n\n", text);
+                    let block = format!("{text}\n\n");
                     push_with_bq(&mut out, &block, bq_depth);
                 }
             }
@@ -162,8 +162,19 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
                     && let Some(ocr_result) = image.and_then(|img| img.ocr_result.as_ref())
                     && !ocr_result.content.is_empty()
                 {
-                    let mut block = escape_text_lines(&ocr_result.content);
-                    block.push_str("\n\n");
+                    let markup = match ocr_result.metadata.output_format.as_deref() {
+                        Some(format) => matches!(format, "markdown" | "djot"),
+                        None => matches!(
+                            ocr_result.mime_type.as_ref(),
+                            "text/markdown" | "text/djot" | "text/x-djot"
+                        ),
+                    };
+                    let content = if markup {
+                        Cow::Borrowed(ocr_result.content.as_str())
+                    } else {
+                        Cow::Owned(escape_text_lines(&ocr_result.content))
+                    };
+                    let block = format!("{content}\n\n");
                     push_with_bq(&mut out, &block, bq_depth);
                 }
             }
@@ -256,7 +267,7 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
             }
             ElementKind::OcrText { .. } => {
                 let text = render_djot_annotated(&elem.text, &elem.annotations);
-                let block = format!("{}\n\n", text);
+                let block = format!("{text}\n\n");
                 push_with_bq(&mut out, &block, bq_depth);
             }
             ElementKind::ListStart { ordered } => {

@@ -1549,3 +1549,71 @@ fn list_items_keep_their_inline_annotations() {
         "<ul>\n<li>\n<strong>bold</strong>\n</li>\n</ul>\n"
     );
 }
+
+#[test]
+fn paragraph_and_ocr_line_breaks_cannot_open_a_new_block() {
+    use crate::types::ocr_elements::OcrElementLevel;
+
+    for kind in [
+        ElementKind::Paragraph,
+        ElementKind::OcrText {
+            level: OcrElementLevel::Line,
+        },
+    ] {
+        for (source, html) in [("x\n# y", "<p>x # y</p>\n"), ("x\n- y", "<p>x - y</p>\n")] {
+            let mut b = InternalDocumentBuilder::new("test");
+            b.push_paragraph(source, vec![], None, None);
+            let mut doc = b.build();
+            doc.elements[0].kind = kind;
+            let output = render_djot(&doc);
+            assert_eq!(
+                jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+                html,
+                "{output:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn image_ocr_preserves_declared_markup() {
+    for (mime, format) in [
+        ("text/markdown", None),
+        ("text/djot", None),
+        ("text/x-djot", None),
+        ("image/png", Some("markdown")),
+        ("image/png", Some("djot")),
+    ] {
+        let mut b = InternalDocumentBuilder::new("test");
+        let image = crate::types::ExtractedImage {
+            ocr_result: Some(Box::new(crate::types::ExtractedDocument {
+                content: "# OCR\n\n*bold*".into(),
+                mime_type: mime.into(),
+                metadata: crate::types::Metadata {
+                    output_format: format.map(str::to_owned),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        b.push_image(Some("Image"), image, None, None);
+        let output = render_djot(&b.build());
+        assert_eq!(output, "![Image]()\n\n# OCR\n\n*bold*\n", "{mime} {format:?}");
+        let html = jotdown::html::render_to_string(jotdown::Parser::new(&output));
+        assert!(html.contains(">OCR</h1>"), "{html}");
+        assert!(html.contains("<p><strong>bold</strong></p>"), "{html}");
+    }
+}
+
+#[test]
+fn footnotes_keep_inline_markup_and_smart_punctuation() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_paragraph("See note", vec![], None, None);
+    b.push_footnote_ref("1", "fn1", None);
+    let note = b.push_footnote_definition("*bold* ... --", "fn1", None);
+    b.set_layer(note, ContentLayer::Footnote);
+    let output = render_djot(&b.build());
+    let html = jotdown::html::render_to_string(jotdown::Parser::new(&output));
+    assert!(html.contains("<strong>bold</strong> … –"), "{html}");
+}
