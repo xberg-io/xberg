@@ -19,26 +19,55 @@ fn extract(name: &str, output_format: OutputFormat) -> String {
     extract_bytes_document_blocking(
         &bytes,
         "application/msword",
-        &ExtractionConfig { output_format, use_cache: false, ..Default::default() },
+        &ExtractionConfig {
+            output_format,
+            use_cache: false,
+            ..Default::default()
+        },
     )
     .expect("binary DOC extraction succeeds")
     .content
 }
 
 fn numbered_lines(content: &str) -> Vec<&str> {
-    content.lines().map(str::trim).filter(|line| line.contains("paragraph.")).collect()
+    content
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.contains("paragraph."))
+        .collect()
+}
+
+/// The rendered list items of a fixture whose paragraphs end in "item.".
+fn item_lines(content: &str) -> Vec<&str> {
+    content
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.contains("item."))
+        .collect()
 }
 
 #[test]
 fn numbered_doc_paragraphs_continue_across_three_headings() {
     for format in [OutputFormat::Markdown, OutputFormat::Plain] {
         let content = extract("continuous", format.clone());
-        assert_eq!(numbered_lines(&content), vec![
-            "1. First paragraph.", "2. Second paragraph.", "3. Third paragraph.",
-            "4. Fourth paragraph.", "5. Fifth paragraph.", "6. Sixth paragraph.",
-        ], "{content}");
+        assert_eq!(
+            numbered_lines(&content),
+            vec![
+                "1. First paragraph.",
+                "2. Second paragraph.",
+                "3. Third paragraph.",
+                "4. Fourth paragraph.",
+                "5. Fifth paragraph.",
+                "6. Sixth paragraph.",
+            ],
+            "{content}"
+        );
         if format == OutputFormat::Markdown {
-            assert_eq!(content.lines().filter(|line| line.starts_with("# ")).count(), 3, "{content}");
+            assert_eq!(
+                content.lines().filter(|line| line.starts_with("# ")).count(),
+                3,
+                "{content}"
+            );
         }
     }
 }
@@ -46,23 +75,80 @@ fn numbered_doc_paragraphs_continue_across_three_headings() {
 #[test]
 fn explicit_doc_restart_after_heading_starts_at_one() {
     let content = extract("restart", OutputFormat::Markdown);
-    assert_eq!(numbered_lines(&content), vec![
-        "1. First paragraph.", "2. Second paragraph.", "1. Third paragraph.", "2. Fourth paragraph.",
-    ], "{content}");
+    assert_eq!(
+        numbered_lines(&content),
+        vec![
+            "1. First paragraph.",
+            "2. Second paragraph.",
+            "1. Third paragraph.",
+            "2. Fourth paragraph.",
+        ],
+        "{content}"
+    );
 }
 
 #[test]
 fn independent_doc_list_after_heading_starts_at_one() {
     let content = extract("new_list", OutputFormat::Markdown);
-    assert_eq!(numbered_lines(&content), vec![
-        "1. First paragraph.", "2. Second paragraph.", "1. Third paragraph.", "2. Fourth paragraph.",
-    ], "{content}");
+    assert_eq!(
+        numbered_lines(&content),
+        vec![
+            "1. First paragraph.",
+            "2. Second paragraph.",
+            "1. Third paragraph.",
+            "2. Fourth paragraph.",
+        ],
+        "{content}"
+    );
 }
 
 #[test]
 fn doc_list_nondefault_start_continues_after_heading() {
     let content = extract("start_seven", OutputFormat::Markdown);
-    assert_eq!(numbered_lines(&content), vec![
-        "7. Seventh paragraph.", "8. Eighth paragraph.", "9. Ninth paragraph.",
-    ], "{content}");
+    assert_eq!(
+        numbered_lines(&content),
+        vec!["7. Seventh paragraph.", "8. Eighth paragraph.", "9. Ninth paragraph.",],
+        "{content}"
+    );
+}
+
+#[test]
+fn rich_doc_lists_keep_their_counts_across_levels_and_headings() {
+    // One fixture carrying what the others hold separately: two list levels, a
+    // non-decimal (roman) format, and an independent decimal list interleaved between
+    // the roman ones -- so integration exercises the label painting and the counts
+    // across a heading, not only the plain `N.` single-level shape. The roman labels
+    // are what Word paints; their sequence runs on across the interleaved plain list
+    // and across both headings, which the renderers' positional counter could not do.
+    let markdown = extract("rich", OutputFormat::Markdown);
+    assert_eq!(
+        item_lines(&markdown),
+        vec![
+            "- i. First roman item.",
+            "1. First nested item.",
+            "- ii. Second roman item.",
+            "1. First plain item.",
+            "- iii. Third roman item.",
+            "- iv. Fourth roman item.",
+        ],
+        "{markdown}"
+    );
+    assert_eq!(
+        markdown.lines().filter(|line| line.starts_with("# ")).count(),
+        2,
+        "{markdown}"
+    );
+    let plain = extract("rich", OutputFormat::Plain);
+    assert_eq!(
+        item_lines(&plain),
+        vec![
+            "i. First roman item.",
+            "1. First nested item.",
+            "ii. Second roman item.",
+            "1. First plain item.",
+            "iii. Third roman item.",
+            "iv. Fourth roman item.",
+        ],
+        "{plain}"
+    );
 }

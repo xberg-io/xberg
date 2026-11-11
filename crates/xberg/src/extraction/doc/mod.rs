@@ -20,6 +20,8 @@ use cp1252::cp1252_to_char;
 pub(crate) use images::{DocPicture, DocWithImages};
 
 #[cfg(test)]
+mod list_numbers_tests;
+#[cfg(test)]
 mod test_chpx;
 #[cfg(test)]
 mod test_floating_images;
@@ -512,9 +514,14 @@ struct ParagraphOutput {
 }
 
 /// What the paragraph mark resolves to: the paragraph's list membership (the
-/// counter having advanced with it) and its style's heading level.
+/// counter having advanced with it), whether the paragraph is list-bound at
+/// all, and its style's heading level.
 struct ResolvedMark {
     list: Option<DocListMembership>,
+    /// The paragraph carries a list binding (`sprmPIlfo`) whether or not the
+    /// list tables resolve it to a sequence: a picture's supported location
+    /// keys on the binding (#1550), the numbering on the resolution.
+    list_bound: bool,
     heading_level: Option<u8>,
 }
 
@@ -534,6 +541,7 @@ impl ParagraphOutput {
         // rendered). ~keep
         let mark = mark_fc_end.map(|fc_end| ResolvedMark {
             list: lists.membership_for_paragraph_end(fc_end, &mut self.numbering),
+            list_bound: lists.is_list_bound_paragraph_end(fc_end),
             heading_level: lists.heading_level_for_paragraph_end(fc_end),
         });
         let supported = push_paragraph(&mut self.paragraphs, &self.buffer, mark, table, budget)?;
@@ -659,8 +667,10 @@ fn push_paragraph(
     budget: &mut crate::extractors::security::SecurityBudget,
 ) -> Result<bool> {
     let (content, annotations) = chpx::normalize(&buffer.raw, &buffer.scripts, budget)?;
-    let (list, heading_level) = mark.map_or((None, None), |mark| (mark.list, mark.heading_level));
-    let supported = table.is_none() && list.is_none();
+    let (list, heading_level, list_bound) = mark.map_or((None, None, false), |mark| {
+        (mark.list, mark.heading_level, mark.list_bound)
+    });
+    let supported = table.is_none() && !list_bound;
     if content.is_empty() && table.is_none() {
         return Ok(supported);
     }

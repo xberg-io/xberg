@@ -98,8 +98,7 @@ fn should_close_an_open_list_before_a_table() {
     item.list = Some(crate::extraction::doc::DocListMembership {
         level: 0,
         ordered: false,
-        list_id: 0,
-        ordinal: None,
+        label: None,
     });
     let paragraphs = [item, paragraph("cell", CELL), paragraph("", ROW)];
     let mut doc = InternalDocument::new("doc");

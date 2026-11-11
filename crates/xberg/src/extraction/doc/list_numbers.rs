@@ -35,9 +35,13 @@ const LVLF_LEN: usize = 28;
 const NFC_BULLET: u8 = 23;
 const NFC_NONE: u8 = 255;
 
-/// `MSONFC` 0 paints plain decimal digits -- the one numbering scheme whose
-/// label this extractor paints, because a renderer can express `n.` exactly.
+/// `MSONFC` 0 paints plain decimal digits ([MS-DOC] 2.9.131); 1..=4 are the
+/// upper/lower-case roman and letter schemes [`painted_number`] writes.
 const NFC_DECIMAL: u8 = 0;
+const NFC_UPPER_ROMAN: u8 = 1;
+const NFC_LOWER_ROMAN: u8 = 2;
+const NFC_UPPER_LETTER: u8 = 3;
+const NFC_LOWER_LETTER: u8 = 4;
 
 /// [MS-DOC] bounds `LVLF.iStartAt` and `LFOLVL.iStartAt` to `0..=0x7FFF`
 /// (2.9.27, 2.9.144); outside that range a start value is malformed and the
@@ -47,34 +51,28 @@ const START_AT_MAX: i32 = 0x7FFF;
 /// Number of `LVL` records a non-simple list carries, one per outline level.
 const LVL_COUNT_MULTILEVEL: usize = 9;
 
-/// A paragraph's place in an automatic list, with the number Word paints.
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+/// A paragraph's place in an automatic list, with the label Word paints.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct DocListMembership {
     /// Zero-based nesting depth (`ilvl`).
     pub level: u8,
     /// Whether the level paints numbers rather than bullets, resolved from the
     /// list tables' `nfc`.
     pub ordered: bool,
-    /// The `lsid` of the list the paragraph belongs to ([MS-DOC] "Determining
-    /// List Formatting of a Paragraph"). Paragraphs sharing an `lsid` share a
-    /// number sequence however many `ilfo`s name it and whatever paragraphs
-    /// sit between them; distinct `lsid`s are independent lists. Default 0:
-    /// the identity of lists whose tables could not be read, which paint no
-    /// number.
+    /// The label Word paints before the paragraph: the level's `Xst` template with
+    /// every placeholder filled by the referenced level's number in that level's own
+    /// scheme (`1.`, `I.`, `(1)`, `i.1.`). Counted per [MS-DOC] "Determining Level
+    /// Number of a Paragraph" across the whole main story, so it runs on across the
+    /// headings between a list's paragraphs and survives a restart. `None` for a
+    /// level that paints no number: bullets, schemes the label channel does not
+    /// express, unreadable tables.
     #[serde(default)]
-    pub list_id: u32,
-    /// The number Word paints for the paragraph, when its level's label is
-    /// the decimal `N.` shape this extractor resolves. Counted per [MS-DOC]
-    /// "Determining Level Number of a Paragraph" across the whole main story,
-    /// so it runs on across the headings between a list's paragraphs.
-    /// `None` for bullets, non-decimal formats, unreadable tables.
-    #[serde(default)]
-    pub ordinal: Option<u32>,
+    pub label: Option<String>,
 }
 
 /// One list level's base formatting, from its `LVL` in `PlfLst` ([MS-DOC]
 /// 2.9.28 `LVL`, 2.9.27 `LVLF`).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(super) struct LevelFormat {
     /// `LVLF.nfc` -- the numbering scheme the level paints.
     pub nfc: u8,
@@ -87,22 +85,24 @@ pub(super) struct LevelFormat {
     /// `LVLF.ilvlRestartLim`, clamped to this level's index as the spec
     /// requires.
     pub restart_lim: u8,
-    /// The level's `Xst` is exactly this level's placeholder followed by a
-    /// period -- the one label shape the extractor paints (`N.` decimal).
-    pub decimal_label: bool,
+    /// The level's `Xst` label template in UTF-16 units, where a character
+    /// 0x0000..=0x0008 ([MS-DOC] 2.9.28) is a placeholder for the number of
+    /// the level whose index it is -- the binary spelling of DOCX's `%1.`.
+    /// Every label this extractor paints is painted from it.
+    pub template: Vec<u16>,
 }
 
 /// What an `LFO`'s `LFOLVL` overrides for one level ([MS-DOC] 2.9.144).
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 struct LfoLevelOverride {
     /// `LFOLVL.iStartAt` when `fStartAt` is set: the start value the first
     /// paragraph bound to that `ilfo` at that level paints.
     start_at: Option<u32>,
-    /// `LFOLVL.fFormatting` -- an embedded `LVL` replaces the level's
-    /// formatting. The embedded level is parsed to be walked past; its
-    /// formatting is not painted, so the level's number falls back to no
-    /// label rather than a guessed one.
-    formatting: bool,
+    /// `LFOLVL.fFormatting` -- an embedded `LVL` replaces the level's own
+    /// formatting: its `nfc`, start and `Xst` are what the level paints.
+    /// `None` when the level has no override or the embedded record could
+    /// not be read.
+    embedded: Option<LevelFormat>,
 }
 
 /// The `LFO` an `ilfo` names: the list (`lsid`) it points at and its level
@@ -114,20 +114,19 @@ struct LfoEntry {
 }
 
 /// The effective list binding of one paragraph: the `LFO`'s list identity,
-/// the base `LVL` format of its level, and the level overrides its `ilfo`
+/// the effective `LVL` format of its level (the embedded one when the `ilfo`'s
+/// `LFOLVL.fFormatting` replaces it), and the level overrides its `ilfo`
 /// carries.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct EffectiveLevel {
     /// The `lsid` of the list the paragraph belongs to. Paragraphs sharing
     /// an `lsid` share a number sequence, however many `ilfo`s name it.
     lsid: u32,
-    /// The level's base `LVL` format. `None` when the list tables do not
+    /// The level's effective format. `None` when the list tables do not
     /// describe the level.
     format: Option<LevelFormat>,
     /// The `ilfo`'s start override for this level, if any.
     start_override: Option<u32>,
-    /// The `ilfo` replaces the level's formatting with an embedded `LVL`.
-    formatting_override: bool,
 }
 
 /// The main story's list counters, advanced once per list-bound paragraph in
@@ -181,7 +180,12 @@ impl ListFormats {
         // table stream. Slicing to `lcb` cuts every `LVL` off, which yields an
         // empty format map whose absence the membership default then silently
         // papers over -- a bulleted list would report as ordered. ~keep
-        let (Some(plf_lst), Some(plf_lfo)) = (table_stream.get(lst_fc..), table_stream.get(lfo_fc..lfo_fc + lfo_lcb))
+        let Some(plf_lst) = table_stream.get(lst_fc..) else {
+            return formats;
+        };
+        let Some(plf_lfo) = lfo_lcb
+            .checked_add(lfo_fc)
+            .and_then(|end| table_stream.get(lfo_fc..end))
         else {
             return formats;
         };
@@ -198,7 +202,11 @@ impl ListFormats {
         if plf_lfo.len() < 4 {
             return;
         }
-        let c_lfo = u32::from_le_bytes([plf_lfo[0], plf_lfo[1], plf_lfo[2], plf_lfo[3]]) as usize;
+        let declared = u32::from_le_bytes([plf_lfo[0], plf_lfo[1], plf_lfo[2], plf_lfo[3]]) as usize;
+        // `cLfo` is file-read data: only records the table can actually hold are read.
+        // Sizing by the declared count unchecked wraps a 32-bit `usize` and walks
+        // billions of phantom records on a 64-bit one.
+        let c_lfo = declared.min((plf_lfo.len() - 4) / LFO_LEN);
         let mut data_at = 4 + c_lfo * LFO_LEN;
         for i in 0..c_lfo {
             let at = 4 + i * LFO_LEN;
@@ -212,15 +220,25 @@ impl ListFormats {
             let Ok(ilfo) = u16::try_from(i + 1) else {
                 break;
             };
-            let mut entry = LfoEntry { lsid, levels: AHashMap::new() };
+            let mut entry = LfoEntry {
+                lsid,
+                levels: AHashMap::new(),
+            };
 
             // `LFOData` begins with the CP of the list's first paragraph.
             // Some producers pad it with extra 0xFFFFFFFF dwords (a Word
             // quirk LibreOffice works around the same way), so dwords are
             // stepped over only where overrides follow -- never past a
             // record that has none, which would eat the next record's CP.
+            // A table cut short of a record's `LFOData` still binds that
+            // record when it needs no overrides: the CP only locates them.
             let Some(cp_at) = read_u32_at(plf_lfo, data_at).map(|(_, next)| next) else {
-                break;
+                if clfolvl > 0 {
+                    break;
+                }
+                data_at = data_at.saturating_add(4);
+                self.overrides_by_ilfo.insert(ilfo, entry);
+                continue;
             };
             data_at = cp_at;
             if clfolvl > 0 {
@@ -228,35 +246,9 @@ impl ListFormats {
                     data_at += 4;
                 }
             }
-            for _ in 0..clfolvl {
-                let Some((i_start_at, next)) = read_i32_at(plf_lfo, data_at) else {
-                    break;
-                };
-                let Some(&bits) = plf_lfo.get(next) else {
-                    break;
-                };
-                // `LFOLVL`: `iStartAt` (4 bytes), then one byte of `iLvl`
-                // (low 4 bits), `fStartAt` (0x10) and `fFormatting` (0x20),
-                // then 3 ignored bytes ([MS-DOC] 2.9.144).
-                let ilvl = bits & 0x0F;
-                let f_start_at = bits & 0x10 != 0;
-                let f_formatting = bits & 0x20 != 0;
-                let mut after = next + 4;
-                if f_formatting
-                    && let Some((_, embedded)) = read_level(plf_lfo, after, ilvl)
-                {
-                    after = embedded;
-                }
-                data_at = after;
-                if ilvl > 8 {
-                    continue;
-                }
-                entry.levels.insert(ilvl, LfoLevelOverride {
-                    start_at: (f_start_at && (0..=START_AT_MAX).contains(&i_start_at))
-                        .then(|| i_start_at as u32),
-                    formatting: f_formatting,
-                });
-            }
+            let (levels, after) = read_lfo_levels(plf_lfo, data_at, clfolvl);
+            entry.levels = levels;
+            data_at = after;
 
             self.overrides_by_ilfo.insert(ilfo, entry);
         }
@@ -268,21 +260,26 @@ impl ListFormats {
     }
 
     /// Resolve the list a paragraph's `ilfo`/`ilvl` binds to. `None` means
-    /// the `ilfo` names no `LFO`; the paragraph then keeps its binding but
-    /// paints no number and joins no sequence.
+    /// the `ilfo` names no `LFO` -- the paragraph is not in a list ([MS-DOC]
+    /// "Determining List Formatting of a Paragraph").
     fn effective_level(&self, ilfo: u16, ilvl: u8) -> Option<EffectiveLevel> {
         let entry = self.overrides_by_ilfo.get(&ilfo)?;
-        let format = self.levels_by_lsid.get(&entry.lsid).and_then(|levels| levels.get(usize::from(ilvl))).copied();
-        let level_override = entry.levels.get(&ilvl).copied();
+        let base = self
+            .levels_by_lsid
+            .get(&entry.lsid)
+            .and_then(|levels| levels.get(usize::from(ilvl)))
+            .cloned();
+        let level_override = entry.levels.get(&ilvl).cloned();
         Some(EffectiveLevel {
             lsid: entry.lsid,
-            format,
+            // An `fFormatting` override replaces the level's own formatting
+            // with the embedded `LVL`'s ([MS-DOC] 2.9.144).
+            format: level_override.as_ref().and_then(|lvl| lvl.embedded.clone()).or(base),
             start_override: level_override.and_then(|lvl| lvl.start_at),
-            formatting_override: level_override.is_some_and(|lvl| lvl.formatting),
         })
     }
 
-    /// Membership and the painted number for a paragraph bound to a list,
+    /// Membership and the painted label for a paragraph bound to a list,
     /// advancing `state`'s counters.
     ///
     /// [MS-DOC] "Determining Level Number of a Paragraph": a paragraph's
@@ -296,25 +293,19 @@ impl ListFormats {
     /// sequences they sit between simply continue. ~keep
     pub(super) fn membership_for(&self, binding: ListBinding, state: &mut NumberingState) -> Option<DocListMembership> {
         let level = binding.ilvl;
-        let Some(effective) = self.effective_level(binding.ilfo, level) else {
-            // The `ilfo` names no `LFO`: the file is invalid ([MS-DOC]
-            // "Determining List Formatting of a Paragraph" part 1 step 3).
-            // The paragraph keeps the membership shape #1550 gave it --
-            // ordered by default -- but paints no number.
-            return Some(DocListMembership { level, ordered: true, list_id: 0, ordinal: None });
-        };
+        // The `ilfo` names no `LFO`: the paragraph is not in a list ([MS-DOC]
+        // "Determining List Formatting of a Paragraph" -- an `ilfo` past the
+        // table binds nothing).
+        let effective = self.effective_level(binding.ilfo, level)?;
+        let format = effective.format.as_ref();
 
-        let format = effective.format;
-        // `nfc` 255 is not "an unordered list": it paints no marker at all --
-        // it is how Word encodes a paragraph bound to a list level with no
-        // number sequence, such as one removed from a list. Such a paragraph
-        // is prose (or its styled heading) to the reader, not a list item;
-        // a bullet's 23 keeps its membership.
-        if format.is_some_and(|format| format.nfc == NFC_NONE) {
-            return None;
-        }
-        let ordered = format.map_or(true, |format| format.nfc != NFC_BULLET);
-
+        // Step 8 of the same walk counts *every* paragraph with a nonzero
+        // `iLfo`, however its level paints -- so the restart below and the
+        // counter advance run before the markerless return: a level-0
+        // paragraph whose `nfc` is 255 paints no marker, yet still counts at
+        // level 0 and still restarts the deeper sequences its level
+        // interrupts.
+        //
         // Restart the deeper sequences of the same list that this paragraph's
         // level interrupts: level `S` restarts when this level is more
         // significant than `S`'s restart threshold ([MS-DOC] 2.9.27
@@ -326,39 +317,121 @@ impl ListFormats {
             .enumerate()
             .skip(usize::from(level) + 1)
         {
-            let threshold = if deeper_format.no_restart { deeper_format.restart_lim } else { deeper as u8 };
+            let threshold = if deeper_format.no_restart {
+                deeper_format.restart_lim
+            } else {
+                deeper as u8
+            };
             if level < threshold {
-                state.counters.remove(&(effective.lsid, u8::try_from(deeper).unwrap_or(u8::MAX)));
+                state
+                    .counters
+                    .remove(&(effective.lsid, u8::try_from(deeper).unwrap_or(u8::MAX)));
             }
         }
 
-        // The painted number: the level's sequence -- started at its
-        // effective start value by the first paragraph of the overriding
-        // `ilfo`, advanced by every paragraph since the last restart --
-        // provided the label is the one shape this extractor paints.
-        let ordinal = format
-            .filter(|format| {
-                format.nfc == NFC_DECIMAL && format.decimal_label && (0..=START_AT_MAX).contains(&format.start_at)
-            })
-            .filter(|_| !effective.formatting_override)
-            .map(|format| {
-                let key = (effective.lsid, level);
-                let first_use = state.started.insert((binding.ilfo, level));
-                let value = match (first_use, effective.start_override) {
-                    // The override's first paragraph paints the overridden
-                    // start value itself, not an advance from the base.
-                    (true, Some(start)) => start,
-                    _ => state
-                        .counters
-                        .get(&key)
-                        .copied()
-                        .map_or(format.start_at as u32, |count| count.saturating_add(1)),
-                };
-                state.counters.insert(key, value);
-                value
-            });
+        // This paragraph's level: started at its effective start value by the
+        // first paragraph of the overriding `ilfo`, advanced by every
+        // paragraph of the list and level since the last restart.
+        self.advance_level_counter(&effective, format, binding.ilfo, level, state);
 
-        Some(DocListMembership { level, ordered, list_id: effective.lsid, ordinal })
+        // `nfc` 255 is not "an unordered list": it paints no marker at all --
+        // it is how Word encodes a paragraph bound to a list level with no
+        // number sequence, such as one removed from a list. Such a paragraph
+        // is prose (or its styled heading) to the reader, not a list item;
+        // a bullet's 23 keeps its membership.
+        if format.is_some_and(|format| format.nfc == NFC_NONE) {
+            return None;
+        }
+        let ordered = format.map_or(true, |format| format.nfc != NFC_BULLET);
+
+        // The painted label: the level's `Xst` template, every placeholder
+        // filled with the referenced level's counted number in that level's
+        // scheme. Counted even when it cannot be painted -- the count is what
+        // survives headings; only the glyph depends on the scheme.
+        let label = if ordered {
+            format.and_then(|format| self.paint_label(&effective, format, level, state))
+        } else {
+            None
+        };
+
+        Some(DocListMembership { level, ordered, label })
+    }
+
+    /// Advance the paragraph's level's counter: started at its effective
+    /// start value by the first paragraph of the overriding `ilfo`, advanced
+    /// by every paragraph of the list and level since the last restart.
+    ///
+    /// Which start a restart begins at is pinned by the 2025 [MS-DOC] text
+    /// (2.9.144 `LFOLVL`): the `fStartAt` override applies once, at the
+    /// overriding `ilfo`'s first paragraph at the level, and a later restart
+    /// begins again at the level's own `LVLF.iStartAt`. (The 2017 text reads
+    /// the override to survive the restart.)
+    fn advance_level_counter(
+        &self,
+        effective: &EffectiveLevel,
+        format: Option<&LevelFormat>,
+        ilfo: u16,
+        level: u8,
+        state: &mut NumberingState,
+    ) {
+        let key = (effective.lsid, level);
+        let first_use = state.started.insert((ilfo, level));
+        let value = match (first_use, effective.start_override) {
+            // The override's first paragraph paints the overridden start
+            // value itself, not an advance from the base.
+            (true, Some(start)) => Some(start),
+            _ => state.counters.get(&key).copied().map(|count| count.saturating_add(1)).or_else(|| {
+                // No counter yet: the level's own start value, when it is in
+                // the [MS-DOC] range (2.9.27, 2.9.144 bound `iStartAt` to
+                // `0..=0x7FFF`). A malformed start starts no sequence.
+                format
+                    .filter(|format| (0..=START_AT_MAX).contains(&format.start_at))
+                    .map(|format| format.start_at as u32)
+            }),
+        };
+        if let Some(value) = value {
+            state.counters.insert(key, value);
+        }
+    }
+
+    /// Paint a level's label: its `Xst` template ([MS-DOC] 2.9.28) with every
+    /// placeholder -- a character 0x0000..=0x0008 -- replaced by the
+    /// referenced level's counted number in that level's scheme. `None` when
+    /// a placeholder names a level the tables do not describe, or a number
+    /// whose scheme the label channel does not express.
+    fn paint_label(
+        &self,
+        effective: &EffectiveLevel,
+        format: &LevelFormat,
+        level: u8,
+        state: &NumberingState,
+    ) -> Option<String> {
+        let levels = self.levels_of(effective.lsid);
+        let mut label = String::new();
+        for &unit in &format.template {
+            if unit <= 8
+                && let Ok(at) = u8::try_from(unit)
+            {
+                // This level's own placeholder reads the effective format --
+                // an `fFormatting` override replaced it wholesale.
+                let referenced = if at == level {
+                    format
+                } else {
+                    levels.get(usize::from(at))?
+                };
+                let value = state.counters.get(&(effective.lsid, at)).copied().or_else(|| {
+                    // A referenced level that has not counted yet paints
+                    // its start value.
+                    (0..=START_AT_MAX)
+                        .contains(&referenced.start_at)
+                        .then_some(referenced.start_at as u32)
+                })?;
+                label.push_str(&painted_number(value, referenced.nfc)?);
+            } else {
+                label.push(char::from_u32(u32::from(unit))?);
+            }
+        }
+        Some(label)
     }
 }
 
@@ -374,8 +447,9 @@ fn parse_plf_lst(plf_lst: &[u8], lcb: usize) -> AHashMap<u32, Vec<LevelFormat>> 
         return levels_by_lsid;
     }
     let c_lst = usize::from(u16::from_le_bytes([plf_lst[0], plf_lst[1]]));
-    // The declared lcb must actually hold the LSTF array it claims to.
-    if 2 + c_lst * LSTF_LEN > lcb {
+    // The declared lcb must actually hold the LSTF array it claims to. (The count is
+    // 16-bit, so the product cannot overflow even a 32-bit `usize`.)
+    if c_lst.checked_mul(LSTF_LEN).is_none_or(|arrays| 2 + arrays > lcb) {
         return levels_by_lsid;
     }
 
@@ -411,7 +485,7 @@ fn parse_plf_lst(plf_lst: &[u8], lcb: usize) -> AHashMap<u32, Vec<LevelFormat>> 
 ///
 /// Returns the level's format and the position one past the record. `level`
 /// is the record's zero-based index within its list, which clamps
-/// `ilvlRestartLim` and identifies the single-placeholder decimal label.
+/// `ilvlRestartLim` and identifies the level's own placeholder in its `Xst`.
 fn read_level(blocks: &[u8], pos: usize, level: u8) -> Option<(LevelFormat, usize)> {
     let lvlf = blocks.get(pos..pos + LVLF_LEN)?;
     let start_at = i32::from_le_bytes([lvlf[0], lvlf[1], lvlf[2], lvlf[3]]);
@@ -422,16 +496,64 @@ fn read_level(blocks: &[u8], pos: usize, level: u8) -> Option<(LevelFormat, usiz
     let restart_lim = lvlf[26].min(level);
     let after_grpprls = pos + LVLF_LEN + cb_grpprl_chpx + cb_grpprl_papx;
 
-    // Xst: a 16-bit character count followed by that many UTF-16 units. The
-    // decimal label shape is exactly this level's placeholder character
-    // (0x0000 + level) followed by a period; every other template -- bullets,
-    // composite multilevel labels, other schemes -- paints no number here.
+    // Xst: a 16-bit character count followed by that many UTF-16 units. A unit in
+    // 0x0000..=0x0008 is a placeholder for the number of the level whose index it is
+    // ([MS-DOC] 2.9.28); the rest is literal label text -- bullets, composite
+    // multilevel labels, parentheses, whatever the template paints.
     let cch = read_u16_at(blocks, after_grpprls)?;
     let chars_at = after_grpprls + 2;
-    let first = read_u16_at(blocks, chars_at);
-    let second = (cch >= 2).then(|| read_u16_at(blocks, chars_at + 2)).flatten();
-    let decimal_label = cch == 2 && first == Some(u16::from(level)) && second == Some(u16::from(b'.'));
-    Some((LevelFormat { nfc, start_at, no_restart, restart_lim, decimal_label }, chars_at + usize::from(cch) * 2))
+    let template = (0..usize::from(cch))
+        .map(|unit| read_u16_at(blocks, chars_at + unit * 2))
+        .collect::<Option<Vec<_>>>()?;
+    Some((
+        LevelFormat {
+            nfc,
+            start_at,
+            no_restart,
+            restart_lim,
+            template,
+        },
+        chars_at + usize::from(cch) * 2,
+    ))
+}
+
+/// Read an `LFOData`'s `clfolvl` `LFOLVL` records from `at`, returning the
+/// overrides by level and the position past the last one read ([MS-DOC]
+/// 2.9.144). A record cut short stops the walk there.
+fn read_lfo_levels(plf_lfo: &[u8], mut at: usize, clfolvl: usize) -> (AHashMap<u8, LfoLevelOverride>, usize) {
+    let mut levels = AHashMap::new();
+    for _ in 0..clfolvl {
+        let Some((i_start_at, next)) = read_i32_at(plf_lfo, at) else {
+            break;
+        };
+        let Some(&bits) = plf_lfo.get(next) else {
+            break;
+        };
+        // `LFOLVL`: `iStartAt` (4 bytes), then one byte of `iLvl` (low 4
+        // bits), `fStartAt` (0x10) and `fFormatting` (0x20), then 3 ignored
+        // bytes ([MS-DOC] 2.9.144).
+        let ilvl = bits & 0x0F;
+        let f_start_at = bits & 0x10 != 0;
+        let f_formatting = bits & 0x20 != 0;
+        let mut after = next + 4;
+        let mut embedded = None;
+        if f_formatting && let Some((embedded_format, after_embedded)) = read_level(plf_lfo, after, ilvl) {
+            after = after_embedded;
+            embedded = Some(embedded_format);
+        }
+        at = after;
+        if ilvl > 8 {
+            continue;
+        }
+        levels.insert(
+            ilvl,
+            LfoLevelOverride {
+                start_at: (f_start_at && (0..=START_AT_MAX).contains(&i_start_at)).then(|| i_start_at as u32),
+                embedded,
+            },
+        );
+    }
+    (levels, at)
 }
 
 /// Read a little-endian `u16` at `at`.
@@ -450,6 +572,65 @@ fn read_u32_at(bytes: &[u8], at: usize) -> Option<(u32, usize)> {
 fn read_i32_at(bytes: &[u8], at: usize) -> Option<(i32, usize)> {
     let (raw, next) = read_u32_at(bytes, at)?;
     Some((raw as i32, next))
+}
+
+/// A number in an `MSONFC` scheme the label channel expresses ([MS-DOC]
+/// 2.9.131): decimal and the upper/lower-case roman and letter schemes.
+/// Other schemes keep no label -- the renderers number them positionally, as
+/// before #2857 -- rather than paint a guessed glyph. Mirrors the DOCX
+/// path's `format_list_counter`.
+fn painted_number(value: u32, nfc: u8) -> Option<String> {
+    match nfc {
+        NFC_DECIMAL => Some(value.to_string()),
+        NFC_UPPER_ROMAN => roman_numeral(value),
+        NFC_LOWER_ROMAN => roman_numeral(value).map(|numeral| numeral.to_ascii_lowercase()),
+        NFC_UPPER_LETTER => letter_run(value),
+        NFC_LOWER_LETTER => letter_run(value).map(|letters| letters.to_ascii_lowercase()),
+        _ => None,
+    }
+}
+
+/// An upper-case roman numeral, for the numbers that have one (1 to 3999).
+fn roman_numeral(value: u32) -> Option<String> {
+    const NUMERALS: [(u32, &str); 13] = [
+        (1000, "M"),
+        (900, "CM"),
+        (500, "D"),
+        (400, "CD"),
+        (100, "C"),
+        (90, "XC"),
+        (50, "L"),
+        (40, "XL"),
+        (10, "X"),
+        (9, "IX"),
+        (5, "V"),
+        (4, "IV"),
+        (1, "I"),
+    ];
+    if !(1..4000).contains(&value) {
+        return None;
+    }
+    let mut rest = value;
+    let mut numeral = String::new();
+    for (amount, symbol) in NUMERALS {
+        while rest >= amount {
+            numeral.push_str(symbol);
+            rest -= amount;
+        }
+    }
+    Some(numeral)
+}
+
+/// Word's letter counter: `a` to `z`, then `aa` to `zz`, one letter repeated.
+/// A count past 26 x 32 is refused rather than written: the repeat grows with
+/// the number, and an `iStartAt` is the document's to choose.
+fn letter_run(value: u32) -> Option<String> {
+    if !(1..=26 * 32).contains(&value) {
+        return None;
+    }
+    let letter = char::from(b'a' + ((value - 1) % 26) as u8);
+    let repeat = ((value - 1) / 26 + 1) as usize;
+    Some(std::iter::repeat_n(letter, repeat).collect())
 }
 
 #[cfg(test)]
@@ -485,7 +666,11 @@ mod tests {
         lstf[..4].copy_from_slice(&lsid.to_le_bytes());
         out.extend_from_slice(&lstf);
         for level in 0..LVL_COUNT_MULTILEVEL {
-            out.extend_from_slice(&synthetic_lvl(start_at, NFC_DECIMAL, u8::try_from(level).unwrap_or(u8::MAX)));
+            out.extend_from_slice(&synthetic_lvl(
+                start_at,
+                NFC_DECIMAL,
+                u8::try_from(level).unwrap_or(u8::MAX),
+            ));
         }
         out
     }
@@ -533,13 +718,13 @@ mod tests {
     }
 
     /// Walk the given paragraphs, all bound to `ilfo` 1 at the given level,
-    /// and collect the ordinals they paint.
-    fn painted(formats: &ListFormats, paragraphs: &[(u16, u8)]) -> Vec<u32> {
+    /// and collect the labels they paint.
+    fn painted(formats: &ListFormats, paragraphs: &[(u16, u8)]) -> Vec<String> {
         let mut state = NumberingState::default();
         paragraphs
             .iter()
             .filter_map(|&(ilfo, ilvl)| formats.membership_for(ListBinding { ilfo, ilvl }, &mut state))
-            .filter_map(|membership| membership.ordinal)
+            .filter_map(|membership| membership.label)
             .collect()
     }
 
@@ -548,7 +733,7 @@ mod tests {
         let formats = synthetic_formats(&synthetic_plf_lst(7, 1), &synthetic_plf_lfo(7, &[Some(5)]));
         assert_eq!(
             painted(&formats, &[(1, 0), (1, 0), (1, 0)]),
-            vec![5, 6, 7],
+            vec!["5.", "6.", "7."],
             "the override starts the sequence at 5 once; later paragraphs advance it"
         );
     }
@@ -558,7 +743,7 @@ mod tests {
         let formats = synthetic_formats(&synthetic_plf_lst(7, 1), &synthetic_plf_lfo(7, &[None, None]));
         assert_eq!(
             painted(&formats, &[(1, 0), (2, 0), (1, 0)]),
-            vec![1, 2, 3],
+            vec!["1.", "2.", "3."],
             "an lsid's sequence is the list; the ilfo only carries overrides"
         );
     }
@@ -568,7 +753,7 @@ mod tests {
         let formats = synthetic_formats(&synthetic_plf_lst(7, 1), &synthetic_plf_lfo(7, &[None]));
         assert_eq!(
             painted(&formats, &[(1, 0), (1, 1), (1, 1), (1, 0), (1, 1)]),
-            vec![1, 1, 2, 2, 1],
+            vec!["1.", "1.", "2.", "2.", "1."],
             "the level-1 sequence starts at 1, advances, and restarts after the deeper \
              interrupting level-0 paragraph"
         );
@@ -590,24 +775,28 @@ mod tests {
         let formats = synthetic_formats(&out, &synthetic_plf_lfo(7, &[None]));
         let mut state = NumberingState::default();
         assert!(
-            formats.membership_for(ListBinding { ilfo: 1, ilvl: 0 }, &mut state).is_none(),
+            formats
+                .membership_for(ListBinding { ilfo: 1, ilvl: 0 }, &mut state)
+                .is_none(),
             "a binding whose level paints no marker is prose (or its styled heading), not a list item"
         );
     }
 
     #[test]
-    fn an_ilfo_past_the_lfo_table_keeps_membership_but_paints_no_number() {
+    fn an_ilfo_past_the_lfo_table_is_not_in_a_list() {
         let formats = synthetic_formats(&synthetic_plf_lst(7, 1), &[0, 0, 0, 0]);
         let mut state = NumberingState::default();
-        let membership = formats
-            .membership_for(ListBinding { ilfo: 1, ilvl: 0 }, &mut state)
-            .expect("an invalid ilfo still leaves the paragraph list-bound");
-        assert!(membership.ordered, "no tables read for the ilfo: ordered by default, as before #2857");
-        assert_eq!(membership.ordinal, None, "no LFO: no sequence, no painted number");
+        assert!(
+            formats
+                .membership_for(ListBinding { ilfo: 1, ilvl: 0 }, &mut state)
+                .is_none(),
+            "an ilfo naming no LFO binds no list, so the paragraph joins no sequence and \
+             paints no number"
+        );
     }
 
     #[test]
-    fn a_formatting_override_is_walked_past_and_later_overrides_still_apply() {
+    fn a_formatting_override_is_walked_past_and_the_embedded_level_paints() {
         // LFOLVL[0] replaces level 0's formatting with an embedded LVL;
         // LFOLVL[1] starts level 1 at 9. A walk that misreads the embedded
         // LVL's variable length would read LFOLVL[1] from the wrong bytes.
@@ -638,9 +827,8 @@ mod tests {
         let formats = synthetic_formats(&plf_lst, &plf_lfo);
         assert_eq!(
             painted(&formats, &[(1, 1), (1, 1)]),
-            vec![9, 10],
-            "the formatting override leaves its level unpainted, and the next LFOLVL's \
-             start override still applies"
+            vec!["9.", "10."],
+            "the next LFOLVL's start override still applies behind the embedded LVL"
         );
         let mut state = NumberingState::default();
         let level_zero = formats
@@ -648,8 +836,13 @@ mod tests {
             .expect("level 0 stays a list item");
         assert!(
             level_zero.ordered,
-            "the base format's ordered flag stands when only formatting is overridden"
+            "the embedded level is ordered where the base format was"
         );
-        assert_eq!(level_zero.ordinal, None, "an overridden format paints no confidently-resolved number");
+        assert_eq!(
+            level_zero.label.as_deref(),
+            Some("3."),
+            "the embedded LVL replaces the level's formatting: its own start, 3, is what \
+             the level paints"
+        );
     }
 }

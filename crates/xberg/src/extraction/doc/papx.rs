@@ -70,8 +70,9 @@ const BX_PAP_LEN: usize = 13;
 /// A paragraph's binding to an automatic list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct ListBinding {
-    /// 1-based index into the list-format overrides. Never zero: a zero
-    /// `ilfo` means "not in a list" and yields `None` rather than a binding.
+    /// 1-based index into the list-format overrides. Only a real binding
+    /// yields one: zero, 2047 (`ilfoNil`) and the negative values mean "not
+    /// in a list" and give `None` rather than a binding.
     pub ilfo: u16,
     /// Zero-based nesting depth. Absent `sprmPIlvl` means level 0.
     pub ilvl: u8,
@@ -139,16 +140,18 @@ fn list_binding_from_grpprl(grpprl: &[u8]) -> Option<ListBinding> {
 
     for_each_sprm(grpprl, |sprm, operand| match sprm {
         SPRM_P_ILFO if operand.len() >= 2 => {
-            ilfo = Some(u16::from_le_bytes([operand[0], operand[1]]));
+            let raw = u16::from_le_bytes([operand[0], operand[1]]);
+            // `ilfo` is a signed 2-byte value ([MS-DOC] 2.9.219): 0 means the
+            // paragraph is not in a list, and 2047 (`ilfoNil`) and the
+            // negative values are how Word records a paragraph removed from
+            // one. Neither binds a list.
+            ilfo = (raw != 0 && raw != 0x07FF && raw < 0x8000).then_some(raw);
         }
         SPRM_P_ILVL if !operand.is_empty() => ilvl = operand[0],
         _ => {}
     });
 
-    match ilfo {
-        Some(ilfo) if ilfo != 0 => Some(ListBinding { ilfo, ilvl }),
-        _ => None,
-    }
+    ilfo.map(|ilfo| ListBinding { ilfo, ilvl })
 }
 
 /// A paragraph's place in a table.
@@ -454,6 +457,14 @@ impl ListTables {
         self.index.table_for_paragraph_end(end_fc)
     }
 
+    /// Whether the paragraph whose mark ends at `end_fc` carries a list
+    /// binding, whether or not the list tables resolve it -- the question the
+    /// picture-location heuristics ask (#1550), where the numbering asks the
+    /// resolved one.
+    pub(super) fn is_list_bound_paragraph_end(&self, end_fc: u32) -> bool {
+        self.index.binding_for_paragraph_end(end_fc).is_some()
+    }
+
     /// Membership and the number Word paints for the paragraph whose mark
     /// ends at `end_fc`, advancing `state`'s counters; see
     /// [`ListFormats::membership_for`](super::list_numbers::ListFormats).
@@ -560,6 +571,21 @@ mod tests {
             None,
             "ilfo == 0 is Word's encoding for 'no list', not a binding to list 0"
         );
+    }
+
+    #[test]
+    fn special_ilfo_values_mean_not_in_a_list() {
+        // 2047 is `ilfoNil`; 65535 (-1) and 63489 (-2047) are negative as the
+        // signed 2-byte value [MS-DOC] 2.9.219 gives the operand.
+        for raw in [2047u16, 65535, 63489] {
+            let mut grpprl = vec![0x0B, 0x46];
+            grpprl.extend_from_slice(&raw.to_le_bytes());
+            assert_eq!(
+                list_binding_from_grpprl(&grpprl),
+                None,
+                "ilfo {raw} records a paragraph removed from a list"
+            );
+        }
     }
 
     #[test]

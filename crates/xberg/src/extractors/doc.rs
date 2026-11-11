@@ -294,7 +294,7 @@ fn push_paragraph_elements_with_images(
             continue;
         }
 
-        let Some(list) = paragraph.list else {
+        let Some(list) = paragraph.list.clone() else {
             close_lists(doc, &mut open, 0);
             let kind = match heading_kind(paragraphs, i, text, styled_headings) {
                 Some(level) => ElementKind::Heading { level },
@@ -346,16 +346,17 @@ fn push_list_paragraph(
 
     let element_depth = u16::try_from(open.len()).unwrap_or(u16::MAX);
     let mut element = InternalElement::text(ElementKind::ListItem { ordered: list.ordered }, text, element_depth);
-    // The number Word paints (#2857): a container closed at every heading or
+    // The label Word paints (#2857): a container closed at every heading or
     // prose paragraph reopens with the renderers' positional counter back at
-    // 1, so the resolved ordinal rides along as the item's source label --
-    // the same channel the DOCX extractor uses -- and the renderers keep the
+    // 1, so the resolved label rides along as the item's source label -- the
+    // same channel the DOCX extractor uses -- and the renderers keep the
     // source's numbering (the markdown bridge reopens an ordered run at a
-    // decimal label's value; plain and Djot print the label). An ordinal of
-    // None -- bullets, non-decimal formats, unreadable tables -- leaves the
-    // renderers' synthesized sequence, as before this fix.
-    if let Some(ordinal) = list.ordinal {
-        element.set_list_item_source_label(format!("{ordinal}."));
+    // decimal label's value; plain and Djot print the label). A label of
+    // None -- bullets, schemes the label channel does not express,
+    // unreadable tables -- leaves the renderers' synthesized sequence, as
+    // before this fix.
+    if let Some(label) = list.label {
+        element.set_list_item_source_label(label);
     }
     element.annotations = annotations.to_vec();
     doc.push_element(element);
