@@ -1556,14 +1556,12 @@ pub(crate) fn layer_lines_to_put_first(
     let lost_glyphs = super::super::unmapped_glyphs::strip_native_fragment(&mut lines);
     // A misread row leaves only from plain OCR text: a table cell, heading, annotated or anchored
     // element keeps its row beside the native one. ~keep
+    let page = plain_rows.page;
     let misread_ocr_rows: Vec<MisreadOcrRow> = restore
         .misread
         .into_iter()
         .filter(|row| plain_rows.take(&row.key))
-        .map(|row| MisreadOcrRow {
-            page: plain_rows.page,
-            ..row
-        })
+        .map(|row| MisreadOcrRow { page, ..row })
         .collect();
     (!lines.is_empty()).then_some(LayerFirst {
         lines,
