@@ -99,7 +99,10 @@ pub(crate) fn parse_hocr_to_internal_document_with_page_offset(
 /// Parsed hOCR plus bounded counters needed by the OCR warning pipeline. ~keep
 pub(crate) struct HocrParseResult {
     pub document: InternalDocument,
+    /// Lines the dictionary filter judged noise, including the ones kept for their numerals.
     pub dictionary_filtered_line_count: usize,
+    /// The judged lines kept because they hold a numeral; the rest were removed.
+    pub dictionary_kept_numeral_line_count: usize,
     pub retained_word_confidence_stats: RetainedWordConfidenceStats,
 }
 
@@ -324,6 +327,7 @@ fn parse_hocr_document_with_policy(
     let mut element_index: u32 = 0;
     let mut last_page: Option<u32> = None;
     let mut dictionary_filtered_line_count = 0usize;
+    let mut dictionary_kept_numeral_line_count = 0usize;
     let mut retained_word_confidence_stats = RetainedWordConfidenceStats::default();
 
     let bytes = hocr_html.as_bytes();
@@ -381,7 +385,7 @@ fn parse_hocr_document_with_policy(
                 .next()
                 .unwrap_or("p")
                 .to_ascii_lowercase();
-            let (paragraph, end_pos, filtered_lines) = parse_paragraph(
+            let (paragraph, end_pos, (filtered_lines, kept_numeral_lines)) = parse_paragraph(
                 hocr_html,
                 pos,
                 last_page.unwrap_or(page_offset),
@@ -392,6 +396,7 @@ fn parse_hocr_document_with_policy(
             );
             pos = end_pos;
             dictionary_filtered_line_count = dictionary_filtered_line_count.saturating_add(filtered_lines);
+            dictionary_kept_numeral_line_count = dictionary_kept_numeral_line_count.saturating_add(kept_numeral_lines);
 
             if let Some(mut elem) = paragraph {
                 if let Some(block) = block_extents.last() {
@@ -415,6 +420,7 @@ fn parse_hocr_document_with_policy(
     HocrParseResult {
         document: doc,
         dictionary_filtered_line_count,
+        dictionary_kept_numeral_line_count,
         retained_word_confidence_stats,
     }
 }
@@ -660,13 +666,8 @@ pub(crate) const DEFAULT_DICT_INVALID_LINE_RATIO: f64 = 0.6;
 /// Whether `line`'s dictionary-checkable words are, on balance, not real words.
 ///
 /// Returns `false` (never noise) for a line with fewer than
-/// [`MIN_DICT_CANDIDATES_FOR_LINE`] checkable words — see that constant's doc comment —
-/// and for a line that holds a numeral: a dictionary cannot judge a number, and a number
-/// the OCR read is data, so dropping its line loses it from the content (#2851). ~keep
+/// [`MIN_DICT_CANDIDATES_FOR_LINE`] checkable words — see that constant's doc comment.
 fn is_dictionary_noise_line(line: &HocrLineInfo, filter: &DictionaryLineFilter<'_>) -> bool {
-    if line.words.iter().any(|word| word.text.chars().any(char::is_numeric)) {
-        return false;
-    }
     let mut candidates = 0usize;
     let mut invalid = 0usize;
     for word in &line.words {
@@ -687,6 +688,12 @@ fn is_dictionary_noise_line(line: &HocrLineInfo, filter: &DictionaryLineFilter<'
         return false;
     }
     (invalid as f64 / candidates as f64) > filter.max_invalid_ratio
+}
+
+/// Whether any word on `line` holds a numeral: a dictionary cannot judge a number, and a number
+/// the OCR read is data, so dropping its line loses it from the content. ~keep
+fn holds_numeral(line: &HocrLineInfo) -> bool {
+    line.words.iter().any(|word| word.text.chars().any(char::is_numeric))
 }
 
 fn line_matches_rejected_table_words(line: &HocrLineInfo, protected_words: &HashSet<PositionedWord>) -> bool {
@@ -828,7 +835,7 @@ fn parse_paragraph(
     par_tag: &str,
     line_policy: &mut HocrLinePolicy<'_>,
     retained_word_confidence_stats: &mut RetainedWordConfidenceStats,
-) -> (Option<InternalElement>, usize, usize) {
+) -> (Option<InternalElement>, usize, (usize, usize)) {
     let bytes = html.as_bytes();
     let mut pos = start;
 
@@ -920,22 +927,29 @@ fn parse_paragraph(
         }
     }
 
-    let mut removed_line_count = 0usize;
+    let mut flagged_line_count = 0usize;
+    let mut kept_numeral_line_count = 0usize;
     if let Some(filter) = line_policy.dictionary_filter {
         let lines_before = lines.len();
         lines.retain(|line| {
-            !is_dictionary_noise_line(line, filter)
-                || line_policy
+            let noise = is_dictionary_noise_line(line, filter)
+                && !line_policy
                     .protected_words
-                    .is_some_and(|words| line_matches_rejected_table_words(line, words))
+                    .is_some_and(|words| line_matches_rejected_table_words(line, words));
+            // A number the OCR read is data the dictionary cannot judge, so its line stays. It is
+            // still counted as judged noise: OCR routing reads that count as a page-quality signal. ~keep
+            let keep_numeral = noise && holds_numeral(line);
+            kept_numeral_line_count += usize::from(keep_numeral);
+            !noise || keep_numeral
         });
-        removed_line_count = lines_before - lines.len();
-        if removed_line_count > 0 {
+        flagged_line_count = lines_before - lines.len() + kept_numeral_line_count;
+        if flagged_line_count > 0 {
             tracing::debug!(
                 page,
-                removed_line_count,
+                flagged_line_count,
+                kept_numeral_line_count,
                 max_invalid_ratio = filter.max_invalid_ratio,
-                "removed OCR line(s) whose dictionary-checkable words are mostly not real words"
+                "judged OCR line(s) as noise because their dictionary-checkable words are mostly not real words"
             );
         }
     }
@@ -953,7 +967,7 @@ fn parse_paragraph(
 
     let all_words: Vec<&HocrWordInfo> = lines.iter().flat_map(|l| l.words.iter()).collect();
     if all_words.is_empty() {
-        return (None, pos, removed_line_count);
+        return (None, pos, (flagged_line_count, kept_numeral_line_count));
     }
 
     let style = aggregate_word_style(&all_words);
@@ -1163,7 +1177,7 @@ fn parse_paragraph(
         }
     }
 
-    (Some(elem), pos, removed_line_count)
+    (Some(elem), pos, (flagged_line_count, kept_numeral_line_count))
 }
 
 fn claim_proved_table_fragment(line: &HocrLineInfo, words: &mut HashSet<PositionedWord>) -> bool {
@@ -2754,7 +2768,8 @@ mod tests {
 
             let with_numeral =
                 parse_hocr_to_internal_document_with_page_offset_and_stats(&hocr("1,250.75"), Some(&filter), 1);
-            assert_eq!(with_numeral.dictionary_filtered_line_count, 0);
+            assert_eq!(with_numeral.dictionary_filtered_line_count, 1);
+            assert_eq!(with_numeral.dictionary_kept_numeral_line_count, 1);
             assert_eq!(with_numeral.document.elements[0].text, "Report\nOWATS DNDEVET 1,250.75");
 
             let arabic_indic = parse_hocr_to_internal_document_with_page_offset_and_stats(
@@ -2762,7 +2777,8 @@ mod tests {
                 Some(&filter),
                 1,
             );
-            assert_eq!(arabic_indic.dictionary_filtered_line_count, 0);
+            assert_eq!(arabic_indic.dictionary_filtered_line_count, 1);
+            assert_eq!(arabic_indic.dictionary_kept_numeral_line_count, 1);
             assert_eq!(
                 arabic_indic.document.elements[0].text,
                 "Report\nOWATS DNDEVET \u{0661}\u{0662}\u{0663}"
@@ -2771,7 +2787,42 @@ mod tests {
             let letter_only =
                 parse_hocr_to_internal_document_with_page_offset_and_stats(&hocr("OPMENT"), Some(&filter), 1);
             assert_eq!(letter_only.dictionary_filtered_line_count, 1);
+            assert_eq!(letter_only.dictionary_kept_numeral_line_count, 0);
             assert_eq!(letter_only.document.elements[0].text, "Report");
+        }
+
+        /// Real numbers never make a line noise on their own: the filter counts only words of three
+        /// letters or more, so a price or a code that holds a numeral flags nothing and keeps nothing.
+        #[test]
+        fn a_line_of_short_words_and_numerals_is_not_noise() {
+            let hocr = |line: &str| {
+                let words: String = line
+                    .split(' ')
+                    .enumerate()
+                    .map(|(i, word)| {
+                        let left = i * 100;
+                        format!(
+                            r#"<span class="ocrx_word" title="bbox {left} 10 {} 40">{word}</span>"#,
+                            left + 90
+                        )
+                    })
+                    .collect();
+                format!(
+                    r#"<div class="ocr_page" title="ppageno 0"><p class="ocr_par"><span class="ocr_line">{words}</span></p></div>"#
+                )
+            };
+            let nothing_is_valid = |_: &str| Some(false);
+            let filter = DictionaryLineFilter {
+                is_valid_word: &nothing_is_valid,
+                max_invalid_ratio: TEST_THRESHOLD,
+            };
+
+            for line in ["Total $5", "Item A1 2026"] {
+                let result = parse_hocr_to_internal_document_with_page_offset_and_stats(&hocr(line), Some(&filter), 1);
+                assert_eq!(result.dictionary_filtered_line_count, 0, "{line}");
+                assert_eq!(result.dictionary_kept_numeral_line_count, 0, "{line}");
+                assert_eq!(result.document.elements[0].text, line);
+            }
         }
 
         /// The numeral decides on every line it sits on, whatever its place in the line: inside a
@@ -2803,7 +2854,8 @@ mod tests {
 
             let result = parse_hocr_to_internal_document_with_page_offset_and_stats(&hocr, Some(&filter), 1);
 
-            assert_eq!(result.dictionary_filtered_line_count, 1);
+            assert_eq!(result.dictionary_filtered_line_count, 4);
+            assert_eq!(result.dictionary_kept_numeral_line_count, 3);
             assert_eq!(
                 result.document.elements[0].text,
                 "OWATS DNDEVET OPM3NT\n7 DNDEVET OPMENT\nOWATS DNDEVET OPMENT 7"

@@ -30,6 +30,19 @@ impl ModelContext {
         Self::for_path(directory, config.psm)
     }
 
+    pub(super) fn for_provisioned(config: &TesseractConfig) -> Result<Self, OcrError> {
+        let directory = config
+            .tessdata_path
+            .as_deref()
+            .and_then(std::path::Path::to_str)
+            .filter(|directory| !directory.is_empty())
+            .ok_or_else(|| {
+                OcrError::InvalidConfiguration("Provisioned OCR requires an explicit model directory".into())
+            })?;
+        super::validation::validate_language_and_traineddata(&config.language, directory)?;
+        Self::for_path(directory.to_owned(), config.psm)
+    }
+
     pub(super) fn for_path(directory: String, psm: u8) -> Result<Self, OcrError> {
         // Match pinned Tesseract's PSM_OSD_ENABLED: these modes load and retain osd.traineddata. ~keep
         let osd_revision = if matches!(psm, 0 | 1 | 12) {
