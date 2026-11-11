@@ -1,4 +1,4 @@
-use super::{Failure, ProofResult, flate_filter, require};
+use super::{Failure, ProofResult, Work, flate_filter, require};
 use std::collections::HashSet;
 use std::io::Read;
 use xberg_native_pdf::{
@@ -29,7 +29,12 @@ pub(super) struct Admitted {
     pub(super) max_chars: usize,
 }
 
-pub(super) fn metadata(document: &PdfDocument, page: usize) -> ProofResult<()> {
+pub(super) struct Metadata {
+    pub(super) contents: Object,
+    pub(super) resources: Object,
+}
+
+pub(super) fn metadata(document: &PdfDocument, page: usize) -> ProofResult<Metadata> {
     require(!document.is_encrypted(), "encrypted source content")?;
     require(
         document
@@ -44,33 +49,32 @@ pub(super) fn metadata(document: &PdfDocument, page: usize) -> ProofResult<()> {
     let catalog = catalog.as_dict().ok_or(Failure::Declined("source catalog"))?;
     require(!catalog.contains_key("StructTreeRoot"), "tagged source content")?;
     let resources = document.get_page_resources(page)?;
-    let resources = resources.as_dict().ok_or(Failure::Declined("source resources"))?;
+    let resource_dict = resources.as_dict().ok_or(Failure::Declined("source resources"))?;
     require(
-        !resources.contains_key("Properties") && !resources.contains_key("ExtGState"),
+        !resource_dict.contains_key("Properties") && !resource_dict.contains_key("ExtGState"),
         "source property resources",
     )?;
-    let page = document.get_page(page)?;
-    let page = page.as_dict().ok_or(Failure::Declined("source page dictionary"))?;
+    let Object::Dictionary(mut page) = document.get_page(page)? else {
+        return Err(Failure::Declined("source page dictionary"));
+    };
     require(
         !page.contains_key("StructParents") && !page.contains_key("ActualText"),
         "tagged source page",
     )?;
-    require(page.contains_key("Contents"), "missing source Contents")
+    let contents = page
+        .remove("Contents")
+        .ok_or(Failure::Declined("missing source Contents"))?;
+    Ok(Metadata { contents, resources })
 }
 
-pub(super) fn admit(document: &PdfDocument, page: usize, max_bytes: usize) -> ProofResult<Admitted> {
-    metadata(document, page)?;
+pub(super) fn admit(document: &PdfDocument, contents: &Object, max_bytes: usize, work: &Work) -> ProofResult<Admitted> {
     require(max_bytes >= FIXED_WORK_BYTES, "source working byte budget")?;
-    let page = document.get_page(page)?;
-    let page = page.as_dict().ok_or(Failure::Declined("source page dictionary"))?;
-    let mut decoder = Contents::new(document);
-    decoder.visit(
-        page.get("Contents")
-            .ok_or(Failure::Declined("missing source Contents"))?,
-        0,
-    )?;
-    let max_chars = scan(&decoder.bytes)?;
-    let working_bytes = reserve_characters(max_chars, max_bytes)?;
+    work.reserve(FIXED_WORK_BYTES)?;
+    let mut decoder = Contents::new(document, work);
+    decoder.visit(contents, 0)?;
+    let max_chars = scan(&decoder.bytes).map_err(Failure::measured)?;
+    let working_bytes = reserve_characters(max_chars, max_bytes).map_err(Failure::measured)?;
+    work.reserve(working_bytes - FIXED_WORK_BYTES)?;
     Ok(Admitted {
         bytes: decoder.bytes,
         working_bytes,
@@ -96,15 +100,17 @@ fn reserve_characters(max_chars: usize, max_bytes: usize) -> ProofResult<usize> 
 
 struct Contents<'a> {
     document: &'a PdfDocument,
+    work: &'a Work,
     bytes: Vec<u8>,
     active: HashSet<ObjectRef>,
     objects: usize,
     raw_bytes: usize,
 }
 impl<'a> Contents<'a> {
-    fn new(document: &'a PdfDocument) -> Self {
+    fn new(document: &'a PdfDocument, work: &'a Work) -> Self {
         Self {
             document,
+            work,
             bytes: Vec::with_capacity(MAX_CONTENT_BYTES + 1),
             active: HashSet::new(),
             objects: 0,
@@ -118,7 +124,7 @@ impl<'a> Contents<'a> {
         match object {
             Object::Reference(reference) => {
                 require(self.active.insert(*reference), "source Contents cycle")?;
-                let resolved = self.document.resolve_object(object)?;
+                let resolved = self.work.resolve(self.document, object)?;
                 self.visit(&resolved, depth + 1)?;
                 self.active.remove(reference);
             }
