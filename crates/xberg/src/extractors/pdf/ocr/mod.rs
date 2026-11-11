@@ -187,9 +187,6 @@ mod combined_rotation_tests;
 #[cfg(all(test, feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
 mod batch_metadata_tests;
 
-#[cfg(all(test, feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
-mod strip_certificate_tests;
-
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 #[allow(unused_imports)]
 pub(crate) use pipeline::extract_with_ocr_with_page_hints;

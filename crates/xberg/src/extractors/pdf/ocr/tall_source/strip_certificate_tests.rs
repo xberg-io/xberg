@@ -4,27 +4,22 @@
 //! The `crates/xberg/tests/` suites cannot reach the certificate: both strip recovery routes
 //! gate the attempt on the builtin Tesseract instance, so a registered custom backend is never
 //! handed a strip through the public API. Like `tall_source::neutral_rgb_tests`, these tests
-//! drive `try_replace` directly — from a module beside, not inside, `tall_source`.
+//! drive `try_replace` directly, as a child module of `tall_source`.
 
-use super::tall_source::try_replace;
-use crate::core::config::{ExtractionConfig, OcrConfig};
-use crate::ocr_metadata_keys::{
-    OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY,
-    OCR_TESSERACT_DICT_INVALID_WORD_RATIO_METADATA_KEY,
+use super::strip_fixture::{
+    BILEVEL, GRAY, HEIGHT, INK_COLUMNS, INK_ROWS, LINE_PITCH, WIDTH, bilevel_samples, gray_samples, ink_runs,
+    is_ink_row, recognized, scan_pdf_at, source_lines,
 };
+use super::try_replace;
+use crate::core::config::{ExtractionConfig, OcrConfig};
+use crate::ocr_metadata_keys::{OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY};
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
-use crate::types::{ExtractedDocument, FormatMetadata, OcrBoundingGeometry, OcrConfidence, OcrElement, OcrMetadata};
+use crate::types::{ExtractedDocument, OcrBoundingGeometry, OcrConfidence, OcrElement};
 use std::borrow::Cow;
-use std::io::Write;
 use std::ops::Range;
 use std::sync::{Arc, Mutex};
 use xberg_native_pdf::PdfDocument;
 
-const WIDTH: u32 = 1200;
-const HEIGHT: u32 = 4400;
-const LINE_PITCH: u32 = 40;
-const INK_ROWS: Range<u32> = 10..20;
-const INK_COLUMNS: Range<usize> = 96..904;
 const LINE_TEXT: &str = "alpha bravo";
 /// The read the page keeps before the strips: fewer, worse words than the strips recover.
 const PRIOR_READ: (&str, f64, f64, u32) = ("one two three", 80.0, 0.1, 3);
@@ -44,6 +39,9 @@ const LINE_DISPLACEMENT: u32 = (LINE_PITCH - (INK_ROWS.end - INK_ROWS.start)) / 
 /// Rows a last line hangs past the strip bottom: fewer than the blank rows a midpoint cut
 /// leaves under a strip's last band.
 const LINE_OVERHANG: u32 = LINE_DISPLACEMENT / 3;
+/// Rows the first line of a strip with a following run extends past its own band: one row
+/// into the next band, across the blank rows that separate two fixture bands.
+const LINE_REACH: u32 = LINE_PITCH - (INK_ROWS.end - INK_ROWS.start) + 1;
 /// A dictionary-invalid ratio above the prior read's, but under the complete-rows path's
 /// ceiling, so only the certified-rows flag can decide the replacement.
 const CLEAN_PATH_INVALID_RATIO: f64 = 0.04;
@@ -61,10 +59,17 @@ enum Lines {
     ExtraTextLine,
     /// The processed height is one row short of the strip.
     WrongHeight,
+    /// The processed width is one column short of the strip.
+    WrongWidth,
     /// The first line of each strip is dropped into the blank gap below its ink band.
     DisplacedFirst,
     /// The last line of each strip hangs past the strip bottom.
     OverhangingLast,
+    /// The first line of each strip with a following run keeps its own band's top and
+    /// reaches into the next ink band.
+    BandReach,
+    /// The first line of each strip reports a right edge past the strip width.
+    OverWide,
     /// Exact lines at the clean-path ratio: the complete-rows evidence carries the replacement.
     CertifiedCleanPath,
     /// Omitted last lines at the clean-path ratio: the uncertified strips withhold that evidence.
@@ -108,31 +113,6 @@ impl OcrBackend for CertificateBackend {
     }
 }
 
-fn recognized(content: &str, mean: f64, invalid: f64, words: u32) -> ExtractedDocument {
-    let mut result = ExtractedDocument {
-        content: content.into(),
-        ..Default::default()
-    };
-    result.metadata.format = Some(FormatMetadata::Ocr(OcrMetadata {
-        language: "eng".into(),
-        psm: 11,
-        output_format: "markdown".into(),
-        table_count: 0,
-        table_rows: None,
-        table_cols: None,
-    }));
-    result.metadata.additional.extend([
-        (Cow::Borrowed("mean_text_conf"), mean.into()),
-        (Cow::Borrowed("word_count"), words.into()),
-        (Cow::Borrowed("low_conf_word_count"), 0.into()),
-        (
-            Cow::Borrowed(OCR_TESSERACT_DICT_INVALID_WORD_RATIO_METADATA_KEY),
-            invalid.into(),
-        ),
-    ]);
-    result
-}
-
 /// The page's prior read from its render, with the processed frame that admits it.
 fn page_read(lines: Lines) -> ExtractedDocument {
     let (content, mean, invalid, words) = if matches!(lines, Lines::CertifiedCleanPath | Lines::UncertifiedCompleteRows)
@@ -155,20 +135,6 @@ fn page_read(lines: Lines) -> ExtractedDocument {
     original
 }
 
-fn ink_runs(strip: &image::GrayImage) -> Vec<Range<u32>> {
-    let (width, height) = strip.dimensions();
-    let mut runs: Vec<Range<u32>> = Vec::new();
-    for y in 0..height {
-        if (0..width).any(|x| strip.get_pixel(x, y).0[0] < 128) {
-            match runs.last_mut() {
-                Some(run) if run.end == y => run.end += 1,
-                _ => runs.push(y..y + 1),
-            }
-        }
-    }
-    runs
-}
-
 fn strip_report(strip: &image::GrayImage, lines: Lines) -> ExtractedDocument {
     let (width, height) = strip.dimensions();
     let mut runs = ink_runs(strip);
@@ -188,13 +154,17 @@ fn strip_report(strip: &image::GrayImage, lines: Lines) -> ExtractedDocument {
     if lines != Lines::NoElements {
         result.ocr_elements = Some(line_elements(&runs, height, lines));
     }
+    let reported_width = if lines == Lines::WrongWidth { width - 1 } else { width };
     let reported_height = if lines == Lines::WrongHeight {
         height - 1
     } else {
         height
     };
     result.metadata.additional.extend([
-        (Cow::Borrowed(OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY), width.into()),
+        (
+            Cow::Borrowed(OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY),
+            reported_width.into(),
+        ),
         (
             Cow::Borrowed(OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY),
             reported_height.into(),
@@ -209,6 +179,8 @@ fn line_elements(runs: &[Range<u32>], strip_height: u32, lines: Lines) -> Vec<Oc
         .map(|(index, run)| {
             let (top, line_height) = if lines == Lines::OverhangingLast && index + 1 == runs.len() {
                 (run.start, strip_height - run.start + LINE_OVERHANG)
+            } else if lines == Lines::BandReach && index == 0 && runs.len() > 1 {
+                (run.start, run.end - run.start + LINE_REACH)
             } else {
                 let displaced = lines == Lines::DisplacedFirst && index == 0;
                 (
@@ -217,12 +189,17 @@ fn line_elements(runs: &[Range<u32>], strip_height: u32, lines: Lines) -> Vec<Oc
                 )
             };
             let mismatched = lines == Lines::MismatchedText && index == 0;
+            let overwide = lines == Lines::OverWide && index == 0;
             OcrElement::new(
                 if mismatched { "alpha delta" } else { LINE_TEXT },
                 OcrBoundingGeometry::Rectangle {
                     left: INK_COLUMNS.start as u32,
                     top,
-                    width: (INK_COLUMNS.end - INK_COLUMNS.start) as u32,
+                    width: if overwide {
+                        WIDTH
+                    } else {
+                        (INK_COLUMNS.end - INK_COLUMNS.start) as u32
+                    },
                     height: line_height,
                 },
                 OcrConfidence {
@@ -258,17 +235,6 @@ async fn replace(document: &PdfDocument, lines: Lines) -> (bool, ExtractedDocume
     (replaced, original, strip_heights)
 }
 
-fn is_ink_row(y: u32) -> bool {
-    INK_ROWS.contains(&(y % LINE_PITCH))
-}
-
-/// Ink line runs of the fixture scan, counted from the fixture constants.
-fn source_lines() -> usize {
-    (0..HEIGHT)
-        .filter(|&y| is_ink_row(y) && (y == 0 || !is_ink_row(y - 1)))
-        .count()
-}
-
 fn used_strips(original: &ExtractedDocument) -> bool {
     original
         .processing_warnings
@@ -279,83 +245,6 @@ fn used_strips(original: &ExtractedDocument) -> bool {
 fn reported_lines(original: &ExtractedDocument) -> usize {
     original.content.lines().filter(|line| !line.trim().is_empty()).count()
 }
-
-fn flate(bytes: &[u8]) -> Vec<u8> {
-    let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::fast());
-    encoder.write_all(bytes).expect("in-memory write");
-    encoder.finish().expect("in-memory flush")
-}
-
-/// Text-line-like black bars on white, one sample per pixel.
-fn gray_samples(ink_row: fn(u32) -> bool) -> Vec<u8> {
-    let mut samples = Vec::with_capacity(WIDTH as usize * HEIGHT as usize);
-    for y in 0..HEIGHT {
-        samples.extend((0..WIDTH as usize).map(|x| if ink_row(y) && INK_COLUMNS.contains(&x) { 0 } else { 255 }));
-    }
-    samples
-}
-
-/// Bars one bit per pixel; a byte is ink when both of its ends are ink columns.
-fn bilevel_samples(ink_row: fn(u32) -> bool) -> Vec<u8> {
-    let mut samples = Vec::new();
-    for y in 0..HEIGHT {
-        for byte in 0..WIDTH as usize / 8 {
-            let ink = INK_COLUMNS.contains(&(byte * 8)) && INK_COLUMNS.contains(&(byte * 8 + 7));
-            samples.push(if ink_row(y) && ink { 0x00 } else { 0xff });
-        }
-    }
-    samples
-}
-
-fn stream(entries: &str, bytes: &[u8]) -> Vec<u8> {
-    let mut output = format!("<< {entries} /Length {} >>\nstream\n", bytes.len()).into_bytes();
-    output.extend(bytes);
-    output.extend(b"\nendstream");
-    output
-}
-
-/// One scan image of `dpi` painted over the whole page.
-fn scan_pdf_at(color: &str, samples: &[u8], dpi: f64) -> PdfDocument {
-    let (page_width, page_height) = (f64::from(WIDTH) * 72.0 / dpi, f64::from(HEIGHT) * 72.0 / dpi);
-    let image = stream(
-        &format!("/Type /XObject /Subtype /Image /Width {WIDTH} /Height {HEIGHT} {color} /Filter /FlateDecode"),
-        &flate(samples),
-    );
-    let objects = [
-        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
-        format!(
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {page_width} {page_height}] /Contents 4 0 R /Resources << /XObject << /Im0 5 0 R >> >> >>"
-        )
-        .into_bytes(),
-        stream("", format!("q {page_width} 0 0 {page_height} 0 0 cm /Im0 Do Q").as_bytes()),
-        image,
-    ];
-    let mut bytes = b"%PDF-1.4\n".to_vec();
-    let mut offsets = Vec::new();
-    for object in &objects {
-        offsets.push(bytes.len());
-        bytes.extend(format!("{} 0 obj\n", offsets.len()).as_bytes());
-        bytes.extend(object);
-        bytes.extend(b"\nendobj\n");
-    }
-    let xref = bytes.len();
-    bytes.extend(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
-    for offset in offsets {
-        bytes.extend(format!("{offset:010} 00000 n \n").as_bytes());
-    }
-    bytes.extend(
-        format!(
-            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
-            objects.len() + 1
-        )
-        .as_bytes(),
-    );
-    PdfDocument::from_bytes(bytes).expect("a well-formed synthetic scan")
-}
-
-const GRAY: &str = "/ColorSpace /DeviceGray /BitsPerComponent 8";
-const BILEVEL: &str = "/ColorSpace /DeviceGray /BitsPerComponent 1";
 
 /// A gray scan just under the standard density floor, so any uncertified strip refuses it.
 fn uncertifiable_gray_scan() -> PdfDocument {
@@ -374,58 +263,99 @@ async fn exact_line_reports_certify_every_strip_and_replace_the_page_read() {
     let (replaced, original, strip_heights) = replace(&document, Lines::Exact).await;
     assert!(replaced);
     assert!(used_strips(&original));
-    assert_eq!(reported_lines(&original), source_lines());
+    assert_eq!(reported_lines(&original), source_lines(is_ink_row));
     assert!(
         strip_heights.len() >= 2,
         "the scan is cut into strips: {strip_heights:?}"
     );
 }
 
+/// A strip whose backend reports a processed size but no line elements is refused. Both the
+/// certificate's elements guard and its final line pairing decline such a strip, so this
+/// input pins the refusal of strips without elements, not one clause of it.
 #[tokio::test]
-async fn strips_without_line_elements_are_refused_even_when_the_processed_size_is_present() {
+async fn a_strip_reporting_a_processed_size_but_no_line_elements_is_refused() {
     let document = uncertifiable_gray_scan();
-    let (replaced, original, _) = replace(&document, Lines::NoElements).await;
+    let (replaced, original, strip_heights) = replace(&document, Lines::NoElements).await;
     assert!(!replaced);
     assert!(!used_strips(&original));
     assert_eq!(original.content, PRIOR_READ.0);
+    assert!(
+        !strip_heights.is_empty(),
+        "the backend ran on strips: {strip_heights:?}"
+    );
 }
 
 #[tokio::test]
 async fn a_line_element_whose_text_differs_from_its_content_line_refuses_the_strip() {
     let document = uncertifiable_gray_scan();
-    let (replaced, original, _) = replace(&document, Lines::MismatchedText).await;
+    let (replaced, original, strip_heights) = replace(&document, Lines::MismatchedText).await;
     assert!(!replaced);
     assert!(!used_strips(&original));
     assert_eq!(original.content, PRIOR_READ.0);
+    assert!(
+        !strip_heights.is_empty(),
+        "the backend ran on strips: {strip_heights:?}"
+    );
 }
 
 #[tokio::test]
 async fn a_leftover_text_line_without_an_element_refuses_the_strip() {
     let document = uncertifiable_gray_scan();
-    let (replaced, original, _) = replace(&document, Lines::ExtraTextLine).await;
+    let (replaced, original, strip_heights) = replace(&document, Lines::ExtraTextLine).await;
     assert!(!replaced);
     assert!(!used_strips(&original));
     assert_eq!(original.content, PRIOR_READ.0);
+    assert!(
+        !strip_heights.is_empty(),
+        "the backend ran on strips: {strip_heights:?}"
+    );
 }
 
+/// The processed height is one row short of the strip: only the height comparison refuses
+/// it, so removing the width comparison must not certify this input.
 #[tokio::test]
 async fn a_strip_reporting_a_wrong_processed_height_refuses_the_strip() {
     let document = uncertifiable_gray_scan();
-    let (replaced, original, _) = replace(&document, Lines::WrongHeight).await;
+    let (replaced, original, strip_heights) = replace(&document, Lines::WrongHeight).await;
     assert!(!replaced);
     assert!(!used_strips(&original));
     assert_eq!(original.content, PRIOR_READ.0);
+    assert!(
+        !strip_heights.is_empty(),
+        "the backend ran on strips: {strip_heights:?}"
+    );
+}
+
+/// The processed width is one column short of the strip: only the width comparison refuses
+/// it, so removing the height comparison must not certify this input.
+#[tokio::test]
+async fn a_strip_reporting_a_wrong_processed_width_refuses_the_strip() {
+    let document = uncertifiable_gray_scan();
+    let (replaced, original, strip_heights) = replace(&document, Lines::WrongWidth).await;
+    assert!(!replaced);
+    assert!(!used_strips(&original));
+    assert_eq!(original.content, PRIOR_READ.0);
+    assert!(
+        !strip_heights.is_empty(),
+        "the backend ran on strips: {strip_heights:?}"
+    );
 }
 
 /// The displaced first line still fits inside the strip and touches no other ink band, so only
-/// the overlap check refuses it: removing the strip-bottom bound must not certify this input.
+/// the band-overlap half of the overlap check refuses it: removing the strip-bottom bound
+/// must not certify this input.
 #[tokio::test]
 async fn a_line_dropped_below_its_ink_band_refuses_the_strip() {
     let document = uncertifiable_gray_scan();
-    let (replaced, original, _) = replace(&document, Lines::DisplacedFirst).await;
+    let (replaced, original, strip_heights) = replace(&document, Lines::DisplacedFirst).await;
     assert!(!replaced);
     assert!(!used_strips(&original));
     assert_eq!(original.content, PRIOR_READ.0);
+    assert!(
+        !strip_heights.is_empty(),
+        "the backend ran on strips: {strip_heights:?}"
+    );
 }
 
 /// The overhanging last line still overlaps only its own ink band, so only the strip-bottom
@@ -433,10 +363,46 @@ async fn a_line_dropped_below_its_ink_band_refuses_the_strip() {
 #[tokio::test]
 async fn a_line_hanging_past_the_strip_bottom_refuses_the_strip() {
     let document = uncertifiable_gray_scan();
-    let (replaced, original, _) = replace(&document, Lines::OverhangingLast).await;
+    let (replaced, original, strip_heights) = replace(&document, Lines::OverhangingLast).await;
     assert!(!replaced);
     assert!(!used_strips(&original));
     assert_eq!(original.content, PRIOR_READ.0);
+    assert!(
+        !strip_heights.is_empty(),
+        "the backend ran on strips: {strip_heights:?}"
+    );
+}
+
+/// The first line of every strip with a following run keeps its own band's top but reaches
+/// into the next ink band, so only the neighbour-overlap half of the overlap check refuses
+/// it: removing the strip-bottom bound must not certify this input.
+#[tokio::test]
+async fn a_line_reaching_into_the_next_ink_band_refuses_the_strip() {
+    let document = uncertifiable_gray_scan();
+    let (replaced, original, strip_heights) = replace(&document, Lines::BandReach).await;
+    assert!(!replaced);
+    assert!(!used_strips(&original));
+    assert_eq!(original.content, PRIOR_READ.0);
+    assert!(
+        !strip_heights.is_empty(),
+        "the backend ran on strips: {strip_heights:?}"
+    );
+}
+
+/// The first line of every strip reports a right edge past the strip width, so only the
+/// over-width clause refuses it: removing the neighbour-overlap half of the overlap check
+/// must not certify this input.
+#[tokio::test]
+async fn a_line_reporting_a_right_beyond_the_strip_width_refuses_the_strip() {
+    let document = uncertifiable_gray_scan();
+    let (replaced, original, strip_heights) = replace(&document, Lines::OverWide).await;
+    assert!(!replaced);
+    assert!(!used_strips(&original));
+    assert_eq!(original.content, PRIOR_READ.0);
+    assert!(
+        !strip_heights.is_empty(),
+        "the backend ran on strips: {strip_heights:?}"
+    );
 }
 
 #[tokio::test]
@@ -445,7 +411,7 @@ async fn a_certified_clean_path_replaces_a_noisy_read_through_the_complete_rows_
     let (replaced, original, strip_heights) = replace(&document, Lines::CertifiedCleanPath).await;
     assert!(replaced);
     assert!(used_strips(&original));
-    assert_eq!(reported_lines(&original), source_lines());
+    assert_eq!(reported_lines(&original), source_lines(is_ink_row));
     assert!(
         strip_heights.len() >= 2,
         "the scan is cut into strips: {strip_heights:?}"
@@ -455,8 +421,12 @@ async fn a_certified_clean_path_replaces_a_noisy_read_through_the_complete_rows_
 #[tokio::test]
 async fn an_uncertified_strip_withholds_the_complete_rows_evidence_from_the_page_read() {
     let document = certifiable_bilevel_scan();
-    let (replaced, original, _) = replace(&document, Lines::UncertifiedCompleteRows).await;
+    let (replaced, original, strip_heights) = replace(&document, Lines::UncertifiedCompleteRows).await;
     assert!(!replaced);
     assert!(!used_strips(&original));
     assert_eq!(original.content, NOISY_READ.0);
+    assert!(
+        !strip_heights.is_empty(),
+        "the backend ran on strips: {strip_heights:?}"
+    );
 }
