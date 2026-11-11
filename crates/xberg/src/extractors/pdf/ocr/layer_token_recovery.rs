@@ -24,15 +24,18 @@ const MAX_CORRECTED_CONFIDENCE: f64 = 0.75;
 /// a page this dense is not one whose layer is checked.
 const MAX_LAYER_WORDS: usize = 4096;
 const MAX_READ_WORDS: usize = 8192;
-/// The most words recovery adds to a page; a page that wants more is not one a few words are lost on.
+/// The most words recovery adds to a page, and the most it corrects; a page that wants more is not
+/// one a few words are lost on.
 const MAX_ADDITIONS: usize = 64;
+const MAX_CORRECTIONS: usize = 256;
 /// Words between two polls of the cancellation check.
 const CANCEL_POLL_INTERVAL: usize = 64;
 const RECOVERY_BACKEND: &str = "layer-token-recovery";
 
-/// Characters an OCR engine takes for one another, as unordered pairs. A letter pair that differs
-/// only in case is listed for the shapes that match at both sizes.
-const CONFUSABLE_PAIRS: [(char, char); 23] = [
+/// Characters an OCR engine takes for one another, as unordered pairs. Every pair holds a digit
+/// or the letter pair `l`/`I`; a pair that differs only in case is left out, since it would let a
+/// lowercase layer rewrite a correct `US` or `Polish`.
+const CONFUSABLE_PAIRS: [(char, char); 14] = [
     ('0', 'O'),
     ('0', 'o'),
     ('1', 'l'),
@@ -47,15 +50,6 @@ const CONFUSABLE_PAIRS: [(char, char); 23] = [
     ('9', 'g'),
     ('9', 'q'),
     ('6', 'b'),
-    ('C', 'c'),
-    ('K', 'k'),
-    ('O', 'o'),
-    ('P', 'p'),
-    ('S', 's'),
-    ('U', 'u'),
-    ('V', 'v'),
-    ('W', 'w'),
-    ('X', 'x'),
 ];
 /// Multi-character shapes read as one character, collapsed before two tokens are compared.
 const CONFUSABLE_RUNS: [(&str, &str); 2] = [("rn", "m"), ("vv", "w")];
@@ -107,7 +101,7 @@ fn confusable(left: char, right: char) -> bool {
 
 /// Whether the read word is an OCR misreading of the layer word. Only these count: the same
 /// characters with confusable ones swapped (`0`/`O`, `1`/`l`, `rn`/`m`, ...), and an edge
-/// character the read dropped or added on an identifier that mixes letters and digits. A layer
+/// character the read dropped on an identifier that mixes letters and digits (the layer is then the longer token; a layer that lost a glyph never overwrites the read). A layer
 /// token with anything beyond ASCII (a ligature or other presentation form, an accent), without a
 /// letter (a number whose digits a shifted mapping could change), or that differs by any other
 /// insertion, deletion or substitution is a different word and the read keeps its own.
@@ -133,15 +127,7 @@ fn is_misreading(read: &str, layer: &str) -> bool {
             && token.chars().any(|character| character.is_ascii_alphabetic())
             && token.chars().all(|character| character.is_ascii_alphanumeric())
     };
-    let (longer, shorter) = if layer.len() > read.len() {
-        (layer, read)
-    } else {
-        (read, layer)
-    };
-    identifier(layer)
-        && identifier(longer)
-        && longer.len() == shorter.len() + 1
-        && (longer[1..] == *shorter || longer[..longer.len() - 1] == *shorter)
+    identifier(layer) && layer.len() == read.len() + 1 && (layer[1..] == *read || layer[..layer.len() - 1] == *read)
 }
 
 fn overlaps(left: &LineBox, right: &LineBox) -> bool {
@@ -265,20 +251,34 @@ pub(super) fn plan(
                 && !has_copy_nearby(&layer[index], read, &read_index)
         })
         .collect();
-    let corrections = consistent
-        .into_iter()
-        .filter(|(_, layer_at)| shows_ink(&layer[*layer_at].place))
-        .map(|(read_at, layer_at)| (read_at, layer[layer_at].text.clone()))
-        .collect();
-    let additions = if additions.len() > MAX_ADDITIONS {
-        Vec::new()
-    } else {
-        additions
-            .into_iter()
-            .filter(|&index| shows_ink(&layer[index].place))
-            .collect()
-    };
-    Plan { corrections, additions }
+    let mut corrections = Vec::new();
+    for (read_at, layer_at) in consistent {
+        if cancelled() {
+            return Plan::default();
+        }
+        if shows_ink(&layer[layer_at].place) {
+            corrections.push((read_at, layer[layer_at].text.clone()));
+        }
+    }
+    let mut shown = Vec::new();
+    for index in additions {
+        if cancelled() {
+            return Plan::default();
+        }
+        if shows_ink(&layer[index].place) {
+            shown.push(index);
+        }
+    }
+    if corrections.len() > MAX_CORRECTIONS {
+        corrections.clear();
+    }
+    if shown.len() > MAX_ADDITIONS {
+        shown.clear();
+    }
+    Plan {
+        corrections,
+        additions: shown,
+    }
 }
 
 /// Whether a read word near the layer word already holds its text, whole or run into a longer
@@ -471,6 +471,9 @@ fn apply(
 ) -> bool {
     let mut changed = false;
     for (from, to) in corrections {
+        if cancelled() {
+            return changed;
+        }
         changed |= correct(read, from, to);
     }
     let page = read

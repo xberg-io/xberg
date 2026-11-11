@@ -381,3 +381,111 @@ fn an_added_word_inside_a_table_is_skipped() {
     assert!(!apply(&mut read, &[], &[added("9", 200, 150)], &|| false));
     assert_eq!(read.content, "Title\n\n| A | B |");
 }
+
+#[test]
+fn a_layer_that_lost_a_glyph_never_overwrites_a_longer_read() {
+    assert!(!is_misreading("H2020", "H202"));
+    assert!(!is_misreading("AB123", "AB12"));
+    assert!(!is_misreading("FY2024", "FY202"));
+    assert!(is_misreading("B1234", "AB1234"));
+    for (read, layer) in [("H2020", "H202"), ("AB123", "AB12"), ("FY2024", "FY202")] {
+        let layer_page = page(&with(&[(layer, 0.0, 1.0)]));
+        let read_page = page(&with(&[(read, 0.0, 1.0)]));
+        assert_eq!(
+            plan(&layer_page, &read_page, &mut inked, &|| false),
+            Plan::default(),
+            "{read} / {layer}"
+        );
+    }
+}
+
+#[test]
+fn a_lowercase_layer_never_rewrites_a_correct_capitalised_read() {
+    assert!(!is_misreading("US", "us"));
+    assert!(!is_misreading("Polish", "polish"));
+    assert!(!is_misreading("XK7021", "xK7021"));
+}
+
+#[test]
+fn a_repeated_read_token_with_a_confident_instance_is_not_corrected() {
+    let layer = page(&with(&[("B0X92Q", 0.0, 1.0), ("B0X92Q", 0.0, 2.0)]));
+    let mut read = page(&with(&[("BOX92Q", 0.0, 1.0), ("BOX92Q", 0.0, 2.0)]));
+    read[5].confidence = 0.95;
+    assert_eq!(plan(&layer, &read, &mut inked, &|| false), Plan::default());
+}
+
+fn grid(count: usize, text: impl Fn(usize) -> String) -> Vec<PlacedWord> {
+    (0..count)
+        .map(|at| word(&text(at), (at % 40) as f32, (at / 40) as f32))
+        .collect()
+}
+
+#[test]
+fn a_page_with_more_layer_words_than_the_cap_is_not_compared() {
+    let layer = grid(MAX_LAYER_WORDS + 1, |at| format!("Word{at}"));
+    let read = grid(MAX_LAYER_WORDS, |at| format!("Word{at}"));
+    assert_eq!(plan(&layer, &read, &mut inked, &|| false), Plan::default());
+}
+
+#[test]
+fn a_page_with_more_read_words_than_the_cap_is_not_compared() {
+    let layer = grid(8, |at| format!("Word{at}"));
+    let read = grid(MAX_READ_WORDS + 1, |at| format!("Word{at}"));
+    assert_eq!(plan(&layer, &read, &mut inked, &|| false), Plan::default());
+}
+
+#[test]
+fn more_additions_than_the_cap_are_all_dropped() {
+    let agreeing: Vec<PlacedWord> = AGREEING
+        .iter()
+        .map(|(text, column, row)| word(text, *column, *row))
+        .collect();
+    let mut layer = agreeing.clone();
+    layer.extend(
+        (0..=MAX_ADDITIONS).map(|at| word(&format!("Extra{at}"), (at % 20) as f32, 10.0 + (at / 20) as f32 * 3.0)),
+    );
+    assert!(plan(&layer, &agreeing, &mut inked, &|| false).additions.is_empty());
+    layer.truncate(agreeing.len() + MAX_ADDITIONS);
+    assert_eq!(
+        plan(&layer, &agreeing, &mut inked, &|| false).additions.len(),
+        MAX_ADDITIONS
+    );
+}
+
+#[test]
+fn more_corrections_than_the_cap_are_all_dropped() {
+    let total = MAX_CORRECTIONS + 1;
+    let layer = grid(total + 4, |at| {
+        if at < total {
+            format!("A0{at:04}x")
+        } else {
+            format!("Same{at}")
+        }
+    });
+    let read = grid(total + 4, |at| {
+        if at < total {
+            format!("AO{at:04}x")
+        } else {
+            format!("Same{at}")
+        }
+    });
+    assert!(plan(&layer, &read, &mut inked, &|| false).corrections.is_empty());
+    let layer = grid(MAX_CORRECTIONS + 4, |at| {
+        if at < MAX_CORRECTIONS {
+            format!("A0{at:04}x")
+        } else {
+            format!("Same{at}")
+        }
+    });
+    let read = grid(MAX_CORRECTIONS + 4, |at| {
+        if at < MAX_CORRECTIONS {
+            format!("AO{at:04}x")
+        } else {
+            format!("Same{at}")
+        }
+    });
+    assert_eq!(
+        plan(&layer, &read, &mut inked, &|| false).corrections.len(),
+        MAX_CORRECTIONS
+    );
+}
