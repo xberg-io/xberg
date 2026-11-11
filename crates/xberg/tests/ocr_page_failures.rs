@@ -53,6 +53,7 @@ fn png_size(bytes: &[u8]) -> Option<(u32, u32)> {
 #[derive(Clone, Copy)]
 enum RasterOutcome {
     Word,
+    Noise,
     TableOnly,
 }
 
@@ -84,6 +85,9 @@ impl OcrBackend for StubBackend {
             let mut recovered = ExtractedDocument::default();
             match self.raster {
                 RasterOutcome::Word => recovered.content = RECOVERED_WORD.to_string(),
+                RasterOutcome::Noise => {
+                    recovered.content = "A B C D E F G H I J K L M N O P Q R S T U V W X ".repeat(8)
+                }
                 RasterOutcome::TableOnly => {
                     recovered.tables = vec![xberg::types::Table {
                         cells: vec![vec!["Item".to_string(), "Amount".to_string()]],
@@ -945,3 +949,6 @@ fn a_cancelled_whole_document_fallback_adds_no_record() {
     );
     assert_eq!(result.ocr_page_failures, None);
 }
+
+#[path = "ocr_page_failures/discarded_noise_2908.rs"]
+mod discarded_noise_2908;
