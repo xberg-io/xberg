@@ -3008,13 +3008,13 @@ impl PageRenderer {
                     if let Some(stream) = char_procs.get(name) {
                         if let Some(data) = decode_type3_charproc(doc, stream) {
                             // Glyph placement: combined_base · translate(cursor)
-                            // · scale(Tfs) · FontMatrix. The cursor is the
+                            // · scale(Tfs·Th, Tfs) · FontMatrix. The cursor is the
                             // un-scaled x position with Th applied at placement,
                             // matching the outline text path. ~keep
                             let px = x_cursor * h_scale;
                             let glyph_transform = combined_base
                                 .pre_translate(px, gs.text_rise)
-                                .pre_scale(font_size, font_size)
+                                .pre_scale(font_size * h_scale, font_size)
                                 .pre_concat(font_matrix);
                             let _ = self.render_type3_glyph(
                                 pixmap,
@@ -10606,6 +10606,11 @@ mod tests {
     /// rectangle. The page shows it once, at font size 100, after setting the
     /// fill colour to red.
     fn build_type3_rect_pdf() -> Vec<u8> {
+        build_type3_rect_pdf_showing(b"BT /T3 100 Tf 1 0 0 rg 10 10 Td (A) Tj ET")
+    }
+
+    /// [`build_type3_rect_pdf`] with the page content stream `content`.
+    fn build_type3_rect_pdf_showing(content: &[u8]) -> Vec<u8> {
         let mut pdf = Vec::new();
         let mut offsets: Vec<usize> = Vec::new();
         pdf.extend_from_slice(b"%PDF-1.4\n");
@@ -10625,7 +10630,6 @@ mod tests {
               >>\nendobj\n\n",
         );
 
-        let content = b"BT /T3 100 Tf 1 0 0 rg 10 10 Td (A) Tj ET";
         offsets.push(pdf.len());
         let hdr = format!("4 0 obj\n<< /Length {} >>\nstream\n", content.len());
         pdf.extend_from_slice(hdr.as_bytes());
@@ -10705,6 +10709,44 @@ mod tests {
             img.width,
             img.height
         );
+    }
+
+    /// Columns of the page that hold a red pixel.
+    fn red_columns(img: &RenderedImage) -> usize {
+        let width = img.width as usize;
+        (0..width)
+            .filter(|&x| {
+                img.data
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .skip(x)
+                    .step_by(width)
+                    .any(|px| px[0] > 200 && px[1] < 80 && px[2] < 80)
+            })
+            .count()
+    }
+
+    /// `Tz` stretches a Type 3 glyph description along the line, as it does an outline glyph
+    /// (ISO 32000-1 9.3.4): the bar is half as wide at 50, twice as wide at 200.
+    #[test]
+    fn type3_glyph_width_follows_horizontal_scaling() {
+        use crate::document::PdfDocument;
+
+        let columns_at = |tz: u32| {
+            let content = format!("BT /T3 20 Tf {tz} Tz 1 0 0 rg 10 10 Td (A) Tj ET");
+            let doc = PdfDocument::from_bytes(build_type3_rect_pdf_showing(content.as_bytes())).expect("parse");
+            let opts = RenderOptions {
+                format: ImageFormat::RawRgba8,
+                ..RenderOptions::with_dpi(72)
+            };
+            let img = PageRenderer::new(opts).render_page(&doc, 0).expect("render page");
+            red_columns(&img)
+        };
+        let (half, full, double) = (columns_at(50), columns_at(100), columns_at(200));
+        assert_eq!(full, 14, "a 700-unit bar at 20 pt is 14 columns");
+        assert_eq!(half, 7, "Tz 50 halves the bar");
+        assert_eq!(double, 28, "Tz 200 doubles the bar");
     }
 
     /// Build a minimal single-page PDF whose only content is a `Do` of an
