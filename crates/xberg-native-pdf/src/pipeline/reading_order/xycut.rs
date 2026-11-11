@@ -280,6 +280,9 @@ const MAX_INTRA_LINE_GAP_EM: f32 = 1.0;
 // line's gap within this slack of the gap's edges.
 const SCRIPT_FONT_RATIO: f32 = 0.8;
 const SCRIPT_GAP_SLACK_PTS: f32 = 1.0;
+// A script mark sits within one em of its base line: a superscript's top rises at most about that
+// far above the baseline, and anything further off belongs to another line.
+const SCRIPT_VERTICAL_TOLERANCE_EM: f32 = 1.0;
 // What is left of the gap once the script is taken out is at most a word space or two.
 const SCRIPT_GAP_REMAINDER_EM: f32 = 0.75;
 // A run narrower than this many ems is a label, a marker or a cell rather than a prose line.
@@ -378,7 +381,7 @@ fn script_fills_gap(
         let span = &all_spans[i];
         span.font_size > 0.0
             && span.font_size <= font_size * SCRIPT_FONT_RATIO
-            && (span.bbox.y - baseline_y).abs() <= font_size
+            && (span.bbox.y - baseline_y).abs() <= font_size * SCRIPT_VERTICAL_TOLERANCE_EM
             && span.bbox.left() >= gap.0 - SCRIPT_GAP_SLACK_PTS
             && span.bbox.right() <= gap.1 + SCRIPT_GAP_SLACK_PTS
             && (gap.1 - gap.0) - span.bbox.width <= font_size * SCRIPT_GAP_REMAINDER_EM
@@ -2871,6 +2874,61 @@ mod tests {
             !lines.iter().any(|line| line.contains(&0) && line.contains(&2)),
             "ordinary line grouping is unchanged: {lines:?}"
         );
+    }
+
+    fn bridged(script_font: f32, script_width: f32, next_left: f32) -> bool {
+        let spans = vec![
+            make_span_text(59.0, 643.4, 100.0, 10.0, "Where e", 10.0),
+            make_span_text(162.0, 647.0, script_width, 7.0, "iθ", script_font),
+            make_span_text(next_left, 643.4, 100.0, 10.0, "symbolize the amplitude", 10.0),
+        ];
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        group_lines(&spans, &indices, true)
+            .iter()
+            .any(|line| line.contains(&0) && line.contains(&2))
+    }
+
+    #[test]
+    fn a_script_larger_than_the_ratio_does_not_bridge_a_gap_gh2925() {
+        assert!(bridged(7.0, 7.0, 172.0));
+        assert!(!bridged(9.0, 7.0, 172.0));
+    }
+
+    #[test]
+    fn a_gap_wider_than_the_script_plus_remainder_is_not_bridged_gh2925() {
+        assert!(bridged(7.0, 7.0, 172.0));
+        assert!(!bridged(7.0, 7.0, 180.0));
+    }
+
+    #[test]
+    fn a_small_span_in_a_column_gutter_neither_bridges_nor_adds_a_straddling_line_gh2925() {
+        let strategy = XYCutStrategy::new();
+        let mut spans = Vec::new();
+        for row in 0..4 {
+            let y = 700.0 - row as f32 * 12.0;
+            spans.push(make_span_text(40.0, y, 100.0, 10.0, "left column prose", 10.0));
+            spans.push(make_span_text(156.0, y + 3.0, 7.0, 7.0, "n", 7.0));
+            spans.push(make_span_text(172.0, y, 100.0, 10.0, "right column prose", 10.0));
+        }
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        let lines = group_lines(&spans, &indices, true);
+        assert!(
+            !lines.iter().any(|line| line.contains(&0) && line.contains(&2)),
+            "a 16pt gutter with a small span in it is still a break: {lines:?}"
+        );
+        assert_eq!(strategy.straddling_line_count(&spans, &indices, 156.0), 0);
+    }
+
+    #[test]
+    fn a_script_off_the_line_by_more_than_an_em_does_not_bridge_gh2925() {
+        let spans = vec![
+            make_span_text(59.0, 643.4, 100.0, 10.0, "Where e", 10.0),
+            make_span_text(162.0, 665.0, 7.0, 7.0, "iθ", 7.0),
+            make_span_text(172.0, 643.4, 100.0, 10.0, "symbolize the amplitude", 10.0),
+        ];
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        let lines = group_lines(&spans, &indices, true);
+        assert!(!lines.iter().any(|line| line.contains(&0) && line.contains(&2)));
     }
 
     #[test]
