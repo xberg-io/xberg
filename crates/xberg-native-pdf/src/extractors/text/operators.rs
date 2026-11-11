@@ -224,7 +224,7 @@ impl<'doc> TextExtractor<'doc> {
                         // but emit nothing. ~keep
                         let w = self.advance_position_for_string(&text, true)?;
                         if let Some(ref mut buffer) = self.tj_span_buffer {
-                            buffer.accumulated_width += w;
+                            buffer.add_width(w);
                         }
                     } else {
                         tracing::trace!(target: LOG_TARGET, "Tj operator: emitting MC-scope ActualText '{}'", actual_text);
@@ -252,7 +252,7 @@ impl<'doc> TextExtractor<'doc> {
                         // Advance position for the original text (to maintain layout) ~keep
                         let w = self.advance_position_for_string(&text, true)?;
                         if let Some(ref mut buffer) = self.tj_span_buffer {
-                            buffer.accumulated_width += w;
+                            buffer.add_width(w);
                         }
                     }
                 } else {
@@ -321,7 +321,7 @@ impl<'doc> TextExtractor<'doc> {
                                 let repair_zero_widths = !Self::has_following_tj_displacement(&array, index);
                                 let w = self.advance_position_for_string(s, repair_zero_widths)?;
                                 if let Some(buffer) = replacement.as_mut().or(self.tj_span_buffer.as_mut()) {
-                                    buffer.accumulated_width += w;
+                                    buffer.add_width(w);
                                 }
                             }
                             TextElement::Offset(offset) => {
@@ -334,7 +334,7 @@ impl<'doc> TextExtractor<'doc> {
                                 };
                                 let advance = -offset / 1000.0 * state.font_size * scale;
                                 if let Some(buffer) = replacement.as_mut().or(self.tj_span_buffer.as_mut()) {
-                                    buffer.accumulated_width += advance;
+                                    buffer.add_width(advance);
                                 }
                             }
                         }

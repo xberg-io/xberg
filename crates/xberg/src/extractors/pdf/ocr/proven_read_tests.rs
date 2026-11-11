@@ -190,8 +190,23 @@ fn a_clamp_a_resolution_below_the_floor_or_no_record_is_suspect() {
     assert!(read_may_be_illegible(None), "no record of what was done");
 }
 
+/// Stated with literals on purpose: a test that restates the floor through
+/// [`MIN_LEGIBLE_PROVEN_DPI`] cannot notice the constant moving (#2909).
+#[test]
+fn a_read_at_99_dpi_is_suspect_at_100_dpi_it_is_not() {
+    assert!(
+        read_may_be_illegible(Some(&metadata(0.34, 99, false))),
+        "99 dpi is below the floor"
+    );
+    assert!(
+        !read_may_be_illegible(Some(&metadata(0.34, 100, false))),
+        "100 dpi is at the floor"
+    );
+}
+
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
 mod collected_reads {
+    use super::super::rendering::MIN_LEGIBLE_PROVEN_DPI;
     use super::{CAUSE, PROSE, fragmented_text, metadata, thresholds};
     use crate::core::config::OcrConfig;
     use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
@@ -206,18 +221,29 @@ mod collected_reads {
 
     const SMALL_LABELS: &str = "A B C D E F G H I J K L";
 
+    /// Why a scripted image's preparation left its read possibly illegible.
+    #[derive(Clone)]
+    enum Suspect {
+        /// A dimension clamp.
+        Clamped,
+        /// A shrink below the legibility floor, without a clamp.
+        BelowFloor,
+    }
+
     /// One scripted read of one image.
+    #[derive(Clone)]
     struct Read {
         content: String,
-        clamped: bool,
+        /// `None` for an unshrunk image, which keeps its own resolution.
+        suspect: Option<Suspect>,
         /// Carries a table and a formula besides its text.
         structured: bool,
     }
 
-    fn read(content: impl Into<String>, clamped: bool, structured: bool) -> Read {
+    fn read(content: impl Into<String>, suspect: Option<Suspect>, structured: bool) -> Read {
         Read {
             content: content.into(),
-            clamped,
+            suspect,
             structured,
         }
     }
@@ -270,10 +296,10 @@ mod collected_reads {
                 }];
                 result.ocr_internal_document = Some(super::super::document::flat_ocr_page_document(&fragmented_text()));
             }
-            result.metadata.image_preprocessing = Some(if scripted.clamped {
-                metadata(0.34, 72, true)
-            } else {
-                metadata(1.0, 300, false)
+            result.metadata.image_preprocessing = Some(match scripted.suspect {
+                Some(Suspect::Clamped) => metadata(0.34, 72, true),
+                Some(Suspect::BelowFloor) => metadata(0.34, MIN_LEGIBLE_PROVEN_DPI - 1, false),
+                None => metadata(1.0, 300, false),
             });
             Ok(result)
         }
@@ -281,7 +307,8 @@ mod collected_reads {
 
     #[tokio::test]
     async fn a_rejected_read_adds_no_text_table_or_formula() {
-        let outcome = recover(vec![read(fragmented_text(), true, true)], false, Some(300.0), true).await;
+        let reads = vec![read(fragmented_text(), Some(Suspect::Clamped), true)];
+        let outcome = recover(reads, false, Some(300.0), true).await;
         assert!(outcome.text.is_empty(), "{:?}", outcome.text);
         assert!(
             outcome.text_outside_tables.is_empty(),
@@ -295,7 +322,7 @@ mod collected_reads {
 
     #[tokio::test]
     async fn an_empty_read_is_not_a_rejection_and_keeps_its_table_text() {
-        let outcome = recover(vec![read("", true, true)], false, Some(300.0), true).await;
+        let outcome = recover(vec![read("", Some(Suspect::Clamped), true)], false, Some(300.0), true).await;
         assert!(outcome.failure_causes.is_empty(), "{:?}", outcome.failure_causes);
         assert_eq!(outcome.text_outside_tables, fragmented_text());
         assert_eq!(outcome.tables.len(), 1);
@@ -304,7 +331,13 @@ mod collected_reads {
 
     #[tokio::test]
     async fn a_read_without_a_proven_resolution_is_left_to_the_page_policy() {
-        let outcome = recover(vec![read(fragmented_text(), true, true)], false, None, true).await;
+        let outcome = recover(
+            vec![read(fragmented_text(), Some(Suspect::Clamped), true)],
+            false,
+            None,
+            true,
+        )
+        .await;
         assert_eq!(outcome.text, fragmented_text());
         assert_eq!(outcome.tables.len(), 1);
         assert!(outcome.failure_causes.is_empty(), "{:?}", outcome.failure_causes);
@@ -312,7 +345,8 @@ mod collected_reads {
 
     #[tokio::test]
     async fn a_route_without_a_policy_keeps_every_read() {
-        let outcome = recover(vec![read(fragmented_text(), true, true)], false, Some(300.0), false).await;
+        let reads = vec![read(fragmented_text(), Some(Suspect::Clamped), true)];
+        let outcome = recover(reads, false, Some(300.0), false).await;
         assert_eq!(outcome.text, fragmented_text());
         assert_eq!(outcome.tables.len(), 1);
         assert!(outcome.failure_causes.is_empty(), "{:?}", outcome.failure_causes);
@@ -320,7 +354,36 @@ mod collected_reads {
 
     #[tokio::test]
     async fn small_clamped_reads_that_pool_into_noise_are_rejected_together() {
-        let reads = vec![read(small_noise(), true, true), read(small_noise(), true, true)];
+        let reads = vec![read(small_noise(), Some(Suspect::Clamped), true); 2];
+        let outcome = recover(reads, false, Some(300.0), true).await;
+        assert!(outcome.text.is_empty(), "{:?}", outcome.text);
+        assert!(
+            outcome.text_outside_tables.is_empty(),
+            "{:?}",
+            outcome.text_outside_tables
+        );
+        assert!(outcome.tables.is_empty() && outcome.formulas.is_empty());
+        assert_eq!(outcome.failure_causes, [CAUSE]);
+    }
+
+    /// Pins the per-image judgment's `possibly_illegible` argument: the read is suspect because
+    /// its own preparation shrank it below the floor, with no clamp, so a noisy read is dropped
+    /// before the page policy could keep it.
+    #[tokio::test]
+    async fn a_noisy_read_shrunk_below_the_legibility_floor_is_dropped_per_image() {
+        let reads = vec![read(fragmented_text(), Some(Suspect::BelowFloor), false)];
+        let outcome = recover(reads, false, Some(300.0), true).await;
+        assert!(outcome.text.is_empty(), "{:?}", outcome.text);
+        assert!(outcome.tables.is_empty() && outcome.formulas.is_empty());
+        assert_eq!(outcome.failure_causes, [CAUSE]);
+    }
+
+    /// Pins the pooled judgment's `possibly_illegible` argument: the pool's members are suspect
+    /// below the floor, so their pooled garbage is judged as such and rejected, not kept by the
+    /// page policy.
+    #[tokio::test]
+    async fn small_below_floor_reads_that_pool_into_noise_are_rejected_together() {
+        let reads = vec![read(small_noise(), Some(Suspect::BelowFloor), true); 2];
         let outcome = recover(reads, false, Some(300.0), true).await;
         assert!(outcome.text.is_empty(), "{:?}", outcome.text);
         assert!(
@@ -334,7 +397,8 @@ mod collected_reads {
 
     #[tokio::test]
     async fn one_small_clamped_read_stays_below_the_word_minimum() {
-        let outcome = recover(vec![read(small_noise(), true, true)], false, Some(300.0), true).await;
+        let reads = vec![read(small_noise(), Some(Suspect::Clamped), true)];
+        let outcome = recover(reads, false, Some(300.0), true).await;
         assert_eq!(outcome.text, small_noise());
         assert_eq!(outcome.tables.len(), 1);
         assert!(outcome.failure_causes.is_empty(), "{:?}", outcome.failure_causes);
@@ -342,7 +406,7 @@ mod collected_reads {
 
     #[tokio::test]
     async fn small_unshrunk_reads_follow_the_discard_policy_once_pooled() {
-        let reads = || vec![read(small_noise(), false, true), read(small_noise(), false, true)];
+        let reads = || vec![read(small_noise(), None, true), read(small_noise(), None, true)];
         let discarded = recover(reads(), true, Some(300.0), true).await;
         assert!(discarded.text.is_empty(), "{:?}", discarded.text);
         assert!(discarded.tables.is_empty());
@@ -358,9 +422,9 @@ mod collected_reads {
     #[tokio::test]
     async fn a_small_labels_read_is_kept_beside_pooled_garbage_of_the_other_kind() {
         let reads = vec![
-            read(small_noise(), true, true),
-            read(SMALL_LABELS, false, true),
-            read(small_noise(), true, true),
+            read(small_noise(), Some(Suspect::Clamped), true),
+            read(SMALL_LABELS, None, true),
+            read(small_noise(), Some(Suspect::Clamped), true),
         ];
         let outcome = recover(reads, true, Some(300.0), true).await;
         assert_eq!(outcome.text, SMALL_LABELS);
@@ -373,9 +437,9 @@ mod collected_reads {
         let first = "The river runs past the old mill";
         let last = "The farmers wait for the fields to dry";
         let reads = vec![
-            read(first, false, false),
-            read(PROSE, false, false),
-            read(last, false, false),
+            read(first, None, false),
+            read(PROSE, None, false),
+            read(last, None, false),
         ];
         let outcome = recover(reads, true, Some(300.0), true).await;
         assert_eq!(outcome.text, format!("{first}\n\n{PROSE}\n\n{last}"));
