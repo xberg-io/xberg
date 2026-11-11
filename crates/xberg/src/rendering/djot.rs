@@ -441,7 +441,9 @@ fn escape_block_prefix(text: &str, literal_row: bool) -> Cow<'_, str> {
         let escape = if literal_row {
             let before_text = chars.peek().is_some_and(|(_, next)| !next.is_whitespace());
             row_start.as_ref().is_some_and(|run| run.contains(&at))
-                || matches!(c, '\\' | '`' | '*' | '_' | '{' | '}' | '[' | ']' | '^' | '~' | '<')
+                || matches!(c, '\\' | '`' | '*' | '_' | '{' | '}' | '[' | ']' | '^' | '~' | '<' | '"' | '\'')
+                || (matches!(c, '.' | '-')
+                    && (previous == Some(c) || chars.peek().is_some_and(|(_, next)| *next == c)))
                 || (c == ':' && before_text)
                 // djot.js opens these forms even after an escaped brace. ~keep
                 || (matches!(c, '+' | '=' | '-') && previous == Some('{'))
