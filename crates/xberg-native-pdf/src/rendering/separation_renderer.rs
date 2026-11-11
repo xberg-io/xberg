@@ -2404,52 +2404,21 @@ fn render_tj_to_plate(
     Ok(total_advance)
 }
 
-/// Compute the horizontal advance a [`TextRasterizer`] call would
-/// produce, without painting. Used for invisible/skipped text so the
-/// text matrix stays consistent with the painted ink plates.
-///
-/// Best-effort: when an embedded width table is unavailable we fall
-/// back to `font_size * len * 0.5` — close enough to keep glyph
-/// positions inside the rest of the line.
-fn measure_text_advance(text: &[u8], gs: &GraphicsState, fonts: &HashMap<String, Arc<FontInfo>>) -> Result<f32> {
-    let font_info = gs.font_name.as_ref().and_then(|n| fonts.get(n)).map(Arc::clone);
-
-    // Sum widths from the font's width table (in glyph units / 1000)
-    // multiplied by font_size, plus per-char Tc spacing. ~keep
-    let mut units: f32 = 0.0;
-    let mut count: usize = 0;
-    if let Some(info) = font_info.as_ref() {
-        if info.subtype != "Type0" {
-            for &b in text {
-                units += info.get_glyph_width(b as u16);
-                count += 1;
-            }
-        } else {
-            // Type0: iterate 2-byte codes (approx). GH #1631: the code read
-            // here is a content-stream character code, not a CID — it must
-            // go through `code_to_cid` before `get_glyph_width` or a
-            // non-Identity predefined/embedded CMap gets the wrong width,
-            // same defect as the rasterizer's main path. ~keep
-            let mut i = 0;
-            while i + 1 < text.len() {
-                let code = ((text[i] as u16) << 8) | text[i + 1] as u16;
-                units += info.get_glyph_width(info.code_to_cid(code as u32));
-                count += 1;
-                i += 2;
-            }
-        }
-    } else {
-        for _ in text {
-            units += 500.0;
-            count += 1;
-        }
-    }
-    let advance = units * gs.font_size / 1000.0 + (count as f32) * gs.char_space;
-    Ok(if gs.text_wmode == 0 {
-        advance * gs.horizontal_scaling / 100.0
-    } else {
-        advance
-    })
+/// Compute the advance a [`TextRasterizer`] call would produce, without
+/// painting. Used for invisible/skipped text so the text matrix stays
+/// consistent with the painted ink plates; delegates to the rasterizer's
+/// own measure so the two cannot drift.
+pub(super) fn measure_text_advance(
+    text: &[u8],
+    gs: &GraphicsState,
+    fonts: &HashMap<String, Arc<FontInfo>>,
+) -> Result<f32> {
+    let font_info = gs.font_name.as_ref().and_then(|n| fonts.get(n));
+    Ok(super::text_rasterizer::measure_text_bytes(
+        text,
+        gs,
+        font_info.map(|f| &**f),
+    ))
 }
 
 /// Fill a path into the separation pixmap with the given tint value.
