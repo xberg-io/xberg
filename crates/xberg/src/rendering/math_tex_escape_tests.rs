@@ -131,20 +131,15 @@ fn should_not_leave_a_dollar_for_a_reader_to_misread_after_a_closing_dollar() {
 }
 
 #[test]
-fn should_keep_display_form_for_display_math_in_a_list_item() {
+fn should_write_display_math_in_a_list_item_on_one_line_with_escaped_tex() {
+    // Redaction cannot map a `$$` block that the list indent breaks, so a list item keeps one line.
     let mut builder = InternalDocumentBuilder::new("test");
     builder.push_list(false);
     builder.push_list_item("item", false, vec![], None, None);
     builder.push_formula(r"a \\ b", None, None);
     builder.end_list();
     let markdown = super::render_markdown(&builder.build());
-    let lines: Vec<&str> = markdown.lines().map(str::trim).collect();
-    let open = lines.iter().position(|line| *line == "$$").expect(&markdown);
-    assert_eq!(
-        lines[open..].iter().take(3).copied().collect::<Vec<_>>(),
-        ["$$", r"a \\ b", "$$"],
-        "display math in a list item must be the TeX between two `$$` lines: {markdown:?}"
-    );
+    assert!(markdown.contains(r"$$a \\\ b$$"), "{markdown:?}");
 }
 
 #[test]

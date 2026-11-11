@@ -286,12 +286,7 @@ fn sanitize_dollar_math<'a>(node: &'a AstNode<'a>) {
     let paragraph = node.parent().filter(|parent| holds_only(parent, node));
     let block_ok = paragraph
         .and_then(|paragraph| paragraph.parent())
-        .is_some_and(|parent| {
-            matches!(
-                parent.data.borrow().value,
-                NodeValue::Document | NodeValue::BlockQuote | NodeValue::Item(_) | NodeValue::TaskItem(_)
-            )
-        });
+        .is_some_and(|parent| matches!(parent.data.borrow().value, NodeValue::Document));
     let mut data = node.data.borrow_mut();
     let NodeValue::Math(math) = &mut data.value else {
         return;
@@ -411,12 +406,13 @@ enum DisplayTex {
 
 /// Display TeX for math alone in a paragraph, or `None` when no `$$` form holds it.
 ///
-/// Where a block can hold it, in the document, a quote or a list item, it is the literal between
-/// `$$` delimiter lines, each of which the container prefix indents. Otherwise, or when a line
+/// At the top level it is the literal between `$$` delimiter lines. Inside a quote, list item or
+/// footnote a container prefix would indent each of those lines, and redaction cannot map a
+/// payload broken by prefixes, so the TeX is written on one line, `$$tex$$`; so it is when a line
 /// opens a Markdown block (a quote, list or heading marker), which would end the paragraph for a
-/// reader without math, the TeX is written on one line, `$$tex$$`. A `%` comment makes the line
-/// breaks significant, so TeX with one that needs the one-line form has no `$$` form and keeps the
-/// fence. The TeX holds no blank line, which would end the block, and no unescaped `$`.
+/// reader without math. A `%` comment makes the line breaks significant, so TeX with one that
+/// needs the one-line form has no `$$` form and keeps the fence. The TeX holds no blank line,
+/// which would end the block, and no unescaped `$`.
 fn dollar_math_display(tex: &str, block_ok: bool) -> Option<DisplayTex> {
     let comment = has_tex_comment(tex);
     let tex = escape_math_dollars(&unix_lines(tex));
@@ -3310,8 +3306,8 @@ mod tests {
         builder.end_list();
         let markdown = crate::rendering::render_markdown(&builder.build());
         assert_no_html(&markdown, &Options::default());
-        assert!(markdown.contains("> $$\n> α\n> < div\n> β\n> $$"), "{markdown}");
-        assert!(markdown.contains("  $$\n  α\n  < script\n  β\n  $$"), "{markdown}");
+        assert!(markdown.contains("> $$α \\<div β$$"), "{markdown}");
+        assert!(markdown.contains("  $$α \\<script β$$"), "{markdown}");
     }
 
     #[test]
@@ -3368,7 +3364,7 @@ mod tests {
     }
 
     #[test]
-    fn should_write_container_display_math_between_dollar_lines() {
+    fn should_write_container_display_math_on_one_line_unless_a_comment_needs_the_breaks() {
         let mut builder = InternalDocumentBuilder::new("test");
         builder.push_quote_start();
         builder.push_formula("a\nb", None, None);
@@ -3382,12 +3378,12 @@ mod tests {
         builder.push_formula("p % q\nr", None, None);
         builder.end_list();
         let markdown = crate::rendering::render_markdown(&builder.build());
-        assert!(markdown.contains("> $$\n> a\n> b\n> $$"), "{markdown}");
-        assert!(markdown.contains("> $$\n> a % note\n> b\n> $$"), "{markdown}");
-        assert!(markdown.contains("> $$\n> a \\% 5\n> b\n> $$"), "{markdown}");
-        assert!(markdown.contains("> $$\n> x \\\n> $$"), "{markdown}");
-        assert!(markdown.contains("  $$\n  x \\\n  $$"), "{markdown}");
-        assert!(markdown.contains("  $$\n  p % q\n  r\n  $$"), "{markdown}");
+        assert!(markdown.contains("> $$a b$$"), "{markdown}");
+        assert!(markdown.contains("> ```math\n> a % note\n> b\n> ```"), "{markdown}");
+        assert!(markdown.contains("> $$a \\\\% 5 b$$"), "{markdown}");
+        assert!(markdown.contains("> $$x \\ $$"), "{markdown}");
+        assert!(markdown.contains("  $$x \\ $$"), "{markdown}");
+        assert!(markdown.contains("  ```math\n  p % q\n  r\n  ```"), "{markdown}");
     }
 
     #[test]
@@ -3415,7 +3411,7 @@ mod tests {
                 .starts_with("```math\na\n- b % c\n```\n\n```math\n> a % c\nb\n```\n\n```math\n# a % c\nb\n```\n\n"),
             "{markdown}"
         );
-        assert!(markdown.ends_with("> $$\n> a\n> % c\n> b\n> $$\n"), "{markdown}");
+        assert!(markdown.ends_with("> ```math\n> a\n> % c\n> b\n> ```\n"), "{markdown}");
     }
 
     #[test]
