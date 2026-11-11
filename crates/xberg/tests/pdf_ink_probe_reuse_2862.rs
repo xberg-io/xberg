@@ -264,7 +264,12 @@ fn probe_and_production_configs_can_return_different_source_words() {
     assert_eq!(inputs.len(), 2);
     assert_eq!(inputs[0].1, inputs[1].1, "decoded pixels are equal");
     assert_eq!(inputs[0].3["quality_thresholds"]["discard_suspected_ocr_noise"], true);
-    assert_eq!(inputs[1].3["quality_thresholds"], serde_json::Value::Null);
+    // With Paddle compiled in, the default pipeline materializes the thresholds; without it they stay null.
+    assert!(
+        !inputs[1].3["quality_thresholds"]["discard_suspected_ocr_noise"]
+            .as_bool()
+            .unwrap_or(false)
+    );
 }
 
 #[test]
