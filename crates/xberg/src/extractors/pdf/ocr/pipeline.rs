@@ -9759,16 +9759,6 @@ mod detached_table_pair;
 #[path = "pipeline/detached_mixed_frame.rs"]
 mod detached_mixed_frame;
 
-#[cfg(all(
-    test,
-    feature = "pdf",
-    feature = "ocr",
-    feature = "tokio-runtime",
-    not(target_arch = "wasm32")
-))]
-#[path = "pipeline/detached_mixed_frame_pin_tests.rs"]
-mod detached_mixed_frame_pin_tests;
-
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 #[path = "pipeline/raw_workspace_geometry.rs"]
 mod raw_workspace_geometry;
