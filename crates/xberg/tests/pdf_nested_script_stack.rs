@@ -166,8 +166,12 @@ fn should_not_flatten_the_half_power_of_the_root_in_gutenberg_38769_p500() {
     assert_no_markup("gutenberg-38769-p500", "2π</sup>");
 }
 
-/// The glyph stream of plos-journal.pcbi.1010783 p4 reads `R`, `n`, `x`, `þ`: the exponent `n_x`
-/// first, then the `þ` below the line. Every dimension keeps that order.
+/// Glyph boxes of plos-journal.pcbi.1010783 p4 (pdftotext -bbox, pt) for the first dimension: `R`
+/// x 284.49 to 291.71 y 522.59 to 532.59; `n` x 291.69 to 294.88 y 521.69 to 527.69 (raised); `þ`
+/// x 291.69 to 296.30 y 529.05 to 534.45 (lowered); `x` x 294.92 to 297.28 y 523.89 to 528.89, whose
+/// bottom edge is above `R`'s, so it is raised with `n` (the subscript of the exponent). The raised
+/// level reads `n`, `x` in x order and the lowered level `þ`, so the dimension reads `Rnxþ`, which
+/// is also the order of the content stream. Every dimension keeps it.
 #[test]
 fn should_keep_the_glyph_stream_order_of_the_dimension_in_plos_1010783() {
     for dimension in [
