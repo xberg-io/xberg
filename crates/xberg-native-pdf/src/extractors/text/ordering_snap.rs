@@ -70,15 +70,18 @@ pub(crate) fn ordering_script_baselines(spans: &[OrderingSpan<'_>]) -> Vec<Optio
         }
         start = end;
     }
-    snap_script_stacks(spans, &own, &mut result);
     result
 }
 
-/// Snaps the members of a nested script stack (`e^{-c_1 \tau}`, `R^{n_x}`) onto their base's line.
+/// The nested script stacks (`e^{-c_1 \tau}`, `R^{n_x}`) among `spans`: each base with the indices of
+/// its members in x order.
 ///
-/// Which spans form a stack is decided by [`script_stack`]. Spans that already snapped are neither
-/// bases nor moved.
-fn snap_script_stacks(spans: &[OrderingSpan<'_>], own: &[Option<f32>], result: &mut [Option<f32>]) {
+/// Which spans form a stack is decided by [`script_stack`]. A span that a single-mark snap already
+/// moved (`snapped`) is not a base; it still counts as a member, so the stack reads as one run. The
+/// stacks are not snapped: a snap moves spans before the page's column and band passes read them, and
+/// a stack must not change how those split the page, so the caller places the members after the page
+/// is ordered.
+pub(crate) fn ordering_script_stacks(spans: &[OrderingSpan<'_>], snapped: &[Option<f32>]) -> Vec<(usize, Vec<usize>)> {
     let to_stack = |i: usize| {
         let (text, x, baseline, width, font_size) = spans[i];
         StackSpan {
@@ -98,8 +101,9 @@ fn snap_script_stacks(spans: &[OrderingSpan<'_>], own: &[Option<f32>], result: &
     bases.sort_by(|&a, &b| crate::utils::safe_float_cmp(spans[b].4, spans[a].4));
 
     let mut claimed = vec![false; spans.len()];
+    let mut stacks = Vec::new();
     for base in bases {
-        if claimed[base] || result[base].is_some() || own[base].is_some() {
+        if claimed[base] || snapped[base].is_some() {
             continue;
         }
         let stack: Vec<usize> = script_stack(&to_stack(base), &candidates)
@@ -109,21 +113,34 @@ fn snap_script_stacks(spans: &[OrderingSpan<'_>], own: &[Option<f32>], result: &
         if stack.is_empty() || stack.iter().any(|&m| claimed[m]) {
             continue;
         }
-        let by = spans[base].2;
-        for m in stack {
+        for &m in &stack {
             claimed[m] = true;
-            if result[m].is_none() {
-                result[m] = Some(by);
-            }
         }
+        stacks.push((base, stack));
     }
+    stacks
 }
+
+/// The nested script stacks among `spans`: each base with the indices of its members in x order.
+///
+/// Nothing is snapped: the caller places the members after the page has been ordered and
+/// partitioned.
+#[doc(hidden)]
+#[must_use]
+pub fn script_stacks(spans: &[StackSpan<'_>]) -> Vec<(usize, Vec<usize>)> {
+    let ordering: Vec<OrderingSpan<'_>> = spans
+        .iter()
+        .map(|span| (span.text, span.x, span.baseline, span.width, span.font_size))
+        .collect();
+    ordering_script_stacks(&ordering, &ordering_script_baselines(&ordering))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn should_snap_a_stack_of_two_sizes_onto_its_base_line() {
+    fn should_report_a_stack_of_two_sizes_on_its_base_without_snapping_it() {
         let spans: Vec<OrderingSpan<'_>> = vec![
             ("(", 65.41, 76.24, 4.24, 10.91),
             ("an", 69.65, 76.24, 17.05, 10.91),
@@ -133,7 +150,8 @@ mod tests {
             ("+", 97.69, 76.24, 8.49, 10.91),
         ];
         let snapped = ordering_script_baselines(&spans);
-        assert_eq!(snapped, [None, None, None, Some(76.24), Some(76.24), None]);
+        assert_eq!(snapped, [None; 6]);
+        assert_eq!(ordering_script_stacks(&spans, &snapped), [(1, vec![3, 4])]);
     }
 
     #[test]
@@ -143,8 +161,31 @@ mod tests {
             ("1", 15.0, 104.5, 3.0, 6.0),
             ("2", 15.0, 99.0, 3.0, 6.0),
         ];
-        assert_eq!(ordering_script_baselines(&fraction), [None, None, None]);
+        assert!(ordering_script_stacks(&fraction, &ordering_script_baselines(&fraction)).is_empty());
         let lone: Vec<OrderingSpan<'_>> = vec![("e", 10.0, 100.0, 5.0, 10.0), ("c", 15.0, 104.5, 3.0, 7.0)];
-        assert_eq!(ordering_script_baselines(&lone), [None, None]);
+        assert!(ordering_script_stacks(&lone, &ordering_script_baselines(&lone)).is_empty());
+    }
+
+    #[test]
+    fn should_report_stacks_of_stack_spans_and_skip_a_large_bracket_piece() {
+        let span = |text, x, baseline, width, font_size| StackSpan {
+            text,
+            x,
+            baseline,
+            width,
+            font_size,
+        };
+        let stack = [
+            span("e", 100.0, 100.0, 4.0, 10.0),
+            span("c", 104.0, 104.2, 3.0, 7.5),
+            span("1", 107.0, 102.6, 3.0, 6.0),
+        ];
+        assert_eq!(script_stacks(&stack), [(0, vec![1, 2])]);
+        let bracket = [
+            span("\u{b5}", 100.0, 100.0, 5.0, 10.0),
+            span("\u{239e}", 105.2, 104.1, 2.2, 4.97),
+            span("2", 107.8, 104.1, 4.0, 8.0),
+        ];
+        assert!(script_stacks(&bracket).is_empty());
     }
 }

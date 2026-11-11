@@ -1017,7 +1017,7 @@ fn segments_to_paragraphs(
     paragraph_gap_ys: &[f32],
     witnesses: &TextRepairWitnesses,
 ) -> Vec<PdfParagraph> {
-    let segments = order_segments_in_reading_frames(segments);
+    let segments = place_script_stacks_after_bases(order_segments_in_reading_frames(segments));
     let mut paragraphs = blocks_to_paragraphs(segments, heading_map, paragraph_gap_ys);
     apply_text_repair_to_structure_tree_paragraphs(&mut paragraphs, true, witnesses);
     reattach_detached_list_markers(&mut paragraphs, DetachedMarkerFrame::Native);
@@ -2185,18 +2185,20 @@ fn blocks_to_paragraphs(
     let mut prev_idx = 0usize;
     let mut visual_row: Option<ParagraphVisualRow<'_>> = None;
     let mut stack_end: Option<usize> = None;
+    let mut stack_members: Vec<usize> = Vec::new();
 
     for (line_idx, line) in lines.iter().enumerate() {
         // The members of a nested script stack on the previous run join its row past a single mark's
         // reach; the stack ends at its last member. ~keep
         if stack_end.is_none_or(|end| line_idx > end) {
-            stack_end = line_idx
+            stack_members = line_idx
                 .checked_sub(1)
                 .map(|base| script_stack_members(&lines, base))
                 .filter(|members| members.contains(&line_idx))
-                .and_then(|members| members.last().copied());
+                .unwrap_or_default();
+            stack_end = stack_members.iter().copied().max();
         }
-        let in_stack = stack_end.is_some();
+        let in_stack = stack_members.contains(&line_idx);
         let is_row_script = visual_row
             .as_ref()
             .is_some_and(|row| row.carries_script_within(line, in_stack));
@@ -2579,6 +2581,63 @@ pub(super) fn script_stack_members<T: std::borrow::Borrow<SegmentData>>(segments
         .into_iter()
         .map(|i| order[i])
         .collect()
+}
+
+/// Moves the members of each nested script stack to directly after their base: the raised members
+/// in x order, then the lowered ones, so each side reads as one run.
+///
+/// A member sits off its base's line, so reading order leaves it among the neighbouring rows. The
+/// page is already ordered and its gap statistics measured, so the move changes only which runs
+/// the paragraph grouper and the markup pass see next to the base. A page with a rotated run is left as is.
+fn place_script_stacks_after_bases(segments: Vec<SegmentData>) -> Vec<SegmentData> {
+    use xberg_native_pdf::document::{StackSpan, script_stacks};
+
+    if segments.iter().any(|segment| !segment.is_unrotated()) {
+        return segments;
+    }
+    let spans: Vec<StackSpan<'_>> = segments
+        .iter()
+        .map(|segment| {
+            let (x, right) = segment.upright_advance_extent();
+            StackSpan {
+                text: segment.text.as_str(),
+                x,
+                baseline: segment.upright_baseline(),
+                width: right - x,
+                font_size: segment.font_size,
+            }
+        })
+        .collect();
+    let after_base: std::collections::HashMap<usize, Vec<usize>> = script_stacks(&spans)
+        .into_iter()
+        .map(|(base, members)| {
+            let (raised, lowered): (Vec<usize>, Vec<usize>) = members
+                .into_iter()
+                .partition(|&member| spans[member].baseline > spans[base].baseline);
+            (base, [raised, lowered].concat())
+        })
+        .collect();
+    drop(spans);
+    if after_base.is_empty() {
+        return segments;
+    }
+    let mut moved = vec![false; segments.len()];
+    for &member in after_base.values().flatten() {
+        moved[member] = true;
+    }
+    let mut slots: Vec<Option<SegmentData>> = segments.into_iter().map(Some).collect();
+    let mut placed = Vec::with_capacity(slots.len());
+    for index in 0..slots.len() {
+        if moved[index] {
+            continue;
+        }
+        placed.extend(slots[index].take());
+        for &member in after_base.get(&index).into_iter().flatten() {
+            placed.extend(slots[member].take());
+        }
+    }
+    placed.extend(slots.into_iter().flatten());
+    placed
 }
 
 /// Whether `line` reads as the wrapped continuation of the numbered-heading

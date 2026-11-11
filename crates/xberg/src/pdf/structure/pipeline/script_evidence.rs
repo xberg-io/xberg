@@ -2,7 +2,6 @@
 
 use std::collections::{HashMap, HashSet};
 
-#[cfg(test)]
 use crate::pdf::hierarchy::SegmentData;
 use crate::pdf::native::hierarchy::script_evidence::{NativePageSegments, ScriptOwner, SegmentKey};
 use crate::pdf::structure::types::{LayoutHintClass, PdfLine, PdfParagraph};
@@ -78,6 +77,15 @@ fn preserves_existing_scripts(
     moved: &HashSet<SegmentKey>,
     insertions: &HashMap<SegmentKey, Vec<ScriptOwner>>,
 ) -> bool {
+    let base_of_script: HashMap<SegmentKey, (&SegmentKey, usize)> = insertions
+        .iter()
+        .flat_map(|(base, owners)| {
+            owners
+                .iter()
+                .enumerate()
+                .map(move |(rank, owner)| (SegmentKey::from(owner.script.as_ref()), (base, rank)))
+        })
+        .collect();
     paragraphs.iter().all(|paragraph| {
         let before: Vec<_> = paragraph.lines.iter().flat_map(|line| &line.segments).collect();
         let mut after = Vec::new();
@@ -85,7 +93,9 @@ fn preserves_existing_scripts(
         for (index, segment) in before.iter().enumerate() {
             let key = SegmentKey::from(*segment);
             if moved.contains(&key) {
-                if super::super::assembly::segment_script_kind(&before, index).is_some() {
+                if super::super::assembly::segment_script_kind(&before, index).is_some()
+                    && !already_follows_its_base(&before, index, &base_of_script, insertions)
+                {
                     return false;
                 }
                 continue;
@@ -102,6 +112,29 @@ fn preserves_existing_scripts(
             super::super::assembly::segment_script(&before, old) == super::super::assembly::segment_script(&after, new)
         })
     })
+}
+
+/// Whether the moved script at `index` already sits where the insertion would put it: right after
+/// its base and the scripts that rank before it, so the move changes nothing and cannot disturb a
+/// script that the paragraph already reads as one.
+fn already_follows_its_base(
+    before: &[&SegmentData],
+    index: usize,
+    base_of_script: &HashMap<SegmentKey, (&SegmentKey, usize)>,
+    insertions: &HashMap<SegmentKey, Vec<ScriptOwner>>,
+) -> bool {
+    let Some(&(base, rank)) = base_of_script.get(&SegmentKey::from(before[index])) else {
+        return false;
+    };
+    let Some(start) = index.checked_sub(rank + 1) else {
+        return false;
+    };
+    SegmentKey::from(before[start]) == *base
+        && insertions[base]
+            .iter()
+            .take(rank)
+            .zip(&before[start + 1..index])
+            .all(|(owner, segment)| SegmentKey::from(owner.script.as_ref()) == SegmentKey::from(*segment))
 }
 
 fn run_context_survives(
