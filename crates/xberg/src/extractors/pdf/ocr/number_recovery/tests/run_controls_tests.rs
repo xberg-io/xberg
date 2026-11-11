@@ -329,35 +329,39 @@ fn should_observe_cancellation_after_admission_before_engine_initialization() {
             }
         }
     }
-    let (_root, mut config) = invalid_auxiliary_models();
-    let token = crate::cancellation::CancellationToken::new();
-    config.cancel_token = Some(token.clone());
-    assert!(eligible(&config, 0), "admission starts before cancellation");
-    let document = matching_document();
-    let run = Arc::new(Run::default());
-    let future = exercise_page(&document, 0, &config, &run);
-    let observed = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let subscriber = tracing_subscriber::registry().with(CancelOnFont(token, observed.clone()));
-    tracing::subscriber::with_default(subscriber, || {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(future)
-    });
-    assert!(
-        observed.load(std::sync::atomic::Ordering::SeqCst),
-        "the native source path must cancel an already admitted page"
-    );
-    assert!(
-        run.processor.get().is_none(),
-        "a cancellation during source proof must prevent engine initialization"
-    );
-    assert_eq!(
-        run.budget.remaining(&config),
-        proof_limits(&config).max_content_size / 2,
-        "cancellation after font work retains its entire bounded reservation"
-    );
+    for document in [
+        matching_document(),
+        Arc::new(PdfDocument::from_bytes(late_decline_pages()).unwrap()),
+    ] {
+        let (_root, mut config) = invalid_auxiliary_models();
+        let token = crate::cancellation::CancellationToken::new();
+        config.cancel_token = Some(token.clone());
+        assert!(eligible(&config, 0), "admission starts before cancellation");
+        let run = Arc::new(Run::default());
+        let future = exercise_page(&document, 0, &config, &run);
+        let observed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let subscriber = tracing_subscriber::registry().with(CancelOnFont(token, observed.clone()));
+        tracing::subscriber::with_default(subscriber, || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(future)
+        });
+        assert!(
+            observed.load(std::sync::atomic::Ordering::SeqCst),
+            "the native source path must cancel an already admitted page"
+        );
+        assert!(
+            run.processor.get().is_none(),
+            "a cancellation during source proof must prevent engine initialization"
+        );
+        assert_eq!(
+            run.budget.remaining(&config),
+            proof_limits(&config).max_content_size / 2,
+            "cancellation after font work retains its entire bounded reservation"
+        );
+    }
 }
 
 #[test]
@@ -637,6 +641,18 @@ fn should_retain_source_reservation_when_a_late_decline_fails_the_proof() {
     });
 }
 
+fn warm_native_number_fonts(document: &PdfDocument, pages: usize) {
+    for index in 0..pages {
+        assert!(
+            document
+                .extract_chars(index)
+                .unwrap()
+                .iter()
+                .any(|glyph| glyph.char == '០')
+        );
+    }
+}
+
 fn early_decline_pages(profile: &str) -> Vec<u8> {
     let source = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -657,7 +673,7 @@ fn early_decline_pages(profile: &str) -> Vec<u8> {
             .get_dictionary_mut(first)
             .unwrap()
             .set("ActualText", lopdf::Object::string_literal("hidden")),
-        "inline_actual_text" => {
+        "inline_actual_text" | "decode_error" | "oversized_contents" => {
             let id = pdf
                 .get_dictionary(first)
                 .unwrap()
@@ -666,12 +682,26 @@ fn early_decline_pages(profile: &str) -> Vec<u8> {
                 .as_reference()
                 .unwrap();
             let mut content = pdf.get_object(id).unwrap().as_stream().unwrap().clone();
-            content.set_plain_content(b"/Span << /ActualText (hidden) >> BDC EMC".to_vec());
+            if profile == "decode_error" {
+                content.set_plain_content(b"invalid zlib stream".to_vec());
+                content.dict.set("Filter", "FlateDecode");
+            } else {
+                content.set_plain_content(b"/Span << /ActualText (hidden) >> BDC EMC".to_vec());
+            }
+            if profile == "oversized_contents" {
+                content
+                    .dict
+                    .set("Padding", lopdf::Object::string_literal(vec![b'x'; 64 * 1024]));
+            }
             let content = pdf.add_object(content);
             pdf.get_dictionary_mut(first).unwrap().set("Contents", content);
         }
-        "form" => {
-            let form = pdf.add_object(lopdf::Stream::new(lopdf::dictionary! {"Subtype" => "Form"}, Vec::new()));
+        "form" | "oversized_form" => {
+            let mut dictionary = lopdf::dictionary! {"Subtype" => "Form"};
+            if profile == "oversized_form" {
+                dictionary.set("Padding", lopdf::Object::string_literal(vec![b'x'; 64 * 1024]));
+            }
+            let form = pdf.add_object(lopdf::Stream::new(dictionary, Vec::new()));
             let resources = pdf.get_dictionary(first).unwrap().get(b"Resources").unwrap().clone();
             let mut resources = match resources {
                 lopdf::Object::Reference(id) => pdf.get_dictionary(id).unwrap().clone(),
@@ -681,7 +711,7 @@ fn early_decline_pages(profile: &str) -> Vec<u8> {
             resources.set("XObject", lopdf::dictionary! {"Fm" => form});
             pdf.get_dictionary_mut(first).unwrap().set("Resources", resources);
         }
-        "ambiguous_font" => {
+        "ambiguous_font" | "unsupported_audit" => {
             let resources = pdf.get_dictionary(first).unwrap().get(b"Resources").unwrap().clone();
             let mut resources = match resources {
                 lopdf::Object::Reference(id) => pdf.get_dictionary(id).unwrap().clone(),
@@ -700,6 +730,12 @@ fn early_decline_pages(profile: &str) -> Vec<u8> {
                 let Ok(cmap) = dictionary.get(b"ToUnicode") else {
                     continue;
                 };
+                if profile == "unsupported_audit" {
+                    dictionary.set("Encoding", "Identity-H");
+                    *font = pdf.add_object(dictionary).into();
+                    changed += 1;
+                    continue;
+                }
                 let cmap = cmap.as_reference().unwrap();
                 let mut cmap = pdf.get_object(cmap).unwrap().as_stream().unwrap().clone();
                 let text = String::from_utf8(cmap.decompressed_content().unwrap()).unwrap();
@@ -760,11 +796,32 @@ fn should_recover_the_second_page_after_an_early_unsupported_source_decline() {
         "form",
         "ambiguous_font",
     ] {
-        let document = Arc::new(PdfDocument::from_bytes(early_decline_pages(profile)).unwrap());
+        let bytes = early_decline_pages(profile);
+        let document = Arc::new(PdfDocument::from_bytes(bytes.clone()).unwrap());
         assert_eq!(document.page_count().unwrap(), 2);
+        let measured_font_charge = if profile == "ambiguous_font" {
+            warm_native_number_fonts(&document, 1);
+            let shadow = PdfDocument::from_bytes(bytes).unwrap();
+            warm_native_number_fonts(&shadow, 1);
+            let Preparation::MeasuredDecline(measured) =
+                source_numbers(&shadow, 0, raster.capacity(), &config).unwrap()
+            else {
+                panic!("the native font pass must leave a measurable ambiguous-font decline");
+            };
+            Some(measured + raster.capacity())
+        } else {
+            None
+        };
         let run = Arc::new(Run::default());
         let initial = run.budget.remaining(&config);
-        let first = exercise_page(&document, 0, &config, &run);
+        let first = exercise_source_page(
+            &document,
+            0,
+            &config,
+            &run,
+            raster.clone(),
+            (decoded.width(), decoded.height()),
+        );
         let events = FontEvents::default();
         with_runtime(events.clone(), async {
             let first = first.await;
@@ -774,17 +831,22 @@ fn should_recover_the_second_page_after_an_early_unsupported_source_decline() {
                     events.0.lock().unwrap().is_empty(),
                     "early {profile} must precede fonts"
                 );
-            } else if profile == "ambiguous_font" {
+            }
+            let remaining = run.budget.remaining(&config);
+            if early {
+                assert_eq!(remaining, initial, "{profile} is metadata-only");
+            } else if let Some(charge) = measured_font_charge {
+                assert_eq!(
+                    remaining,
+                    initial - charge,
+                    "only the measured font proof may be charged"
+                );
+            } else {
                 assert!(
-                    !events.0.lock().unwrap().is_empty(),
-                    "late {profile} really loads fonts"
+                    remaining > initial / 2 && remaining < initial,
+                    "{profile} must settle completed work"
                 );
             }
-            assert_eq!(
-                run.budget.remaining(&config),
-                if early { initial } else { initial / 2 },
-                "{profile} must charge exactly its source phase"
-            );
             assert!(
                 !run.budget.limited(),
                 "early {profile} is unsupported, not budget exhaustion"
@@ -861,11 +923,16 @@ fn should_retain_source_reservation_after_content_decode_or_budget_decline() {
         let document = Arc::new(PdfDocument::from_bytes(early_decline_pages(profile)).unwrap());
         let run = Arc::new(Run::default());
         let warnings = with_runtime(FontEvents::default(), exercise_page(&document, 0, &config, &run));
-        assert_eq!(
-            run.budget.remaining(&config),
-            proof_limits(&config).max_content_size / 2,
-            "{profile} must retain its entire bounded source share"
-        );
+        let initial = proof_limits(&config).max_content_size;
+        let remaining = run.budget.remaining(&config);
+        if profile == "budget" {
+            assert_eq!(remaining, initial / 2, "an unmeasured budget refusal retains its share");
+        } else {
+            assert!(
+                remaining > initial / 2 && remaining < initial,
+                "{profile} must charge measured nonzero work"
+            );
+        }
         assert!(
             !run.budget.limited(),
             "{profile}: a single share is not document exhaustion"
@@ -929,75 +996,88 @@ fn should_splice_numbers_into_the_second_accepted_paragraph() {
     assert_eq!(read, "\nfirst  1\r\n\r\nleft\t ០ right\n");
 }
 
+fn two_late_then_supported_pages(profile: &str) -> Vec<u8> {
+    let mut pdf = lopdf::Document::load_mem(&early_decline_pages(profile)).unwrap();
+    let pages = pdf.get_pages();
+    let first = *pages.get(&1).unwrap();
+    let last = *pages.get(&2).unwrap();
+    let page = pdf.get_dictionary(first).unwrap().clone();
+    let parent = page.get(b"Parent").unwrap().as_reference().unwrap();
+    let second = pdf.add_object(page);
+    let root = pdf.get_dictionary_mut(parent).unwrap();
+    root.set("Kids", vec![first.into(), second.into(), last.into()]);
+    root.set("Count", 3);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    bytes
+}
+
 #[test]
 fn should_allow_supported_source_work_after_bounded_late_declines() {
     let (_root, config) = invalid_auxiliary_models();
     let (raster, _, _) = verifier_fixture();
     let initial = proof_limits(&config).max_content_size;
-    let share = initial / 2;
     let decoded = image::load_from_memory(&raster).unwrap();
     let dimensions = (decoded.width(), decoded.height());
     let mut observed = Vec::new();
     for profile in ["inline_actual_text", "form", "ambiguous_font"] {
-        let bytes = early_decline_pages(profile);
+        let bytes = two_late_then_supported_pages(profile);
         let shadow = PdfDocument::from_bytes(bytes.clone()).unwrap();
+        if profile == "ambiguous_font" {
+            warm_native_number_fonts(&shadow, 2);
+        }
+        for index in 0..2 {
+            assert!(
+                matches!(
+                    source_numbers(&shadow, index, raster.capacity(), &config).unwrap(),
+                    Preparation::MeasuredDecline(_)
+                ),
+                "{profile} page {index} must decline after admission"
+            );
+        }
         assert!(
             matches!(
-                source_numbers(&shadow, 0, raster.capacity(), &config).unwrap(),
-                Preparation::UnmeasuredDecline
-            ),
-            "{profile} must really decline after metadata admission"
-        );
-        assert!(
-            matches!(
-                source_numbers(&shadow, 1, raster.capacity(), &config).unwrap(),
+                source_numbers(&shadow, 2, raster.capacity(), &config).unwrap(),
                 Preparation::Ready(_)
             ),
-            "{profile} successor must be a supported source"
+            "{profile} third page must be a supported source"
         );
         let document = Arc::new(PdfDocument::from_bytes(bytes).unwrap());
+        if profile == "ambiguous_font" {
+            warm_native_number_fonts(&document, 2);
+        }
         let run = Arc::new(Run::default());
         let events = FontEvents::default();
-        let first = exercise_source_page(&document, 0, &config, &run, raster.clone(), dimensions);
-        let second = exercise_source_page(&document, 1, &config, &run, raster.clone(), dimensions);
         with_runtime(events.clone(), async {
-            let warnings = first.await;
-            let remaining = run.budget.remaining(&config);
-            let before = events.0.lock().unwrap().len();
-            let first_limited = run.budget.limited();
-            let _ = second.await;
+            let mut before = initial;
+            let mut charged = true;
+            let mut unproved = true;
+            for index in 0..2 {
+                let warnings = exercise_source_page(&document, index, &config, &run, raster.clone(), dimensions).await;
+                let remaining = run.budget.remaining(&config);
+                charged &= remaining < before;
+                before = remaining;
+                unproved &= warnings.len() == 1 && warnings[0].message.contains("could not be bound");
+            }
+            let after_declines = events.0.lock().unwrap().len();
+            let _ = exercise_source_page(&document, 2, &config, &run, raster.clone(), dimensions).await;
             observed.push((
                 profile,
-                remaining,
-                run.budget.remaining(&config),
-                first_limited,
-                warnings.len() == 1 && warnings[0].message.contains("could not be bound"),
-                events.0.lock().unwrap().len() > before,
+                charged,
+                before > 0,
+                unproved,
+                events.0.lock().unwrap().len() > after_declines,
             ));
         });
     }
     assert_eq!(
         observed,
         vec![
-            (
-                "inline_actual_text",
-                initial - share,
-                initial - 2 * share,
-                false,
-                true,
-                true
-            ),
-            ("form", initial - share, initial - 2 * share, false, true, true),
-            (
-                "ambiguous_font",
-                initial - share,
-                initial - 2 * share,
-                false,
-                true,
-                true
-            ),
+            ("inline_actual_text", true, true, true, true),
+            ("form", true, true, true, true),
+            ("ambiguous_font", true, true, true, true),
         ],
-        "late work must retain a full bounded share while a later supported page can perform charged work"
+        "two completed late declines must charge real work and let a third supported proof run"
     );
 }
 
@@ -1155,4 +1235,174 @@ fn should_fail_closed_when_measured_source_work_exceeds_its_reservation() {
         "an unexpected accounting overrun must stop the run"
     );
     assert!(budget.limited());
+}
+
+#[test]
+#[ignore = "Run mise run rust:test:khmer-number-recovery with the pinned Khmer model"]
+fn should_recover_the_third_page_after_two_late_source_declines() {
+    let (root, config) = invalid_auxiliary_models();
+    std::fs::copy(
+        std::env::var_os("XBERG_2408_KHM_MODEL").expect("pinned model"),
+        root.path().join("khm.traineddata"),
+    )
+    .unwrap();
+    let (raster, proof, character) = verifier_fixture();
+    let decoded = image::load_from_memory(&raster).unwrap();
+    let metadata = crate::types::Metadata::default();
+    for profile in ["inline_actual_text", "form", "ambiguous_font"] {
+        let document = Arc::new(PdfDocument::from_bytes(two_late_then_supported_pages(profile)).unwrap());
+        assert_eq!(document.page_count().unwrap(), 3);
+        if profile == "ambiguous_font" {
+            warm_native_number_fonts(&document, 2);
+        }
+        let run = Arc::new(Run::default());
+        let initial = run.budget.remaining(&config);
+        let events = FontEvents::default();
+        with_runtime(events.clone(), async {
+            for index in 0..2 {
+                let first = exercise_source_page(
+                    &document,
+                    index,
+                    &config,
+                    &run,
+                    raster.clone(),
+                    (decoded.width(), decoded.height()),
+                )
+                .await;
+                assert_eq!(first.len(), 1);
+                assert!(first[0].message.contains("could not be bound"), "{profile}: {first:?}");
+            }
+            assert!(run.budget.remaining(&config) < initial, "late work must stay charged");
+            assert!(
+                run.budget.remaining(&config) > 0,
+                "third page needs remaining allowance: {profile}"
+            );
+            assert!(!run.budget.limited());
+            let mut located = paragraph("VOU", "VOU");
+            let segment = &mut located.lines[0].segments[0];
+            let sx = decoded.width() as f32 / proof.media.width;
+            let sy = decoded.height() as f32 / proof.media.height;
+            segment.x = character.bbox.x * sx - 10.0;
+            segment.y = character.bbox.y * sy;
+            segment.width = character.bbox.width * sx + 20.0;
+            segment.height = character.bbox.height * sy;
+            let mut paragraphs = [located];
+            let mut read = "\n\tVOU \r\n".to_owned();
+            let mut warnings = Vec::new();
+            assert!(
+                recover(
+                    PageSource {
+                        document: document.clone(),
+                        index: 2,
+                        layer: "ប០ប",
+                        raster: raster.clone(),
+                        dimensions: (decoded.width(), decoded.height()),
+                        metadata: &metadata
+                    },
+                    &mut paragraphs,
+                    &mut read,
+                    &config,
+                    &run,
+                    &mut warnings
+                )
+                .await,
+                "supported third page after two {profile} declines"
+            );
+            assert_eq!(
+                read, "\n\tVOU ០ \r\n",
+                "painted zero must preserve accepted spacing after {profile}"
+            );
+            assert!(!events.0.lock().unwrap().is_empty(), "supported page must load fonts");
+            assert!(warnings.is_empty(), "{profile}: {warnings:?}");
+        });
+    }
+}
+
+#[test]
+fn should_retain_reservation_for_unmeasured_source_failures() {
+    let (_root, config) = invalid_auxiliary_models();
+    let (raster, _, _) = verifier_fixture();
+    let decoded = image::load_from_memory(&raster).unwrap();
+    let dimensions = (decoded.width(), decoded.height());
+    for profile in [
+        "decode_error",
+        "unsupported_audit",
+        "oversized_form",
+        "oversized_contents",
+    ] {
+        let bytes = early_decline_pages(profile);
+        let shadow = PdfDocument::from_bytes(bytes.clone()).unwrap();
+        let document = Arc::new(PdfDocument::from_bytes(bytes).unwrap());
+        let outcome = source_numbers(&shadow, 0, raster.capacity(), &config);
+        if profile == "decode_error" {
+            assert!(outcome.is_err(), "the real Flate decoder must error");
+        } else {
+            assert!(
+                matches!(outcome.unwrap(), Preparation::UnmeasuredDecline),
+                "{profile} must keep opaque source work unmeasured"
+            );
+        }
+        let run = Arc::new(Run::default());
+        let initial = run.budget.remaining(&config);
+        with_runtime(FontEvents::default(), async {
+            let warnings = exercise_source_page(&document, 0, &config, &run, raster.clone(), dimensions).await;
+            assert_eq!(
+                run.budget.remaining(&config),
+                initial / 2,
+                "{profile} must retain the full share"
+            );
+            assert_eq!(warnings.len(), 1);
+            assert!(warnings[0].message.contains("could not be bound"));
+            assert!(run.processor.get().is_none());
+        });
+    }
+}
+
+#[test]
+fn should_not_settle_a_cancelled_measured_decline() {
+    struct Measured(bool);
+    impl tracing::field::Visit for Measured {
+        fn record_bool(&mut self, field: &tracing::field::Field, value: bool) {
+            if field.name() == "measured" {
+                self.0 = value;
+            }
+        }
+        fn record_debug(&mut self, _: &tracing::field::Field, _: &dyn std::fmt::Debug) {}
+    }
+    struct CancelMeasured(crate::cancellation::CancellationToken);
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for CancelMeasured {
+        fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+            if event.metadata().target().ends_with("number_recovery::shape_proof") {
+                let mut measured = Measured(false);
+                event.record(&mut measured);
+                if measured.0 {
+                    self.0.cancel();
+                }
+            }
+        }
+    }
+    let (_root, mut config) = invalid_auxiliary_models();
+    let token = crate::cancellation::CancellationToken::new();
+    config.cancel_token = Some(token.clone());
+    let document = Arc::new(PdfDocument::from_bytes(late_decline_pages()).unwrap());
+    warm_native_number_fonts(&document, 1);
+    let run = Arc::new(Run::default());
+    let subscriber = tracing_subscriber::registry().with(CancelMeasured(token.clone()));
+    tracing::subscriber::with_default(subscriber, || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(exercise_page(&document, 0, &config, &run));
+    });
+    assert!(
+        token.is_cancelled(),
+        "the real prepared decline must be measured before cancellation"
+    );
+    assert_eq!(
+        run.budget.remaining(&config),
+        proof_limits(&config).max_content_size / 2,
+        "cancellation at measured disposition must retain the whole share"
+    );
+    assert!(run.processor.get().is_none());
 }
