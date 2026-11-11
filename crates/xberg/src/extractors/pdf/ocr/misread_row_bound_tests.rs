@@ -161,16 +161,43 @@ fn a_native_row_reads_the_longer_ocr_row_first_at_an_equal_distance_in_length() 
     assert_eq!(merged(&native, &read).lines().collect::<Vec<_>>(), expected);
 }
 
-/// Forty OCR rows of one length each misread only the native row at their own place. A native row
-/// reads the rows nearest to its place too, so each takes its own misread although its reads by
-/// length stop before most rows of that length. ~keep
+/// Forty OCR rows of one length each misread only the native row at their own place, after twelve
+/// OCR rows of that length that misread no native row. A native row reads the rows nearest to its
+/// place too, so each takes its own misread although its reads by length stop at the first rows of
+/// that length, which misread nothing. ~keep
 #[test]
 fn a_native_row_reads_the_ocr_rows_nearest_its_place_too() {
     let row = |n: usize, unit: &str| format!("entry {n:03} of the ledger total {:03} {unit}", n * 7);
-    let native: Vec<String> = (0..40).map(|n| row(n, "cm3")).collect();
-    let read: Vec<String> = (0..40).map(|n| row(n, "cm\u{2019}")).collect();
-    assert!(read.iter().all(|text| text.len() == read[0].len()), "one length");
-    assert_eq!(merged(&native, &read), native.join("\n"));
+    let noise = |n: usize| {
+        row(n, "cm3")
+            .chars()
+            .map(|c| if c.is_alphabetic() { 'q' } else { c })
+            .collect::<String>()
+    };
+    let native: Vec<String> = (0..12)
+        .map(|n| format!("native line {n:03} only"))
+        .chain((0..40).map(|n| row(n, "cm3")))
+        .collect();
+    let read: Vec<String> = (0..12)
+        .map(noise)
+        .chain((0..40).map(|n| row(n, "cm\u{2019}")))
+        .collect();
+    assert!(
+        read.iter().all(|text| text.chars().count() == read[0].chars().count()),
+        "one length"
+    );
+    let text = merged(&native, &read);
+    assert!(
+        !text.contains('\u{2019}'),
+        "a misread OCR row stays in the page text:\n{text}"
+    );
+    for line in &native[12..] {
+        assert_eq!(
+            text.lines().filter(|printed| printed == line).count(),
+            1,
+            "{line} prints once"
+        );
+    }
 }
 
 /// A line box at row `row` of a page, one row high. ~keep
