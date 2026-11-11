@@ -199,6 +199,7 @@ fn apply_recovery(original: &mut ExtractedDocument, recovered: TextAccumulator, 
         "p10_word_conf",
         "word_iterator_skipped_count",
         "dictionary_filtered_line_count",
+        "dictionary_kept_numeral_line_count",
         "non_text_block_word_count",
     ] {
         additional.remove(key);
@@ -793,6 +794,9 @@ mod tests {
             .metadata
             .additional
             .insert(Cow::Borrowed("median_word_conf"), 88.into());
+        for key in ["dictionary_filtered_line_count", "dictionary_kept_numeral_line_count"] {
+            original.metadata.additional.insert(Cow::Borrowed(key), 1.into());
+        }
         original.processing_warnings.push(ProcessingWarning {
             source: Cow::Borrowed("ocr"),
             message: Cow::Borrowed("original diagnostic"),
@@ -819,6 +823,18 @@ mod tests {
         assert_eq!(original.metadata.additional["mean_text_conf"], 95.0);
         assert_eq!(original.metadata.additional["low_conf_word_count"], 0);
         assert!(!original.metadata.additional.contains_key("median_word_conf"));
+        assert!(
+            !original
+                .metadata
+                .additional
+                .contains_key("dictionary_filtered_line_count")
+        );
+        assert!(
+            !original
+                .metadata
+                .additional
+                .contains_key("dictionary_kept_numeral_line_count")
+        );
         assert_eq!(original.processing_warnings[0].message, "original diagnostic");
         assert_eq!(
             original.processing_warnings[1].message,

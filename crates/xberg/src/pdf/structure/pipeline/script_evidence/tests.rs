@@ -415,3 +415,78 @@ fn should_reject_literal_prime_when_the_right_record_is_no_longer_on_the_same_li
     assert!(!associate_surviving_suffixes(&mut paragraphs, &page));
     assert_eq!(format!("{paragraphs:?}"), original);
 }
+
+fn two_scripts_on_one_base() -> (NativePageSegments, HashMap<SegmentKey, Vec<ScriptOwner>>) {
+    let page = captured(vec![
+        source("x", 100.0, 700.0, 6.0, 12.0),
+        source("1", 106.2, 704.5, 4.0, 8.0),
+        source("2", 110.2, 704.5, 4.0, 8.0),
+    ]);
+    let owners = page.valid_owners(&page.segments);
+    assert_eq!(owners.len(), 2, "the run of two scripts is proved natively");
+    (page, sorted_insertions(owners))
+}
+
+fn in_place(
+    before: &[&SegmentData],
+    index: usize,
+    insertions: &HashMap<SegmentKey, Vec<ScriptOwner>>,
+    moved: &HashSet<SegmentKey>,
+) -> bool {
+    already_follows_its_base(before, index, &owning_bases(insertions), insertions, moved)
+}
+
+fn moved_scripts(insertions: &HashMap<SegmentKey, Vec<ScriptOwner>>) -> HashSet<SegmentKey> {
+    insertions
+        .values()
+        .flatten()
+        .map(|owner| SegmentKey::from(owner.script.as_ref()))
+        .collect()
+}
+
+#[test]
+fn should_treat_the_first_and_second_script_right_after_their_base_as_in_place() {
+    let (page, insertions) = two_scripts_on_one_base();
+    let before: Vec<_> = page.segments.iter().collect();
+    let moved = moved_scripts(&insertions);
+    assert!(in_place(&before, 1, &insertions, &moved));
+    assert!(in_place(&before, 2, &insertions, &moved));
+}
+
+#[test]
+fn should_not_treat_a_script_as_in_place_when_a_foreign_segment_sits_between() {
+    let (page, insertions) = two_scripts_on_one_base();
+    let foreign = captured(vec![source("zz", 130.0, 700.0, 10.0, 12.0)])
+        .segments
+        .remove(0);
+    let before = [&page.segments[0], &foreign, &page.segments[1], &page.segments[2]];
+    let moved = moved_scripts(&insertions);
+    assert!(!in_place(&before, 2, &insertions, &moved));
+    assert!(!in_place(&before, 3, &insertions, &moved));
+    let reordered = [&page.segments[0], &page.segments[2], &page.segments[1]];
+    assert!(
+        !in_place(&reordered, 1, &insertions, &moved),
+        "rank 1 comes after rank 0"
+    );
+}
+
+#[test]
+fn should_not_treat_a_script_claimed_by_two_bases_as_in_place() {
+    let (page, mut insertions) = two_scripts_on_one_base();
+    let rival = SegmentKey::from(&captured(vec![source("zz", 130.0, 700.0, 10.0, 12.0)]).segments[0]);
+    let claims = insertions[&SegmentKey::from(&page.segments[0])].clone();
+    insertions.insert(rival, claims);
+    let before: Vec<_> = page.segments.iter().collect();
+    let moved = moved_scripts(&insertions);
+    assert!(!in_place(&before, 1, &insertions, &moved));
+    assert!(!in_place(&before, 2, &insertions, &moved));
+}
+
+#[test]
+fn should_not_treat_a_script_as_in_place_when_its_base_is_itself_moved() {
+    let (page, insertions) = two_scripts_on_one_base();
+    let before: Vec<_> = page.segments.iter().collect();
+    let mut moved = moved_scripts(&insertions);
+    moved.insert(SegmentKey::from(&page.segments[0]));
+    assert!(!in_place(&before, 1, &insertions, &moved));
+}

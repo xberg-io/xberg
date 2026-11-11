@@ -1694,6 +1694,25 @@ fn insert_word_iterator_skipped_count_metadata(
     }
 }
 
+/// Records the lines the dictionary filter judged noise and the ones of them kept for a numeral,
+/// replacing any earlier counts; a zero count leaves its key out. ~keep
+fn insert_dictionary_line_counts(
+    metadata: &mut HashMap<String, serde_json::Value>,
+    filtered: usize,
+    kept_numeral: usize,
+) {
+    for (key, count) in [
+        ("dictionary_filtered_line_count", filtered),
+        ("dictionary_kept_numeral_line_count", kept_numeral),
+    ] {
+        if count == 0 {
+            metadata.remove(key);
+        } else {
+            metadata.insert(key.to_string(), serde_json::Value::Number(count.into()));
+        }
+    }
+}
+
 fn insert_retained_word_confidence_metadata(
     metadata: &mut HashMap<String, serde_json::Value>,
     stats: &RetainedWordConfidenceStats,
@@ -2363,6 +2382,7 @@ pub(super) fn perform_ocr(
     let mut hocr_document: Option<InternalDocument> = None;
     let mut hocr_for_tables = None;
     let mut dictionary_filtered_line_count = 0usize;
+    let mut dictionary_kept_numeral_line_count = 0usize;
     let mut retained_hocr_confidence_stats = None;
 
     let dictionary_filter = DictionaryLineFilter {
@@ -2387,6 +2407,7 @@ pub(super) fn perform_ocr(
                 config.page_number,
             );
             dictionary_filtered_line_count = parse_result.dictionary_filtered_line_count;
+            dictionary_kept_numeral_line_count = parse_result.dictionary_kept_numeral_line_count;
             if config.enable_table_detection
                 && (dictionary_filtered_line_count > 0
                     || parse_result
@@ -2469,12 +2490,11 @@ pub(super) fn perform_ocr(
     if auto_rotate_unavailable {
         metadata.insert("auto_rotate_unavailable".to_string(), serde_json::Value::Bool(true));
     }
-    if dictionary_filtered_line_count > 0 {
-        metadata.insert(
-            "dictionary_filtered_line_count".to_string(),
-            serde_json::Value::Number(dictionary_filtered_line_count.into()),
-        );
-    }
+    insert_dictionary_line_counts(
+        &mut metadata,
+        dictionary_filtered_line_count,
+        dictionary_kept_numeral_line_count,
+    );
 
     if let Some(stats) = retained_hocr_confidence_stats.as_ref() {
         insert_retained_word_confidence_metadata(&mut metadata, stats);
@@ -2840,14 +2860,11 @@ pub(super) fn perform_ocr(
         if restored.dictionary_filtered_line_count < dictionary_filtered_line_count {
             content =
                 strip_control_characters(&flatten_hocr_elements_to_text(&restored.document.elements)).into_owned();
-            if restored.dictionary_filtered_line_count == 0 {
-                metadata.remove("dictionary_filtered_line_count");
-            } else {
-                metadata.insert(
-                    "dictionary_filtered_line_count".to_string(),
-                    serde_json::Value::Number(restored.dictionary_filtered_line_count.into()),
-                );
-            }
+            insert_dictionary_line_counts(
+                &mut metadata,
+                restored.dictionary_filtered_line_count,
+                restored.dictionary_kept_numeral_line_count,
+            );
             insert_retained_word_confidence_metadata(&mut metadata, &restored.retained_word_confidence_stats);
             hocr_document = Some(restored.document);
         }
@@ -3024,7 +3041,11 @@ pub(super) fn process_image_with_cache_and_policy(
 ) -> Result<OcrExtractionResult, OcrError> {
     config.validate().map_err(OcrError::InvalidConfiguration)?;
 
-    let resolved = resolve_config_language(config)?;
+    let resolved = if policy.requires_provisioned_models() {
+        None
+    } else {
+        resolve_config_language(config)?
+    };
     let config = resolved.as_ref().unwrap_or(config);
 
     process_image_resolved(image_bytes, config, cache, api_pool, output_format, policy)
@@ -3046,10 +3067,16 @@ fn process_image_resolved(
     let image_hash = crate::cache::blake3_hash_bytes(image_bytes);
 
     // Share one resolved model revision between cached output and its native handle. ~keep
-    let models = ModelContext::resolve(config)?;
+    let models = if policy.requires_provisioned_models() {
+        ModelContext::for_provisioned(config)?
+    } else {
+        ModelContext::resolve(config)?
+    };
     let mut config_str = models.result_key(config);
     config_str.push_str(match policy {
         ImageOcrPolicy::Default => "",
+        #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
+        ImageOcrPolicy::ProvisionedModelsOnly => ":provisioned-models-only",
         ImageOcrPolicy::BoundedInferredUpscale => ":bounded-inferred-upscale",
         ImageOcrPolicy::StandaloneDotLeaderRows => ":standalone-dot-leader-rows",
         #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]

@@ -9384,3 +9384,90 @@ fn should_not_stack_text_set_on_the_line_after_a_large_bracket() {
     ];
     assert!(stack_of(&segments).is_empty());
 }
+
+#[test]
+fn should_not_take_the_closing_piece_of_a_large_bracket_as_a_stack_member() {
+    let segments = [
+        stack_seg("\u{b5}", 100.0, 5.0, 10.0, 100.0),
+        stack_seg("\u{239e}", 105.2, 2.2, 4.97, 104.1),
+        stack_seg("2", 107.8, 4.0, 8.0, 104.1),
+    ];
+    assert!(stack_of(&segments).is_empty());
+}
+
+fn stack_texts(segments: Vec<SegmentData>) -> Vec<String> {
+    place_script_stacks_after_bases(segments)
+        .into_iter()
+        .map(|segment| segment.text)
+        .collect()
+}
+
+#[test]
+fn should_place_stack_members_listed_ahead_of_their_base_directly_after_it() {
+    let segments = vec![
+        stack_seg("c", 104.0, 3.0, 7.5, 104.2),
+        stack_seg("1", 107.0, 3.0, 6.0, 102.6),
+        stack_seg("e", 100.0, 4.0, 10.0, 100.0),
+        stack_seg("tail", 112.0, 20.0, 10.0, 100.0),
+    ];
+    assert_eq!(stack_texts(segments), ["e", "c", "1", "tail"]);
+}
+
+#[test]
+fn should_read_the_raised_members_of_a_stack_before_the_lowered_ones() {
+    let segments = vec![
+        stack_seg("e", 100.0, 4.0, 10.0, 100.0),
+        stack_seg("\u{3b8}", 104.0, 3.0, 7.0, 96.8),
+        stack_seg("c", 104.5, 3.0, 7.5, 104.2),
+        stack_seg("1", 107.5, 3.0, 5.0, 103.0),
+        stack_seg("tail", 112.0, 20.0, 10.0, 100.0),
+    ];
+    assert_eq!(stack_texts(segments), ["e", "c", "1", "\u{3b8}", "tail"]);
+}
+
+#[test]
+fn should_leave_a_page_without_a_stack_in_its_order() {
+    let segments = vec![
+        stack_seg("x", 100.0, 5.0, 10.0, 100.0),
+        stack_seg("2", 105.0, 3.5, 7.0, 104.2),
+        stack_seg("y", 109.0, 5.0, 10.0, 100.0),
+    ];
+    assert_eq!(stack_texts(segments), ["x", "2", "y"]);
+}
+
+#[test]
+fn should_keep_a_stack_in_one_paragraph_when_its_lowered_member_is_listed_last() {
+    let lines = vec![
+        stack_seg("e", 100.0, 4.0, 10.0, 100.0),
+        stack_seg("c", 104.0, 3.0, 7.5, 104.2),
+        stack_seg("1", 107.5, 3.0, 5.0, 103.0),
+        stack_seg("\u{3b8}", 104.5, 3.0, 7.0, 95.8),
+        stack_seg("tail", 112.0, 20.0, 10.0, 100.0),
+    ];
+    assert_eq!(blocks_to_paragraphs(lines, &[], &[]).len(), 1);
+}
+
+#[test]
+fn should_mark_the_members_of_a_stack_listed_ahead_of_its_base_as_scripts_on_one_row() {
+    let segments = vec![
+        stack_seg("c", 104.0, 3.0, 7.5, 104.2),
+        stack_seg("1", 107.0, 3.0, 6.0, 102.6),
+        stack_seg("e", 100.0, 4.0, 10.0, 100.0),
+        stack_seg("\u{3c4}", 110.0, 3.7, 7.5, 104.2),
+    ];
+    let paragraphs = segments_to_paragraphs(segments, &[], &[], &TextRepairWitnesses::default());
+    assert_eq!(paragraphs.len(), 1);
+    let document = crate::pdf::structure::assembly::assemble_internal_document(
+        vec![paragraphs],
+        &[],
+        None,
+        &[],
+        &Default::default(),
+    );
+    assert_eq!(document.elements.len(), 1);
+    assert_eq!(document.elements[0].text, "ec1\u{3c4}");
+    assert!(
+        !document.elements[0].annotations.is_empty(),
+        "the stack members carry sub/superscript markup"
+    );
+}
