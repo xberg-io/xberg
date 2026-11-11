@@ -1,5 +1,5 @@
 use lopdf::{Document, Object};
-use xberg::{ExtractedDocument, ExtractionConfig};
+use xberg::{ExtractedDocument, ExtractionConfig, OcrStrategy};
 
 fn inherited_page(document: &Document, id: lopdf::ObjectId) -> lopdf::Dictionary {
     let mut page = document.get_dictionary(id).unwrap().clone();
@@ -148,4 +148,27 @@ async fn forced_page_ocr_attaches_only_the_replaced_pages_tables() {
 #[tokio::test]
 async fn detected_scanned_page_attaches_ocr_tables_and_keeps_native_tables() {
     check_mixed_tables(&[super::SOURCE_PAGE - 1, super::SOURCE_PAGE], false, false).await;
+}
+
+#[tokio::test]
+async fn detected_scan_without_native_elements_renders_the_accepted_table() {
+    let models = tempfile::tempdir().unwrap();
+    let mut config = super::pinned_config(models.path());
+    let bytes = include_bytes!("../fixtures/ocr/shaded_table_scan.pdf");
+    let forced = read(
+        bytes,
+        &ExtractionConfig {
+            force_ocr: true,
+            ..config.clone()
+        },
+    )
+    .await;
+    config.ocr_strategy = OcrStrategy::ScannedPages { min_confidence: 0.9 };
+    let actual = read(bytes, &config).await;
+    assert_eq!(actual.extraction_method, Some(xberg::types::ExtractionMethod::Mixed));
+    super::plain_contract::assert_page_ranges(&actual);
+    super::plain_contract::assert_scanned_table_body(
+        &actual.pages.as_ref().unwrap()[0],
+        &forced.pages.as_ref().unwrap()[0],
+    );
 }

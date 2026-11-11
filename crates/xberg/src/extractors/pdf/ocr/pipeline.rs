@@ -3136,9 +3136,10 @@ pub(in crate::extractors::pdf) fn render_mixed_tables_plain(
     let (text, replacements, documents, ..) = &mut run.output;
     let mut changed = false;
     for (page, replacement) in &mut *replacements {
-        if let Some(document) = documents.get(page) {
-            changed |= render_inline_tables_plain(replacement, &document.tables);
-        }
+        let Some(document) = documents.get(page).filter(|document| !document.tables.is_empty()) else {
+            continue;
+        };
+        changed |= render_owned_inline_tables_plain(replacement, &document.tables);
     }
     if changed {
         *text = apply_ocr_page_replacements(native_text, boundaries, replacements);
@@ -3146,84 +3147,153 @@ pub(in crate::extractors::pdf) fn render_mixed_tables_plain(
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-fn render_inline_tables_plain(text: &mut String, tables: &[crate::types::Table]) -> bool {
-    let mut changed = false;
-    let mut tables = tables
-        .iter()
-        .filter(|table| !table.cells.is_empty() && !table.markdown.trim().is_empty())
-        .collect::<Vec<_>>();
-    // ~keep Render longer blocks first so a shared header and initial rows cannot mask a shorter table.
-    tables.sort_by_key(|table| std::cmp::Reverse(table.markdown.trim().len()));
-    for (index, table) in tables.iter().enumerate() {
-        let markdown = table.markdown.trim();
-        let mut matches = text.match_indices(markdown).map(|(start, _)| start).filter(|&start| {
-            let end = start + markdown.len();
-            (start == 0 || text.as_bytes()[start - 1] == b'\n') && (end == text.len() || text.as_bytes()[end] == b'\n')
-        });
-        let Some(start) = matches.next() else {
-            tracing::warn!(
-                table_index = index,
-                "Mixed OCR table transcript was not found for Plain rendering"
-            );
-            continue;
-        };
-        let remaining_tables = tables[index + 1..]
-            .iter()
-            .filter(|table| table.markdown.trim() == markdown)
-            .count();
-        // ~keep An extra identical block could be literal prose.
-        if matches.nth(remaining_tables).is_some() {
-            tracing::warn!(
-                table_index = index,
-                "Mixed OCR table transcript is ambiguous for Plain rendering"
-            );
+fn render_owned_inline_tables_plain(text: &mut String, tables: &[crate::types::Table]) -> bool {
+    use pulldown_cmark::{Event, Options, Parser, Tag};
+
+    // ~keep The assembled PDF elements can omit prose covered by table tokens.
+    // Preserve the accepted transcript outside the parser's owned table spans.
+    let mut recognized = ahash::AHashMap::<_, (Vec<_>, Vec<_>)>::new();
+    for table in tables.iter().filter(|table| !table.cells.is_empty()) {
+        let key = inline_table_key(&table.markdown);
+        recognized.entry(key).or_default().0.push(table);
+    }
+
+    let mut depth = 0;
+    for (event, range) in Parser::new_ext(text, Options::ENABLE_TABLES).into_offset_iter() {
+        match event {
+            Event::Start(tag) => {
+                if depth == 0
+                    && matches!(tag, Tag::Table(_))
+                    && let Some((_, spans)) = recognized.get_mut(&inline_table_key(&text[range.clone()]))
+                {
+                    spans.push(range);
+                }
+                depth += 1;
+            }
+            Event::End(_) => depth -= 1,
+            _ => {}
+        }
+    }
+
+    let mut replacements = Vec::new();
+    for (tables, spans) in recognized.into_values() {
+        if spans.len() > tables.len() || tables.windows(2).any(|pair| pair[0].cells != pair[1].cells) {
+            tracing::warn!("Mixed OCR table ownership is ambiguous in the accepted Plain transcript");
             continue;
         }
-        let rows = crate::rendering::common::render_table_plain(&table.cells);
-        text.replace_range(start..start + markdown.len(), rows.trim_end_matches('\n'));
-        changed = true;
+        replacements.extend(spans.into_iter().zip(tables));
     }
-    changed
+    replacements.sort_unstable_by_key(|(span, _)| std::cmp::Reverse(span.start));
+    for (range, table) in &replacements {
+        let end = range.start + text[range.clone()].trim_end_matches(['\r', '\n']).len();
+        let plain = crate::rendering::common::render_table_plain(&table.cells);
+        text.replace_range(range.start..end, plain.trim_end_matches('\n'));
+    }
+    !replacements.is_empty()
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn inline_table_key(markdown: &str) -> String {
+    // A GFM parser can truncate extra cells when rendering a row. Match the source
+    // instead, allowing only ASCII padding around unescaped delimiters. ~keep
+    let mut key = String::with_capacity(markdown.len());
+    for line in markdown.trim_matches(['\r', '\n']).lines() {
+        let mut cell_start = 0;
+        let mut escaped = false;
+        for (offset, character) in line.char_indices() {
+            if character == '|' && !escaped {
+                key.push_str(line[cell_start..offset].trim_matches([' ', '\t']));
+                key.push('|');
+                cell_start = offset + 1;
+            }
+            escaped = character == '\\' && !escaped;
+        }
+        key.push_str(line[cell_start..].trim_matches([' ', '\t']));
+        key.push('\n');
+    }
+    key
 }
 
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 mod plain_table_tests {
-    use super::render_inline_tables_plain;
-    use crate::types::Table;
+    use super::{MixedOcrRun, render_mixed_tables_plain, render_owned_inline_tables_plain};
+    use crate::core::config::{ExtractionConfig, OutputFormat};
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+    use crate::types::{PageBoundary, Table};
 
-    #[test]
-    fn renders_owned_table_blocks_without_changing_adjacent_text() {
-        let markdown = "| Name | Count |\n| --- | --- |\n| A | 3 |";
-        let table = Table {
-            markdown: markdown.to_owned(),
+    fn recognized_table() -> Table {
+        Table {
+            markdown: "| Name | Count |\n| --- | --- |\n| A | 3 |".into(),
             cells: vec![vec!["Name".into(), "Count".into()], vec!["A".into(), "3".into()]],
             ..Default::default()
-        };
-        let mut text = format!("Lead: | Name | Count |\n\n{markdown}\n\nLiteral | prose\n\n{markdown}");
-        let original = text.clone();
-        assert!(!render_inline_tables_plain(&mut text, std::slice::from_ref(&table)));
-        assert_eq!(text, original);
+        }
+    }
 
-        assert!(render_inline_tables_plain(&mut text, &[table.clone(), table]));
+    #[test]
+    fn renders_owned_plain_table_in_place_and_keeps_literal_prose() {
+        let native = "Old\n\nVoisin";
+        let boundaries = [PageBoundary {
+            page_number: 1,
+            byte_start: 0,
+            byte_end: 3,
+        }];
+        let mut document = InternalDocument::new("pdf");
+        document.push_element(InternalElement::text(ElementKind::Paragraph, "Lead | prose", 0));
+        let table_index = document.push_table(recognized_table());
+        document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0));
+
+        let mut run = MixedOcrRun::native(native);
+        let transcript = "Lead | prose\n\n|Name|Count|\n|---|---|\n|A|3|\n\nStatus: Complete?";
+        let original = format!("{transcript}\n\nVoisin");
+        run.output.0.clone_from(&original);
+        run.output.1.insert(1, transcript.into());
+        run.output.2.insert(1, document);
+        for output_format in [OutputFormat::Markdown, OutputFormat::Html, OutputFormat::Djot] {
+            let config = ExtractionConfig {
+                output_format,
+                ..Default::default()
+            };
+            render_mixed_tables_plain(&mut run, native, &boundaries, &config);
+            assert_eq!(run.output.0, original);
+            assert_eq!(run.output.1[&1], transcript);
+        }
+
+        render_mixed_tables_plain(&mut run, native, &boundaries, &ExtractionConfig::default());
+        assert_eq!(run.output.1[&1], "Lead | prose\n\nName Count\nA 3\n\nStatus: Complete?");
         assert_eq!(
-            text,
-            "Lead: | Name | Count |\n\nName Count\nA 3\n\nLiteral | prose\n\nName Count\nA 3"
+            run.output.0,
+            "Lead | prose\n\nName Count\nA 3\n\nStatus: Complete?\n\nVoisin"
         );
     }
 
     #[test]
-    fn renders_both_tables_when_one_starts_with_the_same_rows() {
-        let short = Table {
-            markdown: "| Name | Count |\n| --- | --- |\n| A | 3 |".into(),
-            cells: vec![vec!["Name".into(), "Count".into()], vec!["A".into(), "3".into()]],
-            ..Default::default()
-        };
-        let mut long = short.clone();
-        long.markdown.push_str("\n| B | 5 |");
-        long.cells.push(vec!["B".into(), "5".into()]);
-        let mut text = format!("{}\n\n{}", long.markdown, short.markdown);
-        assert!(render_inline_tables_plain(&mut text, &[short, long]));
-        assert_eq!(text, "Name Count\nA 3\nB 5\n\nName Count\nA 3");
+    fn preserves_ambiguous_and_unowned_table_blocks() {
+        let table = recognized_table();
+        let equivalent = "|Name|Count|\n|---|---|\n|A|3|";
+        let unowned = "| Other | Data |\n| --- | --- |\n| B | 4 |";
+        let mut transcript = format!("{equivalent}\n\n{}\n\n{unowned}", table.markdown);
+        let original = transcript.clone();
+        assert!(!render_owned_inline_tables_plain(
+            &mut transcript,
+            std::slice::from_ref(&table)
+        ));
+        assert_eq!(transcript, original);
+
+        let mut transcript = format!("{equivalent}\n\n```\n{equivalent}\n```\n\n{unowned}");
+        assert!(render_owned_inline_tables_plain(&mut transcript, &[table]));
+        assert_eq!(
+            transcript,
+            format!("Name Count\nA 3\n\n```\n{equivalent}\n```\n\n{unowned}")
+        );
+    }
+
+    #[test]
+    fn preserves_table_span_with_an_extra_source_cell() {
+        let table = recognized_table();
+        let original = "| Name | Count |\n| --- | --- |\n| A | 3 | EXTRA-CELL |";
+        let mut transcript = original.to_string();
+        assert!(!render_owned_inline_tables_plain(&mut transcript, &[table]));
+        assert_eq!(transcript, original);
     }
 }
 
