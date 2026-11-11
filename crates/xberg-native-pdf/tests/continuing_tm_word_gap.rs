@@ -271,6 +271,24 @@ fn actualtext_show_after_stretched_tm_under_tz_ends_the_run_at_its_rescaled_widt
     assert_eq!(doc.extract_text(0).expect("extract_text").trim(), "A BA");
 }
 
+/// The Type0 form of the glyph with a width and no text. `F4` is a GB-EUC-H font with no `ToUnicode`
+/// map and a `/DW` of 600/1000 em: a code reads as its two bytes in GBK, so <0041> gives `A` and
+/// <0002> gives two control characters, which the extractor drops (the control row). After the
+/// continuing `Tm`, <0002> adds width without text, which ends the record: the same-font `Tf` after
+/// it does not end the run, so `B` joins it.
+#[test]
+fn type0_glyph_without_text_after_continuing_tm_ends_the_record() {
+    let control = "BT /F4 12 Tf 1 0 0 1 100 500 Tm <0041> Tj <0002> Tj ET";
+    let doc = PdfDocument::from_bytes(build(control.as_bytes())).expect("open fixture");
+    assert_eq!(doc.extract_text(0).expect("extract_text").trim(), "A");
+    let x_b = x_after_a(0.278);
+    let content = format!(
+        "BT /F4 12 Tf 1 0 0 1 100 500 Tm <0041> Tj 1 0 0 1 {x_b} 500 Tm <0002> Tj /F4 12 Tf 100 Tz <0042> Tj ET"
+    );
+    let doc = PdfDocument::from_bytes(build(content.as_bytes())).expect("open fixture");
+    assert_eq!(doc.extract_text(0).expect("extract_text").trim(), "AB");
+}
+
 /// The `ToUnicode` map of `F3`: `A`, `B` and `C` to themselves and `D` to U+FFFD, so `D` is a glyph
 /// with a width and no text. A code the map misses falls back to the font's encoding, which names `D`.
 const TO_UNICODE_F3: &[u8] = b"/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n\
@@ -280,7 +298,7 @@ const TO_UNICODE_F3: &[u8] = b"/CIDInit /ProcSet findresource begin\n12 dict beg
 
 /// One page with three Helvetica-metric fonts: `F1` and `F2`, whose `A` and `B` are 600/1000 em wide
 /// and whose `C` has no width, and `F3`, the same with a 600/1000 em `D` that `TO_UNICODE_F3` gives
-/// no text.
+/// no text. `F4` is the Type0 font of `type0_glyph_without_text_after_continuing_tm_ends_the_record`.
 fn build(content: &[u8]) -> Vec<u8> {
     let mut pdf = b"%PDF-1.4\n".to_vec();
     let mut offsets = vec![0usize];
@@ -291,7 +309,7 @@ fn build(content: &[u8]) -> Vec<u8> {
         ("<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(), None),
         (
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R \
-             /Resources << /Font << /F1 5 0 R /F2 6 0 R /F3 7 0 R >> >> >>"
+             /Resources << /Font << /F1 5 0 R /F2 6 0 R /F3 7 0 R /F4 9 0 R >> >> >>"
                 .to_string(),
             None,
         ),
@@ -307,6 +325,25 @@ fn build(content: &[u8]) -> Vec<u8> {
             None,
         ),
         (String::new(), Some(TO_UNICODE_F3)),
+        (
+            "<< /Type /Font /Subtype /Type0 /BaseFont /Helvetica /Encoding /GB-EUC-H \
+             /DescendantFonts [10 0 R] >>"
+                .to_string(),
+            None,
+        ),
+        (
+            "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /Helvetica \
+             /CIDSystemInfo << /Registry (Adobe) /Ordering (GB1) /Supplement 2 >> \
+             /FontDescriptor 11 0 R /DW 600 >>"
+                .to_string(),
+            None,
+        ),
+        (
+            "<< /Type /FontDescriptor /FontName /Helvetica /Flags 32 /FontBBox [0 -200 1000 800] \
+             /ItalicAngle 0 /Ascent 800 /Descent -200 /CapHeight 700 /StemV 80 >>"
+                .to_string(),
+            None,
+        ),
     ];
     for (i, (dict, stream)) in objs.iter().enumerate() {
         offsets.push(pdf.len());
