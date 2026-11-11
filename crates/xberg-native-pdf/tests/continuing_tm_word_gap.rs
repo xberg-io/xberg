@@ -185,7 +185,10 @@ fn actualtext_later_show_in_an_unclosed_scope_ends_the_record() {
     let boxes: Vec<(String, f32, f32)> = spans.iter().map(|s| (s.text.clone(), s.bbox.x, s.bbox.width)).collect();
     assert_eq!(boxes.len(), 1, "{boxes:?}");
     assert_eq!(boxes[0].0.trim(), "AB", "{boxes:?}");
-    assert!((boxes[0].1 - 100.0).abs() < 0.05 && (boxes[0].2 - (7.7 + GLYPH)).abs() < 0.05, "{boxes:?}");
+    assert!(
+        (boxes[0].1 - 100.0).abs() < 0.05 && (boxes[0].2 - (7.7 + GLYPH)).abs() < 0.05,
+        "{boxes:?}"
+    );
 }
 
 /// A nested scope: the inner scope's first show gives its own text `C` and adds width, which ends the
@@ -201,12 +204,18 @@ fn actualtext_nested_scope_show_after_continuing_tm_keeps_the_run() {
 
 /// A continuing `Tm` past `AB`, then a `Tm` set back into `AB` (GH#2690): the set-back records
 /// nothing and drops the first record, so the same-font `Tf` does not end the run and `A` joins it
-/// at the set-back pen, as at the base.
+/// at the set-back pen, as at the base: one run `ABA` from x = 100 to the drawn end at 117.2, not
+/// a run `AB` of 14.4 pt and an `A` at 110 that the span merge joins.
 #[test]
 fn set_back_tm_after_continuing_tm_drops_the_record_before_same_font_tf() {
     let content = "BT /F1 12 Tf 1 0 0 1 100 500 Tm (AB) Tj 1 0 0 1 120 500 Tm 1 0 0 1 110 500 Tm \
                    /F1 12 Tf 100 Tz (A) Tj ET";
     let doc = PdfDocument::from_bytes(build(content.as_bytes())).expect("open fixture");
+    let spans = doc.extract_spans(0).expect("extract_spans");
+    let boxes: Vec<(String, f32, f32)> = spans.iter().map(|s| (s.text.clone(), s.bbox.x, s.bbox.width)).collect();
+    assert_eq!(boxes.len(), 1, "{boxes:?}");
+    assert_eq!(boxes[0].0.trim(), "ABA", "{boxes:?}");
+    assert!((boxes[0].1 - 100.0).abs() < 0.05 && (boxes[0].2 - (10.0 + GLYPH)).abs() < 0.05, "{boxes:?}");
     assert_eq!(doc.extract_text(0).expect("extract_text").trim(), "ABA");
 }
 
@@ -231,11 +240,15 @@ fn stretched_tm_after_continuing_tm_under_tz_keeps_the_run_at_its_last_glyph() {
     assert_eq!(doc.extract_text(0).expect("extract_text").trim(), "A B");
 }
 
-/// The same `50 Tz` run and restating `Tm`, then a show inside an `ActualText` scope: its width ends
-/// the record, so the run reaches the pen in the restated unit, `B` and the `A` after the same-font
-/// `Tf` join it, and the one span spans the 6.936 pt to the pen and the two 7.2 pt glyphs.
+/// The same `50 Tz` run and restating `Tm`, then a show inside an `ActualText` scope. The scope's
+/// `BDC` flushes the run before the show, and the record, restated by the same ratio as the glyph
+/// widths, ends it at `A`'s 3.6 pt, not at the 6.936 pt pen. The scope's show starts a new run at
+/// the pen, 7.2 pt wide in the restated unit, and the `A` after the same-font `Tf` joins that run.
+/// The span merge joins the two same-font runs into one box from x = 100 to the drawn end, with a
+/// space for the word gap between them: `A BA`. A run that reached the pen would leave no gap and
+/// read `ABA`.
 #[test]
-fn actualtext_show_after_stretched_tm_under_tz_reaches_the_pen() {
+fn actualtext_show_after_stretched_tm_under_tz_ends_the_run_at_its_rescaled_width() {
     let x_b = 100.0 + 0.5 * GLYPH + 0.278 * SIZE;
     let content = format!(
         "BT /F1 {SIZE} Tf 50 Tz 1 0 0 1 100 500 Tm (A) Tj 1 0 0 1 {x_b} 500 Tm 2 0 0 1 {x_b} 500 Tm \
@@ -245,10 +258,10 @@ fn actualtext_show_after_stretched_tm_under_tz_reaches_the_pen() {
     let spans = doc.extract_spans(0).expect("extract_spans");
     let boxes: Vec<(String, f32, f32)> = spans.iter().map(|s| (s.text.clone(), s.bbox.x, s.bbox.width)).collect();
     assert_eq!(boxes.len(), 1, "{boxes:?}");
-    assert_eq!(boxes[0].0.trim(), "ABA", "{boxes:?}");
+    assert_eq!(boxes[0].0.trim(), "A BA", "{boxes:?}");
     let width = (x_b - 100.0) + 2.0 * GLYPH;
     assert!((boxes[0].1 - 100.0).abs() < 0.05 && (boxes[0].2 - width).abs() < 0.05, "{boxes:?}");
-    assert_eq!(doc.extract_text(0).expect("extract_text").trim(), "ABA");
+    assert_eq!(doc.extract_text(0).expect("extract_text").trim(), "A BA");
 }
 
 /// The `ToUnicode` map of `F3`: `A`, `B` and `C` only, so its `D` is a glyph with a width and no text.
