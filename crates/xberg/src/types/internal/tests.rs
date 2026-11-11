@@ -456,3 +456,40 @@ fn should_hide_markdown_plain_projection_attributes_and_preserve_user_attributes
         )]))
     );
 }
+
+#[test]
+fn a_plugin_result_marks_its_ocr_pages_from_the_extraction_method_or_a_page_confidence() {
+    let page = |number, confident: bool| crate::types::PageContent {
+        page_number: number,
+        ocr_confidence: confident.then(|| crate::types::page::PageOcrConfidence {
+            score: None,
+            word_count: 1,
+            backend: "tesseract".to_string(),
+        }),
+        content: String::new(),
+        tables: Vec::new(),
+        image_indices: Vec::new(),
+        image_preprocessing: None,
+        hierarchy: None,
+        is_blank: None,
+        layout_regions: None,
+        speaker_notes: None,
+        section_name: None,
+        sheet_name: None,
+        native_content: None,
+    };
+    let native = crate::types::ExtractedDocument {
+        mime_type: "application/pdf".into(),
+        pages: Some(vec![page(1, false), page(2, true)]),
+        ..Default::default()
+    };
+    assert_eq!(InternalDocument::from(native).ocr_text_pages, vec![2]);
+
+    let ocr = crate::types::ExtractedDocument {
+        mime_type: "application/pdf".into(),
+        extraction_method: Some(crate::types::ExtractionMethod::Ocr),
+        pages: Some(vec![page(1, false), page(2, false)]),
+        ..Default::default()
+    };
+    assert_eq!(InternalDocument::from(ocr).ocr_text_pages, vec![1, 2]);
+}

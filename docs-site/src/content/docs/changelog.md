@@ -82,6 +82,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(ocr): Recover corroborated native Khmer numbers when the selected English-primary directory already contains `khm.traineddata`.** (GH#2408)
+  Activation is automatic in co-provisioned and all-model deployments; there is no separate recovery flag or auxiliary download.
+  The feature is qualified only for an English primary. Other primary languages, forced/custom OCR, detached or transformed
+  stages, unsupported glyph evidence, ambiguous ownership and lines already containing numbers retain their ordinary read.
+  Numeric insertion preserves neighboring OCR text and multiline paragraph bytes. Eligible pages bypass extraction caching;
+  with the auxiliary model present, admitted pages also bypass primary OCR caching. Serial blocking workers share one
+  document budget of at most eight metadata-supported pages, 64 crops and 128 MiB of accounted verifier work; caller limits
+  can lower these bounds. Each source proof reserves half the document allowance, rounded up (the full allowance for a one-page
+  limit); unmeasured late declines, errors and cancellation retain that share. Metadata-only unsupported pages use no page
+  slot or work allowance. Exhaustion retains accepted OCR text and reports the verification gap. Implicit deferred per-page
+  pipelines, including the usual full-feature route, are outside this capability and its missing-model warning.
+  Accepted eligible pages warn once about a missing model or an unbound geometry proof. The original reporter page remains
+  unavailable, so this is partial support. ADR 0014 records the activation policy and limits.
+
 - **(models): Pin experimental candidate classification and captioning ONNX artifacts to owned Hugging Face revisions.** (#2336)
   The crate-private `candidate_models` inventory (feature `onnx-runtime`) lists NLI-MiniLM2, SmolVLM-256M, SmolVLM-500M and Florence-2-base as unmodified, license-preserving copies in `xberg-io/classification-models` and `xberg-io/captioning-models`, each file pinned by immutable commit and SHA-256. Every entry is marked experimental and unqualified: none is a default or a supported preset, and no captioning adapter consumes them yet. The NLI-MiniLM2 cross-encoder declares Apache-2.0, but its base model `nreimers/MiniLMv2-L6-H768-distilled-from-RoBERTa-Large` publishes no license, so the entry's license is recorded as unresolved; its fp32 graph exceeds the local NLI adapter's graph size cap, so only the quantized graphs are selectable.
 
@@ -147,6 +161,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(llm): Rust exposes failed structured-response usage through `xberg::llm::usage::usage_from_error`.** (#2139)
 
 ### Changed
+
+- **(pdf): Reuse matching built-in OCR reads from the ink probe.** (#2862)
+  A final PDF page pass can reuse recognition from the ink probe when its image, settings,
+  and model files match. The final pass still applies its own quality checks and retries.
 
 - **(excel): A workbook over `security_limits.max_table_cells` no longer fails with a security error.** (#2820)
   A workbook whose only sheet, or every sheet, exceeds the limit now returns empty placeholder sheets and a warning per skipped sheet instead of `SecurityError::TooManyCells`. The limit still bounds parsing work and allocation, because a skipped sheet is never materialized, and there is no strict mode to restore the error. CSV, TSV and other table formats are unchanged. A legacy XLS or XLA workbook in which the over-budget sheet carries the same name as another sheet, as the reader decodes the names (including names that differ only by a byte-order mark, NUL characters or code-page decoding), still fails with the security error, because the reader keys sheets by name.
@@ -312,12 +330,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **(pdf): Render recognized tables as plain text on the mixed OCR route.** (#2903)
+
+- **(ocr): Exclude Unicode numerals from native-prose script evidence.**
+  Numeric-only OCR reads do not claim retention of native prose, across all supported scripts.
+- **(ocr): Re-render only OCR page text as plain, and keep DOCX and native page text.** (#2839, #2902)
+  Since #2839, a DOCX page whose notes or math are not in the plain content, and a native PDF page of a mixed document, were replaced by the plain rendering of their elements, losing the footnote definitions and the equation spacing. A page that is not found in the content is now re-rendered only when an OCR route produced its text; any other page keeps its text, and only its page range is omitted, with the `page_boundaries` warning.
 - **(djot): Preserve paragraph text that begins with block syntax.** (#2856, #2869)
   Escape block markers without changing following inline markup or existing backslash escapes.
 - **(pdf): Keep a nested superscript or subscript stack on its base's line.** (#2728)
   A base glyph whose exponent carries a subscript or has two or more members (`e^{-c1 τ}`, `R^{n_x}`, `a1 n^{s1}`) printed its inner members away from the base, on a line of their own or at the end of the line. A stack of two or more small spans at two sizes, abutting the base, with one member beyond the reach of a single mark, is now ordered with its base and joins its row in paragraph assembly, keeping its sub/superscript markup. Changing the order of those spans shifts the column partition of some math-heavy pages: on arxiv-2403.01153 p3 equation (3) loses its `e<sup>jθ</sup>` markup and the line reads `jθ jθs jθm` apart from its base.
+- **(djot): Keep the text of every dot-leader table row, including rows with underscores, stars, brackets or a backslash.** (GH#2867)
+  Since #2840 a row such as `[snake_case] and a_b .... 3` lost its underscores in some Djot readers, because escaping one delimiter freed a later one. Djot now escapes each character that can open inline markup where it stands: backslash, backtick, `*`, `_`, braces, brackets, `^`, `~`, `<`, a colon before text and a sign after a brace. A row that starts with a run of one punctuation character, other than a hashtag, escapes the whole run, so `--- Rule` stays three hyphens. A backslash in the row is shown. A row with none of these characters and no punctuation start is written as typed.
+- **(pdf): Place a script stack after page ordering, and keep bracket pieces out of it.** (#2904, #2884)
+  The stack rule no longer moves spans before the column and band passes read them: the members are placed after their base once the page is ordered, so equations (2) and (3) of arxiv-2403.01153 p3 and the `ψ` subscript of nist-sp800-22r1a p49 keep their markup. A piece of a large delimiter (`⎞`) is never a stack member, so openstax business statistics p362 no longer reads `<sup>⎞2</sup>`. The raised members of a stack read before the lowered ones, a stack ends at its highest-indexed member, a stack member further than four runs from its base keeps its markup, and a script that the native evidence already places after its base no longer discards the evidence for the whole page.
 - **(ocr): Drop the symbol-noise lines of a page flagged as OCR recognition noise.** (#2312)
   This applies to any page the recognition-noise verdict flags and `discard_suspected_ocr_noise` retains, not only photographs. The new `OcrQualityThresholds.prune_symbol_noise_lines` (default `true`; `false` keeps every line) removes lines in which fewer than half the tokens are word-shaped, only when the page has at least 8 non-blank lines and at least half of them are such lines. A line is kept if it has any digit, a CJK, Kana, Hangul, Thai, Lao, Khmer or Myanmar character, a non-Latin letter, an `=`/`+`/`<`/`>` between two operands (`x = y`, not `oe = ie` or `i - l`), or is an English phrase (`I am.`, `IS IT`, not `ee so`) or contraction (`I'm`); a single-token answer such as `No.`, `Yes` or `Qty`, a non-English short line such as `de la gare`, and `x=y` without spaces are pruned on a flagged page. Pruning runs after the verdict, backend choice and table acceptance, skips pages with tables, adds a warning naming the page and the number of lines removed, and covers standalone images and PDF OCR pages, including a photograph after native text; multi-stage pipeline scoring and the single-page first-pass gate read the text before pruning, and an annotation that crosses a line is dropped with its lines. Title recovery now also runs when `quality_thresholds` differs from the default only in this flag. A fixture photograph keeps 0 of 840 noise characters as an image and 169 of 1056 as a PDF page, where the lines with a digit stay.
+- **(ocr): Drop the symbol-noise lines of a page flagged as OCR recognition noise.** (#2312, #2887)
+  This applies to any page the recognition-noise verdict flags and `discard_suspected_ocr_noise` retains, not only photographs. The new `OcrQualityThresholds.prune_symbol_noise_lines` (default `true`; `false` keeps every line) removes only lines made of symbols and fragments, and only when the page has at least 8 non-blank lines and at least half of them are such lines. A line that reads as text is kept: words of 3 or more letters, capitalized short words and function words in English and other Latin-script languages (`Go to Al`, `Mr X Is In`, `de la gare`, `Mairie du I`), list labels (`b)`, `c) if so`), single words such as `No.`, `Yes`, `Qty`, `ABC` and `pqr`, equations and assignments with or without spaces (`x = y`, `X= Y`, `x=y`, `a=`, `f(x) = x`), any line with a digit, and any line with a CJK, Kana, Hangul, Thai, Lao, Khmer, Myanmar or other non-Latin letter. Fragment lines (`ee so`, `we SY`, `oe = ie`, `i - l`) and a digit with a stray quotation or section mark (`"9`, `5§`) are pruned. Pruning runs after the verdict, backend choice and table acceptance, skips pages with tables, adds a warning naming the page and the number of lines removed, and covers standalone images and PDF OCR pages, including a photograph after native text; multi-stage pipeline scoring and the single-page first-pass gate read the text before pruning, and an annotation that crosses a line is dropped with its lines. Title recovery now also runs when `quality_thresholds` differs from the default only in this flag. A fixture photograph keeps 0 of 840 noise characters as an image and 194 of 1056 as a PDF page, where the lines with a digit and capitalized trigrams stay.
 - **(pdf): Apply horizontal scaling (`Tz`) to a string's advance and glyph outlines in the page render; Type 3 glyph outlines are not stretched yet.** (#2677)
 - **(ocr): Retry an eligible RGB JPEG scan after a minimal-build render-budget refusal.** (#2849)
   A PDF/OCR build without Paddle can now recover an automatic single-page English Tesseract read from a certified whole-page RGB JPEG, using the existing bounded per-page coordinator. Unsupported composition or configuration keeps the typed refusal; budgets, noise-discard policy and clamp/resolution safeguards are unchanged. Mixed-route retries of one image also retain the producing Tesseract segmentation mode.
@@ -1587,6 +1616,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Keep every OCR line that holds a numeral, and keep page ranges inside the content after Unicode normalization.** (GH#2851)
   The dictionary filter for noisy OCR lines no longer removes a line that holds a numeral, so its numbers stay in `content` and in the page text. Lines of letters only follow the filter as before. Page byte ranges in `metadata.pages.boundaries` now follow `content` when Unicode normalization shortens it; a range that cannot be mapped is omitted with a `page_boundaries` warning.
+- **(ocr): A line kept for its numeral still counts as a noisy line.** (GH#2923)
+  The dictionary filter keeps a noisy OCR line that holds a numeral. Table detection and the restore of rejected table words read the number of noisy lines, so a page whose noisy lines all held a numeral took another route and lost words in Markdown, Djot and HTML. The kept line again counts as noisy, and a `tesseract` warning gives the number of kept lines.
+- **(core): Entity offsets follow `content` through Unicode normalization.** (GH#2924)
+  The byte offsets of an entity move with its text when normalization shortens `content`. A span that cuts a letter from the mark that joins it grows to hold the composed letter.
 - **(pdf): Words that a producer places one by one no longer run together.** (GH#2675)
   A PDF that sets the text matrix before each word, often with a repeated font operator, kept the gap to the next word inside the previous word's width, so the words read as one. A run that a text matrix extends past its last glyph now ends at that glyph, unless a word-gap offset in the next text array marks the gap. Pages with glyph-by-glyph text now measure a word gap against the font size of the word after it, not against the largest size on the line. Subscripts and raised indices stay on their symbol, and a gap next to a CJK character (Han, kana or Hangul), CJK punctuation or a fullwidth form is measured as before.
 - **(pdf): Preserve source detail for configured Tesseract preprocessing.** Refs #2711 (partial).

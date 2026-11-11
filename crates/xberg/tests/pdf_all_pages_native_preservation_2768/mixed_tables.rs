@@ -57,7 +57,7 @@ async fn read(bytes: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
         .unwrap()
 }
 
-fn assert_mixed_tables(actual: &ExtractedDocument, native: &ExtractedDocument, forced: &ExtractedDocument) {
+async fn assert_mixed_tables(actual: &ExtractedDocument, native: &ExtractedDocument, forced: &ExtractedDocument) {
     let pages = actual.pages.as_ref().unwrap();
     let last = pages.len() - 1;
     let source = native.pages.as_ref().unwrap();
@@ -74,14 +74,15 @@ fn assert_mixed_tables(actual: &ExtractedDocument, native: &ExtractedDocument, f
             &source[index]
         };
         if index == last {
-            super::assert_plain_table_page(page, reference);
-            assert!(actual.content.contains(&page.content));
+            super::plain_contract::assert_scanned_table_body(page, reference).await;
         } else {
             assert_eq!(page.content, reference.content);
         }
         assert_eq!(super::page_tables_json(page), super::page_tables_json(reference));
         expected.extend(reference.tables.iter().map(|table| table.as_ref()));
     }
+    super::plain_contract::assert_page_ranges(actual);
+    super::plain_contract::assert_page_ranges(forced);
     assert_eq!(
         serde_json::to_value(&actual.tables).unwrap(),
         serde_json::to_value(expected).unwrap()
@@ -131,7 +132,7 @@ async fn check_mixed_tables(source_pages: &[u32], stamp: bool, force_scan: bool)
         config.force_ocr_pages = Some(vec![u32::try_from(source_pages.len() + 1).unwrap()]);
     }
     let actual = read(&bytes, &config).await;
-    assert_mixed_tables(&actual, &native, &forced);
+    assert_mixed_tables(&actual, &native, &forced).await;
 }
 
 #[tokio::test]
