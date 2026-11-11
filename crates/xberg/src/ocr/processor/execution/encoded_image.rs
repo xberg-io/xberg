@@ -604,6 +604,7 @@ mod tests {
     enum ExpectedImage {
         Original,
         Upscaled,
+        ClampedUpscale,
         WorkspaceError,
     }
 
@@ -649,20 +650,32 @@ mod tests {
             ("source_at_peak", source_peak, ExpectedImage::Original),
             ("source_below_peak", source_peak - 1, ExpectedImage::WorkspaceError),
             ("target_at_peak", target_peak, ExpectedImage::Upscaled),
+            ("target_below_peak", target_peak - 1, ExpectedImage::ClampedUpscale),
         ] {
             let result = prepare_png(bytes, policy, budget);
             let (dimensions, scale, skipped) = match expected {
                 ExpectedImage::Original => ((200, 100, 100), 1.0, true),
                 ExpectedImage::Upscaled => ((600, 300, 300), 3.0, false),
+                // One byte under the 300 DPI peak: the admission search clamps the upscale to
+                // 299 DPI; the later workspace check then passes under the budget and never
+                // binds. See the margin assertion in the callers.
+                ExpectedImage::ClampedUpscale => ((598, 299, 299), 2.99, false),
                 ExpectedImage::WorkspaceError => {
                     let error = result
                         .err()
                         .unwrap_or_else(|| panic!("{name}: expected a workspace refusal"));
+                    // Pin the error kind, then match the stable message prefix like
+                    // unknown_dpi_memory_tests::caller_selected_policy_keeps_its_requested_densityless_png_upscale
+                    // so a rewording past the prefix does not break the test.
                     assert!(
-                        matches!(&error, crate::XbergError::Validation { message, .. }
-                            if message == &format!("OCR native image workspace exceeds security_limits.max_content_size \
-                                ({budget} bytes). Raise security_limits.max_content_size")),
+                        matches!(&error, crate::XbergError::Validation { .. }),
                         "{name}: {error}"
+                    );
+                    let message = error.to_string();
+                    assert!(
+                        message.contains("OCR native image workspace exceeds")
+                            && message.contains(&format!("({budget} bytes)")),
+                        "{name}: {message}"
                     );
                     continue;
                 }
@@ -680,7 +693,10 @@ mod tests {
     }
 
     #[test]
-    fn budgeted_png_without_resize_keeps_the_real_source_resolution() {
+    fn budgeted_gray_png_upscale_tracks_the_workspace_budget_boundary() {
+        // Covers four outcomes at the workspace boundary: the source kept as-is at its peak, the
+        // whole image refused one byte below the source peak, the full 300 DPI upscale admitted at
+        // its peak, and the upscale clamped one byte below that peak. xberg#2910.
         let bytes = png_fixture([245; 3], true);
         let policy = contrast_policy();
         let source_peak = native_image_budget::known_gray_phase_peak(200, 100, bytes.len(), Some(&policy))
@@ -690,6 +706,16 @@ mod tests {
             .unwrap()
             .unwrap() as usize;
         assert_budget_cases(&bytes, &policy, source_peak, target_peak);
+        // The post-upscale workspace check (finish_budgeted_upscale) cannot bind at
+        // target_below_peak: the admission search in budgeted_upscale already refuses every DPI
+        // whose raster peak exceeds the budget, so it clamps to 299 DPI, and the chosen raster's
+        // peak must sit more than one byte under the budget for that clamping to be what decides
+        // the outcome rather than the later check. xberg#2910.
+        let clamped_peak = native_image_budget::known_gray_phase_peak(598, 299, bytes.len(), Some(&policy))
+            .unwrap()
+            .unwrap() as usize;
+        let margin = target_peak - 1 - clamped_peak;
+        assert!(margin > 1, "target_below_peak margin is only {margin} bytes");
     }
 
     #[test]
@@ -703,6 +729,15 @@ mod tests {
             .unwrap()
             .unwrap() as usize;
         assert_budget_cases(&bytes, &policy, source_peak, target_peak);
+        // Same decision as the gray test: the admission search clamps to 299 DPI one byte under
+        // the 300 DPI peak, and the chosen raster's peak must sit more than one byte under the
+        // budget for the search, not the post-upscale workspace check, to decide the outcome.
+        // xberg#2910.
+        let clamped_peak = native_image_budget::known_phase_peak(598, 299, bytes.len(), Some(&policy))
+            .unwrap()
+            .unwrap() as usize;
+        let margin = target_peak - 1 - clamped_peak;
+        assert!(margin > 1, "target_below_peak margin is only {margin} bytes");
     }
 
     fn gray_switch_png(pixel: [u8; 3]) -> Vec<u8> {

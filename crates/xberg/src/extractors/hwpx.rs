@@ -424,12 +424,12 @@ enum ImageResourceMatch<'a> {
 }
 
 struct ImageResourceLookup<'a> {
-    resources: &'a std::collections::HashMap<String, unhwp::model::Resource>,
+    resources: &'a std::collections::BTreeMap<String, unhwp::model::Resource>,
     stems: AHashMap<&'a str, ImageResourceMatch<'a>>,
 }
 
 impl<'a> ImageResourceLookup<'a> {
-    fn new(resources: &'a std::collections::HashMap<String, unhwp::model::Resource>) -> Self {
+    fn new(resources: &'a std::collections::BTreeMap<String, unhwp::model::Resource>) -> Self {
         let mut stems = AHashMap::with_capacity(resources.len());
         for (name, resource) in resources {
             let Some(stem) = std::path::Path::new(name).file_stem().and_then(|stem| stem.to_str()) else {
