@@ -23,11 +23,21 @@ pub(super) fn derive_pages(
     // cannot be found in the plain content. Render the pages that are not found from their
     // elements as `render_plain` does and locate that instead (#2825).
     if !reconciled
-        && let Some(rerendered) = rerender_pages_plain(pages.as_deref(), doc, content)
-        && reconcile_page_boundaries(&mut doc.metadata, content, Some(&rerendered))
+        && let Some((rerendered, diverging)) = rerender_pages_plain(pages.as_deref(), doc, content)
+        && reconcile_located_page_boundaries(&mut doc.metadata, content, &rerendered, &diverging)
     {
         pages = Some(rerendered);
         reconciled = true;
+        if !diverging.is_empty() {
+            crate::core::diagnostics::push_warning(
+                &mut doc.processing_warnings,
+                "page_boundaries",
+                format!(
+                    "Page byte ranges of pages {diverging:?} were measured on a different rendering of the text \
+                     and could not be mapped onto the returned content, so they were omitted"
+                ),
+            );
+        }
     }
     if !reconciled && drop_unusable_page_boundaries(&mut doc.metadata, content) {
         crate::core::diagnostics::push_warning(
@@ -260,6 +270,38 @@ pub(super) fn apply_page_content_format(
     Some(pages)
 }
 
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(crate) fn render_plain_selected_pages(
+    doc: &InternalDocument,
+    requested: &std::collections::BTreeSet<u32>,
+) -> std::collections::BTreeMap<u32, String> {
+    let membership = compute_page_membership(doc);
+    let mut observer = ();
+    build_pages(doc, true)
+        .unwrap_or_default()
+        .into_iter()
+        .enumerate()
+        .filter(|(_, page)| requested.contains(&page.page_number))
+        .filter_map(|(index, page)| {
+            let indices = membership.get(&page.page_number)?;
+            let rendered = render_sub_page(
+                page,
+                indices,
+                doc,
+                Some(crate::rendering::render_plain),
+                (index, &crate::core::config::OutputFormat::Plain),
+                &mut observer,
+            );
+            Some((rendered.page_number, rendered.content))
+        })
+        .collect()
+}
+
 /// Which element indices belong to each page, keyed by page number.
 ///
 /// Container markers (`ListStart`/`ListEnd`, quotes, groups) are never page-tagged:
@@ -364,9 +406,19 @@ fn build_sub_doc(elem_indices: &[usize], doc: &InternalDocument) -> InternalDocu
     sub_doc
 }
 
-/// Pages whose prebuilt text is not found in `content` (in page order) rendered from their
-/// own elements by `render_plain`; a page whose text is found keeps it. `None` when no page has
-/// elements, a re-rendered page is empty, or a re-rendered page is still not found.
+/// Whether `page`'s prebuilt text may be replaced by the plain rendering of its elements: every
+/// page of a PDF, image or OCR source (a native page's text layer differs from the plain content
+/// by spacing alone), and a page of another format that took OCR text. A DOCX page with its
+/// notes is not, and its text is deliberately not the plain rendering of its elements.
+fn is_ocr_page_text(doc: &InternalDocument, page: &PageContent) -> bool {
+    matches!(doc.source_format.as_str(), "pdf" | "image" | "ocr") || doc.ocr_text_pages.contains(&page.page_number)
+}
+
+/// OCR pages whose prebuilt text is not found in `content` (in page order) rendered from their
+/// own elements by `render_plain`; a page whose text is found keeps it. Returns the pages and
+/// the numbers of those that still diverge from `content`: a page that is not OCR text (see
+/// `is_ocr_page_text`) keeps its text, and so does an OCR page whose re-rendering is empty or
+/// not found. `None` when no page has elements.
 ///
 /// Pages are located with the leftmost `find` after the previous page, so short or repeated
 /// page text can match early, as in `reconcile_page_boundaries`.
@@ -374,7 +426,7 @@ fn rerender_pages_plain(
     pages: Option<&[PageContent]>,
     doc: &InternalDocument,
     content: &str,
-) -> Option<Vec<PageContent>> {
+) -> Option<(Vec<PageContent>, Vec<u32>)> {
     let pages = pages?;
     let elements_by_page = compute_page_membership(doc);
     if elements_by_page.is_empty() {
@@ -382,30 +434,71 @@ fn rerender_pages_plain(
     }
     let mut search_offset = 0;
     let mut out = Vec::with_capacity(pages.len());
+    let mut diverging = Vec::new();
     for page in pages {
         let mut page = page.clone();
         let found = |text: &str, from: usize| content.get(from..).and_then(|rest| rest.find(text)).map(|i| from + i);
         if !page.content.is_empty() {
             if let Some(start) = found(&page.content, search_offset) {
                 search_offset = start + page.content.len();
-                out.push(page);
-                continue;
+            } else {
+                let rendered = is_ocr_page_text(doc, &page)
+                    .then(|| elements_by_page.get(&page.page_number))
+                    .flatten()
+                    .map(|indices| crate::rendering::render_plain(&build_sub_doc(indices, doc)))
+                    .filter(|rendered| !rendered.is_empty());
+                match rendered.and_then(|rendered| found(&rendered, search_offset).map(|start| (rendered, start))) {
+                    Some((rendered, start)) => {
+                        tracing::debug!(
+                            page = page.page_number,
+                            prebuilt_len = page.content.len(),
+                            rendered_len = rendered.len(),
+                            "page text replaced by the plain rendering of its elements"
+                        );
+                        search_offset = start + rendered.len();
+                        page.content = rendered;
+                    }
+                    None => diverging.push(page.page_number),
+                }
             }
-            let indices = elements_by_page.get(&page.page_number)?;
-            let rendered = crate::rendering::render_plain(&build_sub_doc(indices, doc));
-            let start = found(&rendered, search_offset).filter(|_| !rendered.is_empty())?;
-            tracing::debug!(
-                page = page.page_number,
-                prebuilt_len = page.content.len(),
-                rendered_len = rendered.len(),
-                "page text replaced by the plain rendering of its elements"
-            );
-            search_offset = start + rendered.len();
-            page.content = rendered;
         }
         out.push(page);
     }
-    Some(out)
+    Some((out, diverging))
+}
+
+/// Re-point the boundaries of the pages not in `diverging` at `content`, omitting the boundaries
+/// of the diverging pages. Leaves the boundaries as they were and returns `false` when the
+/// remaining pages cannot be located.
+fn reconcile_located_page_boundaries(
+    metadata: &mut crate::types::Metadata,
+    content: &str,
+    pages: &[PageContent],
+    diverging: &[u32],
+) -> bool {
+    let Some(structure) = metadata.pages.as_mut() else {
+        return false;
+    };
+    let Some(original) = structure.boundaries.take() else {
+        return false;
+    };
+    structure.boundaries = Some(
+        original
+            .iter()
+            .filter(|boundary| !diverging.contains(&boundary.page_number))
+            .cloned()
+            .collect(),
+    );
+    let located: Vec<PageContent> = pages
+        .iter()
+        .filter(|page| !diverging.contains(&page.page_number))
+        .cloned()
+        .collect();
+    let reconciled = reconcile_page_boundaries(metadata, content, Some(&located));
+    if !reconciled && let Some(structure) = metadata.pages.as_mut() {
+        structure.boundaries = Some(original);
+    }
+    reconciled
 }
 
 /// Re-render one page's `content` from just the elements (and the tables/images they
@@ -585,8 +678,18 @@ mod plain_page_rerender_tests {
             ),
             pages: None,
         });
+        doc.ocr_text_pages = pages.iter().map(|p| p.page_number).collect();
         doc.prebuilt_pages = Some(pages);
         doc
+    }
+
+    fn boundary_pages(doc: &InternalDocument) -> Vec<u32> {
+        doc.metadata
+            .pages
+            .as_ref()
+            .and_then(|s| s.boundaries.as_ref())
+            .map(|b| b.iter().map(|b| b.page_number).collect())
+            .unwrap_or_default()
     }
 
     fn derive(doc: &mut InternalDocument, content: &str) -> Vec<PageContent> {
@@ -660,13 +763,14 @@ mod plain_page_rerender_tests {
     }
 
     #[test]
-    fn an_untagged_page_that_is_not_found_still_drops_the_boundaries_with_a_warning() {
+    fn an_untagged_page_that_is_not_found_loses_only_its_own_boundary_with_a_warning() {
         let content = "one\n\ntwo";
         let mut doc = doc_with(vec![page(1, "| one |"), page(2, "| two |")], &[(1, "one")]);
         let pages = derive(&mut doc, content);
+        assert_eq!(pages[0].content, "one");
         assert_eq!(pages[1].content, "| two |");
         assert!(warned(&doc));
-        assert!(doc.metadata.pages.as_ref().unwrap().boundaries.is_none());
+        assert_eq!(boundary_pages(&doc), vec![1]);
     }
 
     #[test]
@@ -684,12 +788,56 @@ mod plain_page_rerender_tests {
     }
 
     #[test]
-    fn an_empty_rerender_of_a_non_empty_page_counts_as_not_found() {
+    fn an_empty_rerender_of_a_non_empty_page_loses_only_its_own_boundary() {
         let content = "two";
         let mut doc = doc_with(vec![page(1, "| a |"), page(2, "two")], &[(1, ""), (2, "two")]);
         let pages = derive(&mut doc, content);
         assert_eq!(pages[0].content, "| a |");
         assert!(warned(&doc));
+        assert_eq!(boundary_pages(&doc), vec![2]);
+    }
+
+    #[test]
+    fn a_native_page_with_its_own_table_markdown_and_a_note_keeps_its_text() {
+        let content = "Body\n\nplain two";
+        let native_text = "| a | b |\n| --- | --- |\n| 1 | 2 |[^1]\n\n1: THE NOTE";
+        let mut native = page(1, native_text);
+        native.tables.push(Arc::new(Table {
+            markdown: "| a | b |\n| --- | --- |\n| 1 | 2 |".to_string(),
+            ..Default::default()
+        }));
+        let mut doc = doc_with(vec![native], &[(1, "Body")]);
+        doc.ocr_text_pages.clear();
+        doc.source_format = "docx".to_string();
+        let pages = derive(&mut doc, content);
+        assert_eq!(pages[0].content, native_text);
+        assert!(warned(&doc));
         assert!(doc.metadata.pages.as_ref().unwrap().boundaries.is_none());
+    }
+
+    #[test]
+    fn a_native_page_keeps_its_text_while_the_ocr_pages_of_a_mixed_document_are_rerendered() {
+        let content = "one\n\ntwo\n\nthree";
+        let mut doc = doc_with(
+            vec![page(1, "| one |"), page(2, "native | two"), page(3, "| three |")],
+            &[(1, "one"), (2, "two"), (3, "three")],
+        );
+        doc.ocr_text_pages = vec![1, 3];
+        doc.source_format = "docx".to_string();
+        let pages = derive(&mut doc, content);
+        assert_eq!(pages[0].content, "one");
+        assert_eq!(pages[1].content, "native | two");
+        assert_eq!(pages[2].content, "three");
+        assert!(warned(&doc));
+        assert_eq!(boundary_pages(&doc), vec![1, 3]);
+        let boundaries = doc.metadata.pages.as_ref().unwrap().boundaries.as_ref().unwrap();
+        assert_eq!(
+            content.get(boundaries[0].byte_start..boundaries[0].byte_end),
+            Some("one")
+        );
+        assert_eq!(
+            content.get(boundaries[1].byte_start..boundaries[1].byte_end),
+            Some("three")
+        );
     }
 }
