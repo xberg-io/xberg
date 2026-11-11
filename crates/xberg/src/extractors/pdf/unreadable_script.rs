@@ -170,8 +170,19 @@ fn is_script_letter(character: char) -> bool {
         && !matches!(character as u32, 0x00A0..=0x00BF | 0x2000..=0x206F | 0x3000..=0x3003)
 }
 
-/// [`unreadable_scripts`] with the number of letters each script holds, largest first.
-pub(super) fn uncovered_script_counts(text: &str, languages: &[String]) -> Option<Vec<(Script, usize)>> {
+/// The letters of a text by script, counted as [`unreadable_scripts`] counts them.
+pub(super) struct ScriptLetters {
+    /// Letters of the scripts a configured language reads (Latin always).
+    pub(super) covered: usize,
+    /// Letters of each other known script, in order of first appearance.
+    pub(super) uncovered: Vec<(Script, usize)>,
+    /// Characters of no known script: private-use, dingbat and symbol characters.
+    unattributed: usize,
+}
+
+/// The letters of `text` by script for `languages`, or `None` when no language is configured or one of
+/// them is a model this module does not know.
+pub(super) fn script_letters(text: &str, languages: &[String]) -> Option<ScriptLetters> {
     if languages.is_empty() {
         return None;
     }
@@ -192,6 +203,20 @@ pub(super) fn uncovered_script_counts(text: &str, languages: &[String]) -> Optio
             None => unattributed += 1,
         }
     }
+    Some(ScriptLetters {
+        covered: covered_chars,
+        uncovered: counts,
+        unattributed,
+    })
+}
+
+/// [`unreadable_scripts`] with the number of letters each script holds, largest first.
+pub(super) fn uncovered_script_counts(text: &str, languages: &[String]) -> Option<Vec<(Script, usize)>> {
+    let ScriptLetters {
+        covered: covered_chars,
+        uncovered: mut counts,
+        unattributed,
+    } = script_letters(text, languages)?;
     let known: usize = counts.iter().map(|(_, count)| count).sum();
     if known < MIN_SCRIPT_CHARS
         || (known as f64) < MIN_KNOWN_SHARE * (known + unattributed) as f64
@@ -813,7 +838,11 @@ pub(super) fn ocr_dropped_native_script(native_page: &str, ocr_text: &str) -> bo
     let Some(scripts) = dominant_scripts(native_page) else {
         return false;
     };
-    let read: Vec<Script> = ocr_text.chars().filter_map(script_of).collect();
+    let read: Vec<Script> = ocr_text
+        .chars()
+        .filter(|character| !character.is_numeric())
+        .filter_map(script_of)
+        .collect();
     !read.is_empty() && !read.iter().any(|script| scripts.contains(script))
 }
 

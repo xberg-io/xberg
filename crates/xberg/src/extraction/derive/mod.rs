@@ -37,6 +37,13 @@ use pages::derive_pages;
 #[cfg(feature = "quality")]
 pub(crate) use pages::drop_unusable_page_boundaries;
 pub(crate) use pages::reconcile_page_boundaries;
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(crate) use pages::render_plain_selected_pages;
 
 /// Cap on how many unresolvable keys a single warning names before it summarises
 /// the rest as a count, so a badly broken document cannot produce an unbounded

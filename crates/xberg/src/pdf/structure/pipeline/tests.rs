@@ -1851,6 +1851,89 @@ fn dedup_counts_two_split_copies_and_drops_a_table_for_one_printed_copy() {
     assert_eq!(kept[0].cells, large.cells);
 }
 
+#[test]
+fn dedup_keeps_two_tables_when_a_split_copy_lies_where_they_overlap_in_either_order() {
+    // The page prints PICCOLO21 whole inside table B only, and a second copy in two pieces that table
+    // A covers and carries whole. B also covers the first piece, so a per-piece carrier splits the
+    // copy over two streams in the order B, A, and no stream prints the second PICCOLO21.
+    let a = cell_table(1, (40.0, 0.0, 140.0, 100.0), &[&["PICCOLO21"]]);
+    let b = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["PICCOLO21"]]);
+    let page = vec![vec![
+        printed_at("PICCOLO21", 5.0, 10.0),
+        printed_at("PICCOLO", 70.0, 10.0),
+        printed_at("21", 102.0, 10.0),
+    ]];
+    let counts: Vec<usize> = [vec![b.clone(), a.clone()], vec![a, b]]
+        .into_iter()
+        .map(|tables| kept_native_tables(tables, &page).len())
+        .collect();
+    assert_eq!(counts, [2, 2], "kept tables in the order B, A and in the order A, B");
+}
+
+/// The carrier of each segment, as a position in `tables`, as the page split assigns it.
+fn split_carriers(tables: &[crate::types::Table], segments: &[SegmentData]) -> Vec<Option<usize>> {
+    let coverage: Vec<TableCoverage> = tables
+        .iter()
+        .map(|table| table_coverage(table).expect("table with a box"))
+        .collect();
+    let words: Vec<WordCounts> = tables.iter().map(table_word_counts).collect();
+    let holders: Vec<(&TableCoverage, &WordCounts)> = coverage.iter().zip(&words).collect();
+    occurrence_carriers(segments, &holders)
+}
+
+#[test]
+fn split_carrier_joins_pieces_whose_seam_lies_inside_a_longer_word() {
+    // PICCOLO21X in three pieces: the seams piccolo21 and 21x are parts of the word, not whole words.
+    let b = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["PICCOLO21X"]]);
+    let a = cell_table(1, (40.0, 0.0, 140.0, 100.0), &[&["PICCOLO21X"]]);
+    let pieces = [
+        printed_at("PICCOLO", 60.0, 10.0),
+        printed_at("21", 80.0, 10.0),
+        printed_at("X", 102.0, 10.0),
+    ];
+    assert_eq!(
+        split_carriers(&[b, a], &pieces),
+        [Some(1); 3],
+        "A covers every piece and carries the copy"
+    );
+}
+
+#[test]
+fn split_carrier_drops_a_table_that_does_not_cover_the_next_piece() {
+    // B holds the word and covers the first piece only, so the copy goes to A, which covers both.
+    let b = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["PICCOLO21"]]);
+    let a = cell_table(1, (40.0, 0.0, 140.0, 100.0), &[&["PICCOLO21"]]);
+    let pieces = [printed_at("PICCOLO", 70.0, 10.0), printed_at("21", 102.0, 10.0)];
+    assert_eq!(split_carriers(&[b, a], &pieces), [Some(1); 2]);
+}
+
+#[test]
+fn split_carrier_goes_to_the_first_table_that_holds_the_seam_when_two_hold_it() {
+    // All three tables cover and carry both pieces. X holds PICCOLO and 21 as two words, so only Y and
+    // Z hold the seam piccolo21, and the first of them in table order carries the copy.
+    let x = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["PICCOLO", "21"]]);
+    let y = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["PICCOLO21"]]);
+    let z = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["PICCOLO21", "Z"]]);
+    let pieces = [printed_at("PICCOLO", 10.0, 10.0), printed_at("21", 30.0, 10.0)];
+    assert_eq!(
+        split_carriers(&[x.clone(), y.clone(), z.clone()], &pieces),
+        [Some(1); 2],
+        "order X, Y, Z"
+    );
+    assert_eq!(split_carriers(&[x, z, y], &pieces), [Some(1); 2], "order X, Z, Y");
+}
+
+#[test]
+fn a_segment_that_only_a_later_table_carries_is_suppressed() {
+    let elsewhere = table_coverage(&cell_table(1, (200.0, 0.0, 300.0, 100.0), &[&["other"]])).expect("box");
+    let covering = table_coverage(&cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha"]])).expect("box");
+    let filtered = filter_segments_by_table_bboxes(vec![printed_at("alpha", 10.0, 10.0)], &[elsewhere, covering]);
+    assert!(
+        filtered.is_empty(),
+        "the second table carries the segment, so it is not printed again as text"
+    );
+}
+
 /// Tables that the document build emits for one page of text and the given native tables.
 fn built_table_count(tables: &[crate::types::Table], page: Vec<Vec<SegmentData>>) -> usize {
     let document = build_document_structure(
@@ -9383,4 +9466,156 @@ fn should_not_stack_text_set_on_the_line_after_a_large_bracket() {
         stack_seg("m", 114.0, 4.0, 7.0, 106.4),
     ];
     assert!(stack_of(&segments).is_empty());
+}
+
+#[test]
+fn should_not_take_the_closing_piece_of_a_large_bracket_as_a_stack_member() {
+    let segments = [
+        stack_seg("\u{b5}", 100.0, 5.0, 10.0, 100.0),
+        stack_seg("\u{239e}", 105.2, 2.2, 4.97, 104.1),
+        stack_seg("2", 107.8, 4.0, 8.0, 104.1),
+    ];
+    assert!(stack_of(&segments).is_empty());
+}
+
+fn stack_texts(segments: Vec<SegmentData>) -> Vec<String> {
+    place_script_stacks_after_bases(segments)
+        .into_iter()
+        .map(|segment| segment.text)
+        .collect()
+}
+
+#[test]
+fn should_place_stack_members_listed_ahead_of_their_base_directly_after_it() {
+    let segments = vec![
+        stack_seg("c", 104.0, 3.0, 7.5, 104.2),
+        stack_seg("1", 107.0, 3.0, 6.0, 102.6),
+        stack_seg("e", 100.0, 4.0, 10.0, 100.0),
+        stack_seg("tail", 112.0, 20.0, 10.0, 100.0),
+    ];
+    assert_eq!(stack_texts(segments), ["e", "c", "1", "tail"]);
+}
+
+#[test]
+fn should_read_the_raised_members_of_a_stack_before_the_lowered_ones() {
+    let segments = vec![
+        stack_seg("e", 100.0, 4.0, 10.0, 100.0),
+        stack_seg("\u{3b8}", 104.0, 3.0, 7.0, 96.8),
+        stack_seg("c", 104.5, 3.0, 7.5, 104.2),
+        stack_seg("1", 107.5, 3.0, 5.0, 103.0),
+        stack_seg("tail", 112.0, 20.0, 10.0, 100.0),
+    ];
+    assert_eq!(stack_texts(segments), ["e", "c", "1", "\u{3b8}", "tail"]);
+}
+
+#[test]
+fn should_leave_a_page_without_a_stack_in_its_order() {
+    let segments = vec![
+        stack_seg("x", 100.0, 5.0, 10.0, 100.0),
+        stack_seg("2", 105.0, 3.5, 7.0, 104.2),
+        stack_seg("y", 109.0, 5.0, 10.0, 100.0),
+    ];
+    assert_eq!(stack_texts(segments), ["x", "2", "y"]);
+}
+
+#[test]
+fn should_keep_a_stack_in_one_paragraph_when_its_lowered_member_is_listed_last() {
+    let lines = vec![
+        stack_seg("e", 100.0, 4.0, 10.0, 100.0),
+        stack_seg("c", 104.0, 3.0, 7.5, 104.2),
+        stack_seg("1", 107.5, 3.0, 5.0, 103.0),
+        stack_seg("\u{3b8}", 104.5, 3.0, 7.0, 95.8),
+        stack_seg("tail", 112.0, 20.0, 10.0, 100.0),
+    ];
+    assert_eq!(blocks_to_paragraphs(lines, &[], &[]).len(), 1);
+}
+
+#[test]
+fn should_mark_the_members_of_a_stack_listed_ahead_of_its_base_as_scripts_on_one_row() {
+    let segments = vec![
+        stack_seg("c", 104.0, 3.0, 7.5, 104.2),
+        stack_seg("1", 107.0, 3.0, 6.0, 102.6),
+        stack_seg("e", 100.0, 4.0, 10.0, 100.0),
+        stack_seg("\u{3c4}", 110.0, 3.7, 7.5, 104.2),
+    ];
+    let paragraphs = segments_to_paragraphs(segments, &[], &[], &TextRepairWitnesses::default());
+    assert_eq!(paragraphs.len(), 1);
+    let document = crate::pdf::structure::assembly::assemble_internal_document(
+        vec![paragraphs],
+        &[],
+        None,
+        &[],
+        &Default::default(),
+    );
+    assert_eq!(document.elements.len(), 1);
+    assert_eq!(document.elements[0].text, "ec1\u{3c4}");
+    assert!(
+        !document.elements[0].annotations.is_empty(),
+        "the stack members carry sub/superscript markup"
+    );
+}
+
+use xberg_native_pdf::document::MAX_STACK_MEMBERS;
+
+fn long_stack(count: usize) -> Vec<SegmentData> {
+    let mut segments = vec![stack_seg("e", 100.0, 4.0, 10.0, 100.0)];
+    segments.extend((0..count).map(|n| {
+        let size = if n % 2 == 0 { 7.0 } else { 5.0 };
+        stack_seg(&n.to_string(), 104.0 + 3.0 * n as f32, 3.0, size, 104.2)
+    }));
+    segments
+}
+
+#[test]
+fn should_place_and_rediscover_a_stack_of_the_most_members_grouping_searches() {
+    let count = MAX_STACK_MEMBERS;
+    let placed = place_script_stacks_after_bases(long_stack(count));
+    assert_eq!(script_stack_members(&placed, 0), (1..=count).collect::<Vec<_>>());
+}
+
+#[test]
+fn should_leave_a_stack_longer_than_the_grouping_search_unplaced_and_unmarked() {
+    let count = MAX_STACK_MEMBERS + 1;
+    let mut segments = long_stack(count);
+    segments.push(stack_seg("tail", 200.0, 20.0, 10.0, 100.0));
+    let before: Vec<String> = segments.iter().map(|segment| segment.text.clone()).collect();
+    assert!(script_stack_members(&segments, 0).is_empty());
+    assert_eq!(stack_texts(segments), before);
+}
+
+#[test]
+fn should_place_a_fraction_in_an_exponent_in_its_reading_order_without_a_stack() {
+    let segments = vec![
+        stack_seg("x", 100.0, 5.0, 10.0, 100.0),
+        stack_seg("\u{2212}", 105.0, 3.0, 7.0, 104.0),
+        stack_seg("1", 108.5, 3.0, 5.0, 107.0),
+        stack_seg("2", 108.5, 3.0, 5.0, 101.5),
+        stack_seg("tail", 113.0, 20.0, 10.0, 100.0),
+    ];
+    assert!(stack_of(&segments).is_empty());
+    assert_eq!(stack_texts(segments), ["x", "\u{2212}", "1", "2", "tail"]);
+}
+
+fn marked_scripts(segments: Vec<SegmentData>) -> usize {
+    let paragraphs = segments_to_paragraphs(segments, &[], &[], &TextRepairWitnesses::default());
+    let document = crate::pdf::structure::assembly::assemble_internal_document(
+        vec![paragraphs],
+        &[],
+        None,
+        &[],
+        &Default::default(),
+    );
+    document.elements.iter().map(|element| element.annotations.len()).sum()
+}
+
+#[test]
+fn should_mark_every_member_of_a_stack_of_the_most_members_and_none_of_a_longer_one() {
+    let most = MAX_STACK_MEMBERS;
+    assert!(marked_scripts(long_stack(most)) > 0, "{most} members carry markup");
+    assert_eq!(
+        marked_scripts(long_stack(most + 1)),
+        0,
+        "{} members carry none",
+        most + 1
+    );
 }

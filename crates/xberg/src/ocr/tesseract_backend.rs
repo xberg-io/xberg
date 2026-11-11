@@ -507,28 +507,43 @@ impl Plugin for TesseractBackend {
 
 /// Counts reads per `security_limits.max_archive_size`, a field no scan read uses, so a test
 /// picks a value of its own and concurrent tests never see each other's reads.
-#[cfg(all(
-    test,
-    paddle_ocr,
-    feature = "pdf",
-    feature = "tokio-runtime",
-    feature = "bundle-tessdata-eng"
-))]
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime", feature = "bundle-tessdata-eng"))]
 pub(crate) mod read_counter {
     use super::OcrConfig;
     use std::collections::HashMap;
     use std::sync::{LazyLock, Mutex};
 
-    static READS: LazyLock<Mutex<HashMap<usize, usize>>> = LazyLock::new(Default::default);
+    #[derive(Default)]
+    struct Counts {
+        reads: usize,
+        probe_reuses: usize,
+    }
+
+    static READS: LazyLock<Mutex<HashMap<usize, Counts>>> = LazyLock::new(Default::default);
 
     pub(crate) fn record(config: &OcrConfig) {
         if let Some(limits) = config.security_limits.as_ref() {
-            *READS.lock().unwrap().entry(limits.max_archive_size).or_default() += 1;
+            READS.lock().unwrap().entry(limits.max_archive_size).or_default().reads += 1;
         }
     }
 
     pub(crate) fn reads(key: usize) -> usize {
-        READS.lock().unwrap().get(&key).copied().unwrap_or(0)
+        READS.lock().unwrap().get(&key).map_or(0, |counts| counts.reads)
+    }
+
+    pub(crate) fn record_probe_reuse(config: &OcrConfig) {
+        if let Some(limits) = config.security_limits.as_ref() {
+            READS
+                .lock()
+                .unwrap()
+                .entry(limits.max_archive_size)
+                .or_default()
+                .probe_reuses += 1;
+        }
+    }
+
+    pub(crate) fn probe_reuses(key: usize) -> usize {
+        READS.lock().unwrap().get(&key).map_or(0, |counts| counts.probe_reuses)
     }
 }
 
@@ -573,13 +588,7 @@ impl TesseractBackend {
         config: &OcrConfig,
         policy: ImageOcrPolicy,
     ) -> Result<ExtractedDocument> {
-        #[cfg(all(
-            test,
-            paddle_ocr,
-            feature = "pdf",
-            feature = "tokio-runtime",
-            feature = "bundle-tessdata-eng"
-        ))]
+        #[cfg(all(test, feature = "pdf", feature = "tokio-runtime", feature = "bundle-tessdata-eng"))]
         read_counter::record(config);
         let tess_config = self.config_to_tesseract(config);
         let tess_config_clone = tess_config.clone();
@@ -1002,8 +1011,11 @@ const WORD_ITERATOR_SKIPPED_COUNT_METADATA_KEY: &str = "word_iterator_skipped_co
 /// never ran. Mirrors the literal written in `ocr::processor::execution::perform_ocr`.
 const AUTO_ROTATE_UNAVAILABLE_METADATA_KEY: &str = "auto_rotate_unavailable";
 
-/// Metadata key carrying the exact number of hOCR lines removed by dictionary filtering. ~keep
+/// Metadata key carrying the exact number of hOCR lines the dictionary filter judged noise. ~keep
 const DICTIONARY_FILTERED_LINE_COUNT_METADATA_KEY: &str = "dictionary_filtered_line_count";
+
+/// Metadata key carrying how many of those judged lines stayed because they hold a numeral. ~keep
+const DICTIONARY_KEPT_NUMERAL_LINE_COUNT_METADATA_KEY: &str = "dictionary_kept_numeral_line_count";
 
 /// Metadata key `perform_ocr` sets when it rebuilds `content` with inline
 /// table markdown at each table's original vertical position (see
@@ -1089,17 +1101,26 @@ fn warnings_from_ocr_metadata(
         );
     }
 
-    if let Some(filtered_lines) = metadata
-        .get(DICTIONARY_FILTERED_LINE_COUNT_METADATA_KEY)
-        .and_then(serde_json::Value::as_u64)
-        && filtered_lines > 0
-    {
+    let count = |key| metadata.get(key).and_then(serde_json::Value::as_u64).unwrap_or(0);
+    let kept_lines = count(DICTIONARY_KEPT_NUMERAL_LINE_COUNT_METADATA_KEY);
+    let removed_lines = count(DICTIONARY_FILTERED_LINE_COUNT_METADATA_KEY).saturating_sub(kept_lines);
+    if removed_lines > 0 {
         crate::core::diagnostics::push_warning(
             &mut warnings,
             "tesseract",
             format!(
-                "Tesseract removed {filtered_lines} OCR line(s) because their dictionary-checkable words were mostly \
+                "Tesseract removed {removed_lines} OCR line(s) because their dictionary-checkable words were mostly \
                  not real words"
+            ),
+        );
+    }
+    if kept_lines > 0 {
+        crate::core::diagnostics::push_warning(
+            &mut warnings,
+            "tesseract",
+            format!(
+                "Tesseract kept {kept_lines} OCR line(s) whose dictionary-checkable words were mostly not real words, \
+                 because they hold numbers"
             ),
         );
     }
@@ -1165,6 +1186,7 @@ fn strip_ocr_scratch_metadata_keys(metadata: &mut std::collections::HashMap<Stri
     metadata.remove(WORD_ITERATOR_SKIPPED_COUNT_METADATA_KEY);
     metadata.remove(AUTO_ROTATE_UNAVAILABLE_METADATA_KEY);
     metadata.remove(DICTIONARY_FILTERED_LINE_COUNT_METADATA_KEY);
+    metadata.remove(DICTIONARY_KEPT_NUMERAL_LINE_COUNT_METADATA_KEY);
 }
 
 fn compact_cjk_horizontal_spacing(text: &str) -> String {
@@ -2190,6 +2212,31 @@ mod tests {
         assert_eq!(
             warnings[0].message,
             "Tesseract removed 2 OCR line(s) because their dictionary-checkable words were mostly not real words"
+        );
+    }
+
+    /// Lines kept for a numeral are still judged noise, so they get their own warning and are not
+    /// reported as removed.
+    #[test]
+    fn warnings_from_ocr_metadata_reports_kept_numeral_lines_apart_from_removed_ones() {
+        let metadata = std::collections::HashMap::from([
+            ("dictionary_filtered_line_count".to_string(), 3.into()),
+            ("dictionary_kept_numeral_line_count".to_string(), 1.into()),
+        ]);
+
+        let warnings = warnings_from_ocr_metadata(&metadata);
+
+        assert!(warnings.iter().all(|warning| warning.source == "tesseract"));
+        assert_eq!(
+            warnings
+                .iter()
+                .map(|warning| warning.message.as_ref())
+                .collect::<Vec<&str>>(),
+            [
+                "Tesseract removed 2 OCR line(s) because their dictionary-checkable words were mostly not real words",
+                "Tesseract kept 1 OCR line(s) whose dictionary-checkable words were mostly not real words, because \
+                 they hold numbers",
+            ]
         );
     }
 
