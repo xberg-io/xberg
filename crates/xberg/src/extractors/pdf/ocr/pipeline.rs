@@ -2688,20 +2688,29 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             let Some(text) = accepted_replacements.get_mut(page) else {
                 continue;
             };
-            if structured_ocr_pages.get(page).is_some_and(|doc| !doc.tables.is_empty())
+            if structured_ocr_pages
+                .get(page)
+                .is_some_and(|doc| !doc.tables.is_empty() || !super::symbol_noise_lines::elements_are_prunable(doc))
                 || !super::symbol_noise_lines::page_is_dominated_by_noise_lines(text.lines())
             {
                 continue;
             }
             let (pruned, removed) = super::symbol_noise_lines::prune_text(text);
             *text = pruned;
+            // Later readers compare the read with the structured page, so both lose the same lines. ~keep
+            if let Some(read) = ocr_results.get_mut(page) {
+                *read = super::symbol_noise_lines::prune_text(read).0;
+            }
             if let Some(paragraphs) = ocr_page_paragraphs.get_mut(page) {
                 super::symbol_noise_lines::prune_paragraphs(paragraphs);
             }
             if let Some(document) = structured_ocr_pages.get_mut(page) {
                 super::symbol_noise_lines::prune_document_elements(document);
             }
-            accumulated_warnings.push(super::symbol_noise_lines::pruned_lines_warning(*page as usize, removed));
+            crate::core::diagnostics::push_warning_deduped(
+                &mut accumulated_warnings,
+                super::symbol_noise_lines::pruned_lines_warning(*page as usize, removed),
+            );
         }
     }
 

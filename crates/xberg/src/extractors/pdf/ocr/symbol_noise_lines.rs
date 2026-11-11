@@ -380,12 +380,19 @@ pub(crate) fn prune_standalone_image_noise(
     removed
 }
 
-/// Prunes the text elements of a document whose elements no relationship refers to by position.
+/// Whether a document's text elements can be pruned: relationships refer to elements by
+/// position, so removing one would leave them pointing at the wrong element.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn elements_are_prunable(document: &crate::types::internal::InternalDocument) -> bool {
+    document.relationships.is_empty()
+}
+
+/// Prunes the text elements of a document, unless [`elements_are_prunable`] is false.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn prune_document_elements(document: &mut crate::types::internal::InternalDocument) {
     use crate::types::internal::ElementKind;
 
-    if !document.relationships.is_empty() {
+    if !elements_are_prunable(document) {
         return;
     }
     document.elements.retain_mut(|element| {
