@@ -1,4 +1,4 @@
-use lopdf::{Document, Object};
+use lopdf::{Document, Object, dictionary};
 use xberg::{ExtractedDocument, ExtractionConfig, OcrStrategy};
 
 fn inherited_page(document: &Document, id: lopdf::ObjectId) -> lopdf::Dictionary {
@@ -171,4 +171,42 @@ async fn detected_scan_without_native_elements_renders_the_accepted_table() {
         &actual.pages.as_ref().unwrap()[0],
         &forced.pages.as_ref().unwrap()[0],
     );
+}
+
+#[tokio::test]
+async fn selected_scan_renders_prose_before_and_after_the_ocr_table() {
+    let mut source = Document::load_mem(include_bytes!("../fixtures/ocr/shaded_table_scan.pdf")).unwrap();
+    let page_id = *source.get_pages().values().next().unwrap();
+    let mut page = source.get_dictionary(page_id).unwrap().clone();
+    let font = source.add_object(dictionary! {
+        "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica",
+    });
+    let mut resources = super::structured_output::resources(&source, &page);
+    resources.set("Font", dictionary! {"ReviewFont" => font});
+    page.set("Resources", resources);
+    let bounds = vec![0.into(), (-55).into(), 612.into(), 847.into()];
+    page.set("MediaBox", bounds.clone());
+    page.set("CropBox", bounds);
+    source.objects.insert(page_id, Object::Dictionary(page));
+    source.add_page_contents(
+        page_id,
+        b"BT /ReviewFont 18 Tf 48 816 Td (Quarterly report introduction) Tj ET\nBT /ReviewFont 18 Tf 48 -28 Td (End of quarterly report) Tj ET".to_vec(),
+    ).unwrap();
+    let mut bytes = Vec::new();
+    source.save_to(&mut bytes).unwrap();
+
+    let models = tempfile::tempdir().unwrap();
+    let mut config = super::pinned_config(models.path());
+    config.force_ocr_pages = Some(vec![1]);
+    let actual = read(&bytes, &config).await;
+    assert_eq!(actual.extraction_method, Some(xberg::types::ExtractionMethod::Mixed));
+    super::plain_contract::assert_page_ranges(&actual);
+    assert_eq!(actual.tables.len(), 1);
+    let body = &actual.pages.as_ref().unwrap()[0].content;
+    let before = body
+        .find("Quarterly report introduction")
+        .expect("recognized introductory prose");
+    let table = body.find("48,210").expect("recognized table cell");
+    let after = body.find("End of quarterly report").expect("recognized closing prose");
+    assert!(before < table && table < after, "{body}");
 }

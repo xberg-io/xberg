@@ -50,7 +50,7 @@ pub(super) mod read_reuse;
 pub(crate) use pipeline::extract_mixed_ocr_native_with_probe_reads;
 mod pipeline;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(super) use pipeline::render_mixed_tables_plain;
+pub(super) use pipeline::render_mixed_plain_pages;
 #[cfg(all(
     any(feature = "ocr", feature = "ocr-pipeline"),
     any(paddle_ocr, all(feature = "ocr", not(target_arch = "wasm32")))

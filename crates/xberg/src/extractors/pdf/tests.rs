@@ -925,6 +925,170 @@ fn should_preserve_tables_without_injecting_text_when_plain_mixed_skips_structur
     assert!(!crate::rendering::render_plain(&plain).contains(table_markdown));
 }
 
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn mixed_plain_derives_prose_and_tables_from_elements_and_reconciles_following_pages() {
+    use crate::core::config::OutputFormat;
+    use crate::types::{PageBoundary, Table};
+
+    let table = Table {
+        cells: vec![
+            vec!["Name".into(), "Count".into()],
+            vec!["A|B \n South".into(), "<br> literal".into()],
+        ],
+        markdown: "| Name | Count |\n| --- | --- |\n| A\\|B <br> South | <br> literal |".into(),
+        page_number: 2,
+        ..Default::default()
+    };
+    let raw_table_page = format!("Lead | prose\n\n{}\n\n| Status --- pending |", table.markdown);
+    let raw_ocr_page = "Raw OCR line one\nRaw OCR line two";
+    let native_page = "Native neighbor";
+    let bodies = [raw_ocr_page, raw_table_page.as_str(), native_page];
+    let mut text = bodies.join("\n\n");
+    let boundaries: Vec<_> = bodies
+        .iter()
+        .enumerate()
+        .scan(0, |start, (index, body)| {
+            let boundary = PageBoundary {
+                page_number: index as u32 + 1,
+                byte_start: *start,
+                byte_end: *start + body.len(),
+            };
+            *start = boundary.byte_end + 2;
+            Some(boundary)
+        })
+        .collect();
+
+    let mut table_page = InternalDocument::new("pdf");
+    table_page.push_element(InternalElement::text(ElementKind::Paragraph, "Lead | prose", 0).with_page(2));
+    let table_index = table_page.push_table(table);
+    table_page.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(2));
+    table_page.push_element(InternalElement::text(ElementKind::Paragraph, "| Status --- pending |", 0).with_page(2));
+    let mut non_table_page = InternalDocument::new("pdf");
+    non_table_page
+        .push_element(InternalElement::text(ElementKind::Paragraph, "Structured OCR alternative", 0).with_page(1));
+    let pages = ahash::AHashMap::from([(2, table_page), (1, non_table_page)]);
+    let mut replacements = ahash::AHashMap::from([(2, raw_table_page.clone()), (1, raw_ocr_page.to_owned())]);
+
+    let original = text.clone();
+    for format in [OutputFormat::Markdown, OutputFormat::Html, OutputFormat::Djot] {
+        ocr::render_mixed_plain_pages(&mut text, &boundaries, &mut replacements, &pages, &format);
+        assert_eq!(text, original);
+        assert_eq!(replacements[&2], raw_table_page);
+    }
+
+    let mut incomplete = pages.clone();
+    incomplete.get_mut(&2).unwrap().elements.last_mut().unwrap().text = "Status pending".into();
+    ocr::render_mixed_plain_pages(
+        &mut text,
+        &boundaries,
+        &mut replacements,
+        &incomplete,
+        &OutputFormat::Plain,
+    );
+    assert_eq!(
+        text, original,
+        "unrepresented accepted prose must retain its transcript"
+    );
+
+    ocr::render_mixed_plain_pages(&mut text, &boundaries, &mut replacements, &pages, &OutputFormat::Plain);
+    let expected = [
+        raw_ocr_page,
+        "Lead | prose\n\nName Count\nA|B \n South <br> literal\n\n| Status --- pending |",
+        native_page,
+    ];
+    assert_eq!(text, expected.join("\n\n"));
+    assert_mixed_plain_marker_keeps_repeated_neighbor(&raw_table_page, expected[1], &pages);
+    let boundaries = ocr::boundaries_after_replacements(&boundaries, &replacements);
+    let (document, _, _) = select_pdf_document(
+        ExtractionMethod::Mixed,
+        &text,
+        "application/pdf",
+        None,
+        None,
+        Some(&replacements),
+        Some(&pages),
+        Some(&boundaries),
+        &OutputFormat::Plain,
+    );
+    assert_mixed_plain_public_page_ranges(document, boundaries, expected);
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn assert_mixed_plain_marker_keeps_repeated_neighbor(
+    raw_table_page: &str,
+    plain_table_page: &str,
+    pages: &ahash::AHashMap<u32, InternalDocument>,
+) {
+    use crate::core::config::OutputFormat;
+    use crate::types::PageBoundary;
+
+    let marker = "[3] ";
+    let mut marked = format!("{raw_table_page}{marker}{raw_table_page}");
+    let marked_bounds = [
+        PageBoundary {
+            page_number: 2,
+            byte_start: 0,
+            byte_end: raw_table_page.len(),
+        },
+        PageBoundary {
+            page_number: 3,
+            byte_start: raw_table_page.len() + marker.len(),
+            byte_end: marked.len(),
+        },
+    ];
+    let mut marked_replacements = ahash::AHashMap::from([(2, raw_table_page.to_owned())]);
+    ocr::render_mixed_plain_pages(
+        &mut marked,
+        &marked_bounds,
+        &mut marked_replacements,
+        pages,
+        &OutputFormat::Plain,
+    );
+    assert_eq!(marked, format!("{}{marker}{raw_table_page}", plain_table_page));
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn assert_mixed_plain_public_page_ranges(
+    mut document: InternalDocument,
+    boundaries: Vec<crate::types::PageBoundary>,
+    expected: [&str; 3],
+) {
+    use crate::types::{ExtractedDocument, PageStructure, PageUnitType};
+
+    document.ocr_text_pages = vec![1, 2];
+    document.prebuilt_pages = Some(
+        expected
+            .iter()
+            .enumerate()
+            .map(|(index, body)| {
+                serde_json::from_value(serde_json::json!({"page_number": index + 1, "content": body})).unwrap()
+            })
+            .collect(),
+    );
+    document.metadata.pages = Some(PageStructure {
+        total_count: 3,
+        unit_type: PageUnitType::Page,
+        boundaries: Some(boundaries),
+        pages: None,
+    });
+
+    let public = ExtractedDocument::from(document);
+    assert_eq!(public.content, expected.join("\n\n"));
+    let public_pages = public.pages.as_ref().unwrap();
+    let ranges = public.metadata.pages.as_ref().unwrap().boundaries.as_ref().unwrap();
+    assert_eq!(public_pages.len(), expected.len());
+    assert_eq!(ranges.len(), expected.len());
+    for ((page, range), expected_body) in public_pages.iter().zip(ranges).zip(expected) {
+        assert_eq!(page.page_number, range.page_number);
+        assert_eq!(page.content, expected_body);
+        assert_eq!(
+            public.content.get(range.byte_start..range.byte_end),
+            Some(expected_body)
+        );
+    }
+}
+
 #[cfg(all(feature = "pdf", feature = "ocr", feature = "chunking"))]
 fn assert_occurs_once(haystack: &str, needle: &str, projection: &str) {
     assert_eq!(

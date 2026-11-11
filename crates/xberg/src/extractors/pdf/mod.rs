@@ -2925,14 +2925,7 @@ impl PdfExtractor {
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         macro_rules! apply_targeted_mixed_run {
             ($mixed_run:expr) => {{
-                let mut mixed_run = $mixed_run;
-                // Render only accepted output; ink probes and retained raw reads must stay unchanged. ~keep
-                ocr::render_mixed_tables_plain(
-                    &mut mixed_run,
-                    &native_text,
-                    boundaries.as_deref().unwrap_or(&[]),
-                    config,
-                );
+                let mixed_run = $mixed_run;
                 #[cfg(feature = "formula-recognition")]
                 {
                     mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
@@ -3021,7 +3014,7 @@ impl PdfExtractor {
             if !ocr_pages.is_empty() {
                 if let Some(ref bounds) = boundaries {
                     if !bounds.is_empty() {
-                        let mut mixed_run = ocr::extract_mixed_ocr_native_with_layout_pages(
+                        let mixed_run = ocr::extract_mixed_ocr_native_with_layout_pages(
                             &native_text,
                             bounds,
                             (ocr_pages, &[]),
@@ -3031,7 +3024,6 @@ impl PdfExtractor {
                             (&[], &[]),
                         )
                         .await?;
-                        ocr::render_mixed_tables_plain(&mut mixed_run, &native_text, bounds, config);
                         #[cfg(feature = "formula-recognition")]
                         {
                             mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
@@ -3108,8 +3100,7 @@ impl PdfExtractor {
                 )
                 .await
                 {
-                    Ok(mut mixed_run) => {
-                        ocr::render_mixed_tables_plain(&mut mixed_run, &native_text, bounds, config);
+                    Ok(mixed_run) => {
                         #[cfg(feature = "formula-recognition")]
                         {
                             mixed_formula_layout_inputs = mixed_run.formula_layout_inputs;
@@ -3781,6 +3772,17 @@ impl PdfExtractor {
 
         #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
         let (mut text, extraction_method) = (native_text, ExtractionMethod::Native);
+
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        if extraction_method == ExtractionMethod::Mixed
+            && let (Some(bounds), Some(replacements), Some(documents)) = (
+                boundaries.as_deref(),
+                ocr_results_map.as_mut(),
+                structured_ocr_pages.as_ref(),
+            )
+        {
+            ocr::render_mixed_plain_pages(&mut text, bounds, replacements, documents, &config.output_format);
+        }
 
         // The routing gates above have read the lost-glyph markers. Pages that stay native must not
         // show them, so remove them from every native structure before any later step reads it.
