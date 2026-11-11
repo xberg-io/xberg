@@ -2547,8 +2547,9 @@ pub(crate) fn is_script_run_of(previous: &SegmentData, next: &SegmentData) -> bo
         && crate::script_run::is_script_run_forward_gap(previous_start, previous_end, next_start, font_size)
 }
 
-/// How many runs after a base are searched for the members of its script stack.
-pub(super) const SCRIPT_STACK_LOOKAHEAD: usize = 8;
+/// How many runs after a base are searched for the members of its script stack: one more than the
+/// longest stack, so a longer one is seen as too long and refused, not cut short.
+pub(super) const SCRIPT_STACK_WINDOW: usize = xberg_native_pdf::document::MAX_STACK_MEMBERS + 1;
 
 /// Indices into `segments` of the members of the nested script stack on `segments[base]`, in reading
 /// order, or none. The rule is `xberg_native_pdf::document::script_stack`, shared with reading-order
@@ -2563,7 +2564,7 @@ pub(super) fn script_stack_members<T: std::borrow::Borrow<SegmentData>>(segments
     let Some(base_segment) = segments.get(base).map(std::borrow::Borrow::borrow) else {
         return Vec::new();
     };
-    let window = (base + 1)..segments.len().min(base + 1 + SCRIPT_STACK_LOOKAHEAD);
+    let window = (base + 1)..segments.len().min(base + 1 + SCRIPT_STACK_WINDOW);
     let mut order: Vec<usize> = window.collect();
     order.sort_by(|&a, &b| span(segments[a].borrow()).0.total_cmp(&span(segments[b].borrow()).0));
     fn to_stack<'a>(segment: &'a SegmentData, span: &impl Fn(&SegmentData) -> (f32, f32, f32)) -> StackSpan<'a> {
