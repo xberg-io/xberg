@@ -2584,14 +2584,15 @@ pub(super) fn script_stack_members<T: std::borrow::Borrow<SegmentData>>(segments
         .collect()
 }
 
-/// Moves the members of each nested script stack to directly after their base: the raised members
-/// in x order, then the lowered ones, so each side reads as one run.
+/// Moves the members of each nested script stack to directly after their base: the members of the
+/// base in x order, each followed by the members that hang from it, so each script of one base reads
+/// as one run.
 ///
 /// A member sits off its base's line, so reading order leaves it among the neighbouring rows. The
 /// page is already ordered and its gap statistics measured, so the move changes only which runs
 /// the paragraph grouper and the markup pass see next to the base. A page with a rotated run is left as is.
 fn place_script_stacks_after_bases(segments: Vec<SegmentData>) -> Vec<SegmentData> {
-    use xberg_native_pdf::document::{StackSpan, script_stacks};
+    use xberg_native_pdf::document::{StackSpan, script_stacks, stack_reading_order};
 
     if segments.iter().any(|segment| !segment.is_unrotated()) {
         return segments;
@@ -2612,10 +2613,9 @@ fn place_script_stacks_after_bases(segments: Vec<SegmentData>) -> Vec<SegmentDat
     let after_base: std::collections::HashMap<usize, Vec<usize>> = script_stacks(&spans)
         .into_iter()
         .map(|(base, members)| {
-            let (raised, lowered): (Vec<usize>, Vec<usize>) = members
-                .into_iter()
-                .partition(|&member| spans[member].baseline > spans[base].baseline);
-            (base, [raised, lowered].concat())
+            let member_spans: Vec<StackSpan<'_>> = members.iter().map(|&member| spans[member]).collect();
+            let order = stack_reading_order(&spans[base], &member_spans);
+            (base, order.into_iter().map(|i| members[i]).collect())
         })
         .collect();
     drop(spans);

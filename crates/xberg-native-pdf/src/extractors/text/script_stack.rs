@@ -63,7 +63,7 @@ fn is_compact(c: &StackSpan<'_>) -> bool {
 /// member. A script pair on the two sides of the base (`H^Z_2`) has one member above the line and
 /// one below it. The partner may sit beyond a member's reach from the base line (a numerator raised
 /// above its denominator) or on it (the numerator of an index fraction is centred on the subscript
-/// line). `partners` are the spans in the stack's x window, so an unrelated span elsewhere on the
+/// line). `partners` are the spans that start between the base's right edge less a gap and the stack's right edge, so an unrelated span elsewhere on the
 /// page cannot take a stack for a fraction.
 fn holds_fraction(base: &StackSpan<'_>, members: &[&StackSpan<'_>], partners: &[StackSpan<'_>]) -> bool {
     let bfs = base.font_size;
@@ -83,7 +83,6 @@ fn holds_fraction(base: &StackSpan<'_>, members: &[&StackSpan<'_>], partners: &[
                 && shift.abs() <= bfs * MAX_FRACTION_PART_SHIFT_EM
                 && (on_base_line || same_side)
                 && same_size
-                && narrower > 0.0
                 && overlap > narrower * MIN_FRACTION_OVERLAP
                 && (member.baseline - partner.baseline).abs() > smaller * MIN_FRACTION_SEPARATION_EM
         })
@@ -134,7 +133,7 @@ pub fn script_stack(base: &StackSpan<'_>, candidates: &[StackSpan<'_>]) -> Vec<u
     if members.len() < 2 || members.len() > MAX_STACK_MEMBERS {
         return Vec::new();
     }
-    let window_end = candidates.partition_point(|c| c.x <= edge + bfs * MAX_GAP_EM);
+    let window_end = candidates.partition_point(|c| c.x < edge);
     let member_spans: Vec<&StackSpan<'_>> = members.iter().map(|&i| &candidates[i]).collect();
     if holds_fraction(base, &member_spans, &candidates[first..window_end]) {
         return Vec::new();
@@ -150,6 +149,59 @@ pub fn script_stack(base: &StackSpan<'_>, candidates: &[StackSpan<'_>]) -> Vec<u
     } else {
         Vec::new()
     }
+}
+
+/// For each stack member (given in x order), the member it is a script of, or `None` for a member
+/// that is a script of the base itself. A member hangs from a larger member that ends where it
+/// starts: `2` of `H^{Z_2}` starts where `Z` ends, while a subscript set below the base starts left of
+/// the exponent and belongs to the base.
+#[doc(hidden)]
+#[must_use]
+pub fn stack_parents(base: &StackSpan<'_>, members: &[StackSpan<'_>]) -> Vec<Option<usize>> {
+    let reach = base.font_size * MAX_GAP_EM;
+    members
+        .iter()
+        .map(|member| {
+            members
+                .iter()
+                .enumerate()
+                .filter(|(_, parent)| {
+                    parent.font_size >= member.font_size * MIN_BASE_SIZE_FACTOR
+                        && parent.x < member.x
+                        && (parent.x + parent.width - member.x).abs() <= reach
+                })
+                .min_by(|(_, a), (_, b)| {
+                    (a.x + a.width - member.x)
+                        .abs()
+                        .total_cmp(&(b.x + b.width - member.x).abs())
+                })
+                .map(|(i, _)| i)
+        })
+        .collect()
+}
+
+/// The order a stack reads in: the scripts of the base set below its line first, then those set above
+/// it, each in x order and each followed by the members that hang from it. A script of an exponent
+/// stays with its exponent, and the subscript of the base is one run instead of sharing one with the
+/// index of an exponent.
+#[doc(hidden)]
+#[must_use]
+pub fn stack_reading_order(base: &StackSpan<'_>, members: &[StackSpan<'_>]) -> Vec<usize> {
+    fn visit(index: usize, parents: &[Option<usize>], order: &mut Vec<usize>) {
+        order.push(index);
+        for child in (0..parents.len()).filter(|&child| parents[child] == Some(index)) {
+            visit(child, parents, order);
+        }
+    }
+    let parents = stack_parents(base, members);
+    let (lowered, raised): (Vec<usize>, Vec<usize>) = (0..members.len())
+        .filter(|&member| parents[member].is_none())
+        .partition(|&member| members[member].baseline < base.baseline);
+    let mut order = Vec::with_capacity(members.len());
+    for root in lowered.into_iter().chain(raised) {
+        visit(root, &parents, &mut order);
+    }
+    order
 }
 
 #[cfg(test)]
@@ -265,5 +317,129 @@ mod tests {
             span("1", 109.5, 103.0, 3.0, 5.0),
         ];
         assert_eq!(script_stack(&base, &candidates), [0, 1, 2]);
+    }
+
+    fn kept(base: &StackSpan<'_>, candidates: &[StackSpan<'_>], members: &[usize]) {
+        assert_eq!(script_stack(base, candidates), members);
+    }
+
+    fn h_stack_with<'a>(partner: StackSpan<'a>) -> ([StackSpan<'a>; 4], StackSpan<'a>) {
+        let base = span("H", 100.0, 100.0, 7.0, 10.0);
+        (
+            [
+                span("Z", 107.0, 104.2, 4.0, 7.0),
+                partner,
+                span("2", 111.0, 96.0, 3.5, 5.0),
+                span("f", 114.5, 96.0, 3.0, 5.0),
+            ],
+            base,
+        )
+    }
+
+    #[test]
+    fn should_stack_when_the_only_partner_is_not_compact() {
+        for text in ["", "\u{2022}", "ab cd", "\u{239e}"] {
+            let (candidates, base) = h_stack_with(span(text, 107.0, 100.5, 4.0, 7.0));
+            kept(&base, &candidates, &[0, 2, 3]);
+        }
+    }
+
+    #[test]
+    fn should_stack_when_the_only_partner_is_not_smaller_than_the_base_by_the_base_size_factor() {
+        let base = span("H", 100.0, 100.0, 7.0, 10.0);
+        let candidates = [
+            span("Z", 107.0, 104.2, 4.0, 8.6),
+            span("q", 107.0, 100.5, 4.0, 9.4),
+            span("2", 111.0, 96.0, 3.5, 5.0),
+            span("f", 114.5, 96.0, 3.0, 5.0),
+        ];
+        kept(&base, &candidates, &[0, 2, 3]);
+    }
+
+    #[test]
+    fn should_stack_when_the_only_partner_sits_more_than_an_em_from_the_base_line() {
+        let (candidates, base) = h_stack_with(span("q", 107.0, 111.0, 4.0, 7.0));
+        kept(&base, &candidates, &[0, 2, 3]);
+    }
+
+    #[test]
+    fn should_take_a_same_size_span_on_the_base_line_across_it_from_a_member_for_a_fraction_partner() {
+        let (candidates, base) = h_stack_with(span("q", 107.0, 99.5, 4.0, 7.0));
+        kept(&base, &candidates, &[]);
+    }
+
+    #[test]
+    fn should_stack_when_the_only_partner_differs_in_size_from_the_member() {
+        let (candidates, base) = h_stack_with(span("q", 107.0, 100.6, 4.0, 5.0));
+        kept(&base, &candidates, &[0, 2, 3]);
+    }
+
+    #[test]
+    fn should_stack_same_size_members_over_one_x_range_whose_baselines_are_close() {
+        let base = span("e", 100.0, 100.0, 4.0, 10.0);
+        let candidates = [
+            span("c", 104.0, 104.9, 3.0, 7.0),
+            span("d", 104.0, 103.5, 3.0, 7.0),
+            span("1", 107.5, 103.0, 3.0, 5.0),
+        ];
+        kept(&base, &candidates, &[0, 1, 2]);
+    }
+
+    #[test]
+    fn should_take_a_partner_that_overlaps_a_member_by_most_of_the_narrower() {
+        let (candidates, base) = h_stack_with(span("q", 108.2, 100.5, 4.0, 7.0));
+        kept(&base, &candidates, &[]);
+    }
+
+    #[test]
+    fn should_not_take_a_partner_that_overlaps_a_member_by_less_than_half() {
+        let (candidates, base) = h_stack_with(span("q", 109.2, 100.5, 4.0, 7.0));
+        kept(&base, &candidates, &[0, 2, 3]);
+    }
+
+    #[test]
+    fn should_hold_a_stack_of_eight_members_and_refuse_nine() {
+        let base = span("e", 100.0, 100.0, 4.0, 10.0);
+        let texts: Vec<String> = (0..9).map(|n| n.to_string()).collect();
+        for (count, stacked) in [(8, true), (9, false)] {
+            let candidates: Vec<StackSpan<'_>> = texts[..count]
+                .iter()
+                .enumerate()
+                .map(|(n, text)| {
+                    span(
+                        text,
+                        104.0 + 3.0 * n as f32,
+                        104.2,
+                        3.0,
+                        if n % 2 == 0 { 7.0 } else { 5.0 },
+                    )
+                })
+                .collect();
+            assert_eq!(!script_stack(&base, &candidates).is_empty(), stacked, "{count} members");
+        }
+    }
+
+    #[test]
+    fn should_hang_the_index_of_an_exponent_from_the_exponent_and_the_subscript_from_the_base() {
+        let base = span("H", 100.0, 100.0, 7.0, 10.0);
+        let members = [
+            span("\u{27e8}xy\u{27e9},f", 107.0, 96.0, 21.5, 5.0),
+            span("Z", 107.8, 104.2, 4.7, 7.0),
+            span("2", 112.5, 103.6, 3.4, 5.0),
+        ];
+        assert_eq!(stack_parents(&base, &members), [None, None, Some(1)]);
+        assert_eq!(stack_reading_order(&base, &members), [0, 1, 2]);
+    }
+
+    #[test]
+    fn should_read_the_subscript_of_the_base_before_its_exponent_and_that_exponents_index() {
+        let base = span("R", 100.0, 100.0, 7.0, 10.0);
+        let members = [
+            span("n", 107.0, 104.3, 3.2, 6.0),
+            span("\u{fe}", 107.0, 95.0, 4.6, 5.4),
+            span("x", 110.2, 103.0, 2.4, 5.0),
+        ];
+        assert_eq!(stack_parents(&base, &members), [None, None, Some(0)]);
+        assert_eq!(stack_reading_order(&base, &members), [1, 0, 2]);
     }
 }

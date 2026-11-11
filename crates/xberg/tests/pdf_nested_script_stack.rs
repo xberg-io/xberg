@@ -76,7 +76,7 @@ fn should_keep_a_series_term_exponent_with_its_base_in_gutenberg_38769_exercise_
 
 #[test]
 fn should_keep_a_subscripted_exponent_with_its_base_in_plos_1010783_state_space() {
-    assert_one_line("plos-journal.pcbi.1010783-p4", "2 Rnxþ is the vector");
+    assert_one_line("plos-journal.pcbi.1010783-p4", "2 Rþnx is the vector");
 }
 
 fn assert_markup(name: &str, fragment: &str) {
@@ -100,12 +100,13 @@ fn assert_no_markup(name: &str, fragment: &str) {
 }
 
 #[test]
-fn should_keep_the_superscript_and_subscript_of_a_stack_in_separate_runs_in_arxiv_02305_equation_3() {
-    assert_markup("arxiv-2305.08917v2-p2", "H<sup>Z</sup>~2 ⟨xy⟩,f~ = t c s");
+fn should_keep_the_subscript_of_h_and_the_indexed_exponent_in_separate_runs_in_arxiv_02305_equation_3() {
+    assert_markup("arxiv-2305.08917v2-p2", "H~⟨xy⟩,f~ <sup>Z</sup>~2~ = t c s");
     assert_markup(
         "arxiv-2305.08917v2-p2",
-        "H<sup>Z</sup>~2~<sup>,des</sup> ~⟨xy⟩,f~ = −2t",
+        "H~⟨xy⟩,f~ <sup>Z</sup>~2~<sup>,des</sup> = −2t",
     );
+    assert_no_markup("arxiv-2305.08917v2-p2", "~2 ⟨xy⟩,f~");
 }
 
 #[test]
@@ -123,7 +124,7 @@ fn should_not_take_the_closing_bracket_piece_for_a_superscript_in_openstax_busin
 
 #[test]
 fn should_hold_the_exponent_n_in_the_superscript_of_r_in_plos_1010783() {
-    assert_markup("plos-journal.pcbi.1010783-p4", "2 R<sup>n</sup>");
+    assert_markup("plos-journal.pcbi.1010783-p4", "2 R~þ~ <sup>n</sup>");
     assert_no_markup("plos-journal.pcbi.1010783-p4", "\nn~x~ n~y~\n");
 }
 
@@ -168,21 +169,21 @@ fn should_not_flatten_the_half_power_of_the_root_in_gutenberg_38769_p500() {
 
 /// Glyph boxes of plos-journal.pcbi.1010783 p4 (pdftotext -bbox, pt) for the first dimension: `R`
 /// x 284.49 to 291.71 y 522.59 to 532.59; `n` x 291.69 to 294.88 y 521.69 to 527.69 (raised); `þ`
-/// x 291.69 to 296.30 y 529.05 to 534.45 (lowered); `x` x 294.92 to 297.28 y 523.89 to 528.89, whose
-/// bottom edge is above `R`'s, so it is raised with `n` (the subscript of the exponent). The raised
-/// level reads `n`, `x` in x order and the lowered level `þ`, so the dimension reads `Rnxþ`, which
-/// is also the order of the content stream. Every dimension keeps it.
+/// x 291.69 to 296.30 y 529.05 to 534.45 (lowered), the plus sign of `R`; `x` x 294.92 to 297.28,
+/// which starts where `n` ends and is its index. The subscript of `R` is one run and `n` with its
+/// index `x` follows it, so the dimension reads `Rþnx`. Every dimension keeps it.
 #[test]
-fn should_keep_the_glyph_stream_order_of_the_dimension_in_plos_1010783() {
+fn should_read_the_plus_of_r_as_its_own_run_before_the_exponent_and_its_index_in_plos_1010783() {
     for dimension in [
-        "Rnxþ is the vector of state",
-        "Rnyþ is the parameter vector",
-        "Rnuþ is the vector of constant",
+        "Rþnx is the vector of state",
+        "Rþny is the parameter vector",
+        "Rþnu is the vector of constant",
     ] {
         assert_one_line("plos-journal.pcbi.1010783-p4", dimension);
     }
     assert_markup(
         "plos-journal.pcbi.1010783-p4",
-        "R<sup>n</sup>~x þ~ is the vector of state variables",
+        "R~þ~ <sup>n</sup>~x~ is the vector of state variables",
     );
+    assert_no_markup("plos-journal.pcbi.1010783-p4", "~x þ~");
 }
