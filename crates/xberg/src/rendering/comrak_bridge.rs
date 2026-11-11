@@ -333,6 +333,10 @@ fn closer_is_not_a_closer<'a>(node: &'a AstNode<'a>, math: &NodeMath) -> bool {
 }
 
 /// Replace a math node by `tex` between `delimiter`s, escaped as Markdown text.
+///
+/// `tex` must already have passed `escape_math_dollars`: the escaper writes every `$` as `\$`, so a
+/// `\$` made there becomes `\\\$` (an odd run before the dollar), which keeps the dollar escaped for
+/// a reader that unescapes before it looks for math.
 fn write_escaped_math<'a>(node: &'a AstNode<'a>, delimiter: &str, tex: &str) {
     let escaped = escape_tex_for_markdown(tex);
     node.data.borrow_mut().value = NodeValue::Raw(format!("{delimiter}{escaped}{delimiter}"));
