@@ -3655,47 +3655,46 @@ async fn extract_with_ocr_with_unpruned_text(
     feature = "tokio-runtime",
     not(target_arch = "wasm32")
 ))]
+fn budget_retry_backend(
+    config: &ExtractionConfig,
+    ocr: &crate::core::config::OcrConfig,
+    failed: &FailedOcrRun,
+) -> Option<std::sync::Arc<dyn crate::plugins::OcrBackend>> {
+    if !render_refused_by_source_image_budget(&failed.error)
+        || config.ocr_strategy != crate::core::config::OcrStrategy::Auto
+        || !super::document::native_preservation_is_automatic(config, 1)
+        || config.pages.as_ref().is_some_and(|pages| pages.insert_page_markers)
+        || !super::tall_source::supports(config, ocr)
+        || !uses_default_ocr_pipeline(ocr)
+    {
+        return None;
+    }
+    let registry = crate::plugins::registry::get_ocr_backend_registry();
+    let registry = registry.read();
+    registry
+        .get(&ocr.backend)
+        .ok()
+        .filter(|backend| registry.is_builtin_tesseract(backend))
+}
+
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
 async fn try_gray_jpeg_render_recovery(
     content: Option<&[u8]>,
     config: &ExtractionConfig,
     failed: &FailedOcrRun,
 ) -> crate::Result<Option<WholeDirectOcrOutput>> {
-    use std::error::Error as _;
-
-    if !failed
-        .error
-        .source()
-        .is_some_and(|source| source.is::<super::rendering::SourceImageBudgetExceeded>())
-        || config.ocr_strategy != crate::core::config::OcrStrategy::Auto
-        || !super::document::native_preservation_is_automatic(config, 1)
-        || config.pages.as_ref().is_some_and(|pages| pages.insert_page_markers)
-    {
-        return Ok(None);
-    }
     let ocr = super::resolve_ocr_config(config);
-    // No layout pass ran for the refused page, so its detections cannot be checked; a layout
-    // request alone keeps the strips from replacing a read the caller wanted laid out. ~keep
-    #[cfg(feature = "layout-detection")]
-    let layout_requested = config.layout.is_some();
-    #[cfg(not(feature = "layout-detection"))]
-    let layout_requested = false;
-    if layout_requested || !super::tall_source::supports(config, &ocr) || !uses_default_ocr_pipeline(&ocr) {
+    let Some(backend) = budget_retry_backend(config, &ocr, failed) else {
         return Ok(None);
-    }
+    };
     let Some(content) = content else { return Ok(None) };
     let Ok((document, 1, _)) = open_pdf_for_full_ocr(content) else {
         return Ok(None);
-    };
-    let backend = {
-        let registry = crate::plugins::registry::get_ocr_backend_registry();
-        let registry = registry.read();
-        let Ok(backend) = registry.get(&ocr.backend) else {
-            return Ok(None);
-        };
-        if !registry.is_builtin_tesseract(&backend) {
-            return Ok(None);
-        }
-        backend
     };
     let Some((result, psm)) =
         super::tall_source::recover_after_gray_jpeg_render_failure(&document, &backend, config, &ocr).await?
