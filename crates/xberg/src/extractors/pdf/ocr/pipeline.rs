@@ -3162,6 +3162,376 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(in crate::extractors::pdf) fn render_mixed_plain_pages(
+    method: crate::types::ExtractionMethod,
+    text: &mut String,
+    boundaries: &[crate::types::PageBoundary],
+    replacements: &mut ahash::AHashMap<u32, String>,
+    documents: &ahash::AHashMap<u32, crate::types::internal::InternalDocument>,
+    format: &crate::core::config::OutputFormat,
+) {
+    if method != crate::types::ExtractionMethod::Mixed || *format != crate::core::config::OutputFormat::Plain {
+        return;
+    }
+    let adjusted = super::document::boundaries_after_replacements(boundaries, replacements);
+    let mut rendered = ahash::AHashMap::new();
+    for boundary in &adjusted {
+        let page = boundary.page_number;
+        let (Some(accepted), Some(document)) = (replacements.get(&page), documents.get(&page)) else {
+            continue;
+        };
+        if document.tables.is_empty() {
+            continue;
+        }
+        let candidate = (|| {
+            if text.get(boundary.byte_start..boundary.byte_end) != Some(accepted.as_str()) {
+                return Err("page range differs from the accepted transcript");
+            }
+            let plain = crate::extraction::derive::render_plain_page_elements(document, page)
+                .filter(|plain| !plain.is_empty())
+                .ok_or("page elements produced no Plain text")?;
+            check_accepted_ocr_tokens(accepted, &plain, document)?;
+            Ok(plain)
+        })();
+        match candidate {
+            Ok(plain) => {
+                rendered.insert(page, plain);
+            }
+            Err(reason) => tracing::debug!(page, reason, "Declined mixed OCR Plain page rendering"),
+        }
+    }
+    if !rendered.is_empty() {
+        *text = apply_ocr_page_replacements(text, &adjusted, &rendered);
+        replacements.extend(rendered);
+    }
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn check_accepted_ocr_tokens(
+    accepted: &str,
+    plain: &str,
+    document: &crate::types::internal::InternalDocument,
+) -> Result<(), &'static str> {
+    use crate::types::internal::ElementKind;
+    use pulldown_cmark::{Event, Options, Parser, Tag};
+
+    // ~keep PDF table assembly may suppress a paragraph covered by cell tokens. Require the
+    // accepted token order, including punctuation, before replacing its transcript.
+    let mut tables = document.elements.iter().filter_map(|element| match element.kind {
+        ElementKind::Table { table_index } => document.tables.get(table_index as usize),
+        _ => None,
+    });
+    let mut retained = plain.split_whitespace();
+    let mut events = Parser::new_ext(accepted, Options::ENABLE_TABLES).into_offset_iter();
+    let mut offset = 0;
+    let mut depth = 0;
+    while let Some((event, range)) = events.next() {
+        match event {
+            Event::Start(tag)
+                if depth == 0
+                    && matches!(
+                        tag,
+                        Tag::Paragraph | Tag::Heading { .. } | Tag::List(_) | Tag::BlockQuote(_) | Tag::Table(_)
+                    ) =>
+            {
+                if !retains_ocr_words(&accepted[offset..range.start], &mut retained) {
+                    return Err("Plain page omitted accepted prose");
+                }
+                offset = range.end;
+                if !matches!(tag, Tag::Table(_)) {
+                    let mut block_depth = 1;
+                    let block = events.by_ref().take_while(|(event, _)| {
+                        match event {
+                            Event::Start(_) => block_depth += 1,
+                            Event::End(_) => block_depth -= 1,
+                            _ => {}
+                        }
+                        block_depth > 0
+                    });
+                    if !retains_inline_block(accepted, range, &tag, block, &mut retained) {
+                        return Err("Plain page omitted accepted prose");
+                    }
+                    continue;
+                }
+
+                let table = tables.next().ok_or("accepted table has no typed table element")?;
+                if !source_table_has_cells(&accepted[range], &table.cells)
+                    || !table
+                        .cells
+                        .iter()
+                        .flatten()
+                        .all(|cell| retains_ocr_words(cell, &mut retained))
+                {
+                    return Err("Plain page omitted or changed accepted table cells");
+                }
+                depth += 1;
+            }
+            Event::Start(_) => depth += 1,
+            Event::End(_) => depth -= 1,
+            _ => {}
+        }
+    }
+    retains_ocr_words(&accepted[offset..], &mut retained)
+        .then_some(())
+        .ok_or("Plain page omitted accepted prose")
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn retains_inline_block<'a>(
+    source: &'a str,
+    block: std::ops::Range<usize>,
+    tag: &pulldown_cmark::Tag<'_>,
+    events: impl Iterator<Item = (pulldown_cmark::Event<'a>, std::ops::Range<usize>)>,
+    retained: &mut std::str::SplitWhitespace<'_>,
+) -> bool {
+    use pulldown_cmark::{CowStr, Event, Tag};
+
+    // ~keep Keep punctuation adjacent to inline markup in the same group, and
+    // keep whitespace inside a code span or link label from splitting its group.
+    let mut inline = Vec::new();
+    let mut leaves = Vec::new();
+    let mut markers = Vec::new();
+    record_block_markers(source, tag, &block, &mut markers);
+    let mut literal_depth = 0;
+    for (event, range) in events {
+        if literal_depth > 0 {
+            match event {
+                Event::Start(_) => literal_depth += 1,
+                Event::End(_) => literal_depth -= 1,
+                _ => {}
+            }
+            continue;
+        }
+        let value = match event {
+            Event::Start(Tag::Emphasis | Tag::Strong | Tag::Link { .. } | Tag::Image { .. }) => {
+                inline.push(range);
+                continue;
+            }
+            Event::Code(text) | Event::InlineHtml(text) => {
+                inline.push(range.clone());
+                Some(text)
+            }
+            Event::Text(text) if text.as_ref() == &source[range.clone()] => None,
+            Event::Text(text) => {
+                inline.push(range.clone());
+                Some(text)
+            }
+            Event::HardBreak => {
+                if source[range.clone()].contains('\\') {
+                    inline.push(range.clone());
+                }
+                Some(CowStr::Borrowed(" "))
+            }
+            Event::SoftBreak => Some(CowStr::Borrowed(" ")),
+            Event::Start(tag @ (Tag::Heading { .. } | Tag::Item | Tag::BlockQuote(_))) => {
+                record_block_markers(source, &tag, &range, &mut markers);
+                continue;
+            }
+            Event::Start(Tag::Paragraph | Tag::List(_)) | Event::End(_) => continue,
+            Event::Start(_) => {
+                // ~keep Keep this child verbatim while allowing its siblings to project.
+                literal_depth = 1;
+                None
+            }
+            _ => None,
+        };
+        leaves.push((range, value));
+    }
+
+    markers.sort_unstable();
+    let mut inline = inline.into_iter().peekable();
+    let mut leaves = leaves.into_iter().peekable();
+    let mut inline_end = block.start;
+    let mut start = block.start;
+    let mut visible = String::new();
+    for (relative, separator) in source[block.clone()]
+        .match_indices(char::is_whitespace)
+        .chain([(block.len(), "")])
+    {
+        let offset = block.start + relative;
+        while inline.peek().is_some_and(|range| range.start < offset) {
+            if let Some(range) = inline.next() {
+                inline_end = inline_end.max(range.end);
+            }
+        }
+        if offset >= inline_end {
+            project_inline_group(source, start..offset, &mut leaves, &mut visible);
+            let is_marker = markers.binary_search(&start).is_ok();
+            if !retains_inline_group(&source[start..offset], &visible, is_marker, retained) {
+                return false;
+            }
+            start = offset + separator.len();
+        }
+    }
+    true
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn project_inline_group<'a>(
+    source: &str,
+    group: std::ops::Range<usize>,
+    leaves: &mut std::iter::Peekable<
+        impl Iterator<Item = (std::ops::Range<usize>, Option<pulldown_cmark::CowStr<'a>>)>,
+    >,
+    visible: &mut String,
+) {
+    visible.clear();
+    while let Some((range, value)) = leaves.peek() {
+        if range.start >= group.end {
+            break;
+        }
+        if let Some(value) = value {
+            if group.start <= range.start && range.end <= group.end {
+                visible.push_str(value);
+            }
+        } else {
+            let start = group.start.max(range.start);
+            let end = group.end.min(range.end);
+            if start < end {
+                visible.push_str(&source[start..end]);
+            }
+        }
+        if range.end > group.end {
+            break;
+        }
+        leaves.next();
+    }
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn retains_inline_group(
+    source: &str,
+    visible: &str,
+    is_marker: bool,
+    retained: &mut std::str::SplitWhitespace<'_>,
+) -> bool {
+    // ~keep Reference definitions and other unrepresented text can lie inside a block.
+    // An empty event projection only accounts for recognized block markers.
+    if source == visible || (visible.is_empty() && !is_marker) {
+        return retains_ocr_words(source, retained);
+    }
+
+    let mut literal = source.split_whitespace().peekable();
+    let mut projected = visible.split_whitespace().peekable();
+    if projected.peek().is_none() {
+        return true;
+    }
+    // ~keep Advance both alternatives together so a failed literal match cannot
+    // repeatedly rescan the remainder of the page.
+    for candidate in retained {
+        if literal.next_if_eq(&candidate).is_some() && literal.peek().is_none()
+            || projected.next_if_eq(&candidate).is_some() && projected.peek().is_none()
+        {
+            return true;
+        }
+    }
+    false
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn record_block_markers(
+    source: &str,
+    tag: &pulldown_cmark::Tag<'_>,
+    range: &std::ops::Range<usize>,
+    markers: &mut Vec<usize>,
+) {
+    use pulldown_cmark::Tag;
+
+    let block = &source[range.clone()];
+    if matches!(tag, Tag::BlockQuote(_)) {
+        // ~keep The quote range includes its continuation lines. Only the leading
+        // quote token within CommonMark's three-column indentation can be syntax.
+        const MAX_MARKER_INDENT: usize = 3;
+        let opening_column = source[..range.start].rsplit('\n').next().map_or(0, str::len);
+        let mut offset = range.start;
+        for line in block.split_inclusive('\n') {
+            let content = line.trim_start_matches(' ');
+            let indent = line.len() - content.len();
+            if indent <= opening_column + MAX_MARKER_INDENT && content.split_whitespace().next() == Some(">") {
+                markers.push(offset + indent);
+            }
+            offset += line.len();
+        }
+        return;
+    }
+    let start = block.trim_start();
+    let first = start.split_whitespace().next().unwrap_or("");
+    let leading_marker = match tag {
+        Tag::Heading { .. } => !first.is_empty() && first.bytes().all(|byte| byte == b'#'),
+        Tag::Item => match first.as_bytes() {
+            [b'+' | b'*' | b'-'] => true,
+            [digits @ .., b'.' | b')'] => (1..=9).contains(&digits.len()) && digits.iter().all(u8::is_ascii_digit),
+            _ => false,
+        },
+        _ => false,
+    };
+    if leading_marker {
+        markers.push(range.start + block.len() - start.len());
+    }
+    if matches!(tag, Tag::Heading { .. }) {
+        let end = block.trim_end();
+        let last = end.split_whitespace().next_back().unwrap_or("");
+        if let [marker @ (b'#' | b'=' | b'-'), rest @ ..] = last.as_bytes()
+            && rest.iter().all(|byte| byte == marker)
+        {
+            markers.push(range.start + end.len() - last.len());
+        }
+    }
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn retains_ocr_words(text: &str, retained: &mut std::str::SplitWhitespace<'_>) -> bool {
+    text.split_whitespace()
+        .all(|word| retained.any(|candidate| candidate == word))
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn source_table_has_cells(source: &str, cells: &[Vec<String>]) -> bool {
+    // ~keep Verify every source cell before relying on the typed table. GFM can omit excess
+    // cells from its events, and a source <br> can represent either a line break or literal text.
+    // ~keep The shared writer copies existing backslashes when escaping a cell pipe.
+    // Its full serialization proves those cells even when the pipe has even parity.
+    if source.trim() == crate::rendering::common::render_table_markdown(cells).trim() {
+        return true;
+    }
+    let mut rows = source.lines().enumerate().filter(|(index, _)| *index != 1);
+    let columns = cells.iter().map(Vec::len).max().unwrap_or(0);
+    for row in cells {
+        let Some((_, source_row)) = rows.next() else {
+            return false;
+        };
+        let mut remainder = source_row.trim();
+        remainder = remainder.strip_prefix('|').unwrap_or(remainder);
+        for column in 0..columns {
+            let delimiter = remainder.match_indices('|').find(|(index, _)| {
+                remainder.as_bytes()[..*index]
+                    .iter()
+                    .rev()
+                    .take_while(|&&byte| byte == b'\\')
+                    .count()
+                    .is_multiple_of(2)
+            });
+            let (source_cell, rest) = match delimiter {
+                Some((index, _)) => (&remainder[..index], &remainder[index + 1..]),
+                None => (remainder, ""),
+            };
+            let mut encoded = String::new();
+            if let Some(cell) = row.get(column) {
+                crate::rendering::common::push_escaped_cell(&mut encoded, cell);
+            }
+            if source_cell.trim() != encoded.trim() {
+                return false;
+            }
+            remainder = rest;
+        }
+        if !remainder.trim().is_empty() {
+            return false;
+        }
+    }
+    rows.next().is_none()
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 impl MixedOcrRun {
     fn native(native_text: &str) -> Self {
         Self {

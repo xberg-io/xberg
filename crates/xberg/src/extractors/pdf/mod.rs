@@ -3761,6 +3761,22 @@ impl PdfExtractor {
         #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
         let (mut text, extraction_method) = (native_text, ExtractionMethod::Native);
 
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        if let (Some(bounds), Some(replacements), Some(documents)) = (
+            boundaries.as_deref(),
+            ocr_results_map.as_mut(),
+            structured_ocr_pages.as_ref(),
+        ) {
+            ocr::render_mixed_plain_pages(
+                extraction_method,
+                &mut text,
+                bounds,
+                replacements,
+                documents,
+                &config.output_format,
+            );
+        }
+
         // The routing gates above have read the lost-glyph markers. Pages that stay native must not
         // show them, so remove them from every native structure before any later step reads it.
         // The text itself, which carries byte offsets, follows once its page boundaries are known. ~keep
