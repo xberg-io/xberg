@@ -163,6 +163,8 @@ mod cache_policy_tests;
 mod failed_page_record_tests;
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 mod ligature_space_tests;
+#[cfg(all(test, feature = "ocr"))]
+mod lost_glyph_route_tests;
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 mod numeric_repair_tests;
 #[cfg(all(test, feature = "ocr", feature = "pdf"))]

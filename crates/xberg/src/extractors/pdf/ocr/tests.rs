@@ -201,13 +201,7 @@ pub(super) mod tests {
         // What a blank page render actually produces: a scrap of noise.
         ocr_results.insert(1, "  a \n".to_string());
 
-        let accepted = accepted_ocr_page_replacements(
-            native,
-            &boundaries,
-            &ocr_results,
-            &OcrQualityThresholds::default(),
-            |_| true,
-        );
+        let accepted = accepted_ocr_page_replacements(native, &boundaries, &ocr_results, &t(), |_| true);
         assert!(
             accepted.is_empty(),
             "blank OCR output must not be accepted as a replacement, got {accepted:?}"
@@ -234,13 +228,7 @@ pub(super) mod tests {
         let mut ocr_results: ahash::AHashMap<u32, String> = ahash::AHashMap::new();
         ocr_results.insert(1, "ORDINANCE NO. 2197\n".to_string());
 
-        let accepted = accepted_ocr_page_replacements(
-            native,
-            &boundaries,
-            &ocr_results,
-            &OcrQualityThresholds::default(),
-            |_| true,
-        );
+        let accepted = accepted_ocr_page_replacements(native, &boundaries, &ocr_results, &t(), |_| true);
         assert_eq!(accepted.len(), 1, "a page with real OCR text must be accepted");
 
         let merged = apply_ocr_page_replacements(native, &boundaries, &accepted);
@@ -258,13 +246,7 @@ pub(super) mod tests {
             "A short English OCR fragment with much less recovered information.".to_string(),
         )]);
 
-        let accepted = accepted_ocr_page_replacements(
-            &native,
-            &boundaries,
-            &ocr_results,
-            &OcrQualityThresholds::default(),
-            |_| true,
-        );
+        let accepted = accepted_ocr_page_replacements(&native, &boundaries, &ocr_results, &t(), |_| true);
         assert!(
             accepted.is_empty(),
             "lower-information OCR must not overwrite a strong native text layer"
@@ -990,38 +972,6 @@ pub(super) mod tests {
         assert!(decision.fallback);
     }
 
-    /// A font the decoder cannot name a glyph of writes U+FFFF for that glyph (public docling.pdf
-    /// does for its ligatures). That is text the page keeps, not a lost-glyph marker: the garbage
-    /// count stays 0 and a readable page stays on the native route. ~keep
-    #[cfg(feature = "ocr")]
-    #[test]
-    fn should_keep_the_native_route_for_a_page_whose_decode_writes_u_ffff_for_an_unmapped_ligature() {
-        let thresholds = t();
-        let sentence = "The committee reviewed the con\u{FFFF}gurations of the e\u{FFFF}ort and the \u{FFFF}nal \
-                        \u{FFFF}ag that \u{FFFF}attens the work the sta\u{FFFF} introduced, which signi\u{FFFF}cantly \
-                        changed the plan. ";
-        let prose = "Each section of the report describes the measured values and the method in plain words. ";
-        let text = format!("{sentence}{}", prose.repeat(120));
-        assert!(
-            text.chars().filter(|c| !c.is_whitespace()).count() > 8000,
-            "a long readable page"
-        );
-        assert_eq!(text.matches('\u{FFFF}').count(), 7, "seven words hold the glyph");
-        let stats = NativeTextStats::compute(&text, &thresholds);
-        assert_eq!(stats.garbage_char_count, 0, "U+FFFF is no lost-glyph marker");
-        assert_eq!(
-            NativeTextStats::compute(&text.replace('\u{FFFF}', "\u{FFFD}"), &thresholds).garbage_char_count,
-            7,
-            "control: the same page with lost-glyph markers counts them"
-        );
-        let decision = evaluate_native_text_for_ocr(&text, Some(1), &thresholds);
-        assert!(
-            !decision.fallback,
-            "the page stays on the native route: failing pages {:?}, garbage {}",
-            decision.failing_pages, decision.stats.garbage_char_count
-        );
-    }
-
     #[cfg(feature = "ocr")]
     #[test]
     fn test_multi_page_garbage_threshold_routes_only_failing_page() {
@@ -1119,35 +1069,29 @@ pub(super) mod tests {
     fn test_multi_page_garbage_threshold_outside_boundaries_uses_aggregate_fallback() {
         use crate::types::PageBoundary;
 
-        // Lost glyphs of either marker outside every page keep the aggregate check. ~keep
-        for marker in [
-            '\u{FFFD}',
-            crate::extractors::pdf::unmapped_glyphs::LOST_SYMBOL_GLYPH_MARKER,
-        ] {
-            let thresholds = t();
-            let first_page = "This first page contains reliable searchable measurements and explanatory text.";
-            let garbage = marker.to_string().repeat(thresholds.min_garbage_chars);
-            let second_page = "This second page also contains reliable searchable measurements and explanatory text.";
-            let text = format!("{first_page}{garbage}{second_page}");
-            let boundaries = vec![
-                PageBoundary {
-                    page_number: 1,
-                    byte_start: 0,
-                    byte_end: first_page.len(),
-                },
-                PageBoundary {
-                    page_number: 2,
-                    byte_start: first_page.len() + garbage.len(),
-                    byte_end: text.len(),
-                },
-            ];
+        let thresholds = t();
+        let first_page = "This first page contains reliable searchable measurements and explanatory text.";
+        let garbage = "\u{FFFD}".repeat(thresholds.min_garbage_chars);
+        let second_page = "This second page also contains reliable searchable measurements and explanatory text.";
+        let text = format!("{first_page}{garbage}{second_page}");
+        let boundaries = vec![
+            PageBoundary {
+                page_number: 1,
+                byte_start: 0,
+                byte_end: first_page.len(),
+            },
+            PageBoundary {
+                page_number: 2,
+                byte_start: first_page.len() + garbage.len(),
+                byte_end: text.len(),
+            },
+        ];
 
-            let decision = evaluate_per_page_ocr(&text, Some(&boundaries), Some(2), &thresholds);
+        let decision = evaluate_per_page_ocr(&text, Some(&boundaries), Some(2), &thresholds);
 
-            assert!(decision.fallback, "{marker:?}");
-            assert!(decision.whole_doc_failure, "{marker:?}");
-            assert!(decision.failing_pages.is_empty(), "{marker:?}");
-        }
+        assert!(decision.fallback);
+        assert!(decision.whole_doc_failure);
+        assert!(decision.failing_pages.is_empty());
     }
 
     // xberg#1667: `apply_flagged_pages` is the union step that lets the
@@ -1409,8 +1353,7 @@ pub(super) mod tests {
         raw.insert(6, "overlap two".to_string());
         raw.insert(7, "   ".to_string());
 
-        let accepted =
-            accepted_ocr_page_replacements(native, &boundaries, &raw, &OcrQualityThresholds::default(), |_| true);
+        let accepted = accepted_ocr_page_replacements(native, &boundaries, &raw, &t(), |_| true);
 
         assert_eq!(accepted.len(), 1);
         assert_eq!(accepted.get(&1).map(String::as_str), Some("accepted"));
@@ -1434,8 +1377,7 @@ pub(super) mod tests {
         ];
         let raw = ahash::AHashMap::from_iter([(2, "page two".to_string()), (1, "page one|".to_string())]);
 
-        let accepted =
-            accepted_ocr_page_replacements("", &boundaries, &raw, &OcrQualityThresholds::default(), |_| true);
+        let accepted = accepted_ocr_page_replacements("", &boundaries, &raw, &t(), |_| true);
         let merged = apply_ocr_page_replacements("", &boundaries, &accepted);
 
         assert_eq!(merged, "page one|page two");
