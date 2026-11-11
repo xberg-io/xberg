@@ -122,6 +122,22 @@ fn marked_rows_read_a_bounded_number_of_ocr_rows() {
     assert_bounded("marked", rows, (calls, reads));
 }
 
+/// A short native row lost a symbol glyph at a word edge, and the OCR glued its read to the word:
+/// `<s>yes` reads `oyes`, too far in length to reach the similarity. The glued pattern ignores the
+/// length, so the native row takes the glued row and the glued row leaves the page text. ~keep
+#[test]
+fn a_short_row_takes_its_glued_misread_whatever_its_length() {
+    let others = (0..39).map(|n| format!("plain words of the row number {n}"));
+    let native: Vec<String> = std::iter::once(format!("{LOST_SYMBOL_GLYPH_MARKER}yes"))
+        .chain(others.clone())
+        .collect();
+    let read: Vec<String> = std::iter::once("oyes".to_string()).chain(others).collect();
+    let text = merged(&native, &read);
+    let lines: Vec<&str> = text.lines().collect();
+    assert!(lines.contains(&"yes"), "the native row is put first:\n{text}");
+    assert!(!lines.contains(&"oyes"), "the glued row leaves:\n{text}");
+}
+
 /// A native row of one-letter words and the OCR row that drops the given ones: a misread of one
 /// fewer character for each dropped word. ~keep
 fn letters_row(dropped: &[char]) -> String {
