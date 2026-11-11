@@ -2681,6 +2681,30 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         }
     }
 
+    // The direct single-backend read has no per-page pipeline stage, so it prunes here, after the
+    // verdict and the replacement decision judged the unpruned text (#2312, #2921).
+    if ocr_output_thresholds.prune_symbol_noise_lines {
+        for page in &noise_verdict_pages {
+            let Some(text) = accepted_replacements.get_mut(page) else {
+                continue;
+            };
+            if structured_ocr_pages.get(page).is_some_and(|doc| !doc.tables.is_empty())
+                || !super::symbol_noise_lines::page_is_dominated_by_noise_lines(text.lines())
+            {
+                continue;
+            }
+            let (pruned, removed) = super::symbol_noise_lines::prune_text(text);
+            *text = pruned;
+            if let Some(paragraphs) = ocr_page_paragraphs.get_mut(page) {
+                super::symbol_noise_lines::prune_paragraphs(paragraphs);
+            }
+            if let Some(document) = structured_ocr_pages.get_mut(page) {
+                super::symbol_noise_lines::prune_document_elements(document);
+            }
+            accumulated_warnings.push(super::symbol_noise_lines::pruned_lines_warning(*page as usize, removed));
+        }
+    }
+
     // The replacement is decided on the OCR text alone. A page that it replaces, whose OCR text
     // got the noise verdict or confirms the layer, now gets the layer lines that its OCR text
     // lacks first. A page it keeps native stays as it was. ~keep

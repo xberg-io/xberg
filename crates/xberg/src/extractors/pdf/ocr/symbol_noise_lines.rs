@@ -315,7 +315,7 @@ pub(super) fn prune_paragraphs(paragraphs: &mut Vec<PdfParagraph>) {
 /// inside one surviving line to that line's new offset. An annotation that crosses a line
 /// boundary is dropped, even between two surviving lines: its byte range has no single new
 /// offset once the lines between or around it are gone.
-#[cfg(all(feature = "ocr", feature = "pdf"))]
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn prune_element_text(element: &mut crate::types::internal::InternalElement) -> bool {
     let mut kept = String::with_capacity(element.text.len());
     let mut spans: Vec<(usize, usize, usize)> = Vec::new();
@@ -365,8 +365,6 @@ pub(crate) fn prune_standalone_image_noise(
     has_tables: bool,
     thresholds: &crate::core::config::OcrQualityThresholds,
 ) -> usize {
-    use crate::types::internal::ElementKind;
-
     if !thresholds.prune_symbol_noise_lines
         || has_tables
         || !super::scoring::is_ocr_recognition_noise(content, thresholds)
@@ -376,21 +374,30 @@ pub(crate) fn prune_standalone_image_noise(
     }
     let (pruned, removed) = prune_text(content);
     *content = pruned;
-    if let Some(document) = document
-        && document.relationships.is_empty()
-    {
-        document.elements.retain_mut(|element| {
-            !matches!(
-                element.kind,
-                ElementKind::OcrText { .. }
-                    | ElementKind::Title
-                    | ElementKind::Heading { .. }
-                    | ElementKind::Paragraph
-                    | ElementKind::ListItem { .. }
-            ) || prune_element_text(element)
-        });
+    if let Some(document) = document {
+        prune_document_elements(document);
     }
     removed
+}
+
+/// Prunes the text elements of a document whose elements no relationship refers to by position.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn prune_document_elements(document: &mut crate::types::internal::InternalDocument) {
+    use crate::types::internal::ElementKind;
+
+    if !document.relationships.is_empty() {
+        return;
+    }
+    document.elements.retain_mut(|element| {
+        !matches!(
+            element.kind,
+            ElementKind::OcrText { .. }
+                | ElementKind::Title
+                | ElementKind::Heading { .. }
+                | ElementKind::Paragraph
+                | ElementKind::ListItem { .. }
+        ) || prune_element_text(element)
+    });
 }
 
 /// The warning that names a pruned page and how many lines it lost.
