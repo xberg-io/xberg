@@ -464,9 +464,19 @@ impl StringGrowthValidator {
     /// cannot wrap to zero.
     pub(crate) fn check_append(&mut self, len: usize) -> Result<(), SecurityError> {
         self.current_size = self.current_size.saturating_add(len);
-        if self.current_size > self.max_size {
+        self.check_size(self.current_size)
+    }
+
+    /// Check whether more bytes would fit without updating the counter.
+    #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+    pub(crate) fn check_additional(&self, len: usize) -> Result<(), SecurityError> {
+        self.check_size(self.current_size.saturating_add(len))
+    }
+
+    fn check_size(&self, size: usize) -> Result<(), SecurityError> {
+        if size > self.max_size {
             Err(SecurityError::ContentTooLarge {
-                size: self.current_size,
+                size,
                 max: self.max_size,
             })
         } else {

@@ -154,6 +154,30 @@ run_ink_probe_cases() {
   fi
 }
 
+run_retained_read_cases() {
+  local before="$passed"
+  local module='extractors::pdf::ocr::rendering::retained_read_metadata_tests'
+  local test_name
+  for test_name in \
+    rejected_first_read_does_not_supply_retained_page_preprocessing \
+    a_rejected_single_read_sets_neither_preprocessing_nor_tesseract_mode \
+    a_retained_single_read_keeps_its_preprocessing_and_tesseract_mode \
+    pooled_rejections_do_not_supply_page_preprocessing \
+    small_legible_read_survives_garbage_in_the_same_pool \
+    counts_two_character_fragments_regardless_of_utf8_width \
+    tiny_garbage_reads_are_still_rejected_when_their_pool_has_enough_words \
+    a_legible_small_read_keeps_its_table_and_formula_when_its_pool_is_noisy \
+    only_reads_with_text_or_structured_content_supply_page_metadata \
+    zero_fragmentation_threshold_still_rejects_a_numeric_only_pool \
+    unpublished_preprocessing_does_not_consume_the_output_budget; do
+    run_exact "${module}::$test_name" --lib
+  done
+  if [ "$((passed - before))" -ne 11 ]; then
+    printf 'Expected 11 executed retained-read tests, observed %s\n' "$((passed - before))" >&2
+    exit 1
+  fi
+}
+
 run_api_cases() {
   run_exact 'api::handlers::tests::test_extract_async_then_poll_job_id' --lib
   run_exact 'api::jobs::tests::test_cancel_running_job_fires_token' --lib
@@ -165,6 +189,8 @@ case "$suite" in
 pdf-ocr)
   expected=70
   run_pdf_cases
+  run_retained_read_cases
+  expected=$((expected + 11))
   run_number_budget_cases
   run_ink_probe_cases
   ;;
