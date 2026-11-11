@@ -118,8 +118,9 @@ fn is_code_block(content: &str) -> bool {
 }
 
 /// A ```` ```math ```` fence anywhere in the chunk, the form the Markdown writer gives display
-/// math whose TeX holds a backtick; other display math is `$$` lines, which `is_formula` reads. Parsed as CommonMark so fences inside other fences or indented code do not count, while
-/// fences in block quotes and list items do.
+/// math whose TeX holds a backtick; other display math is `$$` lines, which `is_formula` reads.
+/// Parsed as CommonMark so fences inside other fences or indented code do not count, while fences
+/// in block quotes and list items do.
 fn is_math_fence(content: &str) -> bool {
     if !content.contains("math") {
         return false;

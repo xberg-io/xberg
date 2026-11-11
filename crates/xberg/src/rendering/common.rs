@@ -62,6 +62,71 @@ pub(crate) fn join_tex_lines(tex: &str) -> String {
         .join(" ")
 }
 
+/// The TeX of a math node that comrak read from the Markdown writer's output, on one line.
+///
+/// The writer escapes inline and one-line math as CommonMark text, since a GitHub-style reader
+/// applies those escapes before it looks for math, and comrak keeps the escapes in the literal.
+/// Display math between `$$` lines and code math are written as they are.
+#[cfg(any(test, feature = "office", feature = "pdf", feature = "redaction"))]
+pub(crate) fn math_node_tex(math: &comrak::nodes::NodeMath) -> String {
+    if math.dollar_math && !markdown_math_is_unescaped(math) {
+        join_tex_lines(&unescape_markdown_text(&math.literal))
+    } else {
+        join_tex_lines(&math.literal)
+    }
+}
+
+/// Display math that the Markdown writer put between `$$` lines holds its TeX unescaped.
+#[cfg(any(test, feature = "office", feature = "pdf", feature = "redaction"))]
+pub(crate) fn markdown_math_is_unescaped(math: &comrak::nodes::NodeMath) -> bool {
+    !math.dollar_math || (math.display_math && math.literal.starts_with('\n'))
+}
+
+/// Undo the CommonMark backslash escape (a backslash before an ASCII punctuation mark) and the
+/// decimal character references the writer uses, such as `&#42;`.
+#[cfg(any(test, feature = "office", feature = "pdf", feature = "redaction"))]
+pub(crate) fn unescape_markdown_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\\'
+            && let Some(next) = chars.next_if(char::is_ascii_punctuation)
+        {
+            out.push(next);
+        } else if ch == '&'
+            && let Some(decoded) = numeric_reference(&mut chars)
+        {
+            out.push(decoded);
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+/// The character of a decimal reference whose `&` the caller has read: `#42;` gives `*`. Reads
+/// nothing when the text is not a reference.
+#[cfg(any(test, feature = "office", feature = "pdf", feature = "redaction"))]
+fn numeric_reference(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<char> {
+    let mut ahead = chars.clone();
+    (ahead.next()? == '#').then_some(())?;
+    let mut code = 0u32;
+    let mut digits = 0;
+    loop {
+        match ahead.next()? {
+            ';' if digits > 0 => break,
+            digit @ '0'..='9' if digits < 7 => {
+                code = code * 10 + digit.to_digit(10)?;
+                digits += 1;
+            }
+            _ => return None,
+        }
+    }
+    let decoded = char::from_u32(code)?;
+    *chars = ahead;
+    Some(decoded)
+}
+
 pub(crate) fn valid_math_annotation(text: &str, annotation: &TextAnnotation) -> bool {
     text.get(annotation.start as usize..annotation.end as usize)
         .and_then(|span| annotated_math(span, &annotation.kind))

@@ -278,24 +278,101 @@ fn write_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath) {
 }
 
 /// Make each remaining math node safe between its dollars, once prose dollars are settled.
+///
+/// A GitHub-style reader applies the CommonMark escapes and the inline rules to the TeX before it
+/// looks for math, so inline and one-line math is written as escaped text between `$` delimiters.
+/// Only math between `$$` lines is read as it is.
 fn sanitize_dollar_math<'a>(node: &'a AstNode<'a>) {
     let paragraph = node.parent().filter(|parent| holds_only(parent, node));
-    let top_level = paragraph
+    let block_ok = paragraph
         .and_then(|paragraph| paragraph.parent())
-        .is_some_and(|parent| matches!(parent.data.borrow().value, NodeValue::Document));
+        .is_some_and(|parent| {
+            matches!(
+                parent.data.borrow().value,
+                NodeValue::Document | NodeValue::BlockQuote | NodeValue::Item(_) | NodeValue::TaskItem(_)
+            )
+        });
     let mut data = node.data.borrow_mut();
     let NodeValue::Math(math) = &mut data.value else {
         return;
     };
+    let delimiter = if math.display_math { "$$" } else { "$" };
     if !math.display_math || paragraph.is_none() {
-        math.literal = dollar_math_inline(&math.literal);
-    } else if let Some(literal) = dollar_math_display(&math.literal, top_level) {
-        math.literal = literal;
+        if closer_is_not_a_closer(node, math) {
+            let math = std::mem::take(math);
+            drop(data);
+            write_backtick_math_as_code(node, math, false);
+        } else {
+            let tex = dollar_math_inline(&math.literal);
+            drop(data);
+            write_escaped_math(node, delimiter, &tex);
+        }
     } else {
-        let math = std::mem::take(math);
-        drop(data);
-        write_backtick_math_as_code(node, math, true);
+        let tex = std::mem::take(&mut math.literal);
+        match dollar_math_display(&tex, block_ok) {
+            Some(DisplayTex::Block(literal)) => math.literal = literal,
+            Some(DisplayTex::Line(tex)) => {
+                drop(data);
+                write_escaped_math(node, "$$", &tex);
+            }
+            None => {
+                let math = NodeMath {
+                    literal: tex,
+                    ..std::mem::take(math)
+                };
+                drop(data);
+                write_backtick_math_as_code(node, math, true);
+            }
+        }
     }
+}
+
+/// Whether a reader would not close this math at its last `$`: a closing `$` before a digit is not
+/// a closer, and a `$` run of another math span would join with this one's.
+fn closer_is_not_a_closer<'a>(node: &'a AstNode<'a>, math: &NodeMath) -> bool {
+    node.next_sibling().is_some_and(|next| match &next.data.borrow().value {
+        NodeValue::Math(_) => true,
+        NodeValue::Text(text) => !math.display_math && text.starts_with(|ch: char| ch.is_ascii_digit()),
+        _ => false,
+    })
+}
+
+/// Replace a math node by `tex` between `delimiter`s, escaped as Markdown text.
+fn write_escaped_math<'a>(node: &'a AstNode<'a>, delimiter: &str, tex: &str) {
+    let escaped = escape_tex_for_markdown(tex);
+    node.data.borrow_mut().value = NodeValue::Raw(format!("{delimiter}{escaped}{delimiter}"));
+}
+
+/// TeX as Markdown text that a reader applying the CommonMark escapes turns back into `tex`.
+///
+/// A backslash before ASCII punctuation is an escape, so it is doubled; one before a letter is
+/// not, and stays. Emphasis, link, strikethrough, tag and entity openers are escaped. A pipe in a
+/// table cell is escaped by comrak's table writer. comrak's own text escaping is not used: `finish_markdown`
+/// strips `\*`, `\_`, `\[` and `\]` from the whole output and corrupts `\\` before them, so those
+/// are written as numeric character references, which a reader decodes after the inline rules.
+fn escape_tex_for_markdown(tex: &str) -> String {
+    let chars: Vec<char> = tex.chars().collect();
+    let mut out = String::with_capacity(tex.len() + 8);
+    for (index, &ch) in chars.iter().enumerate() {
+        let before = index.checked_sub(1).map(|before| chars[before]);
+        let next = chars.get(index + 1).copied();
+        match ch {
+            '\\' if next.is_some_and(|next| next.is_ascii_punctuation()) => {
+                // finish_markdown would turn `\\_` into `\_`, so a doubled backslash is not safe there.
+                let stripped = next.is_some_and(|next| "_[]()*=-#".contains(next));
+                out.push_str(if stripped { "&#92;" } else { "\\\\" });
+            }
+            '*' | '[' | ']' => out.push_str(&format!("&#{};", ch as u32)),
+            '_' if !before.is_some_and(char::is_alphanumeric) => out.push_str("&#95;"),
+            '~' => out.push_str("\\~"),
+            '<' if next.is_some_and(|next| next.is_ascii_alphabetic() || matches!(next, '/' | '!' | '?')) => {
+                out.push_str("\\<");
+            }
+            '&' if next.is_some_and(|next| next.is_ascii_alphanumeric() || next == '#') => out.push_str("\\&"),
+            _ => out.push(ch),
+        }
+    }
+    out
 }
 
 fn write_backtick_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath, alone: bool) {
@@ -320,31 +397,40 @@ fn write_backtick_math_as_code<'a>(node: &'a AstNode<'a>, math: NodeMath, alone:
     });
 }
 
+/// How display TeX alone in a paragraph is written.
+enum DisplayTex {
+    /// The literal between `$$` delimiter lines, which a reader takes as it is.
+    Block(String),
+    /// The TeX on one line, for `$$tex$$` written as escaped text.
+    Line(String),
+}
+
 /// Display TeX for math alone in a paragraph, or `None` when no `$$` form holds it.
 ///
-/// At the top level it is the literal between `$$` delimiter lines. Inside a quote, list item or
-/// footnote a container prefix would indent each of those lines, so the TeX is written on one
-/// line, `$$tex$$`; so it is when a line opens a Markdown block (a quote, list or heading marker),
-/// which would end the paragraph for a reader without math. A `%` comment makes the line breaks
-/// significant, so TeX with one that needs either of those has no `$$` form and keeps the fence.
-/// The TeX holds no blank line, which would end the block, and no unescaped `$`.
-fn dollar_math_display(tex: &str, top_level: bool) -> Option<String> {
+/// Where a block can hold it, in the document, a quote or a list item, it is the literal between
+/// `$$` delimiter lines, each of which the container prefix indents. Otherwise, or when a line
+/// opens a Markdown block (a quote, list or heading marker), which would end the paragraph for a
+/// reader without math, the TeX is written on one line, `$$tex$$`. A `%` comment makes the line
+/// breaks significant, so TeX with one that needs the one-line form has no `$$` form and keeps the
+/// fence. The TeX holds no blank line, which would end the block, and no unescaped `$`.
+fn dollar_math_display(tex: &str, block_ok: bool) -> Option<DisplayTex> {
     let comment = has_tex_comment(tex);
     let tex = escape_math_dollars(&unix_lines(tex));
-    let one_line = !top_level || tex.lines().any(opens_block);
-    let tex = neutralize_markup(&tex, true, !one_line);
+    let one_line = !block_ok || tex.lines().any(opens_block);
+    if one_line && comment {
+        return None;
+    }
+    if one_line {
+        let lines: Vec<&str> = tex.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
+        return Some(DisplayTex::Line(guard_trailing_backslash(lines.join(" "))));
+    }
+    let tex = neutralize_markup(&tex);
     let lines: Vec<&str> = tex
         .lines()
         .map(str::trim_end)
         .filter(|line| !line.trim().is_empty())
         .collect();
-    match (one_line, comment) {
-        (true, true) => None,
-        (true, false) => Some(guard_trailing_backslash(
-            lines.iter().map(|line| line.trim()).collect::<Vec<_>>().join(" "),
-        )),
-        (false, _) => Some(format!("\n{}\n", lines.join("\n"))),
-    }
+    Some(DisplayTex::Block(format!("\n{}\n", lines.join("\n"))))
 }
 
 fn opens_block(line: &str) -> bool {
@@ -356,11 +442,7 @@ fn opens_block(line: &str) -> bool {
 
 /// Inline TeX on one line, without the edge whitespace that stops `$` from opening or closing math.
 fn dollar_math_inline(tex: &str) -> String {
-    guard_trailing_backslash(neutralize_markup(
-        &escape_math_dollars(&join_tex_lines(tex)),
-        false,
-        false,
-    ))
+    guard_trailing_backslash(escape_math_dollars(&join_tex_lines(tex)))
 }
 
 /// An odd run of trailing backslashes would escape the closing "$".
@@ -386,13 +468,11 @@ fn escape_math_dollars(tex: &str) -> String {
 
 /// A space after `<` changes nothing in TeX, and keeps `<img ...>` or `<https://x>` from reading as
 /// a tag or autolink to a CommonMark reader. Only a `<` before a letter, `/`, `!` or `?` can open
-/// one. Display math fills its paragraph, so there a tag needs its `>` inside the TeX
-/// (`closed_inside`); inline math continues into the paragraph, whose text can close the tag, so
-/// every such `<` is spaced. The space is visible inside `\text{}` and `\mathrm{}`, and `$` to `\$` in
-/// `escape_math_dollars` is lossy there too. A line of display TeX written on its own line
-/// (`block_lines`) also gets the space when it starts with `<`: seven CommonMark HTML block start
-/// conditions begin so, and six of them need no `>`.
-fn neutralize_markup(tex: &str, closed_inside: bool, block_lines: bool) -> String {
+/// one. Display TeX fills its paragraph, so a tag needs its `>` inside the TeX, and a line that
+/// starts with `<` also gets the space: seven CommonMark HTML block start conditions begin so, and
+/// six of them need no `>`. The space is visible inside `\text{}` and `\mathrm{}`. Inline math is
+/// written as escaped text, where comrak writes `\<` and nothing is lost.
+fn neutralize_markup(tex: &str) -> String {
     let mut out = String::with_capacity(tex.len());
     let mut line_start = true;
     for (index, ch) in tex.char_indices() {
@@ -403,7 +483,7 @@ fn neutralize_markup(tex: &str, closed_inside: bool, block_lines: bool) -> Strin
         }
         // "<" is one byte, so the rest starts on a character boundary. ~keep
         let rest = &tex[index + 1..];
-        if (!closed_inside || rest.contains('>') || (block_lines && line_start))
+        if (rest.contains('>') || line_start)
             && rest
                 .chars()
                 .next()
@@ -3091,7 +3171,7 @@ mod tests {
     }
 
     /// The literal of every code span, code block and math node in `markdown`, failing on any
-    /// raw HTML, link or image a reader would see.
+    /// raw HTML, link or image a reader would see. The TeX of escaped dollar math is unescaped.
     fn literals(markdown: &str, options: &Options) -> Vec<String> {
         let arena = comrak::Arena::new();
         comrak::parse_document(&arena, markdown, options)
@@ -3099,6 +3179,11 @@ mod tests {
             .filter_map(|node| match &node.data.borrow().value {
                 NodeValue::Code(code) => Some(code.literal.clone()),
                 NodeValue::CodeBlock(block) => Some(block.literal.trim_end().to_string()),
+                NodeValue::Math(math)
+                    if math.dollar_math && !crate::rendering::common::markdown_math_is_unescaped(math) =>
+                {
+                    Some(crate::rendering::common::unescape_markdown_text(&math.literal))
+                }
                 NodeValue::Math(math) => Some(math.literal.clone()),
                 value @ (NodeValue::HtmlInline(_)
                 | NodeValue::HtmlBlock(_)
@@ -3221,8 +3306,8 @@ mod tests {
         builder.end_list();
         let markdown = crate::rendering::render_markdown(&builder.build());
         assert_no_html(&markdown, &Options::default());
-        assert!(markdown.contains("> $$α <div β$$"), "{markdown}");
-        assert!(markdown.contains("  $$α <script β$$"), "{markdown}");
+        assert!(markdown.contains("> $$\n> α\n> < div\n> β\n> $$"), "{markdown}");
+        assert!(markdown.contains("  $$\n  α\n  < script\n  β\n  $$"), "{markdown}");
     }
 
     #[test]
@@ -3234,7 +3319,7 @@ mod tests {
         let markdown = crate::rendering::render_markdown(&builder.build());
         assert_eq!(
             markdown,
-            "Let $a< b$ and $$x^2$$ hold.\n\n$$\n\\sum_i x_i\n$$\n\n$$\ny = x\n$$\n"
+            "Let $a\\<b$ and $$x^2$$ hold.\n\n$$\n\\sum_i x_i\n$$\n\n$$\ny = x\n$$\n"
         );
         assert!(!markdown.contains("```math"), "{markdown}");
     }
@@ -3279,7 +3364,7 @@ mod tests {
     }
 
     #[test]
-    fn should_write_container_display_math_on_one_line_unless_a_comment_needs_the_breaks() {
+    fn should_write_container_display_math_between_dollar_lines() {
         let mut builder = InternalDocumentBuilder::new("test");
         builder.push_quote_start();
         builder.push_formula("a\nb", None, None);
@@ -3293,12 +3378,12 @@ mod tests {
         builder.push_formula("p % q\nr", None, None);
         builder.end_list();
         let markdown = crate::rendering::render_markdown(&builder.build());
-        assert!(markdown.contains("> $$a b$$"), "{markdown}");
-        assert!(markdown.contains("> ```math\n> a % note\n> b\n> ```"), "{markdown}");
-        assert!(markdown.contains("> $$a \\% 5 b$$"), "{markdown}");
-        assert!(markdown.contains("> $$x \\ $$"), "{markdown}");
-        assert!(markdown.contains("  $$x \\ $$"), "{markdown}");
-        assert!(markdown.contains("  ```math\n  p % q\n  r\n  ```"), "{markdown}");
+        assert!(markdown.contains("> $$\n> a\n> b\n> $$"), "{markdown}");
+        assert!(markdown.contains("> $$\n> a % note\n> b\n> $$"), "{markdown}");
+        assert!(markdown.contains("> $$\n> a \\% 5\n> b\n> $$"), "{markdown}");
+        assert!(markdown.contains("> $$\n> x \\\n> $$"), "{markdown}");
+        assert!(markdown.contains("  $$\n  x \\\n  $$"), "{markdown}");
+        assert!(markdown.contains("  $$\n  p % q\n  r\n  $$"), "{markdown}");
     }
 
     #[test]
@@ -3307,7 +3392,7 @@ mod tests {
         let span = "$<img src=x$";
         push_math_paragraph(&mut builder, &format!("{span} onerror=alert(1) >"), &[span]);
         let markdown = crate::rendering::render_markdown(&builder.build());
-        assert_eq!(markdown, "$< img src=x$ onerror=alert(1) \\>\n");
+        assert_eq!(markdown, "$\\<img src=x$ onerror=alert(1) \\>\n");
         assert_no_html(&markdown, &Options::default());
     }
 
@@ -3326,7 +3411,7 @@ mod tests {
                 .starts_with("```math\na\n- b % c\n```\n\n```math\n> a % c\nb\n```\n\n```math\n# a % c\nb\n```\n\n"),
             "{markdown}"
         );
-        assert!(markdown.ends_with("> ```math\n> a\n> % c\n> b\n> ```\n"), "{markdown}");
+        assert!(markdown.ends_with("> $$\n> a\n> % c\n> b\n> $$\n"), "{markdown}");
     }
 
     #[test]
@@ -3334,15 +3419,15 @@ mod tests {
         let mut builder = InternalDocumentBuilder::new("test");
         push_math_paragraph(&mut builder, "Let $a % c\nb \\% d$ hold.", &["$a % c\nb \\% d$"]);
         let markdown = crate::rendering::render_markdown(&builder.build());
-        assert_eq!(markdown, "Let $a b \\% d$ hold.\n");
+        assert_eq!(markdown, "Let $a b \\\\% d$ hold.\n");
     }
 
     #[test]
-    fn should_escape_currency_beside_math_and_space_an_inline_angle_bracket() {
+    fn should_escape_currency_beside_math_and_escape_an_inline_angle_bracket() {
         let mut builder = InternalDocumentBuilder::new("test");
         push_math_paragraph(&mut builder, "Cost $5 or $7 and $a<b$.", &["$a<b$"]);
         let markdown = crate::rendering::render_markdown(&builder.build());
-        assert_eq!(markdown, "Cost \\$5 or \\$7 and $a< b$.\n");
+        assert_eq!(markdown, "Cost \\$5 or \\$7 and $a\\<b$.\n");
     }
 
     #[test]
@@ -3365,9 +3450,9 @@ mod tests {
         assert_literals(
             &markdown,
             &[
-                "< img src=x onerror=alert(1)>",
-                "< https://x>",
-                "x < img src=x>",
+                "<img src=x onerror=alert(1)>",
+                "<https://x>",
+                "x <img src=x>",
                 "a`$<img src=x>",
                 "\n< script>\nalert(1)\n< /script>\n",
                 "a\n```\n<b>",
@@ -3435,10 +3520,10 @@ mod tests {
         assert_literals(
             &markdown,
             &[
-                "x < img src=x onerror=alert(1)>",
+                "\nx\n< img src=x onerror=alert(1)>\n",
                 "a\r\n```\n<img src=x>",
                 "b",
-                "y < img src=x>",
+                "\ny\n< img src=x>\n",
             ],
         );
     }
@@ -3540,8 +3625,8 @@ mod tests {
             &markdown,
             &[
                 "x`y$<img src=x onerror=alert(1)>",
-                "a\\$\\$< img src=x onerror=alert(1)>",
-                "x\\$< img src=x onerror=alert(1)>",
+                "a\\$\\$<img src=x onerror=alert(1)>",
+                "x\\$<img src=x onerror=alert(1)>",
                 "x^2",
                 "x",
                 "a$<img src=x>",
@@ -3638,7 +3723,7 @@ mod tests {
         builder.push_list_item(text, true, vec![math_span(text, text)], None, None);
         builder.end_list();
         builder.end_list();
-        assert_literals(&crate::rendering::render_markdown(&builder.build()), &["a< !-->"]);
+        assert_literals(&crate::rendering::render_markdown(&builder.build()), &["\na< !-->\n"]);
     }
 
     #[test]
@@ -3668,7 +3753,7 @@ mod tests {
         builder.push_list_item("", true, vec![], None, None);
         push_math_paragraph(&mut builder, "$$>$<t>$$$", &["$$>$<t>$$"]);
         builder.end_list();
-        assert_literals(&crate::rendering::render_markdown(&builder.build()), &[">", ">\\$< t>"]);
+        assert_literals(&crate::rendering::render_markdown(&builder.build()), &[">", ">\\$<t>"]);
 
         let mut builder = InternalDocumentBuilder::new("test");
         builder.push_list(false);

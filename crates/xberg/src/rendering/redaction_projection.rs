@@ -210,10 +210,17 @@ impl VisibleMarkdown {
                 && payload.strip_prefix(' ')?.strip_suffix(' ')? == math.literal)
                 .then_some(start + 1..range.end - closing.len() - 1)
         });
-        if let Some(source) = source {
-            self.leaf(&math.literal, markdown, source, false)
+        let escaped = !super::common::markdown_math_is_unescaped(math);
+        let visible = if escaped {
+            super::common::unescape_markdown_text(&math.literal)
         } else {
-            self.unmapped(&math.literal);
+            math.literal.clone()
+        };
+        // A character reference is not a CommonMark backslash escape, so `leaf` cannot map it. ~keep
+        if let Some(source) = source.filter(|_| !(escaped && math.literal.contains("&#"))) {
+            self.leaf(&visible, markdown, source, escaped)
+        } else {
+            self.unmapped(&visible);
             Some(())
         }
     }
