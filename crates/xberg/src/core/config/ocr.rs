@@ -195,8 +195,9 @@ pub struct OcrQualityThresholds {
     /// Remove symbol-noise lines from a page flagged as suspected recognition noise but retained.
     ///
     /// Applies to any such page, not only photographs, when it has at least 8 non-blank lines
-    /// and at least half of them are symbol noise. A line is kept when it reads as text and is
-    /// pruned only when it is made of symbols and fragments:
+    /// and at least half of them are symbol noise. A lone capitalized 3-letter token (`Tee`) is
+    /// pruned from such a page but does not count toward that half. A line is kept when it reads
+    /// as text and is pruned only when it is made of symbols and fragments:
     ///
     /// - a line with a digit is kept, unless every token that holds a digit pairs it with a
     ///   stray quotation mark or a trailing section mark (`"9`, `5§`) and no other token is

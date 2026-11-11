@@ -133,6 +133,17 @@ fn a_lone_capitalized_trigram_is_dropped_from_a_noise_page_but_does_not_make_one
 }
 
 #[test]
+fn a_lowercase_trigram_or_a_trigram_among_glyphs_still_counts_toward_a_noise_page() {
+    for extra in ["mal", "Tee ~ ~", "T~ee"] {
+        let mut lines = vec!["alpha beta", "gamma delta", "epsilon zeta", "theta iota"];
+        lines.extend(noise_filler(3));
+        lines.push(extra);
+        let text = lines.join("\n\n");
+        assert!(page_is_dominated_by_noise_lines(text.lines()), "{text:?}");
+    }
+}
+
+#[test]
 fn keeps_real_words_beside_stray_glyphs() {
     assert_kept_exactly(&[
         "Annual report q z",
