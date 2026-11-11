@@ -1015,13 +1015,7 @@ pub(crate) fn page_ocr_confidence(
 /// scanned table becomes its most likely false positive.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn ocr_output_stats(text: &str, thresholds: &OcrQualityThresholds) -> NativeTextStats {
-    let normalized = normalize_markdown_for_scoring(text.trim());
-    let scoring_input = if normalized.trim().is_empty() {
-        text.trim()
-    } else {
-        normalized.as_str()
-    };
-    NativeTextStats::compute(scoring_input, thresholds)
+    NativeTextStats::compute(&scoring_input(text.trim()), thresholds)
 }
 /// Is this OCR result recognition noise rather than page content?
 ///
@@ -1056,6 +1050,20 @@ pub(crate) fn is_ocr_recognition_noise(text: &str, thresholds: &OcrQualityThresh
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn is_below_noise_check_minimum(text: &str, thresholds: &OcrQualityThresholds) -> bool {
     ocr_output_stats(text, thresholds).word_count < thresholds.min_words_for_ocr_output_check
+}
+
+/// The pool already met the minimum sample size. Compare a member's own fragmentation
+/// without the sample size guard, so a short clean read need not share the pool's verdict.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn small_read_has_fragmented_words(text: &str, thresholds: &OcrQualityThresholds) -> bool {
+    let input = scoring_input(text.trim());
+    let (words, short) = input
+        .split_whitespace()
+        .filter(|word| word.chars().any(char::is_alphabetic))
+        .fold((0, 0), |(words, short), word| {
+            (words + 1, short + usize::from(word.chars().nth(2).is_none()))
+        });
+    short as f64 / words.max(1) as f64 >= thresholds.max_ocr_output_fragmented_word_ratio
 }
 /// Whether a page's Tesseract dictionary-invalid-word ratio crosses the configured
 /// threshold, supplementing [`is_ocr_recognition_noise`] rather than replacing it.

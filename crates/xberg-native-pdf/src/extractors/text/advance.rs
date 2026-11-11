@@ -304,7 +304,7 @@ impl<'doc> TextExtractor<'doc> {
             w_sum
         };
 
-        buffer.accumulated_width += total_width;
+        buffer.add_width(total_width);
 
         // Update text matrix position per ISO 32000-1:2008 §9.4.4. The
         // axis-swap (H vs V) is encapsulated in advance_text_matrix. ~keep
@@ -410,7 +410,7 @@ impl<'doc> TextExtractor<'doc> {
                     None
                 };
                 if let Some(w) = utf8_width {
-                    buffer.accumulated_width += w;
+                    buffer.add_width(w);
                     self.state_stack.current_mut().advance_text_matrix(w);
                     return Ok(());
                 }
@@ -543,7 +543,7 @@ impl<'doc> TextExtractor<'doc> {
             w_sum
         };
 
-        buffer.accumulated_width += total_width;
+        buffer.add_width(total_width);
 
         self.state_stack.current_mut().advance_text_matrix(total_width);
 
@@ -721,7 +721,7 @@ impl<'doc> TextExtractor<'doc> {
             -offset / 1000.0 * state.font_size
         };
         *last += adv;
-        buffer.accumulated_width += adv;
+        buffer.add_width(adv);
         buffer.pullback = (buffer.pullback - adv).max(0.0);
     }
 
@@ -804,10 +804,10 @@ impl<'doc> TextExtractor<'doc> {
         for width in &mut buffer.char_widths {
             *width *= ratio;
         }
-        buffer.rescale_continuing_tm_record(ratio);
         buffer.user_h_scale /= ratio;
         buffer.start_matrix.a = a;
-        buffer.accumulated_width = Self::text_space_advance(buffer.start_matrix, 0, e);
+        let pen = Self::text_space_advance(buffer.start_matrix, 0, e);
+        buffer.restate_width_under_stretched_tm(ratio, pen);
         // A new matrix sets the pen again: the pull-back after a ligature no longer refers to the
         // glyph that ends the run. ~keep
         buffer.ligature_tail = false;
