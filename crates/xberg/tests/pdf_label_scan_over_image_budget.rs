@@ -80,6 +80,12 @@ fn warnings_containing<'a>(document: &'a ExtractedDocument, part: &str) -> Vec<&
         .collect()
 }
 
+fn sorted_noise_warnings(document: &ExtractedDocument) -> Vec<&str> {
+    let mut messages = warnings_containing(document, "suspected OCR recognition noise");
+    messages.sort_unstable();
+    messages
+}
+
 /// `scan_page` is the index of the scan among the document's pages.
 fn assert_kept_with_warning(document: &ExtractedDocument, scan_page: usize) {
     assert!(document.content.contains("GENERAL NOTES"), "{:?}", document.content);
@@ -242,14 +248,9 @@ fn explicit_pipeline_warns_once_per_page_of_a_two_scan_document_like_the_default
         assert!(pages.iter().all(|page| page.content.contains("GENERAL NOTES")), "{pages:?}");
     }
     assert_eq!(explicit.content, default_route.content);
-    let noise = |document: &ExtractedDocument| {
-        let mut messages = warnings_containing(document, "suspected OCR recognition noise");
-        messages.sort_unstable();
-        messages
-    };
-    let explicit_noise = noise(&explicit);
+    let explicit_noise = sorted_noise_warnings(&explicit);
     assert_eq!(explicit_noise.len(), 2, "{:?}", explicit.processing_warnings);
-    assert_eq!(explicit_noise, noise(&default_route));
+    assert_eq!(explicit_noise, sorted_noise_warnings(&default_route));
     assert_eq!(
         explicit.processing_warnings.len(),
         default_route.processing_warnings.len(),
