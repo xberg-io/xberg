@@ -4987,7 +4987,8 @@ mod tests {
         );
     }
 
-    /// Plain, Json and Custom output keep each page's plain text as its content, so the space shows there.
+    /// A Plain page is its part of the Plain content, so the math delimiters keep the equation apart
+    /// from the next letter there too.
     #[tokio::test]
     async fn should_keep_an_equation_apart_from_a_following_letter_in_plain_page_content() {
         let xml = r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -5012,10 +5013,11 @@ mod tests {
         .unwrap();
         let pages = result.pages.expect("pages requested");
         assert!(
-            pages[0].content.contains("Let \\alpha b hold."),
+            pages[0].content.contains("Let $\\alpha$b hold."),
             "{:?}",
             pages[0].content
         );
+        assert!(result.content.contains(&pages[0].content), "{:?}", result.content);
     }
 
     #[tokio::test]
@@ -5621,8 +5623,8 @@ mod tests {
         }
     }
 
-    /// `pages[].content` is built on the parser's own text path; its markers and definitions
-    /// use the numbers the renderers use, and footnote 1 and endnote 1 stay apart.
+    /// A Plain page is its part of the Plain content: its markers and definitions use the numbers
+    /// the renderers use, and footnote 1 and endnote 1 stay apart.
     #[tokio::test]
     async fn should_number_page_content_notes_like_the_rendered_output() {
         let document_xml = format!(
@@ -5654,11 +5656,11 @@ mod tests {
         let result =
             crate::extraction::derive::derive_extraction_result(result, true, crate::core::config::OutputFormat::Plain);
         let page = &result.pages.as_ref().expect("page content")[0].content;
-        assert!(page.contains("Body[^1] text[^2]."), "{page:?}");
-        assert!(page.contains("cell[^3]"), "{page:?}");
-        assert!(page.contains("1: Note B."), "{page:?}");
-        assert!(page.contains("2: THE ENDNOTE"), "{page:?}");
-        assert!(page.contains("3: Note A."), "{page:?}");
+        assert!(page.starts_with("Body text.[^1][^2]\n\ncell\n\n[^3]"), "{page:?}");
+        assert!(page.contains("[^1]: Note B."), "{page:?}");
+        assert!(page.contains("[^2]: THE ENDNOTE"), "{page:?}");
+        assert!(page.contains("[^3]: Note A."), "{page:?}");
+        assert!(result.content.contains(page.as_str()), "{:?}", result.content);
     }
 
     async fn docx_page_content(document_xml: &str, footnotes_xml: &str, endnotes_xml: Option<&str>) -> String {
@@ -5692,8 +5694,8 @@ mod tests {
         );
         let page = docx_page_content(&document_xml, &footnotes_xml, Some(&endnotes_xml)).await;
         assert!(page.starts_with("Body[^1][^2]"), "{page:?}");
-        assert!(page.contains("1: THE FOOTNOTE"), "{page:?}");
-        assert!(page.contains("2: THE ENDNOTE"), "{page:?}");
+        assert!(page.contains("[^1]: THE FOOTNOTE"), "{page:?}");
+        assert!(page.contains("[^2]: THE ENDNOTE"), "{page:?}");
     }
 
     /// A reference in a table nested in a cell belongs to the outer table: it is written after it.
