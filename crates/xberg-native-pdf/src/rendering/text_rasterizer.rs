@@ -365,54 +365,66 @@ fn cached_face(id: fontdb::ID, data: Arc<Vec<u8>>, index: u32) -> Option<Arc<Cac
 /// Before this cache, every glyph that fell through to the CJK path called
 /// `load_cjk_fallback()`, which iterated 7+ fontdb queries and cloned a
 /// 10–20 MB Noto CJK binary. Now that work is done exactly once.
+#[cfg(not(test))]
 static CJK_FALLBACK: std::sync::OnceLock<Option<(fontdb::ID, Arc<Vec<u8>>, u32)>> = std::sync::OnceLock::new();
 
+fn find_cjk_fallback(db: &fontdb::Database) -> Option<(fontdb::ID, Arc<Vec<u8>>, u32)> {
+    let prioritized_variants = [
+        "Noto Sans CJK SC",
+        "Noto Serif CJK SC",
+        "Droid Sans Fallback",
+        "SimSun",
+        "WenQuanYi Micro Hei",
+        "Noto Sans CJK JP",
+        "Noto Serif CJK JP",
+    ];
+    for variant in prioritized_variants {
+        let query = fontdb::Query {
+            families: &[fontdb::Family::Name(variant)],
+            weight: fontdb::Weight::NORMAL,
+            stretch: fontdb::Stretch::Normal,
+            style: fontdb::Style::Normal,
+        };
+        if let Some(id) = db.query(&query) {
+            if let Some((arc, idx)) = cached_font_bytes(id, db) {
+                tracing::debug!(
+                    "CJK fallback: matched '{}', idx={}, size={} bytes",
+                    variant,
+                    idx,
+                    arc.len()
+                );
+                return Some((id, arc, idx));
+            }
+        }
+    }
+    let query = fontdb::Query {
+        families: &[fontdb::Family::SansSerif],
+        weight: fontdb::Weight::NORMAL,
+        stretch: fontdb::Stretch::Normal,
+        style: fontdb::Style::Normal,
+    };
+    if let Some(id) = db.query(&query) {
+        if let Some((arc, idx)) = cached_font_bytes(id, db) {
+            return Some((id, arc, idx));
+        }
+    }
+    None
+}
+
+/// Tests run in one process against differently populated databases, so the
+/// process-wide cache is bypassed there and each lookup sees its own database. ~keep
 fn get_cjk_fallback_cached(db: &fontdb::Database) -> Option<(fontdb::ID, Arc<Vec<u8>>, u32)> {
-    CJK_FALLBACK
-        .get_or_init(|| {
-            let prioritized_variants = [
-                "Noto Sans CJK SC",
-                "Noto Serif CJK SC",
-                "Droid Sans Fallback",
-                "SimSun",
-                "WenQuanYi Micro Hei",
-                "Noto Sans CJK JP",
-                "Noto Serif CJK JP",
-            ];
-            for variant in prioritized_variants {
-                let query = fontdb::Query {
-                    families: &[fontdb::Family::Name(variant)],
-                    weight: fontdb::Weight::NORMAL,
-                    stretch: fontdb::Stretch::Normal,
-                    style: fontdb::Style::Normal,
-                };
-                if let Some(id) = db.query(&query) {
-                    if let Some((arc, idx)) = cached_font_bytes(id, db) {
-                        tracing::debug!(
-                            "CJK fallback: matched '{}', idx={}, size={} bytes",
-                            variant,
-                            idx,
-                            arc.len()
-                        );
-                        return Some((id, arc, idx));
-                    }
-                }
-            }
-            let query = fontdb::Query {
-                families: &[fontdb::Family::SansSerif],
-                weight: fontdb::Weight::NORMAL,
-                stretch: fontdb::Stretch::Normal,
-                style: fontdb::Style::Normal,
-            };
-            if let Some(id) = db.query(&query) {
-                if let Some((arc, idx)) = cached_font_bytes(id, db) {
-                    return Some((id, arc, idx));
-                }
-            }
-            None
-        })
-        .as_ref()
-        .map(|(id, arc, idx)| (*id, Arc::clone(arc), *idx))
+    #[cfg(test)]
+    {
+        find_cjk_fallback(db)
+    }
+    #[cfg(not(test))]
+    {
+        CJK_FALLBACK
+            .get_or_init(|| find_cjk_fallback(db))
+            .as_ref()
+            .map(|(id, arc, idx)| (*id, Arc::clone(arc), *idx))
+    }
 }
 
 /// Process-wide cache for the bundled Droid Sans Fallback face used by the
@@ -2041,7 +2053,7 @@ pub(crate) fn tj_offset_shift(offset: f32, gs: &GraphicsState) -> f32 {
 /// When no font metrics are available we fall back to a half-em estimate per
 /// character — same constant `render_text_fallback` uses for the visible path,
 /// so the suppressed branch stays consistent with the painted branch.
-fn measure_text_bytes(bytes: &[u8], gs: &GraphicsState, font_info: Option<&crate::fonts::FontInfo>) -> f32 {
+pub(crate) fn measure_text_bytes(bytes: &[u8], gs: &GraphicsState, font_info: Option<&crate::fonts::FontInfo>) -> f32 {
     let font_size = gs.font_size;
     let h_scale = gs.horizontal_scaling / 100.0;
     let wmode = gs.text_wmode;

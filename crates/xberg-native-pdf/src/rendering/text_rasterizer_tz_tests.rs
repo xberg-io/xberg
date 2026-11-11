@@ -5,6 +5,7 @@
 use super::tests::make_vertical_test_font;
 use super::*;
 use crate::fonts::FontInfo;
+use std::collections::HashMap;
 
 const FONT_PX: f32 = 40.0;
 const ORIGIN_X: f32 = 150.0;
@@ -62,8 +63,7 @@ fn dejavu() -> Arc<Vec<u8>> {
     Arc::new(crate::fonts::bundled::DEJAVU_SANS.to_vec())
 }
 
-/// The system database, not an empty one: the CJK fallback face is cached
-/// process-wide from whichever database asks first. ~keep
+/// The system database, which carries the CJK fallback face under `cjk-render-fallback`. ~keep
 fn rasterizer() -> TextRasterizer {
     TextRasterizer::new()
 }
@@ -97,12 +97,8 @@ fn unicode_route_applies_horizontal_scaling() {
     assert_route_halves(unicode_route(&"H".repeat(GLYPHS), false));
 }
 
-/// Ignored in the shared suite: the CJK fallback face is cached process-wide from whichever database
-/// asks first, and tests built on an empty database cache "none". Run alone with
-/// `cargo test -p xberg-native-pdf --features cjk-render-fallback --lib unicode_cjk_fallback -- --ignored`.
 #[cfg(feature = "cjk-render-fallback")]
 #[test]
-#[ignore = "needs a process whose first CJK fallback lookup uses the system font database"]
 fn unicode_cjk_fallback_route_applies_horizontal_scaling() {
     assert_route_halves(unicode_route(&"\u{53E3}".repeat(GLYPHS), false));
 }
@@ -257,4 +253,42 @@ fn measured_advance_without_font_scales_by_th() {
     let unscaled = 3.0 * (0.6 * FONT_PX + 2.0) + 10.0;
     assert!((measure(100.0) - unscaled).abs() < 0.01);
     assert!((measure(50.0) - unscaled * 0.5).abs() < 0.01);
+}
+
+fn plate_advance(text: &[u8], font: Option<FontInfo>, gs: &mut GraphicsState) -> f32 {
+    let mut fonts = HashMap::new();
+    if let Some(font) = font {
+        gs.font_name = Some("F1".to_string());
+        fonts.insert("F1".to_string(), Arc::new(font));
+    }
+    crate::rendering::separation_renderer::measure_text_advance(text, gs, &fonts).unwrap()
+}
+
+#[test]
+fn plate_skipped_text_applies_word_spacing_to_a_one_byte_space_in_a_type0_font() {
+    let mut font = make_vertical_test_font();
+    font.wmode = 0;
+    font.encoding = crate::fonts::Encoding::Standard("UniFull-UTF8-H".to_string());
+    let mut gs = gs_at(50.0);
+    gs.char_space = 2.0;
+    gs.word_space = 10.0;
+    // "a b" then a two-byte U+00E9, which must not take Tw and must not be dropped as an odd tail.
+    let advance = plate_advance("a b\u{e9}".as_bytes(), Some(font), &mut gs);
+    let expected = (4.0 * (FONT_PX + 2.0) + 10.0) * 0.5;
+    assert!(
+        (advance - expected).abs() < 0.01,
+        "advance {advance}, expected {expected}"
+    );
+}
+
+#[test]
+fn plate_skipped_text_without_a_font_uses_the_rasterizer_half_em_estimate() {
+    let mut gs = gs_at(50.0);
+    gs.char_space = 2.0;
+    let advance = plate_advance(b"ab", None, &mut gs);
+    let expected = 2.0 * (0.6 * FONT_PX + 2.0) * 0.5;
+    assert!(
+        (advance - expected).abs() < 0.01,
+        "advance {advance}, expected {expected}"
+    );
 }
