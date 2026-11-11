@@ -124,7 +124,7 @@ pub(crate) fn ordering_script_stacks(spans: &[OrderingSpan<'_>], snapped: &[Opti
 /// The nested script stacks among `spans`: each base with the indices of its members in x order.
 ///
 /// Nothing is snapped: the caller places the members after the page has been ordered and
-/// partitioned.
+/// partitioned, the raised members first and the lowered ones after them, each side in x order.
 #[doc(hidden)]
 #[must_use]
 pub fn script_stacks(spans: &[StackSpan<'_>]) -> Vec<(usize, Vec<usize>)> {

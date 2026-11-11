@@ -26,7 +26,7 @@ The label g ∈ {U(1), Z~2~} is the gauge symmetry, with
 
 † 1 † 1
 
-H<sup>Z</sup>~2 ⟨xy~⟩,f = t c s~xy,f~c~y,f~ + c s~xy,f~c~x,f~ x,f y,f (3)
+H<sup>Z</sup>~2 ⟨xy⟩,f~ = t c s~xy,f~c~y,f~ + c s~xy,f~c~x,f~ x,f y,f (3)
 
 U(1) † + † −
 
@@ -42,7 +42,7 @@ Then H is a designer term [62] that makes the mod⟨xy⟩,f
 
 2
 
-fermion hole spin-1/2 up spin-1/2 down FIG. 1: Example fermion occupations and bond variables for the theories on a square spatial lattice with N~f~ = 1. els simulable by the meron algorithm, 1 1 t H<sup>Z</sup>~2~<sup>,des</sup> ⟨xy⟩,f = −2t n~x,f~ − n~y,f~ − + 2 2 2 1 1 U(1),des
+fermion hole spin-1/2 up spin-1/2 down FIG. 1: Example fermion occupations and bond variables for the theories on a square spatial lattice with N~f~ = 1. els simulable by the meron algorithm, 1 1 t H<sup>Z</sup>~2~<sup>,des</sup> ~⟨xy⟩,f~ = −2t n~x,f~ − n~y,f~ − + 2 2 2 1 1 U(1),des
 
 - H = −t n (4) ⟨xy⟩,f x,f − n~y,f~ − 2 2 t
 

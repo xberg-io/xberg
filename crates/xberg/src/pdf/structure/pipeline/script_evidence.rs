@@ -77,15 +77,7 @@ fn preserves_existing_scripts(
     moved: &HashSet<SegmentKey>,
     insertions: &HashMap<SegmentKey, Vec<ScriptOwner>>,
 ) -> bool {
-    let base_of_script: HashMap<SegmentKey, (&SegmentKey, usize)> = insertions
-        .iter()
-        .flat_map(|(base, owners)| {
-            owners
-                .iter()
-                .enumerate()
-                .map(move |(rank, owner)| (SegmentKey::from(owner.script.as_ref()), (base, rank)))
-        })
-        .collect();
+    let base_of_script = owning_bases(insertions);
     paragraphs.iter().all(|paragraph| {
         let before: Vec<_> = paragraph.lines.iter().flat_map(|line| &line.segments).collect();
         let mut after = Vec::new();
@@ -94,7 +86,7 @@ fn preserves_existing_scripts(
             let key = SegmentKey::from(*segment);
             if moved.contains(&key) {
                 if super::super::assembly::segment_script_kind(&before, index).is_some()
-                    && !already_follows_its_base(&before, index, &base_of_script, insertions)
+                    && !already_follows_its_base(&before, index, &base_of_script, insertions, moved)
                 {
                     return false;
                 }
@@ -114,14 +106,33 @@ fn preserves_existing_scripts(
     })
 }
 
+/// The base and the rank among its scripts of each script that has exactly one owning base. A
+/// script that two bases claim is left out, so it is never taken for already placed.
+fn owning_bases(insertions: &HashMap<SegmentKey, Vec<ScriptOwner>>) -> HashMap<SegmentKey, (&SegmentKey, usize)> {
+    let mut owned: HashMap<SegmentKey, Option<(&SegmentKey, usize)>> = HashMap::new();
+    for (base, owners) in insertions {
+        for (rank, owner) in owners.iter().enumerate() {
+            owned
+                .entry(SegmentKey::from(owner.script.as_ref()))
+                .and_modify(|claim| *claim = None)
+                .or_insert(Some((base, rank)));
+        }
+    }
+    owned
+        .into_iter()
+        .filter_map(|(script, claim)| claim.map(|claim| (script, claim)))
+        .collect()
+}
+
 /// Whether the moved script at `index` already sits where the insertion would put it: right after
-/// its base and the scripts that rank before it, so the move changes nothing and cannot disturb a
-/// script that the paragraph already reads as one.
+/// its base and the scripts that rank before it, with the base itself staying where it is. The move
+/// then changes nothing and cannot disturb a script that the paragraph already reads as one.
 fn already_follows_its_base(
     before: &[&SegmentData],
     index: usize,
     base_of_script: &HashMap<SegmentKey, (&SegmentKey, usize)>,
     insertions: &HashMap<SegmentKey, Vec<ScriptOwner>>,
+    moved: &HashSet<SegmentKey>,
 ) -> bool {
     let Some(&(base, rank)) = base_of_script.get(&SegmentKey::from(before[index])) else {
         return false;
@@ -129,7 +140,8 @@ fn already_follows_its_base(
     let Some(start) = index.checked_sub(rank + 1) else {
         return false;
     };
-    SegmentKey::from(before[start]) == *base
+    !moved.contains(base)
+        && SegmentKey::from(before[start]) == *base
         && insertions[base]
             .iter()
             .take(rank)

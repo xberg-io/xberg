@@ -2548,7 +2548,7 @@ pub(crate) fn is_script_run_of(previous: &SegmentData, next: &SegmentData) -> bo
 }
 
 /// How many runs after a base are searched for the members of its script stack.
-const SCRIPT_STACK_LOOKAHEAD: usize = 8;
+pub(super) const SCRIPT_STACK_LOOKAHEAD: usize = 8;
 
 /// Indices into `segments` of the members of the nested script stack on `segments[base]`, in reading
 /// order, or none. The rule is `xberg_native_pdf::document::script_stack`, shared with reading-order

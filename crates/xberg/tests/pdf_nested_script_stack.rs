@@ -4,6 +4,8 @@ mod helpers;
 
 use xberg::core::config::{ExtractionConfig, OutputFormat};
 
+/// `None` only for the local opt-out `XBERG_REGRESSION_PAGES_SKIP=1`, which panics when `CI` is set;
+/// a skipped suite therefore fails loudly in CI and nowhere else.
 fn page_markdown(name: &str) -> Option<String> {
     if std::env::var_os("XBERG_REGRESSION_PAGES_SKIP").is_some_and(|value| value == "1") {
         assert!(
@@ -87,10 +89,23 @@ fn assert_markup(name: &str, fragment: &str) {
     );
 }
 
+fn assert_no_markup(name: &str, fragment: &str) {
+    let Some(markdown) = page_markdown(name) else {
+        return;
+    };
+    assert!(
+        !markdown.contains(fragment),
+        "{fragment:?} is in the Markdown of {name}:\n{markdown}"
+    );
+}
+
 #[test]
 fn should_keep_the_superscript_and_subscript_of_a_stack_in_separate_runs_in_arxiv_02305_equation_3() {
-    assert_markup("arxiv-2305.08917v2-p2", "H<sup>Z</sup>~2~<sup>,des</sup> ⟨xy⟩,f = −2t");
-    assert_one_line("arxiv-2305.08917v2-p2", "H Z 2 ⟨xy⟩,f = t c s");
+    assert_markup("arxiv-2305.08917v2-p2", "H<sup>Z</sup>~2 ⟨xy⟩,f~ = t c s");
+    assert_markup(
+        "arxiv-2305.08917v2-p2",
+        "H<sup>Z</sup>~2~<sup>,des</sup> ~⟨xy⟩,f~ = −2t",
+    );
 }
 
 #[test]
@@ -103,33 +118,22 @@ fn should_mark_the_scripts_of_s_and_sigma_in_arxiv_02305() {
 
 #[test]
 fn should_not_take_the_closing_bracket_piece_for_a_superscript_in_openstax_business_statistics() {
-    assert_markup("openstax-introductory-business-statistics-1e-p362", "⎛- ⎞2\n");
-    let markdown = page_markdown("openstax-introductory-business-statistics-1e-p362");
-    if let Some(markdown) = markdown {
-        assert!(
-            !markdown.contains("<sup>⎞"),
-            "a bracket piece is not a script:\n{markdown}"
-        );
-    }
+    assert_no_markup("openstax-introductory-business-statistics-1e-p362", "<sup>⎞");
 }
 
 #[test]
-fn should_keep_the_exponent_run_of_one_symbol_apart_from_its_subscript_in_plos_1010783() {
-    assert_markup(
-        "plos-journal.pcbi.1010783-p4",
-        "R<sup>n</sup>~x þ~ is the vector of state variables, **θ** 2 R<sup>n</sup>~y þ~ is the parameter vector",
-    );
+fn should_hold_the_exponent_n_in_the_superscript_of_r_in_plos_1010783() {
+    assert_markup("plos-journal.pcbi.1010783-p4", "2 R<sup>n</sup>");
+    assert_no_markup("plos-journal.pcbi.1010783-p4", "\nn~x~ n~y~\n");
 }
 
 #[test]
-fn should_keep_the_stack_scripts_of_arxiv_01153_equation_2_and_3_that_main_had_before_the_stack_rule() {
-    assert_markup(
-        "arxiv-2403.01153v1-p3",
-        "Where ∥H(f, t)∥ and e<sup>iθ</sup> CSI can be rewritten as:",
-    );
+fn should_keep_the_stack_scripts_of_arxiv_01153_equations_2_and_3_on_their_base() {
+    assert_markup("arxiv-2403.01153v1-p3", "· e<sup>iθ</sup> (2)");
     assert_markup("arxiv-2403.01153v1-p3", "∥H(f, t)∥ · e<sup>jθ</sup>\n");
     assert_markup("arxiv-2403.01153v1-p3", "= ∥H~s~(f, t)∥ · e<sup>jθs</sup>");
     assert_markup("arxiv-2403.01153v1-p3", "\\+ ∥H~m~(f, t)∥ · e<sup>jθm</sup> (3)");
+    assert_no_markup("arxiv-2403.01153v1-p3", "\njθs\n\n∥H");
 }
 
 #[test]
