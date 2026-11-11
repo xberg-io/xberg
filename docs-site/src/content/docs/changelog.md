@@ -331,7 +331,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(pdf): Render recognized tables as plain text on the mixed OCR route.** (#2903)
+- **(ocr): Keep Khmer number recovery available after bounded source declines.** (#2905)
+  Completed declines charge the work already done, leaving room to verify supported pages later in the PDF.
+  Cancellation and failures whose work cannot be measured still retain their reservation.
 - **(djot): Preserve straight quotes, apostrophes, and runs of dots or dashes in marked rows.** (#2913)
   Djot readers show the row punctuation as written.
 - **(djot): Preserve block-like text in rendered paragraphs, lists, and OCR output.** (#2891)
@@ -342,6 +344,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Numeric-only OCR reads do not claim retention of native prose, across all supported scripts.
 - **(ocr): Re-render only OCR page text as plain, and keep DOCX and native page text.** (#2839, #2902)
   Since #2839, a DOCX page whose notes or math are not in the plain content, and a native PDF page of a mixed document, were replaced by the plain rendering of their elements, losing the footnote definitions and the equation spacing. A page that is not found in the content is now re-rendered only when an OCR route produced its text; any other page keeps its text, and only its page range is omitted, with the `page_boundaries` warning.
+- **(pdf): Render recognized tables as plain text on the mixed OCR route.** (#2903)
 - **(djot): Preserve paragraph text that begins with block syntax.** (#2856, #2869)
   Escape block markers without changing following inline markup or existing backslash escapes.
 - **(pdf): Keep a nested superscript or subscript stack on its base's line.** (#2728)
