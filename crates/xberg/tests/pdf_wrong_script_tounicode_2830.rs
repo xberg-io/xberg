@@ -173,7 +173,11 @@ fn a_wrong_mapped_page_with_a_correctly_mapped_english_footer_stays_native() {
     assert_eq!(result.extraction_method, Some(ExtractionMethod::Native));
     assert!(arabic_letters(&result.content) > 500, "{:?}", result.content);
     assert!(!result.content.contains(PHRASES[0]), "{:?}", result.content);
-    assert!(result.content.contains("Minutes approved by the board"), "{:?}", result.content);
+    assert!(
+        result.content.contains("Minutes approved by the board"),
+        "{:?}",
+        result.content
+    );
 }
 
 #[test]
