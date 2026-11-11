@@ -37,29 +37,34 @@ pub(super) fn assert_page_ranges(document: &ExtractedDocument) {
     );
 }
 
-fn expected_scanned_table_body(recognized: &PageContent) -> String {
+fn forced_table_block(recognized: &PageContent) -> &str {
     assert_eq!(recognized.tables.len(), 1);
-    let table = &recognized.tables[0];
-    for witness in ["Six-Year Summary", "48,210", "102,228"] {
-        assert!(table.markdown.contains(witness), "the source table contains {witness}");
-    }
-    // Markdown parsing can change OCR punctuation, such as straight quotes. ~keep
-    table
+    let rows = recognized.tables[0]
         .cells
         .iter()
         .map(|row| row.join(" "))
         .collect::<Vec<_>>()
-        .join("\n")
+        .join("\n");
+    // Whole-document OCR also emits the cell text as individual paragraphs. ~keep
+    let mut blocks = recognized.content.split("\n\n").filter(|block| *block == rows.trim());
+    let block = blocks
+        .next()
+        .expect("the forced page contains the complete Plain table");
+    assert!(blocks.next().is_none(), "the forced page has one rendered table block");
+    for witness in ["Six-Year Summary", "48,210", "102,228"] {
+        assert!(block.contains(witness), "the rendered table contains {witness}");
+    }
+    block
 }
 
 pub(super) fn scanned_table_body_is_complete(actual: &PageContent, recognized: &PageContent) -> bool {
-    actual.content == expected_scanned_table_body(recognized).trim()
+    actual.content == forced_table_block(recognized)
 }
 
 pub(super) fn assert_scanned_table_body(actual: &PageContent, recognized: &PageContent) {
     assert_eq!(
         actual.content,
-        expected_scanned_table_body(recognized).trim(),
-        "the complete scanned body equals the recognized Plain table rows"
+        forced_table_block(recognized),
+        "the complete mixed page equals the forced Plain table block"
     );
 }
