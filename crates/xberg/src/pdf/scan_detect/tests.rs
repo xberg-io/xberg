@@ -1026,3 +1026,28 @@ fn text_and_picture_inside_form_xobjects_are_seen_in_paint_order() {
         assert_eq!(text_drawn_over_full_page_picture(&doc, 0), over, "{name}");
     }
 }
+
+/// #2826: a chain of forms that each paint the next one twice is walked 2^depth times. The walk
+/// stops at its operator budget and gives no verdict, so the page stays a scan.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+fn a_form_chain_that_doubles_at_each_level_stops_the_walk_without_a_verdict() {
+    let unit = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+    let picture = "q 100 0 0 100 0 0 cm /Im0 Do Q";
+    let text = "BT /F1 4 Tf 2 80 Td (Line of the native text) Tj ET";
+    let depth = 22;
+    let names: Vec<String> = (0..=depth).map(|level| format!("F{level}")).collect();
+    let bodies: Vec<String> = (0..depth)
+        .map(|level| format!("/F{next} Do /F{next} Do", next = level + 1))
+        .chain([String::new()])
+        .collect();
+    let mut forms = vec![("Fp", unit, picture), ("Ft", unit, text)];
+    forms.extend(
+        names
+            .iter()
+            .zip(&bodies)
+            .map(|(name, body)| (name.as_str(), unit, body.as_str())),
+    );
+    let doc = raster_page_with_forms("/Fp Do /Ft Do /F0 Do", &forms);
+    assert!(!text_drawn_over_full_page_picture(&doc, 0));
+}

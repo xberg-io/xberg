@@ -8,6 +8,10 @@ use crate::content::{Matrix, Operator, TextElement};
 /// Deepest chain of form XObjects followed, the cycle limit of the image handle walk.
 const MAX_FORM_DEPTH: usize = 100;
 
+/// Most operators one page walk reads, its own and those of every form it paints. A form painted
+/// twice by each of a chain of forms is walked 2^depth times; the walk stops at this bound.
+const MAX_WALK_OPERATORS: usize = 1_000_000;
+
 /// The running counts of one page walk.
 struct PictureTextWalk {
     page: (f32, f32, f32, f32),
@@ -16,6 +20,7 @@ struct PictureTextWalk {
     over: usize,
     covered: bool,
     forms: Vec<ObjectRef>,
+    budget: usize,
 }
 
 impl PdfDocument {
@@ -23,7 +28,8 @@ impl PdfDocument {
     /// `min_coverage` of its media box, and all glyph bytes it shows, in `Tj`, `TJ`, `'` and `"`.
     /// A glyph in render mode 3 (invisible) or 7 (clip only) is not visible. Form XObjects are
     /// followed with their `/Matrix` and resources. `None` when no single image covers the page,
-    /// or when the page's content cannot be read.
+    /// when the page's content cannot be read, or when the walk reads more than
+    /// [`MAX_WALK_OPERATORS`] operators.
     pub fn glyphs_over_covering_image(&self, page_index: usize, min_coverage: f32) -> Option<(usize, usize)> {
         let (x0, y0, x1, y1) = self.get_page_media_box(page_index).ok()?;
         let resources = self.get_page_resources(page_index).ok()?;
@@ -35,13 +41,15 @@ impl PdfDocument {
             over: 0,
             covered: false,
             forms: Vec::new(),
+            budget: MAX_WALK_OPERATORS,
         };
-        self.walk_picture_text(&operators, &resources, Matrix::identity(), 0, &mut walk);
+        self.walk_picture_text(&operators, &resources, Matrix::identity(), 0, &mut walk)?;
         walk.covered.then_some((walk.over, walk.all))
     }
 
     /// Walks one content stream, starting from the CTM and text render mode in effect where it is
-    /// painted. A `Q` with no `q` of this stream leaves the state as it is.
+    /// painted. A `Q` with no `q` of this stream leaves the state as it is. `None` when the walk
+    /// runs out of its operator budget.
     fn walk_picture_text(
         &self,
         operators: &[Operator],
@@ -49,7 +57,8 @@ impl PdfDocument {
         ctm: Matrix,
         render: u8,
         walk: &mut PictureTextWalk,
-    ) {
+    ) -> Option<()> {
+        walk.budget = walk.budget.checked_sub(operators.len())?;
         let (mut ctm, mut render, mut saved) = (ctm, render, Vec::new());
         for operator in operators {
             let shown = match operator {
@@ -78,7 +87,7 @@ impl PdfDocument {
                     0
                 }
                 Operator::Do { name } => {
-                    self.paint_picture_text_xobject(name, resources, ctm, render, walk);
+                    self.paint_picture_text_xobject(name, resources, ctm, render, walk)?;
                     0
                 }
                 Operator::InlineImage { .. } => {
@@ -100,10 +109,12 @@ impl PdfDocument {
                 walk.over += shown;
             }
         }
+        Some(())
     }
 
     /// Paints the XObject `name` of `resources`: an image may cover the page, a form is walked
-    /// with its own matrix and resources (its parent's when it has none).
+    /// with its own matrix and resources (its parent's when it has none). `None` when the walk runs
+    /// out of its operator budget.
     fn paint_picture_text_xobject(
         &self,
         name: &str,
@@ -111,29 +122,31 @@ impl PdfDocument {
         ctm: Matrix,
         render: u8,
         walk: &mut PictureTextWalk,
-    ) {
+    ) -> Option<()> {
         let entry = resources
             .as_dict()
             .and_then(|resources| resources.get("XObject"))
             .and_then(|xobjects| self.resolve_object(xobjects).ok())
             .and_then(|xobjects| xobjects.as_dict()?.get(name).cloned());
-        let Some(entry) = entry else { return };
+        let Some(entry) = entry else { return Some(()) };
         let Ok(xobject) = self.resolve_object(&entry) else {
-            return;
+            return Some(());
         };
-        let Some(dict) = xobject.as_dict() else { return };
+        let Some(dict) = xobject.as_dict() else { return Some(()) };
         match dict.get("Subtype").and_then(Object::as_name) {
             Some("Image") => walk.paint_image(&ctm),
             Some("Form") => {
-                let Some(form) = entry.as_reference() else { return };
+                let Some(form) = entry.as_reference() else {
+                    return Some(());
+                };
                 if walk.forms.contains(&form) || walk.forms.len() >= MAX_FORM_DEPTH {
-                    return;
+                    return Some(());
                 }
                 let Ok(data) = self.decode_stream_with_encryption(&xobject, form) else {
-                    return;
+                    return Some(());
                 };
                 let Ok(operators) = crate::content::parse_content_stream(&data) else {
-                    return;
+                    return Some(());
                 };
                 let form_resources = match dict.get("Resources") {
                     Some(own) => self.resolve_object(own).unwrap_or_else(|_| resources.clone()),
@@ -144,11 +157,13 @@ impl PdfDocument {
                     .and_then(|matrix| self.parse_matrix_from_object(matrix))
                     .unwrap_or_else(Matrix::identity);
                 walk.forms.push(form);
-                self.walk_picture_text(&operators, &form_resources, matrix.multiply(&ctm), render, walk);
+                let walked = self.walk_picture_text(&operators, &form_resources, matrix.multiply(&ctm), render, walk);
                 walk.forms.pop();
+                walked?;
             }
             _ => {}
         }
+        Some(())
     }
 }
 
