@@ -160,7 +160,9 @@ fn append_heading_attributes_plain(elem: &InternalElement, out: &mut String) {
     let Some(attrs) = elem.public_attributes() else { return };
     let mut filtered: Vec<_> = attrs
         .iter()
-        .filter(|(key, value)| !key.starts_with("xmlns") && !value.is_empty())
+        .filter(|(key, value)| {
+            !key.starts_with("xmlns") && !value.is_empty() && key.as_str() != crate::types::internal::STYLE_NAME_ATTRIBUTE
+        })
         .collect();
     filtered.sort_by_key(|(key, _)| key.as_str());
     let formatted: Vec<String> = filtered
@@ -635,6 +637,23 @@ mod tests {
             heading,
             AHashMap::from_iter([
                 ("xberg:internal:font-size-pt".to_string(), "18".to_string()),
+                ("role".to_string(), "contract".to_string()),
+            ]),
+        );
+
+        assert_eq!(render_plain(&b.build()), "Service agreement (role: contract)");
+    }
+
+    #[test]
+    fn render_plain_leaves_out_the_docx_style_name_of_a_heading() {
+        use ahash::AHashMap;
+
+        let mut b = InternalDocumentBuilder::new("test");
+        let heading = b.push_heading(1, "Service agreement", None, None);
+        b.set_attributes(
+            heading,
+            AHashMap::from_iter([
+                (crate::types::internal::STYLE_NAME_ATTRIBUTE.to_string(), "heading 1".to_string()),
                 ("role".to_string(), "contract".to_string()),
             ]),
         );
