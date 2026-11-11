@@ -330,7 +330,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **(ocr): Keep the text layer's words when automatic OCR takes a whole page whose layer is partly decodable.** (GH#2952)
-  A decodable layer word that the page paints and that the read misread by one or two edits takes the layer's spelling, and a painted layer word with no read word at its place is added in reading order. A place that holds a different word, several words or a word only partly over it keeps the read, and nothing changes unless the read agrees with at least half of the layer words it locates.
+  A painted ASCII layer word that the read misread with low confidence (below 0.75) as a confusable (`0`/`O`, `1`/`l`, `rn`/`m`, ...) or by a dropped edge character takes the layer's spelling, and a painted layer word with no read word at its place is added in reading order. Ligature or other non-ASCII layer tokens, numbers, other edits, a place that holds a different or several words, and pages whose read disagrees with the layer keep the read.
 - **(go): Ship usable static-link flags in the linux-x86_64 and linux-aarch64 Go release archives.** (GH#2988)
   `native-static-libs.txt` no longer ends with a terminal colour escape that cgo rejected, and the glibc-floor archive lists `-lc++ -lc++abi` instead of `-lstdc++`, matching the zig-built C++ objects.
 - **(pdf): Read each table's grid once per segment in the page split that finds the table carrying each split word.** (#2960)

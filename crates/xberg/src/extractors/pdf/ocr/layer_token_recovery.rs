@@ -5,6 +5,7 @@ use super::native_word_coverage::{
 };
 use crate::types::internal::{ElementKind, InternalElement};
 use crate::types::{ExtractedDocument, OcrBoundingGeometry, OcrConfidence, OcrElement, OcrElementLevel};
+use std::collections::HashMap;
 use xberg_native_pdf::{PdfDocument, geometry::Rect};
 
 /// The fewest decodable layer words the read must locate before its agreement with the layer says
@@ -12,16 +13,60 @@ use xberg_native_pdf::{PdfDocument, geometry::Rect};
 const MIN_LOCATED_WORDS: usize = 3;
 /// The longest layer token that is a word rather than a run-together string.
 const MAX_TOKEN_CHARS: usize = 48;
-/// The most an aspect ratio of the read raster may differ from the page's before the raster is
+/// The most the aspect ratio of the read raster may differ from the page's before the raster is
 /// not the whole page.
 const MAX_ASPECT_DRIFT: f32 = 0.01;
+/// A read word is corrected only below this recognition confidence: the default
+/// `min_ocr_mean_confidence` (75 on Tesseract's scale), under which the page itself would not be
+/// accepted. A word the engine is sure of stays as read, whatever the layer says.
+const MAX_CORRECTED_CONFIDENCE: f64 = 0.75;
+/// Layer and read words beyond these counts are not compared: the comparison indexes the read, but
+/// a page this dense is not one whose layer is checked.
+const MAX_LAYER_WORDS: usize = 4096;
+const MAX_READ_WORDS: usize = 8192;
+/// The most words recovery adds to a page; a page that wants more is not one a few words are lost on.
+const MAX_ADDITIONS: usize = 64;
+/// Words between two polls of the cancellation check.
+const CANCEL_POLL_INTERVAL: usize = 64;
 const RECOVERY_BACKEND: &str = "layer-token-recovery";
+
+/// Characters an OCR engine takes for one another, as unordered pairs. A letter pair that differs
+/// only in case is listed for the shapes that match at both sizes.
+const CONFUSABLE_PAIRS: [(char, char); 23] = [
+    ('0', 'O'),
+    ('0', 'o'),
+    ('1', 'l'),
+    ('1', 'I'),
+    ('l', 'I'),
+    ('5', 'S'),
+    ('5', 's'),
+    ('8', 'B'),
+    ('2', 'Z'),
+    ('2', 'z'),
+    ('9', 'O'),
+    ('9', 'g'),
+    ('9', 'q'),
+    ('6', 'b'),
+    ('C', 'c'),
+    ('K', 'k'),
+    ('O', 'o'),
+    ('P', 'p'),
+    ('S', 's'),
+    ('U', 'u'),
+    ('V', 'v'),
+    ('W', 'w'),
+    ('X', 'x'),
+];
+/// Multi-character shapes read as one character, collapsed before two tokens are compared.
+const CONFUSABLE_RUNS: [(&str, &str); 2] = [("rn", "m"), ("vv", "w")];
 
 /// A word placed on the page, in the points of the read's frame.
 #[derive(Clone, Debug)]
 pub(super) struct PlacedWord {
     pub(super) text: String,
     pub(super) place: LineBox,
+    /// Recognition confidence of a read word, 0 to 1; unused for a layer word.
+    pub(super) confidence: f64,
 }
 
 /// What recovery changes in a read.
@@ -47,64 +92,139 @@ fn alnum_core(token: &str) -> String {
     token.chars().filter(|character| character.is_alphanumeric()).collect()
 }
 
-fn edit_distance(left: &str, right: &str) -> usize {
-    let right: Vec<char> = right.chars().collect();
-    let mut row: Vec<usize> = (0..=right.len()).collect();
-    for (at, a) in left.chars().enumerate() {
-        let mut diagonal = row[0];
-        row[0] = at + 1;
-        for (to, b) in right.iter().enumerate() {
-            let above = row[to + 1];
-            row[to + 1] = (diagonal + usize::from(a != *b)).min(above + 1).min(row[to] + 1);
-            diagonal = above;
-        }
-    }
-    row[right.len()]
+fn collapse_runs(token: &str) -> String {
+    CONFUSABLE_RUNS
+        .iter()
+        .fold(token.to_owned(), |text, (run, single)| text.replace(run, single))
 }
 
-/// Whether the read word is a misreading of the layer word: one edit for a token of three
-/// characters or more, two for a token of five or more (an identifier with a letter and a digit
-/// swapped, an edge character dropped or added). A longer distance is a different word, and the
-/// read keeps it. Words that differ only in punctuation are the same word and stay as read.
-fn is_near_miss(read: &str, layer: &str) -> bool {
-    if alnum_core(read) == alnum_core(layer) {
+fn confusable(left: char, right: char) -> bool {
+    left == right
+        || CONFUSABLE_PAIRS
+            .iter()
+            .any(|&(a, b)| (a == left && b == right) || (a == right && b == left))
+}
+
+/// Whether the read word is an OCR misreading of the layer word. Only these count: the same
+/// characters with confusable ones swapped (`0`/`O`, `1`/`l`, `rn`/`m`, ...), and an edge
+/// character the read dropped or added on an identifier that mixes letters and digits. A layer
+/// token with anything beyond ASCII (a ligature or other presentation form, an accent), without a
+/// letter (a number whose digits a shifted mapping could change), or that differs by any other
+/// insertion, deletion or substitution is a different word and the read keeps its own.
+fn is_misreading(read: &str, layer: &str) -> bool {
+    if !read.is_ascii() || !layer.is_ascii() || alnum_core(read) == alnum_core(layer) {
         return false;
     }
-    let length = layer.chars().count();
-    match edit_distance(read, layer) {
-        1 => length >= 3,
-        2 => length >= 5,
-        _ => false,
+    if !layer.chars().any(|character| character.is_ascii_alphabetic()) {
+        return false;
     }
+    let (collapsed_read, collapsed_layer) = (collapse_runs(read), collapse_runs(layer));
+    if collapsed_read.chars().count() == collapsed_layer.chars().count()
+        && collapsed_read
+            .chars()
+            .zip(collapsed_layer.chars())
+            .all(|(a, b)| confusable(a, b))
+    {
+        return true;
+    }
+    let identifier = |token: &str| {
+        token.chars().count() >= 4
+            && token.chars().any(|character| character.is_ascii_digit())
+            && token.chars().any(|character| character.is_ascii_alphabetic())
+            && token.chars().all(|character| character.is_ascii_alphanumeric())
+    };
+    let (longer, shorter) = if layer.len() > read.len() {
+        (layer, read)
+    } else {
+        (read, layer)
+    };
+    identifier(layer)
+        && identifier(longer)
+        && longer.len() == shorter.len() + 1
+        && (longer[1..] == *shorter || longer[..longer.len() - 1] == *shorter)
 }
 
 fn overlaps(left: &LineBox, right: &LineBox) -> bool {
     left.left < right.right && right.left < left.right && left.top < right.bottom && right.top < left.bottom
 }
 
+/// Words ordered by their top edge, so the words near a place are found without scanning all of them.
+struct PlaceIndex {
+    order: Vec<usize>,
+    tops: Vec<f32>,
+    max_height: f32,
+}
+
+impl PlaceIndex {
+    fn new(words: &[PlacedWord]) -> Self {
+        let mut order: Vec<usize> = (0..words.len()).collect();
+        order.sort_by(|&a, &b| words[a].place.top.total_cmp(&words[b].place.top));
+        let tops = order.iter().map(|&at| words[at].place.top).collect();
+        let max_height = words
+            .iter()
+            .map(|word| word.place.bottom - word.place.top)
+            .fold(0.0, f32::max);
+        Self {
+            order,
+            tops,
+            max_height,
+        }
+    }
+
+    /// Indices of the words whose box may reach into the band `top..bottom`.
+    fn near(&self, top: f32, bottom: f32) -> impl Iterator<Item = usize> + '_ {
+        let start = self.tops.partition_point(|value| *value < top - self.max_height);
+        self.order[start..]
+            .iter()
+            .zip(&self.tops[start..])
+            .take_while(move |(_, value)| **value < bottom)
+            .map(|(at, _)| *at)
+    }
+}
+
 /// Decide what the layer adds to a read. A layer word is acted on only where the read and the
 /// layer agree about the page: the words the read locates at a layer word's own place must equal
-/// the layer or be near misses of it for at least half of them. Then a decodable layer word that
+/// the layer or be misreadings of it for at least half of them. Then a decodable layer word that
 /// the page shows (`shows_ink`) and whose place holds exactly one read word replaces that word
-/// when it is a near miss, and one whose place holds no read word at all is added. A place that
-/// holds a different word, several words, or a word only partly over it is left to the read.
-pub(super) fn plan(layer: &[PlacedWord], read: &[PlacedWord], shows_ink: &mut dyn FnMut(&LineBox) -> bool) -> Plan {
+/// when the word is a low-confidence misreading of it, and one whose place holds no read word at
+/// all, with no copy of its text beside it, is added. A place that holds a different word,
+/// several words, or a word only partly over it is left to the read. `cancelled` is polled
+/// while the words are compared; a cancelled plan is empty.
+pub(super) fn plan(
+    layer: &[PlacedWord],
+    read: &[PlacedWord],
+    shows_ink: &mut dyn FnMut(&LineBox) -> bool,
+    cancelled: &dyn Fn() -> bool,
+) -> Plan {
+    if layer.len() > MAX_LAYER_WORDS || read.len() > MAX_READ_WORDS {
+        return Plan::default();
+    }
+    let read_index = PlaceIndex::new(read);
+    let layer_index = PlaceIndex::new(layer);
     let mut corrections: Vec<(usize, usize)> = Vec::new();
     let mut additions: Vec<usize> = Vec::new();
     let (mut located, mut agreeing) = (0usize, 0usize);
     for (index, word) in layer.iter().enumerate().filter(|(_, word)| is_decodable(&word.text)) {
-        let over: Vec<usize> = (0..read.len())
+        if index % CANCEL_POLL_INTERVAL == 0 && cancelled() {
+            return Plan::default();
+        }
+        let near: Vec<usize> = read_index.near(word.place.top, word.place.bottom).collect();
+        let over: Vec<usize> = near
+            .iter()
+            .copied()
             .filter(|&at| word.place.owns(&read[at].place) || read[at].place.owns(&word.place))
             .collect();
         match over.as_slice() {
-            [] if !read.iter().any(|other| overlaps(&other.place, &word.place)) => additions.push(index),
+            [] if !near.iter().any(|&at| overlaps(&read[at].place, &word.place)) => additions.push(index),
             [only] if word.place.owns(&read[*only].place) && read[*only].place.owns(&word.place) => {
                 located += 1;
                 if read[*only].text == word.text {
                     agreeing += 1;
-                } else if is_near_miss(&read[*only].text, &word.text) {
+                } else if is_misreading(&read[*only].text, &word.text) {
                     agreeing += 1;
-                    corrections.push((*only, index));
+                    if read[*only].confidence < MAX_CORRECTED_CONFIDENCE {
+                        corrections.push((*only, index));
+                    }
                 }
             }
             _ => {}
@@ -114,49 +234,75 @@ pub(super) fn plan(layer: &[PlacedWord], read: &[PlacedWord], shows_ink: &mut dy
         return Plan::default();
     }
 
-    let claimed = |read_at: usize| corrections.iter().filter(|(at, _)| *at == read_at).count();
+    let mut claims: HashMap<usize, Vec<usize>> = HashMap::new();
+    for (read_at, layer_at) in &corrections {
+        claims.entry(*read_at).or_default().push(*layer_at);
+    }
+    let mut by_text: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (at, word) in read.iter().enumerate() {
+        by_text.entry(word.text.as_str()).or_default().push(at);
+    }
     let consistent: Vec<(usize, usize)> = corrections
         .iter()
         .copied()
         .filter(|(read_at, layer_at)| {
-            let text = &read[*read_at].text;
-            claimed(*read_at) == 1
-                && read
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, word)| word.text == *text)
-                    .all(|(other, _)| {
-                        corrections
-                            .iter()
-                            .any(|(at, owner)| *at == other && layer[*owner].text == layer[*layer_at].text)
-                    })
+            claims[read_at].len() == 1
+                && by_text[read[*read_at].text.as_str()].iter().all(|other| {
+                    claims
+                        .get(other)
+                        .is_some_and(|owners| owners.len() == 1 && layer[owners[0]].text == layer[*layer_at].text)
+                })
         })
         .collect();
 
     let additions: Vec<usize> = additions
         .into_iter()
         .filter(|&index| {
-            !layer
-                .iter()
-                .enumerate()
-                .any(|(other, word)| other != index && overlaps(&word.place, &layer[index].place))
+            let place = &layer[index].place;
+            !layer_index
+                .near(place.top, place.bottom)
+                .any(|other| other != index && overlaps(&layer[other].place, place))
+                && !has_copy_nearby(&layer[index], read, &read_index)
         })
         .collect();
-
-    let corrections: Vec<(usize, String)> = consistent
+    let corrections = consistent
         .into_iter()
         .filter(|(_, layer_at)| shows_ink(&layer[*layer_at].place))
         .map(|(read_at, layer_at)| (read_at, layer[layer_at].text.clone()))
         .collect();
-    let additions = additions
-        .into_iter()
-        .filter(|&index| shows_ink(&layer[index].place))
-        .collect();
+    let additions = if additions.len() > MAX_ADDITIONS {
+        Vec::new()
+    } else {
+        additions
+            .into_iter()
+            .filter(|&index| shows_ink(&layer[index].place))
+            .collect()
+    };
     Plan { corrections, additions }
 }
 
+/// Whether a read word near the layer word already holds its text, whole or run into a longer
+/// word: the read placed that word a little off, and adding the layer word would write it twice.
+fn has_copy_nearby(word: &PlacedWord, read: &[PlacedWord], index: &PlaceIndex) -> bool {
+    const WINDOW_HEIGHTS: f32 = 2.0;
+    let core = alnum_core(&word.text);
+    let height = word.place.bottom - word.place.top;
+    let reach = height * WINDOW_HEIGHTS;
+    index.near(word.place.top - reach, word.place.bottom + reach).any(|at| {
+        let other = &read[at];
+        let near_horizontally = other.place.right > word.place.left - reach * 3.0
+            && other.place.left < word.place.right + reach * 3.0
+            && other.place.bottom > word.place.top - reach
+            && other.place.top < word.place.bottom + reach;
+        let other_core = alnum_core(&other.text);
+        near_horizontally && (other_core == core || (core.chars().count() >= 3 && other_core.contains(&core)))
+    })
+}
+
+/// Whether `character` ends a token: the line, a space or a table cell edge. Markup characters,
+/// URL punctuation and the like do not, so a token inside them is never the whole read word.
 fn is_boundary(character: Option<char>) -> bool {
-    character.is_none_or(|character| !character.is_alphanumeric())
+    character.is_none_or(|character| character.is_whitespace() || character == '|')
 }
 
 /// Replace every whole-token occurrence of `from`; returns the number replaced.
@@ -210,7 +356,7 @@ impl Frame {
 }
 
 /// Recover into `read` the layer tokens of one page that a whole-page read of it lost: a layer
-/// word the read misread by a near miss takes the layer's spelling, and a layer word the page
+/// word the read misread with low confidence takes the layer's spelling, and a layer word the page
 /// shows where the read has no word is added. Returns whether the read changed.
 pub(super) fn recover_page(
     pdf: &PdfDocument,
@@ -237,6 +383,7 @@ pub(super) fn recover_page(
         .map(|word| PlacedWord {
             text: word.text.clone(),
             place: native_box(word.bbox),
+            confidence: 1.0,
         })
         .collect();
     let Some(elements) = read.ocr_elements.as_deref() else {
@@ -257,6 +404,7 @@ pub(super) fn recover_page(
             ocr_word_in_page_points(&elements[at], raster, media).map(|place| PlacedWord {
                 text: elements[at].text.trim().to_owned(),
                 place,
+                confidence: elements[at].confidence.recognition,
             })
         })
         .collect::<Option<Vec<_>>>()
@@ -284,7 +432,7 @@ pub(super) fn recover_page(
             .as_ref()
             .is_some_and(|rasters| glyph_ink_in(rasters, place, media, scale))
     };
-    let plan = plan(&layer, &read_words, &mut shows_ink);
+    let plan = plan(&layer, &read_words, &mut shows_ink, limits.cancelled);
     if plan.corrections.is_empty() && plan.additions.is_empty() {
         return false;
     }
@@ -300,7 +448,7 @@ pub(super) fn recover_page(
         .iter()
         .filter_map(|&at| Some((layer[at].text.clone(), frame.to_raster(&layer[at].place)?)))
         .collect();
-    apply(read, &corrections, &additions)
+    apply(read, &corrections, &additions, limits.cancelled)
 }
 
 /// Whether every table of the read carries a box that `area` does not touch.
@@ -315,7 +463,12 @@ fn outside_tables(read: &ExtractedDocument, area: &PixelBox) -> bool {
     })
 }
 
-fn apply(read: &mut ExtractedDocument, corrections: &[(String, String)], additions: &[AddedWord]) -> bool {
+fn apply(
+    read: &mut ExtractedDocument,
+    corrections: &[(String, String)],
+    additions: &[AddedWord],
+    cancelled: &dyn Fn() -> bool,
+) -> bool {
     let mut changed = false;
     for (from, to) in corrections {
         changed |= correct(read, from, to);
@@ -327,22 +480,68 @@ fn apply(read: &mut ExtractedDocument, corrections: &[(String, String)], additio
         .map_or(1, |element| element.page_number);
     let mut ordered: Vec<&AddedWord> = additions.iter().collect();
     ordered.sort_by_key(|(_, (left, top, _, _))| (*top, *left));
-    for (text, place) in ordered {
-        changed |= add(read, text, *place, page);
+    let mut text = PageText::of(read);
+    for (token, place) in ordered {
+        if cancelled() {
+            break;
+        }
+        changed |= add(read, &mut text, token, *place, page);
     }
     changed
 }
 
-/// Rewrite every whole-token occurrence of `from` in every form the read holds, when the text
+/// How many whole tokens of `from` the read's every surface holds, or `None` when the surfaces
+/// disagree about it, which means the token is not the plain word the OCR words say it is.
+fn surfaces_agree(read: &ExtractedDocument, from: &str) -> Option<usize> {
+    let elements = read.ocr_elements.as_deref().unwrap_or_default();
+    let words = elements
+        .iter()
+        .filter(|element| element.level == OcrElementLevel::Word && element.text.trim() == from)
+        .count();
+    if words == 0 || count_token(&read.content, from) != words {
+        return None;
+    }
+    for level in [OcrElementLevel::Line, OcrElementLevel::Block, OcrElementLevel::Page] {
+        let held: usize = elements
+            .iter()
+            .filter(|element| element.level == level)
+            .map(|element| count_token(&element.text, from))
+            .sum();
+        if elements.iter().any(|element| element.level == level) && held != words {
+            return None;
+        }
+    }
+    let mut in_tables = 0usize;
+    for table in &read.tables {
+        let cells: usize = table.cells.iter().flatten().map(|cell| count_token(cell, from)).sum();
+        if count_token(&table.markdown, from) != cells {
+            return None;
+        }
+        in_tables += cells;
+    }
+    if let Some(document) = read.ocr_internal_document.as_ref() {
+        let outside: usize = document
+            .elements
+            .iter()
+            .map(|element| count_token(&element.text, from))
+            .sum();
+        if outside + in_tables != words {
+            return None;
+        }
+        for table in &document.tables {
+            let cells: usize = table.cells.iter().flatten().map(|cell| count_token(cell, from)).sum();
+            if count_token(&table.markdown, from) != cells {
+                return None;
+            }
+        }
+    }
+    Some(words)
+}
+
+/// Rewrite every whole-token occurrence of `from` in every form the read holds, when each form
 /// holds it exactly as often as the read has words of it.
 fn correct(read: &mut ExtractedDocument, from: &str, to: &str) -> bool {
-    let words = read.ocr_elements.as_deref().map_or(0, |elements| {
-        elements
-            .iter()
-            .filter(|element| element.level == OcrElementLevel::Word && element.text.trim() == from)
-            .count()
-    });
-    if words == 0 || count_token(&read.content, from) != words {
+    if surfaces_agree(read, from).is_none() {
         return false;
     }
     replace_token(&mut read.content, from, to);
@@ -351,10 +550,12 @@ fn correct(read: &mut ExtractedDocument, from: &str, to: &str) -> bool {
     }
     for table in &mut read.tables {
         replace_token(&mut table.markdown, from, to);
-        for cell in table.cells.iter_mut().flatten() {
-            replace_token(cell, from, to);
-        }
-        for cell in table.columns.iter_mut().flatten() {
+        for cell in table
+            .cells
+            .iter_mut()
+            .flatten()
+            .chain(table.columns.iter_mut().flatten())
+        {
             replace_token(cell, from, to);
         }
     }
@@ -375,8 +576,51 @@ fn correct(read: &mut ExtractedDocument, from: &str, to: &str) -> bool {
     true
 }
 
+/// The read's words and tokens, counted once per page and kept current as words are added.
+struct PageText {
+    boxes: HashMap<String, Vec<PixelBox>>,
+    tokens: HashMap<String, usize>,
+}
+
+impl PageText {
+    fn of(read: &ExtractedDocument) -> Self {
+        let mut boxes: HashMap<String, Vec<PixelBox>> = HashMap::new();
+        for element in read.ocr_elements.iter().flatten() {
+            if element.level == OcrElementLevel::Word
+                && let Some(place) = PixelBox::of(element)
+            {
+                boxes.entry(element.text.trim().to_owned()).or_default().push(place);
+            }
+        }
+        let mut tokens: HashMap<String, usize> = HashMap::new();
+        for token in read.content.split_whitespace() {
+            *tokens.entry(token.to_owned()).or_default() += 1;
+        }
+        Self { boxes, tokens }
+    }
+
+    /// The place of a word the read holds once, as one token of its text.
+    fn once(&self, text: &str) -> Option<PixelBox> {
+        match (self.boxes.get(text).map(Vec::as_slice), self.tokens.get(text)) {
+            (Some([place]), Some(1)) => Some(*place),
+            _ => None,
+        }
+    }
+
+    fn insert(&mut self, text: &str, place: PixelBox) {
+        self.boxes.entry(text.to_owned()).or_default().push(place);
+        *self.tokens.entry(text.to_owned()).or_default() += 1;
+    }
+}
+
 /// Add `text` at `place` to the read's text, words and structure, when the text places it.
-fn add(read: &mut ExtractedDocument, text: &str, (left, top, width, height): (u32, u32, u32, u32), page: u32) -> bool {
+fn add(
+    read: &mut ExtractedDocument,
+    text: &mut PageText,
+    token: &str,
+    (left, top, width, height): (u32, u32, u32, u32),
+    page: u32,
+) -> bool {
     let area = PixelBox {
         left: i64::from(left),
         top: i64::from(top),
@@ -386,17 +630,11 @@ fn add(read: &mut ExtractedDocument, text: &str, (left, top, width, height): (u3
     if !outside_tables(read, &area) {
         return false;
     }
-    let words: Vec<(&str, PixelBox)> = read
-        .ocr_elements
-        .iter()
-        .flatten()
-        .filter(|element| element.level == OcrElementLevel::Word)
-        .filter_map(|element| Some((element.text.trim(), PixelBox::of(element)?)))
-        .collect();
-    let Some(insertion) = content_insertion(&read.content, &words, &area) else {
+    let Some(insertion) = content_insertion(&read.content, text, &area) else {
         return false;
     };
-    insertion.apply(&mut read.content, text);
+    insertion.apply(&mut read.content, token);
+    text.insert(token, area);
     let geometry = OcrBoundingGeometry::Rectangle {
         left,
         top,
@@ -405,7 +643,7 @@ fn add(read: &mut ExtractedDocument, text: &str, (left, top, width, height): (u3
     };
     if let Some(elements) = read.ocr_elements.as_mut() {
         elements.push(OcrElement {
-            text: text.to_owned(),
+            text: token.to_owned(),
             geometry: geometry.clone(),
             confidence: OcrConfidence {
                 detection: None,
@@ -415,10 +653,7 @@ fn add(read: &mut ExtractedDocument, text: &str, (left, top, width, height): (u3
             rotation: None,
             page_number: page,
             parent_id: None,
-            backend_metadata: std::collections::HashMap::from([(
-                "backend".to_owned(),
-                serde_json::Value::from(RECOVERY_BACKEND),
-            )]),
+            backend_metadata: HashMap::from([("backend".to_owned(), serde_json::Value::from(RECOVERY_BACKEND))]),
         });
     }
     if let Some(document) = read.ocr_internal_document.as_mut() {
@@ -426,7 +661,7 @@ fn add(read: &mut ExtractedDocument, text: &str, (left, top, width, height): (u3
             ElementKind::OcrText {
                 level: OcrElementLevel::Block,
             },
-            text.to_owned(),
+            token.to_owned(),
             0,
         )
         .with_page(page)
@@ -438,9 +673,23 @@ fn add(read: &mut ExtractedDocument, text: &str, (left, top, width, height): (u3
             y1: area.bottom as f64,
         });
         element.ocr_geometry = Some(geometry);
-        document.elements.push(element);
+        let position = reading_position(&document.elements, &area);
+        document.elements.insert(position, element);
     }
     true
+}
+
+/// Where in the document's elements a block at `area` reads: right after the last element, in the
+/// document's own order, that ends above it, or first when none does. Boxes are in the same raster pixels.
+fn reading_position(elements: &[InternalElement], area: &PixelBox) -> usize {
+    elements
+        .iter()
+        .enumerate()
+        .filter_map(|(at, element)| Some((at, element.bbox?)))
+        .filter(|(_, bbox)| bbox.y1 <= area.top as f64)
+        .map(|(at, _)| at)
+        .max()
+        .map_or(0, |at| at + 1)
 }
 
 /// A box in the raster pixels of the read, `top` above `bottom`.
@@ -494,6 +743,9 @@ impl PixelBox {
 /// The widest gap, in heights of the added word, between the added word and a read word that
 /// still makes them neighbours on one line.
 const MAX_LINE_GAP_HEIGHTS: i64 = 3;
+/// Characters of Markdown emphasis, links and code; a word carrying one is not a neighbour to
+/// insert beside, since the insertion could land inside the span.
+const MARKUP_CHARACTERS: [char; 8] = ['*', '_', '[', ']', '(', ')', '`', '<'];
 
 enum Insertion {
     /// Put the token next to the token at `offset`, after it or before it.
@@ -525,14 +777,7 @@ impl Insertion {
 /// the vertical position cannot place a word in. The word lands beside a word of its own line when
 /// there is one within a few word heights, and otherwise as a block of its own between the blocks
 /// above and below it, with no unplaced block between those two.
-fn content_insertion(content: &str, words: &[(&str, PixelBox)], area: &PixelBox) -> Option<Insertion> {
-    let once = |text: &str| {
-        let mut found = words.iter().filter(|(word, _)| *word == text);
-        match (found.next(), found.next()) {
-            (Some((_, place)), None) if count_token(content, text) == 1 => Some(*place),
-            _ => None,
-        }
-    };
+fn content_insertion(content: &str, text: &PageText, area: &PixelBox) -> Option<Insertion> {
     let mut blocks: Vec<(std::ops::Range<usize>, Option<PixelBox>)> = Vec::new();
     let mut start = 0usize;
     for part in content.split("\n\n") {
@@ -541,7 +786,7 @@ fn content_insertion(content: &str, words: &[(&str, PixelBox)], area: &PixelBox)
         let place = part
             .split_whitespace()
             .filter(|word| word.chars().any(char::is_alphanumeric))
-            .filter_map(once)
+            .filter_map(|word| text.once(word))
             .reduce(|left, right| left.union(&right));
         blocks.push((range, place));
     }
@@ -559,7 +804,8 @@ fn content_insertion(content: &str, words: &[(&str, PixelBox)], area: &PixelBox)
         let range = &blocks[*at].0;
         let (word, place, _) = content[range.clone()]
             .split_whitespace()
-            .filter_map(|word| Some((word, once(word)?)))
+            .filter(|word| !word.contains(MARKUP_CHARACTERS))
+            .filter_map(|word| Some((word, text.once(word)?)))
             .filter(|(_, place)| place.shares_line_with(area))
             .map(|(word, place)| {
                 let gap = if place.right <= area.left {
@@ -599,3 +845,7 @@ fn content_insertion(content: &str, words: &[(&str, PixelBox)], area: &PixelBox)
 #[cfg(test)]
 #[path = "layer_token_recovery_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "layer_token_recovery_pdf_tests.rs"]
+mod pdf_tests;

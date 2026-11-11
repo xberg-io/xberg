@@ -63,30 +63,50 @@ fn token_counts(text: &str) -> BTreeMap<String, usize> {
     counts
 }
 
-#[tokio::test]
-async fn automatic_ocr_keeps_every_decodable_layer_token_of_a_page_with_an_undecodable_header() {
-    let directory = tempfile::tempdir().unwrap();
-    let text = page_text(directory.path(), OutputFormat::Plain).await;
-    let counts = token_counts(&text);
-    for token in IDENTIFIERS.iter().chain(&LABELS).chain(&VALUES).chain(&["7"]) {
+/// `B0X92Q` is read as `BOX92Q` with recognition confidence 0.82, above the 0.75 below which a
+/// read word may be corrected, so it stays as read; every other token is recovered.
+const READ_AS_CONFIDENT: &str = "B0X92Q";
+
+fn assert_layer_tokens_recovered(text: &str) {
+    let counts = token_counts(text);
+    for token in IDENTIFIERS
+        .iter()
+        .filter(|token| **token != READ_AS_CONFIDENT)
+        .chain(&LABELS)
+        .chain(&VALUES)
+        .chain(&["7"])
+    {
         assert_eq!(
             counts.get(*token),
             Some(&1),
             "`{token}` must appear exactly once in:\n{text}"
         );
     }
+    let confident = counts.get(READ_AS_CONFIDENT).copied().unwrap_or(0) + counts.get("BOX92Q").copied().unwrap_or(0);
+    assert_eq!(
+        confident, 1,
+        "the confident misread must appear once, as read or as the layer has it:\n{text}"
+    );
 }
 
 #[tokio::test]
-async fn the_structured_markdown_page_keeps_the_same_layer_tokens() {
+async fn automatic_ocr_keeps_every_decodable_layer_token_of_a_page_with_an_undecodable_header() {
+    let directory = tempfile::tempdir().unwrap();
+    assert_layer_tokens_recovered(&page_text(directory.path(), OutputFormat::Plain).await);
+}
+
+#[tokio::test]
+async fn the_structured_markdown_page_keeps_the_same_layer_tokens_in_reading_order() {
     let directory = tempfile::tempdir().unwrap();
     let text = page_text(directory.path(), OutputFormat::Markdown).await;
-    let counts = token_counts(&text);
-    for token in IDENTIFIERS.iter().chain(&LABELS).chain(&VALUES).chain(&["7"]) {
-        assert_eq!(
-            counts.get(*token),
-            Some(&1),
-            "`{token}` must appear exactly once in:\n{text}"
-        );
-    }
+    assert_layer_tokens_recovered(&text);
+    let tokens: Vec<&str> = text
+        .split(|c: char| c.is_whitespace() || c == '|')
+        .filter(|t| !t.is_empty())
+        .collect();
+    let at = |token: &str| tokens.iter().position(|candidate| *candidate == token).unwrap();
+    assert!(
+        at("100") < at("80") && at("80") < at("60") && at("60") < at("7"),
+        "{text}"
+    );
 }
