@@ -85,10 +85,13 @@ unit_names=(
   run_controls_tests::should_cancel_before_source_admission_and_processor_initialization
   run_controls_tests::should_keep_offset_seven_primary_cache_policy_and_operation_cacheability
   run_controls_tests::should_observe_cancellation_after_admission_before_engine_initialization
+  run_controls_tests::should_not_settle_a_cancelled_measured_decline
   run_controls_tests::should_observe_cancellation_during_shape_proof_before_native_engine_start
   run_controls_tests::should_prepare_numeric_source_on_a_blocking_worker
   run_controls_tests::should_retain_source_reservation_when_a_late_decline_fails_the_proof
+  run_controls_tests::should_retain_reservation_for_unmeasured_source_failures
   run_controls_tests::should_recover_the_second_page_after_an_early_unsupported_source_decline
+  run_controls_tests::should_recover_the_third_page_after_two_late_source_declines
   run_controls_tests::should_not_spend_source_page_slots_on_unaccepted_primary_reads
   run_controls_tests::should_retain_source_reservation_after_content_decode_or_budget_decline
   run_controls_tests::should_release_metadata_declines_without_consuming_source_work
@@ -149,6 +152,8 @@ shape_names=(
   tests::should_decline_unaudited_form_font_resources_before_native
   tests::should_decline_nonzero_preflight_budget_below_native_font_cache_reservation
   tests::should_decline_complete_format12_billion_code_group_before_native
+  tests::should_charge_each_audit_of_a_shared_font_program
+  tests::should_charge_encoded_glyph_content_even_when_the_graph_refuses_it
   source_tests::should_decline_inline_actual_text_before_native_byte_reconstruction
   source_tests::should_decline_named_escaped_actual_text_properties_before_native
   source_tests::should_decline_all_marked_content_and_unknown_text_producers
@@ -171,6 +176,7 @@ shape_names=(
   source_tests::should_decline_array_comments_that_hide_character_allocation
   source_tests::should_decline_terminal_comments_that_replay_actual_text_at_eof
   source_tests::should_decline_terminal_comments_that_hide_character_allocation_at_eof
+  source_tests::should_not_populate_native_cache_during_bounded_source_reads
 )
 expected_shapes="${#shape_names[@]}"
 shape_listed="$(cargo "${shape_args[@]}" -- --include-ignored --list --color never)"

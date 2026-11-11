@@ -3,11 +3,17 @@
 equal to glyph IDs) under a Helvetica title. The letter "q" has no ToUnicode entry (one lost glyph).
   arabic:  the ToUnicode map sends each Latin letter to an Arabic code point.
   bengali: the ToUnicode map sends each Latin letter to a Bengali code point.
+  arabic-footer: as arabic, plus a correctly mapped English footer in a second font, so 15.8% of the
+           letters are Latin and the wrong map holds the rest (control: the accepted trade-off of the
+           letter-share rule, a page that stays native).
   genuine: the body is real Arabic text, its ToUnicode map is correct, and the letter qaf has no entry (control: a
            page whose ink really is Arabic).
   hebrew:  the body is real Hebrew text with a correct map and the letter qof lost (control: a script no eng model reads).
   bilingual: real Arabic paragraphs followed by one English paragraph, a correct map, qaf lost (control: a page whose
            ink is mostly Arabic with English beside it).
+  greek-minority, cyrillic-minority, arabic-minority: two English sentences and two long identifiers in that script,
+           a correct map, "q" lost (control: an English page whose other script is a correctly mapped minority of its
+           words, yet more than half its letters).
 Needs fontTools. FONT defaults to crates/xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf.
 """
 
@@ -23,7 +29,11 @@ font = TTFont(sys.argv[3] if len(sys.argv) > 3 else "crates/xberg-native-pdf/src
 best = font.getBestCmap()
 gid = {
     chr(c): font.getGlyphID(best[c])
-    for c in list(range(32, 127)) + list(range(0x0621, 0x064B)) + list(range(0x05D0, 0x05EB))
+    for c in list(range(32, 127))
+    + list(range(0x0621, 0x064B))
+    + list(range(0x05D0, 0x05EB))
+    + list(range(0x0391, 0x03AA))
+    + list(range(0x0410, 0x0430))
     if c in best
 }
 upem = font["head"].unitsPerEm
@@ -47,10 +57,26 @@ HEBREW = (
     "הוועדה התכנסה ביום שלישי כדי לבחון את התוכנית לספרייה החדשה והחברים שאלו על לוח הזמנים ועל התקציב של אזור החניה "
     "האדריכל אמר שעבודות הבנייה יתחילו אחרי החורף "
 ) * 4
+SHORT = "A quiet squad of quick clerks filed the quiz and quota forms. It is on a desk by the quay. Keys:"
+IDENTIFIERS = {
+    "greek-minority": [
+        "ΚΕΝΤΡΙΚΗ_ΜΗΧΑΝΗ_ΤΕΧΝΙΚΗ_ΚΑΤΗΜΕΡΙΝΗ_ΜΟΝΙΜΗ_ΚΟΙΝΗ_ΤΙΜΗ_ΚΙΝΗΤΗ",
+        "ΕΡΕΥΝΗΤΙΚΗ_ΜΗΤΡΙΚΗ_ΑΚΤΙΝΙΚΗ_ΑΝΤΙΚΕΙΜΕΝΙΚΗ_ΤΕΧΝΗΤΗ_ΜΗΧΑΝΙΚΗ",
+    ],
+    "cyrillic-minority": [
+        "АВТОМАТ_КАРТА_МЕТРО_ВЕКТОР_СЕКТОР_МАРКЕР_ТАРА_КОРМА_МЕТКА",
+        "КОМЕТА_РАКЕТА_ТЕАТР_ОРКЕСТР_КАТЕР_МОНТЕР_ТРАКТОР_ТОРТ_КАРКАС_ВЕТЕР",
+    ],
+    "arabic-minority": [
+        "مكتبة_المدينة_الجديدة_جدول_الأعضاء_ميزانية_السيارات_المكتبة",
+        "المهندس_البناء_الحديقة_الشتاء_السكان_القراءة_التصميم_الجديد",
+    ],
+}
 PARAGRAPHS = {
     "genuine": [ARABIC],
     "hebrew": [HEBREW],
     "bilingual": [ARABIC, text.split(". ", maxsplit=1)[0] + ". " + ". ".join(text.split(". ")[1:4]) + "."],
+    **{name: [SHORT, *identifiers] for name, identifiers in IDENTIFIERS.items()},
 }.get(variant, [text])
 
 
@@ -72,9 +98,15 @@ lines = [line for paragraph in PARAGRAPHS for line in wrap(paragraph)]
 ops = ["BT /F1 14 Tf 50 750 Td (Library Planning Notes) Tj ET", "BT /F2 10 Tf 50 720 Td 13 TL"]
 ops += ["<" + "".join(f"{gid[c]:04X}" for c in line) + "> Tj T*" for line in lines]
 ops.append("ET")
+FOOTER = [
+    "Minutes approved by the board. Copies are available from the front desk during opening hours.",
+    "Please contact the office with any comments before the next meeting. Thank you for reading. See the notes.",
+]
+if variant == "arabic-footer":
+    ops += [f"BT /F1 10 Tf 50 {100 - 13 * i} Td ({line}) Tj ET" for i, line in enumerate(FOOTER)]
 content = "\n".join(ops).encode()
 
-BASES = {"arabic": 0x0627, "bengali": 0x0985}
+BASES = {"arabic": 0x0627, "arabic-footer": 0x0627, "bengali": 0x0985}
 
 
 def unicode_of(c: str) -> int:
