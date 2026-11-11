@@ -7,6 +7,8 @@
 ))]
 
 mod helpers;
+#[path = "pdf_type0_scope_2533/marker_probe.rs"]
+mod marker_probe;
 #[path = "pdf_type0_scope_2533/negative.rs"]
 mod negative;
 
