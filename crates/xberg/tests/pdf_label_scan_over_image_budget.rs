@@ -123,12 +123,19 @@ fn explicit_pipeline_keeps_the_retry_read_and_warns_too() {
 fn explicit_pipeline_reads_a_one_page_refused_scan_like_the_default_route() {
     let default_route = extract(LABEL_SCAN, &config(false, false));
     let explicit = extract(LABEL_SCAN, &config(false, true));
-    assert_kept_with_warning(&explicit, 0);
+    assert!(explicit.content.contains("GENERAL NOTES"), "{:?}", explicit.content);
     assert_eq!(explicit.content, default_route.content);
     assert_eq!(
-        warnings_containing(&explicit, "suspected OCR recognition noise"),
+        explicit.pages.as_ref().expect("page record")[0].content,
+        default_route.pages.as_ref().expect("page record")[0].content
+    );
+    let noise = warnings_containing(&explicit, "suspected OCR recognition noise");
+    assert_eq!(noise.len(), 1, "{:?}", explicit.processing_warnings);
+    assert_eq!(
+        noise,
         warnings_containing(&default_route, "suspected OCR recognition noise")
     );
+    assert_read_was_not_shrunk(&explicit, 0);
 }
 
 /// A caller who asked for suspected noise to be discarded gets the refusal, naming the noise, for

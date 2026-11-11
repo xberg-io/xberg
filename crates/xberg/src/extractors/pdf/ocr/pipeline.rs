@@ -836,11 +836,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // The readable text layers that a replaced page keeps first when its OCR text is judged
     // recognition noise or confirms the layer. A forced page is replaced by definition and keeps
     // none. ~keep
-    let ocr_output_thresholds = config
-        .ocr
-        .as_ref()
-        .and_then(|ocr| ocr.quality_thresholds.clone())
-        .unwrap_or_default();
+    let ocr_output_thresholds = route_noise_thresholds(config);
     let page_layers = match pages.native_layers {
         Some(layers) => Some(layers),
         None if !probing_hidden_layer && all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative => {
@@ -6989,6 +6985,16 @@ pub(super) struct XObjectRecoveryContext<'a> {
     pub(super) proven_read: Option<ProvenReadPolicy<'a>>,
 }
 
+/// The recognition-noise thresholds every route judges a page read or an image retry read by.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn route_noise_thresholds(config: &ExtractionConfig) -> crate::core::config::OcrQualityThresholds {
+    config
+        .ocr
+        .as_ref()
+        .and_then(|ocr| ocr.quality_thresholds.clone())
+        .unwrap_or_default()
+}
+
 /// The noise policy a route applies to each retry read made at a placement-proven resolution.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 #[derive(Clone, Copy)]
@@ -7013,6 +7019,17 @@ impl<'a> XObjectRecoveryContext<'a> {
             use_proven_source_dpi: false,
             proven_read: None,
         }
+    }
+
+    /// The context of a route that reads an embedded image at its proven resolution and judges each
+    /// read for noise by `thresholds`, warning about a read it keeps.
+    fn with_proven_reads(mut self, thresholds: &'a crate::core::config::OcrQualityThresholds) -> Self {
+        self.use_proven_source_dpi = true;
+        self.proven_read = Some(ProvenReadPolicy {
+            thresholds,
+            warn_when_kept: true,
+        });
+        self
     }
 
     pub(super) fn check_cancelled(&self) -> crate::Result<()> {
@@ -7049,6 +7066,8 @@ pub(super) async fn collect_pipeline_xobject_pages(
     for page_idx in 0..page_count {
         let mut page_context = XObjectRecoveryContext::with_budget(context.budget, context.cancel_token);
         page_context.stored_jpegs = Some(&mut stored_jpegs);
+        page_context.use_proven_source_dpi = context.use_proven_source_dpi;
+        page_context.proven_read = context.proven_read;
         if matches!(projection, XObjectProjection::CompletePage)
             && !super::rendering::can_project_stored_jpeg_page(doc, page_idx, &limits, &mut page_context)?
         {
@@ -7108,6 +7127,7 @@ fn append_pipeline_xobject_page(
         };
         outcome.warnings.push(warning);
     }
+    outcome.warnings.append(&mut recovery.warnings);
     outcome.llm_usage.append(&mut recovery.llm_usage);
     outcome.tables.append(&mut recovery.tables);
     outcome.formulas.append(&mut recovery.formulas);
@@ -7205,12 +7225,14 @@ pub(super) async fn recover_pipeline_document_from_image_xobjects(
 
     let mut budget = crate::extractors::security::SecurityBudget::from_config(config);
     let recovery_ocr_config = pipeline_xobject_recovery_ocr_config(config, ocr_config);
+    let thresholds = route_noise_thresholds(config);
+    let context = XObjectRecoveryContext::with_budget(&mut budget, cancel_token).with_proven_reads(&thresholds);
     let mut outcome = collect_pipeline_xobject_pages(
         &backend,
         &doc,
         page_count,
         &recovery_ocr_config,
-        XObjectRecoveryContext::with_budget(&mut budget, cancel_token),
+        context,
         XObjectProjection::CompletePage,
     )
     .await?;
