@@ -7,6 +7,13 @@
 //! page again. The backend replaces the built-in `tesseract` entry of this process's registry, so
 //! every test here is serial and the file holds no other tests.
 //!
+//! The pinned fallback conditions of `loses_whole_read` (crates/xberg/src/extractors/pdf/mod.rs)
+//! are `!failure.recovered` and the non-empty whole-read page clause: cases A, B, C and D decide
+//! them through the public API. The `!dropped_pages.contains(&failure.page)` clause is not pinned
+//! here: a page in `dropped_pages` always has native text, which recovers its failure first, so it
+//! never decides alone through the public API — it is unit-tested as a redundant conjunct of the
+//! extracted pure function.
+//!
 //! CI collects these tests on the unit-test legs (`mise run rust:test:ci`, which runs
 //! `scripts/ci/rust/run-unit-tests.sh`; its `xberg_test_features` include `bundle-tessdata-eng`
 //! on every platform, with the `full-no-heic` substitution on Linux aarch64).
@@ -16,6 +23,7 @@ mod helpers;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use xberg::core::config::{OcrStrategy, PageConfig};
 use xberg::plugins::{OcrBackend, OcrBackendType, Plugin, register_ocr_backend, unregister_ocr_backend};
 use xberg::types::{ExtractedDocument, ExtractionMethod};
@@ -93,17 +101,32 @@ enum Read {
     /// A read in the page's own script, which the whole read keeps: nothing drops, so no retry
     /// is armed at all.
     Khmer,
+    /// A read that stays Latin until the per-page retry is executing — marked by the arming
+    /// key's raster being read a second time, its whole read and then the retry's read of it —
+    /// and fails from then on: however many re-reads the whole-document read makes of the same
+    /// raster, none of them is the failing one.
+    FailsAfterRetryArms,
 }
 
 /// Reads pages apart by the dimensions of the raster it is handed: a raster script's calls
 /// consume its outcomes in call order, and a script that runs out repeats its last outcome, so a
 /// test can let the whole-document read cover a page and fail or blank only the per-page retry
-/// that reads the same page again. The scan flag of the handed config (`known_full_page_scan`)
-/// separates a page's own reads from the reads of its embedded image, whose dimensions the page
-/// render repeats. A raster with no script reads Latin.
+/// that reads the same page again. `FailsAfterRetryArms` is the exception: it reads Latin until
+/// the arming key's raster has been read a second time — the page's whole read, then the
+/// per-page retry's read of it — and fails from then on, so a whole read that re-reads the
+/// raster any number of times never takes the failure. The scan flag of the handed config
+/// (`known_full_page_scan`) separates a page's own reads from the reads of its embedded image,
+/// whose dimensions the page render repeats. A raster with no script reads Latin.
 struct ByRaster {
     scripts: Mutex<HashMap<ScriptKey, Vec<Read>>>,
     next: Mutex<HashMap<ScriptKey, usize>>,
+    /// The key whose second read marks the per-page retry as executing. `None` keeps every
+    /// script call-ordered.
+    arming_key: Option<ScriptKey>,
+    /// Every call per key, counted only while an arming key is set.
+    calls: Mutex<HashMap<ScriptKey, usize>>,
+    /// Whether the per-page retry has been observed executing.
+    retry_armed: AtomicBool,
 }
 
 /// A raster script's key: the raster's dimensions and whether the handed config marks the read as
@@ -112,9 +135,16 @@ type ScriptKey = ((u32, u32), bool);
 
 impl ByRaster {
     fn new(scripts: HashMap<ScriptKey, Vec<Read>>) -> Self {
+        Self::new_arming_after(scripts, None)
+    }
+
+    fn new_arming_after(scripts: HashMap<ScriptKey, Vec<Read>>, arming_key: Option<ScriptKey>) -> Self {
         Self {
             scripts: Mutex::new(scripts),
             next: Mutex::new(HashMap::new()),
+            arming_key,
+            calls: Mutex::new(HashMap::new()),
+            retry_armed: AtomicBool::new(false),
         }
     }
 }
@@ -150,6 +180,14 @@ impl OcrBackend for ByRaster {
             .and_then(|options| options.get("known_full_page_scan"))
             .is_some_and(|value| value.as_bool().unwrap_or(false));
         let key = (dims, scan_flag);
+        if self.arming_key.is_some() {
+            let mut calls = self.calls.lock().unwrap();
+            let count = calls.entry(key).or_default();
+            *count += 1;
+            if *count == 2 && Some(key) == self.arming_key {
+                self.retry_armed.store(true, Ordering::SeqCst);
+            }
+        }
         let outcome = {
             let scripts = self.scripts.lock().unwrap();
             let mut next = self.next.lock().unwrap();
@@ -169,6 +207,12 @@ impl OcrBackend for ByRaster {
             Read::Blank => {}
             Read::Fails => return Err(xberg::XbergError::ocr("the page raster was refused")),
             Read::Khmer => document.content = KHMER_READ.to_owned(),
+            Read::FailsAfterRetryArms => {
+                if self.retry_armed.load(Ordering::SeqCst) {
+                    return Err(xberg::XbergError::ocr("the page raster was refused"));
+                }
+                document.content = ENGLISH.to_owned();
+            }
         }
         Ok(document)
     }
@@ -312,17 +356,27 @@ fn a_scan_the_whole_read_read_blank_does_not_drop_the_retry_nor_warn_of_an_unrea
 /// Case C: a per-page read that fails unrecovered on a page the whole-document read read with text
 /// discards the retry for the whole read: the fallback warning appears, and the marked page's
 /// native text is replaced by the whole read's OCR text. This pins the fallback firing itself and
-/// the whole-read page-to-index mapping, which cases A and B cannot see: both keep the retry.
+/// the whole-read page-to-index mapping, which cases A and B cannot see: both keep the retry. The
+/// failing read is keyed on the phase, not on call order: the whole read and the retry share the
+/// scan's script key, and the whole read can re-read the scan through its embedded-image retry
+/// (case B shows that re-read), so the scan reads Latin until the marked page's raster has been
+/// read a second time — the whole read's read of it, then the per-page retry's read of it — and
+/// fails only from then on.
 #[test]
 #[serial_test::serial]
 fn a_retry_failure_unrecovered_on_a_page_the_whole_read_read_drops_the_retry_for_the_whole_read() {
-    let backend = Arc::new(ByRaster::new(script(&[
-        // The scan: the whole-document read reads it, the marked-page retry's read of it fails.
-        // The scan has no native text to recover the failure, so the retry loses to the whole
-        // read. The marked page's whole read is unscripted: it reads Latin, which drops its
-        // script and arms the retry.
-        ((SCAN_DIMS, true), &[Read::Latin, Read::Fails]),
-    ])));
+    let backend = Arc::new(ByRaster::new_arming_after(
+        script(&[
+            // The scan reads Latin for as long as the whole read is running — however many
+            // calls it makes, including its embedded-image re-reads — and fails the per-page
+            // retry's read of it. The scan has no native text to recover that failure, so the
+            // retry loses to the whole read.
+            ((SCAN_DIMS, true), &[Read::FailsAfterRetryArms]),
+        ]),
+        // The marked page: its whole read is unscripted, so it reads Latin, which drops its
+        // script and arms the retry; the retry's read of it is the key's second call.
+        Some((KHMER_DIMS, false)),
+    ));
     let automatic = read(THEN_SCANNED, backend.clone());
     assert_eq!(
         warnings_containing(&automatic, "could not read every other page").len(),
@@ -399,8 +453,9 @@ fn a_retry_read_failure_on_the_marked_page_itself_keeps_the_retry_and_the_native
 /// `Some(Err)` arm of the retry — the run failing as a whole — is unreachable with an observable
 /// effect through the public API: a page task's backend error, however classified, is converted to
 /// a per-page failure, and a run-level cancellation error is re-raised by the cancellation check
-/// inside that arm before its fallback applies, so the arm is bare error propagation, not a
-/// fallback.
+/// inside that arm before its fallback applies. The arm itself is a fallback, not bare error
+/// propagation: it warns that the targeted OCR failed, records that warning, and hands the
+/// document back to the whole-document read.
 #[test]
 #[serial_test::serial]
 fn a_whole_read_that_keeps_the_marked_script_arms_no_retry_and_stands_on_its_own() {
