@@ -794,7 +794,7 @@ impl PageRenderer {
 
         let knockout = knockout::page_is_knockout(doc, page_num);
         if knockout {
-            self.execute_knockout_group(&mut pixmap, transform, &operators, doc, page_num, &resources)?;
+            self.execute_knockout_group(&mut pixmap, transform, &operators, doc, page_num, &resources, Some(0))?;
         } else {
             self.execute_operators(&mut pixmap, transform, &operators, doc, page_num, &resources)?;
         }
@@ -4606,15 +4606,7 @@ impl PageRenderer {
             // rather than against the accumulated paint from earlier
             // elements. Later elements override earlier ones in regions
             // where both contribute. ~keep
-            let is_knockout = dict
-                .get("Group")
-                .and_then(|g| g.as_dict())
-                .and_then(|gd| gd.get("K"))
-                .map(|k| match k {
-                    Object::Boolean(b) => *b,
-                    _ => false,
-                })
-                .unwrap_or(false);
+            let is_knockout = dict.get("Group").is_some_and(knockout::group_is_knockout);
 
             tracing::trace!(
                 "Rendering transparency group (isolated={}, knockout={})",
@@ -4676,6 +4668,7 @@ impl PageRenderer {
                     doc,
                     page_num,
                     &form_resources,
+                    None,
                 )
                 .map(|fallback| {
                     work_fallback = fallback;
@@ -8679,23 +8672,29 @@ fn project_iccbased_to_rgb(doc: &PdfDocument, stream_resolved: &Object, values: 
 /// in a knockout group is delimited by a paint operator and composites
 /// independently against the group's initial backdrop.
 fn is_paint_operator(op: &Operator) -> bool {
+    is_text_show_operator(op)
+        || matches!(
+            op,
+            Operator::Fill
+                | Operator::FillEvenOdd
+                | Operator::Stroke
+                | Operator::CloseStroke
+                | Operator::FillStroke
+                | Operator::FillStrokeEvenOdd
+                | Operator::CloseFillStroke
+                | Operator::CloseFillStrokeEvenOdd
+                | Operator::PaintShading { .. }
+                | Operator::Do { .. }
+                | Operator::InlineImage { .. }
+        )
+}
+
+/// The operators that show text. They are paint operators; a knockout pass charges the ones that
+/// paint a side a second page-sized coverage raster. ~keep
+fn is_text_show_operator(op: &Operator) -> bool {
     matches!(
         op,
-        Operator::Fill
-            | Operator::FillEvenOdd
-            | Operator::Stroke
-            | Operator::CloseStroke
-            | Operator::FillStroke
-            | Operator::FillStrokeEvenOdd
-            | Operator::CloseFillStroke
-            | Operator::CloseFillStrokeEvenOdd
-            | Operator::PaintShading { .. }
-            | Operator::Do { .. }
-            | Operator::InlineImage { .. }
-            | Operator::Tj { .. }
-            | Operator::TJ { .. }
-            | Operator::Quote { .. }
-            | Operator::DoubleQuote { .. }
+        Operator::Tj { .. } | Operator::TJ { .. } | Operator::Quote { .. } | Operator::DoubleQuote { .. }
     )
 }
 
