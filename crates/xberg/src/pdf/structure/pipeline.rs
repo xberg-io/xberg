@@ -5545,7 +5545,18 @@ fn covers_and_carries(seg: &SegmentData, table: &TableCoverage) -> bool {
         return false;
     }
     let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
-    inter_area / seg_area >= 0.5 && table.carries(seg_text)
+    if inter_area / seg_area < 0.5 {
+        return false;
+    }
+    #[cfg(test)]
+    CARRY_CHECKS.with(|checks| checks.set(checks.get() + 1));
+    table.carries(seg_text)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times a table's grid was read for a segment, to bound the page split's work.
+    static CARRY_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The carrier of each page segment, as a position in `holders`. A run of neighbouring segments goes to
@@ -5554,30 +5565,45 @@ fn covers_and_carries(seg: &SegmentData, table: &TableCoverage) -> bool {
 fn occurrence_carriers(segments: &[SegmentData], holders: &[(&TableCoverage, &WordCounts)]) -> Vec<Option<usize>> {
     let mut carriers = Vec::with_capacity(segments.len());
     let mut run_start = 0;
+    let mut run_first: Option<usize> = None;
     let mut run: Vec<usize> = Vec::new();
+    let mut joined_any = false;
     let words: Vec<Vec<String>> = segments
         .iter()
         .map(|segment| word_sequence([segment.text.as_str()]))
         .collect();
     let seam_holders = seam_holders(&words, holders);
     for (index, segment) in segments.iter().enumerate() {
-        let own: Vec<usize> = (0..holders.len())
-            .filter(|&holder| covers_and_carries(segment, holders[holder].0))
-            .collect();
+        // A table's grid is read at most once for a segment, and only for a table the run or the next
+        // seam can still use. ~keep
+        let mut read: Vec<Option<bool>> = vec![None; holders.len()];
+        let mut covers = |holder: usize| -> bool {
+            *read[holder].get_or_insert_with(|| covers_and_carries(segment, holders[holder].0))
+        };
         let joined: Vec<usize> = run
             .iter()
             .copied()
-            .filter(|holder| own.contains(holder) && seam_holders[index].contains(holder))
+            .filter(|&holder| seam_holders[index].contains(&holder) && covers(holder))
             .collect();
         if joined.is_empty() {
-            carriers.extend(std::iter::repeat_n(run.first().copied(), index - run_start));
+            let finished = if joined_any { run.first().copied() } else { run_first };
+            carriers.extend(std::iter::repeat_n(finished, index - run_start));
             run_start = index;
-            run = own;
+            joined_any = false;
+            // The first covering table is the carrier of a run that never joins, so only that one is
+            // searched for. The tables that can join the next segment are the only others kept. ~keep
+            run_first = (0..holders.len()).find(|&holder| covers(holder));
+            run = match seam_holders.get(index + 1) {
+                Some(next) if !next.is_empty() => next.iter().copied().filter(|&holder| covers(holder)).collect(),
+                _ => Vec::new(),
+            };
         } else {
             run = joined;
+            joined_any = true;
         }
     }
-    carriers.extend(std::iter::repeat_n(run.first().copied(), segments.len() - run_start));
+    let finished = if joined_any { run.first().copied() } else { run_first };
+    carriers.extend(std::iter::repeat_n(finished, segments.len() - run_start));
     carriers
 }
 

@@ -1924,6 +1924,35 @@ fn split_carrier_goes_to_the_first_table_that_holds_the_seam_when_two_hold_it() 
 }
 
 #[test]
+fn split_carrier_reads_one_table_per_segment_when_no_seam_joins_pieces() {
+    // Eight tables with one box all cover and carry every word. A run that cannot join its next
+    // segment goes to the first covering table, so the grids are read once per segment, not once per
+    // table and segment.
+    let words: Vec<String> = (0..400).map(|index| format!("word{index}")).collect();
+    let cells: Vec<&str> = words.iter().map(String::as_str).collect();
+    let tables: Vec<crate::types::Table> = (0..8)
+        .map(|_| cell_table(1, (0.0, 0.0, 5000.0, 100.0), &[cells.as_slice()]))
+        .collect();
+    let segments: Vec<SegmentData> = words
+        .iter()
+        .enumerate()
+        .map(|(index, word)| printed_at(word, 10.0 + 8.0 * index as f32, 10.0))
+        .collect();
+    CARRY_CHECKS.with(|checks| checks.set(0));
+    let carriers = split_carriers(&tables, &segments);
+    assert_eq!(
+        carriers,
+        vec![Some(0); segments.len()],
+        "the first table carries every word"
+    );
+    assert_eq!(
+        CARRY_CHECKS.with(std::cell::Cell::get),
+        segments.len(),
+        "one grid read for each segment"
+    );
+}
+
+#[test]
 fn a_segment_that_only_a_later_table_carries_is_suppressed() {
     let elsewhere = table_coverage(&cell_table(1, (200.0, 0.0, 300.0, 100.0), &[&["other"]])).expect("box");
     let covering = table_coverage(&cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha"]])).expect("box");
