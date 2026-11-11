@@ -931,7 +931,8 @@ mod tests {
     }
 
     /// Only the reported word count refuses this read: the count feeds `prose_bands` alone, and
-    /// every other guard sees the same accepted read.
+    /// every other guard sees the same accepted read. Both directions of a wrong count are
+    /// pinned, so a weakened comparison cannot pass.
     #[test]
     fn the_reported_word_count_alone_refuses_the_mixed_two_table_read() {
         let (mut candidate, primary) = mixed_two_table_candidate();
@@ -939,11 +940,9 @@ mod tests {
             complete_text(candidate, &primary, &Default::default(), &Default::default(), 0.5)
         };
         assert_eq!(prove(&candidate).as_deref(), Some(MIXED_PAGE));
+        candidate.metadata.additional.insert("word_count".into(), 23.into());
+        assert_eq!(prove(&candidate), None, "an under-reported count must refuse the read");
         candidate.metadata.additional.insert("word_count".into(), 25.into());
-        assert_eq!(
-            prove(&candidate),
-            None,
-            "the read's reported count must decide the prose bands"
-        );
+        assert_eq!(prove(&candidate), None, "an over-reported count must refuse the read");
     }
 }
