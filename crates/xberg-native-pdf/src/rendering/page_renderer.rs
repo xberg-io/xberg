@@ -715,10 +715,13 @@ impl PageRenderer {
             .map(|budget| {
                 let resources = doc.get_page_resources(page_num)?;
                 let spots = self.page_sidecar_spots(doc, page_num, &resources);
-                // A mask or knockout group can hold one more copy of every plate than
-                // the live sidecar; there is no cheap mask-presence detector, so charge
-                // that peak whenever spot plates are admitted.
-                let transient_copies = usize::from(spots.is_some());
+                // A soft mask can hold one more transient copy of every plate than the live
+                // sidecar (`smask_spot_snapshot`); there is no cheap mask-presence detector,
+                // so charge one extra copy whenever the sidecar declares actual inks. A
+                // zero-ink sidecar (a CMYK page with transparency but no spot plate) holds
+                // nothing transient. Knockout groups hold further copies that the runtime
+                // reservation in `knockout_resources` bounds, which this fit does not model.
+                let transient_copies = usize::from(spots.as_deref().is_some_and(|inks| !inks.is_empty()));
                 dpi = fit_png_dpi(dpi, &budget, spots.as_deref(), transient_copies, dimensions_at_dpi)?;
                 Ok::<_, Error>((resources, spots))
             })
@@ -8813,6 +8816,12 @@ fn raster_dimensions(page_width: f32, page_height: f32, scale: f32, has_scale_ov
     }
 }
 
+/// Per-pixel bytes the PNG working-set fit charges for the RGBA canvas and its demultiply
+/// copy; shared so the budget tests derive the same charge the fit does.
+pub(super) const RGBA_AND_PNG_BYTES_PER_PIXEL: usize = 12;
+/// Fixed per-page allowance the PNG working-set fit reserves for the encoded file's overhead.
+pub(super) const PNG_FIXED_OVERHEAD: usize = 256 * 1024;
+
 fn fit_png_dpi(
     requested: u32,
     budget: &PngRenderBudget,
@@ -8862,10 +8871,9 @@ fn png_working_bytes_fit(
 ) -> bool {
     // The canvas and PNG demultiply copy are both RGBA. Reserve the same per-pixel
     // and fixed PNG allowance as Core image encoding, plus the CMYK plane and two planes per spot ink.
-    // A masked paint or knockout group can hold one more transient copy of every
-    // plane than the live sidecar, so the charge admits that peak.
-    const RGBA_AND_PNG_BYTES_PER_PIXEL: usize = 12;
-    const PNG_FIXED_OVERHEAD: usize = 256 * 1024;
+    // The caller adds one extra copy of the sidecar planes for the transient copy a soft
+    // mask can hold; knockout groups hold more, and the runtime reservation in
+    // `knockout_resources` bounds those, not this fit.
     let sidecar_bytes_per_pixel = spot_names.map_or(Some(0), |names| names.len().checked_mul(2)?.checked_add(4));
     let charge = sidecar_bytes_per_pixel
         .and_then(|bytes| transient_copies.checked_add(1)?.checked_mul(bytes))

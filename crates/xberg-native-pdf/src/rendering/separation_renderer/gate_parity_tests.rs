@@ -2,7 +2,9 @@
 //! pin the rendered output of the pages whose gate decision that move changed.
 
 use super::*;
-use crate::rendering::page_renderer::{PageRenderer, RenderOptions};
+use crate::rendering::page_renderer::{
+    PNG_FIXED_OVERHEAD, PageRenderer, PngRenderBudget, RGBA_AND_PNG_BYTES_PER_PIXEL, RenderOptions,
+};
 use crate::rendering::sidecar::page_declares_transparency;
 
 const DPI: u32 = 72;
@@ -340,33 +342,78 @@ fn lighten_in_a_non_knockout_group_over_a_tint_zero_paint_gives_no_ink() {
     );
 }
 
-/// The PNG budget of the page renderer charges a tint plane and an alpha plane for each spot
-/// ink. A 100 x 100 page with one ink costs 12 + 4 + 2 bytes per pixel plus the fixed allowance;
-/// a limit between that and the one-plane charge of 17 bytes per pixel refuses the page.
+/// The PNG budget of the page renderer charges the live sidecar planes plus one transient
+/// copy of every plane (the snapshot a soft mask can hold). One ink: the live charge is
+/// 12 + 4 + 2 = 18 and the peak 12 + 2·(4 + 2) = 24 bytes per pixel. A limit at the live
+/// charge of the requested raster lowers the DPI, the peak charge admits the request, and a
+/// limit under the peak at the minimum DPI refuses the page instead of lowering further.
 #[test]
-fn the_page_renderer_charges_two_planes_for_each_spot_ink() {
-    use crate::rendering::page_renderer::PngRenderBudget;
+fn the_page_renderer_lowers_dpi_for_the_transient_spot_plate_copy() {
+    const REQUESTED_DPI: u32 = 288;
+    const MINIMUM_DPI: u32 = 72;
+    // Pixels of the 100 x 100 pt page, sized as the fit sizes them: the side rounded up.
+    let pixels = |dpi: u32| {
+        let side = (f64::from(dpi) * 100.0 / 72.0).ceil() as usize;
+        side * side
+    };
+    // `copies` transient copies on top of the live CMYK plane plus the ink's tint and alpha lane.
+    let charge = |dpi: u32, copies: usize| {
+        pixels(dpi) * (RGBA_AND_PNG_BYTES_PER_PIXEL + (copies + 1) * (4 + 2)) + PNG_FIXED_OVERHEAD
+    };
     let doc = build_page("/BM /Multiply", &[]);
-    let fixed = 256 * 1024;
-    let two_planes = 10_000 * 18 + fixed;
-    let one_plane = 10_000 * 17 + fixed;
     let render = |limit: usize| {
-        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(DPI).as_raw());
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(REQUESTED_DPI).as_raw());
         renderer.force_cmyk_sidecar = true;
         let budget = PngRenderBudget {
             max_working_bytes: limit,
-            minimum_dpi: DPI,
+            minimum_dpi: MINIMUM_DPI,
         };
         renderer.render_page_with_budget(0, &doc, Some(budget))
     };
-    assert!(
-        render((one_plane + two_planes) / 2).is_err(),
-        "a limit under the two-plane charge refuses the page"
+    let (image, dpi) = render(charge(REQUESTED_DPI, 0)).expect("the live charge of the minimum raster fits");
+    assert_eq!(
+        dpi, 249,
+        "the transient charge lowers 288 dpi to the largest raster the limit admits"
+    );
+    assert_eq!((image.width, image.height), (346, 346), "249 dpi on a 100 pt page");
+    let (_, dpi) = render(charge(REQUESTED_DPI, 1)).expect("the peak charge admits the request");
+    assert_eq!(
+        dpi, REQUESTED_DPI,
+        "the peak charge of the requested raster fits exactly"
     );
     assert!(
-        render(two_planes).is_ok(),
-        "control: the two-plane charge itself admits the page"
+        render(charge(MINIMUM_DPI, 1) - 1).is_err(),
+        "under the peak charge even the minimum raster is refused, not lowered"
     );
+}
+
+/// A CMYK page whose sidecar declares no spot inks (transparency without a spot plate) holds
+/// nothing transient: the budget charges the CMYK plane only, so the page keeps its
+/// requested DPI where a wrongly charged transient copy would lower it.
+#[test]
+fn a_zero_ink_sidecar_page_keeps_its_requested_dpi() {
+    const REQUESTED_DPI: u32 = 288;
+    const MINIMUM_DPI: u32 = 72;
+    let pixels = |dpi: u32| {
+        let side = (f64::from(dpi) * 100.0 / 72.0).ceil() as usize;
+        side * side
+    };
+    // The CMYK plane only: the sidecar exists but carries no ink lanes.
+    let charge = |dpi: u32| pixels(dpi) * (RGBA_AND_PNG_BYTES_PER_PIXEL + 4) + PNG_FIXED_OVERHEAD;
+    let doc = build_page_with("/T gs 1 0 0 rg 10 10 60 60 re f", "", "/BM /Multiply", &[]);
+    let render = |limit: usize| {
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(REQUESTED_DPI).as_raw());
+        renderer.force_cmyk_sidecar = true;
+        let budget = PngRenderBudget {
+            max_working_bytes: limit,
+            minimum_dpi: MINIMUM_DPI,
+        };
+        renderer.render_page_with_budget(0, &doc, Some(budget))
+    };
+    let (_, dpi) = render(charge(REQUESTED_DPI)).expect("a zero-ink sidecar adds no transient charge");
+    assert_eq!(dpi, REQUESTED_DPI, "the sidecar exists but holds no inks");
+    let (_, dpi) = render(charge(REQUESTED_DPI) - 1).expect("control: one byte under the charge binds");
+    assert_eq!(dpi, 287, "one byte under the requested raster's charge lowers the DPI");
 }
 
 /// A form XObject: `group` is the group dictionary entries, `body` its content, `/CS0` is bound.

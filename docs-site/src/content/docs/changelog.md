@@ -329,6 +329,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Charge the transient copies of the spot-plate buffer to the PNG render budget.** (#2870)
+  Since #2819 the budget admitted only the live sidecar planes (`4 + 2·n` bytes per pixel), while a soft mask can hold one more transient copy of every plate. A page whose sidecar declares spot inks is now fitted against that charge, so a masked paint can lower the admitted DPI. Knockout groups hold further transient copies that their own runtime reservation bounds, not this fit. A sidecar that declares no spot inks — a CMYK page with transparency but without a spot plate — is charged as before and keeps its DPI.
 - **(ocr): Prune symbol-noise lines on the direct PDF read of a flagged page, not only in the layout and pipeline routes.** (#2921)
   Without layout detection the PDF route reads each page straight from the OCR backend and never reached the pruning, so a photograph page kept every noise line and carried no pruning warning. The direct read now prunes the page text, its paragraphs and its text elements together after the verdict and the native-replacement decision have judged the unpruned read.
 - **(ocr): Exclude Unicode numerals from native-prose script evidence.**
