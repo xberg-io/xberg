@@ -82,6 +82,8 @@ async fn a_selected_page_whose_marked_layer_is_kept_warns_of_its_lost_glyphs() {
         native,
         &boundaries,
         MixedOcrPageSelection {
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            probe_reads: None,
             ocr: &[1],
             single_block: &[],
             preserve_native: &[],
@@ -124,6 +126,8 @@ async fn a_caller_supplied_layer_warns_of_the_glyphs_its_page_lost() {
         "",
         &boundaries,
         MixedOcrPageSelection {
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            probe_reads: None,
             ocr: &[1],
             single_block: &[],
             preserve_native: &[],
@@ -226,6 +230,8 @@ async fn the_mixed_route_drops_a_misread_ocr_row_on_a_plain_page_only() {
             native,
             &boundaries,
             MixedOcrPageSelection {
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                probe_reads: None,
                 ocr: &[1],
                 single_block: &[],
                 preserve_native: &[],
