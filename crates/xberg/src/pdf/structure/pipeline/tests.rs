@@ -1870,6 +1870,70 @@ fn dedup_keeps_two_tables_when_a_split_copy_lies_where_they_overlap_in_either_or
     assert_eq!(counts, [2, 2], "kept tables in the order B, A and in the order A, B");
 }
 
+/// The carrier of each segment, as a position in `tables`, as the page split assigns it.
+fn split_carriers(tables: &[crate::types::Table], segments: &[SegmentData]) -> Vec<Option<usize>> {
+    let coverage: Vec<TableCoverage> = tables
+        .iter()
+        .map(|table| table_coverage(table).expect("table with a box"))
+        .collect();
+    let words: Vec<WordCounts> = tables.iter().map(table_word_counts).collect();
+    let holders: Vec<(&TableCoverage, &WordCounts)> = coverage.iter().zip(&words).collect();
+    occurrence_carriers(segments, &holders)
+}
+
+#[test]
+fn split_carrier_joins_pieces_whose_seam_lies_inside_a_longer_word() {
+    // PICCOLO21X in three pieces: the seams piccolo21 and 21x are parts of the word, not whole words.
+    let b = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["PICCOLO21X"]]);
+    let a = cell_table(1, (40.0, 0.0, 140.0, 100.0), &[&["PICCOLO21X"]]);
+    let pieces = [
+        printed_at("PICCOLO", 60.0, 10.0),
+        printed_at("21", 80.0, 10.0),
+        printed_at("X", 102.0, 10.0),
+    ];
+    assert_eq!(
+        split_carriers(&[b, a], &pieces),
+        [Some(1); 3],
+        "A covers every piece and carries the copy"
+    );
+}
+
+#[test]
+fn split_carrier_drops_a_table_that_does_not_cover_the_next_piece() {
+    // B holds the word and covers the first piece only, so the copy goes to A, which covers both.
+    let b = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["PICCOLO21"]]);
+    let a = cell_table(1, (40.0, 0.0, 140.0, 100.0), &[&["PICCOLO21"]]);
+    let pieces = [printed_at("PICCOLO", 70.0, 10.0), printed_at("21", 102.0, 10.0)];
+    assert_eq!(split_carriers(&[b, a], &pieces), [Some(1); 2]);
+}
+
+#[test]
+fn split_carrier_goes_to_the_first_table_that_holds_the_seam_when_two_hold_it() {
+    // All three tables cover and carry both pieces. X holds PICCOLO and 21 as two words, so only Y and
+    // Z hold the seam piccolo21, and the first of them in table order carries the copy.
+    let x = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["PICCOLO", "21"]]);
+    let y = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["PICCOLO21"]]);
+    let z = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["PICCOLO21", "Z"]]);
+    let pieces = [printed_at("PICCOLO", 10.0, 10.0), printed_at("21", 30.0, 10.0)];
+    assert_eq!(
+        split_carriers(&[x.clone(), y.clone(), z.clone()], &pieces),
+        [Some(1); 2],
+        "order X, Y, Z"
+    );
+    assert_eq!(split_carriers(&[x, z, y], &pieces), [Some(1); 2], "order X, Z, Y");
+}
+
+#[test]
+fn a_segment_that_only_a_later_table_carries_is_suppressed() {
+    let elsewhere = table_coverage(&cell_table(1, (200.0, 0.0, 300.0, 100.0), &[&["other"]])).expect("box");
+    let covering = table_coverage(&cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha"]])).expect("box");
+    let filtered = filter_segments_by_table_bboxes(vec![printed_at("alpha", 10.0, 10.0)], &[elsewhere, covering]);
+    assert!(
+        filtered.is_empty(),
+        "the second table carries the segment, so it is not printed again as text"
+    );
+}
+
 /// Tables that the document build emits for one page of text and the given native tables.
 fn built_table_count(tables: &[crate::types::Table], page: Vec<Vec<SegmentData>>) -> usize {
     let document = build_document_structure(
