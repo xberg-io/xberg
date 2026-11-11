@@ -1058,7 +1058,7 @@ pub(super) fn small_read_has_fragmented_words(text: &str, thresholds: &OcrQualit
         .split_whitespace()
         .filter(|word| word.chars().any(char::is_alphabetic))
         .fold((0, 0), |(words, short), word| {
-            (words + 1, short + usize::from(word.len() <= 2))
+            (words + 1, short + usize::from(word.chars().nth(2).is_none()))
         });
     short as f64 / words.max(1) as f64 >= thresholds.max_ocr_output_fragmented_word_ratio
 }
