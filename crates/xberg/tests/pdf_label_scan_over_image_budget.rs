@@ -117,6 +117,20 @@ fn explicit_pipeline_keeps_the_retry_read_and_warns_too() {
     assert_kept_with_warning(&document, 1);
 }
 
+/// A one-page scan under an explicit pipeline reads like the default route: the same text and the
+/// same suspected-noise warning.
+#[test]
+fn explicit_pipeline_reads_a_one_page_refused_scan_like_the_default_route() {
+    let default_route = extract(LABEL_SCAN, &config(false, false));
+    let explicit = extract(LABEL_SCAN, &config(false, true));
+    assert_kept_with_warning(&explicit, 0);
+    assert_eq!(explicit.content, default_route.content);
+    assert_eq!(
+        warnings_containing(&explicit, "suspected OCR recognition noise"),
+        warnings_containing(&default_route, "suspected OCR recognition noise")
+    );
+}
+
 /// A caller who asked for suspected noise to be discarded gets the refusal, naming the noise, for
 /// a one-page document whose only read was discarded; the page is not reported as recovered.
 #[test]
