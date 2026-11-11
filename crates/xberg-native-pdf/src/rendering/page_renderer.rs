@@ -9313,13 +9313,12 @@ fn source_for_overprint(gs: &GraphicsState, fill_side: bool) -> Option<Overprint
                 let mut named = [false; 4];
                 let mut tints = [0.0_f32; 4];
                 for (ink, tint) in spot_inks {
-                    let channels = match ink.as_str() {
-                        "Cyan" => 0..1,
-                        "Magenta" => 1..2,
-                        "Yellow" => 2..3,
-                        "Black" => 3..4,
-                        "All" => 0..4,
-                        _ => continue,
+                    let channels = if ink == "All" {
+                        0..4
+                    } else if let Some(channel) = sidecar_mod::process_colorant_channel(ink) {
+                        channel..channel + 1
+                    } else {
+                        continue;
                     };
                     for channel in channels {
                         named[channel] = true;

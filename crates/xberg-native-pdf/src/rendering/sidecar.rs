@@ -202,6 +202,19 @@ impl BlendModeClass {
     }
 }
 
+/// The DeviceCMYK channel (0 to 3, in C, M, Y, K order) of a process
+/// colorant name, matched case-sensitively (ISO 32000-1 §8.6.6.4).
+/// Any other name, `All` included, returns `None`.
+pub(crate) fn process_colorant_channel(name: &str) -> Option<usize> {
+    match name {
+        "Cyan" => Some(0),
+        "Magenta" => Some(1),
+        "Yellow" => Some(2),
+        "Black" => Some(3),
+        _ => None,
+    }
+}
+
 /// Per-page CMYK + spot-ink compositing sidecar.
 ///
 /// Allocated once at the top of [`super::PageRenderer::render_page_with_options`]
@@ -374,13 +387,7 @@ impl CmykSidecar {
     /// surface type and the allocation cost is one pass over `4 · w · h`
     /// bytes regardless.
     pub(crate) fn process_plate(&self, ink: &str) -> Option<Vec<u8>> {
-        let channel: usize = match ink {
-            "Cyan" => 0,
-            "Magenta" => 1,
-            "Yellow" => 2,
-            "Black" => 3,
-            _ => return None,
-        };
+        let channel = process_colorant_channel(ink)?;
         let (w, h) = self.dims;
         let pixels = (w as usize) * (h as usize);
         let mut out = Vec::with_capacity(pixels);
