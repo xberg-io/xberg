@@ -5063,7 +5063,9 @@ mod tests {
         };
         let rejected = [vec![rejected_word("OWATS", 10, 90), rejected_word("DNDEVET", 110, 110)]];
         let mut metadata = HashMap::new();
-        insert_dictionary_line_counts(&mut metadata, 2, 1);
+        // The first parse is seeded with no kept line, so only the restored parse can supply the count of 1.
+        insert_dictionary_line_counts(&mut metadata, 2, 0);
+        assert!(!metadata.contains_key("dictionary_kept_numeral_line_count"));
 
         let (content, _) = restore_rejected_table_words(hocr, &filter, 1, &rejected, 2, &mut metadata)
             .expect("the restore judges one line fewer as noise");
