@@ -329,6 +329,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(go): Ship usable static-link flags in the linux-x86_64 and linux-aarch64 Go release archives.** (GH#2988)
+  `native-static-libs.txt` no longer ends with a terminal colour escape that cgo rejected, and the glibc-floor archive lists `-lc++ -lc++abi` instead of `-lstdc++`, matching the zig-built C++ objects.
+- **(ocr): Keep Khmer number recovery available after bounded source declines.** (#2905)
+  Completed declines charge the work already done, leaving room to verify supported pages later in the PDF.
+  Cancellation and failures whose work cannot be measured still retain their reservation.
 - **(djot): Preserve straight quotes, apostrophes, and runs of dots or dashes in marked rows.** (#2913)
   Djot readers show the row punctuation as written.
 - **(djot): Preserve block-like text in rendered paragraphs, lists, and OCR output.** (#2891)
@@ -339,6 +344,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Numeric-only OCR reads do not claim retention of native prose, across all supported scripts.
 - **(ocr): Re-render only OCR page text as plain, and keep DOCX and native page text.** (#2839, #2902)
   Since #2839, a DOCX page whose notes or math are not in the plain content, and a native PDF page of a mixed document, were replaced by the plain rendering of their elements, losing the footnote definitions and the equation spacing. A page that is not found in the content is now re-rendered only when an OCR route produced its text; any other page keeps its text, and only its page range is omitted, with the `page_boundaries` warning.
+- **(pdf): Render recognized tables as plain text on the mixed OCR route.** (#2903)
 - **(djot): Preserve paragraph text that begins with block syntax.** (#2856, #2869)
   Escape block markers without changing following inline markup or existing backslash escapes.
 - **(pdf): Keep a nested superscript or subscript stack on its base's line.** (#2728)
@@ -1639,6 +1645,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The byte offsets of an entity move with its text when normalization shortens `content`. A span that cuts a letter from the mark that joins it grows to hold the composed letter.
 - **(pdf): Words that a producer places one by one no longer run together.** (GH#2675)
   A PDF that sets the text matrix before each word, often with a repeated font operator, kept the gap to the next word inside the previous word's width, so the words read as one. A run that a text matrix extends past its last glyph now ends at that glyph, unless a word-gap offset in the next text array marks the gap. Pages with glyph-by-glyph text now measure a word gap against the font size of the word after it, not against the largest size on the line. Subscripts and raised indices stay on their symbol, and a gap next to a CJK character (Han, kana or Hangul), CJK punctuation or a fullwidth form is measured as before.
+- **(pdf): A word that a later show inside an `ActualText` scope widens no longer ends before that show.** (GH#2875)
+  When a producer sets the text matrix before each word, the extractor records the run's width before the matrix move, so a font operator that follows ends the word at its last glyph. A show that comes after the move, such as a second show inside an `ActualText` scope or a glyph the font gives no text, now ends that record, so the word reaches the pen again and its width covers the later glyphs, as it did before the record existed.
 - **(pdf): Preserve source detail for configured Tesseract preprocessing.** Refs #2711 (partial).
   Forced whole-document OCR with the registered built-in Tesseract backend, including the synthesized classical pipeline, renders native page content at a preprocessing target above 150 DPI within the existing budget. Any preprocessing block requests its target, including the default 300 DPI in a denoise-only block. This recovers a reproduced small-text word boundary; explicit image settings and original full-page scan density retain precedence. Without a preprocessing block the default remains 150 DPI. Selected pages, prepared rasters, custom backends, explicit pipelines and VLM fallback keep their source-render policy. The general 150-DPI glyph-shift issue remains open.
 - **(pdf): A page with an ordinary transparency group renders at every resolution again.** (GH#2953)
