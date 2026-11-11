@@ -378,9 +378,19 @@ fn build_internal_document(
             crate::extraction::docx::parser::DocumentElement::Drawing(idx) => {
                 let drawing = &doc.drawings[*idx];
 
-                if let Some(ref textbox_text) = drawing.text_box_content
-                    && !textbox_text.trim().is_empty()
-                {
+                // A drawn shape has no picture data, so no image element carries its description;
+                // the description is text the author wrote, so it is a paragraph in its place.
+                let shape_description = drawing
+                    .image_ref
+                    .is_none()
+                    .then(|| drawing.doc_properties.as_ref()?.description.as_deref())
+                    .flatten()
+                    .filter(|description| !description.trim().is_empty());
+                let textbox_text = drawing
+                    .text_box_content
+                    .as_deref()
+                    .filter(|text| !text.trim().is_empty());
+                for text in shape_description.into_iter().chain(textbox_text) {
                     if current_list_numbering_id.is_some() {
                         for _ in 0..open_list_count {
                             builder.end_list();
@@ -388,7 +398,7 @@ fn build_internal_document(
                         current_list_numbering_id = None;
                         open_list_count = 0;
                     }
-                    builder.push_paragraph(textbox_text, vec![], Some(current_page), None);
+                    builder.push_paragraph(text, vec![], Some(current_page), None);
                 }
 
                 if drawing.image_ref.is_none() {
@@ -5018,6 +5028,53 @@ mod tests {
             pages[0].content
         );
         assert!(result.content.contains(&pages[0].content), "{:?}", result.content);
+    }
+
+    /// A drawn shape has no picture data, but its description is text the author wrote: every
+    /// format writes it in its place, and a Plain page keeps it.
+    #[tokio::test]
+    async fn should_write_the_description_of_a_drawn_shape_in_its_place() {
+        let xml = r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+            xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><w:body>
+            <w:p><w:r><w:t>Before the chart.</w:t></w:r></w:p>
+            <w:p><w:r><w:drawing><wp:inline><wp:extent cx="914400" cy="457200"/>
+            <wp:docPr id="3" name="Flowchart 3" descr="Flow from intake to review"/>
+            <a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+            <wps:wsp><wps:spPr/></wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
+            <w:p><w:r><w:t>After the chart.</w:t></w:r></w:p></w:body></w:document>"#;
+        use crate::core::config::OutputFormat as F;
+        for format in [F::Plain, F::Markdown, F::Djot, F::Html] {
+            let config = ExtractionConfig {
+                output_format: format.clone(),
+                pages: Some(crate::core::config::PageConfig {
+                    extract_pages: true,
+                    ..Default::default()
+                }),
+                use_cache: false,
+                ..Default::default()
+            };
+            let result = crate::core::extractor::extract_bytes(
+                &build_test_docx(xml),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &config,
+            )
+            .await
+            .unwrap();
+            let content = &result.content;
+            let at = |text: &str| content.find(text).unwrap_or_else(|| panic!("{format:?}: {content:?}"));
+            assert!(
+                at("Before the chart.") < at("Flow from intake to review")
+                    && at("Flow from intake to review") < at("After the chart."),
+                "{format:?}: {content:?}"
+            );
+            assert!(!content.contains("Flowchart 3"), "{format:?}: {content:?}");
+            if matches!(format, F::Plain) {
+                let pages = result.pages.expect("pages requested");
+                assert!(pages[0].content.contains("Flow from intake to review"), "{pages:?}");
+            }
+        }
     }
 
     #[tokio::test]
