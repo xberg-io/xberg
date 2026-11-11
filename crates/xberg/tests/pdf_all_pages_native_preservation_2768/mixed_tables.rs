@@ -166,6 +166,20 @@ async fn detected_scan_without_native_elements_renders_the_accepted_table() {
     config.ocr_strategy = OcrStrategy::ScannedPages { min_confidence: 0.9 };
     let actual = read(bytes, &config).await;
     assert_eq!(actual.extraction_method, Some(xberg::types::ExtractionMethod::Mixed));
+    assert_eq!(actual.tables.len(), 1);
+    let bbox = actual.tables[0]
+        .bounding_box
+        .expect("the OCR table keeps its rectangle");
+    // The page is 612x792 pt; recognition ran on a 300 dpi resample of a ~196 dpi render. ~keep
+    assert!(
+        0.0 <= bbox.x0
+            && bbox.x0 < bbox.x1
+            && bbox.x1 <= 612.0
+            && 0.0 <= bbox.y0
+            && bbox.y0 < bbox.y1
+            && bbox.y1 <= 792.0,
+        "the table rectangle lies on the page in points: {bbox:?}"
+    );
     super::plain_contract::assert_page_ranges(&actual);
     super::plain_contract::assert_scanned_table_body(
         &actual.pages.as_ref().unwrap()[0],
