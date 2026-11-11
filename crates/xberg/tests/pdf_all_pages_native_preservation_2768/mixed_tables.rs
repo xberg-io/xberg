@@ -170,15 +170,18 @@ async fn detected_scan_without_native_elements_renders_the_accepted_table() {
     let bbox = actual.tables[0]
         .bounding_box
         .expect("the OCR table keeps its rectangle");
-    // The page is 612x792 pt; recognition ran on a 300 dpi resample of a ~196 dpi render. ~keep
+    // ~keep The 612x792 pt page renders at 1667x2156 px and recognition reads a 2550x3298 px
+    // resample, so the table's pixel rectangle (273, 267)-(2237, 1450) lies at these points. A
+    // rectangle scaled by the render instead lands at x1 = 821, off the page. The tolerance absorbs
+    // a few pixels of platform-dependent table detection.
+    let expected = [65.52, 443.79, 536.88, 727.88];
+    let actual_points = [bbox.x0, bbox.y0, bbox.x1, bbox.y1];
     assert!(
-        0.0 <= bbox.x0
-            && bbox.x0 < bbox.x1
-            && bbox.x1 <= 612.0
-            && 0.0 <= bbox.y0
-            && bbox.y0 < bbox.y1
-            && bbox.y1 <= 792.0,
-        "the table rectangle lies on the page in points: {bbox:?}"
+        actual_points
+            .iter()
+            .zip(expected)
+            .all(|(actual, expected)| (actual - expected).abs() <= 2.0),
+        "the table rectangle is its recognition-frame rectangle in page points: {bbox:?}"
     );
     super::plain_contract::assert_page_ranges(&actual);
     super::plain_contract::assert_scanned_table_body(

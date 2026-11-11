@@ -2935,20 +2935,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         .get((*page_number - 1) as usize)
                         .cloned()
                         .unwrap_or_default();
-                    // ~keep A pipeline page keeps its paragraphs in the OCR raster's pixels, while
-                    // its tables are already in points; assembly compares the two to drop a
-                    // paragraph a table carries, so both must share the page's point frame.
-                    if let Some(&(width_px, height_px)) = ocr_raster_by_page.get(page_number)
-                        && width_px > 0
-                        && height_px > 0
-                    {
-                        let (width_pt, height_pt) =
-                            page_dimensions_pt(&render_doc, page_number.saturating_sub(1) as usize);
-                        detached_mixed_frame::scale_paragraph_geometry(
-                            &mut paragraphs,
-                            (width_pt / width_px as f32, height_pt / height_px as f32),
-                        );
-                    }
                     apply_ocr_text_list_fallback(&mut paragraphs);
                     // #729: recover a bare marker no ML hint ever classified, e.g. a
                     // marker paragraph whose body landed several paragraphs away --
@@ -2961,6 +2947,22 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         &mut paragraphs,
                         page_rotation_degrees,
                     );
+                    // ~keep A pipeline page keeps its paragraphs in the OCR raster's pixels, while
+                    // its tables are already in points; assembly compares the two to drop a
+                    // paragraph a table carries. Scale only for that comparison, after the list
+                    // passes above, whose marker geometry is measured in the raster frame.
+                    if !existing.tables.is_empty()
+                        && let Some(&(width_px, height_px)) = ocr_raster_by_page.get(page_number)
+                        && width_px > 0
+                        && height_px > 0
+                    {
+                        let (width_pt, height_pt) =
+                            page_dimensions_pt(&render_doc, page_number.saturating_sub(1) as usize);
+                        detached_mixed_frame::scale_paragraph_geometry(
+                            &mut paragraphs,
+                            (width_pt / width_px as f32, height_pt / height_px as f32),
+                        );
+                    }
                     let mut new_page_doc = crate::pdf::structure::assemble_internal_document(
                         vec![paragraphs],
                         &existing.tables,
@@ -5803,8 +5805,8 @@ pub(super) async fn extract_with_ocr_for_page(
                 #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
                 if normalize_recovered_table && !normalized_raw {
                     // The detached stage's owner will place raw tables using the render raster. ~keep
-                    super::orientation_retry::scale_recovered_table_to_raster(&mut ocr_result, render);
-                    tables_in_render = true;
+                    tables_in_render =
+                        super::orientation_retry::scale_recovered_table_to_raster(&mut ocr_result, render);
                 }
                 #[cfg(not(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32"))))]
                 let _ = normalized_raw;
@@ -5925,7 +5927,12 @@ pub(super) async fn extract_with_ocr_for_page(
                 ))
             ))]
             let detached_paragraph_scale: Option<(f32, f32)> = None;
-            #[cfg(feature = "pdf")]
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
             let tables_in_render = tables_in_render || detached_paragraph_scale.is_some();
             let mut backend_tables = std::mem::take(&mut ocr_result.tables);
             for table in &mut backend_tables {
@@ -5938,19 +5945,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 // image (GH#1895): bring the rectangles from that frame to the render's.
                 let render = (encoded_batch[offset].2, encoded_batch[offset].3);
                 let processed = resolved_ocr_layout_dimensions(&ocr_result.metadata, render.0, render.1);
-                if processed != render && processed.0 > 0 && processed.1 > 0 {
-                    let scale_x = f64::from(render.0) / f64::from(processed.0);
-                    let scale_y = f64::from(render.1) / f64::from(processed.1);
-                    for bbox in backend_tables
-                        .iter_mut()
-                        .filter_map(|table| table.bounding_box.as_mut())
-                    {
-                        bbox.x0 *= scale_x;
-                        bbox.x1 *= scale_x;
-                        bbox.y0 *= scale_y;
-                        bbox.y1 *= scale_y;
-                    }
-                }
+                detached_mixed_frame::scale_tables_into_render(&mut backend_tables, processed, render);
             }
             #[cfg(feature = "pdf")]
             if let Some((doc, _, _)) = lazy_pdf_render_state.as_ref() {
