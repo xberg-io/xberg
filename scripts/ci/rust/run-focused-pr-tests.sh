@@ -125,6 +125,26 @@ run_ink_probe_cases() {
   fi
 }
 
+run_discarded_recovery_cases() {
+  local before="$passed"
+  local test_name
+  for test_name in \
+    discarded_noisy_image_retry_has_no_recovery_claim \
+    retained_noisy_image_retry_keeps_its_recovery_claim \
+    discarded_noisy_pipeline_retry_has_no_recovery_claim \
+    retained_noisy_pipeline_retry_keeps_its_recovery_claim \
+    discarded_noisy_whole_document_retry_has_no_recovery_claim \
+    retained_noisy_whole_document_retry_keeps_its_recovery_claim; do
+    run_exact "discarded_noise_2908::$test_name" --test ocr_page_failures
+  done
+  run_exact a_directly_called_backend_records_the_page_recovered_as_a_table --test ocr_page_failures
+  run_exact a_whole_document_run_records_every_failed_page --test ocr_page_failures
+  if [ "$((passed - before))" -ne 8 ]; then
+    printf 'Expected 8 executed embedded-image recovery warning tests, observed %s\n' "$((passed - before))" >&2
+    exit 1
+  fi
+}
+
 run_api_cases() {
   run_exact 'api::handlers::tests::test_extract_async_then_poll_job_id' --lib
   run_exact 'api::jobs::tests::test_cancel_running_job_fires_token' --lib
@@ -134,10 +154,11 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=53
+  expected=61
   run_pdf_cases
   run_number_budget_cases
   run_ink_probe_cases
+  run_discarded_recovery_cases
   ;;
 api-jobs)
   expected=4
