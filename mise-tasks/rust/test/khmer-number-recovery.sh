@@ -152,6 +152,8 @@ shape_names=(
   tests::should_decline_unaudited_form_font_resources_before_native
   tests::should_decline_nonzero_preflight_budget_below_native_font_cache_reservation
   tests::should_decline_complete_format12_billion_code_group_before_native
+  tests::should_charge_each_audit_of_a_shared_font_program
+  tests::should_charge_encoded_glyph_content_even_when_the_graph_refuses_it
   source_tests::should_decline_inline_actual_text_before_native_byte_reconstruction
   source_tests::should_decline_named_escaped_actual_text_properties_before_native
   source_tests::should_decline_all_marked_content_and_unknown_text_producers
@@ -174,6 +176,7 @@ shape_names=(
   source_tests::should_decline_array_comments_that_hide_character_allocation
   source_tests::should_decline_terminal_comments_that_replay_actual_text_at_eof
   source_tests::should_decline_terminal_comments_that_hide_character_allocation_at_eof
+  source_tests::should_not_populate_native_cache_during_bounded_source_reads
 )
 expected_shapes="${#shape_names[@]}"
 shape_listed="$(cargo "${shape_args[@]}" -- --include-ignored --list --color never)"
