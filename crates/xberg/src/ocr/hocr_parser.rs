@@ -936,8 +936,9 @@ fn parse_paragraph(
                 && !line_policy
                     .protected_words
                     .is_some_and(|words| line_matches_rejected_table_words(line, words));
-            // A number the OCR read is data the dictionary cannot judge, so its line stays. It is
-            // still counted as judged noise: OCR routing reads that count as a page-quality signal. ~keep
+            // A number the OCR read is data the dictionary cannot judge, so its line stays. It still
+            // counts as judged noise: table detection, the scan-grid and sparse-grid proofs, the
+            // reparse of fragmented table rows and the restore of rejected table words read that count. ~keep
             let keep_numeral = noise && holds_numeral(line);
             kept_numeral_line_count += usize::from(keep_numeral);
             !noise || keep_numeral
@@ -2807,9 +2808,8 @@ mod tests {
                         )
                     })
                     .collect();
-                format!(
-                    r#"<div class="ocr_page" title="ppageno 0"><p class="ocr_par"><span class="ocr_line">{words}</span></p></div>"#
-                )
+                let page = r#"<div class="ocr_page" title="ppageno 0"><p class="ocr_par">"#;
+                format!(r#"{page}<span class="ocr_line">{words}</span></p></div>"#)
             };
             let nothing_is_valid = |_: &str| Some(false);
             let filter = DictionaryLineFilter {

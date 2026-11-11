@@ -1114,16 +1114,6 @@ fn warnings_from_ocr_metadata(
             ),
         );
     }
-    if kept_lines > 0 {
-        crate::core::diagnostics::push_warning(
-            &mut warnings,
-            "tesseract",
-            format!(
-                "Tesseract kept {kept_lines} OCR line(s) whose dictionary-checkable words were mostly not real words, \
-                 because they hold numbers"
-            ),
-        );
-    }
 
     warnings
 }
