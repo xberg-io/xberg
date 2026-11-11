@@ -191,11 +191,12 @@ fn actualtext_later_show_in_an_unclosed_scope_ends_the_record() {
     );
 }
 
-/// A nested scope: the inner scope's first show gives its own text `C` and adds width, which ends the
-/// record as a later show in one scope does, so the same-font `Tf` after both scopes does not end
-/// the run and `A` joins it.
+/// A nested scope after the continuing `Tm`: its `BDC` flushes the run, so the inner show starts a
+/// fresh run with no record, and the same-font `Tf` after both scopes starts another. The three
+/// runs sit side by side and the merge joins them, as at the base. No record is in play here: this
+/// test reads the page, it does not pin the record.
 #[test]
-fn actualtext_nested_scope_show_after_continuing_tm_keeps_the_run() {
+fn actualtext_nested_scope_after_continuing_tm_reads_joined() {
     let content = "BT /F1 12 Tf /Span <</ActualText (AB)>> BDC 1 0 0 1 100 500 Tm (A) Tj \
                    /Span <</ActualText (C)>> BDC 1 0 0 1 107.7 500 Tm (B) Tj EMC EMC /F1 12 Tf (A) Tj ET";
     let doc = PdfDocument::from_bytes(build(content.as_bytes())).expect("open fixture");
