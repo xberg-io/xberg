@@ -66,7 +66,10 @@ pub(crate) fn render_plain_pages(
         .iter()
         .map(|(&page_number, indices)| {
             let page_spans = || indices.iter().filter_map(|&i| spans.get(i).copied().flatten());
-            let text = match (page_spans().map(|(start, _)| start).min(), page_spans().map(|(_, end)| end).max()) {
+            let text = match (
+                page_spans().map(|(start, _)| start).min(),
+                page_spans().map(|(_, end)| end).max(),
+            ) {
                 (Some(start), Some(end)) => {
                     let end = if end == body_end { out.len() } else { end.min(out.len()) };
                     out.get(start.min(end)..end).unwrap_or_default().trim()

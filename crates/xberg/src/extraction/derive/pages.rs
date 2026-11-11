@@ -1007,10 +1007,15 @@ mod plain_page_rerender_tests {
         let texts: Vec<&str> = pages.iter().map(|page| page.content.as_str()).collect();
         assert_eq!(texts.len(), 2);
         assert_eq!(texts[0], "First page[^1]");
-        let (body, notes) = texts[1].split_once("\n\n").expect("the last page has the note definitions");
+        let (body, notes) = texts[1]
+            .split_once("\n\n")
+            .expect("the last page has the note definitions");
         assert_eq!(body, "Second page[^2]");
         assert!(notes.contains("Note one") && notes.contains("Note two"), "{notes}");
-        assert_eq!(content.find(texts[1]).map(|start| start + texts[1].len()), Some(content.len()));
+        assert_eq!(
+            content.find(texts[1]).map(|start| start + texts[1].len()),
+            Some(content.len())
+        );
         assert!(!warned(&doc));
         assert_ranges(&doc, &content, &pages);
     }
@@ -1018,7 +1023,10 @@ mod plain_page_rerender_tests {
     #[test]
     fn a_prebuilt_docx_page_has_its_part_of_the_plain_content_and_keeps_its_notes() {
         let mut doc = docx_with_a_note_on_each_page();
-        doc.prebuilt_pages = Some(vec![page(1, "First page"), page(2, "Second page\n\nNote one\nNote two")]);
+        doc.prebuilt_pages = Some(vec![
+            page(1, "First page"),
+            page(2, "Second page\n\nNote one\nNote two"),
+        ]);
         let content = crate::rendering::render_plain(&doc);
         let pages = derive(&mut doc, &content);
         assert_eq!(pages[0].content, "First page[^1]");
@@ -1114,6 +1122,9 @@ mod plain_page_rerender_tests {
             .map(|w| w.message.as_ref())
             .collect();
         assert_eq!(messages.len(), 1, "one page_boundaries warning: {messages:?}");
-        assert!(messages[0].contains("pages [2] "), "page 2 is named one time: {messages:?}");
+        assert!(
+            messages[0].contains("pages [2] "),
+            "page 2 is named one time: {messages:?}"
+        );
     }
 }
