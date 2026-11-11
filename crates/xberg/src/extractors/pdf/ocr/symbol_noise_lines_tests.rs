@@ -53,8 +53,6 @@ fn flags_fragment_and_symbol_lines() {
         "~",
         "I",
         "ie ee",
-        "mal",
-        "ef \"ae Car Sa % ey Bo ary \"dl",
         "ha >",
         "i. =",
     ] {
@@ -136,9 +134,21 @@ fn prunes_a_digit_with_a_stray_quotation_or_section_mark_and_keeps_a_quoted_numb
         "7",
         "Page 12",
         "we go \u{201c}9",
+        "\u{2018}9\u{2019}",
+        "\"5 items",
+        "\u{201c}3 days\u{201d}",
+        "\"10 Downing",
+        "\u{a7}12",
+        "Siehe \u{a7}12",
     ] {
         assert!(!is_symbol_noise_line(line), "{line}");
     }
+}
+
+#[test]
+fn two_lowercase_trigrams_together_count_as_text_but_one_alone_does_not() {
+    assert!(!is_symbol_noise_line("mal cad"));
+    assert!(is_symbol_noise_line("mal"));
 }
 
 #[test]
@@ -146,7 +156,7 @@ fn prunes_lowercase_trigrams_and_symbol_runs_the_photograph_produces() {
     for line in ["\u{201c}P", "ee pe", "ta gM", "r ,", "co FF", "we SY"] {
         assert!(is_symbol_noise_line(line), "{line}");
     }
-    for line in ["mal", "cad", "rtf", "ee", "ie", "Ne", "He"] {
+    for line in ["cad", "rtf", "Ne", "He"] {
         assert!(is_symbol_noise_line(line), "{line}");
     }
 }

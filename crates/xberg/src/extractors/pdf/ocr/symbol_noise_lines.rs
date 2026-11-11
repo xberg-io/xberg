@@ -3,10 +3,11 @@
 //! Tesseract reads a photograph as a long run of one- and two-letter fragments and stray
 //! symbols, one per line. [`super::scoring::is_ocr_recognition_noise`] flags such a page, but
 //! with `discard_suspected_ocr_noise` off the text is retained whole. This module prunes only
-//! the lines that carry no word-shaped token, and runs after the page verdict, so every
+//! the lines made of symbols and fragments, and runs after the page verdict, so every
 //! backend, table and quality decision still sees the unpruned text. A line is pruned only
 //! when it is dominated by tokens that are not plausible text; any line that reads as words,
-//! a list label or an equation is kept. The page decision is
+//! a list label or an equation is kept. Two 3-letter lowercase tokens together count as
+//! plausible (`mal cad` is kept); a lone one does not. The page decision is
 //! made once by [`page_is_dominated_by_noise_lines`]; the pruners below apply it without
 //! re-deciding, so a page's text and its paragraphs always lose the same lines.
 
@@ -165,16 +166,29 @@ fn is_plausible_text(tokens: &[&str]) -> bool {
             || (function_words.len() >= 2 && function_words.iter().any(|word| word.chars().count() >= 2)))
 }
 
-/// A token with a digit and a stray quotation or section mark (`\u{201c}9`, `\u{ab}5%`, `5\u{a7}`),
-/// which is what a photograph's texture reads as; a quoted number closes its quote.
+/// A token with a digit and a stray quotation mark or a trailing section mark (`\u{201c}9`,
+/// `\u{ab}5%`, `5\u{a7}`), which is what a photograph's texture reads as. A quoted number closes
+/// its quote (`\u{201c}9\u{201d}`, `\u{2018}9\u{2019}`) and `\u{a7}12` is a section reference.
 fn is_junk_digit_token(token: &str) -> bool {
     let balance = |openers: &[char], closers: &[char]| {
         token.chars().filter(|c| openers.contains(c)).count() != token.chars().filter(|c| closers.contains(c)).count()
     };
     token.chars().any(|c| c.is_numeric())
-        && (token.contains('\u{a7}')
-            || balance(&['\u{201c}', '\u{ab}', '\u{2018}'], &['\u{201d}', '\u{bb}'])
+        && (token.ends_with('\u{a7}')
+            || balance(&['\u{201c}', '\u{ab}', '\u{2018}'], &['\u{201d}', '\u{bb}', '\u{2019}'])
             || token.matches('"').count() % 2 == 1)
+}
+
+/// A line with a digit is noise only when every token that carries a digit is junk-shaped and no
+/// other token is plausible text, so `"5 items`, `Siehe \u{a7}12` and `\u{201c}3 days\u{201d}` stay.
+fn is_junk_digit_line(tokens: &[&str]) -> bool {
+    tokens.iter().all(|token| {
+        if token.chars().any(|c| c.is_numeric()) {
+            is_junk_digit_token(token)
+        } else {
+            !is_plausible_token(token)
+        }
+    })
 }
 
 /// An operand of an equation: a word of 3 or more letters, one letter that is not a stroke-like
@@ -209,15 +223,16 @@ fn is_equation(line: &str) -> bool {
 }
 
 /// A line is symbol noise when it holds no character of an unspaced script, no equation
-/// (`x = y`) and its tokens are not plausible text, or when at least half of its tokens are a
-/// digit with a stray quotation or section mark. Any other line with a digit is kept.
+/// (`x = y`) and its tokens are not plausible text, or when it has a digit and every digit
+/// token is a digit with a stray quotation or section mark and no other token is plausible
+/// text. Any other line with a digit is kept.
 fn is_symbol_noise_line(line: &str) -> bool {
     let tokens: Vec<&str> = line.split_whitespace().collect();
     if tokens.is_empty() || line.chars().any(is_unspaced_script) {
         return false;
     }
     if line.chars().any(|c| c.is_numeric()) {
-        return tokens.iter().filter(|token| is_junk_digit_token(token)).count() * 2 >= tokens.len();
+        return is_junk_digit_line(&tokens);
     }
     !(is_equation(line) || is_plausible_text(&tokens))
 }

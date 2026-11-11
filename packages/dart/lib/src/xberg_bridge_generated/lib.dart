@@ -14415,8 +14415,9 @@ class OcrQualityThresholds {
   /// and at least half of them are symbol noise. A line is kept when it reads as text and is
   /// pruned only when it is made of symbols and fragments:
   ///
-  /// - a line with a digit is kept, unless half or more of its tokens pair a digit with a
-  ///   stray quotation or section mark (`"9`, `5§`; a closed quote such as `"9"` stays);
+  /// - a line with a digit is kept, unless every token that holds a digit pairs it with a
+  ///   stray quotation mark or a trailing section mark (`"9`, `5§`) and no other token is
+  ///   plausible text; a closed quote (`"9"`, `‘9’`), `§12` and `"5 items` stay;
   /// - a line with a character of a script written without spaces (CJK ideographs, Kana,
   ///   Hangul, Thai, Lao, Khmer, Myanmar) or a token with a letter outside the Latin script
   ///   (Arabic, Cyrillic, Greek, ...) is kept;
@@ -14433,7 +14434,8 @@ class OcrQualityThresholds {
   ///   `b) to go`, `Mr X Is In`, `de la gare`, `Mairie du I`). A token is plausible text when it
   ///   is a word of 3 or more letters, an English or common Romance/German function word, a
   ///   capitalized initial or abbreviation of 1 or 2 letters, a list label such as `b)`, or a
-  ///   contraction; `ee so`, `we SY` and `a a` are pruned.
+  ///   contraction; `ee so`, `we SY` and `a a` are pruned. Two lowercase 3-letter tokens
+  ///   together count as plausible, so `mal cad` is kept while a lone `mal` is pruned.
   ///
   /// A page that is mostly photograph noise keeps the capitalized fragments and digit-bearing
   /// lines that read as text, so pruning shrinks the noise rather than clearing it.
