@@ -397,12 +397,16 @@ fn table_words(table: &Table) -> impl Iterator<Item = &str> {
 }
 
 #[cfg(test)]
+#[path = "two_tables/pin_tests.rs"]
+mod pin_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::ocr_metadata_keys::{OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY};
     use crate::types::OcrBoundingGeometry;
 
-    fn two_table_candidate() -> (ExtractedDocument, ExtractedDocument) {
+    pub(super) fn two_table_candidate() -> (ExtractedDocument, ExtractedDocument) {
         let mut candidate = super::super::tests::table_candidate();
         candidate.tables[0].page_number = 1;
         candidate.tables[0].markdown = table_to_markdown(&candidate.tables[0].cells);
@@ -655,7 +659,7 @@ mod tests {
         );
     }
 
-    fn mixed_two_table_candidate() -> (ExtractedDocument, ExtractedDocument) {
+    pub(super) fn mixed_two_table_candidate() -> (ExtractedDocument, ExtractedDocument) {
         let (mut candidate, mut primary) = two_table_candidate();
         candidate.content = format!(
             "Overview 7\n\n{}\n\nSubtotal 8\n\n{}\n\nBalance 9",
