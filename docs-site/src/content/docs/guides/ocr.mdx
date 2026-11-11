@@ -1259,6 +1259,8 @@ for failure in result.ocr_page_failures or []:
     print(f"page {failure.page}: {failure.error} ({state})")
 ```
 
+When Tesseract recovers a PDF page from a single embedded image, `metadata.additional.ocr_page_segmentation_modes` can record the page number and the segmentation mode used for that read. This also applies to standalone scans.
+
 ### Keep the Text Layer of an OCR Page
 
 When Xberg sends a PDF page to OCR, the OCR text replaces the text layer in the page `content`. This is correct for a scan with a stamp. For a born-digital page with one short line, the result then has an OCR reading of the line and no copy of the exact characters.
