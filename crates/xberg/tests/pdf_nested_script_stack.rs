@@ -140,3 +140,45 @@ fn should_keep_the_stack_scripts_of_arxiv_01153_equations_2_and_3_on_their_base(
 fn should_keep_the_subscript_of_psi_in_nist_sp800_22_p49() {
     assert_markup("nist-sp800-22r1a-p49", "- (3) Compute: ψ~*m*~ = ∑");
 }
+
+/// The sources set a fraction in each exponent or index: the glyph stream of gutenberg-33283-p84 reads
+/// `x`, `−`, `1`, `2` for x^{−1/2}, p161 `z`, `−`, `2`, `3` for z^{−2/3}, and arxiv-2405.00569 p4 `f`,
+/// `j`, `+`, `3`, `2` for f_{j+3/2}. A numerator over a denominator is no script stack, so none of
+/// them may read as an integer power or index.
+#[test]
+fn should_not_flatten_the_fractional_powers_of_gutenberg_33283_p84_and_p161_into_integers() {
+    assert_no_markup("gutenberg-33283-p84", "x<sup>−");
+    assert_no_markup("gutenberg-33283-p84", "<sup>− 2</sup>");
+    assert_one_line("gutenberg-33283-p84", "θ=3a2x");
+    assert_no_markup("gutenberg-33283-p161", "z<sup>−");
+    assert_no_markup("gutenberg-33283-p161", "<sup>− 3</sup>");
+}
+
+#[test]
+fn should_not_move_a_denominator_into_the_half_cell_index_of_arxiv_00569_p4() {
+    assert_no_markup("arxiv-2405.00569v2-p4", "f~j+2~ 3");
+    assert_no_markup("arxiv-2405.00569v2-p4", "f~j+2~ 1");
+    assert_one_line("arxiv-2405.00569v2-p4", "(2.5)f");
+}
+
+#[test]
+fn should_not_flatten_the_half_power_of_the_root_in_gutenberg_38769_p500() {
+    assert_no_markup("gutenberg-38769-p500", "2π</sup>");
+}
+
+/// The glyph stream of plos-journal.pcbi.1010783 p4 reads `R`, `n`, `x`, `þ`: the exponent `n_x`
+/// first, then the `þ` below the line. Every dimension keeps that order.
+#[test]
+fn should_keep_the_glyph_stream_order_of_the_dimension_in_plos_1010783() {
+    for dimension in [
+        "Rnxþ is the vector of state",
+        "Rnyþ is the parameter vector",
+        "Rnuþ is the vector of constant",
+    ] {
+        assert_one_line("plos-journal.pcbi.1010783-p4", dimension);
+    }
+    assert_markup(
+        "plos-journal.pcbi.1010783-p4",
+        "R<sup>n</sup>~x þ~ is the vector of state variables",
+    );
+}
