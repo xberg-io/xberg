@@ -182,25 +182,32 @@ fn a_native_row_reads_the_longer_ocr_row_first_at_an_equal_distance_in_length() 
 /// other misread and no misread row stays in the page text. ~keep
 #[test]
 fn a_misread_row_that_one_native_row_takes_is_not_taken_again() {
-    let total = "alpha bravo charlie 12 cm3".to_string();
+    let total = "alpha bravo charlie delta 12 cm3 cm3".to_string();
     let native = vec![
         total.clone(),
-        "delta one".to_string(),
-        "echo two".to_string(),
+        "echo one".to_string(),
+        "foxtrot two".to_string(),
         total.clone(),
     ];
+    // One character and two characters short of the native row: both reach the similarity, and
+    // the first scores higher for both native rows. ~keep
+    let (better, worse) = (
+        "alpha bravo charlie delta 12 cm3 cm".to_string(),
+        "alpha bravo charlie delta 12 cm cm".to_string(),
+    );
     let read = vec![
-        "alpha bravo charlie 12 cm\u{2019}".to_string(),
-        "delta one".to_string(),
-        "echo two".to_string(),
-        "alpha bravo charlie 12 cm\u{2019}\u{2019}".to_string(),
+        better.clone(),
+        "echo one".to_string(),
+        "foxtrot two".to_string(),
+        worse.clone(),
     ];
     let text = merged(&native, &read);
+    let lines: Vec<&str> = text.lines().collect();
     assert!(
-        !text.contains('\u{2019}'),
+        !lines.contains(&better.as_str()) && !lines.contains(&worse.as_str()),
         "a misread OCR row stays in the page text:\n{text}"
     );
-    assert_eq!(text.lines().filter(|line| *line == total).count(), 2, "{text}");
+    assert_eq!(lines.iter().filter(|line| **line == total).count(), 2, "{text}");
 }
 
 /// Forty OCR rows of one length each misread only the native row at their own place, after twelve
