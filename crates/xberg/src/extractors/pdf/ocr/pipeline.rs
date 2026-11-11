@@ -6254,12 +6254,17 @@ pub(super) async fn extract_with_ocr_for_page(
         && !tall_source_used
         && pages_with_recovered_xobject_payload == [false]
         && public_ocr_pages.is_empty()
-        && collected_tables.is_empty()
         && accumulated_formulas.is_empty()
         && accumulated_llm_usage.is_empty()
-        && ocr_doc
-            .as_ref()
-            .is_none_or(|doc| super::document::plain_ocr_page_can_yield_to_native(doc, read))
+        // As at the mixed-route site: the structure built from a read the Type0 rule judged may hold
+        // blocks, lists and tables of that read, which the native page replaces whole. ~keep
+        && match ocr_doc.as_ref() {
+            None => collected_tables.is_empty(),
+            Some(doc) => {
+                (collected_tables.is_empty() && super::document::plain_ocr_page_can_yield_to_native(doc, read))
+                    || super::native_word_coverage::only_structures_certified_tesseract_text(doc)
+            }
+        }
         && super::document::type0_native_is_corroborated(
             native,
             read,

@@ -250,3 +250,8 @@ fn a_moderately_speckled_type0_layer_keeps_native_text_after_ink_loss() {
 fn a_speckled_type0_layer_keeps_native_text_in_markdown() {
     assert_speckled_page_keeps_native_text(9000, OutputFormat::Markdown);
 }
+
+#[test]
+fn a_lightly_speckled_type0_layer_keeps_native_text_in_markdown() {
+    assert_speckled_page_keeps_native_text(3000, OutputFormat::Markdown);
+}
