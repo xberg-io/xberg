@@ -406,6 +406,10 @@ fn build_sub_doc(elem_indices: &[usize], doc: &InternalDocument) -> InternalDocu
     sub_doc
 }
 
+pub(crate) fn render_plain_elements(elem_indices: &[usize], doc: &InternalDocument) -> String {
+    crate::rendering::render_plain(&build_sub_doc(elem_indices, doc))
+}
+
 /// Whether `page`'s prebuilt text may be replaced by the plain rendering of its elements: every
 /// page of a PDF, image or OCR source (a native page's text layer differs from the plain content
 /// by spacing alone), and a page of another format that took OCR text. A DOCX page with its
@@ -445,7 +449,7 @@ fn rerender_pages_plain(
                 let rendered = is_ocr_page_text(doc, &page)
                     .then(|| elements_by_page.get(&page.page_number))
                     .flatten()
-                    .map(|indices| crate::rendering::render_plain(&build_sub_doc(indices, doc)))
+                    .map(|indices| render_plain_elements(indices, doc))
                     .filter(|rendered| !rendered.is_empty());
                 match rendered.and_then(|rendered| found(&rendered, search_offset).map(|start| (rendered, start))) {
                     Some((rendered, start)) => {

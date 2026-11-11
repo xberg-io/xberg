@@ -3741,8 +3741,20 @@ impl PdfExtractor {
                     )
                     .await?;
                     if let Some(mixed_run) = probe {
-                        let (text, replacements, _, _, _, _, preprocessing, confidence, warnings, page_failures) =
-                            mixed_run.output;
+                        let (
+                            text,
+                            replacements,
+                            documents,
+                            _,
+                            _,
+                            _,
+                            preprocessing,
+                            confidence,
+                            warnings,
+                            page_failures,
+                        ) = mixed_run.output;
+                        // The stock hidden-layer probe requests text and disables table detection. ~keep
+                        debug_assert!(documents.values().all(|document| document.tables.is_empty()));
                         let method = extraction_method_after_mixed_ocr(&replacements);
                         ocr_preprocessing_by_page.extend(
                             preprocessing

@@ -1,4 +1,10 @@
-use xberg::{ExtractedDocument, types::PageContent};
+use xberg::{
+    ExtractedDocument,
+    types::{
+        PageContent,
+        internal::{ElementKind, InternalDocument, InternalElement},
+    },
+};
 
 pub(super) fn assert_page_ranges(document: &ExtractedDocument) {
     assert!(
@@ -39,14 +45,15 @@ pub(super) fn assert_page_ranges(document: &ExtractedDocument) {
 
 fn forced_table_block(recognized: &PageContent) -> &str {
     assert_eq!(recognized.tables.len(), 1);
-    let rows = recognized.tables[0]
-        .cells
-        .iter()
-        .map(|row| row.join(" "))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let mut table_document = InternalDocument::new("pdf");
+    let table_index = table_document.push_table(recognized.tables[0].as_ref().clone());
+    table_document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0));
+    let rendered = ExtractedDocument::from(table_document);
     // Whole-document OCR also emits the cell text as individual paragraphs. ~keep
-    let mut blocks = recognized.content.split("\n\n").filter(|block| *block == rows.trim());
+    let mut blocks = recognized
+        .content
+        .split("\n\n")
+        .filter(|block| *block == rendered.content);
     let block = blocks
         .next()
         .expect("the forced page contains the complete Plain table");
