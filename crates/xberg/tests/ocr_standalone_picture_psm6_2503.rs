@@ -183,7 +183,13 @@ fn assert_rows_are_own_lines(format: OutputFormat) {
         kept += 1;
         next = at;
     }
-    assert!(kept >= 11, "{kept} of 12 rows kept whole:\n{}", result.content);
+    // Djot escapes every leader dot, so every row the read produced must round-trip
+    // whole; the plain and Markdown variants tolerate one OCR-quality row.
+    assert!(
+        kept >= if is_djot { 12 } else { 11 },
+        "{kept} of 12 rows kept whole:\n{}",
+        result.content
+    );
 }
 
 /// Whether `line` is the fixture row: the label, then the leader dots as literal text, then the
