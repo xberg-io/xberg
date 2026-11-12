@@ -294,18 +294,29 @@ fn embedded_bullet_positions(text: &str) -> Vec<usize> {
     let mut previous_non_space = None;
     let mut product_end = 0;
     let mut item_start = None;
-    let mut chars = text.char_indices().peekable();
-    while let Some((position, character)) = chars.next() {
+    let mut group_starts = Vec::new();
+    for (position, character) in text.char_indices() {
+        match character {
+            '(' | '[' | '{' => group_starts.push(position + character.len_utf8()),
+            ')' | ']' | '}' => {
+                group_starts.pop();
+            }
+            _ => {}
+        }
         if matches!(character, '\u{2022}' | '\u{00B7}') {
-            let next = chars.peek().map(|&(_, c)| c);
+            let right = position + character.len_utf8();
+            let next = text[right..].chars().next();
             let glued = previous.is_some_and(char::is_alphanumeric) && next.is_some_and(char::is_alphanumeric);
             let glued_product = character == '·'
                 && previous.is_some_and(|c| c.is_ascii_digit())
                 && next.is_some_and(|c| c.is_ascii_digit());
             let left_operand =
                 previous_non_space.is_some_and(|c: char| c.is_ascii_digit() || matches!(c, ')' | ']' | '}'));
-            let right = position + character.len_utf8();
             let continues_product = product_end != 0 && text[product_end..position].trim().is_empty();
+            let grouped_product = character == '•'
+                && group_starts
+                    .last()
+                    .is_some_and(|&start| continues_product || is_numeric_operand(&text[start..position]));
             let follows_numeric_item = item_start.is_some_and(|start| {
                 text[start..position]
                     .trim()
@@ -314,8 +325,12 @@ fn embedded_bullet_positions(text: &str) -> Vec<usize> {
             });
             if left_operand
                 && (glued_product || (!glued && !follows_numeric_item))
-                && let Some(number_end) =
-                    numeric_multiplier_end(&text[right..], character, continues_product || glued_product)
+                && let Some(number_end) = numeric_multiplier_end(
+                    &text[right..],
+                    character,
+                    continues_product || glued_product,
+                    grouped_product,
+                )
             {
                 product_end = right + number_end;
             } else if !glued {
@@ -380,12 +395,7 @@ fn numeric_list_row_markers(para: &PdfParagraph, text: &str) -> Option<Vec<usize
 }
 
 fn ends_with_numeric_expression(text: &str) -> bool {
-    let text = text.trim().trim_end_matches([')', ']', '}']).trim_end();
-    let is_number = |token: &str| {
-        token.starts_with(|c: char| c.is_ascii_digit())
-            && token.bytes().all(|byte| byte.is_ascii_digit() || byte == b'.')
-    };
-    if is_number(text) {
+    if is_numeric_operand(text) {
         return true;
     }
     // An arithmetic expression can wrap with its operators aligned at the left edge. ~keep
@@ -393,30 +403,41 @@ fn ends_with_numeric_expression(text: &str) -> bool {
         .is_some_and(|(left, right)| {
             left.trim_end()
                 .ends_with(|c: char| c.is_ascii_digit() || matches!(c, ')' | ']' | '}'))
-                && is_number(right.trim_start())
+                && (is_numeric_operand(right) || is_numeric_operand(right.trim_end().trim_end_matches([')', ']', '}'])))
         })
 }
 
-fn followed_by_explicit_bullet(after_number: &str) -> bool {
-    let after_item = after_number
-        .strip_prefix('-')
-        .filter(|suffix| suffix.starts_with(char::is_alphabetic))
-        .and_then(|suffix| suffix.split_once(char::is_whitespace))
-        .map_or(after_number, |(_, rest)| rest);
-    after_item
-        .trim_start()
-        .strip_prefix('•')
-        .is_some_and(|next| next.starts_with(char::is_whitespace))
+fn is_numeric_operand(text: &str) -> bool {
+    let mut operand = text.trim();
+    while let Some(inner) = operand
+        .strip_prefix('(')
+        .and_then(|rest| rest.strip_suffix(')'))
+        .or_else(|| operand.strip_prefix('[').and_then(|rest| rest.strip_suffix(']')))
+        .or_else(|| operand.strip_prefix('{').and_then(|rest| rest.strip_suffix('}')))
+    {
+        operand = inner.trim();
+    }
+    operand.starts_with(|c: char| c.is_ascii_digit())
+        && operand.bytes().all(|byte| byte.is_ascii_digit() || byte == b'.')
 }
 
-fn numeric_multiplier_end(text: &str, glyph: char, continues_product: bool) -> Option<usize> {
+fn numeric_multiplier_end(text: &str, glyph: char, continues_product: bool, grouped_product: bool) -> Option<usize> {
     let operand = text.trim_start();
     if !operand.starts_with(|c: char| c.is_ascii_digit()) {
         return None;
     }
     let after_number = operand.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.');
-    if glyph == '•' && followed_by_explicit_bullet(after_number) {
-        return None;
+    if glyph == '•' {
+        let hyphenated_word = after_number
+            .strip_prefix('-')
+            .is_some_and(|suffix| suffix.starts_with(char::is_alphabetic));
+        let next_bullet = after_number
+            .trim_start()
+            .strip_prefix('•')
+            .is_some_and(|next| next.starts_with(char::is_whitespace));
+        if hyphenated_word || (next_bullet && !grouped_product) {
+            return None;
+        }
     }
     // Right-attached dots can be decimal points in tables. Require evidence of a product chain. ~keep
     if operand.len() == text.len()
@@ -1113,6 +1134,8 @@ mod tests {
             "(1 − 0.2888 • 2) + (3) · 4",
             "Thus 2 · 3 · 4 · 5 means multiplication.",
             "2 • 3-4 + 5 • 6-7",
+            "(2 • 3 • 4)",
+            "[2 • 3 • 4 • 5]",
         ] {
             let mut paragraphs = vec![make_body_paragraph(formula, 10.0)];
             split_embedded_list_items(&mut paragraphs);
@@ -1136,14 +1159,17 @@ mod tests {
 
     #[test]
     fn corroborated_explicit_bullets_split_hyphenated_counts() {
-        let mut paragraphs = vec![make_body_paragraph("Plan 2024 • 2-pack • 3-pack", 10.0)];
-        split_embedded_list_items(&mut paragraphs);
-        assert_eq!(paragraphs.len(), 3);
-        assert!(!paragraphs[0].is_list_item);
-        assert_eq!(paragraphs[0].lines[0].segments[0].text, "Plan 2024");
-        for (item, expected) in paragraphs[1..].iter().zip(["2-pack", "3-pack"]) {
-            assert!(item.is_list_item);
-            assert_eq!(item.lines[0].segments[0].text, expected);
+        for expected in [["2-pack", "3-pack"], ["2-pack of filters", "3-pack of seals"]] {
+            let text = format!("Plan 2024 • {} • {}", expected[0], expected[1]);
+            let mut paragraphs = vec![make_body_paragraph(&text, 10.0)];
+            split_embedded_list_items(&mut paragraphs);
+            assert_eq!(paragraphs.len(), 3, "{text}");
+            assert!(!paragraphs[0].is_list_item);
+            assert_eq!(paragraphs[0].lines[0].segments[0].text, "Plan 2024");
+            for (item, expected) in paragraphs[1..].iter().zip(expected) {
+                assert!(item.is_list_item);
+                assert_eq!(item.lines[0].segments[0].text, expected);
+            }
         }
     }
 
@@ -1189,7 +1215,7 @@ mod tests {
 
     #[test]
     fn aligned_middle_dot_rows_preserve_wrapped_products() {
-        for intro in ["2", "Evaluate 1 + 2", "Evaluate 1−2"] {
+        for intro in ["2", "(2)", "Evaluate 1 + 2", "Evaluate 1−2", "Evaluate 1 + (2)"] {
             let mut paragraph = legend_row(intro, 50.0, 700.0, 60.0, 10.0);
             paragraph.lines.extend(legend_row("· 3", 62.0, 686.0, 17.0, 10.0).lines);
             paragraph.lines.extend(legend_row("· 4", 62.0, 672.0, 17.0, 10.0).lines);
