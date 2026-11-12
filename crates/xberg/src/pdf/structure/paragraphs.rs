@@ -459,18 +459,27 @@ fn is_explicit_list_marker(left: &str, glyph: char, right: &str) -> bool {
 }
 
 fn is_corroborated_hyphenated_item(after_number: &str, preceding_list_marker: bool) -> bool {
-    let Some(suffix) = after_number
-        .strip_prefix('-')
-        .filter(|suffix| suffix.starts_with(char::is_alphabetic))
-    else {
+    let Some(suffix) = after_number.strip_prefix('-') else {
         return false;
     };
-    if preceding_list_marker {
-        return true;
+    // Require a word as evidence before treating another ambiguous dot as a list marker.
+    if suffix
+        .chars()
+        .take_while(|character| character.is_alphabetic())
+        .nth(1)
+        .is_none()
+    {
+        return false;
     }
     let mut groups = Vec::new();
     for (position, character) in suffix.char_indices() {
         if matches!(character, ')' | ']' | '}') && groups.last().is_none_or(|&(closer, _)| closer != character) {
+            return false;
+        }
+        if groups.is_empty()
+            && matches!(character, '+' | '−' | '*' | '×' | '/' | '÷' | '=')
+            && after_numeric_operand(&suffix[position + character.len_utf8()..]).is_some()
+        {
             return false;
         }
         if matches!(character, '•' | '·') {
@@ -483,7 +492,7 @@ fn is_corroborated_hyphenated_item(after_number: &str, preceding_list_marker: bo
         }
         track_expression_group(&mut groups, position, character);
     }
-    false
+    preceding_list_marker
 }
 
 fn numeric_multiplier_end(
@@ -502,9 +511,16 @@ fn numeric_multiplier_end(
             .trim_start()
             .strip_prefix('·')
             .is_some_and(|next| next.starts_with(char::is_whitespace) && after_numeric_operand(next).is_some());
-    if operand.starts_with(|c| group_closer(c).is_some())
-        && !(grouped_product || continues_product || numeric_dot_chain)
-    {
+    let next_bullet = after_number
+        .trim_start()
+        .strip_prefix('•')
+        .filter(|next| next.starts_with(char::is_whitespace));
+    let grouped_operand = operand.starts_with(|c| group_closer(c).is_some());
+    let numeric_bullet_chain = glyph == '•'
+        && grouped_operand
+        && next_bullet.is_some_and(|next| after_numeric_operand(next).is_some())
+        && (continues_product || ends_with_numeric_expression(left));
+    if grouped_operand && !(grouped_product || continues_product || numeric_dot_chain || numeric_bullet_chain) {
         return None;
     }
     if is_explicit_list_marker(left, glyph, text)
@@ -512,14 +528,11 @@ fn numeric_multiplier_end(
     {
         return None;
     }
-    if glyph == '•' {
-        let next_bullet = after_number
-            .trim_start()
-            .strip_prefix('•')
-            .filter(|next| next.starts_with(char::is_whitespace));
-        if next_bullet.is_some_and(|next| !grouped_product || after_numeric_operand(next).is_none()) {
-            return None;
-        }
+    if glyph == '•'
+        && !numeric_bullet_chain
+        && next_bullet.is_some_and(|next| !grouped_product || after_numeric_operand(next).is_none())
+    {
+        return None;
     }
     // Right-attached dots can be decimal points in tables. Require evidence of a product chain. ~keep
     if operand.len() == text.len() && !(numeric_dot_chain || (glyph == '·' && continues_product)) {
@@ -1217,6 +1230,10 @@ mod tests {
             "(2 • (3) • ((4)))",
             "[2 · {3} · [(4)]]",
             "2 · (3) · (4)",
+            "2 • (3) • ((4))",
+            "2 · 3-x + 4 · 5-y",
+            "2 · 3-x · 4-y",
+            "2 · 3-rate + 4 · 5-time",
         ] {
             let mut paragraphs = vec![make_body_paragraph(formula, 10.0)];
             split_embedded_list_items(&mut paragraphs);
