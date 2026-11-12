@@ -458,21 +458,50 @@ fn is_explicit_list_marker(left: &str, glyph: char, right: &str) -> bool {
     (glyph == '•' || (glyph == '·' && left.ends_with(char::is_whitespace))) && right.starts_with(char::is_whitespace)
 }
 
+fn after_length_unit(text: &str) -> Option<&str> {
+    let end = text.find(|c: char| !c.is_alphabetic()).unwrap_or(text.len());
+    let (unit, rest) = text.split_at(end);
+    (matches!(unit, "mm" | "cm" | "m" | "km" | "in" | "ft" | "yd" | "inch" | "inches")
+        && !rest.starts_with(char::is_alphanumeric))
+    .then_some(rest)
+}
+
+fn after_unit_dimensions(suffix: &str) -> &str {
+    let Some(mut rest) = after_length_unit(suffix) else {
+        return suffix;
+    };
+    let initial = rest;
+    while let Some(next) = rest
+        .trim_start()
+        .strip_prefix('×')
+        .and_then(after_numeric_operand)
+        .and_then(|unit| unit.strip_prefix('-'))
+        .and_then(after_length_unit)
+    {
+        rest = next;
+    }
+    if rest.len() == initial.len() { suffix } else { rest }
+}
+
 fn is_corroborated_hyphenated_item(after_number: &str, preceding_list_marker: bool) -> bool {
     let Some(suffix) = after_number.strip_prefix('-') else {
         return false;
     };
+    let body = after_unit_dimensions(suffix);
+    let body_start = suffix.len() - body.len();
     // Require a word as evidence before treating another ambiguous dot as a list marker.
-    if suffix
-        .chars()
-        .take_while(|character| character.is_alphabetic())
-        .nth(1)
-        .is_none()
+    if body_start == 0
+        && suffix
+            .chars()
+            .take_while(|character| character.is_alphabetic())
+            .nth(1)
+            .is_none()
     {
         return false;
     }
     let mut groups = Vec::new();
-    for (position, character) in suffix.char_indices() {
+    for (position, character) in body.char_indices() {
+        let position = body_start + position;
         if matches!(character, ')' | ']' | '}') && groups.last().is_none_or(|&(closer, _)| closer != character) {
             return false;
         }
@@ -1234,6 +1263,7 @@ mod tests {
             "2 · 3-x + 4 · 5-y",
             "2 · 3-x · 4-y",
             "2 · 3-rate + 4 · 5-time",
+            "2 · 3-in × 4-x · 5-y",
         ] {
             let mut paragraphs = vec![make_body_paragraph(formula, 10.0)];
             split_embedded_list_items(&mut paragraphs);
@@ -1261,6 +1291,8 @@ mod tests {
             (('•', '•'), ["2-pack", "3-pack"]),
             (('•', '•'), ["2-pack of filters", "3-pack of seals"]),
             (('•', '•'), ["2-pack (filters) for model 4", "3-pack of seals"]),
+            (('•', '•'), ["2-in × 4-in lumber", "3-in screws"]),
+            (('•', '•'), ["2-in × 4-in × 6-ft lumber", "3-in screws"]),
             (('•', '·'), ["2-pièces", "3-joints"]),
             (('•', '·'), ["2-pack for model 4", "3-pack of seals"]),
             (('·', '•'), ["2-pack for model 4", "3-pack of seals"]),
