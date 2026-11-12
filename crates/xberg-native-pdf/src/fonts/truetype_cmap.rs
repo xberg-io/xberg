@@ -555,7 +555,7 @@ impl TrueTypeCMap {
         let mut gid_to_unicode = HashMap::new();
         let mut remaining = MAX_CMAP_EXAMINED_CODE_POINTS;
 
-        'groups: for _ in 0..num_groups {
+        for _ in 0..num_groups {
             let start_char_code = cursor
                 .read_u32::<BigEndian>()
                 .map_err(|e| format!("Failed to read startCharCode: {}", e))?;
@@ -598,14 +598,6 @@ impl TrueTypeCMap {
             remaining -= width;
 
             for (offset, char_code) in (start_char_code..=end_char_code).enumerate() {
-                // The map is keyed by `u16` (the TrueType glyph space,
-                // `numGlyphs <= 65535`), so once every gid is present a
-                // further insert can only overwrite an existing entry and
-                // adds no information. Stopping there bounds a crafted
-                // subtable's work at the map's own key-space size. ~keep
-                if gid_to_unicode.len() >= MAX_CMAP_MAPPINGS {
-                    break 'groups;
-                }
                 // A malformed group's startGlyphId can overflow the u32 sum;
                 // wrapping matches release behaviour exactly (the `as u16` cast
                 // then truncates the same low 16 bits). ~keep
