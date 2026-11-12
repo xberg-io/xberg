@@ -2447,7 +2447,11 @@ fn replace_pages_with_ocr_page_texts(
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn attach_ocr_text_page_marks(doc: &mut InternalDocument, ocr_text_pages: Vec<u32>) {
     if !crate::extraction::derive::source_short_circuits_ocr_page_text(&doc.source_format) {
-        doc.ocr_text_pages.extend(ocr_text_pages);
+        for page in ocr_text_pages {
+            if !doc.ocr_text_pages.contains(&page) {
+                doc.ocr_text_pages.push(page);
+            }
+        }
     }
 }
 
