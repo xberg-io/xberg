@@ -3,6 +3,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use super::script_retry::{self, RetryModels};
+use super::validation::{TessdataEnv, resolve_tessdata_path_in, tessdata_search_dirs};
 use crate::ocr::error::OcrError;
 use crate::ocr::types::TesseractConfig;
 
@@ -10,36 +12,90 @@ use crate::ocr::types::TesseractConfig;
 pub(super) struct ModelContext {
     pub(super) directory: String,
     pub(super) osd_revision: Option<blake3::Hash>,
-    /// The script-retry models some directory of the tessdata search chain holds, when the
-    /// configuration asks for the retry; `None` when it does not. Part of the result key: a cached
-    /// first read must not be served once a model the retry needs is present. ~keep
-    pub(super) retry_models: Option<Vec<&'static str>>,
+    retry: Option<RetryContext>,
     invalidated: Arc<AtomicBool>,
     operation: Option<crate::core::extractor::cacheability::Cacheability>,
 }
 
+#[derive(Clone)]
+struct RetryContext {
+    directories: Vec<String>,
+    models: Option<RetryModels>,
+    noisy_below: f64,
+}
+
 impl ModelContext {
+    #[cfg(test)]
     pub(super) fn resolve(config: &TesseractConfig) -> Result<Self, OcrError> {
+        Self::resolve_with_retry(config, None)
+    }
+
+    pub(super) fn resolve_with_retry(config: &TesseractConfig, retry_threshold: Option<f64>) -> Result<Self, OcrError> {
         let languages = config
             .language
             .split('+')
             .map(|lang| lang.trim().to_string())
             .collect::<Vec<_>>();
-        let directory = super::validation::resolve_tessdata_path(&languages, config.tessdata_path.as_deref())
-            .inspect_err(|_| {
-                if matches!(config.psm, 0 | 1 | 12) {
-                    crate::core::extractor::cacheability::invalidate_current();
-                }
-            })?;
+        let env = TessdataEnv::from_process();
+        let override_path = config.tessdata_path.as_deref();
+        let directory = resolve_tessdata_path_in(&languages, override_path, &env).inspect_err(|_| {
+            if matches!(config.psm, 0 | 1 | 12) {
+                crate::core::extractor::cacheability::invalidate_current();
+            }
+        })?;
         let mut context = Self::for_path(directory, config.psm)?;
-        if config.script_retry.is_some() {
-            context.retry_models = Some(super::script_retry::present_models(
-                &config.language,
-                config.tessdata_path.as_deref(),
-                &super::validation::TessdataEnv::from_process(),
-            ));
+        if let Some(noisy_below) = retry_threshold.filter(|_| script_retry::supports_retry(config)) {
+            context.select_retry(config, tessdata_search_dirs(override_path, &env), noisy_below);
         }
         Ok(context)
+    }
+
+    fn select_retry(&mut self, config: &TesseractConfig, directories: Vec<String>, noisy_below: f64) {
+        match RetryModels::resolve(&directories, &config.language, config.psm) {
+            Ok(models) => {
+                self.retry = Some(RetryContext {
+                    directories,
+                    models,
+                    noisy_below,
+                })
+            }
+            Err(error) => self.invalidate_retry(&error),
+        }
+    }
+
+    pub(super) fn invalidate_retry(&self, error: &OcrError) {
+        self.invalidated.store(true, Ordering::Release);
+        crate::core::extractor::cacheability::invalidate_current();
+        tracing::warn!(%error, "script retry skipped or changed; bypassing result cache");
+    }
+
+    pub(super) fn retry_models(&self, config: &TesseractConfig, mean_confidence: f64) -> Option<&RetryModels> {
+        let retry = self.retry.as_ref()?;
+        let models = retry.models.as_ref()?;
+        (mean_confidence < retry.noisy_below && self.retry_is_current(config)).then_some(models)
+    }
+
+    pub(super) fn retry_is_current(&self, config: &TesseractConfig) -> bool {
+        if self.invalidated.load(Ordering::Acquire) {
+            return false;
+        }
+        let Some(retry) = &self.retry else {
+            return true;
+        };
+        let error = match RetryModels::resolve(&retry.directories, &config.language, config.psm) {
+            Ok(current) if current == retry.models => return true,
+            Ok(_) => OcrError::ProcessingFailed("Selected script retry models changed during OCR".into()),
+            Err(error) => error,
+        };
+        self.invalidate_retry(&error);
+        false
+    }
+
+    pub(super) fn if_result_current<T>(&self, config: &TesseractConfig, action: impl FnOnce() -> T) -> Option<T> {
+        if !self.retry_is_current(config) {
+            return None;
+        }
+        self.if_current(action)
     }
 
     pub(super) fn for_provisioned(config: &TesseractConfig) -> Result<Self, OcrError> {
@@ -65,7 +121,7 @@ impl ModelContext {
         Ok(Self {
             directory,
             osd_revision,
-            retry_models: None,
+            retry: None,
             invalidated: Arc::new(AtomicBool::new(false)),
             operation: osd_revision.and_then(|_| crate::core::extractor::cacheability::current()),
         })
@@ -106,20 +162,13 @@ impl ModelContext {
 
     pub(super) fn result_key(&self, config: &TesseractConfig) -> String {
         let mut base = super::config::hash_config(config, &self.directory);
-        if let Some(models) = self.retry_models.as_ref() {
+        if let Some(retry) = self.retry.as_ref() {
             let mut hash = blake3::Hasher::new();
-            hash.update(b"tesseract-script-retry-v1");
+            hash.update(b"tesseract-script-retry-v2");
             hash.update(base.as_bytes());
-            hash.update(self.directory.as_bytes());
-            for model in models {
-                hash.update(b"+");
-                hash.update(model.as_bytes());
-            }
-            // The noise bound decides which pages get the second read, so a page read under one
-            // bound is not the page read under another. ~keep
-            if let Some(retry) = config.script_retry.as_ref() {
-                hash.update(b"<");
-                hash.update(&retry.noisy_below.to_bits().to_le_bytes());
+            hash.update(&retry.noisy_below.to_bits().to_le_bytes());
+            if let Some(models) = &retry.models {
+                models.hash_into(&mut hash);
             }
             base = hash.finalize().to_hex().to_string();
         }
@@ -218,67 +267,75 @@ mod tests {
         assert_ne!(key, missing.result_key(&config));
     }
 
-    /// GH#2300: a cached first read must not be served once the script retry can run, so the
-    /// present retry models and the noise bound are part of the key; a context without retry
-    /// models keeps the old key. Each key differs from the one before it in one input only, so
-    /// that dropping one input from the hash repeats a key.
     #[test]
-    fn result_keys_change_with_the_present_script_retry_models() {
+    fn retry_cache_misses_when_a_complete_set_appears_moves_or_changes() {
         let root = tempfile::tempdir().unwrap();
-        let directory: String = root.path().to_str().unwrap().into();
-        let config = TesseractConfig::default();
-        let plain = ModelContext::for_path(directory.clone(), config.psm).unwrap();
-        let mut with_osd = plain.clone();
-        with_osd.retry_models = Some(Vec::new());
-        let mut with_han = plain.clone();
-        with_han.retry_models = Some(vec!["chi_sim"]);
-        let mut with_both = plain.clone();
-        with_both.retry_models = Some(vec!["osd", "chi_sim"]);
-        let bound = |noisy_below| TesseractConfig {
-            script_retry: Some(crate::ocr::types::ScriptRetry { noisy_below }),
-            ..config.clone()
+        let primary = root.path().join("primary");
+        let fallback = root.path().join("fallback");
+        for dir in [&primary, &fallback] {
+            std::fs::create_dir(dir).unwrap();
+        }
+        let write = |dir: &std::path::Path, lang: &str, bytes: &[u8]| {
+            std::fs::write(dir.join(format!("{lang}.traineddata")), bytes).unwrap();
         };
-        let keys = [
-            plain.result_key(&config),
-            with_osd.result_key(&config),
-            with_han.result_key(&config),
-            with_both.result_key(&config),
-            with_both.result_key(&bound(75.0)),
-            with_both.result_key(&bound(80.0)),
-        ];
-        for (index, key) in keys.iter().enumerate() {
-            assert!(keys[..index].iter().all(|other| other != key), "key {index} repeats");
-        }
-        assert_eq!(keys[0], super::super::config::hash_config(&config, &directory));
-    }
-
-    /// The present retry models are read from the tessdata search chain without any download, and
-    /// recorded whenever the configuration asks for the retry. The chain ends in the system
-    /// directories, which a test cannot empty, so only presence is asserted.
-    #[test]
-    fn resolve_records_the_present_retry_models_whenever_the_retry_is_configured() {
-        let root = tempfile::tempdir().unwrap();
-        for name in ["eng", "chi_sim"] {
-            std::fs::write(root.path().join(format!("{name}.traineddata")), b"model fixture").unwrap();
-        }
+        write(&primary, "eng", b"eng");
+        write(&fallback, "osd", b"osd");
+        write(&fallback, "chi_sim", b"han1");
+        let directories: Vec<String> = vec![primary.to_str().unwrap().into(), fallback.to_str().unwrap().into()];
         let config = TesseractConfig {
-            tessdata_path: Some(root.path().to_path_buf()),
-            script_retry: Some(crate::ocr::types::ScriptRetry { noisy_below: 75.0 }),
+            psm: 3,
             ..Default::default()
         };
-        let present = ModelContext::resolve(&config).unwrap().retry_models.unwrap();
-        assert!(present.contains(&"chi_sim"), "{present:?}");
-        let one_read = TesseractConfig {
-            script_retry: None,
-            ..config.clone()
+        let snapshot = |threshold| {
+            let mut context = ModelContext::for_path(directories[0].clone(), config.psm).unwrap();
+            context.select_retry(&config, directories.clone(), threshold);
+            context
         };
-        assert_eq!(ModelContext::resolve(&one_read).unwrap().retry_models, None);
-        let reads_han = TesseractConfig {
-            language: "eng+chi_sim".to_string(),
-            ..config
+        let cache = crate::ocr::cache::OcrCache::new(Some(root.path().join("results"))).unwrap();
+        let result = crate::types::OcrExtractionResult {
+            content: "cached OCR output".into(),
+            mime_type: "text/plain".into(),
+            metadata: Default::default(),
+            tables: vec![],
+            ocr_elements: None,
+            internal_document: None,
+            raw_ocr_source_frame: None,
         };
-        let present = ModelContext::resolve(&reads_han).unwrap().retry_models.unwrap();
-        assert!(!present.contains(&"chi_sim"), "{present:?}");
+        let lookup = |context: &ModelContext| {
+            cache
+                .get_cached_result("page", "tesseract", &context.result_key(&config), None)
+                .unwrap()
+        };
+        let seed = |context: &ModelContext| {
+            cache
+                .set_cached_result("page", "tesseract", &context.result_key(&config), None, &result)
+                .unwrap();
+            assert_eq!(lookup(context).unwrap().content, result.content);
+        };
+
+        let missing = snapshot(75.0);
+        assert!(missing.retry_models(&config, 30.0).is_none());
+        seed(&missing);
+        write(&fallback, "eng", b"eng");
+        assert!(missing.if_result_current(&config, || ()).is_none());
+        let complete = snapshot(75.0);
+        assert!(lookup(&complete).is_none());
+        assert!(complete.retry_models(&config, 30.0).is_some());
+        assert!(complete.retry_models(&config, 75.0).is_none());
+        seed(&complete);
+        assert!(lookup(&snapshot(80.0)).is_none());
+
+        write(&primary, "chi_sim", b"han1");
+        let moved = snapshot(75.0);
+        assert!(lookup(&moved).is_none());
+        seed(&moved);
+        write(&primary, "chi_sim", b"han2");
+        assert!(moved.if_result_current(&config, || ()).is_none());
+        let replaced_han = snapshot(75.0);
+        assert!(lookup(&replaced_han).is_none());
+        seed(&replaced_han);
+        write(&fallback, "osd", b"OSD");
+        assert!(lookup(&snapshot(75.0)).is_none());
     }
 
     #[test]

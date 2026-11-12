@@ -250,14 +250,14 @@ impl TesseractBackend {
         if let Some(use_cache) = Self::use_cache_from_backend_options(config) {
             internal.use_cache = use_cache;
         }
-        // GH#2300: an explicit `ocr.pipeline` is the caller's own staging of languages and
-        // backends, so only a call without one gets the automatic second read. ~keep
-        if config.pipeline.is_none() {
-            internal.script_retry = Some(crate::ocr::types::ScriptRetry {
-                noisy_below: config.effective_thresholds().min_ocr_mean_confidence,
-            });
-        }
         internal
+    }
+
+    fn script_retry_threshold(config: &OcrConfig) -> Option<f64> {
+        config
+            .pipeline
+            .is_none()
+            .then(|| config.effective_thresholds().min_ocr_mean_confidence)
     }
 
     /// Read the per-call result-cache override from `backend_options`.
@@ -597,6 +597,7 @@ impl TesseractBackend {
     ) -> Result<ExtractedDocument> {
         #[cfg(all(test, feature = "pdf", feature = "tokio-runtime", feature = "bundle-tessdata-eng"))]
         read_counter::record(config);
+        let retry_threshold = Self::script_retry_threshold(config);
         let tess_config = self.config_to_tesseract(config);
         let tess_config_clone = tess_config.clone();
         let output_format = config.output_format.clone();
@@ -619,11 +620,12 @@ impl TesseractBackend {
             let _permit = permit;
             let run = || {
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    processor.process_image_with_policy(
+                    processor.process_image_with_retry(
                         image_bytes.as_slice(),
                         &tess_config_clone,
                         output_format,
                         policy,
+                        retry_threshold,
                     )
                 }))
                 .unwrap_or_else(|_| {
@@ -723,6 +725,7 @@ impl OcrBackend for TesseractBackend {
     }
 
     async fn process_image_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractedDocument> {
+        let retry_threshold = Self::script_retry_threshold(config);
         let tess_config = self.config_to_tesseract(config);
         let tess_config_clone = tess_config.clone();
         let output_format = config.output_format.clone();
@@ -742,9 +745,8 @@ impl OcrBackend for TesseractBackend {
         let operation = move || {
             #[cfg(not(target_arch = "wasm32"))]
             let _permit = permit;
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match output_format {
-                Some(fmt) => processor.process_image_file_with_format(&path_str, &tess_config_clone, fmt),
-                None => processor.process_image_file(&path_str, &tess_config_clone),
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                processor.process_image_file(&path_str, &tess_config_clone, output_format, retry_threshold)
             }))
             .unwrap_or_else(|_| {
                 Err(crate::ocr::error::OcrError::ProcessingFailed(
@@ -1916,31 +1918,27 @@ mod tests {
     /// caller's mean-confidence floor as the noise bound; a staged pipeline is the caller's own
     /// language plan and gets one read.
     #[test]
-    fn config_to_tesseract_sets_the_script_retry_unless_a_pipeline_is_configured() {
-        let backend = TesseractBackend::new();
-        let plain = backend.config_to_tesseract(&OcrConfig::default());
+    fn script_retry_uses_the_quality_threshold_only_without_a_pipeline() {
         assert_eq!(
-            plain.script_retry,
-            Some(crate::ocr::types::ScriptRetry {
-                noisy_below: crate::core::config::ocr::OcrQualityThresholds::default().min_ocr_mean_confidence,
-            })
+            TesseractBackend::script_retry_threshold(&OcrConfig::default()),
+            Some(crate::core::config::ocr::OcrQualityThresholds::default().min_ocr_mean_confidence)
         );
-        let strict = backend.config_to_tesseract(&OcrConfig {
+        let strict = OcrConfig {
             quality_thresholds: Some(crate::core::config::ocr::OcrQualityThresholds {
                 min_ocr_mean_confidence: 60.0,
                 ..Default::default()
             }),
             ..Default::default()
-        });
-        assert_eq!(strict.script_retry.map(|retry| retry.noisy_below), Some(60.0));
-        let staged = backend.config_to_tesseract(&OcrConfig {
+        };
+        assert_eq!(TesseractBackend::script_retry_threshold(&strict), Some(60.0));
+        let staged = OcrConfig {
             pipeline: Some(crate::core::config::ocr::OcrPipelineConfig {
                 stages: Vec::new(),
                 quality_thresholds: Default::default(),
             }),
             ..Default::default()
-        });
-        assert_eq!(staged.script_retry, None);
+        };
+        assert_eq!(TesseractBackend::script_retry_threshold(&staged), None);
     }
 
     /// #1572, multi-language form: the join must use the configured list, not fall back to "eng".

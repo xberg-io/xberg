@@ -2030,9 +2030,6 @@ fn security_limits_for_ocr(
         .unwrap_or_default()
 }
 
-/// The symbols of every word with an underscore, which table reconstruction reads to cut a mark
-/// out of a word. Empty when Tesseract gives no result iterator or cannot read the symbols: the
-/// cut then estimates each piece's box from its share of the word's characters. ~keep
 /// The word table that table detection reads: the merged page's table when the second read changed
 /// the page, otherwise the first read's table.
 fn table_tsv(first_read: Option<String>, merged: Option<&script_retry::Merged>) -> Option<String> {
@@ -2042,6 +2039,28 @@ fn table_tsv(first_read: Option<String>, merged: Option<&script_retry::Merged>) 
     }
 }
 
+fn retry_with_tsv<T>(
+    models: &ModelContext,
+    cached_tsv: Option<&str>,
+    read_tsv: impl FnOnce() -> Result<String, OcrError>,
+    run: impl FnOnce(&str) -> Result<Option<T>, OcrError>,
+) -> Option<T> {
+    let outcome = match cached_tsv {
+        Some(tsv) => run(tsv),
+        None => read_tsv().and_then(|tsv| run(&tsv)),
+    };
+    match outcome {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            models.invalidate_retry(&error);
+            None
+        }
+    }
+}
+
+/// The symbols of every word with an underscore, which table reconstruction reads to cut a mark
+/// out of a word. Empty when Tesseract gives no result iterator or cannot read the symbols: the
+/// cut then estimates each piece's box from its share of the word's characters. ~keep
 fn underscore_word_symbols(api: &TesseractAPI) -> Vec<xberg_tesseract::WordSymbols> {
     match api
         .get_iterator()
@@ -2415,24 +2434,24 @@ pub(super) fn perform_ocr(
     } else {
         None
     };
-    // GH#2300: a noisy first read of a page in a script the configured list cannot read gets a
-    // second read with that script's model, merged per line. A failure of the second read is
-    // logged and the first read stands, so no page that read before can stop reading now. ~keep
-    let script_retry = if script_retry::wanted(config, f64::from(mean_text_conf)) {
-        let first_tsv = api
-            .get_tsv_text(0)
-            .map_err(|e| OcrError::ProcessingFailed(format!("Failed to extract TSV: {}", e)))?;
-        let pass = script_retry::Pass { config, source_dpi };
-        match script_retry::run(&api, &first_tsv, &pass) {
-            Ok(outcome) => outcome,
-            Err(error) => {
-                tracing::warn!(%error, "script retry skipped; the first read stands");
-                None
-            }
-        }
-    } else {
-        None
-    };
+    let script_retry = models
+        .retry_models(config, f64::from(mean_text_conf))
+        .and_then(|retry_models| {
+            let pass = script_retry::Pass { config, source_dpi };
+            retry_with_tsv(
+                models,
+                tsv_data_for_tables.as_deref(),
+                || {
+                    api.get_tsv_text(0).map_err(|error| {
+                        OcrError::ProcessingFailed(format!(
+                            "Failed to extract first-pass TSV for script retry: {error}"
+                        ))
+                    })
+                },
+                |tsv| script_retry::run(&api, tsv, &pass, retry_models),
+            )
+            .filter(|_| models.retry_is_current(config))
+        });
     let merged_read = script_retry
         .as_ref()
         .map(|outcome| &outcome.merged)
@@ -3056,14 +3075,23 @@ pub(super) fn process_image_file_with_cache(
     cache: &OcrCache,
     api_pool: &Arc<TesseractApiPool>,
     output_format: Option<crate::core::config::OutputFormat>,
+    retry_threshold: Option<f64>,
 ) -> Result<OcrExtractionResult, OcrError> {
     let image_bytes = std::fs::read(file_path)
         .map_err(|e| OcrError::IOError(format!("Failed to read file '{}': {}", file_path, e)))?;
-    process_image_with_cache(&image_bytes, config, cache, api_pool, output_format)
+    process_image_with_retry(
+        &image_bytes,
+        config,
+        cache,
+        api_pool,
+        output_format,
+        ImageOcrPolicy::Default,
+        retry_threshold,
+    )
 }
 
 /// Check if a language value is the "all" wildcard (case-insensitive).
-fn is_all_languages(lang: &str) -> bool {
+pub(super) fn is_all_languages(lang: &str) -> bool {
     let lower = lang.to_ascii_lowercase();
     lower == "all" || lower == "*"
 }
@@ -3101,6 +3129,7 @@ fn resolve_config_language(config: &TesseractConfig) -> Result<Option<TesseractC
 /// # Returns
 ///
 /// OCR extraction result
+#[cfg(test)]
 pub(super) fn process_image_with_cache(
     image_bytes: &[u8],
     config: &TesseractConfig,
@@ -3118,6 +3147,7 @@ pub(super) fn process_image_with_cache(
     )
 }
 
+#[cfg(test)]
 pub(super) fn process_image_with_cache_and_policy(
     image_bytes: &[u8],
     config: &TesseractConfig,
@@ -3125,6 +3155,18 @@ pub(super) fn process_image_with_cache_and_policy(
     api_pool: &Arc<TesseractApiPool>,
     output_format: Option<crate::core::config::OutputFormat>,
     policy: ImageOcrPolicy,
+) -> Result<OcrExtractionResult, OcrError> {
+    process_image_with_retry(image_bytes, config, cache, api_pool, output_format, policy, None)
+}
+
+pub(super) fn process_image_with_retry(
+    image_bytes: &[u8],
+    config: &TesseractConfig,
+    cache: &OcrCache,
+    api_pool: &Arc<TesseractApiPool>,
+    output_format: Option<crate::core::config::OutputFormat>,
+    policy: ImageOcrPolicy,
+    retry_threshold: Option<f64>,
 ) -> Result<OcrExtractionResult, OcrError> {
     config.validate().map_err(OcrError::InvalidConfiguration)?;
 
@@ -3135,7 +3177,15 @@ pub(super) fn process_image_with_cache_and_policy(
     };
     let config = resolved.as_ref().unwrap_or(config);
 
-    process_image_resolved(image_bytes, config, cache, api_pool, output_format, policy)
+    process_image_resolved(
+        image_bytes,
+        config,
+        cache,
+        api_pool,
+        output_format,
+        policy,
+        retry_threshold,
+    )
 }
 
 /// Inner implementation operating on an already-resolved config.
@@ -3150,6 +3200,7 @@ fn process_image_resolved(
     api_pool: &Arc<TesseractApiPool>,
     output_format: Option<crate::core::config::OutputFormat>,
     policy: ImageOcrPolicy,
+    retry_threshold: Option<f64>,
 ) -> Result<OcrExtractionResult, OcrError> {
     let image_hash = crate::cache::blake3_hash_bytes(image_bytes);
 
@@ -3157,7 +3208,7 @@ fn process_image_resolved(
     let models = if policy.requires_provisioned_models() {
         ModelContext::for_provisioned(config)?
     } else {
-        ModelContext::resolve(config)?
+        ModelContext::resolve_with_retry(config, retry_threshold)?
     };
     let mut config_str = models.result_key(config);
     config_str.push_str(match policy {
@@ -3176,7 +3227,7 @@ fn process_image_resolved(
     if config.use_cache
         && let Some(cached_result) =
             cache.get_cached_result(&image_hash, "tesseract", &config_str, output_format.as_ref())?
-        && models.if_current(|| ()).is_some()
+        && models.if_result_current(config, || ()).is_some()
     {
         #[cfg(feature = "otel")]
         tracing::Span::current().record("cache.hit", true);
@@ -3200,12 +3251,15 @@ fn process_image_resolved(
         policy,
     )?;
 
-    if config.use_cache
-        && let Some(Err(e)) = models.if_current(|| {
+    let stored = models.if_result_current(config, || {
+        if config.use_cache {
             cache.set_cached_result(&image_hash, "tesseract", &config_str, output_format.as_ref(), &result)
-        })
-    {
-        tracing::warn!(error = %e, "Failed to cache the OCR result; the next identical request will re-run OCR");
+        } else {
+            Ok(())
+        }
+    });
+    if let Some(Err(error)) = stored {
+        tracing::warn!(%error, "Failed to cache the OCR result; the next identical request will re-run OCR");
     }
 
     Ok(result)
@@ -3274,7 +3328,15 @@ pub(super) fn process_image_files_batch(
                         };
                     }
                 };
-                match process_image_resolved(&image_bytes, config, cache, api_pool, None, ImageOcrPolicy::Default) {
+                match process_image_resolved(
+                    &image_bytes,
+                    config,
+                    cache,
+                    api_pool,
+                    None,
+                    ImageOcrPolicy::Default,
+                    None,
+                ) {
                     Ok(result) => BatchItemResult {
                         file_path: path.clone(),
                         success: true,
@@ -3309,7 +3371,15 @@ pub(super) fn process_image_files_batch(
                         };
                     }
                 };
-                match process_image_resolved(&image_bytes, config, cache, api_pool, None, ImageOcrPolicy::Default) {
+                match process_image_resolved(
+                    &image_bytes,
+                    config,
+                    cache,
+                    api_pool,
+                    None,
+                    ImageOcrPolicy::Default,
+                    None,
+                ) {
                     Ok(result) => BatchItemResult {
                         file_path: path.clone(),
                         success: true,
@@ -5062,7 +5132,7 @@ mod tests {
         };
 
         let api_pool = TesseractApiPool::new();
-        let result = process_image_file_with_cache("/nonexistent/file.png", &config, &cache, &api_pool, None);
+        let result = process_image_file_with_cache("/nonexistent/file.png", &config, &cache, &api_pool, None, None);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Failed to read file"));
     }
@@ -5202,19 +5272,85 @@ mod tests {
             output_format: "markdown".to_string(),
             enable_table_detection: table_detection,
             use_cache: false,
-            script_retry: retry.then_some(crate::ocr::types::ScriptRetry { noisy_below: 75.0 }),
             ..TesseractConfig::default()
         };
         let cache_dir = tempdir().unwrap();
         let cache = OcrCache::new(Some(cache_dir.path().to_path_buf())).unwrap();
-        process_image_with_cache(
+        process_image_with_retry(
             &corpus_image("chi_sim_image.jpeg"),
             &config,
             &cache,
             &TesseractApiPool::new(),
             None,
+            ImageOcrPolicy::Default,
+            retry.then_some(75.0),
         )
         .expect("OCR must succeed")
+    }
+
+    #[test]
+    fn retry_tsv_failure_keeps_the_first_read_and_bypasses_cache() {
+        let models = ModelContext::for_path("unused".into(), 3).unwrap();
+        let first_read = "first pass text";
+        let retried = retry_with_tsv(
+            &models,
+            None,
+            || Err(OcrError::ProcessingFailed("injected retry TSV failure".into())),
+            |_| panic!("retry cannot run without first-pass TSV"),
+        );
+        assert_eq!(retried.unwrap_or(first_read), first_read);
+        assert!(models.if_current(|| ()).is_none());
+    }
+
+    #[cfg(feature = "bundle-tessdata-eng")]
+    #[test]
+    #[serial]
+    fn failed_script_retry_preserves_the_processor_result_and_does_not_cache_it() {
+        let tessdata = tempdir().unwrap();
+        let eng = xberg_tesseract::bundled_eng_traineddata().expect("the test bundles English tessdata");
+        std::fs::write(tessdata.path().join("eng.traineddata"), eng).unwrap();
+        for model in ["osd", "chi_sim"] {
+            std::fs::write(tessdata.path().join(format!("{model}.traineddata")), b"invalid model").unwrap();
+        }
+
+        let config = TesseractConfig {
+            tessdata_path: Some(tessdata.path().into()),
+            ..Default::default()
+        };
+        let cache_dir = tempdir().unwrap();
+        let baseline_cache = OcrCache::new(Some(cache_dir.path().join("baseline"))).unwrap();
+        let retry_cache = OcrCache::new(Some(cache_dir.path().join("retry"))).unwrap();
+        let pool = TesseractApiPool::new();
+        let image = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/ocr_dot_leader_2503/clean_table.png"
+        ));
+        let read = |cache, threshold| {
+            process_image_with_retry(image, &config, cache, &pool, None, ImageOcrPolicy::Default, threshold)
+                .expect("OCR must return the first pass")
+        };
+
+        let first = read(&baseline_cache, None);
+        assert!(!first.content.is_empty() || !first.tables.is_empty());
+        assert_eq!(baseline_cache.get_stats().unwrap().total_files, 1);
+        let fallback = read(&retry_cache, Some(101.0));
+        assert_eq!(
+            serde_json::to_value(fallback).unwrap(),
+            serde_json::to_value(first).unwrap()
+        );
+        assert_eq!(retry_cache.get_stats().unwrap().total_files, 0);
+    }
+
+    #[test]
+    fn retry_reuses_table_tsv_without_a_second_native_read() {
+        let models = ModelContext::for_path("unused".into(), 3).unwrap();
+        let outcome = retry_with_tsv(
+            &models,
+            Some("first pass TSV"),
+            || panic!("table TSV is already available"),
+            |tsv| Ok(Some(tsv.to_owned())),
+        );
+        assert_eq!(outcome.as_deref(), Some("first pass TSV"));
     }
 
     #[test]
@@ -5257,12 +5393,12 @@ mod tests {
     #[test]
     #[serial]
     fn a_han_image_read_with_eng_is_read_again_with_chi_sim() {
-        let installed = crate::ocr::processor::script_retry::present_models(
-            "eng",
-            None,
-            &crate::ocr::processor::validation::TessdataEnv::from_process(),
-        );
-        if !(installed.contains(&"osd") && installed.contains(&"chi_sim")) {
+        let config = TesseractConfig {
+            output_format: "markdown".into(),
+            ..Default::default()
+        };
+        let models = ModelContext::resolve_with_retry(&config, Some(75.0)).expect("resolve first-pass models");
+        if models.retry_models(&config, 0.0).is_none() {
             eprintln!("skipped: osd and chi_sim are not installed");
             return;
         }

@@ -10,7 +10,7 @@ mod config;
 mod dictionary;
 mod execution;
 mod model_context;
-mod script_retry;
+pub(crate) mod script_retry;
 #[cfg(test)]
 mod secondary_dictionary_benchmark_tests;
 #[cfg(all(test, not(target_arch = "wasm32")))]
@@ -95,12 +95,24 @@ impl OcrProcessor {
         self.process_image_with_policy(image_bytes, config, None, ImageOcrPolicy::Default)
     }
 
+    #[cfg(any(test, all(feature = "pdf", not(target_arch = "wasm32"))))]
     pub(crate) fn process_image_with_policy(
         &self,
         image_bytes: &[u8],
         config: &TesseractConfig,
         output_format: Option<crate::core::config::OutputFormat>,
         policy: ImageOcrPolicy,
+    ) -> Result<OcrExtractionResult, OcrError> {
+        self.process_image_with_retry(image_bytes, config, output_format, policy, None)
+    }
+
+    pub(crate) fn process_image_with_retry(
+        &self,
+        image_bytes: &[u8],
+        config: &TesseractConfig,
+        output_format: Option<crate::core::config::OutputFormat>,
+        policy: ImageOcrPolicy,
+        retry_threshold: Option<f64>,
     ) -> Result<OcrExtractionResult, OcrError> {
         #[cfg(feature = "otel")]
         let span = crate::telemetry::spans::ocr_span("tesseract", &config.language);
@@ -109,13 +121,14 @@ impl OcrProcessor {
         #[cfg(feature = "otel")]
         let start = Instant::now();
 
-        let result = execution::process_image_with_cache_and_policy(
+        let result = execution::process_image_with_retry(
             image_bytes,
             config,
             &self.cache,
             &self.api_pool,
             output_format,
             policy,
+            retry_threshold,
         );
 
         #[cfg(feature = "otel")]
@@ -146,21 +159,17 @@ impl OcrProcessor {
         &self,
         file_path: &str,
         config: &TesseractConfig,
+        output_format: Option<crate::core::config::OutputFormat>,
+        retry_threshold: Option<f64>,
     ) -> Result<OcrExtractionResult, OcrError> {
-        execution::process_image_file_with_cache(file_path, config, &self.cache, &self.api_pool, None)
-    }
-
-    /// Process a file with OCR and respect the output format from ExtractionConfig.
-    ///
-    /// This variant allows specifying an output format (Plain, Markdown, Djot) which
-    /// affects how the OCR result's mime_type is set when markdown output is requested.
-    pub(crate) fn process_image_file_with_format(
-        &self,
-        file_path: &str,
-        config: &TesseractConfig,
-        output_format: crate::core::config::OutputFormat,
-    ) -> Result<OcrExtractionResult, OcrError> {
-        execution::process_image_file_with_cache(file_path, config, &self.cache, &self.api_pool, Some(output_format))
+        execution::process_image_file_with_cache(
+            file_path,
+            config,
+            &self.cache,
+            &self.api_pool,
+            output_format,
+            retry_threshold,
+        )
     }
 
     /// Process multiple image files in parallel using Rayon.
@@ -221,7 +230,7 @@ mod tests {
         let processor = OcrProcessor::new(Some(temp_dir.path().to_path_buf())).unwrap();
         let config = create_test_config();
 
-        let result = processor.process_image_file("/nonexistent/file.png", &config);
+        let result = processor.process_image_file("/nonexistent/file.png", &config, None, None);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Failed to read file"));
     }

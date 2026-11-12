@@ -7,7 +7,7 @@ use std::path::Path;
 use xberg_tesseract::{TessPageSegMode, TesseractAPI};
 
 use super::api_pool::new_engine;
-use super::validation::{TessdataEnv, existing_tessdata_dir_for, first_directory_holding, tessdata_search_dirs};
+use super::validation::{TessdataEnv, first_directory_holding, tessdata_search_dirs};
 use crate::ocr::error::OcrError;
 use crate::ocr::hocr_parser::RetainedWordConfidenceStats;
 
@@ -19,47 +19,43 @@ pub(super) const RETRY_MIN_CONF_GAIN: f64 = 20.0;
 /// line in `PAGE_FLOOR_DENOMINATOR`. Fixed, never tuned per page. ~keep
 const PAGE_FLOOR_DENOMINATOR: usize = 3;
 
-/// The scripts the retry can read, as Tesseract's OSD names them, with the model of each.
-const SCRIPT_MODELS: [(&str, &str); 1] = [("Han", "chi_sim")];
+/// The traineddata model used when OSD identifies Han.
+const HAN_MODEL: &str = "chi_sim";
 
 /// Tesseract OSD script names the retry knows a model for.
-pub(super) fn model_for_script(script: &str) -> Option<&'static str> {
-    SCRIPT_MODELS
-        .iter()
-        .find(|(name, _)| *name == script)
-        .map(|(_, model)| *model)
+fn model_for_script(script: &str) -> Option<&'static str> {
+    (script == "Han").then_some(HAN_MODEL)
 }
 
-/// Whether the second read of a page is wanted at all: the page has a first read of noise, the
-/// settings ask for it, and the output is read from the word table. Table detection is on by
-/// default, so it cannot turn the retry off: a merged page feeds table detection with its merged
-/// word table instead.
-pub(super) fn wanted(config: &crate::ocr::types::TesseractConfig, mean_text_conf: f64) -> bool {
-    config
-        .script_retry
-        .as_ref()
-        .is_some_and(|settings| mean_text_conf < settings.noisy_below)
-        && matches!(config.output_format.as_str(), "text" | "markdown")
+pub(super) fn supports_retry(config: &crate::ocr::types::TesseractConfig) -> bool {
+    supports_retry_format(&config.output_format) && supports_retry_language(&config.language)
 }
 
-/// Pick the second read of a noisy page from what OSD said: the script and model OSD names when
-/// the configured list cannot read it. An OSD that failed means one read. ~keep
-fn choose(osd: Result<&str, &OcrError>, language: &str) -> Option<(String, &'static str)> {
-    let script = match osd {
-        Ok(script) => script,
-        Err(error) => {
-            tracing::debug!(%error, "script retry skipped: OSD failed; the first read stands");
-            return None;
-        }
-    };
-    let model = model_for_script(script)?;
-    (!list_reads_script_of(language, model)).then(|| (script.to_string(), model))
+pub(crate) fn supports_retry_format(format: &str) -> bool {
+    matches!(format, "text" | "markdown")
+}
+
+fn supports_retry_language(language: &str) -> bool {
+    !list_reads_script_of(language, HAN_MODEL)
+}
+
+pub(crate) fn requires_outer_cache_bypass(language: &str, override_path: Option<&Path>, env: &TessdataEnv) -> bool {
+    // A wildcard is expanded by the processor after resolving the primary tessdata directory. ~keep
+    if super::execution::is_all_languages(language) {
+        return true;
+    }
+    supports_retry_language(language)
+        && retry_directories(
+            &tessdata_search_dirs(override_path, env),
+            &retry_list(language, HAN_MODEL),
+        )
+        .is_some()
 }
 
 /// Whether the configured `+`-joined list already reads the script of `model`.
-pub(super) fn list_reads_script_of(language: &str, model: &str) -> bool {
+fn list_reads_script_of(language: &str, model: &str) -> bool {
     let readers: &[&str] = match model {
-        "chi_sim" => &[
+        HAN_MODEL => &[
             "chi_sim",
             "chi_tra",
             "chi_sim_vert",
@@ -82,19 +78,73 @@ pub(super) fn list_reads_script_of(language: &str, model: &str) -> bool {
         .any(|item| item == "*" || readers.contains(&item.as_str()))
 }
 
-/// The retry's models (`osd` and the script models the configured list does not read) that some
-/// directory of the tessdata search chain already holds, found without any download. Part of the
-/// result key. ~keep
-pub(super) fn present_models(
-    language: &str,
-    override_path: Option<&Path>,
-    tessdata_env: &TessdataEnv,
-) -> Vec<&'static str> {
-    ["osd", "chi_sim"]
-        .into_iter()
-        .filter(|model| *model == "osd" || !list_reads_script_of(language, model))
-        .filter(|model| existing_tessdata_dir_for(&[(*model).to_string()], override_path, tessdata_env).is_some())
-        .collect()
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ModelSet {
+    directory: String,
+    languages: String,
+    revision: blake3::Hash,
+}
+
+impl ModelSet {
+    fn snapshot(directory: String, languages: &[String], implicit_osd: bool) -> Result<Self, OcrError> {
+        let root = Path::new(&directory);
+        let mut hash = blake3::Hasher::new();
+        for language in languages {
+            let path = root.join(format!("{language}.traineddata"));
+            let revision = crate::cache::blake3_hash_file(&path)
+                .map_err(|error| engine_error(&format!("fingerprint model '{}'", path.display()), error))?;
+            hash.update(revision.as_bytes());
+        }
+        if implicit_osd {
+            let revision = crate::core::extractor::cacheability::osd_revision(root)
+                .map_err(|error| engine_error("fingerprint implicit OSD model", error))?;
+            hash.update(revision.as_bytes());
+        }
+        Ok(Self {
+            directory,
+            languages: languages.join("+"),
+            revision: hash.finalize(),
+        })
+    }
+
+    fn hash_into(&self, hash: &mut blake3::Hasher) {
+        for value in [&self.directory, &self.languages] {
+            hash.update(&(value.len() as u64).to_le_bytes());
+            hash.update(value.as_bytes());
+        }
+        hash.update(self.revision.as_bytes());
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct RetryModels {
+    osd: ModelSet,
+    han: ModelSet,
+}
+
+fn retry_directories(directories: &[String], han: &[String]) -> Option<(String, String)> {
+    let osd_directory = first_directory_holding(directories, &["osd".to_string()])?;
+    let han_directory = first_directory_holding(directories, han)?;
+    Some((osd_directory, han_directory))
+}
+
+impl RetryModels {
+    pub(super) fn resolve(directories: &[String], language: &str, psm: u8) -> Result<Option<Self>, OcrError> {
+        let osd = ["osd".to_string()];
+        let han = retry_list(language, HAN_MODEL);
+        let Some((osd_directory, han_directory)) = retry_directories(directories, &han) else {
+            return Ok(None);
+        };
+        Ok(Some(Self {
+            osd: ModelSet::snapshot(osd_directory, &osd, false)?,
+            han: ModelSet::snapshot(han_directory, &han, matches!(psm, 0 | 1 | 12))?,
+        }))
+    }
+
+    pub(super) fn hash_into(&self, hash: &mut blake3::Hasher) {
+        self.osd.hash_into(hash);
+        self.han.hash_into(hash);
+    }
 }
 
 /// The configured list with `model` appended.
@@ -107,9 +157,9 @@ fn retry_list(language: &str, model: &str) -> Vec<String> {
     languages
 }
 
-/// The script OSD names on the first read's pixels, with an engine of its own from `directory`.
-fn osd_script(image: &xberg_tesseract::Pix, pass: &Pass<'_>, directory: &str) -> Result<String, OcrError> {
-    let osd = new_engine(directory, "osd", 3)?;
+/// The script OSD names on the first read's pixels.
+fn osd_script(image: &xberg_tesseract::Pix, pass: &Pass<'_>, models: &ModelSet) -> Result<String, OcrError> {
+    let osd = new_engine(&models.directory, &models.languages, 3)?;
     osd.set_page_seg_mode(TessPageSegMode::PSM_OSD_ONLY)
         .map_err(|e| engine_error("OSD mode", e))?;
     osd.set_image_2(image.as_ptr())
@@ -143,26 +193,21 @@ fn engine_error(step: &str, error: impl std::fmt::Display) -> OcrError {
 /// hold one and wait for a second pooled engine wait forever (measured: every document of a
 /// corpus hit the 600 s limit). Both models are looked up in the installed tessdata only: a model
 /// that is absent keeps the first read, and nothing is downloaded. ~keep
-pub(super) fn run(first: &TesseractAPI, first_tsv: &str, pass: &Pass<'_>) -> Result<Option<Outcome>, OcrError> {
+pub(super) fn run(
+    first: &TesseractAPI,
+    first_tsv: &str,
+    pass: &Pass<'_>,
+    models: &RetryModels,
+) -> Result<Option<Outcome>, OcrError> {
     let started = std::time::Instant::now();
-    let search = tessdata_search_dirs(pass.config.tessdata_path.as_deref(), &TessdataEnv::from_process());
-    let Some(osd_directory) = first_directory_holding(&search, &["osd".to_string()]) else {
-        tracing::debug!("script retry skipped: osd.traineddata is not installed");
-        return Ok(None);
-    };
     let image = first
         .thresholded_image()
         .map_err(|e| engine_error("thresholded image", e))?;
-    let osd = osd_script(&image, pass, &osd_directory);
-    let Some((script, model)) = choose(osd.as_ref().map(String::as_str), &pass.config.language) else {
+    let script = osd_script(&image, pass, &models.osd)?;
+    let Some(model) = model_for_script(&script) else {
         return Ok(None);
     };
-    let languages = retry_list(&pass.config.language, model);
-    let Some(directory) = first_directory_holding(&search, &languages) else {
-        tracing::debug!(model, "script retry skipped: the model is not installed");
-        return Ok(None);
-    };
-    let retry = new_engine(&directory, &languages.join("+"), pass.config.oem)?;
+    let retry = new_engine(&models.han.directory, &models.han.languages, pass.config.oem)?;
     retry
         .set_page_seg_mode(TessPageSegMode::from_int(pass.config.psm as i32))
         .map_err(|e| engine_error("retry mode", e))?;
@@ -1031,65 +1076,6 @@ mod tests {
         assert!(forward.text().ends_with("标题 二"), "{}", forward.text());
     }
 
-    /// GH#2300: OSD's script chooses the second read; an OSD that failed, a script the configured
-    /// list reads and a script with no model each mean one read.
-    #[test]
-    fn the_second_read_is_chosen_from_osd_alone() {
-        let han = Some(("Han".to_string(), "chi_sim"));
-        assert_eq!(choose(Ok("Han"), "eng"), han);
-        assert_eq!(
-            choose(Ok("Khmer"), "eng"),
-            None,
-            "no model for Khmer: OSD never names it"
-        );
-        assert_eq!(choose(Ok("Latin"), "eng"), None);
-        assert_eq!(choose(Ok("Han"), "eng+jpn"), None);
-        let failed = OcrError::ProcessingFailed("script retry: OSD: boom".to_string());
-        assert_eq!(choose(Err(&failed), "eng"), None);
-    }
-
-    /// The retry looks its models up in the installed directories only. With a
-    /// search chain that holds `eng` alone, `osd` and `chi_sim` are absent and there is nothing
-    /// to download from: the lookup returns no directory and creates none. With `osd` and
-    /// `chi_sim` in the second directory, the retry's list resolves past the first pass's own
-    /// directory.
-    #[test]
-    fn the_retry_finds_its_models_in_the_installed_directories_only() {
-        let first_pass = tempfile::tempdir().unwrap();
-        std::fs::write(first_pass.path().join("eng.traineddata"), b"model fixture").unwrap();
-        let second = tempfile::tempdir().unwrap();
-        for name in ["eng", "osd", "chi_sim"] {
-            std::fs::write(second.path().join(format!("{name}.traineddata")), b"model fixture").unwrap();
-        }
-        let absent = tempfile::tempdir().unwrap().path().join("never-created");
-        let only_eng = vec![
-            absent.to_str().unwrap().to_string(),
-            first_pass.path().to_str().unwrap().to_string(),
-        ];
-        assert_eq!(first_directory_holding(&only_eng, &["osd".to_string()]), None);
-        assert_eq!(first_directory_holding(&only_eng, &retry_list("eng", "chi_sim")), None);
-        assert!(!absent.exists(), "the lookup creates no directory");
-        let both = vec![
-            first_pass.path().to_str().unwrap().to_string(),
-            second.path().to_str().unwrap().to_string(),
-        ];
-        assert_eq!(
-            first_directory_holding(&both, &["eng".to_string()]).as_deref(),
-            first_pass.path().to_str()
-        );
-        assert_eq!(
-            first_directory_holding(&both, &retry_list("eng", "chi_sim")).as_deref(),
-            second.path().to_str()
-        );
-        let env = TessdataEnv {
-            tessdata_prefix: second.path().to_str().map(str::to_string),
-            cache_dir: Some(absent.clone()),
-        };
-        let present = present_models("eng", Some(first_pass.path()), &env);
-        assert!(present.contains(&"osd") && present.contains(&"chi_sim"), "{present:?}");
-        assert!(!present_models("eng+chi_sim", Some(first_pass.path()), &env).contains(&"chi_sim"));
-    }
-
     /// Probe: a protected token changed inside (`385.20` read as `385,20`, `Ref` as `Rcf`) is a
     /// lost token, so the line keeps its first read.
     #[test]
@@ -1208,22 +1194,20 @@ mod tests {
     /// (its default) or off, and not with no retry settings or on a page that read well.
     #[test]
     fn table_detection_is_on_by_default_and_does_not_stop_the_retry() {
-        assert!(crate::ocr::types::TesseractConfig::default().enable_table_detection);
-        let config = |detection: bool, format: &str, retry: bool| crate::ocr::types::TesseractConfig {
-            enable_table_detection: detection,
-            output_format: format.to_string(),
-            script_retry: retry.then_some(crate::ocr::types::ScriptRetry { noisy_below: 75.0 }),
-            ..Default::default()
-        };
-        assert!(wanted(&config(false, "text", true), 30.0));
-        assert!(wanted(&config(false, "markdown", true), 30.0));
-        assert!(
-            wanted(&config(true, "text", true), 30.0),
-            "table detection does not stop the retry"
-        );
-        assert!(!wanted(&config(false, "hocr", true), 30.0));
-        assert!(!wanted(&config(false, "text", false), 30.0));
-        assert!(!wanted(&config(false, "text", true), 90.0));
+        use crate::ocr::types::TesseractConfig;
+        assert!(TesseractConfig::default().enable_table_detection);
+        for table_detection in [true, false] {
+            for (format, supported) in [("text", true), ("markdown", true), ("hocr", false), ("tsv", false)] {
+                assert_eq!(
+                    supports_retry(&TesseractConfig {
+                        enable_table_detection: table_detection,
+                        output_format: format.into(),
+                        ..Default::default()
+                    }),
+                    supported
+                );
+            }
+        }
     }
 
     #[test]
@@ -1248,6 +1232,35 @@ mod tests {
             })
             .collect();
         assert_eq!(parse_words(&merge_han(words, Vec::new()).tsv()), renumbered);
+    }
+
+    #[test]
+    fn retry_resolves_osd_and_the_complete_language_set_in_priority_order() {
+        let root = tempfile::tempdir().unwrap();
+        let absent = root.path().join("absent");
+        let first = root.path().join("first");
+        let second = root.path().join("second");
+        let last = root.path().join("last");
+        for dir in [&first, &second, &last] {
+            std::fs::create_dir(dir).unwrap();
+        }
+        let write = |dir: &Path, lang: &str| {
+            std::fs::write(dir.join(format!("{lang}.traineddata")), lang.as_bytes()).unwrap();
+        };
+        write(&first, "eng");
+        write(&first, "osd");
+        write(&second, "chi_sim");
+        for language in ["eng", "deu", "chi_sim", "osd"] {
+            write(&last, language);
+        }
+        let directories = [&absent, &first, &second, &last].map(|dir| dir.to_str().unwrap().to_owned());
+        assert!(RetryModels::resolve(&directories[..3], "eng+deu", 3).unwrap().is_none());
+        let models = RetryModels::resolve(&directories, "eng+deu", 3).unwrap().unwrap();
+        assert_eq!(models.osd.directory, directories[1]);
+        assert_eq!(models.osd.languages, "osd");
+        assert_eq!(models.han.directory, directories[3]);
+        assert_eq!(models.han.languages, "eng+deu+chi_sim");
+        assert!(!absent.exists());
     }
 
     #[test]

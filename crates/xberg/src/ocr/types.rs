@@ -223,21 +223,6 @@ pub struct TesseractConfig {
     /// `None` means `SecurityLimits::default()`, never "disable the check". ~keep
     #[serde(skip)]
     pub security_limits: Option<crate::extractors::security::SecurityLimits>,
-
-    /// Read a noisy page again with the model of the script Tesseract's OSD names (GH#2300).
-    ///
-    /// Not a user-facing knob and absent from the public [`crate::types::TesseractConfig`]:
-    /// `config_to_tesseract` sets it for every call that has no explicit `ocr.pipeline`, with the
-    /// noise bound taken from the caller's `min_ocr_mean_confidence`. `None` runs one read.
-    #[serde(skip)]
-    pub(crate) script_retry: Option<ScriptRetry>,
-}
-
-/// The settings of the second read of a noisy page, see [`TesseractConfig::script_retry`].
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ScriptRetry {
-    /// A first read with a mean text confidence below this bound is noise worth a second read.
-    pub(crate) noisy_below: f64,
 }
 
 /// Default for [`TesseractConfig::page_number`]: page 1, matching Tesseract's own
@@ -303,7 +288,6 @@ impl Default for TesseractConfig {
             known_full_page_scan: false,
             page_number: default_page_number(),
             security_limits: None,
-            script_retry: None,
         }
     }
 }
@@ -374,7 +358,6 @@ impl From<&crate::types::TesseractConfig> for TesseractConfig {
             // API can still set it explicitly.
             page_number: default_page_number(),
             security_limits: None,
-            script_retry: None,
         }
     }
 }
