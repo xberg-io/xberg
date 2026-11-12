@@ -25,6 +25,8 @@ mod caption_conversion;
 mod caption_grid_proof;
 mod document;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) use document::join_run_pages;
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 mod markdown;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use markdown::strip_embedded_gfm_tables;

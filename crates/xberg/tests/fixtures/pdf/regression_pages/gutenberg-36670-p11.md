@@ -1,11 +1,8 @@
 INTRODUCTION.
 
-3 A dot is sometimes used for the sign of multiplication. Thus 2
+3
 
-- 3
-- 4
-- 5 means the same as 2 × 3 × 4 × 5. Either sign is read multiplied by when followed by the multiplier. ? a × b , or ? a
-- b , is read a dollars multiplied by b .
+A dot is sometimes used for the sign of multiplication. Thus 2 · 3 · 4 · 5 means the same as 2 × 3 × 4 × 5. Either sign is read multiplied by when followed by the multiplier. ?a × b, or ?a · b, is read a dollars multiplied by b.
 
 by.
 

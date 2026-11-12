@@ -369,9 +369,18 @@ fn apply_numeric_repair_to_whole_document_ocr_repairs_the_text_the_document_and_
     document.tables.push(table_with_total());
     let mut tables = vec![table_with_total()];
 
-    apply_numeric_repair_to_whole_document_ocr(&mut text, Some(&mut document), &mut tables);
+    let mut pages = vec![text.clone(), String::new()];
+    text.push_str("\n\n");
+    apply_numeric_repair_to_whole_document_ocr(
+        &mut text,
+        &mut pages,
+        Some(&mut document),
+        &mut tables,
+        &Default::default(),
+    );
 
-    assert_eq!(text, "Total: 1,172 units", "the flat text is what Plain renders");
+    assert_eq!(text, "Total: 1,172 units\n\n", "the flat text is what Plain renders");
+    assert_eq!(pages, ["Total: 1,172 units", ""]);
     assert_eq!(
         document.elements[0].text, "Total: 1,172 units",
         "the document is what every structured renderer rebuilds the page from"
@@ -406,11 +415,44 @@ fn apply_numeric_repair_to_whole_document_ocr_repairs_text_and_tables_without_a_
         ..Default::default()
     }];
 
-    apply_numeric_repair_to_whole_document_ocr(&mut text, None, &mut tables);
+    apply_numeric_repair_to_whole_document_ocr(&mut text, &mut [], None, &mut tables, &Default::default());
 
     assert_eq!(text, "Total: 1,172 units");
     assert_eq!(tables[0].cells[0][0], "1,172");
     assert_eq!(tables[0].markdown, "| 1,172 |");
+}
+
+#[test]
+fn whole_document_numeric_repair_only_rewrites_page_bodies() {
+    use crate::core::config::{ExtractionConfig, PageConfig};
+
+    let config = ExtractionConfig {
+        pages: Some(PageConfig {
+            insert_page_markers: true,
+            marker_format: "§{page_num} Total: 1172 units|".into(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut pages = ["Total: 1172 units".into(), String::new(), "Total: 1172 units".into()];
+    let mut text =
+        "§1 Total: 1172 units|Total: 1172 units§2 Total: 1172 units|§3 Total: 1172 units|Total: 1172 units".to_string();
+    apply_numeric_repair_to_whole_document_ocr(&mut text, &mut pages, None, &mut [], &config);
+
+    assert_eq!(pages, ["Total: 1,172 units", "", "Total: 1,172 units"]);
+    assert_eq!(
+        text,
+        "§1 Total: 1172 units|Total: 1,172 units§2 Total: 1172 units|§3 Total: 1172 units|Total: 1,172 units"
+    );
+    let spans = super::super::ocr_page_body_spans(&text, &pages, &config).expect("the page join is intact");
+    assert_eq!(spans[0].byte_start, "§1 Total: 1172 units|".len());
+    assert_eq!(
+        spans[1].byte_start,
+        "§1 Total: 1172 units|Total: 1,172 units§2 Total: 1172 units|".len()
+    );
+    for (span, page) in spans.iter().zip(&pages) {
+        assert_eq!(&text[span.byte_start..span.byte_end], page);
+    }
 }
 
 /// GH#1840: the three string representations `merge_structured_ocr_pages_into_internal_document`

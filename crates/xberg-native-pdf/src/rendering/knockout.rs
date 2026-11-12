@@ -7,6 +7,14 @@ use crate::object::Object;
 use std::collections::{HashMap, HashSet};
 use tiny_skia::{PathBuilder, Pixmap, Transform};
 
+/// RGBA-sized snapshots a paint workspace holds when the page has a sidecar.
+pub(super) const SIDECAR_SNAPSHOT_COPIES: usize = 2;
+/// Coverage bytes per pixel of a fill.
+const FILL_COVERAGE_BYTES: usize = 1;
+/// Coverage bytes per pixel of a stroke, text show, inline image or shading.
+const STROKE_COVERAGE_BYTES: usize = 5;
+/// Coverage bytes per pixel of a fill-and-stroke paint, the largest.
+const FILL_STROKE_COVERAGE_BYTES: usize = 6;
 /// Whether a resolved `/Group` dictionary is a transparency group with `/K true`; pages and forms share it.
 pub(super) fn group_is_knockout(group: &Object) -> bool {
     group.as_dict().is_some_and(|group| {
@@ -428,6 +436,7 @@ impl PageRenderer {
         pixmap: &Pixmap,
         gs: &GraphicsState,
         coverage_bytes_per_pixel: usize,
+        sidecar_snapshots: usize,
     ) -> Result<Option<super::knockout_resources::Reservation>> {
         if !self.knockout_resources.active() {
             return Ok(None);
@@ -438,7 +447,7 @@ impl PageRenderer {
             0
         };
         let snapshots = if self.cmyk_sidecar.is_some() {
-            2
+            sidecar_snapshots
         } else if gs.fill_overprint || gs.stroke_overprint {
             1
         } else {
@@ -463,11 +472,11 @@ impl PageRenderer {
         op: &Operator,
     ) -> Result<Option<super::knockout_resources::Reservation>> {
         let coverage = match op {
-            Operator::Fill | Operator::FillEvenOdd => 1,
+            Operator::Fill | Operator::FillEvenOdd => FILL_COVERAGE_BYTES,
             Operator::FillStroke
             | Operator::FillStrokeEvenOdd
             | Operator::CloseFillStroke
-            | Operator::CloseFillStrokeEvenOdd => 6,
+            | Operator::CloseFillStrokeEvenOdd => FILL_STROKE_COVERAGE_BYTES,
             Operator::Stroke
             | Operator::CloseStroke
             | Operator::InlineImage { .. }
@@ -475,10 +484,19 @@ impl PageRenderer {
             | Operator::Tj { .. }
             | Operator::TJ { .. }
             | Operator::Quote { .. }
-            | Operator::DoubleQuote { .. } => 5,
+            | Operator::DoubleQuote { .. } => STROKE_COVERAGE_BYTES,
             _ => return Ok(None),
         };
-        self.reserve_raster_workspace(pixmap, gs, coverage)
+        // An opaque Normal fill has neither a compose-first nor an overprint
+        // snapshot. Only the process or RGB mirror snapshot can be live.
+        let plain_fill = matches!(op, Operator::Fill | Operator::FillEvenOdd)
+            && gs.blend_mode == "Normal"
+            && gs.fill_alpha >= 1.0
+            && gs.smask.is_none()
+            && !gs.fill_overprint
+            && gs.fill_color_space != "Pattern";
+        let sidecar_snapshots = if plain_fill { 1 } else { SIDECAR_SNAPSHOT_COPIES };
+        self.reserve_raster_workspace(pixmap, gs, coverage, sidecar_snapshots)
     }
 
     pub(super) fn coverage_dimensions(&self) -> Option<(u32, u32)> {
