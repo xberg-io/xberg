@@ -125,14 +125,16 @@ pub(crate) fn extract_text_and_metadata(
         .and_then(|c| c.ocr.as_ref())
         .and_then(|o| o.quality_thresholds.clone())
         .unwrap_or_default();
-    let metadata = super::metadata::extract_metadata_from_native_document(
-        doc,
-        boundaries.as_deref(),
-        &text,
-        scanned_min_confidence,
-        &ocr_quality_thresholds,
-        evidence.provenance_counts.as_deref(),
-    )?;
+    let cut_short = extraction_config
+        .and_then(|config| config.cancel_token.as_ref())
+        .is_some_and(crate::cancellation::CancellationToken::cut_short_by_time_limit);
+    let scan_grading = (!cut_short).then_some(super::metadata::ScanGrading {
+        min_confidence: scanned_min_confidence,
+        quality_thresholds: &ocr_quality_thresholds,
+        provenance_counts: evidence.provenance_counts.as_deref(),
+    });
+    let metadata =
+        super::metadata::extract_metadata_from_native_document(doc, boundaries.as_deref(), &text, scan_grading)?;
 
     Ok((text, boundaries, page_contents, metadata, evidence.financial_rows))
 }
@@ -7795,6 +7797,43 @@ mod tests {
         assert_eq!(finished.len(), 2);
         assert!(finished.iter().all(String::is_empty));
         assert_eq!(token.first_unread_page(), Some(1));
+    }
+
+    /// #3029: the scan grade re-reads every page of the document. A text loop the time limit cut
+    /// short must not pay for it, or the stage outlasts the grace and the pages read are lost.
+    #[test]
+    fn metadata_of_a_text_loop_cut_short_by_the_time_limit_skips_the_scan_grade() {
+        let pdf = build_paged_text_pdf(3, 10);
+        let config_with = |token: &crate::cancellation::CancellationToken| ExtractionConfig {
+            cancel_token: Some(token.clone()),
+            ..Default::default()
+        };
+
+        let finished = crate::cancellation::CancellationToken::new();
+        let mut doc = NativeDocument::open_bytes(&pdf).expect("fixture must open");
+        let (_, _, _, graded, _) = extract_text_and_metadata(&mut doc, Some(&config_with(&finished)))
+            .expect("an unlimited extraction must succeed");
+        assert!(
+            graded.pdf_specific.scanned_confidence.is_some(),
+            "control: a finished text loop is graded"
+        );
+
+        let cut_short = crate::cancellation::CancellationToken::new();
+        cut_short.request_stop();
+        let mut doc = NativeDocument::open_bytes(&pdf).expect("fixture must open");
+        let (_, _, _, skipped, _) =
+            extract_text_and_metadata(&mut doc, Some(&config_with(&cut_short))).expect("a stop is not an error");
+        assert!(
+            cut_short.cut_short_by_time_limit(),
+            "the stop must have cut the loop short"
+        );
+        assert_eq!(skipped.pdf_specific.scanned_confidence, None);
+        assert_eq!(skipped.pdf_specific.scanned_pages, None);
+        assert_eq!(
+            skipped.pdf_specific.page_count,
+            Some(3),
+            "the cheap metadata is still read"
+        );
     }
 
     /// #1744: the provenance pass in `pdf/scan_detect.rs` used to read every page's text a

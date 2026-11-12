@@ -553,6 +553,7 @@ impl TrueTypeCMap {
             .map_err(|e| format!("Failed to read numGroups: {}", e))? as usize;
 
         let mut gid_to_unicode = HashMap::new();
+        let mut remaining = MAX_CMAP_EXAMINED_CODE_POINTS;
 
         for _ in 0..num_groups {
             let start_char_code = cursor
@@ -564,6 +565,37 @@ impl TrueTypeCMap {
             let start_gid = cursor
                 .read_u32::<BigEndian>()
                 .map_err(|e| format!("Failed to read startGlyphId: {}", e))?;
+
+            // GH#3034: a crafted endCharCode can reach 0xFFFFFFFF, whose
+            // walk costs ~4.3 billion iterations per group. Clamp the walk
+            // to Unicode's maximum; a group whose start lies past it (or
+            // whose end is below its start) maps nothing and is skipped
+            // without iterating — and without spending any of the budget,
+            // since code points past U+10FFFF are not characters and can
+            // never be examined. ~keep
+            let end_char_code = end_char_code.min(char::MAX as u32);
+            if end_char_code < start_char_code {
+                continue;
+            }
+
+            // The budget is spent by total examined code points, not by
+            // distinct mappings: a single 65,535-wide group fills the gid
+            // map (short of the map's own capacity, since surrogate code
+            // points are never inserted), so a mapping-count cap lets
+            // ~87k further overlapping groups re-walk the same gids —
+            // about 5.7 billion iterations (GH#3034 review). Charging each
+            // group's full clamped width up front bounds a subtable's work
+            // at the budget itself; a subtable that exceeds it is rejected
+            // rather than silently truncated, so the font falls back to
+            // its declared encoding exactly as a malformed cmap does.
+            let width = (end_char_code - start_char_code + 1) as usize;
+            if width > remaining {
+                return Err(format!(
+                    "cmap format 12 group of {} code points exceeds the remaining iteration budget ({})",
+                    width, remaining
+                ));
+            }
+            remaining -= width;
 
             for (offset, char_code) in (start_char_code..=end_char_code).enumerate() {
                 // A malformed group's startGlyphId can overflow the u32 sum;
@@ -579,6 +611,24 @@ impl TrueTypeCMap {
         Ok(gid_to_unicode)
     }
 }
+
+/// Upper bound on the code points one cmap subtable may examine, as a total
+/// across its groups (each group's clamped width is charged against it up
+/// front). A well-formed font may alias code points: two or more groups can
+/// map overlapping code-point runs onto gids a previous group already
+/// mapped, so a subtable's group widths can legitimately sum to a multiple
+/// of the glyph count even though every gid is mapped once (GH#3064) — a
+/// budget at the glyph space itself rejects such fonts and loses their
+/// whole cmap to the declared-encoding fallback. The bound is therefore
+/// 16 times the glyph space (`numGlyphs` is a u16): far above any sane
+/// aliasing (a face's mapped code points cannot exceed its glyph count
+/// times its aliasing factor, typically one), still walked in
+/// milliseconds, and still rejecting the crafted unbounded groups of
+/// GH#3034 — ~87k overlapping 65,535-wide groups need ~5.7 billion
+/// examined code points, orders of magnitude past this budget. Tighter
+/// than the core crate's `SecurityLimits::max_iterations` work budget
+/// (10M), which lives in a crate this one does not depend on.
+const MAX_CMAP_EXAMINED_CODE_POINTS: usize = (u16::MAX as usize + 1) * 16;
 
 #[cfg(test)]
 mod tests;

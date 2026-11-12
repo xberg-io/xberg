@@ -1650,17 +1650,27 @@ fn a_one_or_two_dot_run_stays_unescaped() {
     assert_eq!(render_rows(&["A..B and Dr. Smith"]), "A..B and Dr. Smith\n");
 }
 
+/// The rule, not measured counts: the every-third-dot escape covers any run of three or
+/// more dots wherever it stands, and the row-start escape additionally covers a run that
+/// starts the row, so deleting the every-third-dot rule alone frees every interior run
+/// (`(...)`, `\....`, `a....b` and the spaced runs) while `...x` stays covered, deleting
+/// the row-start escape alone frees nothing here, and only deleting both frees every
+/// dotted row. The one- and two-dot runs never need an escape and stay green in every arm.
 #[test]
 fn a_leader_run_of_any_length_round_trips_without_an_ellipsis_event() {
-    for dots in 1..=12 {
-        let row = format!("Start {} End", ".".repeat(dots));
-        let output = render_rows(&[&row]);
+    // The spaced runs sit between two words; the last four rows hold the shapes that
+    // reach the rule differently: a run that starts the row and runs into a word, a run
+    // inside brackets, a backslash before a run, and a run between two letters.
+    let mut runs: Vec<String> = (1..=12).map(|dots| format!("Start {} End", ".".repeat(dots))).collect();
+    runs.extend(["...x", "(...)", "\\....", "a....b"].map(String::from));
+    for row in &runs {
+        let output = render_rows(&[row]);
         let events: Vec<_> = jotdown::Parser::new(&output).collect();
         assert!(
             !events.iter().any(|event| matches!(event, jotdown::Event::Ellipsis)),
-            "{dots} dots -> {output:?}"
+            "{row:?} -> {output:?}"
         );
-        assert_eq!(djot_paragraph_texts(&output), [row.as_str()], "{dots} dots");
+        assert_eq!(djot_paragraph_texts(&output), [row.as_str()], "{row:?}");
     }
 }
 

@@ -46,6 +46,8 @@ pub(crate) use pages::render_plain_page_elements;
     not(target_arch = "wasm32")
 ))]
 pub(crate) use pages::render_plain_selected_pages;
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(crate) use pages::source_short_circuits_ocr_page_text;
 
 /// Cap on how many unresolvable keys a single warning names before it summarises
 /// the rest as a count, so a badly broken document cannot produce an unbounded
