@@ -14,11 +14,11 @@ pub(super) async fn try_recovery(
         return Ok(None);
     }
     let Some(content) = content else { return Ok(None) };
-    let Ok((document, 1, _)) = super::open_pdf_for_full_ocr(content) else {
+    let Ok((document, page_count, _)) = super::open_pdf_for_full_ocr(content) else {
         return Ok(None);
     };
     let recovery_ocr = super::pipeline_xobject_recovery_ocr_config(config, &ocr);
-    if !certified_rgb_page(&document, config, &recovery_ocr)? {
+    if !certified_rgb_document(&document, page_count, config, &recovery_ocr)? {
         return Ok(None);
     }
     // The coordinator opens its own PDF; release the admission copy before OCR. ~keep
@@ -35,7 +35,16 @@ pub(super) async fn try_recovery(
             None,
         )
         .await?;
-    let score = confidence.get(&1).and_then(|summary| summary.score);
+    if page_count > 1
+        && document
+            .as_ref()
+            .is_some_and(|doc| doc.ocr_page_failures.iter().any(|failure| !failure.recovered))
+    {
+        return Ok(None);
+    }
+    let score = (page_count == 1)
+        .then(|| confidence.get(&1).and_then(|summary| summary.score))
+        .flatten();
     Ok(Some((
         text,
         score,
@@ -51,10 +60,33 @@ pub(super) async fn try_recovery(
     )))
 }
 
-fn certified_rgb_page(document: &PdfDocument, config: &ExtractionConfig, ocr: &OcrConfig) -> crate::Result<bool> {
-    super::super::super::ensure_pdf_not_cancelled(config)?;
+fn certified_rgb_document(
+    document: &PdfDocument,
+    page_count: usize,
+    config: &ExtractionConfig,
+    ocr: &OcrConfig,
+) -> crate::Result<bool> {
     let limits = ocr.security_limits.clone().unwrap_or_default();
-    let Ok(handles) = document.page_image_handles(0) else {
+    let mut budget = SecurityBudget::from_config(config);
+    let mut context = super::XObjectRecoveryContext::with_budget(&mut budget, config.cancel_token.as_ref());
+    for page in 0..page_count {
+        context.check_cancelled()?;
+        if !super::super::document::native_preservation_is_automatic(config, (page + 1) as u32)
+            || !certified_rgb_page(document, page, &limits, &mut context)?
+        {
+            return Ok(false);
+        }
+    }
+    Ok(page_count != 0)
+}
+
+fn certified_rgb_page(
+    document: &PdfDocument,
+    page: usize,
+    limits: &crate::extractors::security::SecurityLimits,
+    context: &mut super::XObjectRecoveryContext<'_>,
+) -> crate::Result<bool> {
+    let Ok(handles) = document.page_image_handles(page) else {
         return Ok(false);
     };
     let [image] = handles.as_slice() else { return Ok(false) };
@@ -70,17 +102,15 @@ fn certified_rgb_page(document: &PdfDocument, config: &ExtractionConfig, ocr: &O
     if bytes.len() > limits.max_content_size {
         return Ok(false);
     }
-    let placements = crate::pdf::native::proven_dpi::proven_source_dpis(document, 0);
+    let placements = crate::pdf::native::proven_dpi::proven_source_dpis(document, page);
     if placements
         .get(&image.paint_order)
-        .and_then(|placement| placement.confirmed_by("jpeg", &bytes, &limits))
+        .and_then(|placement| placement.confirmed_by("jpeg", &bytes, limits))
         .is_none()
     {
         return Ok(false);
     }
-    let mut budget = SecurityBudget::from_config(config);
-    let mut context = super::XObjectRecoveryContext::with_budget(&mut budget, config.cancel_token.as_ref());
-    super::super::rendering::can_project_stored_jpeg_page(document, 0, &limits, &mut context)
+    super::super::rendering::can_project_stored_jpeg_page(document, page, limits, context)
 }
 
 #[cfg(test)]
@@ -205,6 +235,23 @@ mod tests {
     ));
 
     #[test]
+    fn rgb_certificate_accepts_both_pages_at_the_original_render_budget() {
+        let mut config = configuration();
+        config
+            .security_limits
+            .get_or_insert_with(Default::default)
+            .max_content_size = 80 * 1024 * 1024;
+        let scans = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../fixtures/repros/label-scan-over-image-budget/label-scan-two-pages.pdf"
+        ));
+        let (document, page_count, _) = super::super::open_pdf_for_full_ocr(scans).unwrap();
+        assert_eq!(page_count, 2);
+        let ocr = super::super::pipeline_xobject_recovery_ocr_config(&config, config.ocr.as_ref().unwrap());
+        assert!(certified_rgb_document(&document, page_count, &config, &ocr).unwrap());
+    }
+
+    #[test]
     fn rgb_certificate_rejects_a_source_one_byte_over_the_limit() {
         let config = configuration();
         let doc = PdfDocument::from_bytes(SCAN.to_vec()).unwrap();
@@ -214,11 +261,11 @@ mod tests {
         };
         let (_, bytes) = image.plain_stored_jpeg_for_ocr_recovery().unwrap();
         let mut ocr = config.ocr.clone().unwrap();
-        assert!(certified_rgb_page(&doc, &config, &ocr).unwrap());
+        assert!(certified_rgb_document(&doc, 1, &config, &ocr).unwrap());
         ocr.security_limits
             .get_or_insert_with(Default::default)
             .max_content_size = bytes.len() - 1;
-        assert!(!certified_rgb_page(&doc, &config, &ocr).unwrap());
+        assert!(!certified_rgb_document(&doc, 1, &config, &ocr).unwrap());
     }
 
     #[test]
@@ -242,16 +289,17 @@ mod tests {
         let images = doc.page_image_handles(0).unwrap();
         assert_eq!(images.len(), 1);
         assert!(images[0].plain_stored_jpeg_for_ocr_recovery().is_some());
-        assert!(!certified_rgb_page(&doc, &config, ocr).unwrap());
+        assert!(!certified_rgb_document(&doc, 1, &config, ocr).unwrap());
     }
 
     #[tokio::test]
-    async fn a_second_physical_page_disqualifies_an_otherwise_certified_rgb_source() {
+    async fn an_uncertified_second_page_disqualifies_the_document_retry() {
         let config = configuration();
         let mut pdf = lopdf::Document::load_mem(SCAN).unwrap();
         let first = pdf.get_pages()[&1];
-        let page = pdf.get_dictionary(first).unwrap().clone();
+        let mut page = pdf.get_dictionary(first).unwrap().clone();
         let parent = page.get(b"Parent").unwrap().as_reference().unwrap();
+        assert!(page.remove(b"Contents").is_some());
         let second = pdf.add_object(page);
         let pages = pdf.get_object_mut(parent).unwrap().as_dict_mut().unwrap();
         pages
@@ -265,7 +313,9 @@ mod tests {
         pdf.save_to(&mut bytes).unwrap();
         let (document, pages, _) = super::super::open_pdf_for_full_ocr(&bytes).unwrap();
         assert_eq!(pages, 2);
-        assert!(certified_rgb_page(&document, &config, config.ocr.as_ref().unwrap()).unwrap());
+        let ocr = config.ocr.as_ref().unwrap();
+        assert!(certified_rgb_document(&document, 1, &config, ocr).unwrap());
+        assert!(!certified_rgb_document(&document, pages, &config, ocr).unwrap());
         assert!(
             try_recovery(Some(&bytes), &config, None, &failed_image(true))
                 .await
@@ -292,7 +342,7 @@ mod tests {
             xberg_native_pdf::extractors::images::ColorSpace::DeviceGray
         ));
         assert!(image.plain_stored_jpeg_for_ocr_recovery().is_some());
-        assert!(!certified_rgb_page(&document, &config, ocr).unwrap());
+        assert!(!certified_rgb_document(&document, 1, &config, ocr).unwrap());
     }
 
     #[test]
@@ -314,7 +364,7 @@ mod tests {
         pdf.save_to(&mut bytes).unwrap();
         let document = PdfDocument::from_bytes(bytes).unwrap();
         assert_eq!(document.page_image_handles(0).unwrap().len(), 2);
-        assert!(!certified_rgb_page(&document, &config, config.ocr.as_ref().unwrap()).unwrap());
+        assert!(!certified_rgb_document(&document, 1, &config, config.ocr.as_ref().unwrap()).unwrap());
     }
 
     #[cfg(feature = "bundle-tessdata-eng")]

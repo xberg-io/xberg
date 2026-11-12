@@ -265,6 +265,7 @@ fn explicit_pipeline_warns_once_per_page_of_a_two_scan_document_like_the_default
             pages.iter().all(|page| page.content.contains("GENERAL NOTES")),
             "{pages:?}"
         );
+        assert_eq!(pages[0].content, pages[1].content, "the fixture repeats the same scan");
     }
     assert_eq!(
         explicit.content.split_whitespace().collect::<Vec<_>>(),
