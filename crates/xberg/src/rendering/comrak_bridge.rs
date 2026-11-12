@@ -343,7 +343,13 @@ fn closer_is_not_a_closer<'a>(node: &'a AstNode<'a>, math: &NodeMath) -> bool {
 /// a reader that unescapes before it looks for math.
 fn write_escaped_math<'a>(node: &'a AstNode<'a>, delimiter: &str, tex: &str) {
     let escaped = escape_tex_for_markdown(tex);
-    node.data.borrow_mut().value = NodeValue::Raw(format!("{delimiter}{escaped}{delimiter}"));
+    // Comrak scans for two consecutive dollars even when the first one is escaped. ~keep
+    let separator = if delimiter == "$$" && tex.ends_with('$') {
+        " "
+    } else {
+        ""
+    };
+    node.data.borrow_mut().value = NodeValue::Raw(format!("{delimiter}{escaped}{separator}{delimiter}"));
 }
 
 /// TeX as Markdown text that a reader applying the CommonMark escapes turns back into `tex`.

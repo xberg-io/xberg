@@ -4,6 +4,7 @@ use std::{cell::Cell, collections::BTreeMap, mem::size_of};
 pub(super) enum FormattedPlan {
     Preserve(Vec<PatternMatch>),
     Discard,
+    RebuildBinaryMarkdown,
     ProcessorDiscard,
     Literal(super::literal_leaf::plan::LiteralPlan),
     VerifiedMarkup {

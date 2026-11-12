@@ -93,7 +93,21 @@ fn should_keep_display_tex_inside_prose_when_a_reader_applies_markdown_escapes()
     for tex in TEX_CASES {
         let source = format!("Then $${tex}$$ holds.");
         let markdown = math_paragraph(&source, &[&format!("$${tex}$$")]);
-        assert_eq!(read_text(&markdown), source, "markdown: {markdown:?}");
+        let math = math_nodes(&markdown);
+        assert_eq!(math.len(), 1, "markdown: {markdown:?}");
+        assert!(math[0].0, "markdown: {markdown:?}");
+        let decoded = super::common::unescape_markdown_text(&math[0].1);
+        let payload = if tex.ends_with('$') {
+            decoded.strip_suffix(' ').unwrap_or(&decoded)
+        } else {
+            &decoded
+        };
+        assert_eq!(payload, tex, "markdown: {markdown:?}");
+        assert_eq!(
+            read_text(&markdown),
+            format!("Then $${decoded}$$ holds."),
+            "markdown: {markdown:?}"
+        );
     }
 }
 
@@ -233,32 +247,48 @@ fn should_write_inline_math_whose_tex_ends_in_a_backslash_as_code() {
     }
 }
 
-/// How GitHub reads what the writer wrote. Each row is the TeX, whether it is display math in prose,
-/// the paragraph the writer produces, and the TeX that GitHub's own renderer returned for that
-/// paragraph (`POST /markdown` with `mode=gfm`, 2026-11-12): the text of its math element, or of
-/// the code span for a row that is written as code.
-const GITHUB_READS: [(&str, bool, &str, &str); 10] = [
-    ("a \\\\ b", false, "Let $a \\\\\\ b$ hold.\n", "a \\\\ b"),
-    ("\\{a\\}", false, "Let $\\\\{a\\\\}$ hold.\n", "\\{a\\}"),
-    ("a \\% b", false, "Let $a \\\\% b$ hold.\n", "a \\% b"),
-    ("a*b*c", false, "Let $a&#42;b&#42;c$ hold.\n", "a*b*c"),
-    ("a_b_c", false, "Let $a_b_c$ hold.\n", "a_b_c"),
-    ("[a](u)", false, "Let $&#91;a&#93;(u)$ hold.\n", "[a](u)"),
-    ("\\_ \\#", false, "Let $&#92;&#95; &#92;#$ hold.\n", "\\_ \\#"),
-    ("a\\$ b", false, "Let $a\\\\\\$ b$ hold.\n", "a\\$ b"),
-    ("x\\\\", false, "Let `x\\\\` hold.\n", "x\\\\"),
-    ("x\\\\", true, "Then $$x\\\\\\ $$ holds.\n", "x\\\\ "),
+#[test]
+fn should_keep_a_trailing_dollar_inside_display_math() {
+    let span = r"$$x\$$$";
+    let source = format!("Then {span} holds.");
+    let markdown = math_paragraph(&source, &[span]);
+    assert_eq!(math_nodes(&markdown), [(true, r"x\\\$ ".to_owned())]);
+    assert_eq!(read_text(&markdown), r"Then $$x\$ $$ holds.");
+
+    let arena = Arena::new();
+    let root = parse_document(&arena, &markdown, &super::markdown::comrak_options());
+    let prose: String = root
+        .descendants()
+        .filter_map(|node| match &node.data.borrow().value {
+            NodeValue::Text(text) => Some(text.to_string()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(prose, "Then  holds.");
+}
+
+/// Writer output previously checked against GitHub's GFM renderer.
+const GITHUB_MARKDOWN_SNAPSHOTS: [(&str, bool, &str); 10] = [
+    ("a \\\\ b", false, "Let $a \\\\\\ b$ hold.\n"),
+    ("\\{a\\}", false, "Let $\\\\{a\\\\}$ hold.\n"),
+    ("a \\% b", false, "Let $a \\\\% b$ hold.\n"),
+    ("a*b*c", false, "Let $a&#42;b&#42;c$ hold.\n"),
+    ("a_b_c", false, "Let $a_b_c$ hold.\n"),
+    ("[a](u)", false, "Let $&#91;a&#93;(u)$ hold.\n"),
+    ("\\_ \\#", false, "Let $&#92;&#95; &#92;#$ hold.\n"),
+    ("a\\$ b", false, "Let $a\\\\\\$ b$ hold.\n"),
+    ("x\\\\", false, "Let `x\\\\` hold.\n"),
+    ("x\\\\", true, "Then $$x\\\\\\ $$ holds.\n"),
 ];
 
 #[test]
-fn should_write_the_markdown_that_github_read_back_as_the_tex() {
-    for (tex, display, written, github) in GITHUB_READS {
+fn should_match_markdown_snapshots_previously_checked_on_github() {
+    for (tex, display, written) in GITHUB_MARKDOWN_SNAPSHOTS {
         let (source, span) = if display {
             (format!("Then $${tex}$$ holds."), format!("$${tex}$$"))
         } else {
             (format!("Let ${tex}$ hold."), format!("${tex}$"))
         };
         assert_eq!(math_paragraph(&source, &[&span]), written, "tex: {tex:?}");
-        assert_eq!(github.trim_end(), tex, "recorded GitHub read of {written:?}");
     }
 }

@@ -40,6 +40,10 @@ fn paragraph(text: &str, annotations: Vec<TextAnnotation>) -> DerivedResult {
 
 fn visible(markdown: &str) -> String {
     let bytes = crate::rendering::render_docx(markdown).expect("actual canonical binary consumer");
+    docx_body_text(&bytes)
+}
+
+fn docx_body_text(bytes: &[u8]) -> String {
     let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
     assert!(archive.len() >= 6);
     let mut xml = String::new();
@@ -58,6 +62,59 @@ fn visible(markdown: &str) -> String {
         "real selectable text, not a source-string projection"
     );
     nodes.iter().filter_map(|node| node.text()).collect()
+}
+
+async fn delivered_math_package(format: &str, redaction: Option<RedactionConfig>) -> Vec<u8> {
+    use base64::Engine as _;
+    let source = "Take $x*y$ and more.";
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_paragraph(
+        source,
+        vec![TextAnnotation {
+            start: 5,
+            end: 10,
+            kind: crate::types::document_structure::AnnotationKind::math(false),
+        }],
+        None,
+        None,
+    );
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Custom(format.to_owned()),
+        redaction,
+        ..Default::default()
+    };
+    let output = crate::core::pipeline::run_pipeline(builder.build(), &config)
+        .await
+        .expect("pipeline should finish the requested package");
+    assert_eq!(output.metadata.output_format.as_deref(), Some(format));
+    base64::engine::general_purpose::STANDARD
+        .decode(output.content)
+        .expect("finished package must be base64")
+}
+
+#[tokio::test]
+async fn should_deliver_docx_with_escaped_math_redacted() {
+    let original = delivered_math_package("docx", None).await;
+    assert_eq!(docx_body_text(&original), "Take x*y and more.");
+
+    let redacted = delivered_math_package("docx", Some(config("x*y", RedactionStrategy::Mask))).await;
+    assert_eq!(docx_body_text(&redacted), "Take $[REDACTED]$ and more.");
+}
+
+#[cfg(feature = "pdf")]
+#[tokio::test]
+async fn should_deliver_pdf_with_escaped_math_redacted() {
+    let body_text = |bytes: &[u8]| {
+        lopdf::Document::load_mem(bytes)
+            .expect("finished PDF package")
+            .extract_text(&[1])
+            .expect("selectable PDF text")
+    };
+    let original = delivered_math_package("pdf", None).await;
+    assert_eq!(body_text(&original).trim(), "Take x*y and more.");
+
+    let redacted = delivered_math_package("pdf", Some(config("x*y", RedactionStrategy::Mask))).await;
+    assert_eq!(body_text(&redacted).trim(), "Take $[REDACTED]$ and more.");
 }
 
 async fn findings(text: &str, config: &RedactionConfig) -> Vec<RedactionFinding> {

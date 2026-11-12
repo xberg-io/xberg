@@ -413,6 +413,7 @@ struct MarkdownOrigin {
     /// The Markdown writer made the text, so its dollar math is escaped as Markdown text. A page
     /// is always written by it; formatted text from an extractor or a custom renderer is not.
     written_by_xberg: bool,
+    finishes_as_binary: bool,
 }
 
 struct RedactionPass<'a> {
@@ -468,6 +469,7 @@ impl<'a> RedactionPass<'a> {
                 MarkdownOrigin {
                     tag_exemptions: surfaces.formatted_tag_exemptions(),
                     written_by_xberg: surfaces.formatted_written_by_xberg(),
+                    finishes_as_binary: surfaces.formatted_finishes_as_binary(),
                 },
                 surfaces.formatted_owned_tags(),
                 surfaces.formatted_plain_annotation_separator(),
@@ -565,6 +567,9 @@ impl<'a> RedactionPass<'a> {
         if !correspondence.covered(&sensitive, &match_ranges(&selected)) {
             return Err(invalid());
         }
+        if origin.finishes_as_binary && projection.has_escaped_math_match(&sensitive) {
+            return Ok(FormattedPlan::RebuildBinaryMarkdown);
+        }
         Ok(FormattedPlan::Discard)
     }
 
@@ -657,6 +662,7 @@ impl<'a> RedactionPass<'a> {
                 MarkdownOrigin {
                     tag_exemptions: surfaces.page_tag_exemptions(index),
                     written_by_xberg: true,
+                    finishes_as_binary: false,
                 },
                 surfaces.page_owned_tags(index),
                 None,
@@ -886,6 +892,15 @@ impl<'a> RedactionPass<'a> {
                 None
             }
             (Some(FormattedPlan::Preserve(matches)), Some(formatted)) => Some(self.apply_matches(&formatted, matches)),
+            (Some(FormattedPlan::RebuildBinaryMarkdown), Some(_)) => {
+                crate::core::diagnostics::push_warning(
+                    &mut doc.processing_warnings,
+                    "output_format",
+                    "Formatted Markdown contained a redaction crossing generated syntax; the binary document was \
+                     rebuilt from redacted plain text",
+                );
+                Some(escaped_plain_markdown(&doc.content))
+            }
             (Some(FormattedPlan::Discard), Some(_)) => {
                 crate::core::diagnostics::push_warning(
                     &mut doc.processing_warnings,

@@ -54,6 +54,7 @@ enum PlainAtomKind {
     FootnoteReference,
     FootnoteDefinition,
     DisplayMath,
+    EscapedMath { display: bool },
 }
 
 struct PlainAtom {
@@ -225,13 +226,31 @@ impl VisibleMarkdown {
                 .then_some(start + 1..range.end - closing.len() - 1)
         });
         let escaped = self.written_by_xberg && !super::common::markdown_math_is_unescaped(math);
-        let visible = if escaped {
-            super::common::unescape_markdown_text(&math.literal)
+        // The writer adds a space before the display closer when the payload ends in a dollar or backslash. ~keep
+        let literal = if escaped && math.display_math {
+            math.literal.trim_end_matches(' ')
         } else {
-            math.literal.clone()
+            math.literal.as_str()
         };
+        let visible = if escaped {
+            super::common::unescape_markdown_text(literal)
+        } else {
+            literal.to_owned()
+        };
+        if escaped && visible != literal {
+            if !self.budget.spend(size_of::<PlainAtom>(), 1) {
+                return None;
+            }
+            self.atoms.push(PlainAtom {
+                visible: self.text.len()..self.text.len() + visible.len(),
+                kind: PlainAtomKind::EscapedMath {
+                    display: math.display_math,
+                },
+            });
+        }
         // A character reference is not a CommonMark backslash escape, so `leaf` cannot map it. ~keep
-        if let Some(source) = source.filter(|_| !(escaped && math.literal.contains("&#"))) {
+        if let Some(mut source) = source.filter(|_| !(escaped && literal.contains("&#"))) {
+            source.end -= math.literal.len() - literal.len();
             self.leaf(&visible, markdown, source, escaped)
         } else {
             self.unmapped(&visible);
@@ -379,6 +398,16 @@ impl VisibleMarkdown {
         }
     }
 
+    pub fn has_escaped_math_match(&self, sensitive: &[Range<usize>]) -> bool {
+        self.atoms.iter().any(|atom| {
+            if !matches!(atom.kind, PlainAtomKind::EscapedMath { .. }) {
+                return false;
+            }
+            let index = sensitive.partition_point(|range| range.end <= atom.visible.start);
+            sensitive.get(index).is_some_and(|range| range.start < atom.visible.end)
+        })
+    }
+
     pub fn covered(&self, sensitive: &[Range<usize>], selected: &[Range<usize>]) -> bool {
         sensitive.iter().all(|finding| {
             let start = self
@@ -410,7 +439,10 @@ impl VisibleMarkdown {
                 result.discarded_label(text);
                 return start.checked_add(kind.len());
             }
-            PlainAtomKind::DisplayMath => math_plain_payload(plain, start, text)?,
+            PlainAtomKind::DisplayMath | PlainAtomKind::EscapedMath { display: true } => {
+                math_plain_payload(plain, start, text, "$$")?
+            }
+            PlainAtomKind::EscapedMath { display: false } => math_plain_payload(plain, start, text, "$")?,
             kind @ (PlainAtomKind::FootnoteReference | PlainAtomKind::FootnoteDefinition) => {
                 let suffix = if matches!(kind, PlainAtomKind::FootnoteDefinition) {
                     ":"
@@ -499,17 +531,17 @@ impl VisibleMarkdown {
     }
 }
 
-fn math_plain_payload(plain: &str, start: usize, text: &str) -> Option<(Range<usize>, usize)> {
+fn math_plain_payload(plain: &str, start: usize, text: &str, delimiter: &str) -> Option<(Range<usize>, usize)> {
     let direct_end = start.checked_add(text.len())?;
     if plain.get(start..direct_end) == Some(text) {
         return Some((start..direct_end, direct_end));
     }
-    let payload_start = start.checked_add("$$".len())?;
+    let payload_start = start.checked_add(delimiter.len())?;
     let payload_end = payload_start.checked_add(text.len())?;
-    let end = payload_end.checked_add("$$".len())?;
-    (plain.get(start..payload_start) == Some("$$")
+    let end = payload_end.checked_add(delimiter.len())?;
+    (plain.get(start..payload_start) == Some(delimiter)
         && plain.get(payload_start..payload_end) == Some(text)
-        && plain.get(payload_end..end) == Some("$$"))
+        && plain.get(payload_end..end) == Some(delimiter))
     .then_some((payload_start..payload_end, end))
 }
 
