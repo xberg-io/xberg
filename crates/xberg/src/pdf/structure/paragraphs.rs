@@ -294,6 +294,7 @@ fn embedded_bullet_positions(text: &str) -> Vec<usize> {
     let mut previous_non_space = None;
     let mut product_end = 0;
     let mut item_start = None;
+    let mut preceding_list_marker = false;
     let mut group_starts = Vec::new();
     for (position, character) in text.char_indices() {
         track_expression_group(&mut group_starts, position, character);
@@ -315,19 +316,20 @@ fn embedded_bullet_positions(text: &str) -> Vec<usize> {
             if left_operand
                 && (glued_product || (!glued && !follows_numeric_item))
                 && let Some(number_end) = numeric_multiplier_end(
-                    &text[right..],
-                    character,
+                    &text[..position],
+                    &text[position..],
                     continues_product || glued_product,
                     group_starts.last().is_some_and(|&(_, start)| {
                         continues_product || ends_with_numeric_expression(&text[start..position])
                     }),
-                    item_start.is_some_and(|start| text[..start].ends_with('•')),
+                    preceding_list_marker,
                 )
             {
                 product_end = right + number_end;
             } else if !glued {
                 positions.push(position);
                 item_start = Some(right);
+                preceding_list_marker = is_explicit_list_marker(&text[..position], character, &text[right..]);
             }
         }
         previous = Some(character);
@@ -452,14 +454,18 @@ fn closes_expression_groups(left: &str, rest: &str) -> bool {
         .all(|character| groups.pop().is_some_and(|(closer, _)| character == closer))
 }
 
-fn is_corroborated_hyphenated_item(after_number: &str, preceding_bullet: bool) -> bool {
+fn is_explicit_list_marker(left: &str, glyph: char, right: &str) -> bool {
+    (glyph == '•' || (glyph == '·' && left.ends_with(char::is_whitespace))) && right.starts_with(char::is_whitespace)
+}
+
+fn is_corroborated_hyphenated_item(after_number: &str, preceding_list_marker: bool) -> bool {
     let Some(suffix) = after_number
         .strip_prefix('-')
         .filter(|suffix| suffix.starts_with(char::is_alphabetic))
     else {
         return false;
     };
-    if preceding_bullet {
+    if preceding_list_marker {
         return true;
     }
     let mut groups = Vec::new();
@@ -469,8 +475,11 @@ fn is_corroborated_hyphenated_item(after_number: &str, preceding_bullet: bool) -
         }
         if matches!(character, '•' | '·') {
             return groups.is_empty()
-                && (character == '•' || suffix[..position].ends_with(char::is_whitespace))
-                && suffix[position + character.len_utf8()..].starts_with(char::is_whitespace);
+                && is_explicit_list_marker(
+                    &suffix[..position],
+                    character,
+                    &suffix[position + character.len_utf8()..],
+                );
         }
         track_expression_group(&mut groups, position, character);
     }
@@ -478,36 +487,42 @@ fn is_corroborated_hyphenated_item(after_number: &str, preceding_bullet: bool) -
 }
 
 fn numeric_multiplier_end(
-    text: &str,
-    glyph: char,
+    left: &str,
+    marked_text: &str,
     continues_product: bool,
     grouped_product: bool,
-    preceding_bullet: bool,
+    preceding_list_marker: bool,
 ) -> Option<usize> {
+    let glyph = marked_text.chars().next()?;
+    let text = &marked_text[glyph.len_utf8()..];
     let operand = text.trim_start();
-    if operand.starts_with(|c| group_closer(c).is_some()) && !(grouped_product || continues_product) {
+    let after_number = after_numeric_operand(operand)?;
+    let numeric_dot_chain = glyph == '·'
+        && after_number
+            .trim_start()
+            .strip_prefix('·')
+            .is_some_and(|next| next.starts_with(char::is_whitespace) && after_numeric_operand(next).is_some());
+    if operand.starts_with(|c| group_closer(c).is_some())
+        && !(grouped_product || continues_product || numeric_dot_chain)
+    {
         return None;
     }
-    let after_number = after_numeric_operand(operand)?;
+    if is_explicit_list_marker(left, glyph, text)
+        && is_corroborated_hyphenated_item(after_number, preceding_list_marker && !grouped_product)
+    {
+        return None;
+    }
     if glyph == '•' {
         let next_bullet = after_number
             .trim_start()
             .strip_prefix('•')
             .filter(|next| next.starts_with(char::is_whitespace));
-        if is_corroborated_hyphenated_item(after_number, preceding_bullet && !grouped_product)
-            || next_bullet.is_some_and(|next| !grouped_product || after_numeric_operand(next).is_none())
-        {
+        if next_bullet.is_some_and(|next| !grouped_product || after_numeric_operand(next).is_none()) {
             return None;
         }
     }
     // Right-attached dots can be decimal points in tables. Require evidence of a product chain. ~keep
-    if operand.len() == text.len()
-        && !(glyph == '·'
-            && (continues_product
-                || after_number.trim_start().strip_prefix('·').is_some_and(|next| {
-                    next.starts_with(char::is_whitespace) && after_numeric_operand(next).is_some()
-                })))
-    {
+    if operand.len() == text.len() && !(numeric_dot_chain || (glyph == '·' && continues_product)) {
         return None;
     }
     // A count followed by a word can open a genuine item, such as “2 options”. A multiplication
@@ -1201,6 +1216,7 @@ mod tests {
             "(2 • 3-x) + (4 • 5-y)",
             "(2 • (3) • ((4)))",
             "[2 · {3} · [(4)]]",
+            "2 · (3) · (4)",
         ] {
             let mut paragraphs = vec![make_body_paragraph(formula, 10.0)];
             split_embedded_list_items(&mut paragraphs);
@@ -1224,13 +1240,19 @@ mod tests {
 
     #[test]
     fn corroborated_explicit_bullets_split_hyphenated_counts() {
-        for (second_marker, expected) in [
-            ('•', ["2-pack", "3-pack"]),
-            ('•', ["2-pack of filters", "3-pack of seals"]),
-            ('•', ["2-pack (filters) for model 4", "3-pack of seals"]),
-            ('·', ["2-pièces", "3-joints"]),
+        for ((first_marker, second_marker), expected) in [
+            (('•', '•'), ["2-pack", "3-pack"]),
+            (('•', '•'), ["2-pack of filters", "3-pack of seals"]),
+            (('•', '•'), ["2-pack (filters) for model 4", "3-pack of seals"]),
+            (('•', '·'), ["2-pièces", "3-joints"]),
+            (('•', '·'), ["2-pack for model 4", "3-pack of seals"]),
+            (('·', '•'), ["2-pack for model 4", "3-pack of seals"]),
+            (('·', '·'), ["2-pack for model 4", "3-pack of seals"]),
         ] {
-            let text = format!("Plan 2024 • {} {second_marker} {}", expected[0], expected[1]);
+            let text = format!(
+                "Plan 2024 {first_marker} {} {second_marker} {}",
+                expected[0], expected[1]
+            );
             let mut paragraphs = vec![make_body_paragraph(&text, 10.0)];
             split_embedded_list_items(&mut paragraphs);
             assert_eq!(paragraphs.len(), 3, "{text}");
