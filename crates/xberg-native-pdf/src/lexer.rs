@@ -132,7 +132,9 @@ pub(crate) fn skip_ws(input: &[u8]) -> IResult<&[u8], &[u8]> {
             continue;
         }
 
-        if remaining == before {
+        // Length, not content: `==` on slices is a memcmp of the whole remainder, which made every
+        // token cost the rest of the stream (#3040).
+        if remaining.len() == before.len() {
             break;
         }
     }
@@ -544,6 +546,27 @@ mod tests {
     // 3.14 is a common PDF test value, not trying to use PI constant ~keep
     #[allow(clippy::approx_constant)]
     fn _allow_approx_const() {}
+
+    /// A content stream is tokenized from one slice whose remainder shrinks token by token; each
+    /// token must cost its own length, not the length of everything after it (#3040).
+    #[test]
+    fn tokenizing_a_large_stream_costs_time_linear_in_its_length() {
+        let stream = b"12 ".repeat(700_000);
+        let started = std::time::Instant::now();
+        let mut remaining = &stream[..];
+        let mut tokens = 0_usize;
+        while let Ok((rest, _)) = token(remaining) {
+            remaining = rest;
+            tokens += 1;
+        }
+        let took = started.elapsed();
+        assert_eq!(tokens, 700_000);
+        assert!(
+            took < std::time::Duration::from_secs(5),
+            "tokenizing {} bytes took {took:?}; the cost is not linear in the stream length",
+            stream.len()
+        );
+    }
 
     #[test]
     fn test_parse_positive_integer() {

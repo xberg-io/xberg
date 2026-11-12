@@ -329,6 +329,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): A page with a large content stream no longer takes seconds to read in a debug build.** (GH#3040)
+  The content-stream tokenizer compared the whole remaining stream once per token, so a page cost time quadratic in its stream length; pages 28 and 29 of `bayesian_data_analysis` took 13 s and 8 s, past the extraction time limit's grace.
 - **(pdf): A malformed embedded font's cmap subtable offset is rejected instead of crashing the renderer.** (GH#3019)
   An offset past the end of the embedded font program — or a subtable whose format-4 glyph-id index arithmetic or format-12 glyph-id sum under- or overflows — is now bounds- or wrapping-checked and rejects the cmap with a parse error in both debug and release builds, so the font falls back to its declared encoding ("using fallback font encoding") instead of an overflow panic in debug or a silent garbage walk in release. Successful fonts parse byte-for-byte as before.
 - **(pdf): A column cut no longer runs through a sentence whose inline script fills a line gap.** (GH#2925)
