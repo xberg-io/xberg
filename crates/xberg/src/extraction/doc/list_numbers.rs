@@ -633,13 +633,19 @@ fn read_i32_at(bytes: &[u8], at: usize) -> Option<(i32, usize)> {
 }
 
 /// A number in an `MSONFC` scheme the label channel expresses ([MS-DOC]
-/// 2.9.131): decimal and the upper/lower-case roman and letter schemes.
-/// Other schemes keep no label -- the renderers number them positionally, as
-/// before #2857 -- rather than paint a guessed glyph. Mirrors the DOCX
-/// path's `format_list_counter`.
+/// 2.9.131; [MS-OSHARED] 2.2.5 `MSONFC`): decimal, zero-padded decimal (22)
+/// and the upper/lower-case roman and letter schemes. Other schemes keep no
+/// label -- the renderers number them positionally, as before #2857, exactly
+/// as the DOCX path's `format_list_counter` leaves ordinal and the
+/// cardinal/ordinal text formats unpainted -- rather than paint a guessed
+/// glyph.
 fn painted_number(value: u32, nfc: u8) -> Option<String> {
     match nfc {
         NFC_DECIMAL => Some(value.to_string()),
+        // The DOCX counterpart's `decimalZero`: a count under ten keeps a
+        // leading zero.
+        NFC_ZERO_PADDED if (0..10).contains(&value) => Some(format!("0{value}")),
+        NFC_ZERO_PADDED => Some(value.to_string()),
         NFC_UPPER_ROMAN => roman_numeral(value),
         NFC_LOWER_ROMAN => roman_numeral(value).map(|numeral| numeral.to_ascii_lowercase()),
         NFC_UPPER_LETTER => letter_run(value).map(|letters| letters.to_ascii_uppercase()),

@@ -12,6 +12,10 @@ const NFC_DECIMAL: u8 = 0;
 const NFC_UPPER_ROMAN: u8 = 1;
 const NFC_UPPER_LETTER: u8 = 3;
 const NFC_LOWER_LETTER: u8 = 4;
+const NFC_ZERO_PADDED: u8 = 22;
+/// `MSONFC` 5 paints an ordinal (`1st`, `2nd`) -- a scheme this extractor's
+/// label channel does not paint.
+const NFC_ORDINAL: u8 = 5;
 const NFC_BULLET: u8 = 23;
 const NFC_NONE: u8 = 255;
 
@@ -365,6 +369,40 @@ fn a_template_past_the_unit_bound_paints_no_label() {
         counted += 1;
     }
     assert_eq!(counted, 200, "every paragraph of the walk was counted");
+}
+
+#[test]
+fn a_zero_padded_decimal_level_paints_leading_zeros() {
+    // `MSONFC` 22 is the `decimalZero` scheme the DOCX counterpart paints
+    // (`docx/parser.rs::format_list_counter` writes `w:numFmt` `decimalZero`
+    // with a leading zero under ten): the .doc scheme reads the same Word
+    // level table and must paint the same label, or a zero-padded list loses
+    // its count across headings.
+    let mut levels = decimal_levels(1);
+    levels[0].nfc = NFC_ZERO_PADDED;
+    let formats = formats(&plf_lst(7, levels), &plf_lfo(7, &[(0, None)]));
+    assert_eq!(
+        walked(&formats, &[(1, 0), (1, 0), (1, 0)]),
+        [label("01."), label("02."), label("03.")],
+        "the zero-padded decimal scheme paints its leading zeros through the same label channel"
+    );
+}
+
+#[test]
+fn a_scheme_the_label_channel_does_not_paint_restarts_after_a_heading() {
+    // `MSONFC` 5 (ordinal) and the cardinal/ordinal text schemes have no painted
+    // label -- the DOCX counterpart leaves them unpainted too -- so their levels keep
+    // no label and the renderers number them positionally, which restarts after an
+    // interrupting paragraph: the changelog names this as the schemes' fallback, so it
+    // is pinned as a decision, not an accident.
+    let mut levels = decimal_levels(1);
+    levels[1].nfc = NFC_ORDINAL;
+    let formats = formats(&plf_lst(7, levels), &plf_lfo(7, &[(0, None)]));
+    assert_eq!(
+        walked(&formats, &[(1, 1), (1, 1), (1, 0), (1, 1)]),
+        [None, None, label("1."), None],
+        "the ordinal level paints no label and its sequence restarts after the level-0 paragraph"
+    );
 }
 
 #[test]
