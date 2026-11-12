@@ -1714,18 +1714,22 @@ fn insert_dictionary_line_counts(
 }
 
 /// Parses the page again with the words of rejected table regions exempt from the dictionary filter.
-/// When fewer lines are then judged noise, returns the new content and document and records the new
-/// line counts and word confidences in `metadata`; otherwise leaves `metadata` as it was. ~keep
+/// When fewer lines are then judged noise than the count `metadata` holds from the first parse, returns
+/// the new content and document and records the new line counts and word confidences in `metadata`;
+/// otherwise leaves `metadata` as it was. The count is read from `metadata` so no caller passes it. ~keep
 fn restore_rejected_table_words(
     hocr: &str,
     dictionary_filter: &DictionaryLineFilter<'_>,
     page_number: u32,
     rejected_regions: &[Vec<HocrWord>],
-    filtered_line_count: usize,
     metadata: &mut HashMap<String, serde_json::Value>,
 ) -> Option<(String, InternalDocument)> {
     let restored = parse_hocr_preserving_rejected_table_words(hocr, dictionary_filter, page_number, rejected_regions);
-    if restored.dictionary_filtered_line_count >= filtered_line_count {
+    let first_filtered_line_count = metadata
+        .get("dictionary_filtered_line_count")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0);
+    if restored.dictionary_filtered_line_count as u64 >= first_filtered_line_count {
         return None;
     }
     let content = strip_control_characters(&flatten_hocr_elements_to_text(&restored.document.elements)).into_owned();
@@ -2885,7 +2889,6 @@ pub(super) fn perform_ocr(
             &dictionary_filter,
             config.page_number,
             &rejected_regions,
-            dictionary_filtered_line_count,
             &mut metadata,
         )
     {
@@ -5027,17 +5030,17 @@ mod tests {
     fn restore_rejected_table_words_records_the_kept_numeral_line_count_of_the_new_parse() {
         let hocr = r#"<div class="ocr_page" title="ppageno 0"><p class="ocr_par">
             <span class="ocr_line">
-                <span class="ocrx_word" title="bbox 10 10 100 40">RIGHT</span>
-                <span class="ocrx_word" title="bbox 110 10 260 40">ELEVATION</span>
+                <span class="ocrx_word" title="bbox 10 10 100 40; x_wconf 90">RIGHT</span>
+                <span class="ocrx_word" title="bbox 110 10 260 40; x_wconf 80">ELEVATION</span>
             </span>
             <span class="ocr_line">
-                <span class="ocrx_word" title="bbox 10 50 100 80">OWATS</span>
-                <span class="ocrx_word" title="bbox 110 50 220 80">DNDEVET</span>
+                <span class="ocrx_word" title="bbox 10 50 100 80; x_wconf 70">OWATS</span>
+                <span class="ocrx_word" title="bbox 110 50 220 80; x_wconf 60">DNDEVET</span>
             </span>
             <span class="ocr_line">
-                <span class="ocrx_word" title="bbox 10 90 100 120">QZVRT</span>
-                <span class="ocrx_word" title="bbox 110 90 220 120">PLMKR</span>
-                <span class="ocrx_word" title="bbox 230 90 320 120">2024</span>
+                <span class="ocrx_word" title="bbox 10 90 100 120; x_wconf 40">QZVRT</span>
+                <span class="ocrx_word" title="bbox 110 90 220 120; x_wconf 30">PLMKR</span>
+                <span class="ocrx_word" title="bbox 230 90 320 120; x_wconf 50">2024</span>
             </span>
         </p></div>"#;
         let valid = |word: &str| Some(matches!(word, "RIGHT" | "ELEVATION"));
@@ -5066,8 +5069,10 @@ mod tests {
         // The first parse is seeded with no kept line, so only the restored parse can supply the count of 1.
         insert_dictionary_line_counts(&mut metadata, 2, 0);
         assert!(!metadata.contains_key("dictionary_kept_numeral_line_count"));
+        insert_retained_word_confidence_metadata(&mut metadata, &first.retained_word_confidence_stats);
+        assert_eq!(metadata.get("word_count"), Some(&serde_json::json!(5)));
 
-        let (content, _) = restore_rejected_table_words(hocr, &filter, 1, &rejected, 2, &mut metadata)
+        let (content, _) = restore_rejected_table_words(hocr, &filter, 1, &rejected, &mut metadata)
             .expect("the restore judges one line fewer as noise");
 
         assert_eq!(content, "RIGHT ELEVATION\nOWATS DNDEVET\nQZVRT PLMKR 2024");
@@ -5079,7 +5084,18 @@ mod tests {
             metadata.get("dictionary_kept_numeral_line_count"),
             Some(&serde_json::json!(1))
         );
-        assert!(restore_rejected_table_words(hocr, &filter, 1, &rejected, 1, &mut metadata).is_none());
+        // The restore recorded 1 as the count of the page, so a second restore finds no line to win back.
+        assert!(restore_rejected_table_words(hocr, &filter, 1, &rejected, &mut metadata).is_none());
+        // The restored parse carries the confidence of all seven words, not the five of the first parse.
+        for (key, expected) in [
+            ("word_count", 7),
+            ("low_conf_word_count", 2),
+            ("mean_text_conf", 60),
+            ("median_word_conf", 60),
+            ("p10_word_conf", 30),
+        ] {
+            assert_eq!(metadata.get(key), Some(&serde_json::json!(expected)), "{key}");
+        }
     }
 
     /// Builds a tiny valid PNG so `process_image_with_cache` runs Tesseract on real

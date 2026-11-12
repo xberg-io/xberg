@@ -2264,6 +2264,34 @@ mod tests {
         }
     }
 
+    /// The bytes entry of the backend returns the page text of the OCR run as its content, so the words
+    /// that the restore wins back for a rejected table region are in that content, not only in the
+    /// document tree. The test needs the bundled English data.
+    #[cfg(all(
+        feature = "bundle-tessdata-eng",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    #[tokio::test]
+    async fn the_backend_content_holds_the_words_won_back_for_a_rejected_table_region() {
+        let png = std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/ocr_layout/stair_labels_noise.png"),
+        )
+        .expect("the stair fixture is committed");
+        let document = TesseractBackend::new()
+            .process_image(&png, &OcrConfig::default())
+            .await
+            .expect("the bytes entry reads the page");
+
+        assert!(document.tables.is_empty(), "{:?}", document.tables);
+        assert_eq!(
+            document.content.matches("Qzvrt Plmkr").count(),
+            1,
+            "{:?}",
+            document.content
+        );
+    }
+
     /// A `word_iterator_skipped_count` of exactly zero must not produce a
     /// warning -- the metadata-insertion side already omits the key in that
     /// case, but this guards the consumption side independently (#309).

@@ -164,8 +164,9 @@ run_numeral_noise_cases() {
   run_exact 'ocr::tesseract_backend::tests::warnings_from_ocr_metadata_reports_only_the_removed_lines' --lib
   run_exact 'ocr::tesseract_backend::tests::strip_ocr_scratch_metadata_keys_preserves_genuine_user_metadata' --lib
   run_exact 'ocr::tesseract_backend::tests::process_image_file_reports_the_removed_line_and_keeps_both_counts_out_of_the_metadata' --lib
-  if [ "$((passed - before))" -ne 6 ]; then
-    printf 'Expected 6 executed numeral-noise tests, observed %s\n' "$((passed - before))" >&2
+  run_exact 'ocr::tesseract_backend::tests::the_backend_content_holds_the_words_won_back_for_a_rejected_table_region' --lib
+  if [ "$((passed - before))" -ne 7 ]; then
+    printf 'Expected 7 executed numeral-noise tests, observed %s\n' "$((passed - before))" >&2
     exit 1
   fi
 }
@@ -229,7 +230,7 @@ pdf-ocr)
   expected=81
   run_pdf_cases
   run_retained_read_cases
-  expected=$((expected + 11 + 6))
+  expected=$((expected + 11 + 7))
   run_number_budget_cases
   run_ink_probe_cases
   run_discarded_recovery_cases
