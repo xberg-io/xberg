@@ -163,7 +163,14 @@ fn keeps_real_words_beside_stray_glyphs() {
         "Harbour Lights x y",
         "Quarterly budget summary ~ ~",
         "Red box q z",
+        "open the north gate ee",
+        "the committee met on Tuesday a",
     ]);
+}
+
+#[test]
+fn a_noise_page_keeps_real_short_names_and_mixed_content() {
+    assert_kept_exactly(&["Sade", "Yes.", "Sade Nina ~ q", "Cecil Cecile Cecelia ~"]);
 }
 
 #[test]
