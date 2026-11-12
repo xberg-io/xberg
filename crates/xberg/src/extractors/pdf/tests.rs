@@ -3799,7 +3799,7 @@ fn png_height(bytes: &[u8]) -> Option<u32> {
 /// A two-page PDF whose every page carries a healthy native text layer, and whose pages have
 /// clearly different heights so a page render identifies its page by size: page 1 is a small
 /// (200x300 pt) page, page 2 a tall (1224x1584 pt) one.
-#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 fn two_page_native_text_pdf() -> Vec<u8> {
     use lopdf::content::{Content, Operation};
     use lopdf::{Document, Object, Stream, dictionary};
@@ -8677,5 +8677,86 @@ mod native_text_stop_tests {
         assert!(token.cut_short_by_time_limit());
         assert!(stopped.2.is_empty(), "no tables after the time limit");
         assert!(stopped.9.is_none(), "no images after the time limit");
+    }
+
+    /// Runs the whole extractor on the two-page fixture and returns the derived document.
+    async fn extract_whole(config: &ExtractionConfig) -> crate::types::ExtractedDocument {
+        let internal = PdfExtractor::new()
+            .extract_content(&two_page_native_text_pdf(), "application/pdf", config)
+            .await
+            .expect("the extraction must succeed");
+        crate::extraction::derive::derive_extraction_result(internal, true, crate::core::config::OutputFormat::Plain)
+    }
+
+    fn implausible_text_pages(result: &crate::types::ExtractedDocument) -> Option<Vec<u32>> {
+        result.metadata.format.as_ref().and_then(|format| match format {
+            crate::types::FormatMetadata::Pdf(pdf) => pdf.implausible_text_pages.clone(),
+            _ => None,
+        })
+    }
+
+    /// #3030: pages after a stopped text loop are unread, not scans, so the plausibility check
+    /// must not judge them: it would report an empty list as a clean bill of health.
+    #[tokio::test]
+    async fn a_stopped_text_loop_skips_the_plausibility_check() {
+        let finished = CancellationToken::new();
+        let control = extract_whole(&config_with(&finished)).await;
+        assert!(
+            implausible_text_pages(&control).is_some(),
+            "control: a finished text loop runs the check and records its (empty) result"
+        );
+
+        let token = CancellationToken::new();
+        token.request_stop();
+        let stopped = extract_whole(&config_with(&token)).await;
+
+        assert!(
+            token.cut_short_by_time_limit(),
+            "the stop must have cut the text loop short"
+        );
+        assert_eq!(
+            implausible_text_pages(&stopped),
+            None,
+            "the check must not run on a stopped text loop"
+        );
+    }
+
+    /// #3030: forced OCR on a stopped text loop would read none of the unread pages and fail the
+    /// call, losing the pages already read, so the native result is returned instead.
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    #[serial]
+    async fn a_stopped_text_loop_skips_forced_ocr() {
+        use crate::core::config::OcrConfig;
+
+        let _backend = register_mock_ocr_backend("native-stop-forced-ocr", "mock OCR text");
+        let forced = |token: &CancellationToken| ExtractionConfig {
+            force_ocr: true,
+            ocr: Some(OcrConfig {
+                backend: "native-stop-forced-ocr".to_string(),
+                language: vec!["eng".to_string()],
+                ..Default::default()
+            }),
+            ..config_with(token)
+        };
+
+        let finished = CancellationToken::new();
+        let control = extract_whole(&forced(&finished)).await;
+        assert_eq!(
+            extraction_method(&control),
+            Some(ExtractionMethod::Ocr),
+            "control: forced OCR runs when the text loop finished"
+        );
+
+        let token = CancellationToken::new();
+        token.request_stop();
+        let stopped = extract_whole(&forced(&token)).await;
+
+        assert!(token.cut_short_by_time_limit());
+        assert_eq!(
+            extraction_method(&stopped),
+            Some(ExtractionMethod::Native),
+            "no OCR route may run on pages the stop left unread"
+        );
     }
 }

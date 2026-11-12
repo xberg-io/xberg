@@ -1,10 +1,15 @@
 //! Regression tests for issue #2958: a PDF that reaches `extraction_timeout_secs` used to
 //! return `XbergError::Timeout` and discard every page already read. It must return the
 //! finished pages and a warning naming the first page that was not read.
+//!
+//! The cases need the page loops to outlast a 1-24 s limit, which holds only for an unoptimized
+//! build: an optimized build finishes the fixtures first and would fail them. They are compiled
+//! out of such a build, so their outcome does not depend on the machine's speed; the unit tests
+//! that request the stop on the token cover every profile.
 
 #![cfg(all(feature = "pdf", feature = "ocr", feature = "bundle-tessdata-eng"))]
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
-#![cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+#![cfg(all(feature = "ocr", feature = "tokio-runtime", debug_assertions))]
 
 mod helpers;
 use helpers::{extract_uri_document, get_test_documents_dir};
@@ -82,15 +87,9 @@ async fn extract_with_limits(path: &Path, limits: &[u64]) -> Option<ExtractedDoc
     None
 }
 
-/// The stop is covered deterministically by unit tests; these end-to-end tests also need a
-/// machine slow enough to hit it. A run that never reached the stop fails rather than passing
-/// unchecked, unless `XBERG_2958_ALLOW_UNEXERCISED_STOP` is set.
+/// A run that never reached the stop fails: the case would otherwise pass without checking anything.
 fn unexercised(reason: &str) {
-    if std::env::var_os("XBERG_2958_ALLOW_UNEXERCISED_STOP").is_some() {
-        eprintln!("SKIPPED: {reason}");
-        return;
-    }
-    panic!("{reason} (set XBERG_2958_ALLOW_UNEXERCISED_STOP to accept this on a fast machine)");
+    panic!("{reason}");
 }
 
 fn has_timeout_warning(result: &ExtractedDocument) -> bool {
@@ -169,7 +168,7 @@ async fn test_native_pdf_stopped_in_the_text_loop_keeps_the_pages_it_read() {
         assert_cut_short(&result, total);
         return;
     }
-    unexercised("no native fixture was cut short by a 1 s limit on this machine, so the stop was not exercised");
+    unexercised("no native fixture was cut short by a 1 s limit, so the stop was not exercised");
 }
 
 /// A caller's token reused for a second extraction must not carry the first one's stop. Each
