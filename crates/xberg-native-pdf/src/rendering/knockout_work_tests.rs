@@ -583,6 +583,47 @@ fn only_a_path_paint_that_certainly_builds_a_path_raises_the_floor() {
 }
 
 #[test]
+fn the_floor_counts_a_paint_only_where_the_renderers_path_builder_builds_a_path() {
+    let stale_then_line = format!("-{HUGE} 0 m {HUGE} 0 m 5 5 l f");
+    let stale_then_rect = format!("-{HUGE} 0 m {HUGE} 0 m 0 0 10 10 re f");
+    let stale_after_close = format!("-{HUGE} 0 m h {HUGE} 0 m 5 5 l f");
+    let stale_before_close_stroke = format!("-{HUGE} 0 m {HUGE} 0 m 5 5 l s");
+    let two_moves_only = format!("-{HUGE} 0 m {HUGE} 0 m f");
+    let cases: Vec<(&str, usize)> = vec![
+        (&stale_then_line, 1),
+        (&stale_then_rect, 1),
+        (&stale_before_close_stroke, 1),
+        (&stale_after_close, 0),
+        (&two_moves_only, 0),
+        ("0 0 m 0 0 m f", 0),
+        ("0 0 m h f", 1),
+        ("0 0 m s", 1),
+        ("0 0 m b", 1),
+        ("0 0 m b*", 1),
+        ("0 0 m S", 0),
+        ("0 0 m B", 0),
+        ("0 0 m 1 1 5 5 v f", 1),
+        ("1 1 5 5 v f", 0),
+        ("0 0 -10 -10 re f", 1),
+    ];
+    for (content, expected) in cases {
+        assert_eq!(path_paints(content, true), expected, "{content}");
+    }
+}
+
+#[test]
+fn stale_move_path_paints_that_cannot_fit_degrade_before_painting() {
+    let paints = 40;
+    let body = format!("-{HUGE} 0 m {HUGE} 0 m 5 5 l f ").repeat(paints);
+    let room = 2 * paints - 10;
+    assert_eq!(
+        run_with_room_for(&format!("0 g {body}"), room, false),
+        (false, paints),
+        "the floor counts each stale-move paint, refuses the plan, and nothing is painted twice"
+    );
+}
+
+#[test]
 fn a_path_paint_in_a_visible_layer_raises_the_floor_and_one_in_a_hidden_layer_does_not() {
     let cases: [(&str, usize, usize); 6] = [
         ("/OC /L BDC 0 0 10 10 re f EMC", 1, 0),

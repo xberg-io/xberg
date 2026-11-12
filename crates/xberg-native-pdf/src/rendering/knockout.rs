@@ -5,7 +5,7 @@ use crate::document::PdfDocument;
 use crate::error::{Error, Result};
 use crate::object::Object;
 use std::collections::{HashMap, HashSet};
-use tiny_skia::{Pixmap, Transform};
+use tiny_skia::{PathBuilder, Pixmap, Transform};
 
 /// Whether a resolved `/Group` dictionary is a transparency group with `/K true`; pages and forms share it.
 pub(super) fn group_is_knockout(group: &Object) -> bool {
@@ -236,37 +236,40 @@ impl KnockoutGroup {
     }
 }
 
-/// The points of the path being built, as far as `PathBuilder::finish` judges them: it returns no
-/// path unless every point is finite and the span of each axis fits in `f32`.
-#[derive(Default)]
-struct PathExtent {
-    extent: Option<[f32; 4]>,
-    poisoned: bool,
-    built: bool,
-}
-
-impl PathExtent {
-    fn add(&mut self, x: f32, y: f32) {
-        if !(x.is_finite() && y.is_finite()) {
-            self.poisoned = true;
-            return;
+/// Adds one path-construction operator to `path` with the same builder calls as the operator loop of
+/// the page renderer, so that `finish` judges the path as it does there. A change to those calls in
+/// the renderer needs the same change here. Any other operator leaves `path` as it is.
+fn extend_path(path: &mut PathBuilder, op: &Operator) {
+    match op {
+        Operator::MoveTo { x, y } => path.move_to(*x, *y),
+        Operator::LineTo { x, y } => path.line_to(*x, *y),
+        Operator::CurveTo { x1, y1, x2, y2, x3, y3 } => path.cubic_to(*x1, *y1, *x2, *y2, *x3, *y3),
+        Operator::CurveToV { x2, y2, x3, y3 } => {
+            if let Some(last) = path.last_point() {
+                path.cubic_to(last.x, last.y, *x2, *y2, *x3, *y3);
+            }
         }
-        let [min_x, min_y, max_x, max_y] = self.extent.unwrap_or([x, y, x, y]);
-        self.extent = Some([min_x.min(x), min_y.min(y), max_x.max(x), max_y.max(y)]);
-    }
-
-    fn segment(&mut self, points: &[(f32, f32)]) {
-        for &(x, y) in points {
-            self.add(x, y);
+        Operator::CurveToY { x1, y1, x3, y3 } => path.cubic_to(*x1, *y1, *x3, *y3, *x3, *y3),
+        Operator::Rectangle { x, y, width, height } => {
+            // Normalize negative width/height per PDF spec:
+            // re with negative dimensions means the rect extends in the opposite direction
+            // ~keep
+            let (nx, nw) = if *width < 0.0 {
+                (x + width, -width)
+            } else {
+                (*x, *width)
+            };
+            let (ny, nh) = if *height < 0.0 {
+                (y + height, -height)
+            } else {
+                (*y, *height)
+            };
+            if let Some(rect) = tiny_skia::Rect::from_xywh(nx, ny, nw, nh) {
+                path.push_rect(rect);
+            }
         }
-        self.built = true;
-    }
-
-    fn certainly_builds(&self) -> bool {
-        let Some([min_x, min_y, max_x, max_y]) = self.extent else {
-            return false;
-        };
-        self.built && !self.poisoned && (max_x - min_x).is_finite() && (max_y - min_y).is_finite()
+        Operator::ClosePath => path.close(),
+        _ => {}
     }
 }
 
@@ -543,37 +546,20 @@ impl PageRenderer {
         shows
     }
 
-    /// How many path paints certainly build a path that the pass then charges a page-sized surface
-    /// for: a path with a rectangle or a line or curve segment, whose points and span fit in `f32`
-    /// (what `PathBuilder::finish` accepts), since the last paint or `n`, outside any optional-content
-    /// section that is or may be hidden. A section is left out unless the renderer's own check finds
-    /// its layer visible. A paint with no path, or inside a hidden section, charges nothing, so it is
-    /// left out and the count never exceeds the pass.
+    /// How many path paints build a path that the pass then charges a page-sized surface for: the
+    /// paints for which the renderer's own path builder, fed the operators since the last paint or
+    /// `n`, returns a path. A paint outside any optional-content section that is or may be hidden
+    /// counts; a section is left out unless the renderer's own check finds its layer visible. A paint
+    /// with no path, or inside a hidden section, charges nothing, so it is left out and the count
+    /// never exceeds the pass.
     pub(super) fn certain_path_paints(&self, operators: &[Operator], doc: &PdfDocument, resources: &Object) -> usize {
         let none = HashSet::new();
         let excluded = self.excluded_layers_snapshot.as_deref().unwrap_or(&none);
-        let mut path = PathExtent::default();
+        let mut path = PathBuilder::new();
         let mut layers: Vec<bool> = Vec::new();
         let mut paints = 0;
         for operator in operators {
             match operator {
-                Operator::MoveTo { x, y } => path.add(*x, *y),
-                Operator::Rectangle { x, y, width, height } => {
-                    path.add(*x, *y);
-                    path.add(x + width, y + height);
-                    path.built = true;
-                }
-                Operator::LineTo { x, y } => path.segment(&[(*x, *y)]),
-                Operator::CurveTo { x1, y1, x2, y2, x3, y3 } => {
-                    path.segment(&[(*x1, *y1), (*x2, *y2), (*x3, *y3)]);
-                }
-                Operator::CurveToY { x1, y1, x3, y3 } => path.segment(&[(*x1, *y1), (*x3, *y3)]),
-                Operator::CurveToV { x2, y2, x3, y3 } => {
-                    if path.extent.is_some() {
-                        path.add(*x2, *y2);
-                        path.add(*x3, *y3);
-                    }
-                }
                 Operator::BeginMarkedContent { .. } => layers.push(false),
                 Operator::BeginMarkedContentDict { tag, properties } => layers.push(
                     tag == "OC"
@@ -587,12 +573,19 @@ impl PageRenderer {
                 Operator::EndMarkedContent => {
                     layers.pop();
                 }
-                Operator::EndPath => path = PathExtent::default(),
+                Operator::EndPath => path = PathBuilder::new(),
                 operator if is_path_paint(operator) => {
-                    paints += usize::from(path.certainly_builds() && !layers.contains(&true));
-                    path = PathExtent::default();
+                    // `s`, `b` and `b*` close the path before they paint, as the renderer does. ~keep
+                    if matches!(
+                        operator,
+                        Operator::CloseStroke | Operator::CloseFillStroke | Operator::CloseFillStrokeEvenOdd
+                    ) {
+                        path.close();
+                    }
+                    let built = std::mem::replace(&mut path, PathBuilder::new()).finish().is_some();
+                    paints += usize::from(built && !layers.contains(&true));
                 }
-                _ => {}
+                operator => extend_path(&mut path, operator),
             }
         }
         paints
