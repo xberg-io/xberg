@@ -32,7 +32,7 @@ pub(crate) use ocr_document::adopt_public_ocr_document;
 pub(crate) use ocr_document::is_invalid_public_ocr_document;
 pub(crate) use pages::build_ocr_elements;
 #[cfg(test)]
-use pages::{build_pages, build_plain_pages};
+use pages::build_pages;
 use pages::derive_pages;
 #[cfg(feature = "quality")]
 pub(crate) use pages::drop_unusable_page_boundaries;

@@ -23,17 +23,18 @@ pub(super) fn derive_pages(
     spans: Option<&crate::rendering::ElementSpans>,
     observer: &mut impl super::surfaces::DerivationObserver,
 ) -> Option<Vec<PageContent>> {
-    let page_ranges = spans.map(|spans| plain_page_ranges(doc, content, spans));
     // ~keep A page of a source whose pages are not OCR text gets its text and its range from
     // the spans, so the range selects the page text by construction. PDF, image and OCR pages
     // keep their own text, and their ranges are located below.
-    let native_ranges = page_ranges.as_ref().filter(|ranges| {
-        !source_short_circuits_ocr_page_text(&doc.source_format) && ranges.values().any(Option::is_some)
-    });
-    let raw_pages = match (doc.prebuilt_pages.take(), native_ranges) {
-        (Some(prebuilt), Some(ranges)) => Some(with_plain_page_text(prebuilt, content, ranges)),
-        (Some(prebuilt), None) => Some(prebuilt),
-        (None, _) => build_pages(doc, page_ranges.as_ref().map(|ranges| (content, ranges))),
+    let native_ranges = spans
+        .filter(|_| !source_short_circuits_ocr_page_text(&doc.source_format))
+        .map(|spans| plain_page_ranges(doc, content, spans))
+        .filter(|ranges| ranges.values().any(Option::is_some));
+    let native_ranges = native_ranges.as_ref();
+    let raw_pages = doc.prebuilt_pages.take().or_else(|| build_pages(doc, content_is_plain));
+    let raw_pages = match native_ranges {
+        Some(ranges) => raw_pages.map(|pages| with_plain_page_text(pages, content, ranges)),
+        None => raw_pages,
     };
     let mut pages = apply_page_content_format(raw_pages, doc, output_format, observer);
     if let Some(ranges) = native_ranges {
@@ -109,7 +110,7 @@ fn plain_page_ranges(
         .collect()
 }
 
-/// Give each prebuilt page that has elements its part of the plain `content`. A page with no
+/// Give each page that has elements its part of the plain `content`. A page with no
 /// elements keeps its text, and every other field of a page stays.
 fn with_plain_page_text(mut pages: Vec<PageContent>, content: &str, ranges: &PlainPageRanges) -> Vec<PageContent> {
     for page in &mut pages {
@@ -245,14 +246,12 @@ pub(crate) fn drop_unusable_page_boundaries(metadata: &mut crate::types::Metadat
 
 /// Build per-page `PageContent` from page-grouped elements.
 ///
-/// `plain` is the plain content of the document with the place of each page's text in it, given
-/// when that content is the output: plain output, or a custom format name with no renderer,
-/// which falls back to plain. Then a page has its part of that content. For every other output
-/// a page has the text of its elements only. ~keep
-pub(super) fn build_pages(
-    doc: &InternalDocument,
-    plain: Option<(&str, &PlainPageRanges)>,
-) -> Option<Vec<PageContent>> {
+/// `content_is_plain` says that `result.content` is the plain rendering of the document:
+/// plain output, or a custom format name with no renderer, which falls back to plain. Then
+/// a page has the OCR text of a picture where `render_plain` writes it, so `pages[n].content`
+/// and `result.content` agree. For every other output a page has the text of its elements
+/// only. ~keep
+pub(super) fn build_pages(doc: &InternalDocument, content_is_plain: bool) -> Option<Vec<PageContent>> {
     let mut page_map: std::collections::BTreeMap<u32, Vec<&InternalElement>> = std::collections::BTreeMap::new();
 
     for elem in &doc.elements {
@@ -283,6 +282,7 @@ pub(super) fn build_pages(
                 if elem.kind.is_container_start() || elem.kind.is_container_end() {
                     continue;
                 }
+                let mut picture_ocr_text = None;
                 match elem.kind {
                     ElementKind::Table { table_index } => {
                         if let Some(arc_table) = arc_tables.get(table_index as usize) {
@@ -291,18 +291,23 @@ pub(super) fn build_pages(
                     }
                     ElementKind::Image { image_index } if (image_index as usize) < doc.images.len() => {
                         image_indices.push(image_index);
+                        // The OCR text of a picture goes after the picture, as `render_plain`
+                        // writes it. An image element of a PDF document can hold that text as
+                        // its own text already. ~keep
+                        if content_is_plain {
+                            picture_ocr_text = crate::rendering::common::image_ocr_text(doc, elem, image_index)
+                                .filter(|ocr_text| *ocr_text != elem.text);
+                        }
                     }
                     _ => {}
                 }
-                if plain.is_none() && !elem.text.is_empty() {
+                let own_text = Some(elem.text.as_str()).filter(|text| !text.is_empty());
+                for block in [own_text, picture_ocr_text].into_iter().flatten() {
                     if !content.is_empty() {
                         content.push_str("\n\n");
                     }
-                    content.push_str(&elem.text);
+                    content.push_str(block);
                 }
-            }
-            if let Some((plain_content, ranges)) = plain {
-                content = range_text(plain_content, ranges.get(&page_num).copied().flatten()).to_string();
             }
 
             PageContent {
@@ -324,22 +329,6 @@ pub(super) fn build_pages(
         .collect();
 
     Some(pages)
-}
-
-/// The pages of `doc` as `build_pages` builds them when its plain rendering is the output.
-#[cfg(any(
-    test,
-    all(
-        feature = "pdf",
-        feature = "ocr",
-        feature = "tokio-runtime",
-        not(target_arch = "wasm32")
-    )
-))]
-pub(super) fn build_plain_pages(doc: &InternalDocument) -> Option<Vec<PageContent>> {
-    let rendering = crate::rendering::render_plain_with_spans(doc);
-    let ranges = plain_page_ranges(doc, &rendering.text, &rendering.spans);
-    build_pages(doc, Some((&rendering.text, &ranges)))
 }
 
 /// Re-render each page's content using the requested output format.
@@ -409,7 +398,7 @@ pub(crate) fn render_plain_selected_pages(
 ) -> std::collections::BTreeMap<u32, String> {
     let membership = compute_page_membership(doc);
     let mut observer = ();
-    build_plain_pages(doc)
+    build_pages(doc, true)
         .unwrap_or_default()
         .into_iter()
         .enumerate()
