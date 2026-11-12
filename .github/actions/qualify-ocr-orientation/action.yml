@@ -25,6 +25,7 @@ runs:
           download_traineddata osd "$XBERG_OSD_TEST_MODEL" "${model_base}/${revision}/osd.traineddata"
         fi
         mise run rust:test:explicit-sideways warm
+        mise run rust:test:explicit-sideways paddle
         mise run rust:test:explicit-sideways native
 
     - name: Qualify native Khmer retention after English OCR

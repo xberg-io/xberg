@@ -9,13 +9,14 @@ REPO_ROOT="${REPO_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 }
 cd "$REPO_ROOT"
 
-profile="${1:?Use the warm or native qualification profile}"
+profile="${1:?Use the warm, paddle or native qualification profile}"
 features="pdf,pdf-native,ocr,ocr-pipeline,tokio-runtime,bundle-tessdata-eng,language-detection,html,image-encode"
 filters=()
 expected_names=()
 case "$profile" in
-warm)
+warm | paddle)
   features+=",auto-rotate-tract"
+  [ "$profile" = paddle ] && features+=",paddle-ocr-ort"
   expected=21
   expected_names=(
     caller_psm1_word_elements_on_an_upside_down_page_carry_no_internal_marker
@@ -66,7 +67,7 @@ native)
   filters=(--exact "${expected_names[@]}")
   ;;
 *)
-  echo "Expected profile warm or native" >&2
+  echo "Expected profile warm, paddle or native" >&2
   exit 1
   ;;
 esac
@@ -90,7 +91,7 @@ verify_model() {
 
 export XBERG_OSD_TEST_MODEL="${XBERG_OSD_TEST_MODEL:?Pinned cached OSD model required}"
 verify_model "$XBERG_OSD_TEST_MODEL" 9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff
-if [ "$profile" = warm ]; then
+if [ "$profile" != native ]; then
   verify_model "$XBERG_ORIENTATION_TEST_MODEL" 6b742aebce6f0f7f71f747931ac7becfc7c96c51641e14943b291eeb334e7947
 fi
 # Every model child also verifies the bundled English SHA before seeding its private offline cache. ~keep
