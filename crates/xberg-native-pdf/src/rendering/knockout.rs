@@ -509,6 +509,42 @@ impl PageRenderer {
         shows
     }
 
+    /// How many path paints certainly build a path that the pass then charges a page-sized surface
+    /// for: a rectangle whose span fits in `f32` or a drawn segment since the last paint or `n`, outside
+    /// any optional-content section, which may be hidden. A paint with no path, or inside such a
+    /// section, charges nothing, so it is left out and the count never exceeds the pass.
+    pub(super) fn certain_path_paints(operators: &[Operator]) -> usize {
+        let mut built = false;
+        let mut layers: Vec<bool> = Vec::new();
+        let mut paints = 0;
+        for operator in operators {
+            match operator {
+                Operator::Rectangle { x, y, width, height } => {
+                    built |= (x + width).is_finite() && (y + height).is_finite() && x.is_finite() && y.is_finite();
+                }
+                Operator::LineTo { x, y } => built |= x.is_finite() && y.is_finite(),
+                Operator::CurveTo { x1, y1, x2, y2, x3, y3 } => {
+                    built |= [x1, y1, x2, y2, x3, y3].iter().all(|v| v.is_finite());
+                }
+                Operator::CurveToY { x1, y1, x3, y3 } => {
+                    built |= [x1, y1, x3, y3].iter().all(|v| v.is_finite());
+                }
+                Operator::BeginMarkedContent { .. } => layers.push(false),
+                Operator::BeginMarkedContentDict { tag, .. } => layers.push(tag == "OC"),
+                Operator::EndMarkedContent => {
+                    layers.pop();
+                }
+                Operator::EndPath => built = false,
+                operator if is_path_paint(operator) => {
+                    paints += usize::from(built && !layers.contains(&true));
+                    built = false;
+                }
+                _ => {}
+            }
+        }
+        paints
+    }
+
     pub(super) fn execute_knockout_group(
         &mut self,
         pixmap: &mut Pixmap,
@@ -530,7 +566,10 @@ impl PageRenderer {
         if paints == 0 {
             return Ok(None);
         }
-        let surfaces_in_pass = paints + self.painting_text_shows(operators, doc, resources, initial_text_mode);
+        let path_paints = operators.iter().filter(|operator| is_path_paint(operator)).count();
+        let surfaces_in_pass = paints - path_paints
+            + Self::certain_path_paints(operators)
+            + self.painting_text_shows(operators, doc, resources, initial_text_mode);
         let workspace = self.knockout_resources.knockout(
             pixels,
             pixmap.data().len(),

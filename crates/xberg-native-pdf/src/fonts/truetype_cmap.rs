@@ -116,7 +116,20 @@ impl TrueTypeCMap {
             subtable_offset
         );
 
-        cursor.set_position((cmap_offset + subtable_offset) as u64);
+        // The subtable offset is attacker-controlled: reject anything past
+        // the end of the font data, computed in u64 so the sum cannot
+        // overflow. A checked u32 add would only remove the debug panic
+        // while release silently wrapped and walked garbage. ~keep
+        let subtable_start = u64::from(cmap_offset) + u64::from(subtable_offset);
+        if subtable_start >= data.len() as u64 {
+            return Err(format!(
+                "cmap subtable offset {} out of bounds (font data length {})",
+                subtable_offset,
+                data.len()
+            ));
+        }
+
+        cursor.set_position(subtable_start);
         let gid_to_unicode = Self::parse_cmap_subtable(&mut cursor)?;
 
         Ok(TrueTypeCMap {
@@ -469,9 +482,15 @@ impl TrueTypeCMap {
         }
         // Per TrueType spec: index into glyphIdArray
         // offset = idRangeOffset[i]/2 + (charCode - startCode[i]) + i - segCount ~keep
-        let offset =
-            (segment.id_range_offset as usize) / 2 + (char_code as usize - segment.start as usize) + segment.seg
-                - segment.seg_count;
+        // A malformed subtable can push the value below zero before the
+        // segCount subtraction; underflow resolves to nothing, exactly like
+        // the out-of-bounds case (release's wrapped huge index always failed
+        // the bounds check and returned 0). ~keep
+        let index =
+            (segment.id_range_offset as usize) / 2 + (char_code as usize - segment.start as usize) + segment.seg;
+        let Some(offset) = index.checked_sub(segment.seg_count) else {
+            return 0;
+        };
         if offset < glyph_id_array.len() {
             let raw = glyph_id_array[offset];
             if raw != 0 {
@@ -547,7 +566,10 @@ impl TrueTypeCMap {
                 .map_err(|e| format!("Failed to read startGlyphId: {}", e))?;
 
             for (offset, char_code) in (start_char_code..=end_char_code).enumerate() {
-                let gid = (start_gid + offset as u32) as u16;
+                // A malformed group's startGlyphId can overflow the u32 sum;
+                // wrapping matches release behaviour exactly (the `as u16` cast
+                // then truncates the same low 16 bits). ~keep
+                let gid = start_gid.wrapping_add(offset as u32) as u16;
                 if let Some(ch) = char::from_u32(char_code) {
                     gid_to_unicode.insert(gid, ch);
                 }
