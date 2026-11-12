@@ -331,6 +331,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): A malformed embedded font's cmap subtable offset is rejected instead of crashing the renderer.** (GH#3019)
+  An offset past the end of the embedded font program — or a subtable whose format-4 glyph-id index arithmetic or format-12 glyph-id sum under- or overflows — is now bounds- or wrapping-checked and rejects the cmap with a parse error in both debug and release builds, so the font falls back to its declared encoding ("using fallback font encoding") instead of an overflow panic in debug or a silent garbage walk in release. Successful fonts parse byte-for-byte as before.
 - **(pdf): A column cut no longer runs through a sentence whose inline script fills a line gap.** (GH#2925)
   A superscript sits in a line bucket of its own, so the gap it fills tore the line in two and let a column cut run through the paragraph; the straddling-line guard now reads such a gap as part of the line. Only the column test uses this bridge, so inline equations elsewhere can still read out of order (GH#3024).
 - **(pdf): Mark a page as OCR text only when its whole-document OCR read was accepted into the output.** (#2939)
