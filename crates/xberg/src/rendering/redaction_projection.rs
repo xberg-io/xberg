@@ -448,6 +448,11 @@ impl VisibleMarkdown {
 
     pub fn has_normalized_math_match(&self, sensitive: &[Range<usize>]) -> bool {
         self.normalized_math.iter().flatten().any(|change| {
+            if change.is_empty() {
+                // A deleted formula can expose a match starting or ending at the deletion. ~keep
+                let index = sensitive.partition_point(|range| range.end < change.start);
+                return sensitive.get(index).is_some_and(|range| range.start <= change.start);
+            }
             let index = sensitive.partition_point(|range| range.end <= change.start);
             sensitive.get(index).is_some_and(|range| range.start < change.end)
         })

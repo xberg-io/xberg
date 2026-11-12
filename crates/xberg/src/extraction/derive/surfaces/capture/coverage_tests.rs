@@ -178,6 +178,46 @@ async fn should_refuse_packages_when_math_normalization_creates_an_uncovered_mat
     }
 }
 
+#[tokio::test]
+async fn should_refuse_packages_when_math_disappears_at_a_match_boundary() {
+    let document = |math_first| {
+        let mut builder = InternalDocumentBuilder::new("test");
+        let comment = "% synthetic comment\n% second comment";
+        if math_first {
+            builder.push_formula(comment, None, None);
+        }
+        builder.push_paragraph("Amber", Vec::new(), None, None);
+        if !math_first {
+            builder.push_formula(comment, None, None);
+        }
+        builder.build()
+    };
+    for &(format, body_text) in binary_formats() {
+        for math_first in [false, true] {
+            let original = delivered_package(document(math_first), format, None).await.unwrap();
+            assert_eq!(
+                body_text(&original).trim(),
+                "Amber",
+                "{format}, math_first={math_first}"
+            );
+
+            let redaction = RedactionConfig {
+                custom_patterns: vec![RedactionPattern::labeled("person", r"\A\s*Amber\s*\z")],
+                ..Default::default()
+            };
+            let error = delivered_package(document(math_first), format, Some(redaction))
+                .await
+                .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("Cannot prove complete binary document math redaction"),
+                "{format}, math_first={math_first}: {error}"
+            );
+        }
+    }
+}
+
 async fn findings(text: &str, config: &RedactionConfig) -> Vec<RedactionFinding> {
     let mut document = ExtractedDocument {
         content: text.to_owned(),
