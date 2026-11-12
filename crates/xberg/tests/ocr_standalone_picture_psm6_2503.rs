@@ -176,31 +176,91 @@ fn assert_rows_are_own_lines(format: OutputFormat) {
     let mut kept = 0;
     let mut next = 0;
     for row in PICTURE_11PX_ROWS.lines() {
-        let Some(at) = lines.iter().position(|line| row_kept(line, row, is_djot)) else {
-            continue;
-        };
-        assert!(at >= next, "row {row:?} is out of order:\n{}", result.content);
-        kept += 1;
-        next = at;
+        if is_djot {
+            // Djot escapes every leader dot, so every leader run must round-trip whole:
+            // each of the 12 rows must sit on exactly one line with a byte-identical
+            // label, a non-empty leader and its values intact. The OCR can misread a
+            // value comma as a period (the pipeline's glyph-height resample, ~4.2x for
+            // this image, is where "Signal timing" loses it), so the tail comparison
+            // reads ',' as '.' on both sides; a row failing whole-line equality must be
+            // that one row, differing only in its tail. The OCR accuracy loss never
+            // lowers the bar: all 12 leaders are required, not 11 (GH#3009).
+            let hits: Vec<(usize, bool)> = lines
+                .iter()
+                .enumerate()
+                .filter_map(|(at, line)| row_hit(line, row, true).map(|leader| (at, leader)))
+                .collect();
+            assert_eq!(
+                hits.len(),
+                1,
+                "row {row:?} must be on exactly one line:\n{}",
+                result.content
+            );
+            let (at, leader) = hits[0];
+            assert!(leader, "row {row:?} lost its leader:\n{}", result.content);
+            assert!(at >= next, "row {row:?} is out of order:\n{}", result.content);
+            next = at;
+            if row_hit(lines[at], row, false) != Some(true) {
+                assert_eq!(
+                    row.split('\t').next(),
+                    Some("Signal timing"),
+                    "the row needing the comma normalization must be \"Signal timing\":\n{}",
+                    result.content
+                );
+                assert!(
+                    tail_misread_only(lines[at], row),
+                    "row {row:?} must differ from its line only in the values tail:\n{}",
+                    result.content
+                );
+            }
+        } else {
+            let Some(at) = lines.iter().position(|line| row_hit(line, row, false).is_some()) else {
+                continue;
+            };
+            assert!(at >= next, "row {row:?} is out of order:\n{}", result.content);
+            kept += 1;
+            next = at;
+        }
     }
-    // Djot escapes every leader dot, so every leader run must round-trip whole; the plain and
-    // Markdown variants tolerate one OCR-quality row. The Djot threshold stays at 11 because
-    // the one row the OCR can lose is "Signal timing": the pipeline's glyph-height resample
-    // (~4.2x for this image) can misread its value's comma as a period, which is an OCR
-    // accuracy loss, not a leader loss - all 12 leader runs round-trip without an Ellipsis
-    // event, and the round-trip table in the Djot tests pins that per shape (GH#3009 asked
-    // for 12 here; bump it if the pipeline's scale keeps the comma on every platform).
-    assert!(
-        kept >= if is_djot { 11 } else { 11 },
-        "{kept} of 12 rows kept whole:\n{}",
-        result.content
-    );
+    if !is_djot {
+        // The plain and Markdown variants tolerate one OCR-quality row.
+        assert!(kept >= 11, "{kept} of 12 rows kept whole:\n{}", result.content);
+    }
 }
 
-/// Whether `line` is the fixture row: the label, then the leader dots as literal text, then the
-/// values. The Djot round trip must not lose or reinterpret the leader, so the text that the
-/// comparison trims away has to be a non-empty run of dots.
-fn row_kept(line: &str, row: &str, require_leader: bool) -> bool {
+/// Whether `line` is the fixture row: the label byte-identical, then a leader run, then the
+/// values. With `normalize_tail` the values compare with ',' read as '.' on both sides: the
+/// OCR can misread a comma as a period, and that is an accuracy loss, not a leader loss.
+/// Returns whether a non-empty run of dots separates the label from the values.
+fn row_hit(line: &str, row: &str, normalize_tail: bool) -> Option<bool> {
+    let fields: Vec<_> = row.split('\t').collect();
+    let [label, values @ ..] = fields.as_slice() else {
+        return None;
+    };
+    let flattened = line.replace('|', " ");
+    let words: Vec<_> = flattened.split_whitespace().collect();
+    let split = words.len().checked_sub(values.len())?;
+    let (head, tail) = words.split_at(split);
+    let tail_eq = if normalize_tail {
+        tail.len() == values.len()
+            && tail
+                .iter()
+                .zip(values.iter())
+                .all(|(word, value)| word.replace(',', ".") == value.replace(',', "."))
+    } else {
+        tail == values
+    };
+    if !tail_eq {
+        return None;
+    }
+    let joined = head.join(" ");
+    let trimmed = joined.trim_end_matches('.').trim_end();
+    (trimmed == *label).then_some(trimmed.len() < joined.len())
+}
+
+/// Whether `line` is the fixture row with the label byte-identical and every values word
+/// differing only by ',' against '.': the OCR misread may touch the tail alone.
+fn tail_misread_only(line: &str, row: &str) -> bool {
     let fields: Vec<_> = row.split('\t').collect();
     let [label, values @ ..] = fields.as_slice() else {
         return false;
@@ -211,12 +271,11 @@ fn row_kept(line: &str, row: &str, require_leader: bool) -> bool {
         return false;
     };
     let (head, tail) = words.split_at(split);
-    if tail != values {
-        return false;
-    }
-    let joined = head.join(" ");
-    let trimmed = joined.trim_end_matches('.').trim_end();
-    trimmed == *label && (!require_leader || trimmed.len() < joined.len())
+    head.join(" ").trim_end_matches('.').trim_end() == *label
+        && tail
+            .iter()
+            .zip(values.iter())
+            .all(|(word, value)| word.replace(',', ".") == value.replace(',', "."))
 }
 
 #[test]

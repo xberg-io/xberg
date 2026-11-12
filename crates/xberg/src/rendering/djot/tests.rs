@@ -1650,6 +1650,12 @@ fn a_one_or_two_dot_run_stays_unescaped() {
     assert_eq!(render_rows(&["A..B and Dr. Smith"]), "A..B and Dr. Smith\n");
 }
 
+/// Per-guard removal, measured: deleting the every-third-dot rule alone leaves 13 of the
+/// 16 rows red (the ten spaced runs of three dots or more, `(...)`, `\....` and `a....b`)
+/// while `...x` stays green, the row-start run escape covering it; deleting the row-start
+/// escape alone leaves this table green (the row-start tests pin that rule); deleting
+/// both reds all 14 dotted rows, so only the combined alteration frees `...x`. The one-
+/// and two-dot runs never need an escape and stay green in every arm.
 #[test]
 fn a_leader_run_of_any_length_round_trips_without_an_ellipsis_event() {
     // The spaced runs sit between two words; the last four rows hold the shapes that
