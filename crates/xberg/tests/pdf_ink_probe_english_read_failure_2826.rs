@@ -14,7 +14,9 @@ use xberg::plugins::{OcrBackend, OcrBackendType, Plugin, register_ocr_backend, u
 use xberg::types::ExtractedDocument;
 use xberg::{ExtractionConfig, OcrConfig, OutputFormat};
 
-const COMPLETE: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/cluster-complete-mapped.pdf");
+/// A genuine Arabic layer, which an English read of its ink does not contradict: it stays native
+/// over a picture when that read succeeds.
+const GENUINE_ARABIC: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/genuine.pdf");
 
 /// Fails its first read, as the English read does when the model is missing offline, and reads a
 /// line of English afterwards.
@@ -76,7 +78,7 @@ fn a_layer_over_a_picture_the_english_read_fails_on_is_read_as_a_scan() {
         ocr_strategy: OcrStrategy::Auto,
         ..Default::default()
     };
-    let flyer = with_full_page_picture(COMPLETE, PicturePlacement::Background);
+    let flyer = with_full_page_picture(GENUINE_ARABIC, PicturePlacement::Background);
     let result = helpers::extract_bytes_document_blocking(&flyer, "application/pdf", &config).unwrap();
     let warned = |needle: &str| {
         result
@@ -89,8 +91,8 @@ fn a_layer_over_a_picture_the_english_read_fails_on_is_read_as_a_scan() {
         "{:?}",
         result.processing_warnings
     );
-    // The page went to OCR as the scan its picture made it: the rule names the picture it read. ~keep
-    assert!(warned("carries a picture"), "{:?}", result.processing_warnings);
+    // The page went to OCR as the scan its picture made it, so its layer was not kept. ~keep
+    assert!(!warned("OCR was skipped"), "{:?}", result.processing_warnings);
     assert!(
         backend.0.load(Ordering::SeqCst) >= 2,
         "the page was read again after the failed English read"
