@@ -715,14 +715,16 @@ impl PageRenderer {
             .map(|budget| {
                 let resources = doc.get_page_resources(page_num)?;
                 let spots = self.page_sidecar_spots(doc, page_num, &resources);
-                // Only a soft mask (`smask_spot_snapshot`) or a knockout group copies the spot
-                // planes while painting, so the fit charges the extra copy only for a page whose
-                // resources declare one. A zero-ink sidecar has no spot plane to copy. Knockout
-                // groups hold further copies that the runtime reservation in
-                // `knockout_resources` bounds, which this fit does not model.
-                let has_inks = spots.as_deref().is_some_and(|inks| !inks.is_empty());
-                let transient_copies = usize::from(has_inks && page_may_copy_spot_planes(doc, page_num, &resources));
-                dpi = fit_png_dpi(dpi, &budget, spots.as_deref(), transient_copies, dimensions_at_dpi)?;
+                // A soft mask, a transparency group and a knockout group copy the spot planes
+                // while painting (`smask_spot_snapshot`, `GroupSidecar::capture`, the knockout
+                // workspace), so the fit charges the copies only for a page whose resources
+                // declare one. A zero-ink sidecar has no spot plane to copy.
+                let transient = if spots.as_deref().is_some_and(|inks| !inks.is_empty()) {
+                    transient_spot_copies(doc, page_num, &resources)
+                } else {
+                    TransientSpotCopies::None
+                };
+                dpi = fit_png_dpi(dpi, &budget, spots.as_deref(), transient, dimensions_at_dpi)?;
                 Ok::<_, Error>((resources, spots))
             })
             .transpose()?;
@@ -8815,18 +8817,38 @@ fn raster_dimensions(page_width: f32, page_height: f32, scale: f32, has_scale_ov
     }
 }
 
-/// Whether painting the page can copy the sidecar's spot planes: a page-level or form-level
-/// knockout group, or an ExtGState soft mask, anywhere in the resources a form can reach.
-pub(super) fn page_may_copy_spot_planes(doc: &PdfDocument, page_num: usize, resources: &Object) -> bool {
+/// The spot-plane copies painting a page can hold, by the widest construct its resources declare.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(super) enum TransientSpotCopies {
+    /// No soft mask or group: only the live sidecar planes.
+    None,
+    /// An ExtGState soft mask: one extra copy of the planes (`smask_spot_snapshot`).
+    Copy,
+    /// A transparency group: its own rgba and sidecar copy plus the per-paint scratch.
+    Group,
+    /// A knockout group: the workspace `KnockoutResources::knockout` reserves.
+    Knockout,
+}
+
+/// Scans the page and the resources a form can reach (ExtGState and XObject only; pattern and
+/// annotation appearance resources are not walked, and the runtime reservations in
+/// `knockout_resources` still bound them). A scan that hits the depth cap answers conservatively.
+pub(super) fn transient_spot_copies(doc: &PdfDocument, page_num: usize, resources: &Object) -> TransientSpotCopies {
     const MAX_DEPTH: u32 = 32;
-    fn walk(doc: &PdfDocument, resources: &Object, visited: &mut HashSet<ObjectRef>, depth: u32) -> bool {
+    fn walk(
+        doc: &PdfDocument,
+        resources: &Object,
+        visited: &mut HashSet<ObjectRef>,
+        depth: u32,
+    ) -> TransientSpotCopies {
         use crate::rendering::ext_gstate::SoftMaskValue;
         let Some(dict) = resources.as_dict() else {
-            return false;
+            return TransientSpotCopies::None;
         };
         if depth >= MAX_DEPTH {
-            return false;
+            return TransientSpotCopies::Knockout;
         }
+        let mut widest = TransientSpotCopies::None;
         let ext_g_states = dict
             .get("ExtGState")
             .and_then(|object| doc.resolve_object(object).ok())
@@ -8837,7 +8859,7 @@ pub(super) fn page_may_copy_spot_planes(doc: &PdfDocument, page_num: usize, reso
                     .is_ok_and(|parsed| matches!(parsed.smask, Some(SoftMaskValue::Form(_))))
             })
         }) {
-            return true;
+            widest = TransientSpotCopies::Copy;
         }
         let xobjects = dict
             .get("XObject")
@@ -8850,27 +8872,41 @@ pub(super) fn page_may_copy_spot_planes(doc: &PdfDocument, page_num: usize, reso
             let Ok(Object::Stream { dict: form, .. }) = doc.resolve_object(raw) else {
                 continue;
             };
-            let knockout = form
-                .get("Group")
-                .and_then(|group| doc.resolve_object(group).ok())
-                .is_some_and(|group| knockout::group_is_knockout(&group));
-            if knockout {
-                return true;
+            if form.get("Subtype").and_then(Object::as_name) != Some("Form") {
+                continue;
             }
-            if let Some(Ok(form_resources)) = form.get("Resources").map(|object| doc.resolve_object(object))
-                && walk(doc, &form_resources, visited, depth + 1)
-            {
-                return true;
+            let group = form.get("Group").and_then(|group| doc.resolve_object(group).ok());
+            if group.as_ref().is_some_and(knockout::group_is_knockout) {
+                return TransientSpotCopies::Knockout;
+            }
+            let transparency_group = group
+                .as_ref()
+                .and_then(Object::as_dict)
+                .is_some_and(|group| group.get("S").and_then(Object::as_name) == Some("Transparency"));
+            if transparency_group {
+                widest = widest.max(TransientSpotCopies::Group);
+            }
+            if let Some(Ok(form_resources)) = form.get("Resources").map(|object| doc.resolve_object(object)) {
+                widest = widest.max(walk(doc, &form_resources, visited, depth + 1));
+                if widest == TransientSpotCopies::Knockout {
+                    return widest;
+                }
             }
         }
-        false
+        widest
     }
-    knockout::page_is_knockout(doc, page_num) || walk(doc, resources, &mut HashSet::new(), 0)
+    if knockout::page_is_knockout(doc, page_num) {
+        return TransientSpotCopies::Knockout;
+    }
+    walk(doc, resources, &mut HashSet::new(), 0)
 }
 
 /// Per-pixel bytes the PNG working-set fit charges for the RGBA canvas and its demultiply
 /// copy; shared so the budget tests derive the same charge the fit does.
 pub(super) const RGBA_AND_PNG_BYTES_PER_PIXEL: usize = 12;
+/// Per-pixel scratch a paint inside a group reserves: two RGBA snapshots and a coverage plane
+/// (`knockout.rs`).
+const GROUP_PAINT_SCRATCH_BYTES_PER_PIXEL: usize = 2 * 4 + 1;
 /// Fixed per-page allowance the PNG working-set fit reserves for the encoded file's overhead.
 pub(super) const PNG_FIXED_OVERHEAD: usize = 256 * 1024;
 
@@ -8878,12 +8914,12 @@ fn fit_png_dpi(
     requested: u32,
     budget: &PngRenderBudget,
     spot_names: Option<&[String]>,
-    transient_copies: usize,
+    transient: TransientSpotCopies,
     dimensions: impl Fn(u32) -> (u32, u32),
 ) -> Result<u32> {
     let fits = |dpi| {
         let (width, height) = dimensions(dpi);
-        png_working_bytes_fit(width, height, spot_names, transient_copies, budget.max_working_bytes)
+        png_working_bytes_fit(width, height, spot_names, transient, budget.max_working_bytes)
     };
     if fits(requested) {
         return Ok(requested);
@@ -8918,17 +8954,37 @@ fn png_working_bytes_fit(
     width: u32,
     height: u32,
     spot_names: Option<&[String]>,
-    transient_copies: usize,
+    transient: TransientSpotCopies,
     limit: usize,
 ) -> bool {
     // The canvas and PNG demultiply copy are both RGBA. Reserve the same per-pixel
     // and fixed PNG allowance as Core image encoding, plus the CMYK plane and two planes per spot ink.
-    // The caller adds one extra copy of the sidecar planes when the page declares a soft mask
-    // or knockout group; the runtime reservation in `knockout_resources` bounds further copies.
+    // The run-time reservations in `knockout_resources` peak at: `Copy` the canvas plus one soft
+    // mask snapshot; `Group` the canvas, the group's rgba + sidecar and the per-paint scratch of
+    // `GROUP_PAINT_SCRATCH_BYTES_PER_PIXEL`; `Knockout` the canvas, the group, the shape
+    // workspace, the `knockout()` reservation (twice rgba + sidecar, twice the shape) and the
+    // per-paint scratch. The PNG encode copies come after, so the charge is the larger of the two.
+    let ink_count = spot_names.map_or(0, <[String]>::len);
     let sidecar_bytes_per_pixel = spot_names.map_or(Some(0), |names| names.len().checked_mul(2)?.checked_add(4));
-    let charge = sidecar_bytes_per_pixel
-        .and_then(|bytes| transient_copies.checked_add(1)?.checked_mul(bytes))
-        .and_then(|bytes| RGBA_AND_PNG_BYTES_PER_PIXEL.checked_add(bytes))
+    let live_bytes_per_pixel =
+        sidecar_bytes_per_pixel.and_then(|sidecar| RGBA_AND_PNG_BYTES_PER_PIXEL.checked_add(sidecar));
+    let render_peak_bytes_per_pixel = sidecar_bytes_per_pixel.and_then(|sidecar| {
+        let canvas = sidecar.checked_add(4)?;
+        match transient {
+            TransientSpotCopies::None => Some(0),
+            TransientSpotCopies::Copy => RGBA_AND_PNG_BYTES_PER_PIXEL.checked_add(sidecar.checked_mul(2)?),
+            TransientSpotCopies::Group => canvas.checked_mul(2)?.checked_add(GROUP_PAINT_SCRATCH_BYTES_PER_PIXEL),
+            TransientSpotCopies::Knockout => {
+                let shape_lanes = ink_count.checked_add(1)?.checked_mul(3)?;
+                canvas
+                    .checked_mul(4)?
+                    .checked_add(shape_lanes)?
+                    .checked_add(GROUP_PAINT_SCRATCH_BYTES_PER_PIXEL)
+            }
+        }
+    });
+    let charge = live_bytes_per_pixel
+        .and_then(|live| Some(live.max(render_peak_bytes_per_pixel?)))
         .and_then(|bytes| (width as usize).checked_mul(height as usize)?.checked_mul(bytes))
         .and_then(|bytes| bytes.checked_add(PNG_FIXED_OVERHEAD));
     width > 0 && height > 0 && charge.is_some_and(|bytes| bytes <= limit && bytes <= isize::MAX as usize)

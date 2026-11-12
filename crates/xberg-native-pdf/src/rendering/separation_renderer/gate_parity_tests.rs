@@ -357,6 +357,24 @@ fn one_ink_charge(dpi: u32, copies: usize) -> usize {
     side * side * (RGBA_AND_PNG_BYTES_PER_PIXEL + (copies + 1) * (4 + 2)) + PNG_FIXED_OVERHEAD
 }
 
+/// The knockout peak of one ink per pixel: the canvas, the group, two copies for the backdrop and
+/// accumulator (each rgba + sidecar of 4 + 6), three shape workspaces of 2 and the paint scratch.
+fn one_ink_knockout_charge(dpi: u32) -> usize {
+    let side = (f64::from(dpi) * 100.0 / 72.0).ceil() as usize;
+    side * side * (4 * (4 + 6) + 3 * 2 + 9) + PNG_FIXED_OVERHEAD
+}
+
+/// The plain-group peak of one ink per pixel: the canvas, the group and the paint scratch.
+fn one_ink_group_charge(dpi: u32) -> usize {
+    let side = (f64::from(dpi) * 100.0 / 72.0).ceil() as usize;
+    side * side * (2 * (4 + 6) + 9) + PNG_FIXED_OVERHEAD
+}
+
+fn plain_group_page() -> PdfDocument {
+    let group = group_form("", "/CS0 cs 0.8 scn 10 10 60 60 re f");
+    build_page_with("/F Do", SPOT_A, "/BM /Multiply", &[&group])
+}
+
 /// Renders `doc` through the PNG budget and returns the DPI it was admitted at, or `None` when refused.
 fn budgeted_dpi(doc: &PdfDocument, limit: usize, minimum_dpi: u32) -> Option<u32> {
     let mut renderer = PageRenderer::new(RenderOptions::with_dpi(BUDGET_REQUESTED_DPI).as_raw());
@@ -412,20 +430,62 @@ fn the_page_renderer_lowers_dpi_for_the_transient_spot_plate_copy() {
     );
 }
 
-/// A knockout group copies the spot planes too, so the page scan reports it; the knockout
-/// runtime reservation, not the DPI fit, bounds the group's own copies.
+/// The scan names the widest copy a page's resources declare. Patterns and annotation
+/// appearance resources are not walked.
 #[test]
-fn the_page_scan_reports_soft_masks_and_knockout_groups_only() {
-    use crate::rendering::page_renderer::page_may_copy_spot_planes;
-    let scan = |doc: &PdfDocument| page_may_copy_spot_planes(doc, 0, &doc.get_page_resources(0).expect("resources"));
-    assert!(scan(&knockout_group_page()), "a knockout form group copies the planes");
-    assert!(scan(&soft_mask_page()), "an ExtGState soft mask copies the planes");
-    let plain_group = group_form("", "/CS0 cs 0.8 scn 10 10 60 60 re f");
-    assert!(
-        !scan(&build_page_with("/F Do", SPOT_A, "/BM /Multiply", &[&plain_group])),
-        "a non-knockout group alone does not"
+fn the_page_scan_reports_the_widest_spot_plane_copy() {
+    use crate::rendering::page_renderer::{TransientSpotCopies, transient_spot_copies};
+    let scan = |doc: &PdfDocument| transient_spot_copies(doc, 0, &doc.get_page_resources(0).expect("resources"));
+    assert_eq!(scan(&knockout_group_page()), TransientSpotCopies::Knockout);
+    assert_eq!(scan(&soft_mask_page()), TransientSpotCopies::Copy);
+    assert_eq!(
+        scan(&plain_group_page()),
+        TransientSpotCopies::Group,
+        "a plain transparency group captures the planes too"
     );
-    assert!(!scan(&build_page("/BM /Multiply", &[])), "blend mode alone does not");
+    assert_eq!(scan(&build_page("/BM /Multiply", &[])), TransientSpotCopies::None);
+    let none_mask = build_page("/SMask /None", &[]);
+    assert_eq!(
+        scan(&none_mask),
+        TransientSpotCopies::None,
+        "/SMask /None clears a mask"
+    );
+}
+
+/// A plain transparency group reserves its own rgba and sidecar copy at run time, so the fit
+/// must lower the DPI instead of letting the render fail on the knockout workspace.
+#[test]
+fn an_ink_page_with_a_plain_transparency_group_lowers_dpi_instead_of_failing() {
+    let doc = plain_group_page();
+    let dpi = budgeted_dpi(&doc, one_ink_charge(BUDGET_REQUESTED_DPI, 0), BUDGET_MINIMUM_DPI)
+        .expect("the fit lowers the DPI so the group workspace fits");
+    assert!(
+        dpi < BUDGET_REQUESTED_DPI,
+        "lowered from {BUDGET_REQUESTED_DPI}, got {dpi}"
+    );
+    assert_eq!(
+        budgeted_dpi(&doc, one_ink_group_charge(BUDGET_REQUESTED_DPI), BUDGET_MINIMUM_DPI),
+        Some(BUDGET_REQUESTED_DPI),
+        "the group charge admits the request and the render fits it"
+    );
+}
+
+/// A knockout group reserves a larger workspace than one copy: a limit between the copy charge
+/// and the knockout charge lowers the DPI and renders.
+#[test]
+fn an_ink_page_with_a_knockout_group_lowers_dpi_to_the_knockout_charge() {
+    let doc = knockout_group_page();
+    assert_eq!(
+        budgeted_dpi(&doc, one_ink_knockout_charge(BUDGET_REQUESTED_DPI), BUDGET_MINIMUM_DPI),
+        Some(BUDGET_REQUESTED_DPI),
+        "the knockout charge admits the request and the render fits it"
+    );
+    let dpi = budgeted_dpi(&doc, one_ink_charge(BUDGET_REQUESTED_DPI, 1), BUDGET_MINIMUM_DPI)
+        .expect("a limit between the copy and the knockout charge lowers the DPI");
+    assert!(
+        dpi < BUDGET_REQUESTED_DPI,
+        "lowered from {BUDGET_REQUESTED_DPI}, got {dpi}"
+    );
 }
 
 /// A page with an ink but no soft mask or knockout group never copies the planes: it keeps its
