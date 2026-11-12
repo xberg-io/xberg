@@ -3657,7 +3657,7 @@ async fn check_forced_ocr_discarded_page_restoration() {
             _config: &OcrConfig,
         ) -> crate::Result<crate::types::ExtractedDocument> {
             Ok(crate::types::ExtractedDocument {
-                content: PLUGIN_PAGE_TEXTS.join("\n\n\n"),
+                content: format!("{PLUGIN_PREAMBLE}\n{}\n{PLUGIN_EPILOGUE}", PLUGIN_PAGE_TEXTS.join("\n")),
                 pages: Some(
                     PLUGIN_PAGE_TEXTS
                         .iter()
@@ -3791,6 +3791,12 @@ async fn check_forced_ocr_discarded_page_restoration() {
 const PLUGIN_PAGE_TEXTS: [&str; 2] = ["Repeated OCR paragraph", "Repeated OCR paragraph"];
 
 #[cfg(all(feature = "pdf", feature = "ocr"))]
+const PLUGIN_PREAMBLE: &str = "OCR transcript résumé";
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const PLUGIN_EPILOGUE: &str = "End of OCR transcript";
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
 fn assert_public_pdf_paragraph(result: &crate::types::ExtractedDocument, page: u32, expected: &str) {
     use crate::types::document_structure::NodeContent;
 
@@ -3882,6 +3888,13 @@ async fn assert_document_plugin_page_ranges(backend: &str) {
     for (index, expected) in PLUGIN_PAGE_TEXTS.iter().enumerate() {
         assert_public_pdf_paragraph(&result, (index + 1) as u32, expected);
     }
+    assert_eq!(
+        result.content,
+        format!(
+            "{PLUGIN_PREAMBLE}\n\n{}\n\n{PLUGIN_EPILOGUE}\n",
+            PLUGIN_PAGE_TEXTS.join("\n\n")
+        )
+    );
     let rendered_pages = PLUGIN_PAGE_TEXTS.map(|text| format!("{text}\n"));
     assert_public_pdf_page_ranges(&result, &rendered_pages.each_ref().map(String::as_str));
 }

@@ -533,8 +533,8 @@ enum PdfDocumentOrigin {
 /// markdown verbatim from an HTTP response. Normalize before splitting (#316).
 /// `boundaries` must describe `text` itself, not some earlier revision of it -- on the
 /// mixed path that means the output of `ocr::boundaries_after_replacements`, since OCR
-/// replacement shifts every later offset. When supplied, each paragraph is tagged with
-/// the page its start offset falls in.
+/// replacement shifts every later offset. Split at verified page edges before finding
+/// paragraphs. Text between page spans remains part of the document without a page tag.
 ///
 /// Tagging matters well beyond bookkeeping: `ExtractedDocument.pages` is derived from
 /// `element.page` (`extraction::derive::build_pages`), so a flat document with no page
@@ -548,44 +548,38 @@ fn flat_pdf_document(
 ) -> InternalDocument {
     let mut doc = InternalDocument::new("pdf");
     doc.mime_type = mime_type.to_string();
-    let normalized = crate::extraction::transform::normalize_line_endings(text);
-
-    // Normalization rewrites CRLF to LF, which shifts offsets; boundaries are only
-    // usable when it changed nothing. Falling back to untagged paragraphs is the
-    // pre-existing behaviour, so a CRLF document is no worse off than before.
-    let usable: Option<&[crate::types::PageBoundary]> = boundaries.filter(|bounds| {
-        normalized.len() == text.len()
-            && !bounds.is_empty()
+    let usable = boundaries.filter(|bounds| {
+        bounds.windows(2).all(|pair| pair[0].byte_end <= pair[1].byte_start)
             && bounds
                 .iter()
-                .all(|b| b.byte_start <= b.byte_end && b.byte_end <= normalized.len())
+                .all(|boundary| text.get(boundary.byte_start..boundary.byte_end).is_some())
     });
 
-    let page_at = |offset: usize| -> Option<u32> {
-        usable?
-            .iter()
-            .find(|b| offset >= b.byte_start && offset < b.byte_end)
-            .map(|b| b.page_number)
-    };
-
-    let mut cursor = 0usize;
-    for raw in normalized.split("\n\n") {
-        let offset = cursor;
-        cursor += raw.len() + 2; // the split consumed the two-byte separator
-        let paragraph = raw.trim();
-        if paragraph.is_empty() {
-            continue;
-        }
-        // Offset of the trimmed text, so a paragraph sitting just after a page break is
-        // attributed to the page its visible content is on rather than the previous one.
-        let text_offset = offset + (raw.len() - raw.trim_start().len());
-        let element = InternalElement::text(ElementKind::Paragraph, paragraph, 0);
-        doc.push_element(match page_at(text_offset) {
-            Some(page) => element.with_page(page),
-            None => element,
-        });
+    let mut offset = 0;
+    for boundary in usable
+        .into_iter()
+        .flatten()
+        .filter(|boundary| boundary.byte_start < boundary.byte_end)
+    {
+        append_flat_pdf_paragraphs(&mut doc, &text[offset..boundary.byte_start], None);
+        append_flat_pdf_paragraphs(
+            &mut doc,
+            &text[boundary.byte_start..boundary.byte_end],
+            Some(boundary.page_number),
+        );
+        offset = boundary.byte_end;
     }
+    append_flat_pdf_paragraphs(&mut doc, &text[offset..], None);
     doc
+}
+
+fn append_flat_pdf_paragraphs(doc: &mut InternalDocument, text: &str, page: Option<u32>) {
+    let normalized = crate::extraction::transform::normalize_line_endings(text);
+    for paragraph in normalized.split("\n\n").map(str::trim).filter(|text| !text.is_empty()) {
+        let mut element = InternalElement::text(ElementKind::Paragraph, paragraph, 0);
+        element.page = page;
+        doc.push_element(element);
+    }
 }
 
 #[cfg(feature = "pdf")]
