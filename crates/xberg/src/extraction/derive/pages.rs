@@ -1076,6 +1076,14 @@ mod plain_page_rerender_tests {
     }
 
     #[test]
+    fn a_page_keeps_its_text_when_no_element_of_the_document_writes_text() {
+        let mut doc = office_doc_with(vec![page(1, "one")], &[(1, "")]);
+        let (content, pages) = derive_plain(&mut doc);
+        assert_eq!(content, "");
+        assert_eq!(pages[0].content, "one");
+    }
+
+    #[test]
     fn a_page_whose_elements_write_only_whitespace_loses_its_range_without_a_warning() {
         let mut doc = office_doc_with(
             vec![page(1, "one"), page(2, " "), page(3, "three")],
