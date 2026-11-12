@@ -39,13 +39,13 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
 
         match elem.kind {
             ElementKind::Title => {
-                let text = render_djot_annotated(&elem.text, &elem.annotations);
+                let text = render_djot_heading_text(&elem.text, &elem.annotations);
                 let block = format!("# {}\n\n", text);
                 push_with_bq(&mut out, &block, bq_depth);
             }
             ElementKind::Heading { level } => {
                 let hashes = "#".repeat(level as usize);
-                let text = render_djot_annotated(&elem.text, &elem.annotations);
+                let text = render_djot_heading_text(&elem.text, &elem.annotations);
                 let block = format!("{} {}\n\n", hashes, text);
                 push_with_bq(&mut out, &block, bq_depth);
             }
@@ -186,7 +186,7 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
                 if elem.text.is_empty() {
                     push_with_bq(&mut out, "\n---\n\n", bq_depth);
                 } else {
-                    let text = render_djot_annotated(&elem.text, &elem.annotations);
+                    let text = render_djot_heading_text(&elem.text, &elem.annotations);
                     let mut block = String::with_capacity(12 + text.len());
                     block.push_str("\n---\n\n## ");
                     block.push_str(&text);
@@ -577,7 +577,47 @@ fn render_djot_annotated(text: &str, annotations: &[crate::types::document_struc
     }
 }
 
+/// Render the text of a title, heading or slide title. These sit after their `#` marks, so the
+/// block-start escape does not apply, but a leading `{` still opens an attribute. A leading
+/// `{-` or `{=` that the renderer wrote for a strikethrough or highlight is markup and stays. ~keep
+fn render_djot_heading_text(text: &str, annotations: &[crate::types::document_structure::TextAnnotation]) -> String {
+    let inline = render_djot_inline(text, annotations);
+    if !inline.trim_start().starts_with('{') || opens_with_mark(text, annotations) {
+        return inline;
+    }
+    let escaped = escape_block_prefix(&inline, false).into_owned();
+    // The block escape covers attribute runs. A brace that starts a mark still needs its own.
+    match escaped.find(|c: char| !c.is_whitespace()) {
+        Some(at) if escaped[at..].starts_with('{') => format!("{}\\{}", &escaped[..at], &escaped[at..]),
+        _ => escaped,
+    }
+}
+
+/// Whether the first non-blank output of the rendered line is a strikethrough or highlight mark.
+/// Text outside a mark loses its control characters and code opens with a backtick, so the probe's leading NUL
+/// can only be the one it writes before each mark. ~keep
+fn opens_with_mark(text: &str, annotations: &[crate::types::document_structure::TextAnnotation]) -> bool {
+    const MARK: char = '\0';
+    let probe = render_djot_inline_with(text, annotations, &|span, kind, normalize| {
+        let rendered = render_djot_span(span, kind, normalize);
+        if matches!(kind, AnnotationKind::Strikethrough | AnnotationKind::Highlight) {
+            format!("{MARK}{rendered}")
+        } else {
+            rendered
+        }
+    });
+    probe.trim_start().starts_with(MARK)
+}
+
 fn render_djot_inline(text: &str, annotations: &[crate::types::document_structure::TextAnnotation]) -> String {
+    render_djot_inline_with(text, annotations, &render_djot_span)
+}
+
+fn render_djot_inline_with(
+    text: &str,
+    annotations: &[crate::types::document_structure::TextAnnotation],
+    span_markup: &dyn Fn(&str, &AnnotationKind, bool) -> String,
+) -> String {
     if annotations
         .iter()
         .any(|annotation| valid_math_annotation(text, annotation))
@@ -589,19 +629,19 @@ fn render_djot_inline(text: &str, annotations: &[crate::types::document_structur
                 if let Some((literal, display)) = annotated_math(span, kind) {
                     Some(render_djot_math(literal, display))
                 } else if matches!(kind, AnnotationKind::Code) {
-                    Some(render_djot_span(span, kind, false))
+                    Some(span_markup(span, kind, false))
                 } else {
                     None
                 }
             },
-            &|span, kind| render_djot_span(span, kind, false),
+            &|span, kind| span_markup(span, kind, false),
             &|span| normalize_inline_text(span).into_owned(),
         );
     }
     render_annotated_text_with_plain(
         text,
         annotations,
-        |span, kind| render_djot_span(span, kind, true),
+        |span, kind| span_markup(span, kind, true),
         |span| normalize_inline_text(span).into_owned(),
     )
 }
