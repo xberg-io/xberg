@@ -3457,17 +3457,18 @@ async fn a_pdfs_ocr_text_page_list_is_not_built_and_changes_no_output() {
         .await
         .expect("forced-OCR extraction of the two-page fixture must succeed");
 
-    // Controls: the noise gate really discarded page 2's read and the route kept the page's
-    // native text, while page 1's accepted read is the page's content.
+    // Controls: the noise gate really discarded page 2's read -- the page keeps its native text
+    // (#3013), which also proves the read was discarded and not merely empty -- while page 1's
+    // accepted read is the page's content.
     let pages = internal
         .prebuilt_pages
         .as_ref()
         .expect("extract_pages must produce page contents");
     assert_eq!(pages.len(), 2, "the fixture has two pages: {pages:?}");
     assert_eq!(pages[0].content, ACCEPTED_TEXT, "page 1's accepted read is its content");
-    assert!(
-        pages[1].content.trim().is_empty(),
-        "page 2's discarded read left no OCR text: {:?}",
+    assert_eq!(
+        pages[1].content, NATIVE_PAGE_TWO_TEXT,
+        "page 2's discarded read left no OCR text, so the page keeps its native text: {:?}",
         pages[1].content
     );
     assert_eq!(
@@ -3526,6 +3527,139 @@ async fn a_pdfs_ocr_text_page_list_is_not_built_and_changes_no_output() {
          page of a pdf source as OCR text before it looks at the list (#3014): {:?}",
         internal.ocr_text_pages
     );
+}
+
+/// Issue #3013: on the whole-document route (`force_ocr`), each page's text is replaced with its
+/// read, and a read the noise gate discarded arrives as an empty string -- so the page's content
+/// lost its native text. A discarded read replaces nothing: the page keeps its native text,
+/// recorded in `native_content` under `keep_native_content` exactly as an accepted read records
+/// it, while the accepted page keeps its read.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[tokio::test]
+#[serial]
+async fn forced_ocr_restores_a_discarded_pages_native_text() {
+    use crate::core::config::{OcrConfig, PageConfig};
+
+    const BACKEND_NAME: &str = "pdf-3013-discarded-read-restore";
+    const ACCEPTED_TEXT: &str = "Healthy native prose fills the first page of this ordinary document";
+    const NATIVE_PAGE_TWO_TEXT: &str = "The original native words stay on the second page";
+    // Twenty short alphabetic tokens beside five long ones: a fragmented ratio above the 0.35
+    // default threshold over the 20-word minimum the noise check requires. A mock read this
+    // fragmented is exactly the shape `discard_suspected_ocr_noise` discards.
+    const NOISY_TEXT: &str = "aa bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt \
+         gathering exercises remaining television understanding";
+
+    // The pages have clearly different MediaBox heights, so the page renders are clearly
+    // different PNG heights at any sane render DPI: the short page's read is accepted, the
+    // tall page's read is the noise the gate discards.
+    struct SizeSensitiveOcrBackend {
+        name: &'static str,
+    }
+    impl crate::plugins::Plugin for SizeSensitiveOcrBackend {
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for SizeSensitiveOcrBackend {
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+        fn supports_language(&self, _lang: &str) -> bool {
+            true
+        }
+        async fn process_image(
+            &self,
+            image_bytes: &[u8],
+            _config: &crate::core::config::OcrConfig,
+        ) -> crate::Result<crate::types::ExtractedDocument> {
+            let noisy = png_height(image_bytes).is_some_and(|height| height >= 1200);
+            Ok(crate::types::ExtractedDocument {
+                content: if noisy {
+                    NOISY_TEXT.to_string()
+                } else {
+                    ACCEPTED_TEXT.to_string()
+                },
+                mime_type: std::borrow::Cow::Borrowed("text/plain"),
+                ..Default::default()
+            })
+        }
+    }
+    crate::plugins::register_ocr_backend(std::sync::Arc::new(SizeSensitiveOcrBackend { name: BACKEND_NAME }))
+        .expect("the size-sensitive backend registers");
+    let _backend = RegisteredOcrBackendGuard { name: BACKEND_NAME };
+
+    for keep_native_content in [true, false] {
+        let config = ExtractionConfig {
+            use_cache: false,
+            force_ocr: true,
+            ocr: Some(OcrConfig {
+                backend: BACKEND_NAME.to_string(),
+                quality_thresholds: Some(OcrQualityThresholds {
+                    discard_suspected_ocr_noise: true,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            pages: Some(PageConfig {
+                extract_pages: true,
+                keep_native_content,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let internal = PdfExtractor::new()
+            .extract_content(&two_page_native_text_pdf(), "application/pdf", &config)
+            .await
+            .expect("forced-OCR extraction of the two-page fixture must succeed");
+
+        // Control: the noise gate really discarded page 2's read.
+        assert!(
+            internal
+                .processing_warnings
+                .iter()
+                .any(|warning| warning.message.contains("Page 2") && warning.message.contains("discarded")),
+            "the gate must have discarded page 2's read: {:?}",
+            internal.processing_warnings
+        );
+
+        let result = crate::types::ExtractedDocument::from(internal);
+        let pages = result.pages.as_ref().expect("extract_pages must produce pages");
+        assert_eq!(pages.len(), 2, "the fixture has two pages: {pages:?}");
+        assert_eq!(
+            pages[0].content, ACCEPTED_TEXT,
+            "page 1's accepted read is its content, not restored (keep_native_content: \
+             {keep_native_content})"
+        );
+        assert_eq!(
+            pages[1].content, NATIVE_PAGE_TWO_TEXT,
+            "page 2's discarded read leaves its native text in place (keep_native_content: \
+             {keep_native_content}): {:?}",
+            pages[1].content
+        );
+        assert_eq!(
+            pages[1].native_content.as_deref(),
+            keep_native_content.then_some(NATIVE_PAGE_TWO_TEXT),
+            "the native text is recorded beside the OCR treatment exactly as an accepted read \
+             records it (keep_native_content: {keep_native_content})"
+        );
+        assert_eq!(
+            pages[1].is_blank,
+            Some(false),
+            "the restored native text decides the page's blankness (keep_native_content: \
+             {keep_native_content})"
+        );
+    }
 }
 
 /// Issue #3014, the OCR route its deletion missed: `select_pdf_document`'s Ocr arm returns an
@@ -6578,6 +6712,85 @@ fn pages_cleared_by_a_single_ocr_text_keep_their_text_layer() {
     replace_pages_with_ocr_page_texts(&mut not_kept, &pts, false);
     assert!(not_kept[1].content.is_empty());
     assert_eq!(not_kept[1].native_content, None);
+}
+
+/// #3013: on the whole-document route a read the noise gate discarded arrives as an empty
+/// string, and writing it into the page replaced the page's native text with nothing. A
+/// discarded read replaces nothing: the page keeps its native text, recorded beside the OCR
+/// treatment exactly as an accepted read records it (`keep_native_content`), and only accepted
+/// reads are reported (#2939).
+#[cfg(feature = "ocr")]
+#[test]
+fn a_discarded_ocr_read_keeps_the_pages_native_text() {
+    let pts = vec!["accepted page one read".to_string(), String::new()];
+
+    let mut kept: Vec<_> = (1u32..=2u32)
+        .map(|n| text_layer_page(n, &format!("native page {n}")))
+        .collect();
+    let marks = replace_pages_with_ocr_page_texts(&mut kept, &pts, true);
+    assert_eq!(marks, vec![1], "only the accepted read is reported");
+    assert_eq!(
+        kept[0].content, "accepted page one read",
+        "the accepted read replaces the text layer"
+    );
+    assert_eq!(kept[0].native_content.as_deref(), Some("native page 1"));
+    assert_eq!(
+        kept[1].content, "native page 2",
+        "a discarded read leaves the page's native text in place"
+    );
+    assert_eq!(
+        kept[1].native_content.as_deref(),
+        Some("native page 2"),
+        "the native text is recorded beside the OCR treatment as any accepted read records it"
+    );
+    assert_eq!(
+        kept[1].is_blank,
+        Some(false),
+        "the restored native text decides the page's blankness"
+    );
+
+    let mut dropped: Vec<_> = (1u32..=2u32)
+        .map(|n| text_layer_page(n, &format!("native page {n}")))
+        .collect();
+    replace_pages_with_ocr_page_texts(&mut dropped, &pts, false);
+    assert_eq!(
+        dropped[1].content, "native page 2",
+        "the restore does not depend on keep_native_content"
+    );
+    assert_eq!(dropped[1].native_content, None);
+}
+
+/// A single OCR text is the text of the whole document and is written to the first page, so the
+/// later pages are cleared -- but an empty single text read nothing, so no page is written and
+/// every page keeps its native text (#3013).
+#[cfg(feature = "ocr")]
+#[test]
+fn an_empty_whole_document_ocr_read_replaces_no_page() {
+    let pts = vec![String::new()];
+    let mut pages: Vec<_> = (1u32..=3u32)
+        .map(|n| text_layer_page(n, &format!("native page {n}")))
+        .collect();
+
+    let marks = replace_pages_with_ocr_page_texts(&mut pages, &pts, true);
+
+    assert!(marks.is_empty(), "an empty read is not accepted");
+    assert_eq!(
+        pages[0].native_content.as_deref(),
+        Some("native page 1"),
+        "page 1's discarded read records its native text beside the OCR treatment"
+    );
+    assert_eq!(
+        pages[0].is_blank,
+        Some(false),
+        "the restored native text decides the page's blankness"
+    );
+    for (page, native) in pages.iter().zip(["native page 1", "native page 2", "native page 3"]) {
+        assert_eq!(page.content, native, "page {} keeps its native text", page.page_number);
+    }
+    assert_eq!(
+        pages[1].native_content, None,
+        "a page no read ever reached is untouched, so nothing is recorded beside a treatment"
+    );
 }
 
 /// Regression for #1095: when OCR texts are written into existing PageContent entries,

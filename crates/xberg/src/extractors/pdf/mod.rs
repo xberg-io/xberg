@@ -2399,9 +2399,15 @@ fn replace_page_content_with_ocr_text(page: &mut crate::types::PageContent, ocr_
 /// where its read was accepted, so a page whose read the noise gate discarded (or that
 /// otherwise produced no text) -- which keeps its native text -- is not reported (#2939).
 ///
+/// A discarded read is an empty string, and writing it into the page would erase the page's
+/// native text, so a page whose read is empty is not written at all: the page keeps the text
+/// layer it already holds, recorded in `native_content` under `keep_native_content` exactly as
+/// an accepted read records it (#3013).
+///
 /// One OCR text for a document of several pages is the text of the whole document: it goes to
 /// the first page, and the content of every later page is replaced with empty text; only the
-/// page that received text is reported.
+/// page that received text is reported. An empty single text read nothing, so no page is
+/// written and every page keeps its native text.
 ///
 /// The list only reaches the document where its reader honors it: `is_ocr_page_text` treats
 /// every page of a `pdf`, `image` or `ocr` source as OCR text before it looks at such a list,
@@ -2415,13 +2421,22 @@ fn replace_pages_with_ocr_page_texts(
 ) -> Vec<u32> {
     let mut replaced = Vec::new();
     for (page, text) in pages.iter_mut().zip(ocr_page_texts) {
-        replace_page_content_with_ocr_text(page, text, keep_native_content);
-        if !text.trim().is_empty() {
-            replaced.push(page.page_number);
+        if text.trim().is_empty() {
+            // The read was discarded (or empty): it replaces nothing, so the page keeps its
+            // native text (#3013). The replacement below records that text beside the OCR
+            // treatment exactly as an accepted read would; write it back as the content, and
+            // let it decide the page's blankness again.
+            let native = page.content.clone();
+            replace_page_content_with_ocr_text(page, text, keep_native_content);
+            page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&native));
+            page.content = native;
+            continue;
         }
+        replace_page_content_with_ocr_text(page, text, keep_native_content);
+        replaced.push(page.page_number);
     }
 
-    if ocr_page_texts.len() == 1 {
+    if ocr_page_texts.len() == 1 && !ocr_page_texts[0].trim().is_empty() {
         for page in pages.iter_mut().skip(1) {
             replace_page_content_with_ocr_text(page, "", keep_native_content);
         }

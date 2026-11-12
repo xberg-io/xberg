@@ -331,6 +331,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): A page whose forced OCR read the recognition-noise gate discarded keeps its native text.** (#3013)
+  The whole-document route (`force_ocr`) wrote each page's read into its page, and a read the gate discarded arrives as an empty string, so the page's content was erased and its native text survived only in `native_content`, and only with `keep_native_content` on. A discarded (or otherwise empty) read now replaces nothing: the page keeps its text layer, recorded in `native_content` under `keep_native_content` exactly as an accepted read records it, and only accepted reads are reported as OCR text pages (#2939). An empty whole-document read replaces no page at all.
 - **(ocr): A default Tesseract extraction keeps its sideways-prose recovery and route metadata in builds with Paddle OCR compiled in.** (GH#3007)
   The automatic per-page Tesseract-to-Paddle route now reports the flat `psm` and orientation keys (`auto_rotated`, `orientation_degrees`) of its first accepted Tesseract-read page and recovers a single sideways prose paragraph, as the whole-document route does. Other page content still differs between the routes.
 - **(pdf): A page with a large content stream no longer takes seconds to read in a debug build.** (GH#3040)
