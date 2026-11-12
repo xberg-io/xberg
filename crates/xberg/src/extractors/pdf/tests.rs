@@ -8263,4 +8263,105 @@ mod native_text_stop_tests {
     fn a_config_without_a_token_is_not_a_stopped_native_text() {
         assert!(!native_text_stopped_by_time_limit(&ExtractionConfig::default()));
     }
+
+    fn hierarchy_config(token: &CancellationToken) -> ExtractionConfig {
+        use crate::core::config::{HierarchyConfig, PdfConfig};
+
+        ExtractionConfig {
+            cancel_token: Some(token.clone()),
+            pdf_options: Some(PdfConfig {
+                hierarchy: Some(HierarchyConfig {
+                    enabled: true,
+                    ..HierarchyConfig::default()
+                }),
+                ..PdfConfig::default()
+            }),
+            ..ExtractionConfig::default()
+        }
+    }
+
+    fn extract_native(config: ExtractionConfig) -> NativeBlockingOutput {
+        extract_native_bytes(two_page_native_text_pdf(), config)
+    }
+
+    fn extract_native_bytes(content: Vec<u8>, config: ExtractionConfig) -> NativeBlockingOutput {
+        extract_native_blocking(
+            content,
+            config,
+            #[cfg(feature = "layout-detection")]
+            None,
+            #[cfg(feature = "layout-detection")]
+            None,
+            #[cfg(feature = "layout-detection")]
+            None,
+            #[cfg(feature = "layout-detection")]
+            None,
+            #[cfg(feature = "layout-detection")]
+            None,
+        )
+        .expect("the native extraction must succeed")
+    }
+
+    /// #3029: the stages after the text loop re-read every page, so after a stop they outlast the
+    /// grace period and the pages already read are lost. The structure pass reads the pages itself,
+    /// not the text loop's output, so it runs after a stop unless it is skipped on purpose.
+    #[test]
+    fn a_text_loop_cut_short_by_the_time_limit_skips_the_stages_after_it() {
+        let finished = CancellationToken::new();
+        let control = extract_native(hierarchy_config(&finished)).extraction;
+        assert!(
+            control.5.is_some(),
+            "control: a finished text loop builds the document structure"
+        );
+        assert!(control.11.iter().all(|warning| warning.source != "pdf_time_limit"));
+
+        let token = CancellationToken::new();
+        token.request_stop();
+        let stopped = extract_native(hierarchy_config(&token)).extraction;
+
+        assert!(
+            token.cut_short_by_time_limit(),
+            "the stop must have cut the text loop short"
+        );
+        assert!(stopped.5.is_none(), "no document structure after the time limit");
+        assert!(
+            stopped.11.iter().any(|warning| warning.source == "pdf_time_limit"),
+            "the skipped stages must be reported: {:?}",
+            stopped.11
+        );
+    }
+
+    /// The stages after a cut-short text loop include tables and images, which a fixture that has
+    /// them proves: they come back empty only because of the stop, not because the page has none.
+    #[test]
+    fn a_text_loop_cut_short_by_the_time_limit_returns_no_tables_or_images() {
+        use crate::core::config::PdfConfig;
+
+        let content = std::fs::read(pdf_test_document("embedded_images_tables.pdf"))
+            .expect("the corpus fixture embedded_images_tables.pdf must be present");
+        let config_with = |token: &CancellationToken| ExtractionConfig {
+            cancel_token: Some(token.clone()),
+            pdf_options: Some(PdfConfig {
+                extract_images: true,
+                ..PdfConfig::default()
+            }),
+            ..ExtractionConfig::default()
+        };
+
+        let finished = CancellationToken::new();
+        let control = extract_native_bytes(content.clone(), config_with(&finished)).extraction;
+        assert!(!control.2.is_empty(), "control: the fixture has tables");
+        assert!(
+            control.9.as_ref().is_some_and(|images| !images.is_empty()),
+            "control: the fixture has images"
+        );
+
+        let token = CancellationToken::new();
+        token.request_stop();
+        let stopped = extract_native_bytes(content, config_with(&token)).extraction;
+
+        assert!(token.cut_short_by_time_limit());
+        assert!(stopped.2.is_empty(), "no tables after the time limit");
+        assert!(stopped.9.is_none(), "no images after the time limit");
+    }
 }

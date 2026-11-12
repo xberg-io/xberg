@@ -339,7 +339,7 @@ fn native_text_stopped_by_time_limit(config: &ExtractionConfig) -> bool {
         config
             .cancel_token
             .as_ref()
-            .is_some_and(|token| token.stop_requested() && token.first_unread_page().is_some())
+            .is_some_and(crate::cancellation::CancellationToken::cut_short_by_time_limit)
     }
     #[cfg(not(all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
     {
