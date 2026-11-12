@@ -97,7 +97,8 @@ fn holds_fraction(base: &StackSpan<'_>, members: &[&StackSpan<'_>], partners: &[
 /// A stack is two or more compact spans, smaller than the base, that abut the base or the member
 /// before them in x and sit between a tenth and half an em off the base line. It needs two sizes and
 /// a member beyond a single mark's reach, so a lone mark, a fraction, `x_i^2`, a marker pair and
-/// chemical scripts stay with the single-mark rules. So does a fraction in an exponent or index
+/// chemical scripts stay with the single-mark rules. An admitted stack can also carry a sign
+/// that sits beyond the base's reach but directly abuts its own script parent. A fraction in an exponent or index
 /// (`x^{-1/2}`, `f_{j+3/2}`), whose numerator and denominator share an x range. List markers,
 /// phrases and pieces of a large delimiter (`⎞`) are never members, and a base must end in a letter,
 /// digit or closing bracket: a large operator (`∑`) is followed by its body, not by scripts.
@@ -146,11 +147,57 @@ pub fn script_stack(base: &StackSpan<'_>, candidates: &[StackSpan<'_>]) -> Vec<u
     let (min_fs, max_fs) = members.iter().fold((f32::MAX, 0.0f32), |(lo, hi), &i| {
         (lo.min(candidates[i].font_size), hi.max(candidates[i].font_size))
     });
-    if out_of_reach && max_fs - min_fs > max_fs * MIN_SIZE_STEP {
-        members
-    } else {
-        Vec::new()
+    if !out_of_reach || max_fs - min_fs <= max_fs * MIN_SIZE_STEP {
+        return Vec::new();
     }
+    include_outer_signs(base, candidates, first..window_end, &mut members);
+    members
+}
+
+fn include_outer_signs(
+    base: &StackSpan<'_>,
+    candidates: &[StackSpan<'_>],
+    window: std::ops::Range<usize>,
+    members: &mut Vec<usize>,
+) {
+    let roots = members.len();
+    for index in window {
+        if members.len() == MAX_STACK_MEMBERS {
+            break;
+        }
+        let sign = candidates[index];
+        if !matches!(sign.text.trim(), "+" | "−")
+            || sign.font_size <= 0.0
+            || (sign.baseline - base.baseline).abs() <= base.font_size * MAX_SHIFT_EM
+        {
+            continue;
+        }
+        let paired = members[..roots].iter().any(|&index| {
+            let other = candidates[index];
+            matches!(other.text.trim(), "+" | "−")
+                && (other.baseline - base.baseline) * (sign.baseline - base.baseline) < 0.0
+                && (other.x - sign.x).abs() <= sign.font_size * MAX_PARENT_OVERLAP_EM
+                && (other.font_size - sign.font_size).abs() <= sign.font_size * MIN_SIZE_STEP
+        });
+        if !paired {
+            continue;
+        }
+        if members[..roots].iter().any(|&index| {
+            let parent = candidates[index];
+            let rise = sign.baseline - parent.baseline;
+            let gap = sign.x - (parent.x + parent.width);
+            parent.text.trim().ends_with(char::is_alphanumeric)
+                && parent.font_size >= sign.font_size * MIN_BASE_SIZE_FACTOR
+                && rise * (parent.baseline - base.baseline) > 0.0
+                && rise.abs() > parent.font_size * MIN_DISPLACEMENT_EM
+                && rise.abs() <= parent.font_size * MAX_SHIFT_EM
+                && parent.x < sign.x
+                && gap.abs() <= parent.font_size * MAX_PARENT_OVERLAP_EM
+        }) {
+            members.push(index);
+        }
+    }
+    members.sort_unstable();
 }
 
 /// For each stack member (given in x order), the member it is a script of, or `None` for a member
@@ -205,8 +252,7 @@ fn visit(index: usize, parents: &[Option<usize>], order: &mut Vec<usize>) {
 /// member hanging from its root and its last member sits on the same side of its reference line as the
 /// root of the second, so the markup pass would read a script of a script and a script of the base as
 /// one superscript or subscript run. Two bare roots on one side are not counted: they are one run in
-/// either order. A raised tail at the shared right edge of overlapping lower and upper roots
-/// stays with the lower root. A member sits above its reference line when it is above its parent, or above the base
+/// either order. A member sits above its reference line when it is above its parent, or above the base
 /// for a root; a script level with its reference line counts as lowered. Lowered-first wins when neither order
 /// fuses a pair, which keeps the subscript of the base apart from an exponent chain
 /// (`H^{Z_2,des}_{<xy>,f}`); raised-first wins when both fuse the same number above zero, the order that
@@ -214,12 +260,15 @@ fn visit(index: usize, parents: &[Option<usize>], order: &mut Vec<usize>) {
 fn choose_order(
     raised_first: Vec<Vec<usize>>,
     lowered_first: Vec<Vec<usize>>,
-    fuses: impl Fn(&[usize], usize) -> bool,
+    is_raised: impl Fn(usize) -> bool,
 ) -> Vec<Vec<usize>> {
     let fused = |groups: &[Vec<usize>]| {
         groups
             .windows(2)
-            .filter(|pair| pair[0].len() > 1 && fuses(&pair[0], pair[1][0]))
+            .filter(|pair| {
+                let last = pair[0].last().expect("a group holds its root");
+                pair[0].len() > 1 && is_raised(*last) == is_raised(pair[1][0])
+            })
             .count()
     };
     let (raised_fused, lowered_fused) = (fused(&raised_first), fused(&lowered_first));
@@ -283,20 +332,7 @@ pub fn stack_reading_order(base: &StackSpan<'_>, members: &[StackSpan<'_>]) -> V
     };
     let raised_first = grouped(raised.iter().chain(&lowered).copied().collect());
     let lowered_first = grouped(lowered.iter().chain(&raised).copied().collect());
-    let fuses = |group: &[usize], next: usize| {
-        let root = group[0];
-        let tail = *group.last().expect("a group holds its root");
-        let (lower, upper, end) = (members[root], members[next], members[tail]);
-        let edge_tolerance = base.font_size * MAX_PARENT_OVERLAP_EM;
-        let aligned = !raised_side(root)
-            && raised_side(next)
-            && lower.x < upper.x
-            && upper.x < lower.x + lower.width
-            && (end.x - (lower.x + lower.width)).abs() <= edge_tolerance
-            && (end.x - (upper.x + upper.width)).abs() <= edge_tolerance;
-        is_raised(tail) == is_raised(next) && !aligned
-    };
-    choose_order(raised_first, lowered_first, fuses)
+    choose_order(raised_first, lowered_first, is_raised)
         .into_iter()
         .flatten()
         .collect()
@@ -805,7 +841,7 @@ mod tests {
     }
 
     #[test]
-    fn should_read_the_aligned_lowered_script_and_its_sign_before_the_exponent() {
+    fn should_attach_the_outer_sign_to_its_raised_parent_and_keep_the_lower_chain_separate() {
         let base = span("γ", 0.0, 0.0, 6.07, 11.9552);
         let candidates = [
             span("k", 6.07, -3.88, 4.62, 7.9701),
@@ -817,8 +853,8 @@ mod tests {
             .into_iter()
             .map(|i| candidates[i])
             .collect();
-        assert_eq!(stack_parents(&base, &members), [None, None, Some(0)]);
-        assert_eq!(stack_reading_order(&base, &members), [0, 2, 1]);
+        assert_eq!(stack_parents(&base, &members), [None, None, Some(1), Some(0)]);
+        assert_eq!(stack_reading_order(&base, &members), [1, 2, 0, 3]);
     }
 
     #[test]

@@ -2186,22 +2186,38 @@ fn blocks_to_paragraphs(
     let mut visual_row: Option<ParagraphVisualRow<'_>> = None;
     let mut stack_end: Option<usize> = None;
     let mut stack_members: Vec<usize> = Vec::new();
+    let mut extended_stack_base = None;
 
     for (line_idx, line) in lines.iter().enumerate() {
         // The members of a nested script stack on the previous run join its row past a single mark's
         // reach; the stack ends at its last member. ~keep
         if stack_end.is_none_or(|end| line_idx > end) {
-            stack_members = line_idx
-                .checked_sub(1)
+            let stack_base = line_idx.checked_sub(1);
+            stack_members = stack_base
                 .map(|base| script_stack_members(&lines, base))
                 .filter(|members| members.contains(&line_idx))
                 .unwrap_or_default();
             stack_end = stack_members.iter().copied().max();
+            extended_stack_base = stack_base.filter(|&base| {
+                let root = &lines[base];
+                stack_members
+                    .iter()
+                    .any(|&member| stack_member_exceeds_row_reach(root, &lines[member]))
+            });
         }
         let in_stack = stack_members.contains(&line_idx);
-        let is_row_script = visual_row
-            .as_ref()
-            .is_some_and(|row| row.carries_script_within(line, in_stack));
+        // A sign admitted through its script parent can cross a gap measured from the
+        // root's baseline. Keep that stack together only while its root is in this paragraph.
+        let in_extended_stack = in_stack
+            && extended_stack_base.is_some_and(|base| {
+                base >= line_idx - current_lines.len()
+                    && lines[base].has_same_rotation(line)
+                    && lines[base].assigned_role == line.assigned_role
+            });
+        let is_row_script = in_extended_stack
+            || visual_row
+                .as_ref()
+                .is_some_and(|row| row.carries_script_within(line, in_stack));
         let should_break = if current_lines.is_empty() {
             false
         } else {
@@ -2241,7 +2257,8 @@ fn blocks_to_paragraphs(
                 );
             let rotation_change = !line.has_same_rotation(prev);
             let starts_new_line = rotation_change
-                || ((line.upright_baseline() - prev.upright_baseline()).abs() > INLINE_STYLE_BASELINE_TOLERANCE
+                || (!in_extended_stack
+                    && (line.upright_baseline() - prev.upright_baseline()).abs() > INLINE_STYLE_BASELINE_TOLERANCE
                     && !is_script_run_of(prev, line));
             let has_same_line_follower = lines.get(line_idx + 1).is_some_and(|next| {
                 next.has_same_rotation(line)
@@ -2355,7 +2372,8 @@ fn blocks_to_paragraphs(
             // #1615 for why a continuation `follows_section` rejects must still be
             // able to cross a gap -- this exemption is scoped to exactly the same
             // boundary `follows_section` accepts, not to headings in general. ~keep
-            let crossed_gap = !heading_continuation_accepted
+            let crossed_gap = !in_extended_stack
+                && !heading_continuation_accepted
                 && paragraph_gap_ys.iter().any(|&gap_y| {
                     let previous_baseline = prev.upright_baseline();
                     let current_baseline = line.upright_baseline();
@@ -2578,10 +2596,17 @@ pub(super) fn script_stack_members<T: std::borrow::Borrow<SegmentData>>(segments
         }
     }
     let candidates: Vec<StackSpan<'_>> = order.iter().map(|&i| to_stack(segments[i].borrow(), &span)).collect();
-    script_stack(&to_stack(base_segment, &span), &candidates)
+    let mut members: Vec<usize> = script_stack(&to_stack(base_segment, &span), &candidates)
         .into_iter()
         .map(|i| order[i])
-        .collect()
+        .collect();
+    // Outer signs are structural evidence only after page ordering placed the full stack
+    // next to its base. A lookahead alone can see signs from a different visual row.
+    let end = base + 1 + members.len();
+    if members.iter().any(|&member| member >= end) {
+        members.retain(|&member| !stack_member_exceeds_row_reach(base_segment, segments[member].borrow()));
+    }
+    members
 }
 
 /// Moves the members of each nested script stack to directly after their base: the members of the
@@ -2610,7 +2635,7 @@ fn place_script_stacks_after_bases(segments: Vec<SegmentData>) -> Vec<SegmentDat
             }
         })
         .collect();
-    let after_base: std::collections::HashMap<usize, Vec<usize>> = script_stacks(&spans)
+    let mut after_base: std::collections::HashMap<usize, Vec<usize>> = script_stacks(&spans)
         .into_iter()
         .map(|(base, members)| {
             let member_spans: Vec<StackSpan<'_>> = members.iter().map(|&member| spans[member]).collect();
@@ -2626,6 +2651,18 @@ fn place_script_stacks_after_bases(segments: Vec<SegmentData>) -> Vec<SegmentDat
     for &member in after_base.values().flatten() {
         moved[member] = true;
     }
+    for base in 2..segments.len() {
+        if after_base.get(&base).is_some_and(|members| {
+            members
+                .iter()
+                .any(|&member| stack_member_exceeds_row_reach(&segments[base], &segments[member]))
+        }) && !after_base.contains_key(&(base - 1))
+            && let Some(sign) = preceding_script_sign(&segments, &moved, base)
+        {
+            moved[sign] = true;
+            after_base.insert(base - 1, vec![sign]);
+        }
+    }
     let mut slots: Vec<Option<SegmentData>> = segments.into_iter().map(Some).collect();
     let mut placed = Vec::with_capacity(slots.len());
     for index in 0..slots.len() {
@@ -2639,6 +2676,30 @@ fn place_script_stacks_after_bases(segments: Vec<SegmentData>) -> Vec<SegmentDat
     }
     placed.extend(slots.into_iter().flatten());
     placed
+}
+
+fn stack_member_exceeds_row_reach(base: &SegmentData, member: &SegmentData) -> bool {
+    (member.upright_baseline() - base.upright_baseline()).abs()
+        > base.font_size * crate::script_run::SCRIPT_ROW_MAX_BASELINE_FONT_FACTOR
+}
+
+/// A sign of the preceding script can sort below the main equation row, after
+/// the next stack. Return it only when it fits the preceding parent uniquely.
+fn preceding_script_sign(segments: &[SegmentData], moved: &[bool], stack_base: usize) -> Option<usize> {
+    let parent = &segments[stack_base - 1];
+    if moved[stack_base - 1] || !is_script_run_of(&segments[stack_base - 2], parent) {
+        return None;
+    }
+    let stack_start = segments[stack_base].upright_advance_extent().0;
+    let mut signs = (stack_base + 1..segments.len().min(stack_base + 1 + SCRIPT_STACK_WINDOW)).filter(|&index| {
+        let sign = &segments[index];
+        !moved[index]
+            && matches!(sign.text.trim(), "+" | "−")
+            && sign.upright_advance_extent().1 <= stack_start
+            && is_script_run_of(parent, sign)
+    });
+    let sign = signs.next()?;
+    signs.next().is_none().then_some(sign)
 }
 
 /// Whether `line` reads as the wrapped continuation of the numbered-heading
