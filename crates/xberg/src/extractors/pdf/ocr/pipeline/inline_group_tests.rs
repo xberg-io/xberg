@@ -26,6 +26,11 @@ fn an_alternative_that_a_word_killed_stays_dead_when_a_later_word_matches_it() {
 }
 
 #[test]
+fn a_projected_alternative_that_a_word_killed_stays_dead_when_later_words_match_it() {
+    assert!(!group("a` a`", "a a", false, "a` a a").0);
+}
+
+#[test]
 fn a_word_inside_a_projected_group_that_the_source_lacks_fails_the_group() {
     assert!(!group("`a b`", "a b", false, "a x b tail").0);
 }
