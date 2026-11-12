@@ -3,7 +3,7 @@
 //! finished pages and a warning naming the first page that was not read.
 
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
-#![cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+#![cfg(all(feature = "ocr", feature = "tokio-runtime"))]
 
 mod helpers;
 use helpers::{extract_uri_document, get_test_documents_dir};

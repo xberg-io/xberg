@@ -112,11 +112,11 @@ impl Default for StopState {
 const NO_UNREAD_PAGE: u32 = u32::MAX;
 
 /// Marks a page loop that honours the soft stop as running; dropping it marks the loop as done.
-#[cfg(any(test, feature = "pdf"))]
+#[cfg(any(test, feature = "pdf", feature = "ocr", feature = "ocr-pipeline"))]
 #[derive(Debug)]
 pub(crate) struct PageLoopGuard(Arc<StopState>);
 
-#[cfg(any(test, feature = "pdf"))]
+#[cfg(any(test, feature = "pdf", feature = "ocr", feature = "ocr-pipeline"))]
 impl Drop for PageLoopGuard {
     fn drop(&mut self) {
         self.0.active_page_loops.fetch_sub(1, Ordering::Relaxed);
@@ -176,7 +176,7 @@ impl CancellationToken {
     /// Mark a page loop that honours [`stop_requested`](Self::stop_requested) as running, so the
     /// timeout wrapper knows that waiting for it can return a partial result. The mark ends when
     /// the guard is dropped, so a timeout in a later stage does not wait for a loop that is over.
-    #[cfg(any(test, feature = "pdf"))]
+    #[cfg(any(test, feature = "pdf", feature = "ocr", feature = "ocr-pipeline"))]
     pub(crate) fn enter_page_loop(&self) -> PageLoopGuard {
         self.stop.active_page_loops.fetch_add(1, Ordering::Relaxed);
         PageLoopGuard(Arc::clone(&self.stop))
@@ -188,7 +188,7 @@ impl CancellationToken {
     }
 
     /// Record that a page loop stopped before reading `page` (1-based). The lowest page wins.
-    #[cfg(any(test, feature = "pdf"))]
+    #[cfg(any(test, feature = "pdf", feature = "ocr", feature = "ocr-pipeline"))]
     pub(crate) fn note_unread_page(&self, page: u32) {
         self.stop.first_unread_page.fetch_min(page, Ordering::Relaxed);
     }
