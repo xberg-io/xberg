@@ -3,7 +3,10 @@
 //! out and fail with `Timeout` because the stages after the loop ignore the stop.
 
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
-#![cfg(all(feature = "pdf", feature = "tokio-runtime"))]
+// These cases need the text loop to outlast a 1-3 s limit, which holds only for an unoptimized build;
+// an optimized build reads the fixtures first and fails them. The unit tests that request the stop on
+// the token guard the behavior in every profile.
+#![cfg(all(feature = "pdf", feature = "tokio-runtime", debug_assertions))]
 
 mod helpers;
 use helpers::{extract_uri_document, get_test_documents_dir};
