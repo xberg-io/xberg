@@ -544,7 +544,9 @@ mod tests {
     /// A content stream is tokenized from one slice whose remainder shrinks token by token; each
     /// token must cost its own length, not the length of everything after it (#3040). Doubling the
     /// stream doubles the time when linear and quadruples it when not, so the ratio is asserted
-    /// instead of an absolute time that depends on the machine.
+    /// instead of an absolute time that depends on the machine. An optimized build runs both sizes
+    /// in milliseconds, where timer noise outweighs the ratio, so the test runs unoptimized only.
+    #[cfg(debug_assertions)]
     #[test]
     fn tokenizing_a_large_stream_costs_time_linear_in_its_length() {
         const TOKENS: usize = 150_000;
