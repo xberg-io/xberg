@@ -199,6 +199,10 @@ pub(crate) async fn extract_file(
             .cancel_token
             .as_ref()
             .map(crate::cancellation::CancellationToken::scoped);
+        super::time_limit::arm(
+            owned.cancel_token.as_ref(),
+            owned.extraction_timeout_secs.unwrap_or_default(),
+        );
         owned_config_with_cancel_token = owned;
         &owned_config_with_cancel_token
     } else {
@@ -349,7 +353,7 @@ async fn extract_file_scoped(path: &Path, mime_type: &str, config: &ExtractionCo
     let stopped_early = config
         .cancel_token
         .as_ref()
-        .is_some_and(crate::cancellation::CancellationToken::cut_short_by_time_limit);
+        .is_some_and(crate::cancellation::CancellationToken::result_is_partial);
     if super::cacheability::is_cacheable()
         && !stopped_early
         && lifecycle_generations_before == lifecycle_generations_after
@@ -1807,6 +1811,12 @@ mod issue_217_fallback_tests {
 
             for _ in 0..2 {
                 let config = ExtractionConfig {
+                    // A requested stop also cuts the post-processing stages, which makes any result
+                    // partial; with none enabled, only the page conjunct decides. ~keep
+                    postprocessor: Some(crate::core::config::PostProcessorConfig {
+                        enabled: false,
+                        ..Default::default()
+                    }),
                     use_cache: true,
                     cache_namespace: Some(format!("time-limit-cache-{unique}")),
                     cancel_token: Some(CancellationToken::new()),
