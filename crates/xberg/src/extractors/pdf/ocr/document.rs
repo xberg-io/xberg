@@ -277,6 +277,21 @@ pub(crate) fn ocr_confirms_layer(layer: &str, ocr_text: &str, thresholds: &OcrQu
         && holds_half(&lettered)
         && !evaluate_native_text_for_ocr(layer, Some(1), thresholds).fallback
 }
+/// Whether the OCR text holds at least half of the layer's words with a letter: the letter share
+/// of `ocr_confirms_layer` without its share of all words and its quality check, so numbers the
+/// read dropped do not count against it. A layer with no word with a letter never passes. ~keep
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) fn ocr_holds_layer_letters(layer: &str, ocr_text: &str) -> bool {
+    let lettered: std::collections::HashSet<String> = whole_words(layer)
+        .filter(|word| word.chars().any(char::is_alphabetic))
+        .collect();
+    if lettered.is_empty() {
+        return false;
+    }
+    let ocr_words: std::collections::HashSet<String> = whole_words(ocr_text).collect();
+    let read = lettered.iter().filter(|word| ocr_words.contains(*word)).count();
+    read as f64 >= MIN_LAYER_WORD_SHARE_READ_BY_OCR * lettered.len() as f64
+}
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) fn unique_literal_embedding(native: &str, read: &str) -> bool {
     let native: Vec<_> = native.split_whitespace().collect();
@@ -1024,6 +1039,23 @@ pub(crate) fn layer_lines_to_put_first(
     };
     (!lines.is_empty()).then_some(LayerFirst { lines })
 }
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(super) use matched_layer_occurrences::MatchedLayerOccurrences;
+
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+#[path = "document/matched_layer_occurrences.rs"]
+mod matched_layer_occurrences;
+
 /// The restored native rows and unchanged OCR text of a page. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn text_with_layer_first(ocr_text: &str, first: &LayerFirst) -> String {
@@ -1075,6 +1107,20 @@ pub(super) fn put_layer_first_in_document(
 ) {
     insert_layer_into_document(doc, page, &first.lines);
 }
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(super) fn finish_mixed_layer_prepend(
+    text: &mut String,
+    structured: Option<&mut crate::types::internal::InternalDocument>,
+    first: &LayerFirst,
+) {
+    if !first.lines.is_empty()
+        && let Some(page) = structured
+    {
+        put_layer_first_in_document(page, None, first);
+    }
+    *text = text_with_layer_first(text, first);
+}
+
 /// The page's noise verdict in a whole-document run: `None` when the noise gate discarded the OCR
 /// text of the page, else whether the page has the noise verdict. A page with no verdict has
 /// not. ~keep

@@ -144,7 +144,6 @@ fn assert_rows_are_own_lines(format: OutputFormat) {
         "header plus 12 rows, one per line:\n{}",
         result.content
     );
-    let djot_text;
     if is_djot {
         // The rendered Djot must round-trip with every leader dot as literal text: an
         // ellipsis event means a bare `...` run was left for the reader to turn into `…`.
@@ -169,43 +168,80 @@ fn assert_rows_are_own_lines(format: OutputFormat) {
                 _ => {}
             }
         }
-        djot_text = paragraphs.join("\n");
+        let djot_text = paragraphs.join("\n");
         lines = djot_text.lines().collect();
         assert_eq!(lines.len(), 13, "header plus 12 parsed Djot paragraphs:\n{djot_text}");
+
+        // Each Djot row must keep its exact label and a run of at least three dots. The fixture
+        // does not record leader lengths. Compare values after treating commas as periods
+        // on both sides so an OCR separator misread cannot obscure a missing leader.
+        const MIN_LEADER_DOTS: usize = 3;
+        let mut next = 0;
+        for row in PICTURE_11PX_ROWS.lines() {
+            let hits: Vec<(usize, usize)> = lines
+                .iter()
+                .enumerate()
+                .filter_map(|(at, line)| row_hit(line, row, true).map(|leader| (at, leader)))
+                .collect();
+            assert_eq!(
+                hits.len(),
+                1,
+                "row {row:?} must be on exactly one line:\n{}",
+                result.content
+            );
+            let (at, leader) = hits[0];
+            assert!(
+                leader >= MIN_LEADER_DOTS,
+                "row {row:?} has only {leader} leader dots:\n{}",
+                result.content
+            );
+            assert!(at >= next, "row {row:?} is out of order:\n{}", result.content);
+            next = at;
+        }
+    } else {
+        // The plain and Markdown variants tolerate one OCR-quality row.
+        let mut kept = 0;
+        let mut next = 0;
+        for row in PICTURE_11PX_ROWS.lines() {
+            let Some(at) = lines.iter().position(|line| row_hit(line, row, false).is_some()) else {
+                continue;
+            };
+            assert!(at >= next, "row {row:?} is out of order:\n{}", result.content);
+            kept += 1;
+            next = at;
+        }
+        assert!(kept >= 11, "{kept} of 12 rows kept whole:\n{}", result.content);
     }
-    let mut kept = 0;
-    let mut next = 0;
-    for row in PICTURE_11PX_ROWS.lines() {
-        let Some(at) = lines.iter().position(|line| row_kept(line, row, is_djot)) else {
-            continue;
-        };
-        assert!(at >= next, "row {row:?} is out of order:\n{}", result.content);
-        kept += 1;
-        next = at;
-    }
-    assert!(kept >= 11, "{kept} of 12 rows kept whole:\n{}", result.content);
 }
 
-/// Whether `line` is the fixture row: the label, then the leader dots as literal text, then the
-/// values. The Djot round trip must not lose or reinterpret the leader, so the text that the
-/// comparison trims away has to be a non-empty run of dots.
-fn row_kept(line: &str, row: &str, require_leader: bool) -> bool {
+/// Whether `line` is the fixture row: the label byte-identical, then a leader run, then the
+/// values. With `normalize_tail` the values compare with ',' read as '.' on both sides: the
+/// OCR can misread a comma as a period, and that is an accuracy loss, not a leader loss.
+/// Returns the number of dots between the label and the values.
+fn row_hit(line: &str, row: &str, normalize_tail: bool) -> Option<usize> {
     let fields: Vec<_> = row.split('\t').collect();
     let [label, values @ ..] = fields.as_slice() else {
-        return false;
+        return None;
     };
     let flattened = line.replace('|', " ");
     let words: Vec<_> = flattened.split_whitespace().collect();
-    let Some(split) = words.len().checked_sub(values.len()) else {
-        return false;
-    };
+    let split = words.len().checked_sub(values.len())?;
     let (head, tail) = words.split_at(split);
-    if tail != values {
-        return false;
+    let tail_eq = if normalize_tail {
+        tail.len() == values.len()
+            && tail
+                .iter()
+                .zip(values.iter())
+                .all(|(word, value)| word.replace(',', ".") == value.replace(',', "."))
+    } else {
+        tail == values
+    };
+    if !tail_eq {
+        return None;
     }
     let joined = head.join(" ");
-    let trimmed = joined.trim_end_matches('.').trim_end();
-    trimmed == *label && (!require_leader || trimmed.len() < joined.len())
+    let without_dots = joined.trim_end_matches('.');
+    (without_dots.trim_end() == *label).then_some(joined.len() - without_dots.len())
 }
 
 #[test]

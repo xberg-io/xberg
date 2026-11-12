@@ -2,9 +2,10 @@
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
-suite="${1:?expected pdf-ocr or api-jobs}"
+suite="${1:?expected pdf-ocr, office-pages or api-jobs}"
 case "$suite" in
 pdf-ocr) features="pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types" ;;
+office-pages) features="office,excel,tokio-runtime" ;;
 api-jobs) features="api,tokio-runtime" ;;
 *)
   printf 'Unknown focused test suite: %s\n' "$suite" >&2
@@ -39,6 +40,7 @@ run_exact() {
 }
 
 run_pdf_cases() {
+  run_exact every_native_page_keeps_a_range_that_selects_its_text --test plain_page_ranges_select_page_text
   run_exact 'pdf::structure::paragraphs::tests::display_rows_tests::continuation_merge_keeps_indexed_display_rows_with_changed_source_literals' --lib
   run_exact cached_default_recovers_embedded_line_in_cold_and_warm_reads \
     --test pdf_embedded_psm6_addition_2327
@@ -49,6 +51,14 @@ run_pdf_cases() {
     --test pdf_embedded_psm6_addition_2327
   run_type0_cases
   run_budget_retry_cases
+  run_retry_timeout_cases
+}
+
+run_retry_timeout_cases() {
+  local module='extractors::pdf::ocr::tests::tests::retry_timeout_stop_tests'
+  run_exact "$module::final_failed_page_keeps_its_warning_and_marks_the_run_cut_short" --lib
+  run_exact "$module::a_stop_that_skips_the_only_failed_pages_retry_returns_timeout" --lib
+  run_exact "$module::a_stop_accounts_for_every_pending_failure_in_the_batch" --lib
 }
 
 run_budget_retry_cases() {
@@ -155,6 +165,23 @@ run_ink_probe_cases() {
   fi
 }
 
+run_numeral_noise_cases() {
+  local before="$passed"
+  run_exact the_ocr_result_counts_a_line_kept_for_its_numeral_apart_from_a_removed_one \
+    --test ocr_numeral_noise_count_2851
+  run_exact a_rejected_table_region_gets_its_filtered_words_back_through_real_ocr \
+    --test ocr_numeral_noise_count_2851
+  run_exact 'ocr::processor::execution::tests::restore_rejected_table_words_records_the_kept_numeral_line_count_of_the_new_parse' --lib
+  run_exact 'ocr::tesseract_backend::tests::warnings_from_ocr_metadata_reports_only_the_removed_lines' --lib
+  run_exact 'ocr::tesseract_backend::tests::strip_ocr_scratch_metadata_keys_preserves_genuine_user_metadata' --lib
+  run_exact 'ocr::tesseract_backend::tests::process_image_file_reports_the_removed_line_and_keeps_both_counts_out_of_the_metadata' --lib
+  run_exact 'ocr::tesseract_backend::tests::the_backend_content_holds_the_words_won_back_for_a_rejected_table_region' --lib
+  if [ "$((passed - before))" -ne 7 ]; then
+    printf 'Expected 7 executed numeral-noise tests, observed %s\n' "$((passed - before))" >&2
+    exit 1
+  fi
+}
+
 run_retained_read_cases() {
   local before="$passed"
   local module='extractors::pdf::ocr::rendering::retained_read_metadata_tests'
@@ -202,6 +229,58 @@ run_discarded_recovery_cases() {
   fi
 }
 
+run_office_page_cases() {
+  local test_name
+  for test_name in \
+    plain_heading_carries_no_style_note \
+    plain_table_cell_keeps_link_text_and_drops_the_target \
+    markdown_table_cell_keeps_its_link \
+    plain_image_carries_no_placeholder \
+    plain_image_keeps_its_description \
+    plain_table_cell_keeps_its_math_delimiters; do
+    run_exact "$test_name" --test docx_plain_content
+  done
+  for test_name in \
+    every_page_of_a_docx_memo_keeps_a_range_that_selects_its_page_text \
+    each_page_of_a_two_page_docx_keeps_a_range_that_selects_its_page_text \
+    each_slide_of_a_pptx_keeps_a_range_that_selects_its_page_text; do
+    run_exact "$test_name" --test plain_page_ranges_select_page_text
+  done
+  for test_name in \
+    should_keep_an_equation_apart_from_a_following_letter_in_plain_page_content \
+    should_number_page_content_notes_like_the_rendered_output \
+    should_keep_a_footnote_and_an_endnote_with_the_same_word_id_apart_in_page_content \
+    should_keep_footnote_definitions_before_consecutive_trailing_page_breaks \
+    plain_table_cell_carries_no_footnote_marker \
+    should_write_the_description_of_a_drawn_shape_in_its_place \
+    should_write_no_placeholder_for_a_picture_with_an_empty_description; do
+    run_exact "extractors::docx::tests::$test_name" --lib
+  done
+  run_exact 'extractors::excel::tests::a_plain_sheet_page_starts_with_its_sheet_name' --lib
+  run_exact 'rendering::plain::tests::render_plain_leaves_out_the_docx_style_name_of_a_heading' --lib
+  local module='extraction::derive::pages::plain_page_rerender_tests'
+  for test_name in \
+    a_docx_page_with_its_own_table_markdown_gets_its_part_of_the_plain_content \
+    every_page_of_a_docx_document_with_ocr_pages_gets_its_part_of_the_plain_content \
+    a_markdown_docx_page_keeps_the_range_its_extractor_measured \
+    a_docx_range_measured_on_the_parser_text_selects_its_page_text_in_the_plain_content \
+    pages_with_the_same_text_each_get_the_range_of_their_own_text \
+    a_page_with_text_and_no_elements_keeps_its_text_and_loses_its_range_with_a_warning \
+    a_page_with_no_text_loses_its_range_without_a_warning \
+    a_page_whose_elements_write_only_whitespace_loses_its_range_without_a_warning \
+    a_page_keeps_its_text_when_no_element_of_the_document_writes_text \
+    the_last_page_with_text_keeps_its_range_when_a_later_page_writes_only_whitespace \
+    a_plain_page_has_the_plain_text_of_its_elements_with_the_note_numbers_of_the_document \
+    a_prebuilt_docx_page_has_its_part_of_the_plain_content_and_keeps_its_notes \
+    a_prebuilt_pdf_page_keeps_its_text \
+    a_note_marker_after_the_last_text_of_a_page_stays_on_that_page \
+    the_range_of_a_page_number_with_no_extracted_page_is_omitted_with_a_warning \
+    the_warning_names_a_page_with_two_omitted_ranges_one_time \
+    the_warning_names_omitted_pages_in_page_order_and_no_range_is_left; do
+    run_exact "${module}::$test_name" --lib
+  done
+}
+
 run_api_cases() {
   run_exact 'api::handlers::tests::test_extract_async_then_poll_job_id' --lib
   run_exact 'api::jobs::tests::test_cancel_running_job_fires_token' --lib
@@ -211,13 +290,18 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=82
+  expected=86
   run_pdf_cases
   run_retained_read_cases
-  expected=$((expected + 11))
+  expected=$((expected + 11 + 7))
   run_number_budget_cases
   run_ink_probe_cases
   run_discarded_recovery_cases
+  run_numeral_noise_cases
+  ;;
+office-pages)
+  expected=35
+  run_office_page_cases
   ;;
 api-jobs)
   expected=4

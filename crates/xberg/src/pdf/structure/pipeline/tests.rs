@@ -9906,3 +9906,17 @@ fn should_keep_the_plus_of_a_subscript_out_of_the_exponent_of_its_base() {
         ]
     );
 }
+
+#[test]
+fn should_keep_an_exponent_before_a_subscript_that_starts_after_it() {
+    use crate::types::AnnotationKind::{Subscript, Superscript};
+    let segments = vec![
+        stack_seg("E", 100.0, 8.67, 11.96, 100.0),
+        stack_seg("n", 109.37, 5.14, 7.97, 104.34),
+        stack_seg("C", 114.31, 4.98, 9.96, 97.01),
+        stack_seg("tail", 130.0, 20.0, 11.96, 100.0),
+    ];
+    let (text, runs) = marked_script_runs(segments);
+    assert!(text.replace(' ', "").starts_with("EnC"), "{text:?}");
+    assert_eq!(runs, [("n".to_string(), Superscript), ("C".to_string(), Subscript)]);
+}

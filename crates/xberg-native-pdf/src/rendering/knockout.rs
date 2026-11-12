@@ -4,8 +4,8 @@ use crate::content::operators::Operator;
 use crate::document::PdfDocument;
 use crate::error::{Error, Result};
 use crate::object::Object;
-use std::collections::HashMap;
-use tiny_skia::{Pixmap, Transform};
+use std::collections::{HashMap, HashSet};
+use tiny_skia::{PathBuilder, Pixmap, Transform};
 
 /// Whether a resolved `/Group` dictionary is a transparency group with `/K true`; pages and forms share it.
 pub(super) fn group_is_knockout(group: &Object) -> bool {
@@ -233,6 +233,43 @@ impl KnockoutGroup {
             }
             self.pending_paint = false;
         }
+    }
+}
+
+/// Adds one path-construction operator to `path` with the same builder calls as the operator loop of
+/// the page renderer, so that `finish` judges the path as it does there. A change to those calls in
+/// the renderer needs the same change here. Any other operator leaves `path` as it is.
+fn extend_path(path: &mut PathBuilder, op: &Operator) {
+    match op {
+        Operator::MoveTo { x, y } => path.move_to(*x, *y),
+        Operator::LineTo { x, y } => path.line_to(*x, *y),
+        Operator::CurveTo { x1, y1, x2, y2, x3, y3 } => path.cubic_to(*x1, *y1, *x2, *y2, *x3, *y3),
+        Operator::CurveToV { x2, y2, x3, y3 } => {
+            if let Some(last) = path.last_point() {
+                path.cubic_to(last.x, last.y, *x2, *y2, *x3, *y3);
+            }
+        }
+        Operator::CurveToY { x1, y1, x3, y3 } => path.cubic_to(*x1, *y1, *x3, *y3, *x3, *y3),
+        Operator::Rectangle { x, y, width, height } => {
+            // Normalize negative width/height per PDF spec:
+            // re with negative dimensions means the rect extends in the opposite direction
+            // ~keep
+            let (nx, nw) = if *width < 0.0 {
+                (x + width, -width)
+            } else {
+                (*x, *width)
+            };
+            let (ny, nh) = if *height < 0.0 {
+                (y + height, -height)
+            } else {
+                (*y, *height)
+            };
+            if let Some(rect) = tiny_skia::Rect::from_xywh(nx, ny, nw, nh) {
+                path.push_rect(rect);
+            }
+        }
+        Operator::ClosePath => path.close(),
+        _ => {}
     }
 }
 
@@ -509,37 +546,46 @@ impl PageRenderer {
         shows
     }
 
-    /// How many path paints certainly build a path that the pass then charges a page-sized surface
-    /// for: a rectangle whose span fits in `f32` or a drawn segment since the last paint or `n`, outside
-    /// any optional-content section, which may be hidden. A paint with no path, or inside such a
-    /// section, charges nothing, so it is left out and the count never exceeds the pass.
-    pub(super) fn certain_path_paints(operators: &[Operator]) -> usize {
-        let mut built = false;
+    /// How many path paints build a path that the pass then charges a page-sized surface for: the
+    /// paints for which the renderer's own path builder, fed the operators since the last paint or
+    /// `n`, returns a path. A paint outside any optional-content section that is or may be hidden
+    /// counts; a section is left out unless the renderer's own check finds its layer visible. A paint
+    /// with no path, or inside a hidden section, charges nothing, so it is left out and the count
+    /// never exceeds the pass.
+    pub(super) fn certain_path_paints(&self, operators: &[Operator], doc: &PdfDocument, resources: &Object) -> usize {
+        let none = HashSet::new();
+        let excluded = self.excluded_layers_snapshot.as_deref().unwrap_or(&none);
+        let mut path = PathBuilder::new();
         let mut layers: Vec<bool> = Vec::new();
         let mut paints = 0;
         for operator in operators {
             match operator {
-                Operator::Rectangle { x, y, width, height } => {
-                    built |= (x + width).is_finite() && (y + height).is_finite() && x.is_finite() && y.is_finite();
-                }
-                Operator::LineTo { x, y } => built |= x.is_finite() && y.is_finite(),
-                Operator::CurveTo { x1, y1, x2, y2, x3, y3 } => {
-                    built |= [x1, y1, x2, y2, x3, y3].iter().all(|v| v.is_finite());
-                }
-                Operator::CurveToY { x1, y1, x3, y3 } => {
-                    built |= [x1, y1, x3, y3].iter().all(|v| v.is_finite());
-                }
                 Operator::BeginMarkedContent { .. } => layers.push(false),
-                Operator::BeginMarkedContentDict { tag, .. } => layers.push(tag == "OC"),
+                Operator::BeginMarkedContentDict { tag, properties } => layers.push(
+                    tag == "OC"
+                        && crate::optional_content::resolve_and_check_ocg_excluded(
+                            properties,
+                            Some(resources),
+                            Some(doc),
+                            excluded,
+                        ),
+                ),
                 Operator::EndMarkedContent => {
                     layers.pop();
                 }
-                Operator::EndPath => built = false,
+                Operator::EndPath => path = PathBuilder::new(),
                 operator if is_path_paint(operator) => {
+                    // `s`, `b` and `b*` close the path before they paint, as the renderer does. ~keep
+                    if matches!(
+                        operator,
+                        Operator::CloseStroke | Operator::CloseFillStroke | Operator::CloseFillStrokeEvenOdd
+                    ) {
+                        path.close();
+                    }
+                    let built = std::mem::replace(&mut path, PathBuilder::new()).finish().is_some();
                     paints += usize::from(built && !layers.contains(&true));
-                    built = false;
                 }
-                _ => {}
+                operator => extend_path(&mut path, operator),
             }
         }
         paints
@@ -568,7 +614,7 @@ impl PageRenderer {
         }
         let path_paints = operators.iter().filter(|operator| is_path_paint(operator)).count();
         let surfaces_in_pass = paints - path_paints
-            + Self::certain_path_paints(operators)
+            + self.certain_path_paints(operators, doc, resources)
             + self.painting_text_shows(operators, doc, resources, initial_text_mode);
         let workspace = self.knockout_resources.knockout(
             pixels,

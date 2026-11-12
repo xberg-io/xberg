@@ -9,14 +9,15 @@ REPO_ROOT="${REPO_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 }
 cd "$REPO_ROOT"
 
-profile="${1:?Use the warm or native qualification profile}"
+profile="${1:?Use the warm, paddle or native qualification profile}"
 features="pdf,pdf-native,ocr,ocr-pipeline,tokio-runtime,bundle-tessdata-eng,language-detection,html,image-encode"
 filters=()
 expected_names=()
 case "$profile" in
-warm)
+warm | paddle)
   features+=",auto-rotate-tract"
-  expected=19
+  [ "$profile" = paddle ] && features+=",paddle-ocr-ort"
+  expected=22
   expected_names=(
     caller_psm1_word_elements_on_an_upside_down_page_carry_no_internal_marker
     cached_context_changed_during_extraction_is_not_written
@@ -24,6 +25,9 @@ warm)
     cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
     prose::explicit_language_block_abstains_on_extra_prose_regions
     prose::explicit_language_block_recovers_the_sideways_source_paragraph
+    prose::mixed_document_reads_a_sideways_prose_scan_page_alike_in_every_build
+    prose::mixed_document_abstains_on_extra_prose_regions_alike_in_every_build
+    prose::partial_ocr_selection_on_a_scanned_document_reads_alike_in_every_build
     explicit_language_block_recovers_the_counterclockwise_source_grid
     explicit_language_block_recovers_the_upside_down_source_grid
     explicit_language_block_retains_the_sideways_source_table
@@ -38,6 +42,10 @@ warm)
     omitted_false_and_true_rotation_are_three_distinct_public_configurations
     upright_osd_preserves_its_existing_cells_and_content
   )
+  if [ "$profile" = paddle ]; then
+    expected=$((expected + 1))
+    expected_names+=(prose::paddle_backend_is_compiled_and_registered)
+  fi
   if [ -z "${XBERG_ORIENTATION_TEST_MODEL:-}" ]; then
     repository=models--xberg-io--paddleocr-onnx-models
     revision=bc5ec866cf0e798e667808dfa51b0ba8ad0dafc8
@@ -47,7 +55,7 @@ warm)
   fi
   ;;
 native)
-  expected=9
+  expected=12
   expected_names=(
     caller_psm1_word_elements_on_an_upside_down_page_carry_no_internal_marker
     cached_context_changed_during_extraction_is_not_written
@@ -55,6 +63,9 @@ native)
     cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
     prose::explicit_language_block_abstains_on_extra_prose_regions
     prose::explicit_language_block_recovers_the_sideways_source_paragraph
+    prose::mixed_document_reads_a_sideways_prose_scan_page_alike_in_every_build
+    prose::mixed_document_abstains_on_extra_prose_regions_alike_in_every_build
+    prose::partial_ocr_selection_on_a_scanned_document_reads_alike_in_every_build
     explicit_language_block_recovers_the_counterclockwise_source_grid
     explicit_language_block_recovers_the_upside_down_source_grid
     explicit_language_block_recovers_without_classifier_features
@@ -62,7 +73,7 @@ native)
   filters=(--exact "${expected_names[@]}")
   ;;
 *)
-  echo "Expected profile warm or native" >&2
+  echo "Expected profile warm, paddle or native" >&2
   exit 1
   ;;
 esac
@@ -86,7 +97,7 @@ verify_model() {
 
 export XBERG_OSD_TEST_MODEL="${XBERG_OSD_TEST_MODEL:?Pinned cached OSD model required}"
 verify_model "$XBERG_OSD_TEST_MODEL" 9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff
-if [ "$profile" = warm ]; then
+if [ "$profile" != native ]; then
   verify_model "$XBERG_ORIENTATION_TEST_MODEL" 6b742aebce6f0f7f71f747931ac7becfc7c96c51641e14943b291eeb334e7947
 fi
 # Every model child also verifies the bundled English SHA before seeding its private offline cache. ~keep
