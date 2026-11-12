@@ -741,6 +741,20 @@ pub(super) fn only_segments_certified_tesseract_text_and_tables(doc: &InternalDo
         && super::document::ocr_page_only_segments_text_and_tables_with(doc, read, is_hocr_bookkeeping_with_tables)
 }
 
+/// Whether the single-page Type0 decision can discard the final OCR payload. ~keep
+pub(super) fn single_page_type0_structure_can_yield_to_native(
+    doc: Option<&InternalDocument>,
+    read: &str,
+    collected_tables: &[crate::types::Table],
+) -> bool {
+    // Cell-only sidecar tables can be absent from the structured document. ~keep
+    collected_tables.is_empty()
+        && doc.is_none_or(|doc| {
+            super::document::plain_ocr_page_can_yield_to_native(doc, read)
+                || only_structures_certified_tesseract_text(doc)
+        })
+}
+
 /// The Type0 shape check may discard text segmentation. It has no cell-level proof
 /// that the native layer can replace an OCR table. ~keep
 pub(super) fn only_structures_certified_tesseract_text(doc: &InternalDocument) -> bool {

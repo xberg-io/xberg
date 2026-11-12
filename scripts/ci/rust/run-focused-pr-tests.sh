@@ -51,6 +51,8 @@ run_pdf_cases() {
     --test pdf_embedded_psm6_addition_2327
   run_type0_cases
   run_type0_noisy_render_cases
+  local type0_structure='extractors::pdf::ocr::native_word_coverage::structure_tests::type0_structure'
+  run_exact "$type0_structure::single_page_type0_keeps_cell_only_tables_absent_from_the_structure" --lib
   run_budget_retry_cases
   run_retry_timeout_cases
 }
@@ -310,7 +312,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=91
+  expected=92
   run_pdf_cases
   run_retained_read_cases
   expected=$((expected + 11 + 7))

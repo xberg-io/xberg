@@ -182,6 +182,27 @@ mod type0_structure {
     }
 
     #[test]
+    fn single_page_type0_keeps_cell_only_tables_absent_from_the_structure() {
+        let doc = with_list(text_page());
+        let read = "The orchard harvest includes apples Crates";
+        let sidecar = crate::types::Table {
+            cells: vec![vec!["Unlisted variety".into(), "42".into()]],
+            page_number: PAGE,
+            ..Default::default()
+        };
+        assert!(doc.tables.is_empty());
+        assert!(sidecar.markdown.is_empty());
+        assert!(!super::super::super::document::plain_ocr_page_can_yield_to_native(
+            &doc, read
+        ));
+        assert!(single_page_type0_structure_can_yield_to_native(Some(&doc), read, &[]));
+        assert!(
+            !single_page_type0_structure_can_yield_to_native(Some(&doc), read, &[sidecar]),
+            "native replacement would drop the OCR-only sidecar cells"
+        );
+    }
+
+    #[test]
     fn a_read_built_into_text_and_a_list_keeps_the_native_page() {
         assert!(structured(&with_list(text_page())));
     }
