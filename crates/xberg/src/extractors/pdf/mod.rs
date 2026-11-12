@@ -2401,8 +2401,8 @@ fn replace_page_content_with_ocr_text(page: &mut crate::types::PageContent, ocr_
 ///
 /// A discarded read is an empty string, and writing it into the page would erase the page's
 /// native text, so a page whose read is empty is not written at all: the page keeps the text
-/// layer it already holds, recorded in `native_content` under `keep_native_content` exactly as
-/// an accepted read records it (#3013).
+/// layer it already holds and `native_content` is left alone, since that field records text an
+/// OCR read replaced (GH#3013).
 ///
 /// One OCR text for a document of several pages is the text of the whole document: it goes to
 /// the first page, and the content of every later page is replaced with empty text; only the
@@ -2422,14 +2422,9 @@ fn replace_pages_with_ocr_page_texts(
     let mut replaced = Vec::new();
     for (page, text) in pages.iter_mut().zip(ocr_page_texts) {
         if text.trim().is_empty() {
-            // The read was discarded (or empty): it replaces nothing, so the page keeps its
-            // native text (#3013). The replacement below records that text beside the OCR
-            // treatment exactly as an accepted read would; write it back as the content, and
-            // let it decide the page's blankness again.
-            let native = page.content.clone();
-            replace_page_content_with_ocr_text(page, text, keep_native_content);
-            page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&native));
-            page.content = native;
+            // A discarded (or empty) read replaces nothing: the page keeps its text layer, and
+            // `native_content` stays unset because the page was not replaced (GH#3013).
+            page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&page.content));
             continue;
         }
         replace_page_content_with_ocr_text(page, text, keep_native_content);
@@ -2442,6 +2437,96 @@ fn replace_pages_with_ocr_page_texts(
         }
     }
     replaced
+}
+
+/// The native text of each page, from the page contents when they were built and from the page
+/// boundaries otherwise; empty when neither is available.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn native_page_texts_for_restore(
+    page_contents: Option<&[crate::types::PageContent]>,
+    native_text: &str,
+    boundaries: Option<&[crate::types::PageBoundary]>,
+) -> Vec<String> {
+    if let Some(pages) = page_contents {
+        return pages.iter().map(|page| page.content.clone()).collect();
+    }
+    boundaries
+        .into_iter()
+        .flatten()
+        .map(|boundary| {
+            native_text
+                .get(boundary.byte_start..boundary.byte_end)
+                .unwrap_or_default()
+                .to_string()
+        })
+        .collect()
+}
+
+/// Put the native text of every page whose forced OCR read was discarded back into the
+/// whole-document output, so the document agrees with the pages (GH#3013).
+///
+/// The whole-document read has no text for such a page, so the document content, the structured
+/// document and the page boundaries would otherwise lose it while the page keeps it. A single
+/// blank read stands for the whole document and discards every page. Returns the per-page texts
+/// of the restored document (the reads with each discarded page's native text), or `None` when no
+/// page was restored or the reads cannot be located in `text`.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn restore_discarded_page_reads(
+    text: &mut String,
+    document: &mut Option<InternalDocument>,
+    ocr_page_texts: &[String],
+    native_pages: &[String],
+) -> Option<Vec<String>> {
+    let whole_document_blank = ocr_page_texts.len() == 1 && ocr_page_texts[0].trim().is_empty();
+    if native_pages.is_empty() || (ocr_page_texts.len() != native_pages.len() && !whole_document_blank) {
+        return None;
+    }
+    let reads: Vec<String> = if whole_document_blank {
+        vec![String::new(); native_pages.len()]
+    } else {
+        ocr_page_texts.to_vec()
+    };
+    let discarded: Vec<usize> = (0..reads.len())
+        .filter(|&index| reads[index].trim().is_empty() && !native_pages[index].trim().is_empty())
+        .collect();
+    if discarded.is_empty() {
+        return None;
+    }
+
+    let boundaries = exact_boundaries_for_page_texts(text, &reads)?;
+    for &index in discarded.iter().rev() {
+        let offset = boundaries[index].byte_start;
+        let native = native_pages[index].as_str();
+        if offset == 0 {
+            let separator = if text.is_empty() { "" } else { "\n\n" };
+            text.insert_str(0, &format!("{native}{separator}"));
+        } else {
+            text.insert_str(offset, &format!("\n\n{native}"));
+        }
+    }
+
+    if let Some(document) = document.as_mut() {
+        let restored: ahash::AHashMap<u32, String> = discarded
+            .iter()
+            .map(|&index| ((index + 1) as u32, native_pages[index].clone()))
+            .collect();
+        ocr::merge_ocr_pages_into_internal_document(document, &restored);
+        // The merge writes a page's text as OCR blocks, but these pages hold native text with no
+        // OCR geometry or confidence, so they must not surface as OCR elements.
+        for element in &mut document.elements {
+            if element.page.is_some_and(|page| restored.contains_key(&page))
+                && matches!(element.kind, crate::types::internal::ElementKind::OcrText { .. })
+            {
+                element.kind = crate::types::internal::ElementKind::Paragraph;
+            }
+        }
+    }
+
+    let mut document_pages = reads;
+    for index in discarded {
+        document_pages[index] = native_pages[index].clone();
+    }
+    Some(document_pages)
 }
 
 /// Attach the OCR text page list to the selected document where its reader honors it.
@@ -2950,6 +3035,8 @@ impl PdfExtractor {
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         let mut ocr_page_texts: Option<Vec<String>> = None;
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        let mut ocr_document_page_texts: Option<Vec<String>> = None;
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         let mut ocr_results_map: Option<ahash::AHashMap<u32, String>> = None;
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         let mut structured_ocr_pages: Option<ahash::AHashMap<u32, InternalDocument>> = None;
@@ -3065,10 +3152,10 @@ impl PdfExtractor {
             (native_text, ExtractionMethod::Native)
         } else if config.force_ocr {
             let (
-                ocr_text,
+                mut ocr_text,
                 ocr_tbls,
                 ocr_elems,
-                ocr_doc,
+                mut ocr_doc,
                 llm_usage,
                 ocr_pts,
                 ocr_rstrs,
@@ -3100,6 +3187,12 @@ impl PdfExtractor {
             }
             for warning in layout_glyph_drop_warnings {
                 crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
+            }
+            if ocr_pts.iter().any(|page| page.trim().is_empty()) {
+                let native_pages =
+                    native_page_texts_for_restore(page_contents.as_deref(), &native_text, boundaries.as_deref());
+                ocr_document_page_texts =
+                    restore_discarded_page_reads(&mut ocr_text, &mut ocr_doc, &ocr_pts, &native_pages);
             }
             ocr_layout_gate_audit = gate_audit;
             ocr_tables = ocr_tbls;
@@ -3927,8 +4020,12 @@ impl PdfExtractor {
                             .filter(|(_, text)| !text.trim().is_empty())
                             .map(|(index, _)| (index + 1) as u32),
                     );
+                    // The pages carry the restored native text of a discarded read, like the
+                    // document does (GH#3013).
+                    let page_texts = ocr_document_page_texts.as_deref().unwrap_or(pts);
                     page_contents = Some(
-                        pts.iter()
+                        page_texts
+                            .iter()
                             .enumerate()
                             .map(|(i, text)| {
                                 let content = crate::pdf::text::fix_pdf_control_chars(text).into_owned();
@@ -4041,7 +4138,7 @@ impl PdfExtractor {
                 &text,
                 boundaries.as_deref(),
                 ocr_results_map.as_ref(),
-                ocr_page_texts.as_deref(),
+                ocr_document_page_texts.as_deref().or(ocr_page_texts.as_deref()),
             )
         };
         // OCR text replaces the native text on a fully OCR-read document; any other text is native.

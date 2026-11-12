@@ -329,8 +329,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(pdf): A page whose forced OCR read the recognition-noise gate discarded keeps its native text.** (#3013)
-  The whole-document route (`force_ocr`) wrote each page's read into its page, and a read the gate discarded arrives as an empty string, so the page's content was erased and its native text survived only in `native_content`, and only with `keep_native_content` on. A discarded (or otherwise empty) read now replaces nothing: the page keeps its text layer, recorded in `native_content` under `keep_native_content` exactly as an accepted read records it, and only accepted reads are reported as OCR text pages (#2939). An empty whole-document read replaces no page at all.
+- **(pdf): A page whose forced OCR read the recognition-noise gate discarded keeps its native text.** (GH#3013)
+  The whole-document route (`force_ocr`) wrote each page's read into its page, and a read the gate discarded arrives as an empty string, so the page's content was erased and its native text survived only in `native_content`, and only with `keep_native_content` on. A discarded (or otherwise empty) read now replaces nothing: the page keeps its text layer, `native_content` stays unset because the page was not replaced, and only accepted reads are reported as OCR text pages (#2939). The document content, the structured and Markdown output and the page boundaries carry that native text too, in page order, so they agree with the pages; this holds with page output off, where the OCR route still builds pages from its reads. A single blank whole-document read discards every page.
 - **(pdf): Deduplicate spatially matched native text in mixed OCR output.** (Refs #2534)
   Applies to automatic mixed PDF pages with a fresh direct Tesseract read in a verified scale-only frame.
   Native copies are removed only when unique literal matches survive in both flat and structured output.
