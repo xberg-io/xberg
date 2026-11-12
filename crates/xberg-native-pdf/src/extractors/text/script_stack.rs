@@ -190,12 +190,17 @@ pub fn stack_parents(base: &StackSpan<'_>, members: &[StackSpan<'_>]) -> Vec<Opt
         .collect()
 }
 
-/// The order a stack reads in: the scripts of the base set below its line first, then those set above
-/// it, each in x order and each followed by the members that hang from it.
+/// The order a stack reads in.
 ///
-/// Lowered-first is a convention, not the content-stream order: it is what puts the subscript of the
-/// base in one run apart from an exponent and its index, and it is applied to every stack so that a
-/// stack's reading does not depend on which scripts happen to have parent links.
+/// A stack whose scripts all hang from the base reads raised scripts first, then lowered ones, each
+/// in x order. A stack with a script that hangs from another member reads the scripts of the base set
+/// below its line first, then those above it, each followed by the members that hang from it, so the
+/// subscript of the base is one run apart from an exponent and its index (`H^{Z_2}_{<xy>,f}`).
+///
+/// That second order is dropped for the first when it puts the script of a lowered member beside a
+/// script of the base on the same side of the line: `j` above `γ` and `K` below it with a `+` above
+/// `K` read `K + j` lowered-first, which joins the `+` of `K` to the `j` of the base in one
+/// superscript run, and `j K +` raised-first.
 #[doc(hidden)]
 #[must_use]
 pub fn stack_reading_order(base: &StackSpan<'_>, members: &[StackSpan<'_>]) -> Vec<usize> {
@@ -206,14 +211,43 @@ pub fn stack_reading_order(base: &StackSpan<'_>, members: &[StackSpan<'_>]) -> V
         }
     }
     let parents = stack_parents(base, members);
+    let raised_side = |member: usize| members[member].baseline > base.baseline;
+    if parents.iter().all(Option::is_none) {
+        let (raised, lowered): (Vec<usize>, Vec<usize>) = (0..members.len()).partition(|&member| raised_side(member));
+        return raised.into_iter().chain(lowered).collect();
+    }
+
+    let is_raised = |member: usize| match parents[member] {
+        Some(parent) => members[member].baseline > members[parent].baseline,
+        None => raised_side(member),
+    };
     let (lowered, raised): (Vec<usize>, Vec<usize>) = (0..members.len())
         .filter(|&member| parents[member].is_none())
-        .partition(|&member| members[member].baseline < base.baseline);
-    let mut order = Vec::with_capacity(members.len());
-    for root in lowered.into_iter().chain(raised) {
-        visit(root, &parents, &mut order);
-    }
-    order
+        .partition(|&member| !raised_side(member));
+    let grouped = |roots: Vec<usize>| -> Vec<Vec<usize>> {
+        roots
+            .into_iter()
+            .map(|root| {
+                let mut group = Vec::new();
+                visit(root, &parents, &mut group);
+                group
+            })
+            .collect()
+    };
+    let lowered_first = grouped(lowered.iter().chain(&raised).copied().collect());
+    let raised_first = grouped(raised.iter().chain(&lowered).copied().collect());
+    let fused = |groups: &[Vec<usize>]| {
+        groups
+            .windows(2)
+            .filter(|pair| is_raised(*pair[0].last().unwrap_or(&0)) == is_raised(pair[1][0]))
+            .count()
+    };
+    let chosen = if fused(&raised_first) < fused(&lowered_first) {
+        raised_first
+    } else {
+        lowered_first
+    };
+    chosen.into_iter().flatten().collect()
 }
 
 #[cfg(test)]
@@ -525,9 +559,23 @@ mod tests {
     }
 
     #[test]
-    fn should_read_a_lowered_root_before_a_raised_one_whatever_their_x_order() {
+    fn should_read_the_raised_scripts_before_the_lowered_ones_when_no_index_meets_a_subscript() {
         let base = span("R", 100.0, 100.0, 7.0, 10.0);
         let members = [span("n", 107.0, 104.3, 3.2, 6.0), span("p", 108.0, 95.0, 3.0, 6.0)];
+        assert_eq!(stack_reading_order(&base, &members), [0, 1]);
+        let members = [span("p", 107.0, 95.0, 3.0, 6.0), span("n", 108.0, 104.3, 3.2, 6.0)];
         assert_eq!(stack_reading_order(&base, &members), [1, 0]);
+    }
+
+    #[test]
+    fn should_keep_the_plus_of_a_lowered_subscript_apart_from_the_exponent_of_the_base() {
+        let base = span("\u{3b3}", 100.0, 100.0, 7.0, 10.0);
+        let members = [
+            span("j", 107.0, 104.3, 3.0, 6.0),
+            span("K", 107.2, 96.0, 4.6, 6.0),
+            span("+", 111.9, 97.5, 3.0, 4.2),
+        ];
+        assert_eq!(stack_parents(&base, &members), [None, None, Some(1)]);
+        assert_eq!(stack_reading_order(&base, &members), [0, 1, 2]);
     }
 }
