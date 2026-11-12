@@ -3316,7 +3316,7 @@ fn check_accepted_ocr_tokens(
                     ) =>
             {
                 if !retained.retains(&accepted[offset..range.start], PROSE) {
-                    return Err(retained.decline(PROSE));
+                    return Err(PROSE);
                 }
                 offset = range.end;
                 if !matches!(tag, Tag::Table(_)) {
@@ -3330,7 +3330,7 @@ fn check_accepted_ocr_tokens(
                         block_depth > 0
                     });
                     if !retains_inline_block(accepted, range, &tag, block, &mut retained) {
-                        return Err(retained.decline(PROSE));
+                        return Err(PROSE);
                     }
                     continue;
                 }
@@ -3339,7 +3339,7 @@ fn check_accepted_ocr_tokens(
                 if !source_table_has_cells(&accepted[range], &table.cells)
                     || !table.cells.iter().flatten().all(|cell| retained.retains(cell, CELLS))
                 {
-                    return Err(retained.decline(CELLS));
+                    return Err(CELLS);
                 }
                 depth += 1;
             }
@@ -3349,7 +3349,7 @@ fn check_accepted_ocr_tokens(
         }
     }
     if !retained.retains(&accepted[offset..], PROSE) {
-        return Err(retained.decline(PROSE));
+        return Err(PROSE);
     }
     retained.finish()
 }
@@ -3409,11 +3409,8 @@ impl<'a> PlainWords<'a> {
         self.keeps_unaccepted_word |= Self::runs(word).any(|run| !self.accepted_runs.contains(run));
     }
 
-    /// The reason of the first check that went wrong: a skipped word, else `reason`.
-    fn decline(&self, reason: &'static str) -> &'static str {
-        self.first_skip.unwrap_or(reason)
-    }
-
+    /// Declines a page whose skipped words all repeat the transcript, with the reason of the
+    /// first skip.
     fn finish(mut self) -> Result<(), &'static str> {
         while let Some(word) = self.words.next() {
             self.skip(word, "Plain page added text absent from the accepted transcript");
