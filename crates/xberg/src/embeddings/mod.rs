@@ -688,7 +688,8 @@ pub(crate) fn generate_embeddings_for_chunks(
                 config.batch_size
             }
         }
-        _ => chunks.len(),
+        crate::core::config::EmbeddingModelType::Llm { .. }
+        | crate::core::config::EmbeddingModelType::Plugin { .. } => chunks.len(),
     };
 
     let Some(embeddings_result) = embed_in_windows(chunks, window, stop, &mut |texts| embed_texts(texts, config))?

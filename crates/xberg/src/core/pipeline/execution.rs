@@ -61,7 +61,6 @@ pub(super) async fn execute_processor_stages<R: crate::extraction::derive::surfa
     _builtin_redaction: Option<&PostProcessorHandle>,
 ) -> Result<()> {
     let time_limit = config.cancel_token.as_ref();
-    let _stoppable = time_limit.map(crate::cancellation::CancellationToken::enter_stoppable_stage);
     let mut skipped_after_time_limit: Vec<&str> = Vec::new();
     for (_stage, processors_arc) in stages {
         #[cfg(feature = "otel")]
@@ -85,7 +84,11 @@ pub(super) async fn execute_processor_stages<R: crate::extraction::derive::surfa
             if should_run && processor.should_process(result.document(), config) {
                 // A processor is one model call or network round trip that cannot be split, so the
                 // limit is honoured between processors: those not yet started are skipped. ~keep
-                if time_limit.is_some_and(crate::cancellation::CancellationToken::time_limit_reached) {
+                // Redaction always runs: dropping it would return the text it exists to remove. ~keep
+                let is_builtin_redaction = _builtin_redaction.is_some_and(|builtin| Arc::ptr_eq(builtin, processor));
+                if !is_builtin_redaction
+                    && time_limit.is_some_and(crate::cancellation::CancellationToken::time_limit_reached)
+                {
                     skipped_after_time_limit.push(processor_name);
                     continue;
                 }

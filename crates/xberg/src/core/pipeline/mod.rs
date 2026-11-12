@@ -2366,7 +2366,7 @@ mod time_limit_vector_tests {
         let warning = result
             .processing_warnings
             .iter()
-            .find(|warning| warning.source == "timeout")
+            .find(|warning| warning.source == "time_limit")
             .expect("the dropped stage must be reported");
         assert!(warning.message.contains("chunk embeddings"), "{}", warning.message);
         assert!(token.result_is_partial());

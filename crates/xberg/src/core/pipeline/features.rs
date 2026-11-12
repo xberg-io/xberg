@@ -399,7 +399,7 @@ fn try_code_chunks(
 }
 
 /// Whether the extraction time limit was reached: model stages poll this between batches.
-#[cfg(feature = "chunking")]
+#[cfg(any(feature = "embeddings", feature = "sparse-embeddings", feature = "late-interaction"))]
 fn time_limit_reached(config: &ExtractionConfig) -> bool {
     config
         .cancel_token
@@ -415,7 +415,7 @@ pub(super) fn report_stage_cut(warnings: &mut Vec<ProcessingWarning>, config: &E
     }
     crate::core::diagnostics::push_warning(
         warnings,
-        "timeout",
+        "time_limit",
         format!(
             "Extraction reached extraction_timeout_secs before {stage} finished: it was stopped and its output \
              is missing; the text and chunks produced so far are kept."
@@ -433,17 +433,15 @@ fn attach_chunk_vectors(
     chunking_config: &crate::core::config::ChunkingConfig,
     config: &ExtractionConfig,
 ) {
-    let _stoppable = config
-        .cancel_token
-        .as_ref()
-        .map(crate::cancellation::CancellationToken::enter_stoppable_stage);
-    let stop = || time_limit_reached(config);
+    let _ = config;
 
     #[cfg(feature = "embeddings")]
     if let Some(ref embedding_config) = chunking_config.embedding
         && let Some(ref mut chunks) = result.chunks
     {
-        match crate::embeddings::generate_embeddings_for_chunks(chunks, embedding_config, &stop) {
+        match crate::embeddings::generate_embeddings_for_chunks(chunks, embedding_config, &|| {
+            time_limit_reached(config)
+        }) {
             Ok(true) => {}
             Ok(false) => report_stage_cut(&mut result.processing_warnings, config, "chunk embeddings"),
             Err(e) => {
@@ -471,7 +469,7 @@ fn attach_chunk_vectors(
     if let Some(ref sparse_config) = chunking_config.sparse_embedding
         && let Some(ref mut chunks) = result.chunks
     {
-        if stop() {
+        if time_limit_reached(config) {
             report_stage_cut(&mut result.processing_warnings, config, "sparse chunk embeddings");
         } else if let Err(e) = crate::chunking::vectors::generate_sparse_vectors_for_chunks(chunks, sparse_config) {
             tracing::warn!("Sparse-embedding generation failed: {e}. Check that ONNX Runtime is installed.");
@@ -497,7 +495,7 @@ fn attach_chunk_vectors(
     if let Some(ref late_config) = chunking_config.late_interaction
         && let Some(ref mut chunks) = result.chunks
     {
-        if stop() {
+        if time_limit_reached(config) {
             report_stage_cut(
                 &mut result.processing_warnings,
                 config,

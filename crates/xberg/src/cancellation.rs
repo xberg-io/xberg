@@ -117,10 +117,12 @@ impl Default for StopState {
 
 const NO_UNREAD_PAGE: u32 = u32::MAX;
 
-/// Marks a page loop or stage that honours the soft stop as running; dropping it marks it as done.
+/// Marks a page loop that honours the soft stop as running; dropping it marks the loop as done.
+#[cfg(any(test, feature = "pdf"))]
 #[derive(Debug)]
 pub(crate) struct PageLoopGuard(Arc<StopState>);
 
+#[cfg(any(test, feature = "pdf"))]
 impl Drop for PageLoopGuard {
     fn drop(&mut self) {
         self.0.active_page_loops.fetch_sub(1, Ordering::Relaxed);
@@ -212,13 +214,6 @@ impl CancellationToken {
     /// the guard is dropped, so a timeout in a later stage does not wait for a loop that is over.
     #[cfg(any(test, feature = "pdf"))]
     pub(crate) fn enter_page_loop(&self) -> PageLoopGuard {
-        self.enter_stoppable_stage()
-    }
-
-    /// Mark a post-processing stage that checks [`time_limit_reached`](Self::time_limit_reached)
-    /// as running, so a limit that passes inside it asks the stage to stop and waits out the grace
-    /// for its partial document instead of failing with a timeout at once.
-    pub(crate) fn enter_stoppable_stage(&self) -> PageLoopGuard {
         self.stop.active_page_loops.fetch_add(1, Ordering::Relaxed);
         PageLoopGuard(Arc::clone(&self.stop))
     }
@@ -402,14 +397,5 @@ mod tests {
         unread.request_stop();
         unread.note_unread_page(2);
         assert!(unread.result_is_partial());
-    }
-
-    #[test]
-    fn a_stoppable_stage_counts_as_a_running_loop_until_its_guard_drops() {
-        let token = CancellationToken::new();
-        let guard = token.enter_stoppable_stage();
-        assert!(token.page_loop_running());
-        drop(guard);
-        assert!(!token.page_loop_running());
     }
 }

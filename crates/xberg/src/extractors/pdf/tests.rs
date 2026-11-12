@@ -3485,7 +3485,7 @@ fn png_height(bytes: &[u8]) -> Option<u32> {
 /// A two-page PDF whose every page carries a healthy native text layer, and whose pages have
 /// clearly different heights so a page render identifies its page by size: page 1 is a small
 /// (200x300 pt) page, page 2 a tall (1224x1584 pt) one.
-#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 fn two_page_native_text_pdf() -> Vec<u8> {
     use lopdf::content::{Content, Operation};
     use lopdf::{Document, Object, Stream, dictionary};

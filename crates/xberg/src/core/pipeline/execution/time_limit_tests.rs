@@ -75,7 +75,7 @@ async fn processors_not_yet_started_when_the_limit_is_requested_are_skipped_and_
     let warning = result
         .processing_warnings
         .iter()
-        .find(|warning| warning.source == "timeout")
+        .find(|warning| warning.source == "time_limit")
         .expect("the skipped processors must be reported");
     assert!(
         warning.message.contains("post-processors second, third"),
@@ -102,41 +102,34 @@ async fn processors_all_run_when_the_limit_is_not_reached() {
 }
 
 #[tokio::test]
-async fn a_stage_in_flight_lets_the_timeout_wait_for_its_partial_result() {
+async fn the_builtin_redaction_processor_still_runs_after_the_limit_is_requested() {
     let token = CancellationToken::new();
     let ran: Ran = Arc::default();
-    let stages = stage(None, &ran, &["first"]);
-    let mut result = ExtractedDocument::default();
-    assert!(!token.page_loop_running());
-
-    struct Probe(CancellationToken);
-    impl Plugin for Probe {
-        fn name(&self) -> &str {
-            "probe"
-        }
-    }
-    #[async_trait]
-    impl PostProcessor for Probe {
-        async fn process(&self, _result: &mut ExtractedDocument, _config: &ExtractionConfig) -> Result<()> {
-            assert!(
-                self.0.page_loop_running(),
-                "the stage must be marked stoppable while a processor runs"
-            );
-            Ok(())
-        }
-        fn processing_stage(&self) -> ProcessingStage {
-            ProcessingStage::Middle
-        }
-    }
-    let mut stages = stages;
-    stages.push((
+    let handle = |name: &'static str, stops: Option<&CancellationToken>| -> PostProcessorHandle {
+        Arc::new(Recording {
+            name,
+            stops: stops.cloned(),
+            ran: Arc::clone(&ran),
+        })
+    };
+    let redaction = handle("redaction", None);
+    let stages = vec![(
         ProcessingStage::Middle,
-        Arc::new(vec![Arc::new(Probe(token.clone())) as PostProcessorHandle]),
-    ));
+        Arc::new(vec![
+            handle("stopper", Some(&token)),
+            handle("skipped", None),
+            Arc::clone(&redaction),
+        ]),
+    )];
+    let mut result = ExtractedDocument::default();
 
-    execute_processor_stages(&mut result, &config_with(&token), &None, &stages, None)
+    execute_processor_stages(&mut result, &config_with(&token), &None, &stages, Some(&redaction))
         .await
         .expect("processors run");
 
-    assert!(!token.page_loop_running(), "the mark ends with the stages");
+    assert_eq!(
+        *ran.lock(),
+        ["stopper", "redaction"],
+        "dropping redaction would return the text it removes"
+    );
 }
