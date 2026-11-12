@@ -43,8 +43,6 @@ use tiny_skia::{Color, PathBuilder, Pixmap, PixmapPaint, Transform};
 mod image_budget;
 #[path = "knockout.rs"]
 mod knockout;
-#[cfg(test)]
-pub(super) use knockout::MAX_PAINT_SCRATCH_BYTES_PER_PIXEL;
 #[path = "knockout_resources.rs"]
 mod knockout_resources;
 use knockout::{KnockoutGroup, KnockoutShape, PatternShape};
@@ -656,13 +654,41 @@ impl PageRenderer {
         doc: &PdfDocument,
         png_budget: Option<PngRenderBudget>,
     ) -> Result<(RenderedImage, u32)> {
+        let mut dpi = self.options.dpi;
+        let minimum = png_budget
+            .as_ref()
+            .map_or(dpi, |budget| budget.minimum_dpi.max(1).min(dpi));
+        let can_resize = self.options.scale_override.is_none();
+
+        // A retry can reveal a later reservation peak. Bound the number of renders and
+        // use the minimum on the final attempt if the observed peaks have not converged.
+        for _ in 0..raster_budget::MAX_WORKSPACE_DPI_RETRIES {
+            let result = self.render_page_at_dpi(page_num, doc, png_budget.as_ref(), &mut dpi);
+            let Some((required, limit)) = self.knockout_resources.workspace_shortfall() else {
+                return result;
+            };
+            if result.is_ok() || !can_resize || dpi <= minimum {
+                return result;
+            }
+            self.cmyk_sidecar = None;
+            dpi = raster_budget::dpi_after_workspace_refusal(dpi, minimum, required, limit);
+        }
+        dpi = minimum;
+        self.render_page_at_dpi(page_num, doc, png_budget.as_ref(), &mut dpi)
+    }
+
+    fn render_page_at_dpi(
+        &mut self,
+        page_num: usize,
+        doc: &PdfDocument,
+        png_budget: Option<&PngRenderBudget>,
+        admitted_dpi: &mut u32,
+    ) -> Result<(RenderedImage, u32)> {
         self.knockout_shape = None;
         self.knockout_resources
-            .reset(png_budget.as_ref().map(|budget| budget.max_working_bytes));
+            .reset(png_budget.map(|budget| budget.max_working_bytes));
         self.reported_source_budget_exceeded = false;
-        self.source_image_budget = png_budget
-            .as_ref()
-            .map(|budget| image_budget::ImageBudget::new(budget.max_working_bytes));
+        self.source_image_budget = png_budget.map(|budget| image_budget::ImageBudget::new(budget.max_working_bytes));
         self.fonts.clear();
         self.color_spaces.clear();
         // The qcms transform cache is per-page: dropping every entry
@@ -715,24 +741,24 @@ impl PageRenderer {
         let scale_at_dpi = |dpi| scale_override.unwrap_or(dpi as f32 / 72.0);
         let dimensions_at_dpi = |dpi| raster_dimensions(page_w, page_h, scale_at_dpi(dpi), scale_override.is_some());
 
-        let mut dpi = self.options.dpi;
+        let mut dpi = *admitted_dpi;
         let admitted_png = png_budget
             .map(|budget| {
                 let resources = doc.get_page_resources(page_num)?;
                 let spots = self.page_sidecar_spots(doc, page_num, &resources);
-                // A soft mask, a transparency group and a knockout group copy the spot planes
-                // while painting (`smask_spot_snapshot`, `GroupSidecar::capture`, the knockout
-                // workspace), so the fit charges the copies only for a page whose resources
-                // declare one. A zero-ink sidecar has no spot plane to copy.
+                // Top-level mask snapshots can be outside a reservation scope. Keep their
+                // preflight allowance for ink pages. Group and paint workspace is checked
+                // by the live reservations before allocation, including during source replay.
                 let transient = if spots.as_deref().is_some_and(|inks| !inks.is_empty()) {
                     spot_plane_use(doc, page_num, &resources)
                 } else {
                     SpotPlaneUse::default()
                 };
-                dpi = fit_png_dpi(dpi, &budget, spots.as_deref(), transient, dimensions_at_dpi)?;
+                dpi = fit_png_dpi(dpi, budget, spots.as_deref(), transient, dimensions_at_dpi)?;
                 Ok::<_, Error>((resources, spots))
             })
             .transpose()?;
+        *admitted_dpi = dpi;
         let scale = scale_at_dpi(dpi);
         let (width, height) = dimensions_at_dpi(dpi);
 
@@ -2533,7 +2559,7 @@ impl PageRenderer {
                         let _image_workspace = if is_form {
                             None
                         } else {
-                            self.reserve_raster_workspace(pixmap, &gs_clone, 6)?
+                            self.reserve_raster_workspace(pixmap, &gs_clone, 6, knockout::SIDECAR_SNAPSHOT_COPIES)?
                         };
                         let _ordinary_form_mask = if is_form && !group_boundary && gs_clone.smask.is_some() {
                             Some(self.knockout_resources.reserve(Some(0))?)
@@ -5139,7 +5165,13 @@ impl PageRenderer {
             }
             Some(bytes)
         })();
-        let workspace = if group {
+        let track_mask = group
+            || (self.source_image_budget.is_some()
+                && self
+                    .cmyk_sidecar
+                    .as_ref()
+                    .is_some_and(|sidecar| !sidecar.spot_names().is_empty()));
+        let workspace = if track_mask {
             Some(self.knockout_resources.reserve(bytes)?)
         } else {
             None
@@ -7054,8 +7086,9 @@ impl PageRenderer {
         // For /S /Luminosity the optional /BC backdrop pre-fills with
         // the declared colour; absent /BC the spec default is the
         // colour space's black point (also fills with zeros). ~keep
-        let _mask_workspace = if self.knockout_resources.active() {
-            Some(self.knockout_resources.reserve(pixmap.data().len().checked_mul(2))?)
+        let track_mask = self.knockout_resources.active();
+        let mask_workspace = if track_mask {
+            Some(self.knockout_resources.reserve(Some(pixmap.data().len()))?)
         } else {
             None
         };
@@ -7205,6 +7238,18 @@ impl PageRenderer {
         // is allocated, every spot lane against its pre-mirror
         // snapshot. ~keep
         let pixel_count = dest.len() / 4;
+        // The alpha plane overlaps the mask pixmap, but starts after the mask form's
+        // group and paint reservations have dropped.
+        let _mask_and_alpha_workspace = if let Some(mask_workspace) = mask_workspace {
+            // Exchange the reservation in place so this phase uses one nesting slot.
+            drop(mask_workspace);
+            let bytes = pixel_count
+                .checked_mul(std::mem::size_of::<f32>())
+                .and_then(|alpha| alpha.checked_add(mask_data.len()));
+            Some(self.knockout_resources.reserve(bytes)?)
+        } else {
+            None
+        };
         let mut mask_alpha: Vec<f32> = Vec::with_capacity(pixel_count);
         for px in 0..pixel_count {
             let off = px * 4;

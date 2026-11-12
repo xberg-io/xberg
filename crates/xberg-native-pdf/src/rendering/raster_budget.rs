@@ -304,50 +304,13 @@ pub(super) fn fit_png_dpi(
     Ok(low)
 }
 
-/// Per-pixel bytes the render holds at its peak for the spot planes `transient` declares, from
-/// the reservations in `knockout_resources`; zero when the page holds nothing beyond the live
-/// planes. `sidecar` is the per-pixel size of the CMYK and spot planes.
-///
-/// The run-time reservations in `knockout_resources` peak at the canvas plus one soft mask
-/// snapshot when only a mask paints; inside groups, at the canvas, one rgba + sidecar copy per
-/// nested group and one for non-isolated source recovery, each nested knockout group's
-/// `knockout()` reservation (twice rgba + sidecar, twice the shape) and shape workspace,
-/// and the widest per-paint scratch. The
-/// shape workspace is charged even where no knockout shape exists (an over-charge). A soft
-/// mask inside a group adds its mask workspace, mask backdrop, paint snapshots and the mask
-/// form's own group. The PNG encode copies come after rendering, so the charge is the larger.
-fn render_peak_bytes_per_pixel(sidecar: usize, ink_count: usize, transient: SpotPlaneUse) -> Option<usize> {
-    let canvas = sidecar.checked_add(4)?;
-    let shape = ink_count.checked_add(1)?;
-    let groups = transient.groups.min(knockout_resources::MAX_NESTING_DEPTH);
-    let knockouts = transient.knockouts.min(groups);
-    if groups == 0 {
-        return Some(if transient.soft_mask {
-            RGBA_AND_PNG_BYTES_PER_PIXEL.checked_add(sidecar.checked_mul(2)?)?
-        } else {
-            0
-        });
-    }
-    // One more canvas for the non-isolated source recovery (`recover_nonisolated_source`). ~keep
-    let nested_groups = canvas.checked_mul(groups.checked_add(2)?)?;
-    let knockout_workspace = canvas
-        .checked_mul(2)?
-        .checked_add(shape.checked_mul(3)?)?
-        .checked_mul(knockouts)?;
-    let soft_mask = if transient.soft_mask {
-        // Mask workspace (2 rgba), backdrop (rgba), paint snapshots and the mask form's group. ~keep
-        4usize
-            .checked_mul(3)?
-            .checked_add(canvas)?
-            .checked_add(shape)?
-            .checked_add(canvas)?
-    } else {
-        0
-    };
-    nested_groups
-        .checked_add(knockout_workspace)?
-        .checked_add(knockout::MAX_PAINT_SCRATCH_BYTES_PER_PIXEL)?
-        .checked_add(soft_mask)
+pub(super) const MAX_WORKSPACE_DPI_RETRIES: usize = 3;
+
+pub(super) fn dpi_after_workspace_refusal(dpi: u32, minimum: u32, required: usize, limit: usize) -> u32 {
+    // Raster workspace normally scales with area. Rounding and later paint phases can
+    // change the required bytes, so every attempt still uses the original runtime limit.
+    let scaled = (f64::from(dpi) * (limit as f64 / required as f64).sqrt()).floor() as u32;
+    scaled.clamp(minimum, dpi - 1)
 }
 
 pub(super) fn png_working_bytes_fit(
@@ -360,12 +323,11 @@ pub(super) fn png_working_bytes_fit(
     // The canvas and PNG demultiply copy are both RGBA. Reserve the same per-pixel
     // and fixed PNG allowance as Core image encoding, plus the CMYK plane and two planes per spot ink.
     let sidecar_bytes_per_pixel = spot_names.map_or(Some(0), |names| names.len().checked_mul(2)?.checked_add(4));
-    let live_bytes_per_pixel =
-        sidecar_bytes_per_pixel.and_then(|sidecar| RGBA_AND_PNG_BYTES_PER_PIXEL.checked_add(sidecar));
-    let render_peak_bytes_per_pixel = sidecar_bytes_per_pixel
-        .and_then(|sidecar| render_peak_bytes_per_pixel(sidecar, spot_names.map_or(0, <[String]>::len), transient));
-    let charge = live_bytes_per_pixel
-        .and_then(|live| Some(live.max(render_peak_bytes_per_pixel?)))
+    let charge = sidecar_bytes_per_pixel
+        .and_then(|sidecar| {
+            let copies = 1 + usize::from(transient.soft_mask);
+            RGBA_AND_PNG_BYTES_PER_PIXEL.checked_add(sidecar.checked_mul(copies)?)
+        })
         .and_then(|bytes| (width as usize).checked_mul(height as usize)?.checked_mul(bytes))
         .and_then(|bytes| bytes.checked_add(PNG_FIXED_OVERHEAD));
     width > 0 && height > 0 && charge.is_some_and(|bytes| bytes <= limit && bytes <= isize::MAX as usize)

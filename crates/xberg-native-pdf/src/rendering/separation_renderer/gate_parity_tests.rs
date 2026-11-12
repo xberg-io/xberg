@@ -357,22 +357,16 @@ fn one_ink_charge(dpi: u32, copies: usize) -> usize {
     side * side * (RGBA_AND_PNG_BYTES_PER_PIXEL + (copies + 1) * (4 + 2)) + PNG_FIXED_OVERHEAD
 }
 
-/// Bytes the fit charges the 100 x 100 pt page at `dpi` for `per_pixel` run-time bytes.
-fn one_ink_peak_charge(dpi: u32, per_pixel: usize) -> usize {
-    let side = (f64::from(dpi) * 100.0 / 72.0).ceil() as usize;
-    side * side * per_pixel + PNG_FIXED_OVERHEAD
+/// Runtime workspace for the 100 x 100 pt fixture at the requested DPI.
+fn workspace_limit(bytes_per_pixel: usize) -> usize {
+    let side = (f64::from(BUDGET_REQUESTED_DPI) * 100.0 / 72.0).ceil() as usize;
+    side * side * bytes_per_pixel
 }
 
-/// One ink: rgba + sidecar of a canvas or group is 4 + 4 + 2 bytes per pixel.
-const CANVAS: usize = 4 + 4 + 2;
-/// Worst-case paint scratch: two snapshots, a non-separable blend copy and fill-stroke coverage.
-const SCRATCH: usize = crate::rendering::page_renderer::MAX_PAINT_SCRATCH_BYTES_PER_PIXEL;
-/// Two groups' worth of one knockout reservation: twice rgba + sidecar and twice the shape, plus
-/// the shape workspace, with a shape of one ink plus a coverage plane (2).
-const KNOCKOUT: usize = 2 * CANVAS + 3 * 2;
-/// A soft mask inside a group: mask workspace and backdrop (3 rgba), paint snapshots, the shape
-/// and the mask form's group.
-const SOFT_MASK_IN_GROUP: usize = 12 + CANVAS + 2 + CANVAS;
+// One ink: a 4-byte RGBA canvas and the 6-byte process and spot sidecar.
+const CANVAS: usize = 10;
+// One RGBA mirror snapshot and one byte of fill coverage.
+const NORMAL_FILL: usize = 5;
 
 /// A group form `number` with its own `/Resources` extras and `body`.
 fn group_form_obj(number: u32, resources: &str, body: &str) -> String {
@@ -420,8 +414,12 @@ fn a_group_can_invoke_a_sibling_through_inherited_resources() {
             ..SpotPlaneUse::default()
         }
     );
-    let limit = one_ink_peak_charge(BUDGET_REQUESTED_DPI, 4 * CANVAS + SCRATCH);
-    assert_eq!(budgeted_dpi(&doc, limit, BUDGET_MINIMUM_DPI), Some(265));
+    let limit = workspace_limit(4 * CANVAS + NORMAL_FILL);
+    assert_eq!(
+        budgeted_dpi(&doc, limit, BUDGET_REQUESTED_DPI),
+        Some(BUDGET_REQUESTED_DPI)
+    );
+    assert!(budgeted_dpi(&doc, limit - 1, BUDGET_REQUESTED_DPI).is_none());
 }
 
 #[test]
@@ -465,13 +463,12 @@ fn soft_mask_in_group_page() -> PdfDocument {
 
 /// A group whose stroke runs under the non-separable `/Hue` blend: the widest paint scratch.
 fn stroking_group_page() -> PdfDocument {
-    let group = group_form_obj(5, "", "/CS0 CS 0.8 SCN 8 w 10 10 m 70 70 l S 0.5 g 5 5 20 20 re B");
+    let group = group_form_obj(
+        5,
+        "/ExtGState << /Blend << /BM /Hue >> >>",
+        "/Blend gs /CS0 CS 0.8 SCN 8 w 10 10 m 70 70 l S 0.5 g 5 5 20 20 re B",
+    );
     build_page_with("/T gs /F Do", SPOT_A, "/BM /Hue", &[&group])
-}
-
-fn plain_group_page() -> PdfDocument {
-    let group = group_form("", "/CS0 cs 0.8 scn 10 10 60 60 re f");
-    build_page_with("/F Do", SPOT_A, "/BM /Multiply", &[&group])
 }
 
 /// Renders `doc` through the PNG budget and returns the DPI it was admitted at, or `None` when refused.
@@ -542,7 +539,9 @@ fn the_page_scan_reports_the_widest_spot_plane_use() {
     };
     assert_eq!(scan(&knockout_group_page()), used(false, 1, 1));
     assert_eq!(scan(&soft_mask_page()), used(true, 0, 0));
-    assert_eq!(scan(&plain_group_page()), used(false, 1, 0));
+    let group = group_form("/I true", "0.5 g 0 0 20 20 re f");
+    let plain = build_page_with("/F Do", SPOT_A, "/BM /Normal", &[&group]);
+    assert_eq!(scan(&plain), used(false, 1, 0));
     assert_eq!(scan(&nested_group_page()), used(false, 2, 0));
     assert_eq!(scan(&soft_mask_in_group_page()), used(true, 2, 0));
     assert_eq!(scan(&build_page("/BM /Multiply", &[])), used(false, 0, 0));
@@ -553,44 +552,28 @@ fn the_page_scan_reports_the_widest_spot_plane_use() {
     );
 }
 
-/// A plain transparency group reserves its own rgba and sidecar copy at run time, so the fit
-/// must lower the DPI instead of letting the render fail on the knockout workspace.
 #[test]
-fn an_ink_page_with_a_plain_transparency_group_lowers_dpi_instead_of_failing() {
-    let doc = plain_group_page();
+fn an_isolated_normal_fill_keeps_requested_dpi_at_its_live_workspace_limit() {
+    let group = group_form("/I true", "/CS0 cs 0.8 scn 10 10 60 60 re f");
+    let doc = build_page_with("/F Do", SPOT_A, "/BM /Normal", &[&group]);
+    let limit = workspace_limit(2 * CANVAS + NORMAL_FILL);
+
     assert_eq!(
-        budgeted_dpi(&doc, one_ink_charge(BUDGET_REQUESTED_DPI, 0), BUDGET_MINIMUM_DPI),
-        Some(175),
+        budgeted_dpi(&doc, limit, BUDGET_REQUESTED_DPI),
+        Some(BUDGET_REQUESTED_DPI)
     );
-    assert_eq!(
-        budgeted_dpi(
-            &doc,
-            one_ink_peak_charge(BUDGET_REQUESTED_DPI, 3 * CANVAS + SCRATCH),
-            BUDGET_MINIMUM_DPI
-        ),
-        Some(BUDGET_REQUESTED_DPI),
-        "the group charge admits the request and the render fits it"
-    );
+    assert!(budgeted_dpi(&doc, limit - 1, BUDGET_REQUESTED_DPI).is_none());
+    let reduced = budgeted_dpi(&doc, limit - 1, BUDGET_MINIMUM_DPI).expect("adaptive retry renders");
+    assert!(reduced < BUDGET_REQUESTED_DPI);
 }
 
-/// A knockout group reserves a larger workspace than one copy: a limit between the copy charge
-/// and the knockout charge lowers the DPI and renders.
 #[test]
-fn an_ink_page_with_a_knockout_group_lowers_dpi_to_the_knockout_charge() {
+fn an_ink_page_with_a_knockout_group_lowers_dpi_instead_of_failing() {
     let doc = knockout_group_page();
-    assert_eq!(
-        budgeted_dpi(
-            &doc,
-            one_ink_peak_charge(BUDGET_REQUESTED_DPI, 3 * CANVAS + KNOCKOUT + SCRATCH),
-            BUDGET_MINIMUM_DPI
-        ),
-        Some(BUDGET_REQUESTED_DPI),
-        "the knockout charge admits the request and the render fits it"
-    );
-    assert_eq!(
-        budgeted_dpi(&doc, one_ink_charge(BUDGET_REQUESTED_DPI, 1), BUDGET_MINIMUM_DPI),
-        Some(163),
-    );
+    let limit = one_ink_charge(BUDGET_REQUESTED_DPI, 1);
+    assert!(budgeted_dpi(&doc, limit, BUDGET_REQUESTED_DPI).is_none());
+    let dpi = budgeted_dpi(&doc, limit, BUDGET_MINIMUM_DPI).expect("the knockout workspace fits after retry");
+    assert!(dpi < BUDGET_REQUESTED_DPI);
 }
 
 /// A page with an ink but no soft mask or knockout group never copies the planes: it keeps its
@@ -754,64 +737,67 @@ fn a_page_without_transparency_keeps_the_per_plate_knockout() {
     );
 }
 
-/// A group's stroke and fill-stroke under a non-separable blend reserve the widest paint scratch.
-/// A limit just above the charge of a 9-byte scratch is below the run-time peak, so the fit must lower the
-/// DPI and the render succeeds.
 #[test]
 fn a_group_stroke_under_a_non_separable_blend_lowers_dpi_instead_of_failing() {
     let doc = stroking_group_page();
-    let narrow = one_ink_peak_charge(BUDGET_REQUESTED_DPI, 3 * CANVAS + 10);
-    let dpi = budgeted_dpi(&doc, narrow, BUDGET_MINIMUM_DPI).expect("the fit lowers the DPI");
-    assert!(
-        dpi < BUDGET_REQUESTED_DPI,
-        "lowered from {BUDGET_REQUESTED_DPI}, got {dpi}"
-    );
+    // The source replay holds three canvases while the fill-stroke holds
+    // two snapshots, one blend pixmap, and six bytes of coverage.
+    let limit = workspace_limit(3 * CANVAS + 17);
+    assert!(budgeted_dpi(&doc, limit, BUDGET_REQUESTED_DPI).is_none());
+    let dpi = budgeted_dpi(&doc, limit, BUDGET_MINIMUM_DPI).expect("the fit lowers the DPI");
+    assert!(dpi < BUDGET_REQUESTED_DPI);
     assert_eq!(
-        budgeted_dpi(
-            &doc,
-            one_ink_peak_charge(BUDGET_REQUESTED_DPI, 3 * CANVAS + SCRATCH),
-            BUDGET_MINIMUM_DPI
-        ),
+        budgeted_dpi(&doc, workspace_limit(3 * CANVAS + 19), BUDGET_REQUESTED_DPI),
         Some(BUDGET_REQUESTED_DPI)
     );
 }
 
-/// Each nested group reserves its own rgba and sidecar copy.
 #[test]
 fn a_group_inside_a_group_is_charged_each_level() {
     let doc = nested_group_page();
-    let one_level = one_ink_peak_charge(BUDGET_REQUESTED_DPI, 3 * CANVAS + SCRATCH);
+    let one_level = workspace_limit(2 * CANVAS + NORMAL_FILL);
     let dpi = budgeted_dpi(&doc, one_level, BUDGET_MINIMUM_DPI).expect("the fit lowers the DPI");
-    assert!(
-        dpi < BUDGET_REQUESTED_DPI,
-        "lowered from {BUDGET_REQUESTED_DPI}, got {dpi}"
+    assert!(dpi < BUDGET_REQUESTED_DPI);
+    assert_eq!(
+        budgeted_dpi(&doc, workspace_limit(3 * CANVAS + NORMAL_FILL), BUDGET_REQUESTED_DPI),
+        Some(BUDGET_REQUESTED_DPI)
     );
+}
+
+#[test]
+fn nested_non_normal_groups_hold_both_source_recovery_canvases() {
+    let outer = group_form_obj(
+        5,
+        "/XObject << /G 6 0 R >> /ExtGState << /Blend << /BM /Multiply >> >>",
+        "/Blend gs /G Do",
+    );
+    let inner = group_form_obj(6, "", "/CS0 cs 0.8 scn 10 10 60 60 re f");
+    let doc = build_page_with("/T gs /F Do", SPOT_A, "/BM /Multiply", &[&outer, &inner]);
+
+    // Four canvases plus fill scratch cover either replay alone. During the
+    // outer replay the inner group starts its own replay and needs a fifth.
+    let one_recovery = workspace_limit(4 * CANVAS + NORMAL_FILL + 1);
+    assert!(budgeted_dpi(&doc, one_recovery, BUDGET_REQUESTED_DPI).is_none());
+    let dpi = budgeted_dpi(&doc, one_recovery, BUDGET_MINIMUM_DPI).expect("nested recovery renders after retry");
+    assert!(dpi < BUDGET_REQUESTED_DPI);
     assert_eq!(
         budgeted_dpi(
             &doc,
-            one_ink_peak_charge(BUDGET_REQUESTED_DPI, 4 * CANVAS + SCRATCH),
-            BUDGET_MINIMUM_DPI
+            workspace_limit(5 * CANVAS + NORMAL_FILL + 1),
+            BUDGET_REQUESTED_DPI
         ),
         Some(BUDGET_REQUESTED_DPI)
     );
 }
 
-/// A soft mask painting inside a group adds the mask workspace, backdrop and snapshots.
 #[test]
 fn a_soft_mask_inside_a_group_is_charged_its_workspaces() {
     let doc = soft_mask_in_group_page();
-    let without_mask = one_ink_peak_charge(BUDGET_REQUESTED_DPI, 4 * CANVAS + SCRATCH);
+    let without_mask = workspace_limit(2 * CANVAS + NORMAL_FILL);
     let dpi = budgeted_dpi(&doc, without_mask, BUDGET_MINIMUM_DPI).expect("the fit lowers the DPI");
-    assert!(
-        dpi < BUDGET_REQUESTED_DPI,
-        "lowered from {BUDGET_REQUESTED_DPI}, got {dpi}"
-    );
+    assert!(dpi < BUDGET_REQUESTED_DPI);
     assert_eq!(
-        budgeted_dpi(
-            &doc,
-            one_ink_peak_charge(BUDGET_REQUESTED_DPI, 4 * CANVAS + SCRATCH + SOFT_MASK_IN_GROUP),
-            BUDGET_MINIMUM_DPI
-        ),
+        budgeted_dpi(&doc, workspace_limit(4 * CANVAS), BUDGET_REQUESTED_DPI),
         Some(BUDGET_REQUESTED_DPI)
     );
 }

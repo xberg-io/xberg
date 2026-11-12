@@ -15,6 +15,7 @@ pub(super) struct KnockoutResources {
     ordinary_work: u64,
     paint_operations: usize,
     failure: Option<String>,
+    workspace_shortfall: Option<(usize, usize)>,
     work_exhausted: bool,
     degradations: usize,
     native: Arc<AtomicUsize>,
@@ -31,6 +32,7 @@ impl Default for KnockoutResources {
             ordinary_work: 0,
             paint_operations: 0,
             failure: None,
+            workspace_shortfall: None,
             work_exhausted: false,
             degradations: 0,
             native: Arc::new(AtomicUsize::new(0)),
@@ -83,6 +85,7 @@ impl KnockoutResources {
         self.ordinary_work = 0;
         self.paint_operations = 0;
         self.failure = None;
+        self.workspace_shortfall = None;
         self.work_exhausted = false;
         self.degradations = 0;
         self.native.store(0, Ordering::Relaxed);
@@ -95,6 +98,10 @@ impl KnockoutResources {
 
     pub(super) fn active(&self) -> bool {
         self.depth.load(Ordering::Relaxed) > 0
+    }
+
+    pub(super) fn workspace_shortfall(&self) -> Option<(usize, usize)> {
+        self.workspace_shortfall
     }
 
     pub(super) fn retained_bytes(&self) -> u64 {
@@ -151,8 +158,14 @@ impl KnockoutResources {
         let Some(bytes) = required else {
             return self.refuse("workspace arithmetic");
         };
-        let next = self.live.load(Ordering::Relaxed).checked_add(bytes);
-        if next.is_none_or(|value| value > self.limit || value > isize::MAX as usize) {
+        let Some(next) = self.live.load(Ordering::Relaxed).checked_add(bytes) else {
+            return self.refuse("workspace arithmetic");
+        };
+        if next > isize::MAX as usize {
+            return self.refuse("workspace arithmetic");
+        }
+        if next > self.limit {
+            self.workspace_shortfall = Some((next, self.limit));
             return self.refuse("workspace");
         }
         self.live.fetch_add(bytes, Ordering::Relaxed);
@@ -272,6 +285,7 @@ mod tests {
         drop(resources.reserve(Some(16)).expect("exact boundary fits"));
         let reservation = resources.reserve(Some(16)).expect("released bytes can be reused");
         assert!(resources.reserve(Some(1)).is_err());
+        assert_eq!(resources.workspace_shortfall(), Some((25, 24)));
         drop(reservation);
         assert!(
             resources.reserve(Some(1)).is_err(),
@@ -279,6 +293,7 @@ mod tests {
         );
         resources.reset(Some(24));
         resources.canvas(8);
+        assert_eq!(resources.workspace_shortfall(), None);
         assert!(resources.reserve(Some(16)).is_ok(), "a new page resets the refusal");
     }
 
@@ -291,6 +306,7 @@ mod tests {
         }
         assert_eq!(frames.len(), 64);
         assert!(resources.reserve(Some(0)).is_err());
+        assert_eq!(resources.workspace_shortfall(), None, "resizing cannot fix nesting");
         drop(frames);
         assert_eq!(resources.depth.load(Ordering::Relaxed), 0);
     }
