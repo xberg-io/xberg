@@ -54,32 +54,6 @@ impl MatchedLayerOccurrences {
         (!matched.is_empty()).then_some(Self(matched))
     }
 
-    pub(in crate::extractors::pdf::ocr) fn apply_prepend(
-        &self,
-        first: &mut LayerFirst,
-        flat: &mut String,
-        structured: &mut crate::types::internal::InternalDocument,
-        page: u32,
-    ) {
-        self.trim_prepend(first, flat, structured, page);
-        use crate::types::{
-            OcrElementLevel,
-            internal::{ElementKind, InternalElement},
-        };
-
-        if !first.lines.trim().is_empty() {
-            let element = InternalElement::text(
-                ElementKind::OcrText {
-                    level: OcrElementLevel::Block,
-                },
-                first.lines.as_str(),
-                0,
-            );
-            super::insert_layer_elements(structured, None, vec![element]);
-        }
-        *flat = super::text_with_layer_first(flat, first);
-    }
-
     /// Both final views must account for every matched OCR occurrence. If a pass drops or
     /// repeats one, keep the native occurrences of that literal.
     pub(in crate::extractors::pdf::ocr) fn trim_prepend(
@@ -698,5 +672,4 @@ mod matched_layer_occurrences_tests {
 }
 
 #[cfg(test)]
-#[path = "matched_layer_acceptance_tests.rs"]
 mod matched_layer_acceptance_tests;

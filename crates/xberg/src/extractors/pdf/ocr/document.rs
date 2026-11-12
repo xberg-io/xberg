@@ -1059,20 +1059,12 @@ pub(super) fn insert_layer_into_document(
     page: Option<u32>,
     layer: &str,
 ) {
-    insert_layer_elements(doc, page, flat_ocr_page_document(layer).elements);
-}
-
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn insert_layer_elements(
-    doc: &mut crate::types::internal::InternalDocument,
-    page: Option<u32>,
-    mut layer_elements: Vec<crate::types::internal::InternalElement>,
-) {
     use crate::types::internal::RelationshipTarget;
 
     let at = page
         .and_then(|page| doc.elements.iter().position(|element| element.page == Some(page)))
         .unwrap_or(0);
+    let mut layer_elements = flat_ocr_page_document(layer).elements;
     for element in &mut layer_elements {
         element.page = page;
     }
@@ -1100,6 +1092,20 @@ pub(super) fn put_layer_first_in_document(
 ) {
     insert_layer_into_document(doc, page, &first.lines);
 }
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(super) fn finish_mixed_layer_prepend(
+    text: &mut String,
+    structured: Option<&mut crate::types::internal::InternalDocument>,
+    first: &LayerFirst,
+) {
+    if !first.lines.is_empty()
+        && let Some(page) = structured
+    {
+        put_layer_first_in_document(page, None, first);
+    }
+    *text = text_with_layer_first(text, first);
+}
+
 /// The page's noise verdict in a whole-document run: `None` when the noise gate discarded the OCR
 /// text of the page, else whether the page has the noise verdict. A page with no verdict has
 /// not. ~keep

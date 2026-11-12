@@ -3257,21 +3257,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         let Some(text) = accepted_replacements.get_mut(page_number) else {
             continue;
         };
-        if let Some(page_doc) = structured_ocr_pages.get_mut(page_number) {
-            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-            if !alternative_raster_pages.contains(page_number)
-                && !table_only_xobject_recovery_pages.contains(page_number)
-                && !caption_rewrites.contains_key(page_number)
-                && let Some(matched) = matched_layer_occurrences.get(page_number)
-            {
-                matched.apply_prepend(first, text, page_doc, *page_number);
-                continue;
-            }
-            if !first.lines.is_empty() {
-                super::document::put_layer_first_in_document(page_doc, None, first);
-            }
+        let page_doc = structured_ocr_pages.get_mut(page_number);
+        #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        if !alternative_raster_pages.contains(page_number)
+            && !table_only_xobject_recovery_pages.contains(page_number)
+            && !caption_rewrites.contains_key(page_number)
+            && let Some(matched) = matched_layer_occurrences.get(page_number)
+            && let Some(doc) = page_doc.as_deref()
+        {
+            matched.trim_prepend(first, text, doc, *page_number);
         }
-        *text = super::document::text_with_layer_first(text, first);
+        super::document::finish_mixed_layer_prepend(text, page_doc, first);
     }
 
     if !config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {

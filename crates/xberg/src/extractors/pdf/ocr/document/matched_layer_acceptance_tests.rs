@@ -1,7 +1,7 @@
 use super::MatchedLayerOccurrences;
 use crate::extractors::pdf::ocr::document::{
-    flat_ocr_page_document, layer_lines_to_put_first, merge_structured_ocr_pages_into_internal_document,
-    text_with_layer_first,
+    finish_mixed_layer_prepend, flat_ocr_page_document, layer_lines_to_put_first,
+    merge_structured_ocr_pages_into_internal_document, text_with_layer_first,
 };
 use crate::ocr_metadata_keys::{OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY};
 use crate::types::{BoundingBox, ExtractedDocument, OcrBoundingGeometry, OcrElement, OcrElementLevel, Table};
@@ -109,8 +109,11 @@ fn mixed_prepend_keeps_769_once_and_preserves_a_standalone_ocr_cell() {
     let mut flat = read.content;
     let mut structured = flat_ocr_page_document("");
     structured.tables = read.tables;
-    proof.apply_prepend(&mut first, &mut flat, &mut structured, 1);
-    assert_eq!(structured.elements[0].text, expected_prefix);
+    proof.trim_prepend(&mut first, &flat, &structured, 1);
+    finish_mixed_layer_prepend(&mut flat, Some(&mut structured), &first);
+    assert_eq!(structured.elements[0].text, "NativeOnly");
+    assert_eq!(structured.elements[1].text, "Tail");
+    assert!(flat.starts_with(expected_prefix));
     let mut merged = flat_ocr_page_document("native placeholder");
     merged.elements[0].page = Some(1);
     merge_structured_ocr_pages_into_internal_document(
@@ -119,10 +122,27 @@ fn mixed_prepend_keeps_769_once_and_preserves_a_standalone_ocr_cell() {
         &ahash::AHashMap::from([(1, structured)]),
     );
     for output in [flat, crate::rendering::render_plain(&merged)] {
-        assert!(output.starts_with(expected_prefix), "{output:?}");
         for token in ["769", "NativeOnly", "OcrOnly"] {
             assert_eq!(count(&output, token), 1, "{token} in {output:?}");
         }
     }
     assert_eq!(merged.tables[0].cells, [vec!["769"], vec!["OcrOnly"]]);
+}
+
+#[test]
+fn unmatched_prepend_preserves_legacy_flat_and_structured_bytes() {
+    let first = crate::extractors::pdf::ocr::document::LayerFirst {
+        lines: "  Native  row\n  indented\n\n  Second paragraph  ".into(),
+    };
+    let mut flat = "  OCR text\nwith spacing  \n".to_owned();
+    let mut structured = flat_ocr_page_document(&flat);
+    finish_mixed_layer_prepend(&mut flat, Some(&mut structured), &first);
+    assert_eq!(
+        flat.as_bytes(),
+        b"  Native  row\n  indented\n\n  Second paragraph  \n\n  OCR text\nwith spacing  \n"
+    );
+    assert_eq!(
+        crate::rendering::render_plain(&structured).as_bytes(),
+        b"Native  row\n  indented\n\nSecond paragraph\n\nOCR text\nwith spacing",
+    );
 }
