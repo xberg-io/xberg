@@ -36,12 +36,34 @@ const NFC_BULLET: u8 = 23;
 const NFC_NONE: u8 = 255;
 
 /// `MSONFC` 0 paints plain decimal digits ([MS-DOC] 2.9.131); 1..=4 are the
-/// upper/lower-case roman and letter schemes [`painted_number`] writes.
+/// upper/lower-case roman and letter schemes [`painted_number`] writes; 22 is
+/// the zero-padded decimal the DOCX counterpart writes as `w:numFmt`
+/// `decimalZero` ([MS-OSHARED] 2.2.5 `MSONFC`, value 0x16).
 const NFC_DECIMAL: u8 = 0;
 const NFC_UPPER_ROMAN: u8 = 1;
 const NFC_LOWER_ROMAN: u8 = 2;
 const NFC_UPPER_LETTER: u8 = 3;
 const NFC_LOWER_LETTER: u8 = 4;
+const NFC_ZERO_PADDED: u8 = 22;
+
+/// [MS-DOC] 2.9.145 gives an `Xst` no length bound beyond its 16-bit count,
+/// but a level's label text is Word's to write and Word's are short; the
+/// template is repainted for every list-bound paragraph, so a hostile 128 KB
+/// `Xst` (the count's maximum) would make memory proportional to
+/// paragraphs x template length. A template longer than this is refused at
+/// read: the level keeps its count but paints no label.
+const TEMPLATE_MAX_UNITS: usize = 64;
+
+/// The longest number [`painted_number`] writes: the 15-symbol upper-case
+/// roman numeral of 3999, the largest value any scheme here paints.
+const MAX_PAINTED_NUMBER_CHARS: usize = 15;
+
+/// The largest label a well-formed template can paint: the template's units,
+/// each literal painting one character, plus one placeholder per outline level
+/// ([MS-DOC] 2.9.28), each painting at most [`MAX_PAINTED_NUMBER_CHARS`]
+/// characters. [`ListFormats::paint_label`] refuses a label past it, so the
+/// repaint per paragraph stays bounded whatever the template repeats.
+const LABEL_MAX_CHARS: usize = TEMPLATE_MAX_UNITS + LVL_COUNT_MULTILEVEL * MAX_PAINTED_NUMBER_CHARS;
 
 /// [MS-DOC] bounds `LVLF.iStartAt` and `LFOLVL.iStartAt` to `0..=0x7FFF`
 /// (2.9.27, 2.9.144); outside that range a start value is malformed and the
@@ -65,7 +87,8 @@ pub(crate) struct DocListMembership {
     /// Number of a Paragraph" across the whole main story, so it runs on across the
     /// headings between a list's paragraphs and survives a restart. `None` for a
     /// level that paints no number: bullets, schemes the label channel does not
-    /// express, unreadable tables.
+    /// express, templates refused at read (a past-`TEMPLATE_MAX_UNITS` `Xst`),
+    /// unreadable tables.
     #[serde(default)]
     pub label: Option<String>,
 }
@@ -88,7 +111,8 @@ pub(super) struct LevelFormat {
     /// The level's `Xst` label template in UTF-16 units, where a character
     /// 0x0000..=0x0008 ([MS-DOC] 2.9.28) is a placeholder for the number of
     /// the level whose index it is -- the binary spelling of DOCX's `%1.`.
-    /// Every label this extractor paints is painted from it.
+    /// Every label this extractor paints is painted from it. A template longer
+    /// than `TEMPLATE_MAX_UNITS` is refused at read and stored as none.
     pub template: Vec<u16>,
 }
 
@@ -114,17 +138,17 @@ struct LfoEntry {
 }
 
 /// The effective list binding of one paragraph: the `LFO`'s list identity,
-/// the effective `LVL` format of its level (the embedded one when the `ilfo`'s
-/// `LFOLVL.fFormatting` replaces it), and the level overrides its `ilfo`
-/// carries.
+/// the level's effective `LVL` format borrowed from the list tables (the
+/// embedded one when the `ilfo`'s `LFOLVL.fFormatting` replaces it), and the
+/// level overrides its `ilfo` carries.
 #[derive(Debug, Clone)]
-struct EffectiveLevel {
+struct EffectiveLevel<'a> {
     /// The `lsid` of the list the paragraph belongs to. Paragraphs sharing
     /// an `lsid` share a number sequence, however many `ilfo`s name it.
     lsid: u32,
     /// The level's effective format. `None` when the list tables do not
     /// describe the level.
-    format: Option<LevelFormat>,
+    format: Option<&'a LevelFormat>,
     /// The `ilfo`'s start override for this level, if any.
     start_override: Option<u32>,
 }
@@ -262,19 +286,18 @@ impl ListFormats {
     /// Resolve the list a paragraph's `ilfo`/`ilvl` binds to. `None` means
     /// the `ilfo` names no `LFO` -- the paragraph is not in a list ([MS-DOC]
     /// "Determining List Formatting of a Paragraph").
-    fn effective_level(&self, ilfo: u16, ilvl: u8) -> Option<EffectiveLevel> {
+    fn effective_level(&self, ilfo: u16, ilvl: u8) -> Option<EffectiveLevel<'_>> {
         let entry = self.overrides_by_ilfo.get(&ilfo)?;
         let base = self
             .levels_by_lsid
             .get(&entry.lsid)
-            .and_then(|levels| levels.get(usize::from(ilvl)))
-            .cloned();
-        let level_override = entry.levels.get(&ilvl).cloned();
+            .and_then(|levels| levels.get(usize::from(ilvl)));
+        let level_override = entry.levels.get(&ilvl);
         Some(EffectiveLevel {
             lsid: entry.lsid,
             // An `fFormatting` override replaces the level's own formatting
             // with the embedded `LVL`'s ([MS-DOC] 2.9.144).
-            format: level_override.as_ref().and_then(|lvl| lvl.embedded.clone()).or(base),
+            format: level_override.and_then(|lvl| lvl.embedded.as_ref()).or(base),
             start_override: level_override.and_then(|lvl| lvl.start_at),
         })
     }
@@ -297,7 +320,7 @@ impl ListFormats {
         // "Determining List Formatting of a Paragraph" -- an `ilfo` past the
         // table binds nothing).
         let effective = self.effective_level(binding.ilfo, level)?;
-        let format = effective.format.as_ref();
+        let format = effective.format;
 
         // Step 8 of the same walk counts *every* paragraph with a nonzero
         // `iLfo`, however its level paints -- so the restart below and the
@@ -402,19 +425,27 @@ impl ListFormats {
     /// Paint a level's label: its `Xst` template ([MS-DOC] 2.9.28) with every
     /// placeholder -- a character 0x0000..=0x0008 -- replaced by the
     /// referenced level's counted number in that level's scheme. `None` when
-    /// a placeholder names a level the tables do not describe, or a number
-    /// whose scheme the label channel does not express.
+    /// the template was refused at read (a past-`TEMPLATE_MAX_UNITS` `Xst`
+    /// stores none), a placeholder names a level the tables do not describe, a
+    /// number whose scheme the label channel does not express, or the painted
+    /// label would pass [`LABEL_MAX_CHARS`].
     fn paint_label(
         &self,
-        effective: &EffectiveLevel,
+        effective: &EffectiveLevel<'_>,
         format: &LevelFormat,
         level: u8,
         state: &NumberingState,
     ) -> Option<String> {
+        // A refused template, like a level with no template of its own, paints
+        // no number.
+        if format.template.is_empty() {
+            return None;
+        }
         let levels = self.levels_of(effective.lsid);
         let mut label = String::new();
+        let mut painted_chars = 0usize;
         for &unit in &format.template {
-            if unit <= 8
+            let segment = if unit <= 8
                 && let Ok(at) = u8::try_from(unit)
             {
                 // This level's own placeholder reads the effective format --
@@ -431,10 +462,17 @@ impl ListFormats {
                         .contains(&referenced.start_at)
                         .then_some(referenced.start_at as u32)
                 })?;
-                label.push_str(&painted_number(value, referenced.nfc)?);
+                painted_number(value, referenced.nfc)?
             } else {
-                label.push(char::from_u32(u32::from(unit))?);
+                char::from_u32(u32::from(unit))?.to_string()
+            };
+            painted_chars += segment.chars().count();
+            // The bound a well-formed template cannot pass; a hostile one
+            // stops painting rather than growing with each paragraph.
+            if painted_chars > LABEL_MAX_CHARS {
+                return None;
             }
+            label.push_str(&segment);
         }
         Some(label)
     }
@@ -505,11 +543,26 @@ fn read_level(blocks: &[u8], pos: usize, level: u8) -> Option<(LevelFormat, usiz
     // 0x0000..=0x0008 is a placeholder for the number of the level whose index it is
     // ([MS-DOC] 2.9.28); the rest is literal label text -- bullets, composite
     // multilevel labels, parentheses, whatever the template paints.
-    let cch = read_u16_at(blocks, after_grpprls)?;
+    let cch = usize::from(read_u16_at(blocks, after_grpprls)?);
     let chars_at = after_grpprls + 2;
-    let template = (0..usize::from(cch))
-        .map(|unit| read_u16_at(blocks, chars_at + unit * 2))
-        .collect::<Option<Vec<_>>>()?;
+    // The table must hold the whole `Xst`: a truncated record is malformed and
+    // drops the rest of the list, as before.
+    let end = chars_at.checked_add(cch * 2)?;
+    if end > blocks.len() {
+        return None;
+    }
+    // A template past `TEMPLATE_MAX_UNITS` is refused ([MS-DOC] 2.9.145 gives
+    // `Xst` no length bound beyond the count; the bound is the extractor's,
+    // against the per-paragraph repaint): the record is walked past intact so
+    // the levels behind it still read, but the level stores no template and
+    // paints no label.
+    let template = if cch > TEMPLATE_MAX_UNITS {
+        Vec::new()
+    } else {
+        (0..cch)
+            .map(|unit| read_u16_at(blocks, chars_at + unit * 2))
+            .collect::<Option<Vec<_>>>()?
+    };
     Some((
         LevelFormat {
             nfc,
@@ -518,7 +571,7 @@ fn read_level(blocks: &[u8], pos: usize, level: u8) -> Option<(LevelFormat, usiz
             restart_lim,
             template,
         },
-        chars_at + usize::from(cch) * 2,
+        end,
     ))
 }
 

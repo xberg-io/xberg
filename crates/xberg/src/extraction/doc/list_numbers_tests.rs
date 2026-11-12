@@ -118,13 +118,15 @@ fn plf_lfo(lsid: u32, overrides: &[(u8, Option<i32>)]) -> Vec<u8> {
     out
 }
 
-/// `ListFormats` over synthetic blocks the FIB stub points at.
+/// `ListFormats` over synthetic blocks the FIB stub points at. The `PlfLst` block sits
+/// at 0 and `PlfLfo` follows it, past 0x1000 when the list table itself is larger.
 fn formats(plf_lst: &[u8], plf_lfo: &[u8]) -> ListFormats {
-    let lfo_at = 0x1000;
+    let lst_at = 0usize;
+    let lfo_at = plf_lst.len().max(0x1000);
     let rg = 0x40;
     let mut word_doc = vec![0u8; rg + FIB_IDX_PLF_LFO * 8 + 8];
     for (index, (fc, block)) in [
-        (FIB_IDX_PLF_LST, (0usize, plf_lst)),
+        (FIB_IDX_PLF_LST, (lst_at, plf_lst)),
         (FIB_IDX_PLF_LFO, (lfo_at, plf_lfo)),
     ] {
         let at = rg + index * 8;
@@ -337,4 +339,91 @@ fn truncated_list_tables_never_panic() {
         let formats = formats(&lst, &lfo[..cut]);
         walked(&formats, &[(1, 0), (1, 1), (2, 0)]);
     }
+}
+
+#[test]
+fn a_template_past_the_unit_bound_paints_no_label() {
+    // One unit past the 64-unit template bound: the level keeps its count but paints no
+    // label. The refusal happens at read, independently of the painted-label cap -- this
+    // paint (65 characters) never reaches that cap's bound, so removing the template cap
+    // alone turns this test red.
+    let mut levels = decimal_levels(1);
+    levels[0].xst = vec![u16::from(b'x'); 65];
+    let formats = formats(&plf_lst(7, levels), &plf_lfo(7, &[(0, None)]));
+    let mut state = NumberingState::default();
+    let mut counted = 0;
+    for _ in 0..200 {
+        let membership = formats
+            .membership_for(ListBinding { ilfo: 1, ilvl: 0 }, &mut state)
+            .expect("the level still counts its paragraphs");
+        assert!(membership.ordered, "the refused template does not unorder the level");
+        assert!(
+            membership.label.is_none(),
+            "a template past the 64-unit bound paints no label, got {:?}",
+            membership.label
+        );
+        counted += 1;
+    }
+    assert_eq!(counted, 200, "every paragraph of the walk was counted");
+}
+
+#[test]
+fn an_oversized_label_template_paints_no_label_and_stays_bounded() {
+    // A hostile `Xst` at the 16-bit count's maximum (65 535 UTF-16 units, ~128 KB) is
+    // repainted for every list-bound paragraph: before the bounds, one 200-paragraph run
+    // built 200 labels of 65 536 characters each, memory proportional to
+    // paragraphs x template length and outside `SecurityLimits`. The red-before row of
+    // this test is the High's proof shape: the assertion below failed against unfixed
+    // code with "got 65535 chars", the unbounded paint itself. Post-fix both caps guard
+    // it: the template cap refuses the `Xst` at read, so this test passes even with the
+    // painted-label cap removed only jointly (removing the template cap alone is caught
+    // by `a_label_painted_beyond_its_cap_is_refused` on a template whose paint reaches
+    // that cap, and by `a_template_past_the_unit_bound_paints_no_label` on one that does
+    // not). The level keeps its count but paints no label.
+    let mut levels = decimal_levels(1);
+    levels[0].xst = vec![u16::from(b'x'); 65535];
+    let formats = formats(&plf_lst(7, levels), &plf_lfo(7, &[(0, None)]));
+    let mut state = NumberingState::default();
+    let mut counted = 0;
+    for _ in 0..200 {
+        let membership = formats
+            .membership_for(ListBinding { ilfo: 1, ilvl: 0 }, &mut state)
+            .expect("the level still counts its paragraphs");
+        assert!(membership.ordered, "the oversized template does not unorder the level");
+        assert!(
+            membership.label.is_none(),
+            "a template past Word's 64-unit label bound paints no label, got {} chars",
+            membership.label.as_ref().map_or(0, |label| label.chars().count())
+        );
+        counted += 1;
+    }
+    assert_eq!(counted, 200, "every paragraph of the walk was counted");
+}
+
+#[test]
+fn a_label_painted_beyond_its_cap_is_refused() {
+    // A template within the 64-unit bound can still paint past the label cap when every
+    // unit is a placeholder whose number is long: 64 copies of this level's own
+    // placeholder, upper-case roman at 3999, paint 15 symbols each -- 960 characters,
+    // past the bound a well-formed template cannot pass (64 template units plus nine
+    // placeholders' numbers). The label is refused, not truncated, so the repaint per
+    // paragraph stays bounded.
+    let mut levels = decimal_levels(1);
+    levels[0] = LevelSpec {
+        nfc: NFC_UPPER_ROMAN,
+        start: 3999,
+        xst: vec![0; 64],
+        ..decimal_level(1)
+    };
+    let formats = formats(&plf_lst(7, levels), &plf_lfo(7, &[(0, None)]));
+    let mut state = NumberingState::default();
+    let membership = formats
+        .membership_for(ListBinding { ilfo: 1, ilvl: 0 }, &mut state)
+        .expect("the level still counts its paragraphs");
+    assert!(membership.ordered, "the oversized painted label does not unorder the level");
+    assert!(
+        membership.label.is_none(),
+        "a label past the paint bound is refused, got {} chars",
+        membership.label.as_ref().map_or(0, |label| label.chars().count())
+    );
 }
