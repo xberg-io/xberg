@@ -8957,7 +8957,7 @@ mod unread_page_blank_flag_tests {
     }
 
     #[cfg(feature = "ocr")]
-    const SLOW_PAGE: std::time::Duration = std::time::Duration::from_secs(12);
+    const SLOW_PAGE: std::time::Duration = std::time::Duration::from_secs(9);
 
     #[cfg(feature = "ocr")]
     impl crate::plugins::Plugin for SlowAfterStopBackend {
@@ -9005,8 +9005,8 @@ mod unread_page_blank_flag_tests {
     }
 
     /// #3055: a page still being recognized when the stop arrives must not hold the call past the
-    /// grace. Two workers read pages 2 and 3; page 2 asks for the stop and page 3 would take 12 s.
-    /// The call has to return in a few seconds with page 3 and the page after it listed as unread.
+    /// grace. Two workers read pages 2 and 3; whichever the backend serves first asks for the stop and the
+    /// other would take 9 s. The call has to return in a few seconds with that page and page 4 unread.
     #[cfg(feature = "ocr")]
     #[tokio::test]
     #[serial]
@@ -9056,6 +9056,17 @@ mod unread_page_blank_flag_tests {
             .filter(|failure| failure.error == ocr::TIME_LIMIT_UNREAD_PAGE_ERROR)
             .map(|failure| failure.page)
             .collect();
-        assert_eq!(unread, [3, 4]);
+        let mut unread = unread;
+        unread.sort_unstable();
+        assert_eq!(
+            unread.len(),
+            2,
+            "the slow page and the page after the batch: {unread:?}"
+        );
+        assert!(unread.contains(&4), "the page after the batch is unread: {unread:?}");
+        assert!(
+            unread.iter().any(|page| [2, 3].contains(page)),
+            "one page of the batch is unread: {unread:?}"
+        );
     }
 }
