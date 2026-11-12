@@ -288,6 +288,7 @@ fn embedded_bullet_positions(text: &str) -> Vec<usize> {
     let mut previous: Option<char> = None;
     let mut previous_non_space = None;
     let mut product_end = 0;
+    let mut item_start = None;
     let mut chars = text.char_indices().peekable();
     while let Some((position, character)) = chars.next() {
         if matches!(character, '\u{2022}' | '\u{00B7}') {
@@ -297,13 +298,21 @@ fn embedded_bullet_positions(text: &str) -> Vec<usize> {
                 previous_non_space.is_some_and(|c: char| c.is_ascii_digit() || matches!(c, ')' | ']' | '}'));
             let right = position + character.len_utf8();
             let continues_product = product_end != 0 && text[product_end..position].trim().is_empty();
+            let follows_numeric_item = item_start.is_some_and(|start| {
+                text[start..position]
+                    .trim()
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || byte == b'.')
+            });
             if !glued
                 && left_operand
-                && let Some(number_end) = numeric_multiplier_end(&text[right..], continues_product)
+                && !follows_numeric_item
+                && let Some(number_end) = numeric_multiplier_end(&text[right..], character, continues_product)
             {
                 product_end = right + number_end;
             } else if !glued {
                 positions.push(position);
+                item_start = Some(right);
             }
         }
         previous = Some(character);
@@ -314,13 +323,22 @@ fn embedded_bullet_positions(text: &str) -> Vec<usize> {
     positions
 }
 
-fn numeric_multiplier_end(text: &str, continues_product: bool) -> Option<usize> {
+fn numeric_multiplier_end(text: &str, glyph: char, continues_product: bool) -> Option<usize> {
     let operand = text.trim_start();
-    // A dot attached to the right-hand number can be a decimal point in a PDF table. ~keep
-    if operand.len() == text.len() || !operand.starts_with(|c: char| c.is_ascii_digit()) {
+    if !operand.starts_with(|c: char| c.is_ascii_digit()) {
         return None;
     }
     let after_number = operand.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.');
+    // Right-attached dots can be decimal points in tables. Require evidence of a product chain. ~keep
+    if operand.len() == text.len()
+        && !(glyph == '·'
+            && (continues_product
+                || after_number.trim_start().strip_prefix('·').is_some_and(|next| {
+                    next.starts_with(char::is_whitespace) && next.trim_start().starts_with(|c: char| c.is_ascii_digit())
+                })))
+    {
+        return None;
+    }
     // A count followed by a word can open a genuine item, such as “2 options”. A multiplication
     // chain already establishes that its final number is a multiplier. ~keep
     if after_number.trim_start().starts_with(char::is_alphabetic)
@@ -1021,6 +1039,40 @@ mod tests {
             assert!(item.is_list_item);
             assert_eq!(item.lines[0].segments[0].text, expected);
         }
+    }
+
+    #[test]
+    fn embedded_bullets_split_numeric_only_items() {
+        let mut paragraphs = vec![make_body_paragraph("Available sizes • 2 • 3 • 4", 10.0)];
+        split_embedded_list_items(&mut paragraphs);
+        assert_eq!(paragraphs.len(), 4);
+        assert!(!paragraphs[0].is_list_item);
+        assert_eq!(paragraphs[0].lines[0].segments[0].text, "Available sizes");
+        for (item, expected) in paragraphs[1..].iter().zip(["2", "3", "4"]) {
+            assert!(item.is_list_item);
+            assert_eq!(item.lines[0].segments[0].text, expected);
+        }
+    }
+
+    #[test]
+    fn mixed_spacing_in_multiplication_keeps_the_paragraph() {
+        let text = "Thus 2 ·3 · 4 means multiplication";
+        let mut paragraphs = vec![make_body_paragraph(text, 10.0)];
+        split_embedded_list_items(&mut paragraphs);
+        assert_eq!(paragraphs.len(), 1);
+        assert!(!paragraphs[0].is_list_item);
+        assert_eq!(paragraphs[0].lines[0].segments[0].text, text);
+    }
+
+    #[test]
+    fn attached_decimal_table_dots_keep_the_paragraph() {
+        let text = "Values 12 ·34 56·78";
+        assert_eq!(embedded_bullet_positions(text), vec![10]);
+        let mut paragraphs = vec![make_body_paragraph(text, 10.0)];
+        split_embedded_list_items(&mut paragraphs);
+        assert_eq!(paragraphs.len(), 1);
+        assert!(!paragraphs[0].is_list_item);
+        assert_eq!(paragraphs[0].lines[0].segments[0].text, text);
     }
 
     /// Items split off a paragraph keep their word spaces: word-per-segment items with zero
