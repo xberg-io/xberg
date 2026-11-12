@@ -7364,6 +7364,39 @@ impl PipelineXObjectRecoveryOutcome {
             || !self.formulas.is_empty()
     }
 }
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn plain_budget_recovery_list_document(
+    recovery: &PipelineXObjectRecoveryOutcome,
+    config: &ExtractionConfig,
+) -> Option<crate::types::internal::InternalDocument> {
+    if config.output_format != crate::core::config::OutputFormat::Plain
+        || config.pages.as_ref().is_some_and(|pages| pages.insert_page_markers)
+        || !recovery.tables.is_empty()
+    {
+        return None;
+    }
+    let pages: Vec<_> = recovery
+        .page_texts
+        .iter()
+        .map(|text| {
+            let mut paragraphs = crate::pdf::structure::adapters::ocr_text_to_paragraphs(text);
+            apply_ocr_text_list_fallback(&mut paragraphs);
+            paragraphs
+        })
+        .collect();
+    if !pages.iter().flatten().any(|paragraph| paragraph.is_list_item) {
+        return None;
+    }
+    Some(crate::pdf::structure::assemble_internal_document(
+        pages,
+        &[],
+        None,
+        &[],
+        &Default::default(),
+    ))
+}
+
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) struct XObjectRecoveryContext<'a> {
     pub(super) budget: &'a mut crate::extractors::security::SecurityBudget,
@@ -8371,6 +8404,8 @@ async fn run_ocr_pipeline_stages(
     let mut stage_failures: Vec<(String, String)> = Vec::new();
     #[cfg(feature = "pdf")]
     let mut preferred_recovery_config = None;
+    #[cfg(feature = "pdf")]
+    let mut preferred_recovery_budget_refused = false;
 
     let automatic_paddle = inputs.detached_page.is_some()
         && uses_default_ocr_pipeline(ocr_config)
@@ -8394,7 +8429,9 @@ async fn run_ocr_pipeline_stages(
             ..config.clone()
         };
         #[cfg(feature = "pdf")]
-        if preferred_recovery_config.is_none() {
+        let is_preferred_recovery_stage = preferred_recovery_config.is_none();
+        #[cfg(feature = "pdf")]
+        if is_preferred_recovery_stage {
             preferred_recovery_config = Some(pre_page_ocr_config(&stage_config).into_owned());
         }
 
@@ -8576,6 +8613,10 @@ async fn run_ocr_pipeline_stages(
                 if crate::extraction::derive::is_invalid_public_ocr_document(&failed_stage.error) {
                     return Err(failed_stage);
                 }
+                #[cfg(feature = "pdf")]
+                if is_preferred_recovery_stage {
+                    preferred_recovery_budget_refused = render_refused_by_source_image_budget(&failed_stage.error);
+                }
                 tracing::warn!(
                     backend = %stage.backend,
                     error = %failed_stage.error,
@@ -8702,8 +8743,13 @@ async fn run_ocr_pipeline_stages(
             #[cfg(feature = "pdf")]
             if let Some(mut recovery) = xobject_recovery {
                 accumulated_usage.append(&mut recovery.llm_usage);
+                let doc = if preferred_recovery_budget_refused && inputs.content.is_some() {
+                    plain_budget_recovery_list_document(&recovery, config)
+                } else {
+                    None
+                };
                 let doc =
-                    attach_ocr_pipeline_stage_warnings(None, &recovery.text, &unavailable_backends, &stage_failures);
+                    attach_ocr_pipeline_stage_warnings(doc, &recovery.text, &unavailable_backends, &stage_failures);
                 let mut doc = attach_ocr_fallback_warnings(doc, &recovery.text, recovery.warnings);
                 if let Some(doc) = doc.as_mut() {
                     merge_ocr_page_failures(&mut doc.ocr_page_failures, std::mem::take(&mut recovery.page_failures));
