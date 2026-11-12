@@ -73,28 +73,41 @@ fn mixed_plain_drops_a_repeat_of_projected_prose() {
     let accepted = "Caf&#233; Café";
     let plain = "Café Café Café Summary";
     let document = crate::types::internal::InternalDocument::new("pdf");
-    let repeated = check_accepted_ocr_tokens(accepted, plain, &document, None).unwrap();
+    let repeated = check_accepted_ocr_tokens(accepted, plain, &document, &[])
+        .unwrap()
+        .repeated_for_page(&[])
+        .unwrap();
 
     let filtered = without_repeated_words(plain, &repeated);
     assert_eq!(filtered, "Café Café Summary");
     assert!(
-        check_accepted_ocr_tokens(accepted, &filtered, &document, None)
+        check_accepted_ocr_tokens(accepted, &filtered, &document, &[])
+            .unwrap()
+            .repeated_for_page(&[])
             .unwrap()
             .is_empty()
     );
 
     let accepted = "Caf&#233;";
     let plain = "Café Summary Café";
-    let repeated = check_accepted_ocr_tokens(accepted, plain, &document, None).unwrap();
+    let repeated = check_accepted_ocr_tokens(accepted, plain, &document, &[])
+        .unwrap()
+        .repeated_for_page(&[])
+        .unwrap();
     assert_eq!(without_repeated_words(plain, &repeated), "Café Summary");
 }
 
 fn render_mixed_plain_with_captions(captions: &[(&str, f64)]) -> String {
+    render_mixed_plain_with_prose_and_table("", captions)
+}
+
+fn render_mixed_plain_with_prose_and_table(prose: &str, captions: &[(&str, f64)]) -> String {
     use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
     use crate::types::{BoundingBox, Table};
 
     let cells = vec![vec!["North".into(), "10".into()]];
-    let accepted = crate::rendering::common::render_table_markdown(&cells);
+    let table = crate::rendering::common::render_table_markdown(&cells);
+    let accepted = format!("{prose}\n\n{table}");
     let mut document = InternalDocument::new("pdf");
     for &(caption, y0) in captions {
         let mut element = InternalElement::text(ElementKind::Paragraph, caption, 0).with_page(1);
@@ -109,10 +122,16 @@ fn render_mixed_plain_with_captions(captions: &[(&str, f64)]) -> String {
     let table_index = document.push_table(Table {
         cells,
         page_number: 1,
+        bounding_box: Some(BoundingBox {
+            x0: 20.0,
+            y0: 30.0,
+            x1: 120.0,
+            y1: 40.0,
+        }),
         ..Default::default()
     });
     document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(1));
-    reconcile_mixed_plain_page(accepted.trim_end(), &document, 1).expect("reconcile the Plain page")
+    reconcile_mixed_plain_page(accepted.trim(), &document, 1).expect("reconcile the Plain page")
 }
 
 #[test]
@@ -136,7 +155,53 @@ fn mixed_plain_table_rows_must_share_a_renderer_element() {
     let plain = "North 10\nSouth 20";
     let cells = vec![vec!["North".into(), "10".into()], vec!["South".into(), "20".into()]];
     let first_row_end = "North 10\n".len();
-    let separate_elements = [(0, first_row_end), (first_row_end, plain.len())];
-    assert!(!PlainWords::new(plain, plain).retains_table(&cells, Some(&separate_elements)));
-    assert!(PlainWords::new(plain, plain).retains_table(&cells, Some(&[(0, plain.len())])));
+    use crate::types::internal::{ElementKind, InternalElement};
+    let element = InternalElement::text(ElementKind::Table { table_index: 0 }, "", 0).with_page(1);
+    let source = crate::types::Table {
+        cells,
+        ..Default::default()
+    };
+    let separate_elements = [
+        PlainWriter {
+            start: 0,
+            end: first_row_end,
+            element: &element,
+        },
+        PlainWriter {
+            start: first_row_end,
+            end: plain.len(),
+            element: &element,
+        },
+    ];
+    assert!(!PlainWords::new(plain, plain).retains_table(0, &source, &separate_elements));
+    let one_element = [PlainWriter {
+        start: 0,
+        end: plain.len(),
+        element: &element,
+    }];
+    assert!(PlainWords::new(plain, plain).retains_table(0, &source, &one_element));
+}
+
+#[test]
+fn mixed_plain_keeps_distinct_caption_whole_when_accepted_prose_shares_a_word() {
+    assert_eq!(
+        render_mixed_plain_with_prose_and_table("North office", &[("North office", 150.0), ("North Summary", 100.0)]),
+        "North office\n\nNorth Summary\n\nNorth 10"
+    );
+    assert_eq!(
+        render_mixed_plain_with_prose_and_table("North office", &[("North Summary", 150.0), ("North office", 100.0)]),
+        "North Summary\n\nNorth office\n\nNorth 10"
+    );
+}
+
+#[test]
+fn mixed_plain_keeps_typed_table_beside_equal_text_from_a_separate_source() {
+    assert_eq!(
+        render_mixed_plain_with_captions(&[("North 10", 100.0), ("Summary", 80.0)]),
+        "North 10\n\nSummary\n\nNorth 10"
+    );
+    assert_eq!(
+        render_mixed_plain_with_captions(&[("North 10", 30.0), ("Summary", 80.0)]),
+        "North 10\n\nSummary"
+    );
 }
