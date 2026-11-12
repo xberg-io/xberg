@@ -169,6 +169,13 @@ fn keeps_real_words_beside_stray_glyphs() {
 }
 
 #[test]
+fn a_short_function_word_pair_survives_a_flagged_noise_page() {
+    let text = page(&["Go to q z", "I am q z", "were ee", "a a q z"], 12);
+    assert!(page_is_dominated_by_noise_lines(text.lines()));
+    assert_eq!(prune_text(&text).0, "Go to q z\n\nI am q z");
+}
+
+#[test]
 fn a_noise_page_keeps_real_short_names_and_mixed_content() {
     assert_kept_exactly(&["Sade", "Yes.", "Sade Nina ~ q", "Cecil Cecile Cecelia ~"]);
 }

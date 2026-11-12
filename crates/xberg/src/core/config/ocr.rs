@@ -215,8 +215,9 @@ pub struct OcrQualityThresholds {
     ///   outside ASCII (`Été`); `mal`, `Ne`, `Tee`, `CAS` and `a` are pruned;
     /// - a line of several tokens is kept when at least two tokens and at least half of the
     ///   line are word-like (`Annual report q z`). Latin words need 3 letters and may contain
-    ///   an apostrophe, hyphen or dot. Contractions and non-Latin word shapes also qualify.
-    ///   `were ee` and tokens split by stray symbols do not pass this rule;
+    ///   an apostrophe, hyphen or dot. Contractions, non-Latin word shapes, and short function
+    ///   words also qualify (`Go to q z`). A line needs a word-shaped token or a function word
+    ///   with at least two letters. `were ee` and tokens split by stray symbols fail this rule;
     /// - a line of several tokens is also kept when at least two thirds of its tokens are plausible
     ///   text and it holds a word of 3 or more letters or two function words (`Go to Al`,
     ///   `b) to go`, `Mr X Is In`, `de la gare`, `Mairie du I`). A token is plausible text when it

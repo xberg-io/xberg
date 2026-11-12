@@ -153,31 +153,36 @@ fn is_plausible_lone_token(token: &str) -> bool {
             })
 }
 
-/// Whether a line reads as text: a lone plausible token; a line with at least two words of 3 or
-/// more letters that are at least half its tokens (`Annual report q z`; one word, as in `were ee`,
-/// is not enough); or a line of which at least two thirds of the tokens are plausible and which
-/// holds a word of 3 or more letters or two function words, one of them of 2 or more letters
-/// (`a a` and `we SY` are not text).
+/// A line reads as text when at least half its tokens are two or more words, including short
+/// function words (`Annual report q z`, `Go to q z`). A run of single-letter function words
+/// alone is insufficient. The lone-token and two-thirds plausibility rules also apply.
 fn is_plausible_text(tokens: &[&str]) -> bool {
     if let [token] = tokens {
         return is_plausible_lone_token(token);
     }
-    let words = tokens
-        .iter()
-        .filter(|token| is_word_like(token, MIN_WORD_LETTERS) && is_plausible_token(token))
-        .count();
-    if words >= 2 && words * 2 >= tokens.len() {
-        return true;
-    }
-    let plausible = tokens.iter().filter(|token| is_plausible_token(token)).count();
     let function_words: Vec<&str> = tokens
         .iter()
         .map(|token| core(token))
         .filter(|stem| is_function_word(stem))
         .collect();
+    let has_multi_letter_function_word = function_words.iter().any(|word| word.len() >= 2);
+    let words = tokens
+        .iter()
+        .filter(|token| is_word_like(token, MIN_WORD_LETTERS) && is_plausible_token(token))
+        .count();
+    // Longer function words already count as word-shaped tokens.
+    let short_function_words = function_words
+        .iter()
+        .filter(|word| word.len() < MIN_WORD_LETTERS)
+        .count();
+    let supported = words + short_function_words;
+    if supported >= 2 && supported * 2 >= tokens.len() && (words > 0 || has_multi_letter_function_word) {
+        return true;
+    }
+    let plausible = tokens.iter().filter(|token| is_plausible_token(token)).count();
     plausible * 3 >= tokens.len() * 2
         && (tokens.iter().any(|token| is_word_like(token, MIN_WORD_LETTERS))
-            || (function_words.len() >= 2 && function_words.iter().any(|word| word.chars().count() >= 2)))
+            || (function_words.len() >= 2 && has_multi_letter_function_word))
 }
 
 /// A token with a digit and a stray quotation mark or a trailing section mark (`\u{201c}9`,
