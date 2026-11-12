@@ -245,7 +245,12 @@ pub(super) fn split_embedded_list_items(paragraphs: &mut Vec<PdfParagraph>) {
             .collect::<Vec<_>>()
             .join(" ");
 
-        let separators = embedded_bullet_positions(&full_text);
+        let mut separators = embedded_bullet_positions(&full_text);
+        if let Some(row_markers) = numeric_list_row_markers(&para, &full_text) {
+            separators.extend(row_markers);
+            separators.sort_unstable();
+            separators.dedup();
+        }
         if separators.len() < 2 {
             paragraphs.push(para);
             continue;
@@ -284,10 +289,6 @@ pub(super) fn split_embedded_list_items(paragraphs: &mut Vec<PdfParagraph>) {
 /// A glyph with a letter or digit directly on both sides sits inside running text, such as the
 /// `Gr•iar` of a table row (GH#2115), and is not an item marker.
 fn embedded_bullet_positions(text: &str) -> Vec<usize> {
-    if has_terminal_integer_list(text) {
-        return text.match_indices(['•', '·']).map(|(position, _)| position).collect();
-    }
-
     let mut positions = Vec::new();
     let mut previous: Option<char> = None;
     let mut previous_non_space = None;
@@ -330,38 +331,50 @@ fn embedded_bullet_positions(text: &str) -> Vec<usize> {
     positions
 }
 
-// A prose label ending in an integer can introduce a run of standalone integer items. ~keep
-// Require three spaced markers and the end of the paragraph before treating the run as a list. ~keep
-fn has_terminal_integer_list(text: &str) -> bool {
-    let Some((label, items)) = text.split_once(['•', '·']) else {
-        return false;
+// Repeated indented marker rows provide list evidence lost when the text is flattened. ~keep
+fn numeric_list_row_markers(para: &PdfParagraph, text: &str) -> Option<Vec<usize>> {
+    let [intro, first_item, _, ..] = para.lines.as_slice() else {
+        return None;
     };
-    let Some((prose, identifier)) = label.trim_end().rsplit_once(char::is_whitespace) else {
-        return false;
-    };
-    if !label.ends_with(char::is_whitespace)
-        || prose.split_whitespace().nth(1).is_none()
-        || !prose.trim_end().ends_with(char::is_alphabetic)
-        || !identifier.bytes().all(|byte| byte.is_ascii_digit())
-        || !items.starts_with(char::is_whitespace)
+    let intro_start = intro.segments.first()?;
+    let marker_x = first_item.segments.first()?.x;
+    let alignment_tolerance = para.dominant_font_size / 4.0;
+    if !(intro_start.width > 0.0 && alignment_tolerance > 0.0 && marker_x - intro_start.x >= 2.0 * alignment_tolerance)
     {
-        return false;
+        return None;
     }
 
-    let mut tokens = items.split_whitespace();
-    let mut item_count = 0;
-    while let Some(item) = tokens.next() {
-        if !item.bytes().all(|byte| byte.is_ascii_digit()) {
-            return false;
+    let mut line_start = 0;
+    let mut previous_baseline = intro.baseline_y;
+    let mut markers = Vec::new();
+    for line in &para.lines {
+        let next_line_start = line_start
+            + line
+                .segments
+                .iter()
+                .map(|segment| segment.text.len() + 1)
+                .sum::<usize>();
+        if line_start != 0 {
+            let first = line.segments.first()?;
+            let row = &text[line_start..next_line_start - 1];
+            let mut tokens = row.split_whitespace();
+            if !(first.width > 0.0
+                && (first.x - marker_x).abs() <= alignment_tolerance
+                && line.baseline_y < previous_baseline
+                && matches!(tokens.next(), Some("•" | "·"))
+                && tokens
+                    .next()
+                    .is_some_and(|item| item.bytes().all(|byte| byte.is_ascii_digit()))
+                && tokens.next().is_none())
+            {
+                return None;
+            }
+            markers.push(line_start + row.len() - row.trim_start().len());
+            previous_baseline = line.baseline_y;
         }
-        item_count += 1;
-        match tokens.next() {
-            None => return item_count >= 3,
-            Some("•" | "·") => {}
-            Some(_) => return false,
-        }
+        line_start = next_line_start;
     }
-    false
+    Some(markers)
 }
 
 fn numeric_multiplier_end(text: &str, glyph: char, continues_product: bool) -> Option<usize> {
@@ -1093,19 +1106,39 @@ mod tests {
     #[test]
     fn embedded_bullets_split_numeric_only_items() {
         for intro in ["Available sizes", "Available sizes for model 2024"] {
-            for glyph in ['•', '·'] {
-                let mut paragraphs = vec![make_body_paragraph(
-                    &format!("{intro} {glyph} 2 {glyph} 3 {glyph} 4"),
-                    10.0,
-                )];
-                split_embedded_list_items(&mut paragraphs);
-                assert_eq!(paragraphs.len(), 4, "{intro} {glyph}");
-                assert!(!paragraphs[0].is_list_item);
-                assert_eq!(paragraphs[0].lines[0].segments[0].text, intro);
-                for (item, expected) in paragraphs[1..].iter().zip(["2", "3", "4"]) {
-                    assert!(item.is_list_item);
-                    assert_eq!(item.lines[0].segments[0].text, expected);
-                }
+            let mut paragraphs = vec![make_body_paragraph(&format!("{intro} • 2 • 3 • 4"), 10.0)];
+            split_embedded_list_items(&mut paragraphs);
+            assert_eq!(paragraphs.len(), 4, "{intro}");
+            assert!(!paragraphs[0].is_list_item);
+            assert_eq!(paragraphs[0].lines[0].segments[0].text, intro);
+            for (item, expected) in paragraphs[1..].iter().zip(["2", "3", "4"]) {
+                assert!(item.is_list_item);
+                assert_eq!(item.lines[0].segments[0].text, expected);
+            }
+        }
+    }
+
+    #[test]
+    fn indented_middle_dot_rows_split_into_numeric_list_items() {
+        let intro = "Available sizes for model 2024";
+        for (last_marker_x, expected_count) in [(62.0, 3), (78.0, 1)] {
+            let mut paragraph = legend_row(intro, 50.0, 700.0, 140.0, 10.0);
+            let mut first_item = legend_row("·", 62.0, 686.0, 3.0, 10.0);
+            first_item.lines[0]
+                .segments
+                .extend(legend_row("2", 74.0, 686.0, 5.0, 10.0).lines.remove(0).segments);
+            paragraph.lines.extend(first_item.lines);
+            paragraph
+                .lines
+                .extend(legend_row("· 3", last_marker_x, 672.0, 17.0, 10.0).lines);
+            let mut paragraphs = vec![paragraph];
+            split_embedded_list_items(&mut paragraphs);
+            assert_eq!(paragraphs.len(), expected_count, "last marker x = {last_marker_x}");
+            assert!(!paragraphs[0].is_list_item);
+            assert_eq!(paragraphs[0].lines[0].segments[0].text, intro);
+            for (item, expected) in paragraphs[1..].iter().zip(["2", "3"]) {
+                assert!(item.is_list_item);
+                assert_eq!(item.lines[0].segments[0].text, expected);
             }
         }
     }
@@ -1119,6 +1152,8 @@ mod tests {
             "2 · 3 · 4 · 5",
             "Multiply 2 · 3 · 4 · 5",
             "The result is 2 · 3 · 4 · 5.",
+            "The result is 2 · 3 · 4 · 5",
+            "Available sizes for model 2024 · 2 · 3 · 4",
             "Evaluate 1 + 2 · 3 · 4 · 5",
         ] {
             assert!(embedded_bullet_positions(text).is_empty(), "{text}");
