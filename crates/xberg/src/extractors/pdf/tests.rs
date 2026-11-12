@@ -8689,3 +8689,100 @@ mod native_text_stop_tests {
         assert!(stopped.9.is_none(), "no images after the time limit");
     }
 }
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+mod unread_page_blank_flag_tests {
+    use super::*;
+    use crate::types::{OcrPageFailure, PageContent, PageInfo, PageStructure, PageUnitType};
+
+    fn content_page(page_number: u32, is_blank: Option<bool>) -> PageContent {
+        PageContent {
+            page_number,
+            content: String::new(),
+            tables: Vec::new(),
+            image_indices: Vec::new(),
+            image_preprocessing: None,
+            hierarchy: None,
+            is_blank,
+            layout_regions: None,
+            speaker_notes: None,
+            section_name: None,
+            sheet_name: None,
+            ocr_confidence: None,
+            native_content: None,
+        }
+    }
+
+    fn structure(flags: &[(u32, Option<bool>)]) -> PageStructure {
+        PageStructure {
+            total_count: flags.len() as u32,
+            unit_type: PageUnitType::Page,
+            boundaries: None,
+            pages: Some(
+                flags
+                    .iter()
+                    .map(|&(number, is_blank)| PageInfo {
+                        number,
+                        title: None,
+                        dimensions: None,
+                        image_count: None,
+                        table_count: None,
+                        hidden: None,
+                        has_vector_graphics: false,
+                        is_blank,
+                    })
+                    .collect(),
+            ),
+        }
+    }
+
+    fn failure(page: u32, error: &str, recovered: bool) -> OcrPageFailure {
+        OcrPageFailure {
+            page,
+            error: error.to_string(),
+            recovered,
+        }
+    }
+
+    #[test]
+    fn a_page_the_time_limit_left_unread_is_not_flagged_blank_but_a_read_blank_page_is() {
+        let mut contents = Some(vec![
+            content_page(1, Some(false)),
+            content_page(2, Some(true)),
+            content_page(3, Some(true)),
+        ]);
+        let mut structure = Some(structure(&[(1, Some(false)), (2, Some(true)), (3, Some(true))]));
+        let failures = [failure(3, ocr::TIME_LIMIT_UNREAD_PAGE_ERROR, false)];
+
+        clear_blank_flag_of_unread_pages(&mut contents, &mut structure, &failures);
+
+        let flags: Vec<_> = contents.unwrap().iter().map(|page| page.is_blank).collect();
+        assert_eq!(
+            flags,
+            [Some(false), Some(true), None],
+            "only the unread page loses the flag"
+        );
+        let info: Vec<_> = structure
+            .unwrap()
+            .pages
+            .unwrap()
+            .iter()
+            .map(|page| page.is_blank)
+            .collect();
+        assert_eq!(info, [Some(false), Some(true), None]);
+    }
+
+    #[test]
+    fn other_failures_and_recovered_pages_keep_their_blank_flag() {
+        let mut contents = Some(vec![content_page(1, Some(true)), content_page(2, Some(true))]);
+        let mut structure = None;
+        let failures = [
+            failure(1, "the backend crashed", false),
+            failure(2, ocr::TIME_LIMIT_UNREAD_PAGE_ERROR, true),
+        ];
+
+        clear_blank_flag_of_unread_pages(&mut contents, &mut structure, &failures);
+
+        assert!(contents.unwrap().iter().all(|page| page.is_blank == Some(true)));
+    }
+}
