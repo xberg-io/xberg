@@ -2971,6 +2971,25 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         &mut paragraphs,
                         page_rotation_degrees,
                     );
+                    // ~keep A pipeline page keeps its paragraphs in the OCR raster's pixels, while
+                    // its tables are already in points; assembly compares the two to drop a
+                    // paragraph a table carries. Scale only for that comparison, after the list
+                    // passes above, whose marker geometry is measured in the raster frame. A
+                    // sideways page keeps the raster frame: its geometry is not reading order, and
+                    // pointing it at the tables would put sideways heading text after them.
+                    if !existing.tables.is_empty()
+                        && !detached_mixed_frame::read_sideways(&existing.metadata)
+                        && let Some(&(width_px, height_px)) = ocr_raster_by_page.get(page_number)
+                        && width_px > 0
+                        && height_px > 0
+                    {
+                        let (width_pt, height_pt) =
+                            page_dimensions_pt(&render_doc, page_number.saturating_sub(1) as usize);
+                        detached_mixed_frame::scale_paragraph_geometry(
+                            &mut paragraphs,
+                            (width_pt / width_px as f32, height_pt / height_px as f32),
+                        );
+                    }
                     let mut new_page_doc = crate::pdf::structure::assemble_internal_document(
                         vec![paragraphs],
                         &existing.tables,
@@ -3232,7 +3251,9 @@ pub(in crate::extractors::pdf) fn render_mixed_plain_pages(
             Ok(plain) => {
                 rendered.insert(page, plain);
             }
-            Err(reason) => tracing::debug!(page, reason, "Declined mixed OCR Plain page rendering"),
+            // ~keep The page keeps its Markdown transcript in Plain output, so the decline is a
+            // degraded result, not routine flow.
+            Err(reason) => tracing::warn!(page, reason, "Declined mixed OCR Plain page rendering"),
         }
     }
     if !rendered.is_empty() {
@@ -3250,8 +3271,9 @@ fn check_accepted_ocr_tokens(
     use crate::types::internal::ElementKind;
     use pulldown_cmark::{Event, Options, Parser, Tag};
 
-    // ~keep PDF table assembly may suppress a paragraph covered by cell tokens. Require the
-    // accepted token order, including punctuation, before replacing its transcript.
+    // ~keep PDF table assembly may suppress a paragraph covered by cell tokens, or keep one it
+    // failed to match to a table. Require exactly the accepted token order, including
+    // punctuation, before replacing its transcript: no word dropped, none added.
     let mut tables = document.elements.iter().filter_map(|element| match element.kind {
         ElementKind::Table { table_index } => document.tables.get(table_index as usize),
         _ => None,
@@ -3306,9 +3328,14 @@ fn check_accepted_ocr_tokens(
             _ => {}
         }
     }
-    retains_ocr_words(&accepted[offset..], &mut retained)
+    if !retains_ocr_words(&accepted[offset..], &mut retained) {
+        return Err("Plain page omitted accepted prose");
+    }
+    retained
+        .next()
+        .is_none()
         .then_some(())
-        .ok_or("Plain page omitted accepted prose")
+        .ok_or("Plain page added text absent from the accepted transcript")
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -3449,15 +3476,24 @@ fn retains_inline_group(
     let mut literal = source.split_whitespace().peekable();
     let mut projected = visible.split_whitespace().peekable();
     if projected.peek().is_none() {
+        // ~keep A block marker projects to nothing, but a Plain element may still spell it.
+        let mut spelled = retained.clone();
+        if source.split_whitespace().all(|word| spelled.next() == Some(word)) {
+            *retained = spelled;
+        }
         return true;
     }
-    // ~keep Advance both alternatives together so a failed literal match cannot
-    // repeatedly rescan the remainder of the page.
+    // ~keep Advance both alternatives together; each Plain word must continue one of them,
+    // so a word the accepted group lacks fails the group instead of being skipped.
+    let (mut literal_live, mut projected_live) = (true, true);
     for candidate in retained {
-        if literal.next_if_eq(&candidate).is_some() && literal.peek().is_none()
-            || projected.next_if_eq(&candidate).is_some() && projected.peek().is_none()
-        {
+        literal_live &= literal.next_if_eq(&candidate).is_some();
+        projected_live &= projected.next_if_eq(&candidate).is_some();
+        if literal_live && literal.peek().is_none() || projected_live && projected.peek().is_none() {
             return true;
+        }
+        if !literal_live && !projected_live {
+            return false;
         }
     }
     false
@@ -3516,8 +3552,7 @@ fn record_block_markers(
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn retains_ocr_words(text: &str, retained: &mut std::str::SplitWhitespace<'_>) -> bool {
-    text.split_whitespace()
-        .all(|word| retained.any(|candidate| candidate == word))
+    text.split_whitespace().all(|word| retained.next() == Some(word))
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -5778,6 +5813,14 @@ pub(super) async fn extract_with_ocr_for_page(
                 &mut backend_page_warnings,
                 std::mem::take(&mut ocr_result.processing_warnings),
             );
+            // ~keep Whether a detached-stage normalizer below already put this page's backend
+            // tables in the render frame the page owner scales to points.
+            #[cfg(feature = "pdf")]
+            #[cfg_attr(
+                not(all(feature = "ocr", not(target_arch = "wasm32"))),
+                expect(unused_mut, reason = "only the Tesseract normalizers below set it")
+            )]
+            let mut tables_in_render = false;
             #[cfg(feature = "pdf")]
             {
                 let (correction_degrees, upright_width, upright_height) = batch_upright_correction[offset];
@@ -5802,7 +5845,8 @@ pub(super) async fn extract_with_ocr_for_page(
                 #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
                 if normalize_recovered_table && !normalized_raw {
                     // The detached stage's owner will place raw tables using the render raster. ~keep
-                    super::orientation_retry::scale_recovered_table_to_raster(&mut ocr_result, render);
+                    tables_in_render =
+                        super::orientation_retry::scale_recovered_table_to_raster(&mut ocr_result, render);
                 }
                 #[cfg(not(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32"))))]
                 let _ = normalized_raw;
@@ -5823,6 +5867,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     #[cfg(auto_rotate)]
                     let processed = if normalize_recovered_table { render } else { processed };
                     detached_table_pair = detached_table_pair::normalize(&mut ocr_result.tables, processed, render);
+                    tables_in_render |= detached_table_pair;
                 }
             }
             // #1575: capture once, from the first page that has any -- see this function's
@@ -5922,9 +5967,25 @@ pub(super) async fn extract_with_ocr_for_page(
                 ))
             ))]
             let detached_paragraph_scale: Option<(f32, f32)> = None;
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            let tables_in_render = tables_in_render || detached_paragraph_scale.is_some();
             let mut backend_tables = std::mem::take(&mut ocr_result.tables);
             for table in &mut backend_tables {
                 table.page_number = document_page_number;
+            }
+            #[cfg(feature = "pdf")]
+            if lazy_pdf_render_state.is_none() && xobject_document.is_some() && !tables_in_render {
+                // ~keep The detached page owner scales table rectangles from the render raster
+                // (`build_pipeline_ocr_page_document`), but recognition may have read a resampled
+                // image (GH#1895): bring the rectangles from that frame to the render's.
+                let render = (encoded_batch[offset].2, encoded_batch[offset].3);
+                let processed = resolved_ocr_layout_dimensions(&ocr_result.metadata, render.0, render.1);
+                detached_mixed_frame::scale_tables_into_render(&mut backend_tables, processed, render);
             }
             #[cfg(feature = "pdf")]
             if let Some((doc, _, _)) = lazy_pdf_render_state.as_ref() {

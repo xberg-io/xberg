@@ -2,15 +2,15 @@ And considering (3.22), we have the following estimate s
 
 (ℓ+1)
 
-η<sup>2</sup>(W~H~) 1 ¯
+¯ u¯~i,h~ − E u¯~i,h~ ≤ λ~i,h~ 1 + i,h
 
-a
+a,h
 
-u¯~i,h~ − E u¯~i,h~ ≤ λ~i,h~ 1 + 1 + i,h
+η<sup>2</sup> ~a~(W~H~) 1 1 +
 
-(ℓ+1) 2 (ℓ) a,h
+(ℓ+1) 2
 
-λ~1~ δ λδ ~λ 1 λ~ The following ∥·∥ -error estimate holds ~b~ \! 1 u¯~i,h~
+λ~1~ δ λδ~1 λ~ The following ∥·∥ -error estimate holds ~b~ \! 1 u¯~i,h~
 
 (ℓ+1)
 
@@ -46,29 +46,15 @@ b
 
 a (ℓ+1)
 
-λδ~1 λ~ where s η<sup>2</sup>(W~H~) 1 ¯ ¯
-
-a
-
-γ(λ~i,h~) = λ~i,h~ 1 + 1 + 2
-
-(ℓ+1)
-
-λ~1~ δ λδ ~λ 1~
-
-(ℓ)
-
-The error estimate for the eigenvalue approximation λ~i,h~
-
-Remark 3.2.
-
-# 4 Numerical experiments
+λδ~1 λ~
 
 \!
 
 2
 
-η~a~(W~H~) u¯
+η (W~H~) u¯
+
+(ℓ) a λ
 
 η (W~H~) u¯~i,h~ − E
 
@@ -86,17 +72,9 @@ i,h a,h
 
 - (1) u¯~i,h~ ,
 
-i,h a,h (ℓ+1)
+i,h a,h
 
-η (W~H~) u¯~i,h~ − E~i,h~
-
-\!
-
-2
-
-η~a~(W~H~).
-
-(ℓ) λ
+η (W~H~) u¯~i,h~ − E
 
 (ℓ+1)
 
@@ -104,23 +82,33 @@ has
 
 i,h
 
-(3.25) u¯~i,h~ , (3.26)
+(3.25)
 
-a,h
+(ℓ+1)
 
-(3.27)
+u¯~i,h~ , (3.26)
 
-can be deduced from Theorem 3.2 and
+i,h a,h
 
-In this section, numerical experiments are presented to validate our theoretical results. Here, we are concerned with the Laplace eigenvalue problem (2.1), where the computing domain is set to be the unit square Ω = (0, 1) × (0, 1). W~H~ and the CR element spaces defined on the coarse mesh T fine mesh T~h~ is obtained from the coarse mesh T and V~h~ are chosen as the conforming linear element
+where s \! η<sup>2</sup>(W~H~) 1 ¯ ¯
 
-H
+a 2
 
-and the fine mesh T~h~, respectively. The
+γ(λ~i,h~) = λ~i,h~ 1 + 1 + η (W~H~). (3.27) 2 a
 
-H
+(ℓ+1) (ℓ)
 
-by the regular refinement of uniform triangular mesh.
+λ~1~ δ λδ ~λ 1 λ~
+
+(ℓ)
+
+The error estimate for the eigenvalue approximation λ can be deduced from Theorem 3.2 and ~i,h~
+
+Remark 3.2.
+
+# 4 Numerical experiments
+
+In this section, numerical experiments are presented to validate our theoretical results. Here, we are concerned with the Laplace eigenvalue problem (2.1), where the computing domain is set to be the unit square Ω = (0, 1) × (0, 1). W~H~ and V~h~ are chosen as the conforming linear element and the CR element spaces defined on the coarse mesh T~H~ and the fine mesh T~h~, respectively. The fine mesh T~h~ is obtained from the coarse mesh T~H~ by the regular refinement of uniform triangular mesh.
 
 Since the coarse space W~H~ is the conforming linear finite element space defined on the coarse mesh T~H~, together with the theories of the error estimates of CR element and conforming linear element [8, 11], it is known that the following estimate holds when the mesh size h \< H, η~a~(W~H~) ≤ sup ∥T f − T~h~f∥~a,h~ + inf ∥T f − v~H~∥~a~
 
