@@ -1,23 +1,21 @@
 //! The measured cases of PR #2882's review, rebuilt as tests over synthetic list tables.
 //!
 //! Every ordered scheme keeps its count and paints the label Word paints, a markerless
-//! paragraph still counts at its level, and the restart rules of [MS-DOC] 2.9.27 hold.
-//! The tables are hand-built `PlfLst`/`PlfLfo` blocks because the #2857 fixtures carry no
-//! `LFOLVL` overrides and one level and one list kind each.
+//! paragraph still counts at its level, the restart rules of [MS-DOC] 2.9.27 hold, and a
+//! hostile table's allocation stays bounded. The tables are hand-built `PlfLst`/`PlfLfo`
+//! blocks because the #2857 fixtures carry no `LFOLVL` overrides and one level and one
+//! list kind each; the helpers and `MSONFC` constants here are the single set the `.doc`
+//! numbering tests share.
 
-use super::list_numbers::{ListFormats, NumberingState};
-use super::papx::ListBinding;
+use super::list_numbers::{
+    ListFormats, NFC_BULLET, NFC_DECIMAL, NFC_LOWER_LETTER, NFC_NONE, NFC_UPPER_LETTER,
+    NFC_UPPER_ROMAN, NFC_ZERO_PADDED, NumberingState,
+};
+use super::papx::{ListBinding, list_binding_from_grpprl};
 
-const NFC_DECIMAL: u8 = 0;
-const NFC_UPPER_ROMAN: u8 = 1;
-const NFC_UPPER_LETTER: u8 = 3;
-const NFC_LOWER_LETTER: u8 = 4;
-const NFC_ZERO_PADDED: u8 = 22;
 /// `MSONFC` 5 paints an ordinal (`1st`, `2nd`) -- a scheme this extractor's
 /// label channel does not paint.
 const NFC_ORDINAL: u8 = 5;
-const NFC_BULLET: u8 = 23;
-const NFC_NONE: u8 = 255;
 
 const LSTF_LEN: usize = 28;
 const LVLF_LEN: usize = 28;
@@ -278,15 +276,17 @@ fn a_start_override_does_not_survive_a_restart() {
 fn special_ilfos_bind_no_list() {
     // The review's `special-ilfo` case: `ilfo` 2047 (`ilfoNil`) and the negative values
     // are how Word records a paragraph removed from a list; they name no list and join no
-    // sequence, rather than becoming numberless list items.
-    let formats = formats(&plf_lst(7, decimal_levels(1)), &plf_lfo(7, &[(0, None)]));
-    for ilfo in [2047u16, 65535, 63489] {
-        let mut state = NumberingState::default();
-        assert!(
-            formats
-                .membership_for(ListBinding { ilfo, ilvl: 0 }, &mut state)
-                .is_none(),
-            "ilfo {ilfo} binds no list"
+    // sequence, rather than becoming numberless list items. The test reads the binding
+    // the way the paragraph walk does -- from the grpprl's sprms through
+    // `list_binding_from_grpprl` -- because `membership_for` alone cannot tell a refused
+    // binding from an `ilfo` that names no `LFO`: both resolve to no membership.
+    for raw in [2047u16, 65535, 63489] {
+        let mut grpprl = vec![0x0B, 0x46]; // sprmPIlfo, 2-byte operand
+        grpprl.extend_from_slice(&raw.to_le_bytes());
+        assert_eq!(
+            list_binding_from_grpprl(&grpprl),
+            None,
+            "ilfo {raw} records a paragraph removed from a list"
         );
     }
 }
@@ -304,6 +304,23 @@ fn f_no_restart_with_limit_zero_never_restarts() {
         walked(&formats, &[(1, 0), (1, 1), (1, 1), (1, 0), (1, 1)]),
         [label("1."), label("1."), label("2."), label("2."), label("3.")],
         "the level-1 sequence runs on across the interrupting level-0 paragraphs"
+    );
+}
+
+#[test]
+fn f_no_restart_with_limit_one_restarts_from_shallower_levels() {
+    // [MS-DOC] 2.9.27: with `fNoRestart` set, `ilvlRestartLim` bounds the levels that
+    // still restart the sequence -- a level below the limit restarts it, one at or past
+    // the limit does not. A non-zero limit, unlike the limit-0 level above, leaves the
+    // level restartable by the shallower paragraphs.
+    let mut levels = decimal_levels(1);
+    levels[1].no_restart = true;
+    levels[1].restart_lim = 1;
+    let formats = formats(&plf_lst(7, levels), &plf_lfo(7, &[(0, None)]));
+    assert_eq!(
+        walked(&formats, &[(1, 0), (1, 1), (1, 1), (1, 0), (1, 1)]),
+        [label("1."), label("1."), label("2."), label("2."), label("1.")],
+        "the limit-1 level-1 sequence restarts after the interrupting level-0 paragraph"
     );
 }
 
@@ -326,7 +343,8 @@ fn a_declared_lfo_count_beyond_the_table_stops_at_the_table() {
 #[test]
 fn truncated_list_tables_never_panic() {
     // Every truncation of either table, and of the LVL blocks behind them, is refused by
-    // bounds checks rather than panicking or spinning.
+    // bounds checks rather than panicking or spinning, and no truncation paints a label
+    // the full tables would not.
     let mut levels = decimal_levels(1);
     levels[0] = LevelSpec {
         nfc: NFC_BULLET,
@@ -335,13 +353,33 @@ fn truncated_list_tables_never_panic() {
     };
     let lst = plf_lst(7, levels);
     let lfo = plf_lfo(7, &[(0, None), (1, Some(3))]);
+    let walk = [(1u16, 0u8), (1, 1), (2, 0)];
+    let full = walked(&formats(&lst, &lfo), &walk);
+    assert_eq!(
+        full,
+        [None, label("1."), None],
+        "the full tables paint the bullet level nothing, the decimal level its count and \
+         the unknown ilfo nothing"
+    );
     for cut in 0..=lst.len() {
-        let formats = formats(&lst[..cut], &lfo);
-        walked(&formats, &[(1, 0), (1, 1), (2, 0)]);
+        let labels = walked(&formats(&lst[..cut], &lfo), &walk);
+        assert!(
+            labels
+                .iter()
+                .enumerate()
+                .all(|(at, got)| got.is_none() || Some(got) == full.get(at)),
+            "plf-lst cut at {cut}: {labels:?} vs full {full:?}"
+        );
     }
     for cut in 0..=lfo.len() {
-        let formats = formats(&lst, &lfo[..cut]);
-        walked(&formats, &[(1, 0), (1, 1), (2, 0)]);
+        let labels = walked(&formats(&lst, &lfo[..cut]), &walk);
+        assert!(
+            labels
+                .iter()
+                .enumerate()
+                .all(|(at, got)| got.is_none() || Some(got) == full.get(at)),
+            "plf-lfo cut at {cut}: {labels:?} vs full {full:?}"
+        );
     }
 }
 
@@ -463,5 +501,122 @@ fn a_label_painted_beyond_its_cap_is_refused() {
         membership.label.is_none(),
         "a label past the paint bound is refused, got {} chars",
         membership.label.as_ref().map_or(0, |label| label.chars().count())
+    );
+}
+
+// --- The walk's override and identity rules, over the same synthetic tables ---
+//
+// Moved here from `list_numbers.rs`'s own test module so the synthetic helpers and
+// `MSONFC` constants stay in one place.
+
+#[test]
+fn a_start_override_applies_at_the_overriding_ilfos_first_paragraph() {
+    let formats = formats(&plf_lst(7, decimal_levels(1)), &plf_lfo(7, &[(0, Some(5))]));
+    assert_eq!(
+        walked(&formats, &[(1, 0), (1, 0), (1, 0)]),
+        [label("5."), label("6."), label("7.")],
+        "the override starts the sequence at 5 once; later paragraphs advance it"
+    );
+}
+
+#[test]
+fn two_ilfos_sharing_a_list_continue_its_sequence() {
+    let formats = formats(&plf_lst(7, decimal_levels(1)), &plf_lfo(7, &[(0, None), (1, None)]));
+    assert_eq!(
+        walked(&formats, &[(1, 0), (2, 0), (1, 0)]),
+        [label("1."), label("2."), label("3.")],
+        "an lsid's sequence is the list; the ilfo only carries overrides"
+    );
+}
+
+#[test]
+fn a_shallower_paragraph_of_the_same_list_restarts_deeper_levels() {
+    let formats = formats(&plf_lst(7, decimal_levels(1)), &plf_lfo(7, &[(0, None)]));
+    assert_eq!(
+        walked(&formats, &[(1, 0), (1, 1), (1, 1), (1, 0), (1, 1)]),
+        [label("1."), label("1."), label("2."), label("2."), label("1.")],
+        "the level-1 sequence starts at 1, advances, and restarts after the deeper \
+         interrupting level-0 paragraph"
+    );
+}
+
+#[test]
+fn a_level_with_no_number_sequence_is_not_a_list_item() {
+    // `nfc` 255 and an empty `Xst`: Word paints no marker for the level.
+    let mut levels = decimal_levels(1);
+    levels[0] = LevelSpec {
+        nfc: NFC_NONE,
+        ..decimal_level(1)
+    };
+    let formats = formats(&plf_lst(7, levels), &plf_lfo(7, &[(0, None)]));
+    let mut state = NumberingState::default();
+    assert!(
+        formats
+            .membership_for(ListBinding { ilfo: 1, ilvl: 0 }, &mut state)
+            .is_none(),
+        "a binding whose level paints no marker is prose (or its styled heading), not a list item"
+    );
+}
+
+#[test]
+fn an_ilfo_past_the_lfo_table_is_not_in_a_list() {
+    let formats = formats(&plf_lst(7, decimal_levels(1)), &plf_lfo(7, &[]));
+    let mut state = NumberingState::default();
+    assert!(
+        formats
+            .membership_for(ListBinding { ilfo: 1, ilvl: 0 }, &mut state)
+            .is_none(),
+        "an ilfo naming no LFO binds no list, so the paragraph joins no sequence and \
+         paints no number"
+    );
+}
+
+#[test]
+fn a_formatting_override_is_walked_past_and_the_embedded_level_paints() {
+    // LFOLVL[0] replaces level 0's formatting with an embedded LVL;
+    // LFOLVL[1] starts level 1 at 9. A walk that misreads the embedded
+    // LVL's variable length would read LFOLVL[1] from the wrong bytes.
+    let mut lfo_data = vec![1, 0, 0, 0];
+    let mut lfo = [0u8; LFO_LEN];
+    lfo[..4].copy_from_slice(&7u32.to_le_bytes());
+    lfo[12] = 2; // clfolvl
+    lfo_data.extend_from_slice(&lfo);
+    lfo_data.extend_from_slice(&0xFFFF_FFFFu32.to_le_bytes());
+    // LFOLVL[0]: fFormatting, embedded LVL follows.
+    lfo_data.extend_from_slice(&0i32.to_le_bytes());
+    lfo_data.push(0x20);
+    lfo_data.extend_from_slice(&[0; 3]);
+    lfo_data.extend_from_slice(&lvl_bytes(
+        &LevelSpec {
+            start: 3,
+            xst: placeholder_label(0),
+            ..decimal_level(1)
+        },
+        0,
+    ));
+    // LFOLVL[1]: fStartAt 9 for level 1.
+    lfo_data.extend_from_slice(&9i32.to_le_bytes());
+    lfo_data.push(0x11); // iLvl 1, fStartAt
+    lfo_data.extend_from_slice(&[0; 3]);
+
+    let formats = formats(&plf_lst(7, decimal_levels(1)), &lfo_data);
+    assert_eq!(
+        walked(&formats, &[(1, 1), (1, 1)]),
+        [label("9."), label("10.")],
+        "the next LFOLVL's start override still applies behind the embedded LVL"
+    );
+    let mut state = NumberingState::default();
+    let level_zero = formats
+        .membership_for(ListBinding { ilfo: 1, ilvl: 0 }, &mut state)
+        .expect("level 0 stays a list item");
+    assert!(
+        level_zero.ordered,
+        "the embedded level is ordered where the base format was"
+    );
+    assert_eq!(
+        level_zero.label.as_deref(),
+        Some("3."),
+        "the embedded LVL replaces the level's formatting: its own start, 3, is what \
+         the level paints"
     );
 }

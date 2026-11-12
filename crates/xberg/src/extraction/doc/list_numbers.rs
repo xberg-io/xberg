@@ -30,21 +30,23 @@ const LFO_LEN: usize = 16;
 const LVLF_LEN: usize = 28;
 
 /// A list level with `nfc` 23 paints a bullet glyph rather than a number;
-/// 255 paints nothing. Everything else is an ordered numbering scheme
-/// ([MS-DOC] 2.9.131 `MSONFC`). ~keep
-const NFC_BULLET: u8 = 23;
-const NFC_NONE: u8 = 255;
+/// 255 paints nothing. Everything else is an ordered numbering scheme the
+/// label channel does not paint ([MS-DOC] 2.9.131 `MSONFC`). The shared tests
+/// build their levels from them. ~keep
+pub(super) const NFC_BULLET: u8 = 23;
+pub(super) const NFC_NONE: u8 = 255;
 
 /// `MSONFC` 0 paints plain decimal digits ([MS-DOC] 2.9.131); 1..=4 are the
 /// upper/lower-case roman and letter schemes [`painted_number`] writes; 22 is
 /// the zero-padded decimal the DOCX counterpart writes as `w:numFmt`
-/// `decimalZero` ([MS-OSHARED] 2.2.5 `MSONFC`, value 0x16).
-const NFC_DECIMAL: u8 = 0;
-const NFC_UPPER_ROMAN: u8 = 1;
-const NFC_LOWER_ROMAN: u8 = 2;
-const NFC_UPPER_LETTER: u8 = 3;
-const NFC_LOWER_LETTER: u8 = 4;
-const NFC_ZERO_PADDED: u8 = 22;
+/// `decimalZero` ([MS-OSHARED] 2.2.5 `MSONFC`, value 0x16). The shared tests
+/// build their levels from them.
+pub(super) const NFC_DECIMAL: u8 = 0;
+pub(super) const NFC_UPPER_ROMAN: u8 = 1;
+pub(super) const NFC_LOWER_ROMAN: u8 = 2;
+pub(super) const NFC_UPPER_LETTER: u8 = 3;
+pub(super) const NFC_LOWER_LETTER: u8 = 4;
+pub(super) const NFC_ZERO_PADDED: u8 = 22;
 
 /// [MS-DOC] 2.9.145 gives an `Xst` no length bound beyond its 16-bit count,
 /// but a level's label text is Word's to write and Word's are short; the
@@ -697,216 +699,3 @@ fn letter_run(value: u32) -> Option<String> {
     Some(std::iter::repeat_n(letter, repeat).collect())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // --- The number walk, over synthetic list tables (#2857) ---
-    //
-    // The fixtures for #2857 carry no LFO overrides, so the override walk and
-    // the restart rules have no binary to exercise them; these build the
-    // tables by hand. The [MS-DOC] layouts they encode: `PlfLst` = count,
-    // `LSTF`s, then each list's `LVL`s; `PlfLfo` = count, `LFO`s, then each
-    // `LFO`'s `LFOData` (a CP, then its `LFOLVL`s).
-
-    /// One synthetic `LVL`: an `LVLF` with the given start value and `nfc`,
-    /// then an `Xst` of the level's placeholder and a period.
-    fn synthetic_lvl(start_at: i32, nfc: u8, level: u8) -> Vec<u8> {
-        let mut lvlf = [0u8; LVLF_LEN];
-        lvlf[..4].copy_from_slice(&start_at.to_le_bytes());
-        lvlf[4] = nfc;
-        let mut out = lvlf.to_vec();
-        out.extend_from_slice(&2u16.to_le_bytes());
-        out.extend_from_slice(&(u16::from(level)).to_le_bytes());
-        out.extend_from_slice(&(u16::from(b'.')).to_le_bytes());
-        out
-    }
-
-    /// A synthetic `PlfLst` for one multilevel list: `LVL_COUNT_MULTILEVEL`
-    /// decimal levels that each start at `start_at`.
-    fn synthetic_plf_lst(lsid: u32, start_at: i32) -> Vec<u8> {
-        let mut out = vec![0x01, 0x00];
-        let mut lstf = [0u8; LSTF_LEN];
-        lstf[..4].copy_from_slice(&lsid.to_le_bytes());
-        out.extend_from_slice(&lstf);
-        for level in 0..LVL_COUNT_MULTILEVEL {
-            out.extend_from_slice(&synthetic_lvl(
-                start_at,
-                NFC_DECIMAL,
-                u8::try_from(level).unwrap_or(u8::MAX),
-            ));
-        }
-        out
-    }
-
-    /// A synthetic `PlfLfo` with one `LFO` per entry, every one naming
-    /// `lsid`, each with an `LFOLVL` start override for level 0 when `Some`.
-    /// The layout is all `LFO` records first, then each one's `LFOData`.
-    fn synthetic_plf_lfo(lsid: u32, overrides: &[Option<i32>]) -> Vec<u8> {
-        let mut out = vec![0, 0, 0, 0];
-        out[..4].copy_from_slice(&u32::try_from(overrides.len()).unwrap_or(u32::MAX).to_le_bytes());
-        for start_override in overrides {
-            let mut lfo = [0u8; LFO_LEN];
-            lfo[..4].copy_from_slice(&lsid.to_le_bytes());
-            lfo[12] = u8::from(start_override.is_some());
-            out.extend_from_slice(&lfo);
-        }
-        for start_override in overrides {
-            out.extend_from_slice(&0xFFFF_FFFFu32.to_le_bytes());
-            if let Some(start) = start_override {
-                out.extend_from_slice(&start.to_le_bytes());
-                out.push(0x10); // iLvl 0, fStartAt, not fFormatting
-                out.extend_from_slice(&[0; 3]);
-            }
-        }
-        out
-    }
-
-    /// `ListFormats` over synthetic blocks the FIB stub points at.
-    fn synthetic_formats(plf_lst: &[u8], plf_lfo: &[u8]) -> ListFormats {
-        let lfo_at = 0x1000;
-        let rg = 0x40;
-        let mut word_doc = vec![0u8; rg + FIB_FC_LCB_IDX_PLF_LFO * 8 + 8];
-        for (index, (fc, block)) in [
-            (FIB_FC_LCB_IDX_PLF_LST, (0usize, plf_lst)),
-            (FIB_FC_LCB_IDX_PLF_LFO, (lfo_at, plf_lfo)),
-        ] {
-            let at = rg + index * 8;
-            word_doc[at..at + 4].copy_from_slice(&(fc as u32).to_le_bytes());
-            word_doc[at + 4..at + 8].copy_from_slice(&(block.len() as u32).to_le_bytes());
-        }
-        let mut table = vec![0u8; lfo_at + plf_lfo.len()];
-        table[..plf_lst.len()].copy_from_slice(plf_lst);
-        table[lfo_at..].copy_from_slice(plf_lfo);
-        ListFormats::build(&table, &word_doc, rg)
-    }
-
-    /// Walk the given paragraphs, all bound to `ilfo` 1 at the given level,
-    /// and collect the labels they paint.
-    fn painted(formats: &ListFormats, paragraphs: &[(u16, u8)]) -> Vec<String> {
-        let mut state = NumberingState::default();
-        paragraphs
-            .iter()
-            .filter_map(|&(ilfo, ilvl)| formats.membership_for(ListBinding { ilfo, ilvl }, &mut state))
-            .filter_map(|membership| membership.label)
-            .collect()
-    }
-
-    #[test]
-    fn a_start_override_applies_at_the_overriding_ilfos_first_paragraph() {
-        let formats = synthetic_formats(&synthetic_plf_lst(7, 1), &synthetic_plf_lfo(7, &[Some(5)]));
-        assert_eq!(
-            painted(&formats, &[(1, 0), (1, 0), (1, 0)]),
-            vec!["5.", "6.", "7."],
-            "the override starts the sequence at 5 once; later paragraphs advance it"
-        );
-    }
-
-    #[test]
-    fn two_ilfos_sharing_a_list_continue_its_sequence() {
-        let formats = synthetic_formats(&synthetic_plf_lst(7, 1), &synthetic_plf_lfo(7, &[None, None]));
-        assert_eq!(
-            painted(&formats, &[(1, 0), (2, 0), (1, 0)]),
-            vec!["1.", "2.", "3."],
-            "an lsid's sequence is the list; the ilfo only carries overrides"
-        );
-    }
-
-    #[test]
-    fn a_shallower_paragraph_of_the_same_list_restarts_deeper_levels() {
-        let formats = synthetic_formats(&synthetic_plf_lst(7, 1), &synthetic_plf_lfo(7, &[None]));
-        assert_eq!(
-            painted(&formats, &[(1, 0), (1, 1), (1, 1), (1, 0), (1, 1)]),
-            vec!["1.", "1.", "2.", "2.", "1."],
-            "the level-1 sequence starts at 1, advances, and restarts after the deeper \
-             interrupting level-0 paragraph"
-        );
-    }
-
-    #[test]
-    fn a_level_with_no_number_sequence_is_not_a_list_item() {
-        // `nfc` 255 and an empty `Xst`: Word paints no marker for the level.
-        let mut out = vec![0x01, 0x00];
-        let mut lstf = [0u8; LSTF_LEN];
-        lstf[..4].copy_from_slice(&7u32.to_le_bytes());
-        out.extend_from_slice(&lstf);
-        let mut lvlf = [0u8; LVLF_LEN];
-        lvlf[..4].copy_from_slice(&1i32.to_le_bytes());
-        lvlf[4] = NFC_NONE;
-        out.extend_from_slice(&lvlf);
-        out.extend_from_slice(&0u16.to_le_bytes());
-
-        let formats = synthetic_formats(&out, &synthetic_plf_lfo(7, &[None]));
-        let mut state = NumberingState::default();
-        assert!(
-            formats
-                .membership_for(ListBinding { ilfo: 1, ilvl: 0 }, &mut state)
-                .is_none(),
-            "a binding whose level paints no marker is prose (or its styled heading), not a list item"
-        );
-    }
-
-    #[test]
-    fn an_ilfo_past_the_lfo_table_is_not_in_a_list() {
-        let formats = synthetic_formats(&synthetic_plf_lst(7, 1), &[0, 0, 0, 0]);
-        let mut state = NumberingState::default();
-        assert!(
-            formats
-                .membership_for(ListBinding { ilfo: 1, ilvl: 0 }, &mut state)
-                .is_none(),
-            "an ilfo naming no LFO binds no list, so the paragraph joins no sequence and \
-             paints no number"
-        );
-    }
-
-    #[test]
-    fn a_formatting_override_is_walked_past_and_the_embedded_level_paints() {
-        // LFOLVL[0] replaces level 0's formatting with an embedded LVL;
-        // LFOLVL[1] starts level 1 at 9. A walk that misreads the embedded
-        // LVL's variable length would read LFOLVL[1] from the wrong bytes.
-        let mut plf_lst = vec![0x01, 0x00];
-        let mut lstf = [0u8; LSTF_LEN];
-        lstf[..4].copy_from_slice(&7u32.to_le_bytes());
-        plf_lst.extend_from_slice(&lstf);
-        for level in 0..LVL_COUNT_MULTILEVEL {
-            plf_lst.extend_from_slice(&synthetic_lvl(1, NFC_DECIMAL, u8::try_from(level).unwrap_or(u8::MAX)));
-        }
-
-        let mut plf_lfo = vec![1, 0, 0, 0];
-        let mut lfo = [0u8; LFO_LEN];
-        lfo[..4].copy_from_slice(&7u32.to_le_bytes());
-        lfo[12] = 2; // clfolvl
-        plf_lfo.extend_from_slice(&lfo);
-        plf_lfo.extend_from_slice(&0xFFFF_FFFFu32.to_le_bytes());
-        // LFOLVL[0]: fFormatting, embedded LVL follows.
-        plf_lfo.extend_from_slice(&0i32.to_le_bytes());
-        plf_lfo.push(0x20);
-        plf_lfo.extend_from_slice(&[0; 3]);
-        plf_lfo.extend_from_slice(&synthetic_lvl(3, NFC_DECIMAL, 0));
-        // LFOLVL[1]: fStartAt 9 for level 1.
-        plf_lfo.extend_from_slice(&9i32.to_le_bytes());
-        plf_lfo.push(0x11); // iLvl 1, fStartAt
-        plf_lfo.extend_from_slice(&[0; 3]);
-
-        let formats = synthetic_formats(&plf_lst, &plf_lfo);
-        assert_eq!(
-            painted(&formats, &[(1, 1), (1, 1)]),
-            vec!["9.", "10."],
-            "the next LFOLVL's start override still applies behind the embedded LVL"
-        );
-        let mut state = NumberingState::default();
-        let level_zero = formats
-            .membership_for(ListBinding { ilfo: 1, ilvl: 0 }, &mut state)
-            .expect("level 0 stays a list item");
-        assert!(
-            level_zero.ordered,
-            "the embedded level is ordered where the base format was"
-        );
-        assert_eq!(
-            level_zero.label.as_deref(),
-            Some("3."),
-            "the embedded LVL replaces the level's formatting: its own start, 3, is what \
-             the level paints"
-        );
-    }
-}

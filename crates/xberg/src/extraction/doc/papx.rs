@@ -134,7 +134,7 @@ fn for_each_sprm(grpprl: &[u8], mut visit: impl FnMut(u16, &[u8])) {
 }
 
 /// Scan a `grpprl` for the two sprms that describe list membership.
-fn list_binding_from_grpprl(grpprl: &[u8]) -> Option<ListBinding> {
+pub(super) fn list_binding_from_grpprl(grpprl: &[u8]) -> Option<ListBinding> {
     let mut ilfo: Option<u16> = None;
     let mut ilvl: u8 = 0;
 
