@@ -116,7 +116,20 @@ impl TrueTypeCMap {
             subtable_offset
         );
 
-        cursor.set_position((cmap_offset + subtable_offset) as u64);
+        // The subtable offset is attacker-controlled: reject anything past
+        // the end of the font data, computed in u64 so the sum cannot
+        // overflow. A checked u32 add would only remove the debug panic
+        // while release silently wrapped and walked garbage. ~keep
+        let subtable_start = u64::from(cmap_offset) + u64::from(subtable_offset);
+        if subtable_start >= data.len() as u64 {
+            return Err(format!(
+                "cmap subtable offset {} out of bounds (font data length {})",
+                subtable_offset,
+                data.len()
+            ));
+        }
+
+        cursor.set_position(subtable_start);
         let gid_to_unicode = Self::parse_cmap_subtable(&mut cursor)?;
 
         Ok(TrueTypeCMap {
@@ -469,9 +482,15 @@ impl TrueTypeCMap {
         }
         // Per TrueType spec: index into glyphIdArray
         // offset = idRangeOffset[i]/2 + (charCode - startCode[i]) + i - segCount ~keep
-        let offset =
-            (segment.id_range_offset as usize) / 2 + (char_code as usize - segment.start as usize) + segment.seg
-                - segment.seg_count;
+        // A malformed subtable can push the value below zero before the
+        // segCount subtraction; underflow resolves to nothing, exactly like
+        // the out-of-bounds case (release's wrapped huge index always failed
+        // the bounds check and returned 0). ~keep
+        let index =
+            (segment.id_range_offset as usize) / 2 + (char_code as usize - segment.start as usize) + segment.seg;
+        let Some(offset) = index.checked_sub(segment.seg_count) else {
+            return 0;
+        };
         if offset < glyph_id_array.len() {
             let raw = glyph_id_array[offset];
             if raw != 0 {
@@ -534,6 +553,7 @@ impl TrueTypeCMap {
             .map_err(|e| format!("Failed to read numGroups: {}", e))? as usize;
 
         let mut gid_to_unicode = HashMap::new();
+        let mut remaining = MAX_CMAP_EXAMINED_CODE_POINTS;
 
         for _ in 0..num_groups {
             let start_char_code = cursor
@@ -546,8 +566,42 @@ impl TrueTypeCMap {
                 .read_u32::<BigEndian>()
                 .map_err(|e| format!("Failed to read startGlyphId: {}", e))?;
 
+            // GH#3034: a crafted endCharCode can reach 0xFFFFFFFF, whose
+            // walk costs ~4.3 billion iterations per group. Clamp the walk
+            // to Unicode's maximum; a group whose start lies past it (or
+            // whose end is below its start) maps nothing and is skipped
+            // without iterating — and without spending any of the budget,
+            // since code points past U+10FFFF are not characters and can
+            // never be examined. ~keep
+            let end_char_code = end_char_code.min(char::MAX as u32);
+            if end_char_code < start_char_code {
+                continue;
+            }
+
+            // The budget is spent by total examined code points, not by
+            // distinct mappings: a single 65,535-wide group fills the gid
+            // map (short of the map's own capacity, since surrogate code
+            // points are never inserted), so a mapping-count cap lets
+            // ~87k further overlapping groups re-walk the same gids —
+            // about 5.7 billion iterations (GH#3034 review). Charging each
+            // group's full clamped width up front bounds a subtable's work
+            // at the budget itself; a subtable that exceeds it is rejected
+            // rather than silently truncated, so the font falls back to
+            // its declared encoding exactly as a malformed cmap does.
+            let width = (end_char_code - start_char_code + 1) as usize;
+            if width > remaining {
+                return Err(format!(
+                    "cmap format 12 group of {} code points exceeds the remaining iteration budget ({})",
+                    width, remaining
+                ));
+            }
+            remaining -= width;
+
             for (offset, char_code) in (start_char_code..=end_char_code).enumerate() {
-                let gid = (start_gid + offset as u32) as u16;
+                // A malformed group's startGlyphId can overflow the u32 sum;
+                // wrapping matches release behaviour exactly (the `as u16` cast
+                // then truncates the same low 16 bits). ~keep
+                let gid = start_gid.wrapping_add(offset as u32) as u16;
                 if let Some(ch) = char::from_u32(char_code) {
                     gid_to_unicode.insert(gid, ch);
                 }
@@ -557,6 +611,26 @@ impl TrueTypeCMap {
         Ok(gid_to_unicode)
     }
 }
+
+/// Upper bound on the code points one cmap subtable may examine, as a total
+/// across its groups (each group's clamped width is charged against it up
+/// front). Derivation: the gid→Unicode map is keyed by `u16` — the TrueType
+/// glyph space, `numGlyphs` being a u16 — and a format-12 group maps a
+/// contiguous code-point run onto a contiguous gid run (`startCharCode` →
+/// `startGlyphId`). A well-formed subtable therefore examines at most one
+/// code point per gid, 65,536 in total: a font that claims more either
+/// wraps its gid runs past the u16 space or overlaps them, and in both
+/// cases a later write clobbers an earlier one, so the parsed map would
+/// silently lose entries no matter how far the walk continued. Real fonts
+/// sit far below this — a font's mapped code points cannot exceed its glyph
+/// count, typically well under 30k even for a full CJK face. The budget is
+/// thus tight (every non-degenerate subtable fits exactly once) and safe
+/// (exhaustion proves degeneracy, and the parse is rejected so the font
+/// takes its declared-encoding fallback instead of a silently truncated
+/// map). This is tighter than the core crate's
+/// `SecurityLimits::max_iterations` work budget (10M), which lives in a
+/// crate this one does not depend on.
+const MAX_CMAP_EXAMINED_CODE_POINTS: usize = u16::MAX as usize + 1;
 
 #[cfg(test)]
 mod tests;

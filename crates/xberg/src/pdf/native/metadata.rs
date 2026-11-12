@@ -9,21 +9,29 @@ use crate::pdf::error::{PdfError, Result};
 use crate::pdf::metadata::{CommonPdfMetadata, PdfExtractionMetadata, PdfMetadata};
 use crate::types::{PageBoundary, PageInfo, PageStructure, PageUnitType};
 
+/// What grading a document's pages for OCR routing needs: the grade reads every page again.
+pub(crate) struct ScanGrading<'a> {
+    pub(crate) min_confidence: f64,
+    pub(crate) quality_thresholds: &'a crate::core::config::OcrQualityThresholds,
+    pub(crate) provenance_counts: Option<&'a [(usize, usize)]>,
+}
+
 /// Extract complete PDF metadata from a native document.
 ///
 /// Combines common metadata (title, authors, dates, etc.) with PDF-specific
 /// metadata (version, encryption, dimensions) and optional page structure.
 /// This is the native equivalent of `extract_metadata_from_document_impl`.
+///
+/// `scan_grading` is `None` for a text loop the time limit cut short: grading re-reads every
+/// page, which outlasts the grace period, and the OCR routes that would use the grade are
+/// skipped. ~keep
 pub(crate) fn extract_metadata_from_native_document(
     doc: &mut NativeDocument,
     page_boundaries: Option<&[PageBoundary]>,
     content: &str,
-    scanned_min_confidence: f64,
-    ocr_quality_thresholds: &crate::core::config::OcrQualityThresholds,
-    provenance_counts: Option<&[(usize, usize)]>,
+    scan_grading: Option<ScanGrading<'_>>,
 ) -> Result<PdfExtractionMetadata> {
-    let pdf_specific =
-        extract_pdf_specific_metadata(doc, scanned_min_confidence, ocr_quality_thresholds, provenance_counts)?;
+    let pdf_specific = extract_pdf_specific_metadata(doc, scan_grading)?;
     let common = extract_common_metadata(doc)?;
 
     let page_structure = if let Some(boundaries) = page_boundaries {
@@ -48,9 +56,7 @@ pub(crate) fn extract_metadata_from_native_document(
 /// Extract only PDF-specific metadata (version, producer, encryption, dimensions, page count).
 fn extract_pdf_specific_metadata(
     doc: &mut NativeDocument,
-    scanned_min_confidence: f64,
-    ocr_quality_thresholds: &crate::core::config::OcrQualityThresholds,
-    provenance_counts: Option<&[(usize, usize)]>,
+    scan_grading: Option<ScanGrading<'_>>,
 ) -> Result<PdfMetadata> {
     let (major, minor) = doc.doc.version();
     let pdf_version = if major > 0 {
@@ -81,12 +87,15 @@ fn extract_pdf_specific_metadata(
 
     let producer = get_info_string(&mut doc.doc, "Producer");
 
-    let (scanned_confidence, scanned_pages, fabricated_text_pages) = ocr_routing_pages(
-        &doc.doc,
-        scanned_min_confidence,
-        ocr_quality_thresholds,
-        provenance_counts,
-    );
+    let (scanned_confidence, scanned_pages, fabricated_text_pages) = match scan_grading {
+        Some(grading) => ocr_routing_pages(
+            &doc.doc,
+            grading.min_confidence,
+            grading.quality_thresholds,
+            grading.provenance_counts,
+        ),
+        None => (None, None, None),
+    };
 
     Ok(PdfMetadata {
         pdf_version,

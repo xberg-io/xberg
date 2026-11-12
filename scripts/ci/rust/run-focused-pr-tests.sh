@@ -86,8 +86,9 @@ run_type0_cases() {
   run_exact should_force_only_the_requested_page_in_either_document_order --test pdf_type0_scope_2533
   run_exact 'negative::should_choose_visible_outline_words_when_bad_marker_layer_is_first' --test pdf_type0_scope_2533
   run_exact 'negative::should_choose_visible_outline_words_when_bad_marker_layer_is_second' --test pdf_type0_scope_2533
-  if [ "$((passed - before))" -ne 5 ]; then
-    printf 'Expected five executed public Type0 tests, observed %s\n' "$((passed - before))" >&2
+  run_exact 'marker_probe::probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer' --test pdf_type0_scope_2533
+  if [ "$((passed - before))" -ne 6 ]; then
+    printf 'Expected six executed public Type0 tests, observed %s\n' "$((passed - before))" >&2
     exit 1
   fi
 }
@@ -210,7 +211,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=81
+  expected=82
   run_pdf_cases
   run_retained_read_cases
   expected=$((expected + 11))

@@ -16,18 +16,22 @@ const MIN_ROW_WIDTH_IN_HEIGHTS: f32 = 12.0;
 const BODY_CONTOUR_WIDTH_PT: std::ops::RangeInclusive<f32> = 1.0..=18.0;
 const BODY_CONTOUR_HEIGHT_PT: std::ops::RangeInclusive<f32> = 4.0..=18.0;
 
+/// Whether this run looks for outlined pages at all, before any page is read.
+pub(super) fn requested(config: &ExtractionConfig, text: &str) -> bool {
+    !(config.effective_disable_ocr()
+        || config.ocr_strategy != OcrStrategy::Auto
+        || config.force_ocr
+        || config.force_ocr_pages.is_some()
+        || !super::near_empty_ocr_fallback_applies(config, text))
+}
+
 pub(super) fn candidates(
     doc: &PdfDocument,
     config: &ExtractionConfig,
     text: &str,
     boundaries: &[PageBoundary],
 ) -> Vec<u32> {
-    if config.effective_disable_ocr()
-        || config.ocr_strategy != OcrStrategy::Auto
-        || config.force_ocr
-        || config.force_ocr_pages.is_some()
-        || !super::near_empty_ocr_fallback_applies(config, text)
-    {
+    if !requested(config, text) {
         return Vec::new();
     }
     let mut raster = super::ocr::VisibleRasterProof::new(config);
