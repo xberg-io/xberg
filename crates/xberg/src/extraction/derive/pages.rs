@@ -23,11 +23,12 @@ pub(super) fn derive_pages(
     spans: Option<&crate::rendering::ElementSpans>,
     observer: &mut impl super::surfaces::DerivationObserver,
 ) -> Option<Vec<PageContent>> {
-    // ~keep A page of a source whose pages are not OCR text gets its text and its range from
-    // the spans, so the range selects the page text by construction. PDF, image and OCR pages
-    // keep their own text, and their ranges are located below.
+    // ~keep Renderer spans own native page text and ranges. Adopted OCR documents can
+    // declare any source format, so their transcripts follow the OCR page marks below.
     let native_ranges = spans
-        .filter(|_| content_is_plain && !source_short_circuits_ocr_page_text(&doc.source_format))
+        .filter(|_| {
+            content_is_plain && !doc.adopted_ocr_document && !source_short_circuits_ocr_page_text(&doc.source_format)
+        })
         .map(|spans| plain_page_ranges(doc, content, spans))
         .filter(|ranges| ranges.values().any(Option::is_some));
     let native_ranges = native_ranges.as_ref();

@@ -45,6 +45,7 @@ pub(crate) fn adopt_public_ocr_document(result: &mut ExtractedDocument, limits: 
     validate_structure(structure)?;
     validate_serialized_payload_size(result, limits)?;
     let mut doc = InternalDocument::new(structure.source_format.as_deref().unwrap_or("ocr"));
+    doc.adopted_ocr_document = true;
     for node in &structure.nodes {
         doc.push_element(convert_node(node)?);
     }

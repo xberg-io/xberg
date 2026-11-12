@@ -277,6 +277,11 @@ pub struct InternalDocument {
     #[serde(skip)]
     pub ocr_text_pages: Vec<u32>,
 
+    /// Adopted OCR pages use the page marks to decide whether their transcripts can be re-rendered. ~keep
+    #[doc(hidden)]
+    #[serde(skip)]
+    pub adopted_ocr_document: bool,
+
     /// Pre-rendered formatted content produced by the extractor itself.
     ///
     /// When an extractor has direct access to high-quality formatted output (e.g.,
@@ -477,6 +482,7 @@ impl InternalDocument {
             annotations: None,
             prebuilt_pages: None,
             ocr_text_pages: Vec::new(),
+            adopted_ocr_document: false,
             pre_rendered_content: None,
             prebuilt_ocr_elements: None,
             llm_usage: None,
