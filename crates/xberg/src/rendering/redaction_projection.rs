@@ -588,4 +588,13 @@ mod tests {
         assert!(written.text.contains(r"a \ b"), "{:?}", written.text);
         assert!(foreign.text.contains(r"a \\ b"), "{:?}", foreign.text);
     }
+
+    #[test]
+    fn math_that_the_writer_does_not_escape_keeps_its_backslashes() {
+        let limits = SecurityLimits::default();
+        let display = VisibleMarkdown::parse_written("$$\na \\\\ b\n$$\n", &limits).unwrap();
+        assert!(display.text.contains(r"a \\ b"), "{:?}", display.text);
+        let code = VisibleMarkdown::parse_written("Let $`a \\\\ b`$ hold.\n", &limits).unwrap();
+        assert!(code.text.contains(r"a \\ b"), "{:?}", code.text);
+    }
 }

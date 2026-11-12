@@ -69,17 +69,19 @@ pub(crate) fn join_tex_lines(tex: &str) -> String {
 /// Display math between `$$` lines and code math are written as they are.
 #[cfg(any(feature = "office", feature = "pdf"))]
 pub(crate) fn math_node_tex(math: &comrak::nodes::NodeMath) -> String {
-    if math.dollar_math && !markdown_math_is_unescaped(math) {
-        join_tex_lines(&unescape_markdown_text(&math.literal))
-    } else {
+    if markdown_math_is_unescaped(math) {
         join_tex_lines(&math.literal)
+    } else {
+        join_tex_lines(&unescape_markdown_text(&math.literal))
     }
 }
 
-/// Display math that the Markdown writer put between `$$` lines holds its TeX unescaped.
+/// Code math and display math that the Markdown writer put between `$$` lines hold their TeX
+/// unescaped. The second starts with a line break, which no single-dollar literal does: comrak
+/// turns the line breaks of those into spaces.
 #[cfg(any(test, feature = "office", feature = "pdf", feature = "redaction"))]
 pub(crate) fn markdown_math_is_unescaped(math: &comrak::nodes::NodeMath) -> bool {
-    !math.dollar_math || (math.display_math && math.literal.starts_with('\n'))
+    !math.dollar_math || math.literal.starts_with('\n')
 }
 
 /// Undo the CommonMark backslash escape (a backslash before an ASCII punctuation mark) and the

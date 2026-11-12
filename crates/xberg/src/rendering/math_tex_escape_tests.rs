@@ -179,3 +179,86 @@ fn should_keep_a_dollar_in_tex_inside_its_math_for_a_reader_with_math() {
         );
     }
 }
+
+/// TeX that ends in one, two, three and four backslashes.
+const BACKSLASH_TAILS: [&str; 4] = ["x\\", "x\\\\", "x\\\\\\", "x\\\\\\\\"];
+
+/// The display flag and literal of every math node that a reader with math on finds.
+fn math_nodes(markdown: &str) -> Vec<(bool, String)> {
+    let arena = Arena::new();
+    let root = parse_document(&arena, markdown, &super::markdown::comrak_options());
+    root.descendants()
+        .filter_map(|node| match &node.data.borrow().value {
+            NodeValue::Math(math) => Some((math.display_math, math.literal.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn should_close_display_math_whose_tex_ends_in_a_backslash() {
+    // GitHub and comrak close `$$` after a backslash only when a space comes between them.
+    for tex in BACKSLASH_TAILS {
+        let source = format!("Then $${tex}$$ holds.");
+        let markdown = math_paragraph(&source, &[&format!("$${tex}$$")]);
+        let math = math_nodes(&markdown);
+        assert_eq!(math.len(), 1, "markdown: {markdown:?}");
+        assert!(math[0].0, "markdown: {markdown:?}");
+        assert_eq!(
+            super::common::unescape_markdown_text(&math[0].1).trim_end(),
+            tex,
+            "markdown: {markdown:?}"
+        );
+        assert_eq!(
+            read_text(&markdown),
+            format!("Then $${tex} $$ holds."),
+            "markdown: {markdown:?}"
+        );
+    }
+}
+
+#[test]
+fn should_write_inline_math_whose_tex_ends_in_a_backslash_as_code() {
+    // No reader closes a single `$` right after a backslash, so the TeX is kept as code.
+    for tex in BACKSLASH_TAILS {
+        let source = format!("Let ${tex}$ hold.");
+        let markdown = math_paragraph(&source, &[&format!("${tex}$")]);
+        assert_eq!(markdown, format!("Let `{tex}` hold.\n"));
+        assert!(math_nodes(&markdown).is_empty(), "markdown: {markdown:?}");
+        assert_eq!(
+            read_text(&markdown),
+            format!("Let {tex} hold."),
+            "markdown: {markdown:?}"
+        );
+    }
+}
+
+/// How GitHub reads what the writer wrote. Each row is the TeX, whether it is display math in prose,
+/// the paragraph the writer produces, and the TeX that GitHub's own renderer returned for that
+/// paragraph (`POST /markdown` with `mode=gfm`, 2026-11-12): the text of its math element, or of
+/// the code span for a row that is written as code.
+const GITHUB_READS: [(&str, bool, &str, &str); 10] = [
+    ("a \\\\ b", false, "Let $a \\\\\\ b$ hold.\n", "a \\\\ b"),
+    ("\\{a\\}", false, "Let $\\\\{a\\\\}$ hold.\n", "\\{a\\}"),
+    ("a \\% b", false, "Let $a \\\\% b$ hold.\n", "a \\% b"),
+    ("a*b*c", false, "Let $a&#42;b&#42;c$ hold.\n", "a*b*c"),
+    ("a_b_c", false, "Let $a_b_c$ hold.\n", "a_b_c"),
+    ("[a](u)", false, "Let $&#91;a&#93;(u)$ hold.\n", "[a](u)"),
+    ("\\_ \\#", false, "Let $&#92;&#95; &#92;#$ hold.\n", "\\_ \\#"),
+    ("a\\$ b", false, "Let $a\\\\\\$ b$ hold.\n", "a\\$ b"),
+    ("x\\\\", false, "Let `x\\\\` hold.\n", "x\\\\"),
+    ("x\\\\", true, "Then $$x\\\\\\ $$ holds.\n", "x\\\\ "),
+];
+
+#[test]
+fn should_write_the_markdown_that_github_read_back_as_the_tex() {
+    for (tex, display, written, github) in GITHUB_READS {
+        let (source, span) = if display {
+            (format!("Then $${tex}$$ holds."), format!("$${tex}$$"))
+        } else {
+            (format!("Let ${tex}$ hold."), format!("${tex}$"))
+        };
+        assert_eq!(math_paragraph(&source, &[&span]), written, "tex: {tex:?}");
+        assert_eq!(github.trim_end(), tex, "recorded GitHub read of {written:?}");
+    }
+}

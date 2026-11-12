@@ -59,6 +59,7 @@ struct MarkupPage {
 #[derive(Default)]
 pub(crate) struct SurfaceCapture {
     formatted: Option<Fingerprint>,
+    formatted_written: bool,
     markup: Option<MarkupSurface>,
     markup_pages: Vec<MarkupPage>,
     pages: Vec<PageSurface>,
@@ -111,7 +112,11 @@ impl DerivationObserver for SurfaceCapture {
     fn formatted(&mut self, markdown: bool, text: &str) {
         if markdown {
             self.formatted = Some(Fingerprint::new(text));
+            self.formatted_written = false;
         }
+    }
+    fn formatted_written(&mut self) {
+        self.formatted_written = self.formatted.is_some();
     }
     fn formatted_from_source(&mut self, markdown: bool, text: &str, tag_exemptions: bool) {
         self.formatted(markdown, text);
@@ -245,6 +250,9 @@ impl RedactionSurfaces for SurfaceContext {
     }
     fn formatted_tag_exemptions(&self) -> bool {
         self.capture.tag_exemptions
+    }
+    fn formatted_written_by_xberg(&self) -> bool {
+        self.capture.formatted_written
     }
     fn formatted_literal_backup(&self) -> Option<&str> {
         self.formatted_literal.as_deref()

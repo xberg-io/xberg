@@ -406,6 +406,15 @@ fn reject_nested_markup(doc: &ExtractedDocument, depth: usize, remaining: &mut u
 /// so that every field is rewritten by exactly the same matchers. Holding the
 /// matchers here is what makes NER-derived terms reach fields other than
 /// `content` (xberg-io/xberg#202).
+/// How a Markdown surface was made, as the surfaces record it.
+#[derive(Clone, Copy)]
+struct MarkdownOrigin {
+    tag_exemptions: bool,
+    /// The Markdown writer made the text, so its dollar math is escaped as Markdown text. A page
+    /// is always written by it; formatted text from an extractor or a custom renderer is not.
+    written_by_xberg: bool,
+}
+
 struct RedactionPass<'a> {
     categories: &'a [PiiCategory],
     config: &'a RedactionConfig,
@@ -456,7 +465,10 @@ impl<'a> RedactionPass<'a> {
             plans.formatted = Some(self.plan_markdown(
                 text,
                 Some(&doc.content),
-                surfaces.formatted_tag_exemptions(),
+                MarkdownOrigin {
+                    tag_exemptions: surfaces.formatted_tag_exemptions(),
+                    written_by_xberg: surfaces.formatted_written_by_xberg(),
+                },
                 surfaces.formatted_owned_tags(),
                 surfaces.formatted_plain_annotation_separator(),
                 limits,
@@ -526,15 +538,20 @@ impl<'a> RedactionPass<'a> {
         &self,
         text: &str,
         plain: Option<&str>,
-        tag_exemptions: bool,
+        origin: MarkdownOrigin,
         owned_tags: Option<&[std::ops::Range<usize>]>,
         plain_annotation_separator: Option<usize>,
         limits: &SecurityLimits,
     ) -> Result<FormattedPlan> {
         let invalid = || crate::XbergError::validation("Cannot prove complete generated Markdown redaction coverage");
-        let projection = crate::rendering::VisibleMarkdown::parse_written(text, limits).ok_or_else(invalid)?;
+        let projection = if origin.written_by_xberg {
+            crate::rendering::VisibleMarkdown::parse_written(text, limits)
+        } else {
+            crate::rendering::VisibleMarkdown::parse(text, limits)
+        }
+        .ok_or_else(invalid)?;
         let sensitive = match_ranges(&self.applicable_matches(&projection.text));
-        if let Some(matches) = content_matches(text, self.applicable_matches(text), tag_exemptions, owned_tags)
+        if let Some(matches) = content_matches(text, self.applicable_matches(text), origin.tag_exemptions, owned_tags)
             && projection.covered(&sensitive, &match_ranges(&matches))
         {
             return Ok(FormattedPlan::Preserve(matches));
@@ -637,7 +654,10 @@ impl<'a> RedactionPass<'a> {
             && let FormattedPlan::Preserve(matches) = self.plan_markdown(
                 text,
                 source,
-                surfaces.page_tag_exemptions(index),
+                MarkdownOrigin {
+                    tag_exemptions: surfaces.page_tag_exemptions(index),
+                    written_by_xberg: true,
+                },
                 surfaces.page_owned_tags(index),
                 None,
                 limits,
@@ -2151,6 +2171,9 @@ mod tests {
             fn formatted_markdown(&self) -> bool {
                 true
             }
+            fn formatted_written_by_xberg(&self) -> bool {
+                true
+            }
         }
 
         redact_with_security_limits(&mut doc, &config, &SecurityLimits::default(), &MarkdownSurfaces)
@@ -2165,6 +2188,37 @@ mod tests {
             "formatted: {:?}",
             doc.formatted_content
         );
+    }
+
+    /// Formatted Markdown that an extractor made, not the Markdown writer, holds a doubled backslash
+    /// in its math as the author wrote it. The pass must not read it as one backslash: a term of one
+    /// backslash is not in that text, and the formatted content stays as it is.
+    #[tokio::test]
+    async fn should_not_unescape_the_math_of_formatted_markdown_that_the_writer_did_not_make() {
+        let formatted = r"Take $a \\ b$ now.".to_string() + "\n";
+        let mut doc = ExtractedDocument {
+            content: formatted.clone(),
+            formatted_content: Some(formatted.clone()),
+            ..Default::default()
+        };
+        let config = RedactionConfig {
+            strategy: crate::types::redaction::RedactionStrategy::Mask,
+            custom_terms: vec![crate::core::config::redaction::RedactionTerm::labeled("expr", r"a \ b")],
+            ..Default::default()
+        };
+
+        struct SourceMarkdownSurfaces;
+        impl RedactionSurfaces for SourceMarkdownSurfaces {
+            fn formatted_markdown(&self) -> bool {
+                true
+            }
+        }
+
+        redact_with_security_limits(&mut doc, &config, &SecurityLimits::default(), &SourceMarkdownSurfaces)
+            .await
+            .expect("redaction must succeed");
+
+        assert_eq!(doc.formatted_content.as_deref(), Some(formatted.as_str()));
     }
 
     /// xberg-io/xberg#204 — the report must count findings from every field.

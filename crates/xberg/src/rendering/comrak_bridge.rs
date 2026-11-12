@@ -323,13 +323,17 @@ fn sanitize_dollar_math<'a>(node: &'a AstNode<'a>) {
 }
 
 /// Whether a reader would not close this math at its last `$`: a closing `$` before a digit is not
-/// a closer, and a `$` run of another math span would join with this one's.
+/// a closer, and a `$` run of another math span would join with this one's. A single `$` right after
+/// a backslash is not a closer either, for GitHub and for comrak, whatever the run of backslashes and
+/// whether the backslash is escaped, and a space before it is not allowed. `$$` has no such rule.
 fn closer_is_not_a_closer<'a>(node: &'a AstNode<'a>, math: &NodeMath) -> bool {
-    node.next_sibling().is_some_and(|next| match &next.data.borrow().value {
-        NodeValue::Math(_) => true,
-        NodeValue::Text(text) => !math.display_math && text.starts_with(|ch: char| ch.is_ascii_digit()),
-        _ => false,
-    })
+    let backslash_tail = !math.display_math && join_tex_lines(&math.literal).ends_with('\\');
+    backslash_tail
+        || node.next_sibling().is_some_and(|next| match &next.data.borrow().value {
+            NodeValue::Math(_) => true,
+            NodeValue::Text(text) => !math.display_math && text.starts_with(|ch: char| ch.is_ascii_digit()),
+            _ => false,
+        })
 }
 
 /// Replace a math node by `tex` between `delimiter`s, escaped as Markdown text.
@@ -449,9 +453,10 @@ fn dollar_math_inline(tex: &str) -> String {
     guard_trailing_backslash(escape_math_dollars(&join_tex_lines(tex)))
 }
 
-/// An odd run of trailing backslashes would escape the closing "$".
+/// A reader does not close `$$` right after a backslash, whether the run is odd or even, so a
+/// space goes between them. Single-dollar math with that tail is written as code instead.
 fn guard_trailing_backslash(mut tex: String) -> String {
-    if (tex.len() - tex.trim_end_matches('\\').len()) % 2 == 1 {
+    if tex.ends_with('\\') {
         tex.push(' ');
     }
     tex

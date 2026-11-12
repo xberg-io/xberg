@@ -214,6 +214,12 @@ fn should_set_display_math_on_one_line_without_its_comments() {
 }
 
 #[test]
+fn should_keep_the_backslashes_of_math_that_the_writer_does_not_escape() {
+    assert_eq!(text("$$\na \\\\ b\n$$\n"), "a \\\\ b");
+    assert_eq!(text("Let $`a \\\\ b`$ hold.\n"), "Let a \\\\ b hold.");
+}
+
+#[test]
 fn should_draw_bold_and_italic_from_the_regular_face() {
     let runs = all_runs("**bold** *italic* plain\n");
     let flags: Vec<(&str, bool, bool)> = runs

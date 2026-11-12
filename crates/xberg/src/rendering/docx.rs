@@ -740,6 +740,14 @@ mod tests {
     }
 
     #[test]
+    fn should_keep_the_backslashes_of_math_that_the_writer_does_not_escape() {
+        let display = part("$$\na \\\\ b\n$$\n", "word/document.xml");
+        assert_eq!(body_text(&display), "a \\\\ b");
+        let code = part("Let $`a \\\\ b`$ hold.\n", "word/document.xml");
+        assert_eq!(body_text(&code), "Let a \\\\ b hold.");
+    }
+
+    #[test]
     fn should_escape_markup_and_drop_characters_xml_cannot_hold() {
         let document = part("a < b & \"c\" 'd' \u{1}e\u{FFFE}f\n", "word/document.xml");
         assert_eq!(body_text(&document), "a < b & \"c\" 'd' ef");
