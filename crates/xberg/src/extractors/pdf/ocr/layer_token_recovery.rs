@@ -121,13 +121,16 @@ fn is_misreading(read: &str, layer: &str) -> bool {
     {
         return true;
     }
-    let identifier = |token: &str| {
-        token.chars().count() >= 4
-            && token.chars().any(|character| character.is_ascii_digit())
-            && token.chars().any(|character| character.is_ascii_alphabetic())
-            && token.chars().all(|character| character.is_ascii_alphanumeric())
-    };
-    identifier(layer) && layer.len() == read.len() + 1 && (layer[1..] == *read || layer[..layer.len() - 1] == *read)
+    is_identifier(layer) && layer.len() == read.len() + 1 && (layer[1..] == *read || layer[..layer.len() - 1] == *read)
+}
+
+/// A token of letters and digits, four or more characters, with both kinds: an identifier or a
+/// code, which carries no dictionary word the read could have guessed.
+fn is_identifier(token: &str) -> bool {
+    token.chars().count() >= 4
+        && token.chars().any(|character| character.is_ascii_digit())
+        && token.chars().any(|character| character.is_ascii_alphabetic())
+        && token.chars().all(|character| character.is_ascii_alphanumeric())
 }
 
 fn overlaps(left: &LineBox, right: &LineBox) -> bool {
@@ -355,7 +358,9 @@ impl Frame {
     }
 }
 
-/// Recover into `read` the layer tokens of one page that a whole-page read of it lost: a layer
+/// Recover into `read` the layer tokens of one page that a whole-page read of it lost, when the read
+/// as it stands already confirms the layer: the page's later decision to put the layer's lines
+/// first rests on the same test, so words copied from the layer must not be what passes it. A layer
 /// word the read misread with low confidence takes the layer's spelling, and a layer word the page
 /// shows where the read has no word is added. Returns whether the read changed.
 pub(super) fn recover_page(
@@ -386,6 +391,15 @@ pub(super) fn recover_page(
             confidence: 1.0,
         })
         .collect();
+    let decodable_layer = layer
+        .iter()
+        .filter(|word| is_decodable(&word.text))
+        .map(|word| word.text.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if !super::document::ocr_confirms_layer(&decodable_layer, &read.content, limits.thresholds) {
+        return false;
+    }
     let Some(elements) = read.ocr_elements.as_deref() else {
         return false;
     };

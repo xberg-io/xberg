@@ -12,13 +12,23 @@ const WORKING_BYTES: usize = 64 * 1024 * 1024;
 /// A read of the page that has every layer word as the layer spells it, except where `reading`
 /// gives another spelling for a layer token, each with `confidence`.
 fn read_of(pdf: &PdfDocument, reading: &[(&str, &str)], confidence: f64) -> ExtractedDocument {
+    read_where(pdf, reading, confidence, |_| true)
+}
+
+/// As `read_of`, but only the layer words that `kept` accepts are read at all.
+fn read_where(
+    pdf: &PdfDocument,
+    reading: &[(&str, &str)],
+    confidence: f64,
+    kept: impl Fn(&str) -> bool,
+) -> ExtractedDocument {
     let raster_height = PAGE.1 * SCALE;
     let words: Vec<OcrElement> = pdf
         .extract_text_lines(0)
         .unwrap()
         .iter()
         .flat_map(|line| &line.words)
-        .filter(|word| is_decodable(&word.text))
+        .filter(|word| is_decodable(&word.text) && kept(&word.text))
         .map(|word| {
             let text = reading
                 .iter()
@@ -142,4 +152,15 @@ fn a_confident_confusable_misreading_keeps_the_read() {
         "{}",
         read.content
     );
+}
+
+#[test]
+fn a_read_that_does_not_confirm_the_layer_gets_no_word_from_it() {
+    let pdf = PdfDocument::from_bytes(WRONG_LAYER_PDF.to_vec()).unwrap();
+    let digits_only = |token: &str| token.chars().all(|character| character.is_ascii_digit());
+    let mut read = read_where(&pdf, &[], 0.9, digits_only);
+    let before = read.content.clone();
+    assert!(before.split_whitespace().count() >= MIN_LOCATED_WORDS, "{before}");
+    assert!(!recover(&pdf, &mut read));
+    assert_eq!(read.content, before);
 }
