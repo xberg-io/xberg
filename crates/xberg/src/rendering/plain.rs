@@ -98,7 +98,9 @@ fn render_body_plain(
         }
         let start = out.len();
         if elem.kind == ElementKind::FootnoteRef {
-            let Some(n) = footnotes.ref_number(i as u32) else { continue };
+            let Some(n) = footnotes.ref_number(i as u32) else {
+                continue;
+            };
             append_footnote_marker(out, n, after_text_block);
             // ~keep A marker after a text block goes into that block, before its line breaks,
             // so it belongs to the bytes of the element that wrote the block.

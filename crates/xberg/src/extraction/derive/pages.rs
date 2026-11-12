@@ -85,15 +85,15 @@ pub(super) fn derive_pages(
 /// Where the text of each page is in the plain `content`: from the first byte that the page's
 /// elements write to the last, without the whitespace around it. The page whose elements end
 /// the body also has the note and comment definitions and the annotations that follow the body.
-fn plain_page_ranges(
-    doc: &InternalDocument,
-    content: &str,
-    spans: &crate::rendering::ElementSpans,
-) -> PlainPageRanges {
+fn plain_page_ranges(doc: &InternalDocument, content: &str, spans: &crate::rendering::ElementSpans) -> PlainPageRanges {
     compute_page_membership(doc)
         .into_iter()
         .map(|(page_number, indices)| {
-            let page_spans = || indices.iter().filter_map(|&i| spans.by_element.get(i).copied().flatten());
+            let page_spans = || {
+                indices
+                    .iter()
+                    .filter_map(|&i| spans.by_element.get(i).copied().flatten())
+            };
             let range = page_spans()
                 .map(|(start, _)| start)
                 .min()
@@ -122,7 +122,9 @@ fn with_plain_page_text(mut pages: Vec<PageContent>, content: &str, ranges: &Pla
 }
 
 fn range_text(content: &str, range: Option<(usize, usize)>) -> &str {
-    range.and_then(|(start, end)| content.get(start..end)).unwrap_or_default()
+    range
+        .and_then(|(start, end)| content.get(start..end))
+        .unwrap_or_default()
 }
 
 /// Set the range of each page to the place of its text in the plain content. A page with no

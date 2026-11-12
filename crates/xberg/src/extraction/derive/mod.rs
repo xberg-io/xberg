@@ -926,7 +926,14 @@ fn derive(
     // gets this document and `formatted_content` is `None`: plain output, or a custom format
     // name with no renderer. The document for a registered renderer is not the caller's. ~keep
     let content_is_plain = is_result && formatted_content.is_none();
-    let pages = derive_pages(&mut doc, &content, &output_format, content_is_plain, spans.as_ref(), observer);
+    let pages = derive_pages(
+        &mut doc,
+        &content,
+        &output_format,
+        content_is_plain,
+        spans.as_ref(),
+        observer,
+    );
     let ocr_elements = doc.prebuilt_ocr_elements.take().or_else(|| build_ocr_elements(&doc));
 
     let formulas = derive_formulas(&mut doc);
