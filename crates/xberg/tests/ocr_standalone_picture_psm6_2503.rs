@@ -172,11 +172,9 @@ fn assert_rows_are_own_lines(format: OutputFormat) {
         lines = djot_text.lines().collect();
         assert_eq!(lines.len(), 13, "header plus 12 parsed Djot paragraphs:\n{djot_text}");
 
-        // Djot escapes every leader dot, so every leader run must round-trip whole: each of
-        // the 12 rows must sit on exactly one line with a byte-identical label, a non-empty
-        // leader and its values intact. The OCR can misread a value comma as a period, and
-        // that is an accuracy loss, not a leader loss, so the tail comparison reads ',' as '.'
-        // on both sides for every row; the label and the leader stay exact (GH#3009).
+        // Each Djot row must keep its exact label and a non-empty dot leader. The fixture
+        // does not record leader lengths. Compare values after treating commas as periods
+        // on both sides so an OCR separator misread cannot obscure a missing leader.
         let mut next = 0;
         for row in PICTURE_11PX_ROWS.lines() {
             let hits: Vec<(usize, bool)> = lines
