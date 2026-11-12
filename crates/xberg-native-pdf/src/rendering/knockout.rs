@@ -8,6 +8,21 @@ use std::collections::{HashMap, HashSet};
 use tiny_skia::{Pixmap, Transform};
 
 /// Whether a resolved `/Group` dictionary is a transparency group with `/K true`; pages and forms share it.
+/// RGBA-sized snapshots a paint workspace holds when the page has a sidecar.
+const SIDECAR_SNAPSHOT_COPIES: usize = 2;
+/// Extra RGBA-sized copy a non-separable blend holds.
+const NONSEPARABLE_BLEND_COPIES: usize = 1;
+/// Coverage bytes per pixel of a fill.
+const FILL_COVERAGE_BYTES: usize = 1;
+/// Coverage bytes per pixel of a stroke, text show, inline image or shading.
+const STROKE_COVERAGE_BYTES: usize = 5;
+/// Coverage bytes per pixel of a fill-and-stroke paint, the largest.
+const FILL_STROKE_COVERAGE_BYTES: usize = 6;
+/// Worst-case bytes per pixel `reserve_operator_workspace` reserves for one paint: the sidecar
+/// snapshots and a non-separable blend copy (4 bytes each) plus the widest coverage.
+pub(super) const MAX_PAINT_SCRATCH_BYTES_PER_PIXEL: usize =
+    4 * (SIDECAR_SNAPSHOT_COPIES + NONSEPARABLE_BLEND_COPIES) + FILL_STROKE_COVERAGE_BYTES;
+
 pub(super) fn group_is_knockout(group: &Object) -> bool {
     group.as_dict().is_some_and(|group| {
         group.get("S").and_then(Object::as_name) == Some("Transparency")
@@ -435,7 +450,7 @@ impl PageRenderer {
             0
         };
         let snapshots = if self.cmyk_sidecar.is_some() {
-            2
+            SIDECAR_SNAPSHOT_COPIES
         } else if gs.fill_overprint || gs.stroke_overprint {
             1
         } else {
@@ -460,11 +475,11 @@ impl PageRenderer {
         op: &Operator,
     ) -> Result<Option<super::knockout_resources::Reservation>> {
         let coverage = match op {
-            Operator::Fill | Operator::FillEvenOdd => 1,
+            Operator::Fill | Operator::FillEvenOdd => FILL_COVERAGE_BYTES,
             Operator::FillStroke
             | Operator::FillStrokeEvenOdd
             | Operator::CloseFillStroke
-            | Operator::CloseFillStrokeEvenOdd => 6,
+            | Operator::CloseFillStrokeEvenOdd => FILL_STROKE_COVERAGE_BYTES,
             Operator::Stroke
             | Operator::CloseStroke
             | Operator::InlineImage { .. }
@@ -472,7 +487,7 @@ impl PageRenderer {
             | Operator::Tj { .. }
             | Operator::TJ { .. }
             | Operator::Quote { .. }
-            | Operator::DoubleQuote { .. } => 5,
+            | Operator::DoubleQuote { .. } => STROKE_COVERAGE_BYTES,
             _ => return Ok(None),
         };
         self.reserve_raster_workspace(pixmap, gs, coverage)

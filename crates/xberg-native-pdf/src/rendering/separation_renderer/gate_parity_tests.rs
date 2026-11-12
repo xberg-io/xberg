@@ -357,17 +357,54 @@ fn one_ink_charge(dpi: u32, copies: usize) -> usize {
     side * side * (RGBA_AND_PNG_BYTES_PER_PIXEL + (copies + 1) * (4 + 2)) + PNG_FIXED_OVERHEAD
 }
 
-/// The knockout peak of one ink per pixel: the canvas, the group, two copies for the backdrop and
-/// accumulator (each rgba + sidecar of 4 + 6), three shape workspaces of 2 and the paint scratch.
-fn one_ink_knockout_charge(dpi: u32) -> usize {
+/// Bytes the fit charges the 100 x 100 pt page at `dpi` for `per_pixel` run-time bytes.
+fn one_ink_peak_charge(dpi: u32, per_pixel: usize) -> usize {
     let side = (f64::from(dpi) * 100.0 / 72.0).ceil() as usize;
-    side * side * (4 * (4 + 6) + 3 * 2 + 9) + PNG_FIXED_OVERHEAD
+    side * side * per_pixel + PNG_FIXED_OVERHEAD
 }
 
-/// The plain-group peak of one ink per pixel: the canvas, the group and the paint scratch.
-fn one_ink_group_charge(dpi: u32) -> usize {
-    let side = (f64::from(dpi) * 100.0 / 72.0).ceil() as usize;
-    side * side * (2 * (4 + 6) + 9) + PNG_FIXED_OVERHEAD
+/// One ink: rgba + sidecar of a canvas or group is 4 + 4 + 2 bytes per pixel.
+const CANVAS: usize = 4 + 4 + 2;
+/// Worst-case paint scratch: two snapshots, a non-separable blend copy and fill-stroke coverage.
+const SCRATCH: usize = 4 * 3 + 6;
+/// Two groups' worth of one knockout reservation: twice rgba + sidecar and twice the shape, plus
+/// the shape workspace, with a shape of one ink plus a coverage plane (2).
+const KNOCKOUT: usize = 2 * CANVAS + 3 * 2;
+/// A soft mask inside a group: mask workspace and backdrop (3 rgba), paint snapshots, the shape
+/// and the mask form's group.
+const SOFT_MASK_IN_GROUP: usize = 12 + CANVAS + 2 + CANVAS;
+
+/// A group form `number` with its own `/Resources` extras and `body`.
+fn group_form_obj(number: u32, resources: &str, body: &str) -> String {
+    format!(
+        "{number} 0 obj\n<< /Type /XObject /Subtype /Form /FormType 1 /BBox [0 0 100 100] \
+         /Resources << /ColorSpace << {SPOT_A} >> {resources} >> /Group << /Type /Group /S /Transparency >> \
+         /Length {} >>\nstream\n{body}\nendstream\nendobj\n",
+        body.len()
+    )
+}
+
+fn nested_group_page() -> PdfDocument {
+    let outer = group_form_obj(5, "/XObject << /G 6 0 R >>", "/G Do");
+    let inner = group_form_obj(6, "", "/CS0 cs 0.8 scn 10 10 60 60 re f");
+    build_page_with("/F Do", SPOT_A, "/BM /Multiply", &[&outer, &inner])
+}
+
+fn soft_mask_in_group_page() -> PdfDocument {
+    let outer = group_form_obj(5, "/XObject << /G 6 0 R >>", "/G Do");
+    let mask = group_form_obj(6, "", "0.4 g 0 0 100 100 re f");
+    build_page_with(
+        "/T gs /F Do",
+        SPOT_A,
+        "/SMask << /Type /Mask /S /Luminosity /G 6 0 R >>",
+        &[&outer, &mask],
+    )
+}
+
+/// A group whose stroke runs under the non-separable `/Hue` blend: the widest paint scratch.
+fn stroking_group_page() -> PdfDocument {
+    let group = group_form_obj(5, "", "/CS0 CS 0.8 SCN 8 w 10 10 m 70 70 l S 0.5 g 5 5 20 20 re B");
+    build_page_with("/T gs /F Do", SPOT_A, "/BM /Hue", &[&group])
 }
 
 fn plain_group_page() -> PdfDocument {
@@ -430,24 +467,26 @@ fn the_page_renderer_lowers_dpi_for_the_transient_spot_plate_copy() {
     );
 }
 
-/// The scan names the widest copy a page's resources declare. Patterns and annotation
-/// appearance resources are not walked.
+/// The scan names what a page's resources declare. Patterns and annotation appearance
+/// resources are not walked.
 #[test]
-fn the_page_scan_reports_the_widest_spot_plane_copy() {
-    use crate::rendering::page_renderer::{TransientSpotCopies, transient_spot_copies};
-    let scan = |doc: &PdfDocument| transient_spot_copies(doc, 0, &doc.get_page_resources(0).expect("resources"));
-    assert_eq!(scan(&knockout_group_page()), TransientSpotCopies::Knockout);
-    assert_eq!(scan(&soft_mask_page()), TransientSpotCopies::Copy);
+fn the_page_scan_reports_the_widest_spot_plane_use() {
+    use crate::rendering::page_renderer::{SpotPlaneUse, spot_plane_use};
+    let scan = |doc: &PdfDocument| spot_plane_use(doc, 0, &doc.get_page_resources(0).expect("resources"));
+    let used = |soft_mask, groups, knockouts| SpotPlaneUse {
+        soft_mask,
+        groups,
+        knockouts,
+    };
+    assert_eq!(scan(&knockout_group_page()), used(false, 1, 1));
+    assert_eq!(scan(&soft_mask_page()), used(true, 0, 0));
+    assert_eq!(scan(&plain_group_page()), used(false, 1, 0));
+    assert_eq!(scan(&nested_group_page()), used(false, 2, 0));
+    assert_eq!(scan(&soft_mask_in_group_page()), used(true, 2, 0));
+    assert_eq!(scan(&build_page("/BM /Multiply", &[])), used(false, 0, 0));
     assert_eq!(
-        scan(&plain_group_page()),
-        TransientSpotCopies::Group,
-        "a plain transparency group captures the planes too"
-    );
-    assert_eq!(scan(&build_page("/BM /Multiply", &[])), TransientSpotCopies::None);
-    let none_mask = build_page("/SMask /None", &[]);
-    assert_eq!(
-        scan(&none_mask),
-        TransientSpotCopies::None,
+        scan(&build_page("/SMask /None", &[])),
+        used(false, 0, 0),
         "/SMask /None clears a mask"
     );
 }
@@ -464,7 +503,11 @@ fn an_ink_page_with_a_plain_transparency_group_lowers_dpi_instead_of_failing() {
         "lowered from {BUDGET_REQUESTED_DPI}, got {dpi}"
     );
     assert_eq!(
-        budgeted_dpi(&doc, one_ink_group_charge(BUDGET_REQUESTED_DPI), BUDGET_MINIMUM_DPI),
+        budgeted_dpi(
+            &doc,
+            one_ink_peak_charge(BUDGET_REQUESTED_DPI, 3 * CANVAS + SCRATCH),
+            BUDGET_MINIMUM_DPI
+        ),
         Some(BUDGET_REQUESTED_DPI),
         "the group charge admits the request and the render fits it"
     );
@@ -476,7 +519,11 @@ fn an_ink_page_with_a_plain_transparency_group_lowers_dpi_instead_of_failing() {
 fn an_ink_page_with_a_knockout_group_lowers_dpi_to_the_knockout_charge() {
     let doc = knockout_group_page();
     assert_eq!(
-        budgeted_dpi(&doc, one_ink_knockout_charge(BUDGET_REQUESTED_DPI), BUDGET_MINIMUM_DPI),
+        budgeted_dpi(
+            &doc,
+            one_ink_peak_charge(BUDGET_REQUESTED_DPI, 3 * CANVAS + KNOCKOUT + SCRATCH),
+            BUDGET_MINIMUM_DPI
+        ),
         Some(BUDGET_REQUESTED_DPI),
         "the knockout charge admits the request and the render fits it"
     );
@@ -640,5 +687,66 @@ fn a_page_without_transparency_keeps_the_per_plate_knockout() {
         at(&direct[0].data, OVERLAP.0, OVERLAP.1),
         0,
         "the opaque InkB paint knocks out InkA"
+    );
+}
+
+/// A group's stroke and fill-stroke under a non-separable blend reserve the widest paint scratch,
+/// so a limit at the 9-byte scratch charge lowers the DPI and renders.
+#[test]
+fn a_group_stroke_under_a_non_separable_blend_lowers_dpi_instead_of_failing() {
+    let doc = stroking_group_page();
+    let narrow = one_ink_peak_charge(BUDGET_REQUESTED_DPI, 2 * CANVAS + 9);
+    let dpi = budgeted_dpi(&doc, narrow, BUDGET_MINIMUM_DPI).expect("the fit lowers the DPI");
+    assert!(
+        dpi < BUDGET_REQUESTED_DPI,
+        "lowered from {BUDGET_REQUESTED_DPI}, got {dpi}"
+    );
+    assert_eq!(
+        budgeted_dpi(
+            &doc,
+            one_ink_peak_charge(BUDGET_REQUESTED_DPI, 3 * CANVAS + SCRATCH),
+            BUDGET_MINIMUM_DPI
+        ),
+        Some(BUDGET_REQUESTED_DPI)
+    );
+}
+
+/// Each nested group reserves its own rgba and sidecar copy.
+#[test]
+fn a_group_inside_a_group_is_charged_each_level() {
+    let doc = nested_group_page();
+    let one_level = one_ink_peak_charge(BUDGET_REQUESTED_DPI, 3 * CANVAS + SCRATCH);
+    let dpi = budgeted_dpi(&doc, one_level, BUDGET_MINIMUM_DPI).expect("the fit lowers the DPI");
+    assert!(
+        dpi < BUDGET_REQUESTED_DPI,
+        "lowered from {BUDGET_REQUESTED_DPI}, got {dpi}"
+    );
+    assert_eq!(
+        budgeted_dpi(
+            &doc,
+            one_ink_peak_charge(BUDGET_REQUESTED_DPI, 4 * CANVAS + SCRATCH),
+            BUDGET_MINIMUM_DPI
+        ),
+        Some(BUDGET_REQUESTED_DPI)
+    );
+}
+
+/// A soft mask painting inside a group adds the mask workspace, backdrop and snapshots.
+#[test]
+fn a_soft_mask_inside_a_group_is_charged_its_workspaces() {
+    let doc = soft_mask_in_group_page();
+    let without_mask = one_ink_peak_charge(BUDGET_REQUESTED_DPI, 4 * CANVAS + SCRATCH);
+    let dpi = budgeted_dpi(&doc, without_mask, BUDGET_MINIMUM_DPI).expect("the fit lowers the DPI");
+    assert!(
+        dpi < BUDGET_REQUESTED_DPI,
+        "lowered from {BUDGET_REQUESTED_DPI}, got {dpi}"
+    );
+    assert_eq!(
+        budgeted_dpi(
+            &doc,
+            one_ink_peak_charge(BUDGET_REQUESTED_DPI, 4 * CANVAS + SCRATCH + SOFT_MASK_IN_GROUP),
+            BUDGET_MINIMUM_DPI
+        ),
+        Some(BUDGET_REQUESTED_DPI)
     );
 }

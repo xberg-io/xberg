@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 const MAX_WORKING_BYTES: usize = 512 * 1024 * 1024;
 const MAX_SURFACE_WORK: u64 = 1024 * 1024 * 1024;
-const MAX_NESTING_DEPTH: usize = 64;
+pub(super) const MAX_NESTING_DEPTH: usize = 64;
 const MAX_PAINT_OPERATIONS: usize = 1_000_000;
 
 pub(super) struct KnockoutResources {

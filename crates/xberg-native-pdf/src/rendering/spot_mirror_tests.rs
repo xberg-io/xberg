@@ -173,7 +173,7 @@ fn the_png_budget_charges_two_planes_for_each_spot_ink() {
             side,
             side,
             Some(&names),
-            TransientSpotCopies::None,
+            SpotPlaneUse::default(),
             (old_charge + live_charge) / 2
         ),
         "a limit between the one-plane and two-plane charge does not fit"
@@ -182,14 +182,14 @@ fn the_png_budget_charges_two_planes_for_each_spot_ink() {
         side,
         side,
         Some(&names),
-        TransientSpotCopies::None,
+        SpotPlaneUse::default(),
         live_charge
     ));
     assert!(!png_working_bytes_fit(
         side,
         side,
         Some(&names),
-        TransientSpotCopies::None,
+        SpotPlaneUse::default(),
         live_charge - 1
     ));
     assert!(
@@ -197,7 +197,10 @@ fn the_png_budget_charges_two_planes_for_each_spot_ink() {
             side,
             side,
             Some(&names),
-            TransientSpotCopies::Copy,
+            SpotPlaneUse {
+                soft_mask: true,
+                ..SpotPlaneUse::default()
+            },
             (live_charge + peak_charge) / 2
         ),
         "a limit between the live and peak charge does not fit: a soft mask can hold one more copy of every plate"
@@ -206,14 +209,20 @@ fn the_png_budget_charges_two_planes_for_each_spot_ink() {
         side,
         side,
         Some(&names),
-        TransientSpotCopies::Copy,
+        SpotPlaneUse {
+            soft_mask: true,
+            ..SpotPlaneUse::default()
+        },
         peak_charge
     ));
     assert!(!png_working_bytes_fit(
         side,
         side,
         Some(&names),
-        TransientSpotCopies::Copy,
+        SpotPlaneUse {
+            soft_mask: true,
+            ..SpotPlaneUse::default()
+        },
         peak_charge - 1
     ));
     // A zero-ink sidecar (a CMYK page with transparency but no spot plate) must not charge a
@@ -224,18 +233,27 @@ fn the_png_budget_charges_two_planes_for_each_spot_ink() {
         side,
         side,
         Some(&[]),
-        TransientSpotCopies::None,
+        SpotPlaneUse::default(),
         zero_ink_charge
     ));
     assert!(!png_working_bytes_fit(
         side,
         side,
         Some(&[]),
-        TransientSpotCopies::None,
+        SpotPlaneUse::default(),
         zero_ink_charge - 1
     ));
     assert!(
-        !png_working_bytes_fit(side, side, Some(&[]), TransientSpotCopies::Copy, zero_ink_charge),
+        !png_working_bytes_fit(
+            side,
+            side,
+            Some(&[]),
+            SpotPlaneUse {
+                soft_mask: true,
+                ..SpotPlaneUse::default()
+            },
+            zero_ink_charge
+        ),
         "a charged transient copy would not fit: the call site must pass none for empty ink lists"
     );
     let live = CmykSidecar::new(side, side, names).image_buffer_bytes() as usize;

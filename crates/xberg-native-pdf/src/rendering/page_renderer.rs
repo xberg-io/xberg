@@ -720,9 +720,9 @@ impl PageRenderer {
                 // workspace), so the fit charges the copies only for a page whose resources
                 // declare one. A zero-ink sidecar has no spot plane to copy.
                 let transient = if spots.as_deref().is_some_and(|inks| !inks.is_empty()) {
-                    transient_spot_copies(doc, page_num, &resources)
+                    spot_plane_use(doc, page_num, &resources)
                 } else {
-                    TransientSpotCopies::None
+                    SpotPlaneUse::default()
                 };
                 dpi = fit_png_dpi(dpi, &budget, spots.as_deref(), transient, dimensions_at_dpi)?;
                 Ok::<_, Error>((resources, spots))
@@ -8817,96 +8817,131 @@ fn raster_dimensions(page_width: f32, page_height: f32, scale: f32, has_scale_ov
     }
 }
 
-/// The spot-plane copies painting a page can hold, by the widest construct its resources declare.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub(super) enum TransientSpotCopies {
-    /// No soft mask or group: only the live sidecar planes.
-    None,
-    /// An ExtGState soft mask: one extra copy of the planes (`smask_spot_snapshot`).
-    Copy,
-    /// A transparency group: its own rgba and sidecar copy plus the per-paint scratch.
-    Group,
-    /// A knockout group: the workspace `KnockoutResources::knockout` reserves.
-    Knockout,
+/// What painting a page can hold beyond the live sidecar planes, read from its resources.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct SpotPlaneUse {
+    /// An ExtGState soft mask (`smask_spot_snapshot`).
+    pub(super) soft_mask: bool,
+    /// Deepest nesting of transparency groups, knockout groups included.
+    pub(super) groups: usize,
+    /// Deepest nesting of knockout groups.
+    pub(super) knockouts: usize,
+}
+
+impl SpotPlaneUse {
+    fn nested_in_group(self, is_group: bool, is_knockout: bool) -> Self {
+        Self {
+            soft_mask: self.soft_mask,
+            groups: self.groups + usize::from(is_group),
+            knockouts: self.knockouts + usize::from(is_knockout),
+        }
+    }
+
+    fn widest(self, other: Self) -> Self {
+        Self {
+            soft_mask: self.soft_mask || other.soft_mask,
+            groups: self.groups.max(other.groups),
+            knockouts: self.knockouts.max(other.knockouts),
+        }
+    }
 }
 
 /// Scans the page and the resources a form can reach (ExtGState and XObject only; pattern and
 /// annotation appearance resources are not walked, and the runtime reservations in
 /// `knockout_resources` still bound them). A scan that hits the depth cap answers conservatively.
-pub(super) fn transient_spot_copies(doc: &PdfDocument, page_num: usize, resources: &Object) -> TransientSpotCopies {
-    const MAX_DEPTH: u32 = 32;
-    fn walk(
-        doc: &PdfDocument,
-        resources: &Object,
-        visited: &mut HashSet<ObjectRef>,
-        depth: u32,
-    ) -> TransientSpotCopies {
-        use crate::rendering::ext_gstate::SoftMaskValue;
-        let Some(dict) = resources.as_dict() else {
-            return TransientSpotCopies::None;
+pub(super) fn spot_plane_use(doc: &PdfDocument, page_num: usize, resources: &Object) -> SpotPlaneUse {
+    let page_knockout = knockout::page_is_knockout(doc, page_num);
+    scan_resources_for_spot_plane_use(doc, resources, &mut HashMap::new(), 0)
+        .nested_in_group(page_knockout, page_knockout)
+}
+
+fn resources_declare_soft_mask(doc: &PdfDocument, dict: &HashMap<String, Object>) -> bool {
+    use crate::rendering::ext_gstate::SoftMaskValue;
+    let states = dict
+        .get("ExtGState")
+        .and_then(|object| doc.resolve_object(object).ok())
+        .and_then(|object| object.as_dict().cloned());
+    states.is_some_and(|states| {
+        states.values().any(|state| {
+            parse_ext_g_state_inner(state, doc).is_ok_and(|parsed| matches!(parsed.smask, Some(SoftMaskValue::Form(_))))
+        })
+    })
+}
+
+/// A form's own contribution plus what its resources nest inside it; `None` for a form that is
+/// not a transparency group and holds nothing.
+fn scan_form_for_spot_plane_use(
+    doc: &PdfDocument,
+    form: &HashMap<String, Object>,
+    memo: &mut HashMap<ObjectRef, SpotPlaneUse>,
+    depth: u32,
+) -> SpotPlaneUse {
+    let group = form.get("Group").and_then(|group| doc.resolve_object(group).ok());
+    let is_knockout = group.as_ref().is_some_and(knockout::group_is_knockout);
+    let is_group = is_knockout
+        || group
+            .as_ref()
+            .and_then(Object::as_dict)
+            .is_some_and(|group| group.get("S").and_then(Object::as_name) == Some("Transparency"));
+    let inner = match form.get("Resources").map(|object| doc.resolve_object(object)) {
+        Some(Ok(resources)) => scan_resources_for_spot_plane_use(doc, &resources, memo, depth + 1),
+        _ => SpotPlaneUse::default(),
+    };
+    inner.nested_in_group(is_group, is_knockout)
+}
+
+fn scan_resources_for_spot_plane_use(
+    doc: &PdfDocument,
+    resources: &Object,
+    memo: &mut HashMap<ObjectRef, SpotPlaneUse>,
+    depth: u32,
+) -> SpotPlaneUse {
+    let Some(dict) = resources.as_dict() else {
+        return SpotPlaneUse::default();
+    };
+    if depth >= knockout_resources::MAX_NESTING_DEPTH as u32 {
+        return SpotPlaneUse {
+            soft_mask: true,
+            groups: knockout_resources::MAX_NESTING_DEPTH,
+            knockouts: knockout_resources::MAX_NESTING_DEPTH,
         };
-        if depth >= MAX_DEPTH {
-            return TransientSpotCopies::Knockout;
-        }
-        let mut widest = TransientSpotCopies::None;
-        let ext_g_states = dict
-            .get("ExtGState")
-            .and_then(|object| doc.resolve_object(object).ok())
-            .and_then(|object| object.as_dict().cloned());
-        if ext_g_states.is_some_and(|states| {
-            states.values().any(|state| {
-                parse_ext_g_state_inner(state, doc)
-                    .is_ok_and(|parsed| matches!(parsed.smask, Some(SoftMaskValue::Form(_))))
-            })
-        }) {
-            widest = TransientSpotCopies::Copy;
-        }
-        let xobjects = dict
-            .get("XObject")
-            .and_then(|object| doc.resolve_object(object).ok())
-            .and_then(|object| object.as_dict().cloned());
-        for raw in xobjects.iter().flat_map(|forms| forms.values()) {
-            if raw.as_reference().is_some_and(|reference| !visited.insert(reference)) {
-                continue;
-            }
-            let Ok(Object::Stream { dict: form, .. }) = doc.resolve_object(raw) else {
-                continue;
-            };
-            if form.get("Subtype").and_then(Object::as_name) != Some("Form") {
-                continue;
-            }
-            let group = form.get("Group").and_then(|group| doc.resolve_object(group).ok());
-            if group.as_ref().is_some_and(knockout::group_is_knockout) {
-                return TransientSpotCopies::Knockout;
-            }
-            let transparency_group = group
-                .as_ref()
-                .and_then(Object::as_dict)
-                .is_some_and(|group| group.get("S").and_then(Object::as_name) == Some("Transparency"));
-            if transparency_group {
-                widest = widest.max(TransientSpotCopies::Group);
-            }
-            if let Some(Ok(form_resources)) = form.get("Resources").map(|object| doc.resolve_object(object)) {
-                widest = widest.max(walk(doc, &form_resources, visited, depth + 1));
-                if widest == TransientSpotCopies::Knockout {
-                    return widest;
-                }
-            }
-        }
-        widest
     }
-    if knockout::page_is_knockout(doc, page_num) {
-        return TransientSpotCopies::Knockout;
+    let mut found = SpotPlaneUse {
+        soft_mask: resources_declare_soft_mask(doc, dict),
+        ..SpotPlaneUse::default()
+    };
+    let xobjects = dict
+        .get("XObject")
+        .and_then(|object| doc.resolve_object(object).ok())
+        .and_then(|object| object.as_dict().cloned());
+    for raw in xobjects.iter().flat_map(|forms| forms.values()) {
+        let reference = raw.as_reference();
+        if let Some(known) = reference.and_then(|reference| memo.get(&reference)) {
+            found = found.widest(*known);
+            continue;
+        }
+        let Ok(Object::Stream { dict: form, .. }) = doc.resolve_object(raw) else {
+            continue;
+        };
+        if form.get("Subtype").and_then(Object::as_name) != Some("Form") {
+            continue;
+        }
+        if let Some(reference) = reference {
+            // A form that reaches itself contributes nothing on the cycle. ~keep
+            memo.insert(reference, SpotPlaneUse::default());
+        }
+        let scanned = scan_form_for_spot_plane_use(doc, &form, memo, depth);
+        if let Some(reference) = reference {
+            memo.insert(reference, scanned);
+        }
+        found = found.widest(scanned);
     }
-    walk(doc, resources, &mut HashSet::new(), 0)
+    found
 }
 
 /// Per-pixel bytes the PNG working-set fit charges for the RGBA canvas and its demultiply
 /// copy; shared so the budget tests derive the same charge the fit does.
 pub(super) const RGBA_AND_PNG_BYTES_PER_PIXEL: usize = 12;
-/// Per-pixel scratch a paint inside a group reserves: two RGBA snapshots and a coverage plane
-/// (`knockout.rs`).
-const GROUP_PAINT_SCRATCH_BYTES_PER_PIXEL: usize = 2 * 4 + 1;
 /// Fixed per-page allowance the PNG working-set fit reserves for the encoded file's overhead.
 pub(super) const PNG_FIXED_OVERHEAD: usize = 256 * 1024;
 
@@ -8914,7 +8949,7 @@ fn fit_png_dpi(
     requested: u32,
     budget: &PngRenderBudget,
     spot_names: Option<&[String]>,
-    transient: TransientSpotCopies,
+    transient: SpotPlaneUse,
     dimensions: impl Fn(u32) -> (u32, u32),
 ) -> Result<u32> {
     let fits = |dpi| {
@@ -8954,34 +8989,54 @@ fn png_working_bytes_fit(
     width: u32,
     height: u32,
     spot_names: Option<&[String]>,
-    transient: TransientSpotCopies,
+    transient: SpotPlaneUse,
     limit: usize,
 ) -> bool {
     // The canvas and PNG demultiply copy are both RGBA. Reserve the same per-pixel
     // and fixed PNG allowance as Core image encoding, plus the CMYK plane and two planes per spot ink.
-    // The run-time reservations in `knockout_resources` peak at: `Copy` the canvas plus one soft
-    // mask snapshot; `Group` the canvas, the group's rgba + sidecar and the per-paint scratch of
-    // `GROUP_PAINT_SCRATCH_BYTES_PER_PIXEL`; `Knockout` the canvas, the group, the shape
-    // workspace, the `knockout()` reservation (twice rgba + sidecar, twice the shape) and the
-    // per-paint scratch. The PNG encode copies come after, so the charge is the larger of the two.
+    // The run-time reservations in `knockout_resources` peak at the canvas plus one soft mask
+    // snapshot when only a mask paints; inside groups, at the canvas, one rgba + sidecar copy per
+    // nested group and one for non-isolated source recovery, per nested knockout group its `knockout()` reservation (twice rgba +
+    // sidecar, twice the shape) and shape workspace, and the widest per-paint scratch. The
+    // shape workspace is charged even where no knockout shape exists (an over-charge). A soft
+    // mask inside a group adds its mask workspace, mask backdrop, paint snapshots and the mask
+    // form's own group. The PNG encode copies come after rendering, so the charge is the larger.
     let ink_count = spot_names.map_or(0, <[String]>::len);
     let sidecar_bytes_per_pixel = spot_names.map_or(Some(0), |names| names.len().checked_mul(2)?.checked_add(4));
     let live_bytes_per_pixel =
         sidecar_bytes_per_pixel.and_then(|sidecar| RGBA_AND_PNG_BYTES_PER_PIXEL.checked_add(sidecar));
     let render_peak_bytes_per_pixel = sidecar_bytes_per_pixel.and_then(|sidecar| {
         let canvas = sidecar.checked_add(4)?;
-        match transient {
-            TransientSpotCopies::None => Some(0),
-            TransientSpotCopies::Copy => RGBA_AND_PNG_BYTES_PER_PIXEL.checked_add(sidecar.checked_mul(2)?),
-            TransientSpotCopies::Group => canvas.checked_mul(2)?.checked_add(GROUP_PAINT_SCRATCH_BYTES_PER_PIXEL),
-            TransientSpotCopies::Knockout => {
-                let shape_lanes = ink_count.checked_add(1)?.checked_mul(3)?;
-                canvas
-                    .checked_mul(4)?
-                    .checked_add(shape_lanes)?
-                    .checked_add(GROUP_PAINT_SCRATCH_BYTES_PER_PIXEL)
-            }
+        let shape = ink_count.checked_add(1)?;
+        let groups = transient.groups.min(knockout_resources::MAX_NESTING_DEPTH);
+        let knockouts = transient.knockouts.min(groups);
+        if groups == 0 {
+            return Some(if transient.soft_mask {
+                RGBA_AND_PNG_BYTES_PER_PIXEL.checked_add(sidecar.checked_mul(2)?)?
+            } else {
+                0
+            });
         }
+        // One more canvas for the non-isolated source recovery (`recover_nonisolated_source`).
+        let nested_groups = canvas.checked_mul(groups.checked_add(2)?)?;
+        let knockout_workspace = canvas
+            .checked_mul(2)?
+            .checked_add(shape.checked_mul(3)?)?
+            .checked_mul(knockouts)?;
+        let soft_mask = if transient.soft_mask {
+            // mask workspace (2 rgba) + mask backdrop (rgba) + paint snapshots + the mask form's group
+            4usize
+                .checked_mul(3)?
+                .checked_add(canvas)?
+                .checked_add(shape)?
+                .checked_add(canvas)?
+        } else {
+            0
+        };
+        nested_groups
+            .checked_add(knockout_workspace)?
+            .checked_add(knockout::MAX_PAINT_SCRATCH_BYTES_PER_PIXEL)?
+            .checked_add(soft_mask)
     });
     let charge = live_bytes_per_pixel
         .and_then(|live| Some(live.max(render_peak_bytes_per_pixel?)))
