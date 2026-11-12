@@ -349,7 +349,7 @@ async fn extract_file_scoped(path: &Path, mime_type: &str, config: &ExtractionCo
     let stopped_early = config
         .cancel_token
         .as_ref()
-        .is_some_and(|token| token.stop_requested() && token.first_unread_page().is_some());
+        .is_some_and(crate::cancellation::CancellationToken::cut_short_by_time_limit);
     if super::cacheability::is_cacheable()
         && !stopped_early
         && lifecycle_generations_before == lifecycle_generations_after

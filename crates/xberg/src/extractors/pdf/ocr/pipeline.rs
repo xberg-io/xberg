@@ -8,6 +8,17 @@
 #[path = "pipeline/direct_rgb_budget_recovery.rs"]
 mod direct_rgb_budget_recovery;
 
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "pdf",
+    any(
+        paddle_ocr,
+        all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))
+    )
+))]
+#[path = "pipeline/per_page_flat_metadata.rs"]
+mod per_page_flat_metadata;
+
 #[cfg(all(any(feature = "ocr", feature = "ocr-wasm"), feature = "layout-detection"))]
 use super::document::assemble_ocr_page_paragraphs;
 #[cfg(all(
@@ -3954,6 +3965,7 @@ async fn extract_pages_with_per_page_pipeline(
     document.processing_warnings = warnings;
     document.ocr_page_failures = page_failures;
     merge_structured_ocr_pages_into_internal_document(&mut document, &accepted_pages, &structured_pages);
+    per_page_flat_metadata::lift(&mut document, &structured_pages);
     let tables = document.tables.clone();
     let ocr_elements = document.prebuilt_ocr_elements.clone().unwrap_or_default();
 
@@ -5319,7 +5331,10 @@ pub(super) async fn extract_with_ocr_for_page(
                     .filter(|_| whole_page_raster)
                     .map(|retry| (Arc::clone(retry), Arc::clone(&upright_data)));
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                let allow_prose = detached_page.is_none() && images.is_none();
+                // The prose proof reads only the page's own words and geometry, so it holds wherever the
+                // raster came from: a detached render, including one a stored scan replaced. Only
+                // caller-supplied images, which carry no page of this document, stay excluded (GH#3007). ~keep
+                let allow_prose = detached_page.is_some() || images.is_none();
                 #[cfg(feature = "ocr")]
                 let caption_raster =
                     (capture_caption && retry.is_some() && page_rotation_degrees == 0 && correction_degrees == 0).then(
