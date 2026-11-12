@@ -1803,6 +1803,13 @@ fn identity_h_mapping_pdf(text: &str, with_tounicode: bool) -> Vec<u8> {
 /// must extract `text` verbatim.
 #[cfg(all(feature = "pdf", feature = "ocr"))]
 fn shifted_to_unicode_pdf(text: &str, shift: u8) -> Vec<u8> {
+    shifted_to_unicode_pdf_pages(text, shift, 1, false)
+}
+
+/// [`shifted_to_unicode_pdf`] with `pages` identical pages; with `healthy_first_page` the first one
+/// is mapped without the shift and the others carry no text at all, so only they need OCR.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn shifted_to_unicode_pdf_pages(text: &str, shift: u8, pages: usize, healthy_first_page: bool) -> Vec<u8> {
     use lopdf::content::{Content, Operation};
     use lopdf::{Document, Object, Stream, dictionary};
 
@@ -1822,72 +1829,80 @@ fn shifted_to_unicode_pdf(text: &str, shift: u8) -> Vec<u8> {
     let mut document = Document::with_version("1.5");
     let pages_id = document.new_object_id();
 
-    let descriptor_id = document.add_object(dictionary! {
-        "Type" => "FontDescriptor",
-        "FontName" => "Synth+Shifted",
-        "Flags" => 4,
-        "FontBBox" => vec![0.into(), (-200).into(), 1000.into(), 900.into()],
-        "ItalicAngle" => 0,
-        "Ascent" => 800,
-        "Descent" => (-200),
-        "CapHeight" => 700,
-        "StemV" => 80,
-    });
-    let descendant_id = document.add_object(dictionary! {
-        "Type" => "Font",
-        "Subtype" => "CIDFontType2",
-        "BaseFont" => "Synth+Shifted",
-        "CIDSystemInfo" => dictionary! {
-            "Registry" => Object::string_literal("Adobe"),
-            "Ordering" => Object::string_literal("Identity"),
-            "Supplement" => 0,
-        },
-        "FontDescriptor" => descriptor_id,
-        "CIDToGIDMap" => "Identity",
-        "DW" => 600,
-    });
+    let add_font = |document: &mut Document, shift: u8| {
+        let descriptor_id = document.add_object(dictionary! {
+            "Type" => "FontDescriptor",
+            "FontName" => "Synth+Shifted",
+            "Flags" => 4,
+            "FontBBox" => vec![0.into(), (-200).into(), 1000.into(), 900.into()],
+            "ItalicAngle" => 0,
+            "Ascent" => 800,
+            "Descent" => (-200),
+            "CapHeight" => 700,
+            "StemV" => 80,
+        });
+        let descendant_id = document.add_object(dictionary! {
+            "Type" => "Font",
+            "Subtype" => "CIDFontType2",
+            "BaseFont" => "Synth+Shifted",
+            "CIDSystemInfo" => dictionary! {
+                "Registry" => Object::string_literal("Adobe"),
+                "Ordering" => Object::string_literal("Identity"),
+                "Supplement" => 0,
+            },
+            "FontDescriptor" => descriptor_id,
+            "CIDToGIDMap" => "Identity",
+            "DW" => 600,
+        });
 
-    // Per-character `bfchar` entries rather than a `bfrange`: a ROT shift is not a fixed
-    // offset once case wraps (`z` -> `a`, `Z` -> `A`), so each distinct source character
-    // needs its own explicit mapping entry.
-    let mut distinct: Vec<char> = text.chars().collect();
-    distinct.sort_unstable();
-    distinct.dedup();
-    let mut bfchar_body = String::new();
-    for c in &distinct {
-        let mapped = rot(*c, shift);
-        bfchar_body.push_str(&format!("<{:04X}> <{:04X}>\n", *c as u32, mapped as u32));
-    }
-    let to_unicode_cmap = format!(
-        "/CIDInit /ProcSet findresource begin\n\
-             12 dict begin\n\
-             begincmap\n\
-             /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n\
-             /CMapName /Adobe-Identity-UCS def\n\
-             1 begincodespacerange\n\
-             <0000> <FFFF>\n\
-             endcodespacerange\n\
-             {} beginbfchar\n\
-             {}\
-             endbfchar\n\
-             endcmap\n\
-             CMapName currentdict /CMap defineresource pop\n\
-             end\n\
-             end",
-        distinct.len(),
-        bfchar_body
-    );
-    let to_unicode_id = document.add_object(Stream::new(dictionary! {}, to_unicode_cmap.into_bytes()));
+        // Per-character `bfchar` entries rather than a `bfrange`: a ROT shift is not a fixed
+        // offset once case wraps (`z` -> `a`, `Z` -> `A`), so each distinct source character
+        // needs its own explicit mapping entry.
+        let mut distinct: Vec<char> = text.chars().collect();
+        distinct.sort_unstable();
+        distinct.dedup();
+        let mut bfchar_body = String::new();
+        for c in &distinct {
+            let mapped = rot(*c, shift);
+            bfchar_body.push_str(&format!("<{:04X}> <{:04X}>\n", *c as u32, mapped as u32));
+        }
+        let to_unicode_cmap = format!(
+            "/CIDInit /ProcSet findresource begin\n\
+                 12 dict begin\n\
+                 begincmap\n\
+                 /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n\
+                 /CMapName /Adobe-Identity-UCS def\n\
+                 1 begincodespacerange\n\
+                 <0000> <FFFF>\n\
+                 endcodespacerange\n\
+                 {} beginbfchar\n\
+                 {}\
+                 endbfchar\n\
+                 endcmap\n\
+                 CMapName currentdict /CMap defineresource pop\n\
+                 end\n\
+                 end",
+            distinct.len(),
+            bfchar_body
+        );
+        let to_unicode_id = document.add_object(Stream::new(dictionary! {}, to_unicode_cmap.into_bytes()));
 
-    let font_dict = dictionary! {
-        "Type" => "Font",
-        "Subtype" => "Type0",
-        "BaseFont" => "Synth+Shifted",
-        "Encoding" => "Identity-H",
-        "DescendantFonts" => vec![descendant_id.into()],
-        "ToUnicode" => to_unicode_id,
+        let font_dict = dictionary! {
+            "Type" => "Font",
+            "Subtype" => "Type0",
+            "BaseFont" => "Synth+Shifted",
+            "Encoding" => "Identity-H",
+            "DescendantFonts" => vec![descendant_id.into()],
+            "ToUnicode" => to_unicode_id,
+        };
+        document.add_object(font_dict)
     };
-    let font_id = document.add_object(font_dict);
+    let font_id = add_font(&mut document, shift);
+    let first_page_font_id = if healthy_first_page {
+        add_font(&mut document, 0)
+    } else {
+        font_id
+    };
 
     let content = Content {
         operations: vec![
@@ -1902,20 +1917,33 @@ fn shifted_to_unicode_pdf(text: &str, shift: u8) -> Vec<u8> {
         dictionary! {},
         content.encode().expect("shifted-mapping fixture content must encode"),
     ));
-    let page_id = document.add_object(dictionary! {
-        "Type" => "Page",
-        "Parent" => pages_id,
-        "Contents" => content_id,
-        "Resources" => dictionary! { "Font" => dictionary! { "F1" => font_id } },
-        "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
-    });
+    let textless_content_id = document.add_object(Stream::new(dictionary! {}, b"q Q".to_vec()));
+    let page_ids: Vec<Object> = (0..pages)
+        .map(|index| {
+            let page_font_id = if index == 0 { first_page_font_id } else { font_id };
+            let page_content_id = if healthy_first_page && index > 0 {
+                textless_content_id
+            } else {
+                content_id
+            };
+            document
+                .add_object(dictionary! {
+                    "Type" => "Page",
+                    "Parent" => pages_id,
+                    "Contents" => page_content_id,
+                    "Resources" => dictionary! { "Font" => dictionary! { "F1" => page_font_id } },
+                    "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+                })
+                .into()
+        })
+        .collect();
 
     document.objects.insert(
         pages_id,
         Object::Dictionary(dictionary! {
             "Type" => "Pages",
-            "Kids" => vec![page_id.into()],
-            "Count" => 1,
+            "Count" => page_ids.len() as i64,
+            "Kids" => page_ids,
         }),
     );
     let catalog_id = document.add_object(dictionary! {
@@ -8687,5 +8715,347 @@ mod native_text_stop_tests {
         assert!(token.cut_short_by_time_limit());
         assert!(stopped.2.is_empty(), "no tables after the time limit");
         assert!(stopped.9.is_none(), "no images after the time limit");
+    }
+}
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+mod unread_page_blank_flag_tests {
+    use super::*;
+    use crate::types::{OcrPageFailure, PageContent, PageInfo, PageStructure, PageUnitType};
+
+    fn content_page(page_number: u32, is_blank: Option<bool>) -> PageContent {
+        PageContent {
+            page_number,
+            content: String::new(),
+            tables: Vec::new(),
+            image_indices: Vec::new(),
+            image_preprocessing: None,
+            hierarchy: None,
+            is_blank,
+            layout_regions: None,
+            speaker_notes: None,
+            section_name: None,
+            sheet_name: None,
+            ocr_confidence: None,
+            native_content: None,
+        }
+    }
+
+    fn structure(flags: &[(u32, Option<bool>)]) -> PageStructure {
+        PageStructure {
+            total_count: flags.len() as u32,
+            unit_type: PageUnitType::Page,
+            boundaries: None,
+            pages: Some(
+                flags
+                    .iter()
+                    .map(|&(number, is_blank)| PageInfo {
+                        number,
+                        title: None,
+                        dimensions: None,
+                        image_count: None,
+                        table_count: None,
+                        hidden: None,
+                        has_vector_graphics: false,
+                        is_blank,
+                    })
+                    .collect(),
+            ),
+        }
+    }
+
+    fn failure(page: u32, error: &str, recovered: bool) -> OcrPageFailure {
+        OcrPageFailure {
+            page,
+            error: error.to_string(),
+            recovered,
+        }
+    }
+
+    #[test]
+    fn a_page_the_time_limit_left_unread_is_not_flagged_blank_but_a_read_blank_page_is() {
+        let mut contents = Some(vec![
+            content_page(1, Some(false)),
+            content_page(2, Some(true)),
+            content_page(3, Some(true)),
+        ]);
+        let mut structure = Some(structure(&[(1, Some(false)), (2, Some(true)), (3, Some(true))]));
+        let failures = [failure(3, ocr::TIME_LIMIT_UNREAD_PAGE_ERROR, false)];
+
+        clear_blank_flag_of_unread_pages(&mut contents, &mut structure, &failures);
+
+        let flags: Vec<_> = contents.unwrap().iter().map(|page| page.is_blank).collect();
+        assert_eq!(
+            flags,
+            [Some(false), Some(true), None],
+            "only the unread page loses the flag"
+        );
+        let info: Vec<_> = structure
+            .unwrap()
+            .pages
+            .unwrap()
+            .iter()
+            .map(|page| page.is_blank)
+            .collect();
+        assert_eq!(info, [Some(false), Some(true), None]);
+    }
+
+    #[test]
+    fn other_failures_and_recovered_pages_keep_their_blank_flag() {
+        let mut contents = Some(vec![content_page(1, Some(true)), content_page(2, Some(true))]);
+        let mut structure = None;
+        let failures = [
+            failure(1, "the backend crashed", false),
+            failure(2, ocr::TIME_LIMIT_UNREAD_PAGE_ERROR, true),
+        ];
+
+        clear_blank_flag_of_unread_pages(&mut contents, &mut structure, &failures);
+
+        assert!(contents.unwrap().iter().all(|page| page.is_blank == Some(true)));
+    }
+
+    /// Backend that reads page 1 and then asks for the time-limit stop, as the timeout wrapper does
+    /// when the limit passes while the first page is being recognized.
+    #[cfg(feature = "ocr")]
+    struct StoppingOcrBackend {
+        token: crate::cancellation::CancellationToken,
+        calls: std::sync::atomic::AtomicUsize,
+    }
+
+    #[cfg(feature = "ocr")]
+    impl crate::plugins::Plugin for StoppingOcrBackend {
+        fn name(&self) -> &str {
+            "unread-page-stopping-backend"
+        }
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "ocr")]
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for StoppingOcrBackend {
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+        fn supports_language(&self, _lang: &str) -> bool {
+            true
+        }
+        async fn process_image(
+            &self,
+            _image_bytes: &[u8],
+            _config: &crate::core::config::OcrConfig,
+        ) -> crate::Result<crate::types::ExtractedDocument> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.token.request_stop();
+            Ok(crate::types::ExtractedDocument {
+                content: "Text read from the first page before the stop".to_string(),
+                mime_type: std::borrow::Cow::Borrowed("text/plain"),
+                ..Default::default()
+            })
+        }
+    }
+
+    /// #3056 through the whole extractor and the derivation of the result: the stop arrives after
+    /// page 1, pages 2 and 3 are never read, and no later stage may give them a blank flag. The
+    /// per-page flags in the page contents and in the page structure must agree.
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    #[serial]
+    async fn pages_a_stop_left_unread_keep_no_blank_flag_through_the_whole_extraction() {
+        use crate::core::config::{ConcurrencyConfig, OcrConfig, PageConfig};
+
+        let token = crate::cancellation::CancellationToken::new();
+        let backend = std::sync::Arc::new(StoppingOcrBackend {
+            token: token.clone(),
+            calls: std::sync::atomic::AtomicUsize::new(0),
+        });
+        crate::plugins::register_ocr_backend(backend.clone()).unwrap();
+        let _unregister = RegisteredOcrBackendGuard {
+            name: "unread-page-stopping-backend",
+        };
+        let config = ExtractionConfig {
+            cancel_token: Some(token.clone()),
+            concurrency: Some(ConcurrencyConfig {
+                max_threads: Some(1),
+                ..Default::default()
+            }),
+            pages: Some(PageConfig {
+                extract_pages: true,
+                ..Default::default()
+            }),
+            ocr: Some(OcrConfig {
+                backend: "unread-page-stopping-backend".to_string(),
+                language: vec!["eng".to_string()],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let result = extract_whole_pdf(&shifted_to_unicode_pdf_pages(WRONG_MAPPING_PROSE, 0, 4, true), &config).await;
+
+        assert_eq!(
+            backend.calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "only the first OCR page was read"
+        );
+        let unread: Vec<u32> = result
+            .ocr_page_failures
+            .iter()
+            .flatten()
+            .filter(|failure| failure.error == ocr::TIME_LIMIT_UNREAD_PAGE_ERROR)
+            .map(|failure| failure.page)
+            .collect();
+        assert_eq!(unread, [3, 4], "the pages after the stop are listed as unread");
+
+        let pages = result.pages.as_deref().expect("page contents were requested");
+        let structure = result
+            .metadata
+            .pages
+            .as_ref()
+            .and_then(|structure| structure.pages.as_ref())
+            .expect("page structure");
+        for page in [3u32, 4] {
+            let content = pages.iter().find(|p| p.page_number == page).expect("page content");
+            assert_eq!(content.is_blank, None, "unread page {page} must not be flagged blank");
+            let info = structure.iter().find(|p| p.number == page).expect("page info");
+            assert_eq!(
+                info.is_blank, None,
+                "unread page {page} is flagged in the page structure"
+            );
+        }
+        let from_contents: Vec<_> = pages.iter().map(|p| (p.page_number, p.is_blank)).collect();
+        let from_structure: Vec<_> = structure.iter().map(|p| (p.number, p.is_blank)).collect();
+        assert_eq!(from_contents, from_structure, "the two per-page flag lists must agree");
+        assert!(
+            from_contents[0].1 == Some(false),
+            "the page that was read keeps its flag"
+        );
+    }
+
+    #[cfg(feature = "ocr")]
+    async fn extract_whole_pdf(content: &[u8], config: &ExtractionConfig) -> crate::types::ExtractedDocument {
+        let internal = PdfExtractor::new()
+            .extract_content(content, "application/pdf", config)
+            .await
+            .expect("the extraction must succeed");
+        crate::extraction::derive::derive_extraction_result(internal, true, crate::core::config::OutputFormat::Plain)
+    }
+
+    /// Backend whose first call reads a page and asks for the time-limit stop, and whose later calls
+    /// recognize for `SLOW_PAGE` on a blocking thread, as a Tesseract page under load does.
+    #[cfg(feature = "ocr")]
+    struct SlowAfterStopBackend {
+        token: crate::cancellation::CancellationToken,
+        calls: std::sync::atomic::AtomicUsize,
+    }
+
+    #[cfg(feature = "ocr")]
+    const SLOW_PAGE: std::time::Duration = std::time::Duration::from_secs(12);
+
+    #[cfg(feature = "ocr")]
+    impl crate::plugins::Plugin for SlowAfterStopBackend {
+        fn name(&self) -> &str {
+            "slow-after-stop-backend"
+        }
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "ocr")]
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for SlowAfterStopBackend {
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+        fn supports_language(&self, _lang: &str) -> bool {
+            true
+        }
+        async fn process_image(
+            &self,
+            _image_bytes: &[u8],
+            _config: &crate::core::config::OcrConfig,
+        ) -> crate::Result<crate::types::ExtractedDocument> {
+            if self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                self.token.request_stop();
+            } else {
+                tokio::task::spawn_blocking(|| std::thread::sleep(SLOW_PAGE))
+                    .await
+                    .expect("the sleeping task must not panic");
+            }
+            Ok(crate::types::ExtractedDocument {
+                content: "Text read from a page".to_string(),
+                mime_type: std::borrow::Cow::Borrowed("text/plain"),
+                ..Default::default()
+            })
+        }
+    }
+
+    /// #3055: a page still being recognized when the stop arrives must not hold the call past the
+    /// grace. Two workers read pages 2 and 3; page 2 asks for the stop and page 3 would take 12 s.
+    /// The call has to return in a few seconds with page 3 and the page after it listed as unread.
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    #[serial]
+    async fn a_page_still_recognizing_after_the_stop_is_abandoned_not_awaited() {
+        use crate::core::config::{ConcurrencyConfig, OcrConfig};
+
+        let token = crate::cancellation::CancellationToken::new();
+        let backend = std::sync::Arc::new(SlowAfterStopBackend {
+            token: token.clone(),
+            calls: std::sync::atomic::AtomicUsize::new(0),
+        });
+        crate::plugins::register_ocr_backend(backend.clone()).unwrap();
+        let _unregister = RegisteredOcrBackendGuard {
+            name: "slow-after-stop-backend",
+        };
+        let config = ExtractionConfig {
+            cancel_token: Some(token.clone()),
+            concurrency: Some(ConcurrencyConfig {
+                max_threads: Some(2),
+                ..Default::default()
+            }),
+            ocr: Some(OcrConfig {
+                backend: "slow-after-stop-backend".to_string(),
+                language: vec!["eng".to_string()],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let started = std::time::Instant::now();
+        let result = extract_whole_pdf(&shifted_to_unicode_pdf_pages(WRONG_MAPPING_PROSE, 0, 4, true), &config).await;
+        let took = started.elapsed();
+
+        assert!(
+            took < SLOW_PAGE - std::time::Duration::from_secs(3),
+            "the call took {took:?}: the page still recognizing was awaited"
+        );
+        assert_eq!(
+            backend.calls.load(std::sync::atomic::Ordering::SeqCst),
+            2,
+            "no page starts after the stop"
+        );
+        let unread: Vec<u32> = result
+            .ocr_page_failures
+            .iter()
+            .flatten()
+            .filter(|failure| failure.error == ocr::TIME_LIMIT_UNREAD_PAGE_ERROR)
+            .map(|failure| failure.page)
+            .collect();
+        assert_eq!(unread, [3, 4]);
     }
 }

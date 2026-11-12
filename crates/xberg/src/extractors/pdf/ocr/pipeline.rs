@@ -403,18 +403,26 @@ impl std::fmt::Display for FailedOcrRun {
 
 /// The error recorded for a page the extraction time limit stopped before it was read.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-pub(super) const TIME_LIMIT_UNREAD_PAGE_ERROR: &str = "the extraction time limit was reached before the page was read";
+pub(in crate::extractors::pdf) const TIME_LIMIT_UNREAD_PAGE_ERROR: &str =
+    "the extraction time limit was reached before the page was read";
 
 /// How long pages already in flight may keep running once the extraction time limit has asked
-/// the page loop to stop. A batch is one OCR task per worker, and under load a task can take far
-/// longer than the grace period that is left, so the batch is not awaited to its end.
+/// the page loop to stop: a third of the grace the caller gets for the pages it holds, which leaves
+/// the rest of it for assembling the result. A batch is one OCR task per worker, and under load a
+/// task can take far longer than the grace that is left, so the batch is not awaited to its end.
+///
+/// Abandoning a page stops waiting for it, not the recognition: Tesseract in the native build runs
+/// to the end of the page on its blocking thread, because the build's recognize shim takes no
+/// monitor or cancel callback. No page is started after the stop, so the work left over is bounded
+/// by one batch.
 #[cfg(all(
     any(feature = "ocr", feature = "ocr-pipeline"),
     feature = "pdf",
     feature = "tokio-runtime",
     not(target_arch = "wasm32")
 ))]
-const IN_FLIGHT_PAGE_GRACE: std::time::Duration = std::time::Duration::from_secs(3);
+const IN_FLIGHT_PAGE_GRACE: std::time::Duration =
+    std::time::Duration::from_millis((crate::core::extractor::time_limit::PARTIAL_RESULT_GRACE.as_millis() / 3) as u64);
 
 /// How often a batch that is being awaited looks at the stop request.
 #[cfg(all(
