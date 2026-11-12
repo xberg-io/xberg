@@ -219,6 +219,8 @@ fn should_restore_the_script_markup_on_algebra_page_1555() {
             .0
     };
     let markdown = page(1555);
+    let expression = "γ~k~<sup>− j</sup>";
+    assert!(markdown.contains(expression), "page 1555 is missing {expression:?}");
     let markers = markdown.matches("<sup>").count()
         + markdown.matches("<sub>").count()
         + regex::Regex::new(r"~[^~\n]+~").unwrap().find_iter(markdown).count();
