@@ -3378,9 +3378,10 @@ async fn a_pdfs_ocr_text_page_list_is_not_built_and_changes_no_output() {
     const BACKEND_NAME: &str = "pdf-2939-discarded-read-marking";
     const ACCEPTED_TEXT: &str = "Healthy native prose fills the first page of this ordinary document";
     const NATIVE_PAGE_TWO_TEXT: &str = "The original native words stay on the second page";
-    // Twenty short alphabetic tokens beside ten long ones: a fragmented ratio of 2/3, above
-    // the 0.35 default threshold, over the 20-word minimum the noise check requires. A mock
-    // read this fragmented is exactly the shape `discard_suspected_ocr_noise` discards.
+    // Twenty short alphabetic tokens beside five long ones: a fragmented ratio of 4/5 (20
+    // of the 25 words), above the 0.35 default threshold, over the 20-word minimum the
+    // noise check requires. A mock read this fragmented is exactly the shape
+    // `discard_suspected_ocr_noise` discards.
     const NOISY_TEXT: &str = "aa bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt \
          gathering exercises remaining television understanding";
 
@@ -3458,7 +3459,8 @@ async fn a_pdfs_ocr_text_page_list_is_not_built_and_changes_no_output() {
         .expect("forced-OCR extraction of the two-page fixture must succeed");
 
     // Controls: the noise gate really discarded page 2's read and the route kept the page's
-    // native text, while page 1's accepted read is the page's content.
+    // native text in `native_content` (`keep_native_content` is on here), while page 1's
+    // accepted read is the page's content.
     let pages = internal
         .prebuilt_pages
         .as_ref()
@@ -3473,7 +3475,7 @@ async fn a_pdfs_ocr_text_page_list_is_not_built_and_changes_no_output() {
     assert_eq!(
         pages[1].native_content.as_deref(),
         Some(NATIVE_PAGE_TWO_TEXT),
-        "the discarded page keeps its native text beside the OCR treatment"
+        "the discarded page's native text survives in `native_content` beside the OCR treatment"
     );
 
     // Control: the list empty and set to both pages derive the same output from the same
@@ -3786,8 +3788,8 @@ fn an_adopted_document_without_a_source_format_defaults_to_ocr_and_keeps_no_mark
     );
 }
 
-/// The width and height from a PNG header, or `None` for bytes that are not a PNG. Page
-/// renders reach an OCR backend as PNG bytes, so this tells two page renders apart.
+/// The height from a PNG header, or `None` for bytes that are not a PNG. Page renders reach
+/// an OCR backend as PNG bytes, so this tells two page renders apart by their height.
 #[cfg(all(feature = "pdf", feature = "ocr"))]
 fn png_height(bytes: &[u8]) -> Option<u32> {
     if bytes.len() < 24 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
@@ -3799,7 +3801,15 @@ fn png_height(bytes: &[u8]) -> Option<u32> {
 /// A two-page PDF whose every page carries a healthy native text layer, and whose pages have
 /// clearly different heights so a page render identifies its page by size: page 1 is a small
 /// (200x300 pt) page, page 2 a tall (1224x1584 pt) one.
-#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+#[cfg(any(
+    all(feature = "pdf", feature = "ocr"),
+    all(
+        feature = "pdf",
+        feature = "ocr-pipeline",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    )
+))]
 fn two_page_native_text_pdf() -> Vec<u8> {
     use lopdf::content::{Content, Operation};
     use lopdf::{Document, Object, Stream, dictionary};

@@ -3942,6 +3942,10 @@ impl PdfExtractor {
             if let Some(results_map) = ocr_results_map.as_ref()
                 && let Some(ref mut pages) = page_contents
             {
+                // The map holds only the pages `accepted_ocr_page_replacements` kept -- a
+                // blank or discarded read is filtered and warned about there (unit-tested in
+                // `ocr::tests`) -- so a page whose read the noise gate dropped is never
+                // marked here (#2939).
                 for page in pages.iter_mut() {
                     if let Some(ocr_text) = results_map.get(&page.page_number) {
                         replace_page_content_with_ocr_text(page, ocr_text, keep_native_content);

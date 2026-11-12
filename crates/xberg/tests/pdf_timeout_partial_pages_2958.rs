@@ -7,9 +7,14 @@
 //! out of such a build, so their outcome does not depend on the machine's speed; the unit tests
 //! that request the stop on the token cover every profile.
 
-#![cfg(all(feature = "pdf", feature = "ocr", feature = "bundle-tessdata-eng"))]
+#![cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "bundle-tessdata-eng",
+    feature = "tokio-runtime",
+    debug_assertions
+))]
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
-#![cfg(all(feature = "ocr", feature = "tokio-runtime", debug_assertions))]
 
 mod helpers;
 use helpers::{extract_uri_document, get_test_documents_dir};
