@@ -172,12 +172,13 @@ fn assert_rows_are_own_lines(format: OutputFormat) {
         lines = djot_text.lines().collect();
         assert_eq!(lines.len(), 13, "header plus 12 parsed Djot paragraphs:\n{djot_text}");
 
-        // Each Djot row must keep its exact label and a non-empty dot leader. The fixture
+        // Each Djot row must keep its exact label and a run of at least three dots. The fixture
         // does not record leader lengths. Compare values after treating commas as periods
         // on both sides so an OCR separator misread cannot obscure a missing leader.
+        const MIN_LEADER_DOTS: usize = 3;
         let mut next = 0;
         for row in PICTURE_11PX_ROWS.lines() {
-            let hits: Vec<(usize, bool)> = lines
+            let hits: Vec<(usize, usize)> = lines
                 .iter()
                 .enumerate()
                 .filter_map(|(at, line)| row_hit(line, row, true).map(|leader| (at, leader)))
@@ -189,7 +190,11 @@ fn assert_rows_are_own_lines(format: OutputFormat) {
                 result.content
             );
             let (at, leader) = hits[0];
-            assert!(leader, "row {row:?} lost its leader:\n{}", result.content);
+            assert!(
+                leader >= MIN_LEADER_DOTS,
+                "row {row:?} has only {leader} leader dots:\n{}",
+                result.content
+            );
             assert!(at >= next, "row {row:?} is out of order:\n{}", result.content);
             next = at;
         }
@@ -212,8 +217,8 @@ fn assert_rows_are_own_lines(format: OutputFormat) {
 /// Whether `line` is the fixture row: the label byte-identical, then a leader run, then the
 /// values. With `normalize_tail` the values compare with ',' read as '.' on both sides: the
 /// OCR can misread a comma as a period, and that is an accuracy loss, not a leader loss.
-/// Returns whether a non-empty run of dots separates the label from the values.
-fn row_hit(line: &str, row: &str, normalize_tail: bool) -> Option<bool> {
+/// Returns the number of dots between the label and the values.
+fn row_hit(line: &str, row: &str, normalize_tail: bool) -> Option<usize> {
     let fields: Vec<_> = row.split('\t').collect();
     let [label, values @ ..] = fields.as_slice() else {
         return None;
@@ -235,8 +240,8 @@ fn row_hit(line: &str, row: &str, normalize_tail: bool) -> Option<bool> {
         return None;
     }
     let joined = head.join(" ");
-    let trimmed = joined.trim_end_matches('.').trim_end();
-    (trimmed == *label).then_some(trimmed.len() < joined.len())
+    let without_dots = joined.trim_end_matches('.');
+    (without_dots.trim_end() == *label).then_some(joined.len() - without_dots.len())
 }
 
 #[test]
