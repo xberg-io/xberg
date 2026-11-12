@@ -172,18 +172,12 @@ fn assert_rows_are_own_lines(format: OutputFormat) {
         lines = djot_text.lines().collect();
         assert_eq!(lines.len(), 13, "header plus 12 parsed Djot paragraphs:\n{djot_text}");
 
-        // Djot escapes every leader dot, so every leader run must round-trip whole:
-        // each of the 12 rows must sit on exactly one line with a byte-identical
-        // label, a non-empty leader and its values intact. The OCR can misread a
-        // value comma as a period (the pipeline's glyph-height resample, ~4.2x for
-        // this image, is where it loses one), and that is an accuracy loss, not a
-        // leader loss, so the tail comparison reads ',' as '.' on both sides; the
-        // tolerance is at most one such row, whichever it is, and the normalized
-        // comparison itself pins that line to the row: byte-identical label, tail
-        // alone differing. The OCR accuracy loss never lowers the bar: all 12
-        // leaders are required, not 11 (GH#3009).
+        // Djot escapes every leader dot, so every leader run must round-trip whole: each of
+        // the 12 rows must sit on exactly one line with a byte-identical label, a non-empty
+        // leader and its values intact. The OCR can misread a value comma as a period, and
+        // that is an accuracy loss, not a leader loss, so the tail comparison reads ',' as '.'
+        // on both sides for every row; the label and the leader stay exact (GH#3009).
         let mut next = 0;
-        let mut normalized_only: Option<&str> = None;
         for row in PICTURE_11PX_ROWS.lines() {
             let hits: Vec<(usize, bool)> = lines
                 .iter()
@@ -200,18 +194,6 @@ fn assert_rows_are_own_lines(format: OutputFormat) {
             assert!(leader, "row {row:?} lost its leader:\n{}", result.content);
             assert!(at >= next, "row {row:?} is out of order:\n{}", result.content);
             next = at;
-            // A hit under the normalized comparison but not the exact one is a row
-            // whose comma the OCR misread: `row_hit(.., true)` already pinned that
-            // line to the row (byte-identical label, tail alone differing), so the
-            // only open question is how many rows needed the tolerance — at most one.
-            if row_hit(lines[at], row, false) != Some(true) {
-                assert!(
-                    normalized_only.is_none(),
-                    "at most one row may need the comma normalization, not {row:?} after {normalized_only:?}:\n{}",
-                    result.content
-                );
-                normalized_only = Some(row);
-            }
         }
     } else {
         // The plain and Markdown variants tolerate one OCR-quality row.
