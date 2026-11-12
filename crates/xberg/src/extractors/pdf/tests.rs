@@ -530,6 +530,68 @@ fn should_leave_flat_document_untagged_when_no_boundaries_are_available() {
     );
 }
 
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn fallback_ocr_spans_accept_repeated_pages_with_one_ordered_placement() {
+    let text = "Préface\nReport\nReport\nEpilogue";
+    let pages = ["Report", "", "Report"].map(str::to_string);
+    let spans = boundaries_for_ocr_output(
+        ExtractionMethod::Ocr,
+        text,
+        None,
+        None,
+        Some(&pages),
+        &Default::default(),
+    )
+    .expect("the two nonempty pages have one ordered placement");
+    let first_start = "Préface\n".len();
+    let first_end = first_start + pages[0].len();
+    let second_start = first_end + "\n".len();
+
+    assert_eq!(
+        spans
+            .iter()
+            .map(|b| (b.page_number, b.byte_start, b.byte_end))
+            .collect::<Vec<_>>(),
+        vec![
+            (1, first_start, first_end),
+            (2, first_end, first_end),
+            (3, second_start, second_start + pages[2].len())
+        ]
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn fallback_ocr_spans_leave_a_transcript_with_a_preamble_substring_untagged() {
+    let text = "Préface: Reporting summary\nReport\nSecond page";
+    let pages = ["Report", "Second page"].map(str::to_string);
+    let spans = boundaries_for_ocr_output(
+        ExtractionMethod::Ocr,
+        text,
+        None,
+        None,
+        Some(&pages),
+        &Default::default(),
+    );
+
+    assert!(spans.is_none());
+    let doc = flat_pdf_document(text, "application/pdf", spans.as_deref());
+    assert_eq!(doc.elements.len(), 1);
+    assert_eq!(doc.elements[0].text, text);
+    assert_eq!(doc.elements[0].page, None);
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn fallback_ocr_spans_reject_ambiguous_complete_and_overlapping_matches() {
+    let repeated_pages = ["Report", "Second page"].map(str::to_string);
+    assert!(ordered_ocr_page_spans("Report\nReport\nSecond page", &repeated_pages).is_none());
+
+    let overlapping_page = ["ababa"].map(str::to_string);
+    assert!(ordered_ocr_page_spans("abababa", &overlapping_page).is_none());
+}
+
 #[test]
 fn should_fall_back_to_native_text_when_structure_drops_substantial_content() {
     let native_text = coverage_native_text();

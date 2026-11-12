@@ -103,6 +103,23 @@ fn ordered_ocr_page_spans(text: &str, page_texts: &[String]) -> Option<Vec<crate
         });
         offset = byte_end;
     }
+    if offset == 0 {
+        return None;
+    }
+
+    // The forward scan gives the earliest placement of every body. If any body can
+    // land later in the reverse scan, the transcript does not identify its page span.
+    let mut end = text.len();
+    for (page_text, boundary) in page_texts.iter().zip(&boundaries).rev() {
+        if page_text.is_empty() {
+            continue;
+        }
+        let latest_start = text.get(..end)?.rfind(page_text.as_str())?;
+        if latest_start != boundary.byte_start {
+            return None;
+        }
+        end = latest_start;
+    }
     Some(boundaries)
 }
 
