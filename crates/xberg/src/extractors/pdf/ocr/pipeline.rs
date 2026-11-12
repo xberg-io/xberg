@@ -4578,6 +4578,9 @@ pub(crate) struct PageOcrHints {
     pub(crate) source_dpi: Option<f64>,
     #[cfg(feature = "pdf")]
     pub(crate) raster_dpis: Option<std::sync::Arc<crate::pdf::render::OcrRasterDpis>>,
+    /// Page-aligned flags for real layout rasters that cover the MediaBox.
+    #[cfg(feature = "pdf")]
+    pub(crate) layout_rasters_in_page_frame: Option<std::sync::Arc<[bool]>>,
     /// `true` is authoritative; `false` means the detached caller has no positive scan signal,
     /// so a content-backed whole-document route still performs its normal per-page detection.
     pub(crate) known_full_page_scan: bool,
@@ -6307,38 +6310,33 @@ pub(super) async fn extract_with_ocr_for_page(
                 let processed = resolved_ocr_layout_dimensions(&ocr_result.metadata, render.0, render.1);
                 detached_mixed_frame::scale_tables_into_render(&mut backend_tables, processed, render);
             }
+            // ~keep Only the renderer can certify the page frame. Aspect ratio alone
+            // cannot distinguish a display-oriented raster from an aligned raster.
             #[cfg(feature = "pdf")]
-            if let Some((doc, _, _)) = lazy_pdf_render_state.as_ref() {
-                let (page_width_pt, page_height_pt) = page_dimensions_pt(doc, page_idx);
+            let layout_page_points = external_image_page_dimensions
+                .filter(|_| {
+                    xobject_document.is_none()
+                        && page_ocr_hints
+                            .as_ref()
+                            .and_then(|hints| hints.layout_rasters_in_page_frame.as_deref())
+                            .and_then(|pages| pages.get(page_idx))
+                            .copied()
+                            .unwrap_or(false)
+                })
+                .and_then(|dimensions| dimensions.get(page_idx).copied())
+                .filter(|&(width, height)| width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0);
+            #[cfg(feature = "pdf")]
+            if let Some((page_width_pt, page_height_pt)) = lazy_pdf_render_state
+                .as_ref()
+                .map(|(doc, _, _)| page_dimensions_pt(doc, page_idx))
+                .or(layout_page_points)
+            {
                 // ~keep A backend table's rect is in the pixel space the backend OCR'd, which
                 // preprocessing may have resized away from the render raster -- Tesseract
                 // normalizes to `target_dpi` by default. Passing the render dims here scaled
                 // every TSV table's page-space bbox by the processed/render ratio, while the
                 // formula bbox eleven lines below already resolved the same dims from metadata
                 // (xberg-io/xberg#1813).
-                let (table_px_width, table_px_height) = resolved_ocr_layout_dimensions(
-                    &ocr_result.metadata,
-                    encoded_batch[offset].2,
-                    encoded_batch[offset].3,
-                );
-                rescale_ocr_bboxes_to_page_points(
-                    None,
-                    &mut backend_tables,
-                    table_px_width,
-                    table_px_height,
-                    page_width_pt,
-                    page_height_pt,
-                );
-            }
-            // ~keep The layout-detection route hands in pre-rendered rasters of a PDF's pages:
-            // there is neither a lazy render nor a detached page owner to scale the backend
-            // table, so it would otherwise stay in the pixels recognition read.
-            #[cfg(feature = "pdf")]
-            if lazy_pdf_render_state.is_none()
-                && xobject_document.is_none()
-                && let Some(&(page_width_pt, page_height_pt)) =
-                    external_image_page_dimensions.and_then(|dimensions| dimensions.get(page_idx))
-            {
                 let (table_px_width, table_px_height) = resolved_ocr_layout_dimensions(
                     &ocr_result.metadata,
                     encoded_batch[offset].2,
@@ -6715,9 +6713,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     RecognizedTableFrame::DetachedPdfRaster {
                         height: ocr_render_height,
                     }
-                } else if let Some(&points) =
-                    external_image_page_dimensions.and_then(|dimensions| dimensions.get(page_idx))
-                {
+                } else if let Some(points) = layout_page_points {
                     RecognizedTableFrame::PdfPage {
                         raster: (ocr_render_width, ocr_render_height),
                         points,

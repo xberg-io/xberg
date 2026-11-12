@@ -287,12 +287,13 @@ fn assert_table_rectangles(document: &ExtractedDocument, expected: &[[f64; 4]], 
         })
         .collect();
     assert_eq!(actual.len(), expected.len(), "{page}: {actual:?}");
-    for (actual, expected) in actual.iter().zip(expected) {
-        assert!(
-            actual.iter().zip(expected).all(|(a, e)| (a - e).abs() <= 2.0),
-            "{page}: the table rectangle is {actual:?}, not {expected:?} in page points"
-        );
-    }
+    assert!(
+        actual
+            .iter()
+            .zip(expected)
+            .all(|(actual, expected)| { actual.iter().zip(expected).all(|(a, e)| (a - e).abs() <= 2.0) }),
+        "{page}: expected rectangles {expected:?}, got {actual:?}"
+    );
 }
 
 async fn table_rectangles_under(config: &ExtractionConfig, method: xberg::types::ExtractionMethod, rotated: bool) {
@@ -343,42 +344,77 @@ async fn single_stage_pipeline_reports_every_table_rectangle_in_page_points() {
     table_rectangles_under(&config, xberg::types::ExtractionMethod::Ocr, false).await;
 }
 
-/// Layout detection hands the pipeline pre-rendered images, so the page has neither a detached
-/// image document nor a lazy render; its backend table is still a PDF page's and belongs in points.
 #[cfg(feature = "layout-detection")]
-#[tokio::test]
-#[allow(clippy::print_stderr)]
-async fn layout_route_reports_the_backend_table_in_page_points() {
+async fn read_with_layout(bytes: &[u8], mime: &str) -> ExtractedDocument {
     let models = tempfile::tempdir().unwrap();
     let mut config = single_stage_pipeline(super::pinned_config(models.path()));
-    config.layout = Some(xberg::LayoutDetectionConfig::default());
-    let actual = match super::helpers::extract_bytes_document(TABLE_PAGES[0].pdf, "application/pdf", &config).await {
-        Ok(actual) => actual,
-        Err(error) if format!("{error:?}").to_lowercase().contains("model") => {
-            eprintln!("skipping: layout models unavailable: {error:?}");
-            return;
-        }
-        Err(error) => panic!("layout route extraction failed: {error:?}"),
-    };
-    let rectangles: Vec<_> = actual
-        .tables
+    config.layout = Some(xberg::LayoutDetectionConfig {
+        acceleration: Some(xberg::AccelerationConfig {
+            provider: xberg::ExecutionProviderType::Cpu,
+            ..Default::default()
+        }),
+        ..Default::default()
+    });
+    let actual = super::helpers::extract_bytes_document(bytes, mime, &config)
+        .await
+        .expect("layout route extraction");
+    assert!(
+        actual.processing_warnings.iter().all(|warning| !matches!(
+            warning.source.as_ref(),
+            "layout" | "layout-ocr" | "pdf_tables" | "image_tables"
+        )),
+        "layout or table inference fell back: {:?}",
+        actual.processing_warnings
+    );
+    actual
+}
+
+#[cfg(feature = "layout-detection")]
+#[tokio::test]
+#[ignore = "requires RT-DETR and TATR model files"]
+async fn layout_route_reports_the_backend_and_layout_tables_in_page_points() {
+    let actual = read_with_layout(TABLE_PAGES[0].pdf, "application/pdf").await;
+    let backend = TABLE_PAGES[0].rectangles[0];
+    let detected = [61.88, 442.17, 547.54, 693.63];
+    assert_table_rectangles(&actual, &[backend, detected], "layout OCR of the shaded table");
+}
+
+#[cfg(feature = "layout-detection")]
+#[tokio::test]
+#[ignore = "requires RT-DETR and TATR model files"]
+async fn layout_route_reports_the_detected_table_in_page_points_after_undoing_pdf_rotation() {
+    let mut pdf = Document::load_mem(TABLE_PAGES[0].pdf).unwrap();
+    let page = *pdf.get_pages().values().next().unwrap();
+    pdf.get_dictionary_mut(page).unwrap().set("Rotate", 90);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+
+    let actual = read_with_layout(&bytes, "application/pdf").await;
+    let detected = [61.88, 442.17, 547.54, 693.63];
+    assert_table_rectangles(&actual, &[detected], "layout OCR after undoing /Rotate");
+}
+
+#[cfg(feature = "layout-detection")]
+#[tokio::test]
+#[ignore = "requires RT-DETR and TATR model files"]
+async fn layout_route_keeps_a_standalone_image_table_in_pixels() {
+    let image = include_bytes!("../fixtures/ocr/gh1785_shaded_rows.png");
+    let actual = read_with_layout(image, "image/png").await;
+    let regions = actual.pages.as_ref().unwrap()[0].layout_regions.as_ref().unwrap();
+    let table_region = regions
         .iter()
-        .filter_map(|table| table.bounding_box)
-        .map(|bbox| [bbox.x0, bbox.y0, bbox.x1, bbox.y1])
-        .collect();
-    assert!(!rectangles.is_empty(), "the layout route kept no table");
+        .find(|region| region.class_name == "table")
+        .expect("standalone image layout must detect a table")
+        .bounding_box;
+    assert_table_rectangles(&actual, &[[280.0, 426.0, 2239.0, 1451.0]], "standalone image pixels");
+    let table = &actual.tables[0];
+    let bbox = table.bounding_box.unwrap();
     assert!(
-        rectangles
-            .iter()
-            .all(|rect| rect[2] <= 612.0 + 2.0 && rect[3] <= 792.0 + 2.0),
-        "a table rectangle is outside the 612 x 792 pt page: {rectangles:?}"
+        bbox.x0 >= table_region.x0
+            && bbox.y0 >= table_region.y0
+            && bbox.x1 <= table_region.x1
+            && bbox.y1 <= table_region.y1,
+        "table {bbox:?} must lie inside its detected pixel region {table_region:?}"
     );
-    assert!(
-        rectangles.iter().any(|rect| rect
-            .iter()
-            .zip(TABLE_PAGES[0].rectangles[0])
-            .all(|(actual, expected)| (actual - expected).abs() <= 2.0)),
-        "no table rectangle at {:?} in page points: {rectangles:?}",
-        TABLE_PAGES[0].rectangles[0]
-    );
+    assert_eq!(table.cells[0][1], "FY2024-25");
 }
