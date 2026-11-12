@@ -8216,3 +8216,51 @@ mod mixed_pdf_table_model_warning {
         );
     }
 }
+
+#[cfg(all(
+    feature = "pdf",
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+mod native_text_stop_tests {
+    use super::*;
+    use crate::cancellation::CancellationToken;
+
+    fn config_with(token: &CancellationToken) -> ExtractionConfig {
+        ExtractionConfig {
+            cancel_token: Some(token.clone()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_stop_with_an_unread_page_marks_the_native_text_as_stopped() {
+        let token = CancellationToken::new();
+        token.request_stop();
+        token.note_unread_page(3);
+
+        assert!(native_text_stopped_by_time_limit(&config_with(&token)));
+    }
+
+    #[test]
+    fn a_stop_without_an_unread_page_is_not_a_stopped_native_text() {
+        let token = CancellationToken::new();
+        token.request_stop();
+
+        assert!(!native_text_stopped_by_time_limit(&config_with(&token)));
+    }
+
+    #[test]
+    fn an_unread_page_without_a_stop_is_not_a_stopped_native_text() {
+        let token = CancellationToken::new();
+        token.note_unread_page(3);
+
+        assert!(!native_text_stopped_by_time_limit(&config_with(&token)));
+    }
+
+    #[test]
+    fn a_config_without_a_token_is_not_a_stopped_native_text() {
+        assert!(!native_text_stopped_by_time_limit(&ExtractionConfig::default()));
+    }
+}
