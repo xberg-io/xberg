@@ -205,7 +205,8 @@ fn visit(index: usize, parents: &[Option<usize>], order: &mut Vec<usize>) {
 /// member hanging from its root and its last member sits on the same side of its reference line as the
 /// root of the second, so the markup pass would read a script of a script and a script of the base as
 /// one superscript or subscript run. Two bare roots on one side are not counted: they are one run in
-/// either order. A member sits above its reference line when it is above its parent, or above the base
+/// either order. A raised tail at the shared right edge of overlapping lower and upper roots
+/// stays with the lower root. A member sits above its reference line when it is above its parent, or above the base
 /// for a root; a script level with its reference line counts as lowered. Lowered-first wins when neither order
 /// fuses a pair, which keeps the subscript of the base apart from an exponent chain
 /// (`H^{Z_2,des}_{<xy>,f}`); raised-first wins when both fuse the same number above zero, the order that
@@ -213,15 +214,12 @@ fn visit(index: usize, parents: &[Option<usize>], order: &mut Vec<usize>) {
 fn choose_order(
     raised_first: Vec<Vec<usize>>,
     lowered_first: Vec<Vec<usize>>,
-    is_raised: impl Fn(usize) -> bool,
+    fuses: impl Fn(&[usize], usize) -> bool,
 ) -> Vec<Vec<usize>> {
     let fused = |groups: &[Vec<usize>]| {
         groups
             .windows(2)
-            .filter(|pair| {
-                let last = pair[0].last().expect("a group holds its root");
-                pair[0].len() > 1 && is_raised(*last) == is_raised(pair[1][0])
-            })
+            .filter(|pair| pair[0].len() > 1 && fuses(&pair[0], pair[1][0]))
             .count()
     };
     let (raised_fused, lowered_fused) = (fused(&raised_first), fused(&lowered_first));
@@ -285,7 +283,20 @@ pub fn stack_reading_order(base: &StackSpan<'_>, members: &[StackSpan<'_>]) -> V
     };
     let raised_first = grouped(raised.iter().chain(&lowered).copied().collect());
     let lowered_first = grouped(lowered.iter().chain(&raised).copied().collect());
-    choose_order(raised_first, lowered_first, is_raised)
+    let fuses = |group: &[usize], next: usize| {
+        let root = group[0];
+        let tail = *group.last().expect("a group holds its root");
+        let (lower, upper, end) = (members[root], members[next], members[tail]);
+        let edge_tolerance = base.font_size * MAX_PARENT_OVERLAP_EM;
+        let aligned = !raised_side(root)
+            && raised_side(next)
+            && lower.x < upper.x
+            && upper.x < lower.x + lower.width
+            && (end.x - (lower.x + lower.width)).abs() <= edge_tolerance
+            && (end.x - (upper.x + upper.width)).abs() <= edge_tolerance;
+        is_raised(tail) == is_raised(next) && !aligned
+    };
+    choose_order(raised_first, lowered_first, fuses)
         .into_iter()
         .flatten()
         .collect()
@@ -791,6 +802,23 @@ mod tests {
         ];
         assert_eq!(stack_parents(&base, &members), [None, None, Some(0), None]);
         assert_eq!(stack_reading_order(&base, &members), [1, 0, 2, 3]);
+    }
+
+    #[test]
+    fn should_read_the_aligned_lowered_script_and_its_sign_before_the_exponent() {
+        let base = span("γ", 0.0, 0.0, 6.07, 11.9552);
+        let candidates = [
+            span("k", 6.07, -3.88, 4.62, 7.9701),
+            span("j", 6.72, 5.67, 3.88, 7.9701),
+            span("+", 10.60, 7.94, 5.59, 5.9776),
+            span("−", 10.69, -1.61, 5.76, 5.9776),
+        ];
+        let members: Vec<_> = script_stack(&base, &candidates)
+            .into_iter()
+            .map(|i| candidates[i])
+            .collect();
+        assert_eq!(stack_parents(&base, &members), [None, None, Some(0)]);
+        assert_eq!(stack_reading_order(&base, &members), [0, 2, 1]);
     }
 
     #[test]

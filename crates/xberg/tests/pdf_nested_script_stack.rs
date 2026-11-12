@@ -2,7 +2,7 @@
 
 mod helpers;
 
-use xberg::core::config::{ExtractionConfig, OutputFormat};
+use xberg::core::config::{ExtractionConfig, OutputFormat, PageConfig};
 
 /// `None` only for the local opt-out `XBERG_REGRESSION_PAGES_SKIP=1`, which panics when `CI` is set;
 /// a skipped suite therefore fails loudly in CI and nowhere else.
@@ -186,4 +186,42 @@ fn should_read_the_plus_of_r_as_its_own_run_before_the_exponent_and_its_index_in
         "R~þ~ <sup>n</sup>~x~ is the vector of state variables",
     );
     assert_no_markup("plos-journal.pcbi.1010783-p4", "~x þ~");
+}
+
+#[test]
+fn should_restore_the_script_markup_on_algebra_page_1555() {
+    let path = helpers::get_test_file_path(concat!(
+        "pdf/algebra_topology_differential_calculus_and_optimization_theory_",
+        "for_computer_science_and_machine_learning_2019_math_deep.pdf"
+    ));
+    let config = ExtractionConfig {
+        disable_ocr: true,
+        use_cache: false,
+        enable_quality_processing: false,
+        output_format: OutputFormat::Markdown,
+        pages: Some(PageConfig {
+            extract_pages: true,
+            insert_page_markers: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let document = helpers::extract_uri_document_blocking(&path, Some("application/pdf"), &config)
+        .expect("public algebra fixture extracts");
+    let page = |number| {
+        let marker = format!("<!-- PAGE {number} -->");
+        let next_marker = format!("<!-- PAGE {} -->", number + 1);
+        document
+            .content
+            .split_once(&marker)
+            .and_then(|(_, rest)| rest.split_once(&next_marker))
+            .expect("algebra page has both Markdown markers")
+            .0
+    };
+    let markdown = page(1555);
+    let markers = markdown.matches("<sup>").count()
+        + markdown.matches("<sub>").count()
+        + regex::Regex::new(r"~[^~\n]+~").unwrap().find_iter(markdown).count();
+    assert!(markers >= 59, "page 1555 has {markers} script markers");
+    assert!(page(1524).contains("γ<sup>j</sup> ~K~<sup>+</sup>"));
 }
