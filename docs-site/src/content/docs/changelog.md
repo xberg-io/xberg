@@ -1705,6 +1705,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   When a producer sets the text matrix before each word, the extractor records the run's width before the matrix move, so a font operator that follows ends the word at its last glyph. A show that comes after the move, such as a second show inside an `ActualText` scope or a glyph the font gives no text, now ends that record, so the word reaches the pen again and its width covers the later glyphs, as it did before the record existed.
 - **(pdf): Preserve source detail for configured Tesseract preprocessing.** Refs #2711 (partial).
   Forced whole-document OCR with the registered built-in Tesseract backend, including the synthesized classical pipeline, renders native page content at a preprocessing target above 150 DPI within the existing budget. Any preprocessing block requests its target, including the default 300 DPI in a denoise-only block. This recovers a reproduced small-text word boundary; explicit image settings and original full-page scan density retain precedence. Without a preprocessing block the default remains 150 DPI. Selected pages, prepared rasters, custom backends, explicit pipelines and VLM fallback keep their source-render policy. The general 150-DPI glyph-shift issue remains open.
+- **(djot): Headings, titles and slide titles keep text such as `1. Introduction` unescaped.** (GH#2975)
+  A heading is not at the start of a block, so Djot output no longer writes a backslash before the dot of a numbered or lettered heading, or before a leading dash. A leading brace still gets a backslash, so `{.x}` stays visible text.
 
 ## [1.3.11] - 2026-10-16
 
