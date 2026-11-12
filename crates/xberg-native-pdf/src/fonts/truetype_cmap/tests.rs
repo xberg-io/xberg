@@ -617,6 +617,17 @@ fn test_cmap_subtable_offset_beyond_data_rejected() {
     assert!(result.is_err());
 }
 
+/// Off-by-one audit of the #3019 bounds check: an offset pointing exactly at
+/// the end of the font data (`subtable_start == data.len()`) reads past the
+/// data even though it is not strictly greater, so it must be rejected too.
+#[test]
+fn test_cmap_subtable_offset_at_end_rejected() {
+    let mut data = build_truetype_with_cmap_format4(&[(65, 1)]);
+    let end_offset = data.len() as u32;
+    data[36..40].copy_from_slice(&end_offset.to_be_bytes());
+    let err = TrueTypeCMap::from_font_data(&data).expect_err("offset == data.len() must be rejected");
+    assert!(err.contains("out of bounds"), "unexpected error: {err}");
+}
 
 /// Issue #3019 (audit): the format-4 glyphIdArray index,
 /// `idRangeOffset/2 + (charCode - startCode) + i - segCount`, subtracts
@@ -736,6 +747,17 @@ fn test_format12_group_starting_beyond_unicode_skipped() {
     assert_eq!(cmap.get_unicode(4), Some('C'));
 }
 
+/// Issue #3034: an inverted group (endCharCode < startCharCode) maps nothing
+/// and must not disturb the groups after it.
+#[test]
+fn test_format12_inverted_group_skipped() {
+    let data = build_truetype_with_cmap_format12(&[(0x50, 0x40, 1), (65, 67, 2)]);
+    let cmap = TrueTypeCMap::from_font_data(&data).expect("parse font with an inverted group");
+    assert_eq!(cmap.len(), 3);
+    assert_eq!(cmap.get_unicode(2), Some('A'));
+    assert_eq!(cmap.get_unicode(3), Some('B'));
+    assert_eq!(cmap.get_unicode(4), Some('C'));
+}
 
 /// Issue #3034 review: the total iteration budget binds across groups, not
 /// per distinct gid. Group 1 (U+E000..=U+1DFFF, all 65,536 code points
