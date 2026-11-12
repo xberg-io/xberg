@@ -4,8 +4,8 @@
 //! once per token, which makes the page cost quadratic in the stream length.
 //!
 //! The check is a ratio, not a time: the same page is read with a content stream of `n` and of
-//! `2n` operators, and doubling the stream must roughly double the time. A quadratic page
-//! quadruples it, and a slow or loaded runner scales both readings alike.
+//! `4n` operators, and quadrupling the stream must roughly quadruple the time. A quadratic page
+//! multiplies it by 16 before fixed costs dilute that, and a slow or loaded runner scales both readings alike.
 
 // The cost is only visible unoptimized: an optimized build reads either size in milliseconds, where
 // timer noise outweighs the ratio.
@@ -16,13 +16,16 @@ use std::time::Instant;
 use xberg_native_pdf::PdfDocument;
 use xberg_native_pdf::document::ReadingOrder;
 
-/// Filler pairs at the smaller size. Twice this stays under the 256 KiB at which the text-only
+/// Filler pairs at the smaller size. Four times this stays under the 256 KiB at which the text-only
 /// parser switches to its pre-scan, which would skip the per-token path under test.
-const OPERATORS: usize = 8_000;
-/// Linear growth measures 2.0 and the old tokenizer measured 3.1 (quadratic growth is 4.0, diluted
-/// by the linear share of the page), so the limit sits between them.
-const MAX_RATIO: f64 = 2.6;
-const READINGS: usize = 3;
+const OPERATORS: usize = 4_000;
+/// The larger stream is this many times the smaller one.
+const STEP: usize = 4;
+/// Linear growth measures 4.0 and the old tokenizer measured 8.3 to 8.6 (the rest of the page is
+/// linear and dilutes the quadratic part), so the limit sits between them.
+const MAX_RATIO: f64 = 6.0;
+const READINGS: usize = 5;
+const PRESCAN_THRESHOLD_BYTES: usize = 256 * 1024;
 
 /// One page whose content stream holds a line of text followed by `filler_pairs` empty marked-content
 /// pairs inside the text object. Their dictionary operand is outside the text parser's fast path, so
@@ -81,11 +84,15 @@ fn read_page_seconds(filler_pairs: usize) -> f64 {
 
 #[test]
 fn test_page_with_a_large_content_stream_reads_in_linear_time() {
+    assert!(
+        single_page_pdf(STEP * OPERATORS).len() < PRESCAN_THRESHOLD_BYTES,
+        "the larger stream must stay under the pre-scan threshold"
+    );
     let single = read_page_seconds(OPERATORS);
-    let double = read_page_seconds(2 * OPERATORS);
+    let double = read_page_seconds(STEP * OPERATORS);
     let ratio = double / single;
     assert!(
         ratio < MAX_RATIO,
-        "doubling the content stream multiplied the page time by {ratio:.2} ({single:.3}s -> {double:.3}s): the cost is not linear"
+        "{STEP}x the content stream multiplied the page time by {ratio:.2} ({single:.3}s -> {double:.3}s): the cost is not linear"
     );
 }
