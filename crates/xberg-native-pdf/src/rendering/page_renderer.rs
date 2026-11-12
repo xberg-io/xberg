@@ -10791,8 +10791,7 @@ mod tests {
     /// `'` moves to the next line, then shows the string through the Type 3 path and advances.
     #[test]
     fn type3_quote_operator_paints_on_the_next_line_and_advances_by_th() {
-        let (columns, rows) =
-            type3_red_footprint("BT /T3 20 Tf 20 TL 50 Tz 1 0 0 rg 10 50 Td (A) ' (A) Tj ET");
+        let (columns, rows) = type3_red_footprint("BT /T3 20 Tf 20 TL 50 Tz 1 0 0 rg 10 50 Td (A) ' (A) Tj ET");
         assert_eq!(columns, (10..24).collect::<Vec<_>>());
         assert_eq!(rows, (56..70).collect::<Vec<_>>());
     }
