@@ -9,15 +9,47 @@ use crate::types::tables::Table;
 
 use super::surfaces::MarkupPageBody;
 
+/// The place of each page's text in the plain content, keyed by page number: a page with
+/// elements has its byte range, or `None` when its elements write nothing.
+type PlainPageRanges = std::collections::BTreeMap<u32, Option<(usize, usize)>>;
+
+/// `spans` say where each element is in `content`, given when `content` is the plain rendering
+/// of the elements. They are used only when the caller gets that content (`content_is_plain`).
 pub(super) fn derive_pages(
     doc: &mut InternalDocument,
     content: &str,
     output_format: &crate::core::config::OutputFormat,
     content_is_plain: bool,
+    spans: Option<&crate::rendering::ElementSpans>,
     observer: &mut impl super::surfaces::DerivationObserver,
 ) -> Option<Vec<PageContent>> {
+    // ~keep A page of a source whose pages are not OCR text gets its text and its range from
+    // the spans, so the range selects the page text by construction. PDF, image and OCR pages
+    // keep their own text, and their ranges are located below.
+    let native_ranges = spans
+        .filter(|_| content_is_plain && !source_short_circuits_ocr_page_text(&doc.source_format))
+        .map(|spans| plain_page_ranges(doc, content, spans))
+        .filter(|ranges| ranges.values().any(Option::is_some));
+    let native_ranges = native_ranges.as_ref();
     let raw_pages = doc.prebuilt_pages.take().or_else(|| build_pages(doc, content_is_plain));
+    let raw_pages = match native_ranges {
+        Some(ranges) => raw_pages.map(|pages| with_plain_page_text(pages, content, ranges)),
+        None => raw_pages,
+    };
     let mut pages = apply_page_content_format(raw_pages, doc, output_format, observer);
+    if let Some(ranges) = native_ranges {
+        if let Some(omitted) = set_plain_page_boundaries(&mut doc.metadata, pages.as_deref(), ranges) {
+            crate::core::diagnostics::push_warning(
+                &mut doc.processing_warnings,
+                "page_boundaries",
+                format!(
+                    "Pages {omitted:?} have no text of their own in the returned content, so their page byte \
+                     ranges were omitted"
+                ),
+            );
+        }
+        return pages;
+    }
     let mut reconciled = !content_is_plain || reconcile_page_boundaries(&mut doc.metadata, content, pages.as_deref());
     // ~keep Prebuilt page text (OCR) renders tables and block separators its own way, so it
     // cannot be found in the plain content. Render the pages that are not found from their
@@ -48,6 +80,105 @@ pub(super) fn derive_pages(
         );
     }
     pages
+}
+
+/// Where the text of each page is in the plain `content`: from the first byte that the page's
+/// elements write to the last, without the whitespace around it. The page whose elements end
+/// the body also has the note and comment definitions and the annotations that follow the body.
+fn plain_page_ranges(doc: &InternalDocument, content: &str, spans: &crate::rendering::ElementSpans) -> PlainPageRanges {
+    let body_text_end = content[..spans.body_end].trim_end().len();
+    let mut ranges: PlainPageRanges = compute_page_membership(doc)
+        .into_iter()
+        .map(|(page_number, indices)| {
+            let page_spans = || {
+                indices
+                    .iter()
+                    .filter_map(|&i| spans.by_element.get(i).copied().flatten())
+            };
+            let range = page_spans()
+                .map(|(start, _)| start)
+                .min()
+                .zip(page_spans().map(|(_, end)| end).max())
+                .and_then(|(start, end)| {
+                    if start >= body_text_end {
+                        return None;
+                    }
+                    let end = if end >= body_text_end { content.len() } else { end };
+                    let text = content.get(start..end)?;
+                    let text_start = start + (text.len() - text.trim_start().len());
+                    let text_end = start + text.trim_end().len();
+                    (text_start < text_end).then_some((text_start, text_end))
+                });
+            (page_number, range)
+        })
+        .collect();
+    if doc.source_format == "docx" {
+        for element in &doc.elements {
+            if let (ElementKind::PageBreak, Some(page)) = (&element.kind, element.page) {
+                // ~keep A final explicit break opens a page even if the parser only puts note definitions there.
+                ranges.entry(page + 1).or_insert(None);
+            }
+        }
+    }
+    ranges
+}
+
+/// Give each page that has elements its part of the plain `content`. A page with no
+/// elements keeps its text, and every other field of a page stays.
+fn with_plain_page_text(mut pages: Vec<PageContent>, content: &str, ranges: &PlainPageRanges) -> Vec<PageContent> {
+    for page in &mut pages {
+        if let Some(range) = ranges.get(&page.page_number) {
+            page.content = range_text(content, *range).to_string();
+        }
+    }
+    pages
+}
+
+fn range_text(content: &str, range: Option<(usize, usize)>) -> &str {
+    range
+        .and_then(|(start, end)| content.get(start..end))
+        .unwrap_or_default()
+}
+
+/// Set the range of each page to the place of its text in the plain content. A page with no
+/// text loses its range, and nothing is lost with it. Any other range is omitted: the range of a
+/// page with text that is not in the content, as the text of a page with no elements, and the
+/// range of a page number that has no extracted page. Returns the omitted page numbers, sorted and
+/// without repeats, or `None` when nothing was omitted. When no range is left, the boundaries
+/// become `None`.
+fn set_plain_page_boundaries(
+    metadata: &mut crate::types::Metadata,
+    pages: Option<&[PageContent]>,
+    ranges: &PlainPageRanges,
+) -> Option<Vec<u32>> {
+    let structure = metadata.pages.as_mut()?;
+    let boundaries = structure.boundaries.as_mut()?;
+    let mut omitted = Vec::new();
+    boundaries.retain_mut(|boundary| {
+        let page = pages
+            .unwrap_or_default()
+            .iter()
+            .find(|page| page.page_number == boundary.page_number);
+        match (page, ranges.get(&boundary.page_number)) {
+            (Some(_), Some(Some((start, end)))) => {
+                boundary.byte_start = *start;
+                boundary.byte_end = *end;
+                return true;
+            }
+            (Some(page), _) if page.content.is_empty() => {}
+            _ => omitted.push(boundary.page_number),
+        }
+        false
+    });
+    if boundaries.is_empty() {
+        structure.boundaries = None;
+    }
+    if omitted.is_empty() {
+        return None;
+    }
+    omitted.sort_unstable();
+    omitted.dedup();
+    Some(omitted)
 }
 
 /// Re-point `metadata.pages.boundaries` at `content` by locating each page's text in it, in
@@ -432,8 +563,8 @@ pub(crate) fn source_short_circuits_ocr_page_text(source_format: &str) -> bool {
 
 /// Whether `page`'s prebuilt text may be replaced by the plain rendering of its elements: every
 /// page of a PDF, image or OCR source (a native page's text layer differs from the plain content
-/// by spacing alone), and a page of another format that took OCR text. A DOCX page with its
-/// notes is not, and its text is deliberately not the plain rendering of its elements.
+/// by spacing alone), and a page of another format that took OCR text. In plain output a page of
+/// another format with elements already has its part of the plain content (`plain_page_ranges`).
 fn is_ocr_page_text(doc: &InternalDocument, page: &PageContent) -> bool {
     source_short_circuits_ocr_page_text(&doc.source_format) || doc.ocr_text_pages.contains(&page.page_number)
 }
@@ -717,7 +848,7 @@ mod plain_page_rerender_tests {
     }
 
     fn derive(doc: &mut InternalDocument, content: &str) -> Vec<PageContent> {
-        derive_pages(doc, content, &OutputFormat::Plain, true, &mut ()).expect("pages")
+        derive_pages(doc, content, &OutputFormat::Plain, true, None, &mut ()).expect("pages")
     }
 
     fn warned(doc: &InternalDocument) -> bool {
@@ -822,46 +953,320 @@ mod plain_page_rerender_tests {
     }
 
     #[test]
-    fn a_native_page_with_its_own_table_markdown_and_a_note_keeps_its_text() {
-        let content = "Body\n\nplain two";
+    fn a_docx_page_with_its_own_table_markdown_gets_its_part_of_the_plain_content() {
         let native_text = "| a | b |\n| --- | --- |\n| 1 | 2 |[^1]\n\n1: THE NOTE";
         let mut native = page(1, native_text);
         native.tables.push(Arc::new(Table {
             markdown: "| a | b |\n| --- | --- |\n| 1 | 2 |".to_string(),
             ..Default::default()
         }));
-        let mut doc = doc_with(vec![native], &[(1, "Body")]);
-        doc.ocr_text_pages.clear();
-        doc.source_format = "docx".to_string();
-        let pages = derive(&mut doc, content);
-        assert_eq!(pages[0].content, native_text);
-        assert!(warned(&doc));
-        assert!(doc.metadata.pages.as_ref().unwrap().boundaries.is_none());
+        let mut doc = office_doc_with(vec![native, page(2, "Next")], &[(1, "Body"), (2, "Next")]);
+        let (content, pages) = derive_plain(&mut doc);
+        assert_eq!(content, "Body\n\nNext");
+        assert_eq!(pages[0].content, "Body");
+        assert_eq!(pages[0].tables.len(), 1, "the page keeps its tables");
+        assert!(!warned(&doc));
+        assert_ranges(&doc, &content, &pages);
     }
 
     #[test]
-    fn a_native_page_keeps_its_text_while_the_ocr_pages_of_a_mixed_document_are_rerendered() {
-        let content = "one\n\ntwo\n\nthree";
-        let mut doc = doc_with(
+    fn every_page_of_a_docx_document_with_ocr_pages_gets_its_part_of_the_plain_content() {
+        let mut doc = office_doc_with(
             vec![page(1, "| one |"), page(2, "native | two"), page(3, "| three |")],
             &[(1, "one"), (2, "two"), (3, "three")],
         );
         doc.ocr_text_pages = vec![1, 3];
-        doc.source_format = "docx".to_string();
-        let pages = derive(&mut doc, content);
+        let (content, pages) = derive_plain(&mut doc);
         assert_eq!(pages[0].content, "one");
-        assert_eq!(pages[1].content, "native | two");
+        assert_eq!(pages[1].content, "two");
         assert_eq!(pages[2].content, "three");
+        assert!(!warned(&doc));
+        assert_ranges(&doc, &content, &pages);
+    }
+
+    /// The Plain spans say nothing about Markdown content, so a Markdown page keeps the range
+    /// that its extractor measured, as on main.
+    #[test]
+    fn a_markdown_docx_page_keeps_the_range_its_extractor_measured() {
+        let doc = office_doc_with(vec![page(1, "one"), page(2, "two")], &[(1, "one"), (2, "two")]);
+        let result = super::super::derive_extraction_result(doc, false, OutputFormat::Markdown);
+        let boundaries = result.metadata.pages.and_then(|s| s.boundaries).expect("boundaries");
+        let ranges: Vec<_> = boundaries
+            .iter()
+            .map(|b| (b.page_number, b.byte_start, b.byte_end))
+            .collect();
+        assert_eq!(ranges, [(1, 0, 999), (2, 0, 999)]);
+    }
+
+    fn set_boundaries(doc: &mut InternalDocument, ranges: &[(u32, usize, usize)]) {
+        let structure = doc.metadata.pages.as_mut().unwrap();
+        structure.boundaries = Some(
+            ranges
+                .iter()
+                .map(|&(page_number, byte_start, byte_end)| PageBoundary {
+                    byte_start,
+                    byte_end,
+                    page_number,
+                })
+                .collect(),
+        );
+    }
+
+    /// A DOCX document with `pages` built by its parser and the page-tagged paragraphs `tagged`.
+    fn office_doc_with(pages: Vec<PageContent>, tagged: &[(u32, &str)]) -> InternalDocument {
+        let mut doc = doc_with(pages, tagged);
+        doc.ocr_text_pages.clear();
+        doc.source_format = "docx".to_string();
+        doc
+    }
+
+    /// Derive the pages of `doc` for plain output, as `derive` does: from the one plain rendering
+    /// that makes the content and the place of each element in it. Returns the content and pages.
+    fn derive_plain(doc: &mut InternalDocument) -> (String, Vec<PageContent>) {
+        let rendering = crate::rendering::render_plain_with_spans(doc);
+        let pages = derive_pages(
+            doc,
+            &rendering.text,
+            &OutputFormat::Plain,
+            true,
+            Some(&rendering.spans),
+            &mut (),
+        )
+        .expect("pages");
+        (rendering.text, pages)
+    }
+
+    #[test]
+    fn a_docx_range_measured_on_the_parser_text_selects_its_page_text_in_the_plain_content() {
+        let mut doc = office_doc_with(
+            vec![page(1, "Memo\n\nBody"), page(2, "| a |\n| --- |")],
+            &[(1, "Memo"), (1, "Body"), (2, "a")],
+        );
+        set_boundaries(&mut doc, &[(1, 0, 10), (2, 10, 23)]);
+        let (content, pages) = derive_plain(&mut doc);
+        assert_eq!(pages[0].content, "Memo\n\nBody");
+        assert_eq!(pages[1].content, "a");
+        assert!(!warned(&doc));
+        assert_ranges(&doc, &content, &pages);
+    }
+
+    #[test]
+    fn pages_with_the_same_text_each_get_the_range_of_their_own_text() {
+        let mut doc = office_doc_with(
+            vec![page(1, "beta"), page(2, "alpha"), page(3, "beta")],
+            &[(1, "beta"), (2, "alpha"), (3, "beta")],
+        );
+        doc.source_format = "pptx".to_string();
+        derive_plain(&mut doc);
+        let boundaries = doc.metadata.pages.as_ref().and_then(|s| s.boundaries.clone());
+        let ranges: Vec<(u32, usize, usize)> = boundaries
+            .iter()
+            .flatten()
+            .map(|b| (b.page_number, b.byte_start, b.byte_end))
+            .collect();
+        assert_eq!(ranges, [(1, 0, 4), (2, 6, 11), (3, 13, 17)]);
+        assert!(!warned(&doc));
+    }
+
+    #[test]
+    fn a_page_with_text_and_no_elements_keeps_its_text_and_loses_its_range_with_a_warning() {
+        let mut doc = office_doc_with(vec![page(1, "one"), page(2, "two\nnote")], &[(1, "one")]);
+        let (content, pages) = derive_plain(&mut doc);
+        assert_eq!(content, "one");
+        assert_eq!(pages[1].content, "two\nnote");
         assert!(warned(&doc));
+        assert_eq!(boundary_pages(&doc), vec![1]);
+    }
+
+    #[test]
+    fn a_page_with_no_text_loses_its_range_without_a_warning() {
+        let mut doc = office_doc_with(vec![page(1, "one"), page(2, "")], &[(1, "one")]);
+        let (content, pages) = derive_plain(&mut doc);
+        assert_eq!(pages[1].content, "");
+        assert!(!warned(&doc));
+        assert_eq!(boundary_pages(&doc), vec![1]);
+        assert_ranges(&doc, &content, &pages[..1]);
+    }
+
+    #[test]
+    fn a_page_keeps_its_text_when_no_element_of_the_document_writes_text() {
+        let mut doc = office_doc_with(vec![page(1, "one")], &[(1, "")]);
+        let (content, pages) = derive_plain(&mut doc);
+        assert_eq!(content, "");
+        assert_eq!(pages[0].content, "one");
+    }
+
+    #[test]
+    fn the_last_page_with_text_keeps_its_range_when_a_later_page_writes_only_whitespace() {
+        let mut doc = office_doc_with(
+            vec![page(1, "one"), page(2, "two"), page(3, " ")],
+            &[(1, "one"), (2, "two"), (3, " ")],
+        );
+        let (content, pages) = derive_plain(&mut doc);
+        assert_eq!(content, "one\n\ntwo");
+        assert_eq!(pages[1].content, "two");
+        assert!(!warned(&doc));
+        assert_eq!(boundary_pages(&doc), vec![1, 2]);
+        assert_ranges(&doc, &content, &pages[..2]);
+    }
+
+    #[test]
+    fn a_page_whose_elements_write_only_whitespace_loses_its_range_without_a_warning() {
+        let mut doc = office_doc_with(
+            vec![page(1, "one"), page(2, " "), page(3, "three")],
+            &[(1, "one"), (2, " "), (3, "three")],
+        );
+        let (content, pages) = derive_plain(&mut doc);
+        assert_eq!(pages[1].content, "");
+        assert!(!warned(&doc));
         assert_eq!(boundary_pages(&doc), vec![1, 3]);
-        let boundaries = doc.metadata.pages.as_ref().unwrap().boundaries.as_ref().unwrap();
+        assert_ranges(&doc, &content, &[pages[0].clone(), pages[2].clone()]);
+    }
+
+    #[test]
+    fn exact_ranges_of_pages_that_are_not_located_in_order_stay_without_a_warning() {
+        let content = "two\n\none";
+        let mut doc = doc_with(vec![page(1, "one"), page(2, "two")], &[]);
+        set_boundaries(&mut doc, &[(1, 5, 8), (2, 0, 3)]);
+        derive(&mut doc, content);
+        assert!(!warned(&doc));
+        assert_eq!(boundary_pages(&doc), vec![1, 2]);
+    }
+
+    /// A DOCX document with a note reference on each of its two pages, and page ranges measured on
+    /// the text of the parser.
+    fn docx_with_a_note_on_each_page() -> InternalDocument {
+        let mut builder = crate::types::internal_builder::InternalDocumentBuilder::new("docx");
+        builder.push_paragraph("First page", Vec::new(), Some(1), None);
+        builder.push_footnote_ref("1", "fn1", Some(1));
+        builder.push_paragraph("Second page", Vec::new(), Some(2), None);
+        builder.push_footnote_ref("2", "fn2", Some(2));
+        builder.push_footnote_definition("Note one", "fn1", None);
+        builder.push_footnote_definition("Note two", "fn2", None);
+        let mut doc = builder.build();
+        doc.metadata.pages = Some(PageStructure {
+            total_count: 2,
+            unit_type: PageUnitType::Page,
+            boundaries: None,
+            pages: None,
+        });
+        set_boundaries(&mut doc, &[(1, 0, 13), (2, 13, 26)]);
+        doc
+    }
+
+    #[test]
+    fn a_plain_page_has_the_plain_text_of_its_elements_with_the_note_numbers_of_the_document() {
+        let mut doc = docx_with_a_note_on_each_page();
+        let (content, pages) = derive_plain(&mut doc);
+        let texts: Vec<&str> = pages.iter().map(|page| page.content.as_str()).collect();
+        assert_eq!(texts.len(), 2);
+        assert_eq!(texts[0], "First page[^1]");
+        let (body, notes) = texts[1]
+            .split_once("\n\n")
+            .expect("the last page has the note definitions");
+        assert_eq!(body, "Second page[^2]");
+        assert!(notes.contains("Note one") && notes.contains("Note two"), "{notes}");
         assert_eq!(
-            content.get(boundaries[0].byte_start..boundaries[0].byte_end),
-            Some("one")
+            content.find(texts[1]).map(|start| start + texts[1].len()),
+            Some(content.len())
         );
-        assert_eq!(
-            content.get(boundaries[1].byte_start..boundaries[1].byte_end),
-            Some("three")
+        assert!(!warned(&doc));
+        assert_ranges(&doc, &content, &pages);
+    }
+
+    #[test]
+    fn a_prebuilt_docx_page_has_its_part_of_the_plain_content_and_keeps_its_notes() {
+        let mut doc = docx_with_a_note_on_each_page();
+        doc.prebuilt_pages = Some(vec![
+            page(1, "First page"),
+            page(2, "Second page\n\nNote one\nNote two"),
+        ]);
+        let (content, pages) = derive_plain(&mut doc);
+        assert_eq!(pages[0].content, "First page[^1]");
+        assert!(pages[1].content.starts_with("Second page[^2]"));
+        assert!(pages[1].content.contains("Note one") && pages[1].content.contains("Note two"));
+        assert!(!warned(&doc));
+        assert_ranges(&doc, &content, &pages);
+    }
+
+    #[test]
+    fn a_prebuilt_pdf_page_keeps_its_text() {
+        let mut doc = docx_with_a_note_on_each_page();
+        doc.source_format = "pdf".to_string();
+        doc.prebuilt_pages = Some(vec![page(1, "First page"), page(2, "Second page")]);
+        let (_, pages) = derive_plain(&mut doc);
+        assert_eq!(pages[0].content, "First page");
+    }
+
+    #[test]
+    fn a_note_marker_after_the_last_text_of_a_page_stays_on_that_page() {
+        let mut builder = crate::types::internal_builder::InternalDocumentBuilder::new("docx");
+        builder.push_paragraph("First page", Vec::new(), Some(1), None);
+        builder.push_footnote_ref("1", "fn1", Some(2));
+        builder.push_paragraph("Second page", Vec::new(), Some(2), None);
+        builder.push_footnote_definition("Note one", "fn1", None);
+        let mut doc = builder.build();
+        doc.metadata.pages = Some(PageStructure {
+            total_count: 2,
+            unit_type: PageUnitType::Page,
+            boundaries: None,
+            pages: None,
+        });
+        set_boundaries(&mut doc, &[(1, 0, 10), (2, 10, 21)]);
+        let (content, pages) = derive_plain(&mut doc);
+        assert!(content.starts_with("First page[^1]\n\nSecond page"), "{content}");
+        assert_eq!(pages[0].content, "First page[^1]");
+        assert!(pages[1].content.starts_with("Second page"));
+        assert!(!warned(&doc));
+        assert_ranges(&doc, &content, &pages);
+    }
+
+    #[test]
+    fn the_range_of_a_page_number_with_no_extracted_page_is_omitted_with_a_warning() {
+        let mut doc = office_doc_with(vec![page(1, "one")], &[(1, "one"), (2, "two")]);
+        set_boundaries(&mut doc, &[(1, 0, 3), (2, 5, 8), (3, 8, 9)]);
+        derive_plain(&mut doc);
+        assert_eq!(boundary_pages(&doc), vec![1]);
+        assert!(warned(&doc));
+    }
+
+    #[test]
+    fn the_warning_names_a_page_with_two_omitted_ranges_one_time() {
+        let mut doc = office_doc_with(vec![page(1, "one"), page(2, "gone")], &[(1, "one")]);
+        set_boundaries(&mut doc, &[(1, 0, 3), (2, 0, 1), (2, 1, 2)]);
+        derive_plain(&mut doc);
+        assert_eq!(boundary_pages(&doc), vec![1]);
+        let messages: Vec<&str> = doc
+            .processing_warnings
+            .iter()
+            .filter(|w| w.source == "page_boundaries")
+            .map(|w| w.message.as_ref())
+            .collect();
+        assert_eq!(messages.len(), 1, "one page_boundaries warning: {messages:?}");
+        assert!(
+            messages[0].contains("Pages [2] "),
+            "page 2 is named one time: {messages:?}"
         );
+    }
+
+    #[test]
+    fn the_warning_names_omitted_pages_in_page_order_and_no_range_is_left() {
+        let mut doc = office_doc_with(vec![page(1, "one")], &[(1, "one")]);
+        set_boundaries(&mut doc, &[(3, 5, 8), (2, 0, 3)]);
+        derive_plain(&mut doc);
+        let structure = doc.metadata.pages.as_ref().expect("page structure");
+        assert!(
+            structure.boundaries.is_none(),
+            "no range is left: {:?}",
+            structure.boundaries
+        );
+        let messages: Vec<&str> = doc
+            .processing_warnings
+            .iter()
+            .filter(|w| w.source == "page_boundaries")
+            .map(|w| w.message.as_ref())
+            .collect();
+        assert_eq!(messages.len(), 1, "one page_boundaries warning: {messages:?}");
+        assert!(messages[0].contains("Pages [2, 3] "), "pages in order: {messages:?}");
     }
 }

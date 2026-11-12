@@ -8,7 +8,7 @@ use crate::extraction::office_metadata;
 use crate::extractors::security::SecurityBudget;
 use crate::plugins::{InternalDocumentExtractor, Plugin};
 use crate::types::ExtractedImage;
-use crate::types::internal::InternalDocument;
+use crate::types::internal::{InternalDocument, STYLE_NAME_ATTRIBUTE};
 use crate::types::internal_builder::InternalDocumentBuilder;
 use crate::types::{
     DocxMetadata, FormatMetadata, Metadata, PageBoundary, PageContent, PageInfo, PageStructure, PageUnitType, Table,
@@ -40,10 +40,6 @@ impl Default for DocxExtractor {
     }
 }
 
-/// Attribute key under which the resolved DOCX paragraph style name (`w:pStyle` ->
-/// `styles.xml` `w:name`, walking `w:basedOn`) is exposed on `Element.metadata.additional`.
-const STYLE_NAME_ATTRIBUTE: &str = "style_name";
-
 /// Attribute key set to `"true"` on every element that belongs to a table of contents
 /// (a `w:sdt` with a `Table of Contents` doc-part gallery, or a `TOC` field code).
 const TOC_ENTRY_ATTRIBUTE: &str = "toc_entry";
@@ -63,6 +59,15 @@ fn drawing_alt_text(drawing: &crate::extraction::docx::drawing::Drawing) -> Opti
         .clone()
         .filter(|description| !description.is_empty())
         .or_else(|| properties.name.clone().filter(|name| !name.is_empty()))
+}
+
+/// Whether the drawing carries a description written by the author or by Word, not only a shape name.
+fn drawing_has_description(drawing: &crate::extraction::docx::drawing::Drawing) -> bool {
+    drawing
+        .doc_properties
+        .as_ref()
+        .and_then(|properties| properties.description.as_deref())
+        .is_some_and(|description| !description.is_empty())
 }
 
 /// Anchor key shared by a note's reference and its definition.
@@ -341,15 +346,29 @@ fn build_internal_document(
                 // consumer sees must not diverge from the one `Table::to_markdown` already
                 // renders correctly (xberg-io/xberg#1549). ~keep
                 let table_note_refs = doc.note_refs_by_table.get(idx);
-                let grid = match table_note_refs {
-                    Some(_) => table_without_note_markers(table).to_markdown_cell_grid_with_math(),
-                    None => table.to_markdown_cell_grid_with_math(),
+                let without_note_markers;
+                let grid_table = match table_note_refs {
+                    Some(_) => {
+                        without_note_markers = table_without_note_markers(table);
+                        &without_note_markers
+                    }
+                    None => table,
                 };
+                let grid = grid_table.to_markdown_cell_grid_with_math();
                 let (cells, math) = crate::rendering::table_math::split_cell_grid(grid);
                 if !cells.is_empty() {
                     let cell_styles = resolve_table_cell_styles(doc, table);
                     let element_index =
                         builder.push_table_from_cells_with_styles(&cells, &cell_styles, Some(current_page), None);
+                    // The cells hold Markdown (links, emphasis); Plain output holds the same grid as text. ~keep
+                    builder.merge_attribute(
+                        element_index,
+                        crate::types::internal::MARKDOWN_PLAIN_TEXT_ATTRIBUTE,
+                        crate::rendering::common::render_table_plain(
+                            &grid_table
+                                .to_cell_grid(crate::extraction::docx::parser::Paragraph::to_text_with_math_delimiters),
+                        ),
+                    );
                     if let Some(encoded) = math {
                         builder.set_table_math_annotations(element_index, encoded);
                     }
@@ -359,9 +378,20 @@ fn build_internal_document(
             crate::extraction::docx::parser::DocumentElement::Drawing(idx) => {
                 let drawing = &doc.drawings[*idx];
 
-                if let Some(ref textbox_text) = drawing.text_box_content
-                    && !textbox_text.trim().is_empty()
-                {
+                // A drawn shape has no picture data, so no image element carries its description;
+                // the description is text the author wrote, so it is a paragraph in its place. A
+                // description of punctuation only (`""`) holds no text and is left out.
+                let shape_description = drawing
+                    .image_ref
+                    .is_none()
+                    .then(|| drawing.doc_properties.as_ref()?.description.as_deref())
+                    .flatten()
+                    .filter(|description| description.chars().any(char::is_alphanumeric));
+                let textbox_text = drawing
+                    .text_box_content
+                    .as_deref()
+                    .filter(|text| !text.trim().is_empty());
+                for text in shape_description.into_iter().chain(textbox_text) {
                     if current_list_numbering_id.is_some() {
                         for _ in 0..open_list_count {
                             builder.end_list();
@@ -369,7 +399,7 @@ fn build_internal_document(
                         current_list_numbering_id = None;
                         open_list_count = 0;
                     }
-                    builder.push_paragraph(textbox_text, vec![], Some(current_page), None);
+                    builder.push_paragraph(text, vec![], Some(current_page), None);
                 }
 
                 if drawing.image_ref.is_none() {
@@ -431,6 +461,15 @@ fn build_internal_document(
                 }
                 if !attrs.is_empty() {
                     builder.set_attributes(img_elem_idx, attrs);
+                }
+                // A drawing with no description carries only its shape name (`Picture 1`), which is
+                // not document text, so Plain output shows only the text OCR reads from it. ~keep
+                if !drawing_has_description(drawing) {
+                    builder.merge_attribute(
+                        img_elem_idx,
+                        crate::types::internal::MARKDOWN_IMAGE_REFERENCE_ATTRIBUTE,
+                        "true",
+                    );
                 }
             }
             crate::extraction::docx::parser::DocumentElement::PageBreak => {
@@ -2165,6 +2204,42 @@ mod tests {
         assert!(
             !doc.relationships.is_empty(),
             "Should have footnote relationships in DocumentStructure"
+        );
+    }
+
+    #[tokio::test]
+    async fn plain_table_cell_carries_no_footnote_marker() {
+        let document_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>Cell with note</w:t></w:r><w:r><w:footnoteReference w:id="1"/></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>"#;
+        let footnotes_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:footnote w:id="1"><w:p><w:r><w:t>The footnote.</w:t></w:r></w:p></w:footnote>
+</w:footnotes>"#;
+        let data = build_test_docx_with_parts(document_xml, None, Some(footnotes_xml), None, None, None, None);
+        let internal = DocxExtractor::new()
+            .extract_content(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &ExtractionConfig::default(),
+            )
+            .await
+            .unwrap();
+        let plain = crate::rendering::render_plain(&internal);
+        let cell_line = plain
+            .lines()
+            .find(|line| line.contains("Cell with note"))
+            .unwrap_or_else(|| panic!("the cell text is document text: {plain}"));
+        assert!(
+            !cell_line.contains("[^"),
+            "a Plain table cell carries no note marker: {plain}"
         );
     }
 
@@ -4925,7 +5000,8 @@ mod tests {
         );
     }
 
-    /// Plain, Json and Custom output keep each page's plain text as its content, so the space shows there.
+    /// A Plain page is its part of the Plain content, so the math delimiters keep the equation apart
+    /// from the next letter there too.
     #[tokio::test]
     async fn should_keep_an_equation_apart_from_a_following_letter_in_plain_page_content() {
         let xml = r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -4950,9 +5026,97 @@ mod tests {
         .unwrap();
         let pages = result.pages.expect("pages requested");
         assert!(
-            pages[0].content.contains("Let \\alpha b hold."),
+            pages[0].content.contains("Let $\\alpha$b hold."),
             "{:?}",
             pages[0].content
+        );
+        assert!(result.content.contains(&pages[0].content), "{:?}", result.content);
+    }
+
+    /// A drawn shape has no picture data, but its description is text the author wrote: every
+    /// format writes it in its place, and a Plain page keeps it. A description of punctuation only
+    /// holds no text and stays out.
+    #[tokio::test]
+    async fn should_write_the_description_of_a_drawn_shape_in_its_place() {
+        let xml = r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+            xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><w:body>
+            <w:p><w:r><w:t>Before the chart.</w:t></w:r></w:p>
+            <w:p><w:r><w:drawing><wp:inline><wp:extent cx="914400" cy="457200"/>
+            <wp:docPr id="3" name="Flowchart 3" descr="Flow from intake to review"/>
+            <a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+            <wps:wsp><wps:spPr/></wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
+            <w:p><w:r><w:drawing><wp:inline><wp:extent cx="914400" cy="457200"/>
+            <wp:docPr id="4" name="Line 4" descr="&quot;&quot;"/>
+            <a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+            <wps:wsp><wps:spPr/></wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
+            <w:p><w:r><w:t>After the chart.</w:t></w:r></w:p></w:body></w:document>"#;
+        use crate::core::config::OutputFormat as F;
+        for format in [F::Plain, F::Markdown, F::Djot, F::Html] {
+            let config = ExtractionConfig {
+                output_format: format.clone(),
+                pages: Some(crate::core::config::PageConfig {
+                    extract_pages: true,
+                    ..Default::default()
+                }),
+                use_cache: false,
+                ..Default::default()
+            };
+            let result = crate::core::extractor::extract_bytes(
+                &build_test_docx(xml),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &config,
+            )
+            .await
+            .unwrap();
+            let content = &result.content;
+            let at = |text: &str| content.find(text).unwrap_or_else(|| panic!("{format:?}: {content:?}"));
+            assert!(
+                at("Before the chart.") < at("Flow from intake to review")
+                    && at("Flow from intake to review") < at("After the chart."),
+                "{format:?}: {content:?}"
+            );
+            assert!(!content.contains("Flowchart 3"), "{format:?}: {content:?}");
+            assert!(
+                !content.contains("\"\"") && !content.contains("&quot;&quot;"),
+                "a description of punctuation only holds no text: {format:?}: {content:?}"
+            );
+            if matches!(format, F::Plain) {
+                let pages = result.pages.expect("pages requested");
+                assert!(pages[0].content.contains("Flow from intake to review"), "{pages:?}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn should_write_no_placeholder_for_a_picture_with_an_empty_description() {
+        let xml = FORGED_MEDIA_DOCUMENT_XML
+            .replace(r#"descr="Bomb""#, r#"descr="""#)
+            .replace(
+                "<w:body>",
+                "<w:body><w:p><w:r><w:t>Before the picture.</w:t></w:r></w:p>",
+            );
+        let data = build_test_docx_with_files(
+            &xml,
+            &[
+                ("word/_rels/document.xml.rels", FORGED_MEDIA_RELS_XML),
+                ("word/media/bomb.png", "PNGPAYLOAD"),
+            ],
+        );
+        let internal = DocxExtractor::new()
+            .extract_content(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &ExtractionConfig::default(),
+            )
+            .await
+            .unwrap();
+        let plain = crate::rendering::render_plain(&internal);
+        assert!(plain.contains("Before the picture."), "{plain:?}");
+        assert!(
+            !plain.contains("Picture 1") && !plain.contains("[Image"),
+            "an empty description is no description: {plain:?}"
         );
     }
 
@@ -5559,8 +5723,8 @@ mod tests {
         }
     }
 
-    /// `pages[].content` is built on the parser's own text path; its markers and definitions
-    /// use the numbers the renderers use, and footnote 1 and endnote 1 stay apart.
+    /// A Plain page is its part of the Plain content: its markers and definitions use the numbers
+    /// the renderers use, and footnote 1 and endnote 1 stay apart.
     #[tokio::test]
     async fn should_number_page_content_notes_like_the_rendered_output() {
         let document_xml = format!(
@@ -5592,11 +5756,44 @@ mod tests {
         let result =
             crate::extraction::derive::derive_extraction_result(result, true, crate::core::config::OutputFormat::Plain);
         let page = &result.pages.as_ref().expect("page content")[0].content;
-        assert!(page.contains("Body[^1] text[^2]."), "{page:?}");
-        assert!(page.contains("cell[^3]"), "{page:?}");
-        assert!(page.contains("1: Note B."), "{page:?}");
-        assert!(page.contains("2: THE ENDNOTE"), "{page:?}");
-        assert!(page.contains("3: Note A."), "{page:?}");
+        assert!(page.starts_with("Body text.[^1][^2]\n\ncell\n\n[^3]"), "{page:?}");
+        assert!(page.contains("[^1]: Note B."), "{page:?}");
+        assert!(page.contains("[^2]: THE ENDNOTE"), "{page:?}");
+        assert!(page.contains("[^3]: Note A."), "{page:?}");
+        assert!(result.content.contains(page.as_str()), "{:?}", result.content);
+    }
+
+    #[tokio::test]
+    async fn should_keep_footnote_definitions_before_consecutive_trailing_page_breaks() {
+        let document_xml = format!(
+            r#"<w:document xmlns:w="{NOTES_DOCUMENT_NS}"><w:body>
+<w:p><w:r><w:t>Body</w:t></w:r><w:r><w:footnoteReference w:id="2"/></w:r></w:p>
+<w:p><w:r><w:br w:type="page"/></w:r></w:p>
+<w:p><w:r><w:br w:type="page"/></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">   </w:t></w:r></w:p>
+</w:body></w:document>"#
+        );
+        let data = build_test_docx_with_parts(&document_xml, None, Some(NOTE_A_B_FOOTNOTES), None, None, None, None);
+        let result = DocxExtractor::new()
+            .extract_content(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &ExtractionConfig::default(),
+            )
+            .await
+            .unwrap();
+        let result =
+            crate::extraction::derive::derive_extraction_result(result, true, crate::core::config::OutputFormat::Plain);
+        let pages = result.pages.expect("page content");
+        assert_eq!(pages.len(), 3);
+        assert!(pages[0].content.starts_with("Body[^1]"), "{pages:?}");
+        assert!(pages[0].content.contains("[^1]: Note A."), "{pages:?}");
+        assert!(pages[1..].iter().all(|page| page.content.is_empty()), "{pages:?}");
+        let boundaries = result.metadata.pages.unwrap().boundaries.unwrap();
+        assert_eq!(boundaries.len(), 1);
+        let boundary = &boundaries[0];
+        assert_eq!(boundary.page_number, 1);
+        assert_eq!(result.content[boundary.byte_start..boundary.byte_end], pages[0].content);
     }
 
     async fn docx_page_content(document_xml: &str, footnotes_xml: &str, endnotes_xml: Option<&str>) -> String {
@@ -5630,8 +5827,8 @@ mod tests {
         );
         let page = docx_page_content(&document_xml, &footnotes_xml, Some(&endnotes_xml)).await;
         assert!(page.starts_with("Body[^1][^2]"), "{page:?}");
-        assert!(page.contains("1: THE FOOTNOTE"), "{page:?}");
-        assert!(page.contains("2: THE ENDNOTE"), "{page:?}");
+        assert!(page.contains("[^1]: THE FOOTNOTE"), "{page:?}");
+        assert!(page.contains("[^2]: THE ENDNOTE"), "{page:?}");
     }
 
     /// A reference in a table nested in a cell belongs to the outer table: it is written after it.

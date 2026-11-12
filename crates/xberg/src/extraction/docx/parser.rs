@@ -1366,13 +1366,23 @@ impl Paragraph {
     /// directly without adding extra separators. The parser must use
     /// `trim_text(false)` to preserve this whitespace.
     pub(crate) fn to_text(&self) -> String {
+        self.join_runs(false)
+    }
+
+    /// `to_text` with each equation between `$` (inline) or `$$` (display) delimiters, as the
+    /// Markdown of the runs writes it, so a Plain table cell keeps its math notation.
+    pub(crate) fn to_text_with_math_delimiters(&self) -> String {
+        self.join_runs(true)
+    }
+
+    fn join_runs(&self, delimit_math: bool) -> String {
         let mut text = String::new();
         // Only the preceding equation's own LaTeX is checked, never plain run text. ~keep
         let mut prev_math: Option<&str> = None;
         for run in &self.runs {
-            let piece = match run.math_latex {
-                Some((ref latex, _)) => latex.as_str(),
-                None => run.text.as_str(),
+            let (piece, display) = match run.math_latex {
+                Some((ref latex, display)) => (latex.as_str(), Some(display)),
+                None => (run.text.as_str(), None),
             };
             if piece.is_empty() {
                 continue;
@@ -1380,7 +1390,15 @@ impl Paragraph {
             if prev_math.is_some_and(|latex| needs_space_after_latex(latex, piece)) {
                 text.push(' ');
             }
-            text.push_str(piece);
+            match display {
+                Some(display) if delimit_math => {
+                    let delimiter = if display { "$$" } else { "$" };
+                    text.push_str(delimiter);
+                    text.push_str(piece);
+                    text.push_str(delimiter);
+                }
+                _ => text.push_str(piece),
+            }
             prev_math = run.math_latex.is_some().then_some(piece);
         }
         text

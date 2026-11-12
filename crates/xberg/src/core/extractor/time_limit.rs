@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 /// Ten seconds covers one OCR batch (a page costs 1 to 2 s, and a batch is at most the thread
 /// budget wide) plus the assembly of the finished pages, while keeping the overrun of the
 /// caller's limit short. An extraction that needs longer gets the `Timeout` error as before.
-pub(super) const PARTIAL_RESULT_GRACE: Duration = Duration::from_secs(10);
+pub(crate) const PARTIAL_RESULT_GRACE: Duration = Duration::from_secs(10);
 
 const WARNING_SOURCE: &str = "timeout";
 

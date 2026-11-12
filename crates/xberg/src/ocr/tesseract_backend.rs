@@ -1114,16 +1114,6 @@ fn warnings_from_ocr_metadata(
             ),
         );
     }
-    if kept_lines > 0 {
-        crate::core::diagnostics::push_warning(
-            &mut warnings,
-            "tesseract",
-            format!(
-                "Tesseract kept {kept_lines} OCR line(s) whose dictionary-checkable words were mostly not real words, \
-                 because they hold numbers"
-            ),
-        );
-    }
 
     warnings
 }
@@ -2215,10 +2205,10 @@ mod tests {
         );
     }
 
-    /// Lines kept for a numeral are still judged noise, so they get their own warning and are not
-    /// reported as removed.
+    /// Lines kept for a numeral are still judged noise, but they are not reported as removed and get
+    /// no warning of their own.
     #[test]
-    fn warnings_from_ocr_metadata_reports_kept_numeral_lines_apart_from_removed_ones() {
+    fn warnings_from_ocr_metadata_reports_only_the_removed_lines() {
         let metadata = std::collections::HashMap::from([
             ("dictionary_filtered_line_count".to_string(), 3.into()),
             ("dictionary_kept_numeral_line_count".to_string(), 1.into()),
@@ -2232,11 +2222,73 @@ mod tests {
                 .iter()
                 .map(|warning| warning.message.as_ref())
                 .collect::<Vec<&str>>(),
-            [
-                "Tesseract removed 2 OCR line(s) because their dictionary-checkable words were mostly not real words",
-                "Tesseract kept 1 OCR line(s) whose dictionary-checkable words were mostly not real words, because \
-                 they hold numbers",
-            ]
+            ["Tesseract removed 2 OCR line(s) because their dictionary-checkable words were mostly not real words"]
+        );
+    }
+
+    /// The file-path entry of the backend reads a page with one line kept for its numeral and one
+    /// removed. The removed line is reported and neither line count reaches the public metadata. The
+    /// test needs the bundled English data, as the byte-path integration test does.
+    #[cfg(all(
+        feature = "bundle-tessdata-eng",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    #[tokio::test]
+    async fn process_image_file_reports_the_removed_line_and_keeps_both_counts_out_of_the_metadata() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ocr_numeral_noise_2851/noise.png");
+        let document = TesseractBackend::new()
+            .process_image_file(&path, &OcrConfig::default())
+            .await
+            .expect("the file-path entry reads the page");
+
+        let warnings: Vec<&str> = document
+            .processing_warnings
+            .iter()
+            .map(|warning| warning.message.as_ref())
+            .collect();
+        assert!(document.content.contains("2024"), "{:?}", document.content);
+        assert_eq!(
+            warnings,
+            ["Tesseract removed 1 OCR line(s) because their dictionary-checkable words were mostly not real words"],
+            "for {:?}",
+            document.content
+        );
+        for key in ["dictionary_filtered_line_count", "dictionary_kept_numeral_line_count"] {
+            assert!(
+                !document.metadata.additional.contains_key(key),
+                "{key} leaked into the public metadata: {:?}",
+                document.metadata.additional
+            );
+        }
+    }
+
+    /// The bytes entry of the backend returns the page text of the OCR run as its content, so the words
+    /// that the restore wins back for a rejected table region are in that content, not only in the
+    /// document tree. The test needs the bundled English data.
+    #[cfg(all(
+        feature = "bundle-tessdata-eng",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    #[tokio::test]
+    async fn the_backend_content_holds_the_words_won_back_for_a_rejected_table_region() {
+        let png = std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/ocr_layout/stair_labels_noise.png"),
+        )
+        .expect("the stair fixture is committed");
+        let document = TesseractBackend::new()
+            .process_image(&png, &OcrConfig::default())
+            .await
+            .expect("the bytes entry reads the page");
+
+        assert!(document.tables.is_empty(), "{:?}", document.tables);
+        assert_eq!(
+            document.content.matches("Qzvrt Plmkr").count(),
+            1,
+            "{:?}",
+            document.content
         );
     }
 
@@ -2470,10 +2522,14 @@ mod tests {
             DICTIONARY_FILTERED_LINE_COUNT_METADATA_KEY.to_string(),
             serde_json::Value::Number(1.into()),
         );
+        metadata.insert(
+            DICTIONARY_KEPT_NUMERAL_LINE_COUNT_METADATA_KEY.to_string(),
+            serde_json::Value::Number(1.into()),
+        );
 
         strip_ocr_scratch_metadata_keys(&mut metadata);
 
-        assert_eq!(metadata.len(), 2);
+        assert_eq!(metadata.len(), 2, "{metadata:?}");
         assert_eq!(
             metadata.get("language"),
             Some(&serde_json::Value::String("eng".to_string()))
