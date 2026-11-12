@@ -698,4 +698,3 @@ fn letter_run(value: u32) -> Option<String> {
     let repeat = ((value - 1) / 26 + 1) as usize;
     Some(std::iter::repeat_n(letter, repeat).collect())
 }
-

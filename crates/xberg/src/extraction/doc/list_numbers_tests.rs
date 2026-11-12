@@ -8,8 +8,8 @@
 //! numbering tests share.
 
 use super::list_numbers::{
-    ListFormats, NFC_BULLET, NFC_DECIMAL, NFC_LOWER_LETTER, NFC_NONE, NFC_UPPER_LETTER,
-    NFC_UPPER_ROMAN, NFC_ZERO_PADDED, NumberingState,
+    ListFormats, NFC_BULLET, NFC_DECIMAL, NFC_LOWER_LETTER, NFC_NONE, NFC_UPPER_LETTER, NFC_UPPER_ROMAN,
+    NFC_ZERO_PADDED, NumberingState,
 };
 use super::papx::{ListBinding, list_binding_from_grpprl};
 
@@ -496,7 +496,10 @@ fn a_label_painted_beyond_its_cap_is_refused() {
     let membership = formats
         .membership_for(ListBinding { ilfo: 1, ilvl: 0 }, &mut state)
         .expect("the level still counts its paragraphs");
-    assert!(membership.ordered, "the oversized painted label does not unorder the level");
+    assert!(
+        membership.ordered,
+        "the oversized painted label does not unorder the level"
+    );
     assert!(
         membership.label.is_none(),
         "a label past the paint bound is refused, got {} chars",
