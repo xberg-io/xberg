@@ -331,8 +331,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(pdf): A sentence no longer reads out of order around an inline equation.** (GH#2925)
-  A superscript sits in a line bucket of its own, so the gap it fills tore the line in two and let a column cut run through the paragraph; the straddling-line guard now reads such a gap as part of the line.
+- **(pdf): A malformed embedded font's cmap subtable offset is rejected instead of crashing the renderer.** (GH#3019)
+  An offset past the end of the embedded font program — or a subtable whose format-4 glyph-id index arithmetic or format-12 glyph-id sum under- or overflows — is now bounds- or wrapping-checked and rejects the cmap with a parse error in both debug and release builds, so the font falls back to its declared encoding ("using fallback font encoding") instead of an overflow panic in debug or a silent garbage walk in release. Successful fonts parse byte-for-byte as before.
+- **(pdf): A column cut no longer runs through a sentence whose inline script fills a line gap.** (GH#2925)
+  A superscript sits in a line bucket of its own, so the gap it fills tore the line in two and let a column cut run through the paragraph; the straddling-line guard now reads such a gap as part of the line. Only the column test uses this bridge, so inline equations elsewhere can still read out of order (GH#3024).
 - **(pdf): Mark a page as OCR text only when its whole-document OCR read was accepted into the output.** (#2939)
   Since #2902, `InternalDocument::ocr_text_pages` decides which pages are re-rendered from their elements, and the PDF extractor marked every page of a whole-document OCR read, including one whose noisy read the recognition-noise gate discarded and whose native text the output keeps. A discarded (or otherwise empty) read no longer marks its page; accepted reads keep their marks exactly as before.
 - **(ocr): Keep the text layer's words when automatic OCR takes a whole page whose layer is partly decodable.** (GH#2952)
@@ -345,6 +347,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A run of segments with no seam that a table holds goes to the first table that covers and carries it, and only the tables that can join the next segment are read further. Each table now indexes its rows by word and its cells by run, and the page's long segments are searched in every table's rows once, so a read no longer scans the whole table. The carriers are unchanged: a test compares them with the full read on varied pages. In a debug test build, a page of 2000 words and 3 tables with different words took about 380 ms on main and 160 ms after, the same as before the join rule.
 - **(pdf): Stop a page with a knockout group from rendering the whole page twice when its work cannot fit the limit.** (#2955)
   Each paint in a knockout group plans one page-sized surface and charges at least one more while it runs, and text that paints a side charges a second for its coverage. Invisible text (Tr 3 and 7), Type 3 text and text in an optional-content layer are left out of that count. A page whose planned work plus that floor already passes the render work limit now renders without knockout from the start, instead of running the knockout pass until the limit stops it and then painting everything again. Output and limits are unchanged. Pages and forms also share one knockout check.
+- **(pdf): Keep a knockout page native when its empty or hidden path paints charge no work.** (#3002)
+  The in-pass floor counted every path paint operator, but the pass charges a path paint only when a path was built since the last paint or `n` and it is outside an optional-content layer. The floor now counts only those paints, so a page whose plan and real floor fit renders with knockout instead of degrading to ordinary compositing. Output and limits are unchanged.
 - **(ocr): Keep Khmer number recovery available after bounded source declines.** (#2905)
   Completed declines charge the work already done, leaving room to verify supported pages later in the PDF.
   Cancellation and failures whose work cannot be measured still retain their reservation.
