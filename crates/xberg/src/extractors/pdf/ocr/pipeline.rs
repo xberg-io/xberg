@@ -2684,13 +2684,28 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             .filter(|(page_idx, _)| !abandoned_pages.contains(*page_idx))
             .filter(|_| !probing_hidden_layer);
         for (page_idx, png) in retry_pages {
-            // A retry is another OCR run on the page: with the stop requested it would only outlast
-            // the grace, so the page keeps what it read. ~keep
-            if config.cancel_token.as_ref().is_some_and(|token| token.stop_requested()) {
-                break;
+            let failure = failed_pages.remove(page_idx);
+            if let Some(token) = config.cancel_token.as_ref().filter(|token| token.stop_requested()) {
+                if let Some(error) = failure {
+                    let native_recovered = mixed_native_page_has_content(native_text, boundaries, *page_idx);
+                    push_mixed_ocr_page_failure_warning(
+                        &mut accumulated_warnings,
+                        &mut page_failures,
+                        *page_idx,
+                        &error,
+                        native_recovered,
+                    );
+                    mark_pages_unread(
+                        Some(token),
+                        std::iter::once(*page_idx),
+                        &mut page_failures,
+                        &mut failed_page_errors,
+                        |_| native_recovered,
+                    );
+                }
+                continue;
             }
             let page_number = (page_idx + 1) as u32;
-            let failure = failed_pages.remove(page_idx);
             let page_text = ocr_results.get(&page_number).map_or("", String::as_str);
             let trigger = match png {
                 Some(png) => page_needs_xobject_fallback(page_text, png, security_limits),

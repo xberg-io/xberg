@@ -14,6 +14,9 @@ pub(super) mod tests {
     use crate::core::config::OcrQualityThresholds;
     use std::borrow::Cow;
 
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    mod retry_timeout_stop_tests;
+
     #[cfg(feature = "ocr")]
     fn t() -> OcrQualityThresholds {
         OcrQualityThresholds::default()
