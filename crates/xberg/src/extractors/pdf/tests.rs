@@ -1190,6 +1190,120 @@ fn mixed_plain_accepts_a_heading_marker_whether_or_not_the_element_spells_it() {
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[test]
+fn mixed_plain_keeps_section_labels_the_transcript_lacks_on_a_three_table_page() {
+    use crate::core::config::OutputFormat;
+    use crate::types::{PageBoundary, Table};
+
+    let tables: [Vec<Vec<String>>; 3] = [
+        vec![vec!["North".into(), "10".into()], vec!["South".into(), "20".into()]],
+        vec![vec!["Staff".into(), "5".into()], vec!["Tools".into(), "3".into()]],
+        vec![vec!["Fund".into(), "Plan".into()], vec!["Parks".into(), "4".into()]],
+    ];
+    let markdown = |cells: &Vec<Vec<String>>| {
+        crate::rendering::common::render_table_markdown(cells)
+            .trim_end()
+            .to_owned()
+    };
+    // The transcript dropped the two section labels with the region of its first two tables.
+    let source = format!(
+        "Budget 2030\n\n{}\n\n{}\n\nNet change 7\n\n{}",
+        markdown(&tables[0]),
+        markdown(&tables[1]),
+        markdown(&tables[2])
+    );
+    // Assembly kept the paragraph that the first two tables carry, so it repeats their cells.
+    let render = |paragraph: &str| {
+        let mut document = InternalDocument::new("pdf");
+        document.push_element(InternalElement::text(ElementKind::Paragraph, paragraph, 0).with_page(1));
+        for cells in &tables {
+            let table_index = document.push_table(Table {
+                cells: cells.clone(),
+                page_number: 1,
+                ..Default::default()
+            });
+            document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(1));
+        }
+        let mut text = source.clone();
+        let bounds = [PageBoundary {
+            page_number: 1,
+            byte_start: 0,
+            byte_end: text.len(),
+        }];
+        let mut replacements = ahash::AHashMap::from([(1, text.clone())]);
+        ocr::render_mixed_plain_pages(
+            ExtractionMethod::Mixed,
+            &mut text,
+            &bounds,
+            &mut replacements,
+            &ahash::AHashMap::from([(1, document)]),
+            &OutputFormat::Plain,
+        );
+        assert_eq!(replacements[&1], text);
+        text
+    };
+
+    // The paragraph already holds the cells of the first two tables, so their typed copies go.
+    let last = "Fund Plan\nParks 4";
+    let labelled = "Budget 2030\nIncomeGroups\nNorth 10\nSouth 20\nCostGroups\nStaff 5\nTools 3\nNet change 7";
+    assert_eq!(render(labelled), format!("{labelled}\n\n{last}"));
+    // A recovered label does not admit an extra copy of accepted prose.
+    let repeated_prose = labelled.replace("IncomeGroups", "Budget 2030 IncomeGroups");
+    assert_eq!(render(&repeated_prose), format!("{labelled}\n\n{last}"));
+    // A label that is part of a transcript word, such as "Park" beside "Parks", is still a word the transcript lacks.
+    let partial = "Budget 2030\nPark\nNorth 10\nSouth 20\nStaff 5\nTools 3\nNet change 7";
+    assert_eq!(render(partial), format!("{partial}\n\n{last}"));
+    // A label before the first transcript paragraph is kept as well.
+    let leading = "Summary\nBudget 2030\nNorth 10\nSouth 20\nStaff 5\nTools 3\nNet change 7";
+    assert_eq!(render(leading), format!("{leading}\n\n{last}"));
+    // A paragraph that only repeats the cells loses nothing when declined, so the page keeps its transcript.
+    assert_eq!(
+        render("Budget 2030\nNorth 10\nSouth 20\nStaff 5\nTools 3\nNet change 7"),
+        source
+    );
+    // A label does not excuse transcript words out of order: the line "Net change 7" comes before the first table.
+    assert_eq!(render("IncomeGroups\nNet change 7\nBudget 2030"), source);
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn mixed_plain_keeps_a_label_before_emphasis_the_transcript_lacks() {
+    use crate::core::config::OutputFormat;
+    use crate::types::{PageBoundary, Table};
+
+    let cells = vec![vec!["North".to_owned(), "10".to_owned()]];
+    let source = format!(
+        "**Budget** 2030\n\n{}",
+        crate::rendering::common::render_table_markdown(&cells).trim_end()
+    );
+    let mut document = InternalDocument::new("pdf");
+    document.push_element(InternalElement::text(ElementKind::Paragraph, "Summary\nBudget 2030", 0).with_page(1));
+    let table_index = document.push_table(Table {
+        cells,
+        page_number: 1,
+        ..Default::default()
+    });
+    document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(1));
+    let mut text = source.clone();
+    let bounds = [PageBoundary {
+        page_number: 1,
+        byte_start: 0,
+        byte_end: text.len(),
+    }];
+    let mut replacements = ahash::AHashMap::from([(1, text.clone())]);
+    ocr::render_mixed_plain_pages(
+        ExtractionMethod::Mixed,
+        &mut text,
+        &bounds,
+        &mut replacements,
+        &ahash::AHashMap::from([(1, document)]),
+        &OutputFormat::Plain,
+    );
+    // The label comes before the emphasis group starts, so the group itself still matches whole.
+    assert_eq!(text, "Summary\nBudget 2030\n\nNorth 10");
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
 fn mixed_plain_admits_shared_writer_cell_with_backslash_and_pipe() {
     use crate::core::config::OutputFormat;
     use crate::types::{PageBoundary, Table};

@@ -1,9 +1,9 @@
 use super::*;
 
 fn group(source: &str, visible: &str, is_marker: bool, plain: &str) -> (bool, Vec<String>) {
-    let mut retained = plain.split_whitespace();
+    let mut retained = PlainWords::new(plain, source);
     let accepted = retains_inline_group(source, visible, is_marker, &mut retained);
-    (accepted, retained.map(str::to_owned).collect())
+    (accepted, retained.words.map(str::to_owned).collect())
 }
 
 #[test]
@@ -45,6 +45,15 @@ fn a_failed_group_stops_reading_at_the_word_that_killed_both_spellings() {
 }
 
 #[test]
+fn an_extra_word_before_a_group_starts_is_skipped_and_the_group_interior_stays_strict() {
+    assert_eq!(
+        group("**Budget**", "Budget", false, "Summary Budget 2030"),
+        (true, vec!["2030".into()])
+    );
+    assert!(!group("`a b`", "a b", false, "x a y b").0);
+}
+
+#[test]
 fn a_group_that_the_plain_words_end_inside_is_not_accepted() {
     assert!(!group("`a b`", "a b", false, "`a").0);
 }
@@ -57,4 +66,25 @@ fn a_block_marker_that_projects_to_nothing_is_consumed_only_when_the_element_spe
         group("#", "", true, "## Status"),
         (true, vec!["##".into(), "Status".into()])
     );
+}
+
+#[test]
+fn mixed_plain_drops_a_repeat_of_projected_prose() {
+    let accepted = "Caf&#233; Café";
+    let plain = "Café Café Café Summary";
+    let document = crate::types::internal::InternalDocument::new("pdf");
+    let repeated = check_accepted_ocr_tokens(accepted, plain, &document).unwrap();
+
+    let filtered = without_repeated_words(plain, &repeated);
+    assert_eq!(filtered, "Café Café Summary");
+    assert!(
+        check_accepted_ocr_tokens(accepted, &filtered, &document)
+            .unwrap()
+            .is_empty()
+    );
+
+    let accepted = "Caf&#233;";
+    let plain = "Café Summary Café";
+    let repeated = check_accepted_ocr_tokens(accepted, plain, &document).unwrap();
+    assert_eq!(without_repeated_words(plain, &repeated), "Café Summary");
 }

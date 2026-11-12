@@ -281,6 +281,29 @@ run_office_page_cases() {
   done
 }
 
+run_mixed_plain_cases() {
+  local before="$passed"
+  local test_name
+  for test_name in \
+    mixed_plain_keeps_section_labels_the_transcript_lacks_on_a_three_table_page \
+    mixed_plain_keeps_a_label_before_emphasis_the_transcript_lacks \
+    mixed_plain_declines_elements_that_add_words_to_the_accepted_table \
+    mixed_plain_admits_rendered_inline_prose_beside_a_table; do
+    run_exact "extractors::pdf::tests::$test_name" --lib
+  done
+  for test_name in \
+    detected_scan_without_native_elements_renders_the_accepted_table \
+    selected_scan_renders_prose_before_and_after_the_ocr_table \
+    selected_scan_keeps_section_labels_that_table_assembly_drops; do
+    run_exact "mixed_tables::$test_name" --test pdf_all_pages_native_preservation_2768
+  done
+  run_exact 'extractors::pdf::ocr::pipeline::inline_group_tests::mixed_plain_drops_a_repeat_of_projected_prose' --lib
+  if [ "$((passed - before))" -ne 8 ]; then
+    printf 'Expected 8 executed mixed Plain tests, observed %s\n' "$((passed - before))" >&2
+    exit 1
+  fi
+}
+
 run_api_cases() {
   run_exact 'api::handlers::tests::test_extract_async_then_poll_job_id' --lib
   run_exact 'api::jobs::tests::test_cancel_running_job_fires_token' --lib
@@ -298,6 +321,8 @@ pdf-ocr)
   run_ink_probe_cases
   run_discarded_recovery_cases
   run_numeral_noise_cases
+  expected=$((expected + 8))
+  run_mixed_plain_cases
   ;;
 office-pages)
   expected=35

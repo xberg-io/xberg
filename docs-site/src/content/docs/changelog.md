@@ -1722,6 +1722,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Forced whole-document OCR with the registered built-in Tesseract backend, including the synthesized classical pipeline, renders native page content at a preprocessing target above 150 DPI within the existing budget. Any preprocessing block requests its target, including the default 300 DPI in a denoise-only block. This recovers a reproduced small-text word boundary; explicit image settings and original full-page scan density retain precedence. Without a preprocessing block the default remains 150 DPI. Selected pages, prepared rasters, custom backends, explicit pipelines and VLM fallback keep their source-render policy. The general 150-DPI glyph-shift issue remains open.
 - **(djot): Headings, titles and slide titles keep text such as `1. Introduction` unescaped.** (GH#2975)
   A heading is not at the start of a block, so Djot output no longer writes a backslash before the dot of a numbered or lettered heading, or before a leading dash. A leading brace still gets a backslash, so `{.x}` stays visible text.
+- **(pdf): Keep words on a scanned page whose Plain read repeats table text.** (GH#3046)
+  Since #2997, a mixed OCR page in Plain output kept its OCR transcript when its elements added words to it. The transcript can lack a word that the elements carry, such as a section label inside a table's area, so the page lost it. When the elements keep every transcript word and table cell in order, Plain output also keeps new words from the elements and drops surplus copies of transcript words. A candidate that only adds repeats leaves the transcript in place.
 
 ## [1.3.11] - 2026-10-16
 
