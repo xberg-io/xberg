@@ -5,7 +5,8 @@ use crate::core::config::ExtractionConfig;
 /// Resolution of the renders that look for the layer's ink.
 const PICTURE_LAYER_DPI: u32 = 150;
 
-/// Grey levels by which the layer's glyphs must change a pixel of the page render to have inked it.
+/// The layer's glyphs ink a pixel of the page render when they change it by more than this many
+/// grey levels.
 const MIN_GLYPH_CONTRAST: u8 = 40;
 
 /// Luminance under which a pixel of the render without pictures is ink.
@@ -33,6 +34,9 @@ pub(super) fn layer_is_visible_over_picture(
         return false;
     };
     let glyphs = layer.chars().filter(|c| !c.is_whitespace()).count() as f64 * share;
+    if glyphs <= 0.0 {
+        return false;
+    }
     let budget = super::ocr::preview_byte_limit(config);
     let cancelled = || config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled());
     let Ok(Some(rasters)) = xberg_native_pdf::rendering::render_text_ink_rasters(
@@ -50,7 +54,7 @@ pub(super) fn layer_is_visible_over_picture(
         .zip(&rasters.without_glyphs)
         .filter(|(drawn, without)| drawn.abs_diff(**without) > MIN_GLYPH_CONTRAST)
         .count();
-    if glyphs <= 0.0 || (glyph_ink as f64) < MIN_INK_PER_GLYPH * glyphs || cancelled() {
+    if (glyph_ink as f64) < MIN_INK_PER_GLYPH * glyphs || cancelled() {
         return false;
     }
     let Ok((_, _, without_pictures)) =
