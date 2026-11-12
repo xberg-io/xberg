@@ -2093,7 +2093,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 let retained_bytes = retained_ocr_source_bytes(data, &upright_data, 0);
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 let probe_reads = pages.probe_reads.clone();
-                #[cfg(feature = "ocr")]
+                #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
                 let observe_layer_overlap = correction_degrees == 0
                     && !mixed_route_layout_active
                     && page_layers
@@ -2132,8 +2132,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         }
                     };
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                    let mut scale_only = false;
-                    #[cfg(feature = "ocr")]
+                    let scale_only = std::sync::atomic::AtomicBool::new(false);
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
                     let result = super::read_reuse::read(
                         probe_reads.as_ref(),
                         super::read_reuse::ReadIdentity {
@@ -2157,12 +2157,12 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                 },
                                 cancel_token.as_ref(),
                             );
-                            let scale_only = &mut scale_only;
+                            let scale_only = &scale_only;
                             async move {
                                 if observe_layer_overlap {
                                     let (result, observed) =
                                         crate::ocr::preprocessing::geometry_evidence::observe(read).await;
-                                    *scale_only = observed;
+                                    scale_only.store(observed, std::sync::atomic::Ordering::Relaxed);
                                     result
                                 } else {
                                     read.await
@@ -2171,7 +2171,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         },
                     )
                     .await;
-                    #[cfg(not(feature = "ocr"))]
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    let scale_only = scale_only.into_inner();
+                    #[cfg(not(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))))]
                     let scale_only = false;
                     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
                     let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
@@ -2198,8 +2200,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 join_set.spawn(crate::core::extractor::cacheability::inherit(task));
             }
             while let Some(join_result) = join_set.join_next().await {
-                let (page_idx, correction_degrees, upright_width, upright_height, result, _scale_only) = join_result
-                    .map_err(|e| crate::XbergError::Plugin {
+                let (page_idx, correction_degrees, upright_width, upright_height, result, observed_scale_only) =
+                    join_result.map_err(|e| crate::XbergError::Plugin {
                         message: format!("OCR task panicked: {}", e),
                         plugin_name: "ocr".to_string(),
                     })?;
@@ -2283,8 +2285,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         native_ink_owned_pages.insert(page_number);
                     }
                 }
-                #[cfg(feature = "ocr")]
-                if _scale_only
+                #[cfg(not(feature = "ocr"))]
+                let _ = observed_scale_only;
+                #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                if observed_scale_only
                     && !alternative_raster_pages.contains(&((page_idx + 1) as u32))
                     && let Some(layer) = page_layers
                         .as_ref()
@@ -3260,7 +3264,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 && !caption_rewrites.contains_key(page_number)
                 && let Some(matched) = matched_layer_occurrences.get(page_number)
             {
-                matched.trim_prepend(first, text, page_doc, *page_number);
+                matched.apply_prepend(first, text, page_doc, *page_number);
+                continue;
             }
             if !first.lines.is_empty() {
                 super::document::put_layer_first_in_document(page_doc, None, first);
