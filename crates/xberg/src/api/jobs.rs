@@ -1,34 +1,38 @@
 //! In-memory job store for async extraction polling.
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::collections::HashMap;
 use std::time::Duration;
 
-use moka::ops::compute::{CompResult, Op};
 use moka::sync::Cache;
+use parking_lot::Mutex;
 
 use crate::api::types::{JobState, JobStatus};
 use crate::cancellation::CancellationToken;
 
-/// Default time-to-live for completed/failed jobs (5 minutes).
+/// Time-to-live for completed/failed/cancelled jobs (5 minutes).
 const JOB_TTL: Duration = Duration::from_secs(300);
 
-/// Maximum number of concurrent jobs held in the cache.
-const MAX_CAPACITY: u64 = 10_000;
+/// Maximum number of finished jobs held in the cache.
+const MAX_FINISHED_JOBS: u64 = 10_000;
 
 /// Maximum number of jobs in Pending or Running state at any one time.
 pub const MAX_ACTIVE_JOBS: usize = 100;
 
+/// A pending or running job and the token that cancels its extraction.
+struct ActiveJob {
+    status: JobStatus,
+    token: CancellationToken,
+}
+
 /// Thread-safe in-memory store for async extraction jobs.
 ///
-/// Uses [`moka::sync::Cache`] with built-in TTL eviction — no background
-/// eviction task required. Entries are evicted automatically after 5 minutes.
-/// Server restarts clear all active jobs.
-#[derive(Clone)]
+/// Pending and running jobs live in `active`, which never expires or evicts them.
+/// A job moves to `finished` once, when it completes, fails or is cancelled; that
+/// [`moka::sync::Cache`] drops it after 5 minutes or under capacity pressure.
+/// Server restarts clear all jobs.
 pub struct JobStore {
-    jobs: Cache<String, JobStatus>,
-    tokens: Cache<String, CancellationToken>,
-    active: Arc<AtomicUsize>,
+    active: Mutex<HashMap<String, ActiveJob>>,
+    finished: Cache<String, JobStatus>,
 }
 
 impl Default for JobStore {
@@ -40,49 +44,48 @@ impl Default for JobStore {
 impl JobStore {
     /// Create a new empty job store with default TTL and capacity.
     pub fn new() -> Self {
-        let jobs = Cache::builder()
-            .max_capacity(MAX_CAPACITY)
-            .time_to_live(JOB_TTL)
-            .build();
-        let tokens = Cache::builder()
-            .max_capacity(MAX_CAPACITY)
-            .time_to_live(JOB_TTL)
-            .build();
+        Self::with_limits(JOB_TTL, MAX_FINISHED_JOBS)
+    }
+
+    /// Create a store that keeps at most `finished_capacity` finished jobs for `ttl`.
+    fn with_limits(ttl: Duration, finished_capacity: u64) -> Self {
         Self {
-            jobs,
-            tokens,
-            active: Arc::new(AtomicUsize::new(0)),
+            active: Mutex::new(HashMap::new()),
+            finished: Cache::builder()
+                .max_capacity(finished_capacity)
+                .time_to_live(ttl)
+                .build(),
         }
     }
 
     /// Return the number of jobs currently in Pending or Running state.
     pub fn active_count(&self) -> usize {
-        self.active.load(Ordering::Relaxed)
+        self.active.lock().len()
     }
 
-    /// Create a new job in the store and return its ID.
-    ///
-    /// This handles ID generation and initial state registration in one atomic step.
-    pub fn create_job(&self) -> String {
+    /// Create a new job in the store and return its ID, or `None` when
+    /// [`MAX_ACTIVE_JOBS`] jobs are already pending or running.
+    pub fn create_job(&self) -> Option<String> {
         let job_id = generate_job_id();
-        let now = now_rfc3339();
-        self.active.fetch_add(1, Ordering::Relaxed);
-        self.create(job_id.clone(), now);
-        self.tokens.insert(job_id.clone(), CancellationToken::default());
-        job_id
+        self.create(job_id.clone(), now_rfc3339())?;
+        Some(job_id)
     }
 
-    /// Return the cancellation token associated with a job, if it still exists.
+    /// Return the cancellation token of a pending or running job.
     ///
     /// Pass the returned token's clone to the extraction call (via
     /// `ExtractionConfig::cancel_token`) so it observes cancellation at its
     /// next checkpoint.
     pub fn cancellation_token(&self, job_id: &str) -> Option<CancellationToken> {
-        self.tokens.get(job_id)
+        self.active.lock().get(job_id).map(|job| job.token.clone())
     }
 
-    /// Register a new job in `Pending` state. Returns its initial `JobStatus`.
-    pub fn create(&self, job_id: String, timestamp: String) -> JobStatus {
+    /// Register a new job in `Pending` state and return its initial `JobStatus`.
+    ///
+    /// The capacity check and the insert happen under one lock, so concurrent
+    /// submissions cannot take the store above [`MAX_ACTIVE_JOBS`]. Returns `None`
+    /// when the store is full.
+    pub fn create(&self, job_id: String, timestamp: String) -> Option<JobStatus> {
         let status = JobStatus {
             job_id: job_id.clone(),
             state: JobState::Pending,
@@ -91,70 +94,93 @@ impl JobStore {
             result: None,
             error: None,
         };
-        self.jobs.insert(job_id, status.clone());
-        status
+        let job = ActiveJob {
+            status: status.clone(),
+            token: CancellationToken::default(),
+        };
+        let mut active = self.active.lock();
+        if active.len() >= MAX_ACTIVE_JOBS {
+            return None;
+        }
+        active.insert(job_id, job);
+        Some(status)
     }
 
     /// Retrieve the current status of a job by ID.
     pub fn get(&self, job_id: &str) -> Option<JobStatus> {
-        self.jobs.get(job_id)
+        // `active` first: a job leaves `active` only after it is in `finished`, so this
+        // order never misses a job that finishes between the two lookups. ~keep
+        if let Some(job) = self.active.lock().get(job_id) {
+            return Some(job.status.clone());
+        }
+        self.finished.get(job_id)
     }
 
-    /// Transition a job to the `Running` state.
+    /// Transition a live job to the `Running` state.
+    ///
+    /// A finished job is no longer in `active`, so this is a no-op for it and a job
+    /// cancelled before its task started stays cancelled.
     pub fn set_running(&self, job_id: &str, timestamp: String) {
-        if let Some(mut status) = self.jobs.get(job_id) {
-            status.state = JobState::Running;
-            status.updated_at = timestamp;
-            self.jobs.insert(job_id.to_string(), status);
+        if let Some(job) = self.active.lock().get_mut(job_id) {
+            job.status.state = JobState::Running;
+            job.status.updated_at = timestamp;
         }
     }
 
-    /// Mark a job as `Completed` and store its result.
+    /// Mark a pending or running job as `Completed` and store its result.
     ///
-    /// A no-op if the job was already cancelled, so a late-arriving result
-    /// from a cancelled extraction cannot clobber the `Cancelled` state. The
-    /// read-modify-write against the job entry and the `active` decrement are
-    /// atomic with respect to concurrent `cancel`/`fail` calls on the same
-    /// job ID (see [`JobStore::cancel`] for why this matters).
+    /// A no-op for a job that already finished, so a late-arriving result from a
+    /// cancelled extraction cannot clobber the `Cancelled` state.
     pub fn complete(&self, job_id: &str, result: serde_json::Value, timestamp: String) {
-        let outcome = self.jobs.entry_by_ref(job_id).and_compute_with(|entry| match entry {
-            Some(entry) if entry.value().state == JobState::Cancelled => Op::Nop,
-            Some(entry) => {
-                let mut status = entry.into_value();
-                status.state = JobState::Completed;
-                status.result = Some(result);
-                status.updated_at = timestamp;
-                Op::Put(status)
-            }
-            None => Op::Nop,
+        self.finish(job_id, |status| {
+            status.state = JobState::Completed;
+            status.result = Some(result);
+            status.updated_at = timestamp;
         });
-
-        if matches!(outcome, CompResult::ReplacedWith(_)) {
-            self.active.fetch_sub(1, Ordering::Relaxed);
-        }
     }
 
-    /// Mark a job as `Failed` and store the error message.
+    /// Mark a pending or running job as `Failed` and store the error message.
     ///
-    /// A no-op if the job was already cancelled, so a late-arriving error
-    /// from a cancelled extraction cannot clobber the `Cancelled` state. See
-    /// [`JobStore::complete`] for the atomicity guarantee.
+    /// A no-op for a job that already finished, like [`JobStore::complete`].
     pub fn fail(&self, job_id: &str, error: String, timestamp: String) {
-        let outcome = self.jobs.entry_by_ref(job_id).and_compute_with(|entry| match entry {
-            Some(entry) if entry.value().state == JobState::Cancelled => Op::Nop,
-            Some(entry) => {
-                let mut status = entry.into_value();
-                status.state = JobState::Failed;
-                status.error = Some(error);
-                status.updated_at = timestamp;
-                Op::Put(status)
-            }
-            None => Op::Nop,
+        self.finish(job_id, |status| {
+            status.state = JobState::Failed;
+            status.error = Some(error);
+            status.updated_at = timestamp;
         });
+    }
 
-        if matches!(outcome, CompResult::ReplacedWith(_)) {
-            self.active.fetch_sub(1, Ordering::Relaxed);
+    /// Mark a pending or running job as `Failed` because its task ended without a result.
+    ///
+    /// Fires the job's [`CancellationToken`] first, then publishes `Failed`, under one
+    /// lock: blocking extraction that outlives the task observes the cancellation, and
+    /// no reader sees `Failed` or a free slot while the token is still unsignalled.
+    /// A no-op for a job that already finished, like [`JobStore::fail`].
+    pub fn abort(&self, job_id: &str, error: String, timestamp: String) {
+        self.finish_with(job_id, true, |status| {
+            status.state = JobState::Failed;
+            status.error = Some(error);
+            status.updated_at = timestamp;
+        });
+    }
+
+    /// Move a live job to `finished`. A no-op once the job is no longer active.
+    fn finish(&self, job_id: &str, apply: impl FnOnce(&mut JobStatus)) {
+        self.finish_with(job_id, false, apply);
+    }
+
+    /// Move a live job to `finished`, firing its token first when `cancel_first` is set.
+    fn finish_with(&self, job_id: &str, cancel_first: bool, apply: impl FnOnce(&mut JobStatus)) {
+        let mut active = self.active.lock();
+        let Some(ActiveJob { mut status, token }) = active.remove(job_id) else {
+            return;
+        };
+        if cancel_first {
+            token.cancel();
         }
+        apply(&mut status);
+        // Inserted while `active` is still locked; see `get`. ~keep
+        self.finished.insert(job_id.to_string(), status);
     }
 
     /// Cancel a pending or running job.
@@ -162,44 +188,19 @@ impl JobStore {
     /// Fires the job's [`CancellationToken`] so a running extraction observes
     /// it at its next checkpoint. Jobs that already reached a terminal state
     /// (`Completed`, `Failed`, or `Cancelled`) cannot be cancelled again.
-    ///
-    /// The state transition and the `active` decrement happen inside a single
-    /// [`moka::Cache::entry_by_ref`] `and_compute_with` call, which moka
-    /// serializes per key. This closes a race with the job's own background
-    /// task calling [`JobStore::complete`]/[`JobStore::fail`] concurrently:
-    /// without it, both sides could read the pre-transition state, both would
-    /// decrement `active`, and the second decrement would underflow the
-    /// counter (permanently blocking new submissions once `active_count()`
-    /// wraps past `MAX_ACTIVE_JOBS`).
     pub fn cancel(&self, job_id: &str, timestamp: String) -> CancelOutcome {
-        let outcome = self.jobs.entry_by_ref(job_id).and_compute_with(|entry| match entry {
-            Some(entry) => {
-                let mut status = entry.into_value();
-                match status.state {
-                    JobState::Pending | JobState::Running => {
-                        status.state = JobState::Cancelled;
-                        status.updated_at = timestamp;
-                        Op::Put(status)
-                    }
-                    JobState::Completed | JobState::Failed | JobState::Cancelled => Op::Nop,
-                }
-            }
-            None => Op::Nop,
-        });
-
-        match outcome {
-            CompResult::StillNone(_) => CancelOutcome::NotFound,
-            CompResult::Unchanged(entry) => CancelOutcome::Conflict(entry.into_value()),
-            CompResult::ReplacedWith(entry) => {
-                self.active.fetch_sub(1, Ordering::Relaxed);
-                if let Some(token) = self.tokens.get(job_id) {
-                    token.cancel();
-                }
-                CancelOutcome::Cancelled(entry.into_value())
-            }
-            CompResult::Inserted(_) | CompResult::Removed(_) => {
-                unreachable!("cancel() only produces Nop/Put on an existing entry, never Remove or a fresh Insert")
-            }
+        let mut active = self.active.lock();
+        if let Some(ActiveJob { mut status, token }) = active.remove(job_id) {
+            token.cancel();
+            status.state = JobState::Cancelled;
+            status.updated_at = timestamp;
+            self.finished.insert(job_id.to_string(), status.clone());
+            return CancelOutcome::Cancelled(status);
+        }
+        drop(active);
+        match self.finished.get(job_id) {
+            Some(status) => CancelOutcome::Conflict(status),
+            None => CancelOutcome::NotFound,
         }
     }
 }
@@ -235,7 +236,7 @@ mod tests {
     fn test_create_job_is_pending() {
         let store = JobStore::new();
         let ts = "2026-05-01T12:00:00Z".to_string();
-        let status = store.create("job-1".to_string(), ts.clone());
+        let status = store.create("job-1".to_string(), ts.clone()).expect("slot available");
         assert_eq!(status.state, JobState::Pending);
         assert_eq!(status.job_id, "job-1");
         assert_eq!(status.created_at, ts);
@@ -244,7 +245,9 @@ mod tests {
     #[test]
     fn test_get_existing_job() {
         let store = JobStore::new();
-        store.create("job-2".to_string(), "2026-05-01T12:00:00Z".to_string());
+        store
+            .create("job-2".to_string(), "2026-05-01T12:00:00Z".to_string())
+            .expect("slot available");
         let got = store.get("job-2");
         assert!(got.is_some());
         assert_eq!(got.unwrap().job_id, "job-2");
@@ -259,7 +262,9 @@ mod tests {
     #[test]
     fn test_set_running_transitions_state() {
         let store = JobStore::new();
-        store.create("job-3".to_string(), "2026-05-01T12:00:00Z".to_string());
+        store
+            .create("job-3".to_string(), "2026-05-01T12:00:00Z".to_string())
+            .expect("slot available");
         store.set_running("job-3", "2026-05-01T12:00:01Z".to_string());
         let status = store.get("job-3").unwrap();
         assert_eq!(status.state, JobState::Running);
@@ -268,7 +273,9 @@ mod tests {
     #[test]
     fn test_complete_stores_result() {
         let store = JobStore::new();
-        store.create("job-4".to_string(), "2026-05-01T12:00:00Z".to_string());
+        store
+            .create("job-4".to_string(), "2026-05-01T12:00:00Z".to_string())
+            .expect("slot available");
         store.complete(
             "job-4",
             serde_json::json!({"content": "hello"}),
@@ -282,7 +289,9 @@ mod tests {
     #[test]
     fn test_fail_stores_error() {
         let store = JobStore::new();
-        store.create("job-5".to_string(), "2026-05-01T12:00:00Z".to_string());
+        store
+            .create("job-5".to_string(), "2026-05-01T12:00:00Z".to_string())
+            .expect("slot available");
         store.fail(
             "job-5",
             "OCR unavailable".to_string(),
@@ -296,7 +305,7 @@ mod tests {
     #[test]
     fn test_cancel_pending_job() {
         let store = JobStore::new();
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         assert_eq!(store.active_count(), 1);
 
         match store.cancel(&job_id, "2026-05-01T12:00:01Z".to_string()) {
@@ -310,7 +319,7 @@ mod tests {
     #[test]
     fn test_cancel_running_job_fires_token() {
         let store = JobStore::new();
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         store.set_running(&job_id, "2026-05-01T12:00:01Z".to_string());
         let token = store.cancellation_token(&job_id).expect("token registered on create");
         assert!(!token.is_cancelled());
@@ -325,7 +334,7 @@ mod tests {
     #[test]
     fn test_cancel_completed_job_is_conflict() {
         let store = JobStore::new();
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         store.complete(
             &job_id,
             serde_json::json!({"content": "done"}),
@@ -346,7 +355,7 @@ mod tests {
     #[test]
     fn test_cancel_failed_job_is_conflict() {
         let store = JobStore::new();
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         store.fail(&job_id, "boom".to_string(), "2026-05-01T12:00:01Z".to_string());
 
         match store.cancel(&job_id, "2026-05-01T12:00:02Z".to_string()) {
@@ -358,7 +367,7 @@ mod tests {
     #[test]
     fn test_cancel_already_cancelled_job_is_conflict() {
         let store = JobStore::new();
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         store.cancel(&job_id, "2026-05-01T12:00:01Z".to_string());
 
         match store.cancel(&job_id, "2026-05-01T12:00:02Z".to_string()) {
@@ -379,7 +388,7 @@ mod tests {
     #[test]
     fn test_complete_after_cancel_is_noop() {
         let store = JobStore::new();
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         store.cancel(&job_id, "2026-05-01T12:00:01Z".to_string());
 
         store.complete(
@@ -398,9 +407,80 @@ mod tests {
     }
 
     #[test]
+    fn test_abort_cancels_token_and_fails_job() {
+        let store = JobStore::new();
+        let job_id = store.create_job().expect("slot available");
+        let token = store.cancellation_token(&job_id).expect("token registered on create");
+
+        store.abort(&job_id, "task ended".to_string(), "2026-05-01T12:00:01Z".to_string());
+
+        assert!(token.is_cancelled(), "an aborted job must fire its token");
+        let status = store.get(&job_id).unwrap();
+        assert_eq!(status.state, JobState::Failed);
+        assert_eq!(status.error.as_deref(), Some("task ended"));
+        assert_eq!(store.active_count(), 0);
+    }
+
+    /// An observer that reads the finished cache without taking the active-jobs lock sees
+    /// `Failed` the moment it is published; the token must already be cancelled by then.
+    #[test]
+    fn test_abort_cancels_token_before_failed_is_published() {
+        use std::sync::Arc;
+        use std::sync::mpsc;
+
+        const OBSERVER_TIMEOUT: Duration = Duration::from_secs(5);
+
+        for run in 0..300 {
+            let store = Arc::new(JobStore::new());
+            let job_id = store.create_job().expect("slot available");
+            let token = store.cancellation_token(&job_id).expect("token registered on create");
+            let (ready_tx, ready_rx) = mpsc::channel();
+
+            let observer = {
+                let store = Arc::clone(&store);
+                let job_id = job_id.clone();
+                let token = token.clone();
+                std::thread::spawn(move || {
+                    let deadline = std::time::Instant::now() + OBSERVER_TIMEOUT;
+                    ready_tx.send(()).expect("test still waiting for observer readiness");
+                    while std::time::Instant::now() < deadline {
+                        if store.finished.get(&job_id).is_some() {
+                            return token.is_cancelled();
+                        }
+                        std::thread::yield_now();
+                    }
+                    panic!("run {run}: abort did not publish job {job_id} before the deadline");
+                })
+            };
+            ready_rx
+                .recv_timeout(OBSERVER_TIMEOUT)
+                .unwrap_or_else(|err| panic!("run {run}: observer readiness failed for job {job_id}: {err}"));
+            store.abort(&job_id, "task ended".to_string(), "2026-05-01T12:00:01Z".to_string());
+
+            assert!(
+                observer.join().unwrap(),
+                "run {run}: Failed was published before the token fired"
+            );
+        }
+    }
+
+    #[test]
+    fn test_abort_after_completion_is_noop() {
+        let store = JobStore::new();
+        let job_id = store.create_job().expect("slot available");
+        let token = store.cancellation_token(&job_id).expect("token registered on create");
+        store.complete(&job_id, serde_json::json!({}), "2026-05-01T12:00:01Z".to_string());
+
+        store.abort(&job_id, "late".to_string(), "2026-05-01T12:00:02Z".to_string());
+
+        assert!(!token.is_cancelled(), "a finished job's abort must not fire the token");
+        assert_eq!(store.get(&job_id).unwrap().state, JobState::Completed);
+    }
+
+    #[test]
     fn test_fail_after_cancel_is_noop() {
         let store = JobStore::new();
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
         store.cancel(&job_id, "2026-05-01T12:00:01Z".to_string());
 
         store.fail(&job_id, "late error".to_string(), "2026-05-01T12:00:02Z".to_string());
@@ -427,10 +507,99 @@ mod tests {
     #[test]
     fn test_create_job_helper() {
         let store = JobStore::new();
-        let id = store.create_job();
+        let id = store.create_job().expect("slot available");
         assert!(!id.is_empty());
         let status = store.get(&id).expect("job must be created");
         assert_eq!(status.state, JobState::Pending);
+    }
+
+    #[test]
+    fn test_create_job_refuses_when_store_is_full() {
+        let store = JobStore::new();
+        let ids: Vec<String> = (0..MAX_ACTIVE_JOBS)
+            .map(|_| store.create_job().expect("slot available"))
+            .collect();
+        assert!(store.create_job().is_none());
+        assert_eq!(store.active_count(), MAX_ACTIVE_JOBS);
+
+        store.complete(&ids[0], serde_json::json!({}), "2026-05-01T12:00:01Z".to_string());
+        assert!(store.create_job().is_some());
+        assert_eq!(store.active_count(), MAX_ACTIVE_JOBS);
+    }
+
+    #[test]
+    fn test_job_ttl_counts_from_finish() {
+        let store = JobStore::with_limits(Duration::from_millis(50), MAX_FINISHED_JOBS);
+        let job_id = store.create_job().expect("slot available");
+        store.set_running(&job_id, "2026-05-01T12:00:01Z".to_string());
+        std::thread::sleep(Duration::from_millis(150));
+
+        assert_eq!(store.get(&job_id).unwrap().state, JobState::Running);
+        assert_eq!(store.active_count(), 1);
+        assert!(store.cancellation_token(&job_id).is_some());
+
+        store.complete(
+            &job_id,
+            serde_json::json!({"content": "done"}),
+            "2026-05-01T12:00:02Z".to_string(),
+        );
+        assert_eq!(store.get(&job_id).unwrap().state, JobState::Completed);
+        assert_eq!(store.active_count(), 0);
+
+        std::thread::sleep(Duration::from_millis(150));
+        assert!(store.get(&job_id).is_none());
+    }
+
+    #[test]
+    fn test_set_running_after_cancel_does_not_resurrect() {
+        let store = JobStore::new();
+        let job_id = store.create_job().expect("slot available");
+        store.cancel(&job_id, "2026-05-01T12:00:01Z".to_string());
+
+        store.set_running(&job_id, "2026-05-01T12:00:02Z".to_string());
+        store.complete(&job_id, serde_json::json!({}), "2026-05-01T12:00:03Z".to_string());
+
+        let status = store.get(&job_id).unwrap();
+        assert_eq!(status.state, JobState::Cancelled);
+        assert!(status.result.is_none());
+        assert_eq!(store.active_count(), 0);
+    }
+
+    #[test]
+    fn test_finished_job_does_not_transition_again() {
+        let store = JobStore::new();
+        let job_id = store.create_job().expect("slot available");
+        store.complete(&job_id, serde_json::json!({}), "2026-05-01T12:00:01Z".to_string());
+
+        store.fail(&job_id, "late error".to_string(), "2026-05-01T12:00:02Z".to_string());
+        store.set_running(&job_id, "2026-05-01T12:00:03Z".to_string());
+
+        let status = store.get(&job_id).unwrap();
+        assert_eq!(status.state, JobState::Completed);
+        assert!(status.error.is_none());
+    }
+
+    #[test]
+    fn test_finished_capacity_never_evicts_running_job() {
+        let store = JobStore::with_limits(JOB_TTL, 2);
+        let running = store.create_job().expect("slot available");
+        store.set_running(&running, "2026-05-01T12:00:01Z".to_string());
+        let token = store.cancellation_token(&running).unwrap();
+
+        for _ in 0..100 {
+            let job_id = store.create_job().expect("slot available");
+            store.complete(&job_id, serde_json::json!({}), "2026-05-01T12:00:02Z".to_string());
+        }
+        store.finished.run_pending_tasks();
+
+        assert!(store.finished.entry_count() <= 2);
+        assert_eq!(store.get(&running).unwrap().state, JobState::Running);
+        assert_eq!(store.active_count(), 1);
+        assert!(matches!(
+            store.cancel(&running, "2026-05-01T12:00:03Z".to_string()),
+            CancelOutcome::Cancelled(_)
+        ));
+        assert!(token.is_cancelled());
     }
 }
 
@@ -444,7 +613,7 @@ fn test_create_job_concurrent_uniqueness() {
 
     for _ in 0..100 {
         let store_clone = Arc::clone(&store);
-        handles.push(thread::spawn(move || store_clone.create_job()));
+        handles.push(thread::spawn(move || store_clone.create_job().expect("slot available")));
     }
 
     let mut job_ids = std::collections::HashSet::new();
@@ -456,26 +625,60 @@ fn test_create_job_concurrent_uniqueness() {
     assert_eq!(job_ids.len(), 100);
 }
 
-/// Regression test for a race where `cancel()` and `complete()`/`fail()` on the
-/// same job ID could both read the pre-transition state and both decrement
-/// `active`, underflowing the `AtomicUsize` counter and permanently blocking
-/// new job submissions. `entry_by_ref(..).and_compute_with(..)` serializes the
-/// two calls per key, so exactly one of them observes the pending/running
-/// state and performs the transition + decrement.
+/// With one slot left, concurrent submissions admit exactly one job: the capacity
+/// check and the insert happen under one lock, so the store never exceeds
+/// `MAX_ACTIVE_JOBS`.
 #[test]
-fn test_concurrent_cancel_and_complete_never_double_decrements() {
+fn test_concurrent_admission_fills_last_slot_once() {
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
+    for _ in 0..50 {
+        let store = Arc::new(JobStore::new());
+        for _ in 1..MAX_ACTIVE_JOBS {
+            store.create_job().expect("slot available");
+        }
+
+        let contenders = 16;
+        let barrier = Arc::new(Barrier::new(contenders));
+        let handles: Vec<_> = (0..contenders)
+            .map(|_| {
+                let store = Arc::clone(&store);
+                let barrier = Arc::clone(&barrier);
+                thread::spawn(move || {
+                    barrier.wait();
+                    store.create_job()
+                })
+            })
+            .collect();
+
+        let admitted = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .filter(Option::is_some)
+            .count();
+
+        assert_eq!(admitted, 1, "exactly one submission may take the last slot");
+        assert_eq!(store.active_count(), MAX_ACTIVE_JOBS);
+    }
+}
+
+/// Regression test for a race between `cancel()` and `complete()` on the same job:
+/// exactly one of them finishes the job, the active slot is released once, and when
+/// `cancel()` wins it has fired the job's token.
+#[test]
+fn test_concurrent_cancel_and_complete_finish_once() {
     use std::sync::Arc;
     use std::thread;
 
     for _ in 0..200 {
         let store = Arc::new(JobStore::new());
-        let job_id = store.create_job();
+        let job_id = store.create_job().expect("slot available");
+        let token = store.cancellation_token(&job_id).unwrap();
 
         let store_a = Arc::clone(&store);
         let job_id_a = job_id.clone();
-        let cancel_thread = thread::spawn(move || {
-            store_a.cancel(&job_id_a, "2026-05-01T12:00:01Z".to_string());
-        });
+        let cancel_thread = thread::spawn(move || store_a.cancel(&job_id_a, "2026-05-01T12:00:01Z".to_string()));
 
         let store_b = Arc::clone(&store);
         let job_id_b = job_id.clone();
@@ -487,20 +690,57 @@ fn test_concurrent_cancel_and_complete_never_double_decrements() {
             );
         });
 
-        cancel_thread.join().unwrap();
+        let cancel_outcome = cancel_thread.join().unwrap();
         complete_thread.join().unwrap();
 
-        assert_eq!(
-            store.active_count(),
-            0,
-            "active must be decremented exactly once by whichever of cancel/complete won the race, \
-             never zero times (leak) or twice (underflow)"
-        );
-
+        assert_eq!(store.active_count(), 0);
         let final_state = store.get(&job_id).unwrap().state;
-        assert!(
-            matches!(final_state, JobState::Cancelled | JobState::Completed),
-            "the job must end in whichever terminal state won the race, not a corrupted mix: got {final_state:?}"
-        );
+        match cancel_outcome {
+            CancelOutcome::Cancelled(_) => {
+                assert_eq!(final_state, JobState::Cancelled);
+                assert!(token.is_cancelled(), "a successful cancel must signal the worker");
+            }
+            CancelOutcome::Conflict(_) => assert_eq!(final_state, JobState::Completed),
+            CancelOutcome::NotFound => panic!("the job must be found in one of the stores"),
+        }
+    }
+}
+
+/// A poll that runs while the job finishes must never see it missing: `get()` reads
+/// `active` first, and a job leaves `active` only after it is in `finished`.
+#[test]
+fn test_concurrent_poll_never_misses_finishing_job() {
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
+    for _ in 0..200 {
+        let store = Arc::new(JobStore::new());
+        let job_id = store.create_job().expect("slot available");
+        let barrier = Arc::new(Barrier::new(2));
+
+        let store_a = Arc::clone(&store);
+        let job_id_a = job_id.clone();
+        let barrier_a = Arc::clone(&barrier);
+        let finish_thread = thread::spawn(move || {
+            barrier_a.wait();
+            store_a.complete(&job_id_a, serde_json::json!({}), "2026-05-01T12:00:01Z".to_string());
+        });
+
+        let store_b = Arc::clone(&store);
+        let job_id_b = job_id.clone();
+        let poll_thread = thread::spawn(move || {
+            barrier.wait();
+            loop {
+                let status = store_b
+                    .get(&job_id_b)
+                    .expect("a live or finished job is always visible");
+                if status.state == JobState::Completed {
+                    break;
+                }
+            }
+        });
+
+        finish_thread.join().unwrap();
+        poll_thread.join().unwrap();
     }
 }

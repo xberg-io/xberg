@@ -153,7 +153,7 @@ curl -F "files=@document.pdf" http://localhost:8000/extract-async
 Poll the status of an async job. `state` is one of `pending`, `running`,
 `completed`, or `failed`. The `result` field is present only when
 `state == completed`; the `error` field only when `state == failed`. Jobs
-expire after 5 minutes and return `404` once evicted.
+expire 5 minutes after they finish and return `404` once evicted.
 
 ```bash title="Terminal"
 curl http://localhost:8000/jobs/550e8400-e29b-41d4-a716-446655440000

@@ -95,6 +95,7 @@ pub(super) struct LayoutRunOutput {
     pub data: Option<LayoutForMarkdownOutput>,
     pub gate_decisions: Option<Vec<PageGateDecision>>,
     pub raster_dpis: crate::pdf::render::OcrRasterDpis,
+    pub rendered_pages: Vec<bool>,
 }
 
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
@@ -390,6 +391,7 @@ fn test_selected_page_layout(
         )),
         gate_decisions: Some(explicit_page_decisions(selection, 1)),
         raster_dpis: Default::default(),
+        rendered_pages: vec![true],
     };
     (
         LayoutAttempt {
@@ -964,6 +966,7 @@ fn run_layout_for_pdf_pages_with_security_limits_and_pages(
                 data: Some((Vec::new(), Vec::new(), Vec::new(), Vec::new())),
                 gate_decisions: None,
                 raster_dpis: Default::default(),
+                rendered_pages: Vec::new(),
             },
             None,
         ));
@@ -984,6 +987,7 @@ fn run_layout_for_pdf_pages_with_security_limits_and_pages(
                 data: None,
                 gate_decisions,
                 raster_dpis: Default::default(),
+                rendered_pages: Vec::new(),
             },
             None,
         ));
@@ -1000,6 +1004,7 @@ fn run_layout_for_pdf_pages_with_security_limits_and_pages(
     let mut all_detections: Vec<crate::layout::DetectionResult> = Vec::with_capacity(page_count);
     let mut render_failures: Vec<String> = Vec::new();
     let mut raster_dpis = crate::pdf::render::OcrRasterDpis::new();
+    let mut rendered_pages = Vec::with_capacity(page_count);
 
     let total_chunks = page_count.div_ceil(LAYOUT_BATCH_CHUNK_SIZE);
 
@@ -1017,6 +1022,7 @@ fn run_layout_for_pdf_pages_with_security_limits_and_pages(
                 images_config,
             },
         );
+        rendered_pages.extend(pages.iter().map(|page| page.image.is_some()));
         let rendered = pages.iter().filter(|page| page.image.is_some()).count();
         raster_dpis.extend(
             pages
@@ -1057,6 +1063,7 @@ fn run_layout_for_pdf_pages_with_security_limits_and_pages(
             data: Some((all_images, all_layout_results, all_hints, all_detections)),
             gate_decisions,
             raster_dpis,
+            rendered_pages,
         },
         render_warning,
     ))
@@ -1079,6 +1086,7 @@ fn run_layout_for_pdf_pages_with_security_limits_and_pages(
 /// (#353); always present (possibly empty) rather than folded into the sixth
 /// value so each cause stays a distinct, individually-deduped
 /// `ProcessingWarning` when the caller merges it via `push_warning_deduped`.
+/// The ninth value records which page rasters rendered successfully.
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 type LayoutForMarkdownOptional = (
     Option<Vec<image::RgbImage>>,
@@ -1089,6 +1097,7 @@ type LayoutForMarkdownOptional = (
     Option<crate::types::ProcessingWarning>,
     Option<AccelerationConfig>,
     Vec<crate::types::ProcessingWarning>,
+    Vec<bool>,
 );
 
 pub(super) fn layout_failure_warning(error: &crate::XbergError) -> crate::types::ProcessingWarning {
@@ -1118,13 +1127,13 @@ pub(super) async fn maybe_run_layout_for_markdown_with_pages(
     pages: Option<&crate::core::layout_pages::LayoutPageSelection>,
 ) -> LayoutForMarkdownOptional {
     if !config.use_layout_for_markdown {
-        return (None, None, None, None, None, None, None, Vec::new());
+        return (None, None, None, None, None, None, None, Vec::new(), Vec::new());
     }
     let Some(layout_config) = config.resolved_layout_config() else {
-        return (None, None, None, None, None, None, None, Vec::new());
+        return (None, None, None, None, None, None, None, Vec::new(), Vec::new());
     };
     if config.force_ocr {
-        return (None, None, None, None, None, None, None, Vec::new());
+        return (None, None, None, None, None, None, None, Vec::new(), Vec::new());
     }
     let thread_budget = crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref());
     let default_security_limits = crate::extractors::security::SecurityLimits::default();
@@ -1148,6 +1157,7 @@ pub(super) async fn maybe_run_layout_for_markdown_with_pages(
                         data: Some((images, results, hints, detections)),
                         gate_decisions,
                         raster_dpis,
+                        rendered_pages,
                     },
                 acceleration_override,
                 warning,
@@ -1170,6 +1180,7 @@ pub(super) async fn maybe_run_layout_for_markdown_with_pages(
                 warning,
                 acceleration_override,
                 glyph_drop_warnings,
+                rendered_pages,
             )
         }
         Ok((
@@ -1179,6 +1190,7 @@ pub(super) async fn maybe_run_layout_for_markdown_with_pages(
                         data: None,
                         gate_decisions,
                         raster_dpis,
+                        ..
                     },
                 acceleration_override: _,
                 warning,
@@ -1196,6 +1208,7 @@ pub(super) async fn maybe_run_layout_for_markdown_with_pages(
                 warning,
                 None,
                 glyph_drop_warnings,
+                Vec::new(),
             )
         }
         Err(error) => {
@@ -1204,7 +1217,17 @@ pub(super) async fn maybe_run_layout_for_markdown_with_pages(
                 "layout-for-markdown: detection failed, continuing without layout hints"
             );
             let warning = layout_failure_warning(&error);
-            (None, None, None, None, None, Some(warning), None, Vec::new())
+            (
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(warning),
+                None,
+                Vec::new(),
+                Vec::new(),
+            )
         }
     }
 }

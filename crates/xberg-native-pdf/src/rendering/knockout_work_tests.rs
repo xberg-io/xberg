@@ -5,27 +5,38 @@ use std::io::Write;
 use std::sync::{Arc, Mutex};
 
 fn document(content: &str, knockout: bool, form: Option<&str>) -> PdfDocument {
+    sized_document(content, knockout, form, "72 72")
+}
+
+fn sized_document(content: &str, knockout: bool, form: Option<&str>, size: &str) -> PdfDocument {
     let group = format!("/Group << /S /Transparency /I true /K {knockout} >>");
     let resources = "/ExtGState << /Half << /ca 0.5 >> >> /XObject << /Fm 5 0 R >> /Properties << /L 6 0 R /V 7 0 R >> \
         /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> \
         /F3 << /Type /Font /Subtype /Type3 /FontBBox [0 0 1 1] /FontMatrix [1 0 0 1 0 0] /CharProcs << >> \
         /Encoding << /Type /Encoding /Differences [] >> /FirstChar 0 /LastChar 0 /Widths [0] >> >>";
-    let stream = |dict: &str, data: &str| format!("<< {dict} /Length {} >>\nstream\n{data}\nendstream", data.len());
     let objects = [
         "<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [6 0 R 7 0 R] /D << /OFF [6 0 R] >> >> >>".to_string(),
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
         format!(
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 72] /Contents 4 0 R /Resources << {resources} >> {} >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {size}] /Contents 4 0 R /Resources << {resources} >> {} >>",
             if form.is_none() { group.as_str() } else { "" }
         ),
         stream("", content),
         stream(
-            &format!("/Type /XObject /Subtype /Form /BBox [0 0 72 72] /Resources << {resources} >> {group}"),
+            &format!("/Type /XObject /Subtype /Form /BBox [0 0 {size}] /Resources << {resources} >> {group}"),
             form.unwrap_or(""),
         ),
         "<< /Type /OCG /Name (L) >>".to_string(),
         "<< /Type /OCG /Name (V) >>".to_string(),
     ];
+    pdf(&objects)
+}
+
+fn stream(dict: &str, data: &str) -> String {
+    format!("<< {dict} /Length {} >>\nstream\n{data}\nendstream", data.len())
+}
+
+fn pdf(objects: &[String]) -> PdfDocument {
     let mut bytes = b"%PDF-1.4\n".to_vec();
     let mut offsets = Vec::new();
     for (index, object) in objects.iter().enumerate() {
@@ -266,9 +277,8 @@ fn planned_work_is_committed_only_after_successful_native_admission() {
     drop(fallback);
     resources.raster(1).expect("ordinary siblings remain renderable");
     assert_eq!(
-        resources.surface_work,
-        MAX_SURFACE_WORK + 1,
-        "normal charging resumes after scope drop"
+        resources.surface_work, MAX_SURFACE_WORK,
+        "work outside a native knockout pass is not charged"
     );
     resources.reset(Some(1));
     assert!(resources.knockout(1, 1, 0, 0, 1, 1).is_err(), "failed memory admission");
@@ -366,8 +376,55 @@ fn ordinary_alpha_replay_can_start_after_its_knockout_child_fills_the_work_ledge
     );
 }
 
+struct Form<'a> {
+    name: &'a str,
+    group: Option<bool>,
+    content: String,
+}
+
+fn form(name: &str, group: Option<bool>, content: impl Into<String>) -> Form<'_> {
+    Form {
+        name,
+        group,
+        content: content.into(),
+    }
+}
+
+/// A page whose resources name every form; a form called `Mask` is the soft mask of `/SM gs`.
+fn forms_document(size: &str, page: &str, forms: &[Form<'_>]) -> PdfDocument {
+    let object = |name: &str| forms.iter().position(|form| form.name == name).map(|index| index + 5);
+    let xobjects: String = forms
+        .iter()
+        .map(|form| format!("/{} {} 0 R ", form.name, object(form.name).unwrap_or(0)))
+        .collect();
+    let mask = object("Mask")
+        .map(|mask| format!("/SM << /SMask << /S /Luminosity /G {mask} 0 R >> >>"))
+        .unwrap_or_default();
+    let resources = format!(
+        "/ExtGState << /Half << /ca 0.5 >> {mask} >> /XObject << {xobjects}>> \
+         /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >>"
+    );
+    let mut objects = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {size}] /Contents 4 0 R /Resources << {resources} >> >>"),
+        stream("", page),
+    ];
+    for form in forms {
+        let group = form
+            .group
+            .map(|knockout| format!("/Group << /S /Transparency /I true /K {knockout} >>"))
+            .unwrap_or_default();
+        objects.push(stream(
+            &format!("/Type /XObject /Subtype /Form /BBox [0 0 {size}] /Resources << {resources} >> {group}"),
+            &form.content,
+        ));
+    }
+    pdf(&objects)
+}
+
 #[test]
-fn successful_knockout_does_not_disable_the_ordinary_surface_work_ceiling() {
+fn ordinary_group_paints_spend_no_knockout_work_but_count_operations() {
     let mut resources = KnockoutResources::default();
     let native = resources
         .knockout(10, 40, 0, 0, 1, 1)
@@ -377,15 +434,229 @@ fn successful_knockout_does_not_disable_the_ordinary_surface_work_ceiling() {
         .raster(10)
         .expect("one real surface pass under the native frame");
     drop(native);
+    assert_eq!(resources.surface_work, 20, "the native pass is charged");
     let ordinary = resources.group(40, Some(0)).expect("ordinary sibling workspace");
-    resources
-        .raster(MAX_SURFACE_WORK as usize)
-        .expect("ordinary sibling has its own work allowance");
+    for _ in 0..3 {
+        resources
+            .paint(usize::MAX)
+            .expect("an ordinary group has no work ceiling");
+    }
+    resources.raster(usize::MAX).expect("ordinary raster is not charged");
+    assert_eq!(
+        resources.surface_work, 20,
+        "ordinary paints leave the knockout ledger alone"
+    );
+    assert_eq!(resources.paint_operations, 3, "ordinary paints are counted");
+    resources.paint_operations = MAX_PAINT_OPERATIONS;
     assert!(
-        resources.raster(1).is_err(),
-        "ordinary work beyond its ceiling must still fail"
+        resources.paint(0).is_err(),
+        "the paint operation cap holds in an ordinary group"
     );
     drop(ordinary);
+}
+
+#[test]
+fn native_knockout_keeps_its_operation_cap_and_a_degraded_child_charges_nothing() {
+    let mut resources = KnockoutResources::default();
+    let native = resources
+        .knockout(10, 0, 0, 0, 1, 1)
+        .expect("small knockout admission")
+        .expect("native frame");
+    let child = resources.fallback().expect("degraded child under the native frame");
+    resources
+        .raster(usize::MAX)
+        .expect("a degraded child renders without knockout work");
+    assert_eq!(resources.surface_work, 10, "only the planned native work is charged");
+    drop(child);
+    resources.paint_operations = MAX_PAINT_OPERATIONS;
+    assert!(
+        resources.paint(0).is_err(),
+        "the paint operation cap holds in a native pass"
+    );
+    drop(native);
+}
+
+#[test]
+fn nested_ordinary_form_fan_out_ends_at_the_paint_operation_cap() {
+    let doc = forms_document(
+        "2 2",
+        "/F1 Do",
+        &[
+            form("F1", Some(false), "/F2 Do ".repeat(1000)),
+            form("F2", Some(false), "f ".repeat(1000)),
+        ],
+    );
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    let Err(error) = renderer.render_page(&doc, 0) else {
+        panic!("a million nested ordinary paints end in a bounded error");
+    };
+    assert!(
+        error.to_string().contains("paint operations"),
+        "the paint operation cap ends the fan-out: {error}"
+    );
+    assert_eq!(
+        renderer.knockout_resources.surface_work, 0,
+        "ordinary groups charge no work"
+    );
+}
+
+#[test]
+fn text_runs_charge_the_operator_loop_only_in_a_knockout_group() {
+    let form = "BT /F1 4 Tf 10 10 Td (a) Tj (a) Tj ET";
+    let charges = |knockout: bool| {
+        let doc = document("/Fm Do", knockout, Some(form));
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+        renderer.render_page(&doc, 0).expect("small group renders");
+        let resources = &renderer.knockout_resources;
+        (resources.paint_operations, resources.surface_work)
+    };
+    let page = 72 * 72;
+    assert_eq!(
+        charges(true),
+        (2, 6 * page),
+        "two planned paints, two coverage rasters and two operator loop charges of one page each"
+    );
+    assert_eq!(
+        charges(false),
+        (2, 0),
+        "an ordinary group counts its paints and charges no work"
+    );
+}
+
+#[test]
+fn paint_operation_count_starts_again_on_each_page() {
+    let doc = document("/Fm Do", false, Some("BT /F1 4 Tf 10 10 Td (a) Tj (a) Tj ET"));
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    renderer.knockout_resources.paint_operations = MAX_PAINT_OPERATIONS;
+    renderer
+        .render_page(&doc, 0)
+        .expect("a page does not inherit the paint count of an earlier page");
+    assert_eq!(renderer.knockout_resources.paint_operations, 2);
+}
+
+#[test]
+fn knockout_and_ordinary_groups_nested_either_way_charge_only_the_native_pass() {
+    let fill = "0 g 0 0 10 10 re f ";
+    let charges = |outer: bool| {
+        let doc = forms_document(
+            "72 72",
+            "/Outer Do",
+            &[
+                form("Outer", Some(outer), format!("{fill}/Inner Do")),
+                form("Inner", Some(!outer), fill.repeat(2)),
+            ],
+        );
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+        renderer.render_page(&doc, 0).expect("nested groups render");
+        let resources = &renderer.knockout_resources;
+        assert_eq!(resources.degradations(), 0, "small groups stay native");
+        (resources.paint_operations, resources.surface_work)
+    };
+    let page = 72 * 72;
+    assert_eq!(
+        charges(false),
+        (4, 4 * page),
+        "a knockout form inside an ordinary group: only its plan and its two fills are charged, a page each"
+    );
+    assert_eq!(
+        charges(true),
+        (4, 6 * page),
+        "an ordinary form inside a knockout group: the whole native pass is charged"
+    );
+}
+
+#[test]
+fn heavy_ordinary_work_before_a_knockout_group_keeps_native_knockout() {
+    let runs = 1000;
+    let tiny = "60 60 0.1 0.1 re f ".repeat(78);
+    let doc = forms_document(
+        "612 792",
+        "/Ordinary Do /Knockout Do",
+        &[
+            form(
+                "Ordinary",
+                Some(false),
+                format!("BT /F1 4 Tf 10 400 Td {} ET", "(a) Tj ".repeat(runs)),
+            ),
+            form(
+                "Knockout",
+                Some(true),
+                format!("/Half gs 1 0 0 rg 0 0 612 792 re f {tiny}0 0 1 rg 0 0 612 792 re f"),
+            ),
+        ],
+    );
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    let image = renderer.render_page(&doc, 0).expect("both groups render");
+    assert_eq!(
+        renderer.knockout_resources.degradations(),
+        0,
+        "ordinary work leaves the knockout allowance alone"
+    );
+    let page = 612 * 792;
+    assert_eq!(
+        renderer.knockout_resources.surface_work,
+        2 * 80 * page,
+        "only the knockout group is charged: its plan and its 80 fills, a page each"
+    );
+    let pixel = &image.data[..4];
+    assert!(
+        pixel[0].abs_diff(127) <= 1 && pixel[1].abs_diff(127) <= 1 && pixel[2] == 255,
+        "the last knockout paint replaces the first: {pixel:?}"
+    );
+}
+
+#[test]
+fn ordinary_group_with_a_thousand_text_runs_renders_at_300_dpi() {
+    let runs = 1000;
+    let form = format!("BT /F1 4 Tf 10 400 Td {} ET 0 g 0 0 20 20 re f", "(a) Tj ".repeat(runs));
+    let doc = sized_document("/Fm Do", false, Some(&form), "612 792");
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(300).as_raw());
+    let image = renderer
+        .render_page(&doc, 0)
+        .expect("an ordinary transparency group renders at any size");
+    assert_eq!((image.width, image.height), (2550, 3300));
+    assert_eq!(
+        renderer.paint_operator_calls,
+        runs + 2,
+        "the Do, every text run and the fill ran"
+    );
+    let bottom_left = (image.height as usize - 1) * image.width as usize * 4;
+    assert_eq!(
+        &image.data[bottom_left..bottom_left + 4],
+        &[0, 0, 0, 255],
+        "the fill after the text runs reached the page"
+    );
+}
+
+#[test]
+fn form_without_a_group_under_a_soft_mask_renders_200_text_runs_at_300_dpi() {
+    let runs = 200;
+    let doc = forms_document(
+        "612 792",
+        "/SM gs /Fm Do",
+        &[
+            form(
+                "Fm",
+                None,
+                format!("BT /F1 4 Tf 10 400 Td {} ET 0 g 0 0 20 20 re f", "(a) Tj ".repeat(runs)),
+            ),
+            form("Mask", Some(false), "1 g 0 0 612 792 re f"),
+        ],
+    );
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(300).as_raw());
+    let image = renderer
+        .render_page(&doc, 0)
+        .expect("a masked form renders at any size");
+    assert_eq!(
+        renderer.knockout_resources.surface_work, 0,
+        "a masked form charges no work"
+    );
+    let bottom_left = (image.height as usize - 1) * image.width as usize * 4;
+    assert_eq!(
+        &image.data[bottom_left..bottom_left + 4],
+        &[0, 0, 0, 255],
+        "the fill after the text runs reached the page through a white mask"
+    );
 }
 
 #[test]
@@ -580,6 +851,47 @@ fn only_a_path_paint_that_certainly_builds_a_path_raises_the_floor() {
     for (content, expected) in cases {
         assert_eq!(path_paints(content, true), expected, "{content}");
     }
+}
+
+#[test]
+fn the_floor_counts_a_paint_only_where_the_renderers_path_builder_builds_a_path() {
+    let stale_then_line = format!("-{HUGE} 0 m {HUGE} 0 m 5 5 l f");
+    let stale_then_rect = format!("-{HUGE} 0 m {HUGE} 0 m 0 0 10 10 re f");
+    let stale_after_close = format!("-{HUGE} 0 m h {HUGE} 0 m 5 5 l f");
+    let stale_before_close_stroke = format!("-{HUGE} 0 m {HUGE} 0 m 5 5 l s");
+    let two_moves_only = format!("-{HUGE} 0 m {HUGE} 0 m f");
+    let cases: Vec<(&str, usize)> = vec![
+        (&stale_then_line, 1),
+        (&stale_then_rect, 1),
+        (&stale_before_close_stroke, 1),
+        (&stale_after_close, 0),
+        (&two_moves_only, 0),
+        ("0 0 m 0 0 m f", 0),
+        ("0 0 m h f", 1),
+        ("0 0 m s", 1),
+        ("0 0 m b", 1),
+        ("0 0 m b*", 1),
+        ("0 0 m S", 0),
+        ("0 0 m B", 0),
+        ("0 0 m 1 1 5 5 v f", 1),
+        ("1 1 5 5 v f", 0),
+        ("0 0 -10 -10 re f", 1),
+    ];
+    for (content, expected) in cases {
+        assert_eq!(path_paints(content, true), expected, "{content}");
+    }
+}
+
+#[test]
+fn stale_move_path_paints_that_cannot_fit_degrade_before_painting() {
+    let paints = 40;
+    let body = format!("-{HUGE} 0 m {HUGE} 0 m 5 5 l f ").repeat(paints);
+    let room = 2 * paints - 10;
+    assert_eq!(
+        run_with_room_for(&format!("0 g {body}"), room, false),
+        (false, paints),
+        "the floor counts each stale-move paint, refuses the plan, and nothing is painted twice"
+    );
 }
 
 #[test]
