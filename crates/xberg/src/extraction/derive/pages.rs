@@ -1213,4 +1213,21 @@ mod plain_page_rerender_tests {
             "page 2 is named one time: {messages:?}"
         );
     }
+
+    #[test]
+    fn the_warning_names_omitted_pages_in_page_order_and_no_range_is_left() {
+        let mut doc = office_doc_with(vec![page(1, "one")], &[(1, "one")]);
+        set_boundaries(&mut doc, &[(3, 5, 8), (2, 0, 3)]);
+        derive_plain(&mut doc);
+        let structure = doc.metadata.pages.as_ref().expect("page structure");
+        assert!(structure.boundaries.is_none(), "no range is left: {:?}", structure.boundaries);
+        let messages: Vec<&str> = doc
+            .processing_warnings
+            .iter()
+            .filter(|w| w.source == "page_boundaries")
+            .map(|w| w.message.as_ref())
+            .collect();
+        assert_eq!(messages.len(), 1, "one page_boundaries warning: {messages:?}");
+        assert!(messages[0].contains("Pages [2, 3] "), "pages in order: {messages:?}");
+    }
 }

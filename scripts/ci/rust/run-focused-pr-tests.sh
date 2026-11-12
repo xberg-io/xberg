@@ -244,7 +244,8 @@ run_office_page_cases() {
     a_prebuilt_pdf_page_keeps_its_text \
     a_note_marker_after_the_last_text_of_a_page_stays_on_that_page \
     the_range_of_a_page_number_with_no_extracted_page_is_omitted_with_a_warning \
-    the_warning_names_a_page_with_two_omitted_ranges_one_time; do
+    the_warning_names_a_page_with_two_omitted_ranges_one_time \
+    the_warning_names_omitted_pages_in_page_order_and_no_range_is_left; do
     run_exact "${module}::$test_name" --lib
   done
 }
@@ -267,7 +268,7 @@ pdf-ocr)
   run_discarded_recovery_cases
   ;;
 office-pages)
-  expected=28
+  expected=29
   run_office_page_cases
   ;;
 api-jobs)
