@@ -145,7 +145,6 @@ fn assert_rows_are_own_lines(format: OutputFormat) {
         result.content
     );
     if is_djot {
-        let djot_text;
         // The rendered Djot must round-trip with every leader dot as literal text: an
         // ellipsis event means a bare `...` run was left for the reader to turn into `…`.
         let mut paragraphs: Vec<String> = Vec::new();
@@ -169,7 +168,7 @@ fn assert_rows_are_own_lines(format: OutputFormat) {
                 _ => {}
             }
         }
-        djot_text = paragraphs.join("\n");
+        let djot_text = paragraphs.join("\n");
         lines = djot_text.lines().collect();
         assert_eq!(lines.len(), 13, "header plus 12 parsed Djot paragraphs:\n{djot_text}");
 
