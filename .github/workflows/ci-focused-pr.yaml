@@ -64,7 +64,9 @@ jobs:
         if: matrix.suite == 'pdf-ocr'
         uses: xberg-io/actions/fetch-test-documents@v1
         with:
-          include: pdf/regression_pages/nist-sp811-2008-p7.pdf
+          include: |
+            pdf/regression_pages/nist-sp811-2008-p7.pdf
+            pdf/regression_pages/irs-fw9--2024-p1.pdf
           cache: "false"
 
       - name: Verify NIST input for the public Type0 target

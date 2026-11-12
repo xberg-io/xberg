@@ -5,7 +5,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 suite="${1:?expected pdf-ocr, office-pages or api-jobs}"
 case "$suite" in
 pdf-ocr) features="pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types" ;;
-office-pages) features="office,tokio-runtime" ;;
+office-pages) features="office,excel,tokio-runtime" ;;
 api-jobs) features="api,tokio-runtime" ;;
 *)
   printf 'Unknown focused test suite: %s\n' "$suite" >&2
@@ -40,6 +40,7 @@ run_exact() {
 }
 
 run_pdf_cases() {
+  run_exact every_native_page_keeps_a_range_that_selects_its_text --test plain_page_ranges_select_page_text
   run_exact 'pdf::structure::paragraphs::tests::display_rows_tests::continuation_merge_keeps_indexed_display_rows_with_changed_source_literals' --lib
   run_exact cached_default_recovers_embedded_line_in_cold_and_warm_reads \
     --test pdf_embedded_psm6_addition_2327
@@ -220,13 +221,26 @@ run_office_page_cases() {
     each_slide_of_a_pptx_keeps_a_range_that_selects_its_page_text; do
     run_exact "$test_name" --test plain_page_ranges_select_page_text
   done
-  run_exact 'extractors::docx::tests::plain_table_cell_carries_no_footnote_marker' --lib
+  for test_name in \
+    plain_table_cell_carries_no_footnote_marker \
+    should_write_the_description_of_a_drawn_shape_in_its_place \
+    should_write_no_placeholder_for_a_picture_with_an_empty_description; do
+    run_exact "extractors::docx::tests::$test_name" --lib
+  done
+  run_exact 'extractors::excel::tests::a_plain_sheet_page_starts_with_its_sheet_name' --lib
+  run_exact 'rendering::plain::tests::render_plain_leaves_out_the_docx_style_name_of_a_heading' --lib
   local module='extraction::derive::pages::plain_page_rerender_tests'
   for test_name in \
+    a_docx_page_with_its_own_table_markdown_gets_its_part_of_the_plain_content \
+    every_page_of_a_docx_document_with_ocr_pages_gets_its_part_of_the_plain_content \
+    a_docx_range_measured_on_the_parser_text_selects_its_page_text_in_the_plain_content \
+    pages_with_the_same_text_each_get_the_range_of_their_own_text \
+    a_page_with_text_and_no_elements_keeps_its_text_and_loses_its_range_with_a_warning \
+    a_page_with_no_text_loses_its_range_without_a_warning \
     a_plain_page_has_the_plain_text_of_its_elements_with_the_note_numbers_of_the_document \
-    a_page_range_that_does_not_select_its_page_text_moves_to_the_page_text \
-    a_docx_range_that_selects_its_page_text_stays_where_it_is \
-    a_moved_page_range_starts_after_the_range_of_the_page_before_it \
+    a_prebuilt_docx_page_has_its_part_of_the_plain_content_and_keeps_its_notes \
+    a_prebuilt_pdf_page_keeps_its_text \
+    a_note_marker_after_the_last_text_of_a_page_stays_on_that_page \
     the_range_of_a_page_number_with_no_extracted_page_is_omitted_with_a_warning \
     the_warning_names_a_page_with_two_omitted_ranges_one_time; do
     run_exact "${module}::$test_name" --lib
@@ -242,7 +256,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=82
+  expected=83
   run_pdf_cases
   run_retained_read_cases
   expected=$((expected + 11))
@@ -251,7 +265,7 @@ pdf-ocr)
   run_discarded_recovery_cases
   ;;
 office-pages)
-  expected=16
+  expected=26
   run_office_page_cases
   ;;
 api-jobs)
