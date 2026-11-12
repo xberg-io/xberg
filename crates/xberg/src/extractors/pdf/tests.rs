@@ -3648,6 +3648,26 @@ async fn check_forced_ocr_discarded_page_restoration() {
                 ..Default::default()
             })
         }
+        fn supports_document_processing(&self) -> bool {
+            true
+        }
+        async fn process_document(
+            &self,
+            _path: &std::path::Path,
+            _config: &OcrConfig,
+        ) -> crate::Result<crate::types::ExtractedDocument> {
+            Ok(crate::types::ExtractedDocument {
+                content: PLUGIN_PAGE_TEXTS.join("\n\n\n"),
+                pages: Some(
+                    PLUGIN_PAGE_TEXTS
+                        .iter()
+                        .enumerate()
+                        .map(|(index, text)| text_layer_page((index + 1) as u32, text))
+                        .collect(),
+                ),
+                ..Default::default()
+            })
+        }
     }
     crate::plugins::register_ocr_backend(std::sync::Arc::new(SizeSensitiveOcrBackend { name: BACKEND_NAME }))
         .expect("the size-sensitive backend registers");
@@ -3672,6 +3692,7 @@ async fn check_forced_ocr_discarded_page_restoration() {
                 use_cache: false,
                 force_ocr: true,
                 output_format: output_format.clone(),
+                include_document_structure: true,
                 ocr: Some(OcrConfig {
                     backend: BACKEND_NAME.to_string(),
                     numeric_repair,
@@ -3709,13 +3730,16 @@ async fn check_forced_ocr_discarded_page_restoration() {
                 internal.processing_warnings
             );
 
-            let result = if insert_page_markers {
-                crate::core::pipeline::run_pipeline(internal, &config)
-                    .await
-                    .expect("marked output renders")
+            let result = crate::core::pipeline::run_pipeline(internal, &config)
+                .await
+                .expect("configured output renders");
+            let (expected_format, page_suffix) = if output_format == crate::core::config::OutputFormat::Markdown {
+                ("markdown", "\n")
             } else {
-                crate::types::ExtractedDocument::from(internal)
+                ("plain", "")
             };
+            assert_eq!(result.metadata.output_format.as_deref(), Some(expected_format));
+            assert_public_pdf_paragraph(&result, 2, NATIVE_PAGE_TWO_TEXT);
             let words = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
             assert_eq!(
                 words(&result.content),
@@ -3731,7 +3755,8 @@ async fn check_forced_ocr_discarded_page_restoration() {
             let pages = result.pages.as_ref().expect("the OCR route supplies page output");
             assert_eq!(pages.len(), 2, "the fixture has two pages ({case}): {pages:?}");
             assert_eq!(
-                pages[0].content, accepted_text,
+                pages[0].content,
+                format!("{accepted_text}{page_suffix}"),
                 "page 1's accepted read is its content, not restored ({case})"
             );
             assert_eq!(
@@ -3740,7 +3765,8 @@ async fn check_forced_ocr_discarded_page_restoration() {
                 "only an accepted replacement records the original text ({case})"
             );
             assert_eq!(
-                pages[1].content, NATIVE_PAGE_TWO_TEXT,
+                pages[1].content,
+                format!("{NATIVE_PAGE_TWO_TEXT}{page_suffix}"),
                 "page 2's discarded read leaves its native text in place ({case}): {:?}",
                 pages[1].content
             );
@@ -3754,6 +3780,130 @@ async fn check_forced_ocr_discarded_page_restoration() {
                 "the restored native text decides the page's blankness ({case})"
             );
         }
+    }
+
+    assert_restoration_with_annotation_fallback(BACKEND_NAME, ACCEPTED_TEXT, NATIVE_PAGE_TWO_TEXT).await;
+    #[cfg(feature = "tokio-runtime")]
+    assert_document_plugin_page_ranges(BACKEND_NAME).await;
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const PLUGIN_PAGE_TEXTS: [&str; 2] = ["Repeated OCR paragraph", "Repeated OCR paragraph"];
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn assert_public_pdf_paragraph(result: &crate::types::ExtractedDocument, page: u32, expected: &str) {
+    use crate::types::document_structure::NodeContent;
+
+    let document = result.document.as_ref().expect("configured public document structure");
+    assert!(
+        document.nodes.iter().any(|node| {
+            node.page == Some(page) && matches!(&node.content, NodeContent::Paragraph { text } if text == expected)
+        }),
+        "missing paragraph {expected:?} on page {page}: {:?}",
+        document.nodes
+    );
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+async fn assert_restoration_with_annotation_fallback(backend: &str, accepted: &str, restored: &str) {
+    let config = ExtractionConfig {
+        use_cache: false,
+        force_ocr: true,
+        include_document_structure: true,
+        ocr: Some(crate::core::config::OcrConfig {
+            backend: backend.into(),
+            quality_thresholds: Some(OcrQualityThresholds {
+                discard_suspected_ocr_noise: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        pages: Some(crate::core::config::PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let internal = PdfExtractor::new()
+        .extract_content(
+            &native_text_pdf_with_optional_annotation(true),
+            "application/pdf",
+            &config,
+        )
+        .await
+        .expect("forced OCR with annotation fallback succeeds");
+    assert!(
+        internal.processing_warnings.iter().any(|warning| {
+            warning.source == "pdf_annotations" && warning.message.contains("text-bearing annotation")
+        })
+    );
+    assert!(
+        internal
+            .processing_warnings
+            .iter()
+            .any(|warning| { warning.message.contains("Page 2") && warning.message.contains("discarded") })
+    );
+
+    let result = crate::core::pipeline::run_pipeline(internal, &config)
+        .await
+        .expect("plain output renders");
+    assert_public_pdf_paragraph(&result, 2, restored);
+    assert_public_pdf_paragraph(&result, 3, OCR_RESTORE_ANNOTATION);
+    assert_public_pdf_page_ranges(&result, &[accepted, restored, OCR_RESTORE_ANNOTATION]);
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+async fn assert_document_plugin_page_ranges(backend: &str) {
+    let file = tempfile::NamedTempFile::new().expect("temporary PDF");
+    std::fs::write(file.path(), two_page_native_text_pdf()).expect("write PDF fixture");
+    let config = ExtractionConfig {
+        use_cache: false,
+        force_ocr: true,
+        include_document_structure: true,
+        output_format: crate::core::config::OutputFormat::Markdown,
+        ocr: Some(crate::core::config::OcrConfig {
+            backend: backend.into(),
+            ..Default::default()
+        }),
+        pages: Some(crate::core::config::PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let internal = PdfExtractor::new()
+        .extract_path(file.path(), "application/pdf", &config)
+        .await
+        .expect("document-level OCR succeeds");
+    let result = crate::core::pipeline::run_pipeline(internal, &config)
+        .await
+        .expect("Markdown output renders");
+    assert_eq!(result.metadata.output_format.as_deref(), Some("markdown"));
+    for (index, expected) in PLUGIN_PAGE_TEXTS.iter().enumerate() {
+        assert_public_pdf_paragraph(&result, (index + 1) as u32, expected);
+    }
+    let rendered_pages = PLUGIN_PAGE_TEXTS.map(|text| format!("{text}\n"));
+    assert_public_pdf_page_ranges(&result, &rendered_pages.each_ref().map(String::as_str));
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn assert_public_pdf_page_ranges(result: &crate::types::ExtractedDocument, expected: &[&str]) {
+    let pages = result.pages.as_deref().expect("public pages");
+    let ranges = result
+        .metadata
+        .pages
+        .as_ref()
+        .and_then(|pages| pages.boundaries.as_deref())
+        .expect("public page boundaries");
+    assert_eq!(pages.len(), expected.len());
+    assert_eq!(ranges.len(), expected.len());
+    let mut previous_end = 0;
+    for ((page, range), expected) in pages.iter().zip(ranges).zip(expected) {
+        assert_eq!(page.page_number, range.page_number);
+        assert_eq!(page.content, *expected);
+        assert!(range.byte_start >= previous_end);
+        assert_eq!(result.content.get(range.byte_start..range.byte_end), Some(*expected));
+        previous_end = range.byte_end;
     }
 }
 
@@ -4038,6 +4188,30 @@ fn png_height(bytes: &[u8]) -> Option<u32> {
     )
 ))]
 fn two_page_native_text_pdf() -> Vec<u8> {
+    native_text_pdf_with_optional_annotation(false)
+}
+
+#[cfg(any(
+    all(feature = "pdf", feature = "ocr"),
+    all(
+        feature = "pdf",
+        feature = "ocr-pipeline",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    )
+))]
+const OCR_RESTORE_ANNOTATION: &str = "Recovered annotation on the third page";
+
+#[cfg(any(
+    all(feature = "pdf", feature = "ocr"),
+    all(
+        feature = "pdf",
+        feature = "ocr-pipeline",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    )
+))]
+fn native_text_pdf_with_optional_annotation(add_annotation_page: bool) -> Vec<u8> {
     use lopdf::content::{Content, Operation};
     use lopdf::{Document, Object, Stream, dictionary};
 
@@ -4074,12 +4248,30 @@ fn two_page_native_text_pdf() -> Vec<u8> {
     let page_one_id = page([0, 0, 200, 300], page_one_text);
     let page_two_id = page([0, 0, 1224, 1584], page_two_text);
 
+    let mut kids: Vec<Object> = vec![page_one_id.into(), page_two_id.into()];
+    if add_annotation_page {
+        let page_three_id = page([0, 0, 1224, 1584], "");
+        let annotation = document.add_object(dictionary! {
+            "Type" => "Annot",
+            "Subtype" => "FreeText",
+            "Rect" => vec![10.into(), 10.into(), 250.into(), 35.into()],
+            "Contents" => Object::string_literal(OCR_RESTORE_ANNOTATION),
+        });
+        document
+            .get_object_mut(page_three_id)
+            .and_then(Object::as_dict_mut)
+            .expect("third page dictionary")
+            .set("Annots", vec![Object::Reference(annotation)]);
+        kids.push(page_three_id.into());
+    }
+    let page_count = kids.len() as i64;
+
     document.objects.insert(
         pages_id,
         Object::Dictionary(dictionary! {
             "Type" => "Pages",
-            "Kids" => vec![page_one_id.into(), page_two_id.into()],
-            "Count" => 2,
+            "Kids" => kids,
+            "Count" => page_count,
         }),
     );
     let catalog_id = document.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
@@ -6950,6 +7142,19 @@ fn a_discarded_read_in_the_middle_is_restored_into_the_document() {
     for (boundary, page) in boundaries.iter().zip(&pages) {
         assert_eq!(&text[boundary.byte_start..boundary.byte_end], page.as_str());
     }
+}
+
+#[cfg(feature = "ocr")]
+#[test]
+fn ordered_ocr_spans_do_not_make_a_plugin_transcript_safe_to_rewrite() {
+    let config = ExtractionConfig::default();
+    let reads = vec!["accepted read".into(), String::new()];
+    let natives = vec!["native one".into(), "native two".into()];
+    let mut text = "accepted read\n\n\n".to_string();
+
+    assert!(boundaries_for_ocr_output(ExtractionMethod::Ocr, &text, None, None, Some(&reads), &config).is_some());
+    assert!(restore_discarded_page_reads(&mut text, &mut None, &reads, &natives, &config).is_none());
+    assert_eq!(text, "accepted read\n\n\n");
 }
 
 /// GH#3013: a single blank read stands for the whole document and discards every page, so the

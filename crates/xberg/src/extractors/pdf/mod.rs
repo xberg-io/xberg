@@ -81,8 +81,29 @@ fn boundaries_for_ocr_output(
                 |accepted| ocr::boundaries_after_replacements(boundaries, accepted),
             )
         }),
-        ExtractionMethod::Ocr => ocr_page_body_spans(text, ocr_page_texts?, config),
+        ExtractionMethod::Ocr => {
+            let page_texts = ocr_page_texts?;
+            ocr_page_body_spans(text, page_texts, config).or_else(|| ordered_ocr_page_spans(text, page_texts))
+        }
     }
+}
+
+/// Document-level OCR plugins can supply a transcript with their own page separators.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn ordered_ocr_page_spans(text: &str, page_texts: &[String]) -> Option<Vec<crate::types::PageBoundary>> {
+    let mut boundaries = Vec::with_capacity(page_texts.len());
+    let mut offset = 0;
+    for (index, page_text) in page_texts.iter().enumerate() {
+        let byte_start = offset + text.get(offset..)?.find(page_text)?;
+        let byte_end = byte_start + page_text.len();
+        boundaries.push(crate::types::PageBoundary {
+            byte_start,
+            byte_end,
+            page_number: (index + 1) as u32,
+        });
+        offset = byte_end;
+    }
+    Some(boundaries)
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -4160,7 +4181,7 @@ impl PdfExtractor {
             extraction::apply_annotation_text_fallback(
                 annotation_text_fallback,
                 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-                ocr_page_texts.as_deref(),
+                ocr_document_page_texts.as_deref().or(ocr_page_texts.as_deref()),
                 #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
                 None,
                 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
