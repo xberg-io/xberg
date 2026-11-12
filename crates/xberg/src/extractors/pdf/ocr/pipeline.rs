@@ -3499,7 +3499,15 @@ pub(in crate::extractors::pdf) fn render_mixed_plain_pages(
             let plain = crate::extraction::derive::render_plain_page_elements(document, page)
                 .filter(|plain| !plain.is_empty())
                 .ok_or("page elements produced no Plain text")?;
-            check_accepted_ocr_tokens(accepted, &plain, document)?;
+            let repeated = check_accepted_ocr_tokens(accepted, &plain, document)?;
+            // ~keep A page kept for words the transcript lacks can also render a table twice, once
+            // in a paragraph and once as its typed table. Drop the typed copy when the check still
+            // accepts the page without it.
+            if let Some(single) = without_repeated_tables(&plain, &repeated, document)
+                && check_accepted_ocr_tokens(accepted, &single, document).is_ok()
+            {
+                return Ok(single);
+            }
             Ok(plain)
         })();
         match candidate {
@@ -3522,7 +3530,7 @@ fn check_accepted_ocr_tokens(
     accepted: &str,
     plain: &str,
     document: &crate::types::internal::InternalDocument,
-) -> Result<(), &'static str> {
+) -> Result<Vec<usize>, &'static str> {
     use crate::types::internal::ElementKind;
     use pulldown_cmark::{Event, Options, Parser, Tag};
 
@@ -3597,20 +3605,25 @@ const CELLS: &str = "Plain page omitted or changed accepted table cells";
 /// adds only words the transcript already holds repeats them, and is declined (GH#2990).
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 struct PlainWords<'a> {
+    plain: &'a str,
     words: std::str::SplitWhitespace<'a>,
     accepted_runs: ahash::AHashSet<&'a str>,
     first_skip: Option<&'static str>,
     keeps_unaccepted_word: bool,
+    /// The byte offsets in the Plain text of the skipped words that repeat the transcript.
+    repeated: Vec<usize>,
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 impl<'a> PlainWords<'a> {
     fn new(plain: &'a str, accepted: &'a str) -> Self {
         Self {
+            plain,
             words: plain.split_whitespace(),
             accepted_runs: Self::runs(accepted).collect(),
             first_skip: None,
             keeps_unaccepted_word: false,
+            repeated: Vec::new(),
         }
     }
 
@@ -3636,22 +3649,75 @@ impl<'a> PlainWords<'a> {
 
     /// A word counts as kept text when one of its runs is not a run of the transcript. A run
     /// matches whole, so a label "Park" beside a cell "Parks" counts as kept text.
-    fn skip(&mut self, word: &str, reason: &'static str) {
+    fn skip(&mut self, word: &'a str, reason: &'static str) {
         self.first_skip.get_or_insert(reason);
-        self.keeps_unaccepted_word |= Self::runs(word).any(|run| !self.accepted_runs.contains(run));
+        if Self::runs(word).any(|run| !self.accepted_runs.contains(run)) {
+            self.keeps_unaccepted_word = true;
+        } else {
+            self.repeated
+                .push(word.as_ptr() as usize - self.plain.as_ptr() as usize);
+        }
     }
 
     /// Declines a page whose skipped words all repeat the transcript, with the reason of the
-    /// first skip.
-    fn finish(mut self) -> Result<(), &'static str> {
+    /// first skip. An accepted page returns the offsets of the skipped words that repeat it.
+    fn finish(mut self) -> Result<Vec<usize>, &'static str> {
         while let Some(word) = self.words.next() {
             self.skip(word, "Plain page added text absent from the accepted transcript");
         }
         match self.first_skip {
             Some(reason) if !self.keeps_unaccepted_word => Err(reason),
-            _ => Ok(()),
+            _ => Ok(self.repeated),
         }
     }
+}
+
+/// The Plain text without each block that holds the cells of a typed table of the page and whose
+/// every word the check skipped as a repeat of the transcript. `None` when no block goes.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn without_repeated_tables(
+    plain: &str,
+    repeated: &[usize],
+    document: &crate::types::internal::InternalDocument,
+) -> Option<String> {
+    use crate::types::internal::ElementKind;
+
+    if repeated.is_empty() {
+        return None;
+    }
+    let tables: Vec<Vec<&str>> = document
+        .elements
+        .iter()
+        .filter_map(|element| match element.kind {
+            ElementKind::Table { table_index } => document.tables.get(table_index as usize),
+            _ => None,
+        })
+        .map(|table| {
+            table
+                .cells
+                .iter()
+                .flatten()
+                .flat_map(|cell| cell.split_whitespace())
+                .collect()
+        })
+        .collect();
+    let start = plain.as_ptr() as usize;
+    let mut kept = Vec::new();
+    let mut dropped = false;
+    for block in plain.split("\n\n") {
+        let words: Vec<&str> = block.split_whitespace().collect();
+        let repeats_a_table = !words.is_empty()
+            && words
+                .iter()
+                .all(|word| repeated.binary_search(&(word.as_ptr() as usize - start)).is_ok())
+            && tables.contains(&words);
+        if repeats_a_table {
+            dropped = true;
+        } else {
+            kept.push(block);
+        }
+    }
+    dropped.then(|| kept.join("\n\n"))
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -3794,10 +3860,17 @@ fn retains_inline_group(source: &str, visible: &str, is_marker: bool, retained: 
         }
         return true;
     }
-    // ~keep Advance both alternatives together; each Plain word must continue one of them,
-    // so a word the accepted group lacks fails the group instead of being skipped.
+    // ~keep Advance both alternatives together; once the group starts, each Plain word must
+    // continue one of them, so a word the accepted group lacks fails the group instead of being
+    // skipped. A word before the group starts is an extra word like any other.
     let (mut literal_live, mut projected_live) = (true, true);
-    for candidate in retained.words.by_ref() {
+    let mut started = false;
+    while let Some(candidate) = retained.words.next() {
+        if !started && literal.peek() != Some(&candidate) && projected.peek() != Some(&candidate) {
+            retained.skip(candidate, PROSE);
+            continue;
+        }
+        started = true;
         literal_live &= literal.next_if_eq(&candidate).is_some();
         projected_live &= projected.next_if_eq(&candidate).is_some();
         if literal_live && literal.peek().is_none() || projected_live && projected.peek().is_none() {

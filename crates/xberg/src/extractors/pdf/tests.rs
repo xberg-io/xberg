@@ -1242,15 +1242,16 @@ fn mixed_plain_keeps_section_labels_the_transcript_lacks_on_a_three_table_page()
         text
     };
 
-    let cells = "North 10\nSouth 20\n\nStaff 5\nTools 3\n\nFund Plan\nParks 4";
+    // The paragraph already holds the cells of the first two tables, so their typed copies go.
+    let last = "Fund Plan\nParks 4";
     let labelled = "Budget 2030\nIncomeGroups\nNorth 10\nSouth 20\nCostGroups\nStaff 5\nTools 3\nNet change 7";
-    assert_eq!(render(labelled), format!("{labelled}\n\n{cells}"));
+    assert_eq!(render(labelled), format!("{labelled}\n\n{last}"));
     // A label that is part of a transcript word, such as "Park" beside "Parks", is still a word the transcript lacks.
     let partial = "Budget 2030\nPark\nNorth 10\nSouth 20\nStaff 5\nTools 3\nNet change 7";
-    assert_eq!(render(partial), format!("{partial}\n\n{cells}"));
+    assert_eq!(render(partial), format!("{partial}\n\n{last}"));
     // A label before the first transcript paragraph is kept as well.
     let leading = "Summary\nBudget 2030\nNorth 10\nSouth 20\nStaff 5\nTools 3\nNet change 7";
-    assert_eq!(render(leading), format!("{leading}\n\n{cells}"));
+    assert_eq!(render(leading), format!("{leading}\n\n{last}"));
     // A paragraph that only repeats the cells loses nothing when declined, so the page keeps its transcript.
     assert_eq!(
         render("Budget 2030\nNorth 10\nSouth 20\nStaff 5\nTools 3\nNet change 7"),
@@ -1258,6 +1259,44 @@ fn mixed_plain_keeps_section_labels_the_transcript_lacks_on_a_three_table_page()
     );
     // A label does not excuse transcript words out of order: the line "Net change 7" comes before the first table.
     assert_eq!(render("IncomeGroups\nNet change 7\nBudget 2030"), source);
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn mixed_plain_keeps_a_label_before_emphasis_the_transcript_lacks() {
+    use crate::core::config::OutputFormat;
+    use crate::types::{PageBoundary, Table};
+
+    let cells = vec![vec!["North".to_owned(), "10".to_owned()]];
+    let source = format!(
+        "**Budget** 2030\n\n{}",
+        crate::rendering::common::render_table_markdown(&cells).trim_end()
+    );
+    let mut document = InternalDocument::new("pdf");
+    document.push_element(InternalElement::text(ElementKind::Paragraph, "Summary\nBudget 2030", 0).with_page(1));
+    let table_index = document.push_table(Table {
+        cells,
+        page_number: 1,
+        ..Default::default()
+    });
+    document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(1));
+    let mut text = source.clone();
+    let bounds = [PageBoundary {
+        page_number: 1,
+        byte_start: 0,
+        byte_end: text.len(),
+    }];
+    let mut replacements = ahash::AHashMap::from([(1, text.clone())]);
+    ocr::render_mixed_plain_pages(
+        ExtractionMethod::Mixed,
+        &mut text,
+        &bounds,
+        &mut replacements,
+        &ahash::AHashMap::from([(1, document)]),
+        &OutputFormat::Plain,
+    );
+    // The label comes before the emphasis group starts, so the group itself still matches whole.
+    assert_eq!(text, "Summary\nBudget 2030\n\nNorth 10");
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]

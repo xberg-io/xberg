@@ -40,6 +40,15 @@ fn a_failed_group_stops_reading_at_the_word_that_killed_both_spellings() {
 }
 
 #[test]
+fn an_extra_word_before_a_group_starts_is_skipped_and_the_group_interior_stays_strict() {
+    assert_eq!(
+        group("**Budget**", "Budget", false, "Summary Budget 2030"),
+        (true, vec!["2030".into()])
+    );
+    assert!(!group("`a b`", "a b", false, "x a y b").0);
+}
+
+#[test]
 fn a_group_that_the_plain_words_end_inside_is_not_accepted() {
     assert!(!group("`a b`", "a b", false, "`a").0);
 }
