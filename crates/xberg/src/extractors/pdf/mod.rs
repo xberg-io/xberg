@@ -2402,6 +2402,11 @@ fn replace_page_content_with_ocr_text(page: &mut crate::types::PageContent, ocr_
 /// One OCR text for a document of several pages is the text of the whole document: it goes to
 /// the first page, and the content of every later page is replaced with empty text; only the
 /// page that received text is reported.
+///
+/// The list only reaches the document where its reader honors it: `is_ocr_page_text` treats
+/// every page of a `pdf`, `image` or `ocr` source as OCR text before it looks at such a list,
+/// so the list is attached only to an adopted OCR backend document of another source format
+/// (for example a plugin's `hocr` structure), whose pages #2902's re-rendering reads (#3014).
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn replace_pages_with_ocr_page_texts(
     pages: &mut [crate::types::PageContent],
@@ -2422,6 +2427,32 @@ fn replace_pages_with_ocr_page_texts(
         }
     }
     replaced
+}
+
+/// Attach the OCR text page list to the selected document where its reader honors it.
+///
+/// `is_ocr_page_text` (#2902) treats every page of a `pdf`, `image` or `ocr` source as OCR
+/// text before it looks at the list, so a list this extractor builds for such a document --
+/// including the documents it builds itself, always of source format `pdf` -- could never
+/// change a derived result (#3014) and is not attached. `select_pdf_document`'s Ocr arm
+/// returns an adopted OCR backend document verbatim, and such a document keeps its own
+/// source format (for example a plugin's `hocr` structure), which is exactly the source the
+/// reader honors the list on: there the marks are attached exactly as before #3014, and
+/// #2902's re-rendering re-renders the marked pages from their elements.
+///
+/// The marks extend any list the adopted document already carries rather than overwriting
+/// it: the reader only consults membership, so the adopter's own marks stay readable beside
+/// the extractor's. Both the gate and `is_ocr_page_text` read the shared
+/// `source_short_circuits_ocr_page_text`, so the two cannot drift.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn attach_ocr_text_page_marks(doc: &mut InternalDocument, ocr_text_pages: Vec<u32>) {
+    if !crate::extraction::derive::source_short_circuits_ocr_page_text(&doc.source_format) {
+        for page in ocr_text_pages {
+            if !doc.ocr_text_pages.contains(&page) {
+                doc.ocr_text_pages.push(page);
+            }
+        }
+    }
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -3911,6 +3942,10 @@ impl PdfExtractor {
             if let Some(results_map) = ocr_results_map.as_ref()
                 && let Some(ref mut pages) = page_contents
             {
+                // The map holds only the pages `accepted_ocr_page_replacements` kept -- a
+                // blank or discarded read is filtered and warned about there (unit-tested in
+                // `ocr::tests`) -- so a page whose read the noise gate dropped is never
+                // marked here (#2939).
                 for page in pages.iter_mut() {
                     if let Some(ocr_text) = results_map.get(&page.page_number) {
                         replace_page_content_with_ocr_text(page, ocr_text, keep_native_content);
@@ -4419,9 +4454,7 @@ impl PdfExtractor {
         }
         doc.prebuilt_pages = final_pages;
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        {
-            doc.ocr_text_pages = ocr_text_pages;
-        }
+        attach_ocr_text_page_marks(&mut doc, ocr_text_pages);
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         if !ocr_elements.is_empty() {

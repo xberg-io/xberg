@@ -104,7 +104,8 @@ fn confusable(left: char, right: char) -> bool {
 /// character the read dropped on an identifier that mixes letters and digits (the layer is then the longer token; a layer that lost a glyph never overwrites the read). A layer
 /// token with anything beyond ASCII (a ligature or other presentation form, an accent), without a
 /// letter (a number whose digits a shifted mapping could change), or that differs by any other
-/// insertion, deletion or substitution is a different word and the read keeps its own.
+/// insertion, deletion or substitution is a different word and the read keeps its own. An
+/// identifier also takes capitals that the read wrote lowercase when a digit swap comes with them.
 fn is_misreading(read: &str, layer: &str) -> bool {
     if !read.is_ascii() || !layer.is_ascii() || alnum_core(read) == alnum_core(layer) {
         return false;
@@ -121,13 +122,37 @@ fn is_misreading(read: &str, layer: &str) -> bool {
     {
         return true;
     }
-    let identifier = |token: &str| {
-        token.chars().count() >= 4
-            && token.chars().any(|character| character.is_ascii_digit())
-            && token.chars().any(|character| character.is_ascii_alphabetic())
-            && token.chars().all(|character| character.is_ascii_alphanumeric())
-    };
-    identifier(layer) && layer.len() == read.len() + 1 && (layer[1..] == *read || layer[..layer.len() - 1] == *read)
+    if is_identifier(layer) && layer.len() == read.len() && differs_by_case_and_digit_swaps(read, layer) {
+        return true;
+    }
+    is_identifier(layer) && layer.len() == read.len() + 1 && (layer[1..] == *read || layer[..layer.len() - 1] == *read)
+}
+
+/// A token of letters and digits, four or more characters, with both kinds: an identifier or a
+/// code, which carries no dictionary word the read could have guessed.
+fn is_identifier(token: &str) -> bool {
+    token.chars().count() >= 4
+        && token.chars().any(|character| character.is_ascii_digit())
+        && token.chars().any(|character| character.is_ascii_alphabetic())
+        && token.chars().all(|character| character.is_ascii_alphanumeric())
+}
+
+/// Whether `layer` is `read` with confusable characters swapped and some lowercase letters of the
+/// read capitalised, with at least one digit swap: `K2Q5wo` for `K2Q5W0`. A case difference alone
+/// is never a misreading (`us` is not `US`), so one counts only beside a digit swap in an
+/// identifier, and only toward the capital.
+fn differs_by_case_and_digit_swaps(read: &str, layer: &str) -> bool {
+    let mut digit_swap = false;
+    for (read_char, layer_char) in read.chars().zip(layer.chars()) {
+        if read_char == layer_char || (read_char.is_ascii_lowercase() && layer_char == read_char.to_ascii_uppercase()) {
+            continue;
+        }
+        if !confusable(read_char, layer_char) || !(read_char.is_ascii_digit() || layer_char.is_ascii_digit()) {
+            return false;
+        }
+        digit_swap = true;
+    }
+    digit_swap
 }
 
 fn overlaps(left: &LineBox, right: &LineBox) -> bool {
@@ -355,13 +380,29 @@ impl Frame {
     }
 }
 
-/// Recover into `read` the layer tokens of one page that a whole-page read of it lost: a layer
+/// Whether recovery may run on a read at all: it holds at least half of the words with a letter of
+/// the page's layer. `page_layer` is the layer text the page's later decision
+/// (`ocr_confirms_layer`) sees, question marks of undecodable glyphs included. The decision is
+/// stricter (it also counts numbers and judges the layer's quality, which a short layer fails, so
+/// it can never confirm one), so a read that passes here can still fail it; `recover_page` keeps
+/// recovery from turning that failure into a pass. A page with no layer in the hints has no such
+/// decision, and the decodable layer words stand in for it.
+fn read_confirms_layer(page_layer: &str, read: &str) -> bool {
+    super::document::ocr_holds_layer_letters(page_layer, read)
+}
+
+/// Recover into `read` the layer tokens of one page that a whole-page read of it lost, when the read
+/// holds the letters of the page's layer. The page's later decision to put the layer's lines first
+/// rests on `ocr_confirms_layer`, so words copied from the layer must not turn its failure into a
+/// pass: when the read fails it and the full recovery would pass it, only the words with a letter
+/// are recovered, and none if those alone would pass it. A layer
 /// word the read misread with low confidence takes the layer's spelling, and a layer word the page
 /// shows where the read has no word is added. Returns whether the read changed.
 pub(super) fn recover_page(
     pdf: &PdfDocument,
     page_index: usize,
     read: &mut ExtractedDocument,
+    page_layer: Option<&str>,
     limits: InkProofLimits<'_>,
 ) -> bool {
     let Some(raster) = super::document::processed_ocr_layout_dimensions(&read.metadata) else {
@@ -386,6 +427,23 @@ pub(super) fn recover_page(
             confidence: 1.0,
         })
         .collect();
+    // No layer in the hints means the page decision has none either; the decodable words stand in.
+    let decodable_layer;
+    let page_layer = match page_layer {
+        Some(text) => text,
+        None => {
+            decodable_layer = layer
+                .iter()
+                .filter(|word| is_decodable(&word.text))
+                .map(|word| word.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" ");
+            &decodable_layer
+        }
+    };
+    if !read_confirms_layer(page_layer, &read.content) {
+        return false;
+    }
     let Some(elements) = read.ocr_elements.as_deref() else {
         return false;
     };
@@ -448,6 +506,36 @@ pub(super) fn recover_page(
         .iter()
         .filter_map(|&at| Some((layer[at].text.clone(), frame.to_raster(&layer[at].place)?)))
         .collect();
+    // The page decision runs on the read after the list-marker repair that the pipeline applies to
+    // every read; the numeric repair is opt-in and rewrites digits only. Nothing else changes the
+    // words of a read between this point and the decision.
+    let decision = |text: &str| {
+        super::document::ocr_confirms_layer(
+            page_layer,
+            &super::scoring::repair_ocr_list_markers(text),
+            limits.thresholds,
+        )
+    };
+    // A layer that fails the quality check can never confirm, so nothing can flip.
+    let unflippable = super::scoring::evaluate_native_text_for_ocr(page_layer, Some(1), limits.thresholds).fallback;
+    if !unflippable && !decision(&read.content) {
+        let flips = |additions: &[AddedWord]| {
+            let mut probe = read.clone();
+            apply(&mut probe, &corrections, additions, limits.cancelled);
+            decision(&probe.content)
+        };
+        if flips(&additions) {
+            let letters: Vec<AddedWord> = additions
+                .iter()
+                .filter(|(token, _)| token.chars().any(char::is_alphabetic))
+                .cloned()
+                .collect();
+            if flips(&letters) {
+                return false;
+            }
+            return apply(read, &corrections, &letters, limits.cancelled);
+        }
+    }
     apply(read, &corrections, &additions, limits.cancelled)
 }
 

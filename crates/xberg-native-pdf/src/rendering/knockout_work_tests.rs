@@ -6,13 +6,13 @@ use std::sync::{Arc, Mutex};
 
 fn document(content: &str, knockout: bool, form: Option<&str>) -> PdfDocument {
     let group = format!("/Group << /S /Transparency /I true /K {knockout} >>");
-    let resources = "/ExtGState << /Half << /ca 0.5 >> >> /XObject << /Fm 5 0 R >> /Properties << /L 6 0 R >> \
+    let resources = "/ExtGState << /Half << /ca 0.5 >> >> /XObject << /Fm 5 0 R >> /Properties << /L 6 0 R /V 7 0 R >> \
         /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> \
         /F3 << /Type /Font /Subtype /Type3 /FontBBox [0 0 1 1] /FontMatrix [1 0 0 1 0 0] /CharProcs << >> \
         /Encoding << /Type /Encoding /Differences [] >> /FirstChar 0 /LastChar 0 /Widths [0] >> >>";
     let stream = |dict: &str, data: &str| format!("<< {dict} /Length {} >>\nstream\n{data}\nendstream", data.len());
     let objects = [
-        "<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [6 0 R] /D << /OFF [6 0 R] >> >> >>".to_string(),
+        "<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [6 0 R 7 0 R] /D << /OFF [6 0 R] >> >> >>".to_string(),
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
         format!(
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 72] /Contents 4 0 R /Resources << {resources} >> {} >>",
@@ -24,6 +24,7 @@ fn document(content: &str, knockout: bool, form: Option<&str>) -> PdfDocument {
             form.unwrap_or(""),
         ),
         "<< /Type /OCG /Name (L) >>".to_string(),
+        "<< /Type /OCG /Name (V) >>".to_string(),
     ];
     let mut bytes = b"%PDF-1.4\n".to_vec();
     let mut offsets = Vec::new();
@@ -516,54 +517,109 @@ fn a_knockout_form_with_invisible_text_stays_native_where_its_plan_and_floor_fit
     );
 }
 
-fn path_paints(content: &str) -> usize {
+fn path_paints(content: &str, hidden_layer: bool) -> usize {
+    let doc = document(content, true, None);
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    let resources = doc.get_page_resources(0).expect("page resources");
+    if hidden_layer {
+        renderer.excluded_layers_snapshot = Some(Arc::new(std::iter::once("L".to_string()).collect()));
+    }
     let operators = crate::content::parse_content_stream(content.as_bytes()).expect("real path operators");
-    PageRenderer::certain_path_paints(&operators)
+    renderer.certain_path_paints(&operators, &doc, &resources)
 }
+
+const HUGE: &str = "300000000000000000000000000000000000000.0";
+const BEYOND_F32: &str = "1000000000000000000000000000000000000000.0";
 
 #[test]
 fn only_a_path_paint_that_certainly_builds_a_path_raises_the_floor() {
-    let cases: [(&str, usize); 16] = [
+    let overflowing_span = format!("-{HUGE} 0 m {HUGE} 0 l f");
+    let overflowing_curve = format!("-{HUGE} 0 m 0 0 {HUGE} 0 {HUGE} 0 c f");
+    let overflowing_y = format!("-{HUGE} 0 m 0 0 {HUGE} 0 y f");
+    let overflowing_v = format!("0 0 m 1 1 l 0 0 {HUGE} 0 v 0 0 -{HUGE} 0 v f");
+    let overflowing_from_origin = format!("{HUGE} 0 l -{HUGE} 0 l f");
+    let fitting_span = format!("0 0 m {HUGE} 0 l f");
+    let infinite_line = format!("0 0 m {BEYOND_F32} 5 l f");
+    let infinite_after_rect = format!("0 0 10 10 re {BEYOND_F32} 5 l f");
+    let infinite_start = format!("{BEYOND_F32} 0 m 5 5 l f");
+    let overflowing_rect = format!("{HUGE} 0 {HUGE} 10 re f");
+    let cases: Vec<(&str, usize)> = vec![
         ("f", 0),
         ("n f", 0),
         ("0 0 10 10 re n f", 0),
         ("0 0 10 10 re f", 1),
         ("0 0 10 10 re f f", 1),
         ("0 0 10 10 re B 5 5 m 9 9 l S", 2),
+        ("0 0 10 10 re s", 1),
+        ("5 5 m 9 9 l s", 1),
         ("0 0 0 10 re f", 1),
         ("0 0 100 0 re S", 1),
-        (
-            "300000000000000000000000000000000000000.0 0 300000000000000000000000000000000000000.0 10 re f",
-            0,
-        ),
+        (&overflowing_rect, 0),
         ("/OC /L BDC 0 0 10 10 re f EMC", 0),
         ("/OC /L BDC EMC 0 0 10 10 re f", 1),
         ("/OC /L BDC /Span BMC EMC 0 0 10 10 re f EMC 0 0 10 10 re f", 1),
         ("/Span BMC 0 0 10 10 re f EMC", 1),
+        ("/Span /L BDC 0 0 10 10 re f EMC", 1),
         ("0 0 10 10 re /OC /L BDC f EMC f", 0),
         ("5 5 m f", 0),
         ("0 0 m 5 5 l f 0 0 m 5 5 l f", 2),
+        ("0 0 m 1 1 2 2 3 3 c f", 1),
+        ("0 0 m 1 1 3 3 y f", 1),
+        ("1 1 2 2 3 3 c f", 1),
+        ("5 5 l f", 1),
+        (&fitting_span, 1),
+        (&overflowing_span, 0),
+        (&overflowing_curve, 0),
+        (&overflowing_y, 0),
+        (&overflowing_v, 0),
+        (&overflowing_from_origin, 0),
+        (&infinite_line, 0),
+        (&infinite_after_rect, 0),
+        (&infinite_start, 0),
     ];
     for (content, expected) in cases {
-        assert_eq!(path_paints(content), expected, "{content}");
+        assert_eq!(path_paints(content, true), expected, "{content}");
+    }
+}
+
+#[test]
+fn a_path_paint_in_a_visible_layer_raises_the_floor_and_one_in_a_hidden_layer_does_not() {
+    let cases: [(&str, usize, usize); 6] = [
+        ("/OC /L BDC 0 0 10 10 re f EMC", 1, 0),
+        ("/OC /L BDC 0 0 10 10 re f EMC 0 0 10 10 re f", 2, 1),
+        ("/OC /Gone BDC 0 0 10 10 re f EMC", 1, 1),
+        ("/OC /L BDC /OC /Gone BDC 0 0 10 10 re f EMC EMC", 1, 0),
+        ("/OC /Gone BDC /OC /L BDC 0 0 10 10 re f EMC EMC", 1, 0),
+        ("/OC /Gone BDC 0 0 10 10 re EMC f", 1, 1),
+    ];
+    for (content, visible, hidden) in cases {
+        assert_eq!(path_paints(content, false), visible, "visible: {content}");
+        assert_eq!(path_paints(content, true), hidden, "hidden: {content}");
     }
 }
 
 fn native_with_plan_and_certain_floor(content: &str, certain: usize) -> (bool, usize) {
-    let doc = document(content, true, None);
-    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
-    let resources = doc.get_page_resources(0).expect("page resources");
-    renderer.load_resources(&doc, &resources).expect("load resources");
-    renderer.excluded_layers_snapshot = Some(Arc::new(std::iter::once("L".to_string()).collect()));
     let operators = crate::content::parse_content_stream(content.as_bytes()).expect("real operators");
     let paints = operators
         .iter()
         .filter(|operator| crate::rendering::page_renderer::is_paint_operator(operator))
         .count();
+    run_with_room_for(content, paints + certain, true)
+}
+
+fn run_with_room_for(content: &str, surfaces: usize, hidden_layer: bool) -> (bool, usize) {
+    let doc = document(content, true, None);
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    let resources = doc.get_page_resources(0).expect("page resources");
+    renderer.load_resources(&doc, &resources).expect("load resources");
+    if hidden_layer {
+        renderer.excluded_layers_snapshot = Some(Arc::new(std::iter::once("L".to_string()).collect()));
+    }
+    let operators = crate::content::parse_content_stream(content.as_bytes()).expect("real operators");
     let mut pixmap = tiny_skia::Pixmap::new(72, 72).expect("initial backdrop");
     pixmap.fill(tiny_skia::Color::WHITE);
     renderer.knockout_resources.canvas(pixmap.data().len());
-    renderer.knockout_resources.surface_work = MAX_SURFACE_WORK - ((paints + certain) * 72 * 72) as u64;
+    renderer.knockout_resources.surface_work = MAX_SURFACE_WORK - (surfaces * 72 * 72) as u64;
     let fallback = renderer
         .execute_knockout_group(
             &mut pixmap,
@@ -591,5 +647,22 @@ fn paints_that_charge_no_path_work_stay_native_where_plan_and_floor_fit() {
     assert!(
         !native_with_plan_and_certain_floor(&visible, 2).0,
         "visible path paints charge a surface each, which room for two does not hold"
+    );
+}
+
+#[test]
+fn a_visible_layer_of_path_paints_that_cannot_fit_degrades_before_painting() {
+    let paints = 40;
+    let body = "0 0 10 10 re f ".repeat(paints);
+    let room = 2 * paints - 10;
+    assert_eq!(
+        run_with_room_for(&format!("0 g /OC /V BDC {body}EMC"), room, false),
+        (false, paints),
+        "the floor counts the layer's paints, refuses the plan, and nothing is painted twice"
+    );
+    assert_eq!(
+        run_with_room_for(&format!("0 g /OC /L BDC {body}EMC"), room, true),
+        (true, paints),
+        "a hidden layer charges nothing, so the same room holds it"
     );
 }
