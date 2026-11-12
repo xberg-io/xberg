@@ -359,6 +359,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Each paint in a knockout group plans one page-sized surface and charges at least one more while it runs, and text that paints a side charges a second for its coverage. Invisible text (Tr 3 and 7), Type 3 text and text in an optional-content layer are left out of that count. A page whose planned work plus that floor already passes the render work limit now renders without knockout from the start, instead of running the knockout pass until the limit stops it and then painting everything again. Output and limits are unchanged. Pages and forms also share one knockout check.
 - **(pdf): Keep a knockout page native when its empty or hidden path paints charge no work.** (#3002)
   The in-pass floor counted every path paint operator, but the pass charges a path paint only when a path was built since the last paint or `n` and it is outside an optional-content layer. The floor now counts only those paints, so a page whose plan and real floor fit renders with knockout instead of degrading to ordinary compositing. Output and limits are unchanged.
+- **(pdf): Stop counting overflowing line and curve paths in the knockout floor.** (#3058)
+  A path whose points or span do not fit `f32` builds no path, yet the floor counted it as a charged paint, so a page of such paths that rendered natively degraded. The floor now tracks the path's bounds and counts it only where they fit.
+- **(pdf): Count path paints in visible optional-content layers in the knockout floor.** (#3060)
+  A layer the renderer finds visible no longer hides its paints from the floor, so a page whose layered paints cannot fit the work limit renders without knockout from the start instead of running out of budget and painting again. Hidden layers still count nothing.
 - **(ocr): Keep Khmer number recovery available after bounded source declines.** (#2905)
   Completed declines charge the work already done, leaving room to verify supported pages later in the PDF.
   Cancellation and failures whose work cannot be measured still retain their reservation.
