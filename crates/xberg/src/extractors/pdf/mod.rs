@@ -1246,6 +1246,8 @@ async fn run_ocr_with_layout(
         PageOcrLayoutContext {
             pages: None,
             hints: page_ocr_hints,
+            #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+            rendered_layout_pages: Vec::new(),
         },
         #[cfg(feature = "layout-detection")]
         precomputed_layout_images,
@@ -1261,6 +1263,8 @@ async fn run_ocr_with_layout(
 struct PageOcrLayoutContext<'a> {
     pages: Option<&'a crate::core::layout_pages::LayoutPageSelection>,
     hints: Option<ocr::PageOcrHints>,
+    #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+    rendered_layout_pages: Vec<bool>,
 }
 
 /// Run OCR with optional layout detection on PDF bytes.
@@ -1283,6 +1287,8 @@ async fn run_ocr_with_layout_pages(
     let PageOcrLayoutContext {
         pages: layout_pages,
         hints: page_ocr_hints,
+        #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+        mut rendered_layout_pages,
     } = context;
     #[cfg(all(feature = "pdf", feature = "layout-detection"))]
     let mut layout_warning = None;
@@ -1331,6 +1337,7 @@ async fn run_ocr_with_layout_pages(
                                 data: Some(layout),
                                 gate_decisions,
                                 raster_dpis,
+                                rendered_pages,
                             },
                         acceleration_override,
                         warning,
@@ -1339,6 +1346,7 @@ async fn run_ocr_with_layout_pages(
                 )) => {
                     layout_acceleration_override = acceleration_override;
                     layout_raster_dpis = raster_dpis;
+                    rendered_layout_pages = rendered_pages;
                     layout_warning = warning;
                     layout_glyph_drop_warnings = glyph_drop_warnings;
                     ocr_layout_gate_decisions = layout_gate_metadata(gate_decisions.as_deref());
@@ -1405,8 +1413,14 @@ async fn run_ocr_with_layout_pages(
     #[cfg(all(feature = "pdf", feature = "layout-detection"))]
     let page_ocr_hints = {
         let mut hints = page_ocr_hints;
-        if prepared_layout_inputs.is_some() && !layout_raster_dpis.is_empty() {
-            hints.get_or_insert_with(Default::default).raster_dpis = Some(std::sync::Arc::new(layout_raster_dpis));
+        if prepared_layout_inputs.is_some() {
+            let hints = hints.get_or_insert_with(Default::default);
+            // OCR layout renders undo /Rotate. The Markdown reuse gate only passes unrotated
+            // pages, so those rasters also share the MediaBox frame. ~keep
+            hints.layout_rasters_in_page_frame = Some(rendered_layout_pages.into());
+            if !layout_raster_dpis.is_empty() {
+                hints.raster_dpis = Some(std::sync::Arc::new(layout_raster_dpis));
+            }
         }
         hints
     };
@@ -2846,6 +2860,7 @@ impl PdfExtractor {
             markdown_layout_warning,
             mut markdown_layout_acceleration_override,
             markdown_layout_glyph_drop_warnings,
+            mut markdown_rendered_pages,
         ) = layout_runner::maybe_run_layout_for_markdown_with_pages(content, config, layout_pages).await;
 
         let blocking_content = content.to_vec();
@@ -3105,6 +3120,8 @@ impl PdfExtractor {
                 PageOcrLayoutContext {
                     pages: layout_pages,
                     hints: None,
+                    #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+                    rendered_layout_pages: std::mem::take(&mut markdown_rendered_pages),
                 },
                 #[cfg(feature = "layout-detection")]
                 markdown_layout_images.take(),
@@ -3491,6 +3508,8 @@ impl PdfExtractor {
                         path,
                         PageOcrLayoutContext {
                             pages: layout_pages,
+                            #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+                            rendered_layout_pages: std::mem::take(&mut markdown_rendered_pages),
                             hints: {
                                 #[allow(unused_mut)]
                                 let mut hints = whole_document_ocr_hints(

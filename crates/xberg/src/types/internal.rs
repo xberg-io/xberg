@@ -33,6 +33,10 @@ pub(crate) mod table_grid;
 mod element_id;
 pub use element_id::InternalElementId;
 
+/// Attribute key under which the resolved DOCX paragraph style name (`w:pStyle` ->
+/// `styles.xml` `w:name`, walking `w:basedOn`) is exposed on `Element.metadata.additional`.
+/// Plain output leaves it out: it describes the paragraph, it is not text of the paragraph.
+pub(crate) const STYLE_NAME_ATTRIBUTE: &str = "style_name";
 pub(crate) const MARKDOWN_PLAIN_TEXT_ATTRIBUTE: &str = "xberg:internal:markdown-plain-text";
 pub(crate) const MARKDOWN_ROW_LINES_ATTRIBUTE: &str = "xberg:internal:markdown-row-lines";
 pub(crate) const MARKDOWN_IMAGE_REFERENCE_ATTRIBUTE: &str = "xberg:internal:markdown-image-reference";
