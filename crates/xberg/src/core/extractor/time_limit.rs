@@ -19,6 +19,14 @@ pub(super) const PARTIAL_RESULT_GRACE: Duration = Duration::from_secs(10);
 
 const WARNING_SOURCE: &str = "timeout";
 
+/// Starts the limit on `token`: records its deadline for the post-processing stages that check it
+/// between batches (a model call that never yields keeps the timeout future from firing).
+pub(super) fn arm(token: Option<&CancellationToken>, secs: u64) {
+    if let Some(token) = token {
+        token.set_deadline(Instant::now() + Duration::from_secs(secs));
+    }
+}
+
 /// The limit passed. Asks an extraction whose page loop is running on `token` to stop at the
 /// next page boundary and returns the token to await the extraction for [`PARTIAL_RESULT_GRACE`]
 /// more. Any other extraction is cancelled and gets the timeout error at once.
@@ -52,9 +60,11 @@ pub(super) fn finish_grace(
 ) -> Result<ExtractedDocument> {
     match outcome {
         Ok(Ok(mut document)) => {
-            if let Some(page) = token.first_unread_page() {
+            if token.result_is_partial() {
                 // The operation-wide caches must not keep a partial document.
                 super::cacheability::invalidate_current();
+            }
+            if let Some(page) = token.first_unread_page() {
                 crate::core::diagnostics::push_warning(
                     &mut document.processing_warnings,
                     WARNING_SOURCE,
