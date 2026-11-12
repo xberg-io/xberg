@@ -12,7 +12,7 @@ mod file;
 mod helpers;
 mod lenient;
 #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-mod time_limit;
+pub(crate) mod time_limit;
 
 #[allow(unused_imports)]
 pub(crate) use bytes::{extract_bytes, extract_bytes_with_layout_pages};

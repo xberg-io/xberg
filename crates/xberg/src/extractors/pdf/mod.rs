@@ -845,6 +845,40 @@ fn inject_unrepresented_form_field_elements(doc: &mut InternalDocument, form_fie
     }
 }
 
+/// A page the extraction time limit left unread is neither blank nor not blank, as on the native
+/// path: its `is_blank` is cleared. A page whose native text still gives it content was recovered
+/// and keeps the flag it was given.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn clear_blank_flag_of_unread_pages(
+    page_contents: &mut Option<Vec<crate::types::PageContent>>,
+    page_structure: &mut Option<crate::types::PageStructure>,
+    failures: &[crate::types::OcrPageFailure],
+) {
+    let unread: std::collections::HashSet<u32> = failures
+        .iter()
+        .filter(|failure| failure.error == ocr::TIME_LIMIT_UNREAD_PAGE_ERROR && !failure.recovered)
+        .map(|failure| failure.page)
+        .collect();
+    if unread.is_empty() {
+        return;
+    }
+    for page in page_contents.iter_mut().flatten() {
+        if unread.contains(&page.page_number) {
+            page.is_blank = None;
+        }
+    }
+    for info in page_structure
+        .as_mut()
+        .and_then(|structure| structure.pages.as_mut())
+        .into_iter()
+        .flatten()
+    {
+        if unread.contains(&info.number) {
+            info.is_blank = None;
+        }
+    }
+}
+
 /// Compute language/dictionary-implausible pages (issue #1696), record them on
 /// `pdf_metadata.pdf_specific.implausible_text_pages`, and merge them into
 /// `pdf_metadata.pdf_specific.scanned_pages` so `OcrStrategy::ScannedPages` (via
@@ -4454,6 +4488,10 @@ impl PdfExtractor {
         {
             reconcile_native_page_tables(pages, &doc.tables);
         }
+        // Last: the stages above recompute the flag from each page's text, and the OCR document
+        // carries the unread pages in its own failure list.
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        clear_blank_flag_of_unread_pages(&mut final_pages, &mut doc.metadata.pages, &doc.ocr_page_failures);
         doc.prebuilt_pages = final_pages;
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         attach_ocr_text_page_marks(&mut doc, ocr_text_pages);

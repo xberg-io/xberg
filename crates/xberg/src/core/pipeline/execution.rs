@@ -60,6 +60,8 @@ pub(super) async fn execute_processor_stages<R: crate::extraction::derive::surfa
     stages: &[ProcessorStage],
     _builtin_redaction: Option<&PostProcessorHandle>,
 ) -> Result<()> {
+    let time_limit = config.cancel_token.as_ref();
+    let mut skipped_after_time_limit: Vec<&str> = Vec::new();
     for (_stage, processors_arc) in stages {
         #[cfg(feature = "otel")]
         let stage_name = match _stage {
@@ -80,6 +82,16 @@ pub(super) async fn execute_processor_stages<R: crate::extraction::derive::surfa
             let should_run = should_processor_run(pp_config, processor_name);
 
             if should_run && processor.should_process(result.document(), config) {
+                // A processor is one model call or network round trip that cannot be split, so the
+                // limit is honoured between processors: those not yet started are skipped. ~keep
+                // Redaction always runs: dropping it would return the text it exists to remove. ~keep
+                let is_builtin_redaction = _builtin_redaction.is_some_and(|builtin| Arc::ptr_eq(builtin, processor));
+                if !is_builtin_redaction
+                    && time_limit.is_some_and(crate::cancellation::CancellationToken::time_limit_reached)
+                {
+                    skipped_after_time_limit.push(processor_name);
+                    continue;
+                }
                 #[cfg(feature = "otel")]
                 let processor_span = crate::telemetry::spans::pipeline_processor_span(stage_name, processor_name);
 
@@ -120,6 +132,13 @@ pub(super) async fn execute_processor_stages<R: crate::extraction::derive::surfa
             drop(_stage_guard);
             drop(stage_span);
         }
+    }
+    if !skipped_after_time_limit.is_empty() {
+        super::features::report_stage_cut(
+            &mut result.document_mut().processing_warnings,
+            config,
+            &format!("post-processors {}", skipped_after_time_limit.join(", ")),
+        );
     }
     Ok(())
 }
@@ -188,6 +207,9 @@ mod redaction_surface_tests;
 
 #[cfg(all(test, not(feature = "tokio-runtime")))]
 mod no_runtime_surface_tests;
+
+#[cfg(all(test, feature = "tokio-runtime"))]
+mod time_limit_tests;
 
 #[cfg(all(test, feature = "redaction", feature = "tokio-runtime"))]
 mod processor_mutation_tests;

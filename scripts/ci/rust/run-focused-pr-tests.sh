@@ -49,6 +49,14 @@ run_pdf_cases() {
     --test pdf_embedded_psm6_addition_2327
   run_type0_cases
   run_budget_retry_cases
+  run_retry_timeout_cases
+}
+
+run_retry_timeout_cases() {
+  local module='extractors::pdf::ocr::tests::tests::retry_timeout_stop_tests'
+  run_exact "$module::final_failed_page_keeps_its_warning_and_marks_the_run_cut_short" --lib
+  run_exact "$module::a_stop_that_skips_the_only_failed_pages_retry_returns_timeout" --lib
+  run_exact "$module::a_stop_accounts_for_every_pending_failure_in_the_batch" --lib
 }
 
 run_budget_retry_cases() {
@@ -211,7 +219,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=82
+  expected=85
   run_pdf_cases
   run_retained_read_cases
   expected=$((expected + 11))

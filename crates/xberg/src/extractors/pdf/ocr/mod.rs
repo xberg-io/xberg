@@ -53,6 +53,8 @@ pub(crate) use pipeline::extract_mixed_ocr_native_with_probe_reads;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(in crate::extractors::pdf) use pipeline::read_rendered_page;
 mod pipeline;
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(in crate::extractors::pdf) use pipeline::TIME_LIMIT_UNREAD_PAGE_ERROR;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) use pipeline::render_mixed_plain_pages;
 #[cfg(all(

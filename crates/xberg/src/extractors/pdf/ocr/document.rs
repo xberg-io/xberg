@@ -1039,6 +1039,23 @@ pub(crate) fn layer_lines_to_put_first(
     };
     (!lines.is_empty()).then_some(LayerFirst { lines })
 }
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(super) use matched_layer_occurrences::MatchedLayerOccurrences;
+
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+#[path = "document/matched_layer_occurrences.rs"]
+mod matched_layer_occurrences;
+
 /// The restored native rows and unchanged OCR text of a page. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn text_with_layer_first(ocr_text: &str, first: &LayerFirst) -> String {
@@ -1090,6 +1107,20 @@ pub(super) fn put_layer_first_in_document(
 ) {
     insert_layer_into_document(doc, page, &first.lines);
 }
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(super) fn finish_mixed_layer_prepend(
+    text: &mut String,
+    structured: Option<&mut crate::types::internal::InternalDocument>,
+    first: &LayerFirst,
+) {
+    if !first.lines.is_empty()
+        && let Some(page) = structured
+    {
+        put_layer_first_in_document(page, None, first);
+    }
+    *text = text_with_layer_first(text, first);
+}
+
 /// The page's noise verdict in a whole-document run: `None` when the noise gate discarded the OCR
 /// text of the page, else whether the page has the noise verdict. A page with no verdict has
 /// not. ~keep

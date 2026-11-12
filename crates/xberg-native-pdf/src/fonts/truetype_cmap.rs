@@ -614,23 +614,21 @@ impl TrueTypeCMap {
 
 /// Upper bound on the code points one cmap subtable may examine, as a total
 /// across its groups (each group's clamped width is charged against it up
-/// front). Derivation: the gid→Unicode map is keyed by `u16` — the TrueType
-/// glyph space, `numGlyphs` being a u16 — and a format-12 group maps a
-/// contiguous code-point run onto a contiguous gid run (`startCharCode` →
-/// `startGlyphId`). A well-formed subtable therefore examines at most one
-/// code point per gid, 65,536 in total: a font that claims more either
-/// wraps its gid runs past the u16 space or overlaps them, and in both
-/// cases a later write clobbers an earlier one, so the parsed map would
-/// silently lose entries no matter how far the walk continued. Real fonts
-/// sit far below this — a font's mapped code points cannot exceed its glyph
-/// count, typically well under 30k even for a full CJK face. The budget is
-/// thus tight (every non-degenerate subtable fits exactly once) and safe
-/// (exhaustion proves degeneracy, and the parse is rejected so the font
-/// takes its declared-encoding fallback instead of a silently truncated
-/// map). This is tighter than the core crate's
-/// `SecurityLimits::max_iterations` work budget (10M), which lives in a
-/// crate this one does not depend on.
-const MAX_CMAP_EXAMINED_CODE_POINTS: usize = u16::MAX as usize + 1;
+/// front). A well-formed font may alias code points: two or more groups can
+/// map overlapping code-point runs onto gids a previous group already
+/// mapped, so a subtable's group widths can legitimately sum to a multiple
+/// of the glyph count even though every gid is mapped once (GH#3064) — a
+/// budget at the glyph space itself rejects such fonts and loses their
+/// whole cmap to the declared-encoding fallback. The bound is therefore
+/// 16 times the glyph space (`numGlyphs` is a u16): far above any sane
+/// aliasing (a face's mapped code points cannot exceed its glyph count
+/// times its aliasing factor, typically one), still walked in
+/// milliseconds, and still rejecting the crafted unbounded groups of
+/// GH#3034 — ~87k overlapping 65,535-wide groups need ~5.7 billion
+/// examined code points, orders of magnitude past this budget. Tighter
+/// than the core crate's `SecurityLimits::max_iterations` work budget
+/// (10M), which lives in a crate this one does not depend on.
+const MAX_CMAP_EXAMINED_CODE_POINTS: usize = (u16::MAX as usize + 1) * 16;
 
 #[cfg(test)]
 mod tests;

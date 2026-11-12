@@ -227,3 +227,118 @@ async fn selected_scan_renders_prose_before_and_after_the_ocr_table() {
     let after = body.find("End of quarterly report").expect("recognized closing prose");
     assert!(before < table && table < after, "{body}");
 }
+
+struct TablePage {
+    name: &'static str,
+    pdf: &'static [u8],
+    rectangles: &'static [[f64; 4]],
+}
+
+/// A raster-only page and the table rectangles, in PDF points, that its recognition must report
+/// however the pipeline reaches it. Each page is read at a resampled frame, so a rectangle left in
+/// that frame, or scaled into the render twice, lands outside the page. A rotated page is recovered
+/// only by the detached route; whole-document OCR needs the orientation model for it. ~keep
+const TABLE_PAGES: [TablePage; 7] = [
+    TablePage {
+        name: "shaded table",
+        pdf: include_bytes!("../fixtures/ocr/shaded_table_scan.pdf"),
+        rectangles: &[[65.52, 443.79, 536.88, 727.88]],
+    },
+    TablePage {
+        name: "heading above a table",
+        pdf: include_bytes!("../fixtures/ocr/detached_heading_frame_2497/heading-table-0.pdf"),
+        rectangles: &[[28.8, 53.76, 576.0, 689.28]],
+    },
+    TablePage {
+        name: "heading above a table, rotated",
+        pdf: include_bytes!("../fixtures/ocr/detached_heading_frame_2497/heading-table-90.pdf"),
+        rectangles: &[[53.76, 36.48, 689.28, 583.68]],
+    },
+    TablePage {
+        name: "two tables",
+        pdf: include_bytes!("../fixtures/ocr/multitable_orientation_2497/two-tables-0.pdf"),
+        rectangles: &[[38.4, 459.84, 475.2, 742.08], [38.4, 75.84, 475.2, 358.08]],
+    },
+    TablePage {
+        name: "two tables, rotated",
+        pdf: include_bytes!("../fixtures/ocr/multitable_orientation_2497/two-tables-90.pdf"),
+        rectangles: &[[459.84, 137.28, 742.08, 574.08], [75.84, 137.28, 358.08, 574.08]],
+    },
+    TablePage {
+        name: "strict two tables",
+        pdf: include_bytes!("../fixtures/ocr/multitable_orientation_2497/strict-two-tables-0.pdf"),
+        rectangles: &[[28.8, 449.52, 270.48, 741.84], [28.8, 80.64, 270.48, 372.0]],
+    },
+    TablePage {
+        name: "strict two tables, rotated",
+        pdf: include_bytes!("../fixtures/ocr/multitable_orientation_2497/strict-two-tables-90.pdf"),
+        rectangles: &[[449.52, 342.0, 741.84, 583.68], [80.64, 342.0, 372.0, 583.68]],
+    },
+];
+
+#[track_caller]
+fn assert_table_rectangles(document: &ExtractedDocument, expected: &[[f64; 4]], page: &str) {
+    let actual: Vec<[f64; 4]> = document
+        .tables
+        .iter()
+        .map(|table| {
+            let bbox = table.bounding_box.expect("the OCR table keeps its rectangle");
+            [bbox.x0, bbox.y0, bbox.x1, bbox.y1]
+        })
+        .collect();
+    assert_eq!(actual.len(), expected.len(), "{page}: {actual:?}");
+    for (actual, expected) in actual.iter().zip(expected) {
+        assert!(
+            actual.iter().zip(expected).all(|(a, e)| (a - e).abs() <= 2.0),
+            "{page}: the table rectangle is {actual:?}, not {expected:?} in page points"
+        );
+    }
+}
+
+async fn table_rectangles_under(config: &ExtractionConfig, method: xberg::types::ExtractionMethod, rotated: bool) {
+    for page in TABLE_PAGES
+        .iter()
+        .filter(|page| rotated || !page.name.ends_with("rotated"))
+    {
+        let actual = read(page.pdf, config).await;
+        assert_eq!(actual.extraction_method, Some(method), "{}", page.name);
+        assert_table_rectangles(&actual, page.rectangles, page.name);
+    }
+}
+
+#[tokio::test]
+async fn detected_scans_report_every_table_rectangle_in_page_points() {
+    let models = tempfile::tempdir().unwrap();
+    let mut config = super::pinned_config(models.path());
+    config.ocr_strategy = OcrStrategy::ScannedPages { min_confidence: 0.9 };
+    table_rectangles_under(&config, xberg::types::ExtractionMethod::Mixed, true).await;
+}
+
+#[tokio::test]
+async fn forced_ocr_reports_every_table_rectangle_in_page_points() {
+    let models = tempfile::tempdir().unwrap();
+    let config = ExtractionConfig {
+        force_ocr: true,
+        ..super::pinned_config(models.path())
+    };
+    table_rectangles_under(&config, xberg::types::ExtractionMethod::Ocr, false).await;
+}
+
+fn single_stage_pipeline(config: ExtractionConfig) -> ExtractionConfig {
+    let mut config = config;
+    config.force_ocr = true;
+    config.ocr.as_mut().unwrap().pipeline = Some(xberg::OcrPipelineConfig {
+        stages: vec![serde_json::from_value(serde_json::json!({"backend": "tesseract", "priority": 100})).unwrap()],
+        quality_thresholds: Default::default(),
+    });
+    config
+}
+
+/// An explicit pipeline keeps the whole-document scope, so each page is rendered lazily rather
+/// than handed over as a detached image.
+#[tokio::test]
+async fn single_stage_pipeline_reports_every_table_rectangle_in_page_points() {
+    let models = tempfile::tempdir().unwrap();
+    let config = single_stage_pipeline(super::pinned_config(models.path()));
+    table_rectangles_under(&config, xberg::types::ExtractionMethod::Ocr, false).await;
+}
