@@ -109,7 +109,7 @@ pub(super) fn assemble_mixed_ocr_page_document(
 /// markdown verbatim out of an HTTP JSON body, which routinely carries `\r\n`. Splitting
 /// raw would fold the entire page into a single block element (#316).
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(super) fn flat_ocr_page_document(text: &str) -> crate::types::internal::InternalDocument {
+pub(in crate::extractors::pdf) fn flat_ocr_page_document(text: &str) -> crate::types::internal::InternalDocument {
     use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
     use crate::types::ocr_elements::OcrElementLevel;
 
@@ -1985,7 +1985,7 @@ pub(super) fn accepted_ocr_page_replacements(
         .collect()
 }
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(super) fn apply_ocr_page_replacements(
+pub(in crate::extractors::pdf) fn apply_ocr_page_replacements(
     native_text: &str,
     boundaries: &[crate::types::PageBoundary],
     accepted: &ahash::AHashMap<u32, String>,

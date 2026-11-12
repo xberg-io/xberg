@@ -238,6 +238,24 @@ pub(crate) fn carries_scan_raster(doc: &PdfDocument, page_index: usize) -> bool 
     image_coverage(doc, page_index).is_some_and(|coverage| coverage >= OCR_SCAN_COVERAGE_MIN)
 }
 
+/// Least share of a page's visible glyphs that must be drawn after its full-page picture for the
+/// text layer to be content on a background picture.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+const MIN_GLYPH_SHARE_OVER_PICTURE: f64 = 0.5;
+
+/// Text printed on a background picture, as on a flyer: when at least
+/// [`MIN_GLYPH_SHARE_OVER_PICTURE`] of the page's visible glyphs are drawn after the last picture
+/// that alone covers [`IMAGE_COVERAGE_FULL`] of the page, the share of all its glyphs that are.
+/// Glyphs in render mode 3 or 7, as an OCR sidecar draws them, are not visible: they count only in
+/// the returned share. `None` when the page has no such picture or no such text. Form XObjects are
+/// followed.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn glyph_share_over_full_page_picture(doc: &PdfDocument, page_index: usize) -> Option<f64> {
+    let glyphs = doc.glyphs_over_covering_image(page_index, IMAGE_COVERAGE_FULL)?;
+    (glyphs.visible > 0 && glyphs.over as f64 >= MIN_GLYPH_SHARE_OVER_PICTURE * glyphs.visible as f64)
+        .then(|| glyphs.over as f64 / glyphs.shown as f64)
+}
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline", feature = "layout-detection"))]
 fn readable_glyph_count(spans: &[TextSpan]) -> usize {
     spans

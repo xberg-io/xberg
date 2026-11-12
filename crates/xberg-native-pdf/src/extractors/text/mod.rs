@@ -2380,6 +2380,7 @@ pub struct TextExtractor<'doc> {
     /// Extracted text spans (complete strings from Tj/TJ operators)
     spans: Vec<TextSpan>,
     pub(crate) preserve_script_baselines: bool,
+    pub(crate) skip_nonpainting_text: bool,
     /// Extracted characters (for backward compatibility)
     chars: Vec<TextChar>,
     /// Whether the last glyph that was not a space stood for more than one letter (a ligature).
@@ -2395,7 +2396,7 @@ pub struct TextExtractor<'doc> {
     /// processed multiple times when invoked with different transformation
     /// matrices (e.g., the same XObject stamped at different positions on a page),
     /// while still preventing infinite recursion (same ref + same CTM).
-    processed_xobjects: HashSet<(ObjectRef, [i64; 6])>,
+    processed_xobjects: HashSet<(ObjectRef, [i64; 6], bool)>,
     /// Cached XObject name → ObjectRef mapping for current resources context.
     /// Avoids expensive repeated resolution of the resources/XObject dict chain.
     cached_xobject_refs: HashMap<String, Option<ObjectRef>>,

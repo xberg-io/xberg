@@ -279,7 +279,7 @@ impl PdfDocument {
     /// Gated inside `reorder_mixed_rtl_line`, so pure-RTL, pure-LTR, and
     /// non-RTL lines are returned byte-for-byte unchanged; the ASCII fast path
     /// keeps all Latin-only extraction identical.
-    fn apply_mixed_rtl_line_pass(text: String) -> String {
+    pub(super) fn apply_mixed_rtl_line_pass(text: String) -> String {
         if text.is_ascii() {
             return text;
         }

@@ -19,6 +19,8 @@ mod loses_whole_read_tests;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 mod mixed_tables;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+mod picture_layer;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod unreadable_script;
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "tokio-runtime"))]
 pub(crate) use layout_runner::inherit_test_selected_page_detections;
@@ -3337,6 +3339,8 @@ impl PdfExtractor {
             #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
             let native_script_pages: Vec<u32> = Vec::new();
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            let mut picture_candidates = Vec::new();
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             let probe_reads = {
                 let layer = unreadable_script::NativeLayer {
                     text: &native_text,
@@ -3345,6 +3349,7 @@ impl PdfExtractor {
                 };
                 let ink = ink_probe::contradicted_pages(&decision, layer, content, config, layout_pages).await?;
                 let reads = ink.reads.filter(|reads| reads.finish(&ink.contradicted));
+                picture_candidates.clone_from(&decision.failing_pages);
                 crate::core::diagnostics::dedup_extend_warnings(&mut ocr_fallback_warnings, ink.warnings);
                 crate::core::diagnostics::dedup_extend_warnings(
                     &mut ocr_fallback_warnings,
@@ -3406,6 +3411,9 @@ impl PdfExtractor {
                 ocr::apply_flagged_pages(&mut decision, &outlined_ocr_pages, has_boundaries, None);
             }
 
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            picture_candidates.retain(|page| !decision.failing_pages.contains(page));
+
             tracing::debug!(
                 target: "xberg::pdf::ocr",
                 fallback = decision.fallback,
@@ -3456,7 +3464,7 @@ impl PdfExtractor {
             } else {
                 outcome
             };
-            match outcome {
+            let routed = match outcome {
                 ocr::OcrGateOutcome::SkipNonText => {
                     tracing::debug!(
                         alnum_ws_ratio,
@@ -3887,7 +3895,40 @@ impl PdfExtractor {
                         (native_text, ExtractionMethod::Native)
                     }
                 }
-            }
+            };
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            let routed = {
+                let (mut text, mut method) = routed;
+                if method != ExtractionMethod::Ocr
+                    && !picture_candidates.is_empty()
+                    && let Some(bounds) = boundaries.as_deref()
+                {
+                    let current_bounds = ocr_results_map.as_ref().map_or_else(
+                        || bounds.to_vec(),
+                        |accepted| ocr::boundaries_after_replacements(bounds, accepted),
+                    );
+                    let additions = picture_layer::read_retained_picture_pages(
+                        content,
+                        &text,
+                        &current_bounds,
+                        &picture_candidates,
+                        ocr_results_map.as_ref(),
+                        config,
+                    )
+                    .await?;
+                    if !additions.is_empty() {
+                        text = ocr::apply_ocr_page_replacements(&text, &current_bounds, &additions);
+                        let documents = structured_ocr_pages.get_or_insert_with(Default::default);
+                        for (&page, text) in &additions {
+                            documents.insert(page, ocr::flat_ocr_page_document(text));
+                        }
+                        ocr_results_map.get_or_insert_with(Default::default).extend(additions);
+                        method = ExtractionMethod::Mixed;
+                    }
+                }
+                (text, method)
+            };
+            routed
         } else {
             (native_text, ExtractionMethod::Native)
         };

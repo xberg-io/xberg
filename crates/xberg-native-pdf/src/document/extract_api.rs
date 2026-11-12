@@ -97,6 +97,7 @@ impl PdfDocument {
             HashSet::new(),
             HashSet::new(),
             ScriptGeometry::Flatten,
+            false,
         )
     }
 
@@ -112,6 +113,7 @@ impl PdfDocument {
             excluded_layers,
             excluded_inks,
             ScriptGeometry::Flatten,
+            false,
         )
     }
 
@@ -122,6 +124,7 @@ impl PdfDocument {
         excluded_layers: HashSet<String>,
         excluded_inks: HashSet<String>,
         script_geometry: ScriptGeometry,
+        skip_nonpainting_text: bool,
     ) -> Result<Vec<crate::layout::TextSpan>> {
         if self.is_encrypted_unreadable() {
             tracing::warn!(target: LOG_TARGET, "PDF is encrypted and could not be decrypted; returning no spans");
@@ -176,6 +179,7 @@ impl PdfDocument {
 
         let mut extractor = TextExtractor::with_config(config);
         extractor.preserve_script_baselines = matches!(script_geometry, ScriptGeometry::Preserve);
+        extractor.skip_nonpainting_text = skip_nonpainting_text;
         // Stamp the page index so spans carry McidScope::Page(page_index)
         // by default; Form XObject Do invocations push their own scope
         // on top of the stack inside the extractor. ~keep ~keep
@@ -220,6 +224,23 @@ impl PdfDocument {
             guard.insert(page_index, mc_set);
         }
         Ok(spans)
+    }
+
+    /// Internal Core bridge for text over a scanned picture. Render modes 3 and 7
+    /// advance the text position but contribute no text to the returned page. ~keep
+    #[doc(hidden)]
+    pub fn extract_text_without_nonpainting_glyphs(&self, page_index: usize) -> Result<String> {
+        let spans = self.extract_spans_impl(
+            page_index,
+            crate::extractors::TextExtractionConfig::default(),
+            HashSet::new(),
+            HashSet::new(),
+            ScriptGeometry::Flatten,
+            true,
+        )?;
+        let spans = self.postprocess_spans(page_index, spans)?;
+        let text = self.assemble_text_from_spans(page_index, spans, &Default::default())?;
+        Ok(Self::apply_mixed_rtl_line_pass(text))
     }
 
     /// Extract text from a page, excluding content from specified layers and inks.
@@ -724,6 +745,7 @@ impl PdfDocument {
             HashSet::new(),
             HashSet::new(),
             ScriptGeometry::Preserve,
+            false,
         )?;
         let spans = self.order_extracted_spans(page_index, reading_order, spans)?;
         let chars = spans.iter().flat_map(|span| span.to_chars()).collect();

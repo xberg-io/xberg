@@ -170,7 +170,8 @@ impl<'doc> TextExtractor<'doc> {
         // second backstop. ~keep
         let current_ctm = self.state_stack.current().ctm;
         let ctm_key = Self::quantize_ctm(current_ctm);
-        let xobj_key = (xobject_ref, ctm_key);
+        let nonpainting = self.skip_nonpainting_text && matches!(self.state_stack.current().render_mode, 3 | 7);
+        let xobj_key = (xobject_ref, ctm_key, nonpainting);
 
         // A containing form skipped this text because of an earlier paint on this
         // page, so its partial result must not enter the shared cache. ~keep
@@ -211,7 +212,8 @@ impl<'doc> TextExtractor<'doc> {
             .map(|(llx, lly, urx, ury)| ((urx - llx) * (ury - lly)).abs())
             .filter(|area| *area > 0.0);
         let spans_cache_key = (xobject_ref, ctm_key, page_area.map(f32::to_bits));
-        let has_filters = !self.excluded_layers.is_empty() || !self.excluded_inks.is_empty();
+        let has_filters =
+            self.skip_nonpainting_text || !self.excluded_layers.is_empty() || !self.excluded_inks.is_empty();
         // Cached spans carry no hold identity. A placed scope or a character
         // verdict pass must walk the form to preserve its groups. ~keep
         let span_cache_open = self.extract_spans && !has_filters && !self.verdict_run && !self.inside_placed_pdf;
