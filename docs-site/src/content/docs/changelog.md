@@ -331,6 +331,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Preserve failed-page warnings when the PDF time limit skips embedded-image OCR retries.** (GH#3102)
+  Partial results retain available native text and bypass the file cache. If every requested OCR page fails, extraction returns the time-limit error.
+
 - **(pdf): Deduplicate spatially matched native text in mixed OCR output.** (Refs #2534)
   Applies to automatic mixed PDF pages with a fresh direct Tesseract read in a verified scale-only frame.
   Native copies are removed only when unique literal matches survive in both flat and structured output.
