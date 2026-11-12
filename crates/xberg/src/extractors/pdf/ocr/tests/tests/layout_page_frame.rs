@@ -3,9 +3,29 @@ use super::{
     render_selected_pages_for_ocr, rotated_landscape_pdf,
 };
 
-#[tokio::test]
+fn run_on_ocr_test_stack<F: std::future::Future<Output = ()>>(test: impl FnOnce() -> F + Send + 'static) {
+    const OCR_TEST_STACK_BYTES: usize = 8 * 1024 * 1024;
+    std::thread::Builder::new()
+        .stack_size(OCR_TEST_STACK_BYTES)
+        .spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("build layout OCR test runtime")
+                .block_on(test())
+        })
+        .expect("spawn layout OCR test thread")
+        .join()
+        .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+}
+
+#[test]
 #[serial_test::serial]
-async fn images_driven_ocr_uses_the_certified_page_frame_and_keeps_the_rotation_hint() {
+fn images_driven_ocr_uses_the_certified_page_frame_and_keeps_the_rotation_hint() {
+    run_on_ocr_test_stack(check_images_driven_ocr_page_frame);
+}
+
+async fn check_images_driven_ocr_page_frame() {
     use crate::core::config::OcrConfig;
     use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
     use crate::types::{BoundingBox, ExtractedDocument, Table};
@@ -134,5 +154,167 @@ async fn images_driven_ocr_uses_the_certified_page_frame_and_keeps_the_rotation_
             .and_then(|opts| opts.get("page_rotation_degrees"))
             .and_then(|v| v.as_u64());
         assert_eq!(rotation_hint, Some(270), "backend options: {options:?}");
+    }
+}
+
+#[cfg(feature = "layout-detection")]
+mod handoff {
+    use super::{ExtractionConfig, rotated_landscape_pdf, run_on_ocr_test_stack};
+    use crate::core::config::layout::TableModel;
+    use crate::core::config::{LayoutDetectionConfig, OcrConfig, OutputFormat};
+    use crate::core::layout_pages::LayoutPageSelection;
+    use crate::extractors::pdf::{
+        PageOcrLayoutContext, layout_runner::TEST_SELECTED_PAGE_DETECTIONS, run_ocr_with_layout_pages,
+    };
+    use crate::layout::DetectionResult;
+    use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+    use crate::types::ocr_elements::OcrElementLevel;
+    use crate::types::{BoundingBox, ExtractedDocument, Table};
+
+    const ABOVE: &str = "The introduction comes before the table.";
+    const INSIDE: &str = "Recognized balance carried by the table";
+    const BELOW: &str = "The conclusion comes after the table.";
+
+    struct TableAndProseBackend;
+
+    impl Plugin for TableAndProseBackend {
+        fn name(&self) -> &str {
+            "layout-page-frame-table-and-prose"
+        }
+
+        fn version(&self) -> String {
+            "1.0.0".to_owned()
+        }
+
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl OcrBackend for TableAndProseBackend {
+        fn backend_type(&self) -> OcrBackendType {
+            OcrBackendType::Custom
+        }
+
+        fn supports_language(&self, _: &str) -> bool {
+            true
+        }
+
+        async fn process_image(&self, _: &[u8], _: &OcrConfig) -> crate::Result<ExtractedDocument> {
+            let mut document = InternalDocument::new("pdf");
+            for (text, top) in [(ABOVE, 40.0), (INSIDE, 160.0), (BELOW, 280.0)] {
+                let mut element = InternalElement::text(
+                    ElementKind::OcrText {
+                        level: OcrElementLevel::Block,
+                    },
+                    text,
+                    0,
+                );
+                element.bbox = Some(BoundingBox {
+                    x0: 120.0,
+                    y0: top,
+                    x1: 550.0,
+                    y1: top + 20.0,
+                });
+                document.push_element(element);
+            }
+
+            Ok(ExtractedDocument {
+                content: [ABOVE, INSIDE, BELOW].join("\n"),
+                metadata: crate::types::Metadata {
+                    additional: [
+                        ("ocr_processed_image_width".into(), serde_json::json!(800)),
+                        ("ocr_processed_image_height".into(), serde_json::json!(400)),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    ..Default::default()
+                },
+                tables: vec![Table {
+                    bounding_box: Some(BoundingBox {
+                        x0: 100.0,
+                        y0: 140.0,
+                        x1: 700.0,
+                        y1: 260.0,
+                    }),
+                    markdown: format!("| Balance |\n| --- |\n| {INSIDE} |"),
+                    cells: vec![vec!["Balance".to_owned()], vec![INSIDE.to_owned()]],
+                    ..Default::default()
+                }],
+                ocr_internal_document: Some(document),
+                ..Default::default()
+            })
+        }
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn layout_handoff_places_the_table_between_prose_and_suppresses_its_duplicate_text() {
+        run_on_ocr_test_stack(check_layout_handoff);
+    }
+
+    async fn check_layout_handoff() {
+        let backend = TableAndProseBackend;
+        let backend_name = backend.name().to_owned();
+        crate::plugins::register_ocr_backend(std::sync::Arc::new(backend)).unwrap();
+        let config = ExtractionConfig {
+            force_ocr: true,
+            output_format: OutputFormat::Plain,
+            layout: Some(LayoutDetectionConfig {
+                table_model: TableModel::Disabled,
+                ..Default::default()
+            }),
+            ocr: Some(OcrConfig {
+                backend: backend_name.clone(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let content = rotated_landscape_pdf(0);
+        let selection = LayoutPageSelection::new(vec![1]);
+        let result = TEST_SELECTED_PAGE_DETECTIONS
+            .scope(
+                DetectionResult::new(600, 300, Vec::new()),
+                Box::pin(run_ocr_with_layout_pages(
+                    &content,
+                    &config,
+                    None,
+                    PageOcrLayoutContext {
+                        pages: Some(&selection),
+                        hints: None,
+                        rendered_layout_pages: Vec::new(),
+                    },
+                    None,
+                    None,
+                    None,
+                )),
+            )
+            .await;
+        crate::plugins::unregister_ocr_backend(&backend_name).unwrap();
+
+        let (_, tables, _, document, ..) = result.expect("layout OCR must succeed");
+        assert_eq!(tables.len(), 1);
+        assert_eq!(
+            tables[0].bounding_box,
+            Some(BoundingBox {
+                x0: 25.0,
+                y0: 35.0,
+                x1: 175.0,
+                y1: 65.0
+            })
+        );
+        let document = document.expect("layout OCR must assemble a document");
+        let output = crate::rendering::render_plain(&document);
+        let above = output.find(ABOVE).expect("prose above the table");
+        let table = output.find("Balance").expect("the table header");
+        let below = output.find(BELOW).expect("prose below the table");
+        assert!(above < table && table < below, "{output}");
+        assert_eq!(output.matches(INSIDE).count(), 1, "{output}");
     }
 }
