@@ -227,7 +227,11 @@ fn a_wrong_mapped_layer_drawn_over_a_full_page_picture_is_still_read_by_ocr() {
     for placement in [PicturePlacement::Background, PicturePlacement::TexturedBackground] {
         let result = extract(&with_full_page_picture(ARABIC, placement), models.path());
         assert!(!skipped(&result), "{placement:?}: {:?}", result.processing_warnings);
-        assert_ne!(result.extraction_method, Some(ExtractionMethod::Native), "{placement:?}");
+        assert_ne!(
+            result.extraction_method,
+            Some(ExtractionMethod::Native),
+            "{placement:?}"
+        );
         assert_eq!(arabic_letters(&result.content), 0, "{placement:?}");
         if matches!(placement, PicturePlacement::Background) {
             for phrase in PHRASES {

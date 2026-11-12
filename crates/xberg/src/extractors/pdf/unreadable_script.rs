@@ -1073,7 +1073,11 @@ mod tests {
         let (decision, warnings) = run_contradicted(&[KHMER_MARKED], SCAN_WITH_OVERLAY, &config, &[1]);
         assert_eq!(decision.failing_pages, [1]);
         assert_eq!(warnings.len(), 1, "{warnings:?}");
-        assert!(warnings[0].message.contains("carries a picture"), "{}", warnings[0].message);
+        assert!(
+            warnings[0].message.contains("carries a picture"),
+            "{}",
+            warnings[0].message
+        );
         let (decision, warnings) = run_contradicted(&[KHMER_MARKED], ONE_PAGE, &config, &[1]);
         assert_eq!(decision.failing_pages, [1]);
         assert!(warnings.is_empty(), "{warnings:?}");

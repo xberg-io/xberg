@@ -429,7 +429,8 @@ pub fn render_text_ink_rasters(
     max_working_bytes: usize,
     cancelled: impl Fn() -> bool,
 ) -> Result<Option<TextInkRasters>> {
-    let render = |without_glyphs: bool| render_luminance(doc, page_num, dpi, max_working_bytes, (!without_glyphs, true));
+    let render =
+        |without_glyphs: bool| render_luminance(doc, page_num, dpi, max_working_bytes, (!without_glyphs, true));
     if cancelled() {
         return Ok(None);
     }
