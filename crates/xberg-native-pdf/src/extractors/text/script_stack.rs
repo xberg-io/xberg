@@ -190,6 +190,48 @@ pub fn stack_parents(base: &StackSpan<'_>, members: &[StackSpan<'_>]) -> Vec<Opt
         .collect()
 }
 
+/// The members that hang from `index`, depth first, after `index` itself.
+fn visit(index: usize, parents: &[Option<usize>], order: &mut Vec<usize>) {
+    order.push(index);
+    for child in (0..parents.len()).filter(|&child| parents[child] == Some(index)) {
+        visit(child, parents, order);
+    }
+}
+
+/// Picks between the two orders of a stack that has a script of a script. Each is a list of groups,
+/// a root script and the members hanging from it, in the order they read.
+///
+/// Two groups are adjacent when one is read right after the other. They fuse when the first has a
+/// member hanging from its root and its last member sits on the same side of its reference line as the
+/// root of the second, so the markup pass would read a script of a script and a script of the base as
+/// one superscript or subscript run. Two bare roots on one side are not counted: they are one run in
+/// either order. A member sits above its reference line when it is above its parent, or above the base
+/// for a root; a child level with its parent counts as lowered. Lowered-first wins when neither order
+/// fuses a pair, which keeps the subscript of the base apart from an exponent chain
+/// (`H^{Z_2,des}_{<xy>,f}`); raised-first wins when both fuse the same number above zero, the order that
+/// read the stack before lowered-first was introduced.
+fn choose_order(
+    raised_first: Vec<Vec<usize>>,
+    lowered_first: Vec<Vec<usize>>,
+    is_raised: impl Fn(usize) -> bool,
+) -> Vec<Vec<usize>> {
+    let fused = |groups: &[Vec<usize>]| {
+        groups
+            .windows(2)
+            .filter(|pair| {
+                let last = pair[0].last().expect("a group holds its root");
+                pair[0].len() > 1 && is_raised(*last) == is_raised(pair[1][0])
+            })
+            .count()
+    };
+    let (raised_fused, lowered_fused) = (fused(&raised_first), fused(&lowered_first));
+    if raised_fused < lowered_fused || (raised_fused == lowered_fused && lowered_fused > 0) {
+        raised_first
+    } else {
+        lowered_first
+    }
+}
+
 /// The order a stack reads in.
 ///
 /// A stack whose scripts all hang from the base reads raised scripts first, then lowered ones, each
@@ -197,19 +239,13 @@ pub fn stack_parents(base: &StackSpan<'_>, members: &[StackSpan<'_>]) -> Vec<Opt
 /// below its line first, then those above it, each followed by the members that hang from it, so the
 /// subscript of the base is one run apart from an exponent and its index (`H^{Z_2}_{<xy>,f}`).
 ///
-/// That second order is dropped for the first when it puts the script of a lowered member beside a
-/// script of the base on the same side of the line: `j` above `γ` and `K` below it with a `+` above
-/// `K` read `K + j` lowered-first, which joins the `+` of `K` to the `j` of the base in one
-/// superscript run, and `j K +` raised-first.
+/// That second order is used unless it fuses more adjacent groups than the raised-first order, or the
+/// same number above zero (see [`choose_order`]). `j` above `γ` and `K` below it with a `+` above `K` read `K + j`
+/// lowered-first, which joins the `+` of `K` to the `j` of the base in one superscript run, and
+/// `j K +` raised-first.
 #[doc(hidden)]
 #[must_use]
 pub fn stack_reading_order(base: &StackSpan<'_>, members: &[StackSpan<'_>]) -> Vec<usize> {
-    fn visit(index: usize, parents: &[Option<usize>], order: &mut Vec<usize>) {
-        order.push(index);
-        for child in (0..parents.len()).filter(|&child| parents[child] == Some(index)) {
-            visit(child, parents, order);
-        }
-    }
     let parents = stack_parents(base, members);
     let raised_side = |member: usize| members[member].baseline > base.baseline;
     if parents.iter().all(Option::is_none) {
@@ -234,20 +270,12 @@ pub fn stack_reading_order(base: &StackSpan<'_>, members: &[StackSpan<'_>]) -> V
             })
             .collect()
     };
-    let lowered_first = grouped(lowered.iter().chain(&raised).copied().collect());
     let raised_first = grouped(raised.iter().chain(&lowered).copied().collect());
-    let fused = |groups: &[Vec<usize>]| {
-        groups
-            .windows(2)
-            .filter(|pair| is_raised(*pair[0].last().unwrap_or(&0)) == is_raised(pair[1][0]))
-            .count()
-    };
-    let chosen = if fused(&raised_first) < fused(&lowered_first) {
-        raised_first
-    } else {
-        lowered_first
-    };
-    chosen.into_iter().flatten().collect()
+    let lowered_first = grouped(lowered.iter().chain(&raised).copied().collect());
+    choose_order(raised_first, lowered_first, is_raised)
+        .into_iter()
+        .flatten()
+        .collect()
 }
 
 #[cfg(test)]
@@ -559,6 +587,44 @@ mod tests {
             span("x", 110.0, 103.0, 2.4, 4.0),
         ];
         assert_eq!(stack_parents(&base, &members), [None, None, Some(1)]);
+    }
+
+    #[test]
+    fn should_read_raised_first_when_both_orders_fuse_one_pair() {
+        let base = span("R", 100.0, 100.0, 7.0, 10.0);
+        let members = [
+            span("A", 107.0, 104.3, 3.0, 6.0),
+            span("B", 107.5, 96.0, 3.0, 6.0),
+            span("a", 110.0, 102.0, 2.0, 4.0),
+            span("b", 110.5, 98.0, 2.0, 4.0),
+        ];
+        assert_eq!(stack_parents(&base, &members), [None, None, Some(0), Some(1)]);
+        assert_eq!(stack_reading_order(&base, &members), [0, 2, 1, 3]);
+    }
+
+    #[test]
+    fn should_read_lowered_first_when_children_hang_from_both_sides_and_nothing_fuses() {
+        let base = span("R", 100.0, 100.0, 7.0, 10.0);
+        let members = [
+            span("A", 107.0, 104.3, 3.0, 6.0),
+            span("B", 107.5, 96.0, 3.0, 6.0),
+            span("a", 110.0, 104.8, 2.0, 4.0),
+            span("b", 110.5, 95.2, 2.0, 4.0),
+        ];
+        assert_eq!(stack_parents(&base, &members), [None, None, Some(0), Some(1)]);
+        assert_eq!(stack_reading_order(&base, &members), [1, 3, 0, 2]);
+    }
+
+    #[test]
+    fn should_count_a_child_level_with_its_parent_as_lowered() {
+        let base = span("R", 100.0, 100.0, 7.0, 10.0);
+        let members = [
+            span("A", 107.0, 104.3, 3.0, 6.0),
+            span("B", 107.5, 96.0, 3.0, 6.0),
+            span("c", 110.0, 104.3, 2.0, 4.0),
+        ];
+        assert_eq!(stack_parents(&base, &members), [None, None, Some(0)]);
+        assert_eq!(stack_reading_order(&base, &members), [1, 0, 2]);
     }
 
     #[test]
