@@ -7372,29 +7372,36 @@ fn plain_budget_recovery_list_document(
 ) -> Option<crate::types::internal::InternalDocument> {
     if config.output_format != crate::core::config::OutputFormat::Plain
         || config.pages.as_ref().is_some_and(|pages| pages.insert_page_markers)
-        || !recovery.tables.is_empty()
     {
         return None;
     }
+    let table_pages: ahash::AHashSet<_> = recovery.tables.iter().map(|table| table.page_number).collect();
     let pages: Vec<_> = recovery
         .page_texts
         .iter()
-        .map(|text| {
+        .enumerate()
+        .map(|(index, text)| {
             let mut paragraphs = crate::pdf::structure::adapters::ocr_text_to_paragraphs(text);
-            apply_ocr_text_list_fallback(&mut paragraphs);
+            if !table_pages.contains(&((index + 1) as u32)) {
+                apply_ocr_text_list_fallback(&mut paragraphs);
+            }
             paragraphs
         })
         .collect();
     if !pages.iter().flatten().any(|paragraph| paragraph.is_list_item) {
         return None;
     }
-    Some(crate::pdf::structure::assemble_internal_document(
-        pages,
-        &[],
-        None,
-        &[],
-        &Default::default(),
-    ))
+    let mut document =
+        crate::pdf::structure::assemble_internal_document(pages, &recovery.tables, None, &[], &Default::default());
+    // The assembler skips tables without Markdown, but their sidecars still belong to the result. ~keep
+    document.tables.extend(
+        recovery
+            .tables
+            .iter()
+            .filter(|table| table.markdown.trim().is_empty())
+            .cloned(),
+    );
+    Some(document)
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]

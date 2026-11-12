@@ -7,12 +7,15 @@ use std::sync::{Arc, Mutex};
 
 pub(super) const BACKEND: &str = "xobject-budget-parity-routing-only-2339";
 pub(super) const TEXT: &str = "routing-only fixture response";
+pub(super) const LIST_PAGE_TEXT: &str = "Notes\n\n1. Check the first label\n\nNorth";
+pub(super) const TABLE_PAGE_TEXT: &str = "Table page";
 
 #[derive(Clone, Copy)]
 pub(super) enum Reply {
     Text,
     Empty,
     Fail,
+    TableThenList,
 }
 
 pub(super) struct Observed {
@@ -50,7 +53,9 @@ impl OcrBackend for Observer {
         true
     }
     async fn process_image(&self, bytes: &[u8], config: &OcrConfig) -> crate::Result<ExtractedDocument> {
-        self.records.lock().unwrap().push(Observed {
+        let mut records = self.records.lock().unwrap();
+        let first_read = records.is_empty();
+        records.push(Observed {
             bytes: bytes.to_vec(),
             config: config.clone(),
         });
@@ -62,6 +67,19 @@ impl OcrBackend for Observer {
             Reply::Empty => Ok(ExtractedDocument::default()),
             Reply::Text => Ok(ExtractedDocument {
                 content: TEXT.to_string(),
+                ..Default::default()
+            }),
+            Reply::TableThenList if first_read => Ok(ExtractedDocument {
+                content: TABLE_PAGE_TEXT.to_string(),
+                tables: vec![crate::types::Table {
+                    cells: vec![vec!["Sample".into(), "Count".into()], vec!["Amber".into(), "4".into()]],
+                    markdown: "| Sample | Count |\n| --- | --- |\n| Amber | 4 |".into(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }),
+            Reply::TableThenList => Ok(ExtractedDocument {
+                content: LIST_PAGE_TEXT.to_string(),
                 ..Default::default()
             }),
         }

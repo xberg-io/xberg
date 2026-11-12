@@ -1,6 +1,72 @@
-use super::super::{recover_pipeline_document_from_image_xobjects, recover_pipeline_page_from_image_xobjects};
-use super::support::{BACKEND, Reply, TEXT, complete_fixture, config, observer};
+use super::super::{
+    extract_pages_with_per_page_pipeline, recover_pipeline_document_from_image_xobjects,
+    recover_pipeline_page_from_image_xobjects, run_ocr_pipeline,
+};
+use super::support::{BACKEND, LIST_PAGE_TEXT, Reply, TABLE_PAGE_TEXT, TEXT, complete_fixture, config, observer};
 use lopdf::{Document, Stream, dictionary};
+
+#[tokio::test]
+#[serial_test::serial]
+async fn a_table_on_one_recovered_page_preserves_plain_list_spacing_on_the_other() {
+    use crate::core::config::OutputFormat;
+    use crate::extraction::derive::derive_extraction_result;
+
+    let bytes = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../fixtures/repros/label-scan-over-image-budget/label-scan-two-pages.pdf"
+    ));
+    let (_guard, calls) = observer(Reply::TableThenList);
+    let (mut config, mut ocr) = config(80 * 1024 * 1024, 80 * 1024 * 1024);
+    let default = extract_pages_with_per_page_pipeline(
+        bytes,
+        &config,
+        None,
+        None,
+        #[cfg(feature = "layout-detection")]
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(calls.lock().unwrap().len(), 2);
+    calls.lock().unwrap().clear();
+
+    let pipeline = serde_json::from_value(serde_json::json!({"stages":[{"backend":BACKEND}]})).unwrap();
+    ocr.pipeline = Some(pipeline);
+    config.ocr = Some(ocr);
+    let explicit = run_ocr_pipeline(
+        Some(bytes),
+        None,
+        #[cfg(feature = "layout-detection")]
+        None,
+        &config,
+        config.ocr.as_ref().unwrap().pipeline.as_ref().unwrap(),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(calls.lock().unwrap().len(), 2);
+    assert_eq!(default.5, [TABLE_PAGE_TEXT, LIST_PAGE_TEXT]);
+    assert_eq!(explicit.5, default.5);
+
+    let default = derive_extraction_result(default.3.unwrap(), false, OutputFormat::Plain);
+    let explicit = derive_extraction_result(explicit.3.unwrap(), false, OutputFormat::Plain);
+    assert_eq!(explicit.content, default.content);
+    assert!(explicit.content.ends_with("Notes\n\n1. Check the first label\nNorth"));
+    for output in [&default, &explicit] {
+        assert_eq!(output.tables.len(), 1);
+        assert_eq!(output.tables[0].page_number, 1);
+        let pages = output.pages.as_ref().unwrap();
+        assert_eq!(pages.len(), 2);
+        assert_eq!(pages[0].tables.len(), 1);
+        assert_eq!(pages[0].tables[0].cells, output.tables[0].cells);
+        assert!(pages[1].tables.is_empty());
+    }
+    for (default, explicit) in default.pages.unwrap().iter().zip(explicit.pages.unwrap()) {
+        assert_eq!(explicit.page_number, default.page_number);
+        assert_eq!(explicit.content, default.content);
+    }
+}
 
 fn modified_source(rotation: bool) -> (Vec<u8>, xberg_native_pdf::PdfDocument) {
     let source = complete_fixture();
