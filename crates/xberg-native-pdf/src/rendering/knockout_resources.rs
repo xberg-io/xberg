@@ -13,6 +13,8 @@ pub(super) struct KnockoutResources {
     depth: Arc<AtomicUsize>,
     surface_work: u64,
     paint_operations: usize,
+    #[cfg(test)]
+    paint_operation_limit: usize,
     failure: Option<String>,
     workspace_shortfall: Option<(usize, usize)>,
     work_exhausted: bool,
@@ -29,6 +31,8 @@ impl Default for KnockoutResources {
             depth: Arc::new(AtomicUsize::new(0)),
             surface_work: 0,
             paint_operations: 0,
+            #[cfg(test)]
+            paint_operation_limit: MAX_PAINT_OPERATIONS,
             failure: None,
             workspace_shortfall: None,
             work_exhausted: false,
@@ -77,10 +81,15 @@ impl Drop for WorkFallback {
 impl KnockoutResources {
     pub(super) fn reset(&mut self, limit: Option<usize>) {
         self.limit = limit.unwrap_or(MAX_WORKING_BYTES).min(MAX_WORKING_BYTES);
+        self.paint_operations = 0;
+        self.reset_attempt();
+    }
+
+    /// A DPI retry gets fresh raster state but spends the same page's paint budget.
+    pub(super) fn reset_attempt(&mut self) {
         self.live.store(0, Ordering::Relaxed);
         self.depth.store(0, Ordering::Relaxed);
         self.surface_work = 0;
-        self.paint_operations = 0;
         self.failure = None;
         self.workspace_shortfall = None;
         self.work_exhausted = false;
@@ -222,7 +231,11 @@ impl KnockoutResources {
 
     pub(super) fn paint(&mut self, pixels: usize) -> Result<()> {
         // Every group counts paints, so nested form fan-out stays bounded; only pixel work is knockout-only. ~keep
-        if self.paint_operations >= MAX_PAINT_OPERATIONS {
+        #[cfg(test)]
+        let limit = self.paint_operation_limit;
+        #[cfg(not(test))]
+        let limit = MAX_PAINT_OPERATIONS;
+        if self.paint_operations >= limit {
             return self.refuse("paint operations");
         }
         self.paint_operations += 1;

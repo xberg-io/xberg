@@ -659,6 +659,8 @@ impl PageRenderer {
             .as_ref()
             .map_or(dpi, |budget| budget.minimum_dpi.max(1).min(dpi));
         let can_resize = self.options.scale_override.is_none();
+        self.knockout_resources
+            .reset(png_budget.as_ref().map(|budget| budget.max_working_bytes));
 
         // A retry can reveal a later reservation peak. Bound the number of renders and
         // use the minimum on the final attempt if the observed peaks have not converged.
@@ -671,6 +673,7 @@ impl PageRenderer {
                 return result;
             }
             self.cmyk_sidecar = None;
+            self.knockout_resources.reset_attempt();
             dpi = raster_budget::dpi_after_workspace_refusal(dpi, minimum, required, limit);
         }
         dpi = minimum;
@@ -685,8 +688,6 @@ impl PageRenderer {
         admitted_dpi: &mut u32,
     ) -> Result<(RenderedImage, u32)> {
         self.knockout_shape = None;
-        self.knockout_resources
-            .reset(png_budget.map(|budget| budget.max_working_bytes));
         self.reported_source_budget_exceeded = false;
         self.source_image_budget = png_budget.map(|budget| image_budget::ImageBudget::new(budget.max_working_bytes));
         self.fonts.clear();
