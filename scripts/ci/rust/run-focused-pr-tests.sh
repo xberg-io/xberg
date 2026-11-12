@@ -67,6 +67,7 @@ run_retry_timeout_cases() {
 }
 
 run_budget_retry_cases() {
+  expected=$((expected + 1))
   run_exact tall_gray_jpeg_recovers_every_source_word_after_render_budget_refusal --test pdf_tall_scan_strips
   local module='extractors::pdf::ocr::pipeline::direct_rgb_budget_recovery::tests'
   local test_name
@@ -76,7 +77,8 @@ run_budget_retry_cases() {
     retry_admission_requires_the_registered_builtin_tesseract \
     rgb_certificate_rejects_a_source_one_byte_over_the_limit \
     rgb_certificate_requires_matching_encoded_and_placed_dimensions \
-    a_second_physical_page_disqualifies_an_otherwise_certified_rgb_source \
+    rgb_certificate_accepts_both_pages_at_the_original_render_budget \
+    an_uncertified_second_page_disqualifies_the_document_retry \
     rgb_certificate_rejects_a_stored_gray_jpeg \
     rgb_certificate_rejects_a_second_painted_image \
     two_image_reads_do_not_report_one_page_segmentation_mode \
