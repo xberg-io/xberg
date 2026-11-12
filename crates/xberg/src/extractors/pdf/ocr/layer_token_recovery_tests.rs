@@ -458,6 +458,34 @@ fn numbers_the_read_dropped_do_not_count_against_the_letter_check() {
 }
 
 #[test]
+fn the_decision_layer_of_a_page_is_the_mixed_routes_before_the_whole_documents() {
+    use super::super::pipeline::PageOcrHints;
+    use std::sync::Arc;
+    let layers = |pairs: &[(u32, &str)]| {
+        Arc::new(
+            pairs
+                .iter()
+                .map(|(page, text)| (*page, (*text).to_owned()))
+                .collect::<ahash::AHashMap<u32, String>>(),
+        )
+    };
+    let both = PageOcrHints {
+        decision_layers: Some(layers(&[(2, "decision")])),
+        native_page_layers: Some(layers(&[(2, "native"), (3, "native three")])),
+        ..Default::default()
+    };
+    assert_eq!(both.decision_layer(2), Some("decision"));
+    assert_eq!(both.decision_layer(3), None);
+    let native_only = PageOcrHints {
+        native_page_layers: Some(layers(&[(3, "native three")])),
+        ..Default::default()
+    };
+    assert_eq!(native_only.decision_layer(3), Some("native three"));
+    assert_eq!(native_only.decision_layer(4), None);
+    assert_eq!(PageOcrHints::default().decision_layer(1), None);
+}
+
+#[test]
 fn a_repeated_read_token_with_a_confident_instance_is_not_corrected() {
     let layer = page(&with(&[("B0X92Q", 0.0, 1.0), ("B0X92Q", 0.0, 2.0)]));
     let mut read = page(&with(&[("BOX92Q", 0.0, 1.0), ("BOX92Q", 0.0, 2.0)]));

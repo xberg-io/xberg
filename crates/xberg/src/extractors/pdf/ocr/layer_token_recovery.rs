@@ -427,6 +427,7 @@ pub(super) fn recover_page(
             confidence: 1.0,
         })
         .collect();
+    // No layer in the hints means the page decision has none either; the decodable words stand in.
     let decodable_layer;
     let page_layer = match page_layer {
         Some(text) => text,
@@ -505,8 +506,19 @@ pub(super) fn recover_page(
         .iter()
         .filter_map(|&at| Some((layer[at].text.clone(), frame.to_raster(&layer[at].place)?)))
         .collect();
-    let decision = |text: &str| super::document::ocr_confirms_layer(page_layer, text, limits.thresholds);
-    if !decision(&read.content) {
+    // The page decision runs on the read after the list-marker repair that the pipeline applies to
+    // every read; the numeric repair is opt-in and rewrites digits only. Nothing else changes the
+    // words of a read between this point and the decision.
+    let decision = |text: &str| {
+        super::document::ocr_confirms_layer(
+            page_layer,
+            &super::scoring::repair_ocr_list_markers(text),
+            limits.thresholds,
+        )
+    };
+    // A layer that fails the quality check can never confirm, so nothing can flip.
+    let unflippable = super::scoring::evaluate_native_text_for_ocr(page_layer, Some(1), limits.thresholds).fallback;
+    if !unflippable && !decision(&read.content) {
         let flips = |additions: &[AddedWord]| {
             let mut probe = read.clone();
             apply(&mut probe, &corrections, additions, limits.cancelled);

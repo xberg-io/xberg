@@ -4356,7 +4356,7 @@ pub(crate) struct PageOcrHints {
 
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 impl PageOcrHints {
-    fn decision_layer(&self, page: u32) -> Option<&str> {
+    pub(super) fn decision_layer(&self, page: u32) -> Option<&str> {
         self.decision_layers
             .as_ref()
             .or(self.native_page_layers.as_ref())
