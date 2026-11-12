@@ -2213,7 +2213,9 @@ mod tests {
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
     <w:tbl>
-      <w:tr><w:tc><w:p><w:r><w:t>Cell with note</w:t></w:r><w:r><w:footnoteReference w:id="1"/></w:r></w:p></w:tc></w:tr>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>Cell with note</w:t></w:r><w:r><w:footnoteReference w:id="1"/></w:r></w:p></w:tc>
+      </w:tr>
     </w:tbl>
   </w:body>
 </w:document>"#;

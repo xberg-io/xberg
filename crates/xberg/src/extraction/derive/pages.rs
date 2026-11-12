@@ -13,8 +13,8 @@ use super::surfaces::MarkupPageBody;
 /// elements has its byte range, or `None` when its elements write nothing.
 type PlainPageRanges = std::collections::BTreeMap<u32, Option<(usize, usize)>>;
 
-/// `spans` say where each element is in `content`. They are given only when `content` is the
-/// plain rendering of the elements and the caller gets it (`content_is_plain`).
+/// `spans` say where each element is in `content`, given when `content` is the plain rendering
+/// of the elements. They are used only when the caller gets that content (`content_is_plain`).
 pub(super) fn derive_pages(
     doc: &mut InternalDocument,
     content: &str,
@@ -27,7 +27,7 @@ pub(super) fn derive_pages(
     // the spans, so the range selects the page text by construction. PDF, image and OCR pages
     // keep their own text, and their ranges are located below.
     let native_ranges = spans
-        .filter(|_| !source_short_circuits_ocr_page_text(&doc.source_format))
+        .filter(|_| content_is_plain && !source_short_circuits_ocr_page_text(&doc.source_format))
         .map(|spans| plain_page_ranges(doc, content, spans))
         .filter(|ranges| ranges.values().any(Option::is_some));
     let native_ranges = native_ranges.as_ref();
