@@ -895,19 +895,27 @@ async fn run_pipeline_impl(
     // ~keep so extraction sees plain text, not markdown/HTML
     #[cfg(all(feature = "liter-llm", not(target_arch = "wasm32")))]
     if let Some(ref structured_config) = config.structured_extraction {
-        match crate::llm::structured::extract_structured(&result.content, structured_config).await {
-            Ok((output, usage)) => {
-                result.structured_output = Some(output);
-                crate::llm::usage::push_llm_usage(&mut result, usage);
-            }
-            Err(e) => {
-                let usage = crate::llm::usage::usage_from_error(&e);
-                crate::llm::usage::push_llm_usage(&mut result, usage);
-                tracing::warn!("Structured extraction failed: {e}");
-                result.processing_warnings.push(crate::types::ProcessingWarning {
-                    source: std::borrow::Cow::Borrowed("structured_extraction"),
-                    message: std::borrow::Cow::Owned(format!("Structured extraction failed: {e}")),
-                });
+        if config
+            .cancel_token
+            .as_ref()
+            .is_some_and(crate::cancellation::CancellationToken::time_limit_reached)
+        {
+            features::report_stage_cut(&mut result.processing_warnings, config, "structured extraction");
+        } else {
+            match crate::llm::structured::extract_structured(&result.content, structured_config).await {
+                Ok((output, usage)) => {
+                    result.structured_output = Some(output);
+                    crate::llm::usage::push_llm_usage(&mut result, usage);
+                }
+                Err(e) => {
+                    let usage = crate::llm::usage::usage_from_error(&e);
+                    crate::llm::usage::push_llm_usage(&mut result, usage);
+                    tracing::warn!("Structured extraction failed: {e}");
+                    result.processing_warnings.push(crate::types::ProcessingWarning {
+                        source: std::borrow::Cow::Borrowed("structured_extraction"),
+                        message: std::borrow::Cow::Owned(format!("Structured extraction failed: {e}")),
+                    });
+                }
             }
         }
     }
@@ -2317,5 +2325,81 @@ mod time_limit_vector_tests {
         );
         assert!(chunks.iter().all(|chunk| chunk.embedding.is_none()));
         assert!(chunks.iter().all(|chunk| chunk.content.chars().count() <= 120));
+    }
+
+    /// A stop requested while an earlier stage ran must end the chunk embeddings before the model
+    /// is touched: the preset does not exist, so a stage that ran would report an `embedding` error.
+    #[cfg(all(feature = "chunking", feature = "embeddings"))]
+    #[test]
+    fn a_stop_during_post_processing_drops_the_chunk_vectors_and_keeps_the_chunks() {
+        let token = CancellationToken::new();
+        token.request_stop();
+        let mut config = config_with(&token, true);
+        if let Some(embedding) = config
+            .chunking
+            .as_mut()
+            .and_then(|chunking| chunking.embedding.as_mut())
+        {
+            embedding.model = crate::core::config::EmbeddingModelType::Preset {
+                name: "no-such-embedding-preset".to_string(),
+            };
+        }
+        let mut result = ExtractedDocument {
+            content: "A paragraph that is chunked.".to_string(),
+            mime_type: std::borrow::Cow::Borrowed("text/plain"),
+            ..Default::default()
+        };
+
+        features::execute_chunking(&mut result, &config, None).expect("chunking must succeed");
+
+        let chunks = result.chunks.as_ref().expect("the chunks are kept");
+        assert!(!chunks.is_empty());
+        assert!(chunks.iter().all(|chunk| chunk.embedding.is_none()));
+        assert!(
+            result
+                .processing_warnings
+                .iter()
+                .all(|warning| warning.source != "embedding"),
+            "the model must not be reached after the stop: {:?}",
+            result.processing_warnings
+        );
+        let warning = result
+            .processing_warnings
+            .iter()
+            .find(|warning| warning.source == "time_limit")
+            .expect("the dropped stage must be reported");
+        assert!(warning.message.contains("chunk embeddings"), "{}", warning.message);
+        assert!(token.result_is_partial());
+    }
+
+    #[cfg(all(feature = "chunking", feature = "embeddings"))]
+    #[test]
+    fn without_a_stop_the_chunk_embedding_stage_runs() {
+        let token = CancellationToken::new();
+        let mut config = config_with(&token, true);
+        if let Some(embedding) = config
+            .chunking
+            .as_mut()
+            .and_then(|chunking| chunking.embedding.as_mut())
+        {
+            embedding.model = crate::core::config::EmbeddingModelType::Preset {
+                name: "no-such-embedding-preset".to_string(),
+            };
+        }
+        let mut result = ExtractedDocument {
+            content: "A paragraph that is chunked.".to_string(),
+            mime_type: std::borrow::Cow::Borrowed("text/plain"),
+            ..Default::default()
+        };
+
+        features::execute_chunking(&mut result, &config, None).expect("chunking must succeed");
+
+        assert!(
+            result
+                .processing_warnings
+                .iter()
+                .any(|warning| warning.source == "embedding")
+        );
+        assert!(!token.result_is_partial());
     }
 }
