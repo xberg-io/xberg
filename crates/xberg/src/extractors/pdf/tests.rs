@@ -4277,34 +4277,48 @@ fn an_adopted_hocr_document_keeps_the_extractors_marks_and_rerenders_its_pages()
 
     // The same document without the marks -- what dropping the build outright produced -- keeps
     // the prebuilt text and loses the boundary: the reader reports the page as diverging.
-    let mut unmarked = adopted;
-    unmarked.prebuilt_pages = Some(vec![text_layer_page(1, TRANSCRIPT)]);
-    unmarked.metadata.pages = Some(boundaries_metadata());
-    let unmarked_result = crate::extraction::derive::derive_extraction_result(unmarked, false, OutputFormat::Plain);
-    let unmarked_pages = unmarked_result.pages.as_ref().expect("pages are derived");
-    assert_eq!(
-        unmarked_pages[0].content, TRANSCRIPT,
-        "an unmarked page keeps its prebuilt text"
-    );
+    for stale_end in [40, NODE_TEXT.len()] {
+        let mut structure = boundaries_metadata();
+        structure.boundaries.as_mut().unwrap()[0].byte_end = stale_end;
+        assert_unmarked_hocr_transcript(adopted.clone(), structure, TRANSCRIPT, NODE_TEXT);
+    }
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn assert_unmarked_hocr_transcript(
+    mut unmarked: InternalDocument,
+    structure: crate::types::PageStructure,
+    transcript: &str,
+    node_text: &str,
+) {
+    unmarked.prebuilt_pages = Some(vec![text_layer_page(1, transcript)]);
+    unmarked.metadata.pages = Some(structure);
+    let result =
+        crate::extraction::derive::derive_extraction_result(unmarked, false, crate::core::config::OutputFormat::Plain);
+    let pages = result.pages.as_ref().expect("pages are derived");
+    assert_eq!(result.content, node_text);
+    assert_eq!(pages[0].content, transcript, "an unmarked page keeps its prebuilt text");
     assert!(
-        unmarked_result
+        result
             .metadata
             .pages
             .as_ref()
             .is_some_and(|structure| structure.boundaries.is_none()),
-        "the unmarked page's boundary is dropped, not kept empty or absent with the structure: {:?}",
-        unmarked_result
-            .metadata
-            .pages
-            .as_ref()
-            .and_then(|structure| structure.boundaries.clone())
+        "the unmarked page's boundary is dropped even when it is in bounds"
     );
     assert!(
-        unmarked_result
+        result
             .processing_warnings
             .iter()
             .any(|warning| warning.source == "page_boundaries"),
         "the unmarked page is reported as diverging"
+    );
+    assert!(
+        !result
+            .metadata
+            .additional
+            .contains_key("xberg:internal:adopted-ocr-document"),
+        "adoption provenance stays internal"
     );
 }
 

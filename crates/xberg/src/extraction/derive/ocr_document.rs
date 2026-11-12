@@ -30,6 +30,8 @@ pub(crate) fn is_invalid_public_ocr_document(error: &crate::XbergError) -> bool 
     matches!(error, crate::XbergError::Validation { source: Some(source), .. } if source.is::<InvalidPublicOcrDocument>())
 }
 
+pub(super) const ADOPTED_OCR_DOCUMENT_KEY: &str = "xberg:internal:adopted-ocr-document";
+
 /// ~keep Explicit nodes are adopted without interpreting a string-only transcript as markup.
 pub(crate) fn adopt_public_ocr_document(result: &mut ExtractedDocument, limits: &SecurityLimits) -> crate::Result<()> {
     let Some(structure) = result.document.as_ref() else {
@@ -45,7 +47,9 @@ pub(crate) fn adopt_public_ocr_document(result: &mut ExtractedDocument, limits: 
     validate_structure(structure)?;
     validate_serialized_payload_size(result, limits)?;
     let mut doc = InternalDocument::new(structure.source_format.as_deref().unwrap_or("ocr"));
-    doc.adopted_ocr_document = true;
+    doc.metadata
+        .additional
+        .insert(ADOPTED_OCR_DOCUMENT_KEY.into(), serde_json::Value::Bool(true));
     for node in &structure.nodes {
         doc.push_element(convert_node(node)?);
     }

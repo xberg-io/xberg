@@ -25,10 +25,13 @@ pub(super) fn derive_pages(
 ) -> Option<Vec<PageContent>> {
     // ~keep Renderer spans own native page text and ranges. Adopted OCR documents can
     // declare any source format, so their transcripts follow the OCR page marks below.
+    let adopted_ocr = doc
+        .metadata
+        .additional
+        .remove(super::ocr_document::ADOPTED_OCR_DOCUMENT_KEY)
+        .is_some_and(|value| value.as_bool() == Some(true));
     let native_ranges = spans
-        .filter(|_| {
-            content_is_plain && !doc.adopted_ocr_document && !source_short_circuits_ocr_page_text(&doc.source_format)
-        })
+        .filter(|_| content_is_plain && !adopted_ocr && !source_short_circuits_ocr_page_text(&doc.source_format))
         .map(|spans| plain_page_ranges(doc, content, spans))
         .filter(|ranges| ranges.values().any(Option::is_some));
     let native_ranges = native_ranges.as_ref();
@@ -601,9 +604,6 @@ fn rerender_pages_plain(
 ) -> Option<(Vec<PageContent>, Vec<u32>)> {
     let pages = pages?;
     let elements_by_page = compute_page_membership(doc);
-    if elements_by_page.is_empty() {
-        return None;
-    }
     let mut search_offset = 0;
     let mut out = Vec::with_capacity(pages.len());
     let mut diverging = Vec::new();
@@ -639,9 +639,8 @@ fn rerender_pages_plain(
     Some((out, diverging))
 }
 
-/// Re-point the boundaries of the pages not in `diverging` at `content`, omitting the boundaries
-/// of the diverging pages. Leaves the boundaries as they were and returns `false` when the
-/// remaining pages cannot be located.
+/// Re-point the boundaries of the pages not in `diverging` at `content`.
+/// If recovery fails after finding a diverging page, discard the unverified ranges.
 fn reconcile_located_page_boundaries(
     metadata: &mut crate::types::Metadata,
     content: &str,
@@ -671,7 +670,7 @@ fn reconcile_located_page_boundaries(
         && let Some(structure) = metadata.pages.as_mut()
         && structure.boundaries.is_some()
     {
-        structure.boundaries = Some(original);
+        structure.boundaries = diverging.is_empty().then_some(original);
     }
     reconciled
 }
