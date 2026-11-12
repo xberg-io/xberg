@@ -74,8 +74,24 @@ fn read_where(
     }
 }
 
+/// The page's layer as the page decision sees it: the words of its lines.
+fn layer_text(pdf: &PdfDocument) -> String {
+    pdf.extract_text_lines(0)
+        .unwrap()
+        .iter()
+        .flat_map(|line| line.words.iter().map(|word| word.text.clone()))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// A page long enough for the decision's quality check: the layer and a paragraph the read holds too.
+const PROSE: &str = "The regional office reviewed the quarterly figures and found that deliveries \
+    stayed on schedule across the northern depots while the southern routes needed extra vehicles \
+    during the winter months because snow closed several roads and the drivers waited at the \
+    border crossing for inspections that took longer than planned this year";
+
 fn recover(pdf: &PdfDocument, read: &mut ExtractedDocument) -> bool {
-    recover_with_layer(pdf, read, None)
+    recover_with_layer(pdf, read, Some(&layer_text(pdf)))
 }
 
 fn recover_with_layer(pdf: &PdfDocument, read: &mut ExtractedDocument, page_layer: Option<&str>) -> bool {
@@ -204,29 +220,57 @@ fn the_same_identifiers_stay_as_read_at_the_confidence_floor() {
 }
 
 #[test]
-fn a_chart_page_whose_read_dropped_most_values_still_gets_them_back() {
+fn a_chart_page_whose_read_dropped_a_few_values_gets_them_back_and_still_confirms_its_layer() {
     let pdf = PdfDocument::from_bytes(WRONG_LAYER_PDF.to_vec()).unwrap();
-    let mut layer_text = pdf
-        .extract_text_lines(0)
-        .unwrap()
-        .iter()
-        .flat_map(|line| line.words.iter().map(|word| word.text.clone()))
-        .collect::<Vec<_>>()
-        .join(" ");
-    for value in 1000..1040 {
-        layer_text.push_str(&format!(" {value}"));
-    }
+    let layer = format!("{} {PROSE}", layer_text(&pdf));
+    let thresholds = OcrQualityThresholds::default();
     let not_a_value = |token: &str| !token.chars().all(|character| character.is_ascii_digit());
     let mut read = read_where(&pdf, &[], 0.9, not_a_value);
-    assert!(!ocr_confirms_layer(
-        &layer_text,
-        &read.content,
-        &OcrQualityThresholds::default()
-    ));
+    read.content = format!("{} {PROSE}", read.content);
+    assert!(ocr_confirms_layer(&layer, &read.content, &thresholds));
+    assert!(recover_with_layer(&pdf, &mut read, Some(&layer)), "{}", read.content);
+    assert!(tokens(&read).contains(&"7"), "{}", read.content);
+    assert!(ocr_confirms_layer(&layer, &read.content, &thresholds));
+}
+
+#[test]
+fn a_number_that_would_make_the_read_confirm_the_layer_is_not_recovered() {
+    let pdf = PdfDocument::from_bytes(WRONG_LAYER_PDF.to_vec()).unwrap();
+    let base = layer_text(&pdf);
+    let thresholds = OcrQualityThresholds::default();
+    let not_a_value = |token: &str| !token.chars().all(|character| character.is_ascii_digit());
+    let mut read = read_where(&pdf, &[], 0.9, not_a_value);
+    read.content = format!("{} {PROSE}", read.content);
+    let words = |text: &str| -> std::collections::HashSet<String> {
+        text.split(|c: char| !c.is_alphanumeric())
+            .filter(|word| !word.is_empty())
+            .map(str::to_lowercase)
+            .collect()
+    };
+    let held = words(&read.content).len();
+    let numbers = words(&base)
+        .iter()
+        .filter(|word| word.chars().all(|c| c.is_ascii_digit()))
+        .count();
+    // Filler numbers that the page's words never include put the read just under the decision's
+    // share of all words; one recovered number takes it over.
+    let mut layer = format!("{base} {PROSE}");
+    for value in 0..(held - numbers + 1) {
+        layer.push_str(&format!(" {}", 5000 + value));
+    }
+    let before = read.content.clone();
+    assert!(!ocr_confirms_layer(&layer, &before, &thresholds));
+    let mut full = read.clone();
+    full.content = format!("{} 7", before);
     assert!(
-        recover_with_layer(&pdf, &mut read, Some(&layer_text)),
+        ocr_confirms_layer(&layer, &full.content, &thresholds),
+        "setup: one number must flip it"
+    );
+    recover_with_layer(&pdf, &mut read, Some(&layer));
+    assert!(
+        !ocr_confirms_layer(&layer, &read.content, &thresholds),
         "{}",
         read.content
     );
-    assert!(tokens(&read).contains(&"7"), "{}", read.content);
+    assert!(!tokens(&read).contains(&"7"), "{}", read.content);
 }

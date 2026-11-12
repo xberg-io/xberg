@@ -1549,6 +1549,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         single_block_pages: Some(std::sync::Arc::clone(&single_block_pages)),
                         native_page_layers: None,
                         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                        decision_layers: page_layers.clone(),
+                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                         native_coverage_layers: native_coverage_layers
                             .as_ref()
                             .filter(|_| {
@@ -1768,6 +1770,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             .is_some(),
                         single_block_pages: Some(std::sync::Arc::clone(&single_block_pages)),
                         native_page_layers: None,
+                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                        decision_layers: page_layers.clone(),
                         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                         native_coverage_layers: native_coverage_layers
                             .as_ref()
@@ -4339,6 +4343,10 @@ pub(crate) struct PageOcrHints {
     /// has chosen its output, a page whose OCR text is judged recognition noise gets its layer
     /// first.
     pub(crate) native_page_layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
+    /// The layers the mixed route's page decision compares each page's OCR text with, for the
+    /// per-page calls that carry no `native_page_layers`.
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    pub(crate) decision_layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
     /// Original marker-bearing text of the only physical page in a whole automatic fallback.
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     pub(crate) single_native_type0_page: Option<std::sync::Arc<str>>,
@@ -4348,6 +4356,13 @@ pub(crate) struct PageOcrHints {
 
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 impl PageOcrHints {
+    fn decision_layer(&self, page: u32) -> Option<&str> {
+        self.decision_layers
+            .as_ref()
+            .or(self.native_page_layers.as_ref())
+            .and_then(|layers| layers.get(&page))
+            .map(String::as_str)
+    }
     fn native_layer(&self, page: u32) -> Option<&str> {
         self.native_coverage_layers
             .as_ref()
@@ -5849,9 +5864,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     &mut ocr_result,
                     page_ocr_hints
                         .as_ref()
-                        .and_then(|hints| hints.native_page_layers.as_ref())
-                        .and_then(|layers| layers.get(&document_page_number))
-                        .map(String::as_str),
+                        .and_then(|hints| hints.decision_layer(document_page_number)),
                     super::native_word_coverage::InkProofLimits {
                         thresholds: &ocr_output_thresholds,
                         max_working_bytes: super::hidden_layer::preview_byte_limit(config),

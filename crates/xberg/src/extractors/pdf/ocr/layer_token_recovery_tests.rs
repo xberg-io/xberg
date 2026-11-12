@@ -436,27 +436,25 @@ fn a_lowercase_layer_letter_over_a_capital_read_letter_is_not_a_misreading_besid
     assert!(!is_misreading("K2Q5WO", "K2Q5w0"));
 }
 
+const PROSE: &str = "The regional office reviewed the quarterly figures and found that deliveries \
+    stayed on schedule across the northern depots while the southern routes needed extra vehicles \
+    during the winter months because snow closed several roads and the drivers waited at the \
+    border crossing for inspections that took longer than planned this year";
+
 #[test]
 fn a_read_is_checked_against_the_layer_the_page_decision_sees() {
-    let layer = page(&AGREEING);
-    let read = "alpha beta gamma delta";
-    let mut full = String::from("Alpha Beta Gamma Delta");
-    for fragment in ["qx", "zr", "wv", "kp", "jm", "yt"] {
-        full.push_str(&format!(" {fragment}\u{E000}{fragment}"));
+    let mut full = String::from(PROSE);
+    for (first, second) in ('a'..='z').flat_map(|first| ('a'..='c').map(move |second| (first, second))) {
+        full.push_str(&format!(" {first}{second}x\u{E000}{first}{second}y"));
     }
-    assert!(read_confirms_layer(None, &layer, read));
-    assert!(!read_confirms_layer(Some(&full), &layer, read));
+    assert!(read_confirms_layer(PROSE, PROSE));
+    assert!(!read_confirms_layer(&full, PROSE));
 }
 
 #[test]
-fn numbers_the_read_dropped_do_not_count_against_the_layer_check() {
-    let numbers: String = (100..140).map(|value| format!(" {value}")).collect();
-    let full = format!("Alpha Beta Gamma Delta{numbers}");
-    assert!(read_confirms_layer(
-        Some(&full),
-        &page(&AGREEING),
-        "alpha beta gamma delta 100"
-    ));
+fn numbers_the_read_dropped_do_not_count_against_the_letter_check() {
+    let numbers: String = (100..160).map(|value| format!(" {value}")).collect();
+    assert!(read_confirms_layer(&format!("{PROSE}{numbers}"), PROSE));
 }
 
 #[test]
