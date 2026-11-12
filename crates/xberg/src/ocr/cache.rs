@@ -2,6 +2,7 @@ use super::error::OcrError;
 use super::utils::compute_hash;
 use crate::cache::version::cache_version_tag;
 use crate::core::config::OutputFormat;
+use crate::core::extractor::cacheability;
 use crate::telemetry::conventions;
 use crate::types::internal::InternalDocument;
 use crate::types::{OcrExtractionResult, formats::RawOcrSourceFrame};
@@ -138,7 +139,9 @@ impl OcrCache {
         let cache_key = self.generate_cache_key(image_hash, backend, config, output_format);
         self.ensure_cache_dir(&cache_key)?;
         let serialized = Self::serialize_cached_result(result, &cache_key)?;
-        self.write_cache_file(&cache_key, &serialized)?;
+        if !self.write_cache_file(&cache_key, &serialized)? {
+            return Ok(());
+        }
 
         tracing::debug!(
             { conventions::OPERATION } = conventions::operations::CACHE_WRITE,
@@ -184,7 +187,7 @@ impl OcrCache {
         })
     }
 
-    fn write_cache_file(&self, cache_key: &str, serialized: &[u8]) -> Result<(), OcrError> {
+    fn write_cache_file(&self, cache_key: &str, serialized: &[u8]) -> Result<bool, OcrError> {
         let cache_path = self.get_cache_path(cache_key);
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -209,6 +212,15 @@ impl OcrCache {
             OcrError::CacheError(format!("Failed to write temp cache file: {}", e))
         })?;
 
+        if cacheability::ocr_stop_requested() {
+            fs::remove_file(&temp_path).map_err(|error| {
+                OcrError::CacheError(format!(
+                    "Failed to remove temporary cache file after cancellation: {error}"
+                ))
+            })?;
+            return Ok(false);
+        }
+
         fs::rename(&temp_path, &cache_path).map_err(|e| {
             tracing::warn!(
                 { conventions::OPERATION } = conventions::operations::CACHE_WRITE,
@@ -221,7 +233,7 @@ impl OcrCache {
             }
             OcrError::CacheError(format!("Failed to rename cache file: {}", e))
         })?;
-        Ok(())
+        Ok(true)
     }
 
     /// Emit OCR cache-lookup telemetry.

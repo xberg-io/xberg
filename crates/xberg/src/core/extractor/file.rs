@@ -243,6 +243,11 @@ pub(crate) async fn extract_file(
 
         Box::pin(extract_file_with_extractor(path, &detected_mime, config)).await
     });
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let extraction_future = Box::pin(super::cacheability::with_ocr_cancellation(
+        config.cancel_token.as_ref(),
+        extraction_future,
+    ));
 
     // without a JS/WASI shim), which aborts the whole module with an uncatchable
     // `unreachable` trap. `tokio-runtime` can be enabled transitively on that target
@@ -354,11 +359,11 @@ async fn extract_file_scoped(path: &Path, mime_type: &str, config: &ExtractionCo
         .cancel_token
         .as_ref()
         .is_some_and(crate::cancellation::CancellationToken::result_is_partial);
-    if super::cacheability::is_cacheable()
+    if super::cacheability::can_publish_outer_result()
         && !stopped_early
         && lifecycle_generations_before == lifecycle_generations_after
         && context == fingerprint(&dependencies, config.cancel_token.as_ref()).await?
-        && super::cacheability::is_cacheable()
+        && super::cacheability::can_publish_outer_result()
         && let Some(cache) = get_extraction_cache()
     {
         match serialize_extraction_cache_entry(&result, lifecycle_generations_after) {
