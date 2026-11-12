@@ -2373,10 +2373,14 @@ fn replace_page_content_with_ocr_text(page: &mut crate::types::PageContent, ocr_
     page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&page.content));
 }
 
-/// Write the OCR text of each page into the page that has the same position.
+/// Write the OCR text of each page into the page that has the same position, and report the
+/// page numbers of the reads the output kept: a page's text was written by an OCR route only
+/// where its read was accepted, so a page whose read the noise gate discarded (or that
+/// otherwise produced no text) -- which keeps its native text -- is not reported (#2939).
 ///
 /// One OCR text for a document of several pages is the text of the whole document: it goes to
-/// the first page, and the content of every later page is replaced with empty text.
+/// the first page, and the content of every later page is replaced with empty text; only the
+/// page that received text is reported.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn replace_pages_with_ocr_page_texts(
     pages: &mut [crate::types::PageContent],
@@ -2386,13 +2390,14 @@ fn replace_pages_with_ocr_page_texts(
     let mut replaced = Vec::new();
     for (page, text) in pages.iter_mut().zip(ocr_page_texts) {
         replace_page_content_with_ocr_text(page, text, keep_native_content);
-        replaced.push(page.page_number);
+        if !text.trim().is_empty() {
+            replaced.push(page.page_number);
+        }
     }
 
     if ocr_page_texts.len() == 1 {
         for page in pages.iter_mut().skip(1) {
             replace_page_content_with_ocr_text(page, "", keep_native_content);
-            replaced.push(page.page_number);
         }
     }
     replaced
@@ -3825,7 +3830,14 @@ impl PdfExtractor {
                 if let Some(ref mut pages) = page_contents {
                     ocr_text_pages.extend(replace_pages_with_ocr_page_texts(pages, pts, keep_native_content));
                 } else {
-                    ocr_text_pages.extend((1..=pts.len() as u32).collect::<Vec<_>>());
+                    // Only the pages whose read the output kept: an empty per-page text was
+                    // discarded, not accepted (#2939).
+                    ocr_text_pages.extend(
+                        pts.iter()
+                            .enumerate()
+                            .filter(|(_, text)| !text.trim().is_empty())
+                            .map(|(index, _)| (index + 1) as u32),
+                    );
                     page_contents = Some(
                         pts.iter()
                             .enumerate()

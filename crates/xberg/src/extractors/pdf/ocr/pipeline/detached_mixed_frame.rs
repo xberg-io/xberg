@@ -183,6 +183,23 @@ pub(super) fn scale_tables_into_render(
     true
 }
 
+/// Whether recognition certified this page as read sideways (90 or 270 degrees) by auto-rotate.
+pub(super) fn read_sideways(metadata: &crate::types::Metadata) -> bool {
+    use crate::ocr_metadata_keys::{OCR_AUTO_ROTATED_METADATA_KEY, OCR_ORIENTATION_DEGREES_METADATA_KEY};
+    metadata
+        .additional
+        .get(OCR_AUTO_ROTATED_METADATA_KEY)
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+        && matches!(
+            metadata
+                .additional
+                .get(OCR_ORIENTATION_DEGREES_METADATA_KEY)
+                .and_then(serde_json::Value::as_i64),
+            Some(90 | 270)
+        )
+}
+
 /// Scale bottom-left paragraph geometry per axis, e.g. from a raster's pixels to PDF points.
 pub(super) fn scale_paragraph_geometry(
     paragraphs: &mut [crate::pdf::structure::types::PdfParagraph],
@@ -438,6 +455,55 @@ mod tests {
         assert!(!page.place_detached_in_points());
     }
 
+    /// Only the zero render size guard refuses these placements: the preprocessing block agrees
+    /// with the processed frame and the boxes, so a zero render dimension is the only refusal.
+    #[test]
+    fn a_zero_render_dimension_refuses_detached_table_placement() {
+        let mut read = two_table_frame();
+        assert_eq!(
+            place_table_in_render(&mut read, (400, 800), (200., 400.)),
+            Some((1., 1.)),
+            "the matching render must place the tables"
+        );
+        for (original, render) in [
+            ((0usize, 800usize), (0u32, 800u32)),
+            ((400usize, 0usize), (400u32, 0u32)),
+        ] {
+            let mut read = two_table_frame();
+            read.metadata.image_preprocessing.as_mut().unwrap().original_dimensions = original.into();
+            let before = read.clone();
+            assert_eq!(
+                place_table_in_render(&mut read, render, (200., 400.)),
+                None,
+                "a zero render dimension must refuse placement"
+            );
+            assert_eq!(
+                serde_json::to_value(&read).unwrap(),
+                serde_json::to_value(&before).unwrap(),
+                "a refused placement must not rescale any table"
+            );
+        }
+    }
+
+    /// Only the table order guard refuses this placement: both boxes sit inside the processed
+    /// frame, the text is above both, and the refused placement leaves the read untouched.
+    #[test]
+    fn reversed_table_order_refuses_detached_table_placement() {
+        let mut read = two_table_frame();
+        read.tables.reverse();
+        let before = read.clone();
+        assert_eq!(
+            place_table_in_render(&mut read, (400, 800), (200., 400.)),
+            None,
+            "tables must be placed in vertical reading order"
+        );
+        assert_eq!(
+            serde_json::to_value(&read).unwrap(),
+            serde_json::to_value(&before).unwrap(),
+            "a refused placement must not rescale any table"
+        );
+    }
+
     #[test]
     fn general_detached_tables_move_from_the_recognition_frame_into_the_render() {
         let table = || Table {
@@ -472,5 +538,21 @@ mod tests {
         assert!(!scale_tables_into_render(&mut tables, (2550, 3298), (0, 2156)));
         assert!(!scale_tables_into_render(&mut tables, (0, 3298), (1667, 2156)));
         assert_eq!(boxes(&tables), placed);
+    }
+
+    #[test]
+    fn only_an_auto_rotated_quarter_turn_reads_sideways() {
+        let metadata = |auto: bool, degrees: i64| {
+            let mut metadata = crate::types::Metadata::default();
+            metadata.additional.insert("auto_rotated".into(), auto.into());
+            metadata.additional.insert("orientation_degrees".into(), degrees.into());
+            metadata
+        };
+        assert!(read_sideways(&metadata(true, 90)));
+        assert!(read_sideways(&metadata(true, 270)));
+        assert!(!read_sideways(&metadata(true, 180)));
+        assert!(!read_sideways(&metadata(true, 0)));
+        assert!(!read_sideways(&metadata(false, 90)));
+        assert!(!read_sideways(&crate::types::Metadata::default()));
     }
 }

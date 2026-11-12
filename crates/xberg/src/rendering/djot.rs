@@ -447,14 +447,20 @@ fn escape_block_prefix(text: &str, literal_row: bool) -> Cow<'_, str> {
     escaped.push_str(&text[..range.start]);
     let mut already_escaped = false;
     let mut previous = None;
+    // Literal dots so far in the run the reader is looking at.
+    let mut dot_run = 0usize;
     let mut chars = text[range.clone()].char_indices().peekable();
     while let Some((at, c)) = chars.next() {
         let escape = if literal_row {
             let before_text = chars.peek().is_some_and(|(_, next)| !next.is_whitespace());
             row_start.as_ref().is_some_and(|run| run.contains(&at))
                 || matches!(c, '\\' | '`' | '*' | '_' | '{' | '}' | '[' | ']' | '^' | '~' | '<' | '"' | '\'')
-                || (matches!(c, '.' | '-')
-                    && (previous == Some(c) || chars.peek().is_some_and(|(_, next)| *next == c)))
+                // Jotdown and djot.js turn three literal dots into an ellipsis event
+                // (`…`) and keep one or two literal, so only every third dot of a run
+                // needs its escape; the escape token itself restarts the run. ~keep
+                || (c == '.' && dot_run == 2)
+                || (c == '-'
+                    && (previous == Some('-') || chars.peek().is_some_and(|(_, next)| *next == '-')))
                 || (c == ':' && before_text)
                 // djot.js opens these forms even after an escaped brace. ~keep
                 || (matches!(c, '+' | '=' | '-') && previous == Some('{'))
@@ -467,6 +473,7 @@ fn escape_block_prefix(text: &str, literal_row: bool) -> Cow<'_, str> {
         escaped.push(c);
         previous = Some(c);
         already_escaped = c == '\\' && !already_escaped;
+        dot_run = if escape || c != '.' { 0 } else { dot_run + 1 };
     }
     escaped.push_str(&text[range.end..]);
     escaped.into()
