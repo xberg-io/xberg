@@ -308,14 +308,11 @@ pub(super) async fn contradicted_pages(
         }
         probed.extend_from_slice(&batch);
         let (on_pictures, routed): (Vec<u32>, Vec<u32>) = batch.iter().partition(|page| pictures.contains(page));
-        read_without_pictures(&probe, &document, &on_pictures, &mut outcome).await;
-        super::ensure_pdf_not_cancelled(config)?;
+        read_without_pictures(&probe, &document, &on_pictures, &mut outcome).await?;
         if routed.is_empty() {
             continue;
         }
-        let read = read_through_page_route(&probe, &routed, content, layout_pages, &mut outcome).await;
-        super::ensure_pdf_not_cancelled(config)?;
-        if !read {
+        if !read_through_page_route(&probe, &routed, content, layout_pages, &mut outcome).await? {
             return Ok(outcome);
         }
     }
@@ -331,14 +328,15 @@ struct Probe<'a> {
 }
 
 /// Reads `pages` through the ordinary page route and judges the reads (see [`judge_reads`]). False
-/// when the run failed, after a warning that the layers are kept.
+/// when the run failed, after a warning that the layers are kept; an error when the extraction is
+/// cancelled.
 async fn read_through_page_route(
     probe: &Probe<'_>,
     pages: &[u32],
     content: &[u8],
     layout_pages: Option<&crate::core::layout_pages::LayoutPageSelection>,
     outcome: &mut ProbeOutcome,
-) -> bool {
+) -> crate::Result<bool> {
     let run = super::ocr::extract_mixed_ocr_native_with_probe_reads(
         probe.layer,
         probe.boundaries,
@@ -349,7 +347,8 @@ async fn read_through_page_route(
         (&[], &[], outcome.reads.clone()),
     )
     .await;
-    match run {
+    super::ensure_pdf_not_cancelled(probe.config)?;
+    Ok(match run {
         Ok(run) => {
             judge_reads(probe, pages, (&run.output.1, &run.output.7), outcome);
             true
@@ -362,26 +361,29 @@ async fn read_through_page_route(
             )));
             false
         }
-    }
+    })
 }
 
 /// Reads each of `pages`, whose layer is drawn over a full-page picture, from a render without its
 /// pictures (see [`super::picture_layer::page_without_pictures`]), and judges the reads (see
 /// [`judge_reads`]). The picture is left out because a textured picture turns the read of the
-/// glyphs on it into noise. A page whose render or read fails has no read. ~keep
+/// glyphs on it into noise. A page whose render or read fails has no read; an error when the
+/// extraction is cancelled. ~keep
 async fn read_without_pictures(
     probe: &Probe<'_>,
     document: &xberg_native_pdf::PdfDocument,
     pages: &[u32],
     outcome: &mut ProbeOutcome,
-) {
+) -> crate::Result<()> {
     let (mut reads, mut confidence) = (ahash::AHashMap::new(), ahash::AHashMap::new());
     for page in pages {
         let Some(image) = super::picture_layer::page_without_pictures(document, *page as usize - 1, probe.config)
         else {
             continue;
         };
-        match super::ocr::read_rendered_page(image, probe.config).await {
+        let read = super::ocr::read_rendered_page(image, probe.config).await;
+        super::ensure_pdf_not_cancelled(probe.config)?;
+        match read {
             Ok((read, page_confidence)) => {
                 reads.insert(*page, read);
                 confidence.extend(page_confidence.map(|page_confidence| (*page, page_confidence)));
@@ -390,6 +392,7 @@ async fn read_without_pictures(
         }
     }
     judge_reads(probe, pages, (&reads, &confidence), outcome);
+    Ok(())
 }
 
 /// Adds to `outcome` the pages of `pages` whose confident read contradicts their layer, and a
