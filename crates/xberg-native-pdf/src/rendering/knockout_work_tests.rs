@@ -6,10 +6,13 @@ use std::sync::{Arc, Mutex};
 
 fn document(content: &str, knockout: bool, form: Option<&str>) -> PdfDocument {
     let group = format!("/Group << /S /Transparency /I true /K {knockout} >>");
-    let resources = "/ExtGState << /Half << /ca 0.5 >> >> /XObject << /Fm 5 0 R >>";
+    let resources = "/ExtGState << /Half << /ca 0.5 >> >> /XObject << /Fm 5 0 R >> /Properties << /L 6 0 R /V 7 0 R >> \
+        /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> \
+        /F3 << /Type /Font /Subtype /Type3 /FontBBox [0 0 1 1] /FontMatrix [1 0 0 1 0 0] /CharProcs << >> \
+        /Encoding << /Type /Encoding /Differences [] >> /FirstChar 0 /LastChar 0 /Widths [0] >> >>";
     let stream = |dict: &str, data: &str| format!("<< {dict} /Length {} >>\nstream\n{data}\nendstream", data.len());
     let objects = [
-        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [6 0 R 7 0 R] /D << /OFF [6 0 R] >> >> >>".to_string(),
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
         format!(
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 72] /Contents 4 0 R /Resources << {resources} >> {} >>",
@@ -20,6 +23,8 @@ fn document(content: &str, knockout: bool, form: Option<&str>) -> PdfDocument {
             &format!("/Type /XObject /Subtype /Form /BBox [0 0 72 72] /Resources << {resources} >> {group}"),
             form.unwrap_or(""),
         ),
+        "<< /Type /OCG /Name (L) >>".to_string(),
+        "<< /Type /OCG /Name (V) >>".to_string(),
     ];
     let mut bytes = b"%PDF-1.4\n".to_vec();
     let mut offsets = Vec::new();
@@ -95,12 +100,22 @@ fn oversized_knockout_pages_warn_and_match_normal_compositing_at_300_and_600_dpi
             .with_max_level(tracing::Level::WARN)
             .with_writer(move || writer.clone())
             .finish();
-        let actual = tracing::subscriber::with_default(subscriber, || render(&knockout))
-            .expect("oversized legitimate group degrades instead of failing the page");
+        // tracing-core caches a callsite's Interest from the live dispatchers, and with exactly one
+        // registered it consults only the registering thread's default. A parallel test that first hits
+        // the degradation warning without a subscriber would cache "never" for this test's capture too.
+        // A second live dispatcher makes registration read every dispatcher, and the rebuild replaces an
+        // Interest cached earlier. ~keep
+        let keepalive = tracing::Dispatch::new(tracing_subscriber::fmt().with_writer(std::io::sink).finish());
+        let actual = tracing::subscriber::with_default(subscriber, || {
+            tracing::callsite::rebuild_interest_cache();
+            render(&knockout)
+        })
+        .expect("oversized legitimate group degrades instead of failing the page");
         assert_eq!(
             actual.data, expected.data,
             "fallback follows ordinary paint order at {dpi} dpi"
         );
+        drop(keepalive);
         let warnings = String::from_utf8(log.0.lock().expect("warning log").clone()).expect("UTF8 warning");
         assert!(
             warnings.contains("knockout") && warnings.contains("non-knockout"),
@@ -138,6 +153,7 @@ fn runtime_work_exhaustion_restarts_the_group_from_its_initial_backdrop() {
             &doc,
             0,
             &resources,
+            Some(0),
         )
         .expect("runtime work exhaustion degrades transactionally");
     assert!(
@@ -172,6 +188,7 @@ fn ordinary_group_after_work_fallback_can_still_render() {
                 &doc,
                 0,
                 &resources,
+                Some(0),
             )
             .expect("first group degrades"),
     );
@@ -202,7 +219,7 @@ fn degraded_groups_keep_memory_depth_and_operation_failures_fatal() {
     let fallback = resources.fallback().expect("degraded scope");
     assert!(
         resources
-            .knockout(1, 0, 0, 0, 1)
+            .knockout(1, 0, 0, 0, 1, 1)
             .expect("inherited degradation")
             .is_none()
     );
@@ -231,14 +248,16 @@ fn degraded_groups_keep_memory_depth_and_operation_failures_fatal() {
 #[test]
 fn planned_work_is_committed_only_after_successful_native_admission() {
     let mut resources = KnockoutResources::default();
-    resources.surface_work = MAX_SURFACE_WORK - 10;
+    resources.surface_work = MAX_SURFACE_WORK - 20;
     let admitted = resources
-        .knockout(10, 0, 0, 0, 1)
+        .knockout(10, 0, 0, 0, 1, 1)
         .expect("exact threshold")
         .expect("native");
+    assert_eq!(resources.surface_work, MAX_SURFACE_WORK - 10);
+    resources.raster(10).expect("the pass spends its planned floor");
     assert_eq!(resources.surface_work, MAX_SURFACE_WORK);
     drop(admitted);
-    assert!(resources.knockout(1, 0, 0, 0, 1).expect("graceful excess").is_none());
+    assert!(resources.knockout(1, 0, 0, 0, 1, 1).expect("graceful excess").is_none());
     let fallback = resources.fallback().expect("work-only fallback");
     resources
         .raster(usize::MAX)
@@ -252,7 +271,7 @@ fn planned_work_is_committed_only_after_successful_native_admission() {
         "normal charging resumes after scope drop"
     );
     resources.reset(Some(1));
-    assert!(resources.knockout(1, 1, 0, 0, 1).is_err(), "failed memory admission");
+    assert!(resources.knockout(1, 1, 0, 0, 1, 1).is_err(), "failed memory admission");
     assert_eq!(resources.surface_work, 0, "a failed memory reservation charges no work");
 }
 
@@ -351,7 +370,7 @@ fn ordinary_alpha_replay_can_start_after_its_knockout_child_fills_the_work_ledge
 fn successful_knockout_does_not_disable_the_ordinary_surface_work_ceiling() {
     let mut resources = KnockoutResources::default();
     let native = resources
-        .knockout(10, 40, 0, 0, 1)
+        .knockout(10, 40, 0, 0, 1, 1)
         .expect("small knockout admission")
         .expect("native frame");
     resources
@@ -367,4 +386,283 @@ fn successful_knockout_does_not_disable_the_ordinary_surface_work_ceiling() {
         "ordinary work beyond its ceiling must still fail"
     );
     drop(ordinary);
+}
+
+#[test]
+fn plan_is_refused_before_the_pass_when_its_in_pass_floor_passes_the_limit() {
+    let pixels = 1 << 20;
+    let mut resources = KnockoutResources::default();
+    let fits = resources
+        .knockout(pixels, 0, 0, 0, 500, 500)
+        .expect("plan and floor of 500 surfaces fit")
+        .expect("native");
+    assert_eq!(resources.surface_work, 500 << 20);
+    drop(fits);
+
+    resources.reset(None);
+    assert!(
+        resources
+            .knockout(pixels, 0, 0, 0, 600, 600)
+            .expect("graceful degradation")
+            .is_none(),
+        "600 surfaces plan within the limit and charge 600 more while running"
+    );
+    assert_eq!(resources.surface_work, 0, "a refused plan commits no work");
+    assert_eq!(resources.native.load(Ordering::Relaxed), 0);
+
+    assert!(
+        resources
+            .knockout(pixels, 0, 0, 0, 300, 800)
+            .expect("graceful degradation")
+            .is_none(),
+        "text that also charges a coverage surface raises the floor above the plan"
+    );
+    assert!(resources.knockout(pixels, 0, 0, 0, 300, 600).expect("fits").is_some());
+}
+
+fn text_shows(content: &str, initial: Option<u8>) -> usize {
+    let doc = document(content, true, None);
+    let renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    let resources = doc.get_page_resources(0).expect("page resources");
+    let operators = crate::content::parse_content_stream(content.as_bytes()).expect("real text operators");
+    renderer.painting_text_shows(&operators, &doc, &resources, initial)
+}
+
+#[test]
+fn only_text_that_certainly_paints_a_side_raises_the_floor() {
+    let show = "(M) Tj (M) Tj";
+    let cases: [(&str, Option<u8>, usize); 14] = [
+        ("BT /F1 8 Tf 0 Tr (M) Tj (M) Tj ET", Some(0), 2),
+        ("BT /F1 8 Tf (M) Tj ET", Some(0), 1),
+        ("BT /F1 8 Tf (M) Tj ET", None, 0),
+        ("BT /F1 8 Tf 3 Tr (M) Tj (M) Tj ET", Some(0), 0),
+        ("BT /F1 8 Tf 7 Tr (M) Tj ET", Some(0), 0),
+        ("BT /F1 8 Tf 2 Tr (M) Tj ET", None, 1),
+        ("BT /F1 8 Tf 1 Tr (M) Tj ET", None, 1),
+        ("q 3 Tr Q BT /F1 8 Tf (M) Tj ET", Some(0), 1),
+        ("q BT /F1 8 Tf 3 Tr (M) Tj ET Q BT /F1 8 Tf (M) Tj ET", Some(0), 1),
+        ("/OC /Layer BDC BT /F1 8 Tf (M) Tj ET EMC", Some(0), 0),
+        ("/Span BMC BT /F1 8 Tf (M) Tj ET EMC", Some(0), 1),
+        ("BT /F3 8 Tf (M) Tj ET", Some(0), 0),
+        ("BT /F9 8 Tf (M) Tj ET", Some(0), 0),
+        ("BT (M) Tj ET", Some(0), 0),
+    ];
+    for (content, initial, expected) in cases {
+        assert_eq!(
+            text_shows(content, initial),
+            expected,
+            "{content} starting in mode {initial:?}"
+        );
+    }
+    assert_eq!(text_shows(&format!("BT /F1 8 Tf 3 Tr {show} 0 Tr {show} ET"), None), 2);
+}
+
+/// Runs `content` as a knockout group on a 72x72 page whose work ledger leaves room for exactly the
+/// plan and the in-pass floor of `shows` paints, and returns whether it stayed native, with the
+/// paint operators executed.
+fn native_with_room_for_floor(content: &str, shows: usize, initial: Option<u8>) -> (bool, usize) {
+    let doc = document(content, true, None);
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    let resources = doc.get_page_resources(0).expect("page resources");
+    renderer.load_resources(&doc, &resources).expect("load resources");
+    let operators = crate::content::parse_content_stream(content.as_bytes()).expect("real text operators");
+    let mut pixmap = tiny_skia::Pixmap::new(72, 72).expect("initial backdrop");
+    pixmap.fill(tiny_skia::Color::WHITE);
+    renderer.knockout_resources.canvas(pixmap.data().len());
+    renderer.knockout_resources.surface_work = MAX_SURFACE_WORK - 2 * (shows * 72 * 72) as u64;
+    let fallback = renderer
+        .execute_knockout_group(
+            &mut pixmap,
+            tiny_skia::Transform::identity(),
+            &operators,
+            &doc,
+            0,
+            &resources,
+            initial,
+        )
+        .expect("group renders");
+    (fallback.is_none(), renderer.paint_operator_calls)
+}
+
+#[test]
+fn invisible_text_stays_native_where_its_plan_and_floor_fit() {
+    let shows = 40;
+    let invisible = format!("BT /F1 8 Tf 3 Tr {} ET", "(M) Tj ".repeat(shows));
+    assert_eq!(
+        native_with_room_for_floor(&invisible, shows, Some(0)),
+        (true, shows),
+        "mode 3 charges the paint only, so its plan and floor of {shows} surfaces each fit"
+    );
+    let visible = format!("BT /F1 8 Tf 0 Tr {} ET", "(M) Tj ".repeat(shows));
+    assert!(
+        !native_with_room_for_floor(&visible, shows, Some(0)).0,
+        "visible text also charges its coverage raster, which the same room does not hold"
+    );
+}
+
+#[test]
+fn a_knockout_form_with_invisible_text_stays_native_where_its_plan_and_floor_fit() {
+    let shows = 40;
+    let invisible = format!("BT /F1 8 Tf 3 Tr {} ET", "(M) Tj ".repeat(shows));
+    assert_eq!(native_with_room_for_floor(&invisible, shows, None), (true, shows));
+    let doc = document("/Fm Do", true, Some(&invisible));
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    renderer
+        .render_page(&doc, 0)
+        .expect("knockout form with invisible text renders");
+    assert_eq!(
+        renderer.paint_operator_calls,
+        shows + 1,
+        "the Do and every show execute once"
+    );
+}
+
+fn path_paints(content: &str, hidden_layer: bool) -> usize {
+    let doc = document(content, true, None);
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    let resources = doc.get_page_resources(0).expect("page resources");
+    if hidden_layer {
+        renderer.excluded_layers_snapshot = Some(Arc::new(std::iter::once("L".to_string()).collect()));
+    }
+    let operators = crate::content::parse_content_stream(content.as_bytes()).expect("real path operators");
+    renderer.certain_path_paints(&operators, &doc, &resources)
+}
+
+const HUGE: &str = "300000000000000000000000000000000000000.0";
+const BEYOND_F32: &str = "1000000000000000000000000000000000000000.0";
+
+#[test]
+fn only_a_path_paint_that_certainly_builds_a_path_raises_the_floor() {
+    let overflowing_span = format!("-{HUGE} 0 m {HUGE} 0 l f");
+    let overflowing_curve = format!("-{HUGE} 0 m 0 0 {HUGE} 0 {HUGE} 0 c f");
+    let overflowing_y = format!("-{HUGE} 0 m 0 0 {HUGE} 0 y f");
+    let overflowing_v = format!("0 0 m 1 1 l 0 0 {HUGE} 0 v 0 0 -{HUGE} 0 v f");
+    let overflowing_from_origin = format!("{HUGE} 0 l -{HUGE} 0 l f");
+    let fitting_span = format!("0 0 m {HUGE} 0 l f");
+    let infinite_line = format!("0 0 m {BEYOND_F32} 5 l f");
+    let infinite_after_rect = format!("0 0 10 10 re {BEYOND_F32} 5 l f");
+    let infinite_start = format!("{BEYOND_F32} 0 m 5 5 l f");
+    let overflowing_rect = format!("{HUGE} 0 {HUGE} 10 re f");
+    let cases: Vec<(&str, usize)> = vec![
+        ("f", 0),
+        ("n f", 0),
+        ("0 0 10 10 re n f", 0),
+        ("0 0 10 10 re f", 1),
+        ("0 0 10 10 re f f", 1),
+        ("0 0 10 10 re B 5 5 m 9 9 l S", 2),
+        ("0 0 10 10 re s", 1),
+        ("5 5 m 9 9 l s", 1),
+        ("0 0 0 10 re f", 1),
+        ("0 0 100 0 re S", 1),
+        (&overflowing_rect, 0),
+        ("/OC /L BDC 0 0 10 10 re f EMC", 0),
+        ("/OC /L BDC EMC 0 0 10 10 re f", 1),
+        ("/OC /L BDC /Span BMC EMC 0 0 10 10 re f EMC 0 0 10 10 re f", 1),
+        ("/Span BMC 0 0 10 10 re f EMC", 1),
+        ("/Span /L BDC 0 0 10 10 re f EMC", 1),
+        ("0 0 10 10 re /OC /L BDC f EMC f", 0),
+        ("5 5 m f", 0),
+        ("0 0 m 5 5 l f 0 0 m 5 5 l f", 2),
+        ("0 0 m 1 1 2 2 3 3 c f", 1),
+        ("0 0 m 1 1 3 3 y f", 1),
+        ("1 1 2 2 3 3 c f", 1),
+        ("5 5 l f", 1),
+        (&fitting_span, 1),
+        (&overflowing_span, 0),
+        (&overflowing_curve, 0),
+        (&overflowing_y, 0),
+        (&overflowing_v, 0),
+        (&overflowing_from_origin, 0),
+        (&infinite_line, 0),
+        (&infinite_after_rect, 0),
+        (&infinite_start, 0),
+    ];
+    for (content, expected) in cases {
+        assert_eq!(path_paints(content, true), expected, "{content}");
+    }
+}
+
+#[test]
+fn a_path_paint_in_a_visible_layer_raises_the_floor_and_one_in_a_hidden_layer_does_not() {
+    let cases: [(&str, usize, usize); 6] = [
+        ("/OC /L BDC 0 0 10 10 re f EMC", 1, 0),
+        ("/OC /L BDC 0 0 10 10 re f EMC 0 0 10 10 re f", 2, 1),
+        ("/OC /Gone BDC 0 0 10 10 re f EMC", 1, 1),
+        ("/OC /L BDC /OC /Gone BDC 0 0 10 10 re f EMC EMC", 1, 0),
+        ("/OC /Gone BDC /OC /L BDC 0 0 10 10 re f EMC EMC", 1, 0),
+        ("/OC /Gone BDC 0 0 10 10 re EMC f", 1, 1),
+    ];
+    for (content, visible, hidden) in cases {
+        assert_eq!(path_paints(content, false), visible, "visible: {content}");
+        assert_eq!(path_paints(content, true), hidden, "hidden: {content}");
+    }
+}
+
+fn native_with_plan_and_certain_floor(content: &str, certain: usize) -> (bool, usize) {
+    let operators = crate::content::parse_content_stream(content.as_bytes()).expect("real operators");
+    let paints = operators
+        .iter()
+        .filter(|operator| crate::rendering::page_renderer::is_paint_operator(operator))
+        .count();
+    run_with_room_for(content, paints + certain, true)
+}
+
+fn run_with_room_for(content: &str, surfaces: usize, hidden_layer: bool) -> (bool, usize) {
+    let doc = document(content, true, None);
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    let resources = doc.get_page_resources(0).expect("page resources");
+    renderer.load_resources(&doc, &resources).expect("load resources");
+    if hidden_layer {
+        renderer.excluded_layers_snapshot = Some(Arc::new(std::iter::once("L".to_string()).collect()));
+    }
+    let operators = crate::content::parse_content_stream(content.as_bytes()).expect("real operators");
+    let mut pixmap = tiny_skia::Pixmap::new(72, 72).expect("initial backdrop");
+    pixmap.fill(tiny_skia::Color::WHITE);
+    renderer.knockout_resources.canvas(pixmap.data().len());
+    renderer.knockout_resources.surface_work = MAX_SURFACE_WORK - (surfaces * 72 * 72) as u64;
+    let fallback = renderer
+        .execute_knockout_group(
+            &mut pixmap,
+            tiny_skia::Transform::identity(),
+            &operators,
+            &doc,
+            0,
+            &resources,
+            None,
+        )
+        .expect("group renders");
+    (fallback.is_none(), renderer.paint_operator_calls)
+}
+
+#[test]
+fn paints_that_charge_no_path_work_stay_native_where_plan_and_floor_fit() {
+    let bare = format!("/Half gs 0 g 10 10 40 40 re f 20 20 40 40 re f {}", "f ".repeat(40));
+    assert_eq!(native_with_plan_and_certain_floor(&bare, 2), (true, 42));
+    let hidden = format!(
+        "/Half gs 0 g 10 10 40 40 re f 20 20 40 40 re f /OC /L BDC {}EMC",
+        "0 0 10 10 re f ".repeat(40)
+    );
+    assert_eq!(native_with_plan_and_certain_floor(&hidden, 2), (true, 42));
+    let visible = format!("0 g {}", "0 0 10 10 re f ".repeat(42));
+    assert!(
+        !native_with_plan_and_certain_floor(&visible, 2).0,
+        "visible path paints charge a surface each, which room for two does not hold"
+    );
+}
+
+#[test]
+fn a_visible_layer_of_path_paints_that_cannot_fit_degrades_before_painting() {
+    let paints = 40;
+    let body = "0 0 10 10 re f ".repeat(paints);
+    let room = 2 * paints - 10;
+    assert_eq!(
+        run_with_room_for(&format!("0 g /OC /V BDC {body}EMC"), room, false),
+        (false, paints),
+        "the floor counts the layer's paints, refuses the plan, and nothing is painted twice"
+    );
+    assert_eq!(
+        run_with_room_for(&format!("0 g /OC /L BDC {body}EMC"), room, true),
+        (true, paints),
+        "a hidden layer charges nothing, so the same room holds it"
+    );
 }

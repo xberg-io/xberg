@@ -190,9 +190,19 @@ pub(crate) async fn extract_file(
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let owned_config_with_cancel_token;
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-    let config: &ExtractionConfig = if config.extraction_timeout_secs.is_some() && config.cancel_token.is_none() {
+    let config: &ExtractionConfig = if config.extraction_timeout_secs.is_some() {
         let mut owned = config.clone();
         owned.ensure_cancel_token();
+        // Each timed extraction gets its own soft-stop state, so a caller's token that is
+        // reused for another extraction never starts out stopped.
+        owned.cancel_token = owned
+            .cancel_token
+            .as_ref()
+            .map(crate::cancellation::CancellationToken::scoped);
+        super::time_limit::arm(
+            owned.cancel_token.as_ref(),
+            owned.extraction_timeout_secs.unwrap_or_default(),
+        );
         owned_config_with_cancel_token = owned;
         &owned_config_with_cancel_token
     } else {
@@ -240,18 +250,18 @@ pub(crate) async fn extract_file(
     // not enough — explicitly exclude wasm32 here, matching `run_timed_extraction` in
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let result = if let Some(secs) = config.extraction_timeout_secs {
-        let start = std::time::Instant::now();
-        match tokio::time::timeout(std::time::Duration::from_secs(secs), extraction_future).await {
+        let started = std::time::Instant::now();
+        let mut extraction_future = extraction_future;
+        match tokio::time::timeout(std::time::Duration::from_secs(secs), &mut extraction_future).await {
             Ok(inner) => inner,
-            Err(_elapsed) => {
-                if let Some(ref token) = config.cancel_token {
-                    token.cancel();
+            Err(_elapsed) => match super::time_limit::begin_grace(config.cancel_token.as_ref(), secs, started) {
+                Ok(token) => {
+                    let outcome =
+                        tokio::time::timeout(super::time_limit::PARTIAL_RESULT_GRACE, &mut extraction_future).await;
+                    super::time_limit::finish_grace(outcome, token, secs, started)
                 }
-                Err(crate::XbergError::Timeout {
-                    elapsed_ms: start.elapsed().as_millis() as u64,
-                    limit_ms: secs * 1000,
-                })
-            }
+                Err(timeout) => Err(timeout),
+            },
         }
     } else {
         extraction_future.await
@@ -339,7 +349,13 @@ async fn extract_file_scoped(path: &Path, mime_type: &str, config: &ExtractionCo
     let result = Box::pin(extract_file_uncached(path, mime_type, config)).await?;
     let lifecycle_generations_after = lifecycle_registry_generations();
 
+    // A soft stop at the time limit leaves a partial document, which must not be served later. ~keep
+    let stopped_early = config
+        .cancel_token
+        .as_ref()
+        .is_some_and(crate::cancellation::CancellationToken::result_is_partial);
     if super::cacheability::is_cacheable()
+        && !stopped_early
         && lifecycle_generations_before == lifecycle_generations_after
         && context == fingerprint(&dependencies, config.cancel_token.as_ref()).await?
         && super::cacheability::is_cacheable()
@@ -1702,6 +1718,135 @@ mod issue_217_fallback_tests {
                 assert_eq!(message, "corrupt or encrypted content");
             }
             other => panic!("a hard failure must propagate directly, not cascade: {other:?}"),
+        }
+    }
+
+    mod time_limit_cache {
+        use super::*;
+        use crate::cancellation::CancellationToken;
+        use crate::core::config::ExtractInput;
+        use crate::plugins::{DocumentExtractor, Plugin};
+        use async_trait::async_trait;
+        use serial_test::serial;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        const MIME: &str = "application/x-xberg-time-limit-cache-test";
+        const NAME: &str = "time-limit-cache-test-extractor";
+
+        /// Stands in for a page loop: on every run it asks for the time-limit stop on the
+        /// extraction's token, and when `leaves_page_unread` it also reports a page it never read.
+        struct Stopping {
+            calls: Arc<AtomicUsize>,
+            leaves_page_unread: bool,
+        }
+
+        impl Plugin for Stopping {
+            fn name(&self) -> &str {
+                NAME
+            }
+        }
+
+        #[async_trait]
+        impl DocumentExtractor for Stopping {
+            async fn extract(&self, _input: ExtractInput, config: &ExtractionConfig) -> Result<ExtractedDocument> {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                let token = config.cancel_token.as_ref().expect("the test supplies a token");
+                token.request_stop();
+                if self.leaves_page_unread {
+                    token.note_unread_page(2);
+                }
+                Ok(ExtractedDocument {
+                    content: "pages read".to_string(),
+                    mime_type: Cow::Borrowed("text/plain"),
+                    ..Default::default()
+                })
+            }
+
+            fn supported_mime_types(&self) -> &[&str] {
+                &[MIME]
+            }
+
+            fn priority(&self) -> i32 {
+                100
+            }
+        }
+
+        struct Registered;
+
+        impl Registered {
+            fn new(calls: &Arc<AtomicUsize>, leaves_page_unread: bool) -> Self {
+                crate::plugins::registry::get_document_extractor_registry()
+                    .write()
+                    .register(Arc::new(Stopping {
+                        calls: Arc::clone(calls),
+                        leaves_page_unread,
+                    }))
+                    .unwrap();
+                Self
+            }
+        }
+
+        impl Drop for Registered {
+            fn drop(&mut self) {
+                let _ = crate::plugins::registry::get_document_extractor_registry()
+                    .write()
+                    .remove(NAME);
+            }
+        }
+
+        /// Extract the same file twice, each time on a fresh token, and return how often the
+        /// extractor ran: once means the second call was served from the file cache.
+        async fn extractor_runs_for_two_calls(leaves_page_unread: bool, unique: &str) -> usize {
+            let calls = Arc::new(AtomicUsize::new(0));
+            let _registered = Registered::new(&calls, leaves_page_unread);
+            let directory = tempdir().unwrap();
+            let path = directory.path().join("input.bin");
+            // The cache outlives the test process, so each run needs content no earlier run cached.
+            let nonce = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            std::fs::write(&path, format!("time limit cache test {unique} {nonce}")).unwrap();
+
+            for _ in 0..2 {
+                let config = ExtractionConfig {
+                    // A requested stop also cuts the post-processing stages, which makes any result
+                    // partial; with none enabled, only the page conjunct decides. ~keep
+                    postprocessor: Some(crate::core::config::PostProcessorConfig {
+                        enabled: false,
+                        ..Default::default()
+                    }),
+                    use_cache: true,
+                    cache_namespace: Some(format!("time-limit-cache-{unique}")),
+                    cancel_token: Some(CancellationToken::new()),
+                    ..Default::default()
+                };
+                extract_file_scoped(&path, MIME, &config)
+                    .await
+                    .expect("the stub extractor succeeds");
+            }
+            calls.load(Ordering::SeqCst)
+        }
+
+        #[tokio::test]
+        #[serial]
+        async fn a_result_cut_short_by_the_time_limit_is_not_written_to_the_file_cache() {
+            assert_eq!(
+                extractor_runs_for_two_calls(true, "unread").await,
+                2,
+                "a partial document must be extracted again, not served from the cache"
+            );
+        }
+
+        #[tokio::test]
+        #[serial]
+        async fn a_stop_that_left_no_page_unread_still_writes_the_file_cache() {
+            assert_eq!(
+                extractor_runs_for_two_calls(false, "complete").await,
+                1,
+                "a stop that cut nothing short leaves a complete document, which is cached"
+            );
         }
     }
 }

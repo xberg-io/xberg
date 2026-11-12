@@ -33,45 +33,33 @@ For the example in this section, *F*~*M*~ *= F*~*3*~ *= 1* ( *R*~*2*~ has the fu
 
 0.2888 *N* 0.5776 *N* 0.1336 *N*
 
+For the example in this section,
+
+2 2 2
+
+( 1 − 0.2888
+
+- 2 ) ( 1 − 0.5776
+- 2 ) ( 2 − 1 − 1 − 0.1336
+- 2 )
+
 2
 
-χ ( *obs* ) = For the example in this section,
+χ ( *obs* ) = + + *= 0.596953.*
 
-2
+0.2888
 
-# (~1~− 0.2888· 2)
-
-\+
-
-0.2888· 2
+- 2 0.5776
+- 2 0.1336
+- 2
 
 2 −χ ( *obs* ) / 2
 
-- (5) Compute *P* − *value* = *e*
+- (5) Compute *P* − *value* = *e* . Since there are 3 classes in the example, the *P-value* for the
 
 2
 
-example is equal to *igamc* 1,  
-
-2
-
-# (~1~− 0.5776 · 2)
-
-\+
-
-0.5776 · 2
-
- χ ( *obs* )   . 2 
-
-2
-
-# (~2~ −1−1− 0.1336 · 2)
-
-*= 0.596953.*
-
-0.1336 · 2
-
-. Since there are 3 classes in the example, the *P-value* for the
+ χ ( *obs* )  example is equal to *igamc* 1,  .   2 
 
 For the example in this section, *P-value = e*
 

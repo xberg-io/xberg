@@ -72,7 +72,11 @@ fn should_not_annotate_sine_fraction_numerators_as_exponents() {
     );
     assert_eq!(result.content.matches("2a[8 sin( ) − 4 sin(ω)]").count(), 2);
     assert!(result.content.contains("rπ ω 2b 3ω 2c 5ω 2"));
-    assert!(result.content.contains("\n\nω\n\n2a[8 sin( )"));
+    assert!(
+        result
+            .content
+            .contains("\n\nω 2b 3ω 2c 5ω\n\n2a[8 sin( ) − 4 sin(ω)] + [12 sin(ω)")
+    );
 }
 
 #[test]

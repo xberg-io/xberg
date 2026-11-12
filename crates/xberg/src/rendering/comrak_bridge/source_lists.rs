@@ -4,20 +4,9 @@ use super::{AstNode, ContainerEntry, ElementKind, InternalElement, NodeList, Nod
 use comrak::nodes::ListType;
 use std::collections::HashSet;
 
-const MAX_COMMONMARK_ORDINAL_DIGITS: usize = 9;
 const MAX_COMMONMARK_ORDINAL: usize = 999_999_999;
 
-pub(super) fn decimal_ordinal(label: &str) -> Option<usize> {
-    let digits = label.strip_suffix('.')?;
-    if digits.is_empty()
-        || digits.len() > MAX_COMMONMARK_ORDINAL_DIGITS
-        || !digits.bytes().all(|byte| byte.is_ascii_digit())
-        || digits.len() > 1 && digits.starts_with('0')
-    {
-        return None;
-    }
-    digits.parse().ok()
-}
+pub(super) use crate::rendering::common::decimal_ordinal;
 
 fn previous_ordinal<'a>(parent: &'a AstNode<'a>) -> Option<usize> {
     let item = parent.last_child()?;

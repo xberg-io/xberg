@@ -665,15 +665,42 @@ mod tests {
         let (update_started_sender, update_started_receiver) = mpsc::channel();
         let (update_release_sender, update_release_receiver) = mpsc::channel();
         let update_thread = std::thread::spawn(move || {
-            with_post_processor_suppressed("unregistered-test-processor", || {
-                update_started_sender.send(()).unwrap();
-                update_release_receiver.recv().unwrap();
-                Ok::<(), crate::XbergError>(())
-            })
+            // `with_registration_update` refuses the mutation, without running the closure, while
+            // any snapshot lease is live, and that counter is process-global: a concurrent
+            // non-`#[serial]` extraction in this binary holds one. The refusal is documented as
+            // retryable; the initializing thread stays parked until `update_started` fires, so
+            // refused attempts cannot perturb the retry count asserted below. ~keep
+            loop {
+                let started = update_started_sender.clone();
+                let release = &update_release_receiver;
+                let outcome = with_post_processor_suppressed("unregistered-test-processor", move || {
+                    started.send(()).unwrap();
+                    release.recv().unwrap();
+                    Ok::<(), crate::XbergError>(())
+                });
+                match outcome {
+                    Err(crate::XbergError::Other(message)) if message.contains("retry the lifecycle mutation") => {
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    other => return other,
+                }
+            }
         });
         update_started_receiver.recv().unwrap();
         resume_sender.send(()).unwrap();
 
+        // The initializer reports its single retry and then blocks on the registration lock. A fixed
+        // sleep before the first read is a timing assumption that fails when the woken thread is not
+        // scheduled within it, so wait for the retry to appear, then hold the window to prove that a
+        // blocked waiter adds no further ones. ~keep
+        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        while retry_count.load(Ordering::Relaxed) == 0 {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the initializer never reported its retry"
+            );
+            std::thread::sleep(Duration::from_millis(1));
+        }
         std::thread::sleep(Duration::from_millis(25));
         assert_eq!(retry_count.load(Ordering::Relaxed), 1);
 
