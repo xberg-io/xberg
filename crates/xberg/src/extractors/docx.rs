@@ -379,13 +379,14 @@ fn build_internal_document(
                 let drawing = &doc.drawings[*idx];
 
                 // A drawn shape has no picture data, so no image element carries its description;
-                // the description is text the author wrote, so it is a paragraph in its place.
+                // the description is text the author wrote, so it is a paragraph in its place. A
+                // description of punctuation only (`""`) holds no text and is left out.
                 let shape_description = drawing
                     .image_ref
                     .is_none()
                     .then(|| drawing.doc_properties.as_ref()?.description.as_deref())
                     .flatten()
-                    .filter(|description| !description.trim().is_empty());
+                    .filter(|description| description.chars().any(char::is_alphanumeric));
                 let textbox_text = drawing
                     .text_box_content
                     .as_deref()
@@ -5031,7 +5032,8 @@ mod tests {
     }
 
     /// A drawn shape has no picture data, but its description is text the author wrote: every
-    /// format writes it in its place, and a Plain page keeps it.
+    /// format writes it in its place, and a Plain page keeps it. A description of punctuation only
+    /// holds no text and stays out.
     #[tokio::test]
     async fn should_write_the_description_of_a_drawn_shape_in_its_place() {
         let xml = r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -5041,6 +5043,10 @@ mod tests {
             <w:p><w:r><w:t>Before the chart.</w:t></w:r></w:p>
             <w:p><w:r><w:drawing><wp:inline><wp:extent cx="914400" cy="457200"/>
             <wp:docPr id="3" name="Flowchart 3" descr="Flow from intake to review"/>
+            <a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+            <wps:wsp><wps:spPr/></wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
+            <w:p><w:r><w:drawing><wp:inline><wp:extent cx="914400" cy="457200"/>
+            <wp:docPr id="4" name="Line 4" descr="&quot;&quot;"/>
             <a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
             <wps:wsp><wps:spPr/></wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>
             <w:p><w:r><w:t>After the chart.</w:t></w:r></w:p></w:body></w:document>"#;
@@ -5070,6 +5076,10 @@ mod tests {
                 "{format:?}: {content:?}"
             );
             assert!(!content.contains("Flowchart 3"), "{format:?}: {content:?}");
+            assert!(
+                !content.contains("\"\"") && !content.contains("&quot;&quot;"),
+                "a description of punctuation only holds no text: {format:?}: {content:?}"
+            );
             if matches!(format, F::Plain) {
                 let pages = result.pages.expect("pages requested");
                 assert!(pages[0].content.contains("Flow from intake to review"), "{pages:?}");
