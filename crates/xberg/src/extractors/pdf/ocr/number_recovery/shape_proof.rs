@@ -6,6 +6,7 @@ mod source_profile;
 use font_profile::*;
 use image::{DynamicImage, GrayImage};
 use lopdf::{Dictionary, Object as Output, ObjectId, Stream, dictionary};
+use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::sync::Arc;
@@ -49,6 +50,7 @@ pub(super) struct ShapeProof {
     candidates: Vec<Candidate>,
     media: Rect,
     retained_bytes: usize,
+    measured: bool,
     pixels_left: AtomicUsize,
 }
 struct Candidate {
@@ -63,6 +65,8 @@ struct Candidate {
 enum Failure {
     #[error("glyph shape proof declined: {0}")]
     Declined(&'static str),
+    #[error("glyph shape proof declined after measured work: {0}")]
+    MeasuredDecline(&'static str),
     #[error("native PDF glyph shape operation failed: {0}")]
     Native(#[from] xberg_native_pdf::Error),
     #[error("encoding isolated glyph content failed: {0}")]
@@ -71,6 +75,63 @@ enum Failure {
     Io(#[from] std::io::Error),
 }
 type ProofResult<T> = std::result::Result<T, Failure>;
+
+impl Failure {
+    fn measured(self) -> Self {
+        match self {
+            Self::Declined(reason) => Self::MeasuredDecline(reason),
+            error => error,
+        }
+    }
+}
+
+// Keep spent work after a partial proof is dropped; the counter never refunds a phase. ~keep
+struct Work {
+    bytes: Cell<usize>,
+    measurable: Cell<bool>,
+    limit: usize,
+}
+
+impl Work {
+    fn new(limit: usize) -> Self {
+        Self {
+            bytes: Cell::new(0),
+            measurable: Cell::new(true),
+            limit,
+        }
+    }
+
+    fn resolve(&self, document: &PdfDocument, object: &Object) -> ProofResult<Object> {
+        let remaining = self.limit.saturating_sub(self.bytes.get());
+        if let Some((object, bytes)) = document.resolve_object_for_proof(object, remaining)? {
+            self.charge(bytes)?;
+            return Ok(object);
+        }
+        self.measurable.set(false);
+        Ok(document.resolve_object(object)?)
+    }
+
+    fn font(&self, document: &PdfDocument, object: &Object) -> ProofResult<Arc<FontInfo>> {
+        if let Some(font) = document.cached_font_for_proof(object) {
+            return Ok(font);
+        }
+        self.measurable.set(false);
+        Ok(document.get_or_load_font_for_rendering(object)?)
+    }
+
+    fn reserve(&self, bytes: usize) -> ProofResult<()> {
+        let next = self.bytes.get().saturating_add(bytes);
+        require(next <= self.limit, "source work byte budget")?;
+        self.bytes.set(next);
+        Ok(())
+    }
+
+    fn charge(&self, bytes: usize) -> ProofResult<()> {
+        let next = self.bytes.get().saturating_add(bytes);
+        self.bytes.set(next);
+        require(next <= self.limit, "source work byte budget")
+    }
+}
 
 struct Audited<'a> {
     admitted: source_profile::Admitted,
@@ -81,19 +142,20 @@ struct Source<'a> {
     chars: Vec<TextChar>,
     fonts: HashMap<String, Object>,
     builder: Builder<'a>,
-    working_bytes: usize,
 }
 
 #[cfg(test)]
 fn preflight(document: &PdfDocument, page: usize, max_bytes: usize) -> crate::Result<bool> {
-    Ok(optional(audit_page(document, page, max_bytes))?.is_some())
+    let Some(source) = source_metadata(document, page)? else {
+        return Ok(false);
+    };
+    Ok(optional(audit_page(&source, max_bytes, &Work::new(max_bytes)))?.is_some())
 }
-fn audit_page(document: &PdfDocument, page: usize, max_bytes: usize) -> ProofResult<Audited<'_>> {
-    page_media(document, page)?;
-    let admitted = source_profile::admit(document, page, max_bytes)?;
-    let resources = document.get_page_resources(page)?;
-    let fonts = page_fonts(document, &resources)?;
-    let mut builder = Builder::new(document, max_bytes - admitted.working_bytes);
+fn audit_page<'a>(source: &SourceMetadata<'a>, max_bytes: usize, work: &'a Work) -> ProofResult<Audited<'a>> {
+    let document = source.document;
+    let admitted = source_profile::admit(document, &source.metadata.contents, max_bytes, work)?;
+    let fonts = page_fonts(document, &source.metadata.resources, work)?;
+    let mut builder = Builder::new(document, max_bytes - admitted.working_bytes, work);
     builder.audit_fonts(&fonts)?;
     Ok(Audited {
         admitted,
@@ -101,34 +163,30 @@ fn audit_page(document: &PdfDocument, page: usize, max_bytes: usize) -> ProofRes
         builder,
     })
 }
-fn bounded_source(document: &PdfDocument, page: usize, max_bytes: usize) -> ProofResult<Source<'_>> {
+fn bounded_source<'a>(source: &SourceMetadata<'a>, max_bytes: usize, work: &'a Work) -> ProofResult<Source<'a>> {
     let Audited {
         admitted,
         fonts,
         builder,
-    } = audit_page(document, page, max_bytes)?;
+    } = audit_page(source, max_bytes, work)?;
+    let document = source.document;
     let mut extractor = xberg_native_pdf::extractors::TextExtractor::new();
     extractor.set_document(document);
     // XObjects are audited Image-only. They emit no text; omit them from the private extractor ~keep
     // to avoid source image/resource cache writes and copies. Fonts are supplied only after audit. ~keep
     extractor.set_resources(Object::Dictionary(HashMap::new()));
     for (name, object) in &fonts {
-        let font = document.get_or_load_font_for_rendering(object)?;
+        let font = work.font(document, object)?;
         extractor.add_font(name.clone(), font.as_ref().clone());
     }
     let chars = extractor.extract_owned(&admitted.bytes)?;
     require(chars.len() <= admitted.max_chars, "native character emission invariant")?;
-    Ok(Source {
-        chars,
-        fonts,
-        builder,
-        working_bytes: admitted.working_bytes,
-    })
+    Ok(Source { chars, fonts, builder })
 }
 
 pub(super) struct SourceMetadata<'a> {
     document: &'a PdfDocument,
-    page: usize,
+    metadata: source_profile::Metadata,
     pub(super) media: Rect,
 }
 
@@ -137,24 +195,35 @@ impl SourceMetadata<'_> {
         self,
         max_bytes: usize,
         max_iterations: usize,
-    ) -> crate::Result<Option<(Vec<Number>, ShapeProof)>> {
-        optional(prepare_source_inner(
-            self.document,
-            self.page,
-            max_bytes,
-            max_iterations,
-        ))
+    ) -> crate::Result<Preparation<(Vec<Number>, ShapeProof)>> {
+        let work = Work::new(max_bytes);
+        match prepare_source_inner(&self, max_bytes, max_iterations, &work) {
+            Ok(proof) => Ok(Preparation::Ready(proof)),
+            Err(error @ (Failure::Declined(reason) | Failure::MeasuredDecline(reason))) => {
+                let bytes = work.bytes.get();
+                let measured =
+                    (work.measurable.get() && matches!(error, Failure::MeasuredDecline(_))) || bytes > max_bytes;
+                tracing::debug!(reason, measured, bytes, "Cannot certify native glyph shape");
+                if measured {
+                    Ok(Preparation::MeasuredDecline(bytes))
+                } else {
+                    Ok(Preparation::UnmeasuredDecline)
+                }
+            }
+            Err(error) => Err(proof_error(error)),
+        }
     }
 }
 
 pub(super) fn source_metadata(document: &PdfDocument, page: usize) -> crate::Result<Option<SourceMetadata<'_>>> {
-    Ok(optional(preflight_source(document, page))?.map(|media| SourceMetadata { document, page, media }))
+    optional(preflight_source(document, page))
 }
 
-#[cfg(test)]
 pub(super) enum Preparation<T> {
     Ready(T),
+    #[cfg(test)]
     UnsupportedBeforeWork,
+    MeasuredDecline(usize),
     UnmeasuredDecline,
 }
 
@@ -168,18 +237,15 @@ pub(super) fn prepare_source_accounted(
     let Some(source) = source_metadata(document, page)? else {
         return Ok(Preparation::UnsupportedBeforeWork);
     };
-    Ok(match source.prepare(max_bytes, max_iterations)? {
-        Some(proof) => Preparation::Ready(proof),
-        None => Preparation::UnmeasuredDecline,
-    })
+    source.prepare(max_bytes, max_iterations)
 }
 
-fn preflight_source(document: &PdfDocument, page: usize) -> ProofResult<Rect> {
+fn preflight_source(document: &PdfDocument, page: usize) -> ProofResult<SourceMetadata<'_>> {
     let media = page_media(document, page)?;
-    source_profile::metadata(document, page)?;
-    // Only cached page/font dictionaries are metadata. Program or XObject resolution starts charged work. ~keep
-    let resources = document.get_page_resources(page)?;
-    let fonts = resources
+    let metadata = source_profile::metadata(document, page)?;
+    // Only page/font dictionaries are metadata. Program or XObject resolution starts charged work. ~keep
+    let fonts = metadata
+        .resources
         .as_dict()
         .and_then(|dict| dict.get("Font"))
         .ok_or(Failure::Declined("missing page fonts"))?;
@@ -202,7 +268,11 @@ fn preflight_source(document: &PdfDocument, page: usize) -> ProofResult<Rect> {
             "unsupported page font subtype",
         )?;
     }
-    Ok(media)
+    Ok(SourceMetadata {
+        document,
+        metadata,
+        media,
+    })
 }
 
 #[cfg(test)]
@@ -215,21 +285,23 @@ pub(super) fn prepare_source(
     Ok(
         match prepare_source_accounted(document, page, max_bytes, max_iterations)? {
             Preparation::Ready(proof) => Some(proof),
-            Preparation::UnsupportedBeforeWork | Preparation::UnmeasuredDecline => None,
+            Preparation::UnsupportedBeforeWork | Preparation::MeasuredDecline(_) | Preparation::UnmeasuredDecline => {
+                None
+            }
         },
     )
 }
 fn prepare_source_inner(
-    document: &PdfDocument,
-    page: usize,
+    source: &SourceMetadata<'_>,
     max_bytes: usize,
     max_iterations: usize,
+    work: &Work,
 ) -> ProofResult<(Vec<Number>, ShapeProof)> {
     require(max_iterations > 0, "source candidate work budget")?;
-    let source = bounded_source(document, page, max_bytes)?;
-    let numbers = super::candidates(&source.chars);
-    require(numbers.len() <= max_iterations, "source candidate work budget")?;
-    let shape = prepare_glyphs(document, page, &numbers, max_bytes, source)?;
+    let bounded = bounded_source(source, max_bytes, work)?;
+    let numbers = super::candidates(&bounded.chars);
+    require(numbers.len() <= max_iterations, "source candidate work budget").map_err(Failure::measured)?;
+    let shape = prepare_glyphs(source.media, &numbers, bounded).map_err(Failure::measured)?;
     Ok((numbers, shape))
 }
 #[cfg(test)]
@@ -243,43 +315,40 @@ pub(super) fn prepare(
 }
 #[cfg(test)]
 fn prepare_inner(document: &PdfDocument, page: usize, numbers: &[Number], max_bytes: usize) -> ProofResult<ShapeProof> {
-    let source = bounded_source(document, page, max_bytes)?;
-    prepare_glyphs(document, page, numbers, max_bytes, source)
+    let work = Work::new(max_bytes);
+    let source = preflight_source(document, page)?;
+    let bounded = bounded_source(&source, max_bytes, &work)?;
+    prepare_glyphs(source.media, numbers, bounded)
 }
 fn optional<T>(result: ProofResult<T>) -> crate::Result<Option<T>> {
     match result {
         Ok(value) => Ok(Some(value)),
-        Err(Failure::Declined(reason)) => {
+        Err(Failure::Declined(reason) | Failure::MeasuredDecline(reason)) => {
             tracing::debug!(reason, "Cannot certify native glyph shape");
             Ok(None)
         }
-        Err(error) => Err(crate::XbergError::Ocr {
-            message: "Unable to obtain bounded native glyph shape evidence".into(),
-            source: Some(Box::new(error)),
-        }),
+        Err(error) => Err(proof_error(error)),
+    }
+}
+fn proof_error(error: Failure) -> crate::XbergError {
+    crate::XbergError::Ocr {
+        message: "Unable to obtain bounded native glyph shape evidence".into(),
+        source: Some(Box::new(error)),
     }
 }
 fn require(condition: bool, reason: &'static str) -> ProofResult<()> {
     condition.then_some(()).ok_or(Failure::Declined(reason))
 }
-fn prepare_glyphs(
-    document: &PdfDocument,
-    page: usize,
-    numbers: &[Number],
-    max_bytes: usize,
-    source: Source<'_>,
-) -> ProofResult<ShapeProof> {
+fn prepare_glyphs(media: Rect, numbers: &[Number], source: Source<'_>) -> ProofResult<ShapeProof> {
     let Source {
         chars,
         fonts,
         mut builder,
-        working_bytes,
     } = source;
     require(
         !numbers.is_empty() && numbers.len() <= super::MAX_NUMBER_GLYPHS,
         "candidate count",
     )?;
-    let media = page_media(document, page)?;
     require(
         numbers.iter().map(|number| number.text.chars().count()).sum::<usize>() <= super::MAX_NUMBER_GLYPHS,
         "total numeric glyph count",
@@ -288,19 +357,16 @@ fn prepare_glyphs(
     for number in numbers {
         candidates.push(builder.add_candidate(number, &chars, &fonts, media)?);
     }
-    let cache_bytes = builder.cache_bytes;
-    let (bytes, charged) = builder.finish()?;
-    let retained_bytes = charged
-        .saturating_add(bytes.capacity())
-        .saturating_mul(MEMORY_FACTOR)
-        .saturating_add(cache_bytes)
-        .saturating_add(working_bytes);
-    require(retained_bytes <= max_bytes, "retained font proof budget")?;
+    let work = builder.graph.work;
+    let bytes = builder.finish()?;
+    work.charge(bytes.capacity().saturating_mul(MEMORY_FACTOR))?;
+    let retained_bytes = work.bytes.get();
     Ok(ShapeProof {
         document: PdfDocument::from_bytes(bytes)?,
         candidates,
         media,
         retained_bytes,
+        measured: work.measurable.get(),
         pixels_left: AtomicUsize::new(super::MAX_CROP_PIXELS as usize),
     })
 }
@@ -314,28 +380,29 @@ fn page_media(document: &PdfDocument, page: usize) -> ProofResult<Rect> {
     )?;
     Ok(media)
 }
-fn page_fonts(document: &PdfDocument, resources: &Object) -> ProofResult<HashMap<String, Object>> {
+fn page_fonts(document: &PdfDocument, resources: &Object, work: &Work) -> ProofResult<HashMap<String, Object>> {
     let dict = resources
         .as_dict()
         .ok_or(Failure::Declined("page resources dictionary"))?;
     if let Some(objects) = dict.get("XObject") {
-        let objects = document.resolve_object(objects)?;
+        let objects = work.resolve(document, objects)?;
         let objects = objects.as_dict().ok_or(Failure::Declined("page XObject dictionary"))?;
         require(objects.len() <= MAX_OBJECTS, "page XObject count")?;
         for object in objects.values() {
-            let resolved = document.resolve_object(object)?;
-            require(
-                resolved
-                    .as_dict()
-                    .and_then(|dict| dict.get("Subtype"))
-                    .and_then(Object::as_name)
-                    == Some("Image"),
-                "unaudited Form fonts",
-            )?;
+            let resolved = work.resolve(document, object)?;
+            match resolved
+                .as_dict()
+                .and_then(|dict| dict.get("Subtype"))
+                .and_then(Object::as_name)
+            {
+                Some("Image") => {}
+                Some("Form") => return Err(Failure::MeasuredDecline("unaudited Form fonts")),
+                _ => return Err(Failure::Declined("unaudited page XObject")),
+            }
         }
     }
     let fonts = dict.get("Font");
-    let fonts = document.resolve_object(fonts.ok_or(Failure::Declined("missing page fonts"))?)?;
+    let fonts = work.resolve(document, fonts.ok_or(Failure::Declined("missing page fonts"))?)?;
     let Object::Dictionary(fonts) = fonts else {
         return Err(Failure::Declined("page fonts dictionary"));
     };
@@ -352,37 +419,34 @@ struct Builder<'a> {
     loaded: HashMap<ObjectRef, (ObjectId, Arc<FontInfo>)>,
     pages: Vec<Output>,
     pages_id: ObjectId,
-    cache_bytes: usize,
     max_bytes: usize,
 }
 
 impl<'a> Builder<'a> {
-    fn new(source: &'a PdfDocument, max_bytes: usize) -> Self {
-        let mut graph = FontGraph::new(source, MAX_FONT_BYTES.min(max_bytes / (2 * MEMORY_FACTOR)));
+    fn new(source: &'a PdfDocument, max_bytes: usize, work: &'a Work) -> Self {
+        let mut graph = FontGraph::new(source, MAX_FONT_BYTES.min(max_bytes / (2 * MEMORY_FACTOR)), work);
         let pages_id = graph.output.new_object_id();
         Self {
             graph,
             loaded: HashMap::new(),
             pages: Vec::new(),
             pages_id,
-            cache_bytes: 0,
             max_bytes,
         }
     }
     fn audit_fonts(&mut self, fonts: &HashMap<String, Object>) -> ProofResult<()> {
-        self.cache_bytes = fonts.len().saturating_mul(NATIVE_FONT_CACHE_BYTES);
-        require(
-            self.cache_bytes.saturating_add(FONT_WORKING_BYTES) <= self.max_bytes,
-            "font cache byte reservation",
-        )?;
-        let available = self.max_bytes - self.cache_bytes - FONT_WORKING_BYTES;
+        let cache_bytes = fonts.len().saturating_mul(NATIVE_FONT_CACHE_BYTES);
+        let workspace = cache_bytes.saturating_add(FONT_WORKING_BYTES);
+        require(workspace <= self.max_bytes, "font cache byte reservation")?;
+        self.graph.work.reserve(workspace)?;
+        let available = self.max_bytes - workspace;
         self.graph.limit = self.graph.limit.min(available / (2 * MEMORY_FACTOR));
         for object in fonts.values() {
             self.graph.copy(object, 0)?;
-            let resolved = self.graph.source.resolve_object(object)?;
+            let resolved = self.graph.work.resolve(self.graph.source, object)?;
             let dict = resolved.as_dict().ok_or(Failure::Declined("font dictionary"))?;
             match dict.get("Subtype").and_then(Object::as_name) {
-                Some("TrueType") => audit_truetype(self.graph.source, dict)?,
+                Some("TrueType") => audit_truetype(self.graph.source, dict, self.graph.work)?,
                 Some("Type1") if !dict.contains_key("FontDescriptor") && !dict.contains_key("ToUnicode") => {}
                 _ => return Err(Failure::Declined("unsupported page font subtype")),
             }
@@ -422,7 +486,7 @@ impl<'a> Builder<'a> {
     fn font(&mut self, glyph: &TextChar, fonts: &HashMap<String, Object>) -> ProofResult<(ObjectId, Arc<FontInfo>)> {
         let mut matches = HashSet::new();
         for object in fonts.values() {
-            let resolved = self.graph.source.resolve_object(object)?;
+            let resolved = self.graph.work.resolve(self.graph.source, object)?;
             if resolved
                 .as_dict()
                 .and_then(|dict| dict.get("BaseFont"))
@@ -441,7 +505,7 @@ impl<'a> Builder<'a> {
             return Ok(loaded.clone());
         }
         let object = Object::Reference(reference);
-        let resolved = self.graph.source.resolve_object(&object)?;
+        let resolved = self.graph.work.resolve(self.graph.source, &object)?;
         let subtype = resolved
             .as_dict()
             .and_then(|dict| dict.get("Subtype"))
@@ -451,7 +515,7 @@ impl<'a> Builder<'a> {
         let id = copied
             .as_reference()
             .map_err(|_| Failure::Declined("copied font identity"))?;
-        let info = self.graph.source.get_or_load_font_for_rendering(&object)?;
+        let info = self.graph.work.font(self.graph.source, &object)?;
         self.loaded.insert(reference, (id, info.clone()));
         Ok((id, info))
     }
@@ -462,7 +526,10 @@ impl<'a> Builder<'a> {
         operations: Vec<lopdf::content::Operation>,
     ) -> ProofResult<()> {
         let content = lopdf::content::Content { operations }.encode()?;
-        self.graph.charge(content.len())?;
+        self.graph
+            .work
+            .charge(content.capacity().saturating_mul(MEMORY_FACTOR))?;
+        self.graph.admit_bytes(content.len())?;
         let contents = self.graph.output.add_object(Stream::new(Dictionary::new(), content));
         let page = self.graph.output.add_object(dictionary! {
             "Type" => "Page", "Parent" => self.pages_id,
@@ -472,7 +539,7 @@ impl<'a> Builder<'a> {
         self.pages.push(page.into());
         Ok(())
     }
-    fn finish(mut self) -> ProofResult<(Vec<u8>, usize)> {
+    fn finish(mut self) -> ProofResult<Vec<u8>> {
         self.graph.output.objects.insert(
             self.pages_id,
             dictionary! {
@@ -490,7 +557,7 @@ impl<'a> Builder<'a> {
             limit: self.graph.limit,
         };
         self.graph.output.save_to(&mut sink)?;
-        Ok((sink.bytes, self.graph.charged))
+        Ok(sink.bytes)
     }
 }
 fn candidate_chars<'a>(number: &Number, chars: &'a [TextChar]) -> ProofResult<Vec<&'a TextChar>> {
@@ -595,6 +662,7 @@ fn inside(inner: Rect, outer: Rect) -> bool {
 // Physical byte maps only; every subtable is checked before Native can expand it. ~keep
 struct FontGraph<'a> {
     source: &'a PdfDocument,
+    work: &'a Work,
     output: lopdf::Document,
     references: HashMap<ObjectRef, ObjectId>,
     active: HashSet<ObjectRef>,
@@ -604,9 +672,10 @@ struct FontGraph<'a> {
 }
 
 impl<'a> FontGraph<'a> {
-    fn new(source: &'a PdfDocument, limit: usize) -> Self {
+    fn new(source: &'a PdfDocument, limit: usize, work: &'a Work) -> Self {
         Self {
             source,
+            work,
             output: lopdf::Document::with_version("1.5"),
             references: HashMap::new(),
             active: HashSet::new(),
@@ -616,10 +685,11 @@ impl<'a> FontGraph<'a> {
         }
     }
     fn charge(&mut self, bytes: usize) -> ProofResult<()> {
-        self.charged = self
-            .charged
-            .checked_add(bytes)
-            .ok_or(Failure::Declined("font byte overflow"))?;
+        self.admit_bytes(bytes)?;
+        self.work.reserve(bytes.saturating_mul(MEMORY_FACTOR))
+    }
+    fn admit_bytes(&mut self, bytes: usize) -> ProofResult<()> {
+        self.charged = self.charged.saturating_add(bytes);
         require(self.charged <= self.limit, "font byte budget")
     }
     fn copy(&mut self, object: &Object, depth: usize) -> ProofResult<Output> {
@@ -670,7 +740,7 @@ impl<'a> FontGraph<'a> {
         let id = self.output.new_object_id();
         self.references.insert(reference, id);
         self.active.insert(reference);
-        let resolved = self.source.resolve_object(&Object::Reference(reference))?;
+        let resolved = self.work.resolve(self.source, &Object::Reference(reference))?;
         let copied = self.copy(&resolved, depth + 1)?;
         self.output.objects.insert(id, copied);
         self.active.remove(&reference);
@@ -690,7 +760,10 @@ impl<'a> FontGraph<'a> {
                 let remaining = self.limit.saturating_sub(self.charged);
                 let decoder = flate2::read::ZlibDecoder::new(data);
                 let decoded = std::io::copy(&mut decoder.take(remaining as u64 + 1), &mut std::io::sink())?;
-                self.charge(usize::try_from(decoded).map_err(|_| Failure::Declined("decoded font byte overflow"))?)?;
+                let decoded = usize::try_from(decoded).unwrap_or(usize::MAX);
+                // Charge first so a source overrun is recorded and classified as measured. ~keep
+                self.work.charge(decoded.saturating_mul(MEMORY_FACTOR))?;
+                self.admit_bytes(decoded)?;
             }
             _ => return Err(Failure::Declined("unsupported font stream filter")),
         }
@@ -728,6 +801,10 @@ impl Write for BoundedWriter {
 
 impl ShapeProof {
     // Charge this once for all candidates, including possible later native cache growth. ~keep
+    pub(super) fn can_settle_work(&self) -> bool {
+        self.measured
+    }
+
     pub(super) fn retained_bytes(&self) -> usize {
         self.retained_bytes
     }
@@ -781,9 +858,11 @@ impl ShapeProof {
             .map_err(|_| Failure::Declined("cumulative glyph pixel budget"))?;
         let painted = painted_mask(raster, (x, y, width, height))?;
         let rendered = rendering::render_png_page_with_budget(&self.document, index, dpi, remaining)?;
-        let expected = image::load_from_memory(&rendered.data)
-            .map_err(|error| Failure::Io(std::io::Error::other(format!("decoding bounded glyph raster: {error}"))))?
-            .into_luma8();
+        let expected = crate::extraction::image_decode::decode_standard_luma8_with_security_limits(
+            &rendered.data,
+            &crate::extractors::security::SecurityLimits::default(),
+        )
+        .map_err(|error| Failure::Io(std::io::Error::other(format!("decoding bounded glyph raster: {error}"))))?;
         let phase = crop_phase(media, candidate.frame, dpi, (x, y));
         let coverage = mask_coverage(&expected, &painted, phase);
         tracing::debug!(index, ?coverage, "Native glyph shape ink coverage");

@@ -265,7 +265,8 @@ fn should_prepare_genuine_source_through_the_single_bounded_entry() {
     let (numbers, proof) = prepare_source(&document, 0, BUDGET, 64).unwrap().unwrap();
     assert_eq!(numbers.len(), 1);
     assert_eq!(numbers[0].text, "០");
-    let admitted = source_profile::admit(&document, 0, BUDGET).unwrap();
+    let metadata = source_profile::metadata(&document, 0).unwrap();
+    let admitted = source_profile::admit(&document, &metadata.contents, BUDGET, &Work::new(BUDGET)).unwrap();
     assert!(proof.retained_bytes() >= admitted.working_bytes);
     let media = document.get_page_info(0).unwrap().media_box;
     let rendered = rendering::render_page(&document, 0, &rendering::RenderOptions::with_dpi(150)).unwrap();
@@ -296,7 +297,8 @@ fn should_accept_bounded_indirect_contents_arrays_and_count_tj_spaces() {
     });
     let document = PdfDocument::from_bytes(input).unwrap();
     assert!(preflight(&document, 0, BUDGET).unwrap());
-    let admitted = source_profile::admit(&document, 0, BUDGET).unwrap();
+    let metadata = source_profile::metadata(&document, 0).unwrap();
+    let admitted = source_profile::admit(&document, &metadata.contents, BUDGET, &Work::new(BUDGET)).unwrap();
     assert_eq!(admitted.max_chars, 12, "eight scalars for one byte plus four TJ spaces");
     let (numbers, _) = prepare_source(&document, 0, BUDGET, 64).unwrap().unwrap();
     assert_eq!(numbers.len(), 1);
@@ -449,4 +451,20 @@ fn should_decline_terminal_comments_that_hide_character_allocation_at_eof() {
         "Native replays terminal text before the allocation invariant runs"
     );
     declined(&input, BUDGET);
+}
+
+#[test]
+fn should_not_populate_native_cache_during_bounded_source_reads() {
+    let document = PdfDocument::from_bytes(mutated(|_, _| {})).unwrap();
+    let metadata = source_profile::metadata(&document, 0).unwrap();
+    let contents = &metadata.contents;
+    let first = document.resolve_object_for_proof(contents, BUDGET).unwrap().unwrap().1;
+    let second = document.resolve_object_for_proof(contents, BUDGET).unwrap().unwrap().1;
+    assert_eq!(
+        first, second,
+        "a proof read must not insert into the native object cache"
+    );
+    document.resolve_object(contents).unwrap();
+    let cached = document.resolve_object_for_proof(contents, BUDGET).unwrap().unwrap().1;
+    assert!(cached < first, "the ordinary resolver still caches this real object");
 }

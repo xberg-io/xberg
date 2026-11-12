@@ -427,19 +427,43 @@ fn mixed_native_page_has_content(
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn merge_returned_page_failures(
     failures: &mut Vec<crate::types::OcrPageFailure>,
-    returned: Vec<crate::types::OcrPageFailure>,
+    returned: &mut crate::types::internal::InternalDocument,
+    page_text: &str,
     native_text: &str,
     boundaries: &[crate::types::PageBoundary],
 ) {
-    let returned = returned
-        .into_iter()
-        .map(|failure| crate::types::OcrPageFailure {
-            recovered: failure.recovered
-                || mixed_native_page_has_content(native_text, boundaries, failure.page.saturating_sub(1) as usize),
-            ..failure
-        })
-        .collect();
-    merge_ocr_page_failures(failures, returned);
+    for failure in &mut returned.ocr_page_failures {
+        let native_kept =
+            mixed_native_page_has_content(native_text, boundaries, failure.page.saturating_sub(1) as usize);
+        if native_kept && !failure.recovered && page_text.trim().is_empty() {
+            let discarded = discarded_xobject_retry_warning(failure, false);
+            if let Some(warning) = returned
+                .processing_warnings
+                .iter_mut()
+                .find(|warning| warning.source == discarded.source && warning.message == discarded.message)
+            {
+                *warning = discarded_xobject_retry_warning(failure, true);
+            }
+        }
+        failure.recovered |= native_kept;
+    }
+    merge_ocr_page_failures(failures, std::mem::take(&mut returned.ocr_page_failures));
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn discarded_xobject_retry_warning(
+    failure: &crate::types::OcrPageFailure,
+    native_kept: bool,
+) -> crate::types::ProcessingWarning {
+    let outcome = if native_kept {
+        "its embedded-image retry was discarded and the page's native text was kept"
+    } else {
+        "its embedded-image retry was discarded"
+    };
+    crate::core::diagnostics::warning(
+        "ocr",
+        format!("OCR of page {} failed ({}); {outcome}.", failure.page, failure.error),
+    )
 }
 
 /// Records for an OCR run that failed as a whole: one for each page the run was asked to read.
@@ -1225,6 +1249,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut accumulated_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
     let mut accumulated_formulas: Vec<crate::types::Formula> = Vec::new();
     let mut accumulated_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
+    let mut recovery_warnings = Vec::new();
+    let mut discarded_recovery_pages = ahash::AHashSet::new();
     let mut page_failures: Vec<crate::types::OcrPageFailure> = Vec::new();
     let mut failed_page_errors: ahash::AHashMap<usize, crate::XbergError> = ahash::AHashMap::new();
     #[cfg(feature = "layout-detection")]
@@ -1655,15 +1681,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         raster_size_px,
                         page_size_pt,
                     ) {
+                        merge_returned_page_failures(&mut page_failures, &mut d, &page_text, native_text, boundaries);
                         crate::core::diagnostics::dedup_extend_warnings(
                             &mut accumulated_warnings,
                             std::mem::take(&mut d.processing_warnings),
-                        );
-                        merge_returned_page_failures(
-                            &mut page_failures,
-                            std::mem::take(&mut d.ocr_page_failures),
-                            native_text,
-                            boundaries,
                         );
                         structured_ocr_pages.insert(page_number, d);
                     }
@@ -1816,15 +1837,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         (image.width(), image.height()),
                         page_dimensions_pt(&render_doc, *page_idx),
                     ) {
+                        merge_returned_page_failures(&mut page_failures, &mut d, &page_text, native_text, boundaries);
                         crate::core::diagnostics::dedup_extend_warnings(
                             &mut accumulated_warnings,
                             std::mem::take(&mut d.processing_warnings),
-                        );
-                        merge_returned_page_failures(
-                            &mut page_failures,
-                            std::mem::take(&mut d.ocr_page_failures),
-                            native_text,
-                            boundaries,
                         );
                         structured_ocr_pages.insert(page_number, d);
                     }
@@ -2521,13 +2537,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 } else {
                     "content"
                 };
-                accumulated_warnings.push(crate::types::ProcessingWarning {
+                recovery_warnings.push((page_number, crate::types::ProcessingWarning {
                     source: std::borrow::Cow::Borrowed("ocr"),
                     message: std::borrow::Cow::Owned(format!(
                         "OCR of page {page_number} failed ({error}); its {recovered_kind} was recovered from the page's \
                          embedded image XObjects instead."
                     )),
-                });
+                }));
                 merge_ocr_page_failures(
                     &mut page_failures,
                     vec![crate::types::OcrPageFailure {
@@ -2593,6 +2609,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 confidence_semantics,
                 confidence,
             );
+            if acceptance.discarded {
+                discarded_recovery_pages.insert(*page_number);
+            }
             // The verdict decides whether the page keeps its text layer (see below). A page
             // the noise gate discarded has blank text and keeps the layer already. ~keep
             if acceptance.verdict.is_some() && !acceptance.discarded {
@@ -2605,6 +2624,30 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 dictionary_noise_pages.insert(*page_number);
             }
             *text = acceptance.content;
+        }
+    }
+
+    // Recovery claims describe retained reads, after the caller's noise policy ran. ~keep
+    for (page, warning) in recovery_warnings {
+        if discarded_recovery_pages.contains(&page) {
+            let native_recovered = mixed_native_page_has_content(native_text, boundaries, (page - 1) as usize);
+            let outcome = if native_recovered {
+                "the page's native text was kept"
+            } else {
+                "the page had no native text to retain"
+            };
+            for failure in page_failures.iter_mut().filter(|failure| failure.page == page) {
+                failure.recovered = native_recovered;
+                crate::core::diagnostics::push_warning_deduped(
+                    &mut accumulated_warnings,
+                    crate::core::diagnostics::warning(
+                        "ocr",
+                        format!("OCR of page {page} failed ({}); {outcome}.", failure.error),
+                    ),
+                );
+            }
+        } else {
+            accumulated_warnings.push(warning);
         }
     }
 
@@ -2678,6 +2721,39 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             {
                 accepted_replacements.remove(&page);
             }
+        }
+    }
+
+    // The direct single-backend read has no per-page pipeline stage, so it prunes here, after the
+    // verdict and the replacement decision judged the unpruned text (#2312, #2921).
+    if ocr_output_thresholds.prune_symbol_noise_lines {
+        for page in &noise_verdict_pages {
+            let Some(text) = accepted_replacements.get_mut(page) else {
+                continue;
+            };
+            if structured_ocr_pages
+                .get(page)
+                .is_some_and(|doc| !doc.tables.is_empty() || !super::symbol_noise_lines::elements_are_prunable(doc))
+                || !super::symbol_noise_lines::page_is_dominated_by_noise_lines(text.lines())
+            {
+                continue;
+            }
+            let (pruned, removed) = super::symbol_noise_lines::prune_text(text);
+            *text = pruned;
+            // Later readers compare the read with the structured page, so both lose the same lines. ~keep
+            if let Some(read) = ocr_results.get_mut(page) {
+                *read = super::symbol_noise_lines::prune_text(read).0;
+            }
+            if let Some(paragraphs) = ocr_page_paragraphs.get_mut(page) {
+                super::symbol_noise_lines::prune_paragraphs(paragraphs);
+            }
+            if let Some(document) = structured_ocr_pages.get_mut(page) {
+                super::symbol_noise_lines::prune_document_elements(document);
+            }
+            crate::core::diagnostics::push_warning_deduped(
+                &mut accumulated_warnings,
+                super::symbol_noise_lines::pruned_lines_warning(*page as usize, removed),
+            );
         }
     }
 
@@ -2871,6 +2947,25 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         &mut paragraphs,
                         page_rotation_degrees,
                     );
+                    // ~keep A pipeline page keeps its paragraphs in the OCR raster's pixels, while
+                    // its tables are already in points; assembly compares the two to drop a
+                    // paragraph a table carries. Scale only for that comparison, after the list
+                    // passes above, whose marker geometry is measured in the raster frame. A
+                    // sideways page keeps the raster frame: its geometry is not reading order, and
+                    // pointing it at the tables would put sideways heading text after them.
+                    if !existing.tables.is_empty()
+                        && !detached_mixed_frame::read_sideways(&existing.metadata)
+                        && let Some(&(width_px, height_px)) = ocr_raster_by_page.get(page_number)
+                        && width_px > 0
+                        && height_px > 0
+                    {
+                        let (width_pt, height_pt) =
+                            page_dimensions_pt(&render_doc, page_number.saturating_sub(1) as usize);
+                        detached_mixed_frame::scale_paragraph_geometry(
+                            &mut paragraphs,
+                            (width_pt / width_px as f32, height_pt / height_px as f32),
+                        );
+                    }
                     let mut new_page_doc = crate::pdf::structure::assemble_internal_document(
                         vec![paragraphs],
                         &existing.tables,
@@ -2962,28 +3057,23 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             .get(&page)
             .zip(ocr_results.get(&page))
             .is_some_and(|(doc, text)| {
-                if super::document::plain_ocr_page_can_yield_to_native(doc, text) {
-                    return true;
-                }
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                if native_words_covered_pages.contains(&page) {
-                    return super::native_word_coverage::has_only_certified_tesseract_text(doc)
-                        && super::document::ocr_elements_follow_text(doc, text);
-                }
-                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                if native_ink_owned_pages.contains(&page) {
-                    let clean_ink_layer = native_coverage_layers
-                        .filter(|_| clean_native_ink_pages.contains(&page))
-                        .and_then(|layers| layers.get(&page))
-                        .map(String::as_str);
-                    return super::native_word_coverage::only_segments_certified_tesseract_text(doc, text)
-                        || super::native_word_coverage::ink_owned_table_structure_can_yield_to_native(
-                            doc,
-                            text,
-                            clean_ink_layer,
-                        );
-                }
-                false
+                let yields_to_native = super::native_word_coverage::final_ocr_structure_can_yield_to_native(
+                    page,
+                    doc,
+                    text,
+                    super::native_word_coverage::FinalOcrStructureYieldSets {
+                        native_words_covered_pages: &native_words_covered_pages,
+                        native_ink_owned_pages: &native_ink_owned_pages,
+                        native_coverage_layers,
+                        clean_native_ink_pages: &clean_native_ink_pages,
+                    },
+                );
+                // Without the real OCR backends there are no admission sets to consult, so the
+                // fallback is the plain-acceptance route the gated helper opens with. ~keep
+                #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+                let yields_to_native = super::document::plain_ocr_page_can_yield_to_native(doc, text);
+                yields_to_native
             });
         let has_formula = accumulated_formulas
             .iter()
@@ -3088,6 +3178,392 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         #[cfg(feature = "formula-recognition")]
         formula_layout_inputs,
     })
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(in crate::extractors::pdf) fn render_mixed_plain_pages(
+    method: crate::types::ExtractionMethod,
+    text: &mut String,
+    boundaries: &[crate::types::PageBoundary],
+    replacements: &mut ahash::AHashMap<u32, String>,
+    documents: &ahash::AHashMap<u32, crate::types::internal::InternalDocument>,
+    format: &crate::core::config::OutputFormat,
+) {
+    if method != crate::types::ExtractionMethod::Mixed || *format != crate::core::config::OutputFormat::Plain {
+        return;
+    }
+    let adjusted = super::document::boundaries_after_replacements(boundaries, replacements);
+    let mut rendered = ahash::AHashMap::new();
+    for boundary in &adjusted {
+        let page = boundary.page_number;
+        let (Some(accepted), Some(document)) = (replacements.get(&page), documents.get(&page)) else {
+            continue;
+        };
+        if document.tables.is_empty() {
+            continue;
+        }
+        let candidate = (|| {
+            if text.get(boundary.byte_start..boundary.byte_end) != Some(accepted.as_str()) {
+                return Err("page range differs from the accepted transcript");
+            }
+            let plain = crate::extraction::derive::render_plain_page_elements(document, page)
+                .filter(|plain| !plain.is_empty())
+                .ok_or("page elements produced no Plain text")?;
+            check_accepted_ocr_tokens(accepted, &plain, document)?;
+            Ok(plain)
+        })();
+        match candidate {
+            Ok(plain) => {
+                rendered.insert(page, plain);
+            }
+            // ~keep The page keeps its Markdown transcript in Plain output, so the decline is a
+            // degraded result, not routine flow.
+            Err(reason) => tracing::warn!(page, reason, "Declined mixed OCR Plain page rendering"),
+        }
+    }
+    if !rendered.is_empty() {
+        *text = apply_ocr_page_replacements(text, &adjusted, &rendered);
+        replacements.extend(rendered);
+    }
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn check_accepted_ocr_tokens(
+    accepted: &str,
+    plain: &str,
+    document: &crate::types::internal::InternalDocument,
+) -> Result<(), &'static str> {
+    use crate::types::internal::ElementKind;
+    use pulldown_cmark::{Event, Options, Parser, Tag};
+
+    // ~keep PDF table assembly may suppress a paragraph covered by cell tokens, or keep one it
+    // failed to match to a table. Require exactly the accepted token order, including
+    // punctuation, before replacing its transcript: no word dropped, none added.
+    let mut tables = document.elements.iter().filter_map(|element| match element.kind {
+        ElementKind::Table { table_index } => document.tables.get(table_index as usize),
+        _ => None,
+    });
+    let mut retained = plain.split_whitespace();
+    let mut events = Parser::new_ext(accepted, Options::ENABLE_TABLES).into_offset_iter();
+    let mut offset = 0;
+    let mut depth = 0;
+    while let Some((event, range)) = events.next() {
+        match event {
+            Event::Start(tag)
+                if depth == 0
+                    && matches!(
+                        tag,
+                        Tag::Paragraph | Tag::Heading { .. } | Tag::List(_) | Tag::BlockQuote(_) | Tag::Table(_)
+                    ) =>
+            {
+                if !retains_ocr_words(&accepted[offset..range.start], &mut retained) {
+                    return Err("Plain page omitted accepted prose");
+                }
+                offset = range.end;
+                if !matches!(tag, Tag::Table(_)) {
+                    let mut block_depth = 1;
+                    let block = events.by_ref().take_while(|(event, _)| {
+                        match event {
+                            Event::Start(_) => block_depth += 1,
+                            Event::End(_) => block_depth -= 1,
+                            _ => {}
+                        }
+                        block_depth > 0
+                    });
+                    if !retains_inline_block(accepted, range, &tag, block, &mut retained) {
+                        return Err("Plain page omitted accepted prose");
+                    }
+                    continue;
+                }
+
+                let table = tables.next().ok_or("accepted table has no typed table element")?;
+                if !source_table_has_cells(&accepted[range], &table.cells)
+                    || !table
+                        .cells
+                        .iter()
+                        .flatten()
+                        .all(|cell| retains_ocr_words(cell, &mut retained))
+                {
+                    return Err("Plain page omitted or changed accepted table cells");
+                }
+                depth += 1;
+            }
+            Event::Start(_) => depth += 1,
+            Event::End(_) => depth -= 1,
+            _ => {}
+        }
+    }
+    if !retains_ocr_words(&accepted[offset..], &mut retained) {
+        return Err("Plain page omitted accepted prose");
+    }
+    retained
+        .next()
+        .is_none()
+        .then_some(())
+        .ok_or("Plain page added text absent from the accepted transcript")
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn retains_inline_block<'a>(
+    source: &'a str,
+    block: std::ops::Range<usize>,
+    tag: &pulldown_cmark::Tag<'_>,
+    events: impl Iterator<Item = (pulldown_cmark::Event<'a>, std::ops::Range<usize>)>,
+    retained: &mut std::str::SplitWhitespace<'_>,
+) -> bool {
+    use pulldown_cmark::{CowStr, Event, Tag};
+
+    // ~keep Keep punctuation adjacent to inline markup in the same group, and
+    // keep whitespace inside a code span or link label from splitting its group.
+    let mut inline = Vec::new();
+    let mut leaves = Vec::new();
+    let mut markers = Vec::new();
+    record_block_markers(source, tag, &block, &mut markers);
+    let mut literal_depth = 0;
+    for (event, range) in events {
+        if literal_depth > 0 {
+            match event {
+                Event::Start(_) => literal_depth += 1,
+                Event::End(_) => literal_depth -= 1,
+                _ => {}
+            }
+            continue;
+        }
+        let value = match event {
+            Event::Start(Tag::Emphasis | Tag::Strong | Tag::Link { .. } | Tag::Image { .. }) => {
+                inline.push(range);
+                continue;
+            }
+            Event::Code(text) | Event::InlineHtml(text) => {
+                inline.push(range.clone());
+                Some(text)
+            }
+            Event::Text(text) if text.as_ref() == &source[range.clone()] => None,
+            Event::Text(text) => {
+                inline.push(range.clone());
+                Some(text)
+            }
+            Event::HardBreak => {
+                if source[range.clone()].contains('\\') {
+                    inline.push(range.clone());
+                }
+                Some(CowStr::Borrowed(" "))
+            }
+            Event::SoftBreak => Some(CowStr::Borrowed(" ")),
+            Event::Start(tag @ (Tag::Heading { .. } | Tag::Item | Tag::BlockQuote(_))) => {
+                record_block_markers(source, &tag, &range, &mut markers);
+                continue;
+            }
+            Event::Start(Tag::Paragraph | Tag::List(_)) | Event::End(_) => continue,
+            Event::Start(_) => {
+                // ~keep Keep this child verbatim while allowing its siblings to project.
+                literal_depth = 1;
+                None
+            }
+            _ => None,
+        };
+        leaves.push((range, value));
+    }
+
+    markers.sort_unstable();
+    let mut inline = inline.into_iter().peekable();
+    let mut leaves = leaves.into_iter().peekable();
+    let mut inline_end = block.start;
+    let mut start = block.start;
+    let mut visible = String::new();
+    for (relative, separator) in source[block.clone()]
+        .match_indices(char::is_whitespace)
+        .chain([(block.len(), "")])
+    {
+        let offset = block.start + relative;
+        while inline.peek().is_some_and(|range| range.start < offset) {
+            if let Some(range) = inline.next() {
+                inline_end = inline_end.max(range.end);
+            }
+        }
+        if offset >= inline_end {
+            project_inline_group(source, start..offset, &mut leaves, &mut visible);
+            let is_marker = markers.binary_search(&start).is_ok();
+            if !retains_inline_group(&source[start..offset], &visible, is_marker, retained) {
+                return false;
+            }
+            start = offset + separator.len();
+        }
+    }
+    true
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn project_inline_group<'a>(
+    source: &str,
+    group: std::ops::Range<usize>,
+    leaves: &mut std::iter::Peekable<
+        impl Iterator<Item = (std::ops::Range<usize>, Option<pulldown_cmark::CowStr<'a>>)>,
+    >,
+    visible: &mut String,
+) {
+    visible.clear();
+    while let Some((range, value)) = leaves.peek() {
+        if range.start >= group.end {
+            break;
+        }
+        if let Some(value) = value {
+            if group.start <= range.start && range.end <= group.end {
+                visible.push_str(value);
+            }
+        } else {
+            let start = group.start.max(range.start);
+            let end = group.end.min(range.end);
+            if start < end {
+                visible.push_str(&source[start..end]);
+            }
+        }
+        if range.end > group.end {
+            break;
+        }
+        leaves.next();
+    }
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn retains_inline_group(
+    source: &str,
+    visible: &str,
+    is_marker: bool,
+    retained: &mut std::str::SplitWhitespace<'_>,
+) -> bool {
+    // ~keep Reference definitions and other unrepresented text can lie inside a block.
+    // An empty event projection only accounts for recognized block markers.
+    if source == visible || (visible.is_empty() && !is_marker) {
+        return retains_ocr_words(source, retained);
+    }
+
+    let mut literal = source.split_whitespace().peekable();
+    let mut projected = visible.split_whitespace().peekable();
+    if projected.peek().is_none() {
+        // ~keep A block marker projects to nothing, but a Plain element may still spell it.
+        let mut spelled = retained.clone();
+        if source.split_whitespace().all(|word| spelled.next() == Some(word)) {
+            *retained = spelled;
+        }
+        return true;
+    }
+    // ~keep Advance both alternatives together; each Plain word must continue one of them,
+    // so a word the accepted group lacks fails the group instead of being skipped.
+    let (mut literal_live, mut projected_live) = (true, true);
+    for candidate in retained {
+        literal_live &= literal.next_if_eq(&candidate).is_some();
+        projected_live &= projected.next_if_eq(&candidate).is_some();
+        if literal_live && literal.peek().is_none() || projected_live && projected.peek().is_none() {
+            return true;
+        }
+        if !literal_live && !projected_live {
+            return false;
+        }
+    }
+    false
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn record_block_markers(
+    source: &str,
+    tag: &pulldown_cmark::Tag<'_>,
+    range: &std::ops::Range<usize>,
+    markers: &mut Vec<usize>,
+) {
+    use pulldown_cmark::Tag;
+
+    let block = &source[range.clone()];
+    if matches!(tag, Tag::BlockQuote(_)) {
+        // ~keep The quote range includes its continuation lines. Only the leading
+        // quote token within CommonMark's three-column indentation can be syntax.
+        const MAX_MARKER_INDENT: usize = 3;
+        let opening_column = source[..range.start].rsplit('\n').next().map_or(0, str::len);
+        let mut offset = range.start;
+        for line in block.split_inclusive('\n') {
+            let content = line.trim_start_matches(' ');
+            let indent = line.len() - content.len();
+            if indent <= opening_column + MAX_MARKER_INDENT && content.split_whitespace().next() == Some(">") {
+                markers.push(offset + indent);
+            }
+            offset += line.len();
+        }
+        return;
+    }
+    let start = block.trim_start();
+    let first = start.split_whitespace().next().unwrap_or("");
+    let leading_marker = match tag {
+        Tag::Heading { .. } => !first.is_empty() && first.bytes().all(|byte| byte == b'#'),
+        Tag::Item => match first.as_bytes() {
+            [b'+' | b'*' | b'-'] => true,
+            [digits @ .., b'.' | b')'] => (1..=9).contains(&digits.len()) && digits.iter().all(u8::is_ascii_digit),
+            _ => false,
+        },
+        _ => false,
+    };
+    if leading_marker {
+        markers.push(range.start + block.len() - start.len());
+    }
+    if matches!(tag, Tag::Heading { .. }) {
+        let end = block.trim_end();
+        let last = end.split_whitespace().next_back().unwrap_or("");
+        if let [marker @ (b'#' | b'=' | b'-'), rest @ ..] = last.as_bytes()
+            && rest.iter().all(|byte| byte == marker)
+        {
+            markers.push(range.start + end.len() - last.len());
+        }
+    }
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn retains_ocr_words(text: &str, retained: &mut std::str::SplitWhitespace<'_>) -> bool {
+    text.split_whitespace().all(|word| retained.next() == Some(word))
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn source_table_has_cells(source: &str, cells: &[Vec<String>]) -> bool {
+    // ~keep Verify every source cell before relying on the typed table. GFM can omit excess
+    // cells from its events, and a source <br> can represent either a line break or literal text.
+    // ~keep The shared writer copies existing backslashes when escaping a cell pipe.
+    // Its full serialization proves those cells even when the pipe has even parity.
+    if source.trim() == crate::rendering::common::render_table_markdown(cells).trim() {
+        return true;
+    }
+    let mut rows = source.lines().enumerate().filter(|(index, _)| *index != 1);
+    let columns = cells.iter().map(Vec::len).max().unwrap_or(0);
+    for row in cells {
+        let Some((_, source_row)) = rows.next() else {
+            return false;
+        };
+        let mut remainder = source_row.trim();
+        remainder = remainder.strip_prefix('|').unwrap_or(remainder);
+        for column in 0..columns {
+            let delimiter = remainder.match_indices('|').find(|(index, _)| {
+                remainder.as_bytes()[..*index]
+                    .iter()
+                    .rev()
+                    .take_while(|&&byte| byte == b'\\')
+                    .count()
+                    .is_multiple_of(2)
+            });
+            let (source_cell, rest) = match delimiter {
+                Some((index, _)) => (&remainder[..index], &remainder[index + 1..]),
+                None => (remainder, ""),
+            };
+            let mut encoded = String::new();
+            if let Some(cell) = row.get(column) {
+                crate::rendering::common::push_escaped_cell(&mut encoded, cell);
+            }
+            if source_cell.trim() != encoded.trim() {
+                return false;
+            }
+            remainder = rest;
+        }
+        if !remainder.trim().is_empty() {
+            return false;
+        }
+    }
+    rows.next().is_none()
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -3655,47 +4131,48 @@ async fn extract_with_ocr_with_unpruned_text(
     feature = "tokio-runtime",
     not(target_arch = "wasm32")
 ))]
+fn budget_retry_backend(
+    config: &ExtractionConfig,
+    ocr: &crate::core::config::OcrConfig,
+    failed: &FailedOcrRun,
+) -> Option<std::sync::Arc<dyn crate::plugins::OcrBackend>> {
+    // Native preservation excludes explicit layout: the refused render produced no detections
+    // to validate before a source retry could replace the read. ~keep
+    if !render_refused_by_source_image_budget(&failed.error)
+        || config.ocr_strategy != crate::core::config::OcrStrategy::Auto
+        || !super::document::native_preservation_is_automatic(config, 1)
+        || config.pages.as_ref().is_some_and(|pages| pages.insert_page_markers)
+        || !super::tall_source::supports(config, ocr)
+        || !uses_default_ocr_pipeline(ocr)
+    {
+        return None;
+    }
+    let registry = crate::plugins::registry::get_ocr_backend_registry();
+    let registry = registry.read();
+    registry
+        .get(&ocr.backend)
+        .ok()
+        .filter(|backend| registry.is_builtin_tesseract(backend))
+}
+
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
 async fn try_gray_jpeg_render_recovery(
     content: Option<&[u8]>,
     config: &ExtractionConfig,
     failed: &FailedOcrRun,
 ) -> crate::Result<Option<WholeDirectOcrOutput>> {
-    use std::error::Error as _;
-
-    if !failed
-        .error
-        .source()
-        .is_some_and(|source| source.is::<super::rendering::SourceImageBudgetExceeded>())
-        || config.ocr_strategy != crate::core::config::OcrStrategy::Auto
-        || !super::document::native_preservation_is_automatic(config, 1)
-        || config.pages.as_ref().is_some_and(|pages| pages.insert_page_markers)
-    {
-        return Ok(None);
-    }
     let ocr = super::resolve_ocr_config(config);
-    // No layout pass ran for the refused page, so its detections cannot be checked; a layout
-    // request alone keeps the strips from replacing a read the caller wanted laid out. ~keep
-    #[cfg(feature = "layout-detection")]
-    let layout_requested = config.layout.is_some();
-    #[cfg(not(feature = "layout-detection"))]
-    let layout_requested = false;
-    if layout_requested || !super::tall_source::supports(config, &ocr) || !uses_default_ocr_pipeline(&ocr) {
+    let Some(backend) = budget_retry_backend(config, &ocr, failed) else {
         return Ok(None);
-    }
+    };
     let Some(content) = content else { return Ok(None) };
     let Ok((document, 1, _)) = open_pdf_for_full_ocr(content) else {
         return Ok(None);
-    };
-    let backend = {
-        let registry = crate::plugins::registry::get_ocr_backend_registry();
-        let registry = registry.read();
-        let Ok(backend) = registry.get(&ocr.backend) else {
-            return Ok(None);
-        };
-        if !registry.is_builtin_tesseract(&backend) {
-            return Ok(None);
-        }
-        backend
     };
     let Some((result, psm)) =
         super::tall_source::recover_after_gray_jpeg_render_failure(&document, &backend, config, &ocr).await?
@@ -4406,6 +4883,7 @@ pub(super) async fn extract_with_ocr_for_page(
     // recovered still returns an error.
     let mut page_backend_errors: Vec<(usize, String)> = Vec::new();
     let mut page_failure_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
+    let mut pending_page_failure_warnings = Vec::new();
     let mut page_failures: Vec<crate::types::OcrPageFailure> = Vec::new();
     // #1673: page numbers (1-based) whose embedded-image retry ran (attempted at least one
     // image) but the backend returned successfully with empty content on every one of them --
@@ -5300,6 +5778,14 @@ pub(super) async fn extract_with_ocr_for_page(
                 &mut backend_page_warnings,
                 std::mem::take(&mut ocr_result.processing_warnings),
             );
+            // ~keep Whether a detached-stage normalizer below already put this page's backend
+            // tables in the render frame the page owner scales to points.
+            #[cfg(feature = "pdf")]
+            #[cfg_attr(
+                not(all(feature = "ocr", not(target_arch = "wasm32"))),
+                expect(unused_mut, reason = "only the Tesseract normalizers below set it")
+            )]
+            let mut tables_in_render = false;
             #[cfg(feature = "pdf")]
             {
                 let (correction_degrees, upright_width, upright_height) = batch_upright_correction[offset];
@@ -5324,7 +5810,8 @@ pub(super) async fn extract_with_ocr_for_page(
                 #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
                 if normalize_recovered_table && !normalized_raw {
                     // The detached stage's owner will place raw tables using the render raster. ~keep
-                    super::orientation_retry::scale_recovered_table_to_raster(&mut ocr_result, render);
+                    tables_in_render =
+                        super::orientation_retry::scale_recovered_table_to_raster(&mut ocr_result, render);
                 }
                 #[cfg(not(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32"))))]
                 let _ = normalized_raw;
@@ -5345,6 +5832,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     #[cfg(auto_rotate)]
                     let processed = if normalize_recovered_table { render } else { processed };
                     detached_table_pair = detached_table_pair::normalize(&mut ocr_result.tables, processed, render);
+                    tables_in_render |= detached_table_pair;
                 }
             }
             // #1575: capture once, from the first page that has any -- see this function's
@@ -5444,9 +5932,25 @@ pub(super) async fn extract_with_ocr_for_page(
                 ))
             ))]
             let detached_paragraph_scale: Option<(f32, f32)> = None;
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            let tables_in_render = tables_in_render || detached_paragraph_scale.is_some();
             let mut backend_tables = std::mem::take(&mut ocr_result.tables);
             for table in &mut backend_tables {
                 table.page_number = document_page_number;
+            }
+            #[cfg(feature = "pdf")]
+            if lazy_pdf_render_state.is_none() && xobject_document.is_some() && !tables_in_render {
+                // ~keep The detached page owner scales table rectangles from the render raster
+                // (`build_pipeline_ocr_page_document`), but recognition may have read a resampled
+                // image (GH#1895): bring the rectangles from that frame to the render's.
+                let render = (encoded_batch[offset].2, encoded_batch[offset].3);
+                let processed = resolved_ocr_layout_dimensions(&ocr_result.metadata, render.0, render.1);
+                detached_mixed_frame::scale_tables_into_render(&mut backend_tables, processed, render);
             }
             #[cfg(feature = "pdf")]
             if let Some((doc, _, _)) = lazy_pdf_render_state.as_ref() {
@@ -5626,7 +6130,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 if !recovered && xobject_retry_ran_empty {
                     pages_with_empty_xobject_retry.push(document_page_number);
                 }
-                page_failure_warnings.push(crate::types::ProcessingWarning {
+                let warning = crate::types::ProcessingWarning {
                     source: std::borrow::Cow::Borrowed("ocr"),
                     message: std::borrow::Cow::Owned(if recovered {
                         let recovered_kind = if ocr_result.content.trim().is_empty() {
@@ -5651,7 +6155,8 @@ pub(super) async fn extract_with_ocr_for_page(
                             document_page_number
                         )
                     }),
-                });
+                };
+                pending_page_failure_warnings.push((page_idx, recovered, warning));
                 page_failures.push(crate::types::OcrPageFailure {
                     page: document_page_number,
                     error: error.clone(),
@@ -6108,6 +6613,18 @@ pub(super) async fn extract_with_ocr_for_page(
     #[cfg(feature = "layout-detection")]
     if let Some(model) = tatr_model.take() {
         crate::layout::return_tatr(model);
+    }
+
+    for (page_idx, recovered, warning) in pending_page_failure_warnings {
+        if recovered && rejected_pages[page_idx] {
+            let page = (page_index_offset + page_idx + 1) as u32;
+            for failure in page_failures.iter_mut().filter(|failure| failure.page == page) {
+                failure.recovered = false;
+                page_failure_warnings.push(discarded_xobject_retry_warning(failure, false));
+            }
+        } else {
+            page_failure_warnings.push(warning);
+        }
     }
 
     // A cancelled run fails every page by design, which the #1444 guard below would report as
@@ -9326,6 +9843,10 @@ mod first_pass_route_tests;
 #[cfg(all(test, feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 #[path = "pipeline/native_script_kept_tests.rs"]
 mod native_script_kept_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+#[path = "pipeline/second_site_clean_admission_tests.rs"]
+mod second_site_clean_admission_tests;
 
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
 #[path = "pipeline/budget_refusal_tests.rs"]

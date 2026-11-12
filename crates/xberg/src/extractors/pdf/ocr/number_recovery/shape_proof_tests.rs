@@ -125,7 +125,14 @@ fn should_decline_unbounded_unicode_ranges_before_native_character_decode() {
 #[test]
 fn should_decline_ambiguous_physical_code_even_when_claim_is_unchanged() {
     let input = appended_cmap("1 beginbfchar\n<03> <17E0>\nendbfchar\n");
-    assert_declined(&input, "ambiguous physical character code");
+    let document = PdfDocument::from_bytes(input).unwrap();
+    let source = source_metadata(&document, 0).unwrap().unwrap();
+    let work = Work::new(BUDGET);
+    let result = audit_page(&source, BUDGET, &work);
+    assert!(matches!(
+        result,
+        Err(Failure::MeasuredDecline("ambiguous physical character code"))
+    ));
 }
 
 #[test]
@@ -227,10 +234,40 @@ fn should_decline_oversized_raw_and_compressed_font_streams() {
             stream.set_plain_content(vec![0; MAX_FONT_BYTES + 1]);
             if compressed {
                 stream.compress().unwrap();
+                assert_compressed_font_work_overrun(&stream.content);
             }
         });
-        assert_declined(&input, "font byte budget");
+        let document = PdfDocument::from_bytes(input).unwrap();
+        let source = source_metadata(&document, 0).unwrap().unwrap();
+        let budget = 4 * BUDGET;
+        let work = Work::new(budget);
+        assert!(
+            matches!(
+                audit_page(&source, budget, &work),
+                Err(Failure::Declined("font byte budget"))
+            ),
+            "the font cap must reject the oversized stream with work headroom (compressed={compressed})"
+        );
+        assert!(work.bytes.get() <= budget);
     }
+}
+
+fn assert_compressed_font_work_overrun(encoded: &[u8]) {
+    let graph_limit = 64 * 1024;
+    assert!(encoded.len() < graph_limit);
+    let document = PdfDocument::from_bytes(MATCHING.to_vec()).unwrap();
+    let work = Work::new(BUDGET);
+    // The stored bytes plus the bounded inflation exceed the graph cap by one byte. ~keep
+    let charge = (graph_limit + 1) * MEMORY_FACTOR;
+    work.reserve(BUDGET - charge + 1).unwrap();
+    let mut graph = FontGraph::new(&document, graph_limit, &work);
+    let dict = HashMap::from([("Filter".into(), Object::Name("FlateDecode".into()))]);
+    let error = graph.copy_stream(&dict, encoded, 0).unwrap_err();
+    assert!(
+        matches!(error, Failure::Declined("source work byte budget")),
+        "expected source work byte budget, got {error}"
+    );
+    assert_eq!(work.bytes.get(), BUDGET + 1, "compressed work must record the overrun");
 }
 
 #[test]
@@ -284,7 +321,9 @@ fn should_refuse_rebound_candidates_anisotropic_rasters_and_extra_source_ink() {
 fn native_fixture(input: &[u8]) -> (PdfDocument, Vec<Number>) {
     let document = PdfDocument::from_bytes(input.to_vec()).unwrap();
     assert!(preflight(&document, 0, BUDGET).unwrap());
-    let source = bounded_source(&document, 0, BUDGET).unwrap();
+    let work = Work::new(BUDGET);
+    let metadata = source_metadata(&document, 0).unwrap().unwrap();
+    let source = bounded_source(&metadata, BUDGET, &work).unwrap();
     let numbers = super::super::candidates(&source.chars);
     assert_eq!(numbers.len(), 1, "exactly one real numeric candidate");
     (document, numbers)
@@ -393,7 +432,8 @@ fn assert_audit_declined(input: &[u8]) {
     let document = PdfDocument::from_bytes(input.to_vec()).unwrap();
     let resources = document.get_page_resources(0).unwrap();
     assert!(!preflight(&document, 0, BUDGET).unwrap());
-    let audit = page_fonts(&document, &resources).and_then(|fonts| Builder::new(&document, BUDGET).audit_fonts(&fonts));
+    let audit = page_fonts(&document, &resources, &Work::new(BUDGET))
+        .and_then(|fonts| Builder::new(&document, BUDGET, &Work::new(BUDGET)).audit_fonts(&fonts));
     assert!(
         audit.is_err(),
         "hostile font must decline before native font loading/extraction"
@@ -592,4 +632,65 @@ fn should_decline_complete_format12_billion_code_group_before_native() {
         rebuild_font(program, &[(b"cmap", cmap)]);
     });
     assert_audit_declined(&input);
+}
+
+#[test]
+fn should_charge_each_audit_of_a_shared_font_program() {
+    let document = PdfDocument::from_bytes(MATCHING.to_vec()).unwrap();
+    let resources = document.get_page_resources(0).unwrap();
+    let mut fonts = page_fonts(&document, &resources, &Work::new(BUDGET)).unwrap();
+    let font = fonts
+        .values()
+        .find(|object| {
+            document
+                .resolve_object(object)
+                .unwrap()
+                .as_dict()
+                .unwrap()
+                .contains_key("FontDescriptor")
+        })
+        .unwrap()
+        .clone();
+    Builder::new(&document, BUDGET, &Work::new(BUDGET))
+        .audit_fonts(&fonts)
+        .unwrap();
+    let first = Work::new(BUDGET);
+    Builder::new(&document, BUDGET, &first).audit_fonts(&fonts).unwrap();
+    let copies = font_audit_copy_charge(&document, &font);
+    assert!(fonts.insert("Alias".into(), font).is_none());
+    let repeated = Work::new(BUDGET);
+    Builder::new(&document, BUDGET, &repeated).audit_fonts(&fonts).unwrap();
+    let alias_reference_bytes = 16 * MEMORY_FACTOR;
+    assert!(
+        repeated.bytes.get() > first.bytes.get() + NATIVE_FONT_CACHE_BYTES + alias_reference_bytes + copies,
+        "a cached graph reference still repeats the real program and Unicode decodes"
+    );
+}
+
+fn font_audit_copy_charge(document: &PdfDocument, font: &Object) -> usize {
+    let resolve = |object: &Object| document.resolve_object_for_proof(object, BUDGET).unwrap().unwrap();
+    let (font, font_cost) = resolve(font);
+    let font = font.as_dict().unwrap();
+    let (descriptor, descriptor_cost) = resolve(font.get("FontDescriptor").unwrap());
+    let program = descriptor.as_dict().unwrap().get("FontFile2").unwrap();
+    font_cost + descriptor_cost + resolve(program).1 + resolve(font.get("ToUnicode").unwrap()).1
+}
+
+#[test]
+fn should_charge_encoded_glyph_content_even_when_the_graph_refuses_it() {
+    let document = PdfDocument::from_bytes(MATCHING.to_vec()).unwrap();
+    let work = Work::new(BUDGET);
+    let mut builder = Builder::new(&document, BUDGET, &work);
+    builder.graph.limit = 0;
+    let frame = document.get_page_info(0).unwrap().media_box;
+    let operations = vec![
+        lopdf::content::Operation::new("q", vec![]),
+        lopdf::content::Operation::new("Q", vec![]),
+    ];
+    assert!(builder.add_page(frame, Dictionary::new(), operations).is_err());
+    assert!(builder.pages.is_empty());
+    assert!(
+        work.bytes.get() >= b"q\nQ".len() * MEMORY_FACTOR,
+        "completed encoding must stay charged despite graph refusal"
+    );
 }

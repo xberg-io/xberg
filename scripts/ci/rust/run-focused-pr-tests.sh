@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 suite="${1:?expected pdf-ocr or api-jobs}"
 case "$suite" in
-pdf-ocr) features="pdf,ocr,tokio-runtime,bundle-tessdata-eng" ;;
+pdf-ocr) features="pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types" ;;
 api-jobs) features="api,tokio-runtime" ;;
 *)
   printf 'Unknown focused test suite: %s\n' "$suite" >&2
@@ -48,6 +48,35 @@ run_pdf_cases() {
   run_exact png_predictor_panel_recovers_missing_line_without_changing_primary_ocr \
     --test pdf_embedded_psm6_addition_2327
   run_type0_cases
+  run_budget_retry_cases
+}
+
+run_budget_retry_cases() {
+  run_exact tall_gray_jpeg_recovers_every_source_word_after_render_budget_refusal --test pdf_tall_scan_strips
+  local module='extractors::pdf::ocr::pipeline::direct_rgb_budget_recovery::tests'
+  local test_name
+  for test_name in \
+    only_a_typed_source_budget_failure_is_eligible_for_the_direct_rgb_retry \
+    retry_admission_rejects_each_nondefault_request \
+    retry_admission_requires_the_registered_builtin_tesseract \
+    rgb_certificate_rejects_a_source_one_byte_over_the_limit \
+    rgb_certificate_requires_matching_encoded_and_placed_dimensions \
+    a_second_physical_page_disqualifies_an_otherwise_certified_rgb_source \
+    rgb_certificate_rejects_a_stored_gray_jpeg \
+    rgb_certificate_rejects_a_second_painted_image \
+    two_image_reads_do_not_report_one_page_segmentation_mode \
+    a_budget_failure_without_original_pdf_bytes_is_not_recovered; do
+    run_exact "$module::$test_name" --lib
+  done
+  for test_name in \
+    automatic_direct_rgb_budget_retry_retains_text_with_default_recognition_policy \
+    explicitly_forced_minimal_direct_ocr_keeps_its_budget_refusal \
+    layout_request_keeps_the_original_rgb_render_budget_refusal \
+    minimal_direct_retry_does_not_omit_visible_paint_beside_the_rgb_scan \
+    direct_rgb_budget_retry_retains_the_producing_tesseract_segmentation_mode \
+    mixed_pipeline_retry_records_segmentation_mode_for_the_recovered_page; do
+    run_exact "$test_name" --test pdf_direct_rgb_budget_recovery
+  done
 }
 
 run_type0_cases() {
@@ -141,6 +170,53 @@ run_numeral_noise_cases() {
   fi
 }
 
+run_retained_read_cases() {
+  local before="$passed"
+  local module='extractors::pdf::ocr::rendering::retained_read_metadata_tests'
+  local test_name
+  for test_name in \
+    rejected_first_read_does_not_supply_retained_page_preprocessing \
+    a_rejected_single_read_sets_neither_preprocessing_nor_tesseract_mode \
+    a_retained_single_read_keeps_its_preprocessing_and_tesseract_mode \
+    pooled_rejections_do_not_supply_page_preprocessing \
+    small_legible_read_survives_garbage_in_the_same_pool \
+    counts_two_character_fragments_regardless_of_utf8_width \
+    tiny_garbage_reads_are_still_rejected_when_their_pool_has_enough_words \
+    a_legible_small_read_keeps_its_table_and_formula_when_its_pool_is_noisy \
+    only_reads_with_text_or_structured_content_supply_page_metadata \
+    zero_fragmentation_threshold_still_rejects_a_numeric_only_pool \
+    unpublished_preprocessing_does_not_consume_the_output_budget; do
+    run_exact "${module}::$test_name" --lib
+  done
+  if [ "$((passed - before))" -ne 11 ]; then
+    printf 'Expected 11 executed retained-read tests, observed %s\n' "$((passed - before))" >&2
+    exit 1
+  fi
+}
+
+run_discarded_recovery_cases() {
+  local before="$passed"
+  local test_name
+  for test_name in \
+    discarded_noisy_image_retry_has_no_recovery_claim \
+    retained_noisy_image_retry_keeps_its_recovery_claim \
+    discarded_noisy_pipeline_retry_has_no_recovery_claim \
+    retained_noisy_pipeline_retry_keeps_its_recovery_claim \
+    discarded_noisy_whole_document_retry_has_no_recovery_claim \
+    retained_noisy_whole_document_retry_keeps_its_recovery_claim \
+    discarded_noisy_retry_reports_native_text_kept \
+    discarded_noisy_pipeline_retry_reports_native_text_kept \
+    discarded_noisy_all_pages_pipeline_retry_has_no_recovery_claim; do
+    run_exact "discarded_noise_2908::$test_name" --test ocr_page_failures
+  done
+  run_exact a_directly_called_backend_records_the_page_recovered_as_a_table --test ocr_page_failures
+  run_exact a_whole_document_run_records_every_failed_page --test ocr_page_failures
+  if [ "$((passed - before))" -ne 11 ]; then
+    printf 'Expected 11 executed embedded-image recovery warning tests, observed %s\n' "$((passed - before))" >&2
+    exit 1
+  fi
+}
+
 run_api_cases() {
   run_exact 'api::handlers::tests::test_extract_async_then_poll_job_id' --lib
   run_exact 'api::jobs::tests::test_cancel_running_job_fires_token' --lib
@@ -150,10 +226,13 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=59
+  expected=81
   run_pdf_cases
+  run_retained_read_cases
+  expected=$((expected + 11 + 6))
   run_number_budget_cases
   run_ink_probe_cases
+  run_discarded_recovery_cases
   run_numeral_noise_cases
   ;;
 api-jobs)

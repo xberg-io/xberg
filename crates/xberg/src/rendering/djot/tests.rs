@@ -778,7 +778,7 @@ fn a_row_lines_paragraph_renders_each_line_as_its_own_djot_paragraph() {
     let marked = leader_paragraph_doc("Water .... 36\r\n\nStreet .... 17\nPool .... 16\n", true);
     assert_eq!(
         render_djot(&marked).trim_end(),
-        "Water .... 36\n\nStreet .... 17\n\nPool .... 16"
+        "Water ..\\.. 36\n\nStreet ..\\.. 17\n\nPool ..\\.. 16"
     );
 }
 
@@ -808,7 +808,7 @@ fn a_footnote_ref_after_a_row_lines_paragraph_joins_its_last_row() {
     b.set_layer(def, ContentLayer::Footnote);
     assert_eq!(
         render_djot(&b.build()),
-        "Water .... 36\n\nStreet .... 17[^1]\n\n\n[^1]: A note.\n"
+        "Water ..\\.. 36\n\nStreet ..\\.. 17[^1]\n\n\n[^1]: A note.\n"
     );
 }
 
@@ -820,7 +820,7 @@ fn row_lines_that_start_with_block_syntax_are_escaped() {
     ));
     assert_eq!(
         render_djot(&b.build()),
-        "1\\. Intro .... 5\n\n2\\) Scope .... 9\n\n\\| Water .... 36\n\n\\- Pool .... 4\n\n\\# Park .... 7\n\n\\> Lot .... 2\n\nPlain .... 1\n"
+        "1\\. Intro ..\\.. 5\n\n2\\) Scope ..\\.. 9\n\n\\| Water ..\\.. 36\n\n\\- Pool ..\\.. 4\n\n\\# Park ..\\.. 7\n\n\\> Lot ..\\.. 2\n\nPlain ..\\.. 1\n"
     );
 }
 
@@ -845,7 +845,10 @@ fn a_row_lines_paragraph_inside_a_blockquote_quotes_every_row() {
     paragraph.depth = 1;
     b.push_element(paragraph);
     b.push_quote_end();
-    assert_eq!(render_djot(&b.build()), "> Water .... 36\n> \n> Street .... 17\n>\n");
+    assert_eq!(
+        render_djot(&b.build()),
+        "> Water ..\\.. 36\n> \n> Street ..\\.. 17\n>\n"
+    );
 }
 
 #[test]
@@ -856,7 +859,7 @@ fn row_lines_that_start_with_any_djot_list_marker_are_escaped() {
     ));
     assert_eq!(
         render_djot(&b.build()),
-        "I\\. Introduction .... 3\n\nA\\. Appendix .... 40\n\niv\\. Index .... 9\n\na\\) Note .... 2\n\n\\(1) Aim .... 4\n\n\\(a) Scope .... 5\n\n\\(ii) Terms .... 6\n\n\\: Term .... 8\n"
+        "I\\. Introduction ..\\.. 3\n\nA\\. Appendix ..\\.. 40\n\niv\\. Index ..\\.. 9\n\na\\) Note ..\\.. 2\n\n\\(1) Aim ..\\.. 4\n\n\\(a) Scope ..\\.. 5\n\n\\(ii) Terms ..\\.. 6\n\n\\: Term ..\\.. 8\n"
     );
 }
 
@@ -870,22 +873,22 @@ fn row_lines_escape_punctuation_starts_but_not_hashtags_or_decimals() {
     assert_eq!(
         render_djot(&b.build()),
         concat!(
-            "\\+ Pool .... 4\n\n\\* Park .... 7\n\n\\#\\#\\# Lot .... 2\n\n1.5 Units .... 3\n\n1\\.\n\n\\-\n\n",
-            "\\-\\-\\-\n\n\\- - -\n\n\\*\\*\\*\n\n#hashtag .... 1\n\nPlan A. .... 2\n\n\\-\\-\\- Rule .... 6\n\n",
-            "\\-5 .... 1\n\n\\:\\:\\: note\n\n\\`\\`\\` rust\n"
+            "\\+ Pool ..\\.. 4\n\n\\* Park ..\\.. 7\n\n\\#\\#\\# Lot ..\\.. 2\n\n1.5 Units ..\\.. 3\n\n1\\.\n\n\\-\n\n",
+            "\\-\\-\\-\n\n\\- - -\n\n\\*\\*\\*\n\n#hashtag ..\\.. 1\n\nPlan A. ..\\.. 2\n\n\\-\\-\\- Rule ..\\.. 6\n\n",
+            "\\-5 ..\\.. 1\n\n\\:\\:\\: note\n\n\\`\\`\\` rust\n"
         )
     );
 }
 
 #[test]
-fn row_lines_of_ordinary_prose_are_not_escaped() {
+fn row_lines_of_ordinary_prose_only_escape_the_leader_dots() {
     let mut b = InternalDocumentBuilder::new("test");
     b.push_element(marked_row_lines_element(
         "I am .... 1\nA big .... 2\ni.e. .... 3\nI.e. .... 4\nDr. Smith .... 5",
     ));
     assert_eq!(
         render_djot(&b.build()),
-        "I am .... 1\n\nA big .... 2\n\ni.e. .... 3\n\nI.e. .... 4\n\nDr. Smith .... 5\n"
+        "I am ..\\.. 1\n\nA big ..\\.. 2\n\ni.e. ..\\.. 3\n\nI.e. ..\\.. 4\n\nDr. Smith ..\\.. 5\n"
     );
 }
 
@@ -893,7 +896,7 @@ fn row_lines_of_ordinary_prose_are_not_escaped() {
 fn a_lowercase_roman_run_row_is_escaped_like_a_list_label() {
     let mut b = InternalDocumentBuilder::new("test");
     b.push_element(marked_row_lines_element("mix. .... 6"));
-    assert_eq!(render_djot(&b.build()), "mix\\. .... 6\n");
+    assert_eq!(render_djot(&b.build()), "mix\\. ..\\.. 6\n");
 }
 
 /// Row texts that must each stay one paragraph with their text kept: every ASCII punctuation
@@ -1023,7 +1026,7 @@ fn a_row_that_starts_with_an_escaped_delimiter_shows_its_own_backslash() {
         let output = render_rows(&layout);
         assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
     }
-    assert_eq!(render_rows(&["\\*note* .... 3"]), "\\\\\\*note\\* .... 3\n");
+    assert_eq!(render_rows(&["\\*note* .... 3"]), "\\\\\\*note\\* ..\\.. 3\n");
 }
 
 #[test]
@@ -1040,7 +1043,7 @@ fn a_row_with_a_bracketed_word_keeps_the_underscores_and_stars_after_it() {
     }
     assert_eq!(
         render_rows(&["[snake_case] and a_b .... 3"]),
-        "\\[snake\\_case\\] and a\\_b .... 3\n"
+        "\\[snake\\_case\\] and a\\_b ..\\.. 3\n"
     );
 }
 
@@ -1051,7 +1054,7 @@ fn a_row_with_a_bracketed_word_and_attributes_keeps_its_text() {
         let output = render_rows(&layout);
         assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
     }
-    assert_eq!(render_rows(&["[a]{.x} .... 1"]), "\\[a\\]\\{.x\\} .... 1\n");
+    assert_eq!(render_rows(&["[a]{.x} .... 1"]), "\\[a\\]\\{.x\\} ..\\.. 1\n");
 }
 
 #[test]
@@ -1063,14 +1066,14 @@ fn a_backslash_in_a_row_is_shown_and_frees_no_delimiter() {
     }
     assert_eq!(
         render_rows(&["{\\*x* .... 1", "[_]\\_x_ .... 2"]),
-        "\\{\\\\\\*x\\* .... 1\n\n\\[\\_\\]\\\\\\_x\\_ .... 2\n"
+        "\\{\\\\\\*x\\* ..\\.. 1\n\n\\[\\_\\]\\\\\\_x\\_ ..\\.. 2\n"
     );
 }
 
 #[test]
 fn a_row_that_starts_with_hyphens_escapes_each_hyphen() {
     let output = render_rows(&["--- Rule .... 6"]);
-    assert_eq!(output, "\\-\\-\\- Rule .... 6\n");
+    assert_eq!(output, "\\-\\-\\- Rule ..\\.. 6\n");
     let events: Vec<_> = jotdown::Parser::new(&output).collect();
     assert!(!events.iter().any(|event| matches!(event, jotdown::Event::EnDash)));
     assert!(!events.iter().any(|event| matches!(event, jotdown::Event::EmDash)));
@@ -1085,12 +1088,12 @@ fn a_row_with_a_sign_after_a_brace_escapes_the_sign() {
     }
     assert_eq!(
         render_rows(&["{+ins+} .... 1", "x {=m=} .... 2", "{-d-} .... 3"]),
-        "\\{\\+ins+\\} .... 1\n\nx \\{\\=m=\\} .... 2\n\n\\{\\-d-\\} .... 3\n"
+        "\\{\\+ins+\\} ..\\.. 1\n\nx \\{\\=m=\\} ..\\.. 2\n\n\\{\\-d-\\} ..\\.. 3\n"
     );
 }
 
 #[test]
-fn a_row_leaves_the_characters_that_open_no_markup_as_typed() {
+fn a_row_preserves_safe_punctuation_and_escapes_quotes_and_colons() {
     let rows = [
         "Chapter 3: Introduction .... 5",
         "A-B + C = D .... 1",
@@ -1101,8 +1104,8 @@ fn a_row_leaves_the_characters_that_open_no_markup_as_typed() {
     assert_eq!(
         output,
         concat!(
-            "Chapter 3: Introduction .... 5\n\nA-B + C = D .... 1\n\n",
-            "Dr. Smith (b) |x| #5 $6 \"q\" 'r' !s >t .... 2\n\na\\:b .... 3\n"
+            "Chapter 3: Introduction ..\\.. 5\n\nA-B + C = D ..\\.. 1\n\n",
+            "Dr. Smith (b) |x| #5 $6 \\\"q\\\" \\'r\\' !s >t ..\\.. 2\n\na\\:b ..\\.. 3\n"
         )
     );
 }
@@ -1410,4 +1413,310 @@ fn paragraph_complex_attribute_prefix_preserves_literal_syntax_and_inline_suffix
             "{source:?}"
         );
     }
+}
+
+#[test]
+fn repeated_attribute_spans_remain_visible_before_inline_markup() {
+    for (source, escaped) in [
+        ("{.a} {.b} x_y _z_", r"\{\.a\} \{\.b\} x_y _z_"),
+        ("{.a}{.b} x_y _z_", r"\{\.a\}\{\.b\} x_y _z_"),
+        ("{.a}\u{a0}{.b} x_y _z_", "\\{\\.a\\}\u{a0}\\{\\.b\\} x_y _z_"),
+    ] {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_paragraph(source, vec![], None, None);
+        let output = render_djot(&b.build());
+        assert_eq!(output, format!("{escaped}\n"));
+        let visible = source.strip_suffix("_z_").unwrap();
+        assert_eq!(
+            jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+            format!("<p>{visible}<em>z</em></p>\n")
+        );
+    }
+}
+
+#[test]
+fn ocr_block_openers_stay_in_paragraphs() {
+    use crate::types::ocr_elements::OcrElementLevel;
+
+    for (source, escaped) in [
+        ("::: note", r"\:\:\: note"),
+        ("# x", r"\# x"),
+        ("- x", r"\- x"),
+        ("| a | b |", r"\| a | b |"),
+        ("[ref]: http://a.example", r"[ref]\: http://a.example"),
+        ("> quote", r"\> quote"),
+        ("---", r"\-\-\-"),
+        ("```rust", r"\`\`\`rust"),
+        ("1. x", r"1\. x"),
+        ("[^1]: note", r"[\^1]\: note"),
+        ("{.a}", r"\{\.a\}"),
+    ] {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_paragraph(source, vec![], None, None);
+        b.push_paragraph("Tail", vec![], None, None);
+        let mut doc = b.build();
+        doc.elements[0].kind = ElementKind::OcrText {
+            level: OcrElementLevel::Line,
+        };
+        let output = render_djot(&doc);
+        assert_eq!(output, format!("{escaped}\n\nTail\n"));
+        assert_eq!(djot_paragraph_texts(&output), [source, "Tail"], "{output:?}");
+    }
+}
+
+#[test]
+fn block_openers_remain_literal_in_container_text() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_list(false);
+    b.push_list_item("# x", false, vec![], None, None);
+    b.end_list();
+    let output = render_djot(&b.build());
+    assert_eq!(output, "- \\# x\n");
+    assert_eq!(
+        jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+        "<ul>\n<li>\n# x\n</li>\n</ul>\n"
+    );
+
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_definition_term("# term", None);
+    b.push_definition_description("- description", None);
+    assert_eq!(render_djot(&b.build()), "\\# term\n: \\- description\n");
+
+    let mut b = InternalDocumentBuilder::new("test");
+    let index = b.push_admonition("note", None, None);
+    let mut doc = b.build();
+    doc.elements[index as usize].text = "::: body".into();
+    assert_eq!(render_djot(&doc), "::: note\n\\:\\:\\: body\n:::\n");
+}
+
+#[test]
+fn image_ocr_block_openers_stay_literal_on_every_line() {
+    for (mime, format) in [("text/plain", None), ("text/markdown", Some("plain"))] {
+        let mut b = InternalDocumentBuilder::new("test");
+        let image = crate::types::ExtractedImage {
+            ocr_result: Some(Box::new(crate::types::ExtractedDocument {
+                content: "# x\n\n- y".into(),
+                mime_type: mime.into(),
+                metadata: crate::types::Metadata {
+                    output_format: format.map(str::to_owned),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        b.push_image(Some("Image"), image, None, None);
+        let output = render_djot(&b.build());
+        assert_eq!(output, "![Image]()\n\n\\# x\n\n\\- y\n", "{mime} {format:?}");
+        assert_eq!(djot_paragraph_texts(&output), ["Image", "# x", "- y"]);
+    }
+}
+
+#[test]
+fn block_prefix_escapes_preserve_indentation_and_inline_text_exactly() {
+    for (source, expected) in [
+        (" {.a} _z_", r" \{\.a\} _z_"),
+        (" [ref]: target", r" [ref]\: target"),
+        ("[snake_case]: a_b", r"[snake_case]\: a_b"),
+        ("[snake_case] and a_b", "[snake_case] and a_b"),
+        ("[^snake_case]: note", r"[\^snake_case]\: note"),
+        ("```rust_lang", r"\`\`\`rust_lang"),
+        (":::note_class", r"\:\:\:note_class"),
+        (r#"{.a key="a\\*b"} x"#, r#"\{\.a key\=\"a\\\*b\"\} x"#),
+        ("\u{a0}^ caption", "\u{a0}\\^ caption"),
+    ] {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_paragraph(source, vec![], None, None);
+        assert_eq!(render_djot(&b.build()), format!("{expected}\n"), "{source:?}");
+    }
+}
+
+#[test]
+fn a_thematic_break_only_escapes_the_first_line() {
+    assert_eq!(escape_block_prefix("---\nx_y _z_", false), "\\-\\-\\-\nx_y _z_");
+}
+
+#[test]
+fn list_items_keep_their_inline_annotations() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_list(false);
+    b.push_list_item(
+        "bold",
+        false,
+        vec![TextAnnotation {
+            start: 0,
+            end: 4,
+            kind: AnnotationKind::Bold,
+        }],
+        None,
+        None,
+    );
+    b.end_list();
+    let output = render_djot(&b.build());
+    assert_eq!(output, "- *bold*\n");
+    assert_eq!(
+        jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+        "<ul>\n<li>\n<strong>bold</strong>\n</li>\n</ul>\n"
+    );
+}
+
+#[test]
+fn literal_rows_keep_straight_double_quotes() {
+    let output = render_rows(&["Say \"hello\""]);
+    assert_eq!(
+        jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+        "<p>Say \"hello\"</p>\n"
+    );
+}
+
+#[test]
+fn literal_rows_keep_straight_single_quotes_and_apostrophes() {
+    let output = render_rows(&["Read 'draft' and don't"]);
+    assert_eq!(
+        jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+        "<p>Read 'draft' and don't</p>\n"
+    );
+}
+
+#[test]
+fn literal_rows_keep_dot_runs_and_single_periods() {
+    for text in ["Wait... page .... 3", "A..B and Dr. Smith", "é.....日本 .... 9"] {
+        let output = render_rows(&[text]);
+        assert_eq!(
+            jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+            format!("<p>{text}</p>\n")
+        );
+    }
+}
+
+#[test]
+fn a_leader_run_escapes_one_dot_per_three_of_the_run() {
+    assert_eq!(
+        render_rows(&["Introduction ........ 3"]),
+        "Introduction ..\\...\\... 3\n"
+    );
+}
+
+#[test]
+fn a_three_dot_run_escapes_its_third_dot_only() {
+    assert_eq!(render_rows(&["Wait... page"]), "Wait..\\. page\n");
+}
+
+#[test]
+fn a_one_or_two_dot_run_stays_unescaped() {
+    assert_eq!(render_rows(&["A..B and Dr. Smith"]), "A..B and Dr. Smith\n");
+}
+
+#[test]
+fn a_leader_run_of_any_length_round_trips_without_an_ellipsis_event() {
+    for dots in 1..=12 {
+        let row = format!("Start {} End", ".".repeat(dots));
+        let output = render_rows(&[&row]);
+        let events: Vec<_> = jotdown::Parser::new(&output).collect();
+        assert!(
+            !events.iter().any(|event| matches!(event, jotdown::Event::Ellipsis)),
+            "{dots} dots -> {output:?}"
+        );
+        assert_eq!(djot_paragraph_texts(&output), [row.as_str()], "{dots} dots");
+    }
+}
+
+#[test]
+fn literal_rows_keep_dash_runs_and_single_hyphens() {
+    for text in ["A--B---C----D", "é--日本 and A-B"] {
+        let output = render_rows(&[text]);
+        assert_eq!(
+            jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+            format!("<p>{text}</p>\n")
+        );
+    }
+}
+
+#[test]
+fn literal_rows_pin_smart_punctuation_escapes_exactly() {
+    assert_eq!(
+        render_rows(&["Say \"hello\" and 'draft'... -- next"]),
+        concat!(r#"Say \"hello\" and \'draft\'..\. \-\- next"#, "\n")
+    );
+}
+
+#[test]
+fn ordinary_paragraphs_keep_smart_punctuation() {
+    assert_eq!(
+        paragraph_roundtrip_html("Say \"hello\" and 'draft'... -- next", vec![]),
+        "<p>Say “hello” and ‘draft’… – next</p>\n<p>Tail</p>\n"
+    );
+}
+
+#[test]
+fn paragraph_and_ocr_line_breaks_cannot_open_a_new_block() {
+    use crate::types::ocr_elements::OcrElementLevel;
+
+    for kind in [
+        ElementKind::Paragraph,
+        ElementKind::OcrText {
+            level: OcrElementLevel::Line,
+        },
+    ] {
+        for (source, html) in [
+            ("x\n# y", "<p>x # y</p>\n"),
+            ("x\n- y", "<p>x - y</p>\n"),
+            ("x\n\n# y", "<p>x # y</p>\n"),
+            ("x\n\n- y", "<p>x - y</p>\n"),
+        ] {
+            let mut b = InternalDocumentBuilder::new("test");
+            b.push_paragraph(source, vec![], None, None);
+            let mut doc = b.build();
+            doc.elements[0].kind = kind;
+            let output = render_djot(&doc);
+            assert_eq!(
+                jotdown::html::render_to_string(jotdown::Parser::new(&output)),
+                html,
+                "{output:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn image_ocr_preserves_declared_markup() {
+    for (mime, format) in [
+        ("text/markdown", None),
+        ("text/djot", None),
+        ("text/x-djot", None),
+        ("image/png", Some("markdown")),
+        ("image/png", Some("djot")),
+    ] {
+        let mut b = InternalDocumentBuilder::new("test");
+        let image = crate::types::ExtractedImage {
+            ocr_result: Some(Box::new(crate::types::ExtractedDocument {
+                content: "# OCR\n\n*bold*".into(),
+                mime_type: mime.into(),
+                metadata: crate::types::Metadata {
+                    output_format: format.map(str::to_owned),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        b.push_image(Some("Image"), image, None, None);
+        let output = render_djot(&b.build());
+        assert_eq!(output, "![Image]()\n\n# OCR\n\n*bold*\n", "{mime} {format:?}");
+        let html = jotdown::html::render_to_string(jotdown::Parser::new(&output));
+        assert!(html.contains(">OCR</h1>"), "{html}");
+        assert!(html.contains("<p><strong>bold</strong></p>"), "{html}");
+    }
+}
+
+#[test]
+fn footnotes_keep_inline_markup_and_smart_punctuation() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_paragraph("See note", vec![], None, None);
+    b.push_footnote_ref("1", "fn1", None);
+    let note = b.push_footnote_definition("*bold* ... --", "fn1", None);
+    b.set_layer(note, ContentLayer::Footnote);
+    let output = render_djot(&b.build());
+    let html = jotdown::html::render_to_string(jotdown::Parser::new(&output));
+    assert!(html.contains("<strong>bold</strong> … –"), "{html}");
 }

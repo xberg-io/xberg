@@ -1,5 +1,5 @@
-use lopdf::{Document, Object};
-use xberg::{ExtractedDocument, ExtractionConfig};
+use lopdf::{Document, Object, dictionary};
+use xberg::{ExtractedDocument, ExtractionConfig, OcrStrategy};
 
 fn inherited_page(document: &Document, id: lopdf::ObjectId) -> lopdf::Dictionary {
     let mut page = document.get_dictionary(id).unwrap().clone();
@@ -57,7 +57,7 @@ async fn read(bytes: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
         .unwrap()
 }
 
-async fn assert_mixed_tables(actual: &ExtractedDocument, native: &ExtractedDocument, forced: &ExtractedDocument) {
+fn assert_mixed_tables(actual: &ExtractedDocument, native: &ExtractedDocument, forced: &ExtractedDocument) {
     let pages = actual.pages.as_ref().unwrap();
     let last = pages.len() - 1;
     let source = native.pages.as_ref().unwrap();
@@ -74,7 +74,7 @@ async fn assert_mixed_tables(actual: &ExtractedDocument, native: &ExtractedDocum
             &source[index]
         };
         if index == last {
-            super::plain_contract::assert_scanned_table_body(page, reference).await;
+            super::plain_contract::assert_scanned_table_body(page, reference);
         } else {
             assert_eq!(page.content, reference.content);
         }
@@ -132,7 +132,7 @@ async fn check_mixed_tables(source_pages: &[u32], stamp: bool, force_scan: bool)
         config.force_ocr_pages = Some(vec![u32::try_from(source_pages.len() + 1).unwrap()]);
     }
     let actual = read(&bytes, &config).await;
-    assert_mixed_tables(&actual, &native, &forced).await;
+    assert_mixed_tables(&actual, &native, &forced);
 }
 
 #[tokio::test]
@@ -148,4 +148,82 @@ async fn forced_page_ocr_attaches_only_the_replaced_pages_tables() {
 #[tokio::test]
 async fn detected_scanned_page_attaches_ocr_tables_and_keeps_native_tables() {
     check_mixed_tables(&[super::SOURCE_PAGE - 1, super::SOURCE_PAGE], false, false).await;
+}
+
+#[tokio::test]
+async fn detected_scan_without_native_elements_renders_the_accepted_table() {
+    let models = tempfile::tempdir().unwrap();
+    let mut config = super::pinned_config(models.path());
+    let bytes = include_bytes!("../fixtures/ocr/shaded_table_scan.pdf");
+    let forced = read(
+        bytes,
+        &ExtractionConfig {
+            force_ocr: true,
+            ..config.clone()
+        },
+    )
+    .await;
+    config.ocr_strategy = OcrStrategy::ScannedPages { min_confidence: 0.9 };
+    let actual = read(bytes, &config).await;
+    assert_eq!(actual.extraction_method, Some(xberg::types::ExtractionMethod::Mixed));
+    assert_eq!(actual.tables.len(), 1);
+    let bbox = actual.tables[0]
+        .bounding_box
+        .expect("the OCR table keeps its rectangle");
+    // ~keep The 612x792 pt page renders at 1667x2156 px and recognition reads a 2550x3298 px
+    // resample, so the table's pixel rectangle (273, 267)-(2237, 1450) lies at these points. A
+    // rectangle scaled by the render instead lands at x1 = 821, off the page. The tolerance absorbs
+    // a few pixels of platform-dependent table detection.
+    let expected = [65.52, 443.79, 536.88, 727.88];
+    let actual_points = [bbox.x0, bbox.y0, bbox.x1, bbox.y1];
+    assert!(
+        actual_points
+            .iter()
+            .zip(expected)
+            .all(|(actual, expected)| (actual - expected).abs() <= 2.0),
+        "the table rectangle is its recognition-frame rectangle in page points: {bbox:?}"
+    );
+    super::plain_contract::assert_page_ranges(&actual);
+    super::plain_contract::assert_scanned_table_body(
+        &actual.pages.as_ref().unwrap()[0],
+        &forced.pages.as_ref().unwrap()[0],
+    );
+}
+
+#[tokio::test]
+async fn selected_scan_renders_prose_before_and_after_the_ocr_table() {
+    let mut source = Document::load_mem(include_bytes!("../fixtures/ocr/shaded_table_scan.pdf")).unwrap();
+    let page_id = *source.get_pages().values().next().unwrap();
+    let mut page = source.get_dictionary(page_id).unwrap().clone();
+    let font = source.add_object(dictionary! {
+        "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica",
+    });
+    let mut resources = super::structured_output::resources(&source, &page);
+    resources.set("Font", dictionary! {"ReviewFont" => font});
+    page.set("Resources", resources);
+    let bounds = vec![0.into(), (-55).into(), 612.into(), 847.into()];
+    page.set("MediaBox", bounds.clone());
+    page.set("CropBox", bounds);
+    source.objects.insert(page_id, Object::Dictionary(page));
+    source.add_page_contents(
+        page_id,
+        b"BT /ReviewFont 18 Tf 48 816 Td (Quarterly report introduction) Tj ET\nBT /ReviewFont 18 Tf 48 -28 Td (End of quarterly report) Tj ET".to_vec(),
+    ).unwrap();
+    let mut bytes = Vec::new();
+    source.save_to(&mut bytes).unwrap();
+
+    let models = tempfile::tempdir().unwrap();
+    let mut config = super::pinned_config(models.path());
+    config.force_ocr_pages = Some(vec![1]);
+    let actual = read(&bytes, &config).await;
+    assert_eq!(actual.extraction_method, Some(xberg::types::ExtractionMethod::Mixed));
+    super::plain_contract::assert_page_ranges(&actual);
+    assert_eq!(actual.tables.len(), 1);
+    let body = &actual.pages.as_ref().unwrap()[0].content;
+    let before = body
+        .find("Quarterly report introduction")
+        .expect("recognized introductory prose");
+    let table = body.find("48,210").expect("recognized table cell");
+    let after = body.find("End of quarterly report").expect("recognized closing prose");
+    assert!(before < table && table < after, "{body}");
 }

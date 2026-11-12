@@ -132,21 +132,51 @@ fn a_dot_leader_table_of_contents_is_not_read_again_as_a_table() {
 }
 
 fn assert_rows_are_own_lines(format: OutputFormat) {
+    let is_djot = matches!(format, OutputFormat::Djot);
     let mut rendered = config(None);
     rendered.output_format = format;
     let result = helpers::extract_bytes_document_blocking(PICTURE_11PX, "image/png", &rendered).unwrap();
     assert_eq!(recorded_psm(&result), "6");
-    let lines: Vec<_> = result.content.lines().filter(|line| !line.trim().is_empty()).collect();
+    let mut lines: Vec<_> = result.content.lines().filter(|line| !line.trim().is_empty()).collect();
     assert_eq!(
         lines.len(),
         13,
         "header plus 12 rows, one per line:\n{}",
         result.content
     );
+    let djot_text;
+    if is_djot {
+        // The rendered Djot must round-trip with every leader dot as literal text: an
+        // ellipsis event means a bare `...` run was left for the reader to turn into `…`.
+        let mut paragraphs: Vec<String> = Vec::new();
+        let mut open = false;
+        for event in jotdown::Parser::new(&result.content) {
+            match event {
+                jotdown::Event::Ellipsis => panic!(
+                    "a leader dot run was not escaped and parses as an ellipsis:\n{}",
+                    result.content
+                ),
+                jotdown::Event::Softbreak | jotdown::Event::Hardbreak => panic!(
+                    "expected each Djot row to be a separate paragraph, got an inline break:\n{}",
+                    result.content
+                ),
+                jotdown::Event::Start(jotdown::Container::Paragraph, _) => {
+                    open = true;
+                    paragraphs.push(String::new());
+                }
+                jotdown::Event::End(jotdown::Container::Paragraph) => open = false,
+                jotdown::Event::Str(text) if open => paragraphs.last_mut().unwrap().push_str(&text),
+                _ => {}
+            }
+        }
+        djot_text = paragraphs.join("\n");
+        lines = djot_text.lines().collect();
+        assert_eq!(lines.len(), 13, "header plus 12 parsed Djot paragraphs:\n{djot_text}");
+    }
     let mut kept = 0;
     let mut next = 0;
     for row in PICTURE_11PX_ROWS.lines() {
-        let Some(at) = lines.iter().position(|line| row_lines(line, row) == 1) else {
+        let Some(at) = lines.iter().position(|line| row_kept(line, row, is_djot)) else {
             continue;
         };
         assert!(at >= next, "row {row:?} is out of order:\n{}", result.content);
@@ -154,6 +184,28 @@ fn assert_rows_are_own_lines(format: OutputFormat) {
         next = at;
     }
     assert!(kept >= 11, "{kept} of 12 rows kept whole:\n{}", result.content);
+}
+
+/// Whether `line` is the fixture row: the label, then the leader dots as literal text, then the
+/// values. The Djot round trip must not lose or reinterpret the leader, so the text that the
+/// comparison trims away has to be a non-empty run of dots.
+fn row_kept(line: &str, row: &str, require_leader: bool) -> bool {
+    let fields: Vec<_> = row.split('\t').collect();
+    let [label, values @ ..] = fields.as_slice() else {
+        return false;
+    };
+    let flattened = line.replace('|', " ");
+    let words: Vec<_> = flattened.split_whitespace().collect();
+    let Some(split) = words.len().checked_sub(values.len()) else {
+        return false;
+    };
+    let (head, tail) = words.split_at(split);
+    if tail != values {
+        return false;
+    }
+    let joined = head.join(" ");
+    let trimmed = joined.trim_end_matches('.').trim_end();
+    trimmed == *label && (!require_leader || trimmed.len() < joined.len())
 }
 
 #[test]
