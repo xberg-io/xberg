@@ -28,7 +28,7 @@ pub(super) fn derive_pages(
     let adopted_ocr = doc
         .metadata
         .additional
-        .remove(super::ocr_document::ADOPTED_OCR_DOCUMENT_KEY)
+        .remove(super::ADOPTED_OCR_DOCUMENT_KEY)
         .is_some_and(|value| value.as_bool() == Some(true));
     let native_ranges = spans
         .filter(|_| content_is_plain && !adopted_ocr && !source_short_circuits_ocr_page_text(&doc.source_format))

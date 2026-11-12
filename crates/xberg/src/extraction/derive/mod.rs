@@ -49,6 +49,9 @@ pub(crate) use pages::render_plain_selected_pages;
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(crate) use pages::source_short_circuits_ocr_page_text;
 
+/// Internal marker consumed by page derivation before publishing metadata. ~keep
+const ADOPTED_OCR_DOCUMENT_KEY: &str = "xberg:internal:adopted-ocr-document";
+
 /// Cap on how many unresolvable keys a single warning names before it summarises
 /// the rest as a count, so a badly broken document cannot produce an unbounded
 /// message.
@@ -779,11 +782,18 @@ fn compute_custom_formatted_content(
             if name == "html" {
                 observer.formatted_html(&rendered, false);
             }
+            let written = registry.renders_markdown(name);
             observer.formatted_from_source(
-                registry.renders_markdown(name),
+                written,
                 &rendered,
                 crate::rendering::markdown_tag_exemptions_are_owned(doc),
             );
+            if written {
+                observer.formatted_written();
+                if crate::plugins::registry::renders_from_markdown(name) {
+                    observer.formatted_binary();
+                }
+            }
             Some(rendered)
         }
         Err(e) => {

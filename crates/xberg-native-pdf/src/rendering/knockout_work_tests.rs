@@ -535,6 +535,49 @@ fn paint_operation_count_starts_again_on_each_page() {
 }
 
 #[test]
+fn dpi_retries_share_the_page_paint_cap_and_the_next_page_starts_fresh() {
+    use crate::rendering::page_renderer::{PNG_FIXED_OVERHEAD, PngRenderBudget};
+
+    const REQUESTED_DPI: u32 = 288;
+    const REQUEST_PAINT_LIMIT: usize = 4;
+    let doc = forms_document(
+        "100 100",
+        "/Outer Do",
+        &[
+            form("Outer", Some(false), "0 g 0 0 10 10 re f /Middle Do"),
+            form("Middle", Some(false), "/Inner Do"),
+            form("Inner", Some(false), "0 g 0 0 10 10 re f"),
+        ],
+    );
+    // At 288 DPI the page is 400 x 400. Three RGBA canvases fit;
+    // entering the innermost group needs a fourth.
+    let budget = || PngRenderBudget {
+        max_working_bytes: 400 * 400 * 12 + PNG_FIXED_OVERHEAD,
+        minimum_dpi: 72,
+    };
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(REQUESTED_DPI).as_raw());
+    let (_, dpi) = renderer
+        .render_page_with_budget(0, &doc, Some(budget()))
+        .expect("workspace alone admits a lower DPI");
+    assert!(dpi < REQUESTED_DPI);
+
+    renderer.knockout_resources.paint_operation_limit = REQUEST_PAINT_LIMIT;
+    let error = renderer
+        .render_page_with_budget(0, &doc, Some(budget()))
+        .map(|(_, dpi)| dpi)
+        .expect_err("paints before the workspace refusal also count toward the cap");
+    assert!(error.to_string().contains("paint operations"), "{error}");
+    assert_eq!(renderer.knockout_resources.paint_operations, REQUEST_PAINT_LIMIT);
+    assert_eq!(renderer.knockout_resources.workspace_shortfall(), None);
+
+    let next = document("/Fm Do", false, Some("0 g 0 0 10 10 re f"));
+    renderer
+        .render_page(&next, 0)
+        .expect("an independent page gets a fresh cap");
+    assert_eq!(renderer.knockout_resources.paint_operations, 1);
+}
+
+#[test]
 fn knockout_and_ordinary_groups_nested_either_way_charge_only_the_native_pass() {
     let fill = "0 g 0 0 10 10 re f ";
     let charges = |outer: bool| {

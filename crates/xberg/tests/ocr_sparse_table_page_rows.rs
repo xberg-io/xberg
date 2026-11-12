@@ -106,6 +106,52 @@ fn implicit_sparse_plain_page_uses_the_same_table_rows_as_the_document() {
     assert_plain_rows(page_text(&doc));
 }
 
+#[cfg(feature = "pdf")]
+#[test]
+fn standalone_pipeline_keeps_table_bounds_in_recognition_pixels() {
+    use xberg::core::config::{OcrPipelineConfig, OcrPipelineStage};
+
+    #[expect(deprecated, reason = "OcrPipelineStage still requires the legacy PaddleOCR field")]
+    let stage = OcrPipelineStage {
+        backend: "tesseract".into(),
+        priority: 100,
+        language: None,
+        tesseract_config: None,
+        paddle_ocr_config: None,
+        paddle_ocr_settings: None,
+        vlm_config: None,
+        backend_options: None,
+    };
+    let doc = extract_bytes_document_blocking(
+        IMAGE,
+        "image/png",
+        &ExtractionConfig {
+            use_cache: false,
+            include_document_structure: true,
+            ocr: Some(OcrConfig {
+                pipeline: Some(OcrPipelineConfig {
+                    stages: vec![stage],
+                    quality_thresholds: Default::default(),
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    )
+    .expect("single-stage Tesseract OCR of the standalone PNG");
+
+    let [table] = doc.tables.as_slice() else {
+        panic!("expected one OCR table, got {}", doc.tables.len());
+    };
+    let bbox = table.bounding_box.as_ref().expect("recognized table bounds");
+    // ~keep This fixture's resampled table extends past both edges of the 620×380 input raster.
+    // A standalone image keeps recognition pixels because it has no detached PDF page owner.
+    assert!(
+        bbox.x1 > 620.0 && bbox.y1 > 380.0,
+        "expected table bounds in the larger recognition raster, got {bbox:?}"
+    );
+}
+
 #[test]
 fn implicit_sparse_djot_keeps_plain_rows_in_the_page_snapshot() {
     let doc = extract(IMAGE, OutputFormat::Djot, None);
