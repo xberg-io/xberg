@@ -1072,6 +1072,124 @@ fn mixed_plain_inline_document() -> InternalDocument {
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[test]
+fn mixed_plain_declines_elements_that_add_words_to_the_accepted_table() {
+    let root = tempfile::tempdir().unwrap();
+    crate::utils::test_support::run_child_test(
+        "extractors::pdf::tests::mixed_plain_added_words_with_diagnostic_child",
+        "XBERG_MIXED_PLAIN_ADDED_WORDS_ROOT",
+        root.path(),
+        |_| {},
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+#[ignore = "run in an isolated subprocess to capture debug diagnostics"]
+fn mixed_plain_added_words_with_diagnostic_child() {
+    use crate::types::Table;
+
+    let Some(root) = crate::utils::test_support::child_test_root("XBERG_MIXED_PLAIN_ADDED_WORDS_ROOT") else {
+        return;
+    };
+    let cells: Vec<Vec<String>> = vec![vec!["Name".into(), "Count".into()], vec!["North".into(), "2".into()]];
+    let source = crate::rendering::common::render_table_markdown(&cells);
+    let source = source.trim_end();
+    let document = |before: Option<&str>, after: Option<&str>| {
+        let mut document = InternalDocument::new("pdf");
+        if let Some(text) = before {
+            document.push_element(InternalElement::text(ElementKind::Paragraph, text, 0).with_page(1));
+        }
+        let table_index = document.push_table(Table {
+            cells: cells.clone(),
+            page_number: 1,
+            ..Default::default()
+        });
+        document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(1));
+        if let Some(text) = after {
+            document.push_element(InternalElement::text(ElementKind::Paragraph, text, 0).with_page(1));
+        }
+        ahash::AHashMap::from([(1, document)])
+    };
+
+    // A cell the table assembly failed to suppress repeats as its own paragraph.
+    assert_mixed_plain_declines_with_diagnostic(
+        source,
+        &document(Some("Name"), None),
+        &root,
+        "Plain page omitted or changed accepted table cells",
+    );
+    assert_mixed_plain_declines_with_diagnostic(
+        source,
+        &document(None, Some("North")),
+        &root,
+        "Plain page added text absent from the accepted transcript",
+    );
+
+    // A word inside a code span's group continues neither its literal nor its projected spelling.
+    let prose = format!("Before `a b` after.\n\n{source}");
+    assert_mixed_plain_declines_with_diagnostic(
+        &prose,
+        &document(Some("Before a x b after."), None),
+        &root,
+        "Plain page omitted accepted prose",
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn mixed_plain_accepts_a_heading_marker_whether_or_not_the_element_spells_it() {
+    use crate::core::config::OutputFormat;
+    use crate::types::{PageBoundary, Table};
+
+    let cells: Vec<Vec<String>> = vec![vec!["Name".into(), "Count".into()], vec!["North".into(), "2".into()]];
+    let source = format!(
+        "# Status\n\n{}",
+        crate::rendering::common::render_table_markdown(&cells).trim_end()
+    );
+    let render = |heading: InternalElement| {
+        let mut document = InternalDocument::new("pdf");
+        document.push_element(heading.with_page(1));
+        let table_index = document.push_table(Table {
+            cells: cells.clone(),
+            page_number: 1,
+            ..Default::default()
+        });
+        document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(1));
+        let mut text = source.clone();
+        let bounds = [PageBoundary {
+            page_number: 1,
+            byte_start: 0,
+            byte_end: text.len(),
+        }];
+        let mut replacements = ahash::AHashMap::from([(1, text.clone())]);
+        ocr::render_mixed_plain_pages(
+            ExtractionMethod::Mixed,
+            &mut text,
+            &bounds,
+            &mut replacements,
+            &ahash::AHashMap::from([(1, document)]),
+            &OutputFormat::Plain,
+        );
+        text
+    };
+
+    assert_eq!(
+        render(InternalElement::text(ElementKind::Paragraph, "# Status", 0)),
+        "# Status\n\nName Count\nNorth 2"
+    );
+    assert_eq!(
+        render(InternalElement::text(ElementKind::Heading { level: 1 }, "Status", 0)),
+        "Status\nName Count\nNorth 2"
+    );
+    // A different marker is not the accepted one, so the page keeps its transcript.
+    assert_eq!(
+        render(InternalElement::text(ElementKind::Paragraph, "## Status", 0)),
+        source
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
 fn mixed_plain_admits_shared_writer_cell_with_backslash_and_pipe() {
     use crate::core::config::OutputFormat;
     use crate::types::{PageBoundary, Table};
@@ -1142,6 +1260,10 @@ fn assert_mixed_plain_declines_with_diagnostic(
     assert_eq!(replacements[&1], source);
     let log = std::fs::read_to_string(log.path()).unwrap();
     assert!(log.contains("Declined mixed OCR Plain page rendering"), "{log}");
+    assert!(
+        log.contains(" WARN "),
+        "a declined page is reported as degraded output: {log}"
+    );
     assert!(log.contains("page=1"), "{log}");
     assert!(log.contains(reason), "{log}");
 }
@@ -3229,6 +3351,192 @@ async fn force_ocr_route_applies_numeric_repair() {
         !repaired.contains("1172"),
         "and the bare form must be replaced, not merely accompanied: {repaired:?}"
     );
+}
+
+/// Issue #2939: a whole-document OCR read whose page read the noise gate discarded must not
+/// mark that page as OCR text. `InternalDocument::ocr_text_pages` decides which pages are
+/// re-rendered from their elements (#2902), so a page whose noisy read was discarded -- which
+/// keeps its native text -- is not OCR text and must stay out of the set, while the page whose
+/// read was accepted keeps its mark exactly as before.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[tokio::test]
+#[serial]
+async fn a_discarded_ocr_read_does_not_mark_its_native_page_as_ocr_text() {
+    use crate::core::config::{OcrConfig, PageConfig};
+
+    const BACKEND_NAME: &str = "pdf-2939-discarded-read-marking";
+    const ACCEPTED_TEXT: &str = "Healthy native prose fills the first page of this ordinary document";
+    const NATIVE_PAGE_TWO_TEXT: &str = "The original native words stay on the second page";
+    // Twenty short alphabetic tokens beside ten long ones: a fragmented ratio of 2/3, above
+    // the 0.35 default threshold, over the 20-word minimum the noise check requires. A mock
+    // read this fragmented is exactly the shape `discard_suspected_ocr_noise` discards.
+    const NOISY_TEXT: &str = "aa bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt \
+         gathering exercises remaining television understanding";
+
+    // The pages have clearly different MediaBox heights, so the page renders are clearly
+    // different PNG heights at any sane render DPI: the short page's read is accepted, the
+    // tall page's read is the noise the gate discards.
+    struct SizeSensitiveOcrBackend {
+        name: &'static str,
+    }
+    impl crate::plugins::Plugin for SizeSensitiveOcrBackend {
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for SizeSensitiveOcrBackend {
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+        fn supports_language(&self, _lang: &str) -> bool {
+            true
+        }
+        async fn process_image(
+            &self,
+            image_bytes: &[u8],
+            _config: &crate::core::config::OcrConfig,
+        ) -> crate::Result<crate::types::ExtractedDocument> {
+            let noisy = png_height(image_bytes).is_some_and(|height| height >= 1200);
+            Ok(crate::types::ExtractedDocument {
+                content: if noisy {
+                    NOISY_TEXT.to_string()
+                } else {
+                    ACCEPTED_TEXT.to_string()
+                },
+                mime_type: std::borrow::Cow::Borrowed("text/plain"),
+                ..Default::default()
+            })
+        }
+    }
+    crate::plugins::register_ocr_backend(std::sync::Arc::new(SizeSensitiveOcrBackend { name: BACKEND_NAME }))
+        .expect("the size-sensitive backend registers");
+    let _backend = RegisteredOcrBackendGuard { name: BACKEND_NAME };
+
+    let config = ExtractionConfig {
+        use_cache: false,
+        force_ocr: true,
+        ocr: Some(OcrConfig {
+            backend: BACKEND_NAME.to_string(),
+            quality_thresholds: Some(OcrQualityThresholds {
+                discard_suspected_ocr_noise: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        pages: Some(PageConfig {
+            extract_pages: true,
+            keep_native_content: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let internal = PdfExtractor::new()
+        .extract_content(&two_page_native_text_pdf(), "application/pdf", &config)
+        .await
+        .expect("forced-OCR extraction of the two-page fixture must succeed");
+
+    // Controls: the noise gate really discarded page 2's read and the route kept the page's
+    // native text, while page 1's accepted read is the page's content.
+    let pages = internal
+        .prebuilt_pages
+        .as_ref()
+        .expect("extract_pages must produce page contents");
+    assert_eq!(pages.len(), 2, "the fixture has two pages: {pages:?}");
+    assert_eq!(pages[0].content, ACCEPTED_TEXT, "page 1's accepted read is its content");
+    assert!(
+        pages[1].content.trim().is_empty(),
+        "page 2's discarded read left no OCR text: {:?}",
+        pages[1].content
+    );
+    assert_eq!(
+        pages[1].native_content.as_deref(),
+        Some(NATIVE_PAGE_TWO_TEXT),
+        "the discarded page keeps its native text beside the OCR treatment"
+    );
+    assert_eq!(
+        internal.ocr_text_pages,
+        vec![1],
+        "only the page whose read was accepted may be marked as OCR text: page 2's read was \
+         discarded, its native text is what the page keeps"
+    );
+}
+
+/// The width and height from a PNG header, or `None` for bytes that are not a PNG. Page
+/// renders reach an OCR backend as PNG bytes, so this tells two page renders apart.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn png_height(bytes: &[u8]) -> Option<u32> {
+    if bytes.len() < 24 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return None;
+    }
+    Some(u32::from_be_bytes(bytes[20..24].try_into().ok()?))
+}
+
+/// A two-page PDF whose every page carries a healthy native text layer, and whose pages have
+/// clearly different heights so a page render identifies its page by size: page 1 is a small
+/// (200x300 pt) page, page 2 a tall (1224x1584 pt) one.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn two_page_native_text_pdf() -> Vec<u8> {
+    use lopdf::content::{Content, Operation};
+    use lopdf::{Document, Object, Stream, dictionary};
+
+    let page_one_text = "Healthy native prose fills the first page of this ordinary document";
+    let page_two_text = "The original native words stay on the second page";
+
+    let mut document = Document::new();
+    let pages_id = document.add_object(dictionary! { "Type" => "Pages" });
+    let font_id = document.add_object(dictionary! {
+        "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica",
+    });
+    let mut page = |media_box: [i64; 4], text: &str| {
+        let content = Content {
+            operations: vec![
+                Operation::new("BT", vec![]),
+                Operation::new("Tf", vec!["F1".into(), 12.into()]),
+                Operation::new("Td", vec![10.into(), (media_box[3] - 20).into()]),
+                Operation::new("Tj", vec![Object::string_literal(text)]),
+                Operation::new("ET", vec![]),
+            ],
+        };
+        let content_id = document.add_object(Stream::new(
+            dictionary! {},
+            content.encode().expect("fixture page content must encode"),
+        ));
+        document.add_object(dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "Contents" => content_id,
+            "Resources" => dictionary! { "Font" => dictionary! { "F1" => font_id } },
+            "MediaBox" => media_box.iter().map(|value| (*value).into()).collect::<Vec<Object>>(),
+        })
+    };
+    let page_one_id = page([0, 0, 200, 300], page_one_text);
+    let page_two_id = page([0, 0, 1224, 1584], page_two_text);
+
+    document.objects.insert(
+        pages_id,
+        Object::Dictionary(dictionary! {
+            "Type" => "Pages",
+            "Kids" => vec![page_one_id.into(), page_two_id.into()],
+            "Count" => 2,
+        }),
+    );
+    let catalog_id = document.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+    document.trailer.set("Root", catalog_id);
+
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).expect("two-page fixture must serialize");
+    bytes
 }
 
 /// xberg#1665: the render batch peak scales with the configured thread budget alone, with
@@ -7906,5 +8214,53 @@ mod mixed_pdf_table_model_warning {
             mixed_count, 1,
             "the mixed PDF must carry the warning once: {mixed_warnings:?}"
         );
+    }
+}
+
+#[cfg(all(
+    feature = "pdf",
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+mod native_text_stop_tests {
+    use super::*;
+    use crate::cancellation::CancellationToken;
+
+    fn config_with(token: &CancellationToken) -> ExtractionConfig {
+        ExtractionConfig {
+            cancel_token: Some(token.clone()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_stop_with_an_unread_page_marks_the_native_text_as_stopped() {
+        let token = CancellationToken::new();
+        token.request_stop();
+        token.note_unread_page(3);
+
+        assert!(native_text_stopped_by_time_limit(&config_with(&token)));
+    }
+
+    #[test]
+    fn a_stop_without_an_unread_page_is_not_a_stopped_native_text() {
+        let token = CancellationToken::new();
+        token.request_stop();
+
+        assert!(!native_text_stopped_by_time_limit(&config_with(&token)));
+    }
+
+    #[test]
+    fn an_unread_page_without_a_stop_is_not_a_stopped_native_text() {
+        let token = CancellationToken::new();
+        token.note_unread_page(3);
+
+        assert!(!native_text_stopped_by_time_limit(&config_with(&token)));
+    }
+
+    #[test]
+    fn a_config_without_a_token_is_not_a_stopped_native_text() {
+        assert!(!native_text_stopped_by_time_limit(&ExtractionConfig::default()));
     }
 }

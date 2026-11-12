@@ -327,6 +327,27 @@ struct NativeBlockingOutput {
     layout_acceleration_override: Option<crate::core::config::acceleration::AccelerationConfig>,
 }
 
+/// Whether the extraction time limit stopped the native text loop before its last page.
+///
+/// The pages it did read are the result. The pages after it are unread, not pages without a text
+/// layer, so no OCR route may take them for scans: with the stop in force it would read none of
+/// them and fail the call, losing the pages already read.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn native_text_stopped_by_time_limit(config: &ExtractionConfig) -> bool {
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    {
+        config
+            .cancel_token
+            .as_ref()
+            .is_some_and(|token| token.stop_requested() && token.first_unread_page().is_some())
+    }
+    #[cfg(not(all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+    {
+        let _ = config;
+        false
+    }
+}
+
 #[cfg(feature = "pdf")]
 fn ensure_pdf_not_cancelled(config: &ExtractionConfig) -> Result<()> {
     if config
@@ -2373,10 +2394,14 @@ fn replace_page_content_with_ocr_text(page: &mut crate::types::PageContent, ocr_
     page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&page.content));
 }
 
-/// Write the OCR text of each page into the page that has the same position.
+/// Write the OCR text of each page into the page that has the same position, and report the
+/// page numbers of the reads the output kept: a page's text was written by an OCR route only
+/// where its read was accepted, so a page whose read the noise gate discarded (or that
+/// otherwise produced no text) -- which keeps its native text -- is not reported (#2939).
 ///
 /// One OCR text for a document of several pages is the text of the whole document: it goes to
-/// the first page, and the content of every later page is replaced with empty text.
+/// the first page, and the content of every later page is replaced with empty text; only the
+/// page that received text is reported.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn replace_pages_with_ocr_page_texts(
     pages: &mut [crate::types::PageContent],
@@ -2386,13 +2411,14 @@ fn replace_pages_with_ocr_page_texts(
     let mut replaced = Vec::new();
     for (page, text) in pages.iter_mut().zip(ocr_page_texts) {
         replace_page_content_with_ocr_text(page, text, keep_native_content);
-        replaced.push(page.page_number);
+        if !text.trim().is_empty() {
+            replaced.push(page.page_number);
+        }
     }
 
     if ocr_page_texts.len() == 1 {
         for page in pages.iter_mut().skip(1) {
             replace_page_content_with_ocr_text(page, "", keep_native_content);
-            replaced.push(page.page_number);
         }
     }
     replaced
@@ -2902,13 +2928,15 @@ impl PdfExtractor {
         let mut mixed_formula_layout_inputs = None;
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        record_implausible_text_pages(
-            config,
-            &mut pdf_metadata,
-            &native_text,
-            boundaries.as_deref(),
-            &mut ocr_fallback_warnings,
-        );
+        if !native_text_stopped_by_time_limit(config) {
+            record_implausible_text_pages(
+                config,
+                &mut pdf_metadata,
+                &native_text,
+                boundaries.as_deref(),
+                &mut ocr_fallback_warnings,
+            );
+        }
 
         // Only formula recognition and VLM regions read the rasters on the native path.
         #[cfg(all(
@@ -2985,7 +3013,9 @@ impl PdfExtractor {
         }
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let (mut text, extraction_method) = if config.effective_disable_ocr() {
+        let (mut text, extraction_method) = if config.effective_disable_ocr()
+            || native_text_stopped_by_time_limit(config)
+        {
             (native_text, ExtractionMethod::Native)
         } else if config.force_ocr {
             let (
@@ -3843,7 +3873,14 @@ impl PdfExtractor {
                 if let Some(ref mut pages) = page_contents {
                     ocr_text_pages.extend(replace_pages_with_ocr_page_texts(pages, pts, keep_native_content));
                 } else {
-                    ocr_text_pages.extend((1..=pts.len() as u32).collect::<Vec<_>>());
+                    // Only the pages whose read the output kept: an empty per-page text was
+                    // discarded, not accepted (#2939).
+                    ocr_text_pages.extend(
+                        pts.iter()
+                            .enumerate()
+                            .filter(|(_, text)| !text.trim().is_empty())
+                            .map(|(index, _)| (index + 1) as u32),
+                    );
                     page_contents = Some(
                         pts.iter()
                             .enumerate()

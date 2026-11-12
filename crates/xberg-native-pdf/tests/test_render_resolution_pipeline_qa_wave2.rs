@@ -594,14 +594,40 @@ fn qa_text_tr_change_mid_stream_no_leak_paints_red() {
     let bytes = build_pdf_text(content, "");
     let doc = PdfDocument::from_bytes(bytes).expect("PDF parses");
     let on = render_with_pipeline(&doc, true);
-    // Tr changes don't leak GS state between Tj calls — every Tj
-    // resolves cleanly. Painted ink must be the fill (red), not the
-    // stroke (blue), across all three glyphs. ~keep
-    let avg = average_ink_rgb(&on, 0, 0, 100, 100);
-    let (r, g, b) = avg.expect("Tr change mid-stream must paint glyph ink");
+    // Tr changes don't leak GS state between Tj calls: `A` and `C` (Tr 0) paint fill red only,
+    // while `B` (Tr 2) fills and then strokes its outline in blue (ISO 32000-1 9.3.6). A
+    // whole-page average mixes `B`'s stroke into the result, so each glyph is checked in its own
+    // band of the ink's horizontal extent. ~keep
+    let ink_columns: Vec<u32> = (0..100u32)
+        .filter(|&x| {
+            (0..100u32).any(|y| {
+                let o = ((y * 100 + x) * 4) as usize;
+                on[o] < 220 || on[o + 1] < 220 || on[o + 2] < 220
+            })
+        })
+        .collect();
+    let (&left, &right) = (
+        ink_columns.first().expect("Tr change mid-stream must paint glyph ink"),
+        ink_columns.last().expect("Tr change mid-stream must paint glyph ink"),
+    );
+    let fifth = (right - left) / 5;
+    for (name, x0, x1) in [("A", left, left + fifth), ("C", right - fifth, right + 1)] {
+        let (r, g, b) = average_ink_rgb(&on, x0, 0, x1, 100).expect("each Tr 0 glyph must paint ink");
+        assert!(
+            r > 180.0 && r > g + 60.0 && r > b + 60.0,
+            "Tr 0 glyph {name} must paint fill red with no stroke leaking from the Tr 2 show, got ({r:.1}, {g:.1}, {b:.1})"
+        );
+    }
+    let middle = (left + 2 * fifth)..(left + 3 * fifth);
+    let stroked = middle.clone().any(|x| {
+        (0..100u32).any(|y| {
+            let o = ((y * 100 + x) * 4) as usize;
+            u16::from(on[o + 2]) > u16::from(on[o]) + 60 && u16::from(on[o + 2]) > u16::from(on[o + 1]) + 60
+        })
+    });
     assert!(
-        r > 180.0 && r > g + 60.0 && r > b + 60.0,
-        "Tr change mid-stream must paint red fill across all glyphs, got ({r:.1}, {g:.1}, {b:.1})"
+        stroked,
+        "the Tr 2 glyph B must stroke its 1 pt outline in blue (anti-aliased) between columns {middle:?}"
     );
 }
 

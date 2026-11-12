@@ -2,6 +2,8 @@ use xberg_native_pdf::PdfDocument;
 use xberg_native_pdf::object::{Object, ObjectRef};
 use xberg_native_pdf::rendering::{PageRenderer, RenderOptions, render_separation};
 
+mod common;
+
 const RECT: &str = "0 0 32 16 re f";
 
 fn stream(dictionary: &str, body: &str) -> String {
@@ -30,7 +32,14 @@ fn document_with_profile(
     generation: u16,
     profile: Option<&[u8]>,
 ) -> PdfDocument {
-    let resources = "/ColorSpace << /Ink [/Separation /TestInk /DeviceGray \
+    // Objects 1..8 are the fixed catalog/pages/page/contents/form/group/
+    // state/pattern set below; a profile takes object 9, then the fixture
+    // font's FontFile2 stream and its FontDescriptor (which the font loader
+    // only reads through an indirect reference) follow.
+    let font_object_id = 9 + usize::from(profile.is_some());
+    let descriptor_object_id = font_object_id + 1;
+    let resources = format!(
+        "/ColorSpace << /Ink [/Separation /TestInk /DeviceGray \
         << /FunctionType 2 /Domain [0 1] /C0 [1] /C1 [0] /N 1 >>] \
         /Flat [/Separation /TestInk /DeviceGray << /FunctionType 2 /Domain [0 1] /C0 [0.5] /C1 [0.5] /N 1 >>] \
         /Other [/Separation /OtherInk /DeviceGray << /FunctionType 2 /Domain [0 1] /C0 [1] /C1 [0] /N 1 >>] >> \
@@ -40,8 +49,11 @@ fn document_with_profile(
         /Difference << /BM /Difference >> /Exclusion << /BM /Exclusion >> \
         /Hue << /BM /Hue >> /Saturation << /BM /Saturation >> /Color << /BM /Color >> /Luminosity << /BM /Luminosity >> \
         /Mask << /SMask << /S /Luminosity /G 6 0 R >> >> >> \
-        /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> \
-        /XObject << /Fm 5 0 R >> /Pattern << /P 8 0 R >>";
+        /Font << /F1 << /Type /Font /Subtype /TrueType /BaseFont /FixtureBox \
+        /FirstChar 77 /LastChar 77 /Widths [500] \
+        /FontDescriptor {descriptor_object_id} 0 R >> >> \
+        /XObject << /Fm 5 0 R >> /Pattern << /P 8 0 R >>"
+    );
     let resources = resources.replace("/G 6 0 R", &format!("/G 6 {generation} R"));
     let catalog = if profile.is_some() {
         "/OutputIntents [<< /S /GTS_PDFX /DestOutputProfile 9 0 R >>]"
@@ -82,6 +94,20 @@ fn document_with_profile(
         stream.extend_from_slice(b"\nendstream");
         objects.push(stream);
     }
+    debug_assert_eq!(objects.len(), font_object_id - 1);
+    let font = fixture_font();
+    let mut stream = format!("<< /Length {} /Length1 {} >>\nstream\n", font.len(), font.len()).into_bytes();
+    stream.extend_from_slice(&font);
+    stream.extend_from_slice(b"\nendstream");
+    objects.push(stream);
+    objects.push(
+        format!(
+            "<< /Type /FontDescriptor /FontName /FixtureBox /Flags 4 \
+             /FontBBox [250 0 750 800] /ItalicAngle 0 /Ascent 800 /Descent -200 \
+             /CapHeight 800 /StemV 80 /FontFile2 {font_object_id} 0 R >>"
+        )
+        .into_bytes(),
+    );
     let mut bytes = b"%PDF-1.4\n".to_vec();
     let mut offsets = Vec::new();
     for (i, object) in objects.iter().enumerate() {
@@ -555,8 +581,29 @@ fn group_process_mirror_uses_evenodd_and_combined_path_coverage() {
     }
 }
 
+/// A synthetic embedded TrueType font, so the glyph-pixel tests do not depend
+/// on the host's font database. A non-embedded Helvetica resolves through
+/// `fontdb::Database::load_system_fonts()`, and the glyph that stands in for
+/// it — therefore the sampled pixel row — differs between machines (issue
+/// #2954). Embedded font programs bypass the system database entirely.
+///
+/// The fixture font maps only `M` (byte 0x4D, through a byte-indexed (1, 0)
+/// cmap, the same shape `gh1632_whitespace_inferred_glyph` uses) to glyph 1: a
+/// filled rectangle spanning x 250..750, y 0..800 of a 1000-unit em. At 14 pt
+/// from `Td 4 2` its edges land on half-pixel boundaries (7.5 and 14.5), so a
+/// 4 pt stroke centred on the outline covers whole pixels on both sides of
+/// every edge — the row preconditions the tests below assert on.
+fn fixture_font() -> Vec<u8> {
+    common::build_box_glyph_font(common::BoxGlyphFont {
+        outline: [250, 0, 750, 800],
+        head_bbox: [250, 0, 750, 800],
+        lsb: 250,
+        cmap_byte: b'M',
+    })
+}
+
 fn opaque_glyph_row(mode: u8) -> Vec<u8> {
-    let content = format!("0 g 0 G 2 w {mode} Tr BT /F1 14 Tf 4 2 Td (M) Tj ET");
+    let content = format!("0 g 0 G 4 w {mode} Tr BT /F1 14 Tf 4 2 Td (M) Tj ET");
     let doc = document("", &content, "", "");
     let image = PageRenderer::new(RenderOptions::with_dpi(72).as_raw())
         .render_page(&doc, 0)
@@ -564,21 +611,65 @@ fn opaque_glyph_row(mode: u8) -> Vec<u8> {
     image.data[8 * 32 * 4..9 * 32 * 4].to_vec()
 }
 
+/// The exact glyph row the fixture font paints at 14 pt from `4 2 Td` on
+/// row 8 of the 32×16 page, indexed by render mode (0 fill, 1 stroke, 2
+/// both), pixel by pixel. The glyph's rectangle spans 7.5..14.5 pt, so its
+/// edges land on half-pixel boundaries and the 127 entries are half
+/// coverage. Pinning the row — instead of searching it for a covered pixel
+/// — is what keeps a silent fallback to system fonts (when the embedded
+/// program fails to parse, `text_rasterizer.rs`) from satisfying the
+/// coverage selections below: a Helvetica glyph matches a `find`, never
+/// this row.
+const GLYPH_ROWS: [[u8; 32]; 3] = [
+    [
+        255, 255, 255, 255, 255, 255, 255, 127, 0, 0, 0, 0, 0, 0, 127, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+        255, 255, 255, 255, 255, 255, 255, 255,
+    ],
+    [
+        255, 255, 255, 255, 255, 127, 0, 0, 0, 127, 255, 255, 127, 0, 0, 0, 127, 255, 255, 255, 255, 255, 255, 255,
+        255, 255, 255, 255, 255, 255, 255, 255,
+    ],
+    [
+        255, 255, 255, 255, 255, 127, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 127, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+        255, 255, 255, 255, 255, 255,
+    ],
+];
+
+/// Assert every pixel of the fixture glyph row matches [`GLYPH_ROWS`] for
+/// `mode`.
+fn expect_pinned_glyph_row(mode: usize) {
+    let row = opaque_glyph_row(mode as u8);
+    for x in 0..32 {
+        let pixel = &row[x * 4..x * 4 + 4];
+        assert_eq!(&pixel[..3], &[GLYPH_ROWS[mode][x]; 3], "render mode {mode} pixel {x}");
+        assert_eq!(pixel[3], 255, "render mode {mode} pixel {x} alpha");
+    }
+}
+
+#[test]
+fn embedded_glyph_row_is_pinned_exactly() {
+    for mode in 0..3 {
+        expect_pinned_glyph_row(mode);
+    }
+}
+
+/// Sample positions the pinned rows guarantee: x 8 is covered by both the
+/// fill (x 8..13) and the stroke (x 6..8 and 13..15), x 6 is stroke-only
+/// black over the fill row's white.
+const FILL_AND_STROKE_X: usize = 8;
+const STROKE_ONLY_X: usize = 6;
+
 #[test]
 fn group_process_text_mirror_respects_fill_and_stroke_order() {
-    let fill = opaque_glyph_row(0);
-    let stroke = opaque_glyph_row(1);
     let parent = root_rgb(Ink::Black, "0.2");
     let strong = root_rgb(Ink::Black, "0.6");
     let weak = root_rgb(Ink::Black, "0.1");
     for knockout in [false, true] {
         for mode in [0, 1, 2] {
-            let x = (0..32)
-                .find(|x| (mode == 1 || fill[x * 4] == 0) && (mode == 0 || stroke[x * 4] == 0))
-                .expect("fully covered real glyph pixel");
+            let x = if mode == 1 { STROKE_ONLY_X } else { FILL_AND_STROKE_X };
             let (fill_tint, stroke_tint) = if mode == 1 { ("0.1", "0.6") } else { ("0.6", "0.1") };
             let body = format!(
-                "/Half gs 0 0 0 {fill_tint} k 0 0 0 {stroke_tint} K 2 w {mode} Tr BT /F1 14 Tf 4 2 Td (M) Tj ET"
+                "/Half gs 0 0 0 {fill_tint} k 0 0 0 {stroke_tint} K 4 w {mode} Tr BT /F1 14 Tf 4 2 Td (M) Tj ET"
             );
             let doc = form(Ink::Black, true, knockout, "/Half gs", &body);
             let expected = if mode == 2 {
@@ -608,16 +699,12 @@ fn rgb_stroke_erases_black_process_under_combined_path() {
 
 #[test]
 fn glyph_fill_and_stroke_write_only_their_own_spot_ink() {
-    let fill = opaque_glyph_row(0);
-    let stroke = opaque_glyph_row(1);
-    let x = (0..32)
-        .find(|x| fill[x * 4] == 255 && stroke[x * 4] == 0)
-        .expect("stroke-only coverage control");
+    let x = STROKE_ONLY_X;
     let pixel = 8 * 32 + x;
     for knockout in [false, true] {
         for mode in [1, 2] {
             let body =
-                format!("/Ink cs 0.8 scn /Other CS 0.6 SCN /Half gs 2 w {mode} Tr BT /F1 14 Tf 4 2 Td (M) Tj ET");
+                format!("/Ink cs 0.8 scn /Other CS 0.6 SCN /Half gs 4 w {mode} Tr BT /F1 14 Tf 4 2 Td (M) Tj ET");
             let doc = document(
                 "",
                 "/Fm Do",
@@ -698,13 +785,9 @@ fn build_constant_cmyk_icc(l_byte: u8) -> Vec<u8> {
 #[test]
 fn icc_text_stroke_preserves_opaque_fill_on_process_plate() {
     let profile = build_constant_cmyk_icc(155);
-    let content = "/StrokeHalf gs 0 0 0 1 k 1 0 0 0 K 2 w 2 Tr BT /F1 14 Tf 4 2 Td (M) Tj ET";
+    let content = "/StrokeHalf gs 0 0 0 1 k 1 0 0 0 K 4 w 2 Tr BT /F1 14 Tf 4 2 Td (M) Tj ET";
     let doc = document_with_profile("", content, "", "", 0, Some(&profile));
-    let fill = opaque_glyph_row(0);
-    let stroke = opaque_glyph_row(1);
-    let x = (0..32)
-        .find(|x| fill[x * 4] == 0 && stroke[x * 4] == 0)
-        .expect("opaque fill and stroke overlap");
+    let x = FILL_AND_STROKE_X;
     let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
     renderer.render_page(&doc, 0).expect("ICC glyph page");
     let inks = renderer

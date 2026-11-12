@@ -346,6 +346,7 @@ impl PageRenderer {
                 replay.doc,
                 replay.page_num,
                 replay.resources,
+                None,
             )
         } else {
             self.execute_operators(
