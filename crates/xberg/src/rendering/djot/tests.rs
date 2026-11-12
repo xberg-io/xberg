@@ -778,7 +778,7 @@ fn a_row_lines_paragraph_renders_each_line_as_its_own_djot_paragraph() {
     let marked = leader_paragraph_doc("Water .... 36\r\n\nStreet .... 17\nPool .... 16\n", true);
     assert_eq!(
         render_djot(&marked).trim_end(),
-        "Water \\.\\.\\.\\. 36\n\nStreet \\.\\.\\.\\. 17\n\nPool \\.\\.\\.\\. 16"
+        "Water ..\\.. 36\n\nStreet ..\\.. 17\n\nPool ..\\.. 16"
     );
 }
 
@@ -808,7 +808,7 @@ fn a_footnote_ref_after_a_row_lines_paragraph_joins_its_last_row() {
     b.set_layer(def, ContentLayer::Footnote);
     assert_eq!(
         render_djot(&b.build()),
-        "Water \\.\\.\\.\\. 36\n\nStreet \\.\\.\\.\\. 17[^1]\n\n\n[^1]: A note.\n"
+        "Water ..\\.. 36\n\nStreet ..\\.. 17[^1]\n\n\n[^1]: A note.\n"
     );
 }
 
@@ -820,7 +820,7 @@ fn row_lines_that_start_with_block_syntax_are_escaped() {
     ));
     assert_eq!(
         render_djot(&b.build()),
-        "1\\. Intro \\.\\.\\.\\. 5\n\n2\\) Scope \\.\\.\\.\\. 9\n\n\\| Water \\.\\.\\.\\. 36\n\n\\- Pool \\.\\.\\.\\. 4\n\n\\# Park \\.\\.\\.\\. 7\n\n\\> Lot \\.\\.\\.\\. 2\n\nPlain \\.\\.\\.\\. 1\n"
+        "1\\. Intro ..\\.. 5\n\n2\\) Scope ..\\.. 9\n\n\\| Water ..\\.. 36\n\n\\- Pool ..\\.. 4\n\n\\# Park ..\\.. 7\n\n\\> Lot ..\\.. 2\n\nPlain ..\\.. 1\n"
     );
 }
 
@@ -847,7 +847,7 @@ fn a_row_lines_paragraph_inside_a_blockquote_quotes_every_row() {
     b.push_quote_end();
     assert_eq!(
         render_djot(&b.build()),
-        "> Water \\.\\.\\.\\. 36\n> \n> Street \\.\\.\\.\\. 17\n>\n"
+        "> Water ..\\.. 36\n> \n> Street ..\\.. 17\n>\n"
     );
 }
 
@@ -859,7 +859,7 @@ fn row_lines_that_start_with_any_djot_list_marker_are_escaped() {
     ));
     assert_eq!(
         render_djot(&b.build()),
-        "I\\. Introduction \\.\\.\\.\\. 3\n\nA\\. Appendix \\.\\.\\.\\. 40\n\niv\\. Index \\.\\.\\.\\. 9\n\na\\) Note \\.\\.\\.\\. 2\n\n\\(1) Aim \\.\\.\\.\\. 4\n\n\\(a) Scope \\.\\.\\.\\. 5\n\n\\(ii) Terms \\.\\.\\.\\. 6\n\n\\: Term \\.\\.\\.\\. 8\n"
+        "I\\. Introduction ..\\.. 3\n\nA\\. Appendix ..\\.. 40\n\niv\\. Index ..\\.. 9\n\na\\) Note ..\\.. 2\n\n\\(1) Aim ..\\.. 4\n\n\\(a) Scope ..\\.. 5\n\n\\(ii) Terms ..\\.. 6\n\n\\: Term ..\\.. 8\n"
     );
 }
 
@@ -873,9 +873,9 @@ fn row_lines_escape_punctuation_starts_but_not_hashtags_or_decimals() {
     assert_eq!(
         render_djot(&b.build()),
         concat!(
-            "\\+ Pool \\.\\.\\.\\. 4\n\n\\* Park \\.\\.\\.\\. 7\n\n\\#\\#\\# Lot \\.\\.\\.\\. 2\n\n1.5 Units \\.\\.\\.\\. 3\n\n1\\.\n\n\\-\n\n",
-            "\\-\\-\\-\n\n\\- - -\n\n\\*\\*\\*\n\n#hashtag \\.\\.\\.\\. 1\n\nPlan A. \\.\\.\\.\\. 2\n\n\\-\\-\\- Rule \\.\\.\\.\\. 6\n\n",
-            "\\-5 \\.\\.\\.\\. 1\n\n\\:\\:\\: note\n\n\\`\\`\\` rust\n"
+            "\\+ Pool ..\\.. 4\n\n\\* Park ..\\.. 7\n\n\\#\\#\\# Lot ..\\.. 2\n\n1.5 Units ..\\.. 3\n\n1\\.\n\n\\-\n\n",
+            "\\-\\-\\-\n\n\\- - -\n\n\\*\\*\\*\n\n#hashtag ..\\.. 1\n\nPlan A. ..\\.. 2\n\n\\-\\-\\- Rule ..\\.. 6\n\n",
+            "\\-5 ..\\.. 1\n\n\\:\\:\\: note\n\n\\`\\`\\` rust\n"
         )
     );
 }
@@ -888,7 +888,7 @@ fn row_lines_of_ordinary_prose_only_escape_the_leader_dots() {
     ));
     assert_eq!(
         render_djot(&b.build()),
-        "I am \\.\\.\\.\\. 1\n\nA big \\.\\.\\.\\. 2\n\ni.e. \\.\\.\\.\\. 3\n\nI.e. \\.\\.\\.\\. 4\n\nDr. Smith \\.\\.\\.\\. 5\n"
+        "I am ..\\.. 1\n\nA big ..\\.. 2\n\ni.e. ..\\.. 3\n\nI.e. ..\\.. 4\n\nDr. Smith ..\\.. 5\n"
     );
 }
 
@@ -896,7 +896,7 @@ fn row_lines_of_ordinary_prose_only_escape_the_leader_dots() {
 fn a_lowercase_roman_run_row_is_escaped_like_a_list_label() {
     let mut b = InternalDocumentBuilder::new("test");
     b.push_element(marked_row_lines_element("mix. .... 6"));
-    assert_eq!(render_djot(&b.build()), "mix\\. \\.\\.\\.\\. 6\n");
+    assert_eq!(render_djot(&b.build()), "mix\\. ..\\.. 6\n");
 }
 
 /// Row texts that must each stay one paragraph with their text kept: every ASCII punctuation
@@ -1026,7 +1026,7 @@ fn a_row_that_starts_with_an_escaped_delimiter_shows_its_own_backslash() {
         let output = render_rows(&layout);
         assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
     }
-    assert_eq!(render_rows(&["\\*note* .... 3"]), "\\\\\\*note\\* \\.\\.\\.\\. 3\n");
+    assert_eq!(render_rows(&["\\*note* .... 3"]), "\\\\\\*note\\* ..\\.. 3\n");
 }
 
 #[test]
@@ -1043,7 +1043,7 @@ fn a_row_with_a_bracketed_word_keeps_the_underscores_and_stars_after_it() {
     }
     assert_eq!(
         render_rows(&["[snake_case] and a_b .... 3"]),
-        "\\[snake\\_case\\] and a\\_b \\.\\.\\.\\. 3\n"
+        "\\[snake\\_case\\] and a\\_b ..\\.. 3\n"
     );
 }
 
@@ -1054,7 +1054,7 @@ fn a_row_with_a_bracketed_word_and_attributes_keeps_its_text() {
         let output = render_rows(&layout);
         assert_eq!(djot_paragraph_texts(&output), layout, "row {row:?} -> {output:?}");
     }
-    assert_eq!(render_rows(&["[a]{.x} .... 1"]), "\\[a\\]\\{.x\\} \\.\\.\\.\\. 1\n");
+    assert_eq!(render_rows(&["[a]{.x} .... 1"]), "\\[a\\]\\{.x\\} ..\\.. 1\n");
 }
 
 #[test]
@@ -1066,14 +1066,14 @@ fn a_backslash_in_a_row_is_shown_and_frees_no_delimiter() {
     }
     assert_eq!(
         render_rows(&["{\\*x* .... 1", "[_]\\_x_ .... 2"]),
-        "\\{\\\\\\*x\\* \\.\\.\\.\\. 1\n\n\\[\\_\\]\\\\\\_x\\_ \\.\\.\\.\\. 2\n"
+        "\\{\\\\\\*x\\* ..\\.. 1\n\n\\[\\_\\]\\\\\\_x\\_ ..\\.. 2\n"
     );
 }
 
 #[test]
 fn a_row_that_starts_with_hyphens_escapes_each_hyphen() {
     let output = render_rows(&["--- Rule .... 6"]);
-    assert_eq!(output, "\\-\\-\\- Rule \\.\\.\\.\\. 6\n");
+    assert_eq!(output, "\\-\\-\\- Rule ..\\.. 6\n");
     let events: Vec<_> = jotdown::Parser::new(&output).collect();
     assert!(!events.iter().any(|event| matches!(event, jotdown::Event::EnDash)));
     assert!(!events.iter().any(|event| matches!(event, jotdown::Event::EmDash)));
@@ -1088,7 +1088,7 @@ fn a_row_with_a_sign_after_a_brace_escapes_the_sign() {
     }
     assert_eq!(
         render_rows(&["{+ins+} .... 1", "x {=m=} .... 2", "{-d-} .... 3"]),
-        "\\{\\+ins+\\} \\.\\.\\.\\. 1\n\nx \\{\\=m=\\} \\.\\.\\.\\. 2\n\n\\{\\-d-\\} \\.\\.\\.\\. 3\n"
+        "\\{\\+ins+\\} ..\\.. 1\n\nx \\{\\=m=\\} ..\\.. 2\n\n\\{\\-d-\\} ..\\.. 3\n"
     );
 }
 
@@ -1104,8 +1104,8 @@ fn a_row_preserves_safe_punctuation_and_escapes_quotes_and_colons() {
     assert_eq!(
         output,
         concat!(
-            "Chapter 3: Introduction \\.\\.\\.\\. 5\n\nA-B + C = D \\.\\.\\.\\. 1\n\n",
-            "Dr. Smith (b) |x| #5 $6 \\\"q\\\" \\'r\\' !s >t \\.\\.\\.\\. 2\n\na\\:b \\.\\.\\.\\. 3\n"
+            "Chapter 3: Introduction ..\\.. 5\n\nA-B + C = D ..\\.. 1\n\n",
+            "Dr. Smith (b) |x| #5 $6 \\\"q\\\" \\'r\\' !s >t ..\\.. 2\n\na\\:b ..\\.. 3\n"
         )
     );
 }
@@ -1590,6 +1590,38 @@ fn literal_rows_keep_dot_runs_and_single_periods() {
 }
 
 #[test]
+fn a_leader_run_escapes_one_dot_per_three_of_the_run() {
+    assert_eq!(
+        render_rows(&["Introduction ........ 3"]),
+        "Introduction ..\\...\\... 3\n"
+    );
+}
+
+#[test]
+fn a_three_dot_run_escapes_its_third_dot_only() {
+    assert_eq!(render_rows(&["Wait... page"]), "Wait..\\. page\n");
+}
+
+#[test]
+fn a_one_or_two_dot_run_stays_unescaped() {
+    assert_eq!(render_rows(&["A..B and Dr. Smith"]), "A..B and Dr. Smith\n");
+}
+
+#[test]
+fn a_leader_run_of_any_length_round_trips_without_an_ellipsis_event() {
+    for dots in 1..=12 {
+        let row = format!("Start {} End", ".".repeat(dots));
+        let output = render_rows(&[&row]);
+        let events: Vec<_> = jotdown::Parser::new(&output).collect();
+        assert!(
+            !events.iter().any(|event| matches!(event, jotdown::Event::Ellipsis)),
+            "{dots} dots -> {output:?}"
+        );
+        assert_eq!(djot_paragraph_texts(&output), [row.as_str()], "{dots} dots");
+    }
+}
+
+#[test]
 fn literal_rows_keep_dash_runs_and_single_hyphens() {
     for text in ["A--B---C----D", "é--日本 and A-B"] {
         let output = render_rows(&[text]);
@@ -1604,7 +1636,7 @@ fn literal_rows_keep_dash_runs_and_single_hyphens() {
 fn literal_rows_pin_smart_punctuation_escapes_exactly() {
     assert_eq!(
         render_rows(&["Say \"hello\" and 'draft'... -- next"]),
-        concat!(r#"Say \"hello\" and \'draft\'\.\.\. \-\- next"#, "\n")
+        concat!(r#"Say \"hello\" and \'draft\'..\. \-\- next"#, "\n")
     );
 }
 

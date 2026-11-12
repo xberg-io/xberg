@@ -62,27 +62,19 @@ a 13b 29c
 
 4. Fourier analysis of the errors
 
-The main incentive behind developing TDCCS schemes is to precisely resolve small scales in multiscale physical problems. Consequently, Fourier analysis is conducted on these optimal schemes to evaluate their spectral characteristics. In this section, we investigate the dispersion and dissipation properties of TDCCS through Fourier analysis. TDCCS, being a central difference, eliminates numerically dissipative errors. The Fourier transformation, a frequently employed tool in finite difference scheme analysis, is applied to equation (2.5), and by utilizing Euler's formula, the modified wavenumber ω
-
-ω
-
-2a[8 sin( ) − 4 sin(ω)] +
-
-′′′ 2
-
-(4.1) ω~TDCCS~ = Here, ω represents the scaled wavenumber with ω = kh, and ω
+The main incentive behind developing TDCCS schemes is to precisely resolve small scales in multiscale physical problems. Consequently, Fourier analysis is conducted on these optimal schemes to evaluate their spectral characteristics. In this section, we investigate the dispersion and dissipation properties of TDCCS through Fourier analysis. TDCCS, being a central difference, eliminates numerically dissipative errors. The Fourier transformation, a frequently employed tool in finite difference scheme analysis, is applied to equation
 
 ′′′
 
-of TDCCS can be derived. It is:
+(2.5), and by utilizing Euler's formula, the modified wavenumber ω of TDCCS can be derived. It is:
 
-2b 3ω 2c 5ω
+ω 2b 3ω 2c 5ω
 
-[12 sin(ω) − 8 sin( )] + [20 sin(ω) − 8 sin( )]
+2a[8 sin( ) − 4 sin(ω)] + [12 sin(ω) − 8 sin( )] + [20 sin(ω) − 8 sin( )]
 
-5 2 35 2
+′′′ 2 5 2 35 2
 
-. 1 + 2α cos(ω) + 2β cos(2ω)
+(4.1) ω~TDCCS~ = . 1 + 2α cos(ω) + 2β cos(2ω) Here, ω represents the scaled wavenumber with ω = kh, and ω
 
 ′′′
 

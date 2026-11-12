@@ -31,6 +31,11 @@ mod neutral_rgb_tests;
 mod ordered;
 mod read_geometry;
 mod samples;
+#[cfg(test)]
+#[path = "tall_source/strip_certificate_tests.rs"]
+mod strip_certificate_tests;
+#[cfg(test)]
+mod strip_fixture;
 pub(super) use gray_jpeg::recover_after_gray_jpeg_render_failure;
 use samples::{GrayPacking, decode_source_gray, flate_packing, source_density_allowed, source_frame};
 
