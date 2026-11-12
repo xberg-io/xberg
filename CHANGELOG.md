@@ -1720,6 +1720,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Forced whole-document OCR with the registered built-in Tesseract backend, including the synthesized classical pipeline, renders native page content at a preprocessing target above 150 DPI within the existing budget. Any preprocessing block requests its target, including the default 300 DPI in a denoise-only block. This recovers a reproduced small-text word boundary; explicit image settings and original full-page scan density retain precedence. Without a preprocessing block the default remains 150 DPI. Selected pages, prepared rasters, custom backends, explicit pipelines and VLM fallback keep their source-render policy. The general 150-DPI glyph-shift issue remains open.
 - **(djot): Headings, titles and slide titles keep text such as `1. Introduction` unescaped.** (GH#2975)
   A heading is not at the start of a block, so Djot output no longer writes a backslash before the dot of a numbered or lettered heading, or before a leading dash. A leading brace still gets a backslash, so `{.x}` stays visible text.
+- **(pdf): Remove the pixel-work limit for ordinary transparency groups.** (GH#2953)
+  Text runs, images, shadings, and forms in ordinary transparency groups or under soft masks no longer count as full-page pixel work outside a native knockout pass. This restores rendering for pages that hit the ordinary surface-work limit, including dense Letter pages at 300 DPI. The one-million paint-operation cap, workspace memory limit, and nesting limit still apply in transparency groups.
 
 ## [1.3.11] - 2026-10-16
 
