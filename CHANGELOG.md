@@ -332,7 +332,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): Keep a Khmer text layer printed over a full-page picture.** (GH#2826)
   Automatic OCR in a language that cannot read the layer's script now keeps the layer when it is drawn visibly over a
   background picture, as on a flyer. A layer that leaves no ink on the page, such as an invisible, white or clipped
-  layer, or one under the picture, still goes to OCR.
+  layer, or one under the picture, still goes to OCR. To catch a layer whose font maps English letters to another
+  script, the page is read once with the English OCR model, which is downloaded on first use when it is not installed.
+  If that read fails, the page still goes to OCR.
 
 - **(pdf): A sentence no longer reads out of order around an inline equation.** (GH#2925)
   A superscript sits in a line bucket of its own, so the gap it fills tore the line in two and let a column cut run through the paragraph; the straddling-line guard now reads such a gap as part of the line.

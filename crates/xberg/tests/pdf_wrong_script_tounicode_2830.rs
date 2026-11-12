@@ -256,3 +256,51 @@ fn a_genuine_arabic_layer_drawn_over_a_full_page_picture_stays_native() {
     assert_eq!(result.extraction_method, Some(ExtractionMethod::Native));
     assert!(arabic_letters(&result.content) > 100, "{:?}", result.content);
 }
+
+/// The English model and the installed Khmer model, or `None` when Khmer is not installed.
+fn english_and_khmer_models() -> Option<tempfile::TempDir> {
+    let khm = std::env::var_os("TESSDATA_PREFIX")
+        .map(std::path::PathBuf::from)
+        .into_iter()
+        .chain(
+            [
+                "/opt/homebrew/share/tessdata",
+                "/usr/share/tesseract-ocr/5/tessdata",
+                "/usr/share/tessdata",
+            ]
+            .map(Into::into),
+        )
+        .map(|dir| dir.join("khm.traineddata"))
+        .find(|path| path.is_file())?;
+    let models = models();
+    std::fs::copy(khm, models.path().join("khm.traineddata")).unwrap();
+    Some(models)
+}
+
+/// #2826: with only Khmer configured, the layer's ink is still read with the Latin model, which
+/// contradicts the wrong map, so the page over its picture goes to OCR as at base.
+#[test]
+#[ignore = "needs khm.traineddata in TESSDATA_PREFIX or a system tessdata directory"]
+#[allow(clippy::print_stderr)]
+fn a_wrong_mapped_layer_over_a_picture_goes_to_ocr_with_only_khmer_configured() {
+    let Some(models) = english_and_khmer_models() else {
+        eprintln!("skipped: khm.traineddata is not installed");
+        return;
+    };
+    let config = ExtractionConfig {
+        use_cache: false,
+        output_format: OutputFormat::Plain,
+        ocr: Some(OcrConfig {
+            language: vec!["khm".to_string()],
+            tessdata_path: Some(models.path().into()),
+            ..Default::default()
+        }),
+        ocr_strategy: OcrStrategy::Auto,
+        ..Default::default()
+    };
+    let source = with_full_page_picture(ARABIC, PicturePlacement::Background);
+    let result = helpers::extract_bytes_document_blocking(&source, "application/pdf", &config).unwrap();
+    assert!(!skipped(&result), "{:?}", result.processing_warnings);
+    assert_ne!(result.extraction_method, Some(ExtractionMethod::Native));
+    assert_eq!(arabic_letters(&result.content), 0, "{:?}", result.content);
+}
