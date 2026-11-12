@@ -16,6 +16,7 @@ pub(super) enum Reply {
     Empty,
     Fail,
     TableThenList,
+    TextThenNoise { final_dpi: i32 },
 }
 
 pub(super) struct Observed {
@@ -65,7 +66,8 @@ impl OcrBackend for Observer {
                 source: None,
             }),
             Reply::Empty => Ok(ExtractedDocument::default()),
-            Reply::Text => Ok(ExtractedDocument {
+            Reply::TextThenNoise { final_dpi } if !first_read => Ok(noisy_read(final_dpi)),
+            Reply::Text | Reply::TextThenNoise { .. } => Ok(ExtractedDocument {
                 content: TEXT.to_string(),
                 ..Default::default()
             }),
@@ -83,6 +85,30 @@ impl OcrBackend for Observer {
                 ..Default::default()
             }),
         }
+    }
+}
+
+fn noisy_read(final_dpi: i32) -> ExtractedDocument {
+    ExtractedDocument {
+        content: "ab ".repeat(20).trim_end().to_owned(),
+        metadata: crate::types::Metadata {
+            image_preprocessing: Some(crate::types::ImagePreprocessingMetadata {
+                original_dimensions: (3600, 2550).into(),
+                original_dpi: (300.0, 300.0).into(),
+                target_dpi: 300,
+                scale_factor: f64::from(final_dpi) / 300.0,
+                auto_adjusted: true,
+                final_dpi,
+                new_dimensions: None,
+                resample_method: "test".into(),
+                dimension_clamped: false,
+                calculated_dpi: None,
+                skipped_resize: final_dpi == 300,
+                resize_error: None,
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
     }
 }
 

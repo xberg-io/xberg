@@ -7562,6 +7562,15 @@ fn append_pipeline_xobject_page(
             xobject_fallback_warning(page_idx, recovery.attempted, true)
         };
         outcome.warnings.push(warning);
+    } else if !recovery.failure_causes.is_empty() {
+        outcome.page_failures.push(crate::types::OcrPageFailure {
+            page: (page_idx + 1) as u32,
+            recovered: false,
+            error: format!(
+                "Embedded-image retry recovered no text ({})",
+                retry_cause_summary(&recovery.failure_causes)
+            ),
+        });
     }
     outcome.warnings.append(&mut recovery.warnings);
     outcome.llm_usage.append(&mut recovery.llm_usage);
@@ -8300,24 +8309,27 @@ pub(super) fn judge_proven_read(
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 const RETRY_CAUSES_SHOWN: usize = 3;
 
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn retry_cause_summary(causes: &[String]) -> String {
+    let mut named = causes.iter().take(RETRY_CAUSES_SHOWN).cloned().collect::<Vec<_>>();
+    if causes.len() > RETRY_CAUSES_SHOWN {
+        named.push(format!("+{} more", causes.len() - RETRY_CAUSES_SHOWN));
+    }
+    named.join("; ")
+}
+
 /// The error of a page whose embedded-image retry also recovered nothing, naming why each image
 /// failed. The typed source stays, so callers still match on the original cause.
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 fn with_retry_causes(error: crate::XbergError, causes: &[String]) -> crate::XbergError {
     match error {
-        crate::XbergError::Parsing { message, source } if !causes.is_empty() => {
-            let mut named = causes.iter().take(RETRY_CAUSES_SHOWN).cloned().collect::<Vec<_>>();
-            if causes.len() > RETRY_CAUSES_SHOWN {
-                named.push(format!("+{} more", causes.len() - RETRY_CAUSES_SHOWN));
-            }
-            crate::XbergError::Parsing {
-                message: format!(
-                    "{message}; embedded-image retry recovered no text ({})",
-                    named.join("; ")
-                ),
-                source,
-            }
-        }
+        crate::XbergError::Parsing { message, source } if !causes.is_empty() => crate::XbergError::Parsing {
+            message: format!(
+                "{message}; embedded-image retry recovered no text ({})",
+                retry_cause_summary(causes)
+            ),
+            source,
+        },
         other => other,
     }
 }
