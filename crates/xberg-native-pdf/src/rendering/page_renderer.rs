@@ -43,6 +43,8 @@ use tiny_skia::{Color, PathBuilder, Pixmap, PixmapPaint, Transform};
 mod image_budget;
 #[path = "knockout.rs"]
 mod knockout;
+#[cfg(test)]
+pub(super) use knockout::MAX_PAINT_SCRATCH_BYTES_PER_PIXEL;
 #[path = "knockout_resources.rs"]
 mod knockout_resources;
 use knockout::{KnockoutGroup, KnockoutShape, PatternShape};
@@ -53,6 +55,14 @@ use group_compositing::{FormInvocation, GroupReplay, GroupSidecar};
 mod group_process_text;
 use super::text_rasterizer::TextRun;
 use group_process_text::GroupTextPaint;
+#[path = "raster_budget.rs"]
+mod raster_budget;
+#[cfg(test)]
+use raster_budget::png_working_bytes_fit;
+#[cfg(test)]
+pub(super) use raster_budget::{PNG_FIXED_OVERHEAD, RGBA_AND_PNG_BYTES_PER_PIXEL};
+pub(super) use raster_budget::{PngRenderBudget, SpotPlaneUse, spot_plane_use};
+use raster_budget::{encode_png, fit_png_dpi, raster_dimensions, resize_rgba};
 
 /// Which path-paint side(s) [`PageRenderer::pipeline_resolve_paint_gs`]
 /// should resolve for the current operator.
@@ -192,11 +202,6 @@ impl RenderOptions {
         self.format = ImageFormat::RawRgba8;
         self
     }
-}
-
-pub(super) struct PngRenderBudget {
-    pub(super) max_working_bytes: usize,
-    pub(super) minimum_dpi: u32,
 }
 
 /// A rendered page image.
@@ -715,7 +720,16 @@ impl PageRenderer {
             .map(|budget| {
                 let resources = doc.get_page_resources(page_num)?;
                 let spots = self.page_sidecar_spots(doc, page_num, &resources);
-                dpi = fit_png_dpi(dpi, &budget, spots.as_deref(), dimensions_at_dpi)?;
+                // A soft mask, a transparency group and a knockout group copy the spot planes
+                // while painting (`smask_spot_snapshot`, `GroupSidecar::capture`, the knockout
+                // workspace), so the fit charges the copies only for a page whose resources
+                // declare one. A zero-ink sidecar has no spot plane to copy.
+                let transient = if spots.as_deref().is_some_and(|inks| !inks.is_empty()) {
+                    spot_plane_use(doc, page_num, &resources)
+                } else {
+                    SpotPlaneUse::default()
+                };
+                dpi = fit_png_dpi(dpi, &budget, spots.as_deref(), transient, dimensions_at_dpi)?;
                 Ok::<_, Error>((resources, spots))
             })
             .transpose()?;
@@ -820,17 +834,6 @@ impl PageRenderer {
             },
             dpi,
         ))
-    }
-
-    fn check_source_image_budget(&mut self) -> Result<()> {
-        self.knockout_resources.check()?;
-        if let Some(budget) = &self.source_image_budget
-            && let Some(error) = budget.error()
-        {
-            self.reported_source_budget_exceeded = budget.exceeded();
-            return Err(error);
-        }
-        Ok(())
     }
 
     fn page_sidecar_spots(&self, doc: &PdfDocument, page_num: usize, resources: &Object) -> Option<Vec<String>> {
@@ -6617,8 +6620,9 @@ impl PageRenderer {
     ///    formulas operate on additive components, so
     ///    [`blend_subtractive_tint`](crate::rendering::sidecar::blend_subtractive_tint)
     ///    complements the tints before the blend and the result after
-    ///    it, and mixes the blend with the source by the lane's backdrop
-    ///    alpha (§11.3.6). Only /Normal skips the round trip: `B = c_s`
+    ///    it. With nonzero backdrop alpha `a_b`, it blends against the
+    ///    unpremultiplied tint `t_b / a_b` and mixes the blend with the
+    ///    source by `a_b` (§11.3.6). Only /Normal skips the round trip: `B = c_s`
     ///    holds in both representations. The backdrop alpha is the
     ///    sidecar's per-lane painted plane, so an explicit tint-0 paint
     ///    is a backdrop and untouched paper is not.
@@ -8766,129 +8770,6 @@ fn build_logical_color<'a>(
             }
         }
     }
-}
-
-/// Resize a premultiplied RGBA byte buffer using SIMD-accelerated bilinear filtering.
-///
-/// The resizer's default treats alpha as straight and multiplies every pixel by it before
-/// filtering, then divides it out after; on a premultiplied buffer that leaves a soft edge with
-/// more colour than its opacity allows, so the alpha pass is turned off. (GH#1905)
-///
-/// Returns `None` on failure (zero dimensions, SIMD dispatch error) so callers
-/// can fall back to tiny_skia's own resampling path.
-fn resize_rgba(src: &[u8], src_w: u32, src_h: u32, dst_w: u32, dst_h: u32) -> Option<Vec<u8>> {
-    use fast_image_resize::images::Image;
-    use fast_image_resize::pixels::PixelType;
-    use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
-
-    // from_slice_u8 needs a mutable slice; copy into a local buffer. ~keep
-    let mut buf = src.to_vec();
-    let src_img = Image::from_slice_u8(src_w, src_h, &mut buf, PixelType::U8x4).ok()?;
-    let mut dst_img = Image::new(dst_w, dst_h, PixelType::U8x4);
-    Resizer::new()
-        .resize(
-            &src_img,
-            &mut dst_img,
-            &ResizeOptions::new()
-                .resize_alg(ResizeAlg::Convolution(FilterType::Bilinear))
-                .use_alpha(false),
-        )
-        .ok()?;
-    Some(dst_img.into_vec())
-}
-
-fn raster_dimensions(page_width: f32, page_height: f32, scale: f32, has_scale_override: bool) -> (u32, u32) {
-    let width = page_width * scale;
-    let height = page_height * scale;
-    if has_scale_override {
-        // Exact fractional scale uses rounding and allows very narrow pages to stay one pixel.
-        ((width.round() as u32).max(1), (height.round() as u32).max(1))
-    } else {
-        (width.ceil() as u32, height.ceil() as u32)
-    }
-}
-
-fn fit_png_dpi(
-    requested: u32,
-    budget: &PngRenderBudget,
-    spot_names: Option<&[String]>,
-    dimensions: impl Fn(u32) -> (u32, u32),
-) -> Result<u32> {
-    let fits = |dpi| {
-        let (width, height) = dimensions(dpi);
-        png_working_bytes_fit(width, height, spot_names, budget.max_working_bytes)
-    };
-    if fits(requested) {
-        return Ok(requested);
-    }
-
-    let minimum = budget.minimum_dpi.max(1).min(requested);
-    if minimum == requested || !fits(minimum) {
-        let (width, height) = dimensions(minimum);
-        if width == 0 || height == 0 {
-            return Err(Error::InvalidPdf("Failed to create pixmap".to_string()));
-        }
-        return Err(Error::InvalidOperation(format!(
-            "PDF raster {width}x{height} exceeds security_limits.max_content_size ({} bytes) or platform allocation bounds",
-            budget.max_working_bytes
-        )));
-    }
-
-    let mut low = minimum;
-    let mut high = requested - 1;
-    while low < high {
-        let middle = low + (high - low) / 2 + 1;
-        if fits(middle) {
-            low = middle;
-        } else {
-            high = middle - 1;
-        }
-    }
-    Ok(low)
-}
-
-fn png_working_bytes_fit(width: u32, height: u32, spot_names: Option<&[String]>, limit: usize) -> bool {
-    // The canvas and PNG demultiply copy are both RGBA. Reserve the same per-pixel
-    // and fixed PNG allowance as Core image encoding, plus the CMYK plane and two planes per spot ink.
-    const RGBA_AND_PNG_BYTES_PER_PIXEL: usize = 12;
-    const PNG_FIXED_OVERHEAD: usize = 256 * 1024;
-    let sidecar_bytes_per_pixel = spot_names.map_or(Some(0), |names| names.len().checked_mul(2)?.checked_add(4));
-    let charge = sidecar_bytes_per_pixel
-        .and_then(|bytes| RGBA_AND_PNG_BYTES_PER_PIXEL.checked_add(bytes))
-        .and_then(|bytes| (width as usize).checked_mul(height as usize)?.checked_mul(bytes))
-        .and_then(|bytes| bytes.checked_add(PNG_FIXED_OVERHEAD));
-    width > 0 && height > 0 && charge.is_some_and(|bytes| bytes <= limit && bytes <= isize::MAX as usize)
-}
-
-/// Encode a tiny_skia `Pixmap` to PNG.
-///
-/// Uses fdeflate (ultra-fast) compression via the `image` crate instead of
-/// tiny_skia's built-in `encode_png`, which defaults to flate2 level 6 and is
-/// 3–5× slower on typical page images.
-fn encode_png(pixmap: &Pixmap) -> Result<Vec<u8>> {
-    let w = pixmap.width();
-    let h = pixmap.height();
-
-    // Demultiply: tiny_skia stores premultiplied RGBA; PNG expects straight alpha. ~keep
-    let src = pixmap.data();
-    let mut data = src.to_vec();
-    for chunk in data.as_chunks_mut::<4>().0 {
-        let a = chunk[3];
-        if a != 0 && a != 255 {
-            let a32 = a as u32;
-            chunk[0] = ((chunk[0] as u32 * 255 + a32 / 2) / a32).min(255) as u8;
-            chunk[1] = ((chunk[1] as u32 * 255 + a32 / 2) / a32).min(255) as u8;
-            chunk[2] = ((chunk[2] as u32 * 255 + a32 / 2) / a32).min(255) as u8;
-        }
-    }
-
-    use image::ImageEncoder;
-    use image::codecs::png::{CompressionType, FilterType, PngEncoder};
-    let mut output = Vec::new();
-    PngEncoder::new_with_quality(&mut output, CompressionType::Fast, FilterType::Sub)
-        .write_image(&data, w, h, image::ExtendedColorType::Rgba8)
-        .map_err(|e| Error::InvalidPdf(format!("PNG encoding failed: {}", e)))?;
-    Ok(output)
 }
 
 /// Combine two transformations.
