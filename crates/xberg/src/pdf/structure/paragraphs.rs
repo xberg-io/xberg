@@ -245,7 +245,12 @@ pub(super) fn split_embedded_list_items(paragraphs: &mut Vec<PdfParagraph>) {
             .collect::<Vec<_>>()
             .join(" ");
 
-        let separators = embedded_bullet_positions(&full_text);
+        let mut separators = embedded_bullet_positions(&full_text);
+        if let Some(row_markers) = numeric_list_row_markers(&para, &full_text) {
+            separators.extend(row_markers);
+            separators.sort_unstable();
+            separators.dedup();
+        }
         if separators.len() < 2 {
             paragraphs.push(para);
             continue;
@@ -286,18 +291,290 @@ pub(super) fn split_embedded_list_items(paragraphs: &mut Vec<PdfParagraph>) {
 fn embedded_bullet_positions(text: &str) -> Vec<usize> {
     let mut positions = Vec::new();
     let mut previous: Option<char> = None;
-    let mut chars = text.char_indices().peekable();
-    while let Some((position, character)) = chars.next() {
+    let mut previous_non_space = None;
+    let mut product_end = 0;
+    let mut item_start = None;
+    let mut preceding_list_marker = false;
+    let mut group_starts = Vec::new();
+    for (position, character) in text.char_indices() {
+        track_expression_group(&mut group_starts, position, character);
         if matches!(character, '\u{2022}' | '\u{00B7}') {
-            let next = chars.peek().map(|&(_, c)| c);
+            let right = position + character.len_utf8();
+            let next = text[right..].chars().next();
             let glued = previous.is_some_and(char::is_alphanumeric) && next.is_some_and(char::is_alphanumeric);
-            if !glued {
+            let glued_product = character == '·'
+                && previous.is_some_and(|c| c.is_ascii_digit())
+                && next.is_some_and(|c| c.is_ascii_digit());
+            let left_operand =
+                previous_non_space.is_some_and(|c: char| c.is_ascii_digit() || matches!(c, ')' | ']' | '}'));
+            let continues_product = product_end != 0 && text[product_end..position].trim().is_empty();
+            let follows_numeric_item = item_start.is_some_and(|start| {
+                let item = text[start..position].trim();
+                item.bytes().all(|byte| byte.is_ascii_digit() || byte == b'.')
+                    || after_numeric_operand(item).is_some_and(str::is_empty)
+            });
+            if left_operand
+                && (glued_product || (!glued && !follows_numeric_item))
+                && let Some(number_end) = numeric_multiplier_end(
+                    &text[..position],
+                    &text[position..],
+                    continues_product || glued_product,
+                    group_starts.last().is_some_and(|&(_, start)| {
+                        continues_product || ends_with_numeric_expression(&text[start..position])
+                    }),
+                    preceding_list_marker,
+                )
+            {
+                product_end = right + number_end;
+            } else if !glued {
                 positions.push(position);
+                item_start = Some(right);
+                preceding_list_marker = is_explicit_list_marker(&text[..position], character, &text[right..]);
             }
         }
         previous = Some(character);
+        if !character.is_whitespace() {
+            previous_non_space = Some(character);
+        }
     }
     positions
+}
+
+// Repeated indented marker rows provide list evidence lost when the text is flattened. ~keep
+fn numeric_list_row_markers(para: &PdfParagraph, text: &str) -> Option<Vec<usize>> {
+    let [intro, first_item, _, ..] = para.lines.as_slice() else {
+        return None;
+    };
+    let intro_start = intro.segments.first()?;
+    let marker_x = first_item.segments.first()?.x;
+    let alignment_tolerance = para.dominant_font_size / 4.0;
+    if !(intro_start.width > 0.0 && alignment_tolerance > 0.0 && marker_x - intro_start.x >= 2.0 * alignment_tolerance)
+    {
+        return None;
+    }
+
+    let mut line_start = 0;
+    let mut previous_baseline = intro.baseline_y;
+    let mut markers = Vec::new();
+    for line in &para.lines {
+        let next_line_start = line_start
+            + line
+                .segments
+                .iter()
+                .map(|segment| segment.text.len() + 1)
+                .sum::<usize>();
+        if line_start != 0 {
+            let first = line.segments.first()?;
+            let row = &text[line_start..next_line_start - 1];
+            let mut tokens = row.split_whitespace();
+            if !(first.width > 0.0
+                && (first.x - marker_x).abs() <= alignment_tolerance
+                && line.baseline_y < previous_baseline
+                && matches!(tokens.next(), Some("•" | "·"))
+                && tokens
+                    .next()
+                    .is_some_and(|item| item.bytes().all(|byte| byte.is_ascii_digit()))
+                && tokens.next().is_none())
+            {
+                return None;
+            }
+            markers.push(line_start + row.len() - row.trim_start().len());
+            previous_baseline = line.baseline_y;
+        } else if ends_with_numeric_expression(&text[..next_line_start - 1]) {
+            return None;
+        }
+        line_start = next_line_start;
+    }
+    Some(markers)
+}
+
+fn ends_with_numeric_expression(text: &str) -> bool {
+    if after_numeric_operand(text).is_some_and(|rest| rest.trim().is_empty()) {
+        return true;
+    }
+    // An arithmetic expression can wrap with its operators aligned at the left edge. ~keep
+    text.rsplit_once(['+', '-', '−', '*', '×', '/', '÷', '=', '·', '•'])
+        .is_some_and(|(left, right)| {
+            left.trim_end()
+                .ends_with(|c: char| c.is_ascii_digit() || matches!(c, ')' | ']' | '}'))
+                && after_numeric_operand(right).is_some_and(|rest| closes_expression_groups(left, rest))
+        })
+}
+
+fn group_closer(character: char) -> Option<char> {
+    match character {
+        '(' => Some(')'),
+        '[' => Some(']'),
+        '{' => Some('}'),
+        _ => None,
+    }
+}
+
+fn track_expression_group(groups: &mut Vec<(char, usize)>, position: usize, character: char) {
+    if let Some(closer) = group_closer(character) {
+        groups.push((closer, position + character.len_utf8()));
+    } else if matches!(character, ')' | ']' | '}') && groups.pop().is_some_and(|(closer, _)| closer != character) {
+        groups.clear();
+    }
+}
+
+fn after_numeric_operand(text: &str) -> Option<&str> {
+    let mut operand = text.trim_start();
+    while operand.starts_with(|c| group_closer(c).is_some()) {
+        operand = operand[1..].trim_start();
+    }
+    if !operand.starts_with(|c: char| c.is_ascii_digit()) {
+        return None;
+    }
+    let mut rest = operand.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.');
+    for closer in text[..text.len() - operand.len()]
+        .chars()
+        .rev()
+        .filter_map(group_closer)
+    {
+        rest = rest.trim_start().strip_prefix(closer)?;
+    }
+    Some(rest)
+}
+
+fn closes_expression_groups(left: &str, rest: &str) -> bool {
+    let rest = rest.trim_start();
+    if rest.is_empty() {
+        return true;
+    }
+    if !rest.starts_with([')', ']', '}']) {
+        return false;
+    }
+    let mut groups = Vec::new();
+    for (position, character) in left.char_indices() {
+        track_expression_group(&mut groups, position, character);
+    }
+    rest.chars()
+        .filter(|character| !character.is_whitespace())
+        .all(|character| groups.pop().is_some_and(|(closer, _)| character == closer))
+}
+
+fn is_explicit_list_marker(left: &str, glyph: char, right: &str) -> bool {
+    (glyph == '•' || (glyph == '·' && left.ends_with(char::is_whitespace))) && right.starts_with(char::is_whitespace)
+}
+
+fn after_length_unit(text: &str) -> Option<&str> {
+    let end = text.find(|c: char| !c.is_alphabetic()).unwrap_or(text.len());
+    let (unit, rest) = text.split_at(end);
+    (matches!(unit, "mm" | "cm" | "m" | "km" | "in" | "ft" | "yd" | "inch" | "inches")
+        && !rest.starts_with(char::is_alphanumeric))
+    .then_some(rest)
+}
+
+fn after_unit_dimensions(suffix: &str) -> &str {
+    let Some(mut rest) = after_length_unit(suffix) else {
+        return suffix;
+    };
+    let initial = rest;
+    while let Some(next) = rest
+        .trim_start()
+        .strip_prefix('×')
+        .and_then(after_numeric_operand)
+        .and_then(|unit| unit.strip_prefix('-'))
+        .and_then(after_length_unit)
+    {
+        rest = next;
+    }
+    if rest.len() == initial.len() { suffix } else { rest }
+}
+
+fn is_corroborated_hyphenated_item(after_number: &str, preceding_list_marker: bool) -> bool {
+    let Some(suffix) = after_number.strip_prefix('-') else {
+        return false;
+    };
+    let body = after_unit_dimensions(suffix);
+    let body_start = suffix.len() - body.len();
+    // Require a word as evidence before treating another ambiguous dot as a list marker.
+    if body_start == 0
+        && suffix
+            .chars()
+            .take_while(|character| character.is_alphabetic())
+            .nth(1)
+            .is_none()
+    {
+        return false;
+    }
+    let mut groups = Vec::new();
+    for (position, character) in body.char_indices() {
+        let position = body_start + position;
+        if matches!(character, ')' | ']' | '}') && groups.last().is_none_or(|&(closer, _)| closer != character) {
+            return false;
+        }
+        if groups.is_empty()
+            && matches!(character, '+' | '−' | '*' | '×' | '/' | '÷' | '=')
+            && after_numeric_operand(&suffix[position + character.len_utf8()..]).is_some()
+        {
+            return false;
+        }
+        if matches!(character, '•' | '·') {
+            return groups.is_empty()
+                && is_explicit_list_marker(
+                    &suffix[..position],
+                    character,
+                    &suffix[position + character.len_utf8()..],
+                );
+        }
+        track_expression_group(&mut groups, position, character);
+    }
+    preceding_list_marker
+}
+
+fn numeric_multiplier_end(
+    left: &str,
+    marked_text: &str,
+    continues_product: bool,
+    grouped_product: bool,
+    preceding_list_marker: bool,
+) -> Option<usize> {
+    let glyph = marked_text.chars().next()?;
+    let text = &marked_text[glyph.len_utf8()..];
+    let operand = text.trim_start();
+    let after_number = after_numeric_operand(operand)?;
+    let numeric_dot_chain = glyph == '·'
+        && after_number
+            .trim_start()
+            .strip_prefix('·')
+            .is_some_and(|next| next.starts_with(char::is_whitespace) && after_numeric_operand(next).is_some());
+    let next_bullet = after_number
+        .trim_start()
+        .strip_prefix('•')
+        .filter(|next| next.starts_with(char::is_whitespace));
+    let grouped_operand = operand.starts_with(|c| group_closer(c).is_some());
+    let numeric_bullet_chain = glyph == '•'
+        && grouped_operand
+        && next_bullet.is_some_and(|next| after_numeric_operand(next).is_some())
+        && (continues_product || ends_with_numeric_expression(left));
+    if grouped_operand && !(grouped_product || continues_product || numeric_dot_chain || numeric_bullet_chain) {
+        return None;
+    }
+    if is_explicit_list_marker(left, glyph, text)
+        && is_corroborated_hyphenated_item(after_number, preceding_list_marker && !grouped_product)
+    {
+        return None;
+    }
+    if glyph == '•'
+        && !numeric_bullet_chain
+        && next_bullet.is_some_and(|next| !grouped_product || after_numeric_operand(next).is_none())
+    {
+        return None;
+    }
+    // Right-attached dots can be decimal points in tables. Require evidence of a product chain. ~keep
+    if operand.len() == text.len() && !(numeric_dot_chain || (glyph == '·' && continues_product)) {
+        return None;
+    }
+    // A count followed by a word can open a genuine item, such as “2 options”. A multiplication
+    // chain already establishes that its final number is a multiplier. ~keep
+    if after_number.trim_start().starts_with(char::is_alphabetic)
+        && !(continues_product && after_number.starts_with(char::is_whitespace))
+    {
+        return None;
+    }
+    Some(text.len() - after_number.len())
 }
 
 /// Create a simple paragraph from text.
@@ -967,6 +1244,177 @@ mod tests {
         split_embedded_list_items(&mut paragraphs);
         assert_eq!(paragraphs.len(), 1, "mid-word bullets must not split the paragraph");
         assert!(!paragraphs[0].is_list_item);
+    }
+
+    #[test]
+    fn multiplication_dots_do_not_split_a_paragraph_into_list_items() {
+        for formula in [
+            "(1 − 0.2888 • 2) + (3) · 4",
+            "Thus 2 · 3 · 4 · 5 means multiplication.",
+            "2 • 3-4 + 5 • 6-7",
+            "(2 • 3 • 4)",
+            "[2 • 3 • 4 • 5]",
+            "(1 + 2 • 3 • 4 • 5)",
+            "(2 • 3-x) + (4 • 5-y)",
+            "(2 • (3) • ((4)))",
+            "[2 · {3} · [(4)]]",
+            "2 · (3) · (4)",
+            "2 • (3) • ((4))",
+            "2 · 3-x + 4 · 5-y",
+            "2 · 3-x · 4-y",
+            "2 · 3-rate + 4 · 5-time",
+            "2 · 3-in × 4-x · 5-y",
+        ] {
+            let mut paragraphs = vec![make_body_paragraph(formula, 10.0)];
+            split_embedded_list_items(&mut paragraphs);
+            assert_eq!(paragraphs.len(), 1, "{formula}");
+            assert!(!paragraphs[0].is_list_item);
+            assert_eq!(paragraphs[0].lines[0].segments[0].text, formula);
+        }
+    }
+
+    #[test]
+    fn embedded_bullets_can_introduce_items_that_start_with_counts() {
+        let mut paragraphs = vec![make_body_paragraph("Plan 2024 • 2 options • 3 modes", 10.0)];
+        split_embedded_list_items(&mut paragraphs);
+        assert_eq!(paragraphs.len(), 3);
+        assert_eq!(paragraphs[0].lines[0].segments[0].text, "Plan 2024");
+        for (item, expected) in paragraphs[1..].iter().zip(["2 options", "3 modes"]) {
+            assert!(item.is_list_item);
+            assert_eq!(item.lines[0].segments[0].text, expected);
+        }
+    }
+
+    #[test]
+    fn corroborated_explicit_bullets_split_hyphenated_counts() {
+        for ((first_marker, second_marker), expected) in [
+            (('•', '•'), ["2-pack", "3-pack"]),
+            (('•', '•'), ["2-pack of filters", "3-pack of seals"]),
+            (('•', '•'), ["2-pack (filters) for model 4", "3-pack of seals"]),
+            (('•', '•'), ["2-in × 4-in lumber", "3-in screws"]),
+            (('•', '•'), ["2-in × 4-in × 6-ft lumber", "3-in screws"]),
+            (('•', '·'), ["2-pièces", "3-joints"]),
+            (('•', '·'), ["2-pack for model 4", "3-pack of seals"]),
+            (('·', '•'), ["2-pack for model 4", "3-pack of seals"]),
+            (('·', '·'), ["2-pack for model 4", "3-pack of seals"]),
+        ] {
+            let text = format!(
+                "Plan 2024 {first_marker} {} {second_marker} {}",
+                expected[0], expected[1]
+            );
+            let mut paragraphs = vec![make_body_paragraph(&text, 10.0)];
+            split_embedded_list_items(&mut paragraphs);
+            assert_eq!(paragraphs.len(), 3, "{text}");
+            assert!(!paragraphs[0].is_list_item);
+            assert_eq!(paragraphs[0].lines[0].segments[0].text, "Plan 2024");
+            for (item, expected) in paragraphs[1..].iter().zip(expected) {
+                assert!(item.is_list_item);
+                assert_eq!(item.lines[0].segments[0].text, expected);
+            }
+        }
+    }
+
+    #[test]
+    fn embedded_bullets_split_numeric_only_items() {
+        for intro in ["Available sizes", "Available sizes for model 2024"] {
+            for expected in [["2", "3", "4"], ["(2)", "(3)", "((4))"]] {
+                let text = format!("{intro} • {}", expected.join(" • "));
+                let mut paragraphs = vec![make_body_paragraph(&text, 10.0)];
+                split_embedded_list_items(&mut paragraphs);
+                assert_eq!(paragraphs.len(), 4, "{text}");
+                assert!(!paragraphs[0].is_list_item);
+                assert_eq!(paragraphs[0].lines[0].segments[0].text, intro);
+                for (item, expected) in paragraphs[1..].iter().zip(expected) {
+                    assert!(item.is_list_item);
+                    assert_eq!(item.lines[0].segments[0].text, expected);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn indented_middle_dot_rows_split_into_numeric_list_items() {
+        let intro = "Available sizes for model 2024";
+        for (last_marker_x, expected_count) in [(62.0, 3), (78.0, 1)] {
+            let mut paragraph = legend_row(intro, 50.0, 700.0, 140.0, 10.0);
+            let mut first_item = legend_row("·", 62.0, 686.0, 3.0, 10.0);
+            first_item.lines[0]
+                .segments
+                .extend(legend_row("2", 74.0, 686.0, 5.0, 10.0).lines.remove(0).segments);
+            paragraph.lines.extend(first_item.lines);
+            paragraph
+                .lines
+                .extend(legend_row("· 3", last_marker_x, 672.0, 17.0, 10.0).lines);
+            let mut paragraphs = vec![paragraph];
+            split_embedded_list_items(&mut paragraphs);
+            assert_eq!(paragraphs.len(), expected_count, "last marker x = {last_marker_x}");
+            assert!(!paragraphs[0].is_list_item);
+            assert_eq!(paragraphs[0].lines[0].segments[0].text, intro);
+            for (item, expected) in paragraphs[1..].iter().zip(["2", "3"]) {
+                assert!(item.is_list_item);
+                assert_eq!(item.lines[0].segments[0].text, expected);
+            }
+        }
+    }
+
+    #[test]
+    fn aligned_middle_dot_rows_preserve_wrapped_products() {
+        for intro in [
+            "2",
+            "(2)",
+            "Evaluate 1 + 2",
+            "Evaluate 1−2",
+            "Evaluate 1 + (2)",
+            "(1 + (2))",
+            "Evaluate [1 + { (2) } ]",
+        ] {
+            let mut paragraph = legend_row(intro, 50.0, 700.0, 60.0, 10.0);
+            paragraph.lines.extend(legend_row("· 3", 62.0, 686.0, 17.0, 10.0).lines);
+            paragraph.lines.extend(legend_row("· 4", 62.0, 672.0, 17.0, 10.0).lines);
+            let mut paragraphs = vec![paragraph];
+            split_embedded_list_items(&mut paragraphs);
+            assert_eq!(paragraphs.len(), 1, "{intro}");
+            assert!(!paragraphs[0].is_list_item);
+            let rows: Vec<_> = paragraphs[0]
+                .lines
+                .iter()
+                .map(|line| line.segments[0].text.as_str())
+                .collect();
+            assert_eq!(rows, [intro, "· 3", "· 4"]);
+        }
+    }
+
+    #[test]
+    fn mixed_spacing_in_multiplication_keeps_the_paragraph() {
+        for text in [
+            "Thus 2 ·3 · 4 means multiplication",
+            "Thus 2·3 ·4 means multiplication",
+            "Thus 2·3 ·4 ·5 means multiplication",
+            "2 · 3 · 4 · 5",
+            "Multiply 2 · 3 · 4 · 5",
+            "The result is 2 · 3 · 4 · 5.",
+            "The result is 2 · 3 · 4 · 5",
+            "Available sizes for model 2024 · 2 · 3 · 4",
+            "Evaluate 1 + 2 · 3 · 4 · 5",
+        ] {
+            assert!(embedded_bullet_positions(text).is_empty(), "{text}");
+            let mut paragraphs = vec![make_body_paragraph(text, 10.0)];
+            split_embedded_list_items(&mut paragraphs);
+            assert_eq!(paragraphs.len(), 1, "{text}");
+            assert!(!paragraphs[0].is_list_item);
+            assert_eq!(paragraphs[0].lines[0].segments[0].text, text);
+        }
+    }
+
+    #[test]
+    fn attached_decimal_table_dots_keep_the_paragraph() {
+        let text = "Values 12 ·34 56·78";
+        assert_eq!(embedded_bullet_positions(text), vec![10]);
+        let mut paragraphs = vec![make_body_paragraph(text, 10.0)];
+        split_embedded_list_items(&mut paragraphs);
+        assert_eq!(paragraphs.len(), 1);
+        assert!(!paragraphs[0].is_list_item);
+        assert_eq!(paragraphs[0].lines[0].segments[0].text, text);
     }
 
     /// Items split off a paragraph keep their word spaces: word-per-segment items with zero
