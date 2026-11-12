@@ -335,6 +335,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Preserve failed-page warnings when the PDF time limit skips embedded-image OCR retries.** (GH#3102)
   Partial results retain available native text and bypass the file cache. If every requested OCR page fails, extraction returns the time-limit error.
 
+- **(pdf): Charge the transient copies of the spot-plate buffer to the PNG render budget.** (#2870)
+  Since #2819 the budget admitted only the live sidecar planes (`4 + 2·n` bytes per pixel), while a soft mask, a transparency group or a knockout group holds further copies of them while painting. A page with spot inks whose resources declare one is now fitted against the run-time peak of its reservations, never below it: one soft mask snapshot, or per nested group an RGBA and sidecar copy plus the non-isolated source recovery, per nested knockout group its workspace, the widest paint scratch (stroke, fill-stroke or a non-separable blend) and, for a soft mask inside a group, the mask workspaces; groups nested in a soft mask's form are counted too. The DPI is lowered instead of the render failing on the knockout workspace. A page with spot inks but none of these, and a sidecar that declares no spot inks, are charged as before and keep their DPI. Pattern and annotation appearance resources are not scanned; the shape workspace is charged on every knockout level, which over-charges a page without a knockout shape.
 - **(pdf): Deduplicate spatially matched native text in mixed OCR output.** (Refs #2534)
   Applies to automatic mixed PDF pages with a fresh direct Tesseract read in a verified scale-only frame.
   Native copies are removed only when unique literal matches survive in both flat and structured output.
