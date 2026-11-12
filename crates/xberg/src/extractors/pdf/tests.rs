@@ -3647,7 +3647,10 @@ fn an_adopted_hocr_document_keeps_the_extractors_marks_and_rerenders_its_pages()
         .and_then(|structure| structure.boundaries.clone())
         .expect("the boundary survives the re-render");
     assert_eq!(
-        marked_boundaries.iter().map(|boundary| boundary.page_number).collect::<Vec<_>>(),
+        marked_boundaries
+            .iter()
+            .map(|boundary| boundary.page_number)
+            .collect::<Vec<_>>(),
         vec![1],
         "the page stays bounded once the marks are attached"
     );
