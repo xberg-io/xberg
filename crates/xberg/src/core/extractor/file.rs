@@ -190,9 +190,15 @@ pub(crate) async fn extract_file(
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let owned_config_with_cancel_token;
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-    let config: &ExtractionConfig = if config.extraction_timeout_secs.is_some() && config.cancel_token.is_none() {
+    let config: &ExtractionConfig = if config.extraction_timeout_secs.is_some() {
         let mut owned = config.clone();
         owned.ensure_cancel_token();
+        // Each timed extraction gets its own soft-stop state, so a caller's token that is
+        // reused for another extraction never starts out stopped.
+        owned.cancel_token = owned
+            .cancel_token
+            .as_ref()
+            .map(crate::cancellation::CancellationToken::scoped);
         owned_config_with_cancel_token = owned;
         &owned_config_with_cancel_token
     } else {
@@ -240,18 +246,18 @@ pub(crate) async fn extract_file(
     // not enough — explicitly exclude wasm32 here, matching `run_timed_extraction` in
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let result = if let Some(secs) = config.extraction_timeout_secs {
-        let start = std::time::Instant::now();
-        match tokio::time::timeout(std::time::Duration::from_secs(secs), extraction_future).await {
+        let started = std::time::Instant::now();
+        let mut extraction_future = extraction_future;
+        match tokio::time::timeout(std::time::Duration::from_secs(secs), &mut extraction_future).await {
             Ok(inner) => inner,
-            Err(_elapsed) => {
-                if let Some(ref token) = config.cancel_token {
-                    token.cancel();
+            Err(_elapsed) => match super::time_limit::begin_grace(config.cancel_token.as_ref(), secs, started) {
+                Ok(token) => {
+                    let outcome =
+                        tokio::time::timeout(super::time_limit::PARTIAL_RESULT_GRACE, &mut extraction_future).await;
+                    super::time_limit::finish_grace(outcome, token, secs, started)
                 }
-                Err(crate::XbergError::Timeout {
-                    elapsed_ms: start.elapsed().as_millis() as u64,
-                    limit_ms: secs * 1000,
-                })
-            }
+                Err(timeout) => Err(timeout),
+            },
         }
     } else {
         extraction_future.await
@@ -339,7 +345,13 @@ async fn extract_file_scoped(path: &Path, mime_type: &str, config: &ExtractionCo
     let result = Box::pin(extract_file_uncached(path, mime_type, config)).await?;
     let lifecycle_generations_after = lifecycle_registry_generations();
 
+    // A soft stop at the time limit leaves a partial document, which must not be served later. ~keep
+    let stopped_early = config
+        .cancel_token
+        .as_ref()
+        .is_some_and(crate::cancellation::CancellationToken::cut_short_by_time_limit);
     if super::cacheability::is_cacheable()
+        && !stopped_early
         && lifecycle_generations_before == lifecycle_generations_after
         && context == fingerprint(&dependencies, config.cancel_token.as_ref()).await?
         && super::cacheability::is_cacheable()

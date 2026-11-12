@@ -1407,6 +1407,10 @@ fn assert_mixed_plain_marker_keeps_repeated_neighbor(
     assert_eq!(marked, format!("{}{marker}{raw_table_page}", plain_table_page));
 }
 
+/// The document arrives from `select_pdf_document`'s Mixed arm with `ocr_internal_doc: None`,
+/// so it is `flat_pdf_document`'s: a `pdf`-source document. The OCR text page list therefore
+/// never changes its derivation (#3014), which is why the helper asserts no list and does not
+/// force one before deriving.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn assert_mixed_plain_public_page_ranges(
     mut document: InternalDocument,
@@ -1415,7 +1419,6 @@ fn assert_mixed_plain_public_page_ranges(
 ) {
     use crate::types::{ExtractedDocument, PageStructure, PageUnitType};
 
-    document.ocr_text_pages = vec![1, 2];
     document.prebuilt_pages = Some(
         expected
             .iter()
@@ -3353,23 +3356,32 @@ async fn force_ocr_route_applies_numeric_repair() {
     );
 }
 
-/// Issue #2939: a whole-document OCR read whose page read the noise gate discarded must not
-/// mark that page as OCR text. `InternalDocument::ocr_text_pages` decides which pages are
-/// re-rendered from their elements (#2902), so a page whose noisy read was discarded -- which
-/// keeps its native text -- is not OCR text and must stay out of the set, while the page whose
-/// read was accepted keeps its mark exactly as before.
+/// Issue #3014: the OCR text page list of the PDF extractor's own documents changes no output.
+/// The one reader of `InternalDocument::ocr_text_pages` (`is_ocr_page_text`) treats every page
+/// of a `pdf`, `image` or `ocr` source as OCR text before it looks at the list, and the PDF
+/// extractor builds such a document itself (source format `pdf`), so no list it builds for one
+/// can ever change a derived result. The control below forces the list empty and set to both
+/// pages on the same document and derives both to prove the outputs stay equal, and the fix
+/// attaches no list to it. An adopted OCR backend document of another source format is the
+/// exception -- `select_pdf_document`'s Ocr arm returns it verbatim and the list's reader
+/// honors the marks there -- see
+/// `an_adopted_hocr_document_keeps_the_extractors_marks_and_rerenders_its_pages`. Documents of
+/// other formats still get the list from their own extractor: `fold_embedded_image_ocr_text`
+/// marks the page of, say, a DOCX whose embedded picture's read is folded into it, and
+/// #2902's re-rendering honors the mark there.
 #[cfg(all(feature = "pdf", feature = "ocr"))]
 #[tokio::test]
 #[serial]
-async fn a_discarded_ocr_read_does_not_mark_its_native_page_as_ocr_text() {
+async fn a_pdfs_ocr_text_page_list_is_not_built_and_changes_no_output() {
     use crate::core::config::{OcrConfig, PageConfig};
 
     const BACKEND_NAME: &str = "pdf-2939-discarded-read-marking";
     const ACCEPTED_TEXT: &str = "Healthy native prose fills the first page of this ordinary document";
     const NATIVE_PAGE_TWO_TEXT: &str = "The original native words stay on the second page";
-    // Twenty short alphabetic tokens beside ten long ones: a fragmented ratio of 2/3, above
-    // the 0.35 default threshold, over the 20-word minimum the noise check requires. A mock
-    // read this fragmented is exactly the shape `discard_suspected_ocr_noise` discards.
+    // Twenty short alphabetic tokens beside five long ones: a fragmented ratio of 4/5 (20
+    // of the 25 words), above the 0.35 default threshold, over the 20-word minimum the
+    // noise check requires. A mock read this fragmented is exactly the shape
+    // `discard_suspected_ocr_noise` discards.
     const NOISY_TEXT: &str = "aa bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt \
          gathering exercises remaining television understanding";
 
@@ -3447,7 +3459,8 @@ async fn a_discarded_ocr_read_does_not_mark_its_native_page_as_ocr_text() {
         .expect("forced-OCR extraction of the two-page fixture must succeed");
 
     // Controls: the noise gate really discarded page 2's read and the route kept the page's
-    // native text, while page 1's accepted read is the page's content.
+    // native text in `native_content` (`keep_native_content` is on here), while page 1's
+    // accepted read is the page's content.
     let pages = internal
         .prebuilt_pages
         .as_ref()
@@ -3462,18 +3475,321 @@ async fn a_discarded_ocr_read_does_not_mark_its_native_page_as_ocr_text() {
     assert_eq!(
         pages[1].native_content.as_deref(),
         Some(NATIVE_PAGE_TWO_TEXT),
-        "the discarded page keeps its native text beside the OCR treatment"
+        "the discarded page's native text survives in `native_content` beside the OCR treatment"
     );
+
+    // Control: the list empty and set to both pages derive the same output from the same
+    // document, so the list is provably off the wire for a PDF. This holds before and after
+    // the fix; the emptiness assertion below is what the fix turns green.
+    let mut with_list = internal.clone();
+    with_list.ocr_text_pages = vec![1, 2];
+    let empty_list = crate::types::ExtractedDocument::from(internal.clone());
+    let full_list = crate::types::ExtractedDocument::from(with_list);
     assert_eq!(
-        internal.ocr_text_pages,
-        vec![1],
-        "only the page whose read was accepted may be marked as OCR text: page 2's read was \
-         discarded, its native text is what the page keeps"
+        empty_list.content, full_list.content,
+        "the OCR text page list must not change the derived content of a pdf source"
+    );
+    let page_bodies = |result: &crate::types::ExtractedDocument| {
+        result.pages.as_ref().map(|pages| {
+            pages
+                .iter()
+                .map(|page| (page.page_number, page.content.clone()))
+                .collect::<Vec<_>>()
+        })
+    };
+    assert_eq!(
+        page_bodies(&empty_list),
+        page_bodies(&full_list),
+        "the OCR text page list must not change the derived pages of a pdf source"
+    );
+    let boundaries = |result: &crate::types::ExtractedDocument| {
+        result
+            .metadata
+            .pages
+            .as_ref()
+            .and_then(|structure| structure.boundaries.clone())
+            .map(|boundaries| {
+                boundaries
+                    .iter()
+                    .map(|boundary| (boundary.page_number, boundary.byte_start, boundary.byte_end))
+                    .collect::<Vec<_>>()
+            })
+    };
+    assert_eq!(
+        boundaries(&empty_list),
+        boundaries(&full_list),
+        "the OCR text page list must not change the derived page boundaries of a pdf source"
+    );
+
+    // The fix: no marking that cannot change a result is built (#3014).
+    assert!(
+        internal.ocr_text_pages.is_empty(),
+        "the PDF extractor must not build the OCR text page list: its one reader treats every \
+         page of a pdf source as OCR text before it looks at the list (#3014): {:?}",
+        internal.ocr_text_pages
     );
 }
 
-/// The width and height from a PNG header, or `None` for bytes that are not a PNG. Page
-/// renders reach an OCR backend as PNG bytes, so this tells two page renders apart.
+/// Issue #3014, the OCR route its deletion missed: `select_pdf_document`'s Ocr arm returns an
+/// adopted OCR backend document verbatim, and such a document keeps its own source format -- a
+/// plugin's `hocr` structure is not one of the `pdf`/`image`/`ocr` sources `is_ocr_page_text`
+/// treats as OCR text on every page, so there the list IS read, and #2902's re-rendering
+/// honors the marks. The extractor therefore attaches the list it built exactly for that
+/// document, exactly as before #3014; the control above pins that its own `pdf`-source
+/// documents keep none.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[test]
+fn an_adopted_hocr_document_keeps_the_extractors_marks_and_rerenders_its_pages() {
+    use crate::core::config::OutputFormat;
+    use crate::extractors::security::SecurityLimits;
+    use crate::types::document_structure::{DocumentNode, DocumentStructure, NodeContent};
+
+    const NODE_TEXT: &str = "Adopted paragraph one";
+    // The backend's transcript differs from the structure it contributed, so the prebuilt page
+    // text is not found in the derived content and #2902's re-rendering is what maps the page.
+    const TRANSCRIPT: &str = "Raw page transcript one";
+
+    // A backend result describes one page: every node sits on page 1.
+    let mut structure = DocumentStructure {
+        nodes: vec![DocumentNode {
+            id: String::new(),
+            content: NodeContent::Paragraph {
+                text: NODE_TEXT.to_string(),
+            },
+            parent: None,
+            children: Vec::new(),
+            content_layer: Default::default(),
+            page: Some(1),
+            page_end: None,
+            bbox: None,
+            annotations: Vec::new(),
+            attributes: None,
+        }],
+        source_format: Some("hocr".to_string()),
+        relationships: Vec::new(),
+        node_types: Vec::new(),
+    };
+    structure.finalize_node_types();
+    let mut plugin_result = crate::types::ExtractedDocument {
+        content: TRANSCRIPT.to_string(),
+        mime_type: std::borrow::Cow::Borrowed("text/plain"),
+        document: Some(structure),
+        ..Default::default()
+    };
+    crate::extraction::derive::adopt_public_ocr_document(&mut plugin_result, &SecurityLimits::default())
+        .expect("the plugin's structure must adopt");
+    let adopted = plugin_result
+        .ocr_internal_document
+        .take()
+        .expect("adoption must produce the internal document");
+    assert_eq!(
+        adopted.source_format, "hocr",
+        "an adopted document keeps the plugin's own source format"
+    );
+
+    // `select_pdf_document`'s Ocr arm returns the backend's document verbatim: only the MIME
+    // type is overwritten, so the plugin's source format survives the selection and the list's
+    // reader reads the list on it.
+    let (selected, origin, structured) = select_pdf_document(
+        ExtractionMethod::Ocr,
+        "unrelated seed text",
+        "application/pdf",
+        None,
+        Some(adopted.clone()),
+        None,
+        None,
+        None,
+        &OutputFormat::Plain,
+    );
+    assert_eq!(origin, PdfDocumentOrigin::Ocr);
+    assert!(structured);
+    assert_eq!(
+        selected.source_format, "hocr",
+        "the Ocr arm must not overwrite an adopted document's source format"
+    );
+
+    // The extractor's own marking build (#2939): the pages whose whole-document read the output
+    // kept are reported, and the pages' contents carry the read.
+    let mut pages = vec![text_layer_page(1, TRANSCRIPT)];
+    let marks = replace_pages_with_ocr_page_texts(pages.as_mut_slice(), &[TRANSCRIPT.to_string()], false);
+    assert_eq!(marks, vec![1], "the read was kept, so its page is reported");
+
+    let boundaries_metadata = || crate::types::PageStructure {
+        total_count: 1,
+        unit_type: crate::types::PageUnitType::Page,
+        boundaries: Some(vec![crate::types::PageBoundary {
+            byte_start: 0,
+            byte_end: 40,
+            page_number: 1,
+        }]),
+        pages: None,
+    };
+
+    // The decision under test: the adopted hocr document is exactly the source the list's
+    // reader honors it on, so the extractor's marks are attached exactly as before #3014 --
+    // extended beside any list the adopter already carries, not overwriting it.
+    let mut marked = selected;
+    marked.prebuilt_pages = Some(pages);
+    marked.metadata.pages = Some(boundaries_metadata());
+    marked.ocr_text_pages = vec![7];
+    attach_ocr_text_page_marks(&mut marked, marks);
+    assert_eq!(
+        marked.ocr_text_pages,
+        vec![7, 1],
+        "an adopted hocr document keeps the extractor's marks beside the adopter's own: its \
+         source format is what the list's reader honors the list on"
+    );
+
+    // #2902: the marked page is re-rendered from its element, and the boundary survives because
+    // the re-rendered page is located in the content.
+    let marked_result = crate::extraction::derive::derive_extraction_result(marked, false, OutputFormat::Plain);
+    let marked_pages = marked_result.pages.as_ref().expect("pages are derived");
+    assert_eq!(
+        marked_pages[0].content, NODE_TEXT,
+        "page 1 is re-rendered from its adopted element"
+    );
+    let marked_boundaries = marked_result
+        .metadata
+        .pages
+        .as_ref()
+        .and_then(|structure| structure.boundaries.clone())
+        .expect("the boundary survives the re-render");
+    assert_eq!(
+        marked_boundaries
+            .iter()
+            .map(|boundary| boundary.page_number)
+            .collect::<Vec<_>>(),
+        vec![1],
+        "the page stays bounded once the marks are attached"
+    );
+    assert!(
+        !marked_result
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "page_boundaries"),
+        "no page diverges once the marks are attached: {:?}",
+        marked_result.processing_warnings
+    );
+
+    // The same document without the marks -- what dropping the build outright produced -- keeps
+    // the prebuilt text and loses the boundary: the reader reports the page as diverging.
+    let mut unmarked = adopted;
+    unmarked.prebuilt_pages = Some(vec![text_layer_page(1, TRANSCRIPT)]);
+    unmarked.metadata.pages = Some(boundaries_metadata());
+    let unmarked_result = crate::extraction::derive::derive_extraction_result(unmarked, false, OutputFormat::Plain);
+    let unmarked_pages = unmarked_result.pages.as_ref().expect("pages are derived");
+    assert_eq!(
+        unmarked_pages[0].content, TRANSCRIPT,
+        "an unmarked page keeps its prebuilt text"
+    );
+    assert!(
+        unmarked_result
+            .metadata
+            .pages
+            .as_ref()
+            .is_some_and(|structure| structure.boundaries.is_none()),
+        "the unmarked page's boundary is dropped, not kept empty or absent with the structure: {:?}",
+        unmarked_result
+            .metadata
+            .pages
+            .as_ref()
+            .and_then(|structure| structure.boundaries.clone())
+    );
+    assert!(
+        unmarked_result
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "page_boundaries"),
+        "the unmarked page is reported as diverging"
+    );
+}
+
+/// Issue #3014's default arm: a backend contribution with no `source_format` adopts as `ocr`
+/// (`derive::adopt_public_ocr_document`), and `ocr` is one of the sources the list's reader
+/// treats as OCR text on every page, so the extractor attaches nothing there: the reader
+/// never consults the list on such a document, and whatever the extractor built for it stays
+/// off the wire -- exactly the control the `pdf`-source test above pins for its own documents.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[test]
+fn an_adopted_document_without_a_source_format_defaults_to_ocr_and_keeps_no_marks() {
+    use crate::core::config::OutputFormat;
+    use crate::extractors::security::SecurityLimits;
+    use crate::types::document_structure::{DocumentNode, DocumentStructure, NodeContent};
+
+    const NODE_TEXT: &str = "Default-source paragraph one";
+
+    // The same plugin contribution the `hocr` sibling makes, with the source format absent:
+    // adoption defaults it to `ocr`.
+    let mut structure = DocumentStructure {
+        nodes: vec![DocumentNode {
+            id: String::new(),
+            content: NodeContent::Paragraph {
+                text: NODE_TEXT.to_string(),
+            },
+            parent: None,
+            children: Vec::new(),
+            content_layer: Default::default(),
+            page: Some(1),
+            page_end: None,
+            bbox: None,
+            annotations: Vec::new(),
+            attributes: None,
+        }],
+        source_format: None,
+        relationships: Vec::new(),
+        node_types: Vec::new(),
+    };
+    structure.finalize_node_types();
+    let mut plugin_result = crate::types::ExtractedDocument {
+        content: "Raw page transcript one".to_string(),
+        mime_type: std::borrow::Cow::Borrowed("text/plain"),
+        document: Some(structure),
+        ..Default::default()
+    };
+    crate::extraction::derive::adopt_public_ocr_document(&mut plugin_result, &SecurityLimits::default())
+        .expect("the plugin's structure must adopt");
+    let adopted = plugin_result
+        .ocr_internal_document
+        .take()
+        .expect("adoption must produce the internal document");
+    assert_eq!(
+        adopted.source_format, "ocr",
+        "a contribution without a source format adopts as ocr"
+    );
+
+    let (selected, origin, structured) = select_pdf_document(
+        ExtractionMethod::Ocr,
+        "unrelated seed text",
+        "application/pdf",
+        None,
+        Some(adopted),
+        None,
+        None,
+        None,
+        &OutputFormat::Plain,
+    );
+    assert_eq!(origin, PdfDocumentOrigin::Ocr);
+    assert!(structured);
+    assert_eq!(
+        selected.source_format, "ocr",
+        "the Ocr arm must not overwrite an adopted document's defaulted source format"
+    );
+
+    // The decision under test: `ocr` is a source the list's reader treats as OCR text on
+    // every page, so the extractor's marks could never change a derived result and are not
+    // attached -- the list stays as the adopter left it.
+    let mut marked = selected;
+    attach_ocr_text_page_marks(&mut marked, vec![1]);
+    assert!(
+        marked.ocr_text_pages.is_empty(),
+        "an adopted ocr-source document keeps no marks: its reader treats every page as OCR \
+         text before it looks at the list: {:?}",
+        marked.ocr_text_pages
+    );
+}
+
+/// The height from a PNG header, or `None` for bytes that are not a PNG. Page renders reach
+/// an OCR backend as PNG bytes, so this tells two page renders apart by their height.
 #[cfg(all(feature = "pdf", feature = "ocr"))]
 fn png_height(bytes: &[u8]) -> Option<u32> {
     if bytes.len() < 24 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
@@ -3485,7 +3801,15 @@ fn png_height(bytes: &[u8]) -> Option<u32> {
 /// A two-page PDF whose every page carries a healthy native text layer, and whose pages have
 /// clearly different heights so a page render identifies its page by size: page 1 is a small
 /// (200x300 pt) page, page 2 a tall (1224x1584 pt) one.
-#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[cfg(any(
+    all(feature = "pdf", feature = "ocr"),
+    all(
+        feature = "pdf",
+        feature = "ocr-pipeline",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    )
+))]
 fn two_page_native_text_pdf() -> Vec<u8> {
     use lopdf::content::{Content, Operation};
     use lopdf::{Document, Object, Stream, dictionary};
@@ -8214,5 +8538,154 @@ mod mixed_pdf_table_model_warning {
             mixed_count, 1,
             "the mixed PDF must carry the warning once: {mixed_warnings:?}"
         );
+    }
+}
+
+#[cfg(all(
+    feature = "pdf",
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+mod native_text_stop_tests {
+    use super::*;
+    use crate::cancellation::CancellationToken;
+
+    fn config_with(token: &CancellationToken) -> ExtractionConfig {
+        ExtractionConfig {
+            cancel_token: Some(token.clone()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_stop_with_an_unread_page_marks_the_native_text_as_stopped() {
+        let token = CancellationToken::new();
+        token.request_stop();
+        token.note_unread_page(3);
+
+        assert!(native_text_stopped_by_time_limit(&config_with(&token)));
+    }
+
+    #[test]
+    fn a_stop_without_an_unread_page_is_not_a_stopped_native_text() {
+        let token = CancellationToken::new();
+        token.request_stop();
+
+        assert!(!native_text_stopped_by_time_limit(&config_with(&token)));
+    }
+
+    #[test]
+    fn an_unread_page_without_a_stop_is_not_a_stopped_native_text() {
+        let token = CancellationToken::new();
+        token.note_unread_page(3);
+
+        assert!(!native_text_stopped_by_time_limit(&config_with(&token)));
+    }
+
+    #[test]
+    fn a_config_without_a_token_is_not_a_stopped_native_text() {
+        assert!(!native_text_stopped_by_time_limit(&ExtractionConfig::default()));
+    }
+
+    fn hierarchy_config(token: &CancellationToken) -> ExtractionConfig {
+        use crate::core::config::{HierarchyConfig, PdfConfig};
+
+        ExtractionConfig {
+            cancel_token: Some(token.clone()),
+            pdf_options: Some(PdfConfig {
+                hierarchy: Some(HierarchyConfig {
+                    enabled: true,
+                    ..HierarchyConfig::default()
+                }),
+                ..PdfConfig::default()
+            }),
+            ..ExtractionConfig::default()
+        }
+    }
+
+    fn extract_native(config: ExtractionConfig) -> NativeBlockingOutput {
+        extract_native_bytes(two_page_native_text_pdf(), config)
+    }
+
+    fn extract_native_bytes(content: Vec<u8>, config: ExtractionConfig) -> NativeBlockingOutput {
+        extract_native_blocking(
+            content,
+            config,
+            #[cfg(feature = "layout-detection")]
+            None,
+            #[cfg(feature = "layout-detection")]
+            None,
+            #[cfg(feature = "layout-detection")]
+            None,
+            #[cfg(feature = "layout-detection")]
+            None,
+            #[cfg(feature = "layout-detection")]
+            None,
+        )
+        .expect("the native extraction must succeed")
+    }
+
+    /// #3029: the stages after the text loop re-read every page, so after a stop they outlast the
+    /// grace period and the pages already read are lost. The structure pass reads the pages itself,
+    /// not the text loop's output, so it runs after a stop unless it is skipped on purpose.
+    #[test]
+    fn a_text_loop_cut_short_by_the_time_limit_skips_the_stages_after_it() {
+        let finished = CancellationToken::new();
+        let control = extract_native(hierarchy_config(&finished)).extraction;
+        assert!(
+            control.5.is_some(),
+            "control: a finished text loop builds the document structure"
+        );
+        assert!(control.11.iter().all(|warning| warning.source != "pdf_time_limit"));
+
+        let token = CancellationToken::new();
+        token.request_stop();
+        let stopped = extract_native(hierarchy_config(&token)).extraction;
+
+        assert!(
+            token.cut_short_by_time_limit(),
+            "the stop must have cut the text loop short"
+        );
+        assert!(stopped.5.is_none(), "no document structure after the time limit");
+        assert!(
+            stopped.11.iter().any(|warning| warning.source == "pdf_time_limit"),
+            "the skipped stages must be reported: {:?}",
+            stopped.11
+        );
+    }
+
+    /// The stages after a cut-short text loop include tables and images, which a fixture that has
+    /// them proves: they come back empty only because of the stop, not because the page has none.
+    #[test]
+    fn a_text_loop_cut_short_by_the_time_limit_returns_no_tables_or_images() {
+        use crate::core::config::PdfConfig;
+
+        let content = std::fs::read(pdf_test_document("embedded_images_tables.pdf"))
+            .expect("the corpus fixture embedded_images_tables.pdf must be present");
+        let config_with = |token: &CancellationToken| ExtractionConfig {
+            cancel_token: Some(token.clone()),
+            pdf_options: Some(PdfConfig {
+                extract_images: true,
+                ..PdfConfig::default()
+            }),
+            ..ExtractionConfig::default()
+        };
+
+        let finished = CancellationToken::new();
+        let control = extract_native_bytes(content.clone(), config_with(&finished)).extraction;
+        assert!(!control.2.is_empty(), "control: the fixture has tables");
+        assert!(
+            control.9.as_ref().is_some_and(|images| !images.is_empty()),
+            "control: the fixture has images"
+        );
+
+        let token = CancellationToken::new();
+        token.request_stop();
+        let stopped = extract_native_bytes(content, config_with(&token)).extraction;
+
+        assert!(token.cut_short_by_time_limit());
+        assert!(stopped.2.is_empty(), "no tables after the time limit");
+        assert!(stopped.9.is_none(), "no images after the time limit");
     }
 }
