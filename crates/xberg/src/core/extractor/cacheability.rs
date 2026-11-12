@@ -138,7 +138,16 @@ pub(crate) async fn with_ocr_cancellation<F: Future>(
     };
     let mut context = current().unwrap_or_default();
     context.1 = Some(token.clone());
-    ASYNC_CONTEXT.scope(context, future).await
+    ASYNC_CONTEXT
+        .scope(context, async {
+            let result = future.await;
+            // The engine checks the shared operation after this per-input token leaves scope. ~keep
+            if ocr_stop_requested() {
+                block_outer_result_publication();
+            }
+            result
+        })
+        .await
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]

@@ -760,6 +760,45 @@ mod tests {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
+    fn assert_retry_worker_stops(token: crate::cancellation::CancellationToken, soft_stop: bool, stop_after: usize) {
+        let stop = || {
+            if soft_stop {
+                token.request_stop();
+            } else {
+                token.cancel();
+            }
+        };
+        let mut stages_run = 0;
+        if stop_after == 0 {
+            stop();
+        }
+        let mut native_stage = || {
+            stages_run += 1;
+            if stages_run == stop_after {
+                stop();
+            }
+            Ok(())
+        };
+        let result = retry_stage(&mut native_stage)
+            .expect("OSD stage")
+            .and_then(|()| retry_stage(native_stage).expect("recognition stage"));
+        assert_eq!(result, None, "a stopped worker must discard the retry");
+        assert_eq!(stages_run, stop_after);
+        assert!(!cacheability::can_publish_outer_result());
+
+        let directory = tempfile::tempdir().expect("OCR cache directory");
+        let cache = crate::ocr::cache::OcrCache::new(Some(directory.path().into())).expect("OCR cache");
+        cache
+            .set_cached_result("page", "tesseract", "retry", None, &Default::default())
+            .expect("cancellation is a cache bypass");
+        assert_eq!(
+            directory.path().read_dir().expect("cache files").count(),
+            0,
+            "cancellation must prevent publication and leave no temporary entry"
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
     async fn retry_worker_skips_stages_after_cancellation() {
         use crate::cancellation::CancellationToken;
@@ -768,34 +807,18 @@ mod tests {
             for stop_after in 0..=2 {
                 let token = CancellationToken::new();
                 let worker_token = token.clone();
-                cacheability::with_ocr_cancellation(Some(&token), async move {
-                    let worker = cacheability::blocking(move || {
-                        let stop = || {
-                            if soft_stop {
-                                worker_token.request_stop();
-                            } else {
-                                worker_token.cancel();
-                            }
-                        };
-                        let mut stages_run = 0;
-                        if stop_after == 0 {
-                            stop();
-                        }
-                        let mut native_stage = || {
-                            stages_run += 1;
-                            if stages_run == stop_after {
-                                stop();
-                            }
-                            Ok(())
-                        };
-                        let result = retry_stage(&mut native_stage)
-                            .expect("OSD stage")
-                            .and_then(|()| retry_stage(native_stage).expect("recognition stage"));
-                        assert_eq!(result, None, "a stopped worker must discard the retry");
-                        assert_eq!(stages_run, stop_after);
-                        assert!(!cacheability::can_publish_outer_result());
-                    });
-                    tokio::task::spawn_blocking(worker).await.expect("OCR worker");
+                cacheability::scope(async {
+                    cacheability::with_ocr_cancellation(Some(&token), async move {
+                        let worker = cacheability::blocking(move || {
+                            assert_retry_worker_stops(worker_token, soft_stop, stop_after);
+                        });
+                        tokio::task::spawn_blocking(worker).await.expect("OCR worker");
+                    })
+                    .await;
+                    assert!(
+                        !cacheability::can_publish_outer_result(),
+                        "the engine's enclosing scope must stay blocked"
+                    );
                 })
                 .await;
                 assert!(cacheability::can_publish_outer_result());
