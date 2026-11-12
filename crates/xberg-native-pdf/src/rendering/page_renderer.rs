@@ -10775,7 +10775,7 @@ mod tests {
     }
 
     fn span(ranges: &[std::ops::Range<usize>]) -> Vec<usize> {
-        ranges.iter().cloned().flatten().collect()
+        ranges.iter().flat_map(|r| r.clone()).collect()
     }
 
     /// A 20 pt glyph is a 14 px bar on a 14 px advance. Glyph `n` of a string starts `Th` times the

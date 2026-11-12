@@ -1,77 +1,31 @@
 //! Skipped text on a separation plate still advances the text matrix by the rasterizer's measure.
 //! Each test shows a glyph that paints nothing, then a visible one, and requires the plate to equal
-//! the plate of the visible glyph placed at the advance by hand. It runs through the walker, so it
-//! fails when either call site of `measure_text_advance` stops using it.
+//! the plate of the visible glyph placed at the advance by hand. It runs through the walker: each test covers
+//! one of the two call sites of `measure_text_advance`.
 
+use super::gate_parity_tests::{DPI, build_page_with};
 use super::*;
 
 /// One glyph, `H`, 1000 units wide: at 20 pt and Tz 50 the advance is 10 pt.
 const FONT: &str = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica \
     /FirstChar 72 /LastChar 72 /Widths [1000] >>";
 
-fn plate_of(content: &str, ext_gstate: &str) -> Vec<u8> {
-    let mut buf: Vec<u8> = Vec::new();
-    buf.extend_from_slice(b"%PDF-1.4\n");
-    let mut offs: Vec<usize> = Vec::new();
-    let mut push = |buf: &mut Vec<u8>, body: &str| {
-        offs.push(buf.len());
-        buf.extend_from_slice(body.as_bytes());
-    };
-    push(&mut buf, "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
-    push(&mut buf, "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
-    push(
-        &mut buf,
-        &format!(
-            "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R \
-             /Resources << /Font << /F1 5 0 R >> /ExtGState << /T << {ext_gstate} >> >> >> >>\nendobj\n"
-        ),
-    );
-    push(
-        &mut buf,
-        &format!(
-            "4 0 obj\n<< /Length {} >>\nstream\n{content}\nendstream\nendobj\n",
-            content.len()
-        ),
-    );
-    push(&mut buf, &format!("5 0 obj\n{FONT}\nendobj\n"));
-    let xref_off = buf.len();
-    buf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offs.len() + 1).as_bytes());
-    for off in &offs {
-        buf.extend_from_slice(format!("{off:010} 00000 n \n").as_bytes());
-    }
-    buf.extend_from_slice(
-        format!(
-            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref_off}\n%%EOF\n",
-            offs.len() + 1
-        )
-        .as_bytes(),
-    );
-    let doc = PdfDocument::from_bytes(buf).expect("synthetic PDF parses");
+fn plate_of(content: &str, state_body: &str) -> Vec<u8> {
+    let font_object = format!("5 0 obj\n{FONT}\nendobj\n");
+    let doc = build_page_with(content, "", state_body, &[font_object.as_str()]);
     let inks = vec!["Cyan".to_string()];
-    let plates = render_plates_for_inks(&doc, 0, 72, &inks, &inks).expect("plate renders");
-    assert_eq!(plates.len(), 1);
-    plates.into_iter().next().unwrap().data
+    let plates = render_plates_for_inks(&doc, 0, DPI, &inks, &inks).expect("plate renders");
+    plates.into_iter().next().expect("one plate").data
 }
 
-fn inked_columns(data: &[u8]) -> Vec<usize> {
-    let mut columns: Vec<usize> = data
-        .iter()
-        .enumerate()
-        .filter(|&(_, &v)| v > 0)
-        .map(|(i, _)| i % 100)
-        .collect();
-    columns.sort_unstable();
-    columns.dedup();
-    columns
+fn has_ink(data: &[u8]) -> bool {
+    data.iter().any(|&v| v > 0)
 }
 
 /// The reference: the visible glyph alone, placed where the skipped one's advance puts it.
 fn reference() -> Vec<u8> {
     let plate = plate_of("1 0 0 0 k BT /F1 20 Tf 50 Tz 20 10 Td (H) Tj ET", "");
-    assert!(
-        !inked_columns(&plate).is_empty(),
-        "the reference glyph must ink the plate"
-    );
+    assert!(has_ink(&plate), "the reference glyph must ink the plate");
     plate
 }
 
