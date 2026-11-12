@@ -1407,6 +1407,10 @@ fn assert_mixed_plain_marker_keeps_repeated_neighbor(
     assert_eq!(marked, format!("{}{marker}{raw_table_page}", plain_table_page));
 }
 
+/// The document arrives from `select_pdf_document`'s Mixed arm with `ocr_internal_doc: None`,
+/// so it is `flat_pdf_document`'s: a `pdf`-source document. The OCR text page list therefore
+/// never changes its derivation (#3014), which is why the helper asserts no list and does not
+/// force one before deriving.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn assert_mixed_plain_public_page_ranges(
     mut document: InternalDocument,
@@ -3620,16 +3624,18 @@ fn an_adopted_hocr_document_keeps_the_extractors_marks_and_rerenders_its_pages()
     };
 
     // The decision under test: the adopted hocr document is exactly the source the list's
-    // reader honors it on, so the extractor's marks are attached exactly as before #3014.
+    // reader honors it on, so the extractor's marks are attached exactly as before #3014 --
+    // extended beside any list the adopter already carries, not overwriting it.
     let mut marked = selected;
     marked.prebuilt_pages = Some(pages);
     marked.metadata.pages = Some(boundaries_metadata());
+    marked.ocr_text_pages = vec![7];
     attach_ocr_text_page_marks(&mut marked, marks);
     assert_eq!(
         marked.ocr_text_pages,
-        vec![1],
-        "an adopted hocr document keeps the extractor's marks: its source format is what the \
-         list's reader honors the list on"
+        vec![7, 1],
+        "an adopted hocr document keeps the extractor's marks beside the adopter's own: its \
+         source format is what the list's reader honors the list on"
     );
 
     // #2902: the marked page is re-rendered from its element, and the boundary survives because
@@ -3679,9 +3685,13 @@ fn an_adopted_hocr_document_keeps_the_extractors_marks_and_rerenders_its_pages()
             .metadata
             .pages
             .as_ref()
+            .is_some_and(|structure| structure.boundaries.is_none()),
+        "the unmarked page's boundary is dropped, not kept empty or absent with the structure: {:?}",
+        unmarked_result
+            .metadata
+            .pages
+            .as_ref()
             .and_then(|structure| structure.boundaries.clone())
-            .is_none_or(|boundaries| boundaries.is_empty()),
-        "the unmarked page's boundary is dropped"
     );
     assert!(
         unmarked_result
@@ -3689,6 +3699,90 @@ fn an_adopted_hocr_document_keeps_the_extractors_marks_and_rerenders_its_pages()
             .iter()
             .any(|warning| warning.source == "page_boundaries"),
         "the unmarked page is reported as diverging"
+    );
+}
+
+/// Issue #3014's default arm: a backend contribution with no `source_format` adopts as `ocr`
+/// (`derive::adopt_public_ocr_document`), and `ocr` is one of the sources the list's reader
+/// treats as OCR text on every page, so the extractor attaches nothing there: the reader
+/// never consults the list on such a document, and whatever the extractor built for it stays
+/// off the wire -- exactly the control the `pdf`-source test above pins for its own documents.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[test]
+fn an_adopted_document_without_a_source_format_defaults_to_ocr_and_keeps_no_marks() {
+    use crate::core::config::OutputFormat;
+    use crate::extractors::security::SecurityLimits;
+    use crate::types::document_structure::{DocumentNode, DocumentStructure, NodeContent};
+
+    const NODE_TEXT: &str = "Default-source paragraph one";
+
+    // The same plugin contribution the `hocr` sibling makes, with the source format absent:
+    // adoption defaults it to `ocr`.
+    let mut structure = DocumentStructure {
+        nodes: vec![DocumentNode {
+            id: String::new(),
+            content: NodeContent::Paragraph {
+                text: NODE_TEXT.to_string(),
+            },
+            parent: None,
+            children: Vec::new(),
+            content_layer: Default::default(),
+            page: Some(1),
+            page_end: None,
+            bbox: None,
+            annotations: Vec::new(),
+            attributes: None,
+        }],
+        source_format: None,
+        relationships: Vec::new(),
+        node_types: Vec::new(),
+    };
+    structure.finalize_node_types();
+    let mut plugin_result = crate::types::ExtractedDocument {
+        content: "Raw page transcript one".to_string(),
+        mime_type: std::borrow::Cow::Borrowed("text/plain"),
+        document: Some(structure),
+        ..Default::default()
+    };
+    crate::extraction::derive::adopt_public_ocr_document(&mut plugin_result, &SecurityLimits::default())
+        .expect("the plugin's structure must adopt");
+    let adopted = plugin_result
+        .ocr_internal_document
+        .take()
+        .expect("adoption must produce the internal document");
+    assert_eq!(
+        adopted.source_format, "ocr",
+        "a contribution without a source format adopts as ocr"
+    );
+
+    let (selected, origin, structured) = select_pdf_document(
+        ExtractionMethod::Ocr,
+        "unrelated seed text",
+        "application/pdf",
+        None,
+        Some(adopted),
+        None,
+        None,
+        None,
+        &OutputFormat::Plain,
+    );
+    assert_eq!(origin, PdfDocumentOrigin::Ocr);
+    assert!(structured);
+    assert_eq!(
+        selected.source_format, "ocr",
+        "the Ocr arm must not overwrite an adopted document's defaulted source format"
+    );
+
+    // The decision under test: `ocr` is a source the list's reader treats as OCR text on
+    // every page, so the extractor's marks could never change a derived result and are not
+    // attached -- the list stays as the adopter left it.
+    let mut marked = selected;
+    attach_ocr_text_page_marks(&mut marked, vec![1]);
+    assert!(
+        marked.ocr_text_pages.is_empty(),
+        "an adopted ocr-source document keeps no marks: its reader treats every page as OCR \
+         text before it looks at the list: {:?}",
+        marked.ocr_text_pages
     );
 }
 

@@ -2437,10 +2437,15 @@ fn replace_pages_with_ocr_page_texts(
 /// source format (for example a plugin's `hocr` structure), which is exactly the source the
 /// reader honors the list on: there the marks are attached exactly as before #3014, and
 /// #2902's re-rendering re-renders the marked pages from their elements.
+///
+/// The marks extend any list the adopted document already carries rather than overwriting
+/// it: the reader only consults membership, so the adopter's own marks stay readable beside
+/// the extractor's. Both the gate and `is_ocr_page_text` read the shared
+/// `source_short_circuits_ocr_page_text`, so the two cannot drift.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn attach_ocr_text_page_marks(doc: &mut InternalDocument, ocr_text_pages: Vec<u32>) {
-    if !matches!(doc.source_format.as_str(), "pdf" | "image" | "ocr") {
-        doc.ocr_text_pages = ocr_text_pages;
+    if !crate::extraction::derive::source_short_circuits_ocr_page_text(&doc.source_format) {
+        doc.ocr_text_pages.extend(ocr_text_pages);
     }
 }
 
