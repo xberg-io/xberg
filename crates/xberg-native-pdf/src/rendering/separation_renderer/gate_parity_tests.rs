@@ -473,6 +473,10 @@ fn stroking_group_page() -> PdfDocument {
 
 /// Renders `doc` through the PNG budget and returns the DPI it was admitted at, or `None` when refused.
 fn budgeted_dpi(doc: &PdfDocument, limit: usize, minimum_dpi: u32) -> Option<u32> {
+    render_at_budgeted_dpi(doc, limit, minimum_dpi).ok()
+}
+
+fn render_at_budgeted_dpi(doc: &PdfDocument, limit: usize, minimum_dpi: u32) -> crate::error::Result<u32> {
     let mut renderer = PageRenderer::new(RenderOptions::with_dpi(BUDGET_REQUESTED_DPI).as_raw());
     renderer.force_cmyk_sidecar = true;
     let budget = PngRenderBudget {
@@ -481,7 +485,6 @@ fn budgeted_dpi(doc: &PdfDocument, limit: usize, minimum_dpi: u32) -> Option<u32
     };
     renderer
         .render_page_with_budget(0, doc, Some(budget))
-        .ok()
         .map(|(_, dpi)| dpi)
 }
 
@@ -740,15 +743,28 @@ fn a_page_without_transparency_keeps_the_per_plate_knockout() {
 #[test]
 fn a_group_stroke_under_a_non_separable_blend_lowers_dpi_instead_of_failing() {
     let doc = stroking_group_page();
-    // The source replay holds three canvases while the fill-stroke holds
-    // two snapshots, one blend pixmap, and six bytes of coverage.
-    let limit = workspace_limit(3 * CANVAS + 17);
-    assert!(budgeted_dpi(&doc, limit, BUDGET_REQUESTED_DPI).is_none());
-    let dpi = budgeted_dpi(&doc, limit, BUDGET_MINIMUM_DPI).expect("the fit lowers the DPI");
+    let names = doc.get_page_inks_deep(0).expect("discover fixture spot inks");
+    let [ink] = names.as_slice() else {
+        panic!("expected exactly one spot ink, got {names:?}");
+    };
+    assert_eq!(ink, "InkA");
+
+    // Replay holds three canvases and a copied ink name. Fill-stroke
+    // reserves two RGBA snapshots, one Hue pixmap, six coverage bytes,
+    // and a separate backdrop-alpha plane for the process sidecar.
+    let rgba = 4;
+    let paint_scratch = 3 * rgba + 6 + 1;
+    let replay_name = size_of::<String>() + ink.capacity();
+    let limit = workspace_limit(3 * CANVAS + paint_scratch) + replay_name;
+
+    let error = render_at_budgeted_dpi(&doc, limit - 1, BUDGET_REQUESTED_DPI)
+        .expect_err("strict DPI must refuse a workspace one byte short");
+    assert!(error.to_string().contains("PDF knockout workspace exceeds"), "{error}");
+    let dpi = render_at_budgeted_dpi(&doc, limit - 1, BUDGET_MINIMUM_DPI).expect("the fit lowers the DPI");
     assert!(dpi < BUDGET_REQUESTED_DPI);
     assert_eq!(
-        budgeted_dpi(&doc, workspace_limit(3 * CANVAS + 19), BUDGET_REQUESTED_DPI),
-        Some(BUDGET_REQUESTED_DPI)
+        render_at_budgeted_dpi(&doc, limit, BUDGET_REQUESTED_DPI).expect("the exact workspace admits the request"),
+        BUDGET_REQUESTED_DPI
     );
 }
 
