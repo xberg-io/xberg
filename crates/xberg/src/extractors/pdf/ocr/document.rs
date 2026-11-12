@@ -92,12 +92,21 @@ pub(super) fn assemble_mixed_ocr_page_document(
         );
         copy_source_strip_frames(&doc.metadata, &mut assembled.metadata);
         assembled.processing_warnings = std::mem::take(&mut doc.processing_warnings);
+        // PDF assembly skips empty Markdown. Keep OCR cell data in the page inventory. ~keep
+        assembled
+            .tables
+            .extend(doc.tables.into_iter().filter(is_cell_only_ocr_table));
         doc = assembled;
     }
 
     normalize_mixed_ocr_document_page(&mut doc, page_number);
     (doc, paragraphs, outcome)
 }
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn is_cell_only_ocr_table(table: &crate::types::Table) -> bool {
+    table.markdown.trim().is_empty() && table.cells.iter().flatten().any(|cell| !cell.trim().is_empty())
+}
+
 /// Flat OCR-text document for a page whose backend produced tables or OCR elements
 /// but no structured document.
 ///
@@ -1380,6 +1389,14 @@ pub(super) fn carry_page_ocr_payload_forward(
     existing: &crate::types::internal::InternalDocument,
     new_page_doc: &mut crate::types::internal::InternalDocument,
 ) {
+    // Both rebuild paths skip cell-only tables. Final native yield and output still need them. ~keep
+    new_page_doc.tables.extend(
+        existing
+            .tables
+            .iter()
+            .filter(|table| is_cell_only_ocr_table(table))
+            .cloned(),
+    );
     new_page_doc.prebuilt_ocr_elements = existing.prebuilt_ocr_elements.clone();
     new_page_doc.processing_warnings = existing.processing_warnings.clone();
     new_page_doc.ocr_coordinate_frame = existing.ocr_coordinate_frame;

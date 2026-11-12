@@ -17,6 +17,14 @@ pub(super) mod tests {
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     mod retry_timeout_stop_tests;
 
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    mod mixed_cell_only_tables;
+
     #[cfg(feature = "pdf")]
     mod layout_page_frame;
 
