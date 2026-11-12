@@ -426,32 +426,35 @@ mod tests {
     #[test]
     fn test_abort_cancels_token_before_failed_is_published() {
         use std::sync::Arc;
-        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::mpsc;
+
+        const OBSERVER_TIMEOUT: Duration = Duration::from_secs(5);
 
         for run in 0..300 {
             let store = Arc::new(JobStore::new());
             let job_id = store.create_job().expect("slot available");
             let token = store.cancellation_token(&job_id).expect("token registered on create");
-            let ready = Arc::new(AtomicBool::new(false));
+            let (ready_tx, ready_rx) = mpsc::channel();
 
             let observer = {
                 let store = Arc::clone(&store);
                 let job_id = job_id.clone();
                 let token = token.clone();
-                let ready = Arc::clone(&ready);
                 std::thread::spawn(move || {
-                    ready.store(true, Ordering::SeqCst);
-                    loop {
+                    let deadline = std::time::Instant::now() + OBSERVER_TIMEOUT;
+                    ready_tx.send(()).expect("test still waiting for observer readiness");
+                    while std::time::Instant::now() < deadline {
                         if store.finished.get(&job_id).is_some() {
                             return token.is_cancelled();
                         }
-                        std::hint::spin_loop();
+                        std::thread::yield_now();
                     }
+                    panic!("run {run}: abort did not publish job {job_id} before the deadline");
                 })
             };
-            while !ready.load(Ordering::SeqCst) {
-                std::thread::yield_now();
-            }
+            ready_rx
+                .recv_timeout(OBSERVER_TIMEOUT)
+                .unwrap_or_else(|err| panic!("run {run}: observer readiness failed for job {job_id}: {err}"));
             store.abort(&job_id, "task ended".to_string(), "2026-05-01T12:00:01Z".to_string());
 
             assert!(

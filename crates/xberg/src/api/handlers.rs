@@ -1276,6 +1276,10 @@ where
     }
 }
 
+#[cfg(all(test, feature = "api"))]
+#[derive(Clone, Copy)]
+pub(crate) struct DisallowLocalUriInputs;
+
 /// Submit an async extraction job.
 ///
 /// POST /extract-async
@@ -1317,6 +1321,7 @@ where
 )]
 pub(crate) async fn extract_async_handler(
     State(state): State<ApiState>,
+    #[cfg(test)] disallow_local: Option<axum::Extension<DisallowLocalUriInputs>>,
     mut request: UnifiedExtractRequest,
 ) -> Result<axum::response::Response, ApiError> {
     if request.inputs.is_empty() {
@@ -1328,7 +1333,11 @@ pub(crate) async fn extract_async_handler(
     request.adopt_operator_crawl_egress(&state.default_config);
     let mut effective_config = request.config.unwrap_or_else(|| (*state.default_config).clone());
     apply_multipart_config_fields(&mut effective_config, request.output_format, request.pdf_passwords);
-    enforce_and_apply_api_uri_policy(&request.inputs, &mut effective_config, api_allows_local_uri_inputs())?;
+    #[cfg(not(test))]
+    let allow_local = api_allows_local_uri_inputs();
+    #[cfg(test)]
+    let allow_local = disallow_local.is_none() && api_allows_local_uri_inputs();
+    enforce_and_apply_api_uri_policy(&request.inputs, &mut effective_config, allow_local)?;
     // Created after the last fallible step: a rejected submission must not hold a slot. ~keep
     let Some(job_id) = state.job_store.create_job() else {
         return Err(ApiError::new(
@@ -2404,29 +2413,36 @@ mod tests {
 
     #[cfg(feature = "api")]
     #[tokio::test]
-    async fn test_extract_async_rejected_uri_holds_no_job_slot() {
-        let job_store = std::sync::Arc::new(crate::api::jobs::JobStore::new());
-        let app = test_router_with_store(std::sync::Arc::clone(&job_store));
-        let body = serde_json::json!({"inputs": [{"uri": "file:///etc/passwd"}]});
+    async fn test_extract_async_rejects_local_uri_before_admission() {
+        use crate::api::jobs::{JobStore, MAX_ACTIVE_JOBS};
 
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/extract-async")
-                    .header("content-type", "application/json")
-                    .body(Body::from(body.to_string()))
-                    .expect("valid request"),
-            )
-            .await
-            .expect("handler responded");
+        for active_count in [0, MAX_ACTIVE_JOBS] {
+            let job_store = Arc::new(JobStore::new());
+            for _ in 0..active_count {
+                job_store.create_job().expect("slot available");
+            }
+            let app = test_router_with_store(Arc::clone(&job_store)).layer(axum::Extension(DisallowLocalUriInputs));
+            let body = serde_json::json!({"inputs": [{"uri": "file:///local-document.pdf"}]});
 
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert_eq!(
-            job_store.active_count(),
-            0,
-            "a rejected submission must not hold a job slot"
-        );
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/extract-async")
+                        .header("content-type", "application/json")
+                        .body(Body::from(body.to_string()))
+                        .expect("valid request"),
+                )
+                .await
+                .expect("handler responded");
+
+            assert_eq!(
+                response.status(),
+                StatusCode::BAD_REQUEST,
+                "active jobs: {active_count}"
+            );
+            assert_eq!(job_store.active_count(), active_count);
+        }
     }
 
     #[cfg(feature = "api")]
