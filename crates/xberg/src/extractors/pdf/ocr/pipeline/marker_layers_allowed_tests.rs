@@ -64,17 +64,21 @@ fn an_absent_ocr_config_never_offers_marker_layers() {
 
 #[test]
 fn a_custom_ocr_pipeline_never_offers_marker_layers() {
-    let mut ocr = OcrConfig::default();
-    ocr.pipeline = Some(crate::core::config::OcrPipelineConfig {
-        stages: Vec::new(),
-        quality_thresholds: crate::core::config::OcrQualityThresholds::default(),
-    });
+    let ocr = OcrConfig {
+        pipeline: Some(crate::core::config::OcrPipelineConfig {
+            stages: Vec::new(),
+            quality_thresholds: crate::core::config::OcrQualityThresholds::default(),
+        }),
+        ..Default::default()
+    };
     assert!(!allowed(false, false, &OcrStrategy::Auto, Some(&ocr)));
 }
 
 #[test]
 fn an_enabled_vlm_fallback_never_offers_marker_layers() {
-    let mut ocr = OcrConfig::default();
-    ocr.vlm_fallback = crate::core::config::VlmFallbackPolicy::Always;
+    let ocr = OcrConfig {
+        vlm_fallback: crate::core::config::VlmFallbackPolicy::Always,
+        ..Default::default()
+    };
     assert!(!allowed(false, false, &OcrStrategy::Auto, Some(&ocr)));
 }

@@ -240,7 +240,7 @@ async fn probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer
         native.processing_warnings
     );
 
-    let decisions = probe_decisions(&pdf).await;
+    let decisions = probe_decisions("marker-probe", &pdf).await;
     assert_eq!(
         decisions,
         vec![
@@ -291,31 +291,60 @@ impl tracing::field::Visit for Fields {
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         self.0.insert(field.name().to_owned(), format!("{value:?}"));
     }
+
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        self.0.insert(field.name().to_owned(), value.to_owned());
+    }
 }
 
-/// Probe decisions as `(page, needed, probed)` from the `Hidden PDF text probe decision` events.
+struct Case(String);
+
+/// Probe decisions as `(page, needed, probed)` from the `Hidden PDF text probe decision`
+/// events, keyed by the `case` span that was current when they were logged.
 #[derive(Clone, Default)]
-struct ProbeDecisions(Arc<Mutex<Vec<(String, String, String)>>>);
+struct ProbeDecisions(Arc<Mutex<Vec<(String, Fields)>>>);
 
 impl<S> tracing_subscriber::Layer<S> for ProbeDecisions
 where
     S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
 {
-    fn on_event(&self, event: &tracing::Event<'_>, _context: tracing_subscriber::layer::Context<'_, S>) {
+    fn on_new_span(
+        &self,
+        attrs: &tracing::span::Attributes<'_>,
+        id: &tracing::Id,
+        context: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let mut fields = Fields::default();
+        attrs.record(&mut fields);
+        if let Some(case) = fields.0.remove("case") {
+            context
+                .span(id)
+                .expect("new span exists")
+                .extensions_mut()
+                .insert(Case(case));
+        }
+    }
+
+    fn on_event(&self, event: &tracing::Event<'_>, context: tracing_subscriber::layer::Context<'_, S>) {
         let mut fields = Fields::default();
         event.record(&mut fields);
         if fields.0.get("message").map(String::as_str) != Some("Hidden PDF text probe decision") {
             return;
         }
-        self.0.lock().expect("decision lock").push((
-            fields.0["page"].clone(),
-            fields.0["needed"].clone(),
-            fields.0["probed"].clone(),
-        ));
+        let case = context
+            .event_scope(event)
+            .and_then(|scope| {
+                scope
+                    .from_root()
+                    .find_map(|span| span.extensions().get::<Case>().map(|c| c.0.clone()))
+            })
+            .unwrap_or_default();
+        self.0.lock().expect("decision lock").push((case, fields));
     }
 }
 
-async fn probe_decisions(pdf: &[u8]) -> Vec<(String, String, String)> {
+async fn probe_decisions(case: &str, pdf: &[u8]) -> Vec<(String, String, String)> {
+    use tracing::Instrument as _;
     use tracing_subscriber::layer::SubscriberExt as _;
     static LOG: std::sync::OnceLock<ProbeDecisions> = std::sync::OnceLock::new();
     let log = LOG.get_or_init(|| {
@@ -326,7 +355,20 @@ async fn probe_decisions(pdf: &[u8]) -> Vec<(String, String, String)> {
         tracing::callsite::rebuild_interest_cache();
         decisions
     });
-    log.0.lock().expect("decision lock").clear();
-    extract(pdf, &config()).await;
-    log.0.lock().expect("decision lock").clone()
+    extract(pdf, &config())
+        .instrument(tracing::info_span!("probe", case = case))
+        .await;
+    log.0
+        .lock()
+        .expect("decision lock")
+        .iter()
+        .filter(|(logged, _)| logged == case)
+        .map(|(_, fields)| {
+            (
+                fields.0["page"].clone(),
+                fields.0["needed"].clone(),
+                fields.0["probed"].clone(),
+            )
+        })
+        .collect()
 }
