@@ -484,26 +484,8 @@ fn explicit_true_rotates_without_cached_osd() {
     );
 }
 
-#[cfg(not(paddle_ocr))]
 #[test]
 #[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
-fn cached_file_recovers_when_osd_is_installed_without_changing_the_configuration() {
-    const CACHE_CASE: &str = "cached_file_recovers_when_osd_is_installed_without_changing_the_configuration";
-    if std::env::var(CHILD).as_deref() != Ok(CACHE_CASE) {
-        run_private_child(CACHE_CASE);
-        return;
-    }
-    cached_file_recovers_case();
-}
-
-/// The paddle-route twin asserts the same correct behavior as the default-route test above:
-/// the first read is cached, and once the OSD pack is installed both the fresh and cached
-/// reads recover through the OSD route. Under the synthesized per-page pipeline route none of
-/// that holds yet (#3007), so this variant is ignored until that route delivers the recovery;
-/// running it with `--ignored` under a paddle build shows the degraded behavior failing.
-#[cfg(paddle_ocr)]
-#[test]
-#[ignore = "#3007: the per-page pipeline route neither caches the first read nor recovers through OSD yet"]
 fn cached_file_recovers_when_osd_is_installed_without_changing_the_configuration() {
     const CACHE_CASE: &str = "cached_file_recovers_when_osd_is_installed_without_changing_the_configuration";
     if std::env::var(CHILD).as_deref() != Ok(CACHE_CASE) {
@@ -622,26 +604,8 @@ impl xberg::engine::seams::CacheBackend for DocumentResultsCache {
     }
 }
 
-#[cfg(not(paddle_ocr))]
 #[test]
 #[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
-fn cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_configuration() {
-    const ENGINE_CASE: &str = "cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_configuration";
-    if std::env::var(CHILD).as_deref() != Ok(ENGINE_CASE) {
-        run_private_child(ENGINE_CASE);
-        return;
-    }
-    cached_engine_bytes_recover_case();
-}
-
-/// The paddle-route twin asserts the same correct behavior as the default-route test above:
-/// the first read is cached, and once the OSD pack is installed both the fresh and cached
-/// reads recover through the OSD route. Under the synthesized per-page pipeline route none of
-/// that holds yet (#3007), so this variant is ignored until that route delivers the recovery;
-/// running it with `--ignored` under a paddle build shows the degraded behavior failing.
-#[cfg(paddle_ocr)]
-#[test]
-#[ignore = "#3007: the per-page pipeline route neither caches the first read nor recovers through OSD yet"]
 fn cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_configuration() {
     const ENGINE_CASE: &str = "cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_configuration";
     if std::env::var(CHILD).as_deref() != Ok(ENGINE_CASE) {
@@ -695,27 +659,8 @@ fn cached_engine_bytes_recover_case() {
     assert_route("after", &after, Route::Osd);
 }
 
-#[cfg(not(paddle_ocr))]
 #[test]
 #[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
-fn cached_context_changed_during_extraction_is_not_written() {
-    const CHANGED_CASE: &str = "cached_context_changed_during_extraction_is_not_written";
-    if std::env::var(CHILD).as_deref() != Ok(CHANGED_CASE) {
-        run_private_child(CHANGED_CASE);
-        return;
-    }
-    cached_context_changed_case();
-}
-
-/// The paddle-route twin asserts the same correct behavior as the default-route test above:
-/// the read serves through the OSD route with the full recovered source table. Under the
-/// synthesized per-page pipeline route that recovery does not happen yet (#3007), so this
-/// variant is ignored until the route delivers it; running it with `--ignored` under a paddle
-/// build shows the degraded read failing. The capability-change guard below (the read must not
-/// populate the earlier cache identity) stays asserted for every build.
-#[cfg(paddle_ocr)]
-#[test]
-#[ignore = "#3007: the per-page pipeline route does not recover through OSD yet"]
 fn cached_context_changed_during_extraction_is_not_written() {
     const CHANGED_CASE: &str = "cached_context_changed_during_extraction_is_not_written";
     if std::env::var(CHILD).as_deref() != Ok(CHANGED_CASE) {
@@ -958,7 +903,7 @@ fn persisted_extraction_entries(namespace: &str) -> usize {
     let cache = std::path::PathBuf::from(std::env::var_os("XBERG_CACHE_DIR").unwrap())
         .join("extraction")
         .join(namespace);
-    // A route that writes nothing never creates the namespace directory (#3007), so a missing
+    // A route that writes nothing never creates the namespace directory, so a missing
     // directory is itself the degradation and must fail loudly here rather than read as zero
     // entries behind a caller's expectation of one. ~keep
     let entries = std::fs::read_dir(&cache)
@@ -1160,10 +1105,6 @@ fn assert_route(name: &str, result: &ExtractedDocument, expected: Route) {
     assert_eq!(observed, expected, "{name}: served from the wrong orientation route");
 }
 
-/// The whole-document route reports the caller's PSM as the flat `psm` key; the per-page
-/// pipeline route reports one entry per page in `ocr_page_segmentation_modes` instead, which
-/// is an API-visible difference tracked by #3007. ~keep
-#[cfg(not(paddle_ocr))]
 fn assert_psm(result: &ExtractedDocument, expected: &str) {
     assert_eq!(
         result
@@ -1172,22 +1113,6 @@ fn assert_psm(result: &ExtractedDocument, expected: &str) {
             .get("psm")
             .and_then(serde_json::Value::as_str),
         Some(expected)
-    );
-}
-
-#[cfg(paddle_ocr)]
-fn assert_psm(result: &ExtractedDocument, expected: &str) {
-    let modes = result
-        .metadata
-        .additional
-        .get("ocr_page_segmentation_modes")
-        .and_then(serde_json::Value::as_array)
-        .expect("the per-page pipeline route records ocr_page_segmentation_modes");
-    assert!(
-        modes
-            .iter()
-            .any(|mode| mode.get("psm").and_then(serde_json::Value::as_i64) == Some(expected.parse::<i64>().unwrap())),
-        "expected psm {expected} in {modes:?}"
     );
 }
 

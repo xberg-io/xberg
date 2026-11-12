@@ -3953,6 +3953,42 @@ async fn extract_pages_with_per_page_pipeline(
     document.processing_warnings = warnings;
     document.ocr_page_failures = page_failures;
     merge_structured_ocr_pages_into_internal_document(&mut document, &accepted_pages, &structured_pages);
+    // The whole-document route reports the first read page's backend metadata as flat keys; this
+    // route reads per page, so its first accepted page stands for the run (GH#3007). ~keep
+    if let Some(first) = accepted_pages
+        .iter()
+        .filter(|(_, text)| !text.trim().is_empty())
+        .map(|(page, _)| *page)
+        .min()
+        .and_then(|page| structured_pages.get(&page))
+    {
+        if let Some((key, value)) = first
+            .metadata
+            .additional
+            .get_key_value(crate::ocr_metadata_keys::OCR_AUTO_ROTATED_METADATA_KEY)
+        {
+            document
+                .metadata
+                .additional
+                .entry(key.clone())
+                .or_insert_with(|| value.clone());
+        }
+    }
+    if let Some(psm) = document
+        .metadata
+        .additional
+        .get(crate::ocr_metadata_keys::OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY)
+        .and_then(serde_json::Value::as_array)
+        .and_then(|modes| modes.first())
+        .and_then(|mode| mode.get("psm"))
+        .and_then(serde_json::Value::as_i64)
+    {
+        document
+            .metadata
+            .additional
+            .entry(std::borrow::Cow::Borrowed("psm"))
+            .or_insert_with(|| serde_json::Value::String(psm.to_string()));
+    }
     let tables = document.tables.clone();
     let ocr_elements = document.prebuilt_ocr_elements.clone().unwrap_or_default();
 
