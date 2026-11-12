@@ -14,6 +14,8 @@ mod ink_probe;
 mod layout_hints;
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 mod layout_runner;
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+mod loses_whole_read_tests;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 mod mixed_tables;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -2548,6 +2550,30 @@ fn dropped_script_warnings(
     Vec::new()
 }
 
+/// Whether the targeted run's failures hand the document back to the whole-document read: any
+/// page failure the run could not recover, on a page the whole read read with text. A page whose
+/// script the whole read dropped (`dropped_pages`) never decides alone — a dropped page always
+/// has native text, which recovers its failure first — so its conjunct is redundant through the
+/// public API, but it keeps the fallback away from the pages the targeted run exists to serve.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn loses_whole_read(
+    whole_read_pages: Option<&[String]>,
+    failures: &[crate::types::OcrPageFailure],
+    dropped_pages: &[u32],
+) -> bool {
+    whole_read_pages.is_some_and(|pages| {
+        failures.iter().any(|failure| {
+            !failure.recovered
+                && !dropped_pages.contains(&failure.page)
+                && failure
+                    .page
+                    .checked_sub(1)
+                    .and_then(|index| pages.get(index as usize))
+                    .is_some_and(|text| !text.trim().is_empty())
+        })
+    })
+}
+
 /// PDF document extractor using xberg_native_pdf.
 #[cfg_attr(alef, alef(skip))]
 pub struct PdfExtractor;
@@ -3497,18 +3523,12 @@ impl PdfExtractor {
                         Some(Ok(mixed_run)) => {
                             // A page the retry could not read that the whole read did read would come out
                             // empty, so the retry is discarded and the whole read used. ~keep
-                            let loses_whole_read = whole_read.as_ref().is_ok_and(|read| {
-                                mixed_run.output.9.iter().any(|failure| {
-                                    !failure.recovered
-                                        && !dropped_pages.contains(&failure.page)
-                                        && failure
-                                            .page
-                                            .checked_sub(1)
-                                            .and_then(|index| read.5.get(index as usize))
-                                            .is_some_and(|text| !text.trim().is_empty())
-                                })
-                            });
-                            if loses_whole_read {
+                            let whole_read_loses = loses_whole_read(
+                                whole_read.as_ref().ok().map(|read| read.5.as_slice()),
+                                &mixed_run.output.9,
+                                &dropped_pages,
+                            );
+                            if whole_read_loses {
                                 tracing::warn!(
                                     failing_pages = ?decision.failing_pages,
                                     "Targeted OCR could not read a page the whole-document read had read; \
