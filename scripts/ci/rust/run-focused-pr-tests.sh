@@ -50,6 +50,11 @@ run_pdf_cases() {
   run_exact png_predictor_panel_recovers_missing_line_without_changing_primary_ocr \
     --test pdf_embedded_psm6_addition_2327
   run_type0_cases
+  run_type0_noisy_render_cases
+  local type0_structure='extractors::pdf::ocr::native_word_coverage::structure_tests::type0_structure'
+  run_exact "$type0_structure::single_page_type0_keeps_cell_only_tables_absent_from_the_structure" --lib
+  local mixed_tables='extractors::pdf::ocr::tests::tests::mixed_cell_only_tables'
+  run_exact "$mixed_tables::mixed_ocr_retains_cell_only_sidecar_tables_in_page_output" --lib
   run_budget_retry_cases
   run_retry_timeout_cases
 }
@@ -99,6 +104,25 @@ run_type0_cases() {
   run_exact 'marker_probe::probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer' --test pdf_type0_scope_2533
   if [ "$((passed - before))" -ne 6 ]; then
     printf 'Expected six executed public Type0 tests, observed %s\n' "$((passed - before))" >&2
+    exit 1
+  fi
+}
+
+# This suite builds without PaddleOCR, so the single-backend routes read the pages here. The full
+# build always runs the OCR pipeline and never reaches them.
+run_type0_noisy_render_cases() {
+  local before="$passed"
+  local test_name
+  for test_name in \
+    a_speckled_type0_layer_keeps_native_text_in_markdown \
+    a_lightly_speckled_type0_layer_keeps_native_text_in_markdown \
+    a_speckled_type0_layer_keeps_native_text_after_ink_loss \
+    a_speckled_single_page_type0_layer_keeps_native_text_after_ink_loss \
+    a_covered_type0_layer_sharing_a_few_words_with_the_visible_read_goes_to_ocr; do
+    run_exact "$test_name" --test pdf_type0_covered_layer_2802
+  done
+  if [ "$((passed - before))" -ne 5 ]; then
+    printf 'Expected five executed noisy-render Type0 tests, observed %s\n' "$((passed - before))" >&2
     exit 1
   fi
 }
@@ -290,7 +314,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=86
+  expected=93
   run_pdf_cases
   run_retained_read_cases
   expected=$((expected + 11 + 7))
