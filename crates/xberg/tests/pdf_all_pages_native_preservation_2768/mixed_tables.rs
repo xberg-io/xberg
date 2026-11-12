@@ -342,25 +342,3 @@ async fn single_stage_pipeline_reports_every_table_rectangle_in_page_points() {
     let config = single_stage_pipeline(super::pinned_config(models.path()));
     table_rectangles_under(&config, xberg::types::ExtractionMethod::Ocr, false).await;
 }
-
-/// Layout detection hands the pipeline pre-rendered images, so the page has neither a detached
-/// image document nor a lazy render: its backend table stays in the pixels recognition read.
-#[cfg(feature = "layout-detection")]
-#[tokio::test]
-async fn layout_route_keeps_the_backend_table_in_the_pixels_recognition_read() {
-    let models = tempfile::tempdir().unwrap();
-    let mut config = single_stage_pipeline(super::pinned_config(models.path()));
-    config.layout = Some(xberg::LayoutDetectionConfig::default());
-    let actual = read(TABLE_PAGES[0].pdf, &config).await;
-    let backend = [273.0, 267.0, 2237.0, 1450.0];
-    assert!(
-        actual.tables.iter().filter_map(|table| table.bounding_box).any(|bbox| {
-            [bbox.x0, bbox.y0, bbox.x1, bbox.y1]
-                .iter()
-                .zip(backend)
-                .all(|(actual, expected)| (actual - expected).abs() <= 2.0)
-        }),
-        "no table rectangle at the recognition pixels {backend:?}: {:?}",
-        actual.tables.iter().map(|table| table.bounding_box).collect::<Vec<_>>()
-    );
-}

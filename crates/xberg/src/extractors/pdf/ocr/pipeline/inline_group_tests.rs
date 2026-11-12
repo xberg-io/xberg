@@ -14,8 +14,15 @@ fn a_code_span_group_is_accepted_spelled_or_projected() {
 
 #[test]
 fn a_word_inside_a_spelled_group_that_the_source_lacks_fails_the_group() {
-    // The spelled alternative must stay dead after `x`; `b`` would otherwise finish it.
+    // `x` ends both alternatives at once, so the group fails there.
     assert!(!group("`a b`", "a b", false, "`a x b` tail").0);
+}
+
+#[test]
+fn an_alternative_that_a_word_killed_stays_dead_when_a_later_word_matches_it() {
+    // `a` kills the spelled alternative and "`a" kills the projected one; "`a b`" would
+    // otherwise revive and complete the spelled one.
+    assert!(!group("`a b`", "a b", false, "a `a b` tail").0);
 }
 
 #[test]
