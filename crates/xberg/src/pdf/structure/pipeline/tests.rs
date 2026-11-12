@@ -9859,3 +9859,50 @@ fn should_mark_every_member_of_a_stack_of_eight_members_and_none_of_nine() {
     nine.push(stack_seg("tail", 200.0, 20.0, 10.0, 100.0));
     assert_eq!(marked_script_chars(nine), 0);
 }
+
+/// The marked runs of a placed page, as `(text, kind)` in reading order.
+fn marked_script_runs(segments: Vec<SegmentData>) -> (String, Vec<(String, crate::types::AnnotationKind)>) {
+    let paragraphs = segments_to_paragraphs(segments, &[], &[], &TextRepairWitnesses::default());
+    let document = crate::pdf::structure::assembly::assemble_internal_document(
+        vec![paragraphs],
+        &[],
+        None,
+        &[],
+        &Default::default(),
+    );
+    assert_eq!(document.elements.len(), 1);
+    let element = &document.elements[0];
+    let runs = element
+        .annotations
+        .iter()
+        .map(|annotation| {
+            (
+                element.text[annotation.start as usize..annotation.end as usize].to_string(),
+                annotation.kind.clone(),
+            )
+        })
+        .collect();
+    (element.text.clone(), runs)
+}
+
+#[test]
+fn should_keep_the_plus_of_a_subscript_out_of_the_exponent_of_its_base() {
+    use crate::types::AnnotationKind::{Subscript, Superscript};
+    let segments = vec![
+        stack_seg("\u{3b3}", 100.0, 7.0, 10.0, 100.0),
+        stack_seg("j", 107.0, 3.0, 6.0, 104.3),
+        stack_seg("K", 107.2, 4.6, 6.0, 96.0),
+        stack_seg("+", 111.9, 3.0, 4.2, 97.5),
+        stack_seg("tail", 120.0, 20.0, 10.0, 100.0),
+    ];
+    let (text, runs) = marked_script_runs(segments);
+    assert!(text.replace(' ', "").starts_with("\u{3b3}jK+"), "{text:?}");
+    assert_eq!(
+        runs,
+        [
+            ("j".to_string(), Superscript),
+            ("K".to_string(), Subscript),
+            ("+".to_string(), Superscript)
+        ]
+    );
+}

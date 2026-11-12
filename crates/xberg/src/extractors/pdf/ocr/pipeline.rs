@@ -8,6 +8,17 @@
 #[path = "pipeline/direct_rgb_budget_recovery.rs"]
 mod direct_rgb_budget_recovery;
 
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "pdf",
+    any(
+        paddle_ocr,
+        all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))
+    )
+))]
+#[path = "pipeline/per_page_flat_metadata.rs"]
+mod per_page_flat_metadata;
+
 #[cfg(all(any(feature = "ocr", feature = "ocr-wasm"), feature = "layout-detection"))]
 use super::document::assemble_ocr_page_paragraphs;
 #[cfg(all(
@@ -1549,6 +1560,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         single_block_pages: Some(std::sync::Arc::clone(&single_block_pages)),
                         native_page_layers: None,
                         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                        decision_layers: page_layers.clone(),
+                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                         native_coverage_layers: native_coverage_layers
                             .as_ref()
                             .filter(|_| {
@@ -1768,6 +1781,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             .is_some(),
                         single_block_pages: Some(std::sync::Arc::clone(&single_block_pages)),
                         native_page_layers: None,
+                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                        decision_layers: page_layers.clone(),
                         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                         native_coverage_layers: native_coverage_layers
                             .as_ref()
@@ -3954,6 +3969,7 @@ async fn extract_pages_with_per_page_pipeline(
     document.processing_warnings = warnings;
     document.ocr_page_failures = page_failures;
     merge_structured_ocr_pages_into_internal_document(&mut document, &accepted_pages, &structured_pages);
+    per_page_flat_metadata::lift(&mut document, &structured_pages);
     let tables = document.tables.clone();
     let ocr_elements = document.prebuilt_ocr_elements.clone().unwrap_or_default();
 
@@ -4339,6 +4355,10 @@ pub(crate) struct PageOcrHints {
     /// has chosen its output, a page whose OCR text is judged recognition noise gets its layer
     /// first.
     pub(crate) native_page_layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
+    /// The layers the mixed route's page decision compares each page's OCR text with, for the
+    /// per-page calls that carry no `native_page_layers`.
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    pub(crate) decision_layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
     /// Original marker-bearing text of the only physical page in a whole automatic fallback.
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     pub(crate) single_native_type0_page: Option<std::sync::Arc<str>>,
@@ -4348,6 +4368,13 @@ pub(crate) struct PageOcrHints {
 
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 impl PageOcrHints {
+    pub(super) fn decision_layer(&self, page: u32) -> Option<&str> {
+        self.decision_layers
+            .as_ref()
+            .or(self.native_page_layers.as_ref())
+            .and_then(|layers| layers.get(&page))
+            .map(String::as_str)
+    }
     fn native_layer(&self, page: u32) -> Option<&str> {
         self.native_coverage_layers
             .as_ref()
@@ -5319,7 +5346,10 @@ pub(super) async fn extract_with_ocr_for_page(
                     .filter(|_| whole_page_raster)
                     .map(|retry| (Arc::clone(retry), Arc::clone(&upright_data)));
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                let allow_prose = detached_page.is_none() && images.is_none();
+                // The prose proof reads only the page's own words and geometry, so it holds wherever the
+                // raster came from: a detached render, including one a stored scan replaced. Only
+                // caller-supplied images, which carry no page of this document, stay excluded (GH#3007). ~keep
+                let allow_prose = detached_page.is_some() || images.is_none();
                 #[cfg(feature = "ocr")]
                 let caption_raster =
                     (capture_caption && retry.is_some() && page_rotation_degrees == 0 && correction_degrees == 0).then(
@@ -5847,6 +5877,9 @@ pub(super) async fn extract_with_ocr_for_page(
                     pdf,
                     document_page_idx,
                     &mut ocr_result,
+                    page_ocr_hints
+                        .as_ref()
+                        .and_then(|hints| hints.decision_layer(document_page_number)),
                     super::native_word_coverage::InkProofLimits {
                         thresholds: &ocr_output_thresholds,
                         max_working_bytes: super::hidden_layer::preview_byte_limit(config),

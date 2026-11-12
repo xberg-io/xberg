@@ -193,6 +193,13 @@ impl CancellationToken {
         self.stop.first_unread_page.fetch_min(page, Ordering::Relaxed);
     }
 
+    /// Whether the extraction time limit cut a page loop short: the stop was requested and a loop left
+    /// pages unread. The stages after such a loop only decorate the pages already read, so they give way
+    /// to returning them inside the grace period.
+    pub(crate) fn cut_short_by_time_limit(&self) -> bool {
+        self.stop_requested() && self.first_unread_page().is_some()
+    }
+
     /// The lowest page (1-based) a stopped page loop did not read, if any loop stopped early.
     pub(crate) fn first_unread_page(&self) -> Option<u32> {
         match self.stop.first_unread_page.load(Ordering::Relaxed) {
@@ -303,5 +310,24 @@ mod tests {
         token.note_unread_page(4);
         token.note_unread_page(6);
         assert_eq!(token.first_unread_page(), Some(4));
+    }
+
+    #[test]
+    fn a_time_limit_cuts_a_page_loop_short_only_with_a_stop_and_an_unread_page() {
+        let token = CancellationToken::new();
+        assert!(!token.cut_short_by_time_limit());
+
+        token.request_stop();
+        assert!(
+            !token.cut_short_by_time_limit(),
+            "a stop that left no page unread cut nothing short"
+        );
+
+        token.note_unread_page(5);
+        assert!(token.cut_short_by_time_limit());
+
+        let unstopped = CancellationToken::new();
+        unstopped.note_unread_page(5);
+        assert!(!unstopped.cut_short_by_time_limit());
     }
 }
