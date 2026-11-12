@@ -5,7 +5,7 @@ use super::*;
 use crate::rendering::page_renderer::{PageRenderer, RenderOptions};
 use crate::rendering::sidecar::page_declares_transparency;
 
-const DPI: u32 = 72;
+pub(super) const DPI: u32 = 72;
 
 /// Two overlapping fills in the spot ink `InkA`; the second runs under `/T gs`.
 const CONTENT: &str = "/CS0 cs 0.9 scn 10 10 60 60 re f /T gs /CS0 cs 0.5 scn 40 40 50 50 re f";
@@ -19,7 +19,7 @@ fn build_page(state_body: &str, extras: &[&str]) -> PdfDocument {
     build_page_with(CONTENT, SPOT_A, state_body, extras)
 }
 
-fn build_page_with(content: &str, colour_spaces: &str, state_body: &str, extras: &[&str]) -> PdfDocument {
+pub(super) fn build_page_with(content: &str, colour_spaces: &str, state_body: &str, extras: &[&str]) -> PdfDocument {
     let mut buf: Vec<u8> = Vec::new();
     buf.extend_from_slice(b"%PDF-1.4\n");
     let mut offs: Vec<usize> = Vec::new();
@@ -34,11 +34,16 @@ fn build_page_with(content: &str, colour_spaces: &str, state_body: &str, extras:
     } else {
         ""
     };
+    let fonts = if content.contains("/F1 ") {
+        "/Font << /F1 5 0 R >>"
+    } else {
+        ""
+    };
     push(
         &mut buf,
         &format!(
             "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R \
-             /Resources << /ColorSpace << {colour_spaces} >> {xobjects} \
+             /Resources << /ColorSpace << {colour_spaces} >> {xobjects} {fonts} \
              /ExtGState << /T << /Type /ExtGState {state_body} >> >> >> >>\nendobj\n"
         ),
     );
