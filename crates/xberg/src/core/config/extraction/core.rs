@@ -209,6 +209,12 @@ pub struct ExtractionConfig {
     /// giving slow paths (VLM-based OCR, large scanned documents) enough
     /// headroom to finish. Set to `None` to disable the timeout for trusted
     /// input or long-running workloads.
+    ///
+    /// A PDF that hits the limit while reading pages returns the pages it
+    /// finished with a `timeout` processing warning naming the first unread
+    /// page, and may run up to 10 s past the limit. Otherwise (other formats,
+    /// or a PDF that does not return in time) the extraction fails with a
+    /// timeout error, which also cancels the caller's cancellation token.
     #[serde(default = "ExtractionConfig::default_extraction_timeout")]
     pub extraction_timeout_secs: Option<u64>,
 

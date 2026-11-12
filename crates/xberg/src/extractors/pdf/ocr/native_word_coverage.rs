@@ -80,7 +80,7 @@ const MIN_NATIVE_READ_AGREEMENT: f64 = 0.85;
 const FLAT_GROUND_SPREAD: u8 = 1;
 /// Resolution of the two rasters that tell glyph ink from every other mark. Word boxes are tested
 /// in points, so the resolution only has to resolve a glyph; it is not an OCR resolution.
-const INK_PROOF_DPI: u32 = 144;
+pub(super) const INK_PROOF_DPI: u32 = 144;
 
 /// Whether the native text paints all the ink that a Tesseract read of the page sits on, for a
 /// read whose words do not literally equal the native words. Every iterator word must lie in a
@@ -411,7 +411,7 @@ fn pixel_window(
 
 /// Whether glyph paints made a visible difference somewhere in the box. A native word with none
 /// is not shown on the page: it lies under a fill, is clipped, is invisible, or matches its ground.
-fn glyph_ink_in(
+pub(super) fn glyph_ink_in(
     rasters: &xberg_native_pdf::rendering::TextInkRasters,
     placed: &LineBox,
     media: Rect,
@@ -430,7 +430,7 @@ fn glyph_ink_in(
 }
 
 /// The page's media box when the page is unrotated, starts at the origin and is not cropped.
-fn upright_media_box(pdf: &PdfDocument, page_index: usize) -> Option<Rect> {
+pub(super) fn upright_media_box(pdf: &PdfDocument, page_index: usize) -> Option<Rect> {
     let info = pdf.get_page_info(page_index).ok()?;
     let media = info.media_box;
     (info.rotation == 0 && media.x == 0.0 && media.y == 0.0 && info.crop_box.is_none_or(|crop| crop == media))
@@ -588,11 +588,11 @@ fn word_ink(
     (ground < MIN_VISIBLE_CONTRAST && (glyph_ink || ground <= FLAT_GROUND_SPREAD)).then_some(glyph_ink)
 }
 
-fn is_iterator_word(word: &OcrElement) -> bool {
+pub(super) fn is_iterator_word(word: &OcrElement) -> bool {
     word.backend_metadata.get("backend").and_then(serde_json::Value::as_str) == Some("tesseract-iterator")
 }
 
-fn native_box(rect: Rect) -> LineBox {
+pub(super) fn native_box(rect: Rect) -> LineBox {
     LineBox {
         left: rect.x,
         top: rect.y,
@@ -601,7 +601,7 @@ fn native_box(rect: Rect) -> LineBox {
     }
 }
 
-fn ocr_word_in_page_points(word: &OcrElement, raster: (u32, u32), media: Rect) -> Option<LineBox> {
+pub(super) fn ocr_word_in_page_points(word: &OcrElement, raster: (u32, u32), media: Rect) -> Option<LineBox> {
     let OcrBoundingGeometry::Rectangle {
         left,
         top,

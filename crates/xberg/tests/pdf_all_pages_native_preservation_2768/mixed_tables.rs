@@ -166,6 +166,23 @@ async fn detected_scan_without_native_elements_renders_the_accepted_table() {
     config.ocr_strategy = OcrStrategy::ScannedPages { min_confidence: 0.9 };
     let actual = read(bytes, &config).await;
     assert_eq!(actual.extraction_method, Some(xberg::types::ExtractionMethod::Mixed));
+    assert_eq!(actual.tables.len(), 1);
+    let bbox = actual.tables[0]
+        .bounding_box
+        .expect("the OCR table keeps its rectangle");
+    // ~keep The 612x792 pt page renders at 1667x2156 px and recognition reads a 2550x3298 px
+    // resample, so the table's pixel rectangle (273, 267)-(2237, 1450) lies at these points. A
+    // rectangle scaled by the render instead lands at x1 = 821, off the page. The tolerance absorbs
+    // a few pixels of platform-dependent table detection.
+    let expected = [65.52, 443.79, 536.88, 727.88];
+    let actual_points = [bbox.x0, bbox.y0, bbox.x1, bbox.y1];
+    assert!(
+        actual_points
+            .iter()
+            .zip(expected)
+            .all(|(actual, expected)| (actual - expected).abs() <= 2.0),
+        "the table rectangle is its recognition-frame rectangle in page points: {bbox:?}"
+    );
     super::plain_contract::assert_page_ranges(&actual);
     super::plain_contract::assert_scanned_table_body(
         &actual.pages.as_ref().unwrap()[0],

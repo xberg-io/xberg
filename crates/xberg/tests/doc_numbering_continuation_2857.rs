@@ -1,0 +1,196 @@
+//! Binary Word 97 list identity survives headings; explicit restarts remain independent.
+
+#![cfg(feature = "office")]
+
+mod helpers;
+
+use helpers::extract_bytes_document_blocking;
+use xberg::core::config::{ExtractionConfig, OutputFormat};
+
+fn extract(name: &str, output_format: OutputFormat) -> String {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/office/doc_numbering_2857")
+        .join(format!("{name}.doc"));
+    let bytes = std::fs::read(path).expect("synthetic Word 97 fixture must exist");
+    assert_eq!(&bytes[..8], &[0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+    let mut compound = cfb::CompoundFile::open(std::io::Cursor::new(&bytes)).expect("valid OLE container");
+    assert!(compound.open_stream("/WordDocument").is_ok());
+    assert!(compound.open_stream("/1Table").is_ok());
+    extract_bytes_document_blocking(
+        &bytes,
+        "application/msword",
+        &ExtractionConfig {
+            output_format,
+            use_cache: false,
+            ..Default::default()
+        },
+    )
+    .expect("binary DOC extraction succeeds")
+    .content
+}
+
+fn numbered_lines(content: &str) -> Vec<&str> {
+    content
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.contains("paragraph."))
+        .collect()
+}
+
+/// The rendered list items of a fixture whose paragraphs end in "item.".
+fn item_lines(content: &str) -> Vec<&str> {
+    content
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.contains("item."))
+        .collect()
+}
+
+#[test]
+fn djot_renders_a_decimal_doc_list_as_an_ordered_list() {
+    // The Djot renderer's decimal marker is the same auto-incrementing `N.` the
+    // markdown bridge parses its source labels into
+    // (comrak_bridge/source_lists.rs::decimal_ordinal): a decimal source label must
+    // become the item's ordered marker, not a bullet with the number as visible
+    // text, or every numbered legacy .doc list demotes to an unordered list.
+    let content = extract("continuous", OutputFormat::Djot);
+    assert_eq!(
+        numbered_lines(&content),
+        vec![
+            "1. First paragraph.",
+            "2. Second paragraph.",
+            "3. Third paragraph.",
+            "4. Fourth paragraph.",
+            "5. Fifth paragraph.",
+            "6. Sixth paragraph.",
+        ],
+        "{content}"
+    );
+}
+
+#[test]
+fn djot_keeps_rich_doc_lists_decimal_items_ordered() {
+    // In the multi-level fixture the decimal levels keep their ordered markers
+    // (the nested level after a heading restarts at 1, as the markdown pins);
+    // roman labels stay a literal bullet text, as in markdown.
+    let content = extract("rich", OutputFormat::Djot);
+    assert_eq!(
+        item_lines(&content),
+        vec![
+            "- i. First roman item.",
+            "1. First nested item.",
+            "- ii. Second roman item.",
+            "1. First plain item.",
+            "- iii. Third roman item.",
+            "- iv. Fourth roman item.",
+        ],
+        "{content}"
+    );
+}
+
+#[test]
+fn numbered_doc_paragraphs_continue_across_three_headings() {
+    for format in [OutputFormat::Markdown, OutputFormat::Plain] {
+        let content = extract("continuous", format.clone());
+        assert_eq!(
+            numbered_lines(&content),
+            vec![
+                "1. First paragraph.",
+                "2. Second paragraph.",
+                "3. Third paragraph.",
+                "4. Fourth paragraph.",
+                "5. Fifth paragraph.",
+                "6. Sixth paragraph.",
+            ],
+            "{content}"
+        );
+        if format == OutputFormat::Markdown {
+            assert_eq!(
+                content.lines().filter(|line| line.starts_with("# ")).count(),
+                3,
+                "{content}"
+            );
+        }
+    }
+}
+
+#[test]
+fn explicit_doc_restart_after_heading_starts_at_one() {
+    let content = extract("restart", OutputFormat::Markdown);
+    assert_eq!(
+        numbered_lines(&content),
+        vec![
+            "1. First paragraph.",
+            "2. Second paragraph.",
+            "1. Third paragraph.",
+            "2. Fourth paragraph.",
+        ],
+        "{content}"
+    );
+}
+
+#[test]
+fn independent_doc_list_after_heading_starts_at_one() {
+    let content = extract("new_list", OutputFormat::Markdown);
+    assert_eq!(
+        numbered_lines(&content),
+        vec![
+            "1. First paragraph.",
+            "2. Second paragraph.",
+            "1. Third paragraph.",
+            "2. Fourth paragraph.",
+        ],
+        "{content}"
+    );
+}
+
+#[test]
+fn doc_list_nondefault_start_continues_after_heading() {
+    let content = extract("start_seven", OutputFormat::Markdown);
+    assert_eq!(
+        numbered_lines(&content),
+        vec!["7. Seventh paragraph.", "8. Eighth paragraph.", "9. Ninth paragraph.",],
+        "{content}"
+    );
+}
+
+#[test]
+fn rich_doc_lists_keep_their_counts_across_levels_and_headings() {
+    // One fixture carrying what the others hold separately: two list levels, a
+    // non-decimal (roman) format, and an independent decimal list interleaved between
+    // the roman ones -- so integration exercises the label painting and the counts
+    // across a heading, not only the plain `N.` single-level shape. The roman labels
+    // are what Word paints; their sequence runs on across the interleaved plain list
+    // and across both headings, which the renderers' positional counter could not do.
+    let markdown = extract("rich", OutputFormat::Markdown);
+    assert_eq!(
+        item_lines(&markdown),
+        vec![
+            "- i. First roman item.",
+            "1. First nested item.",
+            "- ii. Second roman item.",
+            "1. First plain item.",
+            "- iii. Third roman item.",
+            "- iv. Fourth roman item.",
+        ],
+        "{markdown}"
+    );
+    assert_eq!(
+        markdown.lines().filter(|line| line.starts_with("# ")).count(),
+        2,
+        "{markdown}"
+    );
+    let plain = extract("rich", OutputFormat::Plain);
+    assert_eq!(
+        item_lines(&plain),
+        vec![
+            "i. First roman item.",
+            "1. First nested item.",
+            "ii. Second roman item.",
+            "1. First plain item.",
+            "iii. Third roman item.",
+            "iv. Fourth roman item.",
+        ],
+        "{plain}"
+    );
+}

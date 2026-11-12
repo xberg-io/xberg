@@ -3,13 +3,17 @@
 //!
 //! [MS-DOC] stores paragraph formatting in `PAPX` grpprls held in 512-byte
 //! `PapxFkp` pages, indexed by byte offset (`FC`) through the FIB's
-//! `PlcfBtePapx`. This module reads only what #1550 needs -- whether a
-//! paragraph is bound to an automatic list (`sprmPIlfo`) and at what depth
-//! (`sprmPIlvl`) -- and whether it sits in a table (`sprmPFInTable`) or ends
-//! a table row (`sprmPFTtp`). Resolving the *number* Word paints requires
-//! `PlfLst` / `PlfLfo` and a counter walk, which is deliberately out of scope.
+//! `PlcfBtePapx`. This module reads whether a paragraph is bound to an
+//! automatic list (`sprmPIlfo`) and at what depth (`sprmPIlvl`), whether it
+//! sits in a table (`sprmPFInTable`) or ends a table row (`sprmPFTtp`), and
+//! -- since #2857 -- the number Word paints for a bound paragraph: the list
+//! identity (`ilfo` -> `LFO` -> `lsid`) and a counter walk over [MS-DOC]
+//! "Determining Level Number of a Paragraph", which is what keeps a list's
+//! sequence running across the headings between its paragraphs.
 
 use ahash::AHashMap;
+
+use super::list_numbers::{DocListMembership, ListFormats, NumberingState};
 
 /// `FibRgFcLcb97` pair holding `fcPlcfBtePapx`/`lcbPlcfBtePapx`.
 const FIB_FC_LCB_IDX_PLCF_BTE_PAPX: usize = 13;
@@ -30,31 +34,6 @@ const STI_HEADING_MAX: u16 = 9;
 /// practice; the bound exists so a malformed self- or cycle-referencing sheet
 /// cannot spin. ~keep
 const MAX_STYLE_BASE_DEPTH: usize = 8;
-
-/// `FibRgFcLcb97` pair holding `fcPlfLst` -- the list definition table.
-const FIB_FC_LCB_IDX_PLF_LST: usize = 73;
-
-/// `FibRgFcLcb97` pair holding `fcPlfLfo` -- the list format overrides that
-/// `ilfo` indexes into.
-const FIB_FC_LCB_IDX_PLF_LFO: usize = 74;
-
-/// `LSTF` record size in the `PlfLst` array.
-const LSTF_LEN: usize = 28;
-
-/// `LFO` record size in the `PlfLfo` array.
-const LFO_LEN: usize = 16;
-
-/// `LVLF` header size, before the two grpprls and the `Xst` that follow it.
-const LVLF_LEN: usize = 28;
-
-/// A list level with `nfc` 23 paints a bullet glyph rather than a number;
-/// 255 paints nothing. Everything else is an ordered numbering scheme
-/// ([MS-DOC] 2.9.131 `MSONFC`). ~keep
-const NFC_BULLET: u8 = 23;
-const NFC_NONE: u8 = 255;
-
-/// Number of `LVL` records a non-simple list carries, one per outline level.
-const LVL_COUNT_MULTILEVEL: usize = 9;
 
 /// `sprmPIlfo` -- the 1-based list index binding a paragraph to a list. Zero
 /// means the paragraph is not in a list. `spra` = 2, so a 2-byte operand.
@@ -91,8 +70,9 @@ const BX_PAP_LEN: usize = 13;
 /// A paragraph's binding to an automatic list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct ListBinding {
-    /// 1-based index into the list-format overrides. Never zero: a zero
-    /// `ilfo` means "not in a list" and yields `None` rather than a binding.
+    /// 1-based index into the list-format overrides. Only a real binding
+    /// yields one: zero, 2047 (`ilfoNil`) and the negative values mean "not
+    /// in a list" and give `None` rather than a binding.
     pub ilfo: u16,
     /// Zero-based nesting depth. Absent `sprmPIlvl` means level 0.
     pub ilvl: u8,
@@ -154,22 +134,24 @@ fn for_each_sprm(grpprl: &[u8], mut visit: impl FnMut(u16, &[u8])) {
 }
 
 /// Scan a `grpprl` for the two sprms that describe list membership.
-fn list_binding_from_grpprl(grpprl: &[u8]) -> Option<ListBinding> {
+pub(super) fn list_binding_from_grpprl(grpprl: &[u8]) -> Option<ListBinding> {
     let mut ilfo: Option<u16> = None;
     let mut ilvl: u8 = 0;
 
     for_each_sprm(grpprl, |sprm, operand| match sprm {
         SPRM_P_ILFO if operand.len() >= 2 => {
-            ilfo = Some(u16::from_le_bytes([operand[0], operand[1]]));
+            let raw = u16::from_le_bytes([operand[0], operand[1]]);
+            // `ilfo` is a signed 2-byte value ([MS-DOC] 2.9.219): 0 means the
+            // paragraph is not in a list, and 2047 (`ilfoNil`) and the
+            // negative values are how Word records a paragraph removed from
+            // one. Neither binds a list.
+            ilfo = (raw != 0 && raw != 0x07FF && raw < 0x8000).then_some(raw);
         }
         SPRM_P_ILVL if !operand.is_empty() => ilvl = operand[0],
         _ => {}
     });
 
-    match ilfo {
-        Some(ilfo) if ilfo != 0 => Some(ListBinding { ilfo, ilvl }),
-        _ => None,
-    }
+    ilfo.map(|ilfo| ListBinding { ilfo, ilvl })
 }
 
 /// A paragraph's place in a table.
@@ -220,77 +202,6 @@ fn style_and_grpprl_at(page: &[u8], b_offset: u8) -> Option<(u16, &[u8])> {
     Some((istd, run.get(2..)?))
 }
 
-/// Whether a list level paints numbers or bullets, resolved through
-/// `ilfo` -> `LFO` -> `lsid` -> `LSTF` -> `LVL[ilvl]` -> `nfc`.
-///
-/// `ElementKind::ListItem` requires an `ordered` flag, so this is not optional
-/// detail: emitting every list-bound paragraph as ordered would mislabel every
-/// bulleted list. Resolving `nfc` is a lookup, distinct from the counter walk
-/// that would be needed to paint the number itself -- which stays out of
-/// scope. ~keep
-#[derive(Default)]
-pub(super) struct ListFormats {
-    /// `(ilfo, ilvl)` -> ordered.
-    ordered_by_level: AHashMap<(u16, u8), bool>,
-}
-
-impl ListFormats {
-    pub(super) fn build(table_stream: &[u8], word_doc: &[u8], rg_fc_lcb_offset: usize) -> Self {
-        let mut formats = Self::default();
-
-        let Some((lst_fc, lst_lcb)) = read_fc_lcb(word_doc, rg_fc_lcb_offset, FIB_FC_LCB_IDX_PLF_LST) else {
-            return formats;
-        };
-        let Some((lfo_fc, lfo_lcb)) = read_fc_lcb(word_doc, rg_fc_lcb_offset, FIB_FC_LCB_IDX_PLF_LFO) else {
-            return formats;
-        };
-        // `lcbPlfLst` covers only the `cLst` count and the `LSTF` array; the
-        // variable-length `LVL` blocks follow immediately *after* it in the
-        // table stream. Slicing to `lcb` cuts every `LVL` off, which yields an
-        // empty format map that `is_ordered`'s default then silently papers
-        // over -- a bulleted list would report as ordered. ~keep
-        let (Some(plf_lst), Some(plf_lfo)) = (table_stream.get(lst_fc..), table_stream.get(lfo_fc..lfo_fc + lfo_lcb))
-        else {
-            return formats;
-        };
-
-        let nfc_by_lsid = parse_plf_lst(plf_lst, lst_lcb);
-
-        // PlfLfo: cLfo as u32, then that many 16-byte LFO records whose first
-        // field is the lsid of the list they override. `ilfo` is 1-based.
-        if plf_lfo.len() < 4 {
-            return formats;
-        }
-        let c_lfo = u32::from_le_bytes([plf_lfo[0], plf_lfo[1], plf_lfo[2], plf_lfo[3]]) as usize;
-        for i in 0..c_lfo {
-            let at = 4 + i * LFO_LEN;
-            let Some(record) = plf_lfo.get(at..at + LFO_LEN) else {
-                break;
-            };
-            let lsid = u32::from_le_bytes([record[0], record[1], record[2], record[3]]);
-            let Some(levels) = nfc_by_lsid.get(&lsid) else {
-                continue;
-            };
-            let ilfo = u16::try_from(i + 1).unwrap_or(u16::MAX);
-            for (ilvl, nfc) in levels.iter().enumerate() {
-                let ilvl = u8::try_from(ilvl).unwrap_or(u8::MAX);
-                formats
-                    .ordered_by_level
-                    .insert((ilfo, ilvl), *nfc != NFC_BULLET && *nfc != NFC_NONE);
-            }
-        }
-
-        formats
-    }
-
-    /// Whether the level paints an ordered number. Unknown levels default to
-    /// ordered, matching the automatic numbering this issue is about; a
-    /// bulleted list whose tables could not be read is the rarer case.
-    pub(super) fn is_ordered(&self, ilfo: u16, ilvl: u8) -> bool {
-        self.ordered_by_level.get(&(ilfo, ilvl)).copied().unwrap_or(true)
-    }
-}
-
 /// Read one `FibRgFcLcb97` pair, rejecting an absent or empty structure.
 pub(super) fn read_fc_lcb(word_doc: &[u8], rg_fc_lcb_offset: usize, index: usize) -> Option<(usize, usize)> {
     let at = rg_fc_lcb_offset + index * 8;
@@ -298,57 +209,6 @@ pub(super) fn read_fc_lcb(word_doc: &[u8], rg_fc_lcb_offset: usize, index: usize
     let fc = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
     let lcb = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]) as usize;
     (lcb > 0).then_some((fc, lcb))
-}
-
-/// Map each list's `lsid` to its per-level `nfc` values.
-///
-/// `PlfLst` is `cLst` as a 16-bit count, then that many fixed-size `LSTF`
-/// records, then the variable-length `LVL` blocks for each list in the same
-/// order -- one for a simple list, nine otherwise. The `LVL`s must be walked
-/// in sequence because each one's length depends on its own header.
-fn parse_plf_lst(plf_lst: &[u8], lcb: usize) -> AHashMap<u32, Vec<u8>> {
-    let mut nfc_by_lsid = AHashMap::new();
-    if plf_lst.len() < 2 {
-        return nfc_by_lsid;
-    }
-    let c_lst = usize::from(u16::from_le_bytes([plf_lst[0], plf_lst[1]]));
-    // The declared lcb must actually hold the LSTF array it claims to.
-    if 2 + c_lst * LSTF_LEN > lcb {
-        return nfc_by_lsid;
-    }
-
-    let mut lists: Vec<(u32, usize)> = Vec::with_capacity(c_lst);
-    for i in 0..c_lst {
-        let at = 2 + i * LSTF_LEN;
-        let Some(lstf) = plf_lst.get(at..at + LSTF_LEN) else {
-            return nfc_by_lsid;
-        };
-        let lsid = u32::from_le_bytes([lstf[0], lstf[1], lstf[2], lstf[3]]);
-        let f_simple_list = lstf[26] & 0x01 != 0;
-        lists.push((lsid, if f_simple_list { 1 } else { LVL_COUNT_MULTILEVEL }));
-    }
-
-    let mut pos = 2 + c_lst * LSTF_LEN;
-    for (lsid, level_count) in lists {
-        let mut nfcs = Vec::with_capacity(level_count);
-        for _ in 0..level_count {
-            let Some(lvlf) = plf_lst.get(pos..pos + LVLF_LEN) else {
-                return nfc_by_lsid;
-            };
-            nfcs.push(lvlf[4]);
-            let cb_grpprl_chpx = usize::from(lvlf[24]);
-            let cb_grpprl_papx = usize::from(lvlf[25]);
-            pos += LVLF_LEN + cb_grpprl_papx + cb_grpprl_chpx;
-            // Xst: a 16-bit character count followed by that many UTF-16 units.
-            let Some(cch) = plf_lst.get(pos..pos + 2) else {
-                return nfc_by_lsid;
-            };
-            pos += 2 + usize::from(u16::from_le_bytes([cch[0], cch[1]])) * 2;
-        }
-        nfc_by_lsid.insert(lsid, nfcs);
-    }
-
-    nfc_by_lsid
 }
 
 /// The document's style sheet, reduced to the one question this module asks:
@@ -597,11 +457,25 @@ impl ListTables {
         self.index.table_for_paragraph_end(end_fc)
     }
 
-    /// Membership for the paragraph whose mark ends at `end_fc`.
-    pub(super) fn membership_for_paragraph_end(&self, end_fc: u32) -> Option<(u8, bool)> {
+    /// Whether the paragraph whose mark ends at `end_fc` carries a list
+    /// binding, whether or not the list tables resolve it -- the question the
+    /// picture-location heuristics ask (#1550), where the numbering asks the
+    /// resolved one.
+    pub(super) fn is_list_bound_paragraph_end(&self, end_fc: u32) -> bool {
+        self.index.binding_for_paragraph_end(end_fc).is_some()
+    }
+
+    /// Membership and the number Word paints for the paragraph whose mark
+    /// ends at `end_fc`, advancing `state`'s counters; see
+    /// [`ListFormats::membership_for`](super::list_numbers::ListFormats).
+    pub(super) fn membership_for_paragraph_end(
+        &self,
+        end_fc: u32,
+        state: &mut NumberingState,
+    ) -> Option<DocListMembership> {
         self.index
             .binding_for_paragraph_end(end_fc)
-            .map(|binding| (binding.ilvl, self.formats.is_ordered(binding.ilfo, binding.ilvl)))
+            .and_then(|binding| self.formats.membership_for(binding, state))
     }
 }
 
@@ -697,6 +571,21 @@ mod tests {
             None,
             "ilfo == 0 is Word's encoding for 'no list', not a binding to list 0"
         );
+    }
+
+    #[test]
+    fn special_ilfo_values_mean_not_in_a_list() {
+        // 2047 is `ilfoNil`; 65535 (-1) and 63489 (-2047) are negative as the
+        // signed 2-byte value [MS-DOC] 2.9.219 gives the operand.
+        for raw in [2047u16, 65535, 63489] {
+            let mut grpprl = vec![0x0B, 0x46];
+            grpprl.extend_from_slice(&raw.to_le_bytes());
+            assert_eq!(
+                list_binding_from_grpprl(&grpprl),
+                None,
+                "ilfo {raw} records a paragraph removed from a list"
+            );
+        }
     }
 
     #[test]

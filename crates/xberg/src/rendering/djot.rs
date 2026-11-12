@@ -8,7 +8,7 @@ use crate::types::internal::{ElementKind, InternalDocument};
 
 use super::common::{
     FootnoteCollector, NestingKind, RenderState, annotated_math, annotation_display_text, annotation_type_label,
-    ensure_trailing_newline, finalize_output, get_admonition_kind, get_admonition_title, get_language,
+    decimal_ordinal, ensure_trailing_newline, finalize_output, get_admonition_kind, get_admonition_title, get_language,
     handle_container_end, is_body_element, is_container_end, normalize_inline_text, parse_metadata_entries,
     push_with_bq, render_annotated_text_with_plain, render_nested_annotated_text, render_table_djot,
     valid_math_annotation,
@@ -70,25 +70,8 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
                 let source_label = elem.list_item_source_label().filter(|label| !label.is_empty());
                 let mut block = String::with_capacity(indent.len() + text.len() + 8);
                 block.push_str(&indent);
-                // A literal source marker (e.g. "B.", "(a)") cannot be expressed by Djot's
-                // auto-incrementing decimal marker syntax either, so it falls back to a
-                // bullet with the label written out as visible text, same trade-off as the
-                // markdown renderer (comrak_bridge) makes. `next_list_number` is still
-                // called (and its result discarded) so a sibling item without a label keeps
-                // counting from the position it would have held either way.
                 if ordered {
-                    let n = state.next_list_number();
-                    match source_label {
-                        Some(label) => {
-                            block.push_str("- ");
-                            block.push_str(label);
-                            block.push(' ');
-                        }
-                        None => {
-                            block.push_str(&n.to_string());
-                            block.push_str(". ");
-                        }
-                    }
+                    block.push_str(&djot_ordered_marker(state.next_list_number(), source_label));
                 } else if let Some(label) = source_label {
                     block.push_str("- ");
                     block.push_str(label);
@@ -447,14 +430,20 @@ fn escape_block_prefix(text: &str, literal_row: bool) -> Cow<'_, str> {
     escaped.push_str(&text[..range.start]);
     let mut already_escaped = false;
     let mut previous = None;
+    // Literal dots so far in the run the reader is looking at.
+    let mut dot_run = 0usize;
     let mut chars = text[range.clone()].char_indices().peekable();
     while let Some((at, c)) = chars.next() {
         let escape = if literal_row {
             let before_text = chars.peek().is_some_and(|(_, next)| !next.is_whitespace());
             row_start.as_ref().is_some_and(|run| run.contains(&at))
                 || matches!(c, '\\' | '`' | '*' | '_' | '{' | '}' | '[' | ']' | '^' | '~' | '<' | '"' | '\'')
-                || (matches!(c, '.' | '-')
-                    && (previous == Some(c) || chars.peek().is_some_and(|(_, next)| *next == c)))
+                // Jotdown and djot.js turn three literal dots into an ellipsis event
+                // (`…`) and keep one or two literal, so only every third dot of a run
+                // needs its escape; the escape token itself restarts the run. ~keep
+                || (c == '.' && dot_run == 2)
+                || (c == '-'
+                    && (previous == Some('-') || chars.peek().is_some_and(|(_, next)| *next == '-')))
                 || (c == ':' && before_text)
                 // djot.js opens these forms even after an escaped brace. ~keep
                 || (matches!(c, '+' | '=' | '-') && previous == Some('{'))
@@ -467,6 +456,7 @@ fn escape_block_prefix(text: &str, literal_row: bool) -> Cow<'_, str> {
         escaped.push(c);
         previous = Some(c);
         already_escaped = c == '\\' && !already_escaped;
+        dot_run = if escape || c != '.' { 0 } else { dot_run + 1 };
     }
     escaped.push_str(&text[range.end..]);
     escaped.into()
@@ -528,6 +518,24 @@ fn escape_text_lines(text: &str) -> String {
         escaped.push_str(&escape_block_prefix(line, false));
     }
     escaped
+}
+
+/// The marker a Djot ordered list item paints. A decimal source label ("1.", "5.") is
+/// exactly the auto-incrementing decimal marker Djot opens an ordered list with, so it
+/// is written as the marker, the same parse the markdown bridge applies
+/// (`common::decimal_ordinal`); any other literal source marker (e.g. "B.", "(a)")
+/// cannot be expressed by that marker syntax and falls back to a bullet with the label
+/// written out as visible text. `n` is the positional counter the renderer advances
+/// (`next_list_number` is still called for every ordered item, labeled or not), so a
+/// sibling item without a label keeps counting from the position it would have held.
+fn djot_ordered_marker(n: u32, source_label: Option<&str>) -> String {
+    if let Some(ordinal) = source_label.and_then(decimal_ordinal) {
+        return format!("{ordinal}. ");
+    }
+    match source_label {
+        Some(label) => format!("- {label} "),
+        None => format!("{n}. "),
+    }
 }
 
 /// A decimal number, a single letter or a roman numeral run: the labels Djot opens a list with.

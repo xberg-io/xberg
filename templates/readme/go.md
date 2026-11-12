@@ -96,6 +96,8 @@ go build
 
 This statically links the Xberg Rust archive. It does not guarantee a fully static executable: system libraries and native dependencies such as ONNX Runtime may remain dynamic. Musl release archives currently support dynamic mode only.
 
+On glibc Linux the release archive is built with Zig's LLVM libc++, so static mode links `-lc++ -lc++abi`. The build host needs the libc++ and libc++abi development packages and the runtime host their shared libraries, at a version that provides `std::__1::__hash_memory`: LLVM 21 from apt.llvm.org works, while Ubuntu 24.04's default libc++ 18 fails with undefined `__hash_memory` references.
+
 #### Option 1: Download Pre-built Static Library
 
 Download the static library for your platform from [GitHub Releases](https://github.com/xberg-io/xberg/releases):

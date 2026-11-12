@@ -1,5 +1,6 @@
 use super::*;
 
+#[cfg(not(paddle_ocr))]
 #[test]
 #[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
 fn explicit_language_block_recovers_the_sideways_source_paragraph() {
@@ -8,6 +9,27 @@ fn explicit_language_block_recovers_the_sideways_source_paragraph() {
         run_private_child(CASE);
         return;
     }
+    recovers_the_sideways_source_paragraph_case();
+}
+
+/// The paddle-route twin asserts the same correct behavior as the default-route test above.
+/// Under the synthesized per-page pipeline route the language-only read keeps the sparse
+/// primary instead of recovering the paragraph (#3007), so this variant is ignored until that
+/// route delivers the recovery; running it with `--ignored` under a paddle build shows the
+/// degraded read failing these assertions.
+#[cfg(paddle_ocr)]
+#[test]
+#[ignore = "#3007: the per-page pipeline route does not recover the sideways source paragraph yet"]
+fn explicit_language_block_recovers_the_sideways_source_paragraph() {
+    const CASE: &str = "prose::explicit_language_block_recovers_the_sideways_source_paragraph";
+    if std::env::var(CHILD).as_deref() != Ok(CASE) {
+        run_private_child(CASE);
+        return;
+    }
+    recovers_the_sideways_source_paragraph_case();
+}
+
+fn recovers_the_sideways_source_paragraph_case() {
     let pdf = prose_source();
     let native = PdfDocument::from_bytes(pdf.clone()).unwrap();
     assert_eq!(native.page_count().unwrap(), 1);
@@ -48,13 +70,14 @@ fn explicit_language_block_recovers_the_sideways_source_paragraph() {
     assert_eq!(sparse.content.split_whitespace().count(), 3);
     config.ocr.as_mut().unwrap().tesseract_config = None;
     let actual = extract("prose-source-language-only", &pdf, &config);
+    assert!(actual.tables.is_empty());
+    assert!(actual.ocr_elements.is_none());
+    assert!(!actual.metadata.additional.contains_key("auto_rotated"));
+    // Correct behavior in every build: the language-only read recovers the source paragraph.
     assert_eq!(
         actual.content.split_whitespace().collect::<Vec<_>>(),
         source.split_whitespace().collect::<Vec<_>>()
     );
-    assert!(actual.tables.is_empty());
-    assert!(actual.ocr_elements.is_none());
-    assert!(!actual.metadata.additional.contains_key("auto_rotated"));
     let actual_document = actual.document.as_ref().unwrap();
     let forced_document = forced.document.as_ref().unwrap();
     assert_eq!(actual_document.nodes.len(), 1);
@@ -79,14 +102,7 @@ fn explicit_language_block_recovers_the_sideways_source_paragraph() {
         upright.content.split_whitespace().collect::<Vec<_>>(),
         source.split_whitespace().collect::<Vec<_>>()
     );
-    assert_eq!(
-        upright
-            .metadata
-            .additional
-            .get("psm")
-            .and_then(serde_json::Value::as_str),
-        Some("11")
-    );
+    assert_psm(&upright, "11");
 }
 
 fn prose_source() -> Vec<u8> {
