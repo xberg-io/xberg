@@ -1076,6 +1076,19 @@ mod plain_page_rerender_tests {
     }
 
     #[test]
+    fn a_page_whose_elements_write_only_whitespace_loses_its_range_without_a_warning() {
+        let mut doc = office_doc_with(
+            vec![page(1, "one"), page(2, " "), page(3, "three")],
+            &[(1, "one"), (2, " "), (3, "three")],
+        );
+        let (content, pages) = derive_plain(&mut doc);
+        assert_eq!(pages[1].content, "");
+        assert!(!warned(&doc));
+        assert_eq!(boundary_pages(&doc), vec![1, 3]);
+        assert_ranges(&doc, &content, &[pages[0].clone(), pages[2].clone()]);
+    }
+
+    #[test]
     fn exact_ranges_of_pages_that_are_not_located_in_order_stay_without_a_warning() {
         let content = "two\n\none";
         let mut doc = doc_with(vec![page(1, "one"), page(2, "two")], &[]);

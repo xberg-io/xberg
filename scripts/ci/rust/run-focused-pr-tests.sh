@@ -238,6 +238,7 @@ run_office_page_cases() {
     pages_with_the_same_text_each_get_the_range_of_their_own_text \
     a_page_with_text_and_no_elements_keeps_its_text_and_loses_its_range_with_a_warning \
     a_page_with_no_text_loses_its_range_without_a_warning \
+    a_page_whose_elements_write_only_whitespace_loses_its_range_without_a_warning \
     a_plain_page_has_the_plain_text_of_its_elements_with_the_note_numbers_of_the_document \
     a_prebuilt_docx_page_has_its_part_of_the_plain_content_and_keeps_its_notes \
     a_prebuilt_pdf_page_keeps_its_text \
@@ -266,7 +267,7 @@ pdf-ocr)
   run_discarded_recovery_cases
   ;;
 office-pages)
-  expected=27
+  expected=28
   run_office_page_cases
   ;;
 api-jobs)
