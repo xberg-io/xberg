@@ -1650,28 +1650,39 @@ fn a_one_or_two_dot_run_stays_unescaped() {
     assert_eq!(render_rows(&["A..B and Dr. Smith"]), "A..B and Dr. Smith\n");
 }
 
-/// The rule, not measured counts: the every-third-dot escape covers any run of three or
-/// more dots wherever it stands, and the row-start escape additionally covers a run that
-/// starts the row, so deleting the every-third-dot rule alone frees every interior run
-/// (`(...)`, `\....`, `a....b` and the spaced runs) while `...x` stays covered, deleting
-/// the row-start escape alone frees nothing here, and only deleting both frees every
-/// dotted row. The one- and two-dot runs never need an escape and stay green in every arm.
+/// Each row names the guard in `escape_block_prefix` that decides it: deleting that guard alone
+/// turns its row red. `...x` stays covered by either the rule or the row-start escape, and the
+/// backslash of `\....` by either the backslash or the row-start escape. Every row is checked
+/// before the test fails so one red row cannot hide the others.
 #[test]
 fn a_leader_run_of_any_length_round_trips_without_an_ellipsis_event() {
-    // The spaced runs sit between two words; the last four rows hold the shapes that
-    // reach the rule differently: a run that starts the row and runs into a word, a run
-    // inside brackets, a backslash before a run, and a run between two letters.
-    let mut runs: Vec<String> = (1..=12).map(|dots| format!("Start {} End", ".".repeat(dots))).collect();
-    runs.extend(["...x", "(...)", "\\....", "a....b"].map(String::from));
-    for row in &runs {
-        let output = render_rows(&[row]);
-        let events: Vec<_> = jotdown::Parser::new(&output).collect();
-        assert!(
-            !events.iter().any(|event| matches!(event, jotdown::Event::Ellipsis)),
-            "{row:?} -> {output:?}"
-        );
-        assert_eq!(djot_paragraph_texts(&output), [row.as_str()], "{row:?}");
-    }
+    let spaced: Vec<String> = (1..=12).map(|dots| format!("Start {} End", ".".repeat(dots))).collect();
+    let mut rows: Vec<(&str, &str)> = spaced
+        .iter()
+        .map(|row| ("every-third-dot rule", row.as_str()))
+        .collect();
+    rows.extend([
+        ("every-third-dot rule", "a...b"),
+        ("every-third-dot rule", "(...)"),
+        ("every-third-dot rule", "a....b"),
+        ("row-start escape", "- Intro .... 3"),
+        ("row-start escape", "1. Intro .... 3"),
+        ("restart after an escape", "a......b"),
+        ("backslash escape", "...\\..."),
+        ("backslash escape", "..\\."),
+        ("rule or row-start escape", "...x"),
+        ("rule, then row-start or backslash escape", "\\...."),
+    ]);
+    let failed: Vec<String> = rows
+        .iter()
+        .filter_map(|(guard, row)| {
+            let output = render_rows(&[row]);
+            let ellipsis = jotdown::Parser::new(&output).any(|event| matches!(event, jotdown::Event::Ellipsis));
+            let kept = djot_paragraph_texts(&output) == [*row];
+            (ellipsis || !kept).then(|| format!("[{guard}] {row:?} -> {output:?}"))
+        })
+        .collect();
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
 #[test]
