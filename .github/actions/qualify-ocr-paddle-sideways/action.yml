@@ -1,0 +1,23 @@
+name: Qualify explicit sideways OCR with Paddle OCR
+description: Run the explicit-sideways tests in a Paddle OCR build; needs ONNX Runtime and the Paddle det, cls, rec and doc-ori models in the Hugging Face cache
+runs:
+  using: composite
+  steps:
+    - name: Cache pinned OSD qualification model
+      uses: actions/cache@v6
+      with:
+        path: ${{ runner.temp }}/xberg-osd-87416418657359cb
+        key: explicit-sideways-osd-9cf5d576fcc47564f11265841e5ca8390
+
+    - name: Qualify explicit sideways OCR in a Paddle OCR build
+      shell: bash
+      run: |
+        export XBERG_OSD_TEST_MODEL="${RUNNER_TEMP:?}/xberg-osd-87416418657359cb/osd.traineddata"
+        if [ ! -s "$XBERG_OSD_TEST_MODEL" ]; then
+          source scripts/lib/tessdata.sh
+          mkdir -p "$(dirname "$XBERG_OSD_TEST_MODEL")"
+          revision=87416418657359cb625c412a48b6e1d6d41c29bd
+          model_base=https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast
+          download_traineddata osd "$XBERG_OSD_TEST_MODEL" "${model_base}/${revision}/osd.traineddata"
+        fi
+        mise run rust:test:explicit-sideways paddle

@@ -17,7 +17,7 @@ case "$profile" in
 warm | paddle)
   features+=",auto-rotate-tract"
   [ "$profile" = paddle ] && features+=",paddle-ocr-ort"
-  expected=21
+  expected=22
   expected_names=(
     caller_psm1_word_elements_on_an_upside_down_page_carry_no_internal_marker
     cached_context_changed_during_extraction_is_not_written
@@ -27,6 +27,7 @@ warm | paddle)
     prose::explicit_language_block_recovers_the_sideways_source_paragraph
     prose::mixed_document_reads_a_sideways_prose_scan_page_alike_in_every_build
     prose::mixed_document_abstains_on_extra_prose_regions_alike_in_every_build
+    prose::partial_ocr_selection_on_a_scanned_document_reads_alike_in_every_build
     explicit_language_block_recovers_the_counterclockwise_source_grid
     explicit_language_block_recovers_the_upside_down_source_grid
     explicit_language_block_retains_the_sideways_source_table
@@ -41,6 +42,10 @@ warm | paddle)
     omitted_false_and_true_rotation_are_three_distinct_public_configurations
     upright_osd_preserves_its_existing_cells_and_content
   )
+  if [ "$profile" = paddle ]; then
+    expected=$((expected + 1))
+    expected_names+=(prose::paddle_backend_is_registered_for_the_automatic_second_stage)
+  fi
   if [ -z "${XBERG_ORIENTATION_TEST_MODEL:-}" ]; then
     repository=models--xberg-io--paddleocr-onnx-models
     revision=bc5ec866cf0e798e667808dfa51b0ba8ad0dafc8
@@ -50,7 +55,7 @@ warm | paddle)
   fi
   ;;
 native)
-  expected=11
+  expected=12
   expected_names=(
     caller_psm1_word_elements_on_an_upside_down_page_carry_no_internal_marker
     cached_context_changed_during_extraction_is_not_written
@@ -60,6 +65,7 @@ native)
     prose::explicit_language_block_recovers_the_sideways_source_paragraph
     prose::mixed_document_reads_a_sideways_prose_scan_page_alike_in_every_build
     prose::mixed_document_abstains_on_extra_prose_regions_alike_in_every_build
+    prose::partial_ocr_selection_on_a_scanned_document_reads_alike_in_every_build
     explicit_language_block_recovers_the_counterclockwise_source_grid
     explicit_language_block_recovers_the_upside_down_source_grid
     explicit_language_block_recovers_without_classifier_features
