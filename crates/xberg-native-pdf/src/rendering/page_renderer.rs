@@ -715,13 +715,13 @@ impl PageRenderer {
             .map(|budget| {
                 let resources = doc.get_page_resources(page_num)?;
                 let spots = self.page_sidecar_spots(doc, page_num, &resources);
-                // A soft mask can hold one more transient copy of every plate than the live
-                // sidecar (`smask_spot_snapshot`); there is no cheap mask-presence detector,
-                // so charge one extra copy whenever the sidecar declares actual inks. A
-                // zero-ink sidecar (a CMYK page with transparency but no spot plate) holds
-                // nothing transient. Knockout groups hold further copies that the runtime
-                // reservation in `knockout_resources` bounds, which this fit does not model.
-                let transient_copies = usize::from(spots.as_deref().is_some_and(|inks| !inks.is_empty()));
+                // Only a soft mask (`smask_spot_snapshot`) or a knockout group copies the spot
+                // planes while painting, so the fit charges the extra copy only for a page whose
+                // resources declare one. A zero-ink sidecar has no spot plane to copy. Knockout
+                // groups hold further copies that the runtime reservation in
+                // `knockout_resources` bounds, which this fit does not model.
+                let has_inks = spots.as_deref().is_some_and(|inks| !inks.is_empty());
+                let transient_copies = usize::from(has_inks && page_may_copy_spot_planes(doc, page_num, &resources));
                 dpi = fit_png_dpi(dpi, &budget, spots.as_deref(), transient_copies, dimensions_at_dpi)?;
                 Ok::<_, Error>((resources, spots))
             })
@@ -8815,6 +8815,59 @@ fn raster_dimensions(page_width: f32, page_height: f32, scale: f32, has_scale_ov
     }
 }
 
+/// Whether painting the page can copy the sidecar's spot planes: a page-level or form-level
+/// knockout group, or an ExtGState soft mask, anywhere in the resources a form can reach.
+pub(super) fn page_may_copy_spot_planes(doc: &PdfDocument, page_num: usize, resources: &Object) -> bool {
+    const MAX_DEPTH: u32 = 32;
+    fn walk(doc: &PdfDocument, resources: &Object, visited: &mut HashSet<ObjectRef>, depth: u32) -> bool {
+        use crate::rendering::ext_gstate::SoftMaskValue;
+        let Some(dict) = resources.as_dict() else {
+            return false;
+        };
+        if depth >= MAX_DEPTH {
+            return false;
+        }
+        let ext_g_states = dict
+            .get("ExtGState")
+            .and_then(|object| doc.resolve_object(object).ok())
+            .and_then(|object| object.as_dict().cloned());
+        if ext_g_states.is_some_and(|states| {
+            states.values().any(|state| {
+                parse_ext_g_state_inner(state, doc)
+                    .is_ok_and(|parsed| matches!(parsed.smask, Some(SoftMaskValue::Form(_))))
+            })
+        }) {
+            return true;
+        }
+        let xobjects = dict
+            .get("XObject")
+            .and_then(|object| doc.resolve_object(object).ok())
+            .and_then(|object| object.as_dict().cloned());
+        for raw in xobjects.iter().flat_map(|forms| forms.values()) {
+            if raw.as_reference().is_some_and(|reference| !visited.insert(reference)) {
+                continue;
+            }
+            let Ok(Object::Stream { dict: form, .. }) = doc.resolve_object(raw) else {
+                continue;
+            };
+            let knockout = form
+                .get("Group")
+                .and_then(|group| doc.resolve_object(group).ok())
+                .is_some_and(|group| knockout::group_is_knockout(&group));
+            if knockout {
+                return true;
+            }
+            if let Some(Ok(form_resources)) = form.get("Resources").map(|object| doc.resolve_object(object))
+                && walk(doc, &form_resources, visited, depth + 1)
+            {
+                return true;
+            }
+        }
+        false
+    }
+    knockout::page_is_knockout(doc, page_num) || walk(doc, resources, &mut HashSet::new(), 0)
+}
+
 /// Per-pixel bytes the PNG working-set fit charges for the RGBA canvas and its demultiply
 /// copy; shared so the budget tests derive the same charge the fit does.
 pub(super) const RGBA_AND_PNG_BYTES_PER_PIXEL: usize = 12;
@@ -8870,9 +8923,8 @@ fn png_working_bytes_fit(
 ) -> bool {
     // The canvas and PNG demultiply copy are both RGBA. Reserve the same per-pixel
     // and fixed PNG allowance as Core image encoding, plus the CMYK plane and two planes per spot ink.
-    // The caller adds one extra copy of the sidecar planes for the transient copy a soft
-    // mask can hold; knockout groups hold more, and the runtime reservation in
-    // `knockout_resources` bounds those, not this fit.
+    // The caller adds one extra copy of the sidecar planes when the page declares a soft mask
+    // or knockout group; the runtime reservation in `knockout_resources` bounds further copies.
     let sidecar_bytes_per_pixel = spot_names.map_or(Some(0), |names| names.len().checked_mul(2)?.checked_add(4));
     let charge = sidecar_bytes_per_pixel
         .and_then(|bytes| transient_copies.checked_add(1)?.checked_mul(bytes))

@@ -347,48 +347,107 @@ fn lighten_in_a_non_knockout_group_over_a_tint_zero_paint_gives_no_ink() {
     );
 }
 
-/// The PNG budget of the page renderer charges the live sidecar planes plus one transient
-/// copy of every plane (the snapshot a soft mask can hold). One ink: the live charge is
+const BUDGET_REQUESTED_DPI: u32 = 288;
+const BUDGET_MINIMUM_DPI: u32 = 72;
+
+/// Bytes the PNG fit charges the 100 x 100 pt page at `dpi` with one ink and `copies` transient
+/// copies of the sidecar planes (the pixel side is rounded up as the fit rounds it).
+fn one_ink_charge(dpi: u32, copies: usize) -> usize {
+    let side = (f64::from(dpi) * 100.0 / 72.0).ceil() as usize;
+    side * side * (RGBA_AND_PNG_BYTES_PER_PIXEL + (copies + 1) * (4 + 2)) + PNG_FIXED_OVERHEAD
+}
+
+/// Renders `doc` through the PNG budget and returns the DPI it was admitted at, or `None` when refused.
+fn budgeted_dpi(doc: &PdfDocument, limit: usize, minimum_dpi: u32) -> Option<u32> {
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(BUDGET_REQUESTED_DPI).as_raw());
+    renderer.force_cmyk_sidecar = true;
+    let budget = PngRenderBudget {
+        max_working_bytes: limit,
+        minimum_dpi,
+    };
+    renderer
+        .render_page_with_budget(0, doc, Some(budget))
+        .ok()
+        .map(|(_, dpi)| dpi)
+}
+
+fn soft_mask_page() -> PdfDocument {
+    let mask = group_form("/CS /DeviceGray", "0.4 g 0 0 100 100 re f");
+    build_page_with(
+        "/T gs /CS0 cs 0.5 scn 10 10 60 60 re f",
+        SPOT_A,
+        "/SMask << /Type /Mask /S /Luminosity /G 5 0 R >>",
+        &[&mask],
+    )
+}
+
+fn knockout_group_page() -> PdfDocument {
+    let group = group_form("/K true", "/CS0 cs 0.8 scn 10 10 60 60 re f");
+    build_page_with("/F Do", SPOT_A, "/BM /Multiply", &[&group])
+}
+
+/// The PNG budget charges the live sidecar planes, plus one transient copy of every plane only
+/// when the page declares a soft mask or a knockout group. One ink: the live charge is
 /// 12 + 4 + 2 = 18 and the peak 12 + 2·(4 + 2) = 24 bytes per pixel. A limit at the live
-/// charge of the requested raster lowers the DPI, the peak charge admits the request, and a
-/// limit under the peak at the minimum DPI refuses the page instead of lowering further.
+/// charge of the requested raster lowers the DPI of such a page, the peak charge admits the
+/// request, and a limit under the peak at the minimum DPI refuses the page.
 #[test]
 fn the_page_renderer_lowers_dpi_for_the_transient_spot_plate_copy() {
-    const REQUESTED_DPI: u32 = 288;
-    const MINIMUM_DPI: u32 = 72;
-    // Pixels of the 100 x 100 pt page, sized as the fit sizes them: the side rounded up.
-    let pixels = |dpi: u32| {
-        let side = (f64::from(dpi) * 100.0 / 72.0).ceil() as usize;
-        side * side
-    };
-    // `copies` transient copies on top of the live CMYK plane plus the ink's tint and alpha lane.
-    let charge = |dpi: u32, copies: usize| {
-        pixels(dpi) * (RGBA_AND_PNG_BYTES_PER_PIXEL + (copies + 1) * (4 + 2)) + PNG_FIXED_OVERHEAD
-    };
-    let doc = build_page("/BM /Multiply", &[]);
-    let render = |limit: usize| {
-        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(REQUESTED_DPI).as_raw());
-        renderer.force_cmyk_sidecar = true;
-        let budget = PngRenderBudget {
-            max_working_bytes: limit,
-            minimum_dpi: MINIMUM_DPI,
-        };
-        renderer.render_page_with_budget(0, &doc, Some(budget))
-    };
-    let (image, dpi) = render(charge(REQUESTED_DPI, 0)).expect("the live charge of the minimum raster fits");
+    let doc = soft_mask_page();
+    let live = one_ink_charge(BUDGET_REQUESTED_DPI, 0);
     assert_eq!(
-        dpi, 249,
+        budgeted_dpi(&doc, live, BUDGET_MINIMUM_DPI),
+        Some(249),
         "the transient charge lowers 288 dpi to the largest raster the limit admits"
     );
-    assert_eq!((image.width, image.height), (346, 346), "249 dpi on a 100 pt page");
-    let (_, dpi) = render(charge(REQUESTED_DPI, 1)).expect("the peak charge admits the request");
     assert_eq!(
-        dpi, REQUESTED_DPI,
+        budgeted_dpi(&doc, one_ink_charge(BUDGET_REQUESTED_DPI, 1), BUDGET_MINIMUM_DPI),
+        Some(BUDGET_REQUESTED_DPI),
         "the peak charge of the requested raster fits exactly"
     );
-    assert!(
-        render(charge(MINIMUM_DPI, 1) - 1).is_err(),
+    assert_eq!(
+        budgeted_dpi(&doc, one_ink_charge(BUDGET_MINIMUM_DPI, 1) - 1, BUDGET_MINIMUM_DPI),
+        None,
         "under the peak charge even the minimum raster is refused, not lowered"
+    );
+}
+
+/// A knockout group copies the spot planes too, so the page scan reports it; the knockout
+/// runtime reservation, not the DPI fit, bounds the group's own copies.
+#[test]
+fn the_page_scan_reports_soft_masks_and_knockout_groups_only() {
+    use crate::rendering::page_renderer::page_may_copy_spot_planes;
+    let scan = |doc: &PdfDocument| page_may_copy_spot_planes(doc, 0, &doc.get_page_resources(0).expect("resources"));
+    assert!(scan(&knockout_group_page()), "a knockout form group copies the planes");
+    assert!(scan(&soft_mask_page()), "an ExtGState soft mask copies the planes");
+    let plain_group = group_form("", "/CS0 cs 0.8 scn 10 10 60 60 re f");
+    assert!(
+        !scan(&build_page_with("/F Do", SPOT_A, "/BM /Multiply", &[&plain_group])),
+        "a non-knockout group alone does not"
+    );
+    assert!(!scan(&build_page("/BM /Multiply", &[])), "blend mode alone does not");
+}
+
+/// A page with an ink but no soft mask or knockout group never copies the planes: it keeps its
+/// requested DPI at the live charge, and a caller whose minimum DPI equals the request admits it.
+#[test]
+fn an_ink_page_without_a_mask_or_knockout_keeps_its_requested_dpi() {
+    let doc = build_page("/BM /Multiply", &[]);
+    let live = one_ink_charge(BUDGET_REQUESTED_DPI, 0);
+    assert_eq!(
+        budgeted_dpi(&doc, live, BUDGET_MINIMUM_DPI),
+        Some(BUDGET_REQUESTED_DPI),
+        "no mask, no transient copy, no lowered DPI"
+    );
+    assert_eq!(
+        budgeted_dpi(&doc, live, BUDGET_REQUESTED_DPI),
+        Some(BUDGET_REQUESTED_DPI),
+        "a strict caller (minimum DPI equals the request) admits the page"
+    );
+    assert_eq!(
+        budgeted_dpi(&doc, live - 1, BUDGET_MINIMUM_DPI),
+        Some(287),
+        "control: one byte under the live charge binds"
     );
 }
 
