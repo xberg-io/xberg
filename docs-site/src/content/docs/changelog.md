@@ -331,8 +331,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **(pdf): A sentence no longer reads out of order around an inline equation.** (GH#2925)
-  A superscript sits in a line bucket of its own, so the gap it fills tore the line in two and let a column cut run through the paragraph; the straddling-line guard now reads such a gap as part of the line.
+- **(pdf): A column cut no longer runs through a sentence whose inline script fills a line gap.** (GH#2925)
+  A superscript sits in a line bucket of its own, so the gap it fills tore the line in two and let a column cut run through the paragraph; the straddling-line guard now reads such a gap as part of the line. Only the column test uses this bridge, so inline equations elsewhere can still read out of order (GH#3024).
 - **(pdf): Mark a page as OCR text only when its whole-document OCR read was accepted into the output.** (#2939)
   Since #2902, `InternalDocument::ocr_text_pages` decides which pages are re-rendered from their elements, and the PDF extractor marked every page of a whole-document OCR read, including one whose noisy read the recognition-noise gate discarded and whose native text the output keeps. A discarded (or otherwise empty) read no longer marks its page; accepted reads keep their marks exactly as before.
 - **(ocr): Keep the text layer's words when automatic OCR takes a whole page whose layer is partly decodable.** (GH#2952)
