@@ -380,6 +380,28 @@ impl Frame {
     }
 }
 
+/// Whether the read as it stands holds the letters of the page's layer, by the test the page's
+/// later decision applies to its words with a letter; the decision's other clauses (the share of
+/// numbers, the quality check) only make it stricter, and a number the read dropped is no reason
+/// to leave a page unrecovered. `page_layer` is the layer text that decision sees, question marks of
+/// undecodable glyphs included; without it the decodable layer words stand in.
+fn read_confirms_layer(page_layer: Option<&str>, layer: &[PlacedWord], read: &str) -> bool {
+    let decodable;
+    let text = match page_layer {
+        Some(text) => text,
+        None => {
+            decodable = layer
+                .iter()
+                .filter(|word| is_decodable(&word.text))
+                .map(|word| word.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" ");
+            &decodable
+        }
+    };
+    super::document::ocr_holds_layer_letters(text, read)
+}
+
 /// Recover into `read` the layer tokens of one page that a whole-page read of it lost, when the read
 /// as it stands already confirms the layer: the page's later decision to put the layer's lines
 /// first rests on the same test, so words copied from the layer must not be what passes it. A layer
@@ -389,6 +411,7 @@ pub(super) fn recover_page(
     pdf: &PdfDocument,
     page_index: usize,
     read: &mut ExtractedDocument,
+    page_layer: Option<&str>,
     limits: InkProofLimits<'_>,
 ) -> bool {
     let Some(raster) = super::document::processed_ocr_layout_dimensions(&read.metadata) else {
@@ -413,13 +436,7 @@ pub(super) fn recover_page(
             confidence: 1.0,
         })
         .collect();
-    let decodable_layer = layer
-        .iter()
-        .filter(|word| is_decodable(&word.text))
-        .map(|word| word.text.as_str())
-        .collect::<Vec<_>>()
-        .join(" ");
-    if !super::document::ocr_confirms_layer(&decodable_layer, &read.content, limits.thresholds) {
+    if !read_confirms_layer(page_layer, &layer, &read.content) {
         return false;
     }
     let Some(elements) = read.ocr_elements.as_deref() else {

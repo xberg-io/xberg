@@ -5846,6 +5846,11 @@ pub(super) async fn extract_with_ocr_for_page(
                     pdf,
                     document_page_idx,
                     &mut ocr_result,
+                    page_ocr_hints
+                        .as_ref()
+                        .and_then(|hints| hints.native_page_layers.as_ref())
+                        .and_then(|layers| layers.get(&document_page_number))
+                        .map(String::as_str),
                     super::native_word_coverage::InkProofLimits {
                         thresholds: &ocr_output_thresholds,
                         max_working_bytes: super::hidden_layer::preview_byte_limit(config),

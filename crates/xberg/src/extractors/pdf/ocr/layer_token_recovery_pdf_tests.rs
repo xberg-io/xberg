@@ -1,5 +1,6 @@
 use super::*;
 use crate::core::config::OcrQualityThresholds;
+use crate::extractors::pdf::ocr::document::ocr_confirms_layer;
 use crate::ocr_metadata_keys::{OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY};
 
 /// The reproducer page of GH#2952 with a painted line whose layer is wrong: `financial` extracts
@@ -74,10 +75,15 @@ fn read_where(
 }
 
 fn recover(pdf: &PdfDocument, read: &mut ExtractedDocument) -> bool {
+    recover_with_layer(pdf, read, None)
+}
+
+fn recover_with_layer(pdf: &PdfDocument, read: &mut ExtractedDocument, page_layer: Option<&str>) -> bool {
     recover_page(
         pdf,
         0,
         read,
+        page_layer,
         InkProofLimits {
             thresholds: &OcrQualityThresholds::default(),
             max_working_bytes: WORKING_BYTES,
@@ -167,6 +173,7 @@ fn a_read_that_does_not_confirm_the_layer_gets_no_word_from_it() {
 
 #[test]
 fn identifiers_misread_with_digits_and_case_take_the_layer_spelling_at_low_confidence() {
+    // `SSTOU9` was already corrected before the case rule; it guards that the rule keeps it.
     let pdf = PdfDocument::from_bytes(WRONG_LAYER_PDF.to_vec()).unwrap();
     let mut read = read_of(&pdf, &[("S5T0U9", "SSTOU9"), ("K2Q5W0", "K2Q5wo")], 0.43);
     assert!(recover(&pdf, &mut read));
@@ -194,4 +201,32 @@ fn the_same_identifiers_stay_as_read_at_the_confidence_floor() {
         "{}",
         read.content
     );
+}
+
+#[test]
+fn a_chart_page_whose_read_dropped_most_values_still_gets_them_back() {
+    let pdf = PdfDocument::from_bytes(WRONG_LAYER_PDF.to_vec()).unwrap();
+    let mut layer_text = pdf
+        .extract_text_lines(0)
+        .unwrap()
+        .iter()
+        .flat_map(|line| line.words.iter().map(|word| word.text.clone()))
+        .collect::<Vec<_>>()
+        .join(" ");
+    for value in 1000..1040 {
+        layer_text.push_str(&format!(" {value}"));
+    }
+    let not_a_value = |token: &str| !token.chars().all(|character| character.is_ascii_digit());
+    let mut read = read_where(&pdf, &[], 0.9, not_a_value);
+    assert!(!ocr_confirms_layer(
+        &layer_text,
+        &read.content,
+        &OcrQualityThresholds::default()
+    ));
+    assert!(
+        recover_with_layer(&pdf, &mut read, Some(&layer_text)),
+        "{}",
+        read.content
+    );
+    assert!(tokens(&read).contains(&"7"), "{}", read.content);
 }

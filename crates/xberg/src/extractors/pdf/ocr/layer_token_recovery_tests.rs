@@ -427,6 +427,39 @@ fn a_case_difference_without_a_digit_swap_is_not_a_misreading() {
 }
 
 #[test]
+fn an_identifier_with_a_case_and_a_digit_swap_in_other_places_is_a_misreading() {
+    assert!(is_misreading("a1o3", "A103"));
+}
+
+#[test]
+fn a_lowercase_layer_letter_over_a_capital_read_letter_is_not_a_misreading_beside_a_digit_swap() {
+    assert!(!is_misreading("K2Q5WO", "K2Q5w0"));
+}
+
+#[test]
+fn a_read_is_checked_against_the_layer_the_page_decision_sees() {
+    let layer = page(&AGREEING);
+    let read = "alpha beta gamma delta";
+    let mut full = String::from("Alpha Beta Gamma Delta");
+    for fragment in ["qx", "zr", "wv", "kp", "jm", "yt"] {
+        full.push_str(&format!(" {fragment}\u{E000}{fragment}"));
+    }
+    assert!(read_confirms_layer(None, &layer, read));
+    assert!(!read_confirms_layer(Some(&full), &layer, read));
+}
+
+#[test]
+fn numbers_the_read_dropped_do_not_count_against_the_layer_check() {
+    let numbers: String = (100..140).map(|value| format!(" {value}")).collect();
+    let full = format!("Alpha Beta Gamma Delta{numbers}");
+    assert!(read_confirms_layer(
+        Some(&full),
+        &page(&AGREEING),
+        "alpha beta gamma delta 100"
+    ));
+}
+
+#[test]
 fn a_repeated_read_token_with_a_confident_instance_is_not_corrected() {
     let layer = page(&with(&[("B0X92Q", 0.0, 1.0), ("B0X92Q", 0.0, 2.0)]));
     let mut read = page(&with(&[("BOX92Q", 0.0, 1.0), ("BOX92Q", 0.0, 2.0)]));
