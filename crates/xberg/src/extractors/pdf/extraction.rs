@@ -673,8 +673,26 @@ pub(crate) fn extract_all_from_native_document(
         crate::pdf::native::text::extract_text_and_metadata(&mut doc, Some(text_config))
             .map_err(map_native_text_error)?;
 
+    // The time limit cut the text loop short: what the limit leaves is the grace period to return the
+    // pages already read, which the stages below (each re-reads every page) would outlast. They only
+    // decorate those pages, so they are skipped. ~keep
+    let cut_short = config
+        .cancel_token
+        .as_ref()
+        .is_some_and(crate::cancellation::CancellationToken::cut_short_by_time_limit);
+    let mut extraction_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
+    if cut_short {
+        extraction_warnings.push(crate::types::ProcessingWarning {
+            source: std::borrow::Cow::Borrowed("pdf_time_limit"),
+            message: std::borrow::Cow::Borrowed(
+                "Tables, images, form fields and document structure were skipped because extraction_timeout_secs was reached.",
+            ),
+        });
+    }
+
     #[cfg(feature = "layout-detection")]
-    if config.pdf_options.as_ref().is_some_and(|opts| opts.reading_order)
+    if !cut_short
+        && config.pdf_options.as_ref().is_some_and(|opts| opts.reading_order)
         && let Some(hints) = layout_hints
     {
         match apply_reading_order_reordering(
@@ -722,11 +740,10 @@ pub(crate) fn extract_all_from_native_document(
         ocr_inline_images,
         config.content_filter.is_some(),
     );
+    let needs_structured = needs_structured && !cut_short;
     let retain_hierarchy_segments = needs_structured && !config.force_ocr;
 
-    let mut extraction_warnings: Vec<crate::types::ProcessingWarning> = Vec::new();
-
-    let extract_tables_flag = config.pdf_options.as_ref().is_none_or(|opts| opts.extract_tables);
+    let extract_tables_flag = !cut_short && config.pdf_options.as_ref().is_none_or(|opts| opts.extract_tables);
     let allow_single_column = config
         .pdf_options
         .as_ref()
@@ -864,7 +881,7 @@ pub(crate) fn extract_all_from_native_document(
     #[cfg(not(all(feature = "ocr", feature = "tokio-runtime")))]
     let ocr_skip_candidate_pages: std::collections::HashMap<u32, (f64, f64)> = std::collections::HashMap::new();
 
-    let (images, image_positions) = if images_extraction_enabled || ocr_inline_images {
+    let (images, image_positions) = if !cut_short && (images_extraction_enabled || ocr_inline_images) {
         let max_images = config.images.as_ref().and_then(|i| i.max_images_per_page);
         let (extracted, image_warnings) = crate::pdf::native::images::extract_images_with_data(
             &mut doc,
@@ -1118,14 +1135,17 @@ pub(crate) fn extract_all_from_native_document(
     );
 
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    let outlined_ocr_pages =
-        super::outline_ocr::candidates(&doc.doc, config, &native_text, boundaries.as_deref().unwrap_or(&[]));
+    let outlined_ocr_pages = if cut_short {
+        Vec::new()
+    } else {
+        super::outline_ocr::candidates(&doc.doc, config, &native_text, boundaries.as_deref().unwrap_or(&[]))
+    };
     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
     let outlined_ocr_pages = Vec::new();
 
     let has_font_encoding_issues = false;
 
-    let form_fields = if config.pdf_options.as_ref().is_none_or(|opts| opts.extract_form_fields) {
+    let form_fields = if !cut_short && config.pdf_options.as_ref().is_none_or(|opts| opts.extract_form_fields) {
         let (fields, form_warnings) = crate::pdf::native::forms::extract_form_fields(&mut doc);
         extraction_warnings.extend(form_warnings);
         fields
