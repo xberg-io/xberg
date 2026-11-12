@@ -214,7 +214,7 @@ impl ExcelExtractor {
                 && !cells.is_empty()
             {
                 if !sheet.name.is_empty() {
-                    builder.push_heading(2, &format!("{}{hidden_suffix}", sheet.name), None, None);
+                    builder.push_heading(2, &format!("{}{hidden_suffix}", sheet.name), Some(page_number), None);
                 }
                 builder.push_table_from_cells(cells, Some(page_number), None);
 
@@ -598,6 +598,23 @@ mod tests {
         assert!(pages[0].content.contains("Sheet1"));
         assert_eq!(pages[0].tables.len(), 1);
         assert_eq!(pages[0].is_blank, Some(false));
+    }
+
+    #[test]
+    fn a_plain_sheet_page_starts_with_its_sheet_name() {
+        let cells = |value: &str| Some(vec![vec!["Item".to_string(), value.to_string()]]);
+        let workbook = make_workbook(vec![
+            make_sheet("Budget", cells("10")),
+            make_sheet("Notes", cells("20")),
+        ]);
+        let doc = ExcelExtractor::build_internal_document(&workbook);
+        let result =
+            crate::extraction::derive::derive_extraction_result(doc, false, crate::core::config::OutputFormat::Plain);
+        let pages = result.pages.expect("one page per sheet");
+        for (page, name) in pages.iter().zip(["Budget", "Notes"]) {
+            assert!(page.content.starts_with(name), "{pages:?}");
+            assert!(result.content.contains(&page.content), "{:?}", result.content);
+        }
     }
 
     #[test]
