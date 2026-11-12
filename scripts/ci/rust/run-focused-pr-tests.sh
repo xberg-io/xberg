@@ -48,11 +48,11 @@ run_pdf_cases() {
   run_exact png_predictor_panel_recovers_missing_line_without_changing_primary_ocr \
     --test pdf_embedded_psm6_addition_2327
   run_type0_cases
-  expected=$((expected + 1))
   run_budget_retry_cases
 }
 
 run_budget_retry_cases() {
+  expected=$((expected + 1))
   run_exact tall_gray_jpeg_recovers_every_source_word_after_render_budget_refusal --test pdf_tall_scan_strips
   local module='extractors::pdf::ocr::pipeline::direct_rgb_budget_recovery::tests'
   local test_name
