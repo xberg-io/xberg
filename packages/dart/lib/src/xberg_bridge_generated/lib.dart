@@ -8522,7 +8522,7 @@ class ExtractionConfig {
   /// finished with a `timeout` processing warning naming the first unread
   /// page, and may run up to 10 s past the limit. Otherwise (other formats,
   /// or a PDF that does not return in time) the extraction fails with a
-  /// timeout error.
+  /// timeout error, which also cancels the caller's cancellation token.
   final BigInt? extractionTimeoutSecs;
 
   /// Maximum concurrent document extractions in batch operations.
