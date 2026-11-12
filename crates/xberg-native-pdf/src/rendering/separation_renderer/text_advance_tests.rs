@@ -45,3 +45,11 @@ fn unpainted_text_advances_the_plate_by_the_rasterizer_measure() {
     );
     assert_eq!(plate, reference());
 }
+
+#[test]
+fn clip_only_text_paints_nothing_on_the_plate_and_advances_by_the_rasterizer_measure() {
+    let clip_only = plate_of("1 0 0 0 k BT /F1 20 Tf 50 Tz 10 10 Td 7 Tr (H) Tj ET", "");
+    assert!(!has_ink(&clip_only), "Tr 7 text must leave the plate blank");
+    let plate = plate_of("1 0 0 0 k BT /F1 20 Tf 50 Tz 10 10 Td 7 Tr (H) Tj 0 Tr (H) Tj ET", "");
+    assert_eq!(plate, reference());
+}

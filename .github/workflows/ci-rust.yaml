@@ -27,6 +27,7 @@ on:
       - "scripts/ci/install-system-deps/**"
       - ".github/actions/install-system-deps/**"
       - ".github/actions/setup-paddle-ocr-models/**"
+      - ".github/actions/qualify-ocr-paddle-sideways/**"
       # The gitlink selects which corpus fixtures the include_bytes! tests compile against, so a
       # pin bump changes what this workflow actually verifies. ~keep
       - "test_documents"
@@ -315,6 +316,19 @@ jobs:
           LD_LIBRARY_PATH: ${{ env.LD_LIBRARY_PATH || '' }}
           DYLD_LIBRARY_PATH: ${{ env.DYLD_LIBRARY_PATH || '' }}
           DYLD_FALLBACK_LIBRARY_PATH: ${{ env.DYLD_FALLBACK_LIBRARY_PATH || '' }}
+
+      # The only leg that has ONNX Runtime and also runs the explicit-sideways suite; the no-ORT tract
+      # leg cannot build `paddle-ocr-ort`. The suite's children seed a private cache with the
+      # orientation model only and never reach the Paddle stage (their Tesseract read is accepted), so
+      # det/cls/rec are not provisioned. ~keep
+      - name: Provision the orientation model for the sideways suite
+        if: matrix.os == 'ubuntu-latest'
+        uses: ./.github/actions/setup-paddle-ocr-models
+        with: { models: doc-ori, cache-key-suffix: document-orientation-onnx }
+
+      - name: Qualify explicit sideways OCR with Paddle OCR
+        if: matrix.os == 'ubuntu-latest'
+        uses: ./.github/actions/qualify-ocr-paddle-sideways
 
       - name: Check no-default-features
         run: cargo check --locked -p xberg --no-default-features

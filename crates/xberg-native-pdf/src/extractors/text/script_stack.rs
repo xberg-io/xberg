@@ -206,7 +206,7 @@ fn visit(index: usize, parents: &[Option<usize>], order: &mut Vec<usize>) {
 /// root of the second, so the markup pass would read a script of a script and a script of the base as
 /// one superscript or subscript run. Two bare roots on one side are not counted: they are one run in
 /// either order. A member sits above its reference line when it is above its parent, or above the base
-/// for a root; a child level with its parent counts as lowered. Lowered-first wins when neither order
+/// for a root; a script level with its reference line counts as lowered. Lowered-first wins when neither order
 /// fuses a pair, which keeps the subscript of the base apart from an exponent chain
 /// (`H^{Z_2,des}_{<xy>,f}`); raised-first wins when both fuse the same number above zero, the order that
 /// read the stack before lowered-first was introduced.
@@ -234,12 +234,12 @@ fn choose_order(
 
 /// The order a stack reads in.
 ///
-/// A stack whose scripts all hang from the base reads raised scripts first, then lowered ones, each
-/// in x order. A stack with a script that hangs from another member reads the scripts of the base set
-/// below its line first, then those above it, each followed by the members that hang from it, so the
-/// subscript of the base is one run apart from an exponent and its index (`H^{Z_2}_{<xy>,f}`).
+/// A stack reads the scripts of the base set on or below its line first, then those above it, each
+/// followed by the members that hang from it, so the subscript of the base is one run apart from an
+/// exponent and its index (`H^{Z_2}_{<xy>,f}`), and a base with a subscript and a superscript side by
+/// side reads the subscript first. A script level with the base, or with its parent, counts as lowered.
 ///
-/// That second order is used unless it fuses more adjacent groups than the raised-first order, or the
+/// That order is used unless it fuses more adjacent groups than the raised-first order, or the
 /// same number above zero (see [`choose_order`]). `j` above `γ` and `K` below it with a `+` above `K` read `K + j`
 /// lowered-first, which joins the `+` of `K` to the `j` of the base in one superscript run, and
 /// `j K +` raised-first.
@@ -248,11 +248,6 @@ fn choose_order(
 pub fn stack_reading_order(base: &StackSpan<'_>, members: &[StackSpan<'_>]) -> Vec<usize> {
     let parents = stack_parents(base, members);
     let raised_side = |member: usize| members[member].baseline > base.baseline;
-    if parents.iter().all(Option::is_none) {
-        let (raised, lowered): (Vec<usize>, Vec<usize>) = (0..members.len()).partition(|&member| raised_side(member));
-        return raised.into_iter().chain(lowered).collect();
-    }
-
     let is_raised = |member: usize| match parents[member] {
         Some(parent) => members[member].baseline > members[parent].baseline,
         None => raised_side(member),
@@ -636,12 +631,58 @@ mod tests {
     }
 
     #[test]
-    fn should_read_the_raised_scripts_before_the_lowered_ones_when_no_index_meets_a_subscript() {
+    fn should_read_the_subscript_before_the_superscript_of_a_base_with_both_and_no_script_of_a_script() {
         let base = span("R", 100.0, 100.0, 7.0, 10.0);
         let members = [span("n", 107.0, 104.3, 3.2, 6.0), span("p", 108.0, 95.0, 3.0, 6.0)];
-        assert_eq!(stack_reading_order(&base, &members), [0, 1]);
-        let members = [span("p", 107.0, 95.0, 3.0, 6.0), span("n", 108.0, 104.3, 3.2, 6.0)];
+        assert_eq!(stack_parents(&base, &members), [None, None]);
         assert_eq!(stack_reading_order(&base, &members), [1, 0]);
+        let members = [span("p", 107.0, 95.0, 3.0, 6.0), span("n", 108.0, 104.3, 3.2, 6.0)];
+        assert_eq!(stack_reading_order(&base, &members), [0, 1]);
+    }
+
+    #[test]
+    fn should_read_a_subscript_before_a_two_member_superscript_of_one_base() {
+        let base = span("p", 100.0, 100.0, 7.0, 10.0);
+        let members = [
+            span("i", 107.0, 96.0, 2.5, 6.0),
+            span("i", 107.2, 104.3, 2.5, 6.0),
+            span(",j", 110.0, 104.3, 4.0, 6.0),
+        ];
+        assert_eq!(stack_reading_order(&base, &members), [0, 1, 2]);
+    }
+
+    #[test]
+    fn should_read_raised_first_when_the_orders_fuse_a_pair_each_of_two_mixed_children() {
+        let base = span("R", 100.0, 100.0, 7.0, 10.0);
+        let members = [
+            span("A", 107.0, 104.3, 3.0, 6.0),
+            span("B", 107.5, 96.0, 3.0, 6.0),
+            span("a", 110.0, 103.0, 2.0, 4.0),
+            span("b", 110.5, 97.0, 2.0, 4.0),
+        ];
+        assert_eq!(stack_parents(&base, &members), [None, None, Some(0), Some(1)]);
+        assert_eq!(stack_reading_order(&base, &members), [0, 2, 1, 3]);
+    }
+
+    #[test]
+    fn should_count_a_root_level_with_the_base_as_lowered() {
+        let base = span("R", 100.0, 100.0, 7.0, 10.0);
+        let members = [span("A", 107.0, 104.3, 3.0, 6.0), span("B", 107.5, 100.0, 3.0, 6.0)];
+        assert_eq!(stack_parents(&base, &members), [None, None]);
+        assert_eq!(stack_reading_order(&base, &members), [1, 0]);
+    }
+
+    #[test]
+    fn should_not_count_a_child_level_with_its_parent_as_raised_when_choosing_the_order() {
+        let base = span("R", 100.0, 100.0, 7.0, 10.0);
+        let members = [
+            span("A", 107.0, 104.3, 3.0, 6.0),
+            span("L", 107.5, 96.0, 3.0, 6.0),
+            span("c", 110.0, 104.3, 2.0, 4.0),
+            span("B", 112.0, 105.0, 3.0, 6.0),
+        ];
+        assert_eq!(stack_parents(&base, &members), [None, None, Some(0), None]);
+        assert_eq!(stack_reading_order(&base, &members), [1, 0, 2, 3]);
     }
 
     #[test]

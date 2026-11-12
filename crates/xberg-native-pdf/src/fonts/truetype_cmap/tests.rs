@@ -760,13 +760,14 @@ fn test_format12_inverted_group_skipped() {
 }
 
 /// Issue #3034 review: the total iteration budget binds across groups, not
-/// per distinct gid. Group 1 (U+E000..=U+1DFFF, all 65,536 code points
-/// valid, mapped to consecutive gids 0..=65535) spends the whole budget
-/// exactly; group 2 needs one more code point and the subtable must be
-/// rejected with an error — never an Ok map that silently drops group 2.
+/// per distinct gid. The budget is 16 times the glyph space (GH#3064), so
+/// sixteen full-gid-space groups (U+E000..=U+1DFFF, 65,536 code points
+/// each) fit exactly and the seventeenth needs more: the subtable must be
+/// rejected with an error — never an Ok map that silently drops a group.
 #[test]
 fn test_format12_budget_exhausted_by_next_group_rejected() {
-    let data = build_truetype_with_cmap_format12(&[(0xE000, 0x1_DFFF, 0), (0x41, 0x41, 0)]);
+    let groups = std::iter::repeat_n((0xE000, 0x1_DFFF, 0), 17).collect::<Vec<_>>();
+    let data = build_truetype_with_cmap_format12(&groups);
     let started = std::time::Instant::now();
     let err = TrueTypeCMap::from_font_data(&data)
         .expect_err("a subtable past the iteration budget must reject, not truncate");
@@ -815,6 +816,41 @@ fn test_format12_surrogate_holes_are_not_mapped() {
     );
     assert_eq!(cmap.get_unicode(2_051), Some('\u{E001}'));
     assert_eq!(cmap.get_unicode(2), None, "the first surrogate's gid stays unmapped");
+}
+
+/// Issue #3064: a well-formed font may alias code points — two groups can
+/// map overlapping code-point runs onto gids a previous group already
+/// maps, so the group widths sum to more than the glyph count. The
+/// original budget (one examined code point per gid) rejected such a font
+/// and lost its whole cmap to the declared-encoding fallback; the budget
+/// is 16 times the glyph space, so this font parses in full exactly as it
+/// did before the budget existed.
+#[test]
+fn test_format12_aliasing_groups_parse_in_full() {
+    // 65,535 code points (0..=0xFFFE) onto gids 0..=65534, then 26 code
+    // points (0x10000..=0x10019) aliasing gids 0..=25.
+    let groups = vec![(0, 0xFFFE, 0), (0x1_0000, 0x1_0019, 0)];
+    let data = build_truetype_with_cmap_format12(&groups);
+    let started = std::time::Instant::now();
+    let cmap = TrueTypeCMap::from_font_data(&data)
+        .expect("a font whose groups alias already-mapped gids must parse, not exhaust the budget");
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "a valid aliasing font must parse in milliseconds, not walk the budget: took {:?}",
+        started.elapsed()
+    );
+    // Every gid of the first group is mapped; the surrogate block
+    // (U+D800..=U+DFFF, 2,048 code points) is never a character, so the
+    // map holds one entry per mapped gid: 65,535 gids minus 2,048
+    // surrogates.
+    assert_eq!(cmap.len(), 65_535 - 2_048);
+    // The second group's aliasing writes the last write, as before the
+    // budget existed: gid 0 now holds 0x10000.
+    assert_eq!(cmap.get_unicode(0), Some('\u{1_0000}'));
+    assert_eq!(cmap.get_unicode(25), Some('\u{1_0019}'));
+    // gid 26 is outside the aliasing group, so it still holds group 1's
+    // identity mapping (code point 0x1A).
+    assert_eq!(cmap.get_unicode(26), Some('\u{1a}'), "unchanged by the aliasing group");
 }
 
 /// Issue #3034 review: the mapping cap counts distinct gids, so one group
