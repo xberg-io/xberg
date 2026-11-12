@@ -3352,13 +3352,17 @@ async fn force_ocr_route_applies_numeric_repair() {
     );
 }
 
-/// Issue #3014: the OCR text page list of the PDF extractor changes no output. The one reader
-/// of `InternalDocument::ocr_text_pages` (`is_ocr_page_text`) treats every page of a `pdf`,
-/// `image` or `ocr` source as OCR text before it looks at the list, and the PDF extractor
-/// always builds a document with source format `pdf`, so no list the extractor builds can ever
-/// change a derived result -- the extractor does not build one. The control below forces the
-/// list empty and set to both pages on the same document and derives both to prove the outputs
-/// stay equal. Documents of other formats still use the list: `fold_embedded_image_ocr_text`
+/// Issue #3014: the OCR text page list of the PDF extractor's own documents changes no output.
+/// The one reader of `InternalDocument::ocr_text_pages` (`is_ocr_page_text`) treats every page
+/// of a `pdf`, `image` or `ocr` source as OCR text before it looks at the list, and the PDF
+/// extractor builds such a document itself (source format `pdf`), so no list it builds for one
+/// can ever change a derived result. The control below forces the list empty and set to both
+/// pages on the same document and derives both to prove the outputs stay equal, and the fix
+/// attaches no list to it. An adopted OCR backend document of another source format is the
+/// exception -- `select_pdf_document`'s Ocr arm returns it verbatim and the list's reader
+/// honors the marks there -- see
+/// `an_adopted_hocr_document_keeps_the_extractors_marks_and_rerenders_its_pages`. Documents of
+/// other formats still get the list from their own extractor: `fold_embedded_image_ocr_text`
 /// marks the page of, say, a DOCX whose embedded picture's read is folded into it, and
 /// #2902's re-rendering honors the mark there.
 #[cfg(all(feature = "pdf", feature = "ocr"))]
@@ -3517,6 +3521,171 @@ async fn a_pdfs_ocr_text_page_list_is_not_built_and_changes_no_output() {
         "the PDF extractor must not build the OCR text page list: its one reader treats every \
          page of a pdf source as OCR text before it looks at the list (#3014): {:?}",
         internal.ocr_text_pages
+    );
+}
+
+/// Issue #3014, the OCR route its deletion missed: `select_pdf_document`'s Ocr arm returns an
+/// adopted OCR backend document verbatim, and such a document keeps its own source format -- a
+/// plugin's `hocr` structure is not one of the `pdf`/`image`/`ocr` sources `is_ocr_page_text`
+/// treats as OCR text on every page, so there the list IS read, and #2902's re-rendering
+/// honors the marks. The extractor therefore attaches the list it built exactly for that
+/// document, exactly as before #3014; the control above pins that its own `pdf`-source
+/// documents keep none.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[test]
+fn an_adopted_hocr_document_keeps_the_extractors_marks_and_rerenders_its_pages() {
+    use crate::core::config::OutputFormat;
+    use crate::extractors::security::SecurityLimits;
+    use crate::types::document_structure::{DocumentNode, DocumentStructure, NodeContent};
+
+    const NODE_TEXT: &str = "Adopted paragraph one";
+    // The backend's transcript differs from the structure it contributed, so the prebuilt page
+    // text is not found in the derived content and #2902's re-rendering is what maps the page.
+    const TRANSCRIPT: &str = "Raw page transcript one";
+
+    // A backend result describes one page: every node sits on page 1.
+    let mut structure = DocumentStructure {
+        nodes: vec![DocumentNode {
+            id: String::new(),
+            content: NodeContent::Paragraph {
+                text: NODE_TEXT.to_string(),
+            },
+            parent: None,
+            children: Vec::new(),
+            content_layer: Default::default(),
+            page: Some(1),
+            page_end: None,
+            bbox: None,
+            annotations: Vec::new(),
+            attributes: None,
+        }],
+        source_format: Some("hocr".to_string()),
+        relationships: Vec::new(),
+        node_types: Vec::new(),
+    };
+    structure.finalize_node_types();
+    let mut plugin_result = crate::types::ExtractedDocument {
+        content: TRANSCRIPT.to_string(),
+        mime_type: std::borrow::Cow::Borrowed("text/plain"),
+        document: Some(structure),
+        ..Default::default()
+    };
+    crate::extraction::derive::adopt_public_ocr_document(&mut plugin_result, &SecurityLimits::default())
+        .expect("the plugin's structure must adopt");
+    let adopted = plugin_result
+        .ocr_internal_document
+        .take()
+        .expect("adoption must produce the internal document");
+    assert_eq!(
+        adopted.source_format, "hocr",
+        "an adopted document keeps the plugin's own source format"
+    );
+
+    // `select_pdf_document`'s Ocr arm returns the backend's document verbatim: only the MIME
+    // type is overwritten, so the plugin's source format survives the selection and the list's
+    // reader reads the list on it.
+    let (selected, origin, structured) = select_pdf_document(
+        ExtractionMethod::Ocr,
+        "unrelated seed text",
+        "application/pdf",
+        None,
+        Some(adopted.clone()),
+        None,
+        None,
+        None,
+        &OutputFormat::Plain,
+    );
+    assert_eq!(origin, PdfDocumentOrigin::Ocr);
+    assert!(structured);
+    assert_eq!(
+        selected.source_format, "hocr",
+        "the Ocr arm must not overwrite an adopted document's source format"
+    );
+
+    // The extractor's own marking build (#2939): the pages whose whole-document read the output
+    // kept are reported, and the pages' contents carry the read.
+    let mut pages = vec![text_layer_page(1, TRANSCRIPT)];
+    let marks = replace_pages_with_ocr_page_texts(pages.as_mut_slice(), &[TRANSCRIPT.to_string()], false);
+    assert_eq!(marks, vec![1], "the read was kept, so its page is reported");
+
+    let boundaries_metadata = || crate::types::PageStructure {
+        total_count: 1,
+        unit_type: crate::types::PageUnitType::Page,
+        boundaries: Some(vec![crate::types::PageBoundary {
+            byte_start: 0,
+            byte_end: 40,
+            page_number: 1,
+        }]),
+        pages: None,
+    };
+
+    // The decision under test: the adopted hocr document is exactly the source the list's
+    // reader honors it on, so the extractor's marks are attached exactly as before #3014.
+    let mut marked = selected;
+    marked.prebuilt_pages = Some(pages);
+    marked.metadata.pages = Some(boundaries_metadata());
+    attach_ocr_text_page_marks(&mut marked, marks);
+    assert_eq!(
+        marked.ocr_text_pages,
+        vec![1],
+        "an adopted hocr document keeps the extractor's marks: its source format is what the \
+         list's reader honors the list on"
+    );
+
+    // #2902: the marked page is re-rendered from its element, and the boundary survives because
+    // the re-rendered page is located in the content.
+    let marked_result = crate::extraction::derive::derive_extraction_result(marked, false, OutputFormat::Plain);
+    let marked_pages = marked_result.pages.as_ref().expect("pages are derived");
+    assert_eq!(
+        marked_pages[0].content, NODE_TEXT,
+        "page 1 is re-rendered from its adopted element"
+    );
+    let marked_boundaries = marked_result
+        .metadata
+        .pages
+        .as_ref()
+        .and_then(|structure| structure.boundaries.clone())
+        .expect("the boundary survives the re-render");
+    assert_eq!(
+        marked_boundaries.iter().map(|boundary| boundary.page_number).collect::<Vec<_>>(),
+        vec![1],
+        "the page stays bounded once the marks are attached"
+    );
+    assert!(
+        !marked_result
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "page_boundaries"),
+        "no page diverges once the marks are attached: {:?}",
+        marked_result.processing_warnings
+    );
+
+    // The same document without the marks -- what dropping the build outright produced -- keeps
+    // the prebuilt text and loses the boundary: the reader reports the page as diverging.
+    let mut unmarked = adopted;
+    unmarked.prebuilt_pages = Some(vec![text_layer_page(1, TRANSCRIPT)]);
+    unmarked.metadata.pages = Some(boundaries_metadata());
+    let unmarked_result = crate::extraction::derive::derive_extraction_result(unmarked, false, OutputFormat::Plain);
+    let unmarked_pages = unmarked_result.pages.as_ref().expect("pages are derived");
+    assert_eq!(
+        unmarked_pages[0].content, TRANSCRIPT,
+        "an unmarked page keeps its prebuilt text"
+    );
+    assert!(
+        unmarked_result
+            .metadata
+            .pages
+            .as_ref()
+            .and_then(|structure| structure.boundaries.clone())
+            .is_none_or(|boundaries| boundaries.is_empty()),
+        "the unmarked page's boundary is dropped"
+    );
+    assert!(
+        unmarked_result
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "page_boundaries"),
+        "the unmarked page is reported as diverging"
     );
 }
 
