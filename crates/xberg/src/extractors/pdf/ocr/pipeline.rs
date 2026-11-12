@@ -3511,18 +3511,7 @@ pub(in crate::extractors::pdf) fn render_mixed_plain_pages(
             if text.get(boundary.byte_start..boundary.byte_end) != Some(accepted.as_str()) {
                 return Err("page range differs from the accepted transcript");
             }
-            let plain = crate::extraction::derive::render_plain_page_elements(document, page)
-                .filter(|plain| !plain.is_empty())
-                .ok_or("page elements produced no Plain text")?;
-            let repeated = check_accepted_ocr_tokens(accepted, &plain, document)?;
-            if repeated.is_empty() {
-                return Ok(plain);
-            }
-            let filtered = without_repeated_words(&plain, &repeated);
-            if !check_accepted_ocr_tokens(accepted, &filtered, document)?.is_empty() {
-                return Err("Plain page still repeats accepted words");
-            }
-            Ok(filtered)
+            reconcile_mixed_plain_page(accepted, document, page)
         })();
         match candidate {
             Ok(plain) => {
@@ -3540,10 +3529,68 @@ pub(in crate::extractors::pdf) fn render_mixed_plain_pages(
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn reconcile_mixed_plain_page(
+    accepted: &str,
+    document: &crate::types::internal::InternalDocument,
+    page: u32,
+) -> Result<String, &'static str> {
+    let (plain, spans, indices) = crate::extraction::derive::render_plain_page_elements(document, page)
+        .filter(|(plain, _, _)| !plain.is_empty())
+        .ok_or("page elements produced no Plain text")?;
+    let element_spans: Vec<_> = spans.by_element.iter().flatten().copied().collect();
+    let mut repeated = check_accepted_ocr_tokens(accepted, &plain, document, Some(&element_spans))?;
+    let mut captions = ahash::AHashSet::new();
+    let mut duplicate_captions = Vec::new();
+    for (index, span) in indices.into_iter().zip(spans.by_element) {
+        let Some((start, end)) = span else { continue };
+        let element = &document.elements[index];
+        let Some(written) = plain.get(start..end.min(plain.len())) else {
+            continue;
+        };
+        let offsets = || written.split_whitespace().map(|word| word_offset(&plain, word));
+        use crate::types::internal::ElementKind;
+        match element.kind {
+            ElementKind::Table { .. } => {
+                // ~keep A duplicate table may disappear from Plain only as a complete block.
+                let mut removed = offsets().map(|offset| repeated.binary_search(&offset).is_ok());
+                if let Some(first) = removed.next()
+                    && removed.any(|removed| removed != first)
+                {
+                    return Err(CELLS);
+                }
+            }
+            ElementKind::Paragraph | ElementKind::Heading { .. } => {
+                if let Some(bbox) = element.bbox
+                    && bbox.x0 < bbox.x1
+                    && bbox.y0 < bbox.y1
+                    && [bbox.x0, bbox.y0, bbox.x1, bbox.y1].into_iter().all(f64::is_finite)
+                    && !captions.insert((written.trim(), [bbox.x0, bbox.y0, bbox.x1, bbox.y1].map(f64::to_bits)))
+                {
+                    duplicate_captions.extend(offsets());
+                }
+            }
+            _ => {}
+        }
+    }
+    repeated.extend(duplicate_captions);
+    if repeated.is_empty() {
+        return Ok(plain);
+    }
+    repeated.sort_unstable();
+    repeated.dedup();
+    let filtered = without_repeated_words(&plain, &repeated);
+    if !check_accepted_ocr_tokens(accepted, &filtered, document, None)?.is_empty() {
+        return Err("Plain page still repeats accepted words");
+    }
+    Ok(filtered)
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn check_accepted_ocr_tokens(
     accepted: &str,
     plain: &str,
     document: &crate::types::internal::InternalDocument,
+    element_spans: Option<&[(usize, usize)]>,
 ) -> Result<Vec<usize>, &'static str> {
     use crate::types::internal::ElementKind;
     use pulldown_cmark::{Event, Options, Parser, Tag};
@@ -3591,7 +3638,7 @@ fn check_accepted_ocr_tokens(
 
                 let table = tables.next().ok_or("accepted table has no typed table element")?;
                 if !source_table_has_cells(&accepted[range], &table.cells)
-                    || !table.cells.iter().flatten().all(|cell| retained.retains(cell, CELLS))
+                    || !retained.retains_table(&table.cells, element_spans)
                 {
                     return Err(CELLS);
                 }
@@ -3622,6 +3669,7 @@ struct PlainWords<'a> {
     plain: &'a str,
     words: std::str::SplitWhitespace<'a>,
     accepted_runs: ahash::AHashSet<&'a str>,
+    prose_runs: ahash::AHashSet<&'a str>,
     first_skip: Option<&'static str>,
     skipped: Vec<&'a str>,
 }
@@ -3633,6 +3681,7 @@ impl<'a> PlainWords<'a> {
             plain,
             words: plain.split_whitespace(),
             accepted_runs: Self::runs(accepted).collect(),
+            prose_runs: ahash::AHashSet::new(),
             first_skip: None,
             skipped: Vec::new(),
         }
@@ -3650,7 +3699,7 @@ impl<'a> PlainWords<'a> {
         text.split_whitespace().all(|word| {
             while let Some(candidate) = self.words.next() {
                 if candidate == word {
-                    self.record_match(candidate);
+                    self.record_prose_match(candidate);
                     return true;
                 }
                 self.skip(candidate, reason);
@@ -3659,8 +3708,45 @@ impl<'a> PlainWords<'a> {
         })
     }
 
-    fn record_match(&mut self, word: &'a str) {
+    fn record_prose_match(&mut self, word: &'a str) {
         self.accepted_runs.extend(Self::runs(word));
+        self.prose_runs.extend(Self::runs(word));
+    }
+
+    fn retains_table(&mut self, cells: &[Vec<String>], spans: Option<&[(usize, usize)]>) -> bool {
+        let rendered = crate::rendering::common::render_table_plain(cells);
+        let table = rendered.trim();
+        let word_count = table.split_whitespace().count();
+        if word_count == 0 {
+            return true;
+        }
+        while let Some(candidate) = self.words.next() {
+            let start = word_offset(self.plain, candidate);
+            let prefix = self.plain[..start].trim_end_matches(|c: char| c != '\n' && c.is_whitespace());
+            if (prefix.is_empty() || prefix.ends_with('\n'))
+                && self
+                    .table_candidate(start, spans)
+                    .is_some_and(|plain| matches_plain_rows(table, plain))
+            {
+                self.accepted_runs.extend(Self::runs(candidate));
+                self.accepted_runs
+                    .extend(self.words.by_ref().take(word_count - 1).flat_map(Self::runs));
+                return true;
+            }
+            self.skip(candidate, CELLS);
+        }
+        false
+    }
+
+    fn table_candidate(&self, start: usize, spans: Option<&[(usize, usize)]>) -> Option<&str> {
+        let Some(spans) = spans else {
+            return self.plain.get(start..);
+        };
+        // ~keep A table can already be in a paragraph's transcript, but its rows must share one writer.
+        let &(begin, end) = spans.get(spans.partition_point(|&(_, end)| end <= start))?;
+        (begin <= start)
+            .then(|| self.plain.get(start..end.min(self.plain.len())))
+            .flatten()
     }
 
     fn skip(&mut self, word: &'a str, reason: &'static str) {
@@ -3676,30 +3762,60 @@ impl<'a> PlainWords<'a> {
         let Some(reason) = self.first_skip else {
             return Ok(Vec::new());
         };
-        let repeated: Vec<_> = self
-            .skipped
-            .iter()
-            .filter(|word| Self::runs(word).all(|run| self.accepted_runs.contains(run)))
-            .map(|word| word.as_ptr() as usize - self.plain.as_ptr() as usize)
-            .collect();
+        let repeated = self.repeated_word_offsets();
         if repeated.len() == self.skipped.len() {
             return Err(reason);
         }
         Ok(repeated)
     }
+
+    fn repeated_word_offsets(&self) -> Vec<usize> {
+        let is_known = |word| Self::runs(word).all(|run| self.accepted_runs.contains(run));
+        let mut repeated = Vec::new();
+        let mut skipped = self.skipped.iter().copied().peekable();
+        for line in self.plain.split_inclusive('\n') {
+            let end = word_offset(self.plain, line) + line.len();
+            let Some(word) = skipped.peek() else { break };
+            if word_offset(self.plain, word) >= end {
+                continue;
+            }
+            // ~keep A word shared with a table cell can still be part of a recovered caption.
+            let has_new_word = line.split_whitespace().any(|word| !is_known(word));
+            while let Some(word) = skipped.next_if(|word| word_offset(self.plain, word) < end) {
+                if is_known(word) && (!has_new_word || Self::runs(word).all(|run| self.prose_runs.contains(run))) {
+                    repeated.push(word_offset(self.plain, word));
+                }
+            }
+        }
+        repeated
+    }
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn matches_plain_rows(table: &str, plain: &str) -> bool {
+    let mut lines = plain.lines();
+    table.lines().all(|expected| {
+        lines
+            .next()
+            .is_some_and(|line| line.split_whitespace().eq(expected.split_whitespace()))
+    })
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn word_offset(plain: &str, word: &str) -> usize {
+    word.as_ptr() as usize - plain.as_ptr() as usize
 }
 
 /// Drop only skipped repeats. Untouched lines keep their spacing and accepted table assets
 /// remain in the document. The caller checks the resulting transcript again.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn without_repeated_words(plain: &str, repeated: &[usize]) -> String {
-    let start = plain.as_ptr() as usize;
     let mut blocks = Vec::new();
     for block in plain.split("\n\n") {
         let mut lines = Vec::new();
         for line in block.split('\n') {
             let mut words = line.split_whitespace();
-            let is_repeat = |word: &str| repeated.binary_search(&(word.as_ptr() as usize - start)).is_ok();
+            let is_repeat = |word: &str| repeated.binary_search(&word_offset(plain, word)).is_ok();
             if words.any(is_repeat) {
                 let kept = line
                     .split_whitespace()
@@ -3872,7 +3988,7 @@ fn retains_inline_group(source: &str, visible: &str, is_marker: bool, retained: 
         started = true;
         literal_live &= literal.next_if_eq(&candidate).is_some();
         projected_live &= projected.next_if_eq(&candidate).is_some();
-        retained.record_match(candidate);
+        retained.record_prose_match(candidate);
         if literal_live && literal.peek().is_none() || projected_live && projected.peek().is_none() {
             return true;
         }
