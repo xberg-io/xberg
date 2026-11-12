@@ -165,6 +165,23 @@ run_ink_probe_cases() {
   fi
 }
 
+run_numeral_noise_cases() {
+  local before="$passed"
+  run_exact the_ocr_result_counts_a_line_kept_for_its_numeral_apart_from_a_removed_one \
+    --test ocr_numeral_noise_count_2851
+  run_exact a_rejected_table_region_gets_its_filtered_words_back_through_real_ocr \
+    --test ocr_numeral_noise_count_2851
+  run_exact 'ocr::processor::execution::tests::restore_rejected_table_words_records_the_kept_numeral_line_count_of_the_new_parse' --lib
+  run_exact 'ocr::tesseract_backend::tests::warnings_from_ocr_metadata_reports_only_the_removed_lines' --lib
+  run_exact 'ocr::tesseract_backend::tests::strip_ocr_scratch_metadata_keys_preserves_genuine_user_metadata' --lib
+  run_exact 'ocr::tesseract_backend::tests::process_image_file_reports_the_removed_line_and_keeps_both_counts_out_of_the_metadata' --lib
+  run_exact 'ocr::tesseract_backend::tests::the_backend_content_holds_the_words_won_back_for_a_rejected_table_region' --lib
+  if [ "$((passed - before))" -ne 7 ]; then
+    printf 'Expected 7 executed numeral-noise tests, observed %s\n' "$((passed - before))" >&2
+    exit 1
+  fi
+}
+
 run_retained_read_cases() {
   local before="$passed"
   local module='extractors::pdf::ocr::rendering::retained_read_metadata_tests'
@@ -272,10 +289,11 @@ pdf-ocr)
   expected=86
   run_pdf_cases
   run_retained_read_cases
-  expected=$((expected + 11))
+  expected=$((expected + 11 + 7))
   run_number_budget_cases
   run_ink_probe_cases
   run_discarded_recovery_cases
+  run_numeral_noise_cases
   ;;
 office-pages)
   expected=31
