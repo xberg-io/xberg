@@ -10167,3 +10167,7 @@ fn registered_preprocessing_render_dpi(config: &ExtractionConfig, ocr: &crate::c
 #[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 #[path = "pipeline/time_limit_run_error_tests.rs"]
 mod time_limit_run_error_tests;
+
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[path = "pipeline/inline_group_tests.rs"]
+mod inline_group_tests;

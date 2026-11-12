@@ -1019,6 +1019,34 @@ mod tests {
 
     #[test]
     #[cfg(auto_rotate)]
+    fn a_result_without_both_processed_dimensions_keeps_its_recognition_frame() {
+        use crate::ocr_metadata_keys::{
+            OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY,
+        };
+
+        for missing in [
+            vec![OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY],
+            vec![OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY],
+            vec![
+                OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY,
+                OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY,
+            ],
+        ] {
+            let mut candidate = table_candidate();
+            for key in &missing {
+                candidate.metadata.additional.remove(*key);
+            }
+            let unscaled = candidate.tables[0].bounding_box;
+            assert!(
+                !scale_recovered_table_to_raster(&mut candidate, (100, 50)),
+                "{missing:?}"
+            );
+            assert_eq!(candidate.tables[0].bounding_box, unscaled, "{missing:?}");
+        }
+    }
+
+    #[test]
+    #[cfg(auto_rotate)]
     fn table_retry_keeps_the_original_when_reported_word_count_disagrees() {
         let retry = OrientationRetry::new(&ExtractionConfig::default(), OcrQualityThresholds::default());
         let confidence = ConfidenceSemantics::Legibility { scale_max: 100.0 };
