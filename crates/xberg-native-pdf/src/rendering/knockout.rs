@@ -1,6 +1,6 @@
-use super::{is_paint_operator, PageRenderer};
-use crate::content::operators::Operator;
+use super::{PageRenderer, is_paint_operator};
 use crate::content::GraphicsState;
+use crate::content::operators::Operator;
 use crate::document::PdfDocument;
 use crate::error::{Error, Result};
 use crate::object::Object;
@@ -510,7 +510,7 @@ impl PageRenderer {
     }
 
     /// How many path paints certainly build a path that the pass then charges a page-sized surface
-    /// for: a rectangle of nonzero size or a drawn segment since the last paint or `n`, outside
+    /// for: a rectangle whose span fits in `f32` or a drawn segment since the last paint or `n`, outside
     /// any optional-content section, which may be hidden. A paint with no path, or inside such a
     /// section, charges nothing, so it is left out and the count never exceeds the pass.
     pub(super) fn certain_path_paints(operators: &[Operator]) -> usize {
@@ -520,7 +520,7 @@ impl PageRenderer {
         for operator in operators {
             match operator {
                 Operator::Rectangle { x, y, width, height } => {
-                    built |= [x, y, width, height].iter().all(|v| v.is_finite()) && *width != 0.0 && *height != 0.0;
+                    built |= (x + width).is_finite() && (y + height).is_finite() && x.is_finite() && y.is_finite();
                 }
                 Operator::LineTo { x, y } => built |= x.is_finite() && y.is_finite(),
                 Operator::CurveTo { x1, y1, x2, y2, x3, y3 } => {
@@ -632,7 +632,7 @@ impl PageRenderer {
 mod tests {
     use super::*;
     use crate::object::ObjectRef;
-    use crate::rendering::{sidecar::CmykSidecar, RenderOptions};
+    use crate::rendering::{RenderOptions, sidecar::CmykSidecar};
 
     fn document_with_failing_child(knockout: bool) -> PdfDocument {
         let invalid = "not-deflated";

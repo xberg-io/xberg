@@ -216,10 +216,12 @@ fn degraded_groups_keep_memory_depth_and_operation_failures_fatal() {
     resources.reset(Some(16));
     resources.canvas(8);
     let fallback = resources.fallback().expect("degraded scope");
-    assert!(resources
-        .knockout(1, 0, 0, 0, 1, 1)
-        .expect("inherited degradation")
-        .is_none());
+    assert!(
+        resources
+            .knockout(1, 0, 0, 0, 1, 1)
+            .expect("inherited degradation")
+            .is_none()
+    );
     assert!(resources.reserve(Some(9)).is_err(), "memory admission remains active");
     drop(fallback);
     assert!(resources.check().is_err(), "fatal memory refusal remains latched");
@@ -521,14 +523,19 @@ fn path_paints(content: &str) -> usize {
 
 #[test]
 fn only_a_path_paint_that_certainly_builds_a_path_raises_the_floor() {
-    let cases: [(&str, usize); 14] = [
+    let cases: [(&str, usize); 16] = [
         ("f", 0),
         ("n f", 0),
         ("0 0 10 10 re n f", 0),
         ("0 0 10 10 re f", 1),
         ("0 0 10 10 re f f", 1),
         ("0 0 10 10 re B 5 5 m 9 9 l S", 2),
-        ("0 0 0 10 re f", 0),
+        ("0 0 0 10 re f", 1),
+        ("0 0 100 0 re S", 1),
+        (
+            "300000000000000000000000000000000000000.0 0 300000000000000000000000000000000000000.0 10 re f",
+            0,
+        ),
         ("/OC /L BDC 0 0 10 10 re f EMC", 0),
         ("/OC /L BDC EMC 0 0 10 10 re f", 1),
         ("/OC /L BDC /Span BMC EMC 0 0 10 10 re f EMC 0 0 10 10 re f", 1),
