@@ -1836,18 +1836,113 @@ fn test_render_djot_heading_keeps_plain_text_that_looks_like_an_annotation_marke
 
 #[test]
 fn test_render_djot_heading_escapes_a_brace_when_a_marker_annotation_writes_nothing() {
-    let mut b = InternalDocumentBuilder::new("test");
-    b.push_heading(2, "{.x} tail", None, None);
-    let mut doc = b.build();
-    for element in doc.elements.iter_mut() {
-        if matches!(element.kind, ElementKind::Heading { .. }) {
-            element.annotations = vec![TextAnnotation {
-                start: 0,
-                end: 0,
-                kind: AnnotationKind::Strikethrough,
-            }];
+    for text in ["{.x} tail", "{=x=} y", "{-x-} y"] {
+        for kind in [AnnotationKind::Strikethrough, AnnotationKind::Highlight] {
+            let out = render_heading_kinds(text, &[TextAnnotation { start: 0, end: 0, kind }]);
+            assert_eq!(count_marks(&out), 0, "{text:?}: {out:?}");
+            assert_eq!(heading_texts(&out), [text, text, text], "{text:?}: {out:?}");
         }
     }
-    let out = render_djot(&doc);
-    assert_eq!(heading_texts(&out), ["{.x} tail"], "{out:?}");
+}
+
+fn render_heading_kinds(text: &str, annotations: &[TextAnnotation]) -> String {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_title(text, None, None);
+    b.push_heading(2, text, None, None);
+    b.push_slide(1, Some(text), None);
+    let mut doc = b.build();
+    for element in doc.elements.iter_mut() {
+        element.annotations = annotations.to_vec();
+    }
+    render_djot(&doc)
+}
+
+fn count_marks(output: &str) -> usize {
+    jotdown::Parser::new(output)
+        .filter(|event| {
+            matches!(
+                event,
+                jotdown::Event::Start(jotdown::Container::Delete | jotdown::Container::Mark, _)
+            )
+        })
+        .count()
+}
+
+#[test]
+fn test_render_djot_heading_keeps_a_mark_after_leading_whitespace_or_a_control_character() {
+    let mut failures = Vec::new();
+    let cases = [
+        (" x tail", 1, 2),
+        ("  x tail", 2, 3),
+        ("\tx tail", 1, 2),
+        ("\u{1}x tail", 1, 2),
+        (" {x} tail", 1, 4),
+        (" 1. Intro", 1, 3),
+    ];
+    for (text, start, end) in cases {
+        for kind in [AnnotationKind::Strikethrough, AnnotationKind::Highlight] {
+            let out = render_heading_kinds(text, &[TextAnnotation { start, end, kind }]);
+            if count_marks(&out) != 3 {
+                failures.push(format!("mark lost in {text:?} at {start}..{end}: {out:?}"));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn test_render_djot_heading_keeps_a_mark_after_leading_whitespace_beside_inline_math() {
+    for kind in [AnnotationKind::Strikethrough, AnnotationKind::Highlight] {
+        let annotations = [
+            TextAnnotation { start: 1, end: 2, kind },
+            TextAnnotation {
+                start: 3,
+                end: 6,
+                kind: AnnotationKind::math(false),
+            },
+        ];
+        let out = render_heading_kinds(" x $y$", &annotations);
+        assert_eq!(count_marks(&out), 3, "{out:?}");
+        assert!(out.contains("$`y`"), "{out:?}");
+    }
+}
+
+#[test]
+fn test_render_djot_heading_keeps_mark_text_under_an_annotation_that_is_not_a_mark() {
+    let mut failures = Vec::new();
+    for text in ["{=x=} y", "{-x-} y"] {
+        let annotations = [
+            (0, 5, AnnotationKind::Color { value: "red".into() }),
+            (0, 5, AnnotationKind::FontSize { value: "12pt".into() }),
+            (0, 0, AnnotationKind::Bold),
+            (0, 0, AnnotationKind::Color { value: "red".into() }),
+        ];
+        for (start, end, kind) in annotations {
+            let out = render_heading_kinds(text, &[TextAnnotation { start, end, kind }]);
+            if count_marks(&out) != 0 || heading_texts(&out) != [text, text, text] {
+                failures.push(format!("{text:?} at {start}..{end} read as markup: {out:?}"));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn test_render_djot_heading_keeps_mark_text_when_an_earlier_annotation_hides_the_mark() {
+    let annotations = [
+        TextAnnotation {
+            start: 0,
+            end: 6,
+            kind: AnnotationKind::Color { value: "red".into() },
+        },
+        TextAnnotation {
+            start: 1,
+            end: 6,
+            kind: AnnotationKind::Strikethrough,
+        },
+    ];
+    let out = render_heading_kinds(" {-x-} y", &annotations);
+    let texts: Vec<String> = heading_texts(&out).iter().map(|t| t.trim().to_string()).collect();
+    assert_eq!(count_marks(&out), 0, "{out:?}");
+    assert_eq!(texts, ["{-x-} y", "{-x-} y", "{-x-} y"], "{out:?}");
 }
