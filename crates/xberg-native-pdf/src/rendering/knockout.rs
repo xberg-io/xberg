@@ -7,7 +7,6 @@ use crate::object::Object;
 use std::collections::{HashMap, HashSet};
 use tiny_skia::{Pixmap, Transform};
 
-/// Whether a resolved `/Group` dictionary is a transparency group with `/K true`; pages and forms share it.
 /// RGBA-sized snapshots a paint workspace holds when the page has a sidecar.
 const SIDECAR_SNAPSHOT_COPIES: usize = 2;
 /// Extra RGBA-sized copy a non-separable blend holds.
@@ -23,6 +22,7 @@ const FILL_STROKE_COVERAGE_BYTES: usize = 6;
 pub(super) const MAX_PAINT_SCRATCH_BYTES_PER_PIXEL: usize =
     4 * (SIDECAR_SNAPSHOT_COPIES + NONSEPARABLE_BLEND_COPIES) + FILL_STROKE_COVERAGE_BYTES;
 
+/// Whether a resolved `/Group` dictionary is a transparency group with `/K true`; pages and forms share it.
 pub(super) fn group_is_knockout(group: &Object) -> bool {
     group.as_dict().is_some_and(|group| {
         group.get("S").and_then(Object::as_name) == Some("Transparency")

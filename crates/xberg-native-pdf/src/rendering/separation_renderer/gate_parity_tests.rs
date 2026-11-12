@@ -690,12 +690,13 @@ fn a_page_without_transparency_keeps_the_per_plate_knockout() {
     );
 }
 
-/// A group's stroke and fill-stroke under a non-separable blend reserve the widest paint scratch,
-/// so a limit at the 9-byte scratch charge lowers the DPI and renders.
+/// A group's stroke and fill-stroke under a non-separable blend reserve the widest paint scratch.
+/// A limit just above the charge of a 9-byte scratch is below the run-time peak, so the fit must lower the
+/// DPI and the render succeeds.
 #[test]
 fn a_group_stroke_under_a_non_separable_blend_lowers_dpi_instead_of_failing() {
     let doc = stroking_group_page();
-    let narrow = one_ink_peak_charge(BUDGET_REQUESTED_DPI, 2 * CANVAS + 9);
+    let narrow = one_ink_peak_charge(BUDGET_REQUESTED_DPI, 3 * CANVAS + 10);
     let dpi = budgeted_dpi(&doc, narrow, BUDGET_MINIMUM_DPI).expect("the fit lowers the DPI");
     assert!(
         dpi < BUDGET_REQUESTED_DPI,
@@ -749,4 +750,31 @@ fn a_soft_mask_inside_a_group_is_charged_its_workspaces() {
         ),
         Some(BUDGET_REQUESTED_DPI)
     );
+}
+
+#[test]
+fn groups_reachable_only_through_a_soft_mask_are_charged() {
+    use crate::rendering::page_renderer::{SpotPlaneUse, spot_plane_use};
+
+    let mask = group_form_obj(5, "/XObject << /G 6 0 R >>", "/G Do");
+    let inner =
+        group_form_obj(6, "", "0.4 g 0 0 100 100 re f").replace("/S /Transparency >>", "/S /Transparency /K true >>");
+    let doc = build_page_with(
+        "/T gs /CS0 cs 0.5 scn 10 10 60 60 re f",
+        SPOT_A,
+        "/SMask << /Type /Mask /S /Luminosity /G 5 0 R >>",
+        &[&mask, &inner],
+    );
+    let resources = doc.get_page_resources(0).expect("resources");
+    assert_eq!(
+        spot_plane_use(&doc, 0, &resources),
+        SpotPlaneUse {
+            soft_mask: true,
+            groups: 2,
+            knockouts: 1,
+        }
+    );
+    let without_nested_groups = one_ink_charge(BUDGET_REQUESTED_DPI, 1);
+    let dpi = budgeted_dpi(&doc, without_nested_groups, BUDGET_MINIMUM_DPI).expect("the reduced DPI renders");
+    assert!(dpi < BUDGET_REQUESTED_DPI, "the nested group lowers DPI, got {dpi}");
 }
