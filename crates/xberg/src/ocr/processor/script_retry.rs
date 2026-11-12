@@ -8,6 +8,7 @@ use xberg_tesseract::{TessPageSegMode, TesseractAPI};
 
 use super::api_pool::new_engine;
 use super::validation::{TessdataEnv, first_directory_holding, tessdata_search_dirs};
+use crate::core::extractor::cacheability;
 use crate::ocr::error::OcrError;
 use crate::ocr::hocr_parser::RetainedWordConfidenceStats;
 
@@ -171,7 +172,10 @@ fn retry_list(language: &str, model: &str) -> Vec<String> {
 }
 
 /// The script OSD names on the first read's pixels.
-fn osd_script(image: &xberg_tesseract::Pix, pass: &Pass<'_>, models: &ModelSet) -> Result<String, OcrError> {
+fn osd_script(image: &xberg_tesseract::Pix, pass: &Pass<'_>, models: &ModelSet) -> Result<Option<String>, OcrError> {
+    if cacheability::ocr_stop_requested() {
+        return Ok(None);
+    }
     let osd = new_engine(&models.directory, &models.languages, 3)?;
     osd.set_page_seg_mode(TessPageSegMode::PSM_OSD_ONLY)
         .map_err(|e| engine_error("OSD mode", e))?;
@@ -179,7 +183,11 @@ fn osd_script(image: &xberg_tesseract::Pix, pass: &Pass<'_>, models: &ModelSet) 
         .map_err(|e| engine_error("OSD image", e))?;
     osd.set_source_resolution(pass.source_dpi)
         .map_err(|e| engine_error("OSD resolution", e))?;
-    Ok(osd.detect_os().map_err(|e| engine_error("OSD", e))?.2)
+    retry_stage(|| {
+        osd.detect_os()
+            .map(|result| result.2)
+            .map_err(|e| engine_error("OSD", e))
+    })
 }
 
 /// A second read of a page that was merged with the first.
@@ -199,6 +207,14 @@ fn engine_error(step: &str, error: impl std::fmt::Display) -> OcrError {
     OcrError::ProcessingFailed(format!("script retry: {step}: {error}"))
 }
 
+fn retry_stage<T>(action: impl FnOnce() -> Result<T, OcrError>) -> Result<Option<T>, OcrError> {
+    if cacheability::ocr_stop_requested() {
+        return Ok(None);
+    }
+    let result = action()?;
+    Ok((!cacheability::ocr_stop_requested()).then_some(result))
+}
+
 /// Name the page's script with OSD on the pixels the first read saw, and when the configured list
 /// cannot read that script, read the page again with its model added and merge line by line.
 /// OSD and the retry run on engines of their own, built for the page and dropped with it, never
@@ -212,11 +228,16 @@ pub(super) fn run(
     pass: &Pass<'_>,
     models: &RetryModels,
 ) -> Result<Option<Outcome>, OcrError> {
+    if cacheability::ocr_stop_requested() {
+        return Ok(None);
+    }
     let started = std::time::Instant::now();
     let image = first
         .thresholded_image()
         .map_err(|e| engine_error("thresholded image", e))?;
-    let script = osd_script(&image, pass, &models.osd)?;
+    let Some(script) = osd_script(&image, pass, &models.osd)? else {
+        return Ok(None);
+    };
     let Some(model) = model_for_script(&script) else {
         return Ok(None);
     };
@@ -231,7 +252,9 @@ pub(super) fn run(
     retry
         .set_source_resolution(pass.source_dpi)
         .map_err(|e| engine_error("retry resolution", e))?;
-    retry.recognize().map_err(|e| engine_error("retry recognize", e))?;
+    if retry_stage(|| retry.recognize().map_err(|e| engine_error("retry recognize", e)))?.is_none() {
+        return Ok(None);
+    }
     let retry_tsv = retry.get_tsv_text(0).map_err(|e| engine_error("retry word table", e))?;
     let merged = merge(
         parse_words(first_tsv),
@@ -489,15 +512,22 @@ fn mostly_script(retry: &[TsvWord], script: &str) -> Result<(), Refusal> {
     Ok(())
 }
 
-/// The retry read a first-read word's box as letters of the target script only. A word
-/// of Latin marks under a Han glyph is the first read's junk, not a word the retry lost; other
-/// Latin or digit text on the box, or no retry word at all, is a lost word. ~keep
-fn replaced_by_script_letters(word: &TsvWord, retry: &[TsvWord]) -> bool {
-    let over: Vec<&TsvWord> = retry
+/// A protected box can be replaced only when it contains a letter of the target script
+/// and no competing letters or digits. Punctuation may accompany the target letters. ~keep
+fn replaced_by_script_letters(word: &TsvWord, retry: &[TsvWord], script: &str) -> bool {
+    let mut target_letter = false;
+    for character in retry
         .iter()
         .filter(|candidate| x_overlap(word, candidate) > 0)
-        .collect();
-    !over.is_empty() && !over.iter().any(|candidate| has_latin_or_digit(&candidate.text))
+        .flat_map(|candidate| candidate.text.chars())
+    {
+        if script_letter(script, character) {
+            target_letter = true;
+        } else if character.is_alphanumeric() {
+            return false;
+        }
+    }
+    target_letter
 }
 
 /// The four line rules (script share, confidence gain, protected words, word coverage), each on one
@@ -517,7 +547,7 @@ fn admit_line(first: &[TsvWord], retry: &[TsvWord], script: &str, margin: f64) -
         });
         match found {
             Some((index, _)) => used[index] = true,
-            None if replaced_by_script_letters(word, retry) => {}
+            None if replaced_by_script_letters(word, retry, script) => {}
             None => return Err(Refusal::Lost(core(&word.text).to_string())),
         }
     }
@@ -727,6 +757,64 @@ mod tests {
             }
         }
         missing
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn retry_worker_skips_stages_after_cancellation() {
+        use crate::cancellation::CancellationToken;
+
+        for soft_stop in [false, true] {
+            for stop_after in 0..=2 {
+                let token = CancellationToken::new();
+                let worker_token = token.clone();
+                cacheability::with_ocr_cancellation(Some(&token), async move {
+                    let worker = cacheability::blocking(move || {
+                        let stop = || {
+                            if soft_stop {
+                                worker_token.request_stop();
+                            } else {
+                                worker_token.cancel();
+                            }
+                        };
+                        let mut stages_run = 0;
+                        if stop_after == 0 {
+                            stop();
+                        }
+                        let mut native_stage = || {
+                            stages_run += 1;
+                            if stages_run == stop_after {
+                                stop();
+                            }
+                            Ok(())
+                        };
+                        let result = retry_stage(&mut native_stage)
+                            .expect("OSD stage")
+                            .and_then(|()| retry_stage(native_stage).expect("recognition stage"));
+                        assert_eq!(result, None, "a stopped worker must discard the retry");
+                        assert_eq!(stages_run, stop_after);
+                        assert!(!cacheability::can_publish_outer_result());
+                    });
+                    tokio::task::spawn_blocking(worker).await.expect("OCR worker");
+                })
+                .await;
+                assert!(cacheability::can_publish_outer_result());
+            }
+        }
+    }
+
+    #[test]
+    fn retry_requires_han_in_the_protected_word_box() {
+        let first = line(&[("Ref", 20.0, 0, 25), ("漢字", 20.0, 30, 50)], 0, 0);
+        for replacement in ["!", "Ж", "漢Ж"] {
+            let retry = line(&[(replacement, 95.0, 0, 25), ("漢字測試", 95.0, 30, 50)], 0, 0);
+            assert!(
+                matches!(admit_line(&first, &retry, HAN, RETRY_MIN_CONF_GAIN), Err(Refusal::Lost(word)) if word == "Ref"),
+                "{replacement} must not displace the protected token"
+            );
+        }
+        let retry = line(&[("漢。", 95.0, 0, 25), ("漢字測試", 95.0, 30, 50)], 0, 0);
+        assert!(admit_line(&first, &retry, HAN, RETRY_MIN_CONF_GAIN).is_ok());
     }
 
     fn ref_fixture() -> (Vec<TsvWord>, Vec<TsvWord>) {

@@ -618,6 +618,10 @@ impl TesseractBackend {
         let operation = move || {
             #[cfg(not(target_arch = "wasm32"))]
             let _permit = permit;
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Err(error) = crate::core::extractor::cacheability::check_ocr_cancelled() {
+                return Err(crate::ocr::error::OcrError::ProcessingFailed(error.to_string()));
+            }
             let run = || {
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     processor.process_image_with_retry(
@@ -649,6 +653,8 @@ impl TesseractBackend {
             })?;
         #[cfg(target_arch = "wasm32")]
         let ocr_result = operation();
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::core::extractor::cacheability::check_ocr_cancelled()?;
         let mut ocr_result = ocr_result.map_err(|e| crate::XbergError::Ocr {
             message: format!("Tesseract OCR failed: {}", e),
             source: Some(Box::new(e)),
@@ -745,6 +751,10 @@ impl OcrBackend for TesseractBackend {
         let operation = move || {
             #[cfg(not(target_arch = "wasm32"))]
             let _permit = permit;
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Err(error) = crate::core::extractor::cacheability::check_ocr_cancelled() {
+                return Err(crate::ocr::error::OcrError::ProcessingFailed(error.to_string()));
+            }
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 processor.process_image_file(&path_str, &tess_config_clone, output_format, retry_threshold)
             }))
@@ -763,6 +773,8 @@ impl OcrBackend for TesseractBackend {
             })?;
         #[cfg(target_arch = "wasm32")]
         let ocr_result = operation();
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::core::extractor::cacheability::check_ocr_cancelled()?;
         let mut ocr_result = ocr_result.map_err(|e| crate::XbergError::Ocr {
             message: format!("Tesseract OCR failed: {}", e),
             source: Some(Box::new(e)),

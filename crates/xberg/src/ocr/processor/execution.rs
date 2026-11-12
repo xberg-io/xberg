@@ -2434,8 +2434,9 @@ pub(super) fn perform_ocr(
     } else {
         None
     };
-    let script_retry = models
-        .retry_models(config, f64::from(mean_text_conf))
+    let script_retry = (!crate::core::extractor::cacheability::ocr_stop_requested())
+        .then(|| models.retry_models(config, f64::from(mean_text_conf)))
+        .flatten()
         .and_then(|retry_models| {
             let pass = script_retry::Pass { config, source_dpi };
             retry_with_tsv(
@@ -2450,7 +2451,7 @@ pub(super) fn perform_ocr(
                 },
                 |tsv| script_retry::run(&api, tsv, &pass, retry_models),
             )
-            .filter(|_| models.retry_is_current(config))
+            .filter(|_| models.retry_is_current(config) && !crate::core::extractor::cacheability::ocr_stop_requested())
         });
     let merged_read = script_retry
         .as_ref()
@@ -3228,6 +3229,7 @@ fn process_image_resolved(
         && let Some(cached_result) =
             cache.get_cached_result(&image_hash, "tesseract", &config_str, output_format.as_ref())?
         && models.if_result_current(config, || ()).is_some()
+        && !crate::core::extractor::cacheability::ocr_stop_requested()
     {
         #[cfg(feature = "otel")]
         tracing::Span::current().record("cache.hit", true);
@@ -3253,7 +3255,7 @@ fn process_image_resolved(
     )?;
 
     let stored = models.if_result_current(config, || {
-        if config.use_cache {
+        if config.use_cache && !crate::core::extractor::cacheability::ocr_stop_requested() {
             cache.set_cached_result(&image_hash, "tesseract", &config_str, output_format.as_ref(), &result)
         } else {
             Ok(())

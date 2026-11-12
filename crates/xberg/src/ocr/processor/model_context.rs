@@ -51,7 +51,9 @@ impl ModelContext {
             }
         })?;
         let mut context = Self::for_path(directory, config.psm)?;
-        if let Some(noisy_below) = retry_threshold.filter(|_| script_retry::supports_retry(config)) {
+        if let Some(noisy_below) = retry_threshold.filter(|_| script_retry::supports_retry(config))
+            && !crate::core::extractor::cacheability::ocr_stop_requested()
+        {
             context.select_retry(config, tessdata_search_dirs(override_path, &env), noisy_below);
         }
         Ok(context)
@@ -205,7 +207,7 @@ impl ModelContext {
         let mut base = super::config::hash_config(config, &self.directory);
         if let Some(retry) = self.retry.as_ref() {
             let mut hash = blake3::Hasher::new();
-            hash.update(b"tesseract-script-retry-v3");
+            hash.update(b"tesseract-script-retry-v4");
             hash.update(base.as_bytes());
             hash.update(&retry.noisy_below.to_bits().to_le_bytes());
             if let Some(models) = &retry.models {
