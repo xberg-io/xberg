@@ -2,10 +2,7 @@ For example, if *n = 20* , *M = Q = 3* , and ε *= 01011001001010101101* , then 
 
  *n* 
 
-into N =   = 2 matrices of cardinality M
-
-- Q (3
-- 3 = 9). Note that the last two bits (0 and 1)
+into *N =*~~  *= 2* matrices of cardinality *M* · *Q* (3·3 = 9). Note that the last two bits (0 and 1)
 
  *3* · *3* 
 
@@ -37,21 +34,13 @@ For the example in this section,
 
 2 2 2
 
-( 1 − 0.2888
-
-- 2 ) ( 1 − 0.5776
-- 2 ) ( 2 − 1 − 1 − 0.1336
-- 2 )
+(~1~− 0.2888· 2) (~1~− 0.5776 · 2) (~2~ −1−1− 0.1336 · 2)
 
 2
 
 χ ( *obs* ) = + + *= 0.596953.*
 
-0.2888
-
-- 2 0.5776
-- 2 0.1336
-- 2
+0.2888· 2 0.5776 · 2 0.1336 · 2
 
 2 −χ ( *obs* ) / 2
 

@@ -286,18 +286,49 @@ pub(super) fn split_embedded_list_items(paragraphs: &mut Vec<PdfParagraph>) {
 fn embedded_bullet_positions(text: &str) -> Vec<usize> {
     let mut positions = Vec::new();
     let mut previous: Option<char> = None;
+    let mut previous_non_space = None;
+    let mut product_end = 0;
     let mut chars = text.char_indices().peekable();
     while let Some((position, character)) = chars.next() {
         if matches!(character, '\u{2022}' | '\u{00B7}') {
             let next = chars.peek().map(|&(_, c)| c);
             let glued = previous.is_some_and(char::is_alphanumeric) && next.is_some_and(char::is_alphanumeric);
-            if !glued {
+            let left_operand =
+                previous_non_space.is_some_and(|c: char| c.is_ascii_digit() || matches!(c, ')' | ']' | '}'));
+            let right = position + character.len_utf8();
+            let continues_product = product_end != 0 && text[product_end..position].trim().is_empty();
+            if !glued
+                && left_operand
+                && let Some(number_end) = numeric_multiplier_end(&text[right..], continues_product)
+            {
+                product_end = right + number_end;
+            } else if !glued {
                 positions.push(position);
             }
         }
         previous = Some(character);
+        if !character.is_whitespace() {
+            previous_non_space = Some(character);
+        }
     }
     positions
+}
+
+fn numeric_multiplier_end(text: &str, continues_product: bool) -> Option<usize> {
+    let operand = text.trim_start();
+    // A dot attached to the right-hand number can be a decimal point in a PDF table. ~keep
+    if operand.len() == text.len() || !operand.starts_with(|c: char| c.is_ascii_digit()) {
+        return None;
+    }
+    let after_number = operand.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.');
+    // A count followed by a word can open a genuine item, such as “2 options”. A multiplication
+    // chain already establishes that its final number is a multiplier. ~keep
+    if after_number.trim_start().starts_with(char::is_alphabetic)
+        && !(continues_product && after_number.starts_with(char::is_whitespace))
+    {
+        return None;
+    }
+    Some(text.len() - after_number.len())
 }
 
 /// Create a simple paragraph from text.
@@ -967,6 +998,29 @@ mod tests {
         split_embedded_list_items(&mut paragraphs);
         assert_eq!(paragraphs.len(), 1, "mid-word bullets must not split the paragraph");
         assert!(!paragraphs[0].is_list_item);
+    }
+
+    #[test]
+    fn multiplication_dots_do_not_split_a_paragraph_into_list_items() {
+        for formula in ["(1 − 0.2888 • 2) + (3) · 4", "Thus 2 · 3 · 4 · 5 means multiplication."] {
+            let mut paragraphs = vec![make_body_paragraph(formula, 10.0)];
+            split_embedded_list_items(&mut paragraphs);
+            assert_eq!(paragraphs.len(), 1, "{formula}");
+            assert!(!paragraphs[0].is_list_item);
+            assert_eq!(paragraphs[0].lines[0].segments[0].text, formula);
+        }
+    }
+
+    #[test]
+    fn embedded_bullets_can_introduce_items_that_start_with_counts() {
+        let mut paragraphs = vec![make_body_paragraph("Plan 2024 • 2 options • 3 modes", 10.0)];
+        split_embedded_list_items(&mut paragraphs);
+        assert_eq!(paragraphs.len(), 3);
+        assert_eq!(paragraphs[0].lines[0].segments[0].text, "Plan 2024");
+        for (item, expected) in paragraphs[1..].iter().zip(["2 options", "3 modes"]) {
+            assert!(item.is_list_item);
+            assert_eq!(item.lines[0].segments[0].text, expected);
+        }
     }
 
     /// Items split off a paragraph keep their word spaces: word-per-segment items with zero
