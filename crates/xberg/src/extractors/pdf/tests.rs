@@ -1248,6 +1248,9 @@ fn mixed_plain_keeps_section_labels_the_transcript_lacks_on_a_three_table_page()
     // A label that is part of a transcript word, such as "Park" beside "Parks", is still a word the transcript lacks.
     let partial = "Budget 2030\nPark\nNorth 10\nSouth 20\nStaff 5\nTools 3\nNet change 7";
     assert_eq!(render(partial), format!("{partial}\n\n{cells}"));
+    // A label before the first transcript paragraph is kept as well.
+    let leading = "Summary\nBudget 2030\nNorth 10\nSouth 20\nStaff 5\nTools 3\nNet change 7";
+    assert_eq!(render(leading), format!("{leading}\n\n{cells}"));
     // A paragraph that only repeats the cells loses nothing when declined, so the page keeps its transcript.
     assert_eq!(
         render("Budget 2030\nNorth 10\nSouth 20\nStaff 5\nTools 3\nNet change 7"),
