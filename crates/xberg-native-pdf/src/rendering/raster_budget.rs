@@ -1,11 +1,12 @@
 //! Page raster sizing, working-memory checks, and PNG encoding.
 
 use super::{PageRenderer, knockout, knockout_resources};
+use crate::content::{operators::Operator, parser::parse_content_stream};
 use crate::document::PdfDocument;
 use crate::error::{Error, Result};
 use crate::object::{Object, ObjectRef};
 use crate::rendering::ext_gstate::parse_ext_g_state_inner;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tiny_skia::Pixmap;
 
 pub(in crate::rendering) struct PngRenderBudget {
@@ -66,10 +67,49 @@ pub(super) fn raster_dimensions(page_width: f32, page_height: f32, scale: f32, h
     }
 }
 
-/// Finished scans by form reference, invocation kind (mask or XObject), and depth.
-/// Including depth makes cyclic paths reach the conservative cap and lets shared forms reuse
-/// results without bypassing the remaining depth limit.
-type MemoOfSpotPlaneUse = HashMap<(ObjectRef, bool, u32), SpotPlaneUse>;
+#[derive(Default)]
+struct SpotPlaneScan {
+    // Depth preserves the remaining recursion allowance. Forms without local resources
+    // can resolve the same name differently in each enclosing scope. ~keep
+    memo: HashMap<(ObjectRef, bool, u32, Option<usize>), SpotPlaneUse>,
+    next_scope: usize,
+}
+
+#[derive(Clone, Copy)]
+struct ResourceScope<'a> {
+    resources: &'a Object,
+    id: usize,
+}
+
+#[derive(Default)]
+struct InheritedNames {
+    xobjects: HashSet<String>,
+    states: HashSet<String>,
+}
+
+impl InheritedNames {
+    fn from_form(doc: &PdfDocument, stream: &Object, reference: Option<ObjectRef>) -> Self {
+        let data = match reference {
+            Some(reference) => doc.decode_stream_with_encryption(stream, reference),
+            None => stream.decode_stream_data(),
+        };
+        let mut names = Self::default();
+        if let Ok(operators) = data.and_then(|data| parse_content_stream(&data)) {
+            for op in operators {
+                match op {
+                    Operator::Do { name } => {
+                        names.xobjects.insert(name);
+                    }
+                    Operator::SetExtGState { dict_name } => {
+                        names.states.insert(dict_name);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        names
+    }
+}
 
 /// What painting a page can hold beyond the live sidecar planes, read from its resources.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -105,120 +145,117 @@ impl SpotPlaneUse {
 /// `knockout_resources` still bound them). A scan that hits the depth cap answers conservatively.
 pub(in crate::rendering) fn spot_plane_use(doc: &PdfDocument, page_num: usize, resources: &Object) -> SpotPlaneUse {
     let page_knockout = knockout::page_is_knockout(doc, page_num);
-    scan_resources_for_spot_plane_use(doc, resources, &mut HashMap::new(), 0)
+    let mut scan = SpotPlaneScan::default();
+    let scope = scan.scope(resources);
+    scan.resources(doc, scope, None, 0)
         .nested_in_group(page_knockout, page_knockout)
 }
 
-/// The `/G` forms of the ExtGState soft masks the resources declare.
-fn soft_mask_forms(doc: &PdfDocument, dict: &HashMap<String, Object>) -> Vec<ObjectRef> {
-    use crate::rendering::ext_gstate::SoftMaskValue;
-    let states = dict
-        .get("ExtGState")
-        .and_then(|object| doc.resolve_object(object).ok())
-        .and_then(|object| object.as_dict().cloned());
-    states
-        .iter()
-        .flat_map(|states| states.values())
-        .filter_map(|state| match parse_ext_g_state_inner(state, doc).ok()?.smask {
-            Some(SoftMaskValue::Form(form)) => Some(form.form_ref),
-            _ => None,
-        })
-        .collect()
-}
-
-fn scan_soft_mask_forms(
-    doc: &PdfDocument,
-    forms: &[ObjectRef],
-    memo: &mut MemoOfSpotPlaneUse,
-    depth: u32,
-) -> SpotPlaneUse {
-    let mut found = SpotPlaneUse::default();
-    for &reference in forms {
-        let key = (reference, true, depth);
-        let scanned = if let Some(&known) = memo.get(&key) {
-            known
-        } else {
-            let scanned = match doc.load_object(reference) {
-                Ok(Object::Stream { dict, .. }) => scan_form_for_spot_plane_use(doc, &dict, memo, depth, true),
-                _ => SpotPlaneUse::default(),
-            };
-            memo.insert(key, scanned);
-            scanned
-        };
-        found = found.widest(scanned);
+impl SpotPlaneScan {
+    fn scope<'a>(&mut self, resources: &'a Object) -> ResourceScope<'a> {
+        let id = self.next_scope;
+        self.next_scope += 1;
+        ResourceScope { resources, id }
     }
-    found
-}
 
-fn scan_form_for_spot_plane_use(
-    doc: &PdfDocument,
-    form: &HashMap<String, Object>,
-    memo: &mut MemoOfSpotPlaneUse,
-    depth: u32,
-    as_mask: bool,
-) -> SpotPlaneUse {
-    let group = form.get("Group").and_then(|group| doc.resolve_object(group).ok());
-    let is_knockout = group.as_ref().is_some_and(knockout::group_is_knockout);
-    let is_group = is_knockout
-        || group
+    fn form(
+        &mut self,
+        doc: &PdfDocument,
+        raw: &Object,
+        parent: ResourceScope<'_>,
+        depth: u32,
+        as_mask: bool,
+    ) -> SpotPlaneUse {
+        let reference = raw.as_reference();
+        if let Some(reference) = reference
+            && let Some(known) = self
+                .memo
+                .get(&(reference, as_mask, depth, None))
+                .or_else(|| self.memo.get(&(reference, as_mask, depth, Some(parent.id))))
+        {
+            return *known;
+        }
+        let Ok(stream) = doc.resolve_object(raw) else {
+            return SpotPlaneUse::default();
+        };
+        let Object::Stream { dict, .. } = &stream else {
+            return SpotPlaneUse::default();
+        };
+        if !as_mask && dict.get("Subtype").and_then(Object::as_name) != Some("Form") {
+            return SpotPlaneUse::default();
+        }
+
+        let local = dict.get("Resources");
+        let key = reference.map(|reference| (reference, as_mask, depth, local.is_none().then_some(parent.id)));
+        let inner = if let Some(local) = local {
+            doc.resolve_object(local)
+                .ok()
+                .map_or_else(SpotPlaneUse::default, |resources| {
+                    let scope = self.scope(&resources);
+                    self.resources(doc, scope, None, depth + 1)
+                })
+        } else {
+            // A form inherits name bindings, but only its operators can invoke
+            // siblings. Walking all bindings here would invent self-recursion. ~keep
+            let names = InheritedNames::from_form(doc, &stream, reference);
+            self.resources(doc, parent, Some(&names), depth + 1)
+        };
+
+        let group = dict.get("Group").and_then(|group| doc.resolve_object(group).ok());
+        let is_knockout = group.as_ref().is_some_and(knockout::group_is_knockout);
+        let is_group = group
             .as_ref()
             .and_then(Object::as_dict)
             .is_some_and(|group| group.get("S").and_then(Object::as_name) == Some("Transparency"));
-    let inner = match form.get("Resources").map(|object| doc.resolve_object(object)) {
-        Some(Ok(resources)) => scan_resources_for_spot_plane_use(doc, &resources, memo, depth + 1),
-        _ => SpotPlaneUse::default(),
-    };
-    // The soft-mask allowance covers a plain mask group by itself. Count its level when
-    // child groups can hold reservations concurrently, or when it has a knockout workspace. ~keep
-    inner.nested_in_group(is_group && (!as_mask || inner.groups != 0 || is_knockout), is_knockout)
-}
-
-fn scan_resources_for_spot_plane_use(
-    doc: &PdfDocument,
-    resources: &Object,
-    memo: &mut MemoOfSpotPlaneUse,
-    depth: u32,
-) -> SpotPlaneUse {
-    let Some(dict) = resources.as_dict() else {
-        return SpotPlaneUse::default();
-    };
-    if depth >= knockout_resources::MAX_NESTING_DEPTH as u32 {
-        // Past the nesting cap the renderer refuses further groups; answer with the cap. ~keep
-        return SpotPlaneUse {
-            soft_mask: true,
-            groups: knockout_resources::MAX_NESTING_DEPTH,
-            knockouts: knockout_resources::MAX_NESTING_DEPTH,
-        };
-    }
-    let mask_forms = soft_mask_forms(doc, dict);
-    let mut found = SpotPlaneUse {
-        soft_mask: !mask_forms.is_empty(),
-        ..SpotPlaneUse::default()
-    }
-    .widest(scan_soft_mask_forms(doc, &mask_forms, memo, depth));
-    let xobjects = dict
-        .get("XObject")
-        .and_then(|object| doc.resolve_object(object).ok())
-        .and_then(|object| object.as_dict().cloned());
-    for raw in xobjects.iter().flat_map(|forms| forms.values()) {
-        let key = raw.as_reference().map(|reference| (reference, false, depth));
-        if let Some(known) = key.and_then(|key| memo.get(&key)) {
-            found = found.widest(*known);
-            continue;
-        }
-        let Ok(Object::Stream { dict: form, .. }) = doc.resolve_object(raw) else {
-            continue;
-        };
-        if form.get("Subtype").and_then(Object::as_name) != Some("Form") {
-            continue;
-        }
-        let scanned = scan_form_for_spot_plane_use(doc, &form, memo, depth, false);
+        // The mask allowance covers a plain mask group unless it holds child group reservations. ~keep
+        let scanned = inner.nested_in_group(is_group && (!as_mask || inner.groups != 0 || is_knockout), is_knockout);
         if let Some(key) = key {
-            memo.insert(key, scanned);
+            self.memo.insert(key, scanned);
         }
-        found = found.widest(scanned);
+        scanned
     }
-    found
+
+    fn resources(
+        &mut self,
+        doc: &PdfDocument,
+        scope: ResourceScope<'_>,
+        names: Option<&InheritedNames>,
+        depth: u32,
+    ) -> SpotPlaneUse {
+        use crate::rendering::ext_gstate::SoftMaskValue;
+
+        let Some(dict) = scope.resources.as_dict() else {
+            return SpotPlaneUse::default();
+        };
+        if depth >= knockout_resources::MAX_NESTING_DEPTH as u32 {
+            return SpotPlaneUse {
+                soft_mask: true,
+                groups: knockout_resources::MAX_NESTING_DEPTH,
+                knockouts: knockout_resources::MAX_NESTING_DEPTH,
+            };
+        }
+        let resolve = |kind| dict.get(kind).and_then(|object| doc.resolve_object(object).ok());
+        let states = resolve("ExtGState");
+        let mut found = SpotPlaneUse::default();
+        for (name, state) in states.iter().filter_map(Object::as_dict).flatten() {
+            if names.is_some_and(|names| !names.states.contains(name)) {
+                continue;
+            }
+            if let Ok(state) = parse_ext_g_state_inner(state, doc)
+                && let Some(SoftMaskValue::Form(form)) = state.smask
+            {
+                found.soft_mask = true;
+                found = found.widest(self.form(doc, &Object::Reference(form.form_ref), scope, depth, true));
+            }
+        }
+        let xobjects = resolve("XObject");
+        for (name, raw) in xobjects.iter().filter_map(Object::as_dict).flatten() {
+            if names.is_none_or(|names| names.xobjects.contains(name)) {
+                found = found.widest(self.form(doc, raw, scope, depth, false));
+            }
+        }
+        found
+    }
 }
 
 /// Per-pixel bytes the PNG working-set fit charges for the RGBA canvas and its demultiply
@@ -270,10 +307,12 @@ pub(super) fn fit_png_dpi(
 /// Per-pixel bytes the render holds at its peak for the spot planes `transient` declares, from
 /// the reservations in `knockout_resources`; zero when the page holds nothing beyond the live
 /// planes. `sidecar` is the per-pixel size of the CMYK and spot planes.
+///
 /// The run-time reservations in `knockout_resources` peak at the canvas plus one soft mask
 /// snapshot when only a mask paints; inside groups, at the canvas, one rgba + sidecar copy per
-/// nested group and one for non-isolated source recovery, per nested knockout group its `knockout()` reservation (twice rgba +
-/// sidecar, twice the shape) and shape workspace, and the widest per-paint scratch. The
+/// nested group and one for non-isolated source recovery, each nested knockout group's
+/// `knockout()` reservation (twice rgba + sidecar, twice the shape) and shape workspace,
+/// and the widest per-paint scratch. The
 /// shape workspace is charged even where no knockout shape exists (an over-charge). A soft
 /// mask inside a group adds its mask workspace, mask backdrop, paint snapshots and the mask
 /// form's own group. The PNG encode copies come after rendering, so the charge is the larger.

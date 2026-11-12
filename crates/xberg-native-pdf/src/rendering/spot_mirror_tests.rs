@@ -162,12 +162,12 @@ fn the_png_budget_charges_two_planes_for_each_spot_ink() {
     let pixels = side as usize * side as usize;
     let names = vec!["InkA".to_string(), "InkB".to_string()];
     let inks = names.len();
-    let fixed = 256 * 1024;
+    let fixed = PNG_FIXED_OVERHEAD;
     let planes_per_ink = 2; // a tint and an alpha lane per ink
     let sidecar_per_pixel = 4 + planes_per_ink * inks;
-    let old_charge = pixels * (12 + 4 + inks) + fixed; // one lane per ink, before #2819
-    let live_charge = pixels * (12 + sidecar_per_pixel) + fixed;
-    let peak_charge = pixels * (12 + 2 * sidecar_per_pixel) + fixed; // one transient snapshot copy
+    let old_charge = pixels * (RGBA_AND_PNG_BYTES_PER_PIXEL + 4 + inks) + fixed; // one lane per ink, before #2819
+    let live_charge = pixels * (RGBA_AND_PNG_BYTES_PER_PIXEL + sidecar_per_pixel) + fixed;
+    let peak_charge = pixels * (RGBA_AND_PNG_BYTES_PER_PIXEL + 2 * sidecar_per_pixel) + fixed; // one transient snapshot copy
     assert!(
         !png_working_bytes_fit(
             side,
@@ -226,9 +226,9 @@ fn the_png_budget_charges_two_planes_for_each_spot_ink() {
         peak_charge - 1
     ));
     // A zero-ink sidecar (a CMYK page with transparency but no spot plate) must not charge a
-    // transient copy either: the call site passes none, so the charge stays at the CMYK-only
+    // transient copy either: the call site passes an empty transient use, so the charge stays at the CMYK-only
     // 16 bytes per pixel. The render-level pin lives with the gate parity tests.
-    let zero_ink_charge = pixels * (12 + 4) + fixed;
+    let zero_ink_charge = pixels * (RGBA_AND_PNG_BYTES_PER_PIXEL + 4) + fixed;
     assert!(png_working_bytes_fit(
         side,
         side,
@@ -254,12 +254,12 @@ fn the_png_budget_charges_two_planes_for_each_spot_ink() {
             },
             zero_ink_charge
         ),
-        "a charged transient copy would not fit: the call site must pass none for empty ink lists"
+        "a charged transient copy would exceed the live CMYK budget"
     );
     let live = CmykSidecar::new(side, side, names).image_buffer_bytes() as usize;
     assert_eq!(
         live,
-        pixels * (4 + planes_per_ink * inks),
+        pixels * sidecar_per_pixel,
         "the sidecar allocates what the budget charges"
     );
 }

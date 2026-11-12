@@ -43,6 +43,8 @@ use tiny_skia::{Color, PathBuilder, Pixmap, PixmapPaint, Transform};
 mod image_budget;
 #[path = "knockout.rs"]
 mod knockout;
+#[cfg(test)]
+pub(super) use knockout::MAX_PAINT_SCRATCH_BYTES_PER_PIXEL;
 #[path = "knockout_resources.rs"]
 mod knockout_resources;
 use knockout::{KnockoutGroup, KnockoutShape, PatternShape};
@@ -6618,8 +6620,9 @@ impl PageRenderer {
     ///    formulas operate on additive components, so
     ///    [`blend_subtractive_tint`](crate::rendering::sidecar::blend_subtractive_tint)
     ///    complements the tints before the blend and the result after
-    ///    it, and mixes the blend with the source by the lane's backdrop
-    ///    alpha (§11.3.6). Only /Normal skips the round trip: `B = c_s`
+    ///    it. With nonzero backdrop alpha `a_b`, it blends against the
+    ///    unpremultiplied tint `t_b / a_b` and mixes the blend with the
+    ///    source by `a_b` (§11.3.6). Only /Normal skips the round trip: `B = c_s`
     ///    holds in both representations. The backdrop alpha is the
     ///    sidecar's per-lane painted plane, so an explicit tint-0 paint
     ///    is a backdrop and untouched paper is not.

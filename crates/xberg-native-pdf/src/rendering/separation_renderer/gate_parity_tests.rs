@@ -366,7 +366,7 @@ fn one_ink_peak_charge(dpi: u32, per_pixel: usize) -> usize {
 /// One ink: rgba + sidecar of a canvas or group is 4 + 4 + 2 bytes per pixel.
 const CANVAS: usize = 4 + 4 + 2;
 /// Worst-case paint scratch: two snapshots, a non-separable blend copy and fill-stroke coverage.
-const SCRATCH: usize = 4 * 3 + 6;
+const SCRATCH: usize = crate::rendering::page_renderer::MAX_PAINT_SCRATCH_BYTES_PER_PIXEL;
 /// Two groups' worth of one knockout reservation: twice rgba + sidecar and twice the shape, plus
 /// the shape workspace, with a shape of one ink plus a coverage plane (2).
 const KNOCKOUT: usize = 2 * CANVAS + 3 * 2;
@@ -376,9 +376,18 @@ const SOFT_MASK_IN_GROUP: usize = 12 + CANVAS + 2 + CANVAS;
 
 /// A group form `number` with its own `/Resources` extras and `body`.
 fn group_form_obj(number: u32, resources: &str, body: &str) -> String {
+    transparency_form(
+        number,
+        &format!("/Resources << /ColorSpace << {SPOT_A} >> {resources} >>"),
+        "",
+        body,
+    )
+}
+
+fn transparency_form(number: u32, resources: &str, group: &str, body: &str) -> String {
     format!(
         "{number} 0 obj\n<< /Type /XObject /Subtype /Form /FormType 1 /BBox [0 0 100 100] \
-         /Resources << /ColorSpace << {SPOT_A} >> {resources} >> /Group << /Type /Group /S /Transparency >> \
+         {resources} /Group << /Type /Group /S /Transparency {group} >> \
          /Length {} >>\nstream\n{body}\nendstream\nendobj\n",
         body.len()
     )
@@ -388,6 +397,59 @@ fn nested_group_page() -> PdfDocument {
     let outer = group_form_obj(5, "/XObject << /G 6 0 R >>", "/G Do");
     let inner = group_form_obj(6, "", "/CS0 cs 0.8 scn 10 10 60 60 re f");
     build_page_with("/F Do", SPOT_A, "/BM /Multiply", &[&outer, &inner])
+}
+
+// /Bridge and /G are siblings in /F's resources. /Bridge inherits those
+// resources and invokes /G while its own transparency group is active. ~keep
+fn inherited_sibling_group_page() -> PdfDocument {
+    let outer = group_form_obj(5, "/XObject << /Bridge 6 0 R /G 7 0 R >>", "/Bridge Do");
+    let bridge = transparency_form(6, "", "", "/G Do");
+    let sibling = group_form_obj(7, "", "/CS0 cs 0.8 scn 10 10 60 60 re f");
+    build_page_with("/F Do", SPOT_A, "/BM /Multiply", &[&outer, &bridge, &sibling])
+}
+
+#[test]
+fn a_group_can_invoke_a_sibling_through_inherited_resources() {
+    use crate::rendering::page_renderer::{SpotPlaneUse, spot_plane_use};
+
+    let doc = inherited_sibling_group_page();
+    assert_eq!(
+        spot_plane_use(&doc, 0, &doc.get_page_resources(0).expect("resources")),
+        SpotPlaneUse {
+            groups: 3,
+            ..SpotPlaneUse::default()
+        }
+    );
+    let limit = one_ink_peak_charge(BUDGET_REQUESTED_DPI, 4 * CANVAS + SCRATCH);
+    assert_eq!(budgeted_dpi(&doc, limit, BUDGET_MINIMUM_DPI), Some(265));
+}
+
+#[test]
+fn a_shared_form_resolves_names_in_each_inherited_scope() {
+    use crate::rendering::page_renderer::{SpotPlaneUse, spot_plane_use};
+
+    let outer = group_form_obj(5, "/XObject << /A 6 0 R /B 7 0 R >>", "/A Do /B Do");
+    let a = group_form_obj(6, "/XObject << /Bridge 8 0 R /G 9 0 R >>", "/Bridge Do");
+    let b = group_form_obj(7, "/XObject << /Bridge 8 0 R /G 10 0 R >>", "/Bridge Do");
+    let bridge = transparency_form(8, "", "/K true", "/G Do");
+    let knockout = transparency_form(9, "/Resources << >>", "/K true", "");
+    let nested = group_form_obj(10, "/XObject << /Inner 11 0 R >>", "/Inner Do");
+    let inner = group_form_obj(11, "", "");
+    let doc = build_page_with(
+        "/F Do",
+        SPOT_A,
+        "/BM /Multiply",
+        &[&outer, &a, &b, &bridge, &knockout, &nested, &inner],
+    );
+    // Each scope contributes a different maximum, regardless of which is scanned first. ~keep
+    assert_eq!(
+        spot_plane_use(&doc, 0, &doc.get_page_resources(0).expect("resources")),
+        SpotPlaneUse {
+            soft_mask: false,
+            groups: 5,
+            knockouts: 2,
+        }
+    );
 }
 
 fn soft_mask_in_group_page() -> PdfDocument {
@@ -496,11 +558,9 @@ fn the_page_scan_reports_the_widest_spot_plane_use() {
 #[test]
 fn an_ink_page_with_a_plain_transparency_group_lowers_dpi_instead_of_failing() {
     let doc = plain_group_page();
-    let dpi = budgeted_dpi(&doc, one_ink_charge(BUDGET_REQUESTED_DPI, 0), BUDGET_MINIMUM_DPI)
-        .expect("the fit lowers the DPI so the group workspace fits");
-    assert!(
-        dpi < BUDGET_REQUESTED_DPI,
-        "lowered from {BUDGET_REQUESTED_DPI}, got {dpi}"
+    assert_eq!(
+        budgeted_dpi(&doc, one_ink_charge(BUDGET_REQUESTED_DPI, 0), BUDGET_MINIMUM_DPI),
+        Some(175),
     );
     assert_eq!(
         budgeted_dpi(
@@ -527,11 +587,9 @@ fn an_ink_page_with_a_knockout_group_lowers_dpi_to_the_knockout_charge() {
         Some(BUDGET_REQUESTED_DPI),
         "the knockout charge admits the request and the render fits it"
     );
-    let dpi = budgeted_dpi(&doc, one_ink_charge(BUDGET_REQUESTED_DPI, 1), BUDGET_MINIMUM_DPI)
-        .expect("a limit between the copy and the knockout charge lowers the DPI");
-    assert!(
-        dpi < BUDGET_REQUESTED_DPI,
-        "lowered from {BUDGET_REQUESTED_DPI}, got {dpi}"
+    assert_eq!(
+        budgeted_dpi(&doc, one_ink_charge(BUDGET_REQUESTED_DPI, 1), BUDGET_MINIMUM_DPI),
+        Some(163),
     );
 }
 
@@ -571,7 +629,13 @@ fn a_zero_ink_sidecar_page_keeps_its_requested_dpi() {
     };
     // The CMYK plane only: the sidecar exists but carries no ink lanes.
     let charge = |dpi: u32| pixels(dpi) * (RGBA_AND_PNG_BYTES_PER_PIXEL + 4) + PNG_FIXED_OVERHEAD;
-    let doc = build_page_with("/T gs 1 0 0 rg 10 10 60 60 re f", "", "/BM /Multiply", &[]);
+    let mask = transparency_form(5, "/Resources << >>", "/CS /DeviceGray", "0.4 g 0 0 100 100 re f");
+    let doc = build_page_with(
+        "/T gs 1 0 0 rg 10 10 60 60 re f",
+        "",
+        "/SMask << /Type /Mask /S /Luminosity /G 5 0 R >>",
+        &[&mask],
+    );
     let render = |limit: usize| {
         let mut renderer = PageRenderer::new(RenderOptions::with_dpi(REQUESTED_DPI).as_raw());
         renderer.force_cmyk_sidecar = true;
@@ -622,8 +686,8 @@ fn a_soft_mask_scales_the_backdrop_alpha_plane_of_a_spot_lane() {
 }
 
 /// The knockout merge carries the backdrop-alpha plane out of the group as well as the tints. A
-/// Multiply over the group result at tint 0.5 gives ink 1 - 0.2 * 0.5 = 0.9 (about 230) only if
-/// the lane is marked painted; a lost alpha plane reads the lane as empty paper and gives 128.
+/// Multiply over the group result at tint 0.4 gives ink 1 - 0.2 * 0.6 = 0.88 (224) only if
+/// the lane is marked painted; a lost alpha plane reads the lane as empty paper and gives 102.
 #[test]
 fn a_knockout_group_hands_its_backdrop_alpha_plane_to_the_paints_after_it() {
     let group = group_form("/K true", "/CS0 cs 0.8 scn 10 10 60 60 re f");
@@ -634,12 +698,12 @@ fn a_knockout_group_hands_its_backdrop_alpha_plane_to_the_paints_after_it() {
         "control: the group paints tint 0.8"
     );
     let after = plate_of(
-        "/F Do /CS0 cs /T gs 0.5 scn 10 10 60 60 re f",
+        "/F Do /CS0 cs /T gs 0.4 scn 10 10 60 60 re f",
         "/BM /Multiply",
         &[&group],
     );
     let ink = at(&after, ONLY_FIRST.0, ONLY_FIRST.1);
-    assert!((229..=230).contains(&ink), "Multiply over the group result: {ink}");
+    assert_eq!(ink, 224, "Multiply over the group result");
 }
 
 fn sidecar_allocated(state_body: &str) -> bool {
@@ -757,8 +821,7 @@ fn groups_reachable_only_through_a_soft_mask_are_charged() {
     use crate::rendering::page_renderer::{SpotPlaneUse, spot_plane_use};
 
     let mask = group_form_obj(5, "/XObject << /G 6 0 R >>", "/G Do");
-    let inner =
-        group_form_obj(6, "", "0.4 g 0 0 100 100 re f").replace("/S /Transparency >>", "/S /Transparency /K true >>");
+    let inner = transparency_form(6, "/Resources << >>", "/K true", "0.4 g 0 0 100 100 re f");
     let doc = build_page_with(
         "/T gs /CS0 cs 0.5 scn 10 10 60 60 re f",
         SPOT_A,

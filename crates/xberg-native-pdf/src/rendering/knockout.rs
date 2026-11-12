@@ -19,7 +19,7 @@ const STROKE_COVERAGE_BYTES: usize = 5;
 const FILL_STROKE_COVERAGE_BYTES: usize = 6;
 /// Worst-case bytes per pixel `reserve_operator_workspace` reserves for one paint: the sidecar
 /// snapshots and a non-separable blend copy (4 bytes each) plus the widest coverage.
-pub(super) const MAX_PAINT_SCRATCH_BYTES_PER_PIXEL: usize =
+pub(in crate::rendering) const MAX_PAINT_SCRATCH_BYTES_PER_PIXEL: usize =
     4 * (SIDECAR_SNAPSHOT_COPIES + NONSEPARABLE_BLEND_COPIES) + FILL_STROKE_COVERAGE_BYTES;
 
 /// Whether a resolved `/Group` dictionary is a transparency group with `/K true`; pages and forms share it.
