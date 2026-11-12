@@ -154,7 +154,7 @@ pub(crate) async fn with_ocr_cancellation<F: Future>(
 pub(crate) fn ocr_stop_requested() -> bool {
     current()
         .and_then(|context| context.1)
-        .is_some_and(|token| token.is_cancelled() || token.stop_requested())
+        .is_some_and(|token| token.is_cancelled() || token.time_limit_reached())
 }
 
 #[cfg(all(feature = "ocr", target_arch = "wasm32"))]

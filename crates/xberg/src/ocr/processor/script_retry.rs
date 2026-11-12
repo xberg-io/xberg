@@ -518,7 +518,7 @@ fn replaced_by_script_letters(word: &TsvWord, retry: &[TsvWord], script: &str) -
     let mut target_letter = false;
     for character in retry
         .iter()
-        .filter(|candidate| x_overlap(word, candidate) > 0)
+        .filter(|candidate| x_overlap(word, candidate) > 0 && y_overlap(word.top, word.bottom(), candidate) > 0)
         .flat_map(|candidate| candidate.text.chars())
     {
         if script_letter(script, character) {
@@ -544,6 +544,7 @@ fn admit_line(first: &[TsvWord], retry: &[TsvWord], script: &str, margin: f64) -
             !used[*index]
                 && core(&candidate.text) == core(&word.text)
                 && x_overlap(word, candidate) * 2 >= word.width.min(candidate.width)
+                && y_overlap(word.top, word.bottom(), candidate) > 0
         });
         match found {
             Some((index, _)) => used[index] = true,
@@ -838,6 +839,38 @@ mod tests {
         }
         let retry = line(&[("漢。", 95.0, 0, 25), ("漢字測試", 95.0, 30, 50)], 0, 0);
         assert!(admit_line(&first, &retry, HAN, RETRY_MIN_CONF_GAIN).is_ok());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn retry_worker_skips_stages_when_deadline_has_passed_before_stop_signal() {
+        let token = crate::cancellation::CancellationToken::new();
+        token.set_deadline(std::time::Instant::now());
+        assert!(!token.is_cancelled());
+        assert!(!token.stop_requested());
+        cacheability::with_ocr_cancellation(Some(&token), async {
+            tokio::task::spawn_blocking(cacheability::blocking(|| {
+                let stage = retry_stage(|| Ok("Han")).expect("OSD stage");
+                assert_eq!(stage, None, "the expired worker must skip OSD");
+                assert!(!cacheability::can_publish_outer_result());
+            }))
+            .await
+            .expect("OCR worker");
+        })
+        .await;
+    }
+
+    #[test]
+    fn retry_rejects_han_in_a_vertically_disjoint_protected_word_box() {
+        let first = line(&[("Ref", 20.0, 0, 25), ("漢字", 20.0, 30, 50)], 0, 0);
+        let mut retry = line(&[("漢。", 95.0, 0, 25), ("漢字測試", 95.0, 30, 50)], 0, 0);
+        assert!(admit_line(&first, &retry, HAN, RETRY_MIN_CONF_GAIN).is_ok());
+
+        retry[0].top = first[0].bottom();
+        assert!(
+            matches!(admit_line(&first, &retry, HAN, RETRY_MIN_CONF_GAIN), Err(Refusal::Lost(word)) if word == "Ref"),
+            "Han from a disjoint row cannot replace the protected token"
+        );
     }
 
     fn ref_fixture() -> (Vec<TsvWord>, Vec<TsvWord>) {
