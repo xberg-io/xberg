@@ -1226,6 +1226,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut original_tesseract_raster_pages = ahash::AHashSet::new();
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut matched_layer_occurrences = ahash::AHashMap::new();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let mut caption_rewrites = ahash::AHashMap::new();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut native_words_covered_pages = ahash::AHashSet::new();
@@ -2095,6 +2097,16 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 let retained_bytes = retained_ocr_source_bytes(data, &upright_data, 0);
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 let probe_reads = pages.probe_reads.clone();
+                #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                let observe_layer_overlap = correction_degrees == 0
+                    && !mixed_route_layout_active
+                    && page_layers
+                        .as_ref()
+                        .is_some_and(|layers| layers.contains_key(&((idx + 1) as u32)))
+                    && super::document::native_preservation_is_automatic(config, (idx + 1) as u32)
+                    && crate::plugins::registry::get_ocr_backend_registry()
+                        .read()
+                        .is_builtin_tesseract(backend);
                 let task = crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         return (
@@ -2103,6 +2115,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             upright_width,
                             upright_height,
                             Err(crate::XbergError::Cancelled),
+                            false,
                         );
                     }
                     let (original_config, config_clone) = match crate::extractors::image::reserve_retained_ocr_raster(
@@ -2111,9 +2124,20 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         retained_bytes,
                     ) {
                         Ok(configs) => configs,
-                        Err(error) => return (idx, correction_degrees, upright_width, upright_height, Err(error)),
+                        Err(error) => {
+                            return (
+                                idx,
+                                correction_degrees,
+                                upright_width,
+                                upright_height,
+                                Err(error),
+                                false,
+                            );
+                        }
                     };
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                    let scale_only = std::sync::atomic::AtomicBool::new(false);
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
                     let result = super::read_reuse::read(
                         probe_reads.as_ref(),
                         super::read_reuse::ReadIdentity {
@@ -2126,7 +2150,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         upright_data,
                         cancel_token.as_ref(),
                         |data| {
-                            crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+                            let read = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
                                 &backend_clone,
                                 data,
                                 &original_config,
@@ -2136,10 +2160,25 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                     allow_standard_retry: false,
                                 },
                                 cancel_token.as_ref(),
-                            )
+                            );
+                            let scale_only = &scale_only;
+                            async move {
+                                if observe_layer_overlap {
+                                    let (result, observed) =
+                                        crate::ocr::preprocessing::geometry_evidence::observe(read).await;
+                                    scale_only.store(observed, std::sync::atomic::Ordering::Relaxed);
+                                    result
+                                } else {
+                                    read.await
+                                }
+                            }
                         },
                     )
                     .await;
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    let scale_only = scale_only.into_inner();
+                    #[cfg(not(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+                    let scale_only = false;
                     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
                     let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
                         &backend_clone,
@@ -2153,12 +2192,19 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         cancel_token.as_ref(),
                     )
                     .await;
-                    (idx, correction_degrees, upright_width, upright_height, result)
+                    (
+                        idx,
+                        correction_degrees,
+                        upright_width,
+                        upright_height,
+                        result,
+                        scale_only,
+                    )
                 });
                 join_set.spawn(crate::core::extractor::cacheability::inherit(task));
             }
             while let Some(join_result) = join_set.join_next().await {
-                let (page_idx, correction_degrees, upright_width, upright_height, result) =
+                let (page_idx, correction_degrees, upright_width, upright_height, result, observed_scale_only) =
                     join_result.map_err(|e| crate::XbergError::Plugin {
                         message: format!("OCR task panicked: {}", e),
                         plugin_name: "ocr".to_string(),
@@ -2242,6 +2288,23 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     ) {
                         native_ink_owned_pages.insert(page_number);
                     }
+                }
+                #[cfg(not(feature = "ocr"))]
+                let _ = observed_scale_only;
+                #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                if observed_scale_only
+                    && !alternative_raster_pages.contains(&((page_idx + 1) as u32))
+                    && let Some(layer) = page_layers
+                        .as_ref()
+                        .and_then(|layers| layers.get(&((page_idx + 1) as u32)))
+                    && let Some(matched) = super::document::MatchedLayerOccurrences::capture(
+                        &render_doc,
+                        page_idx,
+                        layer,
+                        &extraction_result,
+                    )
+                {
+                    matched_layer_occurrences.insert((page_idx + 1) as u32, matched);
                 }
                 crate::extraction::derive::adopt_public_ocr_document(
                     &mut extraction_result,
@@ -2536,6 +2599,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 retry_causes = failure_causes;
                 accumulated_warnings.extend(warnings);
                 let recovered_tables = !tables.is_empty();
+                #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                if recovered_tables {
+                    matched_layer_occurrences.remove(&page_number);
+                }
                 let recovered_text_is_empty = text.trim().is_empty();
                 if should_adopt_xobject_retry_text(page_text, &text) {
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -2933,7 +3000,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 {
                     complete_native_pages.insert(*page_number);
                 }
-                *text = super::document::text_with_layer_first(text, &first);
                 page_layers_first.insert(*page_number, first);
             }
         }
@@ -3191,13 +3257,21 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             }
         }
     }
-    // The structured page keeps the layer first as well, after the passes above rebuilt it. ~keep
-    for (page_number, first) in &page_layers_first {
-        if accepted_replacements.contains_key(page_number)
-            && let Some(page_doc) = structured_ocr_pages.get_mut(page_number)
+    for (page_number, first) in &mut page_layers_first {
+        let Some(text) = accepted_replacements.get_mut(page_number) else {
+            continue;
+        };
+        let page_doc = structured_ocr_pages.get_mut(page_number);
+        #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        if !alternative_raster_pages.contains(page_number)
+            && !table_only_xobject_recovery_pages.contains(page_number)
+            && !caption_rewrites.contains_key(page_number)
+            && let Some(matched) = matched_layer_occurrences.get(page_number)
+            && let Some(doc) = page_doc.as_deref()
         {
-            super::document::put_layer_first_in_document(page_doc, None, first);
+            matched.trim_prepend(first, text, doc, *page_number);
         }
+        super::document::finish_mixed_layer_prepend(text, page_doc, first);
     }
 
     if !config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {

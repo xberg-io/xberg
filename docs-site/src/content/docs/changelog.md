@@ -331,6 +331,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Deduplicate spatially matched native text in mixed OCR output.** (Refs #2534)
+  Applies to automatic mixed PDF pages with a fresh direct Tesseract read in a verified scale-only frame.
+  Native copies are removed only when unique literal matches survive in both flat and structured output.
+
 - **(ocr): A default Tesseract extraction keeps its sideways-prose recovery and route metadata in builds with Paddle OCR compiled in.** (GH#3007)
   The automatic per-page Tesseract-to-Paddle route now reports the flat `psm` and orientation keys (`auto_rotated`, `orientation_degrees`) of its first accepted Tesseract-read page and recovers a single sideways prose paragraph, as the whole-document route does. Other page content still differs between the routes.
 - **(pdf): A page with a large content stream no longer takes seconds to read in a debug build.** (GH#3040)
