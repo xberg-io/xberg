@@ -551,6 +551,17 @@ mod tests {
     }
 
     #[test]
+    fn should_hang_a_script_from_the_nearer_parent_not_the_one_it_overlaps_more() {
+        let base = span("R", 100.0, 100.0, 7.0, 10.0);
+        let members = [
+            span("a", 104.0, 104.3, 6.9, 6.0),
+            span("b", 105.0, 104.3, 4.7, 6.0),
+            span("x", 110.0, 103.0, 2.4, 4.0),
+        ];
+        assert_eq!(stack_parents(&base, &members), [None, None, Some(1)]);
+    }
+
+    #[test]
     #[should_panic(expected = "sorted by x")]
     fn should_refuse_members_that_are_not_sorted_by_x() {
         let base = span("R", 100.0, 100.0, 7.0, 10.0);
