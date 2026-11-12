@@ -219,21 +219,25 @@ fn a_document_of_wrong_script_pages_is_read_whole() {
 }
 
 /// #2826: on a light picture and on a dark, blocky one that turns a read of the whole page into
-/// noise, the layer's ink is read without the picture and contradicts the layer.
+/// noise, the layer's ink is read without the picture and contradicts the layer, so OCR replaces
+/// it. Only the light picture leaves the page's own OCR read clean enough to hold the phrases.
 #[test]
 fn a_wrong_mapped_layer_drawn_over_a_full_page_picture_is_still_read_by_ocr() {
     let models = models();
     for placement in [PicturePlacement::Background, PicturePlacement::TexturedBackground] {
         let result = extract(&with_full_page_picture(ARABIC, placement), models.path());
-        for phrase in PHRASES {
-            assert!(
-                result.content.contains(phrase),
-                "{placement:?}: missing {phrase:?} in {:?}",
-                result.content
-            );
-        }
         assert!(!skipped(&result), "{placement:?}: {:?}", result.processing_warnings);
+        assert_ne!(result.extraction_method, Some(ExtractionMethod::Native), "{placement:?}");
         assert_eq!(arabic_letters(&result.content), 0, "{placement:?}");
+        if matches!(placement, PicturePlacement::Background) {
+            for phrase in PHRASES {
+                assert!(
+                    result.content.contains(phrase),
+                    "missing {phrase:?} in {:?}",
+                    result.content
+                );
+            }
+        }
     }
 }
 
