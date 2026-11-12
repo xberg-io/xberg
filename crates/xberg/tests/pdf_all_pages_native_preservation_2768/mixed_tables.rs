@@ -342,3 +342,43 @@ async fn single_stage_pipeline_reports_every_table_rectangle_in_page_points() {
     let config = single_stage_pipeline(super::pinned_config(models.path()));
     table_rectangles_under(&config, xberg::types::ExtractionMethod::Ocr, false).await;
 }
+
+/// Layout detection hands the pipeline pre-rendered images, so the page has neither a detached
+/// image document nor a lazy render; its backend table is still a PDF page's and belongs in points.
+#[cfg(feature = "layout-detection")]
+#[tokio::test]
+#[allow(clippy::print_stderr)]
+async fn layout_route_reports_the_backend_table_in_page_points() {
+    let models = tempfile::tempdir().unwrap();
+    let mut config = single_stage_pipeline(super::pinned_config(models.path()));
+    config.layout = Some(xberg::LayoutDetectionConfig::default());
+    let actual = match super::helpers::extract_bytes_document(TABLE_PAGES[0].pdf, "application/pdf", &config).await {
+        Ok(actual) => actual,
+        Err(error) if format!("{error:?}").to_lowercase().contains("model") => {
+            eprintln!("skipping: layout models unavailable: {error:?}");
+            return;
+        }
+        Err(error) => panic!("layout route extraction failed: {error:?}"),
+    };
+    let rectangles: Vec<_> = actual
+        .tables
+        .iter()
+        .filter_map(|table| table.bounding_box)
+        .map(|bbox| [bbox.x0, bbox.y0, bbox.x1, bbox.y1])
+        .collect();
+    assert!(!rectangles.is_empty(), "the layout route kept no table");
+    assert!(
+        rectangles
+            .iter()
+            .all(|rect| rect[2] <= 612.0 + 2.0 && rect[3] <= 792.0 + 2.0),
+        "a table rectangle is outside the 612 x 792 pt page: {rectangles:?}"
+    );
+    assert!(
+        rectangles.iter().any(|rect| rect
+            .iter()
+            .zip(TABLE_PAGES[0].rectangles[0])
+            .all(|(actual, expected)| (actual - expected).abs() <= 2.0)),
+        "no table rectangle at {:?} in page points: {rectangles:?}",
+        TABLE_PAGES[0].rectangles[0]
+    );
+}

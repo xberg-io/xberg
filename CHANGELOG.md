@@ -329,6 +329,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): A scanned PDF page's backend table on the layout-detection route is reported in page points.** (GH#3078)
+  The table rectangle was left in the recognition raster's pixels; it now matches every other OCR route.
 - **(pdf): Deduplicate spatially matched native text in mixed OCR output.** (Refs #2534)
   Applies to automatic mixed PDF pages with a fresh direct Tesseract read in a verified scale-only frame.
   Native copies are removed only when unique literal matches survive in both flat and structured output.

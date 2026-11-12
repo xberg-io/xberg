@@ -6173,6 +6173,29 @@ pub(super) async fn extract_with_ocr_for_page(
                     page_height_pt,
                 );
             }
+            // ~keep The layout-detection route hands in pre-rendered rasters of a PDF's pages:
+            // there is neither a lazy render nor a detached page owner to scale the backend
+            // table, so it would otherwise stay in the pixels recognition read.
+            #[cfg(feature = "pdf")]
+            if lazy_pdf_render_state.is_none()
+                && xobject_document.is_none()
+                && let Some(&(page_width_pt, page_height_pt)) =
+                    external_image_page_dimensions.and_then(|dimensions| dimensions.get(page_idx))
+            {
+                let (table_px_width, table_px_height) = resolved_ocr_layout_dimensions(
+                    &ocr_result.metadata,
+                    encoded_batch[offset].2,
+                    encoded_batch[offset].3,
+                );
+                rescale_ocr_bboxes_to_page_points(
+                    None,
+                    &mut backend_tables,
+                    table_px_width,
+                    table_px_height,
+                    page_width_pt,
+                    page_height_pt,
+                );
+            }
             collected_tables.append(&mut backend_tables);
 
             if let Some(ref mut elems) = ocr_result.ocr_elements {
@@ -6534,6 +6557,13 @@ pub(super) async fn extract_with_ocr_for_page(
                 } else if xobject_document.is_some() {
                     RecognizedTableFrame::DetachedPdfRaster {
                         height: ocr_render_height,
+                    }
+                } else if let Some(&points) =
+                    external_image_page_dimensions.and_then(|dimensions| dimensions.get(page_idx))
+                {
+                    RecognizedTableFrame::PdfPage {
+                        raster: (ocr_render_width, ocr_render_height),
+                        points,
                     }
                 } else {
                     RecognizedTableFrame::ImagePixels
