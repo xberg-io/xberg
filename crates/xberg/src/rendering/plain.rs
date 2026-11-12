@@ -91,7 +91,7 @@ fn render_body_plain(
 ) {
     let mut last_heading_depth = None;
     let mut after_text_block = false;
-    let mut last_writer = None;
+    let mut last_writer: Option<usize> = None;
     for (i, elem) in doc.elements.iter().enumerate() {
         if !is_body_element(elem) || elem.kind.is_container_start() || elem.kind.is_container_end() {
             continue;
@@ -103,7 +103,9 @@ fn render_body_plain(
             // ~keep A marker after a text block goes into that block, before its line breaks,
             // so it belongs to the bytes of the element that wrote the block.
             if after_text_block
-                && let Some(span) = last_writer.and_then(|last| spans.as_deref_mut()?.get_mut(last)?.as_mut())
+                && let Some(span) = last_writer
+                    .and_then(|last| spans.as_deref_mut().and_then(|spans| spans.get_mut(last)))
+                    .and_then(Option::as_mut)
             {
                 span.1 += out.len() - start;
                 continue;
