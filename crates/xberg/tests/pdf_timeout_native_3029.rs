@@ -8,7 +8,7 @@
 mod helpers;
 use helpers::{extract_uri_document, get_test_documents_dir};
 use std::time::{Duration, Instant};
-use xberg::core::config::{ChunkingConfig, ConcurrencyConfig, EmbeddingConfig, ExtractionConfig, PageConfig};
+use xberg::core::config::{ChunkingConfig, ConcurrencyConfig, ExtractionConfig, PageConfig};
 use xberg::{ExtractedDocument, XbergError};
 
 const LIMITS_SECS: [u64; 3] = [1, 2, 3];
@@ -113,15 +113,63 @@ async fn test_native_pdf_cut_short_with_chunking_still_returns_inside_the_grace(
 }
 
 /// Embedding the chunks of a cut-short document takes minutes and runs on the extraction's own
-/// task, so it cannot be timed out once started: it must be skipped.
+/// task, so it cannot be timed out once started: it must be skipped. The model is a preset that
+/// does not exist, so a run that did reach the embedding stage fails within a moment with an
+/// `embedding` warning instead of downloading a model or running for minutes; either way the case
+/// fails unless the stage was skipped by the stop.
+#[cfg(feature = "embeddings")]
 #[tokio::test(flavor = "multi_thread")]
-async fn test_native_pdf_cut_short_with_embeddings_returns_inside_the_grace() {
-    assert_cut_short_returns_pages("embeddings", |config| ExtractionConfig {
+async fn test_native_pdf_cut_short_skips_chunk_embeddings() {
+    use xberg::core::config::{EmbeddingConfig, EmbeddingModelType};
+
+    let name = FIXTURES[0];
+    let path = get_test_documents_dir().join(name);
+    assert!(
+        path.exists(),
+        "corpus fixture {path:?} is missing: this test needs the test_documents corpus"
+    );
+    let config = ExtractionConfig {
         chunking: Some(ChunkingConfig {
-            embedding: Some(EmbeddingConfig::default()),
+            embedding: Some(EmbeddingConfig {
+                model: EmbeddingModelType::Preset {
+                    name: "no-such-embedding-preset".to_string(),
+                },
+                ..EmbeddingConfig::default()
+            }),
             ..ChunkingConfig::default()
         }),
-        ..config
-    })
-    .await;
+        ..timed_config(1)
+    };
+
+    let started = Instant::now();
+    let result = extract_uri_document(&path, None, &config)
+        .await
+        .unwrap_or_else(|error| panic!("{name} at 1s: expected a cut-short result, got {error}"));
+    let took = started.elapsed();
+
+    assert!(
+        has_timeout_warning(&result),
+        "{name} at 1s was not cut short, so the embedding stage was not skipped by a stop: {:?}",
+        result.processing_warnings
+    );
+    assert!(
+        took < Duration::from_secs(1) + MAX_OVERRUN,
+        "{name} at 1s took {took:?}"
+    );
+    assert!(
+        result
+            .processing_warnings
+            .iter()
+            .all(|warning| warning.source != "embedding"),
+        "the embedding stage ran on a cut-short result: {:?}",
+        result.processing_warnings
+    );
+    assert!(
+        result
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "pdf_time_limit" && warning.message.contains("chunk embeddings")),
+        "the skipped embeddings must be reported: {:?}",
+        result.processing_warnings
+    );
 }

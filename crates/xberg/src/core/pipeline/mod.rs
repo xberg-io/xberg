@@ -507,17 +507,27 @@ async fn run_pipeline_with_isolated_registry(
     .await
 }
 
-/// `config` without the chunk vector stages, when the time limit cut an extraction short and
-/// `config` asks for any of them.
-fn config_without_chunk_vectors_after_time_limit(config: &ExtractionConfig) -> Option<ExtractionConfig> {
+/// `config` without the chunk vector stages, and the names of the ones dropped, when the time
+/// limit cut an extraction short and `config` asks for any of them.
+fn config_without_chunk_vectors_after_time_limit(
+    config: &ExtractionConfig,
+) -> Option<(ExtractionConfig, Vec<&'static str>)> {
     let cut_short = config
         .cancel_token
         .as_ref()
         .is_some_and(crate::cancellation::CancellationToken::cut_short_by_time_limit);
     let chunking = config.chunking.as_ref()?;
-    if !cut_short
-        || (chunking.embedding.is_none() && chunking.sparse_embedding.is_none() && chunking.late_interaction.is_none())
-    {
+    let mut dropped = Vec::new();
+    if chunking.embedding.is_some() {
+        dropped.push("chunk embeddings");
+    }
+    if chunking.sparse_embedding.is_some() {
+        dropped.push("sparse chunk embeddings");
+    }
+    if chunking.late_interaction.is_some() {
+        dropped.push("late-interaction chunk vectors");
+    }
+    if !cut_short || dropped.is_empty() {
         return None;
     }
     let mut trimmed = config.clone();
@@ -526,7 +536,7 @@ fn config_without_chunk_vectors_after_time_limit(config: &ExtractionConfig) -> O
         chunking.sparse_embedding = None;
         chunking.late_interaction = None;
     }
-    Some(trimmed)
+    Some((trimmed, dropped))
 }
 
 async fn run_pipeline_impl(
@@ -545,11 +555,14 @@ async fn run_pipeline_impl(
     // Embedding a long cut-short document runs for minutes and would carry the pages already read
     // past the grace period into a hard Timeout; the chunks stay, without vectors. ~keep
     let without_vectors;
-    let config = if let Some(trimmed) = config_without_chunk_vectors_after_time_limit(config) {
+    let config = if let Some((trimmed, dropped)) = config_without_chunk_vectors_after_time_limit(config) {
         crate::core::diagnostics::push_warning(
             &mut doc.processing_warnings,
             "pdf_time_limit",
-            "Chunk embeddings were skipped because extraction_timeout_secs was reached.".to_string(),
+            format!(
+                "Skipped after extraction_timeout_secs was reached: {}; chunk boundaries may differ.",
+                dropped.join(", ")
+            ),
         );
         without_vectors = trimmed;
         &without_vectors
@@ -2243,8 +2256,9 @@ mod time_limit_vector_tests {
         token.request_stop();
         token.note_unread_page(2);
 
-        let trimmed = config_without_chunk_vectors_after_time_limit(&config_with(&token, true))
+        let (trimmed, dropped) = config_without_chunk_vectors_after_time_limit(&config_with(&token, true))
             .expect("a cut-short extraction with embeddings must drop them");
+        assert_eq!(dropped, ["chunk embeddings"]);
 
         let chunking = trimmed.chunking.expect("chunking stays");
         assert!(chunking.embedding.is_none());
@@ -2269,5 +2283,39 @@ mod time_limit_vector_tests {
         token.request_stop();
         token.note_unread_page(2);
         assert!(config_without_chunk_vectors_after_time_limit(&config_with(&token, false)).is_none());
+    }
+
+    /// Dropping the embedding changes how a semantic chunker places its boundaries (it falls back to
+    /// structural boundaries under the `max_characters` ceiling); chunks must still come out.
+    #[cfg(feature = "chunking")]
+    #[test]
+    fn a_semantic_chunker_still_produces_chunks_without_vectors_after_a_time_limit_stop() {
+        let token = CancellationToken::new();
+        token.request_stop();
+        token.note_unread_page(2);
+        let mut config = config_with(&token, true);
+        if let Some(chunking) = config.chunking.as_mut() {
+            chunking.chunker_type = crate::chunking::ChunkerType::Semantic;
+            chunking.max_characters = 120;
+            chunking.overlap = 0;
+        }
+        let (trimmed, _) = config_without_chunk_vectors_after_time_limit(&config).expect("embeddings are dropped");
+
+        let mut result = ExtractedDocument {
+            content: "First topic paragraph about cats and their habits.\n\nSecond paragraph about dogs and how they \
+                      behave around people.\n\nThird paragraph about the weather over the mountains in winter."
+                .to_string(),
+            mime_type: std::borrow::Cow::Borrowed("text/plain"),
+            ..Default::default()
+        };
+        features::execute_chunking(&mut result, &trimmed, None).expect("chunking must succeed");
+
+        let chunks = result.chunks.expect("chunks are produced without vectors");
+        assert!(
+            chunks.len() > 1,
+            "the text exceeds max_characters, so it splits: {chunks:?}"
+        );
+        assert!(chunks.iter().all(|chunk| chunk.embedding.is_none()));
+        assert!(chunks.iter().all(|chunk| chunk.content.chars().count() <= 120));
     }
 }
