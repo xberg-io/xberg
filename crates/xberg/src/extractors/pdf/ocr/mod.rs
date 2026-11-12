@@ -25,6 +25,8 @@ mod caption_conversion;
 mod caption_grid_proof;
 mod document;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) use document::join_run_pages;
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 mod markdown;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use markdown::strip_embedded_gfm_tables;
@@ -36,6 +38,8 @@ pub(super) use hidden_layer::VisibleRasterProof;
 pub(crate) use hidden_layer::embedded_gap_placement;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(in crate::extractors::pdf) use hidden_layer::preview_byte_limit;
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+mod layer_token_recovery;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod native_word_coverage;
 #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
@@ -49,6 +53,8 @@ pub(super) mod read_reuse;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(crate) use pipeline::extract_mixed_ocr_native_with_probe_reads;
 mod pipeline;
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(in crate::extractors::pdf) use pipeline::TIME_LIMIT_UNREAD_PAGE_ERROR;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) use pipeline::render_mixed_plain_pages;
 #[cfg(all(

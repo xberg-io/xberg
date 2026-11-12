@@ -4,9 +4,17 @@ use crate::content::operators::Operator;
 use crate::document::PdfDocument;
 use crate::error::{Error, Result};
 use crate::object::Object;
-use std::collections::HashMap;
-use tiny_skia::{Pixmap, Transform};
+use std::collections::{HashMap, HashSet};
+use tiny_skia::{PathBuilder, Pixmap, Transform};
 
+/// RGBA-sized snapshots a paint workspace holds when the page has a sidecar.
+pub(super) const SIDECAR_SNAPSHOT_COPIES: usize = 2;
+/// Coverage bytes per pixel of a fill.
+const FILL_COVERAGE_BYTES: usize = 1;
+/// Coverage bytes per pixel of a stroke, text show, inline image or shading.
+const STROKE_COVERAGE_BYTES: usize = 5;
+/// Coverage bytes per pixel of a fill-and-stroke paint, the largest.
+const FILL_STROKE_COVERAGE_BYTES: usize = 6;
 /// Whether a resolved `/Group` dictionary is a transparency group with `/K true`; pages and forms share it.
 pub(super) fn group_is_knockout(group: &Object) -> bool {
     group.as_dict().is_some_and(|group| {
@@ -236,6 +244,43 @@ impl KnockoutGroup {
     }
 }
 
+/// Adds one path-construction operator to `path` with the same builder calls as the operator loop of
+/// the page renderer, so that `finish` judges the path as it does there. A change to those calls in
+/// the renderer needs the same change here. Any other operator leaves `path` as it is.
+fn extend_path(path: &mut PathBuilder, op: &Operator) {
+    match op {
+        Operator::MoveTo { x, y } => path.move_to(*x, *y),
+        Operator::LineTo { x, y } => path.line_to(*x, *y),
+        Operator::CurveTo { x1, y1, x2, y2, x3, y3 } => path.cubic_to(*x1, *y1, *x2, *y2, *x3, *y3),
+        Operator::CurveToV { x2, y2, x3, y3 } => {
+            if let Some(last) = path.last_point() {
+                path.cubic_to(last.x, last.y, *x2, *y2, *x3, *y3);
+            }
+        }
+        Operator::CurveToY { x1, y1, x3, y3 } => path.cubic_to(*x1, *y1, *x3, *y3, *x3, *y3),
+        Operator::Rectangle { x, y, width, height } => {
+            // Normalize negative width/height per PDF spec:
+            // re with negative dimensions means the rect extends in the opposite direction
+            // ~keep
+            let (nx, nw) = if *width < 0.0 {
+                (x + width, -width)
+            } else {
+                (*x, *width)
+            };
+            let (ny, nh) = if *height < 0.0 {
+                (y + height, -height)
+            } else {
+                (*y, *height)
+            };
+            if let Some(rect) = tiny_skia::Rect::from_xywh(nx, ny, nw, nh) {
+                path.push_rect(rect);
+            }
+        }
+        Operator::ClosePath => path.close(),
+        _ => {}
+    }
+}
+
 pub(super) fn is_path_paint(op: &Operator) -> bool {
     matches!(
         op,
@@ -391,6 +436,7 @@ impl PageRenderer {
         pixmap: &Pixmap,
         gs: &GraphicsState,
         coverage_bytes_per_pixel: usize,
+        sidecar_snapshots: usize,
     ) -> Result<Option<super::knockout_resources::Reservation>> {
         if !self.knockout_resources.active() {
             return Ok(None);
@@ -401,7 +447,7 @@ impl PageRenderer {
             0
         };
         let snapshots = if self.cmyk_sidecar.is_some() {
-            2
+            sidecar_snapshots
         } else if gs.fill_overprint || gs.stroke_overprint {
             1
         } else {
@@ -426,11 +472,11 @@ impl PageRenderer {
         op: &Operator,
     ) -> Result<Option<super::knockout_resources::Reservation>> {
         let coverage = match op {
-            Operator::Fill | Operator::FillEvenOdd => 1,
+            Operator::Fill | Operator::FillEvenOdd => FILL_COVERAGE_BYTES,
             Operator::FillStroke
             | Operator::FillStrokeEvenOdd
             | Operator::CloseFillStroke
-            | Operator::CloseFillStrokeEvenOdd => 6,
+            | Operator::CloseFillStrokeEvenOdd => FILL_STROKE_COVERAGE_BYTES,
             Operator::Stroke
             | Operator::CloseStroke
             | Operator::InlineImage { .. }
@@ -438,10 +484,19 @@ impl PageRenderer {
             | Operator::Tj { .. }
             | Operator::TJ { .. }
             | Operator::Quote { .. }
-            | Operator::DoubleQuote { .. } => 5,
+            | Operator::DoubleQuote { .. } => STROKE_COVERAGE_BYTES,
             _ => return Ok(None),
         };
-        self.reserve_raster_workspace(pixmap, gs, coverage)
+        // An opaque Normal fill has neither a compose-first nor an overprint
+        // snapshot. Only the process or RGB mirror snapshot can be live.
+        let plain_fill = matches!(op, Operator::Fill | Operator::FillEvenOdd)
+            && gs.blend_mode == "Normal"
+            && gs.fill_alpha >= 1.0
+            && gs.smask.is_none()
+            && !gs.fill_overprint
+            && gs.fill_color_space != "Pattern";
+        let sidecar_snapshots = if plain_fill { 1 } else { SIDECAR_SNAPSHOT_COPIES };
+        self.reserve_raster_workspace(pixmap, gs, coverage, sidecar_snapshots)
     }
 
     pub(super) fn coverage_dimensions(&self) -> Option<(u32, u32)> {
@@ -509,6 +564,51 @@ impl PageRenderer {
         shows
     }
 
+    /// How many path paints build a path that the pass then charges a page-sized surface for: the
+    /// paints for which the renderer's own path builder, fed the operators since the last paint or
+    /// `n`, returns a path. A paint outside any optional-content section that is or may be hidden
+    /// counts; a section is left out unless the renderer's own check finds its layer visible. A paint
+    /// with no path, or inside a hidden section, charges nothing, so it is left out and the count
+    /// never exceeds the pass.
+    pub(super) fn certain_path_paints(&self, operators: &[Operator], doc: &PdfDocument, resources: &Object) -> usize {
+        let none = HashSet::new();
+        let excluded = self.excluded_layers_snapshot.as_deref().unwrap_or(&none);
+        let mut path = PathBuilder::new();
+        let mut layers: Vec<bool> = Vec::new();
+        let mut paints = 0;
+        for operator in operators {
+            match operator {
+                Operator::BeginMarkedContent { .. } => layers.push(false),
+                Operator::BeginMarkedContentDict { tag, properties } => layers.push(
+                    tag == "OC"
+                        && crate::optional_content::resolve_and_check_ocg_excluded(
+                            properties,
+                            Some(resources),
+                            Some(doc),
+                            excluded,
+                        ),
+                ),
+                Operator::EndMarkedContent => {
+                    layers.pop();
+                }
+                Operator::EndPath => path = PathBuilder::new(),
+                operator if is_path_paint(operator) => {
+                    // `s`, `b` and `b*` close the path before they paint, as the renderer does. ~keep
+                    if matches!(
+                        operator,
+                        Operator::CloseStroke | Operator::CloseFillStroke | Operator::CloseFillStrokeEvenOdd
+                    ) {
+                        path.close();
+                    }
+                    let built = std::mem::replace(&mut path, PathBuilder::new()).finish().is_some();
+                    paints += usize::from(built && !layers.contains(&true));
+                }
+                operator => extend_path(&mut path, operator),
+            }
+        }
+        paints
+    }
+
     pub(super) fn execute_knockout_group(
         &mut self,
         pixmap: &mut Pixmap,
@@ -530,7 +630,10 @@ impl PageRenderer {
         if paints == 0 {
             return Ok(None);
         }
-        let surfaces_in_pass = paints + self.painting_text_shows(operators, doc, resources, initial_text_mode);
+        let path_paints = operators.iter().filter(|operator| is_path_paint(operator)).count();
+        let surfaces_in_pass = paints - path_paints
+            + self.certain_path_paints(operators, doc, resources)
+            + self.painting_text_shows(operators, doc, resources, initial_text_mode);
         let workspace = self.knockout_resources.knockout(
             pixels,
             pixmap.data().len(),

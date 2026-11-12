@@ -46,6 +46,11 @@ pub(crate) use pages::render_plain_page_elements;
     not(target_arch = "wasm32")
 ))]
 pub(crate) use pages::render_plain_selected_pages;
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(crate) use pages::source_short_circuits_ocr_page_text;
+
+/// Internal marker consumed by page derivation before publishing metadata. ~keep
+const ADOPTED_OCR_DOCUMENT_KEY: &str = "xberg:internal:adopted-ocr-document";
 
 /// Cap on how many unresolvable keys a single warning names before it summarises
 /// the rest as a count, so a badly broken document cannot produce an unbounded
@@ -671,18 +676,21 @@ fn parse_metadata_entries(text: &str) -> Vec<(String, String)> {
 /// tree, so `render_plain` yields nothing. Its already-extracted text lives in
 /// `pre_rendered_content` and must be returned verbatim rather than dropped. Only the
 /// empty rendering falls back, so a document that does have elements always wins.
+///
+/// The element spans say where each element is in `content`. They are `None` when `content`
+/// is not the rendering of the elements.
 fn derive_content_and_mime_type(
     doc: &mut InternalDocument,
     output_format: &crate::core::config::OutputFormat,
     observer: &mut impl surfaces::DerivationObserver,
-) -> (String, Cow<'static, str>, bool) {
-    let (mut content, annotation_separator) = crate::rendering::render_plain_with_annotation_separator(doc);
-    let plain_from_ir = !content.is_empty();
-    if content.is_empty()
-        && let Some(pre_rendered) = doc.pre_rendered_content.as_ref()
-    {
-        content = pre_rendered.clone();
-    }
+) -> (String, Cow<'static, str>, Option<crate::rendering::ElementSpans>) {
+    let rendering = crate::rendering::render_plain_with_spans(doc);
+    let annotation_separator = rendering.annotation_separator;
+    let (content, spans) = match (rendering.text.is_empty(), doc.pre_rendered_content.as_ref()) {
+        (false, _) => (rendering.text, Some(rendering.spans)),
+        (true, Some(pre_rendered)) => (pre_rendered.clone(), None),
+        (true, None) => (rendering.text, None),
+    };
 
     let mime_type: Cow<'static, str> = if doc.mime_type != "application/octet-stream" {
         Cow::Owned(std::mem::take(&mut doc.mime_type))
@@ -696,7 +704,7 @@ fn derive_content_and_mime_type(
     {
         observer.formatted_plain_annotation_separator(annotation_separator);
     }
-    (content, mime_type, plain_from_ir)
+    (content, mime_type, spans)
 }
 
 /// Pre-render or render `doc` in `output_format`, reusing an already-matching
@@ -774,11 +782,18 @@ fn compute_custom_formatted_content(
             if name == "html" {
                 observer.formatted_html(&rendered, false);
             }
+            let written = registry.renders_markdown(name);
             observer.formatted_from_source(
-                registry.renders_markdown(name),
+                written,
                 &rendered,
                 crate::rendering::markdown_tag_exemptions_are_owned(doc),
             );
+            if written {
+                observer.formatted_written();
+                if crate::plugins::registry::renders_from_markdown(name) {
+                    observer.formatted_binary();
+                }
+            }
             Some(rendered)
         }
         Err(e) => {
@@ -912,7 +927,8 @@ fn derive(
     );
     resolve_relationships(&mut doc);
 
-    let (content, mime_type, plain_from_ir) = derive_content_and_mime_type(&mut doc, &output_format, observer);
+    let (content, mime_type, spans) = derive_content_and_mime_type(&mut doc, &output_format, observer);
+    let plain_from_ir = spans.is_some();
     let formatted_content =
         compute_formatted_content_observed(&mut doc, &output_format, observer, plain_from_ir, &content);
 
@@ -920,7 +936,14 @@ fn derive(
     // gets this document and `formatted_content` is `None`: plain output, or a custom format
     // name with no renderer. The document for a registered renderer is not the caller's. ~keep
     let content_is_plain = is_result && formatted_content.is_none();
-    let pages = derive_pages(&mut doc, &content, &output_format, content_is_plain, observer);
+    let pages = derive_pages(
+        &mut doc,
+        &content,
+        &output_format,
+        content_is_plain,
+        spans.as_ref(),
+        observer,
+    );
     let ocr_elements = doc.prebuilt_ocr_elements.take().or_else(|| build_ocr_elements(&doc));
 
     let formulas = derive_formulas(&mut doc);

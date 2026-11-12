@@ -476,3 +476,15 @@ fn should_keep_list_steps_and_a_word_beside_an_icon_in_their_sentences_on_real_p
     }
     assert!(!caution.contains("\n- \n"), "{caution}");
 }
+
+const SUBSCRIPTED_BASE_WITH_EXPONENT: &str = "BT /F1 12 Tf 1 0 0 1 72 700 Tm (g) Tj ET\n\
+    BT /F1 8 Tf 1 0 0 1 79 704.5 Tm (j) Tj ET\n\
+    BT /F1 8 Tf 1 0 0 1 79.2 696 Tm (K) Tj ET\n\
+    BT /F1 6 Tf 1 0 0 1 84.7 697.5 Tm (+) Tj ET\n\
+    BT /F1 12 Tf 1 0 0 1 92 700 Tm ( tail) Tj ET\n";
+
+#[test]
+fn should_keep_the_plus_of_a_subscripted_base_out_of_the_exponent_of_the_base() {
+    let content = markdown(&script_pdf(SUBSCRIPTED_BASE_WITH_EXPONENT));
+    assert!(content.contains("g<sup>j</sup> ~K~<sup>+</sup>"), "{content}");
+}

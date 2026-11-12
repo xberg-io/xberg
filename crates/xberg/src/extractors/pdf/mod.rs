@@ -14,6 +14,8 @@ mod ink_probe;
 mod layout_hints;
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 mod layout_runner;
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+mod loses_whole_read_tests;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 mod mixed_tables;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -69,6 +71,7 @@ fn boundaries_for_ocr_output(
     native_boundaries: Option<&[crate::types::PageBoundary]>,
     replacements: Option<&ahash::AHashMap<u32, String>>,
     ocr_page_texts: Option<&[String]>,
+    config: &ExtractionConfig,
 ) -> Option<Vec<crate::types::PageBoundary>> {
     match extraction_method {
         ExtractionMethod::Native => native_boundaries.map(<[_]>::to_vec),
@@ -78,31 +81,94 @@ fn boundaries_for_ocr_output(
                 |accepted| ocr::boundaries_after_replacements(boundaries, accepted),
             )
         }),
-        ExtractionMethod::Ocr => exact_boundaries_for_page_texts(text, ocr_page_texts?),
+        ExtractionMethod::Ocr => {
+            let page_texts = ocr_page_texts?;
+            ocr_page_body_spans(text, page_texts, config).or_else(|| ordered_ocr_page_spans(text, page_texts))
+        }
     }
 }
 
+/// Document-level OCR plugins can supply a transcript with their own page separators.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn exact_boundaries_for_page_texts(text: &str, page_texts: &[String]) -> Option<Vec<crate::types::PageBoundary>> {
+fn ordered_ocr_page_spans(text: &str, page_texts: &[String]) -> Option<Vec<crate::types::PageBoundary>> {
     let mut boundaries = Vec::with_capacity(page_texts.len());
-    let mut search_offset = 0usize;
-
+    let mut offset = 0;
     for (index, page_text) in page_texts.iter().enumerate() {
-        let byte_start = if page_text.is_empty() {
-            search_offset
-        } else {
-            search_offset + text.get(search_offset..)?.find(page_text)?
-        };
+        let byte_start = offset + text.get(offset..)?.find(page_text)?;
         let byte_end = byte_start + page_text.len();
         boundaries.push(crate::types::PageBoundary {
             byte_start,
             byte_end,
             page_number: (index + 1) as u32,
         });
-        search_offset = byte_end;
+        offset = byte_end;
+    }
+    if offset == 0 {
+        return None;
     }
 
+    // The forward scan gives the earliest placement of every body. If any body can
+    // land later in the reverse scan, the transcript does not identify its page span.
+    let mut end = text.len();
+    for (page_text, boundary) in page_texts.iter().zip(&boundaries).rev() {
+        if page_text.is_empty() {
+            continue;
+        }
+        let latest_start = text.get(..end)?.rfind(page_text.as_str())?;
+        if latest_start != boundary.byte_start {
+            return None;
+        }
+        end = latest_start;
+    }
     Some(boundaries)
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn ocr_page_marker_format(config: &ExtractionConfig) -> Option<&str> {
+    config
+        .pages
+        .as_ref()
+        .filter(|pages| pages.insert_page_markers)
+        .map(|pages| pages.marker_format.as_str())
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn ocr_page_prefix(
+    marker_format: Option<&str>,
+    page_index: usize,
+    page_index_offset: usize,
+) -> std::borrow::Cow<'static, str> {
+    match marker_format {
+        Some(format) => format
+            .replace("{page_num}", &(page_index_offset + page_index + 1).to_string())
+            .into(),
+        None if page_index > 0 => "\n\n".into(),
+        None => "".into(),
+    }
+}
+
+/// Walk the same prefixes and bodies as the page join, including empty bodies.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn ocr_page_body_spans(
+    text: &str,
+    page_texts: &[String],
+    config: &ExtractionConfig,
+) -> Option<Vec<crate::types::PageBoundary>> {
+    let marker_format = ocr_page_marker_format(config);
+    let mut remaining = text;
+    let mut boundaries = Vec::with_capacity(page_texts.len());
+    for (index, page_text) in page_texts.iter().enumerate() {
+        let prefix = ocr_page_prefix(marker_format, index, 0);
+        remaining = remaining.strip_prefix(prefix.as_ref())?;
+        let byte_start = text.len() - remaining.len();
+        remaining = remaining.strip_prefix(page_text.as_str())?;
+        boundaries.push(crate::types::PageBoundary {
+            byte_start,
+            byte_end: text.len() - remaining.len(),
+            page_number: (index + 1) as u32,
+        });
+    }
+    remaining.is_empty().then_some(boundaries)
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -325,6 +391,27 @@ struct NativeBlockingOutput {
     layout_acceleration_override: Option<crate::core::config::acceleration::AccelerationConfig>,
 }
 
+/// Whether the extraction time limit stopped the native text loop before its last page.
+///
+/// The pages it did read are the result. The pages after it are unread, not pages without a text
+/// layer, so no OCR route may take them for scans: with the stop in force it would read none of
+/// them and fail the call, losing the pages already read.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn native_text_stopped_by_time_limit(config: &ExtractionConfig) -> bool {
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    {
+        config
+            .cancel_token
+            .as_ref()
+            .is_some_and(crate::cancellation::CancellationToken::cut_short_by_time_limit)
+    }
+    #[cfg(not(all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+    {
+        let _ = config;
+        false
+    }
+}
+
 #[cfg(feature = "pdf")]
 fn ensure_pdf_not_cancelled(config: &ExtractionConfig) -> Result<()> {
     if config
@@ -463,8 +550,8 @@ enum PdfDocumentOrigin {
 /// markdown verbatim from an HTTP response. Normalize before splitting (#316).
 /// `boundaries` must describe `text` itself, not some earlier revision of it -- on the
 /// mixed path that means the output of `ocr::boundaries_after_replacements`, since OCR
-/// replacement shifts every later offset. When supplied, each paragraph is tagged with
-/// the page its start offset falls in.
+/// replacement shifts every later offset. Split at verified page edges before finding
+/// paragraphs. Text between page spans remains part of the document without a page tag.
 ///
 /// Tagging matters well beyond bookkeeping: `ExtractedDocument.pages` is derived from
 /// `element.page` (`extraction::derive::build_pages`), so a flat document with no page
@@ -478,44 +565,38 @@ fn flat_pdf_document(
 ) -> InternalDocument {
     let mut doc = InternalDocument::new("pdf");
     doc.mime_type = mime_type.to_string();
-    let normalized = crate::extraction::transform::normalize_line_endings(text);
-
-    // Normalization rewrites CRLF to LF, which shifts offsets; boundaries are only
-    // usable when it changed nothing. Falling back to untagged paragraphs is the
-    // pre-existing behaviour, so a CRLF document is no worse off than before.
-    let usable: Option<&[crate::types::PageBoundary]> = boundaries.filter(|bounds| {
-        normalized.len() == text.len()
-            && !bounds.is_empty()
+    let usable = boundaries.filter(|bounds| {
+        bounds.windows(2).all(|pair| pair[0].byte_end <= pair[1].byte_start)
             && bounds
                 .iter()
-                .all(|b| b.byte_start <= b.byte_end && b.byte_end <= normalized.len())
+                .all(|boundary| text.get(boundary.byte_start..boundary.byte_end).is_some())
     });
 
-    let page_at = |offset: usize| -> Option<u32> {
-        usable?
-            .iter()
-            .find(|b| offset >= b.byte_start && offset < b.byte_end)
-            .map(|b| b.page_number)
-    };
-
-    let mut cursor = 0usize;
-    for raw in normalized.split("\n\n") {
-        let offset = cursor;
-        cursor += raw.len() + 2; // the split consumed the two-byte separator
-        let paragraph = raw.trim();
-        if paragraph.is_empty() {
-            continue;
-        }
-        // Offset of the trimmed text, so a paragraph sitting just after a page break is
-        // attributed to the page its visible content is on rather than the previous one.
-        let text_offset = offset + (raw.len() - raw.trim_start().len());
-        let element = InternalElement::text(ElementKind::Paragraph, paragraph, 0);
-        doc.push_element(match page_at(text_offset) {
-            Some(page) => element.with_page(page),
-            None => element,
-        });
+    let mut offset = 0;
+    for boundary in usable
+        .into_iter()
+        .flatten()
+        .filter(|boundary| boundary.byte_start < boundary.byte_end)
+    {
+        append_flat_pdf_paragraphs(&mut doc, &text[offset..boundary.byte_start], None);
+        append_flat_pdf_paragraphs(
+            &mut doc,
+            &text[boundary.byte_start..boundary.byte_end],
+            Some(boundary.page_number),
+        );
+        offset = boundary.byte_end;
     }
+    append_flat_pdf_paragraphs(&mut doc, &text[offset..], None);
     doc
+}
+
+fn append_flat_pdf_paragraphs(doc: &mut InternalDocument, text: &str, page: Option<u32>) {
+    let normalized = crate::extraction::transform::normalize_line_endings(text);
+    for paragraph in normalized.split("\n\n").map(str::trim).filter(|text| !text.is_empty()) {
+        let mut element = InternalElement::text(ElementKind::Paragraph, paragraph, 0);
+        element.page = page;
+        doc.push_element(element);
+    }
 }
 
 #[cfg(feature = "pdf")]
@@ -817,6 +898,40 @@ fn inject_unrepresented_form_field_elements(doc: &mut InternalDocument, form_fie
             format!("{display_name}: {value}"),
             0,
         ));
+    }
+}
+
+/// A page the extraction time limit left unread is neither blank nor not blank, as on the native
+/// path: its `is_blank` is cleared. A page whose native text still gives it content was recovered
+/// and keeps the flag it was given.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn clear_blank_flag_of_unread_pages(
+    page_contents: &mut Option<Vec<crate::types::PageContent>>,
+    page_structure: &mut Option<crate::types::PageStructure>,
+    failures: &[crate::types::OcrPageFailure],
+) {
+    let unread: std::collections::HashSet<u32> = failures
+        .iter()
+        .filter(|failure| failure.error == ocr::TIME_LIMIT_UNREAD_PAGE_ERROR && !failure.recovered)
+        .map(|failure| failure.page)
+        .collect();
+    if unread.is_empty() {
+        return;
+    }
+    for page in page_contents.iter_mut().flatten() {
+        if unread.contains(&page.page_number) {
+            page.is_blank = None;
+        }
+    }
+    for info in page_structure
+        .as_mut()
+        .and_then(|structure| structure.pages.as_mut())
+        .into_iter()
+        .flatten()
+    {
+        if unread.contains(&info.number) {
+            info.is_blank = None;
+        }
     }
 }
 
@@ -1191,6 +1306,8 @@ async fn run_ocr_with_layout(
         PageOcrLayoutContext {
             pages: None,
             hints: page_ocr_hints,
+            #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+            rendered_layout_pages: Vec::new(),
         },
         #[cfg(feature = "layout-detection")]
         precomputed_layout_images,
@@ -1206,6 +1323,8 @@ async fn run_ocr_with_layout(
 struct PageOcrLayoutContext<'a> {
     pages: Option<&'a crate::core::layout_pages::LayoutPageSelection>,
     hints: Option<ocr::PageOcrHints>,
+    #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+    rendered_layout_pages: Vec<bool>,
 }
 
 /// Run OCR with optional layout detection on PDF bytes.
@@ -1228,6 +1347,8 @@ async fn run_ocr_with_layout_pages(
     let PageOcrLayoutContext {
         pages: layout_pages,
         hints: page_ocr_hints,
+        #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+        mut rendered_layout_pages,
     } = context;
     #[cfg(all(feature = "pdf", feature = "layout-detection"))]
     let mut layout_warning = None;
@@ -1276,6 +1397,7 @@ async fn run_ocr_with_layout_pages(
                                 data: Some(layout),
                                 gate_decisions,
                                 raster_dpis,
+                                rendered_pages,
                             },
                         acceleration_override,
                         warning,
@@ -1284,6 +1406,7 @@ async fn run_ocr_with_layout_pages(
                 )) => {
                     layout_acceleration_override = acceleration_override;
                     layout_raster_dpis = raster_dpis;
+                    rendered_layout_pages = rendered_pages;
                     layout_warning = warning;
                     layout_glyph_drop_warnings = glyph_drop_warnings;
                     ocr_layout_gate_decisions = layout_gate_metadata(gate_decisions.as_deref());
@@ -1350,8 +1473,14 @@ async fn run_ocr_with_layout_pages(
     #[cfg(all(feature = "pdf", feature = "layout-detection"))]
     let page_ocr_hints = {
         let mut hints = page_ocr_hints;
-        if prepared_layout_inputs.is_some() && !layout_raster_dpis.is_empty() {
-            hints.get_or_insert_with(Default::default).raster_dpis = Some(std::sync::Arc::new(layout_raster_dpis));
+        if prepared_layout_inputs.is_some() {
+            let hints = hints.get_or_insert_with(Default::default);
+            // OCR layout renders undo /Rotate. The Markdown reuse gate only passes unrotated
+            // pages, so those rasters also share the MediaBox frame. ~keep
+            hints.layout_rasters_in_page_frame = Some(rendered_layout_pages.into());
+            if !layout_raster_dpis.is_empty() {
+                hints.raster_dpis = Some(std::sync::Arc::new(layout_raster_dpis));
+            }
         }
         hints
     };
@@ -1472,7 +1601,7 @@ async fn run_ocr_with_layout_pages(
             ocr_elements,
             mut pipeline_doc,
             llm_usage,
-            ocr_pts,
+            mut ocr_pts,
             pipeline_rasters,
             pipeline_formulas,
             preprocessing,
@@ -1495,7 +1624,13 @@ async fn run_ocr_with_layout_pages(
         // `force_ocr_pages` and silently ignored for `force_ocr` under one identical flag. Placed
         // ahead of formula recognition on purpose -- see the function's own doc comment. ~keep
         if ocr::numeric_repair_enabled(config) {
-            ocr::apply_numeric_repair_to_whole_document_ocr(&mut text, pipeline_doc.as_mut(), &mut ocr_tables);
+            ocr::apply_numeric_repair_to_whole_document_ocr(
+                &mut text,
+                &mut ocr_pts,
+                pipeline_doc.as_mut(),
+                &mut ocr_tables,
+                config,
+            );
         }
         #[cfg(feature = "formula-recognition")]
         let (mut pipeline_doc, mut pipeline_formulas) = (pipeline_doc, pipeline_formulas);
@@ -1537,7 +1672,7 @@ async fn run_ocr_with_layout_pages(
             ocr_elements,
             mut ocr_doc,
             llm_usage,
-            ocr_pts,
+            mut ocr_pts,
             ocr_rasters,
             formulas,
             preprocessing,
@@ -1583,7 +1718,13 @@ async fn run_ocr_with_layout_pages(
     // GH#1892: same repair as the pipeline branch above -- this is the other half of the
     // whole-document route, the one `force_ocr` and the near-empty `Auto` fallback reach. ~keep
     if ocr::numeric_repair_enabled(config) {
-        ocr::apply_numeric_repair_to_whole_document_ocr(&mut text, ocr_doc.as_mut(), &mut ocr_tables);
+        ocr::apply_numeric_repair_to_whole_document_ocr(
+            &mut text,
+            &mut ocr_pts,
+            ocr_doc.as_mut(),
+            &mut ocr_tables,
+            config,
+        );
     }
     #[cfg(feature = "formula-recognition")]
     let (mut ocr_doc, mut formulas) = (ocr_doc, formulas);
@@ -2373,34 +2514,144 @@ fn replace_page_content_with_ocr_text(page: &mut crate::types::PageContent, ocr_
     page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&page.content));
 }
 
-/// Write the OCR text of each page into the page that has the same position, and report the
-/// page numbers of the reads the output kept: a page's text was written by an OCR route only
-/// where its read was accepted, so a page whose read the noise gate discarded (or that
-/// otherwise produced no text) -- which keeps its native text -- is not reported (#2939).
-///
-/// One OCR text for a document of several pages is the text of the whole document: it goes to
-/// the first page, and the content of every later page is replaced with empty text; only the
-/// page that received text is reported.
+/// Publish the same page bodies used to assemble the document. Restored native bodies
+/// leave `native_content` unset, and only accepted reads are marked as OCR text pages (#2939).
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn replace_pages_with_ocr_page_texts(
     pages: &mut [crate::types::PageContent],
     ocr_page_texts: &[String],
+    restored_page_texts: Option<&[String]>,
     keep_native_content: bool,
 ) -> Vec<u32> {
     let mut replaced = Vec::new();
-    for (page, text) in pages.iter_mut().zip(ocr_page_texts) {
-        replace_page_content_with_ocr_text(page, text, keep_native_content);
-        if !text.trim().is_empty() {
+    let page_texts = restored_page_texts.unwrap_or(ocr_page_texts);
+    let count = if page_texts.len() == 1 {
+        pages.len()
+    } else {
+        page_texts.len()
+    };
+    for (index, page) in pages.iter_mut().take(count).enumerate() {
+        let text = page_texts.get(index).map_or("", String::as_str);
+        let accepted = ocr_page_texts.get(index).is_some_and(|read| !read.trim().is_empty());
+        if restored_page_texts.is_some() && !accepted {
+            page.content = crate::pdf::text::fix_pdf_control_chars(text).into_owned();
+            page.native_content = None;
+            page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&page.content));
+        } else {
+            replace_page_content_with_ocr_text(page, text, keep_native_content);
+        }
+        if accepted {
             replaced.push(page.page_number);
         }
     }
+    replaced
+}
 
-    if ocr_page_texts.len() == 1 {
-        for page in pages.iter_mut().skip(1) {
-            replace_page_content_with_ocr_text(page, "", keep_native_content);
+/// The native text of each page, from the page contents when they were built and from the page
+/// boundaries otherwise; empty when neither is available.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn native_page_texts_for_restore(
+    page_contents: Option<&[crate::types::PageContent]>,
+    native_text: &str,
+    boundaries: Option<&[crate::types::PageBoundary]>,
+) -> Vec<String> {
+    if let Some(pages) = page_contents {
+        return pages.iter().map(|page| page.content.clone()).collect();
+    }
+    boundaries
+        .into_iter()
+        .flatten()
+        .map(|boundary| {
+            native_text
+                .get(boundary.byte_start..boundary.byte_end)
+                .unwrap_or_default()
+                .to_string()
+        })
+        .collect()
+}
+
+/// Put the native text of every page whose forced OCR read was discarded back into the
+/// whole-document output, so the document agrees with the pages (GH#3013).
+///
+/// The whole-document read has no text for such a page, so the document content, the structured
+/// document and the page boundaries would otherwise lose it while the page keeps it. A single
+/// blank read stands for the whole document and discards every page. Returns the per-page texts
+/// of the restored document and the count of lost native glyphs, or `None` when no page was
+/// restored or the flat text was assembled independently of its page texts.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn restore_discarded_page_reads(
+    text: &mut String,
+    document: &mut Option<InternalDocument>,
+    ocr_page_texts: &[String],
+    native_pages: &[String],
+    config: &ExtractionConfig,
+) -> Option<(Vec<String>, usize)> {
+    let whole_document_blank = ocr_page_texts.len() == 1 && ocr_page_texts[0].trim().is_empty();
+    if native_pages.is_empty() || (ocr_page_texts.len() != native_pages.len() && !whole_document_blank) {
+        return None;
+    }
+    if !(whole_document_blank && text.trim().is_empty()) {
+        ocr_page_body_spans(text, ocr_page_texts, config)?;
+    }
+    let mut reads = if whole_document_blank {
+        vec![String::new(); native_pages.len()]
+    } else {
+        ocr_page_texts.to_vec()
+    };
+    let mut lost_glyphs = 0;
+    let mut restored = ahash::AHashMap::new();
+    for (index, (read, native)) in reads.iter_mut().zip(native_pages).enumerate() {
+        if read.trim().is_empty() && !native.trim().is_empty() {
+            read.clone_from(native);
+            lost_glyphs += unmapped_glyphs::strip_native_fragment(read);
+            restored.insert((index + 1) as u32, read.clone());
         }
     }
-    replaced
+    if restored.is_empty() {
+        return None;
+    }
+    *text = ocr::join_run_pages(&reads, ocr_page_marker_format(config), 0);
+
+    if let Some(document) = document.as_mut() {
+        ocr::merge_ocr_pages_into_internal_document(document, &restored);
+        // The merge writes a page's text as OCR blocks, but these pages hold native text with no
+        // OCR geometry or confidence, so they must not surface as OCR elements.
+        for element in &mut document.elements {
+            if element.page.is_some_and(|page| restored.contains_key(&page))
+                && matches!(element.kind, crate::types::internal::ElementKind::OcrText { .. })
+            {
+                element.kind = crate::types::internal::ElementKind::Paragraph;
+            }
+        }
+    }
+
+    Some((reads, lost_glyphs))
+}
+
+/// Attach the OCR text page list to the selected document where its reader honors it.
+///
+/// `is_ocr_page_text` (#2902) treats every page of a `pdf`, `image` or `ocr` source as OCR
+/// text before it looks at the list, so a list this extractor builds for such a document --
+/// including the documents it builds itself, always of source format `pdf` -- could never
+/// change a derived result (#3014) and is not attached. `select_pdf_document`'s Ocr arm
+/// returns an adopted OCR backend document verbatim, and such a document keeps its own
+/// source format (for example a plugin's `hocr` structure), which is exactly the source the
+/// reader honors the list on: there the marks are attached exactly as before #3014, and
+/// #2902's re-rendering re-renders the marked pages from their elements.
+///
+/// The marks extend any list the adopted document already carries rather than overwriting
+/// it: the reader only consults membership, so the adopter's own marks stay readable beside
+/// the extractor's. Both the gate and `is_ocr_page_text` read the shared
+/// `source_short_circuits_ocr_page_text`, so the two cannot drift.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn attach_ocr_text_page_marks(doc: &mut InternalDocument, ocr_text_pages: Vec<u32>) {
+    if !crate::extraction::derive::source_short_circuits_ocr_page_text(&doc.source_format) {
+        for page in ocr_text_pages {
+            if !doc.ocr_text_pages.contains(&page) {
+                doc.ocr_text_pages.push(page);
+            }
+        }
+    }
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -2500,6 +2751,30 @@ fn dropped_script_warnings(
     _: Option<&[crate::types::PageBoundary]>,
 ) -> Vec<crate::types::ProcessingWarning> {
     Vec::new()
+}
+
+/// Whether the targeted run's failures hand the document back to the whole-document read: any
+/// page failure the run could not recover, on a page the whole read read with text. A page whose
+/// script the whole read dropped (`dropped_pages`) never decides alone — a dropped page always
+/// has native text, which recovers its failure first — so its conjunct is redundant through the
+/// public API, but it keeps the fallback away from the pages the targeted run exists to serve.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn loses_whole_read(
+    whole_read_pages: Option<&[String]>,
+    failures: &[crate::types::OcrPageFailure],
+    dropped_pages: &[u32],
+) -> bool {
+    whole_read_pages.is_some_and(|pages| {
+        failures.iter().any(|failure| {
+            !failure.recovered
+                && !dropped_pages.contains(&failure.page)
+                && failure
+                    .page
+                    .checked_sub(1)
+                    .and_then(|index| pages.get(index as usize))
+                    .is_some_and(|text| !text.trim().is_empty())
+        })
+    })
 }
 
 /// PDF document extractor using xberg_native_pdf.
@@ -2736,6 +3011,7 @@ impl PdfExtractor {
             markdown_layout_warning,
             mut markdown_layout_acceleration_override,
             markdown_layout_glyph_drop_warnings,
+            mut markdown_rendered_pages,
         ) = layout_runner::maybe_run_layout_for_markdown_with_pages(content, config, layout_pages).await;
 
         let blocking_content = content.to_vec();
@@ -2859,6 +3135,8 @@ impl PdfExtractor {
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         let mut ocr_page_texts: Option<Vec<String>> = None;
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        let mut ocr_document_page_texts: Option<Vec<String>> = None;
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         let mut ocr_results_map: Option<ahash::AHashMap<u32, String>> = None;
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         let mut structured_ocr_pages: Option<ahash::AHashMap<u32, InternalDocument>> = None;
@@ -2883,13 +3161,15 @@ impl PdfExtractor {
         let mut mixed_formula_layout_inputs = None;
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        record_implausible_text_pages(
-            config,
-            &mut pdf_metadata,
-            &native_text,
-            boundaries.as_deref(),
-            &mut ocr_fallback_warnings,
-        );
+        if !native_text_stopped_by_time_limit(config) {
+            record_implausible_text_pages(
+                config,
+                &mut pdf_metadata,
+                &native_text,
+                boundaries.as_deref(),
+                &mut ocr_fallback_warnings,
+            );
+        }
 
         // Only formula recognition and VLM regions read the rasters on the native path.
         #[cfg(all(
@@ -2966,14 +3246,16 @@ impl PdfExtractor {
         }
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let (mut text, extraction_method) = if config.effective_disable_ocr() {
+        let (mut text, extraction_method) = if config.effective_disable_ocr()
+            || native_text_stopped_by_time_limit(config)
+        {
             (native_text, ExtractionMethod::Native)
         } else if config.force_ocr {
             let (
-                ocr_text,
+                mut ocr_text,
                 ocr_tbls,
                 ocr_elems,
-                ocr_doc,
+                mut ocr_doc,
                 llm_usage,
                 ocr_pts,
                 ocr_rstrs,
@@ -2991,6 +3273,8 @@ impl PdfExtractor {
                 PageOcrLayoutContext {
                     pages: layout_pages,
                     hints: None,
+                    #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+                    rendered_layout_pages: std::mem::take(&mut markdown_rendered_pages),
                 },
                 #[cfg(feature = "layout-detection")]
                 markdown_layout_images.take(),
@@ -3005,6 +3289,18 @@ impl PdfExtractor {
             }
             for warning in layout_glyph_drop_warnings {
                 crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
+            }
+            if ocr_pts.iter().any(|page| page.trim().is_empty()) {
+                let native_pages =
+                    native_page_texts_for_restore(page_contents.as_deref(), &native_text, boundaries.as_deref());
+                if let Some((pages, lost_glyphs)) =
+                    restore_discarded_page_reads(&mut ocr_text, &mut ocr_doc, &ocr_pts, &native_pages, config)
+                {
+                    ocr_document_page_texts = Some(pages);
+                    if let Some(warning) = unmapped_glyphs::lost_glyph_warning(lost_glyphs, config) {
+                        crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
+                    }
+                }
             }
             ocr_layout_gate_audit = gate_audit;
             ocr_tables = ocr_tbls;
@@ -3377,6 +3673,8 @@ impl PdfExtractor {
                         path,
                         PageOcrLayoutContext {
                             pages: layout_pages,
+                            #[cfg(all(feature = "pdf", feature = "layout-detection"))]
+                            rendered_layout_pages: std::mem::take(&mut markdown_rendered_pages),
                             hints: {
                                 #[allow(unused_mut)]
                                 let mut hints = whole_document_ocr_hints(
@@ -3447,18 +3745,12 @@ impl PdfExtractor {
                         Some(Ok(mixed_run)) => {
                             // A page the retry could not read that the whole read did read would come out
                             // empty, so the retry is discarded and the whole read used. ~keep
-                            let loses_whole_read = whole_read.as_ref().is_ok_and(|read| {
-                                mixed_run.output.9.iter().any(|failure| {
-                                    !failure.recovered
-                                        && !dropped_pages.contains(&failure.page)
-                                        && failure
-                                            .page
-                                            .checked_sub(1)
-                                            .and_then(|index| read.5.get(index as usize))
-                                            .is_some_and(|text| !text.trim().is_empty())
-                                })
-                            });
-                            if loses_whole_read {
+                            let whole_read_loses = loses_whole_read(
+                                whole_read.as_ref().ok().map(|read| read.5.as_slice()),
+                                &mixed_run.output.9,
+                                &dropped_pages,
+                            );
+                            if whole_read_loses {
                                 tracing::warn!(
                                     failing_pages = ?decision.failing_pages,
                                     "Targeted OCR could not read a page the whole-document read had read; \
@@ -3828,7 +4120,12 @@ impl PdfExtractor {
 
             if let Some(pts) = ocr_page_texts.as_ref() {
                 if let Some(ref mut pages) = page_contents {
-                    ocr_text_pages.extend(replace_pages_with_ocr_page_texts(pages, pts, keep_native_content));
+                    ocr_text_pages.extend(replace_pages_with_ocr_page_texts(
+                        pages,
+                        pts,
+                        ocr_document_page_texts.as_deref(),
+                        keep_native_content,
+                    ));
                 } else {
                     // Only the pages whose read the output kept: an empty per-page text was
                     // discarded, not accepted (#2939).
@@ -3838,8 +4135,12 @@ impl PdfExtractor {
                             .filter(|(_, text)| !text.trim().is_empty())
                             .map(|(index, _)| (index + 1) as u32),
                     );
+                    // The pages carry the restored native text of a discarded read, like the
+                    // document does (GH#3013).
+                    let page_texts = ocr_document_page_texts.as_deref().unwrap_or(pts);
                     page_contents = Some(
-                        pts.iter()
+                        page_texts
+                            .iter()
                             .enumerate()
                             .map(|(i, text)| {
                                 let content = crate::pdf::text::fix_pdf_control_chars(text).into_owned();
@@ -3868,6 +4169,10 @@ impl PdfExtractor {
             if let Some(results_map) = ocr_results_map.as_ref()
                 && let Some(ref mut pages) = page_contents
             {
+                // The map holds only the pages `accepted_ocr_page_replacements` kept -- a
+                // blank or discarded read is filtered and warned about there (unit-tested in
+                // `ocr::tests`) -- so a page whose read the noise gate dropped is never
+                // marked here (#2939).
                 for page in pages.iter_mut() {
                     if let Some(ocr_text) = results_map.get(&page.page_number) {
                         replace_page_content_with_ocr_text(page, ocr_text, keep_native_content);
@@ -3901,7 +4206,7 @@ impl PdfExtractor {
             extraction::apply_annotation_text_fallback(
                 annotation_text_fallback,
                 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-                ocr_page_texts.as_deref(),
+                ocr_document_page_texts.as_deref().or(ocr_page_texts.as_deref()),
                 #[cfg(not(any(feature = "ocr", feature = "ocr-pipeline")))]
                 None,
                 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -3948,10 +4253,11 @@ impl PdfExtractor {
                 &text,
                 boundaries.as_deref(),
                 ocr_results_map.as_ref(),
-                ocr_page_texts.as_deref(),
+                ocr_document_page_texts.as_deref().or(ocr_page_texts.as_deref()),
+                config,
             )
         };
-        // OCR text replaces the native text on a fully OCR-read document; any other text is native.
+        // The whole-document OCR route cleans and counts restored native fragments before joining them. ~keep
         let lost_glyphs = if extraction_method == ExtractionMethod::Ocr {
             0
         } else {
@@ -4374,11 +4680,13 @@ impl PdfExtractor {
         {
             reconcile_native_page_tables(pages, &doc.tables);
         }
+        // Last: the stages above recompute the flag from each page's text, and the OCR document
+        // carries the unread pages in its own failure list.
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        clear_blank_flag_of_unread_pages(&mut final_pages, &mut doc.metadata.pages, &doc.ocr_page_failures);
         doc.prebuilt_pages = final_pages;
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        {
-            doc.ocr_text_pages = ocr_text_pages;
-        }
+        attach_ocr_text_page_marks(&mut doc, ocr_text_pages);
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         if !ocr_elements.is_empty() {

@@ -2,10 +2,12 @@
 //! pin the rendered output of the pages whose gate decision that move changed.
 
 use super::*;
-use crate::rendering::page_renderer::{PageRenderer, RenderOptions};
+use crate::rendering::page_renderer::{
+    PNG_FIXED_OVERHEAD, PageRenderer, PngRenderBudget, RGBA_AND_PNG_BYTES_PER_PIXEL, RenderOptions,
+};
 use crate::rendering::sidecar::page_declares_transparency;
 
-const DPI: u32 = 72;
+pub(super) const DPI: u32 = 72;
 
 /// Two overlapping fills in the spot ink `InkA`; the second runs under `/T gs`.
 const CONTENT: &str = "/CS0 cs 0.9 scn 10 10 60 60 re f /T gs /CS0 cs 0.5 scn 40 40 50 50 re f";
@@ -19,7 +21,7 @@ fn build_page(state_body: &str, extras: &[&str]) -> PdfDocument {
     build_page_with(CONTENT, SPOT_A, state_body, extras)
 }
 
-fn build_page_with(content: &str, colour_spaces: &str, state_body: &str, extras: &[&str]) -> PdfDocument {
+pub(super) fn build_page_with(content: &str, colour_spaces: &str, state_body: &str, extras: &[&str]) -> PdfDocument {
     let mut buf: Vec<u8> = Vec::new();
     buf.extend_from_slice(b"%PDF-1.4\n");
     let mut offs: Vec<usize> = Vec::new();
@@ -34,11 +36,16 @@ fn build_page_with(content: &str, colour_spaces: &str, state_body: &str, extras:
     } else {
         ""
     };
+    let fonts = if content.contains("/F1 ") {
+        "/Font << /F1 5 0 R >>"
+    } else {
+        ""
+    };
     push(
         &mut buf,
         &format!(
             "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R \
-             /Resources << /ColorSpace << {colour_spaces} >> {xobjects} \
+             /Resources << /ColorSpace << {colour_spaces} >> {xobjects} {fonts} \
              /ExtGState << /T << /Type /ExtGState {state_body} >> >> >> >>\nendobj\n"
         ),
     );
@@ -340,33 +347,294 @@ fn lighten_in_a_non_knockout_group_over_a_tint_zero_paint_gives_no_ink() {
     );
 }
 
-/// The PNG budget of the page renderer charges a tint plane and an alpha plane for each spot
-/// ink. A 100 x 100 page with one ink costs 12 + 4 + 2 bytes per pixel plus the fixed allowance;
-/// a limit between that and the one-plane charge of 17 bytes per pixel refuses the page.
+const BUDGET_REQUESTED_DPI: u32 = 288;
+const BUDGET_MINIMUM_DPI: u32 = 72;
+
+/// Bytes the PNG fit charges the 100 x 100 pt page at `dpi` with one ink and `copies` transient
+/// copies of the sidecar planes (the pixel side is rounded up as the fit rounds it).
+fn one_ink_charge(dpi: u32, copies: usize) -> usize {
+    let side = (f64::from(dpi) * 100.0 / 72.0).ceil() as usize;
+    side * side * (RGBA_AND_PNG_BYTES_PER_PIXEL + (copies + 1) * (4 + 2)) + PNG_FIXED_OVERHEAD
+}
+
+/// Runtime workspace for the 100 x 100 pt fixture at the requested DPI.
+fn workspace_limit(bytes_per_pixel: usize) -> usize {
+    let side = (f64::from(BUDGET_REQUESTED_DPI) * 100.0 / 72.0).ceil() as usize;
+    side * side * bytes_per_pixel
+}
+
+// One ink: a 4-byte RGBA canvas and the 6-byte process and spot sidecar.
+const CANVAS: usize = 10;
+// One RGBA mirror snapshot and one byte of fill coverage.
+const NORMAL_FILL: usize = 5;
+
+/// A group form `number` with its own `/Resources` extras and `body`.
+fn group_form_obj(number: u32, resources: &str, body: &str) -> String {
+    transparency_form(
+        number,
+        &format!("/Resources << /ColorSpace << {SPOT_A} >> {resources} >>"),
+        "",
+        body,
+    )
+}
+
+fn transparency_form(number: u32, resources: &str, group: &str, body: &str) -> String {
+    format!(
+        "{number} 0 obj\n<< /Type /XObject /Subtype /Form /FormType 1 /BBox [0 0 100 100] \
+         {resources} /Group << /Type /Group /S /Transparency {group} >> \
+         /Length {} >>\nstream\n{body}\nendstream\nendobj\n",
+        body.len()
+    )
+}
+
+fn nested_group_page() -> PdfDocument {
+    let outer = group_form_obj(5, "/XObject << /G 6 0 R >>", "/G Do");
+    let inner = group_form_obj(6, "", "/CS0 cs 0.8 scn 10 10 60 60 re f");
+    build_page_with("/F Do", SPOT_A, "/BM /Multiply", &[&outer, &inner])
+}
+
+// /Bridge and /G are siblings in /F's resources. /Bridge inherits those
+// resources and invokes /G while its own transparency group is active. ~keep
+fn inherited_sibling_group_page() -> PdfDocument {
+    let outer = group_form_obj(5, "/XObject << /Bridge 6 0 R /G 7 0 R >>", "/Bridge Do");
+    let bridge = transparency_form(6, "", "", "/G Do");
+    let sibling = group_form_obj(7, "", "/CS0 cs 0.8 scn 10 10 60 60 re f");
+    build_page_with("/F Do", SPOT_A, "/BM /Multiply", &[&outer, &bridge, &sibling])
+}
+
 #[test]
-fn the_page_renderer_charges_two_planes_for_each_spot_ink() {
-    use crate::rendering::page_renderer::PngRenderBudget;
+fn a_group_can_invoke_a_sibling_through_inherited_resources() {
+    use crate::rendering::page_renderer::{SpotPlaneUse, spot_plane_use};
+
+    let doc = inherited_sibling_group_page();
+    assert_eq!(
+        spot_plane_use(&doc, 0, &doc.get_page_resources(0).expect("resources")),
+        SpotPlaneUse {
+            groups: 3,
+            ..SpotPlaneUse::default()
+        }
+    );
+    let limit = workspace_limit(4 * CANVAS + NORMAL_FILL);
+    assert_eq!(
+        budgeted_dpi(&doc, limit, BUDGET_REQUESTED_DPI),
+        Some(BUDGET_REQUESTED_DPI)
+    );
+    assert!(budgeted_dpi(&doc, limit - 1, BUDGET_REQUESTED_DPI).is_none());
+}
+
+#[test]
+fn a_shared_form_resolves_names_in_each_inherited_scope() {
+    use crate::rendering::page_renderer::{SpotPlaneUse, spot_plane_use};
+
+    let outer = group_form_obj(5, "/XObject << /A 6 0 R /B 7 0 R >>", "/A Do /B Do");
+    let a = group_form_obj(6, "/XObject << /Bridge 8 0 R /G 9 0 R >>", "/Bridge Do");
+    let b = group_form_obj(7, "/XObject << /Bridge 8 0 R /G 10 0 R >>", "/Bridge Do");
+    let bridge = transparency_form(8, "", "/K true", "/G Do");
+    let knockout = transparency_form(9, "/Resources << >>", "/K true", "");
+    let nested = group_form_obj(10, "/XObject << /Inner 11 0 R >>", "/Inner Do");
+    let inner = group_form_obj(11, "", "");
+    let doc = build_page_with(
+        "/F Do",
+        SPOT_A,
+        "/BM /Multiply",
+        &[&outer, &a, &b, &bridge, &knockout, &nested, &inner],
+    );
+    // Each scope contributes a different maximum, regardless of which is scanned first. ~keep
+    assert_eq!(
+        spot_plane_use(&doc, 0, &doc.get_page_resources(0).expect("resources")),
+        SpotPlaneUse {
+            soft_mask: false,
+            groups: 5,
+            knockouts: 2,
+        }
+    );
+}
+
+fn soft_mask_in_group_page() -> PdfDocument {
+    let outer = group_form_obj(5, "/XObject << /G 6 0 R >>", "/G Do");
+    let mask = group_form_obj(6, "", "0.4 g 0 0 100 100 re f");
+    build_page_with(
+        "/T gs /F Do",
+        SPOT_A,
+        "/SMask << /Type /Mask /S /Luminosity /G 6 0 R >>",
+        &[&outer, &mask],
+    )
+}
+
+/// A group whose stroke runs under the non-separable `/Hue` blend: the widest paint scratch.
+fn stroking_group_page() -> PdfDocument {
+    let group = group_form_obj(
+        5,
+        "/ExtGState << /Blend << /BM /Hue >> >>",
+        "/Blend gs /CS0 CS 0.8 SCN 8 w 10 10 m 70 70 l S 0.5 g 5 5 20 20 re B",
+    );
+    build_page_with("/T gs /F Do", SPOT_A, "/BM /Hue", &[&group])
+}
+
+/// Renders `doc` through the PNG budget and returns the DPI it was admitted at, or `None` when refused.
+fn budgeted_dpi(doc: &PdfDocument, limit: usize, minimum_dpi: u32) -> Option<u32> {
+    render_at_budgeted_dpi(doc, limit, minimum_dpi).ok()
+}
+
+fn render_at_budgeted_dpi(doc: &PdfDocument, limit: usize, minimum_dpi: u32) -> crate::error::Result<u32> {
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(BUDGET_REQUESTED_DPI).as_raw());
+    renderer.force_cmyk_sidecar = true;
+    let budget = PngRenderBudget {
+        max_working_bytes: limit,
+        minimum_dpi,
+    };
+    renderer
+        .render_page_with_budget(0, doc, Some(budget))
+        .map(|(_, dpi)| dpi)
+}
+
+fn soft_mask_page() -> PdfDocument {
+    let mask = group_form("/CS /DeviceGray", "0.4 g 0 0 100 100 re f");
+    build_page_with(
+        "/T gs /CS0 cs 0.5 scn 10 10 60 60 re f",
+        SPOT_A,
+        "/SMask << /Type /Mask /S /Luminosity /G 5 0 R >>",
+        &[&mask],
+    )
+}
+
+fn knockout_group_page() -> PdfDocument {
+    let group = group_form("/K true", "/CS0 cs 0.8 scn 10 10 60 60 re f");
+    build_page_with("/F Do", SPOT_A, "/BM /Multiply", &[&group])
+}
+
+/// The PNG budget charges the live sidecar planes, plus one transient copy of every plane only
+/// when the page declares a soft mask or a knockout group. One ink: the live charge is
+/// 12 + 4 + 2 = 18 and the peak 12 + 2·(4 + 2) = 24 bytes per pixel. A limit at the live
+/// charge of the requested raster lowers the DPI of such a page, the peak charge admits the
+/// request, and a limit under the peak at the minimum DPI refuses the page.
+#[test]
+fn the_page_renderer_lowers_dpi_for_the_transient_spot_plate_copy() {
+    let doc = soft_mask_page();
+    let live = one_ink_charge(BUDGET_REQUESTED_DPI, 0);
+    assert_eq!(
+        budgeted_dpi(&doc, live, BUDGET_MINIMUM_DPI),
+        Some(249),
+        "the transient charge lowers 288 dpi to the largest raster the limit admits"
+    );
+    assert_eq!(
+        budgeted_dpi(&doc, one_ink_charge(BUDGET_REQUESTED_DPI, 1), BUDGET_MINIMUM_DPI),
+        Some(BUDGET_REQUESTED_DPI),
+        "the peak charge of the requested raster fits exactly"
+    );
+    assert_eq!(
+        budgeted_dpi(&doc, one_ink_charge(BUDGET_MINIMUM_DPI, 1) - 1, BUDGET_MINIMUM_DPI),
+        None,
+        "under the peak charge even the minimum raster is refused, not lowered"
+    );
+}
+
+/// The scan names what a page's resources declare. Patterns and annotation appearance
+/// resources are not walked.
+#[test]
+fn the_page_scan_reports_the_widest_spot_plane_use() {
+    use crate::rendering::page_renderer::{SpotPlaneUse, spot_plane_use};
+    let scan = |doc: &PdfDocument| spot_plane_use(doc, 0, &doc.get_page_resources(0).expect("resources"));
+    let used = |soft_mask, groups, knockouts| SpotPlaneUse {
+        soft_mask,
+        groups,
+        knockouts,
+    };
+    assert_eq!(scan(&knockout_group_page()), used(false, 1, 1));
+    assert_eq!(scan(&soft_mask_page()), used(true, 0, 0));
+    let group = group_form("/I true", "0.5 g 0 0 20 20 re f");
+    let plain = build_page_with("/F Do", SPOT_A, "/BM /Normal", &[&group]);
+    assert_eq!(scan(&plain), used(false, 1, 0));
+    assert_eq!(scan(&nested_group_page()), used(false, 2, 0));
+    assert_eq!(scan(&soft_mask_in_group_page()), used(true, 2, 0));
+    assert_eq!(scan(&build_page("/BM /Multiply", &[])), used(false, 0, 0));
+    assert_eq!(
+        scan(&build_page("/SMask /None", &[])),
+        used(false, 0, 0),
+        "/SMask /None clears a mask"
+    );
+}
+
+#[test]
+fn an_isolated_normal_fill_keeps_requested_dpi_at_its_live_workspace_limit() {
+    let group = group_form("/I true", "/CS0 cs 0.8 scn 10 10 60 60 re f");
+    let doc = build_page_with("/F Do", SPOT_A, "/BM /Normal", &[&group]);
+    let limit = workspace_limit(2 * CANVAS + NORMAL_FILL);
+
+    assert_eq!(
+        budgeted_dpi(&doc, limit, BUDGET_REQUESTED_DPI),
+        Some(BUDGET_REQUESTED_DPI)
+    );
+    assert!(budgeted_dpi(&doc, limit - 1, BUDGET_REQUESTED_DPI).is_none());
+    let reduced = budgeted_dpi(&doc, limit - 1, BUDGET_MINIMUM_DPI).expect("adaptive retry renders");
+    assert!(reduced < BUDGET_REQUESTED_DPI);
+}
+
+#[test]
+fn an_ink_page_with_a_knockout_group_lowers_dpi_instead_of_failing() {
+    let doc = knockout_group_page();
+    let limit = one_ink_charge(BUDGET_REQUESTED_DPI, 1);
+    assert!(budgeted_dpi(&doc, limit, BUDGET_REQUESTED_DPI).is_none());
+    let dpi = budgeted_dpi(&doc, limit, BUDGET_MINIMUM_DPI).expect("the knockout workspace fits after retry");
+    assert!(dpi < BUDGET_REQUESTED_DPI);
+}
+
+/// A page with an ink but no soft mask or knockout group never copies the planes: it keeps its
+/// requested DPI at the live charge, and a caller whose minimum DPI equals the request admits it.
+#[test]
+fn an_ink_page_without_a_mask_or_knockout_keeps_its_requested_dpi() {
     let doc = build_page("/BM /Multiply", &[]);
-    let fixed = 256 * 1024;
-    let two_planes = 10_000 * 18 + fixed;
-    let one_plane = 10_000 * 17 + fixed;
+    let live = one_ink_charge(BUDGET_REQUESTED_DPI, 0);
+    assert_eq!(
+        budgeted_dpi(&doc, live, BUDGET_MINIMUM_DPI),
+        Some(BUDGET_REQUESTED_DPI),
+        "no mask, no transient copy, no lowered DPI"
+    );
+    assert_eq!(
+        budgeted_dpi(&doc, live, BUDGET_REQUESTED_DPI),
+        Some(BUDGET_REQUESTED_DPI),
+        "a strict caller (minimum DPI equals the request) admits the page"
+    );
+    assert_eq!(
+        budgeted_dpi(&doc, live - 1, BUDGET_MINIMUM_DPI),
+        Some(287),
+        "control: one byte under the live charge binds"
+    );
+}
+
+/// A CMYK page whose sidecar declares no spot inks (transparency without a spot plate) holds
+/// nothing transient: the budget charges the CMYK plane only, so the page keeps its
+/// requested DPI where a wrongly charged transient copy would lower it.
+#[test]
+fn a_zero_ink_sidecar_page_keeps_its_requested_dpi() {
+    const REQUESTED_DPI: u32 = 288;
+    const MINIMUM_DPI: u32 = 72;
+    let pixels = |dpi: u32| {
+        let side = (f64::from(dpi) * 100.0 / 72.0).ceil() as usize;
+        side * side
+    };
+    // The CMYK plane only: the sidecar exists but carries no ink lanes.
+    let charge = |dpi: u32| pixels(dpi) * (RGBA_AND_PNG_BYTES_PER_PIXEL + 4) + PNG_FIXED_OVERHEAD;
+    let mask = transparency_form(5, "/Resources << >>", "/CS /DeviceGray", "0.4 g 0 0 100 100 re f");
+    let doc = build_page_with(
+        "/T gs 1 0 0 rg 10 10 60 60 re f",
+        "",
+        "/SMask << /Type /Mask /S /Luminosity /G 5 0 R >>",
+        &[&mask],
+    );
     let render = |limit: usize| {
-        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(DPI).as_raw());
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(REQUESTED_DPI).as_raw());
         renderer.force_cmyk_sidecar = true;
         let budget = PngRenderBudget {
             max_working_bytes: limit,
-            minimum_dpi: DPI,
+            minimum_dpi: MINIMUM_DPI,
         };
         renderer.render_page_with_budget(0, &doc, Some(budget))
     };
-    assert!(
-        render((one_plane + two_planes) / 2).is_err(),
-        "a limit under the two-plane charge refuses the page"
-    );
-    assert!(
-        render(two_planes).is_ok(),
-        "control: the two-plane charge itself admits the page"
-    );
+    let (_, dpi) = render(charge(REQUESTED_DPI)).expect("a zero-ink sidecar adds no transient charge");
+    assert_eq!(dpi, REQUESTED_DPI, "the sidecar exists but holds no inks");
+    let (_, dpi) = render(charge(REQUESTED_DPI) - 1).expect("control: one byte under the charge binds");
+    assert_eq!(dpi, 287, "one byte under the requested raster's charge lowers the DPI");
 }
 
 /// A form XObject: `group` is the group dictionary entries, `body` its content, `/CS0` is bound.
@@ -404,8 +672,8 @@ fn a_soft_mask_scales_the_backdrop_alpha_plane_of_a_spot_lane() {
 }
 
 /// The knockout merge carries the backdrop-alpha plane out of the group as well as the tints. A
-/// Multiply over the group result at tint 0.5 gives ink 1 - 0.2 * 0.5 = 0.9 (about 230) only if
-/// the lane is marked painted; a lost alpha plane reads the lane as empty paper and gives 128.
+/// Multiply over the group result at tint 0.4 gives ink 1 - 0.2 * 0.6 = 0.88 (224) only if
+/// the lane is marked painted; a lost alpha plane reads the lane as empty paper and gives 102.
 #[test]
 fn a_knockout_group_hands_its_backdrop_alpha_plane_to_the_paints_after_it() {
     let group = group_form("/K true", "/CS0 cs 0.8 scn 10 10 60 60 re f");
@@ -416,12 +684,12 @@ fn a_knockout_group_hands_its_backdrop_alpha_plane_to_the_paints_after_it() {
         "control: the group paints tint 0.8"
     );
     let after = plate_of(
-        "/F Do /CS0 cs /T gs 0.5 scn 10 10 60 60 re f",
+        "/F Do /CS0 cs /T gs 0.4 scn 10 10 60 60 re f",
         "/BM /Multiply",
         &[&group],
     );
     let ink = at(&after, ONLY_FIRST.0, ONLY_FIRST.1);
-    assert!((229..=230).contains(&ink), "Multiply over the group result: {ink}");
+    assert_eq!(ink, 224, "Multiply over the group result");
 }
 
 fn sidecar_allocated(state_body: &str) -> bool {
@@ -470,4 +738,108 @@ fn a_page_without_transparency_keeps_the_per_plate_knockout() {
         0,
         "the opaque InkB paint knocks out InkA"
     );
+}
+
+#[test]
+fn a_group_stroke_under_a_non_separable_blend_lowers_dpi_instead_of_failing() {
+    let doc = stroking_group_page();
+    let names = doc.get_page_inks_deep(0).expect("discover fixture spot inks");
+    let [ink] = names.as_slice() else {
+        panic!("expected exactly one spot ink, got {names:?}");
+    };
+    assert_eq!(ink, "InkA");
+
+    // Replay holds three canvases and a copied ink name. Fill-stroke
+    // reserves two RGBA snapshots, one Hue pixmap, six coverage bytes,
+    // and a separate backdrop-alpha plane for the process sidecar.
+    let rgba = 4;
+    let paint_scratch = 3 * rgba + 6 + 1;
+    let replay_name = size_of::<String>() + ink.capacity();
+    let limit = workspace_limit(3 * CANVAS + paint_scratch) + replay_name;
+
+    let error = render_at_budgeted_dpi(&doc, limit - 1, BUDGET_REQUESTED_DPI)
+        .expect_err("strict DPI must refuse a workspace one byte short");
+    assert!(error.to_string().contains("PDF knockout workspace exceeds"), "{error}");
+    let dpi = render_at_budgeted_dpi(&doc, limit - 1, BUDGET_MINIMUM_DPI).expect("the fit lowers the DPI");
+    assert!(dpi < BUDGET_REQUESTED_DPI);
+    assert_eq!(
+        render_at_budgeted_dpi(&doc, limit, BUDGET_REQUESTED_DPI).expect("the exact workspace admits the request"),
+        BUDGET_REQUESTED_DPI
+    );
+}
+
+#[test]
+fn a_group_inside_a_group_is_charged_each_level() {
+    let doc = nested_group_page();
+    let one_level = workspace_limit(2 * CANVAS + NORMAL_FILL);
+    let dpi = budgeted_dpi(&doc, one_level, BUDGET_MINIMUM_DPI).expect("the fit lowers the DPI");
+    assert!(dpi < BUDGET_REQUESTED_DPI);
+    assert_eq!(
+        budgeted_dpi(&doc, workspace_limit(3 * CANVAS + NORMAL_FILL), BUDGET_REQUESTED_DPI),
+        Some(BUDGET_REQUESTED_DPI)
+    );
+}
+
+#[test]
+fn nested_non_normal_groups_hold_both_source_recovery_canvases() {
+    let outer = group_form_obj(
+        5,
+        "/XObject << /G 6 0 R >> /ExtGState << /Blend << /BM /Multiply >> >>",
+        "/Blend gs /G Do",
+    );
+    let inner = group_form_obj(6, "", "/CS0 cs 0.8 scn 10 10 60 60 re f");
+    let doc = build_page_with("/T gs /F Do", SPOT_A, "/BM /Multiply", &[&outer, &inner]);
+
+    // Four canvases plus fill scratch cover either replay alone. During the
+    // outer replay the inner group starts its own replay and needs a fifth.
+    let one_recovery = workspace_limit(4 * CANVAS + NORMAL_FILL + 1);
+    assert!(budgeted_dpi(&doc, one_recovery, BUDGET_REQUESTED_DPI).is_none());
+    let dpi = budgeted_dpi(&doc, one_recovery, BUDGET_MINIMUM_DPI).expect("nested recovery renders after retry");
+    assert!(dpi < BUDGET_REQUESTED_DPI);
+    assert_eq!(
+        budgeted_dpi(
+            &doc,
+            workspace_limit(5 * CANVAS + NORMAL_FILL + 1),
+            BUDGET_REQUESTED_DPI
+        ),
+        Some(BUDGET_REQUESTED_DPI)
+    );
+}
+
+#[test]
+fn a_soft_mask_inside_a_group_is_charged_its_workspaces() {
+    let doc = soft_mask_in_group_page();
+    let without_mask = workspace_limit(2 * CANVAS + NORMAL_FILL);
+    let dpi = budgeted_dpi(&doc, without_mask, BUDGET_MINIMUM_DPI).expect("the fit lowers the DPI");
+    assert!(dpi < BUDGET_REQUESTED_DPI);
+    assert_eq!(
+        budgeted_dpi(&doc, workspace_limit(4 * CANVAS), BUDGET_REQUESTED_DPI),
+        Some(BUDGET_REQUESTED_DPI)
+    );
+}
+
+#[test]
+fn groups_reachable_only_through_a_soft_mask_are_charged() {
+    use crate::rendering::page_renderer::{SpotPlaneUse, spot_plane_use};
+
+    let mask = group_form_obj(5, "/XObject << /G 6 0 R >>", "/G Do");
+    let inner = transparency_form(6, "/Resources << >>", "/K true", "0.4 g 0 0 100 100 re f");
+    let doc = build_page_with(
+        "/T gs /CS0 cs 0.5 scn 10 10 60 60 re f",
+        SPOT_A,
+        "/SMask << /Type /Mask /S /Luminosity /G 5 0 R >>",
+        &[&mask, &inner],
+    );
+    let resources = doc.get_page_resources(0).expect("resources");
+    assert_eq!(
+        spot_plane_use(&doc, 0, &resources),
+        SpotPlaneUse {
+            soft_mask: true,
+            groups: 2,
+            knockouts: 1,
+        }
+    );
+    let without_nested_groups = one_ink_charge(BUDGET_REQUESTED_DPI, 1);
+    let dpi = budgeted_dpi(&doc, without_nested_groups, BUDGET_MINIMUM_DPI).expect("the reduced DPI renders");
+    assert!(dpi < BUDGET_REQUESTED_DPI, "the nested group lowers DPI, got {dpi}");
 }

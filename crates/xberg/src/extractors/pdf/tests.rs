@@ -530,6 +530,68 @@ fn should_leave_flat_document_untagged_when_no_boundaries_are_available() {
     );
 }
 
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn fallback_ocr_spans_accept_repeated_pages_with_one_ordered_placement() {
+    let text = "Préface\nReport\nReport\nEpilogue";
+    let pages = ["Report", "", "Report"].map(str::to_string);
+    let spans = boundaries_for_ocr_output(
+        ExtractionMethod::Ocr,
+        text,
+        None,
+        None,
+        Some(&pages),
+        &Default::default(),
+    )
+    .expect("the two nonempty pages have one ordered placement");
+    let first_start = "Préface\n".len();
+    let first_end = first_start + pages[0].len();
+    let second_start = first_end + "\n".len();
+
+    assert_eq!(
+        spans
+            .iter()
+            .map(|b| (b.page_number, b.byte_start, b.byte_end))
+            .collect::<Vec<_>>(),
+        vec![
+            (1, first_start, first_end),
+            (2, first_end, first_end),
+            (3, second_start, second_start + pages[2].len())
+        ]
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn fallback_ocr_spans_leave_a_transcript_with_a_preamble_substring_untagged() {
+    let text = "Préface: Reporting summary\nReport\nSecond page";
+    let pages = ["Report", "Second page"].map(str::to_string);
+    let spans = boundaries_for_ocr_output(
+        ExtractionMethod::Ocr,
+        text,
+        None,
+        None,
+        Some(&pages),
+        &Default::default(),
+    );
+
+    assert!(spans.is_none());
+    let doc = flat_pdf_document(text, "application/pdf", spans.as_deref());
+    assert_eq!(doc.elements.len(), 1);
+    assert_eq!(doc.elements[0].text, text);
+    assert_eq!(doc.elements[0].page, None);
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn fallback_ocr_spans_reject_ambiguous_complete_and_overlapping_matches() {
+    let repeated_pages = ["Report", "Second page"].map(str::to_string);
+    assert!(ordered_ocr_page_spans("Report\nReport\nSecond page", &repeated_pages).is_none());
+
+    let overlapping_page = ["ababa"].map(str::to_string);
+    assert!(ordered_ocr_page_spans("abababa", &overlapping_page).is_none());
+}
+
 #[test]
 fn should_fall_back_to_native_text_when_structure_drops_substantial_content() {
     let native_text = coverage_native_text();
@@ -786,9 +848,17 @@ fn should_build_full_ocr_boundaries_against_exact_output_text() {
         "repeated page".to_string(),
         "repeated page".to_string(),
     ];
-    let text = "<page 1>first page  \n\n<page 2>repeated page\n\n<page 3>repeated page";
+    let text = "<page 1>first page  <page 2>repeated page<page 3>repeated page";
+    let config = ExtractionConfig {
+        pages: Some(crate::core::config::PageConfig {
+            insert_page_markers: true,
+            marker_format: "<page {page_num}>".into(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
 
-    let boundaries = boundaries_for_ocr_output(ExtractionMethod::Ocr, text, None, None, Some(&page_texts))
+    let boundaries = boundaries_for_ocr_output(ExtractionMethod::Ocr, text, None, None, Some(&page_texts), &config)
         .expect("full OCR page texts should produce exact boundaries");
 
     assert_eq!(boundaries.len(), 3);
@@ -1407,6 +1477,10 @@ fn assert_mixed_plain_marker_keeps_repeated_neighbor(
     assert_eq!(marked, format!("{}{marker}{raw_table_page}", plain_table_page));
 }
 
+/// The document arrives from `select_pdf_document`'s Mixed arm with `ocr_internal_doc: None`,
+/// so it is `flat_pdf_document`'s: a `pdf`-source document. The OCR text page list therefore
+/// never changes its derivation (#3014), which is why the helper asserts no list and does not
+/// force one before deriving.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn assert_mixed_plain_public_page_ranges(
     mut document: InternalDocument,
@@ -1415,7 +1489,6 @@ fn assert_mixed_plain_public_page_ranges(
 ) {
     use crate::types::{ExtractedDocument, PageStructure, PageUnitType};
 
-    document.ocr_text_pages = vec![1, 2];
     document.prebuilt_pages = Some(
         expected
             .iter()
@@ -1800,6 +1873,13 @@ fn identity_h_mapping_pdf(text: &str, with_tounicode: bool) -> Vec<u8> {
 /// must extract `text` verbatim.
 #[cfg(all(feature = "pdf", feature = "ocr"))]
 fn shifted_to_unicode_pdf(text: &str, shift: u8) -> Vec<u8> {
+    shifted_to_unicode_pdf_pages(text, shift, 1, false)
+}
+
+/// [`shifted_to_unicode_pdf`] with `pages` identical pages; with `healthy_first_page` the first one
+/// is mapped without the shift and the others carry no text at all, so only they need OCR.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn shifted_to_unicode_pdf_pages(text: &str, shift: u8, pages: usize, healthy_first_page: bool) -> Vec<u8> {
     use lopdf::content::{Content, Operation};
     use lopdf::{Document, Object, Stream, dictionary};
 
@@ -1819,72 +1899,80 @@ fn shifted_to_unicode_pdf(text: &str, shift: u8) -> Vec<u8> {
     let mut document = Document::with_version("1.5");
     let pages_id = document.new_object_id();
 
-    let descriptor_id = document.add_object(dictionary! {
-        "Type" => "FontDescriptor",
-        "FontName" => "Synth+Shifted",
-        "Flags" => 4,
-        "FontBBox" => vec![0.into(), (-200).into(), 1000.into(), 900.into()],
-        "ItalicAngle" => 0,
-        "Ascent" => 800,
-        "Descent" => (-200),
-        "CapHeight" => 700,
-        "StemV" => 80,
-    });
-    let descendant_id = document.add_object(dictionary! {
-        "Type" => "Font",
-        "Subtype" => "CIDFontType2",
-        "BaseFont" => "Synth+Shifted",
-        "CIDSystemInfo" => dictionary! {
-            "Registry" => Object::string_literal("Adobe"),
-            "Ordering" => Object::string_literal("Identity"),
-            "Supplement" => 0,
-        },
-        "FontDescriptor" => descriptor_id,
-        "CIDToGIDMap" => "Identity",
-        "DW" => 600,
-    });
+    let add_font = |document: &mut Document, shift: u8| {
+        let descriptor_id = document.add_object(dictionary! {
+            "Type" => "FontDescriptor",
+            "FontName" => "Synth+Shifted",
+            "Flags" => 4,
+            "FontBBox" => vec![0.into(), (-200).into(), 1000.into(), 900.into()],
+            "ItalicAngle" => 0,
+            "Ascent" => 800,
+            "Descent" => (-200),
+            "CapHeight" => 700,
+            "StemV" => 80,
+        });
+        let descendant_id = document.add_object(dictionary! {
+            "Type" => "Font",
+            "Subtype" => "CIDFontType2",
+            "BaseFont" => "Synth+Shifted",
+            "CIDSystemInfo" => dictionary! {
+                "Registry" => Object::string_literal("Adobe"),
+                "Ordering" => Object::string_literal("Identity"),
+                "Supplement" => 0,
+            },
+            "FontDescriptor" => descriptor_id,
+            "CIDToGIDMap" => "Identity",
+            "DW" => 600,
+        });
 
-    // Per-character `bfchar` entries rather than a `bfrange`: a ROT shift is not a fixed
-    // offset once case wraps (`z` -> `a`, `Z` -> `A`), so each distinct source character
-    // needs its own explicit mapping entry.
-    let mut distinct: Vec<char> = text.chars().collect();
-    distinct.sort_unstable();
-    distinct.dedup();
-    let mut bfchar_body = String::new();
-    for c in &distinct {
-        let mapped = rot(*c, shift);
-        bfchar_body.push_str(&format!("<{:04X}> <{:04X}>\n", *c as u32, mapped as u32));
-    }
-    let to_unicode_cmap = format!(
-        "/CIDInit /ProcSet findresource begin\n\
-             12 dict begin\n\
-             begincmap\n\
-             /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n\
-             /CMapName /Adobe-Identity-UCS def\n\
-             1 begincodespacerange\n\
-             <0000> <FFFF>\n\
-             endcodespacerange\n\
-             {} beginbfchar\n\
-             {}\
-             endbfchar\n\
-             endcmap\n\
-             CMapName currentdict /CMap defineresource pop\n\
-             end\n\
-             end",
-        distinct.len(),
-        bfchar_body
-    );
-    let to_unicode_id = document.add_object(Stream::new(dictionary! {}, to_unicode_cmap.into_bytes()));
+        // Per-character `bfchar` entries rather than a `bfrange`: a ROT shift is not a fixed
+        // offset once case wraps (`z` -> `a`, `Z` -> `A`), so each distinct source character
+        // needs its own explicit mapping entry.
+        let mut distinct: Vec<char> = text.chars().collect();
+        distinct.sort_unstable();
+        distinct.dedup();
+        let mut bfchar_body = String::new();
+        for c in &distinct {
+            let mapped = rot(*c, shift);
+            bfchar_body.push_str(&format!("<{:04X}> <{:04X}>\n", *c as u32, mapped as u32));
+        }
+        let to_unicode_cmap = format!(
+            "/CIDInit /ProcSet findresource begin\n\
+                 12 dict begin\n\
+                 begincmap\n\
+                 /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n\
+                 /CMapName /Adobe-Identity-UCS def\n\
+                 1 begincodespacerange\n\
+                 <0000> <FFFF>\n\
+                 endcodespacerange\n\
+                 {} beginbfchar\n\
+                 {}\
+                 endbfchar\n\
+                 endcmap\n\
+                 CMapName currentdict /CMap defineresource pop\n\
+                 end\n\
+                 end",
+            distinct.len(),
+            bfchar_body
+        );
+        let to_unicode_id = document.add_object(Stream::new(dictionary! {}, to_unicode_cmap.into_bytes()));
 
-    let font_dict = dictionary! {
-        "Type" => "Font",
-        "Subtype" => "Type0",
-        "BaseFont" => "Synth+Shifted",
-        "Encoding" => "Identity-H",
-        "DescendantFonts" => vec![descendant_id.into()],
-        "ToUnicode" => to_unicode_id,
+        let font_dict = dictionary! {
+            "Type" => "Font",
+            "Subtype" => "Type0",
+            "BaseFont" => "Synth+Shifted",
+            "Encoding" => "Identity-H",
+            "DescendantFonts" => vec![descendant_id.into()],
+            "ToUnicode" => to_unicode_id,
+        };
+        document.add_object(font_dict)
     };
-    let font_id = document.add_object(font_dict);
+    let font_id = add_font(&mut document, shift);
+    let first_page_font_id = if healthy_first_page {
+        add_font(&mut document, 0)
+    } else {
+        font_id
+    };
 
     let content = Content {
         operations: vec![
@@ -1899,20 +1987,33 @@ fn shifted_to_unicode_pdf(text: &str, shift: u8) -> Vec<u8> {
         dictionary! {},
         content.encode().expect("shifted-mapping fixture content must encode"),
     ));
-    let page_id = document.add_object(dictionary! {
-        "Type" => "Page",
-        "Parent" => pages_id,
-        "Contents" => content_id,
-        "Resources" => dictionary! { "Font" => dictionary! { "F1" => font_id } },
-        "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
-    });
+    let textless_content_id = document.add_object(Stream::new(dictionary! {}, b"q Q".to_vec()));
+    let page_ids: Vec<Object> = (0..pages)
+        .map(|index| {
+            let page_font_id = if index == 0 { first_page_font_id } else { font_id };
+            let page_content_id = if healthy_first_page && index > 0 {
+                textless_content_id
+            } else {
+                content_id
+            };
+            document
+                .add_object(dictionary! {
+                    "Type" => "Page",
+                    "Parent" => pages_id,
+                    "Contents" => page_content_id,
+                    "Resources" => dictionary! { "Font" => dictionary! { "F1" => page_font_id } },
+                    "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+                })
+                .into()
+        })
+        .collect();
 
     document.objects.insert(
         pages_id,
         Object::Dictionary(dictionary! {
             "Type" => "Pages",
-            "Kids" => vec![page_id.into()],
-            "Count" => 1,
+            "Count" => page_ids.len() as i64,
+            "Kids" => page_ids,
         }),
     );
     let catalog_id = document.add_object(dictionary! {
@@ -3353,23 +3454,32 @@ async fn force_ocr_route_applies_numeric_repair() {
     );
 }
 
-/// Issue #2939: a whole-document OCR read whose page read the noise gate discarded must not
-/// mark that page as OCR text. `InternalDocument::ocr_text_pages` decides which pages are
-/// re-rendered from their elements (#2902), so a page whose noisy read was discarded -- which
-/// keeps its native text -- is not OCR text and must stay out of the set, while the page whose
-/// read was accepted keeps its mark exactly as before.
+/// Issue #3014: the OCR text page list of the PDF extractor's own documents changes no output.
+/// The one reader of `InternalDocument::ocr_text_pages` (`is_ocr_page_text`) treats every page
+/// of a `pdf`, `image` or `ocr` source as OCR text before it looks at the list, and the PDF
+/// extractor builds such a document itself (source format `pdf`), so no list it builds for one
+/// can ever change a derived result. The control below forces the list empty and set to both
+/// pages on the same document and derives both to prove the outputs stay equal, and the fix
+/// attaches no list to it. An adopted OCR backend document of another source format is the
+/// exception -- `select_pdf_document`'s Ocr arm returns it verbatim and the list's reader
+/// honors the marks there -- see
+/// `an_adopted_hocr_document_keeps_the_extractors_marks_and_rerenders_its_pages`. Documents of
+/// other formats still get the list from their own extractor: `fold_embedded_image_ocr_text`
+/// marks the page of, say, a DOCX whose embedded picture's read is folded into it, and
+/// #2902's re-rendering honors the mark there.
 #[cfg(all(feature = "pdf", feature = "ocr"))]
 #[tokio::test]
 #[serial]
-async fn a_discarded_ocr_read_does_not_mark_its_native_page_as_ocr_text() {
+async fn a_pdfs_ocr_text_page_list_is_not_built_and_changes_no_output() {
     use crate::core::config::{OcrConfig, PageConfig};
 
     const BACKEND_NAME: &str = "pdf-2939-discarded-read-marking";
     const ACCEPTED_TEXT: &str = "Healthy native prose fills the first page of this ordinary document";
     const NATIVE_PAGE_TWO_TEXT: &str = "The original native words stay on the second page";
-    // Twenty short alphabetic tokens beside ten long ones: a fragmented ratio of 2/3, above
-    // the 0.35 default threshold, over the 20-word minimum the noise check requires. A mock
-    // read this fragmented is exactly the shape `discard_suspected_ocr_noise` discards.
+    // Twenty short alphabetic tokens beside five long ones: a fragmented ratio of 4/5 (20
+    // of the 25 words), above the 0.35 default threshold, over the 20-word minimum the
+    // noise check requires. A mock read this fragmented is exactly the shape
+    // `discard_suspected_ocr_noise` discards.
     const NOISY_TEXT: &str = "aa bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt \
          gathering exercises remaining television understanding";
 
@@ -3446,34 +3556,858 @@ async fn a_discarded_ocr_read_does_not_mark_its_native_page_as_ocr_text() {
         .await
         .expect("forced-OCR extraction of the two-page fixture must succeed");
 
-    // Controls: the noise gate really discarded page 2's read and the route kept the page's
-    // native text, while page 1's accepted read is the page's content.
+    // Controls: the noise gate really discarded page 2's read -- the page keeps its native text
+    // (GH#3013), which also proves the read was discarded and not merely empty -- while page 1's
+    // accepted read is the page's content.
     let pages = internal
         .prebuilt_pages
         .as_ref()
         .expect("extract_pages must produce page contents");
     assert_eq!(pages.len(), 2, "the fixture has two pages: {pages:?}");
     assert_eq!(pages[0].content, ACCEPTED_TEXT, "page 1's accepted read is its content");
-    assert!(
-        pages[1].content.trim().is_empty(),
-        "page 2's discarded read left no OCR text: {:?}",
+    assert_eq!(
+        pages[1].content, NATIVE_PAGE_TWO_TEXT,
+        "page 2's discarded read left no OCR text, so the page keeps its native text: {:?}",
         pages[1].content
     );
     assert_eq!(
         pages[1].native_content.as_deref(),
-        Some(NATIVE_PAGE_TWO_TEXT),
-        "the discarded page keeps its native text beside the OCR treatment"
+        None,
+        "the discarded page was not replaced, so nothing is recorded in `native_content`"
     );
+
+    // Control: the list empty and set to both pages derive the same output from the same
+    // document, so the list is provably off the wire for a PDF. This holds before and after
+    // the fix; the emptiness assertion below is what the fix turns green.
+    let mut with_list = internal.clone();
+    with_list.ocr_text_pages = vec![1, 2];
+    let empty_list = crate::types::ExtractedDocument::from(internal.clone());
+    let full_list = crate::types::ExtractedDocument::from(with_list);
     assert_eq!(
-        internal.ocr_text_pages,
-        vec![1],
-        "only the page whose read was accepted may be marked as OCR text: page 2's read was \
-         discarded, its native text is what the page keeps"
+        empty_list.content, full_list.content,
+        "the OCR text page list must not change the derived content of a pdf source"
+    );
+    let page_bodies = |result: &crate::types::ExtractedDocument| {
+        result.pages.as_ref().map(|pages| {
+            pages
+                .iter()
+                .map(|page| (page.page_number, page.content.clone()))
+                .collect::<Vec<_>>()
+        })
+    };
+    assert_eq!(
+        page_bodies(&empty_list),
+        page_bodies(&full_list),
+        "the OCR text page list must not change the derived pages of a pdf source"
+    );
+    let boundaries = |result: &crate::types::ExtractedDocument| {
+        result
+            .metadata
+            .pages
+            .as_ref()
+            .and_then(|structure| structure.boundaries.clone())
+            .map(|boundaries| {
+                boundaries
+                    .iter()
+                    .map(|boundary| (boundary.page_number, boundary.byte_start, boundary.byte_end))
+                    .collect::<Vec<_>>()
+            })
+    };
+    assert_eq!(
+        boundaries(&empty_list),
+        boundaries(&full_list),
+        "the OCR text page list must not change the derived page boundaries of a pdf source"
+    );
+
+    // The fix: no marking that cannot change a result is built (#3014).
+    assert!(
+        internal.ocr_text_pages.is_empty(),
+        "the PDF extractor must not build the OCR text page list: its one reader treats every \
+         page of a pdf source as OCR text before it looks at the list (#3014): {:?}",
+        internal.ocr_text_pages
     );
 }
 
-/// The width and height from a PNG header, or `None` for bytes that are not a PNG. Page
-/// renders reach an OCR backend as PNG bytes, so this tells two page renders apart.
+/// Issue GH#3013: on the whole-document route (`force_ocr`), each page's text is replaced with its
+/// read, and a read the noise gate discarded arrives as an empty string -- so the page's content
+/// lost its native text. A discarded read replaces nothing: the page keeps its native text,
+/// untouched (`native_content` unset), while the accepted page keeps its read.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[test]
+#[serial]
+fn forced_ocr_restores_a_discarded_pages_native_text() {
+    const FIXTURE_STACK_BYTES: usize = 16 * 1024 * 1024;
+    std::thread::Builder::new()
+        .stack_size(FIXTURE_STACK_BYTES)
+        .spawn(|| {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("the fixture runtime builds")
+                .block_on(check_forced_ocr_discarded_page_restoration());
+        })
+        .expect("the fixture thread starts")
+        .join()
+        .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const RESTORE_BACKEND_NAME: &str = "pdf-3013-discarded-read-restore";
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const RESTORE_NATIVE_PAGE_ONE: &str = "Healthy native prose fills the first page of this ordinary document";
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const RESTORE_ACCEPTED_TEXT: &str = "The accepted OCR transcript reports 1172 units on page one";
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const RESTORE_NATIVE_PAGE_TWO: &str = "The original native words stay on the second page";
+// Twenty short alphabetic tokens beside five long ones: a fragmented ratio above the 0.35
+// default threshold over the 20-word minimum the noise check requires. A mock read this
+// fragmented is exactly the shape `discard_suspected_ocr_noise` discards.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const RESTORE_NOISY_TEXT: &str = "aa bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt \
+     gathering exercises remaining television understanding";
+
+// The pages have clearly different MediaBox heights (300 and 1584 pt), so the renders are
+// clearly different PNG heights: the short page's read is accepted, the tall page's read is
+// the noise the gate discards. The 1200 px split holds below 288 dpi, where the short page
+// still renders under it.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+struct SizeSensitiveOcrBackend {
+    document_pages: &'static [&'static str],
+    name: &'static str,
+}
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+impl crate::plugins::Plugin for SizeSensitiveOcrBackend {
+    fn name(&self) -> &str {
+        self.name
+    }
+    fn version(&self) -> String {
+        "1.0.0".to_string()
+    }
+    fn initialize(&self) -> crate::Result<()> {
+        Ok(())
+    }
+    fn shutdown(&self) -> crate::Result<()> {
+        Ok(())
+    }
+}
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[async_trait::async_trait]
+impl crate::plugins::OcrBackend for SizeSensitiveOcrBackend {
+    fn backend_type(&self) -> crate::plugins::OcrBackendType {
+        crate::plugins::OcrBackendType::Custom
+    }
+    fn supports_language(&self, _lang: &str) -> bool {
+        true
+    }
+    async fn process_image(
+        &self,
+        image_bytes: &[u8],
+        _config: &crate::core::config::OcrConfig,
+    ) -> crate::Result<crate::types::ExtractedDocument> {
+        let noisy = png_height(image_bytes).is_some_and(|height| height >= 1200);
+        Ok(crate::types::ExtractedDocument {
+            content: if noisy {
+                RESTORE_NOISY_TEXT.to_string()
+            } else {
+                RESTORE_ACCEPTED_TEXT.to_string()
+            },
+            mime_type: std::borrow::Cow::Borrowed("text/plain"),
+            ..Default::default()
+        })
+    }
+    fn supports_document_processing(&self) -> bool {
+        true
+    }
+    async fn process_document(
+        &self,
+        _path: &std::path::Path,
+        _config: &crate::core::config::OcrConfig,
+    ) -> crate::Result<crate::types::ExtractedDocument> {
+        Ok(crate::types::ExtractedDocument {
+            content: format!(
+                "{PLUGIN_PREAMBLE}\n{}\n{PLUGIN_EPILOGUE}",
+                self.document_pages.join("\n")
+            ),
+            pages: Some(
+                self.document_pages
+                    .iter()
+                    .enumerate()
+                    .map(|(index, text)| text_layer_page((index + 1) as u32, text))
+                    .collect(),
+            ),
+            ..Default::default()
+        })
+    }
+}
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn register_restoration_backend(
+    name: &'static str,
+    document_pages: &'static [&'static str],
+) -> RegisteredOcrBackendGuard {
+    crate::plugins::register_ocr_backend(std::sync::Arc::new(SizeSensitiveOcrBackend { name, document_pages }))
+        .expect("the size-sensitive backend registers");
+    RegisteredOcrBackendGuard { name }
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+async fn check_forced_ocr_discarded_page_restoration() {
+    let _backend = register_restoration_backend(RESTORE_BACKEND_NAME, &PLUGIN_PAGE_TEXTS);
+    for (numeric_repair, (extract_pages, keep_native_content)) in [false, true]
+        .into_iter()
+        .flat_map(|repair| [(true, true), (true, false), (false, false)].map(|pages| (repair, pages)))
+    {
+        for output_format in [
+            crate::core::config::OutputFormat::Plain,
+            crate::core::config::OutputFormat::Markdown,
+        ] {
+            run_forced_ocr_restoration_case(numeric_repair, extract_pages, keep_native_content, output_format).await;
+        }
+    }
+    assert_restoration_with_annotation_fallback(RESTORE_BACKEND_NAME, RESTORE_ACCEPTED_TEXT, RESTORE_NATIVE_PAGE_TWO)
+        .await;
+    assert_marker_body_collision_omits_public_ranges().await;
+    #[cfg(feature = "tokio-runtime")]
+    {
+        assert_document_plugin_page_ranges(RESTORE_BACKEND_NAME).await;
+        assert_blank_document_plugin_page_is_not_restored().await;
+    }
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+async fn run_forced_ocr_restoration_case(
+    numeric_repair: bool,
+    extract_pages: bool,
+    keep_native_content: bool,
+    output_format: crate::core::config::OutputFormat,
+) {
+    use crate::core::config::{OcrConfig, PageConfig};
+
+    let accepted_text = if numeric_repair {
+        "The accepted OCR transcript reports 1,172 units on page one"
+    } else {
+        RESTORE_ACCEPTED_TEXT
+    };
+    let insert_page_markers =
+        numeric_repair && !extract_pages && output_format == crate::core::config::OutputFormat::Plain;
+    let config = ExtractionConfig {
+        use_cache: false,
+        force_ocr: true,
+        output_format: output_format.clone(),
+        include_document_structure: true,
+        ocr: Some(OcrConfig {
+            backend: RESTORE_BACKEND_NAME.to_string(),
+            numeric_repair,
+            quality_thresholds: Some(OcrQualityThresholds {
+                discard_suspected_ocr_noise: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        pages: (extract_pages || insert_page_markers).then_some(PageConfig {
+            extract_pages,
+            insert_page_markers,
+            keep_native_content,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let case = format!(
+        "numeric_repair: {numeric_repair}, extract_pages: {extract_pages}, \
+         keep_native_content: {keep_native_content}, {output_format:?}"
+    );
+
+    let internal = PdfExtractor::new()
+        .extract_content(&two_page_native_text_pdf(), "application/pdf", &config)
+        .await
+        .expect("forced-OCR extraction of the two-page fixture must succeed");
+
+    // Control: the noise gate really discarded page 2's read.
+    assert!(
+        internal
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.message.contains("Page 2") && warning.message.contains("discarded")),
+        "the gate must have discarded page 2's read ({case}): {:?}",
+        internal.processing_warnings
+    );
+
+    let result = crate::core::pipeline::run_pipeline(internal, &config)
+        .await
+        .expect("configured output renders");
+    let is_markdown = output_format == crate::core::config::OutputFormat::Markdown;
+    assert_forced_ocr_restoration(
+        &result,
+        accepted_text,
+        insert_page_markers,
+        keep_native_content,
+        is_markdown,
+        &case,
+    );
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn assert_forced_ocr_restoration(
+    result: &crate::types::ExtractedDocument,
+    accepted_text: &str,
+    insert_page_markers: bool,
+    keep_native_content: bool,
+    is_markdown: bool,
+    case: &str,
+) {
+    let (expected_format, page_suffix) = if is_markdown { ("markdown", "\n") } else { ("plain", "") };
+    assert_eq!(result.metadata.output_format.as_deref(), Some(expected_format));
+    assert_public_pdf_paragraph(result, 2, RESTORE_NATIVE_PAGE_TWO);
+    let words = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert_eq!(
+        words(&result.content),
+        if insert_page_markers {
+            format!("<!-- PAGE 1 --> {accepted_text} <!-- PAGE 2 --> {RESTORE_NATIVE_PAGE_TWO}")
+        } else {
+            format!("{accepted_text} {RESTORE_NATIVE_PAGE_TWO}")
+        },
+        "the document carries the discarded page's native text after page 1's read ({case}): {:?}",
+        result.content
+    );
+
+    let pages = result.pages.as_ref().expect("the OCR route supplies page output");
+    assert_eq!(pages.len(), 2, "the fixture has two pages ({case}): {pages:?}");
+    assert_eq!(
+        pages[0].content,
+        format!("{accepted_text}{page_suffix}"),
+        "page 1's accepted read is its content, not restored ({case})"
+    );
+    assert_eq!(
+        pages[0].native_content.as_deref(),
+        keep_native_content.then_some(RESTORE_NATIVE_PAGE_ONE),
+        "only an accepted replacement records the original text ({case})"
+    );
+    assert_eq!(
+        pages[1].content,
+        format!("{RESTORE_NATIVE_PAGE_TWO}{page_suffix}"),
+        "page 2's discarded read leaves its native text in place ({case}): {:?}",
+        pages[1].content
+    );
+    assert_eq!(
+        pages[1].native_content, None,
+        "a page whose read was discarded was not replaced, so no native text is recorded ({case})"
+    );
+    assert_eq!(
+        pages[1].is_blank,
+        Some(false),
+        "the restored native text decides the page's blankness ({case})"
+    );
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+async fn assert_marker_body_collision_omits_public_ranges() {
+    use crate::core::config::{OutputFormat, PageConfig};
+
+    const FIRST_BODY: &str = "Recognized page one";
+    let bodies = [FIRST_BODY, "Restored page two"].map(str::to_string);
+    for output_format in [OutputFormat::Plain, OutputFormat::Markdown] {
+        let config = ExtractionConfig {
+            use_cache: false,
+            output_format,
+            pages: Some(PageConfig {
+                extract_pages: true,
+                insert_page_markers: true,
+                marker_format: format!("Marker {{page_num}}\n{FIRST_BODY}\n\n"),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let text = ocr::join_run_pages(&bodies, ocr_page_marker_format(&config), 0);
+        let spans = ocr_page_body_spans(&text, &bodies, &config).expect("structural marker and body spans");
+        assert!(spans[0].byte_start > 0);
+        assert_eq!(&text[spans[0].byte_start..spans[0].byte_end], FIRST_BODY);
+
+        let mut internal = flat_pdf_document(&text, "application/pdf", Some(&spans));
+        internal.metadata.pages = Some(crate::types::PageStructure {
+            total_count: 2,
+            unit_type: crate::types::PageUnitType::Page,
+            boundaries: Some(spans),
+            pages: None,
+        });
+        let result = crate::core::pipeline::run_pipeline(internal, &config)
+            .await
+            .expect("the marked PDF renders");
+        let pages = result.pages.as_deref().expect("both page bodies are retained");
+        assert_eq!(pages.len(), 2);
+        assert_eq!(pages[0].content.trim(), FIRST_BODY);
+        assert_eq!(result.content.matches(pages[0].content.as_str()).count(), 3);
+        assert!(
+            result
+                .metadata
+                .pages
+                .as_ref()
+                .is_some_and(|pages| pages.boundaries.is_none())
+        );
+        assert!(
+            result
+                .processing_warnings
+                .iter()
+                .any(|warning| warning.source == "page_boundaries")
+        );
+    }
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+async fn assert_blank_document_plugin_page_is_not_restored() {
+    use crate::core::config::{OcrConfig, PageConfig};
+
+    const BACKEND: &str = "pdf-3013-blank-document-plugin";
+    const PAGE_TEXTS: [&str; 2] = ["The document plugin recognized the first page", ""];
+    let _backend = register_restoration_backend(BACKEND, &PAGE_TEXTS);
+    let file = tempfile::NamedTempFile::new().expect("temporary PDF");
+    std::fs::write(file.path(), two_page_native_text_pdf()).expect("write PDF fixture");
+
+    for force_ocr in [true, false] {
+        let config = ExtractionConfig {
+            use_cache: false,
+            force_ocr,
+            ocr: Some(OcrConfig {
+                backend: BACKEND.into(),
+                quality_thresholds: Some(OcrQualityThresholds {
+                    min_total_non_whitespace: 1_000,
+                    min_non_whitespace_per_page: 1_000.0,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            pages: Some(PageConfig {
+                extract_pages: true,
+                keep_native_content: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let internal = PdfExtractor::new()
+            .extract_path(file.path(), "application/pdf", &config)
+            .await
+            .expect("document plugin OCR succeeds");
+        let result = crate::core::pipeline::run_pipeline(internal, &config)
+            .await
+            .expect("plugin transcript renders");
+        assert_eq!(result.extraction_method, Some(ExtractionMethod::Ocr));
+        assert_eq!(
+            result.content,
+            format!("{PLUGIN_PREAMBLE}\n\n{}\n\n{PLUGIN_EPILOGUE}", PAGE_TEXTS[0]),
+            "the document plugin transcript is authoritative (force_ocr={force_ocr})"
+        );
+        let pages = result.pages.as_deref().expect("the plugin supplies two pages");
+        assert_eq!(pages[1].is_blank, Some(true));
+        assert_eq!(pages[1].native_content.as_deref(), Some(RESTORE_NATIVE_PAGE_TWO));
+        assert_public_pdf_page_ranges(&result, &PAGE_TEXTS);
+    }
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const PLUGIN_PAGE_TEXTS: [&str; 2] = ["Repeated OCR paragraph", "Repeated OCR paragraph"];
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const PLUGIN_PREAMBLE: &str = "OCR transcript résumé";
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+const PLUGIN_EPILOGUE: &str = "End of OCR transcript";
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn assert_public_pdf_paragraph(result: &crate::types::ExtractedDocument, page: u32, expected: &str) {
+    use crate::types::document_structure::NodeContent;
+
+    let document = result.document.as_ref().expect("configured public document structure");
+    assert!(
+        document.nodes.iter().any(|node| {
+            node.page == Some(page) && matches!(&node.content, NodeContent::Paragraph { text } if text == expected)
+        }),
+        "missing paragraph {expected:?} on page {page}: {:?}",
+        document.nodes
+    );
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+async fn assert_restoration_with_annotation_fallback(backend: &str, accepted: &str, restored: &str) {
+    let config = ExtractionConfig {
+        use_cache: false,
+        force_ocr: true,
+        include_document_structure: true,
+        ocr: Some(crate::core::config::OcrConfig {
+            backend: backend.into(),
+            quality_thresholds: Some(OcrQualityThresholds {
+                discard_suspected_ocr_noise: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        pages: Some(crate::core::config::PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let internal = PdfExtractor::new()
+        .extract_content(
+            &native_text_pdf_with_optional_annotation(true),
+            "application/pdf",
+            &config,
+        )
+        .await
+        .expect("forced OCR with annotation fallback succeeds");
+    assert!(
+        internal.processing_warnings.iter().any(|warning| {
+            warning.source == "pdf_annotations" && warning.message.contains("text-bearing annotation")
+        })
+    );
+    assert!(
+        internal
+            .processing_warnings
+            .iter()
+            .any(|warning| { warning.message.contains("Page 2") && warning.message.contains("discarded") })
+    );
+
+    let result = crate::core::pipeline::run_pipeline(internal, &config)
+        .await
+        .expect("plain output renders");
+    assert_public_pdf_paragraph(&result, 2, restored);
+    assert_public_pdf_paragraph(&result, 3, OCR_RESTORE_ANNOTATION);
+    assert_public_pdf_page_ranges(&result, &[accepted, restored, OCR_RESTORE_ANNOTATION]);
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
+async fn assert_document_plugin_page_ranges(backend: &str) {
+    let file = tempfile::NamedTempFile::new().expect("temporary PDF");
+    std::fs::write(file.path(), two_page_native_text_pdf()).expect("write PDF fixture");
+    let config = ExtractionConfig {
+        use_cache: false,
+        force_ocr: true,
+        include_document_structure: true,
+        output_format: crate::core::config::OutputFormat::Markdown,
+        ocr: Some(crate::core::config::OcrConfig {
+            backend: backend.into(),
+            ..Default::default()
+        }),
+        pages: Some(crate::core::config::PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let internal = PdfExtractor::new()
+        .extract_path(file.path(), "application/pdf", &config)
+        .await
+        .expect("document-level OCR succeeds");
+    let result = crate::core::pipeline::run_pipeline(internal, &config)
+        .await
+        .expect("Markdown output renders");
+    assert_eq!(result.metadata.output_format.as_deref(), Some("markdown"));
+    for (index, expected) in PLUGIN_PAGE_TEXTS.iter().enumerate() {
+        assert_public_pdf_paragraph(&result, (index + 1) as u32, expected);
+    }
+    assert_eq!(
+        result.content,
+        format!(
+            "{PLUGIN_PREAMBLE}\n\n{}\n\n{PLUGIN_EPILOGUE}\n",
+            PLUGIN_PAGE_TEXTS.join("\n\n")
+        )
+    );
+    let rendered_pages = PLUGIN_PAGE_TEXTS.map(|text| format!("{text}\n"));
+    assert_public_pdf_page_ranges(&result, &rendered_pages.each_ref().map(String::as_str));
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn assert_public_pdf_page_ranges(result: &crate::types::ExtractedDocument, expected: &[&str]) {
+    let pages = result.pages.as_deref().expect("public pages");
+    let ranges = result
+        .metadata
+        .pages
+        .as_ref()
+        .and_then(|pages| pages.boundaries.as_deref())
+        .expect("public page boundaries");
+    assert_eq!(pages.len(), expected.len());
+    assert_eq!(ranges.len(), expected.len());
+    let mut previous_end = 0;
+    for ((page, range), expected) in pages.iter().zip(ranges).zip(expected) {
+        assert_eq!(page.page_number, range.page_number);
+        assert_eq!(page.content, *expected);
+        assert!(range.byte_start >= previous_end);
+        assert_eq!(result.content.get(range.byte_start..range.byte_end), Some(*expected));
+        previous_end = range.byte_end;
+    }
+}
+
+/// Issue #3014, the OCR route its deletion missed: `select_pdf_document`'s Ocr arm returns an
+/// adopted OCR backend document verbatim, and such a document keeps its own source format -- a
+/// plugin's `hocr` structure is not one of the `pdf`/`image`/`ocr` sources `is_ocr_page_text`
+/// treats as OCR text on every page, so there the list IS read, and #2902's re-rendering
+/// honors the marks. The extractor therefore attaches the list it built exactly for that
+/// document, exactly as before #3014; the control above pins that its own `pdf`-source
+/// documents keep none.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[test]
+fn an_adopted_hocr_document_keeps_the_extractors_marks_and_rerenders_its_pages() {
+    use crate::core::config::OutputFormat;
+    use crate::extractors::security::SecurityLimits;
+    use crate::types::document_structure::{DocumentNode, DocumentStructure, NodeContent};
+
+    const NODE_TEXT: &str = "Adopted paragraph one";
+    // The backend's transcript differs from the structure it contributed, so the prebuilt page
+    // text is not found in the derived content and #2902's re-rendering is what maps the page.
+    const TRANSCRIPT: &str = "Raw page transcript one";
+
+    // A backend result describes one page: every node sits on page 1.
+    let mut structure = DocumentStructure {
+        nodes: vec![DocumentNode {
+            id: String::new(),
+            content: NodeContent::Paragraph {
+                text: NODE_TEXT.to_string(),
+            },
+            parent: None,
+            children: Vec::new(),
+            content_layer: Default::default(),
+            page: Some(1),
+            page_end: None,
+            bbox: None,
+            annotations: Vec::new(),
+            attributes: None,
+        }],
+        source_format: Some("hocr".to_string()),
+        relationships: Vec::new(),
+        node_types: Vec::new(),
+    };
+    structure.finalize_node_types();
+    let mut plugin_result = crate::types::ExtractedDocument {
+        content: TRANSCRIPT.to_string(),
+        mime_type: std::borrow::Cow::Borrowed("text/plain"),
+        document: Some(structure),
+        ..Default::default()
+    };
+    crate::extraction::derive::adopt_public_ocr_document(&mut plugin_result, &SecurityLimits::default())
+        .expect("the plugin's structure must adopt");
+    let adopted = plugin_result
+        .ocr_internal_document
+        .take()
+        .expect("adoption must produce the internal document");
+    assert_eq!(
+        adopted.source_format, "hocr",
+        "an adopted document keeps the plugin's own source format"
+    );
+
+    // `select_pdf_document`'s Ocr arm returns the backend's document verbatim: only the MIME
+    // type is overwritten, so the plugin's source format survives the selection and the list's
+    // reader reads the list on it.
+    let (selected, origin, structured) = select_pdf_document(
+        ExtractionMethod::Ocr,
+        "unrelated seed text",
+        "application/pdf",
+        None,
+        Some(adopted.clone()),
+        None,
+        None,
+        None,
+        &OutputFormat::Plain,
+    );
+    assert_eq!(origin, PdfDocumentOrigin::Ocr);
+    assert!(structured);
+    assert_eq!(
+        selected.source_format, "hocr",
+        "the Ocr arm must not overwrite an adopted document's source format"
+    );
+
+    // The extractor's own marking build (#2939): the pages whose whole-document read the output
+    // kept are reported, and the pages' contents carry the read.
+    let mut pages = vec![text_layer_page(1, TRANSCRIPT)];
+    let marks = replace_pages_with_ocr_page_texts(pages.as_mut_slice(), &[TRANSCRIPT.to_string()], None, false);
+    assert_eq!(marks, vec![1], "the read was kept, so its page is reported");
+
+    let boundaries_metadata = || crate::types::PageStructure {
+        total_count: 1,
+        unit_type: crate::types::PageUnitType::Page,
+        boundaries: Some(vec![crate::types::PageBoundary {
+            byte_start: 0,
+            byte_end: 40,
+            page_number: 1,
+        }]),
+        pages: None,
+    };
+
+    // The decision under test: the adopted hocr document is exactly the source the list's
+    // reader honors it on, so the extractor's marks are attached exactly as before #3014 --
+    // extended beside any list the adopter already carries, not overwriting it.
+    let mut marked = selected;
+    marked.prebuilt_pages = Some(pages);
+    marked.metadata.pages = Some(boundaries_metadata());
+    marked.ocr_text_pages = vec![7];
+    attach_ocr_text_page_marks(&mut marked, marks);
+    assert_eq!(
+        marked.ocr_text_pages,
+        vec![7, 1],
+        "an adopted hocr document keeps the extractor's marks beside the adopter's own: its \
+         source format is what the list's reader honors the list on"
+    );
+
+    // #2902: the marked page is re-rendered from its element, and the boundary survives because
+    // the re-rendered page is located in the content.
+    let marked_result = crate::extraction::derive::derive_extraction_result(marked, false, OutputFormat::Plain);
+    let marked_pages = marked_result.pages.as_ref().expect("pages are derived");
+    assert_eq!(
+        marked_pages[0].content, NODE_TEXT,
+        "page 1 is re-rendered from its adopted element"
+    );
+    let marked_boundaries = marked_result
+        .metadata
+        .pages
+        .as_ref()
+        .and_then(|structure| structure.boundaries.clone())
+        .expect("the boundary survives the re-render");
+    assert_eq!(
+        marked_boundaries
+            .iter()
+            .map(|boundary| boundary.page_number)
+            .collect::<Vec<_>>(),
+        vec![1],
+        "the page stays bounded once the marks are attached"
+    );
+    assert!(
+        !marked_result
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "page_boundaries"),
+        "no page diverges once the marks are attached: {:?}",
+        marked_result.processing_warnings
+    );
+
+    // The same document without the marks -- what dropping the build outright produced -- keeps
+    // the prebuilt text and loses the boundary: the reader reports the page as diverging.
+    for stale_end in [40, NODE_TEXT.len()] {
+        let mut structure = boundaries_metadata();
+        structure.boundaries.as_mut().unwrap()[0].byte_end = stale_end;
+        assert_unmarked_hocr_transcript(adopted.clone(), structure, TRANSCRIPT, NODE_TEXT);
+    }
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn assert_unmarked_hocr_transcript(
+    mut unmarked: InternalDocument,
+    structure: crate::types::PageStructure,
+    transcript: &str,
+    node_text: &str,
+) {
+    unmarked.prebuilt_pages = Some(vec![text_layer_page(1, transcript)]);
+    unmarked.metadata.pages = Some(structure);
+    let result =
+        crate::extraction::derive::derive_extraction_result(unmarked, false, crate::core::config::OutputFormat::Plain);
+    let pages = result.pages.as_ref().expect("pages are derived");
+    assert_eq!(result.content, node_text);
+    assert_eq!(pages[0].content, transcript, "an unmarked page keeps its prebuilt text");
+    assert!(
+        result
+            .metadata
+            .pages
+            .as_ref()
+            .is_some_and(|structure| structure.boundaries.is_none()),
+        "the unmarked page's boundary is dropped even when it is in bounds"
+    );
+    assert!(
+        result
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "page_boundaries"),
+        "the unmarked page is reported as diverging"
+    );
+    assert!(
+        !result
+            .metadata
+            .additional
+            .contains_key("xberg:internal:adopted-ocr-document"),
+        "adoption provenance stays internal"
+    );
+}
+
+/// Issue #3014's default arm: a backend contribution with no `source_format` adopts as `ocr`
+/// (`derive::adopt_public_ocr_document`), and `ocr` is one of the sources the list's reader
+/// treats as OCR text on every page, so the extractor attaches nothing there: the reader
+/// never consults the list on such a document, and whatever the extractor built for it stays
+/// off the wire -- exactly the control the `pdf`-source test above pins for its own documents.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[test]
+fn an_adopted_document_without_a_source_format_defaults_to_ocr_and_keeps_no_marks() {
+    use crate::core::config::OutputFormat;
+    use crate::extractors::security::SecurityLimits;
+    use crate::types::document_structure::{DocumentNode, DocumentStructure, NodeContent};
+
+    const NODE_TEXT: &str = "Default-source paragraph one";
+
+    // The same plugin contribution the `hocr` sibling makes, with the source format absent:
+    // adoption defaults it to `ocr`.
+    let mut structure = DocumentStructure {
+        nodes: vec![DocumentNode {
+            id: String::new(),
+            content: NodeContent::Paragraph {
+                text: NODE_TEXT.to_string(),
+            },
+            parent: None,
+            children: Vec::new(),
+            content_layer: Default::default(),
+            page: Some(1),
+            page_end: None,
+            bbox: None,
+            annotations: Vec::new(),
+            attributes: None,
+        }],
+        source_format: None,
+        relationships: Vec::new(),
+        node_types: Vec::new(),
+    };
+    structure.finalize_node_types();
+    let mut plugin_result = crate::types::ExtractedDocument {
+        content: "Raw page transcript one".to_string(),
+        mime_type: std::borrow::Cow::Borrowed("text/plain"),
+        document: Some(structure),
+        ..Default::default()
+    };
+    crate::extraction::derive::adopt_public_ocr_document(&mut plugin_result, &SecurityLimits::default())
+        .expect("the plugin's structure must adopt");
+    let adopted = plugin_result
+        .ocr_internal_document
+        .take()
+        .expect("adoption must produce the internal document");
+    assert_eq!(
+        adopted.source_format, "ocr",
+        "a contribution without a source format adopts as ocr"
+    );
+
+    let (selected, origin, structured) = select_pdf_document(
+        ExtractionMethod::Ocr,
+        "unrelated seed text",
+        "application/pdf",
+        None,
+        Some(adopted),
+        None,
+        None,
+        None,
+        &OutputFormat::Plain,
+    );
+    assert_eq!(origin, PdfDocumentOrigin::Ocr);
+    assert!(structured);
+    assert_eq!(
+        selected.source_format, "ocr",
+        "the Ocr arm must not overwrite an adopted document's defaulted source format"
+    );
+
+    // The decision under test: `ocr` is a source the list's reader treats as OCR text on
+    // every page, so the extractor's marks could never change a derived result and are not
+    // attached -- the list stays as the adopter left it.
+    let mut marked = selected;
+    attach_ocr_text_page_marks(&mut marked, vec![1]);
+    assert!(
+        marked.ocr_text_pages.is_empty(),
+        "an adopted ocr-source document keeps no marks: its reader treats every page as OCR \
+         text before it looks at the list: {:?}",
+        marked.ocr_text_pages
+    );
+}
+
+/// The height from a PNG header, or `None` for bytes that are not a PNG. Page renders reach
+/// an OCR backend as PNG bytes, so this tells two page renders apart by their height.
 #[cfg(all(feature = "pdf", feature = "ocr"))]
 fn png_height(bytes: &[u8]) -> Option<u32> {
     if bytes.len() < 24 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
@@ -3485,8 +4419,40 @@ fn png_height(bytes: &[u8]) -> Option<u32> {
 /// A two-page PDF whose every page carries a healthy native text layer, and whose pages have
 /// clearly different heights so a page render identifies its page by size: page 1 is a small
 /// (200x300 pt) page, page 2 a tall (1224x1584 pt) one.
-#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[cfg(any(
+    all(feature = "pdf", feature = "ocr"),
+    all(
+        feature = "pdf",
+        feature = "ocr-pipeline",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    )
+))]
 fn two_page_native_text_pdf() -> Vec<u8> {
+    native_text_pdf_with_optional_annotation(false)
+}
+
+#[cfg(any(
+    all(feature = "pdf", feature = "ocr"),
+    all(
+        feature = "pdf",
+        feature = "ocr-pipeline",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    )
+))]
+const OCR_RESTORE_ANNOTATION: &str = "Recovered annotation on the third page";
+
+#[cfg(any(
+    all(feature = "pdf", feature = "ocr"),
+    all(
+        feature = "pdf",
+        feature = "ocr-pipeline",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    )
+))]
+fn native_text_pdf_with_optional_annotation(add_annotation_page: bool) -> Vec<u8> {
     use lopdf::content::{Content, Operation};
     use lopdf::{Document, Object, Stream, dictionary};
 
@@ -3523,12 +4489,30 @@ fn two_page_native_text_pdf() -> Vec<u8> {
     let page_one_id = page([0, 0, 200, 300], page_one_text);
     let page_two_id = page([0, 0, 1224, 1584], page_two_text);
 
+    let mut kids: Vec<Object> = vec![page_one_id.into(), page_two_id.into()];
+    if add_annotation_page {
+        let page_three_id = page([0, 0, 1224, 1584], "");
+        let annotation = document.add_object(dictionary! {
+            "Type" => "Annot",
+            "Subtype" => "FreeText",
+            "Rect" => vec![10.into(), 10.into(), 250.into(), 35.into()],
+            "Contents" => Object::string_literal(OCR_RESTORE_ANNOTATION),
+        });
+        document
+            .get_object_mut(page_three_id)
+            .and_then(Object::as_dict_mut)
+            .expect("third page dictionary")
+            .set("Annots", vec![Object::Reference(annotation)]);
+        kids.push(page_three_id.into());
+    }
+    let page_count = kids.len() as i64;
+
     document.objects.insert(
         pages_id,
         Object::Dictionary(dictionary! {
             "Type" => "Pages",
-            "Kids" => vec![page_one_id.into(), page_two_id.into()],
-            "Count" => 2,
+            "Kids" => kids,
+            "Count" => page_count,
         }),
     );
     let catalog_id = document.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
@@ -6160,7 +7144,7 @@ fn test_vlm_single_string_guard_clears_secondary_pages() {
         })
         .collect();
 
-    replace_pages_with_ocr_page_texts(&mut pages, &pts, false);
+    replace_pages_with_ocr_page_texts(&mut pages, &pts, None, false);
 
     assert_eq!(pages[0].content, vlm_text, "page 1 should carry the VLM text");
     assert!(pages[1].content.is_empty(), "page 2 must be cleared by VLM guard");
@@ -6244,7 +7228,7 @@ fn pages_cleared_by_a_single_ocr_text_keep_their_text_layer() {
         .map(|n| text_layer_page(n, &format!("native page {n}")))
         .collect();
 
-    replace_pages_with_ocr_page_texts(&mut pages, &pts, true);
+    replace_pages_with_ocr_page_texts(&mut pages, &pts, None, true);
 
     assert_eq!(pages[0].content, "whole document text");
     assert_eq!(pages[0].native_content.as_deref(), Some("native page 1"));
@@ -6261,9 +7245,185 @@ fn pages_cleared_by_a_single_ocr_text_keep_their_text_layer() {
     let mut not_kept: Vec<_> = (1u32..=2u32)
         .map(|n| text_layer_page(n, &format!("native page {n}")))
         .collect();
-    replace_pages_with_ocr_page_texts(&mut not_kept, &pts, false);
+    replace_pages_with_ocr_page_texts(&mut not_kept, &pts, None, false);
     assert!(not_kept[1].content.is_empty());
     assert_eq!(not_kept[1].native_content, None);
+}
+
+/// GH#3013: on the whole-document route a read the noise gate discarded arrives as an empty
+/// string, and writing it into the page replaced the page's native text with nothing. A
+/// discarded read replaces nothing: the page keeps its native text, `native_content` stays unset
+/// because the page was not replaced, and only accepted reads are reported (#2939).
+#[cfg(feature = "ocr")]
+#[test]
+fn a_discarded_ocr_read_keeps_the_pages_native_text() {
+    let pts = vec!["accepted page one read".to_string(), String::new()];
+
+    let mut kept: Vec<_> = (1u32..=2u32)
+        .map(|n| text_layer_page(n, &format!("native page {n}")))
+        .collect();
+    let restored = ["accepted page one read", "native page 2"].map(str::to_string);
+    let marks = replace_pages_with_ocr_page_texts(&mut kept, &pts, Some(&restored), true);
+    assert_eq!(marks, vec![1], "only the accepted read is reported");
+    assert_eq!(
+        kept[0].content, "accepted page one read",
+        "the accepted read replaces the text layer"
+    );
+    assert_eq!(kept[0].native_content.as_deref(), Some("native page 1"));
+    assert_eq!(
+        kept[1].content, "native page 2",
+        "a discarded read leaves the page's native text in place"
+    );
+    assert_eq!(
+        kept[1].native_content, None,
+        "a page that was not replaced records no native text, even under keep_native_content"
+    );
+    assert_eq!(
+        kept[1].is_blank,
+        Some(false),
+        "the restored native text decides the page's blankness"
+    );
+
+    let mut dropped: Vec<_> = (1u32..=2u32)
+        .map(|n| text_layer_page(n, &format!("native page {n}")))
+        .collect();
+    replace_pages_with_ocr_page_texts(&mut dropped, &pts, Some(&restored), false);
+    assert_eq!(
+        dropped[1].content, "native page 2",
+        "the restore does not depend on keep_native_content"
+    );
+    assert_eq!(dropped[1].native_content, None);
+}
+
+/// A single OCR text is the text of the whole document and is written to the first page, so the
+/// later pages are cleared -- but an empty single text read nothing, so no page is written and
+/// every page keeps its native text (GH#3013).
+#[cfg(feature = "ocr")]
+#[test]
+fn an_empty_whole_document_ocr_read_replaces_no_page() {
+    let pts = vec![String::new()];
+    let mut pages: Vec<_> = (1u32..=3u32)
+        .map(|n| text_layer_page(n, &format!("native page {n}")))
+        .collect();
+
+    let restored = ["native page 1", "native page 2", "native page 3"].map(str::to_string);
+    let marks = replace_pages_with_ocr_page_texts(&mut pages, &pts, Some(&restored), true);
+
+    assert!(marks.is_empty(), "an empty read is not accepted");
+    assert_eq!(
+        pages[0].native_content, None,
+        "page 1's discarded read did not replace it, so no native text is recorded"
+    );
+    assert_eq!(
+        pages[0].is_blank,
+        Some(false),
+        "the restored native text decides the page's blankness"
+    );
+    for (page, native) in pages.iter().zip(["native page 1", "native page 2", "native page 3"]) {
+        assert_eq!(page.content, native, "page {} keeps its native text", page.page_number);
+    }
+    for page in &pages {
+        assert_eq!(page.native_content, None, "page {} was not replaced", page.page_number);
+    }
+}
+
+/// GH#3013: the document agrees with the pages. A discarded read in the middle of the document
+/// puts the page's native text back between its neighbours, in the text, the structured
+/// document and the page texts the boundaries are computed from.
+#[cfg(feature = "ocr")]
+#[test]
+fn a_discarded_read_in_the_middle_is_restored_into_the_document() {
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+
+    let config = ExtractionConfig {
+        pages: Some(crate::core::config::PageConfig {
+            insert_page_markers: true,
+            marker_format: "[read one, page {page_num}]".into(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let reads = vec!["read one".to_string(), String::new(), "read three".to_string()];
+    let natives = vec!["native 1".into(), "native\u{fffd}2".into(), "native 3".into()];
+    let mut text = "[read one, page 1]read one[read one, page 2][read one, page 3]read three".to_string();
+    let mut document = InternalDocument::new("pdf");
+    document.push_element(InternalElement::text(ElementKind::Paragraph, "read one", 0).with_page(1));
+    document.push_element(InternalElement::text(ElementKind::Paragraph, "read three", 0).with_page(3));
+    let mut document = Some(document);
+
+    let (pages, lost_glyphs) = restore_discarded_page_reads(&mut text, &mut document, &reads, &natives, &config)
+        .expect("the discarded page is restored");
+
+    assert_eq!(
+        text,
+        "[read one, page 1]read one[read one, page 2]native 2[read one, page 3]read three"
+    );
+    assert_eq!(lost_glyphs, 1);
+    assert!(unmapped_glyphs::lost_glyph_warning(lost_glyphs, &config).is_some());
+    assert_eq!(pages, vec!["read one", "native 2", "read three"]);
+    let paragraphs: Vec<(&str, Option<u32>)> = document
+        .as_ref()
+        .expect("the document is kept")
+        .elements
+        .iter()
+        .filter(|element| matches!(element.kind, ElementKind::Paragraph))
+        .map(|element| (element.text.as_str(), element.page))
+        .collect();
+    assert_eq!(
+        paragraphs,
+        vec![("read one", Some(1)), ("native 2", Some(2)), ("read three", Some(3))]
+    );
+    assert!(
+        !document.as_ref().is_some_and(|document| document
+            .elements
+            .iter()
+            .any(|e| matches!(e.kind, ElementKind::OcrText { .. }))),
+        "restored native text is not an OCR element"
+    );
+    let boundaries = ocr_page_body_spans(&text, &pages, &config).expect("the page texts are located");
+    assert_eq!(boundaries[0].byte_start, "[read one, page 1]".len());
+    for (boundary, page) in boundaries.iter().zip(&pages) {
+        assert_eq!(&text[boundary.byte_start..boundary.byte_end], page.as_str());
+    }
+}
+
+#[cfg(feature = "ocr")]
+#[test]
+fn ordered_ocr_spans_do_not_make_a_plugin_transcript_safe_to_rewrite() {
+    let config = ExtractionConfig::default();
+    let reads = vec!["accepted read".into(), String::new()];
+    let natives = vec!["native one".into(), "native two".into()];
+    let mut text = "accepted read\n\n\n".to_string();
+
+    assert!(boundaries_for_ocr_output(ExtractionMethod::Ocr, &text, None, None, Some(&reads), &config).is_some());
+    assert!(restore_discarded_page_reads(&mut text, &mut None, &reads, &natives, &config).is_none());
+    assert_eq!(text, "accepted read\n\n\n");
+}
+
+/// GH#3013: a single blank read stands for the whole document and discards every page, so the
+/// document is the native text of all pages; a read that kept every page restores nothing.
+#[cfg(feature = "ocr")]
+#[test]
+fn a_blank_whole_document_read_restores_every_page_and_complete_reads_restore_none() {
+    let natives: Vec<String> = (1..=3).map(|n| format!("native {n}")).collect();
+
+    let config = ExtractionConfig::default();
+    let mut text = String::new();
+    let mut document = None;
+    let (pages, lost_glyphs) =
+        restore_discarded_page_reads(&mut text, &mut document, &[String::new()], &natives, &config)
+            .expect("a blank whole-document read discards every page");
+    assert_eq!(text, "native 1\n\nnative 2\n\nnative 3");
+    assert_eq!(pages, natives);
+    assert_eq!(lost_glyphs, 0);
+
+    let reads: Vec<String> = (1..=3).map(|n| format!("read {n}")).collect();
+    let mut text = "read 1\n\nread 2\n\nread 3".to_string();
+    assert_eq!(
+        restore_discarded_page_reads(&mut text, &mut None, &reads, &natives, &config),
+        None
+    );
+    assert_eq!(text, "read 1\n\nread 2\n\nread 3", "an accepted read is never replaced");
 }
 
 /// Regression for #1095: when OCR texts are written into existing PageContent entries,
@@ -6295,7 +7455,7 @@ fn test_ocr_page_texts_update_is_blank_on_existing_pages() {
         })
         .collect();
 
-    replace_pages_with_ocr_page_texts(&mut pages, &pts, false);
+    replace_pages_with_ocr_page_texts(&mut pages, &pts, None, false);
 
     assert_eq!(
         pages[0].is_blank,
@@ -8213,6 +9373,589 @@ mod mixed_pdf_table_model_warning {
         assert_eq!(
             mixed_count, 1,
             "the mixed PDF must carry the warning once: {mixed_warnings:?}"
+        );
+    }
+}
+
+#[cfg(all(
+    feature = "pdf",
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+mod native_text_stop_tests {
+    use super::*;
+    use crate::cancellation::CancellationToken;
+
+    fn config_with(token: &CancellationToken) -> ExtractionConfig {
+        ExtractionConfig {
+            cancel_token: Some(token.clone()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_stop_with_an_unread_page_marks_the_native_text_as_stopped() {
+        let token = CancellationToken::new();
+        token.request_stop();
+        token.note_unread_page(3);
+
+        assert!(native_text_stopped_by_time_limit(&config_with(&token)));
+    }
+
+    #[test]
+    fn a_stop_without_an_unread_page_is_not_a_stopped_native_text() {
+        let token = CancellationToken::new();
+        token.request_stop();
+
+        assert!(!native_text_stopped_by_time_limit(&config_with(&token)));
+    }
+
+    #[test]
+    fn an_unread_page_without_a_stop_is_not_a_stopped_native_text() {
+        let token = CancellationToken::new();
+        token.note_unread_page(3);
+
+        assert!(!native_text_stopped_by_time_limit(&config_with(&token)));
+    }
+
+    #[test]
+    fn a_config_without_a_token_is_not_a_stopped_native_text() {
+        assert!(!native_text_stopped_by_time_limit(&ExtractionConfig::default()));
+    }
+
+    fn hierarchy_config(token: &CancellationToken) -> ExtractionConfig {
+        use crate::core::config::{HierarchyConfig, PdfConfig};
+
+        ExtractionConfig {
+            cancel_token: Some(token.clone()),
+            pdf_options: Some(PdfConfig {
+                hierarchy: Some(HierarchyConfig {
+                    enabled: true,
+                    ..HierarchyConfig::default()
+                }),
+                ..PdfConfig::default()
+            }),
+            ..ExtractionConfig::default()
+        }
+    }
+
+    fn extract_native(config: ExtractionConfig) -> NativeBlockingOutput {
+        extract_native_bytes(two_page_native_text_pdf(), config)
+    }
+
+    fn extract_native_bytes(content: Vec<u8>, config: ExtractionConfig) -> NativeBlockingOutput {
+        extract_native_blocking(
+            content,
+            config,
+            #[cfg(feature = "layout-detection")]
+            None,
+            #[cfg(feature = "layout-detection")]
+            None,
+            #[cfg(feature = "layout-detection")]
+            None,
+            #[cfg(feature = "layout-detection")]
+            None,
+            #[cfg(feature = "layout-detection")]
+            None,
+        )
+        .expect("the native extraction must succeed")
+    }
+
+    /// #3029: the stages after the text loop re-read every page, so after a stop they outlast the
+    /// grace period and the pages already read are lost. The structure pass reads the pages itself,
+    /// not the text loop's output, so it runs after a stop unless it is skipped on purpose.
+    #[test]
+    fn a_text_loop_cut_short_by_the_time_limit_skips_the_stages_after_it() {
+        let finished = CancellationToken::new();
+        let control = extract_native(hierarchy_config(&finished)).extraction;
+        assert!(
+            control.5.is_some(),
+            "control: a finished text loop builds the document structure"
+        );
+        assert!(control.11.iter().all(|warning| warning.source != "pdf_time_limit"));
+
+        let token = CancellationToken::new();
+        token.request_stop();
+        let stopped = extract_native(hierarchy_config(&token)).extraction;
+
+        assert!(
+            token.cut_short_by_time_limit(),
+            "the stop must have cut the text loop short"
+        );
+        assert!(stopped.5.is_none(), "no document structure after the time limit");
+        assert!(
+            stopped.11.iter().any(|warning| warning.source == "pdf_time_limit"),
+            "the skipped stages must be reported: {:?}",
+            stopped.11
+        );
+    }
+
+    /// The stages after a cut-short text loop include tables and images, which a fixture that has
+    /// them proves: they come back empty only because of the stop, not because the page has none.
+    #[test]
+    fn a_text_loop_cut_short_by_the_time_limit_returns_no_tables_or_images() {
+        use crate::core::config::PdfConfig;
+
+        let content = std::fs::read(pdf_test_document("embedded_images_tables.pdf"))
+            .expect("the corpus fixture embedded_images_tables.pdf must be present");
+        let config_with = |token: &CancellationToken| ExtractionConfig {
+            cancel_token: Some(token.clone()),
+            pdf_options: Some(PdfConfig {
+                extract_images: true,
+                ..PdfConfig::default()
+            }),
+            ..ExtractionConfig::default()
+        };
+
+        let finished = CancellationToken::new();
+        let control = extract_native_bytes(content.clone(), config_with(&finished)).extraction;
+        assert!(!control.2.is_empty(), "control: the fixture has tables");
+        assert!(
+            control.9.as_ref().is_some_and(|images| !images.is_empty()),
+            "control: the fixture has images"
+        );
+
+        let token = CancellationToken::new();
+        token.request_stop();
+        let stopped = extract_native_bytes(content, config_with(&token)).extraction;
+
+        assert!(token.cut_short_by_time_limit());
+        assert!(stopped.2.is_empty(), "no tables after the time limit");
+        assert!(stopped.9.is_none(), "no images after the time limit");
+    }
+
+    /// Runs the whole extractor on the two-page fixture and returns the derived document.
+    async fn extract_whole(config: &ExtractionConfig) -> crate::types::ExtractedDocument {
+        let internal = PdfExtractor::new()
+            .extract_content(&two_page_native_text_pdf(), "application/pdf", config)
+            .await
+            .expect("the extraction must succeed");
+        crate::extraction::derive::derive_extraction_result(internal, true, crate::core::config::OutputFormat::Plain)
+    }
+
+    fn implausible_text_pages(result: &crate::types::ExtractedDocument) -> Option<Vec<u32>> {
+        result.metadata.format.as_ref().and_then(|format| match format {
+            crate::types::FormatMetadata::Pdf(pdf) => pdf.implausible_text_pages.clone(),
+            _ => None,
+        })
+    }
+
+    /// #3030: pages after a stopped text loop are unread, not scans, so the plausibility check
+    /// must not judge them: it would report an empty list as a clean bill of health.
+    #[tokio::test]
+    async fn a_stopped_text_loop_skips_the_plausibility_check() {
+        let finished = CancellationToken::new();
+        let control = extract_whole(&config_with(&finished)).await;
+        assert!(
+            implausible_text_pages(&control).is_some(),
+            "control: a finished text loop runs the check and records its (empty) result"
+        );
+
+        let token = CancellationToken::new();
+        token.request_stop();
+        let stopped = extract_whole(&config_with(&token)).await;
+
+        assert!(
+            token.cut_short_by_time_limit(),
+            "the stop must have cut the text loop short"
+        );
+        assert_eq!(
+            implausible_text_pages(&stopped),
+            None,
+            "the check must not run on a stopped text loop"
+        );
+    }
+
+    /// #3030: forced OCR on a stopped text loop would read none of the unread pages and fail the
+    /// call, losing the pages already read, so the native result is returned instead.
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    #[serial]
+    async fn a_stopped_text_loop_skips_forced_ocr() {
+        use crate::core::config::OcrConfig;
+
+        let _backend = register_mock_ocr_backend("native-stop-forced-ocr", "mock OCR text");
+        let forced = |token: &CancellationToken| ExtractionConfig {
+            force_ocr: true,
+            ocr: Some(OcrConfig {
+                backend: "native-stop-forced-ocr".to_string(),
+                language: vec!["eng".to_string()],
+                ..Default::default()
+            }),
+            ..config_with(token)
+        };
+
+        let finished = CancellationToken::new();
+        let control = extract_whole(&forced(&finished)).await;
+        assert_eq!(
+            extraction_method(&control),
+            Some(ExtractionMethod::Ocr),
+            "control: forced OCR runs when the text loop finished"
+        );
+
+        let token = CancellationToken::new();
+        token.request_stop();
+        let stopped = extract_whole(&forced(&token)).await;
+
+        assert!(token.cut_short_by_time_limit());
+        assert_eq!(
+            extraction_method(&stopped),
+            Some(ExtractionMethod::Native),
+            "no OCR route may run on pages the stop left unread"
+        );
+    }
+}
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+mod unread_page_blank_flag_tests {
+    use super::*;
+    use crate::types::{OcrPageFailure, PageContent, PageInfo, PageStructure, PageUnitType};
+
+    fn content_page(page_number: u32, is_blank: Option<bool>) -> PageContent {
+        PageContent {
+            page_number,
+            content: String::new(),
+            tables: Vec::new(),
+            image_indices: Vec::new(),
+            image_preprocessing: None,
+            hierarchy: None,
+            is_blank,
+            layout_regions: None,
+            speaker_notes: None,
+            section_name: None,
+            sheet_name: None,
+            ocr_confidence: None,
+            native_content: None,
+        }
+    }
+
+    fn structure(flags: &[(u32, Option<bool>)]) -> PageStructure {
+        PageStructure {
+            total_count: flags.len() as u32,
+            unit_type: PageUnitType::Page,
+            boundaries: None,
+            pages: Some(
+                flags
+                    .iter()
+                    .map(|&(number, is_blank)| PageInfo {
+                        number,
+                        title: None,
+                        dimensions: None,
+                        image_count: None,
+                        table_count: None,
+                        hidden: None,
+                        has_vector_graphics: false,
+                        is_blank,
+                    })
+                    .collect(),
+            ),
+        }
+    }
+
+    fn failure(page: u32, error: &str, recovered: bool) -> OcrPageFailure {
+        OcrPageFailure {
+            page,
+            error: error.to_string(),
+            recovered,
+        }
+    }
+
+    #[test]
+    fn a_page_the_time_limit_left_unread_is_not_flagged_blank_but_a_read_blank_page_is() {
+        let mut contents = Some(vec![
+            content_page(1, Some(false)),
+            content_page(2, Some(true)),
+            content_page(3, Some(true)),
+        ]);
+        let mut structure = Some(structure(&[(1, Some(false)), (2, Some(true)), (3, Some(true))]));
+        let failures = [failure(3, ocr::TIME_LIMIT_UNREAD_PAGE_ERROR, false)];
+
+        clear_blank_flag_of_unread_pages(&mut contents, &mut structure, &failures);
+
+        let flags: Vec<_> = contents.unwrap().iter().map(|page| page.is_blank).collect();
+        assert_eq!(
+            flags,
+            [Some(false), Some(true), None],
+            "only the unread page loses the flag"
+        );
+        let info: Vec<_> = structure
+            .unwrap()
+            .pages
+            .unwrap()
+            .iter()
+            .map(|page| page.is_blank)
+            .collect();
+        assert_eq!(info, [Some(false), Some(true), None]);
+    }
+
+    #[test]
+    fn other_failures_and_recovered_pages_keep_their_blank_flag() {
+        let mut contents = Some(vec![content_page(1, Some(true)), content_page(2, Some(true))]);
+        let mut structure = None;
+        let failures = [
+            failure(1, "the backend crashed", false),
+            failure(2, ocr::TIME_LIMIT_UNREAD_PAGE_ERROR, true),
+        ];
+
+        clear_blank_flag_of_unread_pages(&mut contents, &mut structure, &failures);
+
+        assert!(contents.unwrap().iter().all(|page| page.is_blank == Some(true)));
+    }
+
+    /// Backend that reads page 1 and then asks for the time-limit stop, as the timeout wrapper does
+    /// when the limit passes while the first page is being recognized.
+    #[cfg(feature = "ocr")]
+    struct StoppingOcrBackend {
+        token: crate::cancellation::CancellationToken,
+        calls: std::sync::atomic::AtomicUsize,
+    }
+
+    #[cfg(feature = "ocr")]
+    impl crate::plugins::Plugin for StoppingOcrBackend {
+        fn name(&self) -> &str {
+            "unread-page-stopping-backend"
+        }
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "ocr")]
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for StoppingOcrBackend {
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+        fn supports_language(&self, _lang: &str) -> bool {
+            true
+        }
+        async fn process_image(
+            &self,
+            _image_bytes: &[u8],
+            _config: &crate::core::config::OcrConfig,
+        ) -> crate::Result<crate::types::ExtractedDocument> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.token.request_stop();
+            Ok(crate::types::ExtractedDocument {
+                content: "Text read from the first page before the stop".to_string(),
+                mime_type: std::borrow::Cow::Borrowed("text/plain"),
+                ..Default::default()
+            })
+        }
+    }
+
+    /// #3056 through the whole extractor and the derivation of the result: the stop arrives after
+    /// page 1, pages 2 and 3 are never read, and no later stage may give them a blank flag. The
+    /// per-page flags in the page contents and in the page structure must agree.
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    #[serial]
+    async fn pages_a_stop_left_unread_keep_no_blank_flag_through_the_whole_extraction() {
+        use crate::core::config::{ConcurrencyConfig, OcrConfig, PageConfig};
+
+        let token = crate::cancellation::CancellationToken::new();
+        let backend = std::sync::Arc::new(StoppingOcrBackend {
+            token: token.clone(),
+            calls: std::sync::atomic::AtomicUsize::new(0),
+        });
+        crate::plugins::register_ocr_backend(backend.clone()).unwrap();
+        let _unregister = RegisteredOcrBackendGuard {
+            name: "unread-page-stopping-backend",
+        };
+        let config = ExtractionConfig {
+            cancel_token: Some(token.clone()),
+            concurrency: Some(ConcurrencyConfig {
+                max_threads: Some(1),
+                ..Default::default()
+            }),
+            pages: Some(PageConfig {
+                extract_pages: true,
+                ..Default::default()
+            }),
+            ocr: Some(OcrConfig {
+                backend: "unread-page-stopping-backend".to_string(),
+                language: vec!["eng".to_string()],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let result = extract_whole_pdf(&shifted_to_unicode_pdf_pages(WRONG_MAPPING_PROSE, 0, 4, true), &config).await;
+
+        assert_eq!(
+            backend.calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "only the first OCR page was read"
+        );
+        let unread: Vec<u32> = result
+            .ocr_page_failures
+            .iter()
+            .flatten()
+            .filter(|failure| failure.error == ocr::TIME_LIMIT_UNREAD_PAGE_ERROR)
+            .map(|failure| failure.page)
+            .collect();
+        assert_eq!(unread, [3, 4], "the pages after the stop are listed as unread");
+
+        let pages = result.pages.as_deref().expect("page contents were requested");
+        let structure = result
+            .metadata
+            .pages
+            .as_ref()
+            .and_then(|structure| structure.pages.as_ref())
+            .expect("page structure");
+        for page in [3u32, 4] {
+            let content = pages.iter().find(|p| p.page_number == page).expect("page content");
+            assert_eq!(content.is_blank, None, "unread page {page} must not be flagged blank");
+            let info = structure.iter().find(|p| p.number == page).expect("page info");
+            assert_eq!(
+                info.is_blank, None,
+                "unread page {page} is flagged in the page structure"
+            );
+        }
+        let from_contents: Vec<_> = pages.iter().map(|p| (p.page_number, p.is_blank)).collect();
+        let from_structure: Vec<_> = structure.iter().map(|p| (p.number, p.is_blank)).collect();
+        assert_eq!(from_contents, from_structure, "the two per-page flag lists must agree");
+        assert!(
+            from_contents[0].1 == Some(false),
+            "the page that was read keeps its flag"
+        );
+    }
+
+    #[cfg(feature = "ocr")]
+    async fn extract_whole_pdf(content: &[u8], config: &ExtractionConfig) -> crate::types::ExtractedDocument {
+        let internal = PdfExtractor::new()
+            .extract_content(content, "application/pdf", config)
+            .await
+            .expect("the extraction must succeed");
+        crate::extraction::derive::derive_extraction_result(internal, true, crate::core::config::OutputFormat::Plain)
+    }
+
+    /// Backend whose first call reads a page and asks for the time-limit stop, and whose later calls
+    /// recognize for `SLOW_PAGE` on a blocking thread, as a Tesseract page under load does.
+    #[cfg(feature = "ocr")]
+    struct SlowAfterStopBackend {
+        token: crate::cancellation::CancellationToken,
+        calls: std::sync::atomic::AtomicUsize,
+    }
+
+    #[cfg(feature = "ocr")]
+    const SLOW_PAGE: std::time::Duration = std::time::Duration::from_secs(9);
+
+    #[cfg(feature = "ocr")]
+    impl crate::plugins::Plugin for SlowAfterStopBackend {
+        fn name(&self) -> &str {
+            "slow-after-stop-backend"
+        }
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "ocr")]
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for SlowAfterStopBackend {
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+        fn supports_language(&self, _lang: &str) -> bool {
+            true
+        }
+        async fn process_image(
+            &self,
+            _image_bytes: &[u8],
+            _config: &crate::core::config::OcrConfig,
+        ) -> crate::Result<crate::types::ExtractedDocument> {
+            if self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                self.token.request_stop();
+            } else {
+                tokio::task::spawn_blocking(|| std::thread::sleep(SLOW_PAGE))
+                    .await
+                    .expect("the sleeping task must not panic");
+            }
+            Ok(crate::types::ExtractedDocument {
+                content: "Text read from a page".to_string(),
+                mime_type: std::borrow::Cow::Borrowed("text/plain"),
+                ..Default::default()
+            })
+        }
+    }
+
+    /// #3055: a page still being recognized when the stop arrives must not hold the call past the
+    /// grace. Two workers read pages 2 and 3; whichever the backend serves first asks for the stop and the
+    /// other would take 9 s. The call has to return in a few seconds with that page and page 4 unread.
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    #[serial]
+    async fn a_page_still_recognizing_after_the_stop_is_abandoned_not_awaited() {
+        use crate::core::config::{ConcurrencyConfig, OcrConfig};
+
+        let token = crate::cancellation::CancellationToken::new();
+        let backend = std::sync::Arc::new(SlowAfterStopBackend {
+            token: token.clone(),
+            calls: std::sync::atomic::AtomicUsize::new(0),
+        });
+        crate::plugins::register_ocr_backend(backend.clone()).unwrap();
+        let _unregister = RegisteredOcrBackendGuard {
+            name: "slow-after-stop-backend",
+        };
+        let config = ExtractionConfig {
+            cancel_token: Some(token.clone()),
+            concurrency: Some(ConcurrencyConfig {
+                max_threads: Some(2),
+                ..Default::default()
+            }),
+            ocr: Some(OcrConfig {
+                backend: "slow-after-stop-backend".to_string(),
+                language: vec!["eng".to_string()],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let started = std::time::Instant::now();
+        let result = extract_whole_pdf(&shifted_to_unicode_pdf_pages(WRONG_MAPPING_PROSE, 0, 4, true), &config).await;
+        let took = started.elapsed();
+
+        assert!(
+            took < SLOW_PAGE - std::time::Duration::from_secs(3),
+            "the call took {took:?}: the page still recognizing was awaited"
+        );
+        assert_eq!(
+            backend.calls.load(std::sync::atomic::Ordering::SeqCst),
+            2,
+            "no page starts after the stop"
+        );
+        let unread: Vec<u32> = result
+            .ocr_page_failures
+            .iter()
+            .flatten()
+            .filter(|failure| failure.error == ocr::TIME_LIMIT_UNREAD_PAGE_ERROR)
+            .map(|failure| failure.page)
+            .collect();
+        let mut unread = unread;
+        unread.sort_unstable();
+        assert_eq!(
+            unread.len(),
+            2,
+            "the slow page and the page after the batch: {unread:?}"
+        );
+        assert!(unread.contains(&4), "the page after the batch is unread: {unread:?}");
+        assert!(
+            unread.iter().any(|page| [2, 3].contains(page)),
+            "one page of the batch is unread: {unread:?}"
         );
     }
 }

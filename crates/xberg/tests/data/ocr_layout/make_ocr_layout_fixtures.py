@@ -7,6 +7,7 @@ Writes, with invented text only:
   cover_numeric.png      a cover page with dates in a separate column
   map_loose_grid.png     a diagram whose labels sit in a loose grid, with no rules
   ruled_table.png        a ruled table that must stay a table
+  stair_labels_noise.png a stair of labels that must stay text, one of them a line of random letters
 """
 
 import sys
@@ -97,6 +98,30 @@ def map_ragged(out: Path) -> None:
     save(image, out / "map_ragged.png", dpi=(300, 300))
 
 
+def stair_labels_noise(out: Path) -> None:
+    """Seven labels on a stair: no row but one holds two labels, so the grid is not a table.
+
+    The label of the second row is two words of random letters, which the dictionary filter removes
+    from the page text until the words of the rejected grid go back in.
+    """
+    image, draw = page(1700, 730)
+    font_file = Path(__file__).resolve().parents[4] / "xberg-native-pdf/src/fonts/assets/DejaVuSans.ttf"
+    label_font = ImageFont.truetype(str(font_file), 52)
+    x_columns = (120, 620, 1120)
+    labels = [
+        (0, 0, "North Harbor"),
+        (1, 1, "Qzvrt Plmkr"),
+        (2, 0, "Pine Ridge"),
+        (2, 2, "Stone Bridge"),
+        (3, 1, "Cedar Point"),
+        (3, 2, "Lake Mirror"),
+        (4, 0, "Fox Hollow"),
+    ]
+    for row, column, text in labels:
+        draw.text((x_columns[column], 160 + row * 95), text, font=label_font, fill="black")
+    save(image, out / "stair_labels_noise.png", dpi=(300, 300))
+
+
 def ruled_table(out: Path) -> None:
     image, draw = page(1700, 900)
     left, top, row_height = 150, 150, 110
@@ -144,5 +169,6 @@ if __name__ == "__main__":
     map_loose_grid(target)
     cover_centered(target)
     map_ragged(target)
+    stair_labels_noise(target)
     ruled_table(target)
     ledger_plain(target)

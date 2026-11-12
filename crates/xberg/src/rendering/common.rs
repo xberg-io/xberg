@@ -62,6 +62,78 @@ pub(crate) fn join_tex_lines(tex: &str) -> String {
         .join(" ")
 }
 
+/// The TeX of a math node that comrak read from the Markdown writer's output, on one line.
+///
+/// The writer escapes inline and one-line math as CommonMark text, since a GitHub-style reader
+/// applies those escapes before it looks for math, and comrak keeps the escapes in the literal.
+/// Display math between `$$` lines and code math are written as they are.
+#[cfg(any(feature = "office", feature = "pdf", feature = "redaction"))]
+pub(crate) fn math_node_tex(math: &comrak::nodes::NodeMath) -> String {
+    join_tex_lines(&math_node_literal(math))
+}
+
+#[cfg(any(feature = "office", feature = "pdf", feature = "redaction"))]
+pub(crate) fn math_node_literal(math: &comrak::nodes::NodeMath) -> Cow<'_, str> {
+    if markdown_math_is_unescaped(math) {
+        Cow::Borrowed(&math.literal)
+    } else {
+        Cow::Owned(unescape_markdown_text(&math.literal))
+    }
+}
+
+/// Code math and display math that the Markdown writer put between `$$` lines hold their TeX
+/// unescaped. The second starts with a line break, which no single-dollar literal does: comrak
+/// turns the line breaks of those into spaces.
+#[cfg(any(test, feature = "office", feature = "pdf", feature = "redaction"))]
+pub(crate) fn markdown_math_is_unescaped(math: &comrak::nodes::NodeMath) -> bool {
+    !math.dollar_math || math.literal.starts_with('\n')
+}
+
+/// Undo the CommonMark backslash escape (a backslash before an ASCII punctuation mark) and the
+/// decimal character references the writer uses, such as `&#42;`.
+#[cfg(any(test, feature = "office", feature = "pdf", feature = "redaction"))]
+pub(crate) fn unescape_markdown_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\\'
+            && let Some(next) = chars.next_if(char::is_ascii_punctuation)
+        {
+            out.push(next);
+        } else if ch == '&'
+            && let Some(decoded) = numeric_reference(&mut chars)
+        {
+            out.push(decoded);
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+/// The character of a decimal reference whose `&` the caller has read: `#42;` gives `*`. Reads
+/// nothing when the text is not a reference.
+#[cfg(any(test, feature = "office", feature = "pdf", feature = "redaction"))]
+fn numeric_reference(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<char> {
+    let mut ahead = chars.clone();
+    (ahead.next()? == '#').then_some(())?;
+    let mut code = 0u32;
+    let mut digits = 0;
+    loop {
+        match ahead.next()? {
+            ';' if digits > 0 => break,
+            digit @ '0'..='9' if digits < 7 => {
+                code = code * 10 + digit.to_digit(10)?;
+                digits += 1;
+            }
+            _ => return None,
+        }
+    }
+    let decoded = char::from_u32(code)?;
+    *chars = ahead;
+    Some(decoded)
+}
+
 pub(crate) fn valid_math_annotation(text: &str, annotation: &TextAnnotation) -> bool {
     text.get(annotation.start as usize..annotation.end as usize)
         .and_then(|span| annotated_math(span, &annotation.kind))
@@ -827,6 +899,25 @@ pub(crate) fn marked_row_lines<'a>(
         return None;
     }
     Some(text.lines().map(str::trim).filter(|line| !line.is_empty()))
+}
+
+const MAX_DECIMAL_ORDINAL_DIGITS: usize = 9;
+
+/// A source list label CommonMark and Djot can express with their own ordered
+/// decimal marker: a `N.` run of digits that no renumbering could corrupt. Any
+/// other label (lettered, roman, `(1)`, zero-padded) keeps its literal text on a
+/// bullet, because the renderers' ordered marker is an auto-incrementing
+/// decimal that cannot be made to show it.
+pub(crate) fn decimal_ordinal(label: &str) -> Option<usize> {
+    let digits = label.strip_suffix('.')?;
+    if digits.is_empty()
+        || digits.len() > MAX_DECIMAL_ORDINAL_DIGITS
+        || !digits.bytes().all(|byte| byte.is_ascii_digit())
+        || digits.len() > 1 && digits.starts_with('0')
+    {
+        return None;
+    }
+    digits.parse().ok()
 }
 
 #[cfg(test)]

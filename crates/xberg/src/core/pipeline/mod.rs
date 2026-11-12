@@ -507,6 +507,38 @@ async fn run_pipeline_with_isolated_registry(
     .await
 }
 
+/// `config` without the chunk vector stages, and the names of the ones dropped, when the time
+/// limit cut an extraction short and `config` asks for any of them.
+fn config_without_chunk_vectors_after_time_limit(
+    config: &ExtractionConfig,
+) -> Option<(ExtractionConfig, Vec<&'static str>)> {
+    let cut_short = config
+        .cancel_token
+        .as_ref()
+        .is_some_and(crate::cancellation::CancellationToken::cut_short_by_time_limit);
+    let chunking = config.chunking.as_ref()?;
+    let mut dropped = Vec::new();
+    if chunking.embedding.is_some() {
+        dropped.push("chunk embeddings");
+    }
+    if chunking.sparse_embedding.is_some() {
+        dropped.push("sparse chunk embeddings");
+    }
+    if chunking.late_interaction.is_some() {
+        dropped.push("late-interaction chunk vectors");
+    }
+    if !cut_short || dropped.is_empty() {
+        return None;
+    }
+    let mut trimmed = config.clone();
+    if let Some(chunking) = trimmed.chunking.as_mut() {
+        chunking.embedding = None;
+        chunking.sparse_embedding = None;
+        chunking.late_interaction = None;
+    }
+    Some((trimmed, dropped))
+}
+
 async fn run_pipeline_impl(
     mut doc: InternalDocument,
     config: &ExtractionConfig,
@@ -520,6 +552,23 @@ async fn run_pipeline_impl(
     ))]
     placement: Option<crate::extraction::image_ocr::pdf_gap::Placement>,
 ) -> Result<ExtractedDocument> {
+    // Embedding a long cut-short document runs for minutes and would carry the pages already read
+    // past the grace period into a hard Timeout; the chunks stay, without vectors. ~keep
+    let without_vectors;
+    let config = if let Some((trimmed, dropped)) = config_without_chunk_vectors_after_time_limit(config) {
+        crate::core::diagnostics::push_warning(
+            &mut doc.processing_warnings,
+            "pdf_time_limit",
+            format!(
+                "Skipped after extraction_timeout_secs was reached: {}; chunk boundaries may differ.",
+                dropped.join(", ")
+            ),
+        );
+        without_vectors = trimmed;
+        &without_vectors
+    } else {
+        config
+    };
     #[cfg(feature = "redaction")]
     let replace_html_djot = _builtin_html_origin
         && config.output_format == crate::core::config::OutputFormat::Djot
@@ -846,19 +895,27 @@ async fn run_pipeline_impl(
     // ~keep so extraction sees plain text, not markdown/HTML
     #[cfg(all(feature = "liter-llm", not(target_arch = "wasm32")))]
     if let Some(ref structured_config) = config.structured_extraction {
-        match crate::llm::structured::extract_structured(&result.content, structured_config).await {
-            Ok((output, usage)) => {
-                result.structured_output = Some(output);
-                crate::llm::usage::push_llm_usage(&mut result, usage);
-            }
-            Err(e) => {
-                let usage = crate::llm::usage::usage_from_error(&e);
-                crate::llm::usage::push_llm_usage(&mut result, usage);
-                tracing::warn!("Structured extraction failed: {e}");
-                result.processing_warnings.push(crate::types::ProcessingWarning {
-                    source: std::borrow::Cow::Borrowed("structured_extraction"),
-                    message: std::borrow::Cow::Owned(format!("Structured extraction failed: {e}")),
-                });
+        if config
+            .cancel_token
+            .as_ref()
+            .is_some_and(crate::cancellation::CancellationToken::time_limit_reached)
+        {
+            features::report_stage_cut(&mut result.processing_warnings, config, "structured extraction");
+        } else {
+            match crate::llm::structured::extract_structured(&result.content, structured_config).await {
+                Ok((output, usage)) => {
+                    result.structured_output = Some(output);
+                    crate::llm::usage::push_llm_usage(&mut result, usage);
+                }
+                Err(e) => {
+                    let usage = crate::llm::usage::usage_from_error(&e);
+                    crate::llm::usage::push_llm_usage(&mut result, usage);
+                    tracing::warn!("Structured extraction failed: {e}");
+                    result.processing_warnings.push(crate::types::ProcessingWarning {
+                        source: std::borrow::Cow::Borrowed("structured_extraction"),
+                        message: std::borrow::Cow::Owned(format!("Structured extraction failed: {e}")),
+                    });
+                }
             }
         }
     }
@@ -2180,5 +2237,169 @@ mod issue_271_builtin_registration_warning_tests {
             "built-in post-processor registration was incomplete (summarization: boom); a configured \
              processor may silently produce no output for its stage"
         );
+    }
+}
+
+#[cfg(test)]
+mod time_limit_vector_tests {
+    use super::*;
+    use crate::cancellation::CancellationToken;
+    use crate::core::config::{ChunkingConfig, EmbeddingConfig};
+
+    fn config_with(token: &CancellationToken, embedding: bool) -> ExtractionConfig {
+        ExtractionConfig {
+            cancel_token: Some(token.clone()),
+            chunking: Some(ChunkingConfig {
+                embedding: embedding.then(EmbeddingConfig::default),
+                max_characters: 321,
+                ..ChunkingConfig::default()
+            }),
+            ..ExtractionConfig::default()
+        }
+    }
+
+    #[test]
+    fn a_cut_short_extraction_keeps_its_chunks_but_not_their_vectors() {
+        let token = CancellationToken::new();
+        token.request_stop();
+        token.note_unread_page(2);
+
+        let (trimmed, dropped) = config_without_chunk_vectors_after_time_limit(&config_with(&token, true))
+            .expect("a cut-short extraction with embeddings must drop them");
+        assert_eq!(dropped, ["chunk embeddings"]);
+
+        let chunking = trimmed.chunking.expect("chunking stays");
+        assert!(chunking.embedding.is_none());
+        assert_eq!(chunking.max_characters, 321, "the chunk shape is unchanged");
+    }
+
+    #[test]
+    fn an_extraction_that_was_not_cut_short_keeps_its_embeddings() {
+        let token = CancellationToken::new();
+        assert!(config_without_chunk_vectors_after_time_limit(&config_with(&token, true)).is_none());
+
+        token.request_stop();
+        assert!(
+            config_without_chunk_vectors_after_time_limit(&config_with(&token, true)).is_none(),
+            "a stop that left no page unread cut nothing short"
+        );
+    }
+
+    #[test]
+    fn a_cut_short_extraction_without_vectors_needs_no_new_config() {
+        let token = CancellationToken::new();
+        token.request_stop();
+        token.note_unread_page(2);
+        assert!(config_without_chunk_vectors_after_time_limit(&config_with(&token, false)).is_none());
+    }
+
+    /// Dropping the embedding changes how a semantic chunker places its boundaries (it falls back to
+    /// structural boundaries under the `max_characters` ceiling); chunks must still come out.
+    #[cfg(feature = "chunking")]
+    #[test]
+    fn a_semantic_chunker_still_produces_chunks_without_vectors_after_a_time_limit_stop() {
+        let token = CancellationToken::new();
+        token.request_stop();
+        token.note_unread_page(2);
+        let mut config = config_with(&token, true);
+        if let Some(chunking) = config.chunking.as_mut() {
+            chunking.chunker_type = crate::chunking::ChunkerType::Semantic;
+            chunking.max_characters = 120;
+            chunking.overlap = 0;
+        }
+        let (trimmed, _) = config_without_chunk_vectors_after_time_limit(&config).expect("embeddings are dropped");
+
+        let mut result = ExtractedDocument {
+            content: "First topic paragraph about cats and their habits.\n\nSecond paragraph about dogs and how they \
+                      behave around people.\n\nThird paragraph about the weather over the mountains in winter."
+                .to_string(),
+            mime_type: std::borrow::Cow::Borrowed("text/plain"),
+            ..Default::default()
+        };
+        features::execute_chunking(&mut result, &trimmed, None).expect("chunking must succeed");
+
+        let chunks = result.chunks.expect("chunks are produced without vectors");
+        assert!(
+            chunks.len() > 1,
+            "the text exceeds max_characters, so it splits: {chunks:?}"
+        );
+        assert!(chunks.iter().all(|chunk| chunk.embedding.is_none()));
+        assert!(chunks.iter().all(|chunk| chunk.content.chars().count() <= 120));
+    }
+
+    /// A stop requested while an earlier stage ran must end the chunk embeddings before the model
+    /// is touched: the preset does not exist, so a stage that ran would report an `embedding` error.
+    #[cfg(all(feature = "chunking", feature = "embeddings"))]
+    #[test]
+    fn a_stop_during_post_processing_drops_the_chunk_vectors_and_keeps_the_chunks() {
+        let token = CancellationToken::new();
+        token.request_stop();
+        let mut config = config_with(&token, true);
+        if let Some(embedding) = config
+            .chunking
+            .as_mut()
+            .and_then(|chunking| chunking.embedding.as_mut())
+        {
+            embedding.model = crate::core::config::EmbeddingModelType::Preset {
+                name: "no-such-embedding-preset".to_string(),
+            };
+        }
+        let mut result = ExtractedDocument {
+            content: "A paragraph that is chunked.".to_string(),
+            mime_type: std::borrow::Cow::Borrowed("text/plain"),
+            ..Default::default()
+        };
+
+        features::execute_chunking(&mut result, &config, None).expect("chunking must succeed");
+
+        let chunks = result.chunks.as_ref().expect("the chunks are kept");
+        assert!(!chunks.is_empty());
+        assert!(chunks.iter().all(|chunk| chunk.embedding.is_none()));
+        assert!(
+            result
+                .processing_warnings
+                .iter()
+                .all(|warning| warning.source != "embedding"),
+            "the model must not be reached after the stop: {:?}",
+            result.processing_warnings
+        );
+        let warning = result
+            .processing_warnings
+            .iter()
+            .find(|warning| warning.source == "time_limit")
+            .expect("the dropped stage must be reported");
+        assert!(warning.message.contains("chunk embeddings"), "{}", warning.message);
+        assert!(token.result_is_partial());
+    }
+
+    #[cfg(all(feature = "chunking", feature = "embeddings"))]
+    #[test]
+    fn without_a_stop_the_chunk_embedding_stage_runs() {
+        let token = CancellationToken::new();
+        let mut config = config_with(&token, true);
+        if let Some(embedding) = config
+            .chunking
+            .as_mut()
+            .and_then(|chunking| chunking.embedding.as_mut())
+        {
+            embedding.model = crate::core::config::EmbeddingModelType::Preset {
+                name: "no-such-embedding-preset".to_string(),
+            };
+        }
+        let mut result = ExtractedDocument {
+            content: "A paragraph that is chunked.".to_string(),
+            mime_type: std::borrow::Cow::Borrowed("text/plain"),
+            ..Default::default()
+        };
+
+        features::execute_chunking(&mut result, &config, None).expect("chunking must succeed");
+
+        assert!(
+            result
+                .processing_warnings
+                .iter()
+                .any(|warning| warning.source == "embedding")
+        );
+        assert!(!token.result_is_partial());
     }
 }

@@ -47,6 +47,9 @@ packages=(
   libuv1-dev
   libde265-dev
   libaom-dev
+  aom-tools
+  libyuv-dev
+  libwebm-dev
   libx265-dev
   libdav1d-dev
   libnuma-dev

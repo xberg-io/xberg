@@ -722,6 +722,21 @@ pub(crate) fn ocr_confirms_layer(layer: &str, ocr_text: &str, thresholds: &OcrQu
         && holds_half(&lettered)
         && !evaluate_native_text_for_ocr(&layer, Some(1), thresholds).fallback
 }
+/// Whether the OCR text holds at least half of the layer's words with a letter: the letter share
+/// of `ocr_confirms_layer` without its share of all words and its quality check, so numbers the
+/// read dropped do not count against it. A layer with no word with a letter never passes. ~keep
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) fn ocr_holds_layer_letters(layer: &str, ocr_text: &str) -> bool {
+    let lettered: std::collections::HashSet<String> = whole_words(layer)
+        .filter(|word| word.chars().any(char::is_alphabetic))
+        .collect();
+    if lettered.is_empty() {
+        return false;
+    }
+    let ocr_words: std::collections::HashSet<String> = whole_words(ocr_text).collect();
+    let read = lettered.iter().filter(|word| ocr_words.contains(*word)).count();
+    read as f64 >= MIN_LAYER_WORD_SHARE_READ_BY_OCR * lettered.len() as f64
+}
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) fn unique_literal_embedding(native: &str, read: &str) -> bool {
     let native: Vec<_> = native.split_whitespace().collect();
@@ -1683,6 +1698,7 @@ fn rows_the_ocr_text_lacks_too<'a>(
     let unboxed = unboxed.join("\n");
     let text = layer_lines_absent_from_ocr(layer, &unboxed)?;
     let mut lacking = KeyCounts::new(text.rows.iter().map(|row| line_key(row)));
+    let geometry_row_count = geometry.rows.len();
     let rows: Vec<&'a str> = geometry
         .rows
         .into_iter()
@@ -1695,7 +1711,12 @@ fn rows_the_ocr_text_lacks_too<'a>(
     let from_text = layer_lines_absent_from_ocr(&joined, &unboxed).map_or_else(Vec::new, |found| found.misread);
     // A row of the unboxed text names its line in `ocr_text`. The geometry names boxed lines
     // only, so no line is named twice. ~keep
-    let mut misread = geometry.misread;
+    // A boxed misread can leave only if its replacement survived the unboxed-row check. ~keep
+    let mut misread = if rows.len() == geometry_row_count {
+        geometry.misread
+    } else {
+        Vec::new()
+    };
     misread.extend(from_text.into_iter().map(|row| MisreadOcrRow {
         line: row.line.and_then(|at| unboxed_lines.get(at).copied()),
         ..row
@@ -1739,6 +1760,24 @@ impl KeyCounts {
         }
     }
 }
+
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(super) use matched_layer_occurrences::MatchedLayerOccurrences;
+
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+#[path = "document/matched_layer_occurrences.rs"]
+mod matched_layer_occurrences;
+
 /// The restored native rows, then the OCR text of a page without the rows that misread one of
 /// them. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -1906,6 +1945,21 @@ fn remove_misread_rows_from_document(
         }
     }
 }
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(super) fn finish_mixed_layer_prepend(
+    text: &mut String,
+    structured: Option<&mut crate::types::internal::InternalDocument>,
+    first: &LayerFirst,
+) {
+    if !first.lines.is_empty()
+        && let Some(page) = structured
+    {
+        put_layer_first_in_document(page, None, first);
+    }
+    *text = text_with_layer_first(text, first);
+}
+
 /// The page's noise verdict in a whole-document run: `None` when the noise gate discarded the OCR
 /// text of the page, else whether the page has the noise verdict. A page with no verdict has
 /// not. ~keep
@@ -1922,14 +1976,14 @@ fn run_page_noise_verdict(verdicts: &[super::scoring::OcrPageNoiseVerdict], page
 /// The page texts of a whole-document run as its flat text holds them: joined with a page marker
 /// or a blank line. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn join_run_pages(page_texts: &[String], marker_format: Option<&str>, page_index_offset: usize) -> String {
+pub(in crate::extractors::pdf) fn join_run_pages(
+    page_texts: &[String],
+    marker_format: Option<&str>,
+    page_index_offset: usize,
+) -> String {
     let mut joined = String::new();
     for (i, page_text) in page_texts.iter().enumerate() {
-        match marker_format {
-            Some(format) => joined.push_str(&format.replace("{page_num}", &(page_index_offset + i + 1).to_string())),
-            None if i > 0 => joined.push_str("\n\n"),
-            None => {}
-        }
+        joined.push_str(&super::super::ocr_page_prefix(marker_format, i, page_index_offset));
         joined.push_str(page_text);
     }
     joined
@@ -1949,11 +2003,7 @@ pub(super) fn put_layers_first_in_run(
     page_index_offset: usize,
     config: &ExtractionConfig,
 ) -> usize {
-    let marker_format = config
-        .pages
-        .as_ref()
-        .filter(|pages| pages.insert_page_markers)
-        .map(|pages| pages.marker_format.as_str());
+    let marker_format = super::super::ocr_page_marker_format(config);
     let thresholds = config
         .ocr
         .as_ref()

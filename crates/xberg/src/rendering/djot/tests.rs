@@ -93,6 +93,49 @@ fn test_render_djot_ordered_list_with_a_literal_source_label() {
     assert!(out.contains("2. Second item\n"), "got: {out}");
 }
 
+/// The source labels the DOCX, PDF and image extractors attach to a numbered
+/// item go through the shared `djot_ordered_marker`, so these pin what every
+/// Djot render paints for each label shape: a decimal label becomes the
+/// item's ordered marker (not a bullet with the number as visible text),
+/// while a label the marker syntax cannot express stays a bullet with the
+/// label written out.
+#[test]
+fn test_render_djot_ordered_list_with_a_decimal_source_label() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_list(true);
+    let first = b.push_list_item("General Provisions.", true, vec![], None, None);
+    b.set_list_item_source_label(first, "1.");
+    let second = b.push_list_item("Scope.", true, vec![], None, None);
+    b.set_list_item_source_label(second, "2.");
+    b.end_list();
+    let out = render_djot(&b.build());
+    assert!(out.contains("1. General Provisions.\n"), "got: {out}");
+    assert!(out.contains("2. Scope.\n"), "got: {out}");
+    assert!(!out.contains("- 1."), "got: {out}");
+}
+
+#[test]
+fn test_render_djot_ordered_list_with_an_upper_letter_source_label() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_list(true);
+    let first = b.push_list_item("General Provisions.", true, vec![], None, None);
+    b.set_list_item_source_label(first, "B.");
+    b.end_list();
+    let out = render_djot(&b.build());
+    assert!(out.contains("- B. General Provisions.\n"), "got: {out}");
+}
+
+#[test]
+fn test_render_djot_ordered_list_with_a_parenthesized_source_label() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_list(true);
+    let first = b.push_list_item("General Provisions.", true, vec![], None, None);
+    b.set_list_item_source_label(first, "(a)");
+    b.end_list();
+    let out = render_djot(&b.build());
+    assert!(out.contains("- (a) General Provisions.\n"), "got: {out}");
+}
+
 #[test]
 fn test_render_djot_nested_list() {
     let mut b = InternalDocumentBuilder::new("test");
@@ -1607,18 +1650,39 @@ fn a_one_or_two_dot_run_stays_unescaped() {
     assert_eq!(render_rows(&["A..B and Dr. Smith"]), "A..B and Dr. Smith\n");
 }
 
+/// Each row names the guard in `escape_block_prefix` that decides it: deleting that guard alone
+/// turns its row red. `...x` stays covered by either the rule or the row-start escape, and the
+/// backslash of `\....` by either the backslash or the row-start escape. Every row is checked
+/// before the test fails so one red row cannot hide the others.
 #[test]
 fn a_leader_run_of_any_length_round_trips_without_an_ellipsis_event() {
-    for dots in 1..=12 {
-        let row = format!("Start {} End", ".".repeat(dots));
-        let output = render_rows(&[&row]);
-        let events: Vec<_> = jotdown::Parser::new(&output).collect();
-        assert!(
-            !events.iter().any(|event| matches!(event, jotdown::Event::Ellipsis)),
-            "{dots} dots -> {output:?}"
-        );
-        assert_eq!(djot_paragraph_texts(&output), [row.as_str()], "{dots} dots");
-    }
+    let spaced: Vec<String> = (1..=12).map(|dots| format!("Start {} End", ".".repeat(dots))).collect();
+    let mut rows: Vec<(&str, &str)> = spaced
+        .iter()
+        .map(|row| ("every-third-dot rule", row.as_str()))
+        .collect();
+    rows.extend([
+        ("every-third-dot rule", "a...b"),
+        ("every-third-dot rule", "(...)"),
+        ("every-third-dot rule", "a....b"),
+        ("row-start escape", "- Intro .... 3"),
+        ("row-start escape", "1. Intro .... 3"),
+        ("restart after an escape", "a......b"),
+        ("backslash escape", "...\\..."),
+        ("backslash escape", "..\\."),
+        ("rule or row-start escape", "...x"),
+        ("rule, then row-start or backslash escape", "\\...."),
+    ]);
+    let failed: Vec<String> = rows
+        .iter()
+        .filter_map(|(guard, row)| {
+            let output = render_rows(&[row]);
+            let ellipsis = jotdown::Parser::new(&output).any(|event| matches!(event, jotdown::Event::Ellipsis));
+            let kept = djot_paragraph_texts(&output) == [*row];
+            (ellipsis || !kept).then(|| format!("[{guard}] {row:?} -> {output:?}"))
+        })
+        .collect();
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
 #[test]
@@ -1719,4 +1783,262 @@ fn footnotes_keep_inline_markup_and_smart_punctuation() {
     let output = render_djot(&b.build());
     let html = jotdown::html::render_to_string(jotdown::Parser::new(&output));
     assert!(html.contains("<strong>bold</strong> … –"), "{html}");
+}
+
+fn heading_texts(output: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut current: Option<String> = None;
+    for event in jotdown::Parser::new(output) {
+        match event {
+            jotdown::Event::Start(jotdown::Container::Heading { .. }, _) => current = Some(String::new()),
+            jotdown::Event::End(jotdown::Container::Heading { .. }) => found.extend(current.take()),
+            jotdown::Event::Str(value) => {
+                if let Some(text) = current.as_mut() {
+                    text.push_str(&value);
+                }
+            }
+            _ => {}
+        }
+    }
+    found
+}
+
+#[test]
+fn test_render_djot_headings_titles_and_slide_titles_keep_block_start_text_unescaped() {
+    let mut failures = Vec::new();
+    for text in ["1. Introduction", "A. Heading", "- x", "# x", "> x", "1) x", "+ x"] {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_title(text, None, None);
+        b.push_heading(2, text, None, None);
+        b.push_slide(1, Some(text), None);
+        let out = render_djot(&b.build());
+        if out.contains('\\') {
+            failures.push(format!("escape in heading text {text:?}: {out}"));
+        }
+        if heading_texts(&out) != [text, text, text] {
+            failures.push(format!("round trip of {text:?}: {out}"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn test_render_djot_headings_titles_and_slide_titles_keep_a_leading_brace_as_text() {
+    let mut failures = Vec::new();
+    for text in ["{.x} Intro", "{#id} Intro", "{=fmt} Intro", "{ Intro"] {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_title(text, None, None);
+        b.push_heading(2, text, None, None);
+        b.push_slide(1, Some(text), None);
+        let out = render_djot(&b.build());
+        if heading_texts(&out) != [text, text, text] {
+            failures.push(format!("round trip of {text:?}: {out}"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn test_render_djot_paragraph_still_escapes_block_start_text() {
+    for (text, escaped) in [("1. Introduction", "1\\. Introduction"), ("# x", "\\# x")] {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_paragraph(text, vec![], None, None);
+        let out = render_djot(&b.build());
+        assert_eq!(out, format!("{escaped}\n"));
+    }
+}
+
+#[test]
+fn test_render_djot_heading_keeps_an_annotation_that_starts_with_a_brace() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_heading(2, "{x} tail", None, None);
+    let mut doc = b.build();
+    for element in doc.elements.iter_mut() {
+        if matches!(element.kind, ElementKind::Heading { .. }) {
+            element.annotations = vec![TextAnnotation {
+                start: 0,
+                end: 3,
+                kind: AnnotationKind::Strikethrough,
+            }];
+        }
+    }
+    assert_eq!(render_djot(&doc), "## {-{x}-} tail\n");
+}
+
+#[test]
+fn test_render_djot_heading_keeps_brace_text_after_whitespace_or_a_second_attribute_group() {
+    let mut failures = Vec::new();
+    for text in [
+        " {.x} Intro",
+        "\t{.x} Intro",
+        "\u{1}{.x} Intro",
+        "  {#id} Intro",
+        "\u{c}{#id} Intro",
+        "{.a} {.b} z",
+        "{.x}{#y} z",
+    ] {
+        let expected: String = text.chars().filter(|c| !c.is_control() || *c == '\t').collect();
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_title(text, None, None);
+        b.push_heading(2, text, None, None);
+        b.push_slide(1, Some(text), None);
+        let out = render_djot(&b.build());
+        let texts: Vec<String> = heading_texts(&out).iter().map(|t| t.trim().to_string()).collect();
+        let want = expected.trim().to_string();
+        if texts != [want.clone(), want.clone(), want] {
+            failures.push(format!("round trip of {text:?}: {out:?} gave {texts:?}"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn test_render_djot_heading_keeps_brace_text_under_an_annotation_that_writes_no_marker() {
+    let kinds = [
+        AnnotationKind::Color { value: "red".into() },
+        AnnotationKind::FontSize { value: "12pt".into() },
+        AnnotationKind::Custom {
+            name: "style".into(),
+            value: None,
+        },
+    ];
+    for kind in kinds {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_heading(2, "{.x} tail", None, None);
+        let mut doc = b.build();
+        for element in doc.elements.iter_mut() {
+            if matches!(element.kind, ElementKind::Heading { .. }) {
+                element.annotations = vec![TextAnnotation {
+                    start: 0,
+                    end: 4,
+                    kind: kind.clone(),
+                }];
+            }
+        }
+        let out = render_djot(&doc);
+        assert_eq!(heading_texts(&out), ["{.x} tail"], "{kind:?}: {out:?}");
+    }
+}
+
+#[test]
+fn test_render_djot_heading_keeps_plain_text_that_looks_like_an_annotation_marker() {
+    for text in ["{=x=} y", "{-x-} y"] {
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_heading(2, text, None, None);
+        let out = render_djot(&b.build());
+        assert_eq!(heading_texts(&out), [text], "{out:?}");
+    }
+}
+
+#[test]
+fn test_render_djot_heading_escapes_a_brace_when_a_marker_annotation_writes_nothing() {
+    for text in ["{.x} tail", "{=x=} y", "{-x-} y"] {
+        for kind in [AnnotationKind::Strikethrough, AnnotationKind::Highlight] {
+            let out = render_heading_kinds(text, &[TextAnnotation { start: 0, end: 0, kind }]);
+            assert_eq!(count_marks(&out), 0, "{text:?}: {out:?}");
+            assert_eq!(heading_texts(&out), [text, text, text], "{text:?}: {out:?}");
+        }
+    }
+}
+
+fn render_heading_kinds(text: &str, annotations: &[TextAnnotation]) -> String {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_title(text, None, None);
+    b.push_heading(2, text, None, None);
+    b.push_slide(1, Some(text), None);
+    let mut doc = b.build();
+    for element in doc.elements.iter_mut() {
+        element.annotations = annotations.to_vec();
+    }
+    render_djot(&doc)
+}
+
+fn count_marks(output: &str) -> usize {
+    jotdown::Parser::new(output)
+        .filter(|event| {
+            matches!(
+                event,
+                jotdown::Event::Start(jotdown::Container::Delete | jotdown::Container::Mark, _)
+            )
+        })
+        .count()
+}
+
+#[test]
+fn test_render_djot_heading_keeps_a_mark_after_leading_whitespace_or_a_control_character() {
+    let mut failures = Vec::new();
+    let cases = [
+        (" x tail", 1, 2),
+        ("  x tail", 2, 3),
+        ("\tx tail", 1, 2),
+        ("\u{1}x tail", 1, 2),
+        (" {x} tail", 1, 4),
+        (" 1. Intro", 1, 3),
+    ];
+    for (text, start, end) in cases {
+        for kind in [AnnotationKind::Strikethrough, AnnotationKind::Highlight] {
+            let out = render_heading_kinds(text, &[TextAnnotation { start, end, kind }]);
+            if count_marks(&out) != 3 {
+                failures.push(format!("mark lost in {text:?} at {start}..{end}: {out:?}"));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn test_render_djot_heading_keeps_a_mark_after_leading_whitespace_beside_inline_math() {
+    for kind in [AnnotationKind::Strikethrough, AnnotationKind::Highlight] {
+        let annotations = [
+            TextAnnotation { start: 1, end: 2, kind },
+            TextAnnotation {
+                start: 3,
+                end: 6,
+                kind: AnnotationKind::math(false),
+            },
+        ];
+        let out = render_heading_kinds(" x $y$", &annotations);
+        assert_eq!(count_marks(&out), 3, "{out:?}");
+        assert!(out.contains("$`y`"), "{out:?}");
+    }
+}
+
+#[test]
+fn test_render_djot_heading_keeps_mark_text_under_an_annotation_that_is_not_a_mark() {
+    let mut failures = Vec::new();
+    for text in ["{=x=} y", "{-x-} y"] {
+        let annotations = [
+            (0, 5, AnnotationKind::Color { value: "red".into() }),
+            (0, 5, AnnotationKind::FontSize { value: "12pt".into() }),
+            (0, 0, AnnotationKind::Bold),
+            (0, 0, AnnotationKind::Color { value: "red".into() }),
+        ];
+        for (start, end, kind) in annotations {
+            let out = render_heading_kinds(text, &[TextAnnotation { start, end, kind }]);
+            if count_marks(&out) != 0 || heading_texts(&out) != [text, text, text] {
+                failures.push(format!("{text:?} at {start}..{end} read as markup: {out:?}"));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn test_render_djot_heading_keeps_mark_text_when_an_earlier_annotation_hides_the_mark() {
+    let annotations = [
+        TextAnnotation {
+            start: 0,
+            end: 6,
+            kind: AnnotationKind::Color { value: "red".into() },
+        },
+        TextAnnotation {
+            start: 1,
+            end: 6,
+            kind: AnnotationKind::Strikethrough,
+        },
+    ];
+    let out = render_heading_kinds(" {-x-} y", &annotations);
+    let texts: Vec<String> = heading_texts(&out).iter().map(|t| t.trim().to_string()).collect();
+    assert_eq!(count_marks(&out), 0, "{out:?}");
+    assert_eq!(texts, ["{-x-} y", "{-x-} y", "{-x-} y"], "{out:?}");
 }

@@ -50,9 +50,12 @@ pub(crate) use markdown::comrak_options;
 pub(crate) use markdown::{markdown_tag_exemptions_are_owned, render_markdown, render_markdown_observed};
 #[cfg(feature = "pdf")]
 pub(crate) use pdf::render_pdf;
-pub(crate) use plain::{render_plain, render_plain_with_annotation_separator};
+pub(crate) use plain::{ElementSpans, render_plain, render_plain_with_spans};
 #[cfg(feature = "redaction")]
 pub(crate) use redaction_projection::VisibleMarkdown;
 
 #[cfg(all(test, feature = "office", feature = "pdf"))]
 mod inline_html_writer_tests;
+
+#[cfg(test)]
+mod math_tex_escape_tests;

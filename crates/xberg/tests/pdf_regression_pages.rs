@@ -445,6 +445,25 @@ fn regression_page_keeps_opening_paragraph_in_sentence_order_around_displayed_eq
     );
 }
 
+#[test]
+fn regression_page_preserves_multiplication_dots_in_formulas() {
+    if switch(SKIP_VAR) {
+        assert!(std::env::var_os("CI").is_none(), "{SKIP_VAR}=1 must not be set in CI");
+        return;
+    }
+    let page = get_test_documents_dir().join("pdf/regression_pages/nist-sp800-22r1a-p33.pdf");
+    let (_, markdown) = extract_all(&[page]).pop().expect("one extracted page");
+    let markdown = markdown.expect("native Markdown for NIST page 33");
+    let compact: String = markdown
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect();
+    for operand in ["0.2888", "0.5776", "0.1336"] {
+        let product = format!("{operand}·2");
+        assert_eq!(compact.matches(&product).count(), 2, "{product} in:\n{markdown}");
+    }
+}
+
 /// Negative controls: each broken corpus must fail and name its problem.
 mod input_checks {
     use super::*;

@@ -270,14 +270,7 @@ fn caller_psm1_word_elements_on_an_upside_down_page_carry_no_internal_marker() {
         .get_or_insert_default()
         .psm = Some(1);
     let result = extract("caller-psm1-elements", &upside_down_pdf, &config);
-    assert_eq!(
-        result
-            .metadata
-            .additional
-            .get("psm")
-            .and_then(serde_json::Value::as_str),
-        Some("1")
-    );
+    assert_psm(&result, "1");
     assert!(
         result
             .ocr_elements
@@ -327,17 +320,42 @@ fn upright_osd_preserves_its_existing_cells_and_content() {
         ..Default::default()
     });
     let result = extract("upright-osd", &upright, &config);
-    // This pre-existing PSM1 read duplicates prose; preserve it until that separate defect is repaired.
-    assert_eq!(result.content.split_whitespace().count(), 942);
-    assert_eq!(source_matches(&result.content), 473);
-    assert_eq!(
-        hex::encode(Sha256::digest(result.content.as_bytes())),
-        "0a1bb659d01c2253893cfcb8727c442d0c7b4146ac1d86aa7413783e2b0e17df"
-    );
-    assert_eq!(
-        hex::encode(Sha256::digest(serde_json::to_vec(&result.tables[0].cells).unwrap())),
-        "b1b2893d3d99f08a6262c04e071b353f96fd28a36520833789c7d58474f6d260"
-    );
+    #[cfg(not(paddle_ocr))]
+    {
+        // This pre-existing PSM1 read duplicates prose; preserve it until that separate defect is repaired.
+        assert_eq!(result.content.split_whitespace().count(), 942);
+        assert_eq!(source_matches(&result.content), 473);
+        assert_eq!(
+            hex::encode(Sha256::digest(result.content.as_bytes())),
+            "0a1bb659d01c2253893cfcb8727c442d0c7b4146ac1d86aa7413783e2b0e17df"
+        );
+        assert_eq!(
+            hex::encode(Sha256::digest(serde_json::to_vec(&result.tables[0].cells).unwrap())),
+            "b1b2893d3d99f08a6262c04e071b353f96fd28a36520833789c7d58474f6d260"
+        );
+    }
+    #[cfg(paddle_ocr)]
+    {
+        // Invariants first: the per-page pipeline route keeps every matched source token and
+        // does not duplicate prose (the whole-document route's pre-existing duplication reads
+        // ~942 words, i.e. 469 words beyond its 473 matches; this route serves exactly the 13
+        // non-source words). The SHAs are additional byte-level pins so the served contract
+        // cannot drift silently. ~keep
+        assert_eq!(source_matches(&result.content), 473);
+        assert_eq!(
+            result.content.split_whitespace().count() - source_matches(&result.content),
+            13,
+            "no duplicated prose: only the non-source words beyond the 473 matches"
+        );
+        assert_eq!(
+            hex::encode(Sha256::digest(result.content.as_bytes())),
+            "358bb58799d345222e25af8e3d98340dc21cf0fa75ed25a73e63126b71c7c83b"
+        );
+        assert_eq!(
+            hex::encode(Sha256::digest(serde_json::to_vec(&result.tables[0].cells).unwrap())),
+            "b1b2893d3d99f08a6262c04e071b353f96fd28a36520833789c7d58474f6d260"
+        );
+    }
     assert!(result.metadata.additional.get("auto_rotated").is_none());
 }
 
@@ -474,6 +492,10 @@ fn cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
         run_private_child(CACHE_CASE);
         return;
     }
+    cached_file_recovers_case();
+}
+
+fn cached_file_recovers_case() {
     let (_, mut config) = controls();
     let root = tempfile::tempdir().unwrap();
     let models = root.path().join("models");
@@ -590,6 +612,10 @@ fn cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_config
         run_private_child(ENGINE_CASE);
         return;
     }
+    cached_engine_bytes_recover_case();
+}
+
+fn cached_engine_bytes_recover_case() {
     let (_, mut config) = controls();
     let models = tempfile::tempdir().unwrap();
     seed_english(models.path());
@@ -610,7 +636,11 @@ fn cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_config
     let read = |config: &ExtractionConfig| read_engine(&engine, &runtime, config);
     let before = read(&config);
     assert_before_osd(&before);
-    assert_eq!(cache.writes.load(std::sync::atomic::Ordering::SeqCst), 1);
+    assert_eq!(
+        cache.writes.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "a final single-backend read is cached"
+    );
     let osd = osd_model();
     std::fs::write(models.path().join("osd.traineddata"), osd).unwrap();
     let fresh = read(&ExtractionConfig {
@@ -637,6 +667,10 @@ fn cached_context_changed_during_extraction_is_not_written() {
         run_private_child(CHANGED_CASE);
         return;
     }
+    cached_context_changed_case();
+}
+
+fn cached_context_changed_case() {
     let (_, mut config) = controls();
     let models = tempfile::tempdir().unwrap();
     seed_english(models.path());
@@ -707,14 +741,7 @@ fn osd_recognition_control(base: &ExtractionConfig) -> ExtractedDocument {
     });
     assert_eq!(ocr.auto_rotate, None);
     let result = extract("psm1-osd-no-rotation", PDF, &config);
-    assert_eq!(
-        result
-            .metadata
-            .additional
-            .get("psm")
-            .and_then(serde_json::Value::as_str),
-        Some("1")
-    );
+    assert_psm(&result, "1");
     let words = result
         .ocr_elements
         .as_ref()
@@ -876,8 +903,12 @@ fn persisted_extraction_entries(namespace: &str) -> usize {
     let cache = std::path::PathBuf::from(std::env::var_os("XBERG_CACHE_DIR").unwrap())
         .join("extraction")
         .join(namespace);
-    std::fs::read_dir(cache)
-        .unwrap()
+    // A route that writes nothing never creates the namespace directory, so a missing
+    // directory is itself the degradation and must fail loudly here rather than read as zero
+    // entries behind a caller's expectation of one. ~keep
+    let entries = std::fs::read_dir(&cache)
+        .unwrap_or_else(|error| panic!("extraction cache namespace {}: {error}", cache.display()));
+    entries
         .map(Result::unwrap)
         .filter(|entry| entry.path().extension().is_some_and(|extension| extension == "msgpack"))
         .count()
@@ -1071,7 +1102,37 @@ fn assert_route(name: &str, result: &ExtractedDocument, expected: Route) {
         (false, false) => Route::Original,
         _ => panic!("{name}: ambiguous route psm1={psm1} auto_rotated={rotated}"),
     };
+    if observed == Route::Classifier {
+        let additional = &result.metadata.additional;
+        assert_eq!(
+            additional.get("auto_rotated"),
+            Some(&serde_json::Value::Bool(true)),
+            "{name}"
+        );
+        for key in [
+            "orientation_degrees",
+            "orientation_confidence",
+            "ocr_processed_image_width",
+            "ocr_processed_image_height",
+        ] {
+            assert!(
+                additional.get(key).is_some_and(serde_json::Value::is_number),
+                "{name}: the classifier route must report {key}"
+            );
+        }
+    }
     assert_eq!(observed, expected, "{name}: served from the wrong orientation route");
+}
+
+fn assert_psm(result: &ExtractedDocument, expected: &str) {
+    assert_eq!(
+        result
+            .metadata
+            .additional
+            .get("psm")
+            .and_then(serde_json::Value::as_str),
+        Some(expected)
+    );
 }
 
 /// The unset policy's read before the OSD pack exists: the classifier recovers the table when one

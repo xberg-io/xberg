@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 const MAX_WORKING_BYTES: usize = 512 * 1024 * 1024;
 const MAX_SURFACE_WORK: u64 = 1024 * 1024 * 1024;
-const MAX_NESTING_DEPTH: usize = 64;
+pub(super) const MAX_NESTING_DEPTH: usize = 64;
 const MAX_PAINT_OPERATIONS: usize = 1_000_000;
 
 pub(super) struct KnockoutResources {
@@ -12,9 +12,11 @@ pub(super) struct KnockoutResources {
     live: Arc<AtomicUsize>,
     depth: Arc<AtomicUsize>,
     surface_work: u64,
-    ordinary_work: u64,
     paint_operations: usize,
+    #[cfg(test)]
+    paint_operation_limit: usize,
     failure: Option<String>,
+    workspace_shortfall: Option<(usize, usize)>,
     work_exhausted: bool,
     degradations: usize,
     native: Arc<AtomicUsize>,
@@ -28,9 +30,11 @@ impl Default for KnockoutResources {
             live: Arc::new(AtomicUsize::new(0)),
             depth: Arc::new(AtomicUsize::new(0)),
             surface_work: 0,
-            ordinary_work: 0,
             paint_operations: 0,
+            #[cfg(test)]
+            paint_operation_limit: MAX_PAINT_OPERATIONS,
             failure: None,
+            workspace_shortfall: None,
             work_exhausted: false,
             degradations: 0,
             native: Arc::new(AtomicUsize::new(0)),
@@ -77,12 +81,17 @@ impl Drop for WorkFallback {
 impl KnockoutResources {
     pub(super) fn reset(&mut self, limit: Option<usize>) {
         self.limit = limit.unwrap_or(MAX_WORKING_BYTES).min(MAX_WORKING_BYTES);
+        self.paint_operations = 0;
+        self.reset_attempt();
+    }
+
+    /// A DPI retry gets fresh raster state but spends the same page's paint budget.
+    pub(super) fn reset_attempt(&mut self) {
         self.live.store(0, Ordering::Relaxed);
         self.depth.store(0, Ordering::Relaxed);
         self.surface_work = 0;
-        self.ordinary_work = 0;
-        self.paint_operations = 0;
         self.failure = None;
+        self.workspace_shortfall = None;
         self.work_exhausted = false;
         self.degradations = 0;
         self.native.store(0, Ordering::Relaxed);
@@ -95,6 +104,10 @@ impl KnockoutResources {
 
     pub(super) fn active(&self) -> bool {
         self.depth.load(Ordering::Relaxed) > 0
+    }
+
+    pub(super) fn workspace_shortfall(&self) -> Option<(usize, usize)> {
+        self.workspace_shortfall
     }
 
     pub(super) fn retained_bytes(&self) -> u64 {
@@ -151,8 +164,14 @@ impl KnockoutResources {
         let Some(bytes) = required else {
             return self.refuse("workspace arithmetic");
         };
-        let next = self.live.load(Ordering::Relaxed).checked_add(bytes);
-        if next.is_none_or(|value| value > self.limit || value > isize::MAX as usize) {
+        let Some(next) = self.live.load(Ordering::Relaxed).checked_add(bytes) else {
+            return self.refuse("workspace arithmetic");
+        };
+        if next > isize::MAX as usize {
+            return self.refuse("workspace arithmetic");
+        }
+        if next > self.limit {
+            self.workspace_shortfall = Some((next, self.limit));
             return self.refuse("workspace");
         }
         self.live.fetch_add(bytes, Ordering::Relaxed);
@@ -211,7 +230,12 @@ impl KnockoutResources {
     }
 
     pub(super) fn paint(&mut self, pixels: usize) -> Result<()> {
-        if self.paint_operations >= MAX_PAINT_OPERATIONS {
+        // Every group counts paints, so nested form fan-out stays bounded; only pixel work is knockout-only. ~keep
+        #[cfg(test)]
+        let limit = self.paint_operation_limit;
+        #[cfg(not(test))]
+        let limit = MAX_PAINT_OPERATIONS;
+        if self.paint_operations >= limit {
             return self.refuse("paint operations");
         }
         self.paint_operations += 1;
@@ -220,19 +244,12 @@ impl KnockoutResources {
 
     pub(super) fn raster(&mut self, pixels: usize) -> Result<()> {
         self.check()?;
-        if self.degraded.load(Ordering::Relaxed) > 0 {
+        // Only a native knockout pass is charged: ordinary groups render as they do without knockout. ~keep
+        if self.degraded.load(Ordering::Relaxed) > 0 || self.native.load(Ordering::Relaxed) == 0 {
             return Ok(());
         }
         self.surface_work = self.surface_work.saturating_add(pixels as u64);
-        if self.native.load(Ordering::Relaxed) > 0 {
-            self.work_exhausted = self.surface_work > MAX_SURFACE_WORK;
-        } else {
-            // Knockout plans and native raster passes cannot spend ordinary siblings' allowance. ~keep
-            self.ordinary_work = self.ordinary_work.saturating_add(pixels as u64);
-            if self.ordinary_work > MAX_SURFACE_WORK {
-                return self.refuse("ordinary surface work");
-            }
-        }
+        self.work_exhausted = self.surface_work > MAX_SURFACE_WORK;
         self.check()
     }
 
@@ -272,6 +289,7 @@ mod tests {
         drop(resources.reserve(Some(16)).expect("exact boundary fits"));
         let reservation = resources.reserve(Some(16)).expect("released bytes can be reused");
         assert!(resources.reserve(Some(1)).is_err());
+        assert_eq!(resources.workspace_shortfall(), Some((25, 24)));
         drop(reservation);
         assert!(
             resources.reserve(Some(1)).is_err(),
@@ -279,6 +297,7 @@ mod tests {
         );
         resources.reset(Some(24));
         resources.canvas(8);
+        assert_eq!(resources.workspace_shortfall(), None);
         assert!(resources.reserve(Some(16)).is_ok(), "a new page resets the refusal");
     }
 
@@ -291,6 +310,7 @@ mod tests {
         }
         assert_eq!(frames.len(), 64);
         assert!(resources.reserve(Some(0)).is_err());
+        assert_eq!(resources.workspace_shortfall(), None, "resizing cannot fix nesting");
         drop(frames);
         assert_eq!(resources.depth.load(Ordering::Relaxed), 0);
     }
