@@ -8,7 +8,14 @@
 #[path = "pipeline/direct_rgb_budget_recovery.rs"]
 mod direct_rgb_budget_recovery;
 
-#[cfg(all(paddle_ocr, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "pdf",
+    any(
+        paddle_ocr,
+        all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))
+    )
+))]
 #[path = "pipeline/per_page_flat_metadata.rs"]
 mod per_page_flat_metadata;
 
