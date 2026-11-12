@@ -3353,6 +3353,192 @@ async fn force_ocr_route_applies_numeric_repair() {
     );
 }
 
+/// Issue #2939: a whole-document OCR read whose page read the noise gate discarded must not
+/// mark that page as OCR text. `InternalDocument::ocr_text_pages` decides which pages are
+/// re-rendered from their elements (#2902), so a page whose noisy read was discarded -- which
+/// keeps its native text -- is not OCR text and must stay out of the set, while the page whose
+/// read was accepted keeps its mark exactly as before.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[tokio::test]
+#[serial]
+async fn a_discarded_ocr_read_does_not_mark_its_native_page_as_ocr_text() {
+    use crate::core::config::{OcrConfig, PageConfig};
+
+    const BACKEND_NAME: &str = "pdf-2939-discarded-read-marking";
+    const ACCEPTED_TEXT: &str = "Healthy native prose fills the first page of this ordinary document";
+    const NATIVE_PAGE_TWO_TEXT: &str = "The original native words stay on the second page";
+    // Twenty short alphabetic tokens beside ten long ones: a fragmented ratio of 2/3, above
+    // the 0.35 default threshold, over the 20-word minimum the noise check requires. A mock
+    // read this fragmented is exactly the shape `discard_suspected_ocr_noise` discards.
+    const NOISY_TEXT: &str = "aa bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt \
+         gathering exercises remaining television understanding";
+
+    // The pages have clearly different MediaBox heights, so the page renders are clearly
+    // different PNG heights at any sane render DPI: the short page's read is accepted, the
+    // tall page's read is the noise the gate discards.
+    struct SizeSensitiveOcrBackend {
+        name: &'static str,
+    }
+    impl crate::plugins::Plugin for SizeSensitiveOcrBackend {
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for SizeSensitiveOcrBackend {
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+        fn supports_language(&self, _lang: &str) -> bool {
+            true
+        }
+        async fn process_image(
+            &self,
+            image_bytes: &[u8],
+            _config: &crate::core::config::OcrConfig,
+        ) -> crate::Result<crate::types::ExtractedDocument> {
+            let noisy = png_height(image_bytes).is_some_and(|height| height >= 1200);
+            Ok(crate::types::ExtractedDocument {
+                content: if noisy {
+                    NOISY_TEXT.to_string()
+                } else {
+                    ACCEPTED_TEXT.to_string()
+                },
+                mime_type: std::borrow::Cow::Borrowed("text/plain"),
+                ..Default::default()
+            })
+        }
+    }
+    crate::plugins::register_ocr_backend(std::sync::Arc::new(SizeSensitiveOcrBackend { name: BACKEND_NAME }))
+        .expect("the size-sensitive backend registers");
+    let _backend = RegisteredOcrBackendGuard { name: BACKEND_NAME };
+
+    let config = ExtractionConfig {
+        use_cache: false,
+        force_ocr: true,
+        ocr: Some(OcrConfig {
+            backend: BACKEND_NAME.to_string(),
+            quality_thresholds: Some(OcrQualityThresholds {
+                discard_suspected_ocr_noise: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        pages: Some(PageConfig {
+            extract_pages: true,
+            keep_native_content: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let internal = PdfExtractor::new()
+        .extract_content(&two_page_native_text_pdf(), "application/pdf", &config)
+        .await
+        .expect("forced-OCR extraction of the two-page fixture must succeed");
+
+    // Controls: the noise gate really discarded page 2's read and the route kept the page's
+    // native text, while page 1's accepted read is the page's content.
+    let pages = internal
+        .prebuilt_pages
+        .as_ref()
+        .expect("extract_pages must produce page contents");
+    assert_eq!(pages.len(), 2, "the fixture has two pages: {pages:?}");
+    assert_eq!(pages[0].content, ACCEPTED_TEXT, "page 1's accepted read is its content");
+    assert!(
+        pages[1].content.trim().is_empty(),
+        "page 2's discarded read left no OCR text: {:?}",
+        pages[1].content
+    );
+    assert_eq!(
+        pages[1].native_content.as_deref(),
+        Some(NATIVE_PAGE_TWO_TEXT),
+        "the discarded page keeps its native text beside the OCR treatment"
+    );
+    assert_eq!(
+        internal.ocr_text_pages,
+        vec![1],
+        "only the page whose read was accepted may be marked as OCR text: page 2's read was \
+         discarded, its native text is what the page keeps"
+    );
+}
+
+/// The width and height from a PNG header, or `None` for bytes that are not a PNG. Page
+/// renders reach an OCR backend as PNG bytes, so this tells two page renders apart.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn png_height(bytes: &[u8]) -> Option<u32> {
+    if bytes.len() < 24 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return None;
+    }
+    Some(u32::from_be_bytes(bytes[20..24].try_into().ok()?))
+}
+
+/// A two-page PDF whose every page carries a healthy native text layer, and whose pages have
+/// clearly different heights so a page render identifies its page by size: page 1 is a small
+/// (200x300 pt) page, page 2 a tall (1224x1584 pt) one.
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn two_page_native_text_pdf() -> Vec<u8> {
+    use lopdf::content::{Content, Operation};
+    use lopdf::{Document, Object, Stream, dictionary};
+
+    let page_one_text = "Healthy native prose fills the first page of this ordinary document";
+    let page_two_text = "The original native words stay on the second page";
+
+    let mut document = Document::new();
+    let pages_id = document.add_object(dictionary! { "Type" => "Pages" });
+    let font_id = document.add_object(dictionary! {
+        "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica",
+    });
+    let mut page = |media_box: [i64; 4], text: &str| {
+        let content = Content {
+            operations: vec![
+                Operation::new("BT", vec![]),
+                Operation::new("Tf", vec!["F1".into(), 12.into()]),
+                Operation::new("Td", vec![10.into(), (media_box[3] - 20).into()]),
+                Operation::new("Tj", vec![Object::string_literal(text)]),
+                Operation::new("ET", vec![]),
+            ],
+        };
+        let content_id = document.add_object(Stream::new(
+            dictionary! {},
+            content.encode().expect("fixture page content must encode"),
+        ));
+        document.add_object(dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "Contents" => content_id,
+            "Resources" => dictionary! { "Font" => dictionary! { "F1" => font_id } },
+            "MediaBox" => media_box.iter().map(|value| (*value).into()).collect::<Vec<Object>>(),
+        })
+    };
+    let page_one_id = page([0, 0, 200, 300], page_one_text);
+    let page_two_id = page([0, 0, 1224, 1584], page_two_text);
+
+    document.objects.insert(
+        pages_id,
+        Object::Dictionary(dictionary! {
+            "Type" => "Pages",
+            "Kids" => vec![page_one_id.into(), page_two_id.into()],
+            "Count" => 2,
+        }),
+    );
+    let catalog_id = document.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+    document.trailer.set("Root", catalog_id);
+
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).expect("two-page fixture must serialize");
+    bytes
+}
+
 /// xberg#1665: the render batch peak scales with the configured thread budget alone, with
 /// no notion of `security_limits.max_content_size`. A 4-page batch of Letter (612x792pt)
 /// pages at the default 150 dpi estimates to about 4 x 20.3MB = 81MB; with
