@@ -28,7 +28,7 @@ use std::collections::HashSet;
 
 use super::formatted::{
     FormattedPlan, HtmlBudget, HtmlPlan, PagePlan, SurfacePlans, content_matches, escaped_plain_markdown,
-    html_budget_error,
+    html_budget_error, literal_binary_markdown,
 };
 use crate::Result;
 use crate::core::config::redaction::{ExternalRedactionFinding, RedactionConfig, RedactionOffsetEncoding};
@@ -352,6 +352,11 @@ fn redact_pass(
         })?;
     }
     pass.redact_document(result, 0);
+    if surfaces.formatted_finishes_as_binary()
+        && let Some(markdown) = result.formatted_content.as_deref()
+    {
+        pass.verify_binary_math(markdown, limits)?;
+    }
 
     let findings = std::mem::take(&mut pass.findings);
     let total_redacted = findings.len() as u32;
@@ -534,6 +539,17 @@ impl<'a> RedactionPass<'a> {
             .into_iter()
             .filter(|finding| is_applicable(text, finding))
             .collect()
+    }
+
+    fn verify_binary_math(&self, markdown: &str, limits: &SecurityLimits) -> Result<()> {
+        let invalid = || crate::XbergError::validation("Cannot prove complete binary document math redaction");
+        let projection = crate::rendering::VisibleMarkdown::parse_binary(markdown, limits).ok_or_else(invalid)?;
+        if projection.has_normalized_math()
+            && projection.has_normalized_math_match(&match_ranges(&self.applicable_matches(&projection.text)))
+        {
+            return Err(invalid());
+        }
+        Ok(())
     }
 
     fn plan_markdown(
@@ -899,7 +915,7 @@ impl<'a> RedactionPass<'a> {
                     "Formatted Markdown contained a redaction crossing generated syntax; the binary document was \
                      rebuilt from redacted plain text",
                 );
-                Some(escaped_plain_markdown(&doc.content))
+                Some(literal_binary_markdown(&doc.content))
             }
             (Some(FormattedPlan::Discard), Some(_)) => {
                 crate::core::diagnostics::push_warning(

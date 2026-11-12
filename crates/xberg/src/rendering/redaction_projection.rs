@@ -54,7 +54,7 @@ enum PlainAtomKind {
     FootnoteReference,
     FootnoteDefinition,
     DisplayMath,
-    EscapedMath { display: bool },
+    Math { display: bool, escaped: bool },
 }
 
 struct PlainAtom {
@@ -66,6 +66,7 @@ pub(crate) struct VisibleMarkdown {
     pub text: String,
     origins: Vec<Origin>,
     atoms: Vec<PlainAtom>,
+    normalized_math: Option<Vec<Range<usize>>>,
     budget: Budget,
     /// The Markdown is xberg's own output, whose dollar math is escaped as Markdown text.
     written_by_xberg: bool,
@@ -75,15 +76,24 @@ impl VisibleMarkdown {
     /// Text that the Markdown writer did not produce. Its dollar math stays as written, since a
     /// backslash there is the author's own.
     pub fn parse(markdown: &str, limits: &SecurityLimits) -> Option<Self> {
-        Self::parse_with(markdown, limits, false)
+        Self::parse_with(markdown, limits, false, false)
     }
 
     /// Markdown that the Markdown writer produced, whose dollar math is escaped as Markdown text.
     pub fn parse_written(markdown: &str, limits: &SecurityLimits) -> Option<Self> {
-        Self::parse_with(markdown, limits, true)
+        Self::parse_with(markdown, limits, true, false)
     }
 
-    fn parse_with(markdown: &str, limits: &SecurityLimits, written_by_xberg: bool) -> Option<Self> {
+    pub fn parse_binary(markdown: &str, limits: &SecurityLimits) -> Option<Self> {
+        Self::parse_with(markdown, limits, true, true)
+    }
+
+    fn parse_with(
+        markdown: &str,
+        limits: &SecurityLimits,
+        written_by_xberg: bool,
+        normalize_math: bool,
+    ) -> Option<Self> {
         if markdown.len() > limits.max_content_size {
             return None;
         }
@@ -105,6 +115,7 @@ impl VisibleMarkdown {
             text: String::new(),
             origins: Vec::new(),
             atoms: Vec::new(),
+            normalized_math: normalize_math.then(Vec::new),
             budget,
             written_by_xberg,
         };
@@ -204,6 +215,9 @@ impl VisibleMarkdown {
     }
 
     fn inline_math(&mut self, node: &AstNode<'_>, math: &NodeMath, markdown: &str, lines: &[usize]) -> Option<()> {
+        if self.normalized_math.is_some() {
+            return self.append_binary_math(math);
+        }
         let (opening, closing) = if !math.dollar_math {
             ("$`", "`$")
         } else if math.display_math {
@@ -237,14 +251,15 @@ impl VisibleMarkdown {
         } else {
             literal.to_owned()
         };
-        if escaped && visible != literal {
+        if self.written_by_xberg && !visible.is_empty() {
             if !self.budget.spend(size_of::<PlainAtom>(), 1) {
                 return None;
             }
             self.atoms.push(PlainAtom {
                 visible: self.text.len()..self.text.len() + visible.len(),
-                kind: PlainAtomKind::EscapedMath {
+                kind: PlainAtomKind::Math {
                     display: math.display_math,
+                    escaped: escaped && visible != literal,
                 },
             });
         }
@@ -256,6 +271,21 @@ impl VisibleMarkdown {
             self.unmapped(&visible);
             Some(())
         }
+    }
+
+    fn append_binary_math(&mut self, math: &NodeMath) -> Option<()> {
+        let decoded = super::common::math_node_literal(math);
+        let normalized = super::common::join_tex_lines(&decoded);
+        if normalized != decoded.as_ref() {
+            if !self.budget.spend(size_of::<Range<usize>>(), decoded.len()) {
+                return None;
+            }
+            self.normalized_math
+                .as_mut()?
+                .push(self.text.len()..self.text.len().checked_add(normalized.len())?);
+        }
+        self.unmapped(&normalized);
+        Some(())
     }
 
     fn inline_code(&mut self, node: &AstNode<'_>, code: &NodeCode, markdown: &str, lines: &[usize]) -> Option<()> {
@@ -271,6 +301,10 @@ impl VisibleMarkdown {
     }
 
     fn leaf(&mut self, visible: &str, markdown: &str, source: Range<usize>, escapes: bool) -> Option<()> {
+        if self.normalized_math.is_some() {
+            self.unmapped(visible);
+            return Some(());
+        }
         let raw = markdown.get(source.clone())?;
         let mut offset = 0;
         for character in visible.chars() {
@@ -400,11 +434,22 @@ impl VisibleMarkdown {
 
     pub fn has_escaped_math_match(&self, sensitive: &[Range<usize>]) -> bool {
         self.atoms.iter().any(|atom| {
-            if !matches!(atom.kind, PlainAtomKind::EscapedMath { .. }) {
+            if !matches!(atom.kind, PlainAtomKind::Math { escaped: true, .. }) {
                 return false;
             }
             let index = sensitive.partition_point(|range| range.end <= atom.visible.start);
             sensitive.get(index).is_some_and(|range| range.start < atom.visible.end)
+        })
+    }
+
+    pub fn has_normalized_math(&self) -> bool {
+        self.normalized_math.as_ref().is_some_and(|changes| !changes.is_empty())
+    }
+
+    pub fn has_normalized_math_match(&self, sensitive: &[Range<usize>]) -> bool {
+        self.normalized_math.iter().flatten().any(|change| {
+            let index = sensitive.partition_point(|range| range.end <= change.start);
+            sensitive.get(index).is_some_and(|range| range.start < change.end)
         })
     }
 
@@ -439,10 +484,10 @@ impl VisibleMarkdown {
                 result.discarded_label(text);
                 return start.checked_add(kind.len());
             }
-            PlainAtomKind::DisplayMath | PlainAtomKind::EscapedMath { display: true } => {
+            PlainAtomKind::DisplayMath | PlainAtomKind::Math { display: true, .. } => {
                 math_plain_payload(plain, start, text, "$$")?
             }
-            PlainAtomKind::EscapedMath { display: false } => math_plain_payload(plain, start, text, "$")?,
+            PlainAtomKind::Math { display: false, .. } => math_plain_payload(plain, start, text, "$")?,
             kind @ (PlainAtomKind::FootnoteReference | PlainAtomKind::FootnoteDefinition) => {
                 let suffix = if matches!(kind, PlainAtomKind::FootnoteDefinition) {
                     ":"
@@ -473,6 +518,7 @@ impl VisibleMarkdown {
             text: String::new(),
             origins: Vec::new(),
             atoms: Vec::new(),
+            normalized_math: None,
             budget: self.budget.clone(),
             written_by_xberg: self.written_by_xberg,
         };

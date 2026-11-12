@@ -64,57 +64,118 @@ fn docx_body_text(bytes: &[u8]) -> String {
     nodes.iter().filter_map(|node| node.text()).collect()
 }
 
-async fn delivered_math_package(format: &str, redaction: Option<RedactionConfig>) -> Vec<u8> {
+async fn delivered_package(
+    document: InternalDocument,
+    format: &str,
+    redaction: Option<RedactionConfig>,
+) -> crate::Result<Vec<u8>> {
     use base64::Engine as _;
-    let source = "Take $x*y$ and more.";
-    let mut builder = InternalDocumentBuilder::new("test");
-    builder.push_paragraph(
-        source,
-        vec![TextAnnotation {
-            start: 5,
-            end: 10,
-            kind: crate::types::document_structure::AnnotationKind::math(false),
-        }],
-        None,
-        None,
-    );
     let config = ExtractionConfig {
         output_format: OutputFormat::Custom(format.to_owned()),
         redaction,
         ..Default::default()
     };
-    let output = crate::core::pipeline::run_pipeline(builder.build(), &config)
-        .await
-        .expect("pipeline should finish the requested package");
+    let output = crate::core::pipeline::run_pipeline(document, &config).await?;
     assert_eq!(output.metadata.output_format.as_deref(), Some(format));
-    base64::engine::general_purpose::STANDARD
+    Ok(base64::engine::general_purpose::STANDARD
         .decode(output.content)
-        .expect("finished package must be base64")
+        .expect("finished package must be base64"))
+}
+
+type PackageReader = fn(&[u8]) -> String;
+
+fn binary_formats() -> &'static [(&'static str, PackageReader)] {
+    &[
+        ("docx", docx_body_text),
+        #[cfg(feature = "pdf")]
+        ("pdf", |bytes| {
+            lopdf::Document::load_mem(bytes)
+                .expect("finished PDF package")
+                .extract_text(&[1])
+                .expect("selectable PDF text")
+        }),
+    ]
+}
+
+fn inline_math_package_source(indented_code: bool) -> InternalDocument {
+    let source = "Take $y$ and $x*y$ here.";
+    let annotations = ["$y$", "$x*y$"]
+        .into_iter()
+        .map(|span| {
+            let start = source.find(span).expect("fixture contains equation");
+            TextAnnotation {
+                start: start as u32,
+                end: (start + span.len()) as u32,
+                kind: crate::types::document_structure::AnnotationKind::math(false),
+            }
+        })
+        .collect();
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_paragraph(source, annotations, None, None);
+    if indented_code {
+        builder.push_code("    *literal* [text]", None, None, None);
+    }
+    builder.build()
 }
 
 #[tokio::test]
-async fn should_deliver_docx_with_escaped_math_redacted() {
-    let original = delivered_math_package("docx", None).await;
-    assert_eq!(docx_body_text(&original), "Take x*y and more.");
+async fn should_deliver_packages_when_escaped_math_follows_unescaped_math() {
+    for &(format, body_text) in binary_formats() {
+        let original = delivered_package(inline_math_package_source(false), format, None)
+            .await
+            .unwrap();
+        assert_eq!(body_text(&original).trim(), "Take y and x*y here.", "{format}");
 
-    let redacted = delivered_math_package("docx", Some(config("x*y", RedactionStrategy::Mask))).await;
-    assert_eq!(docx_body_text(&redacted), "Take $[REDACTED]$ and more.");
+        let redaction = config("x*y", RedactionStrategy::Mask);
+        let redacted = delivered_package(inline_math_package_source(false), format, Some(redaction))
+            .await
+            .unwrap();
+        assert_eq!(
+            body_text(&redacted).trim(),
+            "Take $y$ and $[REDACTED]$ here.",
+            "{format}"
+        );
+    }
 }
 
-#[cfg(feature = "pdf")]
 #[tokio::test]
-async fn should_deliver_pdf_with_escaped_math_redacted() {
-    let body_text = |bytes: &[u8]| {
-        lopdf::Document::load_mem(bytes)
-            .expect("finished PDF package")
-            .extract_text(&[1])
-            .expect("selectable PDF text")
+async fn should_preserve_indented_literal_punctuation_in_rebuilt_packages() {
+    for &(format, body_text) in binary_formats() {
+        let redaction = config("x*y", RedactionStrategy::Mask);
+        let redacted = delivered_package(inline_math_package_source(true), format, Some(redaction))
+            .await
+            .unwrap();
+        let body = body_text(&redacted);
+        assert!(body.contains("Take $y$ and $[REDACTED]$ here."), "{format}: {body:?}");
+        assert!(body.trim_end().ends_with("*literal* [text]"), "{format}: {body:?}");
+        if format == "docx" {
+            assert!(body.ends_with("    *literal* [text]"), "{body:?}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn should_refuse_packages_when_math_normalization_creates_an_uncovered_match() {
+    let document = || {
+        let mut builder = InternalDocumentBuilder::new("test");
+        builder.push_formula("Amber % comment\nMaple", None, None);
+        builder.build()
     };
-    let original = delivered_math_package("pdf", None).await;
-    assert_eq!(body_text(&original).trim(), "Take x*y and more.");
+    for &(format, body_text) in binary_formats() {
+        let original = delivered_package(document(), format, None).await.unwrap();
+        assert_eq!(body_text(&original).trim(), "Amber Maple", "{format}");
 
-    let redacted = delivered_math_package("pdf", Some(config("x*y", RedactionStrategy::Mask))).await;
-    assert_eq!(body_text(&redacted).trim(), "Take $[REDACTED]$ and more.");
+        let redaction = config("Amber Maple", RedactionStrategy::Mask);
+        let error = delivered_package(document(), format, Some(redaction))
+            .await
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Cannot prove complete binary document math redaction"),
+            "{format}: {error}"
+        );
+    }
 }
 
 async fn findings(text: &str, config: &RedactionConfig) -> Vec<RedactionFinding> {
