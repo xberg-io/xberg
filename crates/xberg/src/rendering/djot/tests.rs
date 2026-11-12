@@ -93,6 +93,49 @@ fn test_render_djot_ordered_list_with_a_literal_source_label() {
     assert!(out.contains("2. Second item\n"), "got: {out}");
 }
 
+/// The source labels the DOCX, PDF and image extractors attach to a numbered
+/// item go through the shared `djot_ordered_marker`, so these pin what every
+/// Djot render paints for each label shape: a decimal label becomes the
+/// item's ordered marker (not a bullet with the number as visible text),
+/// while a label the marker syntax cannot express stays a bullet with the
+/// label written out.
+#[test]
+fn test_render_djot_ordered_list_with_a_decimal_source_label() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_list(true);
+    let first = b.push_list_item("General Provisions.", true, vec![], None, None);
+    b.set_list_item_source_label(first, "1.");
+    let second = b.push_list_item("Scope.", true, vec![], None, None);
+    b.set_list_item_source_label(second, "2.");
+    b.end_list();
+    let out = render_djot(&b.build());
+    assert!(out.contains("1. General Provisions.\n"), "got: {out}");
+    assert!(out.contains("2. Scope.\n"), "got: {out}");
+    assert!(!out.contains("- 1."), "got: {out}");
+}
+
+#[test]
+fn test_render_djot_ordered_list_with_an_upper_letter_source_label() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_list(true);
+    let first = b.push_list_item("General Provisions.", true, vec![], None, None);
+    b.set_list_item_source_label(first, "B.");
+    b.end_list();
+    let out = render_djot(&b.build());
+    assert!(out.contains("- B. General Provisions.\n"), "got: {out}");
+}
+
+#[test]
+fn test_render_djot_ordered_list_with_a_parenthesized_source_label() {
+    let mut b = InternalDocumentBuilder::new("test");
+    b.push_list(true);
+    let first = b.push_list_item("General Provisions.", true, vec![], None, None);
+    b.set_list_item_source_label(first, "(a)");
+    b.end_list();
+    let out = render_djot(&b.build());
+    assert!(out.contains("- (a) General Provisions.\n"), "got: {out}");
+}
+
 #[test]
 fn test_render_djot_nested_list() {
     let mut b = InternalDocumentBuilder::new("test");
