@@ -20,6 +20,12 @@ pub enum PicturePlacement {
     /// [`PicturePlacement::Background`] with a dark, blocky picture, which a read of the whole page
     /// turns into noise.
     TexturedBackground,
+    /// The dark, blocky picture of [`PicturePlacement::TexturedBackground`], then the text layer in
+    /// white: the layer changes the page, but leaves no ink without the picture.
+    WhiteLayerOverDarkPicture,
+    /// A black picture, then the text layer in black: the layer leaves ink without the picture, but
+    /// does not change the page.
+    BlackLayerOverBlackPicture,
 }
 
 /// A light 8 by 8 checker.
@@ -59,7 +65,8 @@ pub fn with_full_page_picture(source: &[u8], placement: PicturePlacement) -> Vec
         panic!("a media box has four numbers: {media_box:?}");
     };
     let (side, pixels) = match placement {
-        PicturePlacement::TexturedBackground => dark_blocks(),
+        PicturePlacement::TexturedBackground | PicturePlacement::WhiteLayerOverDarkPicture => dark_blocks(),
+        PicturePlacement::BlackLayerOverBlackPicture => (8, vec![0; 64]),
         _ => light_checker(),
     };
     let picture = document.add_object(Stream::new(
@@ -88,7 +95,10 @@ pub fn with_full_page_picture(source: &[u8], placement: PicturePlacement) -> Vec
         PicturePlacement::Background | PicturePlacement::TexturedBackground => [paint, over(b"q\n")].concat(),
         PicturePlacement::Cover => [over(b"q\n"), paint].concat(),
         PicturePlacement::BehindInvisibleLayer => [paint, over(b"q 3 Tr\n")].concat(),
-        PicturePlacement::BehindWhiteLayer => [paint, over(b"q 1 g\n")].concat(),
+        PicturePlacement::BehindWhiteLayer | PicturePlacement::WhiteLayerOverDarkPicture => {
+            [paint, over(b"q 1 g\n")].concat()
+        }
+        PicturePlacement::BlackLayerOverBlackPicture => [paint, over(b"q 0 g\n")].concat(),
         PicturePlacement::BehindClippedLayer => [paint, over(b"q 0 0 1 1 re W n\n")].concat(),
         PicturePlacement::BesideSidecar => {
             let sidecar = over(b"q 3 Tr\n");

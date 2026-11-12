@@ -468,6 +468,8 @@ fn automatic_english_ocr_still_reads_a_picture_over_or_under_an_invisible_khmer_
         PicturePlacement::BehindInvisibleLayer,
         PicturePlacement::BehindWhiteLayer,
         PicturePlacement::BehindClippedLayer,
+        PicturePlacement::WhiteLayerOverDarkPicture,
+        PicturePlacement::BlackLayerOverBlackPicture,
     ] {
         let source = with_full_page_picture(COMPLETE, placement);
         // The warning names a Khmer layer the rule saw, so the layer was read and the picture won. ~keep
