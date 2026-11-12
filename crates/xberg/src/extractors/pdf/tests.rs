@@ -3563,14 +3563,31 @@ async fn a_pdfs_ocr_text_page_list_is_not_built_and_changes_no_output() {
 /// lost its native text. A discarded read replaces nothing: the page keeps its native text,
 /// untouched (`native_content` unset), while the accepted page keeps its read.
 #[cfg(all(feature = "pdf", feature = "ocr"))]
-#[tokio::test]
+#[test]
 #[serial]
-async fn forced_ocr_restores_a_discarded_pages_native_text() {
+fn forced_ocr_restores_a_discarded_pages_native_text() {
+    const FIXTURE_STACK_BYTES: usize = 16 * 1024 * 1024;
+    std::thread::Builder::new()
+        .stack_size(FIXTURE_STACK_BYTES)
+        .spawn(|| {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("the fixture runtime builds")
+                .block_on(check_forced_ocr_discarded_page_restoration());
+        })
+        .expect("the fixture thread starts")
+        .join()
+        .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+async fn check_forced_ocr_discarded_page_restoration() {
     use crate::core::config::{OcrConfig, PageConfig};
 
     const BACKEND_NAME: &str = "pdf-3013-discarded-read-restore";
     const NATIVE_PAGE_ONE_TEXT: &str = "Healthy native prose fills the first page of this ordinary document";
-    const ACCEPTED_TEXT: &str = "The accepted OCR transcript replaces the original words on page one";
+    const ACCEPTED_TEXT: &str = "The accepted OCR transcript reports 1172 units on page one";
     const NATIVE_PAGE_TWO_TEXT: &str = "The original native words stay on the second page";
     // Twenty short alphabetic tokens beside five long ones: a fragmented ratio above the 0.35
     // default threshold over the 20-word minimum the noise check requires. A mock read this
@@ -3628,7 +3645,15 @@ async fn forced_ocr_restores_a_discarded_pages_native_text() {
         .expect("the size-sensitive backend registers");
     let _backend = RegisteredOcrBackendGuard { name: BACKEND_NAME };
 
-    for (extract_pages, keep_native_content) in [(true, true), (true, false), (false, false)] {
+    for (numeric_repair, (extract_pages, keep_native_content)) in [false, true]
+        .into_iter()
+        .flat_map(|repair| [(true, true), (true, false), (false, false)].map(|pages| (repair, pages)))
+    {
+        let accepted_text = if numeric_repair {
+            "The accepted OCR transcript reports 1,172 units on page one"
+        } else {
+            ACCEPTED_TEXT
+        };
         for output_format in [
             crate::core::config::OutputFormat::Plain,
             crate::core::config::OutputFormat::Markdown,
@@ -3639,6 +3664,7 @@ async fn forced_ocr_restores_a_discarded_pages_native_text() {
                 output_format: output_format.clone(),
                 ocr: Some(OcrConfig {
                     backend: BACKEND_NAME.to_string(),
+                    numeric_repair,
                     quality_thresholds: Some(OcrQualityThresholds {
                         discard_suspected_ocr_noise: true,
                         ..Default::default()
@@ -3653,7 +3679,8 @@ async fn forced_ocr_restores_a_discarded_pages_native_text() {
                 ..Default::default()
             };
             let case = format!(
-                "extract_pages: {extract_pages}, keep_native_content: {keep_native_content}, {output_format:?}"
+                "numeric_repair: {numeric_repair}, extract_pages: {extract_pages}, \
+                 keep_native_content: {keep_native_content}, {output_format:?}"
             );
 
             let internal = PdfExtractor::new()
@@ -3675,7 +3702,7 @@ async fn forced_ocr_restores_a_discarded_pages_native_text() {
             let words = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
             assert_eq!(
                 words(&result.content),
-                format!("{} {}", words(ACCEPTED_TEXT), words(NATIVE_PAGE_TWO_TEXT)),
+                format!("{} {}", words(accepted_text), words(NATIVE_PAGE_TWO_TEXT)),
                 "the document carries the discarded page's native text after page 1's read ({case}): {:?}",
                 result.content
             );
@@ -3683,7 +3710,7 @@ async fn forced_ocr_restores_a_discarded_pages_native_text() {
             let pages = result.pages.as_ref().expect("the OCR route supplies page output");
             assert_eq!(pages.len(), 2, "the fixture has two pages ({case}): {pages:?}");
             assert_eq!(
-                pages[0].content, ACCEPTED_TEXT,
+                pages[0].content, accepted_text,
                 "page 1's accepted read is its content, not restored ({case})"
             );
             assert_eq!(

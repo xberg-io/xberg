@@ -219,11 +219,26 @@ pub(super) fn apply_numeric_repair_to_structured_ocr_pages(
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn apply_numeric_repair_to_whole_document_ocr(
     text: &mut String,
+    page_texts: &mut [String],
     document: Option<&mut crate::types::internal::InternalDocument>,
     tables: &mut [crate::types::Table],
 ) {
-    if let Cow::Owned(repaired) = repair_ocr_numeric_tokens(text) {
+    let boundaries =
+        super::super::exact_boundaries_for_page_texts(text, page_texts).filter(|boundaries| !boundaries.is_empty());
+    if boundaries.is_none()
+        && let Cow::Owned(repaired) = repair_ocr_numeric_tokens(text)
+    {
         *text = repaired;
+    }
+    // Repair matching page spans from the end so length changes preserve earlier offsets. ~keep
+    for (index, page_text) in page_texts.iter_mut().enumerate().rev() {
+        if let Cow::Owned(repaired) = repair_ocr_numeric_tokens(page_text) {
+            if let Some(boundaries) = &boundaries {
+                let boundary = &boundaries[index];
+                text.replace_range(boundary.byte_start..boundary.byte_end, &repaired);
+            }
+            *page_text = repaired;
+        }
     }
     if let Some(document) = document {
         for element in &mut document.elements {

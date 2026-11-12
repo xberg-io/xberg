@@ -369,9 +369,11 @@ fn apply_numeric_repair_to_whole_document_ocr_repairs_the_text_the_document_and_
     document.tables.push(table_with_total());
     let mut tables = vec![table_with_total()];
 
-    apply_numeric_repair_to_whole_document_ocr(&mut text, Some(&mut document), &mut tables);
+    let mut pages = vec![text.clone(), String::new()];
+    apply_numeric_repair_to_whole_document_ocr(&mut text, &mut pages, Some(&mut document), &mut tables);
 
     assert_eq!(text, "Total: 1,172 units", "the flat text is what Plain renders");
+    assert_eq!(pages, ["Total: 1,172 units", ""]);
     assert_eq!(
         document.elements[0].text, "Total: 1,172 units",
         "the document is what every structured renderer rebuilds the page from"
@@ -406,7 +408,7 @@ fn apply_numeric_repair_to_whole_document_ocr_repairs_text_and_tables_without_a_
         ..Default::default()
     }];
 
-    apply_numeric_repair_to_whole_document_ocr(&mut text, None, &mut tables);
+    apply_numeric_repair_to_whole_document_ocr(&mut text, &mut [], None, &mut tables);
 
     assert_eq!(text, "Total: 1,172 units");
     assert_eq!(tables[0].cells[0][0], "1,172");
