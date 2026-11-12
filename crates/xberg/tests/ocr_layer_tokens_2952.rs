@@ -42,7 +42,8 @@ async fn page_text(tessdata: &std::path::Path, format: OutputFormat) -> String {
     .await
     .expect("extract the reproducer page");
     assert!(output.errors.is_empty(), "{:?}", output.errors);
-    let [document] = <[_; 1]>::try_from(output.results).ok().expect("one document");
+    let [document] = <[_; 1]>::try_from(output.results)
+        .unwrap_or_else(|results| panic!("expected one document, got {}", results.len()));
     assert!(
         document.metadata.ocr_used,
         "the undecodable header must send the page to OCR: {:?}",
