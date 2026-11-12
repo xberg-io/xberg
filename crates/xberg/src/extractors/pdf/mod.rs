@@ -2498,46 +2498,34 @@ fn replace_page_content_with_ocr_text(page: &mut crate::types::PageContent, ocr_
     page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&page.content));
 }
 
-/// Write the OCR text of each page into the page that has the same position, and report the
-/// page numbers of the reads the output kept: a page's text was written by an OCR route only
-/// where its read was accepted, so a page whose read the noise gate discarded (or that
-/// otherwise produced no text) -- which keeps its native text -- is not reported (#2939).
-///
-/// A discarded read is an empty string, and writing it into the page would erase the page's
-/// native text, so a page whose read is empty is not written at all: the page keeps the text
-/// layer it already holds and `native_content` is left alone, since that field records text an
-/// OCR read replaced (GH#3013).
-///
-/// One OCR text for a document of several pages is the text of the whole document: it goes to
-/// the first page, and the content of every later page is replaced with empty text; only the
-/// page that received text is reported. An empty single text read nothing, so no page is
-/// written and every page keeps its native text.
-///
-/// The list only reaches the document where its reader honors it: `is_ocr_page_text` treats
-/// every page of a `pdf`, `image` or `ocr` source as OCR text before it looks at such a list,
-/// so the list is attached only to an adopted OCR backend document of another source format
-/// (for example a plugin's `hocr` structure), whose pages #2902's re-rendering reads (#3014).
+/// Publish the same page bodies used to assemble the document. Restored native bodies
+/// leave `native_content` unset, and only accepted reads are marked as OCR text pages (#2939).
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn replace_pages_with_ocr_page_texts(
     pages: &mut [crate::types::PageContent],
     ocr_page_texts: &[String],
+    restored_page_texts: Option<&[String]>,
     keep_native_content: bool,
 ) -> Vec<u32> {
     let mut replaced = Vec::new();
-    for (page, text) in pages.iter_mut().zip(ocr_page_texts) {
-        if text.trim().is_empty() {
-            // A discarded (or empty) read replaces nothing: the page keeps its text layer, and
-            // `native_content` stays unset because the page was not replaced (GH#3013).
+    let page_texts = restored_page_texts.unwrap_or(ocr_page_texts);
+    let count = if page_texts.len() == 1 {
+        pages.len()
+    } else {
+        page_texts.len()
+    };
+    for (index, page) in pages.iter_mut().take(count).enumerate() {
+        let text = page_texts.get(index).map_or("", String::as_str);
+        let accepted = ocr_page_texts.get(index).is_some_and(|read| !read.trim().is_empty());
+        if restored_page_texts.is_some() && !accepted {
+            page.content = crate::pdf::text::fix_pdf_control_chars(text).into_owned();
+            page.native_content = None;
             page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&page.content));
-            continue;
+        } else {
+            replace_page_content_with_ocr_text(page, text, keep_native_content);
         }
-        replace_page_content_with_ocr_text(page, text, keep_native_content);
-        replaced.push(page.page_number);
-    }
-
-    if ocr_page_texts.len() == 1 && !ocr_page_texts[0].trim().is_empty() {
-        for page in pages.iter_mut().skip(1) {
-            replace_page_content_with_ocr_text(page, "", keep_native_content);
+        if accepted {
+            replaced.push(page.page_number);
         }
     }
     replaced
@@ -4111,7 +4099,12 @@ impl PdfExtractor {
 
             if let Some(pts) = ocr_page_texts.as_ref() {
                 if let Some(ref mut pages) = page_contents {
-                    ocr_text_pages.extend(replace_pages_with_ocr_page_texts(pages, pts, keep_native_content));
+                    ocr_text_pages.extend(replace_pages_with_ocr_page_texts(
+                        pages,
+                        pts,
+                        ocr_document_page_texts.as_deref(),
+                        keep_native_content,
+                    ));
                 } else {
                     // Only the pages whose read the output kept: an empty per-page text was
                     // discarded, not accepted (#2939).
