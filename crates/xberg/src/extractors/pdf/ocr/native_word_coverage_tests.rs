@@ -522,6 +522,10 @@ mod ink_ownership {
 
     /// A page whose text also holds one glyph without a Unicode value at each of `lost`.
     fn pdf_with_lost_glyphs(under_text: &str, over_text: &str, lost: &[(i32, i32, i32)]) -> PdfDocument {
+        PdfDocument::from_bytes(page_bytes(under_text, over_text, lost)).unwrap()
+    }
+
+    fn page_bytes(under_text: &str, over_text: &str, lost: &[(i32, i32, i32)]) -> Vec<u8> {
         use lopdf::{Document, Object, Stream, dictionary};
 
         let prose: String = PROSE
@@ -589,7 +593,7 @@ mod ink_ownership {
         document.trailer.set("Root", catalog_id);
         let mut bytes = Vec::new();
         document.save_to(&mut bytes).unwrap();
-        PdfDocument::from_bytes(bytes).unwrap()
+        bytes
     }
 
     fn iterator_word(text: &str, placed: Rect) -> OcrElement {
@@ -1176,5 +1180,111 @@ call puts",
                 cancelled: &|| true,
             },
         ));
+    }
+
+    /// The read of every native word of `pdf` at its own box, with `text` naming each word's text.
+    fn read_at_native_boxes(pdf: &PdfDocument, text: impl Fn(usize, &str) -> String) -> ExtractedDocument {
+        let words = native_word_boxes(pdf)
+            .iter()
+            .enumerate()
+            .map(|(at, (native, placed))| iterator_word(&text(at, native), *placed))
+            .collect();
+        read_of(words)
+    }
+
+    fn placed(pdf: &PdfDocument, read: &ExtractedDocument) -> std::collections::HashSet<String> {
+        read_words_at_native_place(pdf, 0, read)
+    }
+
+    #[test]
+    fn should_place_read_words_only_where_a_native_word_with_the_same_letters_lies() {
+        let pdf = pdf_with("");
+        let words = native_word_boxes(&pdf);
+        let at = |word: &str| words.iter().position(|(text, _)| text == word).unwrap();
+        let (committee, tuesday, budget) = (at("committee"), at("Tuesday"), at("budget,"));
+        let read = read_at_native_boxes(&pdf, |index, native| match index {
+            _ if index == committee => "Tuesday".to_owned(),
+            _ if index == tuesday => "Wednesday".to_owned(),
+            _ if index == budget => "BUDGET".to_owned(),
+            _ => native.to_owned(),
+        });
+        let placed = placed(&pdf, &read);
+        assert!(placed.contains("library"), "{placed:?}");
+        assert!(placed.contains("eax"), "{placed:?}");
+        assert!(
+            placed.contains("budget"),
+            "case and punctuation are ignored: {placed:?}"
+        );
+        assert!(!placed.contains("tuesday"), "read at another word's place: {placed:?}");
+        assert!(!placed.contains("committee"), "read as another word: {placed:?}");
+        assert!(!placed.contains("wednesday"), "no native word spells it: {placed:?}");
+    }
+
+    #[test]
+    fn a_box_with_multiple_words_does_not_prove_whole_word_placement() {
+        let here = native_box(Rect::new(10.0, 20.0, 30.0, 40.0));
+        let elsewhere = native_box(Rect::new(100.0, 20.0, 120.0, 40.0));
+        let native = [("budgetdesign", here), ("budget-design", here), ("budget", elsewhere)];
+        let read = [("budget-design", here), ("BUDGET!", elsewhere)];
+        assert_eq!(placed_word_keys(native, read, 1), ["budget".to_owned()].into());
+    }
+
+    #[test]
+    fn repeated_words_cannot_exceed_the_comparison_budget_or_leave_partial_proof() {
+        let here = native_box(Rect::new(10.0, 20.0, 30.0, 40.0));
+        let elsewhere = native_box(Rect::new(100.0, 20.0, 120.0, 40.0));
+        let native = [("verified", here), ("repeat", here), ("repeat", here)];
+        let read = [("verified", here), ("repeat", elsewhere)];
+        assert_eq!(placed_word_keys(native, read, 3), ["verified".to_owned()].into());
+        assert!(placed_word_keys(native, read, 2).is_empty());
+    }
+
+    #[test]
+    fn should_place_no_word_of_a_read_without_word_elements() {
+        let pdf = pdf_with("");
+        let mut read = read_at_native_boxes(&pdf, |_, native| native.to_owned());
+        assert!(placed(&pdf, &read).contains("committee"));
+        read.ocr_elements = None;
+        assert!(placed(&pdf, &read).is_empty());
+        read.ocr_elements = Some(Vec::new());
+        assert!(placed(&pdf, &read).is_empty());
+    }
+
+    #[test]
+    fn should_place_no_word_of_a_read_whose_words_are_not_iterator_words() {
+        let pdf = pdf_with("");
+        let mut read = read_at_native_boxes(&pdf, |_, native| native.to_owned());
+        for word in read.ocr_elements.as_mut().unwrap() {
+            word.backend_metadata.clear();
+        }
+        assert!(placed(&pdf, &read).is_empty());
+    }
+
+    #[test]
+    fn should_place_no_word_of_a_read_without_a_raster_size() {
+        let pdf = pdf_with("");
+        let mut read = read_at_native_boxes(&pdf, |_, native| native.to_owned());
+        read.metadata.additional.remove(OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY);
+        assert!(placed(&pdf, &read).is_empty());
+    }
+
+    #[test]
+    fn should_place_no_word_on_a_rotated_page() {
+        let upright = pdf_with("");
+        let read = read_at_native_boxes(&upright, |_, native| native.to_owned());
+        assert!(placed(&upright, &read).contains("committee"));
+        let mut document = lopdf::Document::load_mem(&page_bytes("", "", &[])).unwrap();
+        let page_id = *document.get_pages().values().next().unwrap();
+        document
+            .get_object_mut(page_id)
+            .unwrap()
+            .as_dict_mut()
+            .unwrap()
+            .set("Rotate", 90_i64);
+        let mut bytes = Vec::new();
+        document.save_to(&mut bytes).unwrap();
+        let rotated = PdfDocument::from_bytes(bytes).unwrap();
+        assert!(!native_word_boxes(&rotated).is_empty());
+        assert!(placed(&rotated, &read).is_empty());
     }
 }

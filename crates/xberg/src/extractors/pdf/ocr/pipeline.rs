@@ -1349,6 +1349,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut ocr_results: ahash::AHashMap<u32, String> = ahash::AHashMap::with_capacity(total);
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut original_tesseract_raster_pages = ahash::AHashSet::new();
+    // The read words each page shows at a native word's own place, for the Type0 keep rule. ~keep
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let mut native_placed_words_pages: ahash::AHashMap<u32, std::collections::HashSet<String>> = ahash::AHashMap::new();
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let mut matched_layer_occurrences = ahash::AHashMap::new();
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
@@ -1826,6 +1829,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         if read_evidence.native_ink_owned {
                             native_ink_owned_pages.insert(page_number);
                         }
+                        native_placed_words_pages.insert(page_number, read_evidence.native_placed_words);
                     }
                     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
                     let _ = read_evidence;
@@ -2003,6 +2007,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         if read_evidence.native_ink_owned {
                             native_ink_owned_pages.insert(page_number);
                         }
+                        native_placed_words_pages.insert(page_number, read_evidence.native_placed_words);
                     }
                     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
                     let _ = read_evidence;
@@ -2419,6 +2424,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         .is_builtin_tesseract(backend)
                 {
                     let page_number = (page_idx + 1) as u32;
+                    native_placed_words_pages.insert(
+                        page_number,
+                        super::native_word_coverage::read_words_at_native_place(
+                            render_doc.as_ref(),
+                            page_idx,
+                            &extraction_result,
+                        ),
+                    );
                     if super::native_word_coverage::covers_complete_native_page(
                         render_doc.as_ref(),
                         page_idx,
@@ -2783,6 +2796,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     native_words_covered_pages.remove(&page_number);
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                     native_ink_owned_pages.remove(&page_number);
+                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                    native_placed_words_pages.remove(&page_number);
                     // The render's paragraphs, confidence and word count describe the blank
                     // render, not the recovered text.
                     let recovered_paragraphs =
@@ -3318,6 +3333,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     .read()
                     .is_builtin_tesseract(backend)
             });
+        let no_placed_words = std::collections::HashSet::new();
         for boundary in boundaries {
             let page = boundary.page_number;
             let native = if page_count == 1 && page == 1 {
@@ -3337,8 +3353,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     native,
                     read,
                     &ocr_output_thresholds,
-                    native_ink_owned_pages.contains(&page),
-                    native_words_covered_pages.contains(&page),
+                    super::document::Type0ReadEvidence {
+                        ink_owned: native_ink_owned_pages.contains(&page),
+                        words_covered: native_words_covered_pages.contains(&page),
+                        placed_words: native_placed_words_pages.get(&page).unwrap_or(&no_placed_words),
+                    },
                 )
             {
                 complete_native_pages.insert(page);
@@ -3375,6 +3394,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         native_ink_owned_pages: &native_ink_owned_pages,
                         native_coverage_layers: native_coverage_layers.as_ref(),
                         clean_native_ink_pages: &clean_native_ink_pages,
+                        type0_loss_pages: &type0_loss_pages,
                     },
                 );
                 // Without the real OCR backends there are no admission sets to consult, so the
@@ -4668,6 +4688,9 @@ pub(super) struct OcrReadEvidence {
     complete_native_words: bool,
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     native_ink_owned: bool,
+    /// The read words shown at a native word's own place (see `read_words_at_native_place`).
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    native_placed_words: std::collections::HashSet<String>,
 }
 
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
@@ -5231,6 +5254,8 @@ pub(super) async fn extract_with_ocr_for_page(
     let mut complete_native_words = false;
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     let mut native_ink_owned = false;
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    let mut native_placed_words = std::collections::HashSet::new();
     #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
     let tall_source_used = false;
     #[cfg(all(
@@ -6089,6 +6114,8 @@ pub(super) async fn extract_with_ocr_for_page(
                     pdf,
                     coverage_layer.filter(|_| detached_page.is_some()).or(lost_glyph_layer),
                 ) {
+                    native_placed_words =
+                        super::native_word_coverage::read_words_at_native_place(pdf, document_page_idx, &ocr_result);
                     native_ink_owned = !complete_native_words
                         && super::document::native_preservation_is_automatic(config, document_page_number)
                         && super::native_word_coverage::native_text_paints_all_read_ink(
@@ -7453,18 +7480,26 @@ pub(super) async fn extract_with_ocr_for_page(
         && !tall_source_used
         && pages_with_recovered_xobject_payload == [false]
         && public_ocr_pages.is_empty()
-        && collected_tables.is_empty()
         && accumulated_formulas.is_empty()
         && accumulated_llm_usage.is_empty()
-        && ocr_doc
-            .as_ref()
-            .is_none_or(|doc| super::document::plain_ocr_page_can_yield_to_native(doc, read))
+        // As at the mixed-route site: the structure built from a read the Type0 rule judged may hold
+        // blocks, lists and tables of that read, which the native page replaces whole. ~keep
+        && match ocr_doc.as_ref() {
+            None => collected_tables.is_empty(),
+            Some(doc) => {
+                (collected_tables.is_empty() && super::document::plain_ocr_page_can_yield_to_native(doc, read))
+                    || super::native_word_coverage::only_structures_certified_tesseract_text(doc)
+            }
+        }
         && super::document::type0_native_is_corroborated(
             native,
             read,
             &ocr_output_thresholds,
-            native_ink_owned,
-            complete_native_words,
+            super::document::Type0ReadEvidence {
+                ink_owned: native_ink_owned,
+                words_covered: complete_native_words,
+                placed_words: &native_placed_words,
+            },
         )
     {
         for warning in render_warnings {
@@ -7608,6 +7643,8 @@ pub(super) async fn extract_with_ocr_for_page(
             complete_native_words,
             #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
             native_ink_owned,
+            #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+            native_placed_words,
             original_tesseract_raster: {
                 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                 {

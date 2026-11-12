@@ -571,10 +571,16 @@ fn type0_retention_counts_meaningful_literal_occurrences_and_requires_markers() 
     ));
 }
 
+/// The read's words a word box shows at a native word's own place, for `native_spells_read`.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn placed(words: &[&str]) -> std::collections::HashSet<String> {
+    words.iter().map(|word| (*word).to_owned()).collect()
+}
+
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 #[test]
-fn native_spells_read_needs_distinct_alphabetic_words_above_the_floor_and_share() {
-    use super::super::document::{native_spells_read, read_words_in_native};
+fn native_spells_read_needs_distinct_alphabetic_words_above_the_floor_and_share_or_placed() {
+    use super::super::document::{ReadWordsInNative, native_spells_read, read_words_in_native};
     let thresholds = crate::core::config::OcrQualityThresholds::default();
     let native = "Committee members reviewed budget design archive reader source library plans 2024";
     let marked = "The commit\u{FFFD}tee met on Tuesd\u{FFFD}y to review the budget and design";
@@ -591,61 +597,161 @@ fn native_spells_read_needs_distinct_alphabetic_words_above_the_floor_and_share(
     };
     let near_floor = format!("budget design archive {}", filler(6));
     let under_share = format!("budget design archive {}", filler(10));
-    let cases: [(&str, &str, &str, bool); 13] = [
-        ("empty read", native, "", false),
-        ("short words only", native, "the and for new met", false),
-        ("case is ignored", native, "COMMITTEE Members REVIEWED budget", true),
+    let noisy = format!("budget design archive {}", filler(26));
+    let noisy_two = format!("budget design {}", filler(26));
+    let three = ["budget", "design", "archive"];
+    let none: [&str; 0] = [];
+    let cases: [(&str, &str, &str, &[&str], bool); 20] = [
+        ("empty read", native, "", &three, false),
+        ("short words only", native, "the and for new met", &none, false),
+        (
+            "case is ignored",
+            native,
+            "COMMITTEE Members REVIEWED budget",
+            &none,
+            true,
+        ),
         (
             "markers removed from native",
             marked,
             "committee tuesday review budget design",
+            &none,
             true,
         ),
         (
             "repeated read words count once",
             native,
             "budget budget budget budget budget",
+            &["budget"],
             false,
         ),
-        ("one shared word of three", native, "budget wrong other", false),
+        ("one shared word of three", native, "budget wrong other", &none, false),
         (
             "two shared words are under the floor",
             native,
             "budget design alpha bravo",
+            &none,
             false,
         ),
-        ("three shared of nine is above the share", native, &near_floor, true),
+        (
+            "three shared of nine is above the share",
+            native,
+            &near_floor,
+            &none,
+            true,
+        ),
         (
             "three shared of thirteen is under the share",
             native,
             &under_share,
+            &none,
             false,
         ),
-        ("digits alone are not alphabetic", native, "2024 2025 2026", false),
+        (
+            "three shared of thirteen, all three placed",
+            native,
+            &under_share,
+            &three,
+            true,
+        ),
+        (
+            "three shared beside 26 noise words, none placed",
+            native,
+            &noisy,
+            &none,
+            false,
+        ),
+        (
+            "three shared beside 26 noise words, all placed",
+            native,
+            &noisy,
+            &three,
+            true,
+        ),
+        (
+            "two of the three shared words placed are under the floor",
+            native,
+            &noisy,
+            &["budget", "design"],
+            false,
+        ),
+        (
+            "placed words the layer does not spell do not count",
+            native,
+            &noisy,
+            &["aaaaa", "bbbbb", "ccccc"],
+            false,
+        ),
+        (
+            "two shared words placed beside noise are under the floor",
+            native,
+            &noisy_two,
+            &["budget", "design"],
+            false,
+        ),
+        (
+            "digits alone are not alphabetic",
+            native,
+            "2024 2025 2026",
+            &none,
+            false,
+        ),
         (
             "shared digits and one word do not reach the floor",
             native,
             "2024 budget zzzz yyyy",
+            &["2024", "budget"],
             false,
         ),
-        ("a garbled read on a legitimate page", garbled_page, garbled_read, true),
+        (
+            "a garbled read on a legitimate page",
+            garbled_page,
+            garbled_read,
+            &none,
+            true,
+        ),
         (
             "a read that contradicts the layer",
             native,
             "quarterly revenue improved",
+            &none,
+            false,
+        ),
+        (
+            "placed words of a read that contradicts the layer",
+            native,
+            "quarterly revenue improved",
+            &["quarterly", "revenue", "improved"],
             false,
         ),
     ];
-    for (name, native, read, expected) in cases {
-        let overlap = read_words_in_native(native, read, &thresholds);
+    for (name, native, read, placed_words, expected) in cases {
+        let placed_words = placed(placed_words);
+        let overlap = read_words_in_native(native, read, &placed_words, &thresholds);
         assert_eq!(
-            native_spells_read(native, read, &thresholds),
+            native_spells_read(native, read, &placed_words, &thresholds),
             expected,
             "{name}: {overlap:?}"
         );
     }
-    assert_eq!(read_words_in_native(native, &near_floor, &thresholds), (3, 9, true));
-    assert_eq!(read_words_in_native(native, &under_share, &thresholds), (3, 13, true));
+    let counts = |shared, placed, distinct| ReadWordsInNative {
+        shared,
+        placed,
+        distinct,
+        alphabetic: true,
+    };
+    assert_eq!(
+        read_words_in_native(native, &near_floor, &placed(&none), &thresholds),
+        counts(3, 0, 9)
+    );
+    assert_eq!(
+        read_words_in_native(native, &under_share, &placed(&none), &thresholds),
+        counts(3, 0, 13)
+    );
+    assert_eq!(
+        read_words_in_native(native, &noisy, &placed(&["budget", "aaaaa"]), &thresholds),
+        counts(3, 1, 29)
+    );
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -656,11 +762,13 @@ fn native_spells_read_rejects_a_read_whose_shared_words_are_all_numbers() {
     assert!(!native_spells_read(
         "2024 2025 2026 2027",
         "2024 2025 2026 2027",
+        &placed(&["2024", "2025", "2026", "2027"]),
         &thresholds
     ));
     assert!(native_spells_read(
         "2024 2025 2026 budget",
         "2024 2025 2026 budget",
+        &placed(&[]),
         &thresholds
     ));
 }
@@ -674,8 +782,18 @@ fn native_spells_read_never_accepts_a_single_shared_word_even_with_a_floor_of_on
         ..Default::default()
     };
     let native = "budget design archive reader";
-    assert!(!native_spells_read(native, "budget wrong other", &thresholds));
-    assert!(native_spells_read(native, "budget design wrong other", &thresholds));
+    assert!(!native_spells_read(
+        native,
+        "budget wrong other",
+        &placed(&["budget"]),
+        &thresholds
+    ));
+    assert!(native_spells_read(
+        native,
+        "budget design wrong other",
+        &placed(&[]),
+        &thresholds
+    ));
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -685,16 +803,24 @@ fn native_spells_read_compares_unspaced_scripts_by_bigrams() {
     let thresholds = crate::core::config::OcrQualityThresholds::default();
     let native = "我们的委员会审查了图书馆的计划和预算设计方案\u{FFFD}";
     let misread = "我们的委员会审查了图书馆的计划和预算设计万案";
-    assert!(native_spells_read(native, misread, &thresholds));
+    let none = placed(&[]);
+    assert!(native_spells_read(native, misread, &none, &thresholds));
     assert!(native_spells_read(
         "한국어 문서의 위원회가 도서관 계획을 검토했다",
         "한국어 문서의 위원회가 도서관 계획을 검토했다",
+        &none,
         &thresholds
     ));
     assert!(!native_spells_read(
         native,
         "季度收入有所增长，利润率保持稳定",
+        &none,
         &thresholds
     ));
-    assert!(!native_spells_read(native, "我们的委员", &thresholds));
+    assert!(!native_spells_read(native, "我们的委员", &none, &thresholds));
+    // Seven shared characters beside a long unrelated run: the bigrams are under the share, and an
+    // unspaced read has no placed alternative, so placing the run's word does not keep the layer.
+    let diluted = "我们的委员会审查季度收入有所增长利润率保持稳定季节变化天气预报明天下雨";
+    assert!(!native_spells_read(native, diluted, &none, &thresholds));
+    assert!(!native_spells_read(native, diluted, &placed(&[diluted]), &thresholds));
 }
