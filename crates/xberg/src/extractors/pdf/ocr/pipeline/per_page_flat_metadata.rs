@@ -17,7 +17,9 @@ const ORIENTATION_KEYS: [&str; 5] = [
 
 /// The whole-document route copies the backend metadata of the first page it reads onto the
 /// document (`backend_additional_metadata`). The per-page route reads each page on its own, so
-/// the first accepted Tesseract-read page (the first entry of `ocr_page_segmentation_modes`)
+/// the first accepted Tesseract-read page (the first entry of `ocr_page_segmentation_modes`, which
+/// lists only pages whose read text was accepted, where the whole-document route also counts a page
+/// with an empty read)
 /// stands for the run: its `psm` and the orientation keys its read carries. A page another
 /// backend read supplies nothing, and a run with no Tesseract page sets no key (GH#3007). ~keep
 pub(super) fn lift(document: &mut InternalDocument, structured_pages: &ahash::AHashMap<u32, InternalDocument>) {

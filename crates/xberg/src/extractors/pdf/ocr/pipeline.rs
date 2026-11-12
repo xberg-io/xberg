@@ -5331,6 +5331,9 @@ pub(super) async fn extract_with_ocr_for_page(
                     .filter(|_| whole_page_raster)
                     .map(|retry| (Arc::clone(retry), Arc::clone(&upright_data)));
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                // The prose proof reads only the page's own words and geometry, so it holds wherever the
+                // raster came from: a detached render, including one a stored scan replaced. Only
+                // caller-supplied images, which carry no page of this document, stay excluded (GH#3007). ~keep
                 let allow_prose = detached_page.is_some() || images.is_none();
                 #[cfg(feature = "ocr")]
                 let caption_raster =

@@ -1102,6 +1102,25 @@ fn assert_route(name: &str, result: &ExtractedDocument, expected: Route) {
         (false, false) => Route::Original,
         _ => panic!("{name}: ambiguous route psm1={psm1} auto_rotated={rotated}"),
     };
+    if observed == Route::Classifier {
+        let additional = &result.metadata.additional;
+        assert_eq!(
+            additional.get("auto_rotated"),
+            Some(&serde_json::Value::Bool(true)),
+            "{name}"
+        );
+        for key in [
+            "orientation_degrees",
+            "orientation_confidence",
+            "ocr_processed_image_width",
+            "ocr_processed_image_height",
+        ] {
+            assert!(
+                additional.get(key).is_some_and(serde_json::Value::is_number),
+                "{name}: the classifier route must report {key}"
+            );
+        }
+    }
     assert_eq!(observed, expected, "{name}: served from the wrong orientation route");
 }
 
