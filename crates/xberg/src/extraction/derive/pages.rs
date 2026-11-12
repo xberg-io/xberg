@@ -980,6 +980,20 @@ mod plain_page_rerender_tests {
         assert_ranges(&doc, &content, &pages);
     }
 
+    /// The Plain spans say nothing about Markdown content, so a Markdown page keeps the range
+    /// that its extractor measured, as on main.
+    #[test]
+    fn a_markdown_docx_page_keeps_the_range_its_extractor_measured() {
+        let doc = office_doc_with(vec![page(1, "one"), page(2, "two")], &[(1, "one"), (2, "two")]);
+        let result = super::super::derive_extraction_result(doc, false, OutputFormat::Markdown);
+        let boundaries = result.metadata.pages.and_then(|s| s.boundaries).expect("boundaries");
+        let ranges: Vec<_> = boundaries
+            .iter()
+            .map(|b| (b.page_number, b.byte_start, b.byte_end))
+            .collect();
+        assert_eq!(ranges, [(1, 0, 999), (2, 0, 999)]);
+    }
+
     fn set_boundaries(doc: &mut InternalDocument, ranges: &[(u32, usize, usize)]) {
         let structure = doc.metadata.pages.as_mut().unwrap();
         structure.boundaries = Some(

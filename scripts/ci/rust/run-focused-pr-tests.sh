@@ -233,6 +233,7 @@ run_office_page_cases() {
   for test_name in \
     a_docx_page_with_its_own_table_markdown_gets_its_part_of_the_plain_content \
     every_page_of_a_docx_document_with_ocr_pages_gets_its_part_of_the_plain_content \
+    a_markdown_docx_page_keeps_the_range_its_extractor_measured \
     a_docx_range_measured_on_the_parser_text_selects_its_page_text_in_the_plain_content \
     pages_with_the_same_text_each_get_the_range_of_their_own_text \
     a_page_with_text_and_no_elements_keeps_its_text_and_loses_its_range_with_a_warning \
@@ -265,7 +266,7 @@ pdf-ocr)
   run_discarded_recovery_cases
   ;;
 office-pages)
-  expected=26
+  expected=27
   run_office_page_cases
   ;;
 api-jobs)
