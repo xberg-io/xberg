@@ -40,6 +40,10 @@ fn supports_retry_language(language: &str) -> bool {
     !list_reads_script_of(language, HAN_MODEL)
 }
 
+pub(crate) fn may_retry_language(language: &str) -> bool {
+    super::execution::is_all_languages(language) || supports_retry_language(language)
+}
+
 pub(crate) fn requires_outer_cache_bypass(language: &str, override_path: Option<&Path>, env: &TessdataEnv) -> bool {
     // A wildcard is expanded by the processor after resolving the primary tessdata directory. ~keep
     if super::execution::is_all_languages(language) {
@@ -89,13 +93,7 @@ struct ModelSet {
 impl ModelSet {
     fn snapshot(directory: String, languages: &[String], implicit_osd: bool) -> Result<Self, OcrError> {
         let root = Path::new(&directory);
-        let mut hash = blake3::Hasher::new();
-        for language in languages {
-            let path = root.join(format!("{language}.traineddata"));
-            let revision = crate::cache::blake3_hash_file(&path)
-                .map_err(|error| engine_error(&format!("fingerprint model '{}'", path.display()), error))?;
-            hash.update(revision.as_bytes());
-        }
+        let mut hash = hash_language_models(root, languages.iter().map(String::as_str))?;
         if implicit_osd {
             let revision = crate::core::extractor::cacheability::osd_revision(root)
                 .map_err(|error| engine_error("fingerprint implicit OSD model", error))?;
@@ -115,6 +113,20 @@ impl ModelSet {
         }
         hash.update(self.revision.as_bytes());
     }
+}
+
+pub(super) fn hash_language_models<'a>(
+    root: &Path,
+    languages: impl IntoIterator<Item = &'a str>,
+) -> Result<blake3::Hasher, OcrError> {
+    let mut hash = blake3::Hasher::new();
+    for language in languages {
+        let path = root.join(format!("{language}.traineddata"));
+        let revision = crate::cache::blake3_hash_file(&path)
+            .map_err(|error| engine_error(&format!("fingerprint model '{}'", path.display()), error))?;
+        hash.update(revision.as_bytes());
+    }
+    Ok(hash)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

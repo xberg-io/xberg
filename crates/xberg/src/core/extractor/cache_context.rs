@@ -84,7 +84,8 @@ async fn fingerprint_with_reader(
     let has_orientation_models = dependencies
         .iter()
         .any(|dependency| dependency.model.is_some() || !dependency.stage_models.is_empty());
-    if has_orientation_models || dependencies.iter().any(|dependency| dependency.script_retry.is_some()) {
+    let has_script_retry = dependencies.iter().any(|dependency| dependency.script_retry.is_some());
+    if has_orientation_models || has_script_retry {
         let dependencies = dependencies.to_vec();
         let worker_cancel = cancel.cloned();
         let result = tokio::task::spawn_blocking(super::cacheability::blocking(move || {
@@ -94,11 +95,16 @@ async fn fingerprint_with_reader(
             if script_retry_requires_bypass(&dependencies, worker_cancel.as_ref())? {
                 return Ok(None);
             }
-            if has_orientation_models {
-                read_models(&dependencies, worker_cancel.as_ref()).map(Some)
+            let mut context = if has_orientation_models {
+                read_models(&dependencies, worker_cancel.as_ref())?
             } else {
-                Ok(Some(String::new()))
+                String::new()
+            };
+            if has_script_retry {
+                // ~keep Legacy outer entries may contain a retry result even after its models are removed.
+                context.push_str(":script-retry-outer-v1");
             }
+            Ok(Some(context))
         }))
         .await;
         check_cancelled(cancel)?;
@@ -195,8 +201,12 @@ impl ModelSelection {
         {
             return None;
         }
+        let languages = ocr.effective_tesseract_language();
+        if !crate::ocr::processor::script_retry::may_retry_language(&languages.join("+")) {
+            return None;
+        }
         Some(Self {
-            languages: ocr.effective_tesseract_language(),
+            languages,
             directory: ocr.tessdata_path.clone(),
         })
     }
@@ -666,7 +676,7 @@ mod explicit_mode_tests {
     }
 
     #[tokio::test]
-    async fn outer_cache_bypasses_an_image_once_the_script_retry_set_is_complete() {
+    async fn outer_cache_rejects_legacy_retry_entry_after_model_removal() {
         let root = tempfile::tempdir().unwrap();
         let language = "xberg_retry_cache_fixture";
         let mut config = config(Some(3));
@@ -681,7 +691,17 @@ mod explicit_mode_tests {
         std::fs::write(root.path().join(format!("{language}.traineddata")), b"primary").unwrap();
         std::fs::write(root.path().join("osd.traineddata"), b"orientation").unwrap();
         let missing = context().await.unwrap();
-        assert_eq!(apply_context(Some("warm".into()), &missing).as_deref(), Some("warm"));
+        let legacy_key = "warm";
+        let cache = crate::cache::GenericCache::new(
+            "extraction".into(),
+            Some(root.path().to_str().unwrap().into()),
+            30.0,
+            500.0,
+            1000.0,
+        )
+        .unwrap();
+        let legacy_result = "汉字 from the old retry".as_bytes().to_vec();
+        cache.set_default(legacy_key, legacy_result.clone(), None).unwrap();
 
         let han = root.path().join("chi_sim.traineddata");
         for bytes in [b"han-v1", b"han-v2"] {
@@ -704,10 +724,15 @@ mod explicit_mode_tests {
         let mut no_retry = config.clone();
         no_retry.ocr.as_mut().unwrap().language = vec!["chi_sim".into()];
         let no_retry = CacheDependency::for_config(&no_retry, Some("image/png"));
-        assert_eq!(fingerprint(&[no_retry], None).await.unwrap(), missing);
+        assert_eq!(fingerprint(&[no_retry], None).await.unwrap().as_deref(), Some(""));
 
         std::fs::remove_file(han).unwrap();
-        assert_eq!(context().await.unwrap(), missing);
+        let after_removal = context().await.unwrap();
+        assert_eq!(after_removal, missing);
+        let current_key = apply_context(Some(legacy_key.into()), &after_removal)
+            .expect("an image without the retry models remains cacheable");
+        assert_eq!(cache.get_default(legacy_key, None).unwrap(), Some(legacy_result));
+        assert_eq!(cache.get_default(&current_key, None).unwrap(), None);
     }
 
     #[tokio::test]

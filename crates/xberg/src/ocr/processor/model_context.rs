@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use super::script_retry::{self, RetryModels};
+use super::script_retry::{self, RetryModels, hash_language_models};
 use super::validation::{TessdataEnv, resolve_tessdata_path_in, tessdata_search_dirs};
 use crate::ocr::error::OcrError;
 use crate::ocr::types::TesseractConfig;
@@ -12,9 +12,16 @@ use crate::ocr::types::TesseractConfig;
 pub(super) struct ModelContext {
     pub(super) directory: String,
     pub(super) osd_revision: Option<blake3::Hash>,
+    primary: Option<PrimaryModels>,
     retry: Option<RetryContext>,
     invalidated: Arc<AtomicBool>,
     operation: Option<crate::core::extractor::cacheability::Cacheability>,
+}
+
+#[derive(Clone)]
+struct PrimaryModels {
+    languages: Vec<String>,
+    revision: blake3::Hash,
 }
 
 #[derive(Clone)]
@@ -51,16 +58,48 @@ impl ModelContext {
     }
 
     fn select_retry(&mut self, config: &TesseractConfig, directories: Vec<String>, noisy_below: f64) {
-        match RetryModels::resolve(&directories, &config.language, config.psm) {
-            Ok(models) => {
-                self.retry = Some(RetryContext {
-                    directories,
-                    models,
-                    noisy_below,
-                })
+        let models = match RetryModels::resolve(&directories, &config.language, config.psm) {
+            Ok(models) => models,
+            Err(error) => return self.invalidate_retry(&error),
+        };
+        if models.is_some() {
+            // ~keep The first pass can use a different directory from the complete retry set.
+            let languages: Vec<String> = config.language.split('+').map(|name| name.trim().into()).collect();
+            match self.read_primary_revision(&languages) {
+                Ok(revision) => self.primary = Some(PrimaryModels { languages, revision }),
+                Err(error) => return self.invalidate_retry(&error),
             }
-            Err(error) => self.invalidate_retry(&error),
         }
+        self.retry = Some(RetryContext {
+            directories,
+            models,
+            noisy_below,
+        });
+    }
+
+    pub(super) fn primary_revision(&self) -> Option<blake3::Hash> {
+        self.primary.as_ref().map(|primary| primary.revision)
+    }
+
+    fn read_primary_revision(&self, languages: &[String]) -> Result<blake3::Hash, OcrError> {
+        hash_language_models(
+            std::path::Path::new(&self.directory),
+            languages.iter().map(String::as_str),
+        )
+        .map(|hash| hash.finalize())
+    }
+
+    fn primary_is_current(&self) -> bool {
+        let Some(primary) = self.primary.as_ref() else {
+            return true;
+        };
+        let error = match self.read_primary_revision(&primary.languages) {
+            Ok(revision) if revision == primary.revision => return true,
+            Ok(_) => OcrError::ProcessingFailed("Primary Tesseract models changed during OCR".into()),
+            Err(error) => error,
+        };
+        self.invalidate_retry(&error);
+        false
     }
 
     pub(super) fn invalidate_retry(&self, error: &OcrError) {
@@ -121,6 +160,7 @@ impl ModelContext {
         Ok(Self {
             directory,
             osd_revision,
+            primary: None,
             retry: None,
             invalidated: Arc::new(AtomicBool::new(false)),
             operation: osd_revision.and_then(|_| crate::core::extractor::cacheability::current()),
@@ -133,6 +173,7 @@ impl ModelContext {
                 .operation
                 .as_ref()
                 .is_some_and(|operation| !operation.is_cacheable())
+            || !self.primary_is_current()
         {
             return None;
         }
@@ -164,11 +205,14 @@ impl ModelContext {
         let mut base = super::config::hash_config(config, &self.directory);
         if let Some(retry) = self.retry.as_ref() {
             let mut hash = blake3::Hasher::new();
-            hash.update(b"tesseract-script-retry-v2");
+            hash.update(b"tesseract-script-retry-v3");
             hash.update(base.as_bytes());
             hash.update(&retry.noisy_below.to_bits().to_le_bytes());
             if let Some(models) = &retry.models {
                 models.hash_into(&mut hash);
+            }
+            if let Some(revision) = self.primary_revision() {
+                hash.update(revision.as_bytes());
             }
             base = hash.finalize().to_hex().to_string();
         }
@@ -324,6 +368,13 @@ mod tests {
         assert!(complete.retry_models(&config, 75.0).is_none());
         seed(&complete);
         assert!(lookup(&snapshot(80.0)).is_none());
+
+        write(&primary, "eng", b"ENG");
+        let replaced_primary = snapshot(75.0);
+        assert!(replaced_primary.retry_models(&config, 30.0).is_some());
+        assert!(lookup(&replaced_primary).is_none());
+        assert!(complete.if_result_current(&config, || ()).is_none());
+        seed(&replaced_primary);
 
         write(&primary, "chi_sim", b"han1");
         let moved = snapshot(75.0);

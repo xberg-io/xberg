@@ -5378,7 +5378,7 @@ mod tests {
 
         cacheability::scope(async {
             let before = snapshot().await.unwrap();
-            assert_eq!(before.as_deref(), Some(""));
+            assert!(before.as_ref().is_some_and(|context| !context.is_empty()));
             for model in [language, "osd", "chi_sim"] {
                 std::fs::write(root.path().join(format!("{model}.traineddata")), model).unwrap();
             }
