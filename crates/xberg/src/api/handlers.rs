@@ -1276,6 +1276,10 @@ where
     }
 }
 
+#[cfg(all(test, feature = "api"))]
+#[derive(Clone, Copy)]
+pub(crate) struct DisallowLocalUriInputs;
+
 /// Submit an async extraction job.
 ///
 /// POST /extract-async
@@ -1317,6 +1321,7 @@ where
 )]
 pub(crate) async fn extract_async_handler(
     State(state): State<ApiState>,
+    #[cfg(test)] disallow_local: Option<axum::Extension<DisallowLocalUriInputs>>,
     mut request: UnifiedExtractRequest,
 ) -> Result<axum::response::Response, ApiError> {
     if request.inputs.is_empty() {
@@ -1325,54 +1330,36 @@ pub(crate) async fn extract_async_handler(
         )));
     }
 
-    if state.job_store.active_count() >= super::jobs::MAX_ACTIVE_JOBS {
+    request.adopt_operator_crawl_egress(&state.default_config);
+    let mut effective_config = request.config.unwrap_or_else(|| (*state.default_config).clone());
+    apply_multipart_config_fields(&mut effective_config, request.output_format, request.pdf_passwords);
+    #[cfg(not(test))]
+    let allow_local = api_allows_local_uri_inputs();
+    #[cfg(test)]
+    let allow_local = disallow_local.is_none() && api_allows_local_uri_inputs();
+    enforce_and_apply_api_uri_policy(&request.inputs, &mut effective_config, allow_local)?;
+    // Created after the last fallible step: a rejected submission must not hold a slot. ~keep
+    let Some(job_id) = state.job_store.create_job() else {
         return Err(ApiError::new(
             axum::http::StatusCode::TOO_MANY_REQUESTS,
             crate::error::XbergError::Other("too many concurrent jobs; try again later".into()),
         ));
-    }
-
-    request.adopt_operator_crawl_egress(&state.default_config);
-    let job_id = state.job_store.create_job();
-    let mut effective_config = request.config.unwrap_or_else(|| (*state.default_config).clone());
-    apply_multipart_config_fields(&mut effective_config, request.output_format, request.pdf_passwords);
-    enforce_and_apply_api_uri_policy(&request.inputs, &mut effective_config, api_allows_local_uri_inputs())?;
+    };
     effective_config.cancel_token = state.job_store.cancellation_token(&job_id);
-    let inputs = request.inputs;
-    let include_image_data = request.include_image_data;
 
-    let job_store = Arc::clone(&state.job_store);
-    let job_id_bg = job_id.clone();
-    let job_timeout_secs = state.job_timeout_secs;
-
-    tokio::spawn(async move {
-        let store = job_store;
-        let jid = job_id_bg;
-
-        store.set_running(&jid, super::jobs::now_rfc3339());
-
-        let timeout_secs = resolve_job_timeout_secs(effective_config.extraction_timeout_secs, job_timeout_secs);
-        let timeout_dur = std::time::Duration::from_secs(timeout_secs);
-        let cancel_token = effective_config.cancel_token.clone();
-
-        let extraction_fut = async {
-            let results = extract_unified_inputs(inputs, effective_config)
-                .await
-                .map_err(|e| e.body.message)?;
-            super::response::serialize_results(results, include_image_data)
-                .map_err(|e| format!("failed to serialize results: {e}"))
-        };
-
-        match timeout_extraction(timeout_dur, cancel_token, extraction_fut).await {
-            Ok(Ok(value)) => store.complete(&jid, value, super::jobs::now_rfc3339()),
-            Ok(Err(e)) => store.fail(&jid, e, super::jobs::now_rfc3339()),
-            Err(_elapsed) => store.fail(
-                &jid,
-                format!("extraction timed out after {}s", timeout_secs),
-                super::jobs::now_rfc3339(),
-            ),
-        }
-    });
+    // Built before spawning so a task dropped before its first poll (runtime shutdown)
+    // still releases the job's slot. ~keep
+    let guard = JobAbortGuard {
+        store: Arc::clone(&state.job_store),
+        job_id: job_id.clone(),
+    };
+    tokio::spawn(run_extraction_job(
+        guard,
+        request.inputs,
+        effective_config,
+        request.include_image_data,
+        state.job_timeout_secs,
+    ));
 
     Ok((
         axum::http::StatusCode::ACCEPTED,
@@ -1381,13 +1368,73 @@ pub(crate) async fn extract_async_handler(
         .into_response())
 }
 
+/// Run one async extraction job to its terminal state. `guard` fails the job if this
+/// future is dropped or panics before it reports a result.
+#[cfg(feature = "api")]
+async fn run_extraction_job(
+    guard: JobAbortGuard,
+    inputs: Vec<ApiExtractInput>,
+    effective_config: crate::core::config::ExtractionConfig,
+    include_image_data: bool,
+    job_timeout_secs: u64,
+) {
+    let store = Arc::clone(&guard.store);
+    let jid = guard.job_id.clone();
+
+    store.set_running(&jid, super::jobs::now_rfc3339());
+
+    let timeout_secs = resolve_job_timeout_secs(effective_config.extraction_timeout_secs, job_timeout_secs);
+    let timeout_dur = std::time::Duration::from_secs(timeout_secs);
+    let cancel_token = effective_config.cancel_token.clone();
+
+    let extraction_fut = async {
+        let results = extract_unified_inputs(inputs, effective_config)
+            .await
+            .map_err(|e| e.body.message)?;
+        super::response::serialize_results(results, include_image_data)
+            .map_err(|e| format!("failed to serialize results: {e}"))
+    };
+
+    match timeout_extraction(timeout_dur, cancel_token, extraction_fut).await {
+        Ok(Ok(value)) => store.complete(&jid, value, super::jobs::now_rfc3339()),
+        Ok(Err(e)) => store.fail(&jid, e, super::jobs::now_rfc3339()),
+        Err(_elapsed) => store.fail(
+            &jid,
+            format!("extraction timed out after {}s", timeout_secs),
+            super::jobs::now_rfc3339(),
+        ),
+    }
+}
+
+/// Fails the job when its task ends without reporting a result (extractor panic,
+/// task dropped before or during its run at runtime shutdown) so it does not stay
+/// `Pending` or `Running` and hold its slot forever. It cancels the job's token before
+/// the job shows `Failed`, so blocking extraction that outlives the task stops. After a
+/// normal completion or failure `abort` is a no-op.
+#[cfg(feature = "api")]
+struct JobAbortGuard {
+    store: Arc<super::jobs::JobStore>,
+    job_id: String,
+}
+
+#[cfg(feature = "api")]
+impl Drop for JobAbortGuard {
+    fn drop(&mut self) {
+        self.store.abort(
+            &self.job_id,
+            "extraction task ended without a result".to_string(),
+            super::jobs::now_rfc3339(),
+        );
+    }
+}
+
 /// Poll the status of an async extraction job.
 ///
 /// GET /jobs/{job_id}
 ///
 /// Returns the current `JobStatus`. Once `state == completed` the `result`
 /// field is populated; once `state == failed` the `error` field is populated.
-/// Jobs expire after 5 minutes and return 404 once evicted.
+/// Jobs expire 5 minutes after they finish and return 404 once evicted.
 #[cfg(feature = "api")]
 #[utoipa::path(
     get,
@@ -1427,8 +1474,8 @@ pub(crate) async fn job_status_handler(
 /// signalled to stop cooperatively at its next checkpoint. Both transition to
 /// `cancelled` and return the updated `JobStatus`. A job that already reached
 /// `completed`, `failed`, or `cancelled` cannot be cancelled again and returns
-/// 409. Jobs expire after 5 minutes and return 404 once evicted, as with
-/// `GET /jobs/{job_id}`.
+/// 409. Jobs expire 5 minutes after they finish and return 404 once evicted,
+/// as with `GET /jobs/{job_id}`.
 #[cfg(feature = "api")]
 #[utoipa::path(
     delete,
@@ -1515,6 +1562,10 @@ mod tests {
     use tower::ServiceExt;
 
     fn test_router() -> Router {
+        test_router_with_store(std::sync::Arc::new(crate::api::jobs::JobStore::new()))
+    }
+
+    fn test_router_with_store(job_store: std::sync::Arc<crate::api::jobs::JobStore>) -> Router {
         let extraction_service = crate::service::ExtractionServiceBuilder::new()
             .build()
             .expect("default extraction service configuration should be valid");
@@ -1522,7 +1573,7 @@ mod tests {
             default_config: std::sync::Arc::new(crate::ExtractionConfig::default()),
             extraction_service: std::sync::Arc::new(std::sync::Mutex::new(extraction_service)),
             #[cfg(feature = "api")]
-            job_store: std::sync::Arc::new(crate::api::jobs::JobStore::new()),
+            job_store,
             #[cfg(feature = "api")]
             job_timeout_secs: crate::core::ServerConfig::default().job_timeout_secs,
             #[cfg(feature = "prometheus")]
@@ -2358,6 +2409,216 @@ mod tests {
             .expect("body bytes readable");
         let resp: AsyncJobResponse = serde_json::from_slice(&bytes).expect("response parses as AsyncJobResponse");
         assert!(!resp.job_id.is_empty(), "job_id must be non-empty");
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn test_extract_async_rejects_local_uri_before_admission() {
+        use crate::api::jobs::{JobStore, MAX_ACTIVE_JOBS};
+
+        for active_count in [0, MAX_ACTIVE_JOBS] {
+            let job_store = Arc::new(JobStore::new());
+            for _ in 0..active_count {
+                job_store.create_job().expect("slot available");
+            }
+            let app = test_router_with_store(Arc::clone(&job_store)).layer(axum::Extension(DisallowLocalUriInputs));
+            let body = serde_json::json!({"inputs": [{"uri": "file:///local-document.pdf"}]});
+
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/extract-async")
+                        .header("content-type", "application/json")
+                        .body(Body::from(body.to_string()))
+                        .expect("valid request"),
+                )
+                .await
+                .expect("handler responded");
+
+            assert_eq!(
+                response.status(),
+                StatusCode::BAD_REQUEST,
+                "active jobs: {active_count}"
+            );
+            assert_eq!(job_store.active_count(), active_count);
+        }
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn test_extract_async_returns_429_at_active_job_limit() {
+        let job_store = std::sync::Arc::new(crate::api::jobs::JobStore::new());
+        for _ in 0..crate::api::jobs::MAX_ACTIVE_JOBS {
+            job_store.create_job().expect("slot available");
+        }
+        let app = test_router_with_store(std::sync::Arc::clone(&job_store));
+        let body = serde_json::json!({"inputs": [{"uri": "https://example.com/doc.pdf"}]});
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/extract-async")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .expect("valid request"),
+            )
+            .await
+            .expect("handler responded");
+
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(job_store.active_count(), crate::api::jobs::MAX_ACTIVE_JOBS);
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn test_job_abort_guard_fails_job_when_task_panics() {
+        use crate::api::types::JobState;
+
+        let job_store = std::sync::Arc::new(crate::api::jobs::JobStore::new());
+        let job_id = job_store.create_job().expect("slot available");
+        let guard = JobAbortGuard {
+            store: std::sync::Arc::clone(&job_store),
+            job_id: job_id.clone(),
+        };
+
+        let task = tokio::spawn(async move {
+            let _guard = guard;
+            panic!("extractor crashed");
+        });
+        assert!(task.await.is_err());
+
+        assert_eq!(job_store.get(&job_id).unwrap().state, JobState::Failed);
+        assert_eq!(job_store.active_count(), 0);
+    }
+
+    /// Dropping a task while blocking extraction is held must signal the job's token and
+    /// only then show the job as `Failed` with its slot free. An observer thread reads the
+    /// store in a tight loop and checks the token the moment it sees `Failed`.
+    #[cfg(feature = "api")]
+    #[test]
+    fn test_dropped_task_cancels_token_before_job_fails() {
+        use crate::api::types::JobState;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::time::{Duration, Instant};
+
+        for run in 0..100 {
+            let job_store = std::sync::Arc::new(crate::api::jobs::JobStore::new());
+            let job_id = job_store.create_job().expect("slot available");
+            let token = job_store
+                .cancellation_token(&job_id)
+                .expect("token registered on create");
+            let guard = JobAbortGuard {
+                store: std::sync::Arc::clone(&job_store),
+                job_id: job_id.clone(),
+            };
+
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .build()
+                .expect("runtime builds");
+            runtime.spawn(async move {
+                let _guard = guard;
+                std::future::pending::<()>().await;
+            });
+            runtime.block_on(tokio::task::yield_now());
+
+            // Blocking work that only stops when its token fires; it outlives the task.
+            let work_token = token.clone();
+            let work_started = std::sync::Arc::new(AtomicBool::new(false));
+            let work_started_flag = std::sync::Arc::clone(&work_started);
+            let work = std::thread::spawn(move || {
+                work_started_flag.store(true, Ordering::SeqCst);
+                let deadline = Instant::now() + Duration::from_secs(5);
+                while !work_token.is_cancelled() {
+                    if Instant::now() > deadline {
+                        return false;
+                    }
+                    std::thread::yield_now();
+                }
+                true
+            });
+            while !work_started.load(Ordering::SeqCst) {
+                std::thread::yield_now();
+            }
+
+            let observer_store = std::sync::Arc::clone(&job_store);
+            let observer_id = job_id.clone();
+            let observer_token = token.clone();
+            let observer = std::thread::spawn(move || {
+                let deadline = Instant::now() + Duration::from_secs(5);
+                loop {
+                    if observer_store
+                        .get(&observer_id)
+                        .is_some_and(|s| s.state == JobState::Failed)
+                    {
+                        return Some(observer_token.is_cancelled());
+                    }
+                    if Instant::now() > deadline {
+                        return None;
+                    }
+                }
+            });
+
+            drop(runtime);
+
+            assert!(
+                work.join().unwrap(),
+                "run {run}: blocking work never saw its token fire"
+            );
+            assert_eq!(
+                observer.join().unwrap(),
+                Some(true),
+                "run {run}: the job showed Failed before its token was cancelled"
+            );
+            assert_eq!(job_store.get(&job_id).unwrap().state, JobState::Failed);
+            assert_eq!(job_store.active_count(), 0, "run {run}: the slot was not released");
+        }
+    }
+
+    /// A task dropped before its first poll (runtime shutdown right after the
+    /// submission) must still release the job's slot, which is why the guard is
+    /// built before the future is spawned.
+    #[cfg(feature = "api")]
+    #[test]
+    fn test_extract_async_task_dropped_before_first_poll_fails_job() {
+        use crate::api::types::JobState;
+
+        let job_store = std::sync::Arc::new(crate::api::jobs::JobStore::new());
+        let app = test_router_with_store(std::sync::Arc::clone(&job_store));
+        let body = serde_json::json!({"inputs": [{"uri": "https://example.com/doc.pdf"}]});
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime builds");
+        let job_id = runtime.block_on(async {
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/extract-async")
+                        .header("content-type", "application/json")
+                        .body(Body::from(body.to_string()))
+                        .expect("valid request"),
+                )
+                .await
+                .expect("handler responded");
+            assert_eq!(response.status(), StatusCode::ACCEPTED);
+            let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("body bytes readable");
+            serde_json::from_slice::<AsyncJobResponse>(&bytes)
+                .expect("response parses")
+                .job_id
+        });
+
+        // The task was spawned but never polled: it has not moved the job to Running. ~keep
+        assert_eq!(job_store.get(&job_id).unwrap().state, JobState::Pending);
+        drop(runtime);
+
+        assert_eq!(job_store.get(&job_id).unwrap().state, JobState::Failed);
+        assert_eq!(job_store.active_count(), 0);
     }
 
     #[cfg(feature = "api")]
