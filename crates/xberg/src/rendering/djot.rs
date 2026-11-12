@@ -8,7 +8,7 @@ use crate::types::internal::{ElementKind, InternalDocument};
 
 use super::common::{
     FootnoteCollector, NestingKind, RenderState, annotated_math, annotation_display_text, annotation_type_label,
-    ensure_trailing_newline, finalize_output, get_admonition_kind, get_admonition_title, get_language,
+    decimal_ordinal, ensure_trailing_newline, finalize_output, get_admonition_kind, get_admonition_title, get_language,
     handle_container_end, is_body_element, is_container_end, normalize_inline_text, parse_metadata_entries,
     push_with_bq, render_annotated_text_with_plain, render_nested_annotated_text, render_table_djot,
     valid_math_annotation,
@@ -70,25 +70,8 @@ pub(crate) fn render_djot(doc: &InternalDocument) -> String {
                 let source_label = elem.list_item_source_label().filter(|label| !label.is_empty());
                 let mut block = String::with_capacity(indent.len() + text.len() + 8);
                 block.push_str(&indent);
-                // A literal source marker (e.g. "B.", "(a)") cannot be expressed by Djot's
-                // auto-incrementing decimal marker syntax either, so it falls back to a
-                // bullet with the label written out as visible text, same trade-off as the
-                // markdown renderer (comrak_bridge) makes. `next_list_number` is still
-                // called (and its result discarded) so a sibling item without a label keeps
-                // counting from the position it would have held either way.
                 if ordered {
-                    let n = state.next_list_number();
-                    match source_label {
-                        Some(label) => {
-                            block.push_str("- ");
-                            block.push_str(label);
-                            block.push(' ');
-                        }
-                        None => {
-                            block.push_str(&n.to_string());
-                            block.push_str(". ");
-                        }
-                    }
+                    block.push_str(&djot_ordered_marker(state.next_list_number(), source_label));
                 } else if let Some(label) = source_label {
                     block.push_str("- ");
                     block.push_str(label);
@@ -535,6 +518,24 @@ fn escape_text_lines(text: &str) -> String {
         escaped.push_str(&escape_block_prefix(line, false));
     }
     escaped
+}
+
+/// The marker a Djot ordered list item paints. A decimal source label ("1.", "5.") is
+/// exactly the auto-incrementing decimal marker Djot opens an ordered list with, so it
+/// is written as the marker, the same parse the markdown bridge applies
+/// (`common::decimal_ordinal`); any other literal source marker (e.g. "B.", "(a)")
+/// cannot be expressed by that marker syntax and falls back to a bullet with the label
+/// written out as visible text. `n` is the positional counter the renderer advances
+/// (`next_list_number` is still called for every ordered item, labeled or not), so a
+/// sibling item without a label keeps counting from the position it would have held.
+fn djot_ordered_marker(n: u32, source_label: Option<&str>) -> String {
+    if let Some(ordinal) = source_label.and_then(decimal_ordinal) {
+        return format!("{ordinal}. ");
+    }
+    match source_label {
+        Some(label) => format!("- {label} "),
+        None => format!("{n}. "),
+    }
 }
 
 /// A decimal number, a single letter or a roman numeral run: the labels Djot opens a list with.
