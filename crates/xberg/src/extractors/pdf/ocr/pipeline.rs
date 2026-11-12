@@ -6142,7 +6142,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 table.page_number = document_page_number;
             }
             #[cfg(feature = "pdf")]
-            if lazy_pdf_render_state.is_none() && xobject_document.is_some() && !tables_in_render {
+            if xobject_document.is_some() && !tables_in_render {
                 // ~keep The detached page owner scales table rectangles from the render raster
                 // (`build_pipeline_ocr_page_document`), but recognition may have read a resampled
                 // image (GH#1895): bring the rectangles from that frame to the render's.
