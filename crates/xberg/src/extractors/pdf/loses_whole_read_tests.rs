@@ -61,3 +61,16 @@ fn should_keep_the_whole_read_for_a_page_number_below_one() {
     let whole_read_pages = pages();
     assert!(!loses_whole_read(Some(&whole_read_pages), &[failure(0, false)], &[]));
 }
+
+/// Several failures at once: a single unrecovered failure on a page the whole read read with
+/// text decides the fallback even when every other failure was recovered — `any` over the
+/// failures decides, `all` (every failure unrecovered) does not, so this case fails if the
+/// `any` is replaced with an `all`.
+#[test]
+fn should_lose_the_whole_read_when_one_of_several_failures_is_unrecovered_on_a_page_it_read() {
+    let whole_read_pages = pages();
+    assert!(
+        loses_whole_read(Some(&whole_read_pages), &[failure(1, true), failure(2, false)], &[]),
+        "page 2's unrecovered failure loses the whole read even though page 1's was recovered"
+    );
+}

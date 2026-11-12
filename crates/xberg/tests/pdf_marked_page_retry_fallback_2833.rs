@@ -24,7 +24,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
-use xberg::core::config::{OcrStrategy, PageConfig};
+use xberg::core::config::{ConcurrencyConfig, OcrStrategy, PageConfig};
 use xberg::plugins::{OcrBackend, OcrBackendType, Plugin, register_ocr_backend, unregister_ocr_backend};
 use xberg::types::{ExtractedDocument, ExtractionMethod};
 use xberg::{ExtractionConfig, OcrConfig, OutputFormat};
@@ -234,8 +234,13 @@ fn script(pages: &[(ScriptKey, &[Read])]) -> HashMap<ScriptKey, Vec<Read>> {
 }
 
 /// Runs the whole-document read and the marked-page retry of `source` with a Latin-only first
-/// stage whose backend is `backend`, through the public API.
+/// stage whose backend is `backend`, through the public API. `max_threads` pins the extraction's
+/// concurrency (`ConcurrencyConfig::max_threads`); `None` leaves the automatic budget.
 fn read(source: &[u8], backend: Arc<ByRaster>) -> ExtractedDocument {
+    read_pinned(source, backend, None)
+}
+
+fn read_pinned(source: &[u8], backend: Arc<ByRaster>, max_threads: Option<usize>) -> ExtractedDocument {
     let _guard = Guard;
     register_ocr_backend(backend).unwrap();
     let pipeline = serde_json::json!({"stages": [
@@ -253,6 +258,10 @@ fn read(source: &[u8], backend: Arc<ByRaster>) -> ExtractedDocument {
             ..Default::default()
         }),
         ocr_strategy: OcrStrategy::Auto,
+        concurrency: max_threads.map(|threads| ConcurrencyConfig {
+            max_threads: Some(threads),
+            max_concurrent_ocr: None,
+        }),
         ..Default::default()
     };
     helpers::extract_bytes_document_blocking(source, "application/pdf", &config).unwrap()
@@ -361,7 +370,9 @@ fn a_scan_the_whole_read_read_blank_does_not_drop_the_retry_nor_warn_of_an_unrea
 /// scan's script key, and the whole read can re-read the scan through its embedded-image retry
 /// (case B shows that re-read), so the scan reads Latin until the marked page's raster has been
 /// read a second time — the whole read's read of it, then the per-page retry's read of it — and
-/// fails only from then on.
+/// fails only from then on. The extraction runs with one thread, so the two reads of the arming
+/// key run in document order whatever the task schedule, and the test asserts the retry's read
+/// of the marked page actually armed the fallback (`retry_armed`).
 #[test]
 #[serial_test::serial]
 fn a_retry_failure_unrecovered_on_a_page_the_whole_read_read_drops_the_retry_for_the_whole_read() {
@@ -377,7 +388,16 @@ fn a_retry_failure_unrecovered_on_a_page_the_whole_read_read_drops_the_retry_for
         // script and arms the retry; the retry's read of it is the key's second call.
         Some((KHMER_DIMS, false)),
     ));
-    let automatic = read(THEN_SCANNED, backend.clone());
+    // One thread pins the batch width the whole read and the retry run at
+    // (`resolve_thread_budget` sizes both from `max_threads`), so the scripted reads cannot
+    // interleave: the arming key's two calls — the whole read's, then the retry's — run in
+    // document order no matter which task would have consumed the script first.
+    let automatic = read_pinned(THEN_SCANNED, backend.clone(), Some(1));
+    assert!(
+        backend.retry_armed.load(Ordering::SeqCst),
+        "the per-page retry's read of the marked page must arm the fallback: calls {:?}",
+        backend.calls.lock().unwrap()
+    );
     assert_eq!(
         warnings_containing(&automatic, "could not read every other page").len(),
         1,
@@ -482,8 +502,9 @@ fn a_whole_read_that_keeps_the_marked_script_arms_no_retry_and_stands_on_its_own
         "no retry ran, so no retry warning appears: {:?}",
         automatic.processing_warnings
     );
-    assert!(
-        automatic.ocr_page_failures.iter().flatten().count() == 0,
+    assert_eq!(
+        automatic.ocr_page_failures.iter().flatten().count(),
+        0,
         "every read succeeded: {:?}",
         automatic.ocr_page_failures
     );

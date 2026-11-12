@@ -14,7 +14,7 @@ mod ink_probe;
 mod layout_hints;
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 mod layout_runner;
-#[cfg(all(test, feature = "ocr", not(target_arch = "wasm32")))]
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 mod loses_whole_read_tests;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 mod mixed_tables;
@@ -2528,7 +2528,7 @@ fn dropped_script_warnings(
 /// script the whole read dropped (`dropped_pages`) never decides alone — a dropped page always
 /// has native text, which recovers its failure first — so its conjunct is redundant through the
 /// public API, but it keeps the fallback away from the pages the targeted run exists to serve.
-#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn loses_whole_read(
     whole_read_pages: Option<&[String]>,
     failures: &[crate::types::OcrPageFailure],
