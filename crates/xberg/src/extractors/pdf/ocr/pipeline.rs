@@ -8,6 +8,17 @@
 #[path = "pipeline/direct_rgb_budget_recovery.rs"]
 mod direct_rgb_budget_recovery;
 
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "pdf",
+    any(
+        paddle_ocr,
+        all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))
+    )
+))]
+#[path = "pipeline/per_page_flat_metadata.rs"]
+mod per_page_flat_metadata;
+
 #[cfg(all(any(feature = "ocr", feature = "ocr-wasm"), feature = "layout-detection"))]
 use super::document::assemble_ocr_page_paragraphs;
 #[cfg(all(
@@ -388,6 +399,38 @@ impl std::fmt::Display for FailedOcrRun {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.error.fmt(formatter)
     }
+}
+
+/// The error recorded for a page the extraction time limit stopped before it was read.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) const TIME_LIMIT_UNREAD_PAGE_ERROR: &str = "the extraction time limit was reached before the page was read";
+
+/// The error of a run in which no page was read. Pages the time limit left unread make it the
+/// time limit, whatever failed earlier; otherwise it is the error of the first failed page.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn run_error_for_failed_pages(
+    page_indices: &[usize],
+    failed_page_errors: &mut ahash::AHashMap<usize, crate::XbergError>,
+) -> crate::XbergError {
+    let stopped_by_limit = page_indices.iter().find(|page_idx| {
+        matches!(
+            failed_page_errors.get(page_idx),
+            Some(crate::XbergError::Timeout { .. })
+        )
+    });
+    let chosen = stopped_by_limit
+        .or_else(|| {
+            page_indices
+                .iter()
+                .find(|page_idx| failed_page_errors.contains_key(page_idx))
+        })
+        .copied();
+    chosen
+        .and_then(|page_idx| failed_page_errors.remove(&page_idx))
+        .unwrap_or_else(|| crate::XbergError::Ocr {
+            message: "OCR failed for every requested page".to_string(),
+            source: None,
+        })
 }
 
 /// Add `incoming` records to `failures`. A page that already has a record keeps its first
@@ -1192,18 +1235,21 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut native_ink_owned_pages = ahash::AHashSet::new();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    let ink_coverage_layers = {
-        let markers = if !probing_hidden_layer && all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative {
-            super::document::marker_native_ink_layers(
-                native_text,
-                boundaries,
-                &ocr_set,
-                page_count,
-                &ocr_output_thresholds,
-            )
-        } else {
-            ahash::AHashMap::new()
-        };
+    // Marker-bearing ink-proof layers are offered only when `marker_layers_allowed` says so (#2900). ~keep
+    let native_coverage_layers = if marker_layers_allowed(
+        all_pages_failed_policy,
+        probing_hidden_layer,
+        mixed_route_layout_active,
+        &config.ocr_strategy,
+        config.ocr.as_ref(),
+    ) {
+        let markers = super::document::marker_native_ink_layers(
+            native_text,
+            boundaries,
+            &ocr_set,
+            page_count,
+            &ocr_output_thresholds,
+        );
         if markers.is_empty() {
             page_layers.clone()
         } else {
@@ -1211,15 +1257,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             layers.extend(markers);
             Some(std::sync::Arc::new(layers))
         }
+    } else {
+        None
     };
-    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    let native_coverage_layers = ink_coverage_layers.as_ref().filter(|_| {
-        all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative
-            && !probing_hidden_layer
-            && !mixed_route_layout_active
-            && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
-            && config.ocr.as_ref().is_some_and(uses_default_ocr_pipeline)
-    });
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut alternative_raster_pages = ahash::AHashSet::new();
     // Tesseract's own mean confidence for each page it read, 0-100. Captured here because
@@ -1269,7 +1309,36 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut preprocessing_by_page: ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata> =
         ahash::AHashMap::new();
     let mut xobject_recovery_budget = crate::extractors::security::SecurityBudget::from_config(config);
+    let page_loop = config
+        .cancel_token
+        .as_ref()
+        .map(crate::cancellation::CancellationToken::enter_page_loop);
     for batch_start in (0..total).step_by(batch_size) {
+        // The extraction time limit asks for the pages read so far: the pages of the batches
+        // that finished stay in the result and every later page is recorded as unread.
+        if let Some(token) = config.cancel_token.as_ref().filter(|token| token.stop_requested()) {
+            if let Some(&first_unread) = page_indices.get(batch_start) {
+                token.note_unread_page((first_unread + 1) as u32);
+            }
+            for &page_idx in &page_indices[batch_start..] {
+                merge_ocr_page_failures(
+                    &mut page_failures,
+                    vec![crate::types::OcrPageFailure {
+                        page: (page_idx + 1) as u32,
+                        error: TIME_LIMIT_UNREAD_PAGE_ERROR.to_string(),
+                        recovered: mixed_native_page_has_content(native_text, boundaries, page_idx),
+                    }],
+                );
+                failed_page_errors.insert(
+                    page_idx,
+                    crate::XbergError::Timeout {
+                        elapsed_ms: 0,
+                        limit_ms: 0,
+                    },
+                );
+            }
+            break;
+        }
         let batch_end = (batch_start + batch_size).min(total);
         let default_security_limits = crate::extractors::security::SecurityLimits::default();
         let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
@@ -1494,7 +1563,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         single_block_pages: Some(std::sync::Arc::clone(&single_block_pages)),
                         native_page_layers: None,
                         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                        decision_layers: page_layers.clone(),
+                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                         native_coverage_layers: native_coverage_layers
+                            .as_ref()
                             .filter(|_| {
                                 super::document::native_preservation_is_automatic(config, (page_idx + 1) as u32)
                             })
@@ -1714,7 +1786,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         single_block_pages: Some(std::sync::Arc::clone(&single_block_pages)),
                         native_page_layers: None,
                         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                        decision_layers: page_layers.clone(),
+                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                         native_coverage_layers: native_coverage_layers
+                            .as_ref()
                             .filter(|_| {
                                 super::document::native_preservation_is_automatic(config, (*page_idx + 1) as u32)
                             })
@@ -2144,6 +2219,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 if correction_degrees == 0
                     && !alternative_raster_pages.contains(&((page_idx + 1) as u32))
                     && let Some(layer) = native_coverage_layers
+                        .as_ref()
                         .filter(|_| super::document::native_preservation_is_automatic(config, (page_idx + 1) as u32))
                         .and_then(|layers| layers.get(&((page_idx + 1) as u32)))
                     && crate::plugins::registry::get_ocr_backend_registry()
@@ -2578,19 +2654,15 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         }
     }
 
+    drop(page_loop);
+
     if all_pages_failed_policy == AllPagesFailedPolicy::ReturnError
         && !page_indices.is_empty()
         && page_indices
             .iter()
             .all(|page_idx| failed_page_errors.contains_key(page_idx))
     {
-        let error = page_indices
-            .iter()
-            .find_map(|page_idx| failed_page_errors.remove(page_idx))
-            .unwrap_or_else(|| crate::XbergError::Ocr {
-                message: "OCR failed for every requested page".to_string(),
-                source: None,
-            });
+        let error = run_error_for_failed_pages(&page_indices, &mut failed_page_errors);
         return Err(FailedOcrRun { error, page_failures });
     }
 
@@ -2809,6 +2881,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             });
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             let clean_ink_layer = native_coverage_layers
+                .as_ref()
                 .and_then(|layers| layers.get(page_number))
                 .map(String::as_str)
                 .filter(|layer| !layer.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER));
@@ -2962,6 +3035,25 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         &mut paragraphs,
                         page_rotation_degrees,
                     );
+                    // ~keep A pipeline page keeps its paragraphs in the OCR raster's pixels, while
+                    // its tables are already in points; assembly compares the two to drop a
+                    // paragraph a table carries. Scale only for that comparison, after the list
+                    // passes above, whose marker geometry is measured in the raster frame. A
+                    // sideways page keeps the raster frame: its geometry is not reading order, and
+                    // pointing it at the tables would put sideways heading text after them.
+                    if !existing.tables.is_empty()
+                        && !detached_mixed_frame::read_sideways(&existing.metadata)
+                        && let Some(&(width_px, height_px)) = ocr_raster_by_page.get(page_number)
+                        && width_px > 0
+                        && height_px > 0
+                    {
+                        let (width_pt, height_pt) =
+                            page_dimensions_pt(&render_doc, page_number.saturating_sub(1) as usize);
+                        detached_mixed_frame::scale_paragraph_geometry(
+                            &mut paragraphs,
+                            (width_pt / width_px as f32, height_pt / height_px as f32),
+                        );
+                    }
                     let mut new_page_doc = crate::pdf::structure::assemble_internal_document(
                         vec![paragraphs],
                         &existing.tables,
@@ -3065,7 +3157,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     super::native_word_coverage::FinalOcrStructureYieldSets {
                         native_words_covered_pages: &native_words_covered_pages,
                         native_ink_owned_pages: &native_ink_owned_pages,
-                        native_coverage_layers,
+                        native_coverage_layers: native_coverage_layers.as_ref(),
                         clean_native_ink_pages: &clean_native_ink_pages,
                         type0_loss_pages: &type0_loss_pages,
                     },
@@ -3217,7 +3309,9 @@ pub(in crate::extractors::pdf) fn render_mixed_plain_pages(
             Ok(plain) => {
                 rendered.insert(page, plain);
             }
-            Err(reason) => tracing::debug!(page, reason, "Declined mixed OCR Plain page rendering"),
+            // ~keep The page keeps its Markdown transcript in Plain output, so the decline is a
+            // degraded result, not routine flow.
+            Err(reason) => tracing::warn!(page, reason, "Declined mixed OCR Plain page rendering"),
         }
     }
     if !rendered.is_empty() {
@@ -3235,8 +3329,9 @@ fn check_accepted_ocr_tokens(
     use crate::types::internal::ElementKind;
     use pulldown_cmark::{Event, Options, Parser, Tag};
 
-    // ~keep PDF table assembly may suppress a paragraph covered by cell tokens. Require the
-    // accepted token order, including punctuation, before replacing its transcript.
+    // ~keep PDF table assembly may suppress a paragraph covered by cell tokens, or keep one it
+    // failed to match to a table. Require exactly the accepted token order, including
+    // punctuation, before replacing its transcript: no word dropped, none added.
     let mut tables = document.elements.iter().filter_map(|element| match element.kind {
         ElementKind::Table { table_index } => document.tables.get(table_index as usize),
         _ => None,
@@ -3291,9 +3386,14 @@ fn check_accepted_ocr_tokens(
             _ => {}
         }
     }
-    retains_ocr_words(&accepted[offset..], &mut retained)
+    if !retains_ocr_words(&accepted[offset..], &mut retained) {
+        return Err("Plain page omitted accepted prose");
+    }
+    retained
+        .next()
+        .is_none()
         .then_some(())
-        .ok_or("Plain page omitted accepted prose")
+        .ok_or("Plain page added text absent from the accepted transcript")
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -3434,15 +3534,24 @@ fn retains_inline_group(
     let mut literal = source.split_whitespace().peekable();
     let mut projected = visible.split_whitespace().peekable();
     if projected.peek().is_none() {
+        // ~keep A block marker projects to nothing, but a Plain element may still spell it.
+        let mut spelled = retained.clone();
+        if source.split_whitespace().all(|word| spelled.next() == Some(word)) {
+            *retained = spelled;
+        }
         return true;
     }
-    // ~keep Advance both alternatives together so a failed literal match cannot
-    // repeatedly rescan the remainder of the page.
+    // ~keep Advance both alternatives together; each Plain word must continue one of them,
+    // so a word the accepted group lacks fails the group instead of being skipped.
+    let (mut literal_live, mut projected_live) = (true, true);
     for candidate in retained {
-        if literal.next_if_eq(&candidate).is_some() && literal.peek().is_none()
-            || projected.next_if_eq(&candidate).is_some() && projected.peek().is_none()
-        {
+        literal_live &= literal.next_if_eq(&candidate).is_some();
+        projected_live &= projected.next_if_eq(&candidate).is_some();
+        if literal_live && literal.peek().is_none() || projected_live && projected.peek().is_none() {
             return true;
+        }
+        if !literal_live && !projected_live {
+            return false;
         }
     }
     false
@@ -3501,8 +3610,7 @@ fn record_block_markers(
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 fn retains_ocr_words(text: &str, retained: &mut std::str::SplitWhitespace<'_>) -> bool {
-    text.split_whitespace()
-        .all(|word| retained.any(|candidate| candidate == word))
+    text.split_whitespace().all(|word| retained.next() == Some(word))
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -3881,6 +3989,7 @@ async fn extract_pages_with_per_page_pipeline(
     document.processing_warnings = warnings;
     document.ocr_page_failures = page_failures;
     merge_structured_ocr_pages_into_internal_document(&mut document, &accepted_pages, &structured_pages);
+    per_page_flat_metadata::lift(&mut document, &structured_pages);
     let tables = document.tables.clone();
     let ocr_elements = document.prebuilt_ocr_elements.clone().unwrap_or_default();
 
@@ -4266,6 +4375,10 @@ pub(crate) struct PageOcrHints {
     /// has chosen its output, a page whose OCR text is judged recognition noise gets its layer
     /// first.
     pub(crate) native_page_layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
+    /// The layers the mixed route's page decision compares each page's OCR text with, for the
+    /// per-page calls that carry no `native_page_layers`.
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    pub(crate) decision_layers: Option<std::sync::Arc<ahash::AHashMap<u32, String>>>,
     /// Original marker-bearing text of the only physical page in a whole automatic fallback.
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     pub(crate) single_native_type0_page: Option<std::sync::Arc<str>>,
@@ -4275,6 +4388,13 @@ pub(crate) struct PageOcrHints {
 
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 impl PageOcrHints {
+    pub(super) fn decision_layer(&self, page: u32) -> Option<&str> {
+        self.decision_layers
+            .as_ref()
+            .or(self.native_page_layers.as_ref())
+            .and_then(|layers| layers.get(&page))
+            .map(String::as_str)
+    }
     fn native_layer(&self, page: u32) -> Option<&str> {
         self.native_coverage_layers
             .as_ref()
@@ -5251,7 +5371,10 @@ pub(super) async fn extract_with_ocr_for_page(
                     .filter(|_| whole_page_raster)
                     .map(|retry| (Arc::clone(retry), Arc::clone(&upright_data)));
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                let allow_prose = detached_page.is_none() && images.is_none();
+                // The prose proof reads only the page's own words and geometry, so it holds wherever the
+                // raster came from: a detached render, including one a stored scan replaced. Only
+                // caller-supplied images, which carry no page of this document, stay excluded (GH#3007). ~keep
+                let allow_prose = detached_page.is_some() || images.is_none();
                 #[cfg(feature = "ocr")]
                 let caption_raster =
                     (capture_caption && retry.is_some() && page_rotation_degrees == 0 && correction_degrees == 0).then(
@@ -5760,6 +5883,37 @@ pub(super) async fn extract_with_ocr_for_page(
                 &mut ocr_result,
                 config.security_limits.as_ref().unwrap_or(&Default::default()),
             )?;
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            if batch_upright_correction[offset].0 == 0
+                && !complete_native_words
+                && !native_ink_owned
+                && !pages_with_recovered_xobject_payload[page_idx]
+                && super::document::resolved_ocr_correction_degrees(&ocr_result.metadata).is_none_or(|angle| angle == 0)
+                && super::document::native_preservation_is_automatic(config, document_page_number)
+                && get_ocr_backend_registry().read().is_builtin_tesseract(&backend)
+                && let Some(pdf) = detached_page
+                    .map(|source| source.document)
+                    .or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf.as_ref()))
+            {
+                super::layer_token_recovery::recover_page(
+                    pdf,
+                    document_page_idx,
+                    &mut ocr_result,
+                    page_ocr_hints
+                        .as_ref()
+                        .and_then(|hints| hints.decision_layer(document_page_number)),
+                    super::native_word_coverage::InkProofLimits {
+                        thresholds: &ocr_output_thresholds,
+                        max_working_bytes: super::hidden_layer::preview_byte_limit(config),
+                        cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
+                    },
+                );
+            }
             if let Some(psm) = effective_tesseract_psm(&ocr_result.metadata, &backend_name) {
                 page_segmentation_modes.insert(document_page_number, psm);
             }
@@ -5770,6 +5924,14 @@ pub(super) async fn extract_with_ocr_for_page(
                 &mut backend_page_warnings,
                 std::mem::take(&mut ocr_result.processing_warnings),
             );
+            // ~keep Whether a detached-stage normalizer below already put this page's backend
+            // tables in the render frame the page owner scales to points.
+            #[cfg(feature = "pdf")]
+            #[cfg_attr(
+                not(all(feature = "ocr", not(target_arch = "wasm32"))),
+                expect(unused_mut, reason = "only the Tesseract normalizers below set it")
+            )]
+            let mut tables_in_render = false;
             #[cfg(feature = "pdf")]
             {
                 let (correction_degrees, upright_width, upright_height) = batch_upright_correction[offset];
@@ -5794,7 +5956,8 @@ pub(super) async fn extract_with_ocr_for_page(
                 #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
                 if normalize_recovered_table && !normalized_raw {
                     // The detached stage's owner will place raw tables using the render raster. ~keep
-                    super::orientation_retry::scale_recovered_table_to_raster(&mut ocr_result, render);
+                    tables_in_render =
+                        super::orientation_retry::scale_recovered_table_to_raster(&mut ocr_result, render);
                 }
                 #[cfg(not(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32"))))]
                 let _ = normalized_raw;
@@ -5815,6 +5978,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     #[cfg(auto_rotate)]
                     let processed = if normalize_recovered_table { render } else { processed };
                     detached_table_pair = detached_table_pair::normalize(&mut ocr_result.tables, processed, render);
+                    tables_in_render |= detached_table_pair;
                 }
             }
             // #1575: capture once, from the first page that has any -- see this function's
@@ -5914,9 +6078,25 @@ pub(super) async fn extract_with_ocr_for_page(
                 ))
             ))]
             let detached_paragraph_scale: Option<(f32, f32)> = None;
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            let tables_in_render = tables_in_render || detached_paragraph_scale.is_some();
             let mut backend_tables = std::mem::take(&mut ocr_result.tables);
             for table in &mut backend_tables {
                 table.page_number = document_page_number;
+            }
+            #[cfg(feature = "pdf")]
+            if lazy_pdf_render_state.is_none() && xobject_document.is_some() && !tables_in_render {
+                // ~keep The detached page owner scales table rectangles from the render raster
+                // (`build_pipeline_ocr_page_document`), but recognition may have read a resampled
+                // image (GH#1895): bring the rectangles from that frame to the render's.
+                let render = (encoded_batch[offset].2, encoded_batch[offset].3);
+                let processed = resolved_ocr_layout_dimensions(&ocr_result.metadata, render.0, render.1);
+                detached_mixed_frame::scale_tables_into_render(&mut backend_tables, processed, render);
             }
             #[cfg(feature = "pdf")]
             if let Some((doc, _, _)) = lazy_pdf_render_state.as_ref() {
@@ -9887,6 +10067,25 @@ fn mixed_route_promotes_preprocessing_dpi(mixed_route_layout_active: bool, probi
     !mixed_route_layout_active && !probing_hidden_layer
 }
 
+/// Every condition that decides whether a marker-bearing ink-proof layer may be offered at all,
+/// stated once where the layers are built (#2900). Each consumer re-gates the routes it reaches,
+/// so removing one conjunct alone changes no output; the per-condition unit tests below pin the
+/// predicate itself, turning red when a conjunct leaves this function. ~keep
+#[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+fn marker_layers_allowed(
+    all_pages_failed_policy: AllPagesFailedPolicy,
+    probing_hidden_layer: bool,
+    mixed_route_layout_active: bool,
+    ocr_strategy: &crate::core::config::OcrStrategy,
+    ocr: Option<&crate::core::config::OcrConfig>,
+) -> bool {
+    all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative
+        && !probing_hidden_layer
+        && !mixed_route_layout_active
+        && *ocr_strategy == crate::core::config::OcrStrategy::Auto
+        && ocr.is_some_and(uses_default_ocr_pipeline)
+}
+
 /// A promoted mixed-route batch sizes itself from the page security cap instead of the bare
 /// fallback, so the wider batch cannot outrun the memory the promotion assumes. ~keep
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -9903,6 +10102,10 @@ fn mixed_route_batch_working_set(
 #[path = "pipeline/preprocessing_density_tests.rs"]
 mod preprocessing_density_tests;
 
+#[cfg(all(test, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+#[path = "pipeline/marker_layers_allowed_tests.rs"]
+mod marker_layers_allowed_tests;
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(in crate::extractors::pdf) fn uses_default_ocr_pipeline(ocr: &crate::core::config::OcrConfig) -> bool {
     ocr.pipeline.is_none() && ocr.vlm_fallback == crate::core::config::VlmFallbackPolicy::Disabled
@@ -9918,3 +10121,7 @@ fn registered_preprocessing_render_dpi(config: &ExtractionConfig, ocr: &crate::c
     let backend = registry.get(&ocr.backend).ok()?;
     registry.is_builtin_tesseract(&backend).then_some(target)
 }
+
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[path = "pipeline/time_limit_run_error_tests.rs"]
+mod time_limit_run_error_tests;

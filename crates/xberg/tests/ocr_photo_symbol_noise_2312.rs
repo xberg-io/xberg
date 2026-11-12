@@ -22,9 +22,19 @@ const PROSE_PDF: &[u8] = include_bytes!("fixtures/ocr_photo_noise_2312/prose.pdf
 /// Characters of OCR output before the filter existed, measured on this tree's parent commit.
 const PNG_NOISE_BEFORE: usize = 840;
 const PDF_NOISE_BEFORE: usize = 1056;
-const PDF_NOISE_AFTER_PLAIN: usize = 194;
-const PDF_NOISE_PLATFORM_SLACK: usize = 24;
 const PDF_PRUNED_LINES: usize = 194;
+
+/// Plain-text bytes the photograph PDF keeps after pruning, as a band across platforms.
+///
+/// The quantity is `noise_chars` of the Plain read: everything OCR recognized except the real
+/// title. Its variance comes only from how each platform's Tesseract classifies the
+/// symbol-noise glyphs; the keep rules anchor on unambiguous glyphs -- lines with a digit
+/// (`$5`, `1.`) and capitalized trigrams (`Qty`, `Yes`) -- that every platform reads the same,
+/// which holds the floor: macOS retains 194 bytes and no platform should fall much under that,
+/// while Linux CI read 212 (+9%) because its symbol glyphs misread into more kept bytes.
+/// 190..=220 absorbs that spread with margin on both observed platforms while staying under
+/// the quarter cap of 264; an unpruned page carries ~862 kept noise bytes, far above it.
+const PDF_NOISE_AFTER_PLAIN_BAND: std::ops::RangeInclusive<usize> = 190..=220;
 
 const PROSE: &str = "The committee met on Tuesday to review the annual budget.\n\n\
 Members agreed that the library needs a new roof before winter.\n\n\
@@ -75,12 +85,12 @@ async fn photograph_pdf_keeps_at_most_a_quarter_of_its_symbol_noise() {
         assert!(noise_chars(&content) * 4 <= PDF_NOISE_BEFORE, "{content:?}");
         if plain {
             // Lines with a digit are kept (`$5`, `1.`) and so are capitalized trigrams (`Qty`, `Yes`),
-            // which is why 194 bytes of the 1056 stay, under the quarter bound of 264.
+            // which is why macOS retains 194 bytes of the 1056, under the quarter bound of 264.
             // The OCR read differs by platform in a few lines the keep rules retain
-            // (macOS 194, Linux CI 212), so the count is a band, not a point.
+            // (macOS 194, Linux CI 212), so the count is a band, not a point; the bounds'
+            // reasoning lives on `PDF_NOISE_AFTER_PLAIN_BAND`.
             assert!(
-                (PDF_NOISE_AFTER_PLAIN..=PDF_NOISE_AFTER_PLAIN + PDF_NOISE_PLATFORM_SLACK)
-                    .contains(&noise_chars(&content)),
+                PDF_NOISE_AFTER_PLAIN_BAND.contains(&noise_chars(&content)),
                 "{content:?}"
             );
         }

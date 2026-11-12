@@ -635,13 +635,15 @@ fn table_matches_words(cells: &[Vec<String>], words: &[HocrWord], row_threshold:
     })
 }
 
+/// Returns whether the tables were moved into `raster`; a result outside the recovery shape
+/// keeps its recognition frame.
 #[cfg(auto_rotate)]
-pub(super) fn scale_recovered_table_to_raster(result: &mut ExtractedDocument, raster: (u32, u32)) {
+pub(super) fn scale_recovered_table_to_raster(result: &mut ExtractedDocument, raster: (u32, u32)) -> bool {
     let Some((width, height)) = processed_ocr_layout_dimensions(&result.metadata) else {
-        return;
+        return false;
     };
     if !matches!(result.tables.len(), 1 | 2) {
-        return;
+        return false;
     }
     let scale_x = f64::from(raster.0) / f64::from(width);
     let scale_y = f64::from(raster.1) / f64::from(height);
@@ -651,6 +653,7 @@ pub(super) fn scale_recovered_table_to_raster(result: &mut ExtractedDocument, ra
         bbox.y0 *= scale_y;
         bbox.y1 *= scale_y;
     }
+    true
 }
 
 #[cfg(test)]
@@ -987,7 +990,15 @@ mod tests {
         off_page.tables[0].bounding_box.as_mut().unwrap().y1 = 201.0;
         assert!(!retry.accepts(&off_page, confidence, 0.5));
 
-        scale_recovered_table_to_raster(&mut candidate, (100, 50));
+        let mut three_tables = candidate.clone();
+        three_tables
+            .tables
+            .extend([candidate.tables[0].clone(), candidate.tables[0].clone()]);
+        let unscaled = three_tables.tables[0].bounding_box;
+        assert!(!scale_recovered_table_to_raster(&mut three_tables, (100, 50)));
+        assert_eq!(three_tables.tables[0].bounding_box, unscaled);
+
+        assert!(scale_recovered_table_to_raster(&mut candidate, (100, 50)));
         let bbox = candidate.tables[0].bounding_box.unwrap();
         assert_eq!((bbox.x0, bbox.y0, bbox.x1, bbox.y1), (10.0, 10.0, 90.0, 40.0));
     }

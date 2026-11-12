@@ -829,6 +829,25 @@ pub(crate) fn marked_row_lines<'a>(
     Some(text.lines().map(str::trim).filter(|line| !line.is_empty()))
 }
 
+const MAX_DECIMAL_ORDINAL_DIGITS: usize = 9;
+
+/// A source list label CommonMark and Djot can express with their own ordered
+/// decimal marker: a `N.` run of digits that no renumbering could corrupt. Any
+/// other label (lettered, roman, `(1)`, zero-padded) keeps its literal text on a
+/// bullet, because the renderers' ordered marker is an auto-incrementing
+/// decimal that cannot be made to show it.
+pub(crate) fn decimal_ordinal(label: &str) -> Option<usize> {
+    let digits = label.strip_suffix('.')?;
+    if digits.is_empty()
+        || digits.len() > MAX_DECIMAL_ORDINAL_DIGITS
+        || !digits.bytes().all(|byte| byte.is_ascii_digit())
+        || digits.len() > 1 && digits.starts_with('0')
+    {
+        return None;
+    }
+    digits.parse().ok()
+}
+
 #[cfg(test)]
 mod retained_furniture_tests {
     use super::*;

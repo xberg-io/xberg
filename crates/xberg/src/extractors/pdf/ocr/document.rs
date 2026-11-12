@@ -277,6 +277,21 @@ pub(crate) fn ocr_confirms_layer(layer: &str, ocr_text: &str, thresholds: &OcrQu
         && holds_half(&lettered)
         && !evaluate_native_text_for_ocr(layer, Some(1), thresholds).fallback
 }
+/// Whether the OCR text holds at least half of the layer's words with a letter: the letter share
+/// of `ocr_confirms_layer` without its share of all words and its quality check, so numbers the
+/// read dropped do not count against it. A layer with no word with a letter never passes. ~keep
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) fn ocr_holds_layer_letters(layer: &str, ocr_text: &str) -> bool {
+    let lettered: std::collections::HashSet<String> = whole_words(layer)
+        .filter(|word| word.chars().any(char::is_alphabetic))
+        .collect();
+    if lettered.is_empty() {
+        return false;
+    }
+    let ocr_words: std::collections::HashSet<String> = whole_words(ocr_text).collect();
+    let read = lettered.iter().filter(|word| ocr_words.contains(*word)).count();
+    read as f64 >= MIN_LAYER_WORD_SHARE_READ_BY_OCR * lettered.len() as f64
+}
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) fn unique_literal_embedding(native: &str, read: &str) -> bool {
     let native: Vec<_> = native.split_whitespace().collect();

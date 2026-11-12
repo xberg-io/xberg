@@ -1924,6 +1924,238 @@ fn split_carrier_goes_to_the_first_table_that_holds_the_seam_when_two_hold_it() 
 }
 
 #[test]
+fn split_carrier_reads_one_table_per_segment_when_no_seam_joins_pieces() {
+    // Eight tables with one box all cover and carry every word. A run that cannot join its next
+    // segment goes to the first covering table, so the grids are read once per segment, not once per
+    // table and segment.
+    let words: Vec<String> = (0..400).map(|index| format!("word{index}")).collect();
+    let cells: Vec<&str> = words.iter().map(String::as_str).collect();
+    let tables: Vec<crate::types::Table> = (0..8)
+        .map(|_| cell_table(1, (0.0, 0.0, 5000.0, 100.0), &[cells.as_slice()]))
+        .collect();
+    let segments: Vec<SegmentData> = words
+        .iter()
+        .enumerate()
+        .map(|(index, word)| printed_at(word, 10.0 + 8.0 * index as f32, 10.0))
+        .collect();
+    CARRY_CHECKS.with(|checks| checks.set(0));
+    let carriers = split_carriers(&tables, &segments);
+    assert_eq!(
+        carriers,
+        vec![Some(0); segments.len()],
+        "the first table carries every word"
+    );
+    assert_eq!(
+        CARRY_CHECKS.with(std::cell::Cell::get),
+        segments.len(),
+        "one grid read for each segment"
+    );
+}
+
+/// The grid test as it read every row and cell of the table for each segment.
+fn reference_carries(table: &TableCoverage, text: &str) -> bool {
+    let normalized = normalize_for_table_coverage(text);
+    if normalized.is_empty() {
+        return true;
+    }
+    let text_words: Vec<String> = text
+        .split_whitespace()
+        .map(normalize_for_table_coverage)
+        .filter(|word| !word.is_empty())
+        .collect();
+    if normalized.chars().count() < MIN_CROSS_CELL_RUN_GLYPHS {
+        return text_words.iter().all(|word| table.words.contains(word)) || {
+            let piece = alphanumeric_runs(text);
+            table.cell_runs.iter().any(|runs| runs_spell(runs, &piece))
+        };
+    }
+    table.rows.iter().any(|row| row.contains(&normalized))
+        || table
+            .row_words
+            .iter()
+            .any(|row| text_words.iter().all(|word| row.contains(word)))
+}
+
+fn reference_covers_and_carries(seg: &SegmentData, table: &TableCoverage) -> bool {
+    let seg_area = seg.width * seg.height;
+    let seg_text = seg.text.trim();
+    if seg_area <= 0.0 || seg_text.is_empty() {
+        return false;
+    }
+    let bb = &table.bbox;
+    let inter_left = seg.x.max(bb.x0 as f32);
+    let inter_right = (seg.x + seg.width).min(bb.x1 as f32);
+    let inter_bottom = seg.y.max(bb.y0 as f32);
+    let inter_top = (seg.y + seg.height).min(bb.y1 as f32);
+    if inter_left >= inter_right || inter_bottom >= inter_top {
+        return false;
+    }
+    let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
+    inter_area / seg_area >= 0.5 && reference_carries(table, seg_text)
+}
+
+/// The carriers as the page split assigned them when it read every table for every segment.
+fn reference_carriers(segments: &[SegmentData], holders: &[(&TableCoverage, &WordCounts)]) -> Vec<Option<usize>> {
+    let mut carriers = Vec::with_capacity(segments.len());
+    let mut run_start = 0;
+    let mut run: Vec<usize> = Vec::new();
+    let words: Vec<Vec<String>> = segments
+        .iter()
+        .map(|segment| word_sequence([segment.text.as_str()]))
+        .collect();
+    let seam_holders = seam_holders(&words, holders);
+    for (index, segment) in segments.iter().enumerate() {
+        let own: Vec<usize> = (0..holders.len())
+            .filter(|&holder| reference_covers_and_carries(segment, holders[holder].0))
+            .collect();
+        let joined: Vec<usize> = run
+            .iter()
+            .copied()
+            .filter(|holder| own.contains(holder) && seam_holders[index].contains(holder))
+            .collect();
+        if joined.is_empty() {
+            carriers.extend(std::iter::repeat_n(run.first().copied(), index - run_start));
+            run_start = index;
+            run = own;
+        } else {
+            run = joined;
+        }
+    }
+    carriers.extend(std::iter::repeat_n(run.first().copied(), segments.len() - run_start));
+    carriers
+}
+
+fn next_random(state: &mut u64) -> u64 {
+    *state ^= *state << 13;
+    *state ^= *state >> 7;
+    *state ^= *state << 17;
+    *state
+}
+
+#[test]
+fn split_carriers_match_the_full_table_read_on_varied_pages() {
+    // Plain and punctuated words, short and long, so the run index, the word index and the row
+    // search each decide some segments.
+    let vocabulary = [
+        "alpha",
+        "b2",
+        "piccolo21",
+        "x",
+        "12",
+        "covid-19",
+        "covid 19",
+        "a-b",
+        "x.5",
+        "7",
+        "northwind",
+        "quarterly",
+        "ab12cd",
+        "no.",
+        "3.14",
+        "report",
+    ];
+    let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+    let (mut with_carrier, mut joined_choice, mut cases) = (0usize, 0usize, 0usize);
+    for _ in 0..120 {
+        let table_count = 1 + (next_random(&mut state) % 5) as usize;
+        let tables: Vec<crate::types::Table> = (0..table_count)
+            .map(|_| {
+                let rows: Vec<Vec<String>> = (0..1 + next_random(&mut state) % 3)
+                    .map(|_| {
+                        (0..1 + next_random(&mut state) % 4)
+                            .map(|_| {
+                                let mut cell = vocabulary[(next_random(&mut state) % 16) as usize].to_string();
+                                if next_random(&mut state).is_multiple_of(3) {
+                                    cell.push(' ');
+                                    cell.push_str(vocabulary[(next_random(&mut state) % 16) as usize]);
+                                }
+                                cell
+                            })
+                            .collect()
+                    })
+                    .collect();
+                let refs: Vec<Vec<&str>> = rows
+                    .iter()
+                    .map(|row| row.iter().map(String::as_str).collect())
+                    .collect();
+                let slices: Vec<&[&str]> = refs.iter().map(Vec::as_slice).collect();
+                let left = (next_random(&mut state) % 60) as f64;
+                cell_table(
+                    1,
+                    (left, 0.0, left + 40.0 + (next_random(&mut state) % 120) as f64, 100.0),
+                    &slices,
+                )
+            })
+            .collect();
+        let mut segments: Vec<SegmentData> = Vec::new();
+        let mut x = 5.0_f32;
+        for _ in 0..4 + next_random(&mut state) % 12 {
+            let word = vocabulary[(next_random(&mut state) % 16) as usize];
+            let mut texts: Vec<String> = vec![word.to_string()];
+            match next_random(&mut state) % 4 {
+                0 if word.is_ascii() && word.len() > 3 => {
+                    let at = 1 + (next_random(&mut state) as usize % (word.len() - 1));
+                    texts = vec![word[..at].to_string(), word[at..].to_string()];
+                }
+                1 => texts[0].push_str(&format!(" {}", vocabulary[(next_random(&mut state) % 16) as usize])),
+                _ => {}
+            }
+            for text in texts {
+                segments.push(printed_at(&text, x, 10.0));
+                x += 7.0;
+            }
+        }
+        let coverage: Vec<TableCoverage> = tables.iter().map(|table| table_coverage(table).expect("box")).collect();
+        let counts: Vec<WordCounts> = tables.iter().map(table_word_counts).collect();
+        let holders: Vec<(&TableCoverage, &WordCounts)> = coverage.iter().zip(&counts).collect();
+        let expected = reference_carriers(&segments, &holders);
+        let actual = occurrence_carriers(&segments, &holders);
+        assert_eq!(
+            actual,
+            expected,
+            "carriers of {:?}",
+            segments.iter().map(|s| s.text.as_str()).collect::<Vec<_>>()
+        );
+        cases += 1;
+        with_carrier += actual.iter().filter(|carrier| carrier.is_some()).count();
+        let first_covering: Vec<Option<usize>> = segments
+            .iter()
+            .map(|segment| (0..holders.len()).find(|&holder| reference_covers_and_carries(segment, holders[holder].0)))
+            .collect();
+        joined_choice += usize::from(first_covering != actual);
+    }
+    assert_eq!(cases, 120);
+    assert!(
+        with_carrier > 300,
+        "the pages must give tables segments to carry, got {with_carrier}"
+    );
+    assert!(
+        joined_choice > 0,
+        "some page must have a seam change a carrier, or no join was exercised"
+    );
+}
+
+#[test]
+fn split_carrier_reads_only_the_table_that_holds_the_seam() {
+    // Seven tables hold PICCOLO and 21 as two words and one holds PICCOLO21, so only that last table
+    // holds the seam. The first piece goes to the first table that carries it and is read in the
+    // seam's holder; the second is read once, in that holder.
+    let two: Vec<crate::types::Table> = (0..7)
+        .map(|_| cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["PICCOLO", "21"]]))
+        .collect();
+    let one = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["PICCOLO21"]]);
+    let tables: Vec<crate::types::Table> = two.into_iter().chain(std::iter::once(one)).collect();
+    let pieces = [printed_at("PICCOLO", 10.0, 10.0), printed_at("21", 30.0, 10.0)];
+    CARRY_CHECKS.with(|checks| checks.set(0));
+    assert_eq!(split_carriers(&tables, &pieces), [Some(7); 2]);
+    let reads = CARRY_CHECKS.with(std::cell::Cell::get);
+    assert!(
+        reads <= 4,
+        "16 reads before, one table's worth each for the seam, got {reads}"
+    );
+}
+
+#[test]
 fn a_segment_that_only_a_later_table_carries_is_suppressed() {
     let elsewhere = table_coverage(&cell_table(1, (200.0, 0.0, 300.0, 100.0), &[&["other"]])).expect("box");
     let covering = table_coverage(&cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha"]])).expect("box");
@@ -9497,7 +9729,7 @@ fn should_place_stack_members_listed_ahead_of_their_base_directly_after_it() {
 }
 
 #[test]
-fn should_read_the_raised_members_of_a_stack_before_the_lowered_ones() {
+fn should_read_the_lowered_members_of_a_stack_before_the_raised_ones() {
     let segments = vec![
         stack_seg("e", 100.0, 4.0, 10.0, 100.0),
         stack_seg("\u{3b8}", 104.0, 3.0, 7.0, 96.8),
@@ -9505,7 +9737,7 @@ fn should_read_the_raised_members_of_a_stack_before_the_lowered_ones() {
         stack_seg("1", 107.5, 3.0, 5.0, 103.0),
         stack_seg("tail", 112.0, 20.0, 10.0, 100.0),
     ];
-    assert_eq!(stack_texts(segments), ["e", "c", "1", "\u{3b8}", "tail"]);
+    assert_eq!(stack_texts(segments), ["e", "\u{3b8}", "c", "1", "tail"]);
 }
 
 #[test]
@@ -9555,8 +9787,6 @@ fn should_mark_the_members_of_a_stack_listed_ahead_of_its_base_as_scripts_on_one
     );
 }
 
-use xberg_native_pdf::document::MAX_STACK_MEMBERS;
-
 fn long_stack(count: usize) -> Vec<SegmentData> {
     let mut segments = vec![stack_seg("e", 100.0, 4.0, 10.0, 100.0)];
     segments.extend((0..count).map(|n| {
@@ -9567,16 +9797,17 @@ fn long_stack(count: usize) -> Vec<SegmentData> {
 }
 
 #[test]
-fn should_place_and_rediscover_a_stack_of_the_most_members_grouping_searches() {
-    let count = MAX_STACK_MEMBERS;
-    let placed = place_script_stacks_after_bases(long_stack(count));
-    assert_eq!(script_stack_members(&placed, 0), (1..=count).collect::<Vec<_>>());
+fn should_place_and_rediscover_a_stack_of_eight_members_followed_by_a_span() {
+    let mut segments = long_stack(8);
+    segments.push(stack_seg("tail", 200.0, 20.0, 10.0, 100.0));
+    let placed = place_script_stacks_after_bases(segments);
+    assert_eq!(script_stack_members(&placed, 0), (1..=8).collect::<Vec<_>>());
+    assert_eq!(placed[9].text, "tail");
 }
 
 #[test]
-fn should_leave_a_stack_longer_than_the_grouping_search_unplaced_and_unmarked() {
-    let count = MAX_STACK_MEMBERS + 1;
-    let mut segments = long_stack(count);
+fn should_leave_a_stack_of_nine_members_followed_by_a_span_unplaced_and_unmarked() {
+    let mut segments = long_stack(9);
     segments.push(stack_seg("tail", 200.0, 20.0, 10.0, 100.0));
     let before: Vec<String> = segments.iter().map(|segment| segment.text.clone()).collect();
     assert!(script_stack_members(&segments, 0).is_empty());
@@ -9596,7 +9827,8 @@ fn should_place_a_fraction_in_an_exponent_in_its_reading_order_without_a_stack()
     assert_eq!(stack_texts(segments), ["x", "\u{2212}", "1", "2", "tail"]);
 }
 
-fn marked_scripts(segments: Vec<SegmentData>) -> usize {
+/// Characters of the paragraph text that sit inside a sub- or superscript annotation.
+fn marked_script_chars(segments: Vec<SegmentData>) -> usize {
     let paragraphs = segments_to_paragraphs(segments, &[], &[], &TextRepairWitnesses::default());
     let document = crate::pdf::structure::assembly::assemble_internal_document(
         vec![paragraphs],
@@ -9605,17 +9837,72 @@ fn marked_scripts(segments: Vec<SegmentData>) -> usize {
         &[],
         &Default::default(),
     );
-    document.elements.iter().map(|element| element.annotations.len()).sum()
+    document
+        .elements
+        .iter()
+        .flat_map(|element| {
+            element.annotations.iter().map(|annotation| {
+                element.text[annotation.start as usize..annotation.end as usize]
+                    .chars()
+                    .count()
+            })
+        })
+        .sum()
 }
 
 #[test]
-fn should_mark_every_member_of_a_stack_of_the_most_members_and_none_of_a_longer_one() {
-    let most = MAX_STACK_MEMBERS;
-    assert!(marked_scripts(long_stack(most)) > 0, "{most} members carry markup");
+fn should_mark_every_member_of_a_stack_of_eight_members_and_none_of_nine() {
+    let mut eight = long_stack(8);
+    eight.push(stack_seg("tail", 200.0, 20.0, 10.0, 100.0));
+    assert_eq!(marked_script_chars(eight), 8);
+    let mut nine = long_stack(9);
+    nine.push(stack_seg("tail", 200.0, 20.0, 10.0, 100.0));
+    assert_eq!(marked_script_chars(nine), 0);
+}
+
+/// The marked runs of a placed page, as `(text, kind)` in reading order.
+fn marked_script_runs(segments: Vec<SegmentData>) -> (String, Vec<(String, crate::types::AnnotationKind)>) {
+    let paragraphs = segments_to_paragraphs(segments, &[], &[], &TextRepairWitnesses::default());
+    let document = crate::pdf::structure::assembly::assemble_internal_document(
+        vec![paragraphs],
+        &[],
+        None,
+        &[],
+        &Default::default(),
+    );
+    assert_eq!(document.elements.len(), 1);
+    let element = &document.elements[0];
+    let runs = element
+        .annotations
+        .iter()
+        .map(|annotation| {
+            (
+                element.text[annotation.start as usize..annotation.end as usize].to_string(),
+                annotation.kind.clone(),
+            )
+        })
+        .collect();
+    (element.text.clone(), runs)
+}
+
+#[test]
+fn should_keep_the_plus_of_a_subscript_out_of_the_exponent_of_its_base() {
+    use crate::types::AnnotationKind::{Subscript, Superscript};
+    let segments = vec![
+        stack_seg("\u{3b3}", 100.0, 7.0, 10.0, 100.0),
+        stack_seg("j", 107.0, 3.0, 6.0, 104.3),
+        stack_seg("K", 107.2, 4.6, 6.0, 96.0),
+        stack_seg("+", 111.9, 3.0, 4.2, 97.5),
+        stack_seg("tail", 120.0, 20.0, 10.0, 100.0),
+    ];
+    let (text, runs) = marked_script_runs(segments);
+    assert!(text.replace(' ', "").starts_with("\u{3b3}jK+"), "{text:?}");
     assert_eq!(
-        marked_scripts(long_stack(most + 1)),
-        0,
-        "{} members carry none",
-        most + 1
+        runs,
+        [
+            ("j".to_string(), Superscript),
+            ("K".to_string(), Subscript),
+            ("+".to_string(), Superscript)
+        ]
     );
 }

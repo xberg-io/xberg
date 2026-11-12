@@ -4,8 +4,16 @@ use crate::content::operators::Operator;
 use crate::document::PdfDocument;
 use crate::error::{Error, Result};
 use crate::object::Object;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tiny_skia::{Pixmap, Transform};
+
+/// Whether a resolved `/Group` dictionary is a transparency group with `/K true`; pages and forms share it.
+pub(super) fn group_is_knockout(group: &Object) -> bool {
+    group.as_dict().is_some_and(|group| {
+        group.get("S").and_then(Object::as_name) == Some("Transparency")
+            && matches!(group.get("K"), Some(Object::Boolean(true)))
+    })
+}
 
 pub(super) fn page_is_knockout(doc: &PdfDocument, page_num: usize) -> bool {
     let resolved = (|| {
@@ -16,10 +24,7 @@ pub(super) fn page_is_knockout(doc: &PdfDocument, page_num: usize) -> bool {
             .transpose()
     })();
     match resolved {
-        Ok(group) => group.as_ref().and_then(Object::as_dict).is_some_and(|group| {
-            group.get("S").and_then(Object::as_name) == Some("Transparency")
-                && matches!(group.get("K"), Some(Object::Boolean(true)))
-        }),
+        Ok(group) => group.as_ref().is_some_and(group_is_knockout),
         Err(error) => {
             tracing::warn!(
                 error_code = error.telemetry_code(),
@@ -231,6 +236,40 @@ impl KnockoutGroup {
     }
 }
 
+/// The points of the path being built, as far as `PathBuilder::finish` judges them: it returns no
+/// path unless every point is finite and the span of each axis fits in `f32`.
+#[derive(Default)]
+struct PathExtent {
+    extent: Option<[f32; 4]>,
+    poisoned: bool,
+    built: bool,
+}
+
+impl PathExtent {
+    fn add(&mut self, x: f32, y: f32) {
+        if !(x.is_finite() && y.is_finite()) {
+            self.poisoned = true;
+            return;
+        }
+        let [min_x, min_y, max_x, max_y] = self.extent.unwrap_or([x, y, x, y]);
+        self.extent = Some([min_x.min(x), min_y.min(y), max_x.max(x), max_y.max(y)]);
+    }
+
+    fn segment(&mut self, points: &[(f32, f32)]) {
+        for &(x, y) in points {
+            self.add(x, y);
+        }
+        self.built = true;
+    }
+
+    fn certainly_builds(&self) -> bool {
+        let Some([min_x, min_y, max_x, max_y]) = self.extent else {
+            return false;
+        };
+        self.built && !self.poisoned && (max_x - min_x).is_finite() && (max_y - min_y).is_finite()
+    }
+}
+
 pub(super) fn is_path_paint(op: &Operator) -> bool {
     matches!(
         op,
@@ -243,6 +282,27 @@ pub(super) fn is_path_paint(op: &Operator) -> bool {
             | Operator::CloseFillStroke
             | Operator::CloseFillStrokeEvenOdd
     )
+}
+
+/// Whether `font` resolves in the resources to a font that is not Type 3: a Type 3 glyph is a
+/// content stream and never reaches the text coverage raster.
+fn font_is_not_type3(doc: &PdfDocument, resources: &Object, font: &str) -> bool {
+    let Some(fonts) = resources
+        .as_dict()
+        .and_then(|resources| resources.get("Font"))
+        .and_then(|fonts| doc.resolve_object(fonts).ok())
+    else {
+        return false;
+    };
+    fonts
+        .as_dict()
+        .and_then(|fonts| fonts.get(font))
+        .and_then(|font| doc.resolve_object(font).ok())
+        .and_then(|font| {
+            font.as_dict()
+                .map(|font| font.get("Subtype").and_then(Object::as_name) != Some("Type3"))
+        })
+        .unwrap_or(false)
 }
 
 fn path_pixels(pixmap: &Pixmap, path: &tiny_skia::Path, transform: Transform, padding: f64) -> usize {
@@ -425,6 +485,119 @@ impl PageRenderer {
             .or_else(|| self.cmyk_sidecar.as_ref().map(|sidecar| sidecar.dims()))
     }
 
+    /// How many text-show operators certainly charge a page-sized coverage raster, on top of the
+    /// paint itself, while the pass runs: those that paint a side, in a font that is not Type 3,
+    /// outside any optional-content layer, which may be excluded. The render mode is tracked through
+    /// `q` and `Q`; `initial_text_mode` is the mode the group starts in, `None` where it inherits one
+    /// this scan cannot see. Whatever cannot be shown to paint is left out, so the count never
+    /// exceeds what the pass charges.
+    pub(super) fn painting_text_shows(
+        &self,
+        operators: &[Operator],
+        doc: &PdfDocument,
+        resources: &Object,
+        initial_text_mode: Option<u8>,
+    ) -> usize {
+        if self.text_ink_suppressed {
+            return 0;
+        }
+        #[derive(Clone, Copy)]
+        struct TextState {
+            mode: Option<u8>,
+            font_paints: bool,
+        }
+        let mut state = TextState {
+            mode: initial_text_mode,
+            font_paints: false,
+        };
+        let mut saved: Vec<TextState> = Vec::new();
+        // Whether each open marked-content section is an optional-content layer, which may be excluded.
+        let mut layers: Vec<bool> = Vec::new();
+        let mut shows = 0;
+        for operator in operators {
+            match operator {
+                Operator::SaveState => saved.push(state),
+                Operator::RestoreState => {
+                    state = saved.pop().unwrap_or(TextState {
+                        mode: None,
+                        font_paints: false,
+                    });
+                }
+                Operator::Tr { render } => state.mode = Some(*render),
+                Operator::Tf { font, .. } => state.font_paints = font_is_not_type3(doc, resources, font),
+                Operator::BeginMarkedContent { .. } => layers.push(false),
+                Operator::BeginMarkedContentDict { tag, .. } => layers.push(tag == "OC"),
+                Operator::EndMarkedContent => {
+                    layers.pop();
+                }
+                operator if super::is_text_show_operator(operator) => {
+                    shows += usize::from(
+                        !layers.contains(&true)
+                            && state.font_paints
+                            && matches!(state.mode, Some(0 | 1 | 2 | 4 | 5 | 6)),
+                    );
+                }
+                _ => {}
+            }
+        }
+        shows
+    }
+
+    /// How many path paints certainly build a path that the pass then charges a page-sized surface
+    /// for: a path with a rectangle or a line or curve segment, whose points and span fit in `f32`
+    /// (what `PathBuilder::finish` accepts), since the last paint or `n`, outside any optional-content
+    /// section that is or may be hidden. A section is left out unless the renderer's own check finds
+    /// its layer visible. A paint with no path, or inside a hidden section, charges nothing, so it is
+    /// left out and the count never exceeds the pass.
+    pub(super) fn certain_path_paints(&self, operators: &[Operator], doc: &PdfDocument, resources: &Object) -> usize {
+        let none = HashSet::new();
+        let excluded = self.excluded_layers_snapshot.as_deref().unwrap_or(&none);
+        let mut path = PathExtent::default();
+        let mut layers: Vec<bool> = Vec::new();
+        let mut paints = 0;
+        for operator in operators {
+            match operator {
+                Operator::MoveTo { x, y } => path.add(*x, *y),
+                Operator::Rectangle { x, y, width, height } => {
+                    path.add(*x, *y);
+                    path.add(x + width, y + height);
+                    path.built = true;
+                }
+                Operator::LineTo { x, y } => path.segment(&[(*x, *y)]),
+                Operator::CurveTo { x1, y1, x2, y2, x3, y3 } => {
+                    path.segment(&[(*x1, *y1), (*x2, *y2), (*x3, *y3)]);
+                }
+                Operator::CurveToY { x1, y1, x3, y3 } => path.segment(&[(*x1, *y1), (*x3, *y3)]),
+                Operator::CurveToV { x2, y2, x3, y3 } => {
+                    if path.extent.is_some() {
+                        path.add(*x2, *y2);
+                        path.add(*x3, *y3);
+                    }
+                }
+                Operator::BeginMarkedContent { .. } => layers.push(false),
+                Operator::BeginMarkedContentDict { tag, properties } => layers.push(
+                    tag == "OC"
+                        && crate::optional_content::resolve_and_check_ocg_excluded(
+                            properties,
+                            Some(resources),
+                            Some(doc),
+                            excluded,
+                        ),
+                ),
+                Operator::EndMarkedContent => {
+                    layers.pop();
+                }
+                Operator::EndPath => path = PathExtent::default(),
+                operator if is_path_paint(operator) => {
+                    paints += usize::from(path.certainly_builds() && !layers.contains(&true));
+                    path = PathExtent::default();
+                }
+                _ => {}
+            }
+        }
+        paints
+    }
+
     pub(super) fn execute_knockout_group(
         &mut self,
         pixmap: &mut Pixmap,
@@ -433,6 +606,7 @@ impl PageRenderer {
         doc: &PdfDocument,
         page_num: usize,
         resources: &Object,
+        initial_text_mode: Option<u8>,
     ) -> Result<Option<super::knockout_resources::WorkFallback>> {
         let pixels = pixmap.width() as usize * pixmap.height() as usize;
         let (sidecar_bytes, spot_count) = self.cmyk_sidecar.as_ref().map_or((0, 0), |sidecar| {
@@ -445,9 +619,18 @@ impl PageRenderer {
         if paints == 0 {
             return Ok(None);
         }
-        let workspace =
-            self.knockout_resources
-                .knockout(pixels, pixmap.data().len(), sidecar_bytes, spot_count, paints)?;
+        let path_paints = operators.iter().filter(|operator| is_path_paint(operator)).count();
+        let surfaces_in_pass = paints - path_paints
+            + self.certain_path_paints(operators, doc, resources)
+            + self.painting_text_shows(operators, doc, resources, initial_text_mode);
+        let workspace = self.knockout_resources.knockout(
+            pixels,
+            pixmap.data().len(),
+            sidecar_bytes,
+            spot_count,
+            paints,
+            surfaces_in_pass,
+        )?;
         let Some(workspace) = workspace else {
             return self.execute_without_knockout(pixmap, base_transform, operators, doc, page_num, resources);
         };
@@ -760,6 +943,27 @@ mod tests {
                 assert_eq!(renderer.paint_operator_calls, expected);
             }
         }
+    }
+
+    #[test]
+    fn knockout_plan_that_cannot_finish_degrades_before_the_pass_and_paints_once() {
+        // 13_700 fills of a 256x256 page plan 898M pixels and then charge 898M more while they run,
+        // past the 1G limit. The pass used to run for about 2_700 paints (2^30 less 13_700 x 65_536, over 65_536) before the limit stopped it
+        // and every paint ran again without knockout, so the paints executed were more than the page has.
+        let paints = 13_700;
+        let doc = knockout_document_with_content(&"0.2 g 0 0 1 1 re f ".repeat(paints), 256, true);
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+        let image = renderer
+            .render_page(&doc, 0)
+            .expect("work-limited group remains renderable");
+        let corner = 255 * 256 * 4;
+        assert_eq!(&image.data[corner..corner + 4], &[51, 51, 51, 255]);
+        assert_eq!(renderer.paint_operator_calls, paints, "each paint executes once");
+        assert_eq!(
+            renderer.rgba_snapshot_bytes.load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "the degradation is decided before any knockout backdrop is captured"
+        );
     }
 
     #[test]

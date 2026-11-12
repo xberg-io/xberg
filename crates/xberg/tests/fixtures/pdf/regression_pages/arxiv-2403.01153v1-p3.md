@@ -1,8 +1,8 @@
 Where H~s~(f, t) denotes the CSI measurements transmitted by static paths such as ceiling/wall reflections, termed as static CSI component. H~m~(f, t) and H~n~(f, t) represent the CSI measurements transmitted via body reflection paths and limb reflection paths, respectively. H(f, t) can also be expressed as:
 
-Where ∥H(f, t)∥ and e<sup>iθ</sup> CSI can be rewritten as:
+H(f, t) = ∥H(f, t)∥ · e<sup>iθ</sup> (2)
 
-H(f, t) = ∥H(f, t)∥ · e<sup>iθ</sup> (2) symbolize the amplitude and phase of the transmitted signal, respectively. Thus, the received
+Where ∥H(f, t)∥ and e<sup>iθ</sup> symbolize the amplitude and phase of the transmitted signal, respectively. Thus, the received CSI can be rewritten as:
 
 ∥H(f, t)∥ · e<sup>jθ</sup>
 

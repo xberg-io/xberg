@@ -242,15 +242,16 @@ async fn qualify() {
             "new_native_allocations":pixel_memory::observation().allocations-before,
         })
     );
-    assert!(
-        result.is_err(),
-        "stored JPEG alone cannot recover the visible annotation: {result:?}"
-    );
     assert_eq!(
-        pixel_memory::observation().allocations,
-        before,
-        "do not OCR an incomplete page projection"
+        result.as_deref().ok(),
+        Some(complete.as_str()),
+        "the reduced-scale JPEG decode keeps the visible annotation: {result:?}"
     );
+    assert!(
+        pixel_memory::observation().allocations > before,
+        "the recovered page must have been read natively"
+    );
+    assert_eq!(pixel_memory::observation().live, 0);
     crate::plugins::clear_ocr_backends().unwrap();
     model.verify();
 }

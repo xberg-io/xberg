@@ -153,25 +153,72 @@ fn in_frame(bbox: BoundingBox, (width, height): (u32, u32)) -> bool {
 impl RunPageParagraphs {
     /// Detached paragraph geometry is carried separately from the already assembled document.
     pub(super) fn place_detached_in_points(&mut self) -> bool {
-        let Some((sx, sy)) = self.detached_ocr_scale.take() else {
+        let Some(scale) = self.detached_ocr_scale.take() else {
             return false;
         };
-        for paragraph in &mut self.paragraphs {
-            if let Some((left, bottom, right, top)) = paragraph.block_bbox {
-                paragraph.block_bbox = Some((left * sx, bottom * sy, right * sx, top * sy));
-            }
-            for line in &mut paragraph.lines {
-                line.baseline_y *= sy;
-                for segment in &mut line.segments {
-                    segment.x *= sx;
-                    segment.width *= sx;
-                    segment.y *= sy;
-                    segment.height *= sy;
-                    segment.baseline_y *= sy;
-                }
+        scale_paragraph_geometry(&mut self.paragraphs, scale);
+        true
+    }
+}
+
+/// Scale top-left table rectangles from the frame recognition read (`processed`) into the
+/// render raster. Returns whether anything was scaled; a degenerate or identical frame is left
+/// alone.
+pub(super) fn scale_tables_into_render(
+    tables: &mut [crate::types::Table],
+    processed: (u32, u32),
+    render: (u32, u32),
+) -> bool {
+    if processed == render || [processed.0, processed.1, render.0, render.1].contains(&0) {
+        return false;
+    }
+    let scale_x = f64::from(render.0) / f64::from(processed.0);
+    let scale_y = f64::from(render.1) / f64::from(processed.1);
+    for bbox in tables.iter_mut().filter_map(|table| table.bounding_box.as_mut()) {
+        bbox.x0 *= scale_x;
+        bbox.x1 *= scale_x;
+        bbox.y0 *= scale_y;
+        bbox.y1 *= scale_y;
+    }
+    true
+}
+
+/// Whether recognition certified this page as read sideways (90 or 270 degrees) by auto-rotate.
+pub(super) fn read_sideways(metadata: &crate::types::Metadata) -> bool {
+    use crate::ocr_metadata_keys::{OCR_AUTO_ROTATED_METADATA_KEY, OCR_ORIENTATION_DEGREES_METADATA_KEY};
+    metadata
+        .additional
+        .get(OCR_AUTO_ROTATED_METADATA_KEY)
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+        && matches!(
+            metadata
+                .additional
+                .get(OCR_ORIENTATION_DEGREES_METADATA_KEY)
+                .and_then(serde_json::Value::as_i64),
+            Some(90 | 270)
+        )
+}
+
+/// Scale bottom-left paragraph geometry per axis, e.g. from a raster's pixels to PDF points.
+pub(super) fn scale_paragraph_geometry(
+    paragraphs: &mut [crate::pdf::structure::types::PdfParagraph],
+    (sx, sy): (f32, f32),
+) {
+    for paragraph in paragraphs {
+        if let Some((left, bottom, right, top)) = paragraph.block_bbox {
+            paragraph.block_bbox = Some((left * sx, bottom * sy, right * sx, top * sy));
+        }
+        for line in &mut paragraph.lines {
+            line.baseline_y *= sy;
+            for segment in &mut line.segments {
+                segment.x *= sx;
+                segment.width *= sx;
+                segment.y *= sy;
+                segment.height *= sy;
+                segment.baseline_y *= sy;
             }
         }
-        true
     }
 }
 
@@ -406,5 +453,106 @@ mod tests {
         page.detached_ocr_scale = Some((0.24, 0.24));
         assert!(page.place_detached_in_points());
         assert!(!page.place_detached_in_points());
+    }
+
+    /// Only the zero render size guard refuses these placements: the preprocessing block agrees
+    /// with the processed frame and the boxes, so a zero render dimension is the only refusal.
+    #[test]
+    fn a_zero_render_dimension_refuses_detached_table_placement() {
+        let mut read = two_table_frame();
+        assert_eq!(
+            place_table_in_render(&mut read, (400, 800), (200., 400.)),
+            Some((1., 1.)),
+            "the matching render must place the tables"
+        );
+        for (original, render) in [
+            ((0usize, 800usize), (0u32, 800u32)),
+            ((400usize, 0usize), (400u32, 0u32)),
+        ] {
+            let mut read = two_table_frame();
+            read.metadata.image_preprocessing.as_mut().unwrap().original_dimensions = original.into();
+            let before = read.clone();
+            assert_eq!(
+                place_table_in_render(&mut read, render, (200., 400.)),
+                None,
+                "a zero render dimension must refuse placement"
+            );
+            assert_eq!(
+                serde_json::to_value(&read).unwrap(),
+                serde_json::to_value(&before).unwrap(),
+                "a refused placement must not rescale any table"
+            );
+        }
+    }
+
+    /// Only the table order guard refuses this placement: both boxes sit inside the processed
+    /// frame, the text is above both, and the refused placement leaves the read untouched.
+    #[test]
+    fn reversed_table_order_refuses_detached_table_placement() {
+        let mut read = two_table_frame();
+        read.tables.reverse();
+        let before = read.clone();
+        assert_eq!(
+            place_table_in_render(&mut read, (400, 800), (200., 400.)),
+            None,
+            "tables must be placed in vertical reading order"
+        );
+        assert_eq!(
+            serde_json::to_value(&read).unwrap(),
+            serde_json::to_value(&before).unwrap(),
+            "a refused placement must not rescale any table"
+        );
+    }
+
+    #[test]
+    fn general_detached_tables_move_from_the_recognition_frame_into_the_render() {
+        let table = || Table {
+            bounding_box: Some(BoundingBox {
+                x0: 273.0,
+                y0: 267.0,
+                x1: 2237.0,
+                y1: 1450.0,
+            }),
+            ..Default::default()
+        };
+        let boxes = |tables: &[Table]| tables.iter().map(|table| table.bounding_box).collect::<Vec<_>>();
+        // A 196 dpi render that preprocessing resampled to 300 dpi before recognition; three
+        // tables are outside every shape-specific normalizer. ~keep
+        let mut tables = vec![table(), table(), table()];
+        assert!(scale_tables_into_render(&mut tables, (2550, 3298), (1667, 2156)));
+        for bbox in boxes(&tables).into_iter().flatten() {
+            let expected = [
+                273.0 * 1667.0 / 2550.0,
+                267.0 * 2156.0 / 3298.0,
+                2237.0 * 1667.0 / 2550.0,
+                1450.0 * 2156.0 / 3298.0,
+            ];
+            for (actual, expected) in [bbox.x0, bbox.y0, bbox.x1, bbox.y1].into_iter().zip(expected) {
+                assert!((actual - expected).abs() < 1e-9, "{bbox:?}");
+            }
+            assert!(bbox.x1 <= 1667.0 && bbox.y1 <= 2156.0);
+        }
+
+        let placed = boxes(&tables);
+        assert!(!scale_tables_into_render(&mut tables, (1667, 2156), (1667, 2156)));
+        assert!(!scale_tables_into_render(&mut tables, (2550, 3298), (0, 2156)));
+        assert!(!scale_tables_into_render(&mut tables, (0, 3298), (1667, 2156)));
+        assert_eq!(boxes(&tables), placed);
+    }
+
+    #[test]
+    fn only_an_auto_rotated_quarter_turn_reads_sideways() {
+        let metadata = |auto: bool, degrees: i64| {
+            let mut metadata = crate::types::Metadata::default();
+            metadata.additional.insert("auto_rotated".into(), auto.into());
+            metadata.additional.insert("orientation_degrees".into(), degrees.into());
+            metadata
+        };
+        assert!(read_sideways(&metadata(true, 90)));
+        assert!(read_sideways(&metadata(true, 270)));
+        assert!(!read_sideways(&metadata(true, 180)));
+        assert!(!read_sideways(&metadata(true, 0)));
+        assert!(!read_sideways(&metadata(false, 90)));
+        assert!(!read_sideways(&crate::types::Metadata::default()));
     }
 }

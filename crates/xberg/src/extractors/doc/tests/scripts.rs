@@ -35,6 +35,7 @@ fn should_preserve_script_annotations_on_list_items() {
     let list = crate::extraction::doc::DocListMembership {
         level: 0,
         ordered: true,
+        label: None,
     };
     push_list_paragraph(&mut doc, &mut open, list, "109", &[builder::superscript(2, 3)]);
     assert_eq!(doc.elements.len(), 2);
