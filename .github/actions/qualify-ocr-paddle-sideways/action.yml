@@ -1,5 +1,5 @@
 name: Qualify explicit sideways OCR with Paddle OCR
-description: Run the explicit-sideways tests in a Paddle OCR build; needs ONNX Runtime and the Paddle det, cls, rec and doc-ori models in the Hugging Face cache
+description: Run the explicit-sideways tests in a Paddle OCR build; needs ONNX Runtime and the doc-ori model in the Hugging Face cache
 runs:
   using: composite
   steps:

@@ -44,7 +44,7 @@ warm | paddle)
   )
   if [ "$profile" = paddle ]; then
     expected=$((expected + 1))
-    expected_names+=(prose::paddle_backend_is_registered_for_the_automatic_second_stage)
+    expected_names+=(prose::paddle_backend_is_compiled_and_registered)
   fi
   if [ -z "${XBERG_ORIENTATION_TEST_MODEL:-}" ]; then
     repository=models--xberg-io--paddleocr-onnx-models

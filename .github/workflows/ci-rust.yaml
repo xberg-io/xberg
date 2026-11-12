@@ -317,12 +317,14 @@ jobs:
           DYLD_LIBRARY_PATH: ${{ env.DYLD_LIBRARY_PATH || '' }}
           DYLD_FALLBACK_LIBRARY_PATH: ${{ env.DYLD_FALLBACK_LIBRARY_PATH || '' }}
 
-      # The only leg with ONNX Runtime and the Paddle models that also runs the explicit-sideways
-      # suite; the no-ORT tract leg cannot form the automatic Tesseract-to-Paddle pair. ~keep
-      - name: Provision Paddle models for the sideways suite
+      # The only leg that has ONNX Runtime and also runs the explicit-sideways suite; the no-ORT tract
+      # leg cannot build `paddle-ocr-ort`. The suite's children seed a private cache with the
+      # orientation model only and never reach the Paddle stage (their Tesseract read is accepted), so
+      # det/cls/rec are not provisioned. ~keep
+      - name: Provision the orientation model for the sideways suite
         if: matrix.os == 'ubuntu-latest'
         uses: ./.github/actions/setup-paddle-ocr-models
-        with: { models: "det,cls,rec,doc-ori" }
+        with: { models: doc-ori, cache-key-suffix: document-orientation-onnx }
 
       - name: Qualify explicit sideways OCR with Paddle OCR
         if: matrix.os == 'ubuntu-latest'

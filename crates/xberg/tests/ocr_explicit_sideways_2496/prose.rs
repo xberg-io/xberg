@@ -278,10 +278,10 @@ fn partial_ocr_selection_on_a_scanned_document_reads_alike_in_every_build() {
 #[cfg(paddle_ocr)]
 #[test]
 #[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
-fn paddle_backend_is_registered_for_the_automatic_second_stage() {
-    // The paddle profile is only meaningful when the automatic Tesseract-to-Paddle pair can form; a build
-    // or runner without a usable Paddle backend must fail here instead of passing the parity tests
-    // through Tesseract alone. ~keep
+fn paddle_backend_is_compiled_and_registered() {
+    // Compiled and registered only: construction loads no ONNX Runtime or models, and the parity cases
+    // never reach the Paddle stage (their Tesseract read is accepted), so this guards that the paddle
+    // profile was built with Paddle OCR at all. ~keep
     let registered = xberg::plugins::registry::get_ocr_backend_registry().read().list();
     assert!(
         registered.iter().any(|name| name == "paddle-ocr"),
