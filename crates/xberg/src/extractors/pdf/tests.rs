@@ -9028,4 +9028,126 @@ mod unread_page_blank_flag_tests {
             .expect("the extraction must succeed");
         crate::extraction::derive::derive_extraction_result(internal, true, crate::core::config::OutputFormat::Plain)
     }
+
+    /// Backend whose first call reads a page and asks for the time-limit stop, and whose later calls
+    /// recognize for `SLOW_PAGE` on a blocking thread, as a Tesseract page under load does.
+    #[cfg(feature = "ocr")]
+    struct SlowAfterStopBackend {
+        token: crate::cancellation::CancellationToken,
+        calls: std::sync::atomic::AtomicUsize,
+    }
+
+    #[cfg(feature = "ocr")]
+    const SLOW_PAGE: std::time::Duration = std::time::Duration::from_secs(9);
+
+    #[cfg(feature = "ocr")]
+    impl crate::plugins::Plugin for SlowAfterStopBackend {
+        fn name(&self) -> &str {
+            "slow-after-stop-backend"
+        }
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "ocr")]
+    #[async_trait::async_trait]
+    impl crate::plugins::OcrBackend for SlowAfterStopBackend {
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+        fn supports_language(&self, _lang: &str) -> bool {
+            true
+        }
+        async fn process_image(
+            &self,
+            _image_bytes: &[u8],
+            _config: &crate::core::config::OcrConfig,
+        ) -> crate::Result<crate::types::ExtractedDocument> {
+            if self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                self.token.request_stop();
+            } else {
+                tokio::task::spawn_blocking(|| std::thread::sleep(SLOW_PAGE))
+                    .await
+                    .expect("the sleeping task must not panic");
+            }
+            Ok(crate::types::ExtractedDocument {
+                content: "Text read from a page".to_string(),
+                mime_type: std::borrow::Cow::Borrowed("text/plain"),
+                ..Default::default()
+            })
+        }
+    }
+
+    /// #3055: a page still being recognized when the stop arrives must not hold the call past the
+    /// grace. Two workers read pages 2 and 3; whichever the backend serves first asks for the stop and the
+    /// other would take 9 s. The call has to return in a few seconds with that page and page 4 unread.
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    #[serial]
+    async fn a_page_still_recognizing_after_the_stop_is_abandoned_not_awaited() {
+        use crate::core::config::{ConcurrencyConfig, OcrConfig};
+
+        let token = crate::cancellation::CancellationToken::new();
+        let backend = std::sync::Arc::new(SlowAfterStopBackend {
+            token: token.clone(),
+            calls: std::sync::atomic::AtomicUsize::new(0),
+        });
+        crate::plugins::register_ocr_backend(backend.clone()).unwrap();
+        let _unregister = RegisteredOcrBackendGuard {
+            name: "slow-after-stop-backend",
+        };
+        let config = ExtractionConfig {
+            cancel_token: Some(token.clone()),
+            concurrency: Some(ConcurrencyConfig {
+                max_threads: Some(2),
+                ..Default::default()
+            }),
+            ocr: Some(OcrConfig {
+                backend: "slow-after-stop-backend".to_string(),
+                language: vec!["eng".to_string()],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let started = std::time::Instant::now();
+        let result = extract_whole_pdf(&shifted_to_unicode_pdf_pages(WRONG_MAPPING_PROSE, 0, 4, true), &config).await;
+        let took = started.elapsed();
+
+        assert!(
+            took < SLOW_PAGE - std::time::Duration::from_secs(3),
+            "the call took {took:?}: the page still recognizing was awaited"
+        );
+        assert_eq!(
+            backend.calls.load(std::sync::atomic::Ordering::SeqCst),
+            2,
+            "no page starts after the stop"
+        );
+        let unread: Vec<u32> = result
+            .ocr_page_failures
+            .iter()
+            .flatten()
+            .filter(|failure| failure.error == ocr::TIME_LIMIT_UNREAD_PAGE_ERROR)
+            .map(|failure| failure.page)
+            .collect();
+        let mut unread = unread;
+        unread.sort_unstable();
+        assert_eq!(
+            unread.len(),
+            2,
+            "the slow page and the page after the batch: {unread:?}"
+        );
+        assert!(unread.contains(&4), "the page after the batch is unread: {unread:?}");
+        assert!(
+            unread.iter().any(|page| [2, 3].contains(page)),
+            "one page of the batch is unread: {unread:?}"
+        );
+    }
 }
