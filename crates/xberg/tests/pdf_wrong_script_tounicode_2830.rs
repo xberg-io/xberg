@@ -277,7 +277,7 @@ fn english_and_khmer_models() -> Option<tempfile::TempDir> {
     Some(models)
 }
 
-/// #2826: with only Khmer configured, the layer's ink is still read with the Latin model, which
+/// #2826: with only Khmer configured, the layer's ink is still read with the English model, which
 /// contradicts the wrong map, so the page over its picture goes to OCR as at base.
 #[test]
 #[ignore = "needs khm.traineddata in TESSDATA_PREFIX or a system tessdata directory"]

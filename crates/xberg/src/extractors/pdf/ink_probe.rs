@@ -6,7 +6,7 @@
 //! the same. Where nothing but lost-glyph markers vouches for such a layer (no cluster structure
 //! to check), the page is read once in the configured languages, and the layer is given up only
 //! when the read is confident prose that spells none of the layer's script. A page whose layer is
-//! drawn over a full-page picture is read with the Latin model whatever the configured languages,
+//! drawn over a full-page picture is read with the English model whatever the configured languages,
 //! so the verdict depends on the page alone. ~keep
 
 use super::unreadable_script::{
@@ -361,10 +361,10 @@ async fn read_through_page_route(
 }
 
 /// Reads each of `pages`, whose layer is drawn over a full-page picture, from a render without its
-/// pictures (see [`super::picture_layer::page_without_pictures`]) with the Latin reference reader
+/// pictures (see [`super::picture_layer::page_without_pictures`]) with the English reference reader
 /// (see [`reference_reader`]), and judges the reads (see [`judge_reads`]). The picture is left out
 /// because a textured picture turns the read of the glyphs on it into noise. A page whose render or
-/// read fails, as when the Latin model is missing and cannot be downloaded, has no verdict: it is
+/// read fails, as when the English model is missing and cannot be downloaded, has no verdict: it is
 /// listed as contradicted, so it is read as the scan it was taken for. An error when the extraction
 /// is cancelled. ~keep
 async fn read_without_pictures(
@@ -403,7 +403,7 @@ async fn read_without_pictures(
 }
 
 /// The config of the read that judges a layer drawn over a picture: the probe's config with OCR
-/// set to Tesseract's Latin model (`eng`, downloaded on first use like any language) and the
+/// set to Tesseract's English model (`eng`, downloaded on first use like any language) and the
 /// probe's thresholds, whatever backend and languages the caller configured. The pipeline holds
 /// that one stage, so a weak read is judged as it is, never replaced by another backend's. The
 /// caller's model directory and OCR limits are kept. ~keep
@@ -632,10 +632,10 @@ mod tests {
         assert!(!read_contradicts_layer(&layer, few_long));
     }
 
-    /// #2826: a layer over a picture is judged by Tesseract's Latin model whatever the caller
+    /// #2826: a layer over a picture is judged by Tesseract's English model whatever the caller
     /// configured, in the caller's model directory and with the probe's thresholds.
     #[test]
-    fn a_layer_over_a_picture_is_read_with_the_latin_model_whatever_the_configured_languages() {
+    fn a_layer_over_a_picture_is_read_with_the_english_model_whatever_the_configured_languages() {
         let configured = ExtractionConfig {
             ocr: Some(crate::OcrConfig {
                 backend: "paddleocr".to_string(),
