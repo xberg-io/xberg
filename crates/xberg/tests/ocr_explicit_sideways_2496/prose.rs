@@ -1,5 +1,6 @@
 use super::*;
 
+#[cfg(not(paddle_ocr))]
 #[test]
 #[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
 fn explicit_language_block_recovers_the_sideways_source_paragraph() {
@@ -8,6 +9,27 @@ fn explicit_language_block_recovers_the_sideways_source_paragraph() {
         run_private_child(CASE);
         return;
     }
+    recovers_the_sideways_source_paragraph_case();
+}
+
+/// The paddle-route twin asserts the same correct behavior as the default-route test above.
+/// Under the synthesized per-page pipeline route the language-only read keeps the sparse
+/// primary instead of recovering the paragraph (#3007), so this variant is ignored until that
+/// route delivers the recovery; running it with `--ignored` under a paddle build shows the
+/// degraded read failing these assertions.
+#[cfg(paddle_ocr)]
+#[test]
+#[ignore = "#3007: the per-page pipeline route does not recover the sideways source paragraph yet"]
+fn explicit_language_block_recovers_the_sideways_source_paragraph() {
+    const CASE: &str = "prose::explicit_language_block_recovers_the_sideways_source_paragraph";
+    if std::env::var(CHILD).as_deref() != Ok(CASE) {
+        run_private_child(CASE);
+        return;
+    }
+    recovers_the_sideways_source_paragraph_case();
+}
+
+fn recovers_the_sideways_source_paragraph_case() {
     let pdf = prose_source();
     let native = PdfDocument::from_bytes(pdf.clone()).unwrap();
     assert_eq!(native.page_count().unwrap(), 1);
@@ -51,36 +73,19 @@ fn explicit_language_block_recovers_the_sideways_source_paragraph() {
     assert!(actual.tables.is_empty());
     assert!(actual.ocr_elements.is_none());
     assert!(!actual.metadata.additional.contains_key("auto_rotated"));
-    {
-        #[cfg(not(paddle_ocr))]
-        {
-            assert_eq!(
-                actual.content.split_whitespace().collect::<Vec<_>>(),
-                source.split_whitespace().collect::<Vec<_>>()
-            );
-            let actual_document = actual.document.as_ref().unwrap();
-            let forced_document = forced.document.as_ref().unwrap();
-            assert_eq!(actual_document.nodes.len(), 1);
-            assert_eq!(actual_document.nodes[0].bbox, forced_document.nodes[0].bbox);
-            assert_eq!(
-                actual_document.nodes[0].content.text(),
-                Some(
-                    "Docling bundles PDF document conversion to\nJSON and Markdown in an easy self contained\npackage"
-                )
-            );
-        }
-        #[cfg(paddle_ocr)]
-        {
-            // The per-page pipeline route keeps the sparse primary: the recognition-orientation
-            // retry's prose admission is a whole-document-route capability, and this route reads
-            // page images with `allow_prose` off. The sparse read above is what gets served. ~keep
-            assert_eq!(actual.content, sparse.content);
-            assert_eq!(
-                serde_json::to_value(actual.document).unwrap(),
-                serde_json::to_value(sparse.document).unwrap()
-            );
-        }
-    }
+    // Correct behavior in every build: the language-only read recovers the source paragraph.
+    assert_eq!(
+        actual.content.split_whitespace().collect::<Vec<_>>(),
+        source.split_whitespace().collect::<Vec<_>>()
+    );
+    let actual_document = actual.document.as_ref().unwrap();
+    let forced_document = forced.document.as_ref().unwrap();
+    assert_eq!(actual_document.nodes.len(), 1);
+    assert_eq!(actual_document.nodes[0].bbox, forced_document.nodes[0].bbox);
+    assert_eq!(
+        actual_document.nodes[0].content.text(),
+        Some("Docling bundles PDF document conversion to\nJSON and Markdown in an easy self contained\npackage")
+    );
 
     let mut upright = Document::load_mem(&pdf).unwrap();
     let page = upright.get_pages()[&1];

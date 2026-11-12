@@ -336,11 +336,17 @@ fn upright_osd_preserves_its_existing_cells_and_content() {
     }
     #[cfg(paddle_ocr)]
     {
-        // The per-page pipeline route places the OCR table in its own frame, so the served read
-        // is the row-per-line transcript instead of the whole-document route's duplicated-prose
-        // pin above. Pin this route's bytes so the served contract cannot drift silently. ~keep
-        assert_eq!(result.content.split_whitespace().count(), 486);
+        // Invariants first: the per-page pipeline route keeps every matched source token and
+        // does not duplicate prose (the whole-document route's pre-existing duplication reads
+        // ~942 words, i.e. 469 words beyond its 473 matches; this route serves exactly the 13
+        // non-source words). The SHAs are additional byte-level pins so the served contract
+        // cannot drift silently. ~keep
         assert_eq!(source_matches(&result.content), 473);
+        assert_eq!(
+            result.content.split_whitespace().count() - source_matches(&result.content),
+            13,
+            "no duplicated prose: only the non-source words beyond the 473 matches"
+        );
         assert_eq!(
             hex::encode(Sha256::digest(result.content.as_bytes())),
             "358bb58799d345222e25af8e3d98340dc21cf0fa75ed25a73e63126b71c7c83b"
@@ -478,6 +484,7 @@ fn explicit_true_rotates_without_cached_osd() {
     );
 }
 
+#[cfg(not(paddle_ocr))]
 #[test]
 #[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
 fn cached_file_recovers_when_osd_is_installed_without_changing_the_configuration() {
@@ -486,6 +493,27 @@ fn cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
         run_private_child(CACHE_CASE);
         return;
     }
+    cached_file_recovers_case();
+}
+
+/// The paddle-route twin asserts the same correct behavior as the default-route test above:
+/// the first read is cached, and once the OSD pack is installed both the fresh and cached
+/// reads recover through the OSD route. Under the synthesized per-page pipeline route none of
+/// that holds yet (#3007), so this variant is ignored until that route delivers the recovery;
+/// running it with `--ignored` under a paddle build shows the degraded behavior failing.
+#[cfg(paddle_ocr)]
+#[test]
+#[ignore = "#3007: the per-page pipeline route neither caches the first read nor recovers through OSD yet"]
+fn cached_file_recovers_when_osd_is_installed_without_changing_the_configuration() {
+    const CACHE_CASE: &str = "cached_file_recovers_when_osd_is_installed_without_changing_the_configuration";
+    if std::env::var(CHILD).as_deref() != Ok(CACHE_CASE) {
+        run_private_child(CACHE_CASE);
+        return;
+    }
+    cached_file_recovers_case();
+}
+
+fn cached_file_recovers_case() {
     let (_, mut config) = controls();
     let root = tempfile::tempdir().unwrap();
     let models = root.path().join("models");
@@ -507,17 +535,10 @@ fn cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
     };
     let before = read(&config);
     assert_before_osd(&before);
-    #[cfg(not(paddle_ocr))]
     assert_eq!(
         persisted_extraction_entries("explicit-osd-transition"),
         1,
         "the real file-extraction cache must contain the first result"
-    );
-    #[cfg(paddle_ocr)]
-    assert_eq!(
-        persisted_extraction_entries("explicit-osd-transition"),
-        0,
-        "a read kept only because the classifier is missing must not be cached"
     );
     let osd = osd_model();
     std::fs::write(models.join("osd.traineddata"), osd).unwrap();
@@ -525,22 +546,12 @@ fn cached_file_recovers_when_osd_is_installed_without_changing_the_configuration
         use_cache: false,
         ..config.clone()
     });
-    #[cfg(not(paddle_ocr))]
-    {
-        assert_source_table(&fresh);
-        assert_route("fresh", &fresh, Route::Osd);
-    }
-    #[cfg(paddle_ocr)]
-    assert_route("fresh", &fresh, Route::Original);
+    assert_source_table(&fresh);
+    assert_route("fresh", &fresh, Route::Osd);
     let after = read(&config);
     record_result("cached-after-osd", &after);
-    #[cfg(not(paddle_ocr))]
-    {
-        assert_source_table(&after);
-        assert_route("after", &after, Route::Osd);
-    }
-    #[cfg(paddle_ocr)]
-    assert_route("after", &after, Route::Original);
+    assert_source_table(&after);
+    assert_route("after", &after, Route::Osd);
 }
 
 #[cfg(feature = "auto-rotate-tract")]
@@ -611,6 +622,7 @@ impl xberg::engine::seams::CacheBackend for DocumentResultsCache {
     }
 }
 
+#[cfg(not(paddle_ocr))]
 #[test]
 #[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
 fn cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_configuration() {
@@ -619,6 +631,27 @@ fn cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_config
         run_private_child(ENGINE_CASE);
         return;
     }
+    cached_engine_bytes_recover_case();
+}
+
+/// The paddle-route twin asserts the same correct behavior as the default-route test above:
+/// the first read is cached, and once the OSD pack is installed both the fresh and cached
+/// reads recover through the OSD route. Under the synthesized per-page pipeline route none of
+/// that holds yet (#3007), so this variant is ignored until that route delivers the recovery;
+/// running it with `--ignored` under a paddle build shows the degraded behavior failing.
+#[cfg(paddle_ocr)]
+#[test]
+#[ignore = "#3007: the per-page pipeline route neither caches the first read nor recovers through OSD yet"]
+fn cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_configuration() {
+    const ENGINE_CASE: &str = "cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_configuration";
+    if std::env::var(CHILD).as_deref() != Ok(ENGINE_CASE) {
+        run_private_child(ENGINE_CASE);
+        return;
+    }
+    cached_engine_bytes_recover_case();
+}
+
+fn cached_engine_bytes_recover_case() {
     let (_, mut config) = controls();
     let models = tempfile::tempdir().unwrap();
     seed_english(models.path());
@@ -639,17 +672,10 @@ fn cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_config
     let read = |config: &ExtractionConfig| read_engine(&engine, &runtime, config);
     let before = read(&config);
     assert_before_osd(&before);
-    #[cfg(not(paddle_ocr))]
     assert_eq!(
         cache.writes.load(std::sync::atomic::Ordering::SeqCst),
         1,
         "a final single-backend read is cached"
-    );
-    #[cfg(paddle_ocr)]
-    assert_eq!(
-        cache.writes.load(std::sync::atomic::Ordering::SeqCst),
-        0,
-        "a read kept only because the classifier is missing must not be cached"
     );
     let osd = osd_model();
     std::fs::write(models.path().join("osd.traineddata"), osd).unwrap();
@@ -657,28 +683,19 @@ fn cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_config
         use_cache: false,
         ..config.clone()
     });
-    #[cfg(not(paddle_ocr))]
-    {
-        assert_source_table(&fresh);
-        assert_route("fresh", &fresh, Route::Osd);
-    }
-    #[cfg(paddle_ocr)]
-    assert_route("fresh", &fresh, Route::Original);
+    assert_source_table(&fresh);
+    assert_route("fresh", &fresh, Route::Osd);
     let after = read(&config);
     assert_eq!(
         cache.hits.load(std::sync::atomic::Ordering::SeqCst),
         0,
         "changed OSD capability must miss the outer cache"
     );
-    #[cfg(not(paddle_ocr))]
-    {
-        assert_source_table(&after);
-        assert_route("after", &after, Route::Osd);
-    }
-    #[cfg(paddle_ocr)]
-    assert_route("after", &after, Route::Original);
+    assert_source_table(&after);
+    assert_route("after", &after, Route::Osd);
 }
 
+#[cfg(not(paddle_ocr))]
 #[test]
 #[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
 fn cached_context_changed_during_extraction_is_not_written() {
@@ -687,6 +704,28 @@ fn cached_context_changed_during_extraction_is_not_written() {
         run_private_child(CHANGED_CASE);
         return;
     }
+    cached_context_changed_case();
+}
+
+/// The paddle-route twin asserts the same correct behavior as the default-route test above:
+/// the read serves through the OSD route with the full recovered source table. Under the
+/// synthesized per-page pipeline route that recovery does not happen yet (#3007), so this
+/// variant is ignored until the route delivers it; running it with `--ignored` under a paddle
+/// build shows the degraded read failing. The capability-change guard below (the read must not
+/// populate the earlier cache identity) stays asserted for every build.
+#[cfg(paddle_ocr)]
+#[test]
+#[ignore = "#3007: the per-page pipeline route does not recover through OSD yet"]
+fn cached_context_changed_during_extraction_is_not_written() {
+    const CHANGED_CASE: &str = "cached_context_changed_during_extraction_is_not_written";
+    if std::env::var(CHILD).as_deref() != Ok(CHANGED_CASE) {
+        run_private_child(CHANGED_CASE);
+        return;
+    }
+    cached_context_changed_case();
+}
+
+fn cached_context_changed_case() {
     let (_, mut config) = controls();
     let models = tempfile::tempdir().unwrap();
     seed_english(models.path());
@@ -709,18 +748,8 @@ fn cached_context_changed_during_extraction_is_not_written() {
         .build()
         .unwrap();
     let read = read_engine(&engine, &runtime, &config);
-    #[cfg(not(paddle_ocr))]
-    {
-        assert_source_table(&read);
-        assert_route("read after install during lookup", &read, Route::Osd);
-    }
-    #[cfg(paddle_ocr)]
-    {
-        // The per-page pipeline route keeps the sparse primary: the recognition-orientation
-        // retry that would recover the page is a whole-document-route capability. The
-        // assertion under test is the capability-change guard below, not the recovery. ~keep
-        assert_route("read after install during lookup", &read, Route::Original);
-    }
+    assert_source_table(&read);
+    assert_route("read after install during lookup", &read, Route::Osd);
     assert!(
         cache.install_osd_on_lookup.lock().unwrap().is_none(),
         "lookup installed the verified OSD pack"
@@ -929,10 +958,11 @@ fn persisted_extraction_entries(namespace: &str) -> usize {
     let cache = std::path::PathBuf::from(std::env::var_os("XBERG_CACHE_DIR").unwrap())
         .join("extraction")
         .join(namespace);
-    // A route that wrote nothing never creates the namespace directory. ~keep
-    let Ok(entries) = std::fs::read_dir(cache) else {
-        return 0;
-    };
+    // A route that writes nothing never creates the namespace directory (#3007), so a missing
+    // directory is itself the degradation and must fail loudly here rather than read as zero
+    // entries behind a caller's expectation of one. ~keep
+    let entries = std::fs::read_dir(&cache)
+        .unwrap_or_else(|error| panic!("extraction cache namespace {}: {error}", cache.display()));
     entries
         .map(Result::unwrap)
         .filter(|entry| entry.path().extension().is_some_and(|extension| extension == "msgpack"))
@@ -1131,7 +1161,8 @@ fn assert_route(name: &str, result: &ExtractedDocument, expected: Route) {
 }
 
 /// The whole-document route reports the caller's PSM as the flat `psm` key; the per-page
-/// pipeline route reports one entry per page in `ocr_page_segmentation_modes` instead. ~keep
+/// pipeline route reports one entry per page in `ocr_page_segmentation_modes` instead, which
+/// is an API-visible difference tracked by #3007. ~keep
 #[cfg(not(paddle_ocr))]
 fn assert_psm(result: &ExtractedDocument, expected: &str) {
     assert_eq!(
