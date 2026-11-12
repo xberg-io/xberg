@@ -56,3 +56,6 @@ pub(crate) use redaction_projection::VisibleMarkdown;
 
 #[cfg(all(test, feature = "office", feature = "pdf"))]
 mod inline_html_writer_tests;
+
+#[cfg(test)]
+mod math_tex_escape_tests;

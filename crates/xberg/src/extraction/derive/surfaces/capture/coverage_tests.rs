@@ -40,6 +40,10 @@ fn paragraph(text: &str, annotations: Vec<TextAnnotation>) -> DerivedResult {
 
 fn visible(markdown: &str) -> String {
     let bytes = crate::rendering::render_docx(markdown).expect("actual canonical binary consumer");
+    docx_body_text(&bytes)
+}
+
+fn docx_body_text(bytes: &[u8]) -> String {
     let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
     assert!(archive.len() >= 6);
     let mut xml = String::new();
@@ -58,6 +62,160 @@ fn visible(markdown: &str) -> String {
         "real selectable text, not a source-string projection"
     );
     nodes.iter().filter_map(|node| node.text()).collect()
+}
+
+async fn delivered_package(
+    document: InternalDocument,
+    format: &str,
+    redaction: Option<RedactionConfig>,
+) -> crate::Result<Vec<u8>> {
+    use base64::Engine as _;
+    let config = ExtractionConfig {
+        output_format: OutputFormat::Custom(format.to_owned()),
+        redaction,
+        ..Default::default()
+    };
+    let output = crate::core::pipeline::run_pipeline(document, &config).await?;
+    assert_eq!(output.metadata.output_format.as_deref(), Some(format));
+    Ok(base64::engine::general_purpose::STANDARD
+        .decode(output.content)
+        .expect("finished package must be base64"))
+}
+
+type PackageReader = fn(&[u8]) -> String;
+
+fn binary_formats() -> &'static [(&'static str, PackageReader)] {
+    &[
+        ("docx", docx_body_text),
+        #[cfg(feature = "pdf")]
+        ("pdf", |bytes| {
+            lopdf::Document::load_mem(bytes)
+                .expect("finished PDF package")
+                .extract_text(&[1])
+                .expect("selectable PDF text")
+        }),
+    ]
+}
+
+fn inline_math_package_source(indented_code: bool) -> InternalDocument {
+    let source = "Take $y$ and $x*y$ here.";
+    let annotations = ["$y$", "$x*y$"]
+        .into_iter()
+        .map(|span| {
+            let start = source.find(span).expect("fixture contains equation");
+            TextAnnotation {
+                start: start as u32,
+                end: (start + span.len()) as u32,
+                kind: crate::types::document_structure::AnnotationKind::math(false),
+            }
+        })
+        .collect();
+    let mut builder = InternalDocumentBuilder::new("test");
+    builder.push_paragraph(source, annotations, None, None);
+    if indented_code {
+        builder.push_code("    *literal* [text]", None, None, None);
+    }
+    builder.build()
+}
+
+#[tokio::test]
+async fn should_deliver_packages_when_escaped_math_follows_unescaped_math() {
+    for &(format, body_text) in binary_formats() {
+        let original = delivered_package(inline_math_package_source(false), format, None)
+            .await
+            .unwrap();
+        assert_eq!(body_text(&original).trim(), "Take y and x*y here.", "{format}");
+
+        let redaction = config("x*y", RedactionStrategy::Mask);
+        let redacted = delivered_package(inline_math_package_source(false), format, Some(redaction))
+            .await
+            .unwrap();
+        assert_eq!(
+            body_text(&redacted).trim(),
+            "Take $y$ and $[REDACTED]$ here.",
+            "{format}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn should_preserve_indented_literal_punctuation_in_rebuilt_packages() {
+    for &(format, body_text) in binary_formats() {
+        let redaction = config("x*y", RedactionStrategy::Mask);
+        let redacted = delivered_package(inline_math_package_source(true), format, Some(redaction))
+            .await
+            .unwrap();
+        let body = body_text(&redacted);
+        assert!(body.contains("Take $y$ and $[REDACTED]$ here."), "{format}: {body:?}");
+        assert!(body.trim_end().ends_with("*literal* [text]"), "{format}: {body:?}");
+        if format == "docx" {
+            assert!(body.ends_with("    *literal* [text]"), "{body:?}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn should_refuse_packages_when_math_normalization_creates_an_uncovered_match() {
+    let document = || {
+        let mut builder = InternalDocumentBuilder::new("test");
+        builder.push_formula("Amber % comment\nMaple", None, None);
+        builder.build()
+    };
+    for &(format, body_text) in binary_formats() {
+        let original = delivered_package(document(), format, None).await.unwrap();
+        assert_eq!(body_text(&original).trim(), "Amber Maple", "{format}");
+
+        let redaction = config("Amber Maple", RedactionStrategy::Mask);
+        let error = delivered_package(document(), format, Some(redaction))
+            .await
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Cannot prove complete binary document math redaction"),
+            "{format}: {error}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn should_refuse_packages_when_math_disappears_at_a_match_boundary() {
+    let document = |math_first| {
+        let mut builder = InternalDocumentBuilder::new("test");
+        let comment = "% synthetic comment\n% second comment";
+        if math_first {
+            builder.push_formula(comment, None, None);
+        }
+        builder.push_paragraph("Amber", Vec::new(), None, None);
+        if !math_first {
+            builder.push_formula(comment, None, None);
+        }
+        builder.build()
+    };
+    for &(format, body_text) in binary_formats() {
+        for math_first in [false, true] {
+            let original = delivered_package(document(math_first), format, None).await.unwrap();
+            assert_eq!(
+                body_text(&original).trim(),
+                "Amber",
+                "{format}, math_first={math_first}"
+            );
+
+            let redaction = RedactionConfig {
+                custom_patterns: vec![RedactionPattern::labeled("person", r"\A\s*Amber\s*\z")],
+                ..Default::default()
+            };
+            let error = delivered_package(document(math_first), format, Some(redaction))
+                .await
+                .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("Cannot prove complete binary document math redaction"),
+                "{format}, math_first={math_first}: {error}"
+            );
+        }
+    }
 }
 
 async fn findings(text: &str, config: &RedactionConfig) -> Vec<RedactionFinding> {
