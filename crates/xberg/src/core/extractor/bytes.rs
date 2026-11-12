@@ -88,9 +88,15 @@ pub(crate) async fn extract_bytes_with_layout_pages(
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let owned_config_with_cancel_token;
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
-    let config: &ExtractionConfig = if config.extraction_timeout_secs.is_some() && config.cancel_token.is_none() {
+    let config: &ExtractionConfig = if config.extraction_timeout_secs.is_some() {
         let mut owned = config.clone();
         owned.ensure_cancel_token();
+        // Each timed extraction gets its own soft-stop state, so a caller's token that is
+        // reused for another extraction never starts out stopped.
+        owned.cancel_token = owned
+            .cancel_token
+            .as_ref()
+            .map(crate::cancellation::CancellationToken::scoped);
         owned_config_with_cancel_token = owned;
         &owned_config_with_cancel_token
     } else {

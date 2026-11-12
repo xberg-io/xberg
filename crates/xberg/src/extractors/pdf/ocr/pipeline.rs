@@ -390,6 +390,38 @@ impl std::fmt::Display for FailedOcrRun {
     }
 }
 
+/// The error recorded for a page the extraction time limit stopped before it was read.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) const TIME_LIMIT_UNREAD_PAGE_ERROR: &str = "the extraction time limit was reached before the page was read";
+
+/// The error of a run in which no page was read. Pages the time limit left unread make it the
+/// time limit, whatever failed earlier; otherwise it is the error of the first failed page.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn run_error_for_failed_pages(
+    page_indices: &[usize],
+    failed_page_errors: &mut ahash::AHashMap<usize, crate::XbergError>,
+) -> crate::XbergError {
+    let stopped_by_limit = page_indices.iter().find(|page_idx| {
+        matches!(
+            failed_page_errors.get(page_idx),
+            Some(crate::XbergError::Timeout { .. })
+        )
+    });
+    let chosen = stopped_by_limit
+        .or_else(|| {
+            page_indices
+                .iter()
+                .find(|page_idx| failed_page_errors.contains_key(page_idx))
+        })
+        .copied();
+    chosen
+        .and_then(|page_idx| failed_page_errors.remove(&page_idx))
+        .unwrap_or_else(|| crate::XbergError::Ocr {
+            message: "OCR failed for every requested page".to_string(),
+            source: None,
+        })
+}
+
 /// Add `incoming` records to `failures`. A page that already has a record keeps its first
 /// error and is recovered when any of its records is.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -1266,9 +1298,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut preprocessing_by_page: ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata> =
         ahash::AHashMap::new();
     let mut xobject_recovery_budget = crate::extractors::security::SecurityBudget::from_config(config);
-    if let Some(token) = config.cancel_token.as_ref() {
-        token.register_page_loop();
-    }
+    let page_loop = config
+        .cancel_token
+        .as_ref()
+        .map(crate::cancellation::CancellationToken::enter_page_loop);
     for batch_start in (0..total).step_by(batch_size) {
         // The extraction time limit asks for the pages read so far: the pages of the batches
         // that finished stay in the result and every later page is recorded as unread.
@@ -1281,7 +1314,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     &mut page_failures,
                     vec![crate::types::OcrPageFailure {
                         page: (page_idx + 1) as u32,
-                        error: "the extraction time limit was reached before the page was read".to_string(),
+                        error: TIME_LIMIT_UNREAD_PAGE_ERROR.to_string(),
                         recovered: mixed_native_page_has_content(native_text, boundaries, page_idx),
                     }],
                 );
@@ -2591,19 +2624,15 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         }
     }
 
+    drop(page_loop);
+
     if all_pages_failed_policy == AllPagesFailedPolicy::ReturnError
         && !page_indices.is_empty()
         && page_indices
             .iter()
             .all(|page_idx| failed_page_errors.contains_key(page_idx))
     {
-        let error = page_indices
-            .iter()
-            .find_map(|page_idx| failed_page_errors.remove(page_idx))
-            .unwrap_or_else(|| crate::XbergError::Ocr {
-                message: "OCR failed for every requested page".to_string(),
-                source: None,
-            });
+        let error = run_error_for_failed_pages(&page_indices, &mut failed_page_errors);
         return Err(FailedOcrRun { error, page_failures });
     }
 
@@ -9967,3 +9996,7 @@ fn registered_preprocessing_render_dpi(config: &ExtractionConfig, ocr: &crate::c
     let backend = registry.get(&ocr.backend).ok()?;
     registry.is_builtin_tesseract(&backend).then_some(target)
 }
+
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[path = "pipeline/time_limit_run_error_tests.rs"]
+mod time_limit_run_error_tests;

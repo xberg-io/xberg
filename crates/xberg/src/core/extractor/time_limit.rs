@@ -19,7 +19,7 @@ pub(super) const PARTIAL_RESULT_GRACE: Duration = Duration::from_secs(10);
 
 const WARNING_SOURCE: &str = "timeout";
 
-/// The limit passed. Asks an extraction whose page loops registered with `token` to stop at the
+/// The limit passed. Asks an extraction whose page loop is running on `token` to stop at the
 /// next page boundary and returns the token to await the extraction for [`PARTIAL_RESULT_GRACE`]
 /// more. Any other extraction is cancelled and gets the timeout error at once.
 pub(super) fn begin_grace(
@@ -27,7 +27,7 @@ pub(super) fn begin_grace(
     secs: u64,
     started: Instant,
 ) -> std::result::Result<&CancellationToken, XbergError> {
-    match token.filter(|token| token.page_loop_registered()) {
+    match token.filter(|token| token.page_loop_running()) {
         Some(token) => {
             token.request_stop();
             Ok(token)
@@ -107,13 +107,25 @@ mod tests {
     #[test]
     fn begin_grace_asks_a_page_loop_to_stop_without_cancelling() {
         let token = CancellationToken::new();
-        token.register_page_loop();
+        let _guard = token.enter_page_loop();
 
         let outcome = begin_grace(Some(&token), 3, Instant::now());
 
         assert!(outcome.is_ok());
         assert!(token.stop_requested());
         assert!(!token.is_cancelled());
+    }
+
+    #[test]
+    fn begin_grace_skips_the_grace_once_the_page_loop_is_over() {
+        let token = CancellationToken::new();
+        drop(token.enter_page_loop());
+
+        let outcome = begin_grace(Some(&token), 3, Instant::now());
+
+        assert!(matches!(outcome, Err(XbergError::Timeout { limit_ms: 3000, .. })));
+        assert!(token.is_cancelled(), "a timeout after the loops is a hard timeout");
+        assert!(!token.stop_requested());
     }
 
     #[test]

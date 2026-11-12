@@ -37,7 +37,7 @@
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
 /// A lightweight, cloneable, one-shot cancellation token.
 ///
@@ -73,15 +73,29 @@ pub struct CancellationToken {
     stop: Arc<StopState>,
 }
 
-/// Soft-stop state shared by every clone of a token.
+/// Soft-stop state of one timed extraction.
 ///
 /// A soft stop is the extraction time limit asking page loops to finish the page in hand and
 /// return what they hold, where [`CancellationToken::cancel`] makes them fail. It is internal:
-/// only the timeout wrapper requests it and only page loops observe it.
+/// only the timeout wrapper requests it and only page loops observe it. A timed extraction
+/// works on a [`scoped`](CancellationToken::scoped) token, so a caller's token that is reused
+/// for another extraction never carries it over.
+// Read only by the page loops and the timeout wrapper, which are feature-gated; a build with
+// neither has no reader. ~keep
+#[cfg_attr(
+    not(any(
+        test,
+        feature = "pdf",
+        feature = "ocr",
+        feature = "ocr-pipeline",
+        all(feature = "tokio-runtime", not(target_arch = "wasm32"))
+    )),
+    allow(dead_code)
+)]
 #[derive(Debug)]
 struct StopState {
     requested: AtomicBool,
-    page_loop_registered: AtomicBool,
+    active_page_loops: AtomicUsize,
     first_unread_page: AtomicU32,
 }
 
@@ -89,13 +103,25 @@ impl Default for StopState {
     fn default() -> Self {
         Self {
             requested: AtomicBool::new(false),
-            page_loop_registered: AtomicBool::new(false),
+            active_page_loops: AtomicUsize::new(0),
             first_unread_page: AtomicU32::new(NO_UNREAD_PAGE),
         }
     }
 }
 
 const NO_UNREAD_PAGE: u32 = u32::MAX;
+
+/// Marks a page loop that honours the soft stop as running; dropping it marks the loop as done.
+#[cfg(any(test, feature = "pdf", feature = "ocr", feature = "ocr-pipeline"))]
+#[derive(Debug)]
+pub(crate) struct PageLoopGuard(Arc<StopState>);
+
+#[cfg(any(test, feature = "pdf", feature = "ocr", feature = "ocr-pipeline"))]
+impl Drop for PageLoopGuard {
+    fn drop(&mut self) {
+        self.0.active_page_loops.fetch_sub(1, Ordering::Relaxed);
+    }
+}
 
 impl CancellationToken {
     /// Create a new, uncancelled token.
@@ -127,29 +153,42 @@ impl CancellationToken {
         self.cancelled.load(Ordering::Relaxed)
     }
 
+    /// A token that shares this token's cancellation but has its own soft-stop state.
+    #[cfg(any(test, all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+    pub(crate) fn scoped(&self) -> Self {
+        Self {
+            cancelled: Arc::clone(&self.cancelled),
+            stop: Arc::default(),
+        }
+    }
+
     /// Ask page loops to stop at the next page boundary and return the pages they hold.
     #[cfg(any(test, all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
     pub(crate) fn request_stop(&self) {
         self.stop.requested.store(true, Ordering::Relaxed);
     }
 
-    /// Returns `true` once [`request_stop`](Self::request_stop) was called on any clone.
+    /// Returns `true` once [`request_stop`](Self::request_stop) was called on this extraction's token.
     pub(crate) fn stop_requested(&self) -> bool {
         self.stop.requested.load(Ordering::Relaxed)
     }
 
-    /// Record that a page loop that honours [`stop_requested`](Self::stop_requested) is running,
-    /// so the timeout wrapper knows waiting for it can return a partial result.
-    pub(crate) fn register_page_loop(&self) {
-        self.stop.page_loop_registered.store(true, Ordering::Relaxed);
+    /// Mark a page loop that honours [`stop_requested`](Self::stop_requested) as running, so the
+    /// timeout wrapper knows that waiting for it can return a partial result. The mark ends when
+    /// the guard is dropped, so a timeout in a later stage does not wait for a loop that is over.
+    #[cfg(any(test, feature = "pdf", feature = "ocr", feature = "ocr-pipeline"))]
+    pub(crate) fn enter_page_loop(&self) -> PageLoopGuard {
+        self.stop.active_page_loops.fetch_add(1, Ordering::Relaxed);
+        PageLoopGuard(Arc::clone(&self.stop))
     }
 
     #[cfg(any(test, all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
-    pub(crate) fn page_loop_registered(&self) -> bool {
-        self.stop.page_loop_registered.load(Ordering::Relaxed)
+    pub(crate) fn page_loop_running(&self) -> bool {
+        self.stop.active_page_loops.load(Ordering::Relaxed) > 0
     }
 
     /// Record that a page loop stopped before reading `page` (1-based). The lowest page wins.
+    #[cfg(any(test, feature = "pdf", feature = "ocr", feature = "ocr-pipeline"))]
     pub(crate) fn note_unread_page(&self, page: u32) {
         self.stop.first_unread_page.fetch_min(page, Ordering::Relaxed);
     }
@@ -225,5 +264,45 @@ mod tests {
     fn test_default_is_not_cancelled() {
         let token = CancellationToken::default();
         assert!(!token.is_cancelled());
+    }
+
+    #[test]
+    fn a_scoped_token_shares_cancellation_but_not_the_soft_stop() {
+        let caller = CancellationToken::new();
+        let scoped = caller.scoped();
+        scoped.request_stop();
+        scoped.note_unread_page(3);
+
+        assert!(scoped.stop_requested());
+        assert!(!caller.stop_requested(), "the caller's token must not carry the stop");
+        assert_eq!(caller.first_unread_page(), None);
+
+        caller.cancel();
+        assert!(scoped.is_cancelled());
+        let next_extraction = caller.scoped();
+        assert!(!next_extraction.stop_requested());
+    }
+
+    #[test]
+    fn a_page_loop_is_running_until_its_guard_drops() {
+        let token = CancellationToken::new();
+        assert!(!token.page_loop_running());
+
+        let guard = token.enter_page_loop();
+        let second = token.enter_page_loop();
+        assert!(token.page_loop_running());
+        drop(guard);
+        assert!(token.page_loop_running());
+        drop(second);
+        assert!(!token.page_loop_running());
+    }
+
+    #[test]
+    fn the_lowest_unread_page_wins() {
+        let token = CancellationToken::new();
+        token.note_unread_page(9);
+        token.note_unread_page(4);
+        token.note_unread_page(6);
+        assert_eq!(token.first_unread_page(), Some(4));
     }
 }

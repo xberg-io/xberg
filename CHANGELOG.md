@@ -330,7 +330,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **(extract): Return the pages already read when a PDF extraction reaches `extraction_timeout_secs`.** (GH#2958)
-  The OCR batch loop and the native text loop stop at a page boundary and the call returns the pages they finished with a `timeout` processing warning naming the first page that was not read. An extraction that does not return within 10 seconds of the limit, and every format without a page loop, still returns `XbergError::Timeout`. A partial result is never cached.
+  A call that used to fail with `XbergError::Timeout` can now succeed: the OCR batch loop and the native text loop stop at a page boundary and the call returns the pages they finished with a `timeout` processing warning naming the first page that was not read. The call may run up to 10 seconds past the limit to finish the page in hand. An extraction that does not return within that grace, and every format without a page loop, still returns `XbergError::Timeout`. Batch, service and REST timeouts are unchanged. A partial result is never cached.
 - **(go): Ship usable static-link flags in the linux-x86_64 and linux-aarch64 Go release archives.** (GH#2988)
   `native-static-libs.txt` no longer ends with a terminal colour escape that cgo rejected, and the glibc-floor archive lists `-lc++ -lc++abi` instead of `-lstdc++`, matching the zig-built C++ objects.
 - **(pdf): Read each table's grid once per segment in the page split that finds the table carrying each split word.** (#2960)

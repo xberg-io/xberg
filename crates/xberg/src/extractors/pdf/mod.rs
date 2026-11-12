@@ -325,6 +325,27 @@ struct NativeBlockingOutput {
     layout_acceleration_override: Option<crate::core::config::acceleration::AccelerationConfig>,
 }
 
+/// Whether the extraction time limit stopped the native text loop before its last page.
+///
+/// The pages it did read are the result. The pages after it are unread, not pages without a text
+/// layer, so no OCR route may take them for scans: with the stop in force it would read none of
+/// them and fail the call, losing the pages already read.
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn native_text_stopped_by_time_limit(config: &ExtractionConfig) -> bool {
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    {
+        config
+            .cancel_token
+            .as_ref()
+            .is_some_and(|token| token.stop_requested() && token.first_unread_page().is_some())
+    }
+    #[cfg(not(all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+    {
+        let _ = config;
+        false
+    }
+}
+
 #[cfg(feature = "pdf")]
 fn ensure_pdf_not_cancelled(config: &ExtractionConfig) -> Result<()> {
     if config
@@ -2959,7 +2980,9 @@ impl PdfExtractor {
         }
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let (mut text, extraction_method) = if config.effective_disable_ocr() {
+        let (mut text, extraction_method) = if config.effective_disable_ocr()
+            || native_text_stopped_by_time_limit(config)
+        {
             (native_text, ExtractionMethod::Native)
         } else if config.force_ocr {
             let (

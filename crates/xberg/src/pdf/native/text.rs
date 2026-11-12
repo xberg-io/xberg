@@ -304,9 +304,7 @@ fn extract_page_texts_until(
         ..Default::default()
     };
 
-    if let Some(token) = cancel_token {
-        token.register_page_loop();
-    }
+    let _page_loop = cancel_token.map(crate::cancellation::CancellationToken::enter_page_loop);
     let mut texts = Vec::with_capacity(page_count);
     for page_idx in 0..page_count {
         if cancel_token.is_some_and(crate::cancellation::CancellationToken::is_cancelled) {
@@ -316,6 +314,12 @@ fn extract_page_texts_until(
         if stop(page_idx) {
             if let Some(token) = cancel_token {
                 token.note_unread_page((page_idx + 1) as u32);
+            }
+            // Every later stage indexes pages by the document's page count, so the unread pages
+            // stay in place as empty pages; the stop warning names the first of them.
+            texts.resize(page_count, String::new());
+            if let Some(collected) = evidence.provenance_counts.as_mut() {
+                collected.resize(page_count, (0, 0));
             }
             break;
         }
@@ -7703,12 +7707,18 @@ mod tests {
             .expect("a stop is not an error");
 
         assert_eq!(
-            finished,
+            finished.len(),
+            all_pages.len(),
+            "unread pages are padded to keep page order"
+        );
+        assert_eq!(
+            finished[..2],
             all_pages[..2],
             "the pages read before the stop must be returned"
         );
+        assert!(finished[2..].iter().all(String::is_empty));
         assert_eq!(token.first_unread_page(), Some(3));
-        assert!(token.page_loop_registered());
+        assert!(!token.page_loop_running(), "the loop's mark ends with the loop");
         assert!(!token.is_cancelled());
     }
 
@@ -7722,7 +7732,8 @@ mod tests {
         let (finished, _) = extract_all_page_texts(&doc.doc, NativePageTextOptions::default(), Some(&token))
             .expect("a stop is not an error");
 
-        assert!(finished.is_empty());
+        assert_eq!(finished.len(), 2);
+        assert!(finished.iter().all(String::is_empty));
         assert_eq!(token.first_unread_page(), Some(1));
     }
 
