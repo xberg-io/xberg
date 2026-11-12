@@ -28,6 +28,10 @@ const MAX_CONTINUATION_LINE_GAP_MULTIPLE: f32 = 3.0;
 /// - Font sizes are within 2pt of each other
 /// - Their baselines are within [`MAX_CONTINUATION_LINE_GAP_MULTIPLE`] line-heights
 pub(super) fn merge_continuation_paragraphs(paragraphs: &mut Vec<PdfParagraph>) {
+    merge_continuation_paragraphs_with_gaps(paragraphs, &[]);
+}
+
+pub(super) fn merge_continuation_paragraphs_with_gaps(paragraphs: &mut Vec<PdfParagraph>, paragraph_gaps: &[f32]) {
     if paragraphs.len() < 2 {
         return;
     }
@@ -123,6 +127,7 @@ pub(super) fn merge_continuation_paragraphs(paragraphs: &mut Vec<PdfParagraph>) 
             && same_region
             && same_rotation
             && vertical_gap_compatible
+            && !page_number_before_gap(&current, &next, paragraph_gaps)
             && !next_starts_section
             && !accent_letter_over_formula_line(&current, &next)
             && !display_rows::is_indexed_display_row(&next)
@@ -140,6 +145,30 @@ pub(super) fn merge_continuation_paragraphs(paragraphs: &mut Vec<PdfParagraph>) 
     }
 
     paragraphs.push(current);
+}
+
+fn page_number_before_gap(current: &PdfParagraph, next: &PdfParagraph, paragraph_gaps: &[f32]) -> bool {
+    let [line] = current.lines.as_slice() else {
+        return false;
+    };
+    let [number] = line.segments.as_slice() else {
+        return false;
+    };
+    let Some(next_line) = next.lines.first() else {
+        return false;
+    };
+    if !super::page_number::classify_page_number_text(&number.text)
+        .is_some_and(|number| number.convention == super::page_number::PageNumberConvention::BareDigits)
+        || !paragraph_gaps
+            .iter()
+            .any(|&gap| next_line.baseline_y < gap && gap < line.baseline_y)
+    {
+        return false;
+    }
+    // Keeping a repaired stack together can remove the intervening fragment that
+    // previously kept the number separate. Preserve the measured break at that boundary.
+    let segments: Vec<_> = next.lines.iter().flat_map(|line| &line.segments).collect();
+    (2..segments.len()).any(|index| super::pipeline::adjacent_outer_sign_parent(&segments, index).is_some())
 }
 
 fn paragraphs_share_rotation(current: &PdfParagraph, next: &PdfParagraph) -> bool {

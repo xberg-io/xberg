@@ -21,7 +21,10 @@ use super::classify::{
 };
 use super::constants::{FULL_LINE_FRACTION, MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO};
 use super::lines::{is_cjk_char, segments_need_space};
-use super::paragraphs::{accent_letter_over_formula_start, merge_continuation_paragraphs, split_embedded_list_items};
+use super::paragraphs::{
+    accent_letter_over_formula_start, merge_continuation_paragraphs, merge_continuation_paragraphs_with_gaps,
+    split_embedded_list_items,
+};
 use super::text_repair::{
     MIN_LIGATURE_WITNESS_WORD_LEN, TextReplacement, WordWitnesses, apply_to_all_segments, clean_duplicate_punctuation,
     collapse_spaced_hyphens, expand_ligatures, expand_ligatures_mapped, normalize_text_encoding,
@@ -1021,7 +1024,7 @@ fn segments_to_paragraphs(
     let mut paragraphs = blocks_to_paragraphs(segments, heading_map, paragraph_gap_ys);
     apply_text_repair_to_structure_tree_paragraphs(&mut paragraphs, true, witnesses);
     reattach_detached_list_markers(&mut paragraphs, DetachedMarkerFrame::Native);
-    merge_continuation_paragraphs(&mut paragraphs);
+    merge_continuation_paragraphs_with_gaps(&mut paragraphs, paragraph_gap_ys);
     synchronize_paragraph_text_metadata(&mut paragraphs);
     paragraphs
 }
@@ -2569,34 +2572,73 @@ pub(crate) fn is_script_run_of(previous: &SegmentData, next: &SegmentData) -> bo
 /// longest stack, so a longer one is seen as too long and refused, not cut short.
 pub(super) const SCRIPT_STACK_WINDOW: usize = xberg_native_pdf::document::MAX_STACK_MEMBERS + 1;
 
+fn stack_span(segment: &SegmentData) -> xberg_native_pdf::document::StackSpan<'_> {
+    let (x, right) = segment.upright_advance_extent();
+    xberg_native_pdf::document::StackSpan {
+        text: segment.text.as_str(),
+        x,
+        baseline: segment.upright_baseline(),
+        width: right - x,
+        font_size: segment.font_size,
+    }
+}
+
+fn stack_window<T: std::borrow::Borrow<SegmentData>>(
+    segments: &[T],
+    base: usize,
+) -> (Vec<xberg_native_pdf::document::StackSpan<'_>>, Vec<usize>) {
+    let mut order: Vec<usize> = ((base + 1)..segments.len().min(base + 1 + SCRIPT_STACK_WINDOW)).collect();
+    order.sort_by(|&a, &b| {
+        segments[a]
+            .borrow()
+            .upright_advance_extent()
+            .0
+            .total_cmp(&segments[b].borrow().upright_advance_extent().0)
+    });
+    let candidates = order
+        .iter()
+        .map(|&index| stack_span(segments[index].borrow()))
+        .collect();
+    (candidates, order)
+}
+
+/// A placed outer sign can keep its adjacent parent even when another run interrupts the rest
+/// of the stack. This supplies inline markup evidence without changing paragraph membership.
+pub(super) fn adjacent_outer_sign_parent<'a>(segments: &[&'a SegmentData], sign: usize) -> Option<&'a SegmentData> {
+    use xberg_native_pdf::document::{script_stack, stack_parents};
+
+    let base = sign.checked_sub(2)?;
+    let root = segments[base];
+    let preceding = segments[sign - 1];
+    let sign_segment = segments[sign];
+    if !matches!(sign_segment.text.trim(), "+" | "−")
+        || !stack_member_exceeds_row_reach(root, sign_segment)
+        || !root.has_same_rotation(preceding)
+        || !preceding.has_same_rotation(sign_segment)
+        || root.assigned_role != preceding.assigned_role
+        || preceding.assigned_role != sign_segment.assigned_role
+    {
+        return None;
+    }
+    let root_span = stack_span(root);
+    let (candidates, order) = stack_window(segments, base);
+    let members = script_stack(&root_span, &candidates);
+    let index = members.iter().position(|&member| order[member] == sign)?;
+    let spans: Vec<_> = members.iter().map(|&member| candidates[member]).collect();
+    let parent = stack_parents(&root_span, &spans)[index]?;
+    (order[members[parent]] == sign - 1).then_some(preceding)
+}
+
 /// Indices into `segments` of the members of the nested script stack on `segments[base]`, in reading
 /// order, or none. The rule is `xberg_native_pdf::document::script_stack`, shared with reading-order
 /// snapping.
 pub(super) fn script_stack_members<T: std::borrow::Borrow<SegmentData>>(segments: &[T], base: usize) -> Vec<usize> {
-    use xberg_native_pdf::document::{StackSpan, script_stack};
-
-    let span = |segment: &SegmentData| {
-        let (x, right) = segment.upright_advance_extent();
-        (x, right - x, segment.upright_baseline())
-    };
+    use xberg_native_pdf::document::script_stack;
     let Some(base_segment) = segments.get(base).map(std::borrow::Borrow::borrow) else {
         return Vec::new();
     };
-    let window = (base + 1)..segments.len().min(base + 1 + SCRIPT_STACK_WINDOW);
-    let mut order: Vec<usize> = window.collect();
-    order.sort_by(|&a, &b| span(segments[a].borrow()).0.total_cmp(&span(segments[b].borrow()).0));
-    fn to_stack<'a>(segment: &'a SegmentData, span: &impl Fn(&SegmentData) -> (f32, f32, f32)) -> StackSpan<'a> {
-        let (x, width, baseline) = span(segment);
-        StackSpan {
-            text: segment.text.as_str(),
-            x,
-            baseline,
-            width,
-            font_size: segment.font_size,
-        }
-    }
-    let candidates: Vec<StackSpan<'_>> = order.iter().map(|&i| to_stack(segments[i].borrow(), &span)).collect();
-    let mut members: Vec<usize> = script_stack(&to_stack(base_segment, &span), &candidates)
+    let (candidates, order) = stack_window(segments, base);
+    let mut members: Vec<usize> = script_stack(&stack_span(base_segment), &candidates)
         .into_iter()
         .map(|i| order[i])
         .collect();
@@ -2622,19 +2664,7 @@ fn place_script_stacks_after_bases(segments: Vec<SegmentData>) -> Vec<SegmentDat
     if segments.iter().any(|segment| !segment.is_unrotated()) {
         return segments;
     }
-    let spans: Vec<StackSpan<'_>> = segments
-        .iter()
-        .map(|segment| {
-            let (x, right) = segment.upright_advance_extent();
-            StackSpan {
-                text: segment.text.as_str(),
-                x,
-                baseline: segment.upright_baseline(),
-                width: right - x,
-                font_size: segment.font_size,
-            }
-        })
-        .collect();
+    let spans: Vec<StackSpan<'_>> = segments.iter().map(stack_span).collect();
     let mut after_base: std::collections::HashMap<usize, Vec<usize>> = script_stacks(&spans)
         .into_iter()
         .map(|(base, members)| {

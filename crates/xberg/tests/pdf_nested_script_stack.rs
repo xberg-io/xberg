@@ -243,5 +243,7 @@ fn should_restore_the_script_markup_on_algebra_page_1555() {
     assert!(neighbor.contains("γ<sup>j</sup> ~K~<sup>+</sup>"));
     assert!(neighbor.contains("j<sup>+</sup> is the index of the incoming basis vector"));
     assert!(page(1514).contains("A<sup>j</sup> = γ<sup>j+</sup> ~k~<sup>−</sup>A<sup>k</sup> + γ~k~ A<sup>k</sup>,"));
+    assert!(page(1521).contains("determine which index k for which γ<sup>j+</sup>"));
+    assert!(page(1522).trim_start().starts_with("1522\n\nSince "));
     assert!(page(1523).contains("The entry γ<sup>j+</sup> ~k~<sup>−</sup> is called the pivot element."));
 }
