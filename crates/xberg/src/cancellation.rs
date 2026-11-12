@@ -194,7 +194,6 @@ impl CancellationToken {
     }
 
     /// The lowest page (1-based) a stopped page loop did not read, if any loop stopped early.
-    #[cfg(any(test, all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
     pub(crate) fn first_unread_page(&self) -> Option<u32> {
         match self.stop.first_unread_page.load(Ordering::Relaxed) {
             NO_UNREAD_PAGE => None,

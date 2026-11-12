@@ -376,6 +376,9 @@ fn extract_text_with_tracking(
 ) -> Result<PdfTextExtractionResult> {
     let (page_texts, evidence) = extract_all_page_texts(&doc.doc, options, cancel_token)?;
     let page_count = page_texts.len();
+    let first_unread = cancel_token
+        .and_then(crate::cancellation::CancellationToken::first_unread_page)
+        .map(|page| page as usize);
 
     let markers: Vec<String> = if config.insert_page_markers {
         (1..=page_count)
@@ -419,7 +422,8 @@ fn extract_text_with_tracking(
         });
 
         if let Some(ref mut pages) = page_contents {
-            let is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&cleaned));
+            let unread = first_unread.is_some_and(|first| page_number >= first);
+            let is_blank = (!unread).then(|| crate::extraction::blank_detection::is_page_text_blank(&cleaned));
             pages.push(PageContent {
                 page_number: page_number as u32,
                 content: cleaned,
@@ -7720,6 +7724,62 @@ mod tests {
         assert_eq!(token.first_unread_page(), Some(3));
         assert!(!token.page_loop_running(), "the loop's mark ends with the loop");
         assert!(!token.is_cancelled());
+    }
+
+    #[test]
+    fn tracked_text_of_a_stopped_extraction_keeps_every_page_boundary() {
+        let pdf = build_paged_text_pdf(3, 10);
+        let doc = NativeDocument::open_bytes(&pdf).expect("fixture must open");
+        let token = crate::cancellation::CancellationToken::new();
+        token.request_stop();
+        let config = PageConfig {
+            extract_pages: true,
+            insert_page_markers: true,
+            ..Default::default()
+        };
+
+        let (content, boundaries, pages, _) =
+            extract_text_with_tracking(&doc, &config, NativePageTextOptions::default(), Some(&token))
+                .expect("a stop is not an error");
+
+        let boundaries = boundaries.expect("boundaries are always tracked");
+        assert_eq!(boundaries.len(), 3);
+        for (idx, boundary) in boundaries.iter().enumerate() {
+            assert_eq!(boundary.page_number, (idx + 1) as u32);
+            assert_eq!(boundary.byte_start, boundary.byte_end, "an unread page has no text");
+        }
+        let markers: Vec<String> = (1..=3)
+            .map(|n| config.marker_format.replace("{page_num}", &n.to_string()))
+            .collect();
+        assert_eq!(
+            content,
+            markers.concat(),
+            "every page keeps its marker and nothing else"
+        );
+        let pages = pages.expect("page contents were requested");
+        assert_eq!(pages.len(), 3);
+        for page in &pages {
+            assert!(page.content.is_empty());
+            assert_eq!(page.is_blank, None, "an unread page is not known to be blank");
+        }
+    }
+
+    #[test]
+    fn tracked_text_of_an_unstopped_extraction_reports_blank_state() {
+        let pdf = build_paged_text_pdf(2, 10);
+        let doc = NativeDocument::open_bytes(&pdf).expect("fixture must open");
+        let token = crate::cancellation::CancellationToken::new();
+        let config = PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        };
+
+        let (_, boundaries, pages, _) =
+            extract_text_with_tracking(&doc, &config, NativePageTextOptions::default(), Some(&token))
+                .expect("extraction succeeds");
+
+        assert_eq!(boundaries.expect("boundaries").len(), 2);
+        assert!(pages.expect("pages").iter().all(|page| page.is_blank == Some(false)));
     }
 
     #[test]

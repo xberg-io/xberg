@@ -2897,13 +2897,15 @@ impl PdfExtractor {
         let mut mixed_formula_layout_inputs = None;
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        record_implausible_text_pages(
-            config,
-            &mut pdf_metadata,
-            &native_text,
-            boundaries.as_deref(),
-            &mut ocr_fallback_warnings,
-        );
+        if !native_text_stopped_by_time_limit(config) {
+            record_implausible_text_pages(
+                config,
+                &mut pdf_metadata,
+                &native_text,
+                boundaries.as_deref(),
+                &mut ocr_fallback_warnings,
+            );
+        }
 
         // Only formula recognition and VLM regions read the rasters on the native path.
         #[cfg(all(

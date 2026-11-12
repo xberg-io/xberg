@@ -346,7 +346,10 @@ async fn extract_file_scoped(path: &Path, mime_type: &str, config: &ExtractionCo
     let lifecycle_generations_after = lifecycle_registry_generations();
 
     // A soft stop at the time limit leaves a partial document, which must not be served later. ~keep
-    let stopped_early = config.cancel_token.as_ref().is_some_and(|token| token.stop_requested());
+    let stopped_early = config
+        .cancel_token
+        .as_ref()
+        .is_some_and(|token| token.stop_requested() && token.first_unread_page().is_some());
     if super::cacheability::is_cacheable()
         && !stopped_early
         && lifecycle_generations_before == lifecycle_generations_after

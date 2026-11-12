@@ -214,7 +214,7 @@ pub struct ExtractionConfig {
     /// finished with a `timeout` processing warning naming the first unread
     /// page, and may run up to 10 s past the limit. Otherwise (other formats,
     /// or a PDF that does not return in time) the extraction fails with a
-    /// timeout error.
+    /// timeout error, which also cancels the caller's cancellation token.
     #[serde(default = "ExtractionConfig::default_extraction_timeout")]
     pub extraction_timeout_secs: Option<u64>,
 

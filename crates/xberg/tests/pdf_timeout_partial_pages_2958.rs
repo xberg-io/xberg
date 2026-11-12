@@ -81,6 +81,17 @@ async fn extract_with_limits(path: &Path, limits: &[u64]) -> Option<ExtractedDoc
     None
 }
 
+/// The stop is covered deterministically by unit tests; these end-to-end tests also need a
+/// machine slow enough to hit it. A run that never reached the stop fails rather than passing
+/// unchecked, unless `XBERG_2958_ALLOW_UNEXERCISED_STOP` is set.
+fn unexercised(reason: &str) {
+    if std::env::var_os("XBERG_2958_ALLOW_UNEXERCISED_STOP").is_some() {
+        eprintln!("SKIPPED: {reason}");
+        return;
+    }
+    panic!("{reason} (set XBERG_2958_ALLOW_UNEXERCISED_STOP to accept this on a fast machine)");
+}
+
 fn has_timeout_warning(result: &ExtractedDocument) -> bool {
     result
         .processing_warnings
@@ -157,18 +168,20 @@ async fn test_native_pdf_stopped_in_the_text_loop_keeps_the_pages_it_read() {
         assert_cut_short(&result, total);
         return;
     }
-    eprintln!("SKIPPED: no native fixture was cut short by a 1 s limit on this machine, so the stop was not exercised");
+    unexercised("no native fixture was cut short by a 1 s limit on this machine, so the stop was not exercised");
 }
 
-/// A caller's token reused for a second extraction must not carry the first one's stop.
+/// A caller's token reused for a second extraction must not carry the first one's stop. Each
+/// attempt gets a fresh token because a hard timeout cancels the caller's token for good; only
+/// the token of the attempt that returned its pages is reused.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_a_token_reused_after_a_partial_result_reads_the_whole_document() {
     let path = fixture(NATIVE_FIXTURES[0]);
     let total = page_count(&path);
-    let token = CancellationToken::new();
 
     let mut cut_short = None;
     for secs in NATIVE_LIMITS_SECS {
+        let token = CancellationToken::new();
         let config = ExtractionConfig {
             cancel_token: Some(token.clone()),
             ..timed_config(secs)
@@ -176,13 +189,13 @@ async fn test_a_token_reused_after_a_partial_result_reads_the_whole_document() {
         match extract_uri_document(&path, None, &config).await {
             Err(XbergError::Timeout { .. }) => continue,
             other => {
-                cut_short = Some(other.expect("a limited extraction returns its pages"));
+                cut_short = Some((token, other.expect("a limited extraction returns its pages")));
                 break;
             }
         }
     }
-    let Some(first) = cut_short.filter(has_timeout_warning) else {
-        eprintln!("SKIPPED: the first extraction was not cut short on this machine, so there is no stop to carry over");
+    let Some((token, first)) = cut_short.filter(|(_, result)| has_timeout_warning(result)) else {
+        unexercised("the first extraction was not cut short on this machine, so there is no stop to carry over");
         return;
     };
     assert!(pages_read(&first) < total);
