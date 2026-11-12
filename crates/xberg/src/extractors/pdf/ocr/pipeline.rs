@@ -3244,14 +3244,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         &mut paragraphs,
                         page_rotation_degrees,
                     );
-                    // ~keep A pipeline page keeps its paragraphs in the OCR raster's pixels, while
-                    // its tables are already in points; assembly compares the two to drop a
-                    // paragraph a table carries. Scale only for that comparison, after the list
-                    // passes above, whose marker geometry is measured in the raster frame. A
-                    // sideways page keeps the raster frame: its geometry is not reading order, and
-                    // pointing it at the tables would put sideways heading text after them.
-                    if !existing.tables.is_empty()
-                        && !detached_mixed_frame::read_sideways(&existing.metadata)
+                    // ~keep This rebuild publishes paragraph boxes in page points. Convert
+                    // after the list passes, which measure marker geometry in raster pixels.
+                    // The raster map only contains pages whose paragraphs still need scaling.
+                    // Keep the sideways reading-order exception for heading/table placement.
+                    if !detached_mixed_frame::read_sideways(&existing.metadata)
                         && let Some(&(width_px, height_px)) = ocr_raster_by_page.get(page_number)
                         && width_px > 0
                         && height_px > 0
