@@ -5,8 +5,19 @@
 use super::*;
 use crate::content::{Matrix, Operator, TextElement};
 
-/// Deepest chain of form XObjects followed, the cycle limit of the image handle walk.
+/// Deepest chain of form XObjects this walk follows.
 const MAX_FORM_DEPTH: usize = 100;
+
+/// Glyph bytes a page shows, counted by [`PdfDocument::glyphs_over_covering_image`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GlyphsOverPicture {
+    /// Visible glyph bytes shown after the last image that covers the page.
+    pub over: usize,
+    /// Visible glyph bytes shown anywhere on the page.
+    pub visible: usize,
+    /// Glyph bytes shown anywhere on the page, invisible ones (render mode 3 or 7) included.
+    pub shown: usize,
+}
 
 /// Most operators one page walk reads, its own and those of every form it paints. A form painted
 /// twice by each of a chain of forms is walked 2^depth times; the walk stops at this bound.
@@ -16,7 +27,8 @@ const MAX_WALK_OPERATORS: usize = 1_000_000;
 struct PictureTextWalk {
     page: (f32, f32, f32, f32),
     min_coverage: f32,
-    all: usize,
+    shown: usize,
+    visible: usize,
     over: usize,
     covered: bool,
     forms: Vec<ObjectRef>,
@@ -24,27 +36,32 @@ struct PictureTextWalk {
 }
 
 impl PdfDocument {
-    /// The glyph bytes the page shows visibly after the last image that alone covers at least
-    /// `min_coverage` of its media box, and all glyph bytes it shows, in `Tj`, `TJ`, `'` and `"`.
-    /// A glyph in render mode 3 (invisible) or 7 (clip only) is not visible. Form XObjects are
-    /// followed with their `/Matrix` and resources. `None` when no single image covers the page,
-    /// when the page's content cannot be read, or when the walk reads more than
+    /// The glyph bytes the page shows in `Tj`, `TJ`, `'` and `"`: those shown visibly after the
+    /// last image that alone covers at least `min_coverage` of its media box, those shown visibly,
+    /// and all of them. A glyph in render mode 3 (invisible) or 7 (clip only) is not visible. Form
+    /// XObjects are followed with their `/Matrix` and resources. `None` when no single image covers
+    /// the page, when the page's content cannot be read, or when the walk reads more than
     /// [`MAX_WALK_OPERATORS`] operators.
-    pub fn glyphs_over_covering_image(&self, page_index: usize, min_coverage: f32) -> Option<(usize, usize)> {
+    pub fn glyphs_over_covering_image(&self, page_index: usize, min_coverage: f32) -> Option<GlyphsOverPicture> {
         let (x0, y0, x1, y1) = self.get_page_media_box(page_index).ok()?;
         let resources = self.get_page_resources(page_index).ok()?;
         let operators = crate::content::parse_content_stream(&self.get_page_content_data(page_index).ok()?).ok()?;
         let mut walk = PictureTextWalk {
             page: (x0.min(x1), y0.min(y1), x0.max(x1), y0.max(y1)),
             min_coverage,
-            all: 0,
+            shown: 0,
+            visible: 0,
             over: 0,
             covered: false,
             forms: Vec::new(),
             budget: MAX_WALK_OPERATORS,
         };
         self.walk_picture_text(&operators, &resources, Matrix::identity(), 0, &mut walk)?;
-        walk.covered.then_some((walk.over, walk.all))
+        walk.covered.then_some(GlyphsOverPicture {
+            over: walk.over,
+            visible: walk.visible,
+            shown: walk.shown,
+        })
     }
 
     /// Walks one content stream, starting from the CTM and text render mode in effect where it is
@@ -104,8 +121,9 @@ impl PdfDocument {
                     .sum(),
                 _ => 0,
             };
-            walk.all += shown;
+            walk.shown += shown;
             if !matches!(render, 3 | 7) {
+                walk.visible += shown;
                 walk.over += shown;
             }
         }

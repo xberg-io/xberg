@@ -121,7 +121,8 @@ fn automatic_english_ocr_still_reads_a_scanned_page_whose_khmer_layer_is_invisib
 }
 
 /// #2826: a Khmer stamp printed visibly over a scanned page is page content, so English OCR does
-/// not replace it. Whether the English body of the picture is to be read beside it is open.
+/// not replace it. The English body that only the picture holds is not read beside it: whether it
+/// is to be is open, and this pins the current outcome.
 #[test]
 fn automatic_english_ocr_keeps_a_khmer_stamp_drawn_over_a_scanned_page() {
     let models = english_model();
@@ -131,6 +132,26 @@ fn automatic_english_ocr_keeps_a_khmer_stamp_drawn_over_a_scanned_page() {
     assert_eq!(khmer_count(&native.content), 222, "{:?}", native.content);
     let automatic = extract(SCANNED_ENGLISH_KHMER_OVERLAY, models.path(), |_| {});
     assert_eq!(khmer_count(&automatic.content), 222, "{:?}", automatic.content);
+    assert!(!picture_warning(&automatic), "{:?}", automatic.processing_warnings);
+    assert!(!automatic.content.contains("bottles"), "{:?}", automatic.content);
+}
+
+/// #2826: an OCR sidecar much longer than a Khmer stamp drawn visibly over the same picture does
+/// not make the page a scan: invisible glyphs count on neither side of the share over the picture.
+#[test]
+fn automatic_english_ocr_keeps_a_khmer_stamp_beside_a_longer_invisible_sidecar() {
+    let models = english_model();
+    let page = with_full_page_picture(COMPLETE, PicturePlacement::BesideSidecar);
+    let native = extract(&page, models.path(), |config| config.disable_ocr = true);
+    assert!(khmer_count(&native.content) >= 222, "{:?}", native.content);
+    let automatic = extract(&page, models.path(), |_| {});
+    assert_eq!(
+        khmer_count(&automatic.content),
+        khmer_count(&native.content),
+        "{:?}",
+        automatic.content
+    );
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
     assert!(!picture_warning(&automatic), "{:?}", automatic.processing_warnings);
 }
 
@@ -442,7 +463,12 @@ fn automatic_english_ocr_keeps_a_khmer_layer_drawn_over_a_full_page_picture() {
 #[test]
 fn automatic_english_ocr_still_reads_a_picture_over_or_under_an_invisible_khmer_layer() {
     let models = english_model();
-    for placement in [PicturePlacement::Cover, PicturePlacement::BehindInvisibleLayer] {
+    for placement in [
+        PicturePlacement::Cover,
+        PicturePlacement::BehindInvisibleLayer,
+        PicturePlacement::BehindWhiteLayer,
+        PicturePlacement::BehindClippedLayer,
+    ] {
         let source = with_full_page_picture(COMPLETE, placement);
         // The warning names a Khmer layer the rule saw, so the layer was read and the picture won. ~keep
         let automatic = extract(&source, models.path(), |_| {});

@@ -234,6 +234,8 @@ pub struct PageRenderer {
     /// Draw text in the invisible rendering modes (3, or 7 where it clips) so the raster shows
     /// everything on the page except glyph ink.
     text_ink_suppressed: bool,
+    /// Leave every image XObject, image mask and inline image unpainted.
+    images_suppressed: bool,
     /// Font cache (name -> FontInfo) for current context
     fonts: HashMap<String, Arc<FontInfo>>,
     /// Color space cache (name -> Object) for current context
@@ -499,6 +501,7 @@ impl PageRenderer {
             path_rasterizer: PathRasterizer::new(),
             text_rasterizer: TextRasterizer::new(),
             text_ink_suppressed: false,
+            images_suppressed: false,
             fonts: HashMap::new(),
             color_spaces: HashMap::new(),
             excluded_layers_snapshot: None,
@@ -625,6 +628,11 @@ impl PageRenderer {
 
     pub(super) fn without_text_ink(mut self) -> Self {
         self.text_ink_suppressed = true;
+        self
+    }
+
+    pub(super) fn without_images(mut self) -> Self {
+        self.images_suppressed = true;
         self
     }
 
@@ -3754,6 +3762,9 @@ impl PageRenderer {
     ) -> Result<()> {
         use crate::extractors::images::{ImageData, extract_image_from_xobject};
 
+        if self.images_suppressed {
+            return Ok(());
+        }
         let color_space_map = self.color_spaces.clone();
         let pdf_image = extract_image_from_xobject(Some(doc), xobject, obj_ref, Some(&color_space_map))?;
         let mut reduction = 1;
@@ -4365,6 +4376,9 @@ impl PageRenderer {
         clip_mask: Option<&tiny_skia::Mask>,
         gs: &GraphicsState,
     ) -> Result<()> {
+        if self.images_suppressed {
+            return Ok(());
+        }
         let dict = xobject
             .as_dict()
             .ok_or_else(|| Error::Image("ImageMask XObject is not a stream".to_string()))?;

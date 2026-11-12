@@ -218,22 +218,23 @@ fn a_document_of_wrong_script_pages_is_read_whole() {
     assert!(!skipped(&result), "{:?}", result.processing_warnings);
 }
 
+/// #2826: on a light picture and on a dark, blocky one that turns a read of the whole page into
+/// noise, the layer's ink is read without the picture and contradicts the layer.
 #[test]
 fn a_wrong_mapped_layer_drawn_over_a_full_page_picture_is_still_read_by_ocr() {
     let models = models();
-    let result = extract(
-        &with_full_page_picture(ARABIC, PicturePlacement::Background),
-        models.path(),
-    );
-    for phrase in PHRASES {
-        assert!(
-            result.content.contains(phrase),
-            "missing {phrase:?} in {:?}",
-            result.content
-        );
+    for placement in [PicturePlacement::Background, PicturePlacement::TexturedBackground] {
+        let result = extract(&with_full_page_picture(ARABIC, placement), models.path());
+        for phrase in PHRASES {
+            assert!(
+                result.content.contains(phrase),
+                "{placement:?}: missing {phrase:?} in {:?}",
+                result.content
+            );
+        }
+        assert!(!skipped(&result), "{placement:?}: {:?}", result.processing_warnings);
+        assert_eq!(arabic_letters(&result.content), 0, "{placement:?}");
     }
-    assert!(!skipped(&result), "{:?}", result.processing_warnings);
-    assert_eq!(arabic_letters(&result.content), 0);
 }
 
 #[test]

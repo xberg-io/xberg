@@ -17,6 +17,8 @@ mod layout_runner;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 mod mixed_tables;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+mod picture_layer;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod unreadable_script;
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "tokio-runtime"))]
 pub(crate) use layout_runner::inherit_test_selected_page_detections;

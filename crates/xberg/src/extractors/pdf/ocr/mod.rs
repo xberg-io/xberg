@@ -48,6 +48,8 @@ pub(crate) use orientation_retry::recognition_retry_eligible;
 pub(super) mod read_reuse;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(crate) use pipeline::extract_mixed_ocr_native_with_probe_reads;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(in crate::extractors::pdf) use pipeline::read_rendered_page;
 mod pipeline;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) use pipeline::render_mixed_plain_pages;

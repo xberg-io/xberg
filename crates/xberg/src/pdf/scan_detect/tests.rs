@@ -969,11 +969,33 @@ fn text_is_drawn_over_a_full_page_picture_only_when_painted_visibly_after_it() {
         ("inline picture then text", format!("{inline_picture}{text}"), true),
         ("a name that is not a picture", format!("{not_a_picture}{text}"), false),
         ("no picture", text.to_string(), false),
+        (
+            "a long sidecar under a short visible stamp",
+            format!("{picture}q 3 Tr {text}{text}{text} Q {short}"),
+            true,
+        ),
+        ("only a sidecar", format!("{picture}3 Tr {text}"), false),
     ];
     for (name, content, over) in cases {
         let doc = raster_page_with_content(&content);
-        assert_eq!(text_drawn_over_full_page_picture(&doc, 0), over, "{name}");
+        assert_eq!(glyph_share_over_full_page_picture(&doc, 0).is_some(), over, "{name}");
     }
+}
+
+/// #2826: the share counts every glyph the page shows, the invisible ones too, so a stamp of five
+/// glyphs beside a sidecar of seventy holds a fifteenth of them.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+fn the_share_over_a_full_page_picture_counts_invisible_glyphs_too() {
+    let picture = "q 100 0 0 100 0 0 cm /Im0 Do Q\n";
+    let sidecar = "q 3 Tr BT /F1 4 Tf 2 80 Td (Line of the native text) Tj ET Q\n";
+    let stamp = "BT /F1 4 Tf 2 70 Td (Short) Tj ET\n";
+    let doc = raster_page_with_content(&format!("{picture}{sidecar}{sidecar}{sidecar}{sidecar}{stamp}"));
+    let (stamp_bytes, sidecar_bytes) = ("Short".len(), "Line of the native text".len());
+    let expected = stamp_bytes as f64 / (stamp_bytes + 4 * sidecar_bytes) as f64;
+    assert_eq!(glyph_share_over_full_page_picture(&doc, 0), Some(expected));
+    let alone = raster_page_with_content(&format!("{picture}{stamp}"));
+    assert_eq!(glyph_share_over_full_page_picture(&alone, 0), Some(1.0));
 }
 
 /// #2826: a picture and a text layer each drawn inside a form XObject, as a merged overlay is, are
@@ -1026,7 +1048,7 @@ fn text_and_picture_inside_form_xobjects_are_seen_in_paint_order() {
     ];
     for (name, content, forms, over) in cases {
         let doc = raster_page_with_forms(content, &forms);
-        assert_eq!(text_drawn_over_full_page_picture(&doc, 0), over, "{name}");
+        assert_eq!(glyph_share_over_full_page_picture(&doc, 0).is_some(), over, "{name}");
     }
 }
 
@@ -1052,5 +1074,5 @@ fn a_form_chain_that_doubles_at_each_level_stops_the_walk_without_a_verdict() {
             .map(|(name, body)| (name.as_str(), unit, body.as_str())),
     );
     let doc = raster_page_with_forms("/Fp Do /Ft Do /F0 Do", &forms);
-    assert!(!text_drawn_over_full_page_picture(&doc, 0));
+    assert_eq!(glyph_share_over_full_page_picture(&doc, 0), None);
 }

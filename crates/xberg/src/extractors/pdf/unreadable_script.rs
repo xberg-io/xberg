@@ -264,21 +264,36 @@ fn model_for(script: Script) -> &'static str {
 /// Whether the page is a scan or a page that carries one, by the rule the scanned-page detector
 /// uses: pictures covering at least 80% of it, or covering a quarter with a text layer too short to
 /// be the page's body. A page with a figure beside a full text layer is not.
-fn page_is_scan(document: &xberg_native_pdf::PdfDocument, page_index: usize) -> bool {
+pub(super) fn page_is_scan(document: &xberg_native_pdf::PdfDocument, page_index: usize) -> bool {
     scan_verdict(page_index, || {
         crate::pdf::scan_detect::full_page_raster_density(document, page_index).is_some()
     })
 }
 
 /// Whether the script rule leaves the page to OCR as a scan: it carries a picture (see
-/// [`page_is_scan`]) and its text layer is not drawn over a full-page picture. A layer printed
+/// [`page_is_scan`]) and its text layer `layer` is not drawn over a full-page picture where a
+/// reader sees it (see [`super::picture_layer::layer_is_visible_over_picture`]). A layer printed
 /// visibly on a background picture is page content, which the completeness and ink checks judge
-/// like any other layer (#2826); a sidecar or text under the picture stays with the scan.
-pub(super) fn page_reads_as_scan(document: &xberg_native_pdf::PdfDocument, page_index: usize) -> bool {
+/// like any other layer (#2826); a sidecar, text under the picture and text that leaves no ink stay
+/// with the scan.
+pub(super) fn page_reads_as_scan(
+    document: &xberg_native_pdf::PdfDocument,
+    page_index: usize,
+    layer: &str,
+    config: &ExtractionConfig,
+) -> bool {
     page_is_scan(document, page_index)
         && scan_verdict(page_index, || {
-            !crate::pdf::scan_detect::text_drawn_over_full_page_picture(document, page_index)
+            !super::picture_layer::layer_is_visible_over_picture(document, page_index, layer, config)
         })
+}
+
+/// The text of `page` in a layer split at `boundaries`.
+pub(super) fn page_text<'a>(text: &'a str, boundaries: &[PageBoundary], page: u32) -> Option<&'a str> {
+    boundaries
+        .iter()
+        .find(|boundary| boundary.page_number == page)
+        .and_then(|boundary| text.get(boundary.byte_start..boundary.byte_end))
 }
 
 /// The verdict of a scan check, which is "a scan" when the check panics: a page whose raster cannot
@@ -662,7 +677,8 @@ fn read_pages_warning(read: &[(u32, Vec<Script>)], stage: &RouteStage) -> crate:
 /// script, so a caller whose scan is in Khmer is told to add `khm`. A page is in at most one.
 ///
 /// `ink_contradicted` lists pages whose ink an OCR read contradicted (see
-/// [`super::ink_probe::contradicted_pages`]); they stay failing and get no warning.
+/// [`super::ink_probe::contradicted_pages`]); they stay failing. One that carries a picture gets
+/// the warning of a page read for its picture, as a scan does; any other gets no warning.
 ///
 /// The filter runs before the provenance and plausibility flags are merged into the decision, so
 /// a page whose layer is flagged as a mis-decode (all-Greek English from a symbol font, for
@@ -687,7 +703,6 @@ pub(super) fn retain_unreadable_script_pages(
     let candidates: Vec<(Candidate, usize)> = decision
         .failing_pages
         .iter()
-        .filter(|page| !ink_contradicted.contains(page))
         .filter_map(|page| {
             let boundary = boundaries.iter().find(|boundary| boundary.page_number == *page)?;
             let text = native_text.get(boundary.byte_start..boundary.byte_end)?;
@@ -708,15 +723,19 @@ pub(super) fn retain_unreadable_script_pages(
             return Vec::new();
         }
     };
-    // A scan is read by OCR, so only the stage that reads first can say its text is unreadable.
+    // A scan is read by OCR, so only the stage that reads first can say its text is unreadable. A
+    // page with a picture whose ink contradicts its layer is read as the scan it was taken for.
     let (read, kept): (Vec<_>, Vec<_>) = candidates
         .into_iter()
-        .map(|(candidate, stage)| {
-            (
-                page_reads_as_scan(&document, candidate.0 as usize - 1),
-                candidate,
-                stage,
-            )
+        .filter_map(|(candidate, stage)| {
+            let index = candidate.0 as usize - 1;
+            let scan = if ink_contradicted.contains(&candidate.0) {
+                page_is_scan(&document, index).then_some(true)?
+            } else {
+                let text = page_text(native_text, boundaries, candidate.0).unwrap_or_default();
+                page_reads_as_scan(&document, index, text, config)
+            };
+            Some((scan, candidate, stage))
         })
         .filter(|(scan, _, stage)| !scan || *stage == 0)
         .partition(|(scan, ..)| *scan);
@@ -1021,6 +1040,15 @@ mod tests {
         content: &[u8],
         config: &ExtractionConfig,
     ) -> (OcrFallbackDecision, Vec<crate::types::ProcessingWarning>) {
+        run_contradicted(pages, content, config, &[])
+    }
+
+    fn run_contradicted(
+        pages: &[&str],
+        content: &[u8],
+        config: &ExtractionConfig,
+        contradicted: &[u32],
+    ) -> (OcrFallbackDecision, Vec<crate::types::ProcessingWarning>) {
         let (text, boundaries) = page_text(pages);
         let mut decision = decision_for(&text, &boundaries);
         let warnings = retain_unreadable_script_pages(
@@ -1032,9 +1060,23 @@ mod tests {
             },
             content,
             config,
-            &[],
+            contradicted,
         );
         (decision, warnings)
+    }
+
+    /// #2826: a page whose ink contradicts its layer stays failing. Over a picture it is reported as
+    /// read for its picture, as the scan it was taken for; without one it gets no warning.
+    #[test]
+    fn a_contradicted_page_over_a_picture_is_reported_as_read_for_its_picture() {
+        let config = config_with(&["eng"]);
+        let (decision, warnings) = run_contradicted(&[KHMER_MARKED], SCAN_WITH_OVERLAY, &config, &[1]);
+        assert_eq!(decision.failing_pages, [1]);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].message.contains("carries a picture"), "{}", warnings[0].message);
+        let (decision, warnings) = run_contradicted(&[KHMER_MARKED], ONE_PAGE, &config, &[1]);
+        assert_eq!(decision.failing_pages, [1]);
+        assert!(warnings.is_empty(), "{warnings:?}");
     }
 
     #[test]
