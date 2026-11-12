@@ -113,6 +113,18 @@ pub fn with_full_page_picture(source: &[u8], placement: PicturePlacement) -> Vec
     bytes
 }
 
+/// `source` with one stream of `bytes` blank bytes added, referenced from the trailer and painted
+/// nowhere, so the file is larger than a size limit of `bytes`. The pages are unchanged.
+pub fn padded_past(source: &[u8], bytes: usize) -> Vec<u8> {
+    let mut document = Document::load_mem(source).expect("load the fixture");
+    let padding = document.add_object(Stream::new(dictionary! {}, vec![b' '; bytes]));
+    document.trailer.set("Padding", Object::Reference(padding));
+    let mut out = Vec::new();
+    document.save_to(&mut out).expect("serialize the fixture");
+    assert!(out.len() > bytes, "{bytes} bytes of padding left the file at {}", out.len());
+    out
+}
+
 /// The first page of `source` with its whole content drawn in render mode 3 (invisible), as a
 /// scan's OCR sidecar is. Form XObjects the page paints inherit the mode.
 pub fn with_invisible_text(source: &[u8]) -> Vec<u8> {

@@ -239,9 +239,10 @@ fn warning(message: String) -> crate::types::ProcessingWarning {
 /// The read goes through the ordinary page route with noise discarding forced on, and only a read
 /// whose page confidence clears the acceptance gate counts. Scan pages (see [`page_reads_as_scan`])
 /// are left out, since OCR reads them anyway. Each page whose layer is drawn over its full-page
-/// picture is read from a render without its pictures (see [`read_without_pictures`]). A document
-/// over the OCR preview size limit is not read, and a probe that fails leaves the layer native with
-/// a warning. Cancellation is returned as the error.
+/// picture is read from a render without its pictures (see [`read_without_pictures`]), whatever the
+/// document's size: that render and read are bounded by the OCR working-byte budget. A document over
+/// the OCR preview size limit is not read through the page route, and a probe that fails leaves the
+/// layer native with a warning. Cancellation is returned as the error.
 ///
 /// Of the other pages, up to four spread across the candidates (first, last, evenly spaced) are
 /// read first; the rest of the first [`MAX_PROBED_PAGES`] candidates only if a page is
@@ -258,13 +259,6 @@ pub(super) async fn contradicted_pages(
     let (Some(boundaries), false) = (layer.boundaries, candidates.is_empty()) else {
         return Ok(outcome);
     };
-    if content.len() > super::ocr::preview_byte_limit(config) {
-        outcome.warnings.push(warning(format!(
-            "The ink of pages {candidates:?} was not checked against their text layer because the document \
-             exceeds the OCR preview size limit; their native text is kept."
-        )));
-        return Ok(outcome);
-    }
     let document = match xberg_native_pdf::PdfDocument::from_bytes(content.to_vec()) {
         Ok(document) => document,
         Err(error) => {
@@ -301,6 +295,15 @@ pub(super) async fn contradicted_pages(
         thresholds: &thresholds,
     };
     read_without_pictures(&probe, &document, &pictures, &mut outcome).await?;
+    if content.len() > super::ocr::preview_byte_limit(config) {
+        if !eligible.is_empty() {
+            outcome.warnings.push(warning(format!(
+                "The ink of pages {eligible:?} was not checked against their text layer because the document \
+                 exceeds the OCR preview size limit; their native text is kept."
+            )));
+        }
+        return Ok(outcome);
+    }
     let mut probed: Vec<u32> = Vec::new();
     loop {
         let batch = next_batch(&eligible, &probed, !outcome.contradicted.is_empty());
