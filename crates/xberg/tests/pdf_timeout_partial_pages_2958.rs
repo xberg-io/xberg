@@ -2,6 +2,7 @@
 //! return `XbergError::Timeout` and discard every page already read. It must return the
 //! finished pages and a warning naming the first page that was not read.
 
+#![cfg(all(feature = "pdf", feature = "ocr", feature = "bundle-tessdata-eng"))]
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
 #![cfg(all(feature = "ocr", feature = "tokio-runtime"))]
 

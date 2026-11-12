@@ -1221,18 +1221,21 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut native_ink_owned_pages = ahash::AHashSet::new();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    let ink_coverage_layers = {
-        let markers = if !probing_hidden_layer && all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative {
-            super::document::marker_native_ink_layers(
-                native_text,
-                boundaries,
-                &ocr_set,
-                page_count,
-                &ocr_output_thresholds,
-            )
-        } else {
-            ahash::AHashMap::new()
-        };
+    // Marker-bearing ink-proof layers are offered only when `marker_layers_allowed` says so (#2900). ~keep
+    let native_coverage_layers = if marker_layers_allowed(
+        all_pages_failed_policy,
+        probing_hidden_layer,
+        mixed_route_layout_active,
+        &config.ocr_strategy,
+        config.ocr.as_ref(),
+    ) {
+        let markers = super::document::marker_native_ink_layers(
+            native_text,
+            boundaries,
+            &ocr_set,
+            page_count,
+            &ocr_output_thresholds,
+        );
         if markers.is_empty() {
             page_layers.clone()
         } else {
@@ -1240,15 +1243,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             layers.extend(markers);
             Some(std::sync::Arc::new(layers))
         }
+    } else {
+        None
     };
-    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    let native_coverage_layers = ink_coverage_layers.as_ref().filter(|_| {
-        all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative
-            && !probing_hidden_layer
-            && !mixed_route_layout_active
-            && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
-            && config.ocr.as_ref().is_some_and(uses_default_ocr_pipeline)
-    });
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut alternative_raster_pages = ahash::AHashSet::new();
     // Tesseract's own mean confidence for each page it read, 0-100. Captured here because
@@ -1553,6 +1550,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         native_page_layers: None,
                         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                         native_coverage_layers: native_coverage_layers
+                            .as_ref()
                             .filter(|_| {
                                 super::document::native_preservation_is_automatic(config, (page_idx + 1) as u32)
                             })
@@ -1772,6 +1770,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         native_page_layers: None,
                         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                         native_coverage_layers: native_coverage_layers
+                            .as_ref()
                             .filter(|_| {
                                 super::document::native_preservation_is_automatic(config, (*page_idx + 1) as u32)
                             })
@@ -2200,6 +2199,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 if correction_degrees == 0
                     && !alternative_raster_pages.contains(&((page_idx + 1) as u32))
                     && let Some(layer) = native_coverage_layers
+                        .as_ref()
                         .filter(|_| super::document::native_preservation_is_automatic(config, (page_idx + 1) as u32))
                         .and_then(|layers| layers.get(&((page_idx + 1) as u32)))
                     && crate::plugins::registry::get_ocr_backend_registry()
@@ -2851,6 +2851,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             });
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             let clean_ink_layer = native_coverage_layers
+                .as_ref()
                 .and_then(|layers| layers.get(page_number))
                 .map(String::as_str)
                 .filter(|layer| !layer.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER));
@@ -3122,7 +3123,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     super::native_word_coverage::FinalOcrStructureYieldSets {
                         native_words_covered_pages: &native_words_covered_pages,
                         native_ink_owned_pages: &native_ink_owned_pages,
-                        native_coverage_layers,
+                        native_coverage_layers: native_coverage_layers.as_ref(),
                         clean_native_ink_pages: &clean_native_ink_pages,
                     },
                 );
@@ -10001,6 +10002,25 @@ fn mixed_route_promotes_preprocessing_dpi(mixed_route_layout_active: bool, probi
     !mixed_route_layout_active && !probing_hidden_layer
 }
 
+/// Every condition that decides whether a marker-bearing ink-proof layer may be offered at all,
+/// stated once where the layers are built (#2900). Each consumer re-gates the routes it reaches,
+/// so removing one conjunct alone changes no output; the per-condition unit tests below pin the
+/// predicate itself, turning red when a conjunct leaves this function. ~keep
+#[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+fn marker_layers_allowed(
+    all_pages_failed_policy: AllPagesFailedPolicy,
+    probing_hidden_layer: bool,
+    mixed_route_layout_active: bool,
+    ocr_strategy: &crate::core::config::OcrStrategy,
+    ocr: Option<&crate::core::config::OcrConfig>,
+) -> bool {
+    all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative
+        && !probing_hidden_layer
+        && !mixed_route_layout_active
+        && *ocr_strategy == crate::core::config::OcrStrategy::Auto
+        && ocr.is_some_and(uses_default_ocr_pipeline)
+}
+
 /// A promoted mixed-route batch sizes itself from the page security cap instead of the bare
 /// fallback, so the wider batch cannot outrun the memory the promotion assumes. ~keep
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
@@ -10016,6 +10036,10 @@ fn mixed_route_batch_working_set(
 #[cfg(all(test, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
 #[path = "pipeline/preprocessing_density_tests.rs"]
 mod preprocessing_density_tests;
+
+#[cfg(all(test, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+#[path = "pipeline/marker_layers_allowed_tests.rs"]
+mod marker_layers_allowed_tests;
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(in crate::extractors::pdf) fn uses_default_ocr_pipeline(ocr: &crate::core::config::OcrConfig) -> bool {

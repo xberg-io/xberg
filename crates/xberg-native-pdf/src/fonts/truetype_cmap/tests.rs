@@ -588,6 +588,113 @@ fn test_clone_and_debug() {
     assert!(debug.contains("TrueTypeCMap"));
 }
 
+/// Issue #3019: a malformed embedded font whose cmap subtable offset is huge
+/// must be rejected with a parse error, not overflow the u32
+/// `cmap_offset + subtable_offset` arithmetic — a debug panic that crashes the
+/// renderer, or a release wrap that silently walks garbage.
+#[test]
+fn test_cmap_subtable_offset_out_of_bounds_rejected() {
+    let mut data = build_truetype_with_cmap_format4(&[(65, 1)]);
+    // The (3,1) record is the only subtable: its offset field is the four
+    // bytes at 36..40 — 12-byte sfnt header + one 16-byte directory entry +
+    // 4-byte cmap version/count header + 4-byte platform/encoding pair. ~keep
+    assert_eq!(&data[36..40], &12u32.to_be_bytes(), "subtable offset field location");
+    data[36..40].copy_from_slice(&0xFFFF_FFF0u32.to_be_bytes());
+
+    let err = TrueTypeCMap::from_font_data(&data).expect_err("huge subtable offset must be rejected, not overflowed");
+    assert!(err.contains("out of bounds"), "unexpected error: {err}");
+}
+
+/// The offset need not overflow to be invalid: one pointing past the end of
+/// the font data must be rejected in release builds too, where the unchecked
+/// arithmetic wraps instead of panicking. The fix is a bounds check, not just
+/// overflow-checked arithmetic.
+#[test]
+fn test_cmap_subtable_offset_beyond_data_rejected() {
+    let mut data = build_truetype_with_cmap_format4(&[(65, 1)]);
+    data[36..40].copy_from_slice(&0x0000_1000u32.to_be_bytes()); // 4096 ≫ this ~70-byte font
+    let result = TrueTypeCMap::from_font_data(&data);
+    assert!(result.is_err());
+}
+
+/// Issue #3019 (audit): the format-4 glyphIdArray index,
+/// `idRangeOffset/2 + (charCode - startCode) + i - segCount`, subtracts
+/// `segCount` from a `usize` that a malformed subtable can push below zero —
+/// a debug underflow panic (release wrap happens to fail the bounds check and
+/// resolve to GID 0). A subtable whose first segment has a nonzero
+/// idRangeOffset smaller than segCount reaches it.
+#[test]
+fn test_format4_id_range_offset_index_underflow_yields_no_glyph() {
+    let mut data = Vec::new();
+
+    data.write_u32::<BigEndian>(0x00010000).unwrap();
+    data.write_u16::<BigEndian>(1).unwrap();
+    data.write_u16::<BigEndian>(16).unwrap();
+    data.write_u16::<BigEndian>(0).unwrap();
+    data.write_u16::<BigEndian>(0).unwrap();
+
+    let cmap_offset: u32 = 12 + 16;
+    data.write_u32::<BigEndian>(0x636D6170).unwrap();
+    data.write_u32::<BigEndian>(0).unwrap();
+    data.write_u32::<BigEndian>(cmap_offset).unwrap();
+    data.write_u32::<BigEndian>(0).unwrap();
+
+    data.write_u16::<BigEndian>(0).unwrap();
+    data.write_u16::<BigEndian>(1).unwrap();
+    data.write_u16::<BigEndian>(3).unwrap();
+    data.write_u16::<BigEndian>(1).unwrap();
+    data.write_u32::<BigEndian>(4 + 8).unwrap();
+
+    data.write_u16::<BigEndian>(4).unwrap();
+    data.write_u16::<BigEndian>(0).unwrap(); // length (unused by the parser)
+    data.write_u16::<BigEndian>(0).unwrap(); // language
+    data.write_u16::<BigEndian>(6).unwrap(); // segCountX2: three segments
+    data.write_u16::<BigEndian>(0).unwrap();
+    data.write_u16::<BigEndian>(0).unwrap();
+    data.write_u16::<BigEndian>(0).unwrap();
+
+    // End codes, reserved pad, start codes. ~keep
+    for code in [0x41u16, 0x42, 0xFFFF] {
+        data.write_u16::<BigEndian>(code).unwrap();
+    }
+    data.write_u16::<BigEndian>(0).unwrap();
+    for code in [0x41u16, 0x42, 0xFFFF] {
+        data.write_u16::<BigEndian>(code).unwrap();
+    }
+    // idDelta per segment. ~keep
+    for delta in [0i16, 2, 1] {
+        data.write_i16::<BigEndian>(delta).unwrap();
+    }
+    // idRangeOffset: segment 0 points at the glyphIdArray, segments 1-2 do
+    // not. For segment 0 the index is 2/2 + (0x41 - 0x41) + 0 - 3 < 0. ~keep
+    for range_offset in [2u16, 0, 0] {
+        data.write_u16::<BigEndian>(range_offset).unwrap();
+    }
+    data.write_u16::<BigEndian>(9).unwrap(); // glyphIdArray
+    data.write_u16::<BigEndian>(8).unwrap();
+
+    let cmap = TrueTypeCMap::from_font_data(&data).expect("parse malformed-but-recoverable cmap");
+    assert_eq!(cmap.get_unicode(68), Some('B'), "well-formed segment still parses");
+    assert_eq!(cmap.len(), 1, "underflowing segment contributes no glyph");
+}
+
+/// Issue #3019 (audit): format 12 computes each glyph id as
+/// `startGlyphId + (charCode - startCharCode)`, an unchecked u32 add that a
+/// malformed group's `startGlyphId` can overflow — a debug panic; release
+/// wraps and then truncates through the `as u16` cast. `wrapping_add` keeps
+/// the release mapping byte-for-byte while removing the panic.
+#[test]
+fn test_format12_glyph_id_overflow_wraps_like_release() {
+    let data = build_truetype_with_cmap_format12(&[(65, 67, 0xFFFF_FFFE)]);
+    let cmap = TrueTypeCMap::from_font_data(&data).expect("parse");
+    // Release behaviour today: the u32 add wraps, then `as u16` truncates —
+    // 0xFFFF_FFFE → 0xFFFE, 0xFFFF_FFFF → 0xFFFF, 0x1_0000_0000 → 0x0000. ~keep
+    assert_eq!(cmap.get_unicode(0xFFFE), Some('A'));
+    assert_eq!(cmap.get_unicode(0xFFFF), Some('B'));
+    assert_eq!(cmap.get_unicode(0), Some('C'));
+    assert_eq!(cmap.len(), 3);
+}
+
 #[test]
 fn test_platform_priority_windows_full_over_bmp() {
     let mut data = Vec::new();

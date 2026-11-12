@@ -6,13 +6,13 @@ use std::sync::{Arc, Mutex};
 
 fn document(content: &str, knockout: bool, form: Option<&str>) -> PdfDocument {
     let group = format!("/Group << /S /Transparency /I true /K {knockout} >>");
-    let resources = "/ExtGState << /Half << /ca 0.5 >> >> /XObject << /Fm 5 0 R >> \
+    let resources = "/ExtGState << /Half << /ca 0.5 >> >> /XObject << /Fm 5 0 R >> /Properties << /L 6 0 R >> \
         /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> \
         /F3 << /Type /Font /Subtype /Type3 /FontBBox [0 0 1 1] /FontMatrix [1 0 0 1 0 0] /CharProcs << >> \
         /Encoding << /Type /Encoding /Differences [] >> /FirstChar 0 /LastChar 0 /Widths [0] >> >>";
     let stream = |dict: &str, data: &str| format!("<< {dict} /Length {} >>\nstream\n{data}\nendstream", data.len());
     let objects = [
-        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [6 0 R] /D << /OFF [6 0 R] >> >> >>".to_string(),
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
         format!(
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 72] /Contents 4 0 R /Resources << {resources} >> {} >>",
@@ -23,6 +23,7 @@ fn document(content: &str, knockout: bool, form: Option<&str>) -> PdfDocument {
             &format!("/Type /XObject /Subtype /Form /BBox [0 0 72 72] /Resources << {resources} >> {group}"),
             form.unwrap_or(""),
         ),
+        "<< /Type /OCG /Name (L) >>".to_string(),
     ];
     let mut bytes = b"%PDF-1.4\n".to_vec();
     let mut offsets = Vec::new();
@@ -512,5 +513,83 @@ fn a_knockout_form_with_invisible_text_stays_native_where_its_plan_and_floor_fit
         renderer.paint_operator_calls,
         shows + 1,
         "the Do and every show execute once"
+    );
+}
+
+fn path_paints(content: &str) -> usize {
+    let operators = crate::content::parse_content_stream(content.as_bytes()).expect("real path operators");
+    PageRenderer::certain_path_paints(&operators)
+}
+
+#[test]
+fn only_a_path_paint_that_certainly_builds_a_path_raises_the_floor() {
+    let cases: [(&str, usize); 16] = [
+        ("f", 0),
+        ("n f", 0),
+        ("0 0 10 10 re n f", 0),
+        ("0 0 10 10 re f", 1),
+        ("0 0 10 10 re f f", 1),
+        ("0 0 10 10 re B 5 5 m 9 9 l S", 2),
+        ("0 0 0 10 re f", 1),
+        ("0 0 100 0 re S", 1),
+        (
+            "300000000000000000000000000000000000000.0 0 300000000000000000000000000000000000000.0 10 re f",
+            0,
+        ),
+        ("/OC /L BDC 0 0 10 10 re f EMC", 0),
+        ("/OC /L BDC EMC 0 0 10 10 re f", 1),
+        ("/OC /L BDC /Span BMC EMC 0 0 10 10 re f EMC 0 0 10 10 re f", 1),
+        ("/Span BMC 0 0 10 10 re f EMC", 1),
+        ("0 0 10 10 re /OC /L BDC f EMC f", 0),
+        ("5 5 m f", 0),
+        ("0 0 m 5 5 l f 0 0 m 5 5 l f", 2),
+    ];
+    for (content, expected) in cases {
+        assert_eq!(path_paints(content), expected, "{content}");
+    }
+}
+
+fn native_with_plan_and_certain_floor(content: &str, certain: usize) -> (bool, usize) {
+    let doc = document(content, true, None);
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    let resources = doc.get_page_resources(0).expect("page resources");
+    renderer.load_resources(&doc, &resources).expect("load resources");
+    renderer.excluded_layers_snapshot = Some(Arc::new(std::iter::once("L".to_string()).collect()));
+    let operators = crate::content::parse_content_stream(content.as_bytes()).expect("real operators");
+    let paints = operators
+        .iter()
+        .filter(|operator| crate::rendering::page_renderer::is_paint_operator(operator))
+        .count();
+    let mut pixmap = tiny_skia::Pixmap::new(72, 72).expect("initial backdrop");
+    pixmap.fill(tiny_skia::Color::WHITE);
+    renderer.knockout_resources.canvas(pixmap.data().len());
+    renderer.knockout_resources.surface_work = MAX_SURFACE_WORK - ((paints + certain) * 72 * 72) as u64;
+    let fallback = renderer
+        .execute_knockout_group(
+            &mut pixmap,
+            tiny_skia::Transform::identity(),
+            &operators,
+            &doc,
+            0,
+            &resources,
+            None,
+        )
+        .expect("group renders");
+    (fallback.is_none(), renderer.paint_operator_calls)
+}
+
+#[test]
+fn paints_that_charge_no_path_work_stay_native_where_plan_and_floor_fit() {
+    let bare = format!("/Half gs 0 g 10 10 40 40 re f 20 20 40 40 re f {}", "f ".repeat(40));
+    assert_eq!(native_with_plan_and_certain_floor(&bare, 2), (true, 42));
+    let hidden = format!(
+        "/Half gs 0 g 10 10 40 40 re f 20 20 40 40 re f /OC /L BDC {}EMC",
+        "0 0 10 10 re f ".repeat(40)
+    );
+    assert_eq!(native_with_plan_and_certain_floor(&hidden, 2), (true, 42));
+    let visible = format!("0 g {}", "0 0 10 10 re f ".repeat(42));
+    assert!(
+        !native_with_plan_and_certain_floor(&visible, 2).0,
+        "visible path paints charge a surface each, which room for two does not hold"
     );
 }
