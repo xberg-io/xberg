@@ -34,6 +34,8 @@ pub(crate) struct Cacheability(Arc<Operation>);
 #[derive(Default)]
 struct Operation {
     invalidated: AtomicBool,
+    // Retry results carry model identity only in the OCR cache. ~keep
+    outer_publication_blocked: AtomicBool,
     #[cfg(any(
         all(test, feature = "tokio-runtime", not(target_arch = "wasm32")),
         all(feature = "ocr", not(target_arch = "wasm32"))
@@ -104,6 +106,18 @@ pub(crate) fn is_cacheable() -> bool {
 pub(crate) fn invalidate_current() {
     if let Some(context) = current() {
         context.invalidate();
+    }
+}
+
+pub(crate) fn can_publish_outer_result() -> bool {
+    current()
+        .is_none_or(|context| context.is_cacheable() && !context.0.outer_publication_blocked.load(Ordering::Acquire))
+}
+
+#[cfg(feature = "ocr")]
+pub(crate) fn block_outer_result_publication() {
+    if let Some(context) = current() {
+        context.0.outer_publication_blocked.store(true, Ordering::Release);
     }
 }
 

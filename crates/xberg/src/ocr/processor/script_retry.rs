@@ -21,6 +21,7 @@ const PAGE_FLOOR_DENOMINATOR: usize = 3;
 
 /// The traineddata model used when OSD identifies Han.
 const HAN_MODEL: &str = "chi_sim";
+pub(super) const METADATA_KEY: &str = "script_retry";
 
 /// Tesseract OSD script names the retry knows a model for.
 fn model_for_script(script: &str) -> Option<&'static str> {
@@ -243,7 +244,7 @@ pub(super) fn run(
 pub(super) fn record(metadata: &mut HashMap<String, serde_json::Value>, outcome: &Outcome) {
     let merged = &outcome.merged;
     metadata.insert(
-        "script_retry".to_string(),
+        METADATA_KEY.to_string(),
         serde_json::json!({
             "script": outcome.script,
             "model": outcome.model,

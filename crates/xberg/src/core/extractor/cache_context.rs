@@ -165,6 +165,9 @@ impl ModelSelection {
             return None;
         }
         let mime = mime.map(|mime| mime.split(';').next().unwrap_or_default().trim());
+        if mime.is_some_and(|mime| mime.eq_ignore_ascii_case("text/plain")) {
+            return None;
+        }
         let image = mime.is_some_and(|mime| {
             mime.split('/')
                 .next()
@@ -672,6 +675,8 @@ mod explicit_mode_tests {
         ocr.tessdata_path = Some(root.path().into());
         let dependency = CacheDependency::for_config(&config, Some("image/png"));
         let context = || fingerprint(std::slice::from_ref(&dependency), None);
+        assert!(config.runs_ocr_on_embedded_images());
+        let plain = CacheDependency::for_config(&config, Some("Text/Plain; charset=utf-8"));
 
         std::fs::write(root.path().join(format!("{language}.traineddata")), b"primary").unwrap();
         std::fs::write(root.path().join("osd.traineddata"), b"orientation").unwrap();
@@ -683,6 +688,11 @@ mod explicit_mode_tests {
             std::fs::write(&han, bytes).unwrap();
             super::super::cacheability::scope(async {
                 assert!(apply_context(Some("warm".into()), &context().await.unwrap()).is_none());
+                let plain_context = fingerprint(std::slice::from_ref(&plain), None).await.unwrap();
+                assert_eq!(
+                    apply_context(Some("warm".into()), &plain_context).as_deref(),
+                    Some("warm")
+                );
                 assert!(
                     super::super::cacheability::is_cacheable(),
                     "the inner cache can still be used"

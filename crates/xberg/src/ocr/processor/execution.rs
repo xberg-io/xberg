@@ -3231,6 +3231,7 @@ fn process_image_resolved(
     {
         #[cfg(feature = "otel")]
         tracing::Span::current().record("cache.hit", true);
+        block_outer_cache_for_retry(&cached_result);
         return Ok(cached_result);
     }
 
@@ -3262,7 +3263,14 @@ fn process_image_resolved(
         tracing::warn!(%error, "Failed to cache the OCR result; the next identical request will re-run OCR");
     }
 
+    block_outer_cache_for_retry(&result);
     Ok(result)
+}
+
+fn block_outer_cache_for_retry(result: &OcrExtractionResult) {
+    if result.metadata.contains_key(script_retry::METADATA_KEY) {
+        crate::core::extractor::cacheability::block_outer_result_publication();
+    }
 }
 
 /// Process multiple image files in parallel using Rayon.
@@ -5341,6 +5349,93 @@ mod tests {
         assert_eq!(retry_cache.get_stats().unwrap().total_files, 0);
     }
 
+    #[tokio::test]
+    async fn retry_cache_hit_blocks_outer_publication_after_models_are_removed() {
+        use crate::core::extractor::{cache_context, cacheability};
+
+        let root = tempdir().unwrap();
+        let language = "xberg_retry_publication_fixture";
+        let config = TesseractConfig {
+            language: language.into(),
+            tessdata_path: Some(root.path().into()),
+            psm: 3,
+            use_cache: true,
+            ..Default::default()
+        };
+        let outer_config = ExtractionConfig {
+            ocr: Some(crate::core::config::OcrConfig {
+                language: vec![language.into()],
+                tessdata_path: config.tessdata_path.clone(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let dependencies = [cache_context::CacheDependency::for_config(
+            &outer_config,
+            Some("image/png"),
+        )];
+        let snapshot = || cache_context::fingerprint(&dependencies, None);
+
+        cacheability::scope(async {
+            let before = snapshot().await.unwrap();
+            assert_eq!(before.as_deref(), Some(""));
+            for model in [language, "osd", "chi_sim"] {
+                std::fs::write(root.path().join(format!("{model}.traineddata")), model).unwrap();
+            }
+            assert_eq!(snapshot().await.unwrap(), None);
+
+            let threshold = Some(75.0);
+            let models = ModelContext::resolve_with_retry(&config, threshold).unwrap();
+            let cache = OcrCache::new(Some(root.path().join("results"))).unwrap();
+            // A miss would try to decode these bytes and fail. ~keep
+            let image = b"inner cache fixture, not an image";
+            let cached = OcrExtractionResult {
+                content: "汉字".into(),
+                mime_type: "text/plain".into(),
+                metadata: HashMap::from([(
+                    script_retry::METADATA_KEY.into(),
+                    serde_json::json!({"model": "chi_sim"}),
+                )]),
+                tables: vec![],
+                ocr_elements: None,
+                internal_document: None,
+                raw_ocr_source_frame: None,
+            };
+            cache
+                .set_cached_result(
+                    &crate::cache::blake3_hash_bytes(image),
+                    "tesseract",
+                    &models.result_key(&config),
+                    None,
+                    &cached,
+                )
+                .unwrap();
+            let read = tokio::task::spawn_blocking(cacheability::blocking(move || {
+                process_image_with_retry(
+                    image,
+                    &config,
+                    &cache,
+                    &TesseractApiPool::new(),
+                    None,
+                    ImageOcrPolicy::Default,
+                    threshold,
+                )
+            }))
+            .await
+            .unwrap()
+            .unwrap();
+            assert_eq!(read.content, cached.content);
+            assert_eq!(read.metadata, cached.metadata);
+
+            std::fs::remove_file(root.path().join("chi_sim.traineddata")).unwrap();
+            assert_eq!(snapshot().await.unwrap(), before);
+            assert!(cacheability::is_cacheable(), "only outer publication is blocked");
+            assert!(!cacheability::can_publish_outer_result());
+        })
+        .await;
+        assert!(cacheability::can_publish_outer_result());
+    }
+
     #[test]
     fn retry_reuses_table_tsv_without_a_second_native_read() {
         let models = ModelContext::for_path("unused".into(), 3).unwrap();
@@ -5390,9 +5485,10 @@ mod tests {
     /// installed, the page is read again and its metadata names the retry; without the settings
     /// the page keeps the noise. Table detection is on in the first read, as it is by default.
     /// Skips when the models are not installed, because the retry never downloads them.
-    #[test]
+    #[tokio::test]
     #[serial]
-    fn a_han_image_read_with_eng_is_read_again_with_chi_sim() {
+    async fn a_han_image_read_with_eng_is_read_again_with_chi_sim() {
+        use crate::core::extractor::cacheability;
         let config = TesseractConfig {
             output_format: "markdown".into(),
             ..Default::default()
@@ -5402,20 +5498,30 @@ mod tests {
             eprintln!("skipped: osd and chi_sim are not installed");
             return;
         }
-        let plain = read_with_retry_settings(false, true);
-        assert_eq!(han_letters(&plain.content), 0, "the first read is Latin noise");
-        assert!(!plain.metadata.contains_key("script_retry"));
+        cacheability::scope(async {
+            let plain = read_with_retry_settings(false, true);
+            assert_eq!(han_letters(&plain.content), 0, "the first read is Latin noise");
+            assert!(!plain.metadata.contains_key(script_retry::METADATA_KEY));
+            assert!(cacheability::can_publish_outer_result());
+        })
+        .await;
         for table_detection in [true, false] {
-            let retried = read_with_retry_settings(true, table_detection);
-            assert!(
-                han_letters(&retried.content) > 0,
-                "table detection {table_detection}: {:?}",
-                retried.content
-            );
-            assert_eq!(
-                retried.metadata["script_retry"]["model"], "chi_sim",
-                "the record names the model"
-            );
+            cacheability::scope(async {
+                let retried = read_with_retry_settings(true, table_detection);
+                assert!(
+                    han_letters(&retried.content) > 0,
+                    "table detection {table_detection}: {:?}",
+                    retried.content
+                );
+                assert_eq!(
+                    retried.metadata[script_retry::METADATA_KEY]["model"],
+                    "chi_sim",
+                    "the record names the model"
+                );
+                assert!(cacheability::is_cacheable());
+                assert!(!cacheability::can_publish_outer_result());
+            })
+            .await;
         }
     }
 
