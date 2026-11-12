@@ -3366,7 +3366,7 @@ const CELLS: &str = "Plain page omitted or changed accepted table cells";
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 struct PlainWords<'a> {
     words: std::str::SplitWhitespace<'a>,
-    accepted: &'a str,
+    accepted_runs: ahash::AHashSet<&'a str>,
     first_skip: Option<&'static str>,
     keeps_unaccepted_word: bool,
 }
@@ -3376,10 +3376,16 @@ impl<'a> PlainWords<'a> {
     fn new(plain: &'a str, accepted: &'a str) -> Self {
         Self {
             words: plain.split_whitespace(),
-            accepted,
+            accepted_runs: Self::runs(accepted).collect(),
             first_skip: None,
             keeps_unaccepted_word: false,
         }
+    }
+
+    /// The letter and digit runs of `text`. A mark such as a heading marker carries none.
+    fn runs(text: &str) -> impl Iterator<Item = &str> {
+        text.split(|character: char| !character.is_alphanumeric())
+            .filter(|run| !run.is_empty())
     }
 
     /// Whether the Plain words hold the words of `text` in order. `reason` names the check
@@ -3396,13 +3402,11 @@ impl<'a> PlainWords<'a> {
         })
     }
 
-    /// A word counts as kept text when one of its letter and digit runs is nowhere in the
-    /// transcript; a mark such as a heading marker carries no run.
+    /// A word counts as kept text when one of its runs is not a run of the transcript. A run
+    /// matches whole, so a label "Park" beside a cell "Parks" counts as kept text.
     fn skip(&mut self, word: &str, reason: &'static str) {
         self.first_skip.get_or_insert(reason);
-        self.keeps_unaccepted_word |= word
-            .split(|character: char| !character.is_alphanumeric())
-            .any(|run| !run.is_empty() && !self.accepted.contains(run));
+        self.keeps_unaccepted_word |= Self::runs(word).any(|run| !self.accepted_runs.contains(run));
     }
 
     /// The reason of the first check that went wrong: a skipped word, else `reason`.
