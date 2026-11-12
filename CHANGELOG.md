@@ -329,6 +329,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): A default Tesseract extraction reports the same result in builds with Paddle OCR compiled in.** (GH#3007)
+  The automatic per-page Tesseract-to-Paddle route now carries the flat `psm` and `auto_rotated` metadata of its first accepted page and recovers a single sideways prose paragraph, matching the whole-document route.
 - **(pdf): A sentence no longer reads out of order around an inline equation.** (GH#2925)
   A superscript sits in a line bucket of its own, so the gap it fills tore the line in two and let a column cut run through the paragraph; the straddling-line guard now reads such a gap as part of the line.
 - **(pdf): Mark a page as OCR text only when its whole-document OCR read was accepted into the output.** (#2939)

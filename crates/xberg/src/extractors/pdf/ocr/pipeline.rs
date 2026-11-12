@@ -5354,7 +5354,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     .filter(|_| whole_page_raster)
                     .map(|retry| (Arc::clone(retry), Arc::clone(&upright_data)));
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                let allow_prose = detached_page.is_none() && images.is_none();
+                let allow_prose = detached_page.is_some() || images.is_none();
                 #[cfg(feature = "ocr")]
                 let caption_raster =
                     (capture_caption && retry.is_some() && page_rotation_degrees == 0 && correction_degrees == 0).then(

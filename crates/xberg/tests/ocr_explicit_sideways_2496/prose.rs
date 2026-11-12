@@ -1,25 +1,7 @@
 use super::*;
 
-#[cfg(not(paddle_ocr))]
 #[test]
 #[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
-fn explicit_language_block_recovers_the_sideways_source_paragraph() {
-    const CASE: &str = "prose::explicit_language_block_recovers_the_sideways_source_paragraph";
-    if std::env::var(CHILD).as_deref() != Ok(CASE) {
-        run_private_child(CASE);
-        return;
-    }
-    recovers_the_sideways_source_paragraph_case();
-}
-
-/// The paddle-route twin asserts the same correct behavior as the default-route test above.
-/// Under the synthesized per-page pipeline route the language-only read keeps the sparse
-/// primary instead of recovering the paragraph (#3007), so this variant is ignored until that
-/// route delivers the recovery; running it with `--ignored` under a paddle build shows the
-/// degraded read failing these assertions.
-#[cfg(paddle_ocr)]
-#[test]
-#[ignore = "#3007: the per-page pipeline route does not recover the sideways source paragraph yet"]
 fn explicit_language_block_recovers_the_sideways_source_paragraph() {
     const CASE: &str = "prose::explicit_language_block_recovers_the_sideways_source_paragraph";
     if std::env::var(CHILD).as_deref() != Ok(CASE) {
