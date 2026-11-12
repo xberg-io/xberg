@@ -617,6 +617,18 @@ fn test_cmap_subtable_offset_beyond_data_rejected() {
     assert!(result.is_err());
 }
 
+/// Off-by-one audit of the #3019 bounds check: an offset pointing exactly at
+/// the end of the font data (`subtable_start == data.len()`) reads past the
+/// data even though it is not strictly greater, so it must be rejected too.
+#[test]
+fn test_cmap_subtable_offset_at_end_rejected() {
+    let mut data = build_truetype_with_cmap_format4(&[(65, 1)]);
+    let end_offset = data.len() as u32;
+    data[36..40].copy_from_slice(&end_offset.to_be_bytes());
+    let err = TrueTypeCMap::from_font_data(&data).expect_err("offset == data.len() must be rejected");
+    assert!(err.contains("out of bounds"), "unexpected error: {err}");
+}
+
 /// Issue #3019 (audit): the format-4 glyphIdArray index,
 /// `idRangeOffset/2 + (charCode - startCode) + i - segCount`, subtracts
 /// `segCount` from a `usize` that a malformed subtable can push below zero —
@@ -693,6 +705,93 @@ fn test_format12_glyph_id_overflow_wraps_like_release() {
     assert_eq!(cmap.get_unicode(0xFFFF), Some('B'));
     assert_eq!(cmap.get_unicode(0), Some('C'));
     assert_eq!(cmap.len(), 3);
+}
+
+/// Issue #3034: a crafted format-12 group spanning the whole u32 space
+/// (`0..=0xFFFFFFFF`) must not walk ~4.3 billion code points. The walk is
+/// clamped to Unicode's maximum (U+10FFFF) and the mapping cap bounds the
+/// work at the u16 gid space (65,536 — the map is keyed by `u16`), so
+/// parsing completes quickly with a bounded table that still covers the
+/// clamped range.
+#[test]
+fn test_format12_unbounded_group_clamped_not_iterated() {
+    let data = build_truetype_with_cmap_format12(&[(0, 0xFFFF_FFFF, 0)]);
+    let cmap = TrueTypeCMap::from_font_data(&data).expect("parse font with a full-range crafted group");
+    assert_eq!(cmap.len(), 65_536, "mappings capped at the u16 gid space");
+    // The walk re-wraps the gids: gid 0 is first written by code point 0 and
+    // overwritten by code point U+10000 (offset 65,536) before the cap stops
+    // the walk. ~keep
+    assert_eq!(cmap.get_unicode(0), Some('\u{10000}'));
+    assert_eq!(
+        cmap.get_unicode(0xFFFF),
+        Some('\u{FFFF}'),
+        "the whole clamped valid range is mapped"
+    );
+}
+
+/// Issue #3034: a group whose startCharCode lies beyond Unicode's maximum
+/// maps nothing (the clamped end falls below the start) and must be skipped
+/// instead of iterating — pre-fix this group alone walked 4.3 billion code
+/// points — while the following group still parses.
+#[test]
+fn test_format12_group_starting_beyond_unicode_skipped() {
+    let data = build_truetype_with_cmap_format12(&[(0x11_0000, 0xFFFF_FFFF, 1), (65, 67, 2)]);
+    let cmap = TrueTypeCMap::from_font_data(&data).expect("parse font with a beyond-Unicode start group");
+    assert_eq!(cmap.len(), 3, "only the in-range group contributes mappings");
+    assert_eq!(cmap.get_unicode(2), Some('A'));
+    assert_eq!(cmap.get_unicode(3), Some('B'));
+    assert_eq!(cmap.get_unicode(4), Some('C'));
+}
+
+/// Issue #3034: an inverted group (endCharCode < startCharCode) maps nothing
+/// and must not disturb the groups after it.
+#[test]
+fn test_format12_inverted_group_skipped() {
+    let data = build_truetype_with_cmap_format12(&[(0x50, 0x40, 1), (65, 67, 2)]);
+    let cmap = TrueTypeCMap::from_font_data(&data).expect("parse font with an inverted group");
+    assert_eq!(cmap.len(), 3);
+    assert_eq!(cmap.get_unicode(2), Some('A'));
+    assert_eq!(cmap.get_unicode(3), Some('B'));
+    assert_eq!(cmap.get_unicode(4), Some('C'));
+}
+
+/// Issue #3034: the mappings cap binds once the u16 gid space is exhausted.
+/// Group 1 fills all 65,536 distinct gids with its first 65,536 code points
+/// (U+E000..=U+1DFFF, avoiding the surrogate block, mapped to consecutive
+/// gids 0..=65535); group 2 would overwrite gid 0 with U+009F. With the cap,
+/// parsing stops when the map is full, so gid 0 keeps its first mapping
+/// instead of the overwrite.
+#[test]
+fn test_format12_mapping_cap_stops_after_gid_space_is_full() {
+    let data = build_truetype_with_cmap_format12(&[(0xE000, 0x1_E03F, 0), (0x9F, 0x9F, 0)]);
+    let cmap = TrueTypeCMap::from_font_data(&data).expect("parse font whose groups exceed the gid space");
+    assert_eq!(cmap.len(), 65_536, "gid space saturated, no balloon beyond it");
+    assert_eq!(
+        cmap.get_unicode(0),
+        Some('\u{E000}'),
+        "the cap stops later groups from overwriting"
+    );
+    assert_eq!(
+        cmap.get_unicode(65_535),
+        Some('\u{1_DFFF}'),
+        "the filling group is mapped in full"
+    );
+}
+
+/// Issue #3034: a group ending beyond Unicode's maximum maps exactly its
+/// valid range (up to U+10FFFF) and nothing past it — a code point in
+/// 0x110000+ is not a character and must be absent from the mapping.
+/// Pre-fix this group walked 4.3 billion code points to produce the same
+/// three mappings.
+#[test]
+fn test_format12_group_ending_beyond_unicode_maps_only_valid_range() {
+    let data = build_truetype_with_cmap_format12(&[(0x10_FFFD, 0xFFFF_FFFF, 5)]);
+    let cmap = TrueTypeCMap::from_font_data(&data).expect("parse font with an over-long end group");
+    assert_eq!(cmap.len(), 3, "only the clamped valid range is mapped");
+    assert_eq!(cmap.get_unicode(5), Some('\u{10_FFFD}'));
+    assert_eq!(cmap.get_unicode(6), Some('\u{10_FFFE}'));
+    assert_eq!(cmap.get_unicode(7), Some('\u{10_FFFF}'));
+    assert_eq!(cmap.get_unicode(8), None, "nothing past U+10FFFF is mapped");
 }
 
 #[test]

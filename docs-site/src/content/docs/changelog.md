@@ -331,6 +331,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): A crafted TrueType cmap format-12 group no longer walks billions of code points.** (GH#3034)
+  A subtable whose group `endCharCode` reaches `0xFFFFFFFF` cost ~4.3 billion iterations per group (a 1 MB font can hold ~87k such groups), hanging extraction and rendering. The group walk is clamped to Unicode's maximum (U+10FFFF), inverted groups (`end < start`) and groups starting past it are skipped without iterating, and total mappings are capped at the parser's own gid space (65,536 — the map is keyed by a `u16` gid, so further inserts could only overwrite). Well-formed fonts parse byte-for-byte as before; only subtables whose declared mappings exceed the gid space are truncated.
 - **(pdf): A malformed embedded font's cmap subtable offset is rejected instead of crashing the renderer.** (GH#3019)
   An offset past the end of the embedded font program — or a subtable whose format-4 glyph-id index arithmetic or format-12 glyph-id sum under- or overflows — is now bounds- or wrapping-checked and rejects the cmap with a parse error in both debug and release builds, so the font falls back to its declared encoding ("using fallback font encoding") instead of an overflow panic in debug or a silent garbage walk in release. Successful fonts parse byte-for-byte as before.
 - **(pdf): A column cut no longer runs through a sentence whose inline script fills a line gap.** (GH#2925)

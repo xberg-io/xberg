@@ -554,7 +554,7 @@ impl TrueTypeCMap {
 
         let mut gid_to_unicode = HashMap::new();
 
-        for _ in 0..num_groups {
+        'groups: for _ in 0..num_groups {
             let start_char_code = cursor
                 .read_u32::<BigEndian>()
                 .map_err(|e| format!("Failed to read startCharCode: {}", e))?;
@@ -565,7 +565,25 @@ impl TrueTypeCMap {
                 .read_u32::<BigEndian>()
                 .map_err(|e| format!("Failed to read startGlyphId: {}", e))?;
 
+            // GH#3034: a crafted endCharCode can reach 0xFFFFFFFF, whose
+            // walk costs ~4.3 billion iterations per group. Clamp the walk
+            // to Unicode's maximum; a group whose start lies past it (or
+            // whose end is below its start) maps nothing and is skipped
+            // without iterating. ~keep
+            let end_char_code = end_char_code.min(char::MAX as u32);
+            if end_char_code < start_char_code {
+                continue;
+            }
+
             for (offset, char_code) in (start_char_code..=end_char_code).enumerate() {
+                // The map is keyed by `u16` (the TrueType glyph space,
+                // `numGlyphs <= 65535`), so once every gid is present a
+                // further insert can only overwrite an existing entry and
+                // adds no information. Stopping there bounds a crafted
+                // subtable's work at the map's own key-space size. ~keep
+                if gid_to_unicode.len() >= MAX_CMAP_MAPPINGS {
+                    break 'groups;
+                }
                 // A malformed group's startGlyphId can overflow the u32 sum;
                 // wrapping matches release behaviour exactly (the `as u16` cast
                 // then truncates the same low 16 bits). ~keep
@@ -579,6 +597,15 @@ impl TrueTypeCMap {
         Ok(gid_to_unicode)
     }
 }
+
+/// Upper bound on the mappings one cmap subtable may produce. The
+/// gid→Unicode map is keyed by `u16`, so it can never hold more entries
+/// than the TrueType glyph space itself (`numGlyphs` is a u16): beyond
+/// 65,536 examined code points an insert can only overwrite an existing
+/// entry. This is an exact bound derived from the parser's own data
+/// structure — tighter than the core crate's `SecurityLimits::max_iterations`
+/// work budget (10M), which lives in a crate this one does not depend on.
+const MAX_CMAP_MAPPINGS: usize = u16::MAX as usize + 1;
 
 #[cfg(test)]
 mod tests;
