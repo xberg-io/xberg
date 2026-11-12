@@ -786,9 +786,17 @@ fn should_build_full_ocr_boundaries_against_exact_output_text() {
         "repeated page".to_string(),
         "repeated page".to_string(),
     ];
-    let text = "<page 1>first page  \n\n<page 2>repeated page\n\n<page 3>repeated page";
+    let text = "<page 1>first page  <page 2>repeated page<page 3>repeated page";
+    let config = ExtractionConfig {
+        pages: Some(crate::core::config::PageConfig {
+            insert_page_markers: true,
+            marker_format: "<page {page_num}>".into(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
 
-    let boundaries = boundaries_for_ocr_output(ExtractionMethod::Ocr, text, None, None, Some(&page_texts))
+    let boundaries = boundaries_for_ocr_output(ExtractionMethod::Ocr, text, None, None, Some(&page_texts), &config)
         .expect("full OCR page texts should produce exact boundaries");
 
     assert_eq!(boundaries.len(), 3);
@@ -3658,6 +3666,8 @@ async fn check_forced_ocr_discarded_page_restoration() {
             crate::core::config::OutputFormat::Plain,
             crate::core::config::OutputFormat::Markdown,
         ] {
+            let insert_page_markers =
+                numeric_repair && !extract_pages && output_format == crate::core::config::OutputFormat::Plain;
             let config = ExtractionConfig {
                 use_cache: false,
                 force_ocr: true,
@@ -3671,8 +3681,9 @@ async fn check_forced_ocr_discarded_page_restoration() {
                     }),
                     ..Default::default()
                 }),
-                pages: extract_pages.then_some(PageConfig {
+                pages: (extract_pages || insert_page_markers).then_some(PageConfig {
                     extract_pages,
+                    insert_page_markers,
                     keep_native_content,
                     ..Default::default()
                 }),
@@ -3698,11 +3709,21 @@ async fn check_forced_ocr_discarded_page_restoration() {
                 internal.processing_warnings
             );
 
-            let result = crate::types::ExtractedDocument::from(internal);
+            let result = if insert_page_markers {
+                crate::core::pipeline::run_pipeline(internal, &config)
+                    .await
+                    .expect("marked output renders")
+            } else {
+                crate::types::ExtractedDocument::from(internal)
+            };
             let words = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
             assert_eq!(
                 words(&result.content),
-                format!("{} {}", words(accepted_text), words(NATIVE_PAGE_TWO_TEXT)),
+                if insert_page_markers {
+                    format!("<!-- PAGE 1 --> {accepted_text} <!-- PAGE 2 --> {NATIVE_PAGE_TWO_TEXT}")
+                } else {
+                    format!("{accepted_text} {NATIVE_PAGE_TWO_TEXT}")
+                },
                 "the document carries the discarded page's native text after page 1's read ({case}): {:?}",
                 result.content
             );
@@ -6879,18 +6900,31 @@ fn an_empty_whole_document_ocr_read_replaces_no_page() {
 fn a_discarded_read_in_the_middle_is_restored_into_the_document() {
     use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
 
+    let config = ExtractionConfig {
+        pages: Some(crate::core::config::PageConfig {
+            insert_page_markers: true,
+            marker_format: "[read one, page {page_num}]".into(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
     let reads = vec!["read one".to_string(), String::new(), "read three".to_string()];
-    let natives: Vec<String> = (1..=3).map(|n| format!("native {n}")).collect();
-    let mut text = "read one\n\nread three".to_string();
+    let natives = vec!["native 1".into(), "native\u{fffd}2".into(), "native 3".into()];
+    let mut text = "[read one, page 1]read one[read one, page 2][read one, page 3]read three".to_string();
     let mut document = InternalDocument::new("pdf");
     document.push_element(InternalElement::text(ElementKind::Paragraph, "read one", 0).with_page(1));
     document.push_element(InternalElement::text(ElementKind::Paragraph, "read three", 0).with_page(3));
     let mut document = Some(document);
 
-    let pages = restore_discarded_page_reads(&mut text, &mut document, &reads, &natives)
+    let (pages, lost_glyphs) = restore_discarded_page_reads(&mut text, &mut document, &reads, &natives, &config)
         .expect("the discarded page is restored");
 
-    assert_eq!(text, "read one\n\nnative 2\n\nread three");
+    assert_eq!(
+        text,
+        "[read one, page 1]read one[read one, page 2]native 2[read one, page 3]read three"
+    );
+    assert_eq!(lost_glyphs, 1);
+    assert!(unmapped_glyphs::lost_glyph_warning(lost_glyphs, &config).is_some());
     assert_eq!(pages, vec!["read one", "native 2", "read three"]);
     let paragraphs: Vec<(&str, Option<u32>)> = document
         .as_ref()
@@ -6911,7 +6945,8 @@ fn a_discarded_read_in_the_middle_is_restored_into_the_document() {
             .any(|e| matches!(e.kind, ElementKind::OcrText { .. }))),
         "restored native text is not an OCR element"
     );
-    let boundaries = exact_boundaries_for_page_texts(&text, &pages).expect("the page texts are located");
+    let boundaries = ocr_page_body_spans(&text, &pages, &config).expect("the page texts are located");
+    assert_eq!(boundaries[0].byte_start, "[read one, page 1]".len());
     for (boundary, page) in boundaries.iter().zip(&pages) {
         assert_eq!(&text[boundary.byte_start..boundary.byte_end], page.as_str());
     }
@@ -6924,17 +6959,20 @@ fn a_discarded_read_in_the_middle_is_restored_into_the_document() {
 fn a_blank_whole_document_read_restores_every_page_and_complete_reads_restore_none() {
     let natives: Vec<String> = (1..=3).map(|n| format!("native {n}")).collect();
 
+    let config = ExtractionConfig::default();
     let mut text = String::new();
     let mut document = None;
-    let pages = restore_discarded_page_reads(&mut text, &mut document, &[String::new()], &natives)
-        .expect("a blank whole-document read discards every page");
+    let (pages, lost_glyphs) =
+        restore_discarded_page_reads(&mut text, &mut document, &[String::new()], &natives, &config)
+            .expect("a blank whole-document read discards every page");
     assert_eq!(text, "native 1\n\nnative 2\n\nnative 3");
     assert_eq!(pages, natives);
+    assert_eq!(lost_glyphs, 0);
 
     let reads: Vec<String> = (1..=3).map(|n| format!("read {n}")).collect();
     let mut text = "read 1\n\nread 2\n\nread 3".to_string();
     assert_eq!(
-        restore_discarded_page_reads(&mut text, &mut None, &reads, &natives),
+        restore_discarded_page_reads(&mut text, &mut None, &reads, &natives, &config),
         None
     );
     assert_eq!(text, "read 1\n\nread 2\n\nread 3", "an accepted read is never replaced");

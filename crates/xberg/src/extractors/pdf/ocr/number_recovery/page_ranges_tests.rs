@@ -22,7 +22,7 @@ fn attach_page_handoff(document: &mut InternalDocument, reads: &[String]) -> Str
     document.metadata.pages = Some(PageStructure {
         total_count: 2,
         unit_type: PageUnitType::Page,
-        boundaries: super::super::super::exact_boundaries_for_page_texts(&text, reads),
+        boundaries: super::super::super::ocr_page_body_spans(&text, reads, &Default::default()),
         pages: None,
     });
     document.prebuilt_pages = Some(

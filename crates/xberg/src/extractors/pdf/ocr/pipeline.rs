@@ -222,9 +222,10 @@ pub(crate) fn apply_numeric_repair_to_whole_document_ocr(
     page_texts: &mut [String],
     document: Option<&mut crate::types::internal::InternalDocument>,
     tables: &mut [crate::types::Table],
+    config: &ExtractionConfig,
 ) {
     let boundaries =
-        super::super::exact_boundaries_for_page_texts(text, page_texts).filter(|boundaries| !boundaries.is_empty());
+        super::super::ocr_page_body_spans(text, page_texts, config).filter(|boundaries| !boundaries.is_empty());
     if boundaries.is_none()
         && let Cow::Owned(repaired) = repair_ocr_numeric_tokens(text)
     {
@@ -3948,15 +3949,11 @@ pub(super) fn formula_layout_inputs_for_replaced_pages(
     )
 ))]
 fn full_document_page_seed(page_count: usize, config: &ExtractionConfig) -> (String, Vec<crate::types::PageBoundary>) {
-    let marker_config = config.pages.as_ref().filter(|pages| pages.insert_page_markers);
+    let marker_format = super::super::ocr_page_marker_format(config);
     let mut text = String::new();
     let mut boundaries = Vec::with_capacity(page_count);
     for page_index in 0..page_count {
-        if let Some(pages) = marker_config {
-            text.push_str(&pages.marker_format.replace("{page_num}", &(page_index + 1).to_string()));
-        } else if page_index > 0 {
-            text.push_str("\n\n");
-        }
+        text.push_str(&super::super::ocr_page_prefix(marker_format, page_index, 0));
         boundaries.push(crate::types::PageBoundary {
             byte_start: text.len(),
             byte_end: text.len(),
@@ -7070,22 +7067,8 @@ pub(super) async fn extract_with_ocr_for_page(
         }
     }
 
-    let page_marker_cfg = config.pages.as_ref().filter(|p| p.insert_page_markers);
-    let join_pages = |texts: &[String]| {
-        let mut joined = String::new();
-        for (i, text) in texts.iter().enumerate() {
-            if let Some(cfg) = page_marker_cfg {
-                let marker = cfg
-                    .marker_format
-                    .replace("{page_num}", &(page_index_offset + i + 1).to_string());
-                joined.push_str(&marker);
-            } else if i > 0 {
-                joined.push_str("\n\n");
-            }
-            joined.push_str(text);
-        }
-        joined
-    };
+    let marker_format = super::super::ocr_page_marker_format(config);
+    let join_pages = |texts: &[String]| super::document::join_run_pages(texts, marker_format, page_index_offset);
     #[cfg_attr(
         not(all(
             feature = "ocr",
@@ -8326,19 +8309,12 @@ fn join_pipeline_xobject_text_at_offset(
     budget: &mut crate::extractors::security::SecurityBudget,
     page_offset: usize,
 ) -> crate::Result<String> {
-    let page_marker_cfg = config.pages.as_ref().filter(|pages| pages.insert_page_markers);
+    let marker_format = super::super::ocr_page_marker_format(config);
     let mut text = String::new();
     for (page_idx, page_text) in page_texts.iter().enumerate() {
-        if let Some(cfg) = page_marker_cfg {
-            let marker = cfg
-                .marker_format
-                .replace("{page_num}", &(page_offset + page_idx + 1).to_string());
-            budget.account_text(marker.len())?;
-            text.push_str(&marker);
-        } else if page_idx > 0 {
-            budget.account_text(2)?;
-            text.push_str("\n\n");
-        }
+        let prefix = super::super::ocr_page_prefix(marker_format, page_idx, page_offset);
+        budget.account_text(prefix.len())?;
+        text.push_str(&prefix);
         text.push_str(page_text);
     }
     Ok(text)

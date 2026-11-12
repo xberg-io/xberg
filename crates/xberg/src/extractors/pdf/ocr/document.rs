@@ -1137,14 +1137,14 @@ fn run_page_noise_verdict(verdicts: &[super::scoring::OcrPageNoiseVerdict], page
 /// The page texts of a whole-document run as its flat text holds them: joined with a page marker
 /// or a blank line. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn join_run_pages(page_texts: &[String], marker_format: Option<&str>, page_index_offset: usize) -> String {
+pub(in crate::extractors::pdf) fn join_run_pages(
+    page_texts: &[String],
+    marker_format: Option<&str>,
+    page_index_offset: usize,
+) -> String {
     let mut joined = String::new();
     for (i, page_text) in page_texts.iter().enumerate() {
-        match marker_format {
-            Some(format) => joined.push_str(&format.replace("{page_num}", &(page_index_offset + i + 1).to_string())),
-            None if i > 0 => joined.push_str("\n\n"),
-            None => {}
-        }
+        joined.push_str(&super::super::ocr_page_prefix(marker_format, i, page_index_offset));
         joined.push_str(page_text);
     }
     joined
@@ -1164,11 +1164,7 @@ pub(super) fn put_layers_first_in_run(
     page_index_offset: usize,
     config: &ExtractionConfig,
 ) -> usize {
-    let marker_format = config
-        .pages
-        .as_ref()
-        .filter(|pages| pages.insert_page_markers)
-        .map(|pages| pages.marker_format.as_str());
+    let marker_format = super::super::ocr_page_marker_format(config);
     let thresholds = config
         .ocr
         .as_ref()

@@ -71,6 +71,7 @@ fn boundaries_for_ocr_output(
     native_boundaries: Option<&[crate::types::PageBoundary]>,
     replacements: Option<&ahash::AHashMap<u32, String>>,
     ocr_page_texts: Option<&[String]>,
+    config: &ExtractionConfig,
 ) -> Option<Vec<crate::types::PageBoundary>> {
     match extraction_method {
         ExtractionMethod::Native => native_boundaries.map(<[_]>::to_vec),
@@ -80,31 +81,56 @@ fn boundaries_for_ocr_output(
                 |accepted| ocr::boundaries_after_replacements(boundaries, accepted),
             )
         }),
-        ExtractionMethod::Ocr => exact_boundaries_for_page_texts(text, ocr_page_texts?),
+        ExtractionMethod::Ocr => ocr_page_body_spans(text, ocr_page_texts?, config),
     }
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn exact_boundaries_for_page_texts(text: &str, page_texts: &[String]) -> Option<Vec<crate::types::PageBoundary>> {
-    let mut boundaries = Vec::with_capacity(page_texts.len());
-    let mut search_offset = 0usize;
+fn ocr_page_marker_format(config: &ExtractionConfig) -> Option<&str> {
+    config
+        .pages
+        .as_ref()
+        .filter(|pages| pages.insert_page_markers)
+        .map(|pages| pages.marker_format.as_str())
+}
 
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn ocr_page_prefix(
+    marker_format: Option<&str>,
+    page_index: usize,
+    page_index_offset: usize,
+) -> std::borrow::Cow<'static, str> {
+    match marker_format {
+        Some(format) => format
+            .replace("{page_num}", &(page_index_offset + page_index + 1).to_string())
+            .into(),
+        None if page_index > 0 => "\n\n".into(),
+        None => "".into(),
+    }
+}
+
+/// Walk the same prefixes and bodies as the page join, including empty bodies.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn ocr_page_body_spans(
+    text: &str,
+    page_texts: &[String],
+    config: &ExtractionConfig,
+) -> Option<Vec<crate::types::PageBoundary>> {
+    let marker_format = ocr_page_marker_format(config);
+    let mut remaining = text;
+    let mut boundaries = Vec::with_capacity(page_texts.len());
     for (index, page_text) in page_texts.iter().enumerate() {
-        let byte_start = if page_text.is_empty() {
-            search_offset
-        } else {
-            search_offset + text.get(search_offset..)?.find(page_text)?
-        };
-        let byte_end = byte_start + page_text.len();
+        let prefix = ocr_page_prefix(marker_format, index, 0);
+        remaining = remaining.strip_prefix(prefix.as_ref())?;
+        let byte_start = text.len() - remaining.len();
+        remaining = remaining.strip_prefix(page_text.as_str())?;
         boundaries.push(crate::types::PageBoundary {
             byte_start,
-            byte_end,
+            byte_end: text.len() - remaining.len(),
             page_number: (index + 1) as u32,
         });
-        search_offset = byte_end;
     }
-
-    Some(boundaries)
+    remaining.is_empty().then_some(boundaries)
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -1555,6 +1581,7 @@ async fn run_ocr_with_layout_pages(
                 &mut ocr_pts,
                 pipeline_doc.as_mut(),
                 &mut ocr_tables,
+                config,
             );
         }
         #[cfg(feature = "formula-recognition")]
@@ -1643,7 +1670,13 @@ async fn run_ocr_with_layout_pages(
     // GH#1892: same repair as the pipeline branch above -- this is the other half of the
     // whole-document route, the one `force_ocr` and the near-empty `Auto` fallback reach. ~keep
     if ocr::numeric_repair_enabled(config) {
-        ocr::apply_numeric_repair_to_whole_document_ocr(&mut text, &mut ocr_pts, ocr_doc.as_mut(), &mut ocr_tables);
+        ocr::apply_numeric_repair_to_whole_document_ocr(
+            &mut text,
+            &mut ocr_pts,
+            ocr_doc.as_mut(),
+            &mut ocr_tables,
+            config,
+        );
     }
     #[cfg(feature = "formula-recognition")]
     let (mut ocr_doc, mut formulas) = (ocr_doc, formulas);
@@ -2507,48 +2540,43 @@ fn native_page_texts_for_restore(
 /// The whole-document read has no text for such a page, so the document content, the structured
 /// document and the page boundaries would otherwise lose it while the page keeps it. A single
 /// blank read stands for the whole document and discards every page. Returns the per-page texts
-/// of the restored document (the reads with each discarded page's native text), or `None` when no
-/// page was restored or the reads cannot be located in `text`.
+/// of the restored document and the count of lost native glyphs, or `None` when no page was
+/// restored or the flat text was assembled independently of its page texts.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn restore_discarded_page_reads(
     text: &mut String,
     document: &mut Option<InternalDocument>,
     ocr_page_texts: &[String],
     native_pages: &[String],
-) -> Option<Vec<String>> {
+    config: &ExtractionConfig,
+) -> Option<(Vec<String>, usize)> {
     let whole_document_blank = ocr_page_texts.len() == 1 && ocr_page_texts[0].trim().is_empty();
     if native_pages.is_empty() || (ocr_page_texts.len() != native_pages.len() && !whole_document_blank) {
         return None;
     }
-    let reads: Vec<String> = if whole_document_blank {
+    if !(whole_document_blank && text.trim().is_empty()) {
+        ocr_page_body_spans(text, ocr_page_texts, config)?;
+    }
+    let mut reads = if whole_document_blank {
         vec![String::new(); native_pages.len()]
     } else {
         ocr_page_texts.to_vec()
     };
-    let discarded: Vec<usize> = (0..reads.len())
-        .filter(|&index| reads[index].trim().is_empty() && !native_pages[index].trim().is_empty())
-        .collect();
-    if discarded.is_empty() {
-        return None;
-    }
-
-    let boundaries = exact_boundaries_for_page_texts(text, &reads)?;
-    for &index in discarded.iter().rev() {
-        let offset = boundaries[index].byte_start;
-        let native = native_pages[index].as_str();
-        if offset == 0 {
-            let separator = if text.is_empty() { "" } else { "\n\n" };
-            text.insert_str(0, &format!("{native}{separator}"));
-        } else {
-            text.insert_str(offset, &format!("\n\n{native}"));
+    let mut lost_glyphs = 0;
+    let mut restored = ahash::AHashMap::new();
+    for (index, (read, native)) in reads.iter_mut().zip(native_pages).enumerate() {
+        if read.trim().is_empty() && !native.trim().is_empty() {
+            read.clone_from(native);
+            lost_glyphs += unmapped_glyphs::strip_native_fragment(read);
+            restored.insert((index + 1) as u32, read.clone());
         }
     }
+    if restored.is_empty() {
+        return None;
+    }
+    *text = ocr::join_run_pages(&reads, ocr_page_marker_format(config), 0);
 
     if let Some(document) = document.as_mut() {
-        let restored: ahash::AHashMap<u32, String> = discarded
-            .iter()
-            .map(|&index| ((index + 1) as u32, native_pages[index].clone()))
-            .collect();
         ocr::merge_ocr_pages_into_internal_document(document, &restored);
         // The merge writes a page's text as OCR blocks, but these pages hold native text with no
         // OCR geometry or confidence, so they must not surface as OCR elements.
@@ -2561,11 +2589,7 @@ fn restore_discarded_page_reads(
         }
     }
 
-    let mut document_pages = reads;
-    for index in discarded {
-        document_pages[index] = native_pages[index].clone();
-    }
-    Some(document_pages)
+    Some((reads, lost_glyphs))
 }
 
 /// Attach the OCR text page list to the selected document where its reader honors it.
@@ -3230,8 +3254,14 @@ impl PdfExtractor {
             if ocr_pts.iter().any(|page| page.trim().is_empty()) {
                 let native_pages =
                     native_page_texts_for_restore(page_contents.as_deref(), &native_text, boundaries.as_deref());
-                ocr_document_page_texts =
-                    restore_discarded_page_reads(&mut ocr_text, &mut ocr_doc, &ocr_pts, &native_pages);
+                if let Some((pages, lost_glyphs)) =
+                    restore_discarded_page_reads(&mut ocr_text, &mut ocr_doc, &ocr_pts, &native_pages, config)
+                {
+                    ocr_document_page_texts = Some(pages);
+                    if let Some(warning) = unmapped_glyphs::lost_glyph_warning(lost_glyphs, config) {
+                        crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
+                    }
+                }
             }
             ocr_layout_gate_audit = gate_audit;
             ocr_tables = ocr_tbls;
@@ -4178,9 +4208,10 @@ impl PdfExtractor {
                 boundaries.as_deref(),
                 ocr_results_map.as_ref(),
                 ocr_document_page_texts.as_deref().or(ocr_page_texts.as_deref()),
+                config,
             )
         };
-        // OCR text replaces the native text on a fully OCR-read document; any other text is native.
+        // The whole-document OCR route cleans and counts restored native fragments before joining them. ~keep
         let lost_glyphs = if extraction_method == ExtractionMethod::Ocr {
             0
         } else {
