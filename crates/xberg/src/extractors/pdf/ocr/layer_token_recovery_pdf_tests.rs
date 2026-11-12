@@ -164,3 +164,34 @@ fn a_read_that_does_not_confirm_the_layer_gets_no_word_from_it() {
     assert!(!recover(&pdf, &mut read));
     assert_eq!(read.content, before);
 }
+
+#[test]
+fn identifiers_misread_with_digits_and_case_take_the_layer_spelling_at_low_confidence() {
+    let pdf = PdfDocument::from_bytes(WRONG_LAYER_PDF.to_vec()).unwrap();
+    let mut read = read_of(&pdf, &[("S5T0U9", "SSTOU9"), ("K2Q5W0", "K2Q5wo")], 0.43);
+    assert!(recover(&pdf, &mut read));
+    let found = tokens(&read);
+    assert!(
+        found.contains(&"S5T0U9") && found.contains(&"K2Q5W0"),
+        "{}",
+        read.content
+    );
+    assert!(
+        !found.contains(&"SSTOU9") && !found.contains(&"K2Q5wo"),
+        "{}",
+        read.content
+    );
+}
+
+#[test]
+fn the_same_identifiers_stay_as_read_at_the_confidence_floor() {
+    let pdf = PdfDocument::from_bytes(WRONG_LAYER_PDF.to_vec()).unwrap();
+    let mut read = read_of(&pdf, &[("S5T0U9", "SSTOU9"), ("K2Q5W0", "K2Q5wo")], 0.75);
+    recover(&pdf, &mut read);
+    let found = tokens(&read);
+    assert!(
+        found.contains(&"SSTOU9") && found.contains(&"K2Q5wo"),
+        "{}",
+        read.content
+    );
+}

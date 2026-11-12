@@ -104,7 +104,8 @@ fn confusable(left: char, right: char) -> bool {
 /// character the read dropped on an identifier that mixes letters and digits (the layer is then the longer token; a layer that lost a glyph never overwrites the read). A layer
 /// token with anything beyond ASCII (a ligature or other presentation form, an accent), without a
 /// letter (a number whose digits a shifted mapping could change), or that differs by any other
-/// insertion, deletion or substitution is a different word and the read keeps its own.
+/// insertion, deletion or substitution is a different word and the read keeps its own. An
+/// identifier also takes capitals that the read wrote lowercase when a digit swap comes with them.
 fn is_misreading(read: &str, layer: &str) -> bool {
     if !read.is_ascii() || !layer.is_ascii() || alnum_core(read) == alnum_core(layer) {
         return false;
@@ -121,6 +122,9 @@ fn is_misreading(read: &str, layer: &str) -> bool {
     {
         return true;
     }
+    if is_identifier(layer) && layer.len() == read.len() && differs_by_case_and_digit_swaps(read, layer) {
+        return true;
+    }
     is_identifier(layer) && layer.len() == read.len() + 1 && (layer[1..] == *read || layer[..layer.len() - 1] == *read)
 }
 
@@ -131,6 +135,24 @@ fn is_identifier(token: &str) -> bool {
         && token.chars().any(|character| character.is_ascii_digit())
         && token.chars().any(|character| character.is_ascii_alphabetic())
         && token.chars().all(|character| character.is_ascii_alphanumeric())
+}
+
+/// Whether `layer` is `read` with confusable characters swapped and some lowercase letters of the
+/// read capitalised, with at least one digit swap: `K2Q5wo` for `K2Q5W0`. A case difference alone
+/// is never a misreading (`us` is not `US`), so one counts only beside a digit swap in an
+/// identifier, and only toward the capital.
+fn differs_by_case_and_digit_swaps(read: &str, layer: &str) -> bool {
+    let mut digit_swap = false;
+    for (read_char, layer_char) in read.chars().zip(layer.chars()) {
+        if read_char == layer_char || (read_char.is_ascii_lowercase() && layer_char == read_char.to_ascii_uppercase()) {
+            continue;
+        }
+        if !confusable(read_char, layer_char) || !(read_char.is_ascii_digit() || layer_char.is_ascii_digit()) {
+            return false;
+        }
+        digit_swap = true;
+    }
+    digit_swap
 }
 
 fn overlaps(left: &LineBox, right: &LineBox) -> bool {

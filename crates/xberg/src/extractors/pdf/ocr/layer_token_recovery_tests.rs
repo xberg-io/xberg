@@ -407,6 +407,26 @@ fn a_lowercase_layer_never_rewrites_a_correct_capitalised_read() {
 }
 
 #[test]
+fn an_identifier_takes_capitals_the_read_wrote_lowercase_beside_a_digit_swap() {
+    assert!(is_misreading("K2Q5wo", "K2Q5W0"));
+    assert!(is_misreading("SSTOU9", "S5T0U9"));
+    let layer = page(&with(&[("K2Q5W0", 0.0, 1.0)]));
+    let read = page(&with(&[("K2Q5wo", 0.0, 1.0)]));
+    assert_eq!(
+        plan(&layer, &read, &mut inked, &|| false).corrections,
+        vec![(4, "K2Q5W0".to_owned())]
+    );
+}
+
+#[test]
+fn a_case_difference_without_a_digit_swap_is_not_a_misreading() {
+    assert!(!is_misreading("K2Q5w1", "K2Q5W1"));
+    assert!(!is_misreading("ab12cd", "AB12CD"));
+    assert!(!is_misreading("K2Q5wo", "K2Q5W9"));
+    assert!(!is_misreading("Kowal", "KOWAL"));
+}
+
+#[test]
 fn a_repeated_read_token_with_a_confident_instance_is_not_corrected() {
     let layer = page(&with(&[("B0X92Q", 0.0, 1.0), ("B0X92Q", 0.0, 2.0)]));
     let mut read = page(&with(&[("BOX92Q", 0.0, 1.0), ("BOX92Q", 0.0, 2.0)]));
