@@ -372,6 +372,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A path whose points or span do not fit `f32` builds no path, yet the floor counted it as a charged paint, so a page of such paths that rendered natively degraded. The floor now tracks the path's bounds and counts it only where they fit.
 - **(pdf): Count path paints in visible optional-content layers in the knockout floor.** (#3060)
   A layer the renderer finds visible no longer hides its paints from the floor, so a page whose layered paints cannot fit the work limit renders without knockout from the start instead of running out of budget and painting again. Hidden layers still count nothing.
+- **(pdf): Count a knockout path paint only where the renderer's path builder builds a path.** (#3098)
+  The floor kept its own copy of the builder's bounds rule. The copy differed on a move that no segment follows, which the builder replaces, so it counted too little and a page of such paths ran the knockout pass until the work limit stopped it and then painted again. The floor now builds each path with the same builder calls as the renderer and counts a paint when the builder returns a path. Output and limits are unchanged.
 - **(ocr): Keep Khmer number recovery available after bounded source declines.** (#2905)
   Completed declines charge the work already done, leaving room to verify supported pages later in the PDF.
   Cancellation and failures whose work cannot be measured still retain their reservation.
