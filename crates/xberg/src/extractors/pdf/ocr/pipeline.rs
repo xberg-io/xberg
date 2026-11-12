@@ -2156,6 +2156,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         drop(page_images);
         // A page whose backend call failed waits here for the embedded-image retry below.
         let mut failed_pages: ahash::AHashMap<usize, crate::XbergError> = ahash::AHashMap::new();
+        #[cfg_attr(not(all(feature = "tokio-runtime", not(target_arch = "wasm32"))), allow(unused_mut))]
         let mut abandoned_pages: ahash::AHashSet<usize> = ahash::AHashSet::new();
         let budget_refused_pages: Vec<usize> = budget_refused.iter().map(|(page_idx, _)| *page_idx).collect();
         failed_pages.extend(budget_refused);
