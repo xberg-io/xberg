@@ -398,6 +398,132 @@ fn try_code_chunks(
     Some(chunks)
 }
 
+/// Whether the extraction time limit was reached: model stages poll this between batches.
+#[cfg(any(feature = "embeddings", feature = "sparse-embeddings", feature = "late-interaction"))]
+fn time_limit_reached(config: &ExtractionConfig) -> bool {
+    config
+        .cancel_token
+        .as_ref()
+        .is_some_and(crate::cancellation::CancellationToken::time_limit_reached)
+}
+
+/// Record that the time limit ended `stage` early: the stage's output is missing and the
+/// document must not be cached.
+pub(super) fn report_stage_cut(warnings: &mut Vec<ProcessingWarning>, config: &ExtractionConfig, stage: &str) {
+    if let Some(token) = config.cancel_token.as_ref() {
+        token.note_stage_cut();
+    }
+    crate::core::diagnostics::push_warning(
+        warnings,
+        "time_limit",
+        format!(
+            "Extraction reached extraction_timeout_secs before {stage} finished: it was stopped and its output \
+             is missing; the text and chunks produced so far are kept."
+        ),
+    );
+}
+
+/// Attach the configured chunk vectors (dense, sparse, late-interaction) to `result.chunks`.
+///
+/// Each stage polls the time limit between batches. A stage the limit ends attaches nothing, so
+/// the chunks stay without that kind of vector, and the cut is reported by [`report_stage_cut`].
+#[cfg(feature = "chunking")]
+fn attach_chunk_vectors(
+    result: &mut ExtractedDocument,
+    chunking_config: &crate::core::config::ChunkingConfig,
+    config: &ExtractionConfig,
+) {
+    let _ = config;
+
+    #[cfg(feature = "embeddings")]
+    if let Some(ref embedding_config) = chunking_config.embedding
+        && let Some(ref mut chunks) = result.chunks
+    {
+        match crate::embeddings::generate_embeddings_for_chunks(chunks, embedding_config, &|| {
+            time_limit_reached(config)
+        }) {
+            Ok(true) => {}
+            Ok(false) => report_stage_cut(&mut result.processing_warnings, config, "chunk embeddings"),
+            Err(e) => {
+                tracing::warn!("Embedding generation failed: {e}. Check that ONNX Runtime is installed.");
+                result.processing_warnings.push(ProcessingWarning {
+                    source: Cow::Borrowed("embedding"),
+                    message: Cow::Owned(e.to_string()),
+                });
+            }
+        }
+    }
+
+    #[cfg(not(feature = "embeddings"))]
+    if chunking_config.embedding.is_some() {
+        tracing::warn!(
+            "Embedding config provided but embeddings feature is not enabled. Recompile with --features embeddings."
+        );
+        result.processing_warnings.push(ProcessingWarning {
+            source: Cow::Borrowed("embedding"),
+            message: Cow::Borrowed("Embeddings feature not enabled"),
+        });
+    }
+
+    #[cfg(feature = "sparse-embeddings")]
+    if let Some(ref sparse_config) = chunking_config.sparse_embedding
+        && let Some(ref mut chunks) = result.chunks
+    {
+        if time_limit_reached(config) {
+            report_stage_cut(&mut result.processing_warnings, config, "sparse chunk embeddings");
+        } else if let Err(e) = crate::chunking::vectors::generate_sparse_vectors_for_chunks(chunks, sparse_config) {
+            tracing::warn!("Sparse-embedding generation failed: {e}. Check that ONNX Runtime is installed.");
+            result.processing_warnings.push(ProcessingWarning {
+                source: Cow::Borrowed("sparse_embedding"),
+                message: Cow::Owned(e.to_string()),
+            });
+        }
+    }
+
+    #[cfg(not(feature = "sparse-embeddings"))]
+    if chunking_config.sparse_embedding.is_some() {
+        tracing::warn!(
+            "Sparse-embedding config provided but sparse-embeddings feature is not enabled. Recompile with --features sparse-embeddings."
+        );
+        result.processing_warnings.push(ProcessingWarning {
+            source: Cow::Borrowed("sparse_embedding"),
+            message: Cow::Borrowed("sparse-embeddings feature not enabled"),
+        });
+    }
+
+    #[cfg(feature = "late-interaction")]
+    if let Some(ref late_config) = chunking_config.late_interaction
+        && let Some(ref mut chunks) = result.chunks
+    {
+        if time_limit_reached(config) {
+            report_stage_cut(
+                &mut result.processing_warnings,
+                config,
+                "late-interaction chunk vectors",
+            );
+        } else if let Err(e) =
+            crate::chunking::vectors::generate_late_interaction_vectors_for_chunks(chunks, late_config)
+        {
+            tracing::warn!("Late-interaction generation failed: {e}. Check that ONNX Runtime is installed.");
+            result.processing_warnings.push(ProcessingWarning {
+                source: Cow::Borrowed("late_interaction"),
+                message: Cow::Owned(e.to_string()),
+            });
+        }
+    }
+
+    #[cfg(not(feature = "late-interaction"))]
+    if chunking_config.late_interaction.is_some() {
+        tracing::warn!(
+            "Late-interaction config provided but late-interaction feature is not enabled. Recompile with --features late-interaction."
+        );
+        result.processing_warnings.push(ProcessingWarning {
+            source: Cow::Borrowed("late_interaction"),
+            message: Cow::Borrowed("late-interaction feature not enabled"),
+        });
+    }
+}
+
 /// Execute chunking if configured.
 ///
 /// `heading_source_override`, when supplied, is a pre-rendered Markdown version of the
@@ -447,75 +573,7 @@ pub(super) fn execute_chunking(
                     )),
                 });
             }
-            #[cfg(feature = "embeddings")]
-            if let Some(ref embedding_config) = resolved_config.embedding
-                && let Some(ref mut chunks) = result.chunks
-                && let Err(e) = crate::embeddings::generate_embeddings_for_chunks(chunks, embedding_config)
-            {
-                tracing::warn!("Embedding generation failed: {e}. Check that ONNX Runtime is installed.");
-                result.processing_warnings.push(ProcessingWarning {
-                    source: Cow::Borrowed("embedding"),
-                    message: Cow::Owned(e.to_string()),
-                });
-            }
-
-            #[cfg(not(feature = "embeddings"))]
-            if resolved_config.embedding.is_some() {
-                tracing::warn!(
-                    "Embedding config provided but embeddings feature is not enabled. Recompile with --features embeddings."
-                );
-                result.processing_warnings.push(ProcessingWarning {
-                    source: Cow::Borrowed("embedding"),
-                    message: Cow::Borrowed("Embeddings feature not enabled"),
-                });
-            }
-
-            #[cfg(feature = "sparse-embeddings")]
-            if let Some(ref sparse_config) = resolved_config.sparse_embedding
-                && let Some(ref mut chunks) = result.chunks
-                && let Err(e) = crate::chunking::vectors::generate_sparse_vectors_for_chunks(chunks, sparse_config)
-            {
-                tracing::warn!("Sparse-embedding generation failed: {e}. Check that ONNX Runtime is installed.");
-                result.processing_warnings.push(ProcessingWarning {
-                    source: Cow::Borrowed("sparse_embedding"),
-                    message: Cow::Owned(e.to_string()),
-                });
-            }
-
-            #[cfg(not(feature = "sparse-embeddings"))]
-            if resolved_config.sparse_embedding.is_some() {
-                tracing::warn!(
-                    "Sparse-embedding config provided but sparse-embeddings feature is not enabled. Recompile with --features sparse-embeddings."
-                );
-                result.processing_warnings.push(ProcessingWarning {
-                    source: Cow::Borrowed("sparse_embedding"),
-                    message: Cow::Borrowed("sparse-embeddings feature not enabled"),
-                });
-            }
-
-            #[cfg(feature = "late-interaction")]
-            if let Some(ref late_config) = resolved_config.late_interaction
-                && let Some(ref mut chunks) = result.chunks
-                && let Err(e) =
-                    crate::chunking::vectors::generate_late_interaction_vectors_for_chunks(chunks, late_config)
-            {
-                tracing::warn!("Late-interaction generation failed: {e}. Check that ONNX Runtime is installed.");
-                result.processing_warnings.push(ProcessingWarning {
-                    source: Cow::Borrowed("late_interaction"),
-                    message: Cow::Owned(e.to_string()),
-                });
-            }
-
-            #[cfg(not(feature = "late-interaction"))]
-            if resolved_config.late_interaction.is_some() {
-                tracing::warn!(
-                    "Late-interaction config provided but late-interaction feature is not enabled. Recompile with --features late-interaction."
-                );
-                result.processing_warnings.push(ProcessingWarning {
-                    source: Cow::Borrowed("late_interaction"),
-                    message: Cow::Borrowed("late-interaction feature not enabled"),
-                });
-            }
+            attach_chunk_vectors(result, &resolved_config, config);
 
             return Ok(());
         }
@@ -644,75 +702,7 @@ pub(super) fn execute_chunking(
                     crate::chunking::page_spans::populate_page_span_bboxes(chunks, structure);
                 }
 
-                #[cfg(feature = "embeddings")]
-                if let Some(ref embedding_config) = chunking_config.embedding
-                    && let Some(ref mut chunks) = result.chunks
-                    && let Err(e) = crate::embeddings::generate_embeddings_for_chunks(chunks, embedding_config)
-                {
-                    tracing::warn!("Embedding generation failed: {e}. Check that ONNX Runtime is installed.");
-                    result.processing_warnings.push(ProcessingWarning {
-                        source: Cow::Borrowed("embedding"),
-                        message: Cow::Owned(e.to_string()),
-                    });
-                }
-
-                #[cfg(not(feature = "embeddings"))]
-                if chunking_config.embedding.is_some() {
-                    tracing::warn!(
-                        "Embedding config provided but embeddings feature is not enabled. Recompile with --features embeddings."
-                    );
-                    result.processing_warnings.push(ProcessingWarning {
-                        source: Cow::Borrowed("embedding"),
-                        message: Cow::Borrowed("Embeddings feature not enabled"),
-                    });
-                }
-
-                #[cfg(feature = "sparse-embeddings")]
-                if let Some(ref sparse_config) = chunking_config.sparse_embedding
-                    && let Some(ref mut chunks) = result.chunks
-                    && let Err(e) = crate::chunking::vectors::generate_sparse_vectors_for_chunks(chunks, sparse_config)
-                {
-                    tracing::warn!("Sparse-embedding generation failed: {e}. Check that ONNX Runtime is installed.");
-                    result.processing_warnings.push(ProcessingWarning {
-                        source: Cow::Borrowed("sparse_embedding"),
-                        message: Cow::Owned(e.to_string()),
-                    });
-                }
-
-                #[cfg(not(feature = "sparse-embeddings"))]
-                if chunking_config.sparse_embedding.is_some() {
-                    tracing::warn!(
-                        "Sparse-embedding config provided but sparse-embeddings feature is not enabled. Recompile with --features sparse-embeddings."
-                    );
-                    result.processing_warnings.push(ProcessingWarning {
-                        source: Cow::Borrowed("sparse_embedding"),
-                        message: Cow::Borrowed("sparse-embeddings feature not enabled"),
-                    });
-                }
-
-                #[cfg(feature = "late-interaction")]
-                if let Some(ref late_config) = chunking_config.late_interaction
-                    && let Some(ref mut chunks) = result.chunks
-                    && let Err(e) =
-                        crate::chunking::vectors::generate_late_interaction_vectors_for_chunks(chunks, late_config)
-                {
-                    tracing::warn!("Late-interaction generation failed: {e}. Check that ONNX Runtime is installed.");
-                    result.processing_warnings.push(ProcessingWarning {
-                        source: Cow::Borrowed("late_interaction"),
-                        message: Cow::Owned(e.to_string()),
-                    });
-                }
-
-                #[cfg(not(feature = "late-interaction"))]
-                if chunking_config.late_interaction.is_some() {
-                    tracing::warn!(
-                        "Late-interaction config provided but late-interaction feature is not enabled. Recompile with --features late-interaction."
-                    );
-                    result.processing_warnings.push(ProcessingWarning {
-                        source: Cow::Borrowed("late_interaction"),
-                        message: Cow::Borrowed("late-interaction feature not enabled"),
-                    });
-                }
+                attach_chunk_vectors(result, chunking_config, config);
             }
             Err(e) => {
                 result.processing_warnings.push(ProcessingWarning {
