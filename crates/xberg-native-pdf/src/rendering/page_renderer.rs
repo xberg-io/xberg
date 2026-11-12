@@ -10662,7 +10662,7 @@ mod tests {
             b"5 0 obj\n\
               << /Type /Font /Subtype /Type3 /FontBBox [0 0 750 750]\n\
                  /FontMatrix [0.001 0 0 0.001 0 0]\n\
-                 /FirstChar 65 /LastChar 65 /Widths [700]\n\
+                 /FirstChar 32 /LastChar 65 /Widths [500 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 700]\n\
                  /Encoding 6 0 R /CharProcs 7 0 R >>\nendobj\n\n",
         );
 
@@ -10768,6 +10768,146 @@ mod tests {
         assert_eq!(full, 14, "a 700-unit bar at 20 pt is 14 columns");
         assert_eq!(half, 7, "Tz 50 halves the bar");
         assert_eq!(double, 28, "Tz 200 doubles the bar");
+    }
+
+    /// The 100 x 100 px page of [`build_type3_rect_pdf_showing`] rendered at 72 dpi with `content`,
+    /// as the sorted columns and rows that hold a red pixel.
+    fn type3_red_footprint(content: &str) -> (Vec<usize>, Vec<usize>) {
+        type3_red_footprint_without_layers(content, &[])
+    }
+
+    /// [`type3_red_footprint`] with the optional-content groups named `excluded_layers` hidden.
+    fn type3_red_footprint_without_layers(content: &str, excluded_layers: &[&str]) -> (Vec<usize>, Vec<usize>) {
+        use crate::document::PdfDocument;
+
+        let doc = PdfDocument::from_bytes(build_type3_rect_pdf_showing(content.as_bytes())).expect("parse");
+        let opts = RenderOptions {
+            format: ImageFormat::RawRgba8,
+            excluded_layers: excluded_layers.iter().map(|name| name.to_string()).collect(),
+            ..RenderOptions::with_dpi(72)
+        };
+        let img = PageRenderer::new(opts).render_page(&doc, 0).expect("render page");
+        let width = img.width as usize;
+        let (mut columns, mut rows) = (Vec::new(), Vec::new());
+        for (i, px) in img.data.as_chunks::<4>().0.iter().enumerate() {
+            if px[0] > 200 && px[1] < 80 && px[2] < 80 {
+                columns.push(i % width);
+                rows.push(i / width);
+            }
+        }
+        columns.sort_unstable();
+        columns.dedup();
+        rows.sort_unstable();
+        rows.dedup();
+        (columns, rows)
+    }
+
+    fn span(ranges: &[std::ops::Range<usize>]) -> Vec<usize> {
+        ranges.iter().flat_map(|r| r.clone()).collect()
+    }
+
+    /// A 20 pt glyph is a 14 px bar on a 14 px advance. Glyph `n` of a string starts `Th` times the
+    /// advance of the glyphs before it, so at Tz 50 and 200 the bars touch with no gap or overlap.
+    #[test]
+    fn type3_second_glyph_sits_one_scaled_advance_from_the_first() {
+        for (tz, end) in [(50, 24), (100, 38), (200, 66)] {
+            let (columns, _) = type3_red_footprint(&format!("BT /T3 20 Tf {tz} Tz 1 0 0 rg 10 10 Td (AA) Tj ET"));
+            assert_eq!(columns, (10..end).collect::<Vec<_>>(), "Tz {tz}");
+        }
+    }
+
+    /// `'` moves to the next line, then shows the string through the Type 3 path and advances.
+    #[test]
+    fn type3_quote_operator_paints_on_the_next_line_and_advances_by_th() {
+        let (columns, rows) = type3_red_footprint("BT /T3 20 Tf 20 TL 50 Tz 1 0 0 rg 10 50 Td (A) ' (A) Tj ET");
+        assert_eq!(columns, (10..24).collect::<Vec<_>>());
+        assert_eq!(rows, (56..70).collect::<Vec<_>>());
+    }
+
+    /// `"` sets Tw and Tc, moves to the next line and shows through the Type 3 path: with Tc 4 and
+    /// Tz 50 the second glyph starts (14 + 4) * 0.5 = 9 px on.
+    #[test]
+    fn type3_double_quote_operator_paints_with_its_character_spacing_scaled_by_th() {
+        let (columns, rows) = type3_red_footprint("BT /T3 20 Tf 20 TL 50 Tz 1 0 0 rg 10 50 Td 0 4 (AA) \" ET");
+        assert_eq!(columns, span(&[10..17, 19..26]));
+        assert_eq!(rows, (56..70).collect::<Vec<_>>());
+    }
+
+    /// A `TJ` array shows each string through the Type 3 path; its -500 shift moves 0.5 * 20 * Th = 5
+    /// px right of the first glyph's 7 px advance.
+    #[test]
+    fn type3_tj_array_paints_each_string_and_scales_the_offset_by_th() {
+        let (columns, _) = type3_red_footprint("BT /T3 20 Tf 50 Tz 1 0 0 rg 10 10 Td [(A) -500 (A)] TJ ET");
+        assert_eq!(columns, span(&[10..17, 22..29]));
+    }
+
+    /// Tz 0 collapses the glyph and its advance: nothing is inked, and the next glyph at Tz 100
+    /// starts where the first would have.
+    #[test]
+    fn type3_zero_horizontal_scaling_inks_nothing_and_does_not_advance() {
+        let (columns, _) = type3_red_footprint("BT /T3 20 Tf 1 0 0 rg 10 10 Td 0 Tz (AA) Tj 100 Tz (A) Tj ET");
+        assert_eq!(columns, (10..24).collect::<Vec<_>>());
+    }
+
+    /// A negative Tz mirrors the glyph and the line to the left of the origin (ISO 32000-1 9.3.4).
+    #[test]
+    fn type3_negative_horizontal_scaling_mirrors_the_glyphs_left_of_the_origin() {
+        let (columns, _) = type3_red_footprint("BT /T3 20 Tf -50 Tz 1 0 0 rg 50 10 Td (AA) Tj ET");
+        assert_eq!(columns, (36..50).collect::<Vec<_>>());
+    }
+
+    /// Rise lifts the glyph along y by its full amount whatever Tz is: Tz does not scale it.
+    #[test]
+    fn type3_text_rise_is_not_scaled_by_horizontal_scaling() {
+        let (columns, rows) = type3_red_footprint("BT /T3 20 Tf 50 Tz 10 Ts 1 0 0 rg 10 10 Td (A) Tj ET");
+        assert_eq!(columns, (10..17).collect::<Vec<_>>());
+        assert_eq!(rows, (66..80).collect::<Vec<_>>());
+    }
+
+    /// A space code (byte 32) adds the word space `Tw` on top of its own 10 px advance (500 units at
+    /// 20 pt): the second `A` starts 14 + 10 + 5 = 29 px after the first. Any other code skips `Tw`.
+    #[test]
+    fn type3_space_code_advances_by_its_width_plus_the_word_space() {
+        let (columns, _) = type3_red_footprint("BT /T3 20 Tf 1 0 0 rg 10 10 Td 5 Tw (A A) Tj ET");
+        assert_eq!(columns, span(&[10..24, 39..53]));
+        let (columns, _) = type3_red_footprint("BT /T3 20 Tf 1 0 0 rg 10 10 Td 5 Tw (AA) Tj ET");
+        assert_eq!(
+            columns,
+            (10..38).collect::<Vec<_>>(),
+            "Tw leaves a non-space code alone"
+        );
+    }
+
+    /// Clip-only text (Tr 7) paints nothing but advances like visible text: only the second glyph
+    /// is inked, one advance on.
+    #[test]
+    fn type3_clip_only_text_paints_nothing_and_still_advances() {
+        let (columns, _) = type3_red_footprint("BT /T3 20 Tf 1 0 0 rg 10 10 Td 7 Tr (A) Tj 0 Tr (A) Tj ET");
+        assert_eq!(columns, (24..38).collect::<Vec<_>>());
+        let (columns, _) = type3_red_footprint("BT /T3 20 Tf 1 0 0 rg 10 10 Td 7 Tr (AA) Tj ET");
+        assert!(columns.is_empty(), "Tr 7 alone leaves the page blank");
+    }
+
+    /// Inside an excluded optional-content section every text operator paints nothing and advances
+    /// by measure only, so the glyph after it lands one advance on.
+    #[test]
+    fn type3_text_in_an_excluded_layer_paints_nothing_and_advances_by_measure() {
+        let hidden = "/OC << /Type /OCG /Name (Hidden) >> BDC";
+        for (show, columns) in [
+            ("(A) Tj", (24..38).collect::<Vec<_>>()),
+            ("[(A) -500 (A)] TJ", (48..62).collect::<Vec<_>>()),
+        ] {
+            let content = format!("BT /T3 20 Tf 1 0 0 rg 10 10 Td {hidden} {show} EMC (A) Tj ET");
+            let (found, _) = type3_red_footprint_without_layers(&content, &["Hidden"]);
+            assert_eq!(found, columns, "{show}");
+        }
+        // `'` and `"` move to the next line first: the hidden glyph's advance carries along it.
+        for show in ["(A) '", "0 0 (A) \""] {
+            let content = format!("BT /T3 20 Tf 20 TL 1 0 0 rg 10 50 Td {hidden} {show} EMC (A) Tj ET");
+            let (found, rows) = type3_red_footprint_without_layers(&content, &["Hidden"]);
+            assert_eq!(found, (24..38).collect::<Vec<_>>(), "{show}");
+            assert_eq!(rows, (56..70).collect::<Vec<_>>(), "{show}");
+        }
     }
 
     /// Build a minimal single-page PDF whose only content is a `Do` of an

@@ -35,6 +35,7 @@ pub(super) struct OrientationRetry {
     #[cfg(auto_rotate)]
     cached_model_ready: tokio::sync::OnceCell<bool>,
     recognition_config: Option<OcrConfig>,
+    recovers_prose: bool,
 }
 
 impl OrientationRetry {
@@ -49,7 +50,20 @@ impl OrientationRetry {
                 .as_ref()
                 .filter(|config| recognition_retry_eligible(config))
                 .cloned(),
+            recovers_prose: true,
         }
+    }
+
+    /// Sideways prose recovery belongs to a call that OCRs every page of the document. Any page
+    /// left to its native layer, including by `force_ocr_pages`, makes the output a mixed one whose
+    /// scan pages keep the read the default build gives them, so both builds agree (GH#3050). ~keep
+    pub(super) fn with_prose_recovery(mut self, recovers_prose: bool) -> Self {
+        self.recovers_prose = recovers_prose;
+        self
+    }
+
+    pub(super) fn recovers_prose(&self) -> bool {
+        self.recovers_prose
     }
 
     pub(super) fn allows(config: &ExtractionConfig) -> bool {
@@ -1001,6 +1015,34 @@ mod tests {
         assert!(scale_recovered_table_to_raster(&mut candidate, (100, 50)));
         let bbox = candidate.tables[0].bounding_box.unwrap();
         assert_eq!((bbox.x0, bbox.y0, bbox.x1, bbox.y1), (10.0, 10.0, 90.0, 40.0));
+    }
+
+    #[test]
+    #[cfg(auto_rotate)]
+    fn a_result_without_both_processed_dimensions_keeps_its_recognition_frame() {
+        use crate::ocr_metadata_keys::{
+            OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY,
+        };
+
+        for missing in [
+            vec![OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY],
+            vec![OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY],
+            vec![
+                OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY,
+                OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY,
+            ],
+        ] {
+            let mut candidate = table_candidate();
+            for key in &missing {
+                candidate.metadata.additional.remove(*key);
+            }
+            let unscaled = candidate.tables[0].bounding_box;
+            assert!(
+                !scale_recovered_table_to_raster(&mut candidate, (100, 50)),
+                "{missing:?}"
+            );
+            assert_eq!(candidate.tables[0].bounding_box, unscaled, "{missing:?}");
+        }
     }
 
     #[test]

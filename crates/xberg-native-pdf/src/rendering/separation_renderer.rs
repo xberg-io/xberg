@@ -3262,3 +3262,5 @@ fn paint_image_mask_to_plates(
 
 #[cfg(test)]
 mod gate_parity_tests;
+#[cfg(test)]
+mod text_advance_tests;

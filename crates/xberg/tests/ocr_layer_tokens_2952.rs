@@ -16,7 +16,16 @@ const IDENTIFIERS: [&str; 18] = [
 const LABELS: [&str; 5] = ["Norte", "Sur", "Este", "Oeste", "Centro"];
 const VALUES: [&str; 5] = ["120", "80", "150", "60", "100"];
 
+/// `ids.pdf` behind a clean, fully decodable first page: only the second page needs OCR, so the
+/// document takes the mixed native and OCR route, whose page decision compares each OCR page with
+/// the layer it keeps.
+const MIXED_PDF: &[u8] = include_bytes!("fixtures/ocr_layer_tokens_2952/mixed.pdf");
+
 async fn page_text(tessdata: &std::path::Path, format: OutputFormat) -> String {
+    pages_of(IDS_PDF, tessdata, format).await.remove(0)
+}
+
+async fn pages_of(pdf: &[u8], tessdata: &std::path::Path, format: OutputFormat) -> Vec<String> {
     let model = xberg_tesseract::bundled_eng_traineddata().expect("bundled English model");
     std::fs::write(tessdata.join("eng.traineddata"), model).unwrap();
     let config = ExtractionConfig {
@@ -35,12 +44,9 @@ async fn page_text(tessdata: &std::path::Path, format: OutputFormat) -> String {
         }),
         ..Default::default()
     };
-    let output = xberg::extract(
-        ExtractInput::from_bytes(IDS_PDF.to_vec(), "application/pdf", None),
-        &config,
-    )
-    .await
-    .expect("extract the reproducer page");
+    let output = xberg::extract(ExtractInput::from_bytes(pdf.to_vec(), "application/pdf", None), &config)
+        .await
+        .expect("extract the reproducer page");
     assert!(output.errors.is_empty(), "{:?}", output.errors);
     let [document] = <[_; 1]>::try_from(output.results)
         .unwrap_or_else(|results| panic!("expected one document, got {}", results.len()));
@@ -50,8 +56,7 @@ async fn page_text(tessdata: &std::path::Path, format: OutputFormat) -> String {
         document.extraction_method
     );
     let pages = document.pages.expect("per-page output requested");
-    assert_eq!(pages.len(), 1);
-    pages.into_iter().next().unwrap().content
+    pages.into_iter().map(|page| page.content).collect()
 }
 
 fn token_counts(text: &str) -> BTreeMap<String, usize> {
@@ -110,4 +115,13 @@ async fn the_structured_markdown_page_keeps_the_same_layer_tokens_in_reading_ord
         at("100") < at("80") && at("80") < at("60") && at("60") < at("7"),
         "{text}"
     );
+}
+
+#[tokio::test]
+async fn the_mixed_route_keeps_the_layer_tokens_of_its_ocr_page() {
+    let directory = tempfile::tempdir().unwrap();
+    let pages = pages_of(MIXED_PDF, directory.path(), OutputFormat::Plain).await;
+    assert_eq!(pages.len(), 2);
+    assert!(pages[0].contains("Quarterly regional summary"), "{}", pages[0]);
+    assert_layer_tokens_recovered(&pages[1]);
 }

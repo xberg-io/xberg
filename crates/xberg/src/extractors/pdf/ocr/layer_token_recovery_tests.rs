@@ -407,6 +407,85 @@ fn a_lowercase_layer_never_rewrites_a_correct_capitalised_read() {
 }
 
 #[test]
+fn an_identifier_takes_capitals_the_read_wrote_lowercase_beside_a_digit_swap() {
+    assert!(is_misreading("K2Q5wo", "K2Q5W0"));
+    assert!(is_misreading("SSTOU9", "S5T0U9"));
+    let layer = page(&with(&[("K2Q5W0", 0.0, 1.0)]));
+    let read = page(&with(&[("K2Q5wo", 0.0, 1.0)]));
+    assert_eq!(
+        plan(&layer, &read, &mut inked, &|| false).corrections,
+        vec![(4, "K2Q5W0".to_owned())]
+    );
+}
+
+#[test]
+fn a_case_difference_without_a_digit_swap_is_not_a_misreading() {
+    assert!(!is_misreading("K2Q5w1", "K2Q5W1"));
+    assert!(!is_misreading("ab12cd", "AB12CD"));
+    assert!(!is_misreading("K2Q5wo", "K2Q5W9"));
+    assert!(!is_misreading("Kowal", "KOWAL"));
+}
+
+#[test]
+fn an_identifier_with_a_case_and_a_digit_swap_in_other_places_is_a_misreading() {
+    assert!(is_misreading("a1o3", "A103"));
+}
+
+#[test]
+fn a_lowercase_layer_letter_over_a_capital_read_letter_is_not_a_misreading_beside_a_digit_swap() {
+    assert!(!is_misreading("K2Q5WO", "K2Q5w0"));
+}
+
+const PROSE: &str = "The regional office reviewed the quarterly figures and found that deliveries \
+    stayed on schedule across the northern depots while the southern routes needed extra vehicles \
+    during the winter months because snow closed several roads and the drivers waited at the \
+    border crossing for inspections that took longer than planned this year";
+
+#[test]
+fn a_read_is_checked_against_the_layer_the_page_decision_sees() {
+    let mut full = String::from(PROSE);
+    for (first, second) in ('a'..='z').flat_map(|first| ('a'..='c').map(move |second| (first, second))) {
+        full.push_str(&format!(" {first}{second}x\u{E000}{first}{second}y"));
+    }
+    assert!(read_confirms_layer(PROSE, PROSE));
+    assert!(!read_confirms_layer(&full, PROSE));
+}
+
+#[test]
+fn numbers_the_read_dropped_do_not_count_against_the_letter_check() {
+    let numbers: String = (100..160).map(|value| format!(" {value}")).collect();
+    assert!(read_confirms_layer(&format!("{PROSE}{numbers}"), PROSE));
+}
+
+#[test]
+fn the_decision_layer_of_a_page_is_the_mixed_routes_before_the_whole_documents() {
+    use super::super::pipeline::PageOcrHints;
+    use std::sync::Arc;
+    let layers = |pairs: &[(u32, &str)]| {
+        Arc::new(
+            pairs
+                .iter()
+                .map(|(page, text)| (*page, (*text).to_owned()))
+                .collect::<ahash::AHashMap<u32, String>>(),
+        )
+    };
+    let both = PageOcrHints {
+        decision_layers: Some(layers(&[(2, "decision")])),
+        native_page_layers: Some(layers(&[(2, "native"), (3, "native three")])),
+        ..Default::default()
+    };
+    assert_eq!(both.decision_layer(2), Some("decision"));
+    assert_eq!(both.decision_layer(3), None);
+    let native_only = PageOcrHints {
+        native_page_layers: Some(layers(&[(3, "native three")])),
+        ..Default::default()
+    };
+    assert_eq!(native_only.decision_layer(3), Some("native three"));
+    assert_eq!(native_only.decision_layer(4), None);
+    assert_eq!(PageOcrHints::default().decision_layer(1), None);
+}
+
+#[test]
 fn a_repeated_read_token_with_a_confident_instance_is_not_corrected() {
     let layer = page(&with(&[("B0X92Q", 0.0, 1.0), ("B0X92Q", 0.0, 2.0)]));
     let mut read = page(&with(&[("BOX92Q", 0.0, 1.0), ("BOX92Q", 0.0, 2.0)]));

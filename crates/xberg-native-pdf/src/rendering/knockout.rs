@@ -4,7 +4,7 @@ use crate::content::operators::Operator;
 use crate::document::PdfDocument;
 use crate::error::{Error, Result};
 use crate::object::Object;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tiny_skia::{Pixmap, Transform};
 
 /// Whether a resolved `/Group` dictionary is a transparency group with `/K true`; pages and forms share it.
@@ -233,6 +233,40 @@ impl KnockoutGroup {
             }
             self.pending_paint = false;
         }
+    }
+}
+
+/// The points of the path being built, as far as `PathBuilder::finish` judges them: it returns no
+/// path unless every point is finite and the span of each axis fits in `f32`.
+#[derive(Default)]
+struct PathExtent {
+    extent: Option<[f32; 4]>,
+    poisoned: bool,
+    built: bool,
+}
+
+impl PathExtent {
+    fn add(&mut self, x: f32, y: f32) {
+        if !(x.is_finite() && y.is_finite()) {
+            self.poisoned = true;
+            return;
+        }
+        let [min_x, min_y, max_x, max_y] = self.extent.unwrap_or([x, y, x, y]);
+        self.extent = Some([min_x.min(x), min_y.min(y), max_x.max(x), max_y.max(y)]);
+    }
+
+    fn segment(&mut self, points: &[(f32, f32)]) {
+        for &(x, y) in points {
+            self.add(x, y);
+        }
+        self.built = true;
+    }
+
+    fn certainly_builds(&self) -> bool {
+        let Some([min_x, min_y, max_x, max_y]) = self.extent else {
+            return false;
+        };
+        self.built && !self.poisoned && (max_x - min_x).is_finite() && (max_y - min_y).is_finite()
     }
 }
 
@@ -509,6 +543,61 @@ impl PageRenderer {
         shows
     }
 
+    /// How many path paints certainly build a path that the pass then charges a page-sized surface
+    /// for: a path with a rectangle or a line or curve segment, whose points and span fit in `f32`
+    /// (what `PathBuilder::finish` accepts), since the last paint or `n`, outside any optional-content
+    /// section that is or may be hidden. A section is left out unless the renderer's own check finds
+    /// its layer visible. A paint with no path, or inside a hidden section, charges nothing, so it is
+    /// left out and the count never exceeds the pass.
+    pub(super) fn certain_path_paints(&self, operators: &[Operator], doc: &PdfDocument, resources: &Object) -> usize {
+        let none = HashSet::new();
+        let excluded = self.excluded_layers_snapshot.as_deref().unwrap_or(&none);
+        let mut path = PathExtent::default();
+        let mut layers: Vec<bool> = Vec::new();
+        let mut paints = 0;
+        for operator in operators {
+            match operator {
+                Operator::MoveTo { x, y } => path.add(*x, *y),
+                Operator::Rectangle { x, y, width, height } => {
+                    path.add(*x, *y);
+                    path.add(x + width, y + height);
+                    path.built = true;
+                }
+                Operator::LineTo { x, y } => path.segment(&[(*x, *y)]),
+                Operator::CurveTo { x1, y1, x2, y2, x3, y3 } => {
+                    path.segment(&[(*x1, *y1), (*x2, *y2), (*x3, *y3)]);
+                }
+                Operator::CurveToY { x1, y1, x3, y3 } => path.segment(&[(*x1, *y1), (*x3, *y3)]),
+                Operator::CurveToV { x2, y2, x3, y3 } => {
+                    if path.extent.is_some() {
+                        path.add(*x2, *y2);
+                        path.add(*x3, *y3);
+                    }
+                }
+                Operator::BeginMarkedContent { .. } => layers.push(false),
+                Operator::BeginMarkedContentDict { tag, properties } => layers.push(
+                    tag == "OC"
+                        && crate::optional_content::resolve_and_check_ocg_excluded(
+                            properties,
+                            Some(resources),
+                            Some(doc),
+                            excluded,
+                        ),
+                ),
+                Operator::EndMarkedContent => {
+                    layers.pop();
+                }
+                Operator::EndPath => path = PathExtent::default(),
+                operator if is_path_paint(operator) => {
+                    paints += usize::from(path.certainly_builds() && !layers.contains(&true));
+                    path = PathExtent::default();
+                }
+                _ => {}
+            }
+        }
+        paints
+    }
+
     pub(super) fn execute_knockout_group(
         &mut self,
         pixmap: &mut Pixmap,
@@ -530,7 +619,10 @@ impl PageRenderer {
         if paints == 0 {
             return Ok(None);
         }
-        let surfaces_in_pass = paints + self.painting_text_shows(operators, doc, resources, initial_text_mode);
+        let path_paints = operators.iter().filter(|operator| is_path_paint(operator)).count();
+        let surfaces_in_pass = paints - path_paints
+            + self.certain_path_paints(operators, doc, resources)
+            + self.painting_text_shows(operators, doc, resources, initial_text_mode);
         let workspace = self.knockout_resources.knockout(
             pixels,
             pixmap.data().len(),

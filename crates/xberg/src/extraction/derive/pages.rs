@@ -416,12 +416,26 @@ fn render_plain_elements(indices: &[usize], doc: &InternalDocument) -> String {
     crate::rendering::render_plain(&build_sub_doc(indices, doc))
 }
 
+/// Whether every page of a document of `source_format` is OCR text whether or not the page took
+/// OCR text: on a `pdf`, `image` or `ocr` source a native page's text layer differs from the
+/// plain content by spacing alone, so the OCR text page list is never read there (#3014). The
+/// extractor's own documents are always `pdf`, so it attaches the list only to an adopted
+/// document of another source format, and both sides share this one list of source formats.
+/// Whether every page of a document of `source_format` is OCR text whether or not the page took
+/// OCR text: on a `pdf`, `image` or `ocr` source a native page's text layer differs from the
+/// plain content by spacing alone, so the OCR text page list is never read there (#3014). The
+/// extractor's own documents are always `pdf`, so it attaches the list only to an adopted
+/// document of another source format, and both sides share this one list of source formats.
+pub(crate) fn source_short_circuits_ocr_page_text(source_format: &str) -> bool {
+    matches!(source_format, "pdf" | "image" | "ocr")
+}
+
 /// Whether `page`'s prebuilt text may be replaced by the plain rendering of its elements: every
 /// page of a PDF, image or OCR source (a native page's text layer differs from the plain content
 /// by spacing alone), and a page of another format that took OCR text. A DOCX page with its
 /// notes is not, and its text is deliberately not the plain rendering of its elements.
 fn is_ocr_page_text(doc: &InternalDocument, page: &PageContent) -> bool {
-    matches!(doc.source_format.as_str(), "pdf" | "image" | "ocr") || doc.ocr_text_pages.contains(&page.page_number)
+    source_short_circuits_ocr_page_text(&doc.source_format) || doc.ocr_text_pages.contains(&page.page_number)
 }
 
 /// OCR pages whose prebuilt text is not found in `content` (in page order) rendered from their
