@@ -5088,6 +5088,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn should_write_no_placeholder_for_a_picture_with_an_empty_description() {
+        let xml = FORGED_MEDIA_DOCUMENT_XML
+            .replace(r#"descr="Bomb""#, r#"descr="""#)
+            .replace(
+                "<w:body>",
+                "<w:body><w:p><w:r><w:t>Before the picture.</w:t></w:r></w:p>",
+            );
+        let data = build_test_docx_with_files(
+            &xml,
+            &[
+                ("word/_rels/document.xml.rels", FORGED_MEDIA_RELS_XML),
+                ("word/media/bomb.png", "PNGPAYLOAD"),
+            ],
+        );
+        let internal = DocxExtractor::new()
+            .extract_content(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &ExtractionConfig::default(),
+            )
+            .await
+            .unwrap();
+        let plain = crate::rendering::render_plain(&internal);
+        assert!(plain.contains("Before the picture."), "{plain:?}");
+        assert!(
+            !plain.contains("Picture 1") && !plain.contains("[Image"),
+            "an empty description is no description: {plain:?}"
+        );
+    }
+
+    #[tokio::test]
     async fn should_keep_issue_2123_inline_math_in_its_docx_sentence() {
         let xml = r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
             xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><w:body><w:p>
