@@ -55,10 +55,7 @@ impl Cacheability {
         !self.0.invalidated.load(Ordering::Acquire)
     }
 
-    #[cfg(any(
-        all(test, feature = "tokio-runtime", not(target_arch = "wasm32")),
-        all(feature = "ocr", not(target_arch = "wasm32"))
-    ))]
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     pub(crate) fn invalidate(&self) {
         self.0.invalidated.store(true, Ordering::Release);
     }
@@ -103,10 +100,7 @@ pub(crate) fn is_cacheable() -> bool {
     current().is_none_or(|context| context.is_cacheable())
 }
 
-#[cfg(any(
-    all(test, feature = "tokio-runtime", not(target_arch = "wasm32")),
-    all(feature = "ocr", not(target_arch = "wasm32"))
-))]
+#[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
 pub(crate) fn invalidate_current() {
     if let Some(context) = current() {
         context.invalidate();

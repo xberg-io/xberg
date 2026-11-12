@@ -2678,6 +2678,6 @@ mod span_merging;
 mod span_ordering;
 pub use ordering_snap::script_stacks;
 pub(crate) use ordering_snap::{OrderingSpan, ordering_script_baselines};
-pub use script_stack::{MAX_STACK_MEMBERS, StackSpan, script_stack};
+pub use script_stack::{MAX_STACK_MEMBERS, StackSpan, script_stack, stack_parents, stack_reading_order};
 mod tj_arrays;
 mod xobjects;

@@ -386,6 +386,26 @@ fn regression_page_keeps_raised_footnote_number_separate_from_cms_definition() {
     assert_regression_page_has_script("fr-2026-08190-hcbs-p18.pdf", "\n\n56 Available at");
 }
 
+#[test]
+fn regression_page_keeps_opening_paragraph_in_sentence_order_around_displayed_equation() {
+    if switch(SKIP_VAR) {
+        assert!(std::env::var_os("CI").is_none(), "{SKIP_VAR}=1 must not be set in CI");
+        eprintln!("Skipping regression page: {SKIP_VAR}=1 (local opt-out)");
+        return;
+    }
+    let file_name = "arxiv-2403.01153v1-p3.pdf";
+    let page = get_test_documents_dir().join("pdf/regression_pages").join(file_name);
+    let (_, content) = extract_all(&[page]).pop().expect("one extracted page");
+    let content = content.unwrap_or_else(|error| panic!("{file_name}: {error}. {FETCH_HINT}"));
+    let flat = content.split_whitespace().collect::<Vec<_>>().join(" ");
+    let expected = "symbolize the amplitude and phase of the transmitted signal, respectively. \
+                    Thus, the received CSI can be rewritten as:";
+    assert!(
+        flat.contains(expected),
+        "{file_name}: sentence split by the equation:\n{content}"
+    );
+}
+
 /// Negative controls: each broken corpus must fail and name its problem.
 mod input_checks {
     use super::*;

@@ -703,3 +703,114 @@ fn word_at(left: u32, top: u32, width: u32, height: u32, text: &str) -> crate::t
         confidence: 95.0,
     }
 }
+
+/// The fragmented proof must run on the budget left over after the source match: the minimal
+/// `max_iterations` of the full reconcile must exceed the minimal `max_iterations` of the same
+/// flow that hands the proof a budget of its own, and one work unit short of the shared
+/// minimum must refuse the claim.
+#[test]
+fn fragmented_source_matching_leaves_the_table_proof_one_work_unit_short() {
+    let (hocr, tsv, document, tables) = two_fragmented_hocr_tables();
+    let tables = &tables[..1];
+    let reconcile = |iterations: usize| {
+        reconcile_fragmented_hocr_table_rows(
+            &hocr,
+            &document,
+            tables,
+            &tsv,
+            fragment_policy(&Default::default()),
+            &SecurityLimits {
+                max_iterations: iterations,
+                ..Default::default()
+            },
+        )
+    };
+    let unshared = |iterations: usize| -> Option<Vec<Vec<HocrWord>>> {
+        let limits = SecurityLimits {
+            max_iterations: iterations,
+            ..Default::default()
+        };
+        let mut budget = fragmented_hocr_budget(&hocr, &tsv, &limits)?;
+        let boxes = fragmented_table_boxes(tables, 1, &limits, &mut budget)?;
+        let source = fragmented_tsv_source(&tsv)?;
+        fragmented_hocr_source_matches(&hocr, &source, &mut budget)?;
+        let mut fresh = fragmented_hocr_budget(&hocr, &tsv, &limits)?;
+        prove_all_fragmented_tables(&source, tables, boxes, &Default::default(), &mut fresh, false)
+    };
+    let minimum = |mut low: usize, mut high: usize, probe: &dyn Fn(usize) -> bool| {
+        while low < high {
+            let middle = low + (high - low) / 2;
+            if probe(middle) {
+                high = middle;
+            } else {
+                low = middle + 1;
+            }
+        }
+        low
+    };
+    let ceiling = SecurityLimits::default().max_iterations;
+    let shared_minimum = minimum(0, ceiling, &|iterations| reconcile(iterations).is_some());
+    let unshared_minimum = minimum(0, ceiling, &|iterations| unshared(iterations).is_some());
+    assert!(
+        reconcile(shared_minimum).is_some(),
+        "combined source must pass before testing exhaustion"
+    );
+    assert!(
+        reconcile(shared_minimum - 1).is_none(),
+        "one work unit short must refuse the claim"
+    );
+    assert!(
+        shared_minimum > unshared_minimum,
+        "the proof must run on the budget left over after the source match"
+    );
+}
+
+/// Only the claimed-words check refuses the shared-line claim: the proof claims one word of a
+/// two-word hOCR line, and a line is removed whole, so the words the removal accounts for
+/// cannot match the claim. The same words on their own lines reconcile.
+#[test]
+fn fragmented_claims_refuse_when_the_removed_words_do_not_match_the_claimed_words() {
+    let tsv = concat!(
+        "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\t",
+        "left\ttop\twidth\theight\tconf\ttext\n",
+        "5\t1\t1\t1\t1\t1\t10\t40\t15\t10\t90\tApples\n",
+        "5\t1\t1\t1\t1\t2\t10\t70\t15\t10\t90\tPears\n",
+    );
+    let word = |title: &str, text: &str| format!(r#"<span class="ocrx_word" title="{title}">{text}</span>"#);
+    let apples = word("bbox 10 40 25 50", "Apples");
+    let pears = word("bbox 10 70 25 80", "Pears");
+    let page = |body: &str| format!("<div class=\"ocr_page\" title=\"ppageno 0\">{body}</div>");
+    let shared_line = page(&format!(
+        r#"<p class="ocr_par"><span class="ocr_line">{apples}{pears}</span></p>"#
+    ));
+    let split_lines = page(&format!(
+        r#"<p class="ocr_par"><span class="ocr_line">{apples}</span></p><p class="ocr_par"><span class="ocr_line">{pears}</span></p>"#
+    ));
+    let table = OcrTable {
+        cells: vec![vec!["Apples".into()]],
+        markdown: String::new(),
+        page_number: 1,
+        bounding_box: Some(OcrTableBoundingBox {
+            left: 10,
+            top: 40,
+            right: 85,
+            bottom: 50,
+        }),
+    };
+    let prove = |hocr: &str| {
+        let document = crate::ocr::hocr_parser::parse_hocr_to_internal_document(hocr);
+        reconcile_fragmented_hocr_table_rows(
+            hocr,
+            &document,
+            std::slice::from_ref(&table),
+            tsv,
+            fragment_policy(&Default::default()),
+            &Default::default(),
+        )
+    };
+    assert!(prove(&split_lines).is_some(), "a line of claimed words reconciles");
+    assert!(
+        prove(&shared_line).is_none(),
+        "the line keeps its unclaimed word, so the removal cannot account for the claim"
+    );
+}
