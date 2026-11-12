@@ -1694,6 +1694,8 @@ fn insert_word_iterator_skipped_count_metadata(
     }
 }
 
+const DICTIONARY_FILTERED_LINE_COUNT_KEY: &str = "dictionary_filtered_line_count";
+
 /// Records the lines the dictionary filter judged noise and the ones of them kept for a numeral,
 /// replacing any earlier counts; a zero count leaves its key out. ~keep
 fn insert_dictionary_line_counts(
@@ -1702,7 +1704,7 @@ fn insert_dictionary_line_counts(
     kept_numeral: usize,
 ) {
     for (key, count) in [
-        ("dictionary_filtered_line_count", filtered),
+        (DICTIONARY_FILTERED_LINE_COUNT_KEY, filtered),
         ("dictionary_kept_numeral_line_count", kept_numeral),
     ] {
         if count == 0 {
@@ -1726,7 +1728,7 @@ fn restore_rejected_table_words(
 ) -> Option<(String, InternalDocument)> {
     let restored = parse_hocr_preserving_rejected_table_words(hocr, dictionary_filter, page_number, rejected_regions);
     let first_filtered_line_count = metadata
-        .get("dictionary_filtered_line_count")
+        .get(DICTIONARY_FILTERED_LINE_COUNT_KEY)
         .and_then(serde_json::Value::as_u64)
         .unwrap_or(0);
     if restored.dictionary_filtered_line_count as u64 >= first_filtered_line_count {
