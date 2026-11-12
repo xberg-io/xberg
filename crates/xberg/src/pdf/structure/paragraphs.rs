@@ -294,6 +294,9 @@ fn embedded_bullet_positions(text: &str) -> Vec<usize> {
         if matches!(character, '\u{2022}' | '\u{00B7}') {
             let next = chars.peek().map(|&(_, c)| c);
             let glued = previous.is_some_and(char::is_alphanumeric) && next.is_some_and(char::is_alphanumeric);
+            let glued_product = character == '·'
+                && previous.is_some_and(|c| c.is_ascii_digit())
+                && next.is_some_and(|c| c.is_ascii_digit());
             let left_operand =
                 previous_non_space.is_some_and(|c: char| c.is_ascii_digit() || matches!(c, ')' | ']' | '}'));
             let right = position + character.len_utf8();
@@ -304,10 +307,10 @@ fn embedded_bullet_positions(text: &str) -> Vec<usize> {
                     .bytes()
                     .all(|byte| byte.is_ascii_digit() || byte == b'.')
             });
-            if !glued
-                && left_operand
-                && !follows_numeric_item
-                && let Some(number_end) = numeric_multiplier_end(&text[right..], character, continues_product)
+            if left_operand
+                && (glued_product || (!glued && !follows_numeric_item))
+                && let Some(number_end) =
+                    numeric_multiplier_end(&text[right..], character, continues_product || glued_product)
             {
                 product_end = right + number_end;
             } else if !glued {
@@ -329,6 +332,14 @@ fn numeric_multiplier_end(text: &str, glyph: char, continues_product: bool) -> O
         return None;
     }
     let after_number = operand.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.');
+    if glyph == '•'
+        && after_number
+            .trim_start()
+            .strip_prefix('•')
+            .is_some_and(|next| next.starts_with(char::is_whitespace))
+    {
+        return None;
+    }
     // Right-attached dots can be decimal points in tables. Require evidence of a product chain. ~keep
     if operand.len() == text.len()
         && !(glyph == '·'
@@ -1043,25 +1054,31 @@ mod tests {
 
     #[test]
     fn embedded_bullets_split_numeric_only_items() {
-        let mut paragraphs = vec![make_body_paragraph("Available sizes • 2 • 3 • 4", 10.0)];
-        split_embedded_list_items(&mut paragraphs);
-        assert_eq!(paragraphs.len(), 4);
-        assert!(!paragraphs[0].is_list_item);
-        assert_eq!(paragraphs[0].lines[0].segments[0].text, "Available sizes");
-        for (item, expected) in paragraphs[1..].iter().zip(["2", "3", "4"]) {
-            assert!(item.is_list_item);
-            assert_eq!(item.lines[0].segments[0].text, expected);
+        for intro in ["Available sizes", "Available sizes for model 2024"] {
+            let mut paragraphs = vec![make_body_paragraph(&format!("{intro} • 2 • 3 • 4"), 10.0)];
+            split_embedded_list_items(&mut paragraphs);
+            assert_eq!(paragraphs.len(), 4, "{intro}");
+            assert!(!paragraphs[0].is_list_item);
+            assert_eq!(paragraphs[0].lines[0].segments[0].text, intro);
+            for (item, expected) in paragraphs[1..].iter().zip(["2", "3", "4"]) {
+                assert!(item.is_list_item);
+                assert_eq!(item.lines[0].segments[0].text, expected);
+            }
         }
     }
 
     #[test]
     fn mixed_spacing_in_multiplication_keeps_the_paragraph() {
-        let text = "Thus 2 ·3 · 4 means multiplication";
-        let mut paragraphs = vec![make_body_paragraph(text, 10.0)];
-        split_embedded_list_items(&mut paragraphs);
-        assert_eq!(paragraphs.len(), 1);
-        assert!(!paragraphs[0].is_list_item);
-        assert_eq!(paragraphs[0].lines[0].segments[0].text, text);
+        for text in [
+            "Thus 2 ·3 · 4 means multiplication",
+            "Thus 2·3 ·4 ·5 means multiplication",
+        ] {
+            let mut paragraphs = vec![make_body_paragraph(text, 10.0)];
+            split_embedded_list_items(&mut paragraphs);
+            assert_eq!(paragraphs.len(), 1, "{text}");
+            assert!(!paragraphs[0].is_list_item);
+            assert_eq!(paragraphs[0].lines[0].segments[0].text, text);
+        }
     }
 
     #[test]
