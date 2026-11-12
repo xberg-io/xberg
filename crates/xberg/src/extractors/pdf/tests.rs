@@ -1415,7 +1415,6 @@ fn assert_mixed_plain_public_page_ranges(
 ) {
     use crate::types::{ExtractedDocument, PageStructure, PageUnitType};
 
-    document.ocr_text_pages = vec![1, 2];
     document.prebuilt_pages = Some(
         expected
             .iter()
@@ -3353,15 +3352,19 @@ async fn force_ocr_route_applies_numeric_repair() {
     );
 }
 
-/// Issue #2939: a whole-document OCR read whose page read the noise gate discarded must not
-/// mark that page as OCR text. `InternalDocument::ocr_text_pages` decides which pages are
-/// re-rendered from their elements (#2902), so a page whose noisy read was discarded -- which
-/// keeps its native text -- is not OCR text and must stay out of the set, while the page whose
-/// read was accepted keeps its mark exactly as before.
+/// Issue #3014: the OCR text page list of the PDF extractor changes no output. The one reader
+/// of `InternalDocument::ocr_text_pages` (`is_ocr_page_text`) treats every page of a `pdf`,
+/// `image` or `ocr` source as OCR text before it looks at the list, and the PDF extractor
+/// always builds a document with source format `pdf`, so no list the extractor builds can ever
+/// change a derived result -- the extractor does not build one. The control below forces the
+/// list empty and set to both pages on the same document and derives both to prove the outputs
+/// stay equal. Documents of other formats still use the list: `fold_embedded_image_ocr_text`
+/// marks the page of, say, a DOCX whose embedded picture's read is folded into it, and
+/// #2902's re-rendering honors the mark there.
 #[cfg(all(feature = "pdf", feature = "ocr"))]
 #[tokio::test]
 #[serial]
-async fn a_discarded_ocr_read_does_not_mark_its_native_page_as_ocr_text() {
+async fn a_pdfs_ocr_text_page_list_is_not_built_and_changes_no_output() {
     use crate::core::config::{OcrConfig, PageConfig};
 
     const BACKEND_NAME: &str = "pdf-2939-discarded-read-marking";
@@ -3464,11 +3467,56 @@ async fn a_discarded_ocr_read_does_not_mark_its_native_page_as_ocr_text() {
         Some(NATIVE_PAGE_TWO_TEXT),
         "the discarded page keeps its native text beside the OCR treatment"
     );
+
+    // Control: the list empty and set to both pages derive the same output from the same
+    // document, so the list is provably off the wire for a PDF. This holds before and after
+    // the fix; the emptiness assertion below is what the fix turns green.
+    let mut with_list = internal.clone();
+    with_list.ocr_text_pages = vec![1, 2];
+    let empty_list = crate::types::ExtractedDocument::from(internal.clone());
+    let full_list = crate::types::ExtractedDocument::from(with_list);
     assert_eq!(
-        internal.ocr_text_pages,
-        vec![1],
-        "only the page whose read was accepted may be marked as OCR text: page 2's read was \
-         discarded, its native text is what the page keeps"
+        empty_list.content, full_list.content,
+        "the OCR text page list must not change the derived content of a pdf source"
+    );
+    let page_bodies = |result: &crate::types::ExtractedDocument| {
+        result.pages.as_ref().map(|pages| {
+            pages
+                .iter()
+                .map(|page| (page.page_number, page.content.clone()))
+                .collect::<Vec<_>>()
+        })
+    };
+    assert_eq!(
+        page_bodies(&empty_list),
+        page_bodies(&full_list),
+        "the OCR text page list must not change the derived pages of a pdf source"
+    );
+    let boundaries = |result: &crate::types::ExtractedDocument| {
+        result
+            .metadata
+            .pages
+            .as_ref()
+            .and_then(|structure| structure.boundaries.clone())
+            .map(|boundaries| {
+                boundaries
+                    .iter()
+                    .map(|boundary| (boundary.page_number, boundary.byte_start, boundary.byte_end))
+                    .collect::<Vec<_>>()
+            })
+    };
+    assert_eq!(
+        boundaries(&empty_list),
+        boundaries(&full_list),
+        "the OCR text page list must not change the derived page boundaries of a pdf source"
+    );
+
+    // The fix: no marking that cannot change a result is built (#3014).
+    assert!(
+        internal.ocr_text_pages.is_empty(),
+        "the PDF extractor must not build the OCR text page list: its one reader treats every \
+         page of a pdf source as OCR text before it looks at the list (#3014): {:?}",
+        internal.ocr_text_pages
     );
 }
 

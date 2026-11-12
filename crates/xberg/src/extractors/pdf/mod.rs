@@ -2392,26 +2392,24 @@ fn replace_page_content_with_ocr_text(page: &mut crate::types::PageContent, ocr_
     page.is_blank = Some(crate::extraction::blank_detection::is_page_text_blank(&page.content));
 }
 
-/// Write the OCR text of each page into the page that has the same position, and report the
-/// page numbers of the reads the output kept: a page's text was written by an OCR route only
-/// where its read was accepted, so a page whose read the noise gate discarded (or that
-/// otherwise produced no text) -- which keeps its native text -- is not reported (#2939).
+/// Write the OCR text of each page into the page that has the same position.
 ///
 /// One OCR text for a document of several pages is the text of the whole document: it goes to
-/// the first page, and the content of every later page is replaced with empty text; only the
-/// page that received text is reported.
+/// the first page, and the content of every later page is replaced with empty text.
+///
+/// The list of the pages whose text an OCR route wrote is not built here: every page of a
+/// `pdf` source is treated as OCR text by `is_ocr_page_text` before it looks at such a list,
+/// so a list this extractor builds could never change a result (#3014). Documents of other
+/// formats that take OCR text on some of their pages mark those pages elsewhere (for example
+/// `fold_embedded_image_ocr_text` for a page whose embedded picture's read is folded into it).
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn replace_pages_with_ocr_page_texts(
     pages: &mut [crate::types::PageContent],
     ocr_page_texts: &[String],
     keep_native_content: bool,
-) -> Vec<u32> {
-    let mut replaced = Vec::new();
+) {
     for (page, text) in pages.iter_mut().zip(ocr_page_texts) {
         replace_page_content_with_ocr_text(page, text, keep_native_content);
-        if !text.trim().is_empty() {
-            replaced.push(page.page_number);
-        }
     }
 
     if ocr_page_texts.len() == 1 {
@@ -2419,7 +2417,6 @@ fn replace_pages_with_ocr_page_texts(
             replace_page_content_with_ocr_text(page, "", keep_native_content);
         }
     }
-    replaced
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -3844,23 +3841,13 @@ impl PdfExtractor {
         ) = (extracted_images, None);
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        let mut ocr_text_pages: Vec<u32> = Vec::new();
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         {
             let keep_native_content = config.pages.as_ref().is_some_and(|pages| pages.keep_native_content);
 
             if let Some(pts) = ocr_page_texts.as_ref() {
                 if let Some(ref mut pages) = page_contents {
-                    ocr_text_pages.extend(replace_pages_with_ocr_page_texts(pages, pts, keep_native_content));
+                    replace_pages_with_ocr_page_texts(pages, pts, keep_native_content);
                 } else {
-                    // Only the pages whose read the output kept: an empty per-page text was
-                    // discarded, not accepted (#2939).
-                    ocr_text_pages.extend(
-                        pts.iter()
-                            .enumerate()
-                            .filter(|(_, text)| !text.trim().is_empty())
-                            .map(|(index, _)| (index + 1) as u32),
-                    );
                     page_contents = Some(
                         pts.iter()
                             .enumerate()
@@ -3894,7 +3881,6 @@ impl PdfExtractor {
                 for page in pages.iter_mut() {
                     if let Some(ocr_text) = results_map.get(&page.page_number) {
                         replace_page_content_with_ocr_text(page, ocr_text, keep_native_content);
-                        ocr_text_pages.push(page.page_number);
                     }
                 }
             }
@@ -4398,10 +4384,6 @@ impl PdfExtractor {
             reconcile_native_page_tables(pages, &doc.tables);
         }
         doc.prebuilt_pages = final_pages;
-        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-        {
-            doc.ocr_text_pages = ocr_text_pages;
-        }
 
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         if !ocr_elements.is_empty() {
