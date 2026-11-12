@@ -5763,6 +5763,39 @@ mod tests {
         assert!(result.content.contains(page.as_str()), "{:?}", result.content);
     }
 
+    #[tokio::test]
+    async fn should_keep_footnote_definitions_before_consecutive_trailing_page_breaks() {
+        let document_xml = format!(
+            r#"<w:document xmlns:w="{NOTES_DOCUMENT_NS}"><w:body>
+<w:p><w:r><w:t>Body</w:t></w:r><w:r><w:footnoteReference w:id="2"/></w:r></w:p>
+<w:p><w:r><w:br w:type="page"/></w:r></w:p>
+<w:p><w:r><w:br w:type="page"/></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">   </w:t></w:r></w:p>
+</w:body></w:document>"#
+        );
+        let data = build_test_docx_with_parts(&document_xml, None, Some(NOTE_A_B_FOOTNOTES), None, None, None, None);
+        let result = DocxExtractor::new()
+            .extract_content(
+                &data,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                &ExtractionConfig::default(),
+            )
+            .await
+            .unwrap();
+        let result =
+            crate::extraction::derive::derive_extraction_result(result, true, crate::core::config::OutputFormat::Plain);
+        let pages = result.pages.expect("page content");
+        assert_eq!(pages.len(), 3);
+        assert!(pages[0].content.starts_with("Body[^1]"), "{pages:?}");
+        assert!(pages[0].content.contains("[^1]: Note A."), "{pages:?}");
+        assert!(pages[1..].iter().all(|page| page.content.is_empty()), "{pages:?}");
+        let boundaries = result.metadata.pages.unwrap().boundaries.unwrap();
+        assert_eq!(boundaries.len(), 1);
+        let boundary = &boundaries[0];
+        assert_eq!(boundary.page_number, 1);
+        assert_eq!(result.content[boundary.byte_start..boundary.byte_end], pages[0].content);
+    }
+
     async fn docx_page_content(document_xml: &str, footnotes_xml: &str, endnotes_xml: Option<&str>) -> String {
         let data = build_test_docx_with_parts(document_xml, None, Some(footnotes_xml), endnotes_xml, None, None, None);
         let result = DocxExtractor::new()

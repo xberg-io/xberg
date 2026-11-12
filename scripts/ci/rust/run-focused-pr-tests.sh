@@ -247,6 +247,10 @@ run_office_page_cases() {
     run_exact "$test_name" --test plain_page_ranges_select_page_text
   done
   for test_name in \
+    should_keep_an_equation_apart_from_a_following_letter_in_plain_page_content \
+    should_number_page_content_notes_like_the_rendered_output \
+    should_keep_a_footnote_and_an_endnote_with_the_same_word_id_apart_in_page_content \
+    should_keep_footnote_definitions_before_consecutive_trailing_page_breaks \
     plain_table_cell_carries_no_footnote_marker \
     should_write_the_description_of_a_drawn_shape_in_its_place \
     should_write_no_placeholder_for_a_picture_with_an_empty_description; do
@@ -296,7 +300,7 @@ pdf-ocr)
   run_numeral_noise_cases
   ;;
 office-pages)
-  expected=31
+  expected=35
   run_office_page_cases
   ;;
 api-jobs)

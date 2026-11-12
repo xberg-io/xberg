@@ -86,7 +86,8 @@ pub(super) fn derive_pages(
 /// elements write to the last, without the whitespace around it. The page whose elements end
 /// the body also has the note and comment definitions and the annotations that follow the body.
 fn plain_page_ranges(doc: &InternalDocument, content: &str, spans: &crate::rendering::ElementSpans) -> PlainPageRanges {
-    compute_page_membership(doc)
+    let body_text_end = content[..spans.body_end].trim_end().len();
+    let mut ranges: PlainPageRanges = compute_page_membership(doc)
         .into_iter()
         .map(|(page_number, indices)| {
             let page_spans = || {
@@ -99,7 +100,10 @@ fn plain_page_ranges(doc: &InternalDocument, content: &str, spans: &crate::rende
                 .min()
                 .zip(page_spans().map(|(_, end)| end).max())
                 .and_then(|(start, end)| {
-                    let end = if end >= spans.body_end { content.len() } else { end };
+                    if start >= body_text_end {
+                        return None;
+                    }
+                    let end = if end >= body_text_end { content.len() } else { end };
                     let text = content.get(start..end)?;
                     let text_start = start + (text.len() - text.trim_start().len());
                     let text_end = start + text.trim_end().len();
@@ -107,7 +111,16 @@ fn plain_page_ranges(doc: &InternalDocument, content: &str, spans: &crate::rende
                 });
             (page_number, range)
         })
-        .collect()
+        .collect();
+    if doc.source_format == "docx" {
+        for element in &doc.elements {
+            if let (ElementKind::PageBreak, Some(page)) = (&element.kind, element.page) {
+                // ~keep A final explicit break opens a page even if the parser only puts note definitions there.
+                ranges.entry(page + 1).or_insert(None);
+            }
+        }
+    }
+    ranges
 }
 
 /// Give each page that has elements its part of the plain `content`. A page with no
