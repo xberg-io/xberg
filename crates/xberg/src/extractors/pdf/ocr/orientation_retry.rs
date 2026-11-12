@@ -54,8 +54,9 @@ impl OrientationRetry {
         }
     }
 
-    /// Sideways prose recovery is the whole-scan route's; a mixed document's scan pages keep the
-    /// read the default build gives them, so both builds agree (GH#3050). ~keep
+    /// Sideways prose recovery belongs to a call that OCRs every page of the document. Any page
+    /// left to its native layer, including by `force_ocr_pages`, makes the output a mixed one whose
+    /// scan pages keep the read the default build gives them, so both builds agree (GH#3050). ~keep
     pub(super) fn with_prose_recovery(mut self, recovers_prose: bool) -> Self {
         self.recovers_prose = recovers_prose;
         self

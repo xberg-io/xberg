@@ -225,6 +225,84 @@ fn mixed_document_abstains_on_extra_prose_regions_alike_in_every_build() {
     }
 }
 
+#[test]
+#[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
+fn partial_ocr_selection_on_a_scanned_document_reads_alike_in_every_build() {
+    const CASE: &str = "prose::partial_ocr_selection_on_a_scanned_document_reads_alike_in_every_build";
+    if std::env::var(CHILD).as_deref() != Ok(CASE) {
+        run_private_child(CASE);
+        return;
+    }
+    // Choosing pages with `force_ocr_pages` makes the output a mixed one even when every page is a scan:
+    // the unlisted pages come from the native layer. Recovery belongs to a read of every page, so the
+    // listed scan page keeps the sparse read in both builds. ~keep
+    let scan = prose_source();
+    let two_scans = with_second_scan_page(&scan);
+    let mut config = ExtractionConfig {
+        use_cache: false,
+        force_ocr_pages: Some(vec![1]),
+        pages: Some(PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ocr: Some(OcrConfig::default()),
+        ..Default::default()
+    };
+    let selected = helpers::extract_bytes_document_blocking(&two_scans, "application/pdf", &config)
+        .expect("actual public partial-selection extraction");
+    record_result("partial-selection", &selected);
+    let pages = selected.pages.as_ref().expect("requested pages");
+    assert_eq!(pages.len(), 2);
+    assert!(
+        pages[1].content.trim().is_empty(),
+        "the unlisted scan page has no native text"
+    );
+
+    config.force_ocr_pages = None;
+    config.force_ocr = true;
+    config
+        .ocr
+        .as_mut()
+        .unwrap()
+        .tesseract_config
+        .get_or_insert_default()
+        .psm = Some(11);
+    let sparse = extract("partial-selection-sparse", &scan, &config);
+    assert_eq!(
+        pages[0].content.split_whitespace().collect::<Vec<_>>(),
+        sparse.content.split_whitespace().collect::<Vec<_>>(),
+        "the listed scan page must read as the sparse read, in every build"
+    );
+}
+
+#[cfg(paddle_ocr)]
+#[test]
+#[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
+fn paddle_backend_is_registered_for_the_automatic_second_stage() {
+    // The paddle profile is only meaningful when the automatic Tesseract-to-Paddle pair can form; a build
+    // or runner without a usable Paddle backend must fail here instead of passing the parity tests
+    // through Tesseract alone. ~keep
+    let registered = xberg::plugins::registry::get_ocr_backend_registry().read().list();
+    assert!(
+        registered.iter().any(|name| name == "paddle-ocr"),
+        "paddle-ocr is not registered; registered backends: {registered:?}"
+    );
+}
+
+fn with_second_scan_page(scan: &[u8]) -> Vec<u8> {
+    let mut document = Document::load_mem(scan).unwrap();
+    let first = document.get_pages()[&1];
+    let page = document.get_object(first).unwrap().as_dict().unwrap().clone();
+    let parent = page.get(b"Parent").unwrap().as_reference().unwrap();
+    let second = document.add_object(page);
+    let root = document.get_object_mut(parent).unwrap().as_dict_mut().unwrap();
+    root.set("Kids", vec![first.into(), second.into()]);
+    root.set("Count", 2);
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).unwrap();
+    bytes
+}
+
 /// The default build's mixed route runs no orientation retry, so a Paddle build must not recover the
 /// scan page's paragraph either: the page reads exactly as the sparse-text read of the same scan. ~keep
 fn assert_mixed_page_keeps_the_sparse_read(name: &str, scan: &[u8]) {
