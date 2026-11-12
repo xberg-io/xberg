@@ -336,8 +336,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   script, the page is read once with the English OCR model, which is downloaded on first use when it is not installed.
   If that read fails, the page still goes to OCR.
 
-- **(pdf): A sentence no longer reads out of order around an inline equation.** (GH#2925)
-  A superscript sits in a line bucket of its own, so the gap it fills tore the line in two and let a column cut run through the paragraph; the straddling-line guard now reads such a gap as part of the line.
 - **(ocr): A default Tesseract extraction keeps its sideways-prose recovery and route metadata in builds with Paddle OCR compiled in.** (GH#3007)
   The automatic per-page Tesseract-to-Paddle route now reports the flat `psm` and orientation keys (`auto_rotated`, `orientation_degrees`) of its first accepted Tesseract-read page and recovers a single sideways prose paragraph, as the whole-document route does. Other page content still differs between the routes.
 - **(pdf): A page with a large content stream no longer takes seconds to read in a debug build.** (GH#3040)
