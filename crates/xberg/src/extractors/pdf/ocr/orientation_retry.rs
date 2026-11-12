@@ -35,6 +35,7 @@ pub(super) struct OrientationRetry {
     #[cfg(auto_rotate)]
     cached_model_ready: tokio::sync::OnceCell<bool>,
     recognition_config: Option<OcrConfig>,
+    recovers_prose: bool,
 }
 
 impl OrientationRetry {
@@ -49,7 +50,20 @@ impl OrientationRetry {
                 .as_ref()
                 .filter(|config| recognition_retry_eligible(config))
                 .cloned(),
+            recovers_prose: true,
         }
+    }
+
+    /// Sideways prose recovery belongs to a call that OCRs every page of the document. Any page
+    /// left to its native layer, including by `force_ocr_pages`, makes the output a mixed one whose
+    /// scan pages keep the read the default build gives them, so both builds agree (GH#3050). ~keep
+    pub(super) fn with_prose_recovery(mut self, recovers_prose: bool) -> Self {
+        self.recovers_prose = recovers_prose;
+        self
+    }
+
+    pub(super) fn recovers_prose(&self) -> bool {
+        self.recovers_prose
     }
 
     pub(super) fn allows(config: &ExtractionConfig) -> bool {

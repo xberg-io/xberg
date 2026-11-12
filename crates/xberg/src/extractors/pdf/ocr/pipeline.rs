@@ -1185,10 +1185,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         .as_ref()
         .filter(|_| super::orientation_retry::OrientationRetry::allows(config) && !mixed_route_layout_active)
         .map(|pipeline| {
-            Arc::new(super::orientation_retry::OrientationRetry::new(
-                config,
-                pipeline.quality_thresholds.clone(),
-            ))
+            let whole_document_scan = (1..=page_count as u32).all(|page| ocr_set.contains(&page));
+            Arc::new(
+                super::orientation_retry::OrientationRetry::new(config, pipeline.quality_thresholds.clone())
+                    .with_prose_recovery(whole_document_scan),
+            )
         });
 
     // Each invocation below owns exactly one page. Page markers belong to the outer document
@@ -5421,9 +5422,13 @@ pub(super) async fn extract_with_ocr_for_page(
                     .map(|retry| (Arc::clone(retry), Arc::clone(&upright_data)));
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 // The prose proof reads only the page's own words and geometry, so it holds wherever the
-                // raster came from: a detached render, including one a stored scan replaced. Only
-                // caller-supplied images, which carry no page of this document, stay excluded (GH#3007). ~keep
-                let allow_prose = detached_page.is_some() || images.is_none();
+                // raster came from: a detached render, including one a stored scan replaced. Caller-supplied
+                // images carry no page of this document, and a detached page of a mixed document stays on the
+                // read the default build gives it, which runs no retry there (GH#3007, GH#3050). ~keep
+                let allow_prose = images.is_none()
+                    || detached_page
+                        .and_then(|source| source.orientation_retry)
+                        .is_some_and(|retry| retry.recovers_prose());
                 #[cfg(feature = "ocr")]
                 let caption_raster =
                     (capture_caption && retry.is_some() && page_rotation_degrees == 0 && correction_degrees == 0).then(
