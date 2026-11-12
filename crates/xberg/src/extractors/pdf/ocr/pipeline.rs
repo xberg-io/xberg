@@ -403,7 +403,8 @@ impl std::fmt::Display for FailedOcrRun {
 
 /// The error recorded for a page the extraction time limit stopped before it was read.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-pub(super) const TIME_LIMIT_UNREAD_PAGE_ERROR: &str = "the extraction time limit was reached before the page was read";
+pub(in crate::extractors::pdf) const TIME_LIMIT_UNREAD_PAGE_ERROR: &str =
+    "the extraction time limit was reached before the page was read";
 
 /// The error of a run in which no page was read. Pages the time limit left unread make it the
 /// time limit, whatever failed earlier; otherwise it is the error of the first failed page.
