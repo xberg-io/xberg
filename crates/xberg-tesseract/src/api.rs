@@ -680,6 +680,13 @@ impl TesseractAPI {
         }
     }
 
+    /// The binary image the last `recognize` read, owned by the caller; a second engine can read
+    /// the same pixels with `set_image_2` after the source image is gone.
+    #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
+    pub fn thresholded_image(&self) -> Result<crate::Pix> {
+        crate::Pix::from_owned_ptr(self.get_thresholded_image()?)
+    }
+
     /// Gets the box text for the specified page.
     ///
     /// # Arguments

@@ -10,6 +10,7 @@ mod config;
 mod dictionary;
 mod execution;
 mod model_context;
+mod script_retry;
 #[cfg(test)]
 mod secondary_dictionary_benchmark_tests;
 #[cfg(all(test, not(target_arch = "wasm32")))]

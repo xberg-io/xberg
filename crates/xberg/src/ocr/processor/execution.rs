@@ -28,6 +28,7 @@ use super::api_pool::TesseractApiPool;
 use super::config::apply_tesseract_variables;
 use super::dictionary::WordDictionary;
 use super::model_context::ModelContext;
+use super::script_retry;
 use super::validation::{
     resolve_all_installed_languages, resolve_tessdata_path, strip_control_characters, validate_language_and_traineddata,
 };
@@ -1713,7 +1714,7 @@ fn insert_dictionary_line_counts(
     }
 }
 
-fn insert_retained_word_confidence_metadata(
+pub(super) fn insert_retained_word_confidence_metadata(
     metadata: &mut HashMap<String, serde_json::Value>,
     stats: &RetainedWordConfidenceStats,
 ) {
@@ -2001,6 +2002,15 @@ fn security_limits_for_ocr(
 /// The symbols of every word with an underscore, which table reconstruction reads to cut a mark
 /// out of a word. Empty when Tesseract gives no result iterator or cannot read the symbols: the
 /// cut then estimates each piece's box from its share of the word's characters. ~keep
+/// The word table that table detection reads: the merged page's table when the second read changed
+/// the page, otherwise the first read's table.
+fn table_tsv(first_read: Option<String>, merged: Option<&script_retry::Merged>) -> Option<String> {
+    match (first_read, merged) {
+        (Some(_), Some(merged)) => Some(merged.tsv()),
+        (first_read, _) => first_read,
+    }
+}
+
 fn underscore_word_symbols(api: &TesseractAPI) -> Vec<xberg_tesseract::WordSymbols> {
     match api
         .get_iterator()
@@ -2366,7 +2376,7 @@ pub(super) fn perform_ocr(
         }
     };
 
-    let tsv_data_for_tables = if config.enable_table_detection || config.output_format == "tsv" {
+    let mut tsv_data_for_tables = if config.enable_table_detection || config.output_format == "tsv" {
         Some(
             api.get_tsv_text(0)
                 .map_err(|e| OcrError::ProcessingFailed(format!("Failed to extract TSV: {}", e)))?,
@@ -2374,6 +2384,29 @@ pub(super) fn perform_ocr(
     } else {
         None
     };
+    // GH#2300: a noisy first read of a page in a script the configured list cannot read gets a
+    // second read with that script's model, merged per line. A failure of the second read is
+    // logged and the first read stands, so no page that read before can stop reading now. ~keep
+    let script_retry = if script_retry::wanted(config, f64::from(mean_text_conf)) {
+        let first_tsv = api
+            .get_tsv_text(0)
+            .map_err(|e| OcrError::ProcessingFailed(format!("Failed to extract TSV: {}", e)))?;
+        let pass = script_retry::Pass { config, source_dpi };
+        match script_retry::run(&api, &first_tsv, &pass) {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                tracing::warn!(%error, "script retry skipped; the first read stands");
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let merged_read = script_retry
+        .as_ref()
+        .map(|outcome| &outcome.merged)
+        .filter(|merged| merged.changed());
+    tsv_data_for_tables = table_tsv(tsv_data_for_tables, merged_read);
     let table_mark_symbols = match tsv_data_for_tables.as_deref() {
         Some(tsv) if config.enable_table_detection && tsv.contains('_') => underscore_word_symbols(&api),
         _ => Vec::new(),
@@ -2389,7 +2422,7 @@ pub(super) fn perform_ocr(
         is_valid_word: &|text| dictionary.is_valid_word(text),
         max_invalid_ratio: crate::ocr::hocr_parser::DEFAULT_DICT_INVALID_LINE_RATIO,
     };
-    let (raw_content, mime_type) = match config.output_format.as_str() {
+    let (mut raw_content, mime_type) = match config.output_format.as_str() {
         "text" => {
             let text = api
                 .get_utf8_text()
@@ -2455,6 +2488,18 @@ pub(super) fn perform_ocr(
             )));
         }
     };
+
+    if let Some(merged) = merged_read {
+        // The merged page has no hOCR: its lines come from two engines, so the text is rebuilt
+        // from the merged word table and the hOCR-only steps (dictionary filter, table repair
+        // from hOCR) do not run for it. ~keep
+        raw_content = merged.text();
+        hocr_document = None;
+        hocr_for_tables = None;
+        dictionary_filtered_line_count = 0;
+        dictionary_kept_numeral_line_count = 0;
+        retained_hocr_confidence_stats = None;
+    }
 
     let mut metadata = HashMap::new();
     if let Some(image_preprocessing) = image_preprocessing {
@@ -2550,15 +2595,28 @@ pub(super) fn perform_ocr(
         }
     }
 
+    if let Some(outcome) = script_retry.as_ref() {
+        // After the first read's confidence metadata, so the merged page reports its own. ~keep
+        script_retry::record(&mut metadata, outcome);
+    }
+
     let mut content = strip_control_characters(&raw_content).into_owned();
     let retained_text = (config.output_format == "text").then_some(content.as_str());
-    let iterator_extraction = extract_elements_via_iterator(
-        &api,
-        &dictionary,
-        config.page_number,
-        config.min_confidence,
-        retained_text,
-    );
+    let iterator_extraction = if merged_read.is_some() {
+        // The first engine holds only the first read; the merged elements come from the word
+        // table below. ~keep
+        Err(OcrError::ProcessingFailed(
+            "merged read has no result iterator".to_string(),
+        ))
+    } else {
+        extract_elements_via_iterator(
+            &api,
+            &dictionary,
+            config.page_number,
+            config.min_confidence,
+            retained_text,
+        )
+    };
     let mut ocr_elements = None;
     if let Ok(extraction) = &iterator_extraction
         && let Some(stats) = extraction.retained_text_confidence_stats.as_ref()
@@ -2592,7 +2650,8 @@ pub(super) fn perform_ocr(
             ocr_elements = Some(extraction.elements);
         }
         _ => {
-            if let Some(ref tsv_data) = tsv_data_for_tables {
+            let merged_tsv = merged_read.map(|merged| merged.tsv());
+            if let Some(tsv_data) = merged_tsv.as_deref().or(tsv_data_for_tables.as_deref()) {
                 let elements = parse_tsv_to_elements(tsv_data, config.min_confidence, config.page_number);
                 if !elements.is_empty() {
                     ocr_elements = Some(elements);
@@ -5029,6 +5088,97 @@ mod tests {
         let cache = OcrCache::new(Some(cache_dir.path().to_path_buf())).unwrap();
         process_image_with_cache(&corpus_image(image), &config, &cache, &TesseractApiPool::new(), None)
             .expect("OCR must succeed")
+    }
+
+    fn han_letters(text: &str) -> usize {
+        text.chars().filter(|c| ('\u{4e00}'..='\u{9fff}').contains(c)).count()
+    }
+
+    fn read_with_retry_settings(retry: bool, table_detection: bool) -> OcrExtractionResult {
+        let config = TesseractConfig {
+            language: "eng".to_string(),
+            output_format: "markdown".to_string(),
+            enable_table_detection: table_detection,
+            use_cache: false,
+            script_retry: retry.then_some(crate::ocr::types::ScriptRetry { noisy_below: 75.0 }),
+            ..TesseractConfig::default()
+        };
+        let cache_dir = tempdir().unwrap();
+        let cache = OcrCache::new(Some(cache_dir.path().to_path_buf())).unwrap();
+        process_image_with_cache(
+            &corpus_image("chi_sim_image.jpeg"),
+            &config,
+            &cache,
+            &TesseractApiPool::new(),
+            None,
+        )
+        .expect("OCR must succeed")
+    }
+
+    #[test]
+    fn table_detection_reads_the_merged_page_only_when_the_page_changed() {
+        let word = |text: &str| script_retry::TsvWord {
+            line_key: (1, 1, 1),
+            left: 10,
+            top: 10,
+            width: 40,
+            height: 20,
+            conf: 90.0,
+            text: text.to_string(),
+        };
+        let merged = script_retry::Merged {
+            lines: vec![vec![word("汉字")]],
+            admitted: 1,
+            refused: 0,
+            added: 0,
+        };
+        let first = Some("first read table".to_string());
+
+        let with_merge = table_tsv(first.clone(), Some(&merged)).expect("a table");
+        assert!(
+            with_merge.contains("汉字"),
+            "the merged words feed table detection: {with_merge}"
+        );
+        assert!(!with_merge.contains("first read table"));
+        assert_eq!(
+            table_tsv(first.clone(), None),
+            first,
+            "no merge keeps the first read's table"
+        );
+        assert_eq!(table_tsv(None, Some(&merged)), None, "no table asked for, none made");
+    }
+
+    /// A Han image read with `eng` alone is noise. With the retry settings, and `osd` and `chi_sim`
+    /// installed, the page is read again and its metadata names the retry; without the settings
+    /// the page keeps the noise. Table detection is on in the first read, as it is by default.
+    /// Skips when the models are not installed, because the retry never downloads them.
+    #[test]
+    #[serial]
+    fn a_han_image_read_with_eng_is_read_again_with_chi_sim() {
+        let installed = crate::ocr::processor::script_retry::present_models(
+            "eng",
+            None,
+            &crate::ocr::processor::validation::TessdataEnv::from_process(),
+        );
+        if !(installed.contains(&"osd") && installed.contains(&"chi_sim")) {
+            eprintln!("skipped: osd and chi_sim are not installed");
+            return;
+        }
+        let plain = read_with_retry_settings(false, true);
+        assert_eq!(han_letters(&plain.content), 0, "the first read is Latin noise");
+        assert!(!plain.metadata.contains_key("script_retry"));
+        for table_detection in [true, false] {
+            let retried = read_with_retry_settings(true, table_detection);
+            assert!(
+                han_letters(&retried.content) > 0,
+                "table detection {table_detection}: {:?}",
+                retried.content
+            );
+            assert_eq!(
+                retried.metadata["script_retry"]["model"], "chi_sim",
+                "the record names the model"
+            );
+        }
     }
 
     /// Lines OCR read in the secondary language of a `lang1+lang2` run must survive the

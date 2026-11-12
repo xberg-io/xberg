@@ -1276,7 +1276,10 @@ impl OcrConfig {
     }
 
     /// Returns the effective quality thresholds, using configured values or defaults.
-    #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+    ///
+    /// The native Tesseract backend reads the noise threshold of the script retry from it, so
+    /// the method exists under `ocr` alone as well as on the PDF route.
+    #[cfg(any(feature = "ocr", all(feature = "ocr-pipeline", feature = "pdf")))]
     pub(crate) fn effective_thresholds(&self) -> OcrQualityThresholds {
         self.quality_thresholds.clone().unwrap_or_default()
     }

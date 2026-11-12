@@ -250,6 +250,13 @@ impl TesseractBackend {
         if let Some(use_cache) = Self::use_cache_from_backend_options(config) {
             internal.use_cache = use_cache;
         }
+        // GH#2300: an explicit `ocr.pipeline` is the caller's own staging of languages and
+        // backends, so only a call without one gets the automatic second read. ~keep
+        if config.pipeline.is_none() {
+            internal.script_retry = Some(crate::ocr::types::ScriptRetry {
+                noisy_below: config.effective_thresholds().min_ocr_mean_confidence,
+            });
+        }
         internal
     }
 
@@ -1913,6 +1920,37 @@ mod tests {
             tess_config.language, "deu",
             "OcrConfig.language must survive a default TesseractConfig"
         );
+    }
+
+    /// GH#2300: every call without an explicit `ocr.pipeline` gets the script retry, with the
+    /// caller's mean-confidence floor as the noise bound; a staged pipeline is the caller's own
+    /// language plan and gets one read.
+    #[test]
+    fn config_to_tesseract_sets_the_script_retry_unless_a_pipeline_is_configured() {
+        let backend = TesseractBackend::new();
+        let plain = backend.config_to_tesseract(&OcrConfig::default());
+        assert_eq!(
+            plain.script_retry,
+            Some(crate::ocr::types::ScriptRetry {
+                noisy_below: crate::core::config::ocr::OcrQualityThresholds::default().min_ocr_mean_confidence,
+            })
+        );
+        let strict = backend.config_to_tesseract(&OcrConfig {
+            quality_thresholds: Some(crate::core::config::ocr::OcrQualityThresholds {
+                min_ocr_mean_confidence: 60.0,
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+        assert_eq!(strict.script_retry.map(|retry| retry.noisy_below), Some(60.0));
+        let staged = backend.config_to_tesseract(&OcrConfig {
+            pipeline: Some(crate::core::config::ocr::OcrPipelineConfig {
+                stages: Vec::new(),
+                quality_thresholds: Default::default(),
+            }),
+            ..Default::default()
+        });
+        assert_eq!(staged.script_retry, None);
     }
 
     /// #1572, multi-language form: the join must use the configured list, not fall back to "eng".

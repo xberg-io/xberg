@@ -303,24 +303,31 @@ impl TesseractApiPool {
         let tessdata_path = &models.directory;
         let key = ApiKey::for_models(models, language, oem);
         let lease = self.resources.checkout(key, || {
-            let api = TesseractAPI::new().map_err(|error| {
-                OcrError::TesseractInitializationFailed(format!("Failed to allocate Tesseract engine: {error}"))
-            })?;
-            api.init_2(tessdata_path, language, i32::from(oem)).map_err(|error| {
-                OcrError::TesseractInitializationFailed(format!(
-                    "Failed to initialize language '{language}' with OCR engine mode {oem}: {error}"
-                ))
-            })?;
-            api.clear().map_err(|error| {
-                OcrError::ProcessingFailed(format!("Failed to clear newly initialized Tesseract API: {error}"))
-            })?;
             Ok(PooledTesseractApi {
-                primary: api,
+                primary: new_engine(tessdata_path, language, oem)?,
                 secondary: super::dictionary::SecondaryDictionaries::new(tessdata_path, language, oem),
             })
         })?;
         TesseractApiLease::begin(lease, models)
     }
+}
+
+/// A Tesseract engine initialised with `language` from `tessdata_path`, cleared and ready for a
+/// page. The pool builds its handles with it; the script retry builds its own engines with it.
+/// `oem` is validated by the caller.
+pub(super) fn new_engine(tessdata_path: &str, language: &str, oem: u8) -> Result<TesseractAPI, OcrError> {
+    let api = TesseractAPI::new().map_err(|error| {
+        OcrError::TesseractInitializationFailed(format!("Failed to allocate Tesseract engine: {error}"))
+    })?;
+    api.init_2(tessdata_path, language, i32::from(oem)).map_err(|error| {
+        OcrError::TesseractInitializationFailed(format!(
+            "Failed to initialize language '{language}' with OCR engine mode {oem}: {error}"
+        ))
+    })?;
+    api.clear().map_err(|error| {
+        OcrError::ProcessingFailed(format!("Failed to clear newly initialized Tesseract API: {error}"))
+    })?;
+    Ok(api)
 }
 
 /// Tells the caller why a pooled handle cannot start a lease.

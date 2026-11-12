@@ -10,6 +10,10 @@ use crate::ocr::types::TesseractConfig;
 pub(super) struct ModelContext {
     pub(super) directory: String,
     pub(super) osd_revision: Option<blake3::Hash>,
+    /// The script-retry models some directory of the tessdata search chain holds, when the
+    /// configuration asks for the retry; `None` when it does not. Part of the result key: a cached
+    /// first read must not be served once a model the retry needs is present. ~keep
+    pub(super) retry_models: Option<Vec<&'static str>>,
     invalidated: Arc<AtomicBool>,
     operation: Option<crate::core::extractor::cacheability::Cacheability>,
 }
@@ -27,7 +31,15 @@ impl ModelContext {
                     crate::core::extractor::cacheability::invalidate_current();
                 }
             })?;
-        Self::for_path(directory, config.psm)
+        let mut context = Self::for_path(directory, config.psm)?;
+        if config.script_retry.is_some() {
+            context.retry_models = Some(super::script_retry::present_models(
+                &config.language,
+                config.tessdata_path.as_deref(),
+                &super::validation::TessdataEnv::from_process(),
+            ));
+        }
+        Ok(context)
     }
 
     pub(super) fn for_provisioned(config: &TesseractConfig) -> Result<Self, OcrError> {
@@ -53,6 +65,7 @@ impl ModelContext {
         Ok(Self {
             directory,
             osd_revision,
+            retry_models: None,
             invalidated: Arc::new(AtomicBool::new(false)),
             operation: osd_revision.and_then(|_| crate::core::extractor::cacheability::current()),
         })
@@ -92,7 +105,24 @@ impl ModelContext {
     }
 
     pub(super) fn result_key(&self, config: &TesseractConfig) -> String {
-        let base = super::config::hash_config(config, &self.directory);
+        let mut base = super::config::hash_config(config, &self.directory);
+        if let Some(models) = self.retry_models.as_ref() {
+            let mut hash = blake3::Hasher::new();
+            hash.update(b"tesseract-script-retry-v1");
+            hash.update(base.as_bytes());
+            hash.update(self.directory.as_bytes());
+            for model in models {
+                hash.update(b"+");
+                hash.update(model.as_bytes());
+            }
+            // The noise bound decides which pages get the second read, so a page read under one
+            // bound is not the page read under another. ~keep
+            if let Some(retry) = config.script_retry.as_ref() {
+                hash.update(b"<");
+                hash.update(&retry.noisy_below.to_bits().to_le_bytes());
+            }
+            base = hash.finalize().to_hex().to_string();
+        }
         let Some(revision) = self.osd_revision else {
             return base;
         };
@@ -186,6 +216,69 @@ mod tests {
         );
         let missing = ModelContext::for_path(root.path().to_str().unwrap().into(), 1).unwrap();
         assert_ne!(key, missing.result_key(&config));
+    }
+
+    /// GH#2300: a cached first read must not be served once the script retry can run, so the
+    /// present retry models and the noise bound are part of the key; a context without retry
+    /// models keeps the old key. Each key differs from the one before it in one input only, so
+    /// that dropping one input from the hash repeats a key.
+    #[test]
+    fn result_keys_change_with_the_present_script_retry_models() {
+        let root = tempfile::tempdir().unwrap();
+        let directory: String = root.path().to_str().unwrap().into();
+        let config = TesseractConfig::default();
+        let plain = ModelContext::for_path(directory.clone(), config.psm).unwrap();
+        let mut with_osd = plain.clone();
+        with_osd.retry_models = Some(Vec::new());
+        let mut with_han = plain.clone();
+        with_han.retry_models = Some(vec!["chi_sim"]);
+        let mut with_both = plain.clone();
+        with_both.retry_models = Some(vec!["osd", "chi_sim"]);
+        let bound = |noisy_below| TesseractConfig {
+            script_retry: Some(crate::ocr::types::ScriptRetry { noisy_below }),
+            ..config.clone()
+        };
+        let keys = [
+            plain.result_key(&config),
+            with_osd.result_key(&config),
+            with_han.result_key(&config),
+            with_both.result_key(&config),
+            with_both.result_key(&bound(75.0)),
+            with_both.result_key(&bound(80.0)),
+        ];
+        for (index, key) in keys.iter().enumerate() {
+            assert!(keys[..index].iter().all(|other| other != key), "key {index} repeats");
+        }
+        assert_eq!(keys[0], super::super::config::hash_config(&config, &directory));
+    }
+
+    /// The present retry models are read from the tessdata search chain without any download, and
+    /// recorded whenever the configuration asks for the retry. The chain ends in the system
+    /// directories, which a test cannot empty, so only presence is asserted.
+    #[test]
+    fn resolve_records_the_present_retry_models_whenever_the_retry_is_configured() {
+        let root = tempfile::tempdir().unwrap();
+        for name in ["eng", "chi_sim"] {
+            std::fs::write(root.path().join(format!("{name}.traineddata")), b"model fixture").unwrap();
+        }
+        let config = TesseractConfig {
+            tessdata_path: Some(root.path().to_path_buf()),
+            script_retry: Some(crate::ocr::types::ScriptRetry { noisy_below: 75.0 }),
+            ..Default::default()
+        };
+        let present = ModelContext::resolve(&config).unwrap().retry_models.unwrap();
+        assert!(present.contains(&"chi_sim"), "{present:?}");
+        let one_read = TesseractConfig {
+            script_retry: None,
+            ..config.clone()
+        };
+        assert_eq!(ModelContext::resolve(&one_read).unwrap().retry_models, None);
+        let reads_han = TesseractConfig {
+            language: "eng+chi_sim".to_string(),
+            ..config
+        };
+        let present = ModelContext::resolve(&reads_han).unwrap().retry_models.unwrap();
+        assert!(!present.contains(&"chi_sim"), "{present:?}");
     }
 
     #[test]
