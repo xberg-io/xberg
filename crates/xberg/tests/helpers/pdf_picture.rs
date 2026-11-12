@@ -121,7 +121,11 @@ pub fn padded_past(source: &[u8], bytes: usize) -> Vec<u8> {
     document.trailer.set("Padding", Object::Reference(padding));
     let mut out = Vec::new();
     document.save_to(&mut out).expect("serialize the fixture");
-    assert!(out.len() > bytes, "{bytes} bytes of padding left the file at {}", out.len());
+    assert!(
+        out.len() > bytes,
+        "{bytes} bytes of padding left the file at {}",
+        out.len()
+    );
     out
 }
 
