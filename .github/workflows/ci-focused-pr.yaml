@@ -53,20 +53,34 @@ jobs:
       fail-fast: false
       matrix:
         suite: [pdf-ocr, office-pages, api-jobs, nli]
+        # ~keep The public test documents a suite reads. A suite that names some gets the test_documents
+        # submodule, because the fetch action reads test_documents/corpus.lock.json from it.
+        include:
+          - suite: pdf-ocr
+            documents: |
+              pdf/regression_pages/nist-sp811-2008-p7.pdf
+              pdf/regression_pages/irs-fw9--2024-p1.pdf
+          - suite: office-pages
+            documents: |
+              docx/budget_fy2027_memo.docx
+              docx/docx_tables.docx
+              docx/test_emf_docx.docx
+              docx/unit_test_headers.docx
+              docx/word_sample.docx
+              vendored/docling/docx/table_with_equations.docx
+              pptx/powerpoint_sample.pptx
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 2
-          submodules: ${{ matrix.suite == 'pdf-ocr' }}
+          submodules: ${{ matrix.documents != '' }}
 
-      - name: Fetch pinned NIST regression page
-        if: matrix.suite == 'pdf-ocr'
+      - name: Fetch the public test documents of the suite
+        if: matrix.documents != ''
         uses: xberg-io/actions/fetch-test-documents@v1
         with:
-          include: |
-            pdf/regression_pages/nist-sp811-2008-p7.pdf
-            pdf/regression_pages/irs-fw9--2024-p1.pdf
+          include: ${{ matrix.documents }}
           cache: "false"
 
       - name: Verify NIST input for the public Type0 target
@@ -77,20 +91,6 @@ jobs:
           printf '%s  %s\n' 71c2a76af332a9b796899a78e99ce2d835026d624048cf239069276fcacce79b \
             "$nist_fixture" | sha256sum --check
           printf 'XBERG_NIST_FIXTURE=%s\n' "$nist_fixture" >> "$GITHUB_ENV"
-
-      - name: Fetch the public office documents of the page tests
-        if: matrix.suite == 'office-pages'
-        uses: xberg-io/actions/fetch-test-documents@v1
-        with:
-          include: |
-            docx/budget_fy2027_memo.docx
-            docx/docx_tables.docx
-            docx/test_emf_docx.docx
-            docx/unit_test_headers.docx
-            docx/word_sample.docx
-            vendored/docling/docx/table_with_equations.docx
-            pptx/powerpoint_sample.pptx
-          cache: "false"
 
       - uses: xberg-io/actions/setup-rust@v1
         with:
