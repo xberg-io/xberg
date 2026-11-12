@@ -120,8 +120,6 @@ pub(crate) fn skip_ws(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let mut remaining = input;
 
     loop {
-        let before = remaining;
-
         if let Ok((rest, _)) = whitespace(remaining) {
             remaining = rest;
             continue;
@@ -132,11 +130,7 @@ pub(crate) fn skip_ws(input: &[u8]) -> IResult<&[u8], &[u8]> {
             continue;
         }
 
-        // Length, not content: `==` on slices is a memcmp of the whole remainder, which made every
-        // token cost the rest of the stream (#3040).
-        if remaining.len() == before.len() {
-            break;
-        }
+        break;
     }
 
     Ok((remaining, input))
@@ -548,23 +542,36 @@ mod tests {
     fn _allow_approx_const() {}
 
     /// A content stream is tokenized from one slice whose remainder shrinks token by token; each
-    /// token must cost its own length, not the length of everything after it (#3040).
+    /// token must cost its own length, not the length of everything after it (#3040). Doubling the
+    /// stream doubles the time when linear and quadruples it when not, so the ratio is asserted
+    /// instead of an absolute time that depends on the machine.
     #[test]
     fn tokenizing_a_large_stream_costs_time_linear_in_its_length() {
-        let stream = b"12 ".repeat(700_000);
-        let started = std::time::Instant::now();
-        let mut remaining = &stream[..];
-        let mut tokens = 0_usize;
-        while let Ok((rest, _)) = token(remaining) {
-            remaining = rest;
-            tokens += 1;
-        }
-        let took = started.elapsed();
-        assert_eq!(tokens, 700_000);
+        const TOKENS: usize = 150_000;
+        const MAX_RATIO: f64 = 2.8;
+        let time_tokens = |count: usize| {
+            let stream = b"12 ".repeat(count);
+            (0..3)
+                .map(|_| {
+                    let started = std::time::Instant::now();
+                    let mut remaining = &stream[..];
+                    let mut tokens = 0_usize;
+                    while let Ok((rest, _)) = token(remaining) {
+                        remaining = rest;
+                        tokens += 1;
+                    }
+                    let took = started.elapsed().as_secs_f64();
+                    assert_eq!(tokens, count);
+                    took
+                })
+                .fold(f64::INFINITY, f64::min)
+        };
+        let single = time_tokens(TOKENS);
+        let double = time_tokens(2 * TOKENS);
+        let ratio = double / single;
         assert!(
-            took < std::time::Duration::from_secs(5),
-            "tokenizing {} bytes took {took:?}; the cost is not linear in the stream length",
-            stream.len()
+            ratio < MAX_RATIO,
+            "doubling the stream multiplied the tokenizing time by {ratio:.2} ({single:.3}s -> {double:.3}s): the cost is not linear"
         );
     }
 

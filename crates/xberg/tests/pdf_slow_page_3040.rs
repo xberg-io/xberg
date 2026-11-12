@@ -3,7 +3,8 @@
 //! grace. The page's cost was a content-stream tokenizer that compared the whole remaining stream
 //! once per token; the page must read in a small fraction of a second.
 
-#![cfg(feature = "pdf")]
+// The page cost is only visible unoptimized: a release build read these pages in 0.05 s before the fix.
+#![cfg(all(feature = "pdf", debug_assertions))]
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
 
 mod helpers;
@@ -18,17 +19,14 @@ const SLOW_PAGES: [usize; 2] = [27, 28];
 /// Over 300 times the cost after the fix in a debug build, and well under the 12 s it cost before.
 const PAGE_BUDGET: Duration = Duration::from_secs(4);
 
+// The page cost is only visible unoptimized: a release build read these pages in 0.05 s before the fix.
 #[test]
 fn test_pages_with_a_large_content_stream_read_in_linear_time() {
     let path = get_test_documents_dir().join(FIXTURE);
-    if !path.exists() {
-        assert!(
-            std::env::var_os("CI").is_none(),
-            "corpus fixture {path:?} is missing: this test needs the test_documents corpus"
-        );
-        eprintln!("skipping: corpus fixture {path:?} is missing");
-        return;
-    }
+    assert!(
+        path.exists(),
+        "corpus fixture {path:?} is missing: this test needs the test_documents corpus"
+    );
     let document = PdfDocument::open(&path).expect("open the fixture");
     for page in SLOW_PAGES {
         let started = Instant::now();
