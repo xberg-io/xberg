@@ -779,11 +779,18 @@ fn compute_custom_formatted_content(
             if name == "html" {
                 observer.formatted_html(&rendered, false);
             }
+            let written = registry.renders_markdown(name);
             observer.formatted_from_source(
-                registry.renders_markdown(name),
+                written,
                 &rendered,
                 crate::rendering::markdown_tag_exemptions_are_owned(doc),
             );
+            if written {
+                observer.formatted_written();
+                if crate::plugins::registry::renders_from_markdown(name) {
+                    observer.formatted_binary();
+                }
+            }
             Some(rendered)
         }
         Err(e) => {

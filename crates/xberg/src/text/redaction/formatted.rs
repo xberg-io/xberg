@@ -4,6 +4,7 @@ use std::{cell::Cell, collections::BTreeMap, mem::size_of};
 pub(super) enum FormattedPlan {
     Preserve(Vec<PatternMatch>),
     Discard,
+    RebuildBinaryMarkdown,
     ProcessorDiscard,
     Literal(super::literal_leaf::plan::LiteralPlan),
     VerifiedMarkup {
@@ -64,6 +65,31 @@ pub(super) fn escaped_plain_markdown(text: &str) -> String {
             output.push('\\');
         }
         output.push(character);
+    }
+    output
+}
+
+/// Encode punctuation and indentation as text tokens, so block parsing cannot turn them into markup.
+pub(super) fn literal_binary_markdown(text: &str) -> String {
+    use std::fmt::Write as _;
+
+    let mut output = String::with_capacity(text.len());
+    let mut lines = text.split('\n').peekable();
+    while let Some(line) = lines.next() {
+        let line = line.strip_suffix('\r').unwrap_or(line);
+        for character in line.chars() {
+            if character.is_ascii_punctuation() || matches!(character, ' ' | '\t') {
+                write!(output, "&#{};", u32::from(character)).expect("writing to a String cannot fail");
+            } else {
+                output.push(character);
+            }
+        }
+        if let Some(next) = lines.peek() {
+            if !line.is_empty() && !next.trim_end_matches('\r').is_empty() {
+                output.push('\\');
+            }
+            output.push('\n');
+        }
     }
     output
 }

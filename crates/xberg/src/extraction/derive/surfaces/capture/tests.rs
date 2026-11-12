@@ -378,3 +378,26 @@ fn pdf_body_lookalike_cannot_provide_an_annotation_separator_certificate() {
     assert!(result.content.contains("Annotations:"));
     assert!(result.context.unwrap().formatted_plain_annotation_separator().is_none());
 }
+
+#[test]
+fn formatted_markdown_that_the_writer_made_is_marked_as_written() {
+    let math = TextAnnotation {
+        start: 5,
+        end: 10,
+        kind: AnnotationKind::math(false),
+    };
+    let result = source("Take $x*y$ now.", vec![math]);
+    assert!(result.formatted_content.as_deref().unwrap().contains("x&#42;y"));
+    assert!(result.context.as_ref().unwrap().formatted_written_by_xberg());
+}
+
+#[test]
+fn formatted_markdown_from_an_extractor_or_a_renderer_is_not_marked_as_written() {
+    let mut capture = SurfaceCapture::default();
+    capture.formatted_from_source(true, "Take $x*y$ now.", false);
+    assert!(!capture.formatted_written);
+    capture.formatted_written();
+    assert!(capture.formatted_written);
+    capture.formatted_from_source(true, "Take $x*y$ later.", false);
+    assert!(!capture.formatted_written, "a later text that the writer did not make");
+}

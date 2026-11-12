@@ -46,6 +46,9 @@ pub(crate) trait DerivationObserver {
     fn formatted_from_source(&mut self, markdown: bool, text: &str, _tag_exemptions: bool) {
         self.formatted(markdown, text);
     }
+    /// The Markdown writer made the formatted text recorded last.
+    fn formatted_written(&mut self) {}
+    fn formatted_binary(&mut self) {}
     fn page_from_source(&mut self, index: usize, number: u32, rendered: &str, plain: String, _tag_exemptions: bool) {
         self.page(index, number, rendered, plain);
     }
@@ -81,6 +84,7 @@ pub(super) fn derive_markdown(
     };
     let (rendered, ranges) = crate::rendering::render_markdown_observed(doc, budget);
     observer.formatted_from_source(true, &rendered, all_owned);
+    observer.formatted_written();
     observer.formatted_tag_ranges(ranges);
     rendered
 }
@@ -182,6 +186,14 @@ pub(crate) trait RedactionSurfaces: Send + Sync {
         None
     }
     fn formatted_tag_exemptions(&self) -> bool {
+        false
+    }
+    /// Whether the Markdown writer made the formatted text, as opposed to an extractor that
+    /// pre-rendered it or a custom renderer.
+    fn formatted_written_by_xberg(&self) -> bool {
+        false
+    }
+    fn formatted_finishes_as_binary(&self) -> bool {
         false
     }
     fn html_heading_sources(&self) -> Option<&[HtmlHeadingSource]> {
