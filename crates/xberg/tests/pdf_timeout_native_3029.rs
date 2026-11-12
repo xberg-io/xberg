@@ -1,11 +1,12 @@
 //! Regression tests for issue #3029: a native PDF that reaches `extraction_timeout_secs` inside
 //! its text loop must return the pages the loop read within the grace period, not wait the grace
 //! out and fail with `Timeout` because the stages after the loop ignore the stop.
+//!
+//! The cases need the text loop to outlast a 1-3 s limit, which holds only for an unoptimized
+//! build: an optimized build reads the fixtures first and would fail them. The unit tests that
+//! request the stop on the token cover every profile.
 
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test/bench binaries print by design; org logging policy exempts tests
-// These cases need the text loop to outlast a 1-3 s limit, which holds only for an unoptimized build;
-// an optimized build reads the fixtures first and fails them. The unit tests that request the stop on
-// the token guard the behavior in every profile.
 #![cfg(all(feature = "pdf", feature = "tokio-runtime", debug_assertions))]
 
 mod helpers;
