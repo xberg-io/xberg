@@ -649,7 +649,7 @@ mod tests {
     }
 
     #[test]
-    fn should_read_the_subscript_before_the_superscript_of_a_base_with_both_and_no_script_of_a_script() {
+    fn should_read_the_script_that_starts_first_of_a_base_with_both_and_no_script_of_a_script() {
         let base = span("R", 100.0, 100.0, 7.0, 10.0);
         let members = [span("n", 107.0, 104.3, 3.2, 6.0), span("p", 108.0, 95.0, 3.0, 6.0)];
         assert_eq!(stack_parents(&base, &members), [None, None]);
@@ -699,6 +699,39 @@ mod tests {
             span("+1", 112.4, 96.0, 3.0, 6.0),
         ];
         assert_eq!(stack_reading_order(&base, &members), [0, 2, 1, 3]);
+    }
+
+    #[test]
+    fn should_read_the_group_whose_first_member_starts_first_even_when_its_last_member_starts_last() {
+        let base = span("R", 100.0, 100.0, 7.0, 10.0);
+        let members = [
+            span("s", 101.0, 96.0, 2.0, 6.0),
+            span("a", 107.0, 104.3, 3.0, 6.0),
+            span("b", 110.0, 104.3, 3.0, 6.0),
+            span("t", 114.0, 96.0, 2.0, 6.0),
+        ];
+        assert_eq!(stack_parents(&base, &members), [None, None, None, None]);
+        assert_eq!(stack_reading_order(&base, &members), [0, 3, 1, 2]);
+        let members = [
+            span("r", 101.0, 104.3, 2.0, 6.0),
+            span("s", 107.0, 96.0, 3.0, 6.0),
+            span("t", 110.0, 96.0, 3.0, 6.0),
+            span("u", 114.0, 104.3, 2.0, 6.0),
+        ];
+        assert_eq!(stack_parents(&base, &members), [None, None, None, None]);
+        assert_eq!(stack_reading_order(&base, &members), [0, 3, 1, 2]);
+    }
+
+    #[test]
+    fn should_count_a_script_level_with_the_base_as_lowered_when_no_script_hangs_from_another() {
+        let base = span("R", 100.0, 100.0, 7.0, 10.0);
+        let members = [
+            span("a", 107.0, 104.3, 3.0, 6.0),
+            span("L", 110.0, 100.0, 3.0, 6.0),
+            span("b", 114.0, 104.3, 3.0, 6.0),
+        ];
+        assert_eq!(stack_parents(&base, &members), [None, None, None]);
+        assert_eq!(stack_reading_order(&base, &members), [0, 2, 1]);
     }
 
     #[test]
