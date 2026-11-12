@@ -617,6 +617,18 @@ fn test_cmap_subtable_offset_beyond_data_rejected() {
     assert!(result.is_err());
 }
 
+/// Off-by-one audit of the #3019 bounds check: an offset pointing exactly at
+/// the end of the font data (`subtable_start == data.len()`) reads past the
+/// data even though it is not strictly greater, so it must be rejected too.
+#[test]
+fn test_cmap_subtable_offset_at_end_rejected() {
+    let mut data = build_truetype_with_cmap_format4(&[(65, 1)]);
+    let end_offset = data.len() as u32;
+    data[36..40].copy_from_slice(&end_offset.to_be_bytes());
+    let err = TrueTypeCMap::from_font_data(&data).expect_err("offset == data.len() must be rejected");
+    assert!(err.contains("out of bounds"), "unexpected error: {err}");
+}
+
 /// Issue #3019 (audit): the format-4 glyphIdArray index,
 /// `idRangeOffset/2 + (charCode - startCode) + i - segCount`, subtracts
 /// `segCount` from a `usize` that a malformed subtable can push below zero —
@@ -693,6 +705,159 @@ fn test_format12_glyph_id_overflow_wraps_like_release() {
     assert_eq!(cmap.get_unicode(0xFFFF), Some('B'));
     assert_eq!(cmap.get_unicode(0), Some('C'));
     assert_eq!(cmap.len(), 3);
+}
+
+/// Issue #3034: a crafted format-12 group spanning the whole u32 space
+/// (`0..=0xFFFFFFFF`) must not walk billions of code points. The walk is
+/// clamped to Unicode's maximum (U+10FFFF), so the group's charged width is
+/// 1,114,112 — still far beyond the 65,536-code-point iteration budget —
+/// and the subtable is rejected instead of being parsed with a truncated
+/// table.
+#[test]
+fn test_format12_unbounded_group_rejected_by_budget() {
+    let data = build_truetype_with_cmap_format12(&[(0, 0xFFFF_FFFF, 0)]);
+    let started = std::time::Instant::now();
+    let err = TrueTypeCMap::from_font_data(&data)
+        .expect_err("a group wider than the iteration budget must reject, not truncate");
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "a budgeted group must be rejected without walking it: took {:?}",
+        started.elapsed()
+    );
+    assert!(err.contains("iteration budget"), "unexpected error: {err}");
+}
+
+/// Issue #3034: a group whose startCharCode lies beyond Unicode's maximum
+/// maps nothing (the clamped end falls below the start) and must be skipped
+/// instead of iterating — pre-fix this group alone walked 4.3 billion code
+/// points — while the following group still parses.
+#[test]
+fn test_format12_group_starting_beyond_unicode_skipped() {
+    let data = build_truetype_with_cmap_format12(&[(0x11_0000, 0xFFFF_FFFF, 1), (65, 67, 2)]);
+    let started = std::time::Instant::now();
+    let cmap = TrueTypeCMap::from_font_data(&data).expect("parse font with a beyond-Unicode start group");
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "a beyond-Unicode group must be skipped without walking it: took {:?}",
+        started.elapsed()
+    );
+    assert_eq!(cmap.len(), 3, "only the in-range group contributes mappings");
+    assert_eq!(cmap.get_unicode(2), Some('A'));
+    assert_eq!(cmap.get_unicode(3), Some('B'));
+    assert_eq!(cmap.get_unicode(4), Some('C'));
+}
+
+/// Issue #3034: an inverted group (endCharCode < startCharCode) maps nothing
+/// and must not disturb the groups after it.
+#[test]
+fn test_format12_inverted_group_skipped() {
+    let data = build_truetype_with_cmap_format12(&[(0x50, 0x40, 1), (65, 67, 2)]);
+    let cmap = TrueTypeCMap::from_font_data(&data).expect("parse font with an inverted group");
+    assert_eq!(cmap.len(), 3);
+    assert_eq!(cmap.get_unicode(2), Some('A'));
+    assert_eq!(cmap.get_unicode(3), Some('B'));
+    assert_eq!(cmap.get_unicode(4), Some('C'));
+}
+
+/// Issue #3034 review: the total iteration budget binds across groups, not
+/// per distinct gid. Group 1 (U+E000..=U+1DFFF, all 65,536 code points
+/// valid, mapped to consecutive gids 0..=65535) spends the whole budget
+/// exactly; group 2 needs one more code point and the subtable must be
+/// rejected with an error — never an Ok map that silently drops group 2.
+#[test]
+fn test_format12_budget_exhausted_by_next_group_rejected() {
+    let data = build_truetype_with_cmap_format12(&[(0xE000, 0x1_DFFF, 0), (0x41, 0x41, 0)]);
+    let started = std::time::Instant::now();
+    let err = TrueTypeCMap::from_font_data(&data)
+        .expect_err("a subtable past the iteration budget must reject, not truncate");
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "a budgeted subtable must be rejected without walking it: took {:?}",
+        started.elapsed()
+    );
+    assert!(err.contains("iteration budget"), "unexpected error: {err}");
+}
+
+/// Issue #3034: a group that consumes the iteration budget exactly is not
+/// an off-by-one rejection — U+E000..=U+1DFFF is 65,536 valid code points
+/// (no surrogate hole) mapped onto the full u16 gid space, and must parse
+/// in full.
+#[test]
+fn test_format12_full_gid_space_group_maps_exactly() {
+    let data = build_truetype_with_cmap_format12(&[(0xE000, 0x1_DFFF, 0)]);
+    let started = std::time::Instant::now();
+    let cmap = TrueTypeCMap::from_font_data(&data).expect("a group exactly filling the budget must parse");
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "a budget-sized group must parse without walking past it: took {:?}",
+        started.elapsed()
+    );
+    assert_eq!(cmap.len(), 65_536, "the full gid space is mapped");
+    assert_eq!(cmap.get_unicode(0), Some('\u{E000}'));
+    assert_eq!(cmap.get_unicode(65_535), Some('\u{1_DFFF}'));
+}
+
+/// Issue #3034 review: `char::from_u32` rejects the surrogate block
+/// (U+D800..U+DFFF), so a group spanning it maps only the code points
+/// around the hole — and the gids the hole would have occupied stay
+/// unmapped rather than shifting.
+#[test]
+fn test_format12_surrogate_holes_are_not_mapped() {
+    let data = build_truetype_with_cmap_format12(&[(0xD7FE, 0xE001, 0)]);
+    let cmap = TrueTypeCMap::from_font_data(&data).expect("parse font with a group spanning the surrogates");
+    assert_eq!(cmap.len(), 4, "only the four non-surrogate code points are mapped");
+    assert_eq!(cmap.get_unicode(0), Some('\u{D7FE}'));
+    assert_eq!(cmap.get_unicode(1), Some('\u{D7FF}'));
+    assert_eq!(
+        cmap.get_unicode(2_050),
+        Some('\u{E000}'),
+        "gids count the hole, not just mapped chars"
+    );
+    assert_eq!(cmap.get_unicode(2_051), Some('\u{E001}'));
+    assert_eq!(cmap.get_unicode(2), None, "the first surrogate's gid stays unmapped");
+}
+
+/// Issue #3034 review: the mapping cap counts distinct gids, so one group
+/// of 65,535 code points (0..=0xFFFE) fills the map short of the cap
+/// (the surrogate block is never inserted) and ~87k further such groups —
+/// a ~1 MB embedded font — re-walk the same gids: about 5.7 billion
+/// iterations, the original hang. The subtable must instead exhaust a
+/// total iteration budget and be rejected, not walk every group.
+#[test]
+fn test_format12_many_overlapping_groups_rejected_by_budget() {
+    let groups = vec![(0, 0xFFFE, 0); 87_381];
+    let data = build_truetype_with_cmap_format12(&groups);
+    let started = std::time::Instant::now();
+    let result = TrueTypeCMap::from_font_data(&data);
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "parsing ~87k overlapping groups must be bounded by the budget, not walked: took {:?}",
+        started.elapsed()
+    );
+    let err = result.expect_err("overlapping groups exhausting the budget must reject, not truncate");
+    assert!(err.contains("budget"), "unexpected error: {err}");
+}
+
+/// Issue #3034: a group ending beyond Unicode's maximum maps exactly its
+/// valid range (up to U+10FFFF) and nothing past it — a code point in
+/// 0x110000+ is not a character and must be absent from the mapping.
+/// Pre-fix this group walked 4.3 billion code points to produce the same
+/// three mappings.
+#[test]
+fn test_format12_group_ending_beyond_unicode_maps_only_valid_range() {
+    let data = build_truetype_with_cmap_format12(&[(0x10_FFFD, 0xFFFF_FFFF, 5)]);
+    let started = std::time::Instant::now();
+    let cmap = TrueTypeCMap::from_font_data(&data).expect("parse font with an over-long end group");
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "a group must be charged only its clamped width, not walked past U+10FFFF: took {:?}",
+        started.elapsed()
+    );
+    assert_eq!(cmap.len(), 3, "only the clamped valid range is mapped");
+    assert_eq!(cmap.get_unicode(5), Some('\u{10_FFFD}'));
+    assert_eq!(cmap.get_unicode(6), Some('\u{10_FFFE}'));
+    assert_eq!(cmap.get_unicode(7), Some('\u{10_FFFF}'));
+    assert_eq!(cmap.get_unicode(8), None, "nothing past U+10FFFF is mapped");
 }
 
 #[test]
