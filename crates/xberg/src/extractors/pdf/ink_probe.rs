@@ -404,16 +404,32 @@ async fn read_without_pictures(
 
 /// The config of the read that judges a layer drawn over a picture: the probe's config with OCR
 /// set to Tesseract's Latin model (`eng`, downloaded on first use like any language) and the
-/// probe's thresholds, whatever backend and languages the caller configured. The caller's model
-/// directory and OCR limits are kept. ~keep
+/// probe's thresholds, whatever backend and languages the caller configured. The pipeline holds
+/// that one stage, so a weak read is judged as it is, never replaced by another backend's. The
+/// caller's model directory and OCR limits are kept. ~keep
 fn reference_reader(probe: &Probe<'_>) -> ExtractionConfig {
     let mut reader = probe.config.clone();
     let configured = reader.ocr.take().unwrap_or_default();
+    let latin = crate::core::config::OcrConfig::default();
+    let stage = crate::core::config::OcrPipelineStage {
+        backend: latin.backend.clone(),
+        priority: 100,
+        language: Some(latin.language.clone()),
+        tesseract_config: None,
+        paddle_ocr_config: None,
+        paddle_ocr_settings: None,
+        vlm_config: None,
+        backend_options: None,
+    };
     reader.ocr = Some(crate::core::config::OcrConfig {
         quality_thresholds: Some(probe.thresholds.clone()),
+        pipeline: Some(crate::core::config::OcrPipelineConfig {
+            stages: vec![stage],
+            quality_thresholds: probe.thresholds.clone(),
+        }),
         tessdata_path: configured.tessdata_path,
         security_limits: configured.security_limits,
-        ..crate::core::config::OcrConfig::default()
+        ..latin
     });
     reader
 }
@@ -646,5 +662,11 @@ mod tests {
         assert_eq!(ocr.effective_tesseract_language(), ["eng"]);
         assert_eq!(ocr.tessdata_path.as_deref(), Some(std::path::Path::new("/models")));
         assert!(ocr.effective_thresholds().discard_suspected_ocr_noise);
+        let pipeline = ocr.effective_pipeline().expect("one fixed stage");
+        assert_eq!(pipeline.stages.len(), 1, "no other backend replaces a weak read");
+        let stage = crate::extractors::pdf::ocr::stage_model_inputs::StageModelInputs::new(ocr, &pipeline.stages[0]);
+        assert_eq!(stage.backend(), "tesseract");
+        assert_eq!(stage.languages(), ["eng"]);
+        assert!(pipeline.quality_thresholds.discard_suspected_ocr_noise);
     }
 }
