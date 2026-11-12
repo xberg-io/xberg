@@ -308,10 +308,9 @@ fn embedded_bullet_positions(text: &str) -> Vec<usize> {
                 previous_non_space.is_some_and(|c: char| c.is_ascii_digit() || matches!(c, ')' | ']' | '}'));
             let continues_product = product_end != 0 && text[product_end..position].trim().is_empty();
             let follows_numeric_item = item_start.is_some_and(|start| {
-                text[start..position]
-                    .trim()
-                    .bytes()
-                    .all(|byte| byte.is_ascii_digit() || byte == b'.')
+                let item = text[start..position].trim();
+                item.bytes().all(|byte| byte.is_ascii_digit() || byte == b'.')
+                    || after_numeric_operand(item).is_some_and(str::is_empty)
             });
             if left_operand
                 && (glued_product || (!glued && !follows_numeric_item))
@@ -319,10 +318,9 @@ fn embedded_bullet_positions(text: &str) -> Vec<usize> {
                     &text[right..],
                     character,
                     continues_product || glued_product,
-                    character == '•'
-                        && group_starts.last().is_some_and(|&(_, start)| {
-                            continues_product || ends_with_numeric_expression(&text[start..position])
-                        }),
+                    group_starts.last().is_some_and(|&(_, start)| {
+                        continues_product || ends_with_numeric_expression(&text[start..position])
+                    }),
                     item_start.is_some_and(|start| text[..start].ends_with('•')),
                 )
             {
@@ -471,7 +469,7 @@ fn is_corroborated_hyphenated_item(after_number: &str, preceding_bullet: bool) -
         }
         if matches!(character, '•' | '·') {
             return groups.is_empty()
-                && character == '•'
+                && (character == '•' || suffix[..position].ends_with(char::is_whitespace))
                 && suffix[position + character.len_utf8()..].starts_with(char::is_whitespace);
         }
         track_expression_group(&mut groups, position, character);
@@ -487,18 +485,17 @@ fn numeric_multiplier_end(
     preceding_bullet: bool,
 ) -> Option<usize> {
     let operand = text.trim_start();
-    if !operand.starts_with(|c: char| c.is_ascii_digit()) {
+    if operand.starts_with(|c| group_closer(c).is_some()) && !(grouped_product || continues_product) {
         return None;
     }
-    let after_number = operand.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.');
+    let after_number = after_numeric_operand(operand)?;
     if glyph == '•' {
         let next_bullet = after_number
             .trim_start()
             .strip_prefix('•')
             .filter(|next| next.starts_with(char::is_whitespace));
         if is_corroborated_hyphenated_item(after_number, preceding_bullet && !grouped_product)
-            || next_bullet
-                .is_some_and(|next| !grouped_product || !next.trim_start().starts_with(|c: char| c.is_ascii_digit()))
+            || next_bullet.is_some_and(|next| !grouped_product || after_numeric_operand(next).is_none())
         {
             return None;
         }
@@ -508,7 +505,7 @@ fn numeric_multiplier_end(
         && !(glyph == '·'
             && (continues_product
                 || after_number.trim_start().strip_prefix('·').is_some_and(|next| {
-                    next.starts_with(char::is_whitespace) && next.trim_start().starts_with(|c: char| c.is_ascii_digit())
+                    next.starts_with(char::is_whitespace) && after_numeric_operand(next).is_some()
                 })))
     {
         return None;
@@ -1202,6 +1199,8 @@ mod tests {
             "[2 • 3 • 4 • 5]",
             "(1 + 2 • 3 • 4 • 5)",
             "(2 • 3-x) + (4 • 5-y)",
+            "(2 • (3) • ((4)))",
+            "[2 · {3} · [(4)]]",
         ] {
             let mut paragraphs = vec![make_body_paragraph(formula, 10.0)];
             split_embedded_list_items(&mut paragraphs);
@@ -1225,12 +1224,13 @@ mod tests {
 
     #[test]
     fn corroborated_explicit_bullets_split_hyphenated_counts() {
-        for expected in [
-            ["2-pack", "3-pack"],
-            ["2-pack of filters", "3-pack of seals"],
-            ["2-pack (filters) for model 4", "3-pack of seals"],
+        for (second_marker, expected) in [
+            ('•', ["2-pack", "3-pack"]),
+            ('•', ["2-pack of filters", "3-pack of seals"]),
+            ('•', ["2-pack (filters) for model 4", "3-pack of seals"]),
+            ('·', ["2-pièces", "3-joints"]),
         ] {
-            let text = format!("Plan 2024 • {} • {}", expected[0], expected[1]);
+            let text = format!("Plan 2024 • {} {second_marker} {}", expected[0], expected[1]);
             let mut paragraphs = vec![make_body_paragraph(&text, 10.0)];
             split_embedded_list_items(&mut paragraphs);
             assert_eq!(paragraphs.len(), 3, "{text}");
@@ -1246,14 +1246,17 @@ mod tests {
     #[test]
     fn embedded_bullets_split_numeric_only_items() {
         for intro in ["Available sizes", "Available sizes for model 2024"] {
-            let mut paragraphs = vec![make_body_paragraph(&format!("{intro} • 2 • 3 • 4"), 10.0)];
-            split_embedded_list_items(&mut paragraphs);
-            assert_eq!(paragraphs.len(), 4, "{intro}");
-            assert!(!paragraphs[0].is_list_item);
-            assert_eq!(paragraphs[0].lines[0].segments[0].text, intro);
-            for (item, expected) in paragraphs[1..].iter().zip(["2", "3", "4"]) {
-                assert!(item.is_list_item);
-                assert_eq!(item.lines[0].segments[0].text, expected);
+            for expected in [["2", "3", "4"], ["(2)", "(3)", "((4))"]] {
+                let text = format!("{intro} • {}", expected.join(" • "));
+                let mut paragraphs = vec![make_body_paragraph(&text, 10.0)];
+                split_embedded_list_items(&mut paragraphs);
+                assert_eq!(paragraphs.len(), 4, "{text}");
+                assert!(!paragraphs[0].is_list_item);
+                assert_eq!(paragraphs[0].lines[0].segments[0].text, intro);
+                for (item, expected) in paragraphs[1..].iter().zip(expected) {
+                    assert!(item.is_list_item);
+                    assert_eq!(item.lines[0].segments[0].text, expected);
+                }
             }
         }
     }
