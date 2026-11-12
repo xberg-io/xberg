@@ -2931,6 +2931,61 @@ mod tests {
         assert!(!lines.iter().any(|line| line.contains(&0) && line.contains(&2)));
     }
 
+    /// The gap is 159..172 (13 pt, past the 10 pt line break). A script of `width` starting at `left`
+    /// bridges it only when it lies within the gap, give or take the 1 pt slack.
+    fn bridged_script(left: f32, width: f32, font_size: f32) -> bool {
+        let spans = vec![
+            make_span_text(59.0, 643.4, 100.0, 10.0, "Where e", 10.0),
+            make_span_text(left, 647.0, width, 7.0, "iθ", font_size),
+            make_span_text(172.0, 643.4, 100.0, 10.0, "symbolize the amplitude", 10.0),
+        ];
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        group_lines(&spans, &indices, true)
+            .iter()
+            .any(|line| line.contains(&0) && line.contains(&2))
+    }
+
+    #[test]
+    fn a_script_left_of_the_gap_does_not_bridge_it_gh2925() {
+        assert!(bridged_script(162.0, 7.0, 7.0));
+        assert!(!bridged_script(150.0, 7.0, 7.0));
+    }
+
+    #[test]
+    fn a_script_right_of_the_gap_does_not_bridge_it_gh2925() {
+        assert!(bridged_script(162.0, 7.0, 7.0));
+        assert!(!bridged_script(170.0, 7.0, 7.0));
+    }
+
+    /// A script 0.5 pt out of the gap still bridges it; one 1.5 pt out does not.
+    #[test]
+    fn a_script_bridges_a_gap_only_within_one_point_of_its_edges_gh2925() {
+        assert!(bridged_script(158.5, 7.0, 7.0), "0.5 pt left of the gap");
+        assert!(bridged_script(165.5, 7.0, 7.0), "0.5 pt right of the gap");
+        assert!(!bridged_script(157.5, 7.0, 7.0), "1.5 pt left of the gap");
+        assert!(!bridged_script(166.5, 7.0, 7.0), "1.5 pt right of the gap");
+    }
+
+    #[test]
+    fn a_zero_size_span_in_the_gap_does_not_bridge_it_gh2925() {
+        assert!(bridged_script(162.0, 7.0, 7.0));
+        assert!(!bridged_script(162.0, 7.0, 0.0));
+    }
+
+    #[test]
+    fn a_line_bridged_by_an_inline_script_is_a_straddling_line_gh2925() {
+        let strategy = XYCutStrategy::new();
+        let spans = vec![
+            make_span_text(59.0, 643.4, 100.0, 10.0, "Where e", 10.0),
+            make_span_text(162.0, 647.0, 7.0, 7.0, "iθ", 7.0),
+            make_span_text(172.0, 643.4, 100.0, 10.0, "symbolize the amplitude", 10.0),
+        ];
+        let indices: Vec<usize> = (0..spans.len()).collect();
+        assert_eq!(strategy.straddling_line_count(&spans, &indices, 165.0), 1);
+        let without_script = [0, 2];
+        assert_eq!(strategy.straddling_line_count(&spans, &without_script, 165.0), 0);
+    }
+
     #[test]
     fn test_single_column_no_split() {
         let strategy = XYCutStrategy::new();
