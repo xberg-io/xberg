@@ -33,7 +33,7 @@ fn issue_2128_should_preserve_boundaries_when_page_text_cannot_locate_them() {
         if let Some(page_text) = page_text {
             let mut page_doc = make_doc("pdf");
             page_doc.push_element(InternalElement::text(ElementKind::Paragraph, page_text, 0).with_page(1));
-            doc.prebuilt_pages = build_pages(&page_doc, true);
+            doc.prebuilt_pages = build_plain_pages(&page_doc);
         }
         doc.metadata.pages = Some(crate::types::PageStructure {
             total_count: 1,
@@ -157,7 +157,7 @@ fn assert_final_ocr_page_boundaries(suffix: &str) {
         pages: None,
     });
     doc.metadata.title = Some("Synthetic OCR invoice batch".to_string());
-    doc.prebuilt_pages = build_pages(&doc, true);
+    doc.prebuilt_pages = build_plain_pages(&doc);
     let result = derive_extraction_result(doc, true, crate::core::config::OutputFormat::Plain);
     assert_eq!(result.content, page_texts.join("\n\n\n"));
     assert_eq!(result.metadata.title.as_deref(), Some("Synthetic OCR invoice batch"));

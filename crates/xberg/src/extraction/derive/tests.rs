@@ -555,7 +555,7 @@ fn page_with_a_picture(element_text: &str, ocr_text: &str) -> InternalDocument {
 
 /// The only page of `doc`, built for a document whose `content` is the plain rendering.
 fn only_page(doc: &InternalDocument) -> crate::types::page::PageContent {
-    let mut pages = build_pages(doc, true).expect("the elements have a page");
+    let mut pages = build_plain_pages(doc).expect("the elements have a page");
     assert_eq!(pages.len(), 1);
     pages.remove(0)
 }
@@ -641,7 +641,7 @@ fn build_pages_adds_no_picture_text_when_the_content_is_not_the_plain_rendering(
     doc.ocr_text_only = true;
     doc.append_ocr_text = true;
 
-    let pages = build_pages(&doc, false).expect("the elements have a page");
+    let pages = build_pages(&doc, None).expect("the elements have a page");
 
     assert_eq!(pages.len(), 1);
     assert_eq!(pages[0].content, "Stock list");

@@ -15,18 +15,52 @@ use super::common::{
     image_ocr_text, is_body_element, parse_metadata_entries, render_table_plain,
 };
 
-/// Render an `InternalDocument` to plain text.
-pub(crate) fn render_plain(doc: &InternalDocument) -> String {
-    render_plain_with_annotation_separator(doc).0
+/// The plain text of a document, with the bytes that each body element writes in it.
+pub(crate) struct PlainRendering {
+    pub(crate) text: String,
+    /// The offset of the annotations in `text`, after their title.
+    pub(crate) annotation_separator: Option<usize>,
+    pub(crate) spans: ElementSpans,
 }
 
-pub(crate) fn render_plain_with_annotation_separator(doc: &InternalDocument) -> (String, Option<usize>) {
+/// Where the body elements of a document are in its plain text.
+pub(crate) struct ElementSpans {
+    /// The byte range of the text that each element writes, at the element's index in
+    /// `doc.elements`. `None` for an element that writes nothing.
+    pub(crate) by_element: Vec<Option<(usize, usize)>>,
+    /// The end of the body in the text. The note and comment definitions and the annotations
+    /// follow it.
+    pub(crate) body_end: usize,
+}
+
+/// Render an `InternalDocument` to plain text.
+pub(crate) fn render_plain(doc: &InternalDocument) -> String {
+    render_plain_into(doc, None).0
+}
+
+/// Render an `InternalDocument` to plain text, and record the bytes that each element writes.
+pub(crate) fn render_plain_with_spans(doc: &InternalDocument) -> PlainRendering {
+    let mut by_element = vec![None; doc.elements.len()];
+    let (text, annotation_separator, body_end) = render_plain_into(doc, Some(&mut by_element));
+    PlainRendering {
+        text,
+        annotation_separator,
+        spans: ElementSpans { by_element, body_end },
+    }
+}
+
+fn render_plain_into(
+    doc: &InternalDocument,
+    spans: Option<&mut Vec<Option<(usize, usize)>>>,
+) -> (String, Option<usize>, usize) {
     let mut out = String::with_capacity(doc.elements.len() * 80);
     let footnotes = FootnoteCollector::new(doc);
-    render_body_plain(doc, &footnotes, &mut out, None);
+    render_body_plain(doc, &footnotes, &mut out, spans);
+    let body_end = out.len();
     let annotation_separator = append_tail_plain(doc, &footnotes, &mut out);
     out.truncate(out.trim_end().len());
-    (out, annotation_separator)
+    let body_end = body_end.min(out.len());
+    (out, annotation_separator, body_end)
 }
 
 /// Write the note and comment definitions and the annotations after the body. Returns the
@@ -47,40 +81,6 @@ fn append_tail_plain(doc: &InternalDocument, footnotes: &FootnoteCollector, out:
     Some(annotation_separator)
 }
 
-/// The Plain text of each page: the part of the `render_plain` output that the page's elements
-/// (indices into `doc.elements`) write, so each page text is found in that output. The page
-/// whose elements end last also has the note and comment definitions and the annotations, which
-/// `render_plain` writes after the body.
-pub(crate) fn render_plain_pages(
-    doc: &InternalDocument,
-    elements_by_page: &std::collections::BTreeMap<u32, Vec<usize>>,
-) -> std::collections::BTreeMap<u32, String> {
-    let mut out = String::with_capacity(doc.elements.len() * 80);
-    let footnotes = FootnoteCollector::new(doc);
-    let mut spans = vec![None; doc.elements.len()];
-    render_body_plain(doc, &footnotes, &mut out, Some(&mut spans));
-    let body_end = out.len();
-    append_tail_plain(doc, &footnotes, &mut out);
-    out.truncate(out.trim_end().len());
-    elements_by_page
-        .iter()
-        .map(|(&page_number, indices)| {
-            let page_spans = || indices.iter().filter_map(|&i| spans.get(i).copied().flatten());
-            let text = match (
-                page_spans().map(|(start, _)| start).min(),
-                page_spans().map(|(_, end)| end).max(),
-            ) {
-                (Some(start), Some(end)) => {
-                    let end = if end == body_end { out.len() } else { end.min(out.len()) };
-                    out.get(start.min(end)..end).unwrap_or_default().trim()
-                }
-                _ => "",
-            };
-            (page_number, text.to_string())
-        })
-        .collect()
-}
-
 /// Write the body elements in document order, with the note markers that `footnotes` numbers.
 /// With `spans`, record the output range that each element writes, at the element's index.
 fn render_body_plain(
@@ -91,16 +91,24 @@ fn render_body_plain(
 ) {
     let mut last_heading_depth = None;
     let mut after_text_block = false;
+    let mut last_writer = None;
     for (i, elem) in doc.elements.iter().enumerate() {
         if !is_body_element(elem) || elem.kind.is_container_start() || elem.kind.is_container_end() {
             continue;
         }
         let start = out.len();
         if elem.kind == ElementKind::FootnoteRef {
-            if let Some(n) = footnotes.ref_number(i as u32) {
-                append_footnote_marker(out, n, after_text_block);
-                after_text_block = true;
+            let Some(n) = footnotes.ref_number(i as u32) else { continue };
+            append_footnote_marker(out, n, after_text_block);
+            // ~keep A marker after a text block goes into that block, before its line breaks,
+            // so it belongs to the bytes of the element that wrote the block.
+            if after_text_block
+                && let Some(span) = last_writer.and_then(|last| spans.as_deref_mut()?.get_mut(last)?.as_mut())
+            {
+                span.1 += out.len() - start;
+                continue;
             }
+            after_text_block = true;
         } else {
             render_element_plain(doc, elem, out, &mut last_heading_depth);
             let plain_text = elem
@@ -118,10 +126,11 @@ fn render_body_plain(
                         | ElementKind::DefinitionDescription
                 );
         }
-        if let Some(span) = spans.as_deref_mut().and_then(|spans| spans.get_mut(i))
-            && out.len() > start
-        {
-            *span = Some((start, out.len()));
+        if out.len() > start {
+            last_writer = Some(i);
+            if let Some(span) = spans.as_deref_mut().and_then(|spans| spans.get_mut(i)) {
+                *span = Some((start, out.len()));
+            }
         }
     }
 }
