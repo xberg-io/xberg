@@ -222,3 +222,126 @@ pub fn build_sfnt(tables: &[(&[u8; 4], Vec<u8>)]) -> Vec<u8> {
     }
     font
 }
+
+/// Parameters of the minimal TrueType fixture font assembled by
+/// [`build_box_glyph_font`]: glyph 0 empty, glyph 1 a filled rectangle, and a
+/// single byte-indexed cmap subtable (platform 1, encoding 0, format 0)
+/// mapping exactly one byte to glyph 1.
+pub struct BoxGlyphFont {
+    /// Outline rectangle of glyph 1: `(x_min, y_min, x_max, y_max)` in font
+    /// units of the 1000-unit em.
+    pub outline: [u16; 4],
+    /// Bounding box the `head` table reports.
+    pub head_bbox: [u16; 4],
+    /// Left side bearing `hmtx` reports for glyph 1.
+    pub lsb: u16,
+    /// The one byte the cmap maps to glyph 1; every other byte resolves to
+    /// glyph 0.
+    pub cmap_byte: u8,
+}
+
+/// Assemble the shared box-glyph fixture font.
+///
+/// `knockout_authorfix_2855`, `test_glyph_drop_reporting` and
+/// `gh1632_whitespace_inferred_glyph` each carried a private copy of this
+/// builder that differed only in the rectangle, the mapped byte and the
+/// glyph-1 left side bearing; those are the parameters. The advance width
+/// (500), ascent/descent (800/-200) and `hhea` fields are fixed, matching
+/// all three originals byte for byte.
+pub fn build_box_glyph_font(spec: BoxGlyphFont) -> Vec<u8> {
+    let [x0, y0, x1, y1] = spec.outline;
+
+    // Glyph 1: one contour, four on-curve points tracing the rectangle.
+    let mut glyf: Vec<u8> = Vec::new();
+    glyf.extend(1u16.to_be_bytes());
+    for v in spec.outline {
+        glyf.extend(v.to_be_bytes());
+    }
+    glyf.extend(3u16.to_be_bytes());
+    glyf.extend(0u16.to_be_bytes());
+    glyf.extend([0x01; 4]);
+    for dx in [x0 as i16, (x1 - x0) as i16, 0, -((x1 - x0) as i16)] {
+        glyf.extend(dx.to_be_bytes());
+    }
+    for dy in [0i16, 0, (y1 - y0) as i16, 0] {
+        glyf.extend(dy.to_be_bytes());
+    }
+
+    // loca, short format (offset/2): glyph 0 empty, glyph 1 = all of glyf. ~keep
+    let mut loca: Vec<u8> = Vec::new();
+    loca.extend(0u16.to_be_bytes());
+    loca.extend(0u16.to_be_bytes());
+    loca.extend(
+        u16::try_from(glyf.len() / 2)
+            .expect("glyph 1 fits short loca")
+            .to_be_bytes(),
+    );
+
+    let mut head: Vec<u8> = Vec::new();
+    head.extend(0x0001_0000u32.to_be_bytes());
+    head.extend(0u32.to_be_bytes());
+    head.extend(0u32.to_be_bytes());
+    head.extend(0x5F0F_3CF5u32.to_be_bytes());
+    head.extend(0u16.to_be_bytes());
+    head.extend(1000u16.to_be_bytes());
+    head.extend([0u8; 16]);
+    for v in spec.head_bbox {
+        head.extend(v.to_be_bytes());
+    }
+    head.extend(0u16.to_be_bytes());
+    head.extend(8u16.to_be_bytes());
+    head.extend(2u16.to_be_bytes());
+    head.extend(0u16.to_be_bytes());
+    head.extend(0u16.to_be_bytes());
+
+    let mut hhea: Vec<u8> = Vec::new();
+    hhea.extend(0x0001_0000u32.to_be_bytes());
+    hhea.extend(800u16.to_be_bytes());
+    hhea.extend((-200i16).to_be_bytes());
+    hhea.extend(0u16.to_be_bytes());
+    hhea.extend(500u16.to_be_bytes());
+    for _ in 0..2 {
+        hhea.extend(0u16.to_be_bytes());
+    }
+    hhea.extend(x1.to_be_bytes());
+    hhea.extend(1u16.to_be_bytes());
+    hhea.extend(0u16.to_be_bytes());
+    hhea.extend(0u16.to_be_bytes());
+    hhea.extend([0u8; 8]);
+    hhea.extend(0u16.to_be_bytes());
+    hhea.extend(2u16.to_be_bytes());
+
+    let mut hmtx: Vec<u8> = Vec::new();
+    for lsb in [0u16, spec.lsb] {
+        hmtx.extend(500u16.to_be_bytes());
+        hmtx.extend(lsb.to_be_bytes());
+    }
+
+    let mut maxp: Vec<u8> = Vec::new();
+    maxp.extend(0x0001_0000u32.to_be_bytes());
+    maxp.extend(2u16.to_be_bytes());
+    maxp.extend([0u8; 26]);
+
+    let mut cmap: Vec<u8> = Vec::new();
+    cmap.extend(0u16.to_be_bytes());
+    cmap.extend(1u16.to_be_bytes());
+    cmap.extend(1u16.to_be_bytes());
+    cmap.extend(0u16.to_be_bytes());
+    cmap.extend(12u32.to_be_bytes());
+    cmap.extend(0u16.to_be_bytes());
+    cmap.extend(262u16.to_be_bytes());
+    cmap.extend(0u16.to_be_bytes());
+    let mut glyph_ids = [0u8; 256];
+    glyph_ids[usize::from(spec.cmap_byte)] = 1;
+    cmap.extend(glyph_ids);
+
+    build_sfnt(&[
+        (b"cmap", cmap),
+        (b"glyf", glyf),
+        (b"head", head),
+        (b"hhea", hhea),
+        (b"hmtx", hmtx),
+        (b"loca", loca),
+        (b"maxp", maxp),
+    ])
+}

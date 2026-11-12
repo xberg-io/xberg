@@ -390,6 +390,38 @@ impl std::fmt::Display for FailedOcrRun {
     }
 }
 
+/// The error recorded for a page the extraction time limit stopped before it was read.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) const TIME_LIMIT_UNREAD_PAGE_ERROR: &str = "the extraction time limit was reached before the page was read";
+
+/// The error of a run in which no page was read. Pages the time limit left unread make it the
+/// time limit, whatever failed earlier; otherwise it is the error of the first failed page.
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn run_error_for_failed_pages(
+    page_indices: &[usize],
+    failed_page_errors: &mut ahash::AHashMap<usize, crate::XbergError>,
+) -> crate::XbergError {
+    let stopped_by_limit = page_indices.iter().find(|page_idx| {
+        matches!(
+            failed_page_errors.get(page_idx),
+            Some(crate::XbergError::Timeout { .. })
+        )
+    });
+    let chosen = stopped_by_limit
+        .or_else(|| {
+            page_indices
+                .iter()
+                .find(|page_idx| failed_page_errors.contains_key(page_idx))
+        })
+        .copied();
+    chosen
+        .and_then(|page_idx| failed_page_errors.remove(&page_idx))
+        .unwrap_or_else(|| crate::XbergError::Ocr {
+            message: "OCR failed for every requested page".to_string(),
+            source: None,
+        })
+}
+
 /// Add `incoming` records to `failures`. A page that already has a record keeps its first
 /// error and is recovered when any of its records is.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -1266,7 +1298,36 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut preprocessing_by_page: ahash::AHashMap<u32, crate::types::ImagePreprocessingMetadata> =
         ahash::AHashMap::new();
     let mut xobject_recovery_budget = crate::extractors::security::SecurityBudget::from_config(config);
+    let page_loop = config
+        .cancel_token
+        .as_ref()
+        .map(crate::cancellation::CancellationToken::enter_page_loop);
     for batch_start in (0..total).step_by(batch_size) {
+        // The extraction time limit asks for the pages read so far: the pages of the batches
+        // that finished stay in the result and every later page is recorded as unread.
+        if let Some(token) = config.cancel_token.as_ref().filter(|token| token.stop_requested()) {
+            if let Some(&first_unread) = page_indices.get(batch_start) {
+                token.note_unread_page((first_unread + 1) as u32);
+            }
+            for &page_idx in &page_indices[batch_start..] {
+                merge_ocr_page_failures(
+                    &mut page_failures,
+                    vec![crate::types::OcrPageFailure {
+                        page: (page_idx + 1) as u32,
+                        error: TIME_LIMIT_UNREAD_PAGE_ERROR.to_string(),
+                        recovered: mixed_native_page_has_content(native_text, boundaries, page_idx),
+                    }],
+                );
+                failed_page_errors.insert(
+                    page_idx,
+                    crate::XbergError::Timeout {
+                        elapsed_ms: 0,
+                        limit_ms: 0,
+                    },
+                );
+            }
+            break;
+        }
         let batch_end = (batch_start + batch_size).min(total);
         let default_security_limits = crate::extractors::security::SecurityLimits::default();
         let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
@@ -2563,19 +2624,15 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         }
     }
 
+    drop(page_loop);
+
     if all_pages_failed_policy == AllPagesFailedPolicy::ReturnError
         && !page_indices.is_empty()
         && page_indices
             .iter()
             .all(|page_idx| failed_page_errors.contains_key(page_idx))
     {
-        let error = page_indices
-            .iter()
-            .find_map(|page_idx| failed_page_errors.remove(page_idx))
-            .unwrap_or_else(|| crate::XbergError::Ocr {
-                message: "OCR failed for every requested page".to_string(),
-                source: None,
-            });
+        let error = run_error_for_failed_pages(&page_indices, &mut failed_page_errors);
         return Err(FailedOcrRun { error, page_failures });
     }
 
@@ -5768,6 +5825,34 @@ pub(super) async fn extract_with_ocr_for_page(
                 &mut ocr_result,
                 config.security_limits.as_ref().unwrap_or(&Default::default()),
             )?;
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            if batch_upright_correction[offset].0 == 0
+                && !complete_native_words
+                && !native_ink_owned
+                && !pages_with_recovered_xobject_payload[page_idx]
+                && super::document::resolved_ocr_correction_degrees(&ocr_result.metadata).is_none_or(|angle| angle == 0)
+                && super::document::native_preservation_is_automatic(config, document_page_number)
+                && get_ocr_backend_registry().read().is_builtin_tesseract(&backend)
+                && let Some(pdf) = detached_page
+                    .map(|source| source.document)
+                    .or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf.as_ref()))
+            {
+                super::layer_token_recovery::recover_page(
+                    pdf,
+                    document_page_idx,
+                    &mut ocr_result,
+                    super::native_word_coverage::InkProofLimits {
+                        thresholds: &ocr_output_thresholds,
+                        max_working_bytes: super::hidden_layer::preview_byte_limit(config),
+                        cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
+                    },
+                );
+            }
             if let Some(psm) = effective_tesseract_psm(&ocr_result.metadata, &backend_name) {
                 page_segmentation_modes.insert(document_page_number, psm);
             }
@@ -9942,3 +10027,7 @@ fn registered_preprocessing_render_dpi(config: &ExtractionConfig, ocr: &crate::c
     let backend = registry.get(&ocr.backend).ok()?;
     registry.is_builtin_tesseract(&backend).then_some(target)
 }
+
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[path = "pipeline/time_limit_run_error_tests.rs"]
+mod time_limit_run_error_tests;

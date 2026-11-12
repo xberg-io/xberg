@@ -12,134 +12,21 @@
 //! process-lifetime latch fails this test, because bulk ingestion would go
 //! silent after the first page.
 
+mod common;
+
 use xberg_native_pdf::PdfDocument;
 use xberg_native_pdf::extractors::warnings::{WarningCategory, drain_global_warnings};
 use xberg_native_pdf::rendering::{PageRenderer, RenderOptions};
 
-fn be16(v: u16) -> [u8; 2] {
-    v.to_be_bytes()
-}
-
-fn be32(v: u32) -> [u8; 4] {
-    v.to_be_bytes()
-}
-
-/// A minimal TrueType font: glyph 0 empty, glyph 1 a box, and a single
-/// byte-indexed cmap subtable (platform 1, encoding 0, format 0) that maps
-/// only 'A' (0x41) to glyph 1. Every other byte resolves to glyph 0.
+/// The shared box-glyph fixture font (see `common::build_box_glyph_font`),
+/// here mapping 'A' to glyph 1 so "AB" paints the box and drops the 'B'.
 fn broken_subset_font() -> Vec<u8> {
-    let mut glyf: Vec<u8> = Vec::new();
-    glyf.extend(be16(1));
-    glyf.extend(be16(50));
-    glyf.extend(be16(0));
-    glyf.extend(be16(450));
-    glyf.extend(be16(700));
-    glyf.extend(be16(3));
-    glyf.extend(be16(0));
-    glyf.extend([0x01, 0x01, 0x01, 0x01]);
-    for dx in [50i16, 400, 0, -400] {
-        glyf.extend(dx.to_be_bytes());
-    }
-    for dy in [0i16, 0, 700, 0] {
-        glyf.extend(dy.to_be_bytes());
-    }
-
-    // loca (short format, offset/2): glyph 0 empty, glyph 1 = all of glyf. ~keep
-    let mut loca: Vec<u8> = Vec::new();
-    loca.extend(be16(0));
-    loca.extend(be16(0));
-    loca.extend(be16((glyf.len() / 2) as u16));
-
-    let mut head: Vec<u8> = Vec::new();
-    head.extend(be32(0x0001_0000));
-    head.extend(be32(0));
-    head.extend(be32(0));
-    head.extend(be32(0x5F0F_3CF5));
-    head.extend(be16(0));
-    head.extend(be16(1000));
-    head.extend([0u8; 16]);
-    head.extend(be16(0));
-    head.extend(be16(0));
-    head.extend(be16(450));
-    head.extend(be16(700));
-    head.extend(be16(0));
-    head.extend(be16(8));
-    head.extend(be16(2));
-    head.extend(be16(0));
-    head.extend(be16(0));
-
-    let mut hhea: Vec<u8> = Vec::new();
-    hhea.extend(be32(0x0001_0000));
-    hhea.extend(be16(800));
-    hhea.extend((-200i16).to_be_bytes());
-    hhea.extend(be16(0));
-    hhea.extend(be16(500));
-    hhea.extend(be16(0));
-    hhea.extend(be16(0));
-    hhea.extend(be16(450));
-    hhea.extend(be16(1));
-    hhea.extend(be16(0));
-    hhea.extend(be16(0));
-    hhea.extend([0u8; 8]);
-    hhea.extend(be16(0));
-    hhea.extend(be16(2));
-
-    let mut hmtx: Vec<u8> = Vec::new();
-    for _ in 0..2 {
-        hmtx.extend(be16(500));
-        hmtx.extend(be16(0));
-    }
-
-    let mut maxp: Vec<u8> = Vec::new();
-    maxp.extend(be32(0x0001_0000));
-    maxp.extend(be16(2));
-    maxp.extend([0u8; 26]);
-
-    let mut cmap: Vec<u8> = Vec::new();
-    cmap.extend(be16(0));
-    cmap.extend(be16(1));
-    cmap.extend(be16(1));
-    cmap.extend(be16(0));
-    cmap.extend(be32(12));
-    cmap.extend(be16(0));
-    cmap.extend(be16(262));
-    cmap.extend(be16(0));
-    let mut glyph_ids = [0u8; 256];
-    glyph_ids[0x41] = 1;
-    cmap.extend(glyph_ids);
-
-    let tables: [(&[u8; 4], &Vec<u8>); 7] = [
-        (b"cmap", &cmap),
-        (b"glyf", &glyf),
-        (b"head", &head),
-        (b"hhea", &hhea),
-        (b"hmtx", &hmtx),
-        (b"loca", &loca),
-        (b"maxp", &maxp),
-    ];
-    let num_tables = tables.len() as u16;
-    let mut font: Vec<u8> = Vec::new();
-    font.extend(be32(0x0001_0000));
-    font.extend(be16(num_tables));
-    let entry_selector = 15 - num_tables.leading_zeros() as u16;
-    let search_range = (1u16 << entry_selector) * 16;
-    font.extend(be16(search_range));
-    font.extend(be16(entry_selector));
-    font.extend(be16(num_tables * 16 - search_range));
-
-    let mut offset = 12 + 16 * tables.len();
-    for (tag, data) in &tables {
-        font.extend_from_slice(*tag);
-        font.extend(be32(0));
-        font.extend(be32(offset as u32));
-        font.extend(be32(data.len() as u32));
-        offset += data.len().div_ceil(4) * 4;
-    }
-    for (_, data) in &tables {
-        font.extend_from_slice(data);
-        font.extend(std::iter::repeat_n(0u8, data.len().div_ceil(4) * 4 - data.len()));
-    }
-    font
+    common::build_box_glyph_font(common::BoxGlyphFont {
+        outline: [50, 0, 450, 700],
+        head_bbox: [0, 0, 450, 700],
+        lsb: 0,
+        cmap_byte: b'A',
+    })
 }
 
 /// A PDF with `page_count` identical pages, each painting "AB" in the
