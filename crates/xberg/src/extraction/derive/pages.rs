@@ -1220,7 +1220,11 @@ mod plain_page_rerender_tests {
         set_boundaries(&mut doc, &[(3, 5, 8), (2, 0, 3)]);
         derive_plain(&mut doc);
         let structure = doc.metadata.pages.as_ref().expect("page structure");
-        assert!(structure.boundaries.is_none(), "no range is left: {:?}", structure.boundaries);
+        assert!(
+            structure.boundaries.is_none(),
+            "no range is left: {:?}",
+            structure.boundaries
+        );
         let messages: Vec<&str> = doc
             .processing_warnings
             .iter()
