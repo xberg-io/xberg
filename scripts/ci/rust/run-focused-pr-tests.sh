@@ -214,11 +214,12 @@ run_mixed_plain_cases() {
   done
   for test_name in \
     detected_scan_without_native_elements_renders_the_accepted_table \
-    selected_scan_renders_prose_before_and_after_the_ocr_table; do
+    selected_scan_renders_prose_before_and_after_the_ocr_table \
+    selected_scan_keeps_section_labels_that_table_assembly_drops; do
     run_exact "mixed_tables::$test_name" --test pdf_all_pages_native_preservation_2768
   done
-  if [ "$((passed - before))" -ne 6 ]; then
-    printf 'Expected 6 executed mixed Plain tests, observed %s\n' "$((passed - before))" >&2
+  if [ "$((passed - before))" -ne 7 ]; then
+    printf 'Expected 7 executed mixed Plain tests, observed %s\n' "$((passed - before))" >&2
     exit 1
   fi
 }
@@ -239,7 +240,7 @@ pdf-ocr)
   run_number_budget_cases
   run_ink_probe_cases
   run_discarded_recovery_cases
-  expected=$((expected + 6))
+  expected=$((expected + 7))
   run_mixed_plain_cases
   ;;
 api-jobs)
