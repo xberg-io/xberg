@@ -634,31 +634,67 @@ fn normalize_embeddings(embeddings: &mut [Vec<f32>]) {
     embeddings.iter_mut().for_each(|v| normalize_in_place(v));
 }
 
-/// Generate embeddings for text chunks using the specified configuration.
+#[cfg(feature = "embeddings")]
+type WindowVectors = Vec<Vec<f32>>;
+
+/// Embed `chunks` `window` at a time through `embed`, asking `stop` before every window.
+/// `None` when `stop` ended the run: no partial vector list is returned.
+#[cfg(feature = "embeddings")]
+fn embed_in_windows(
+    chunks: &[crate::types::Chunk],
+    window: usize,
+    stop: &dyn Fn() -> bool,
+    embed: &mut dyn FnMut(&[&str]) -> crate::Result<WindowVectors>,
+) -> crate::Result<Option<WindowVectors>> {
+    let mut vectors = Vec::with_capacity(chunks.len());
+    for window_chunks in chunks.chunks(window) {
+        if stop() {
+            return Ok(None);
+        }
+        let texts: Vec<&str> = window_chunks.iter().map(|c| c.content.as_str()).collect();
+        vectors.extend(embed(&texts)?);
+    }
+    Ok(Some(vectors))
+}
+
+/// The batch size the ONNX engine falls back to for a `batch_size` of zero.
+#[cfg(feature = "embeddings")]
+const DEFAULT_ENGINE_BATCH_SIZE: usize = 32;
+
+/// Generate embeddings for text chunks using the specified configuration, populating their
+/// `embedding` field in place. A local model is run one batch at a time, and `stop` is asked
+/// before every batch: the stage is abandoned when it answers `true`.
 ///
-/// This function modifies chunks in-place, populating their `embedding` field
-/// with generated embedding vectors. It uses batch processing for efficiency.
-///
-/// # Arguments
-///
-/// * `chunks` - Mutable reference to vector of chunks to generate embeddings for
-/// * `config` - Embedding configuration specifying model and parameters
-///
-/// # Returns
-///
-/// Returns `Ok(())` if embeddings were generated successfully, or an error if
-/// model initialization or embedding generation fails.
+/// Returns `Ok(true)` once every chunk holds its vector and `Ok(false)` when `stop` ended the
+/// stage; a stopped stage attaches no vector at all, because a document where only the first
+/// chunks are embedded would silently mislead a retrieval index. A hosted or plugin backend is
+/// one call that cannot be split, so `stop` is asked once before it.
 #[cfg(feature = "embeddings")]
 pub(crate) fn generate_embeddings_for_chunks(
     chunks: &mut [crate::types::Chunk],
     config: &crate::core::config::EmbeddingConfig,
-) -> crate::Result<()> {
+    stop: &dyn Fn() -> bool,
+) -> crate::Result<bool> {
     if chunks.is_empty() {
-        return Ok(());
+        return Ok(true);
     }
 
-    let texts: Vec<&str> = chunks.iter().map(|c| c.content.as_str()).collect();
-    let embeddings_result = embed_texts(&texts, config)?;
+    let window = match &config.model {
+        crate::core::config::EmbeddingModelType::Preset { .. }
+        | crate::core::config::EmbeddingModelType::Custom { .. } => {
+            if config.batch_size == 0 {
+                DEFAULT_ENGINE_BATCH_SIZE
+            } else {
+                config.batch_size
+            }
+        }
+        _ => chunks.len(),
+    };
+
+    let Some(embeddings_result) = embed_in_windows(chunks, window, stop, &mut |texts| embed_texts(texts, config))?
+    else {
+        return Ok(false);
+    };
 
     if embeddings_result.len() != chunks.len() {
         return Err(crate::XbergError::Validation {
@@ -676,7 +712,7 @@ pub(crate) fn generate_embeddings_for_chunks(
         chunk.embedding = Some(embedding);
     }
 
-    Ok(())
+    Ok(true)
 }
 
 /// Generate embeddings for a list of raw text strings (standalone, no chunking pipeline).
@@ -1891,5 +1927,93 @@ mod tests {
     #[test]
     fn validate_shape_empty_expected_count_ok() {
         super::validate_embedding_shape(&[], 0, 4, "empty").unwrap();
+    }
+
+    #[cfg(feature = "embeddings")]
+    fn chunks(count: usize) -> Vec<crate::types::Chunk> {
+        (0..count)
+            .map(|index| crate::types::Chunk {
+                content: format!("chunk {index}"),
+                chunk_type: crate::types::ChunkType::default(),
+                embedding: None,
+                sparse_embedding: None,
+                late_interaction: None,
+                metadata: crate::types::ChunkMetadata {
+                    byte_start: 0,
+                    byte_end: 0,
+                    token_count: None,
+                    chunk_index: index,
+                    total_chunks: count,
+                    first_page: None,
+                    last_page: None,
+                    heading_context: None,
+                    heading_path: Vec::new(),
+                    image_indices: Vec::new(),
+                    node_ids: Vec::new(),
+                    page_spans: Vec::new(),
+                    classifications: Vec::new(),
+                },
+            })
+            .collect()
+    }
+
+    #[cfg(feature = "embeddings")]
+    #[test]
+    fn a_stop_requested_between_windows_abandons_the_run_without_a_partial_list() {
+        let chunks = chunks(7);
+        let windows = std::cell::Cell::new(0);
+        let asked = std::cell::Cell::new(0);
+        let stop = || {
+            asked.set(asked.get() + 1);
+            asked.get() > 2
+        };
+
+        let outcome = embed_in_windows(&chunks, 3, &stop, &mut |texts| {
+            windows.set(windows.get() + 1);
+            Ok(vec![vec![1.0]; texts.len()])
+        })
+        .expect("the stub never fails");
+
+        assert!(outcome.is_none(), "a stopped run returns no vectors at all");
+        assert_eq!(windows.get(), 2, "the model ran for the two windows before the stop");
+    }
+
+    #[cfg(feature = "embeddings")]
+    #[test]
+    fn every_window_is_embedded_in_order_when_no_stop_is_requested() {
+        let chunks = chunks(7);
+        let mut sizes = Vec::new();
+
+        let vectors = embed_in_windows(&chunks, 3, &|| false, &mut |texts| {
+            sizes.push(texts.len());
+            Ok(texts.iter().map(|text| vec![text.len() as f32]).collect())
+        })
+        .expect("the stub never fails")
+        .expect("no stop was requested");
+
+        assert_eq!(sizes, [3, 3, 1]);
+        assert_eq!(vectors.len(), 7);
+    }
+
+    #[cfg(feature = "embeddings")]
+    #[test]
+    fn a_stopped_chunk_embedding_stage_attaches_nothing_and_never_loads_the_model() {
+        let mut chunks = chunks(3);
+        let config = crate::core::config::EmbeddingConfig {
+            model: crate::core::config::EmbeddingModelType::Preset {
+                name: "no-such-embedding-preset".to_string(),
+            },
+            ..crate::core::config::EmbeddingConfig::default()
+        };
+
+        let stopped = generate_embeddings_for_chunks(&mut chunks, &config, &|| true);
+        assert!(matches!(stopped, Ok(false)), "got {stopped:?}");
+        assert!(chunks.iter().all(|chunk| chunk.embedding.is_none()));
+
+        let unstopped = generate_embeddings_for_chunks(&mut chunks, &config, &|| false);
+        assert!(
+            unstopped.is_err(),
+            "without a stop the unknown preset is reached and fails"
+        );
     }
 }

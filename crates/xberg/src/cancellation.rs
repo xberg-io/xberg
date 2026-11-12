@@ -37,7 +37,9 @@
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
+use std::time::Instant;
 
 /// A lightweight, cloneable, one-shot cancellation token.
 ///
@@ -97,6 +99,8 @@ struct StopState {
     requested: AtomicBool,
     active_page_loops: AtomicUsize,
     first_unread_page: AtomicU32,
+    deadline: OnceLock<Instant>,
+    stage_cut: AtomicBool,
 }
 
 impl Default for StopState {
@@ -105,18 +109,18 @@ impl Default for StopState {
             requested: AtomicBool::new(false),
             active_page_loops: AtomicUsize::new(0),
             first_unread_page: AtomicU32::new(NO_UNREAD_PAGE),
+            deadline: OnceLock::new(),
+            stage_cut: AtomicBool::new(false),
         }
     }
 }
 
 const NO_UNREAD_PAGE: u32 = u32::MAX;
 
-/// Marks a page loop that honours the soft stop as running; dropping it marks the loop as done.
-#[cfg(any(test, feature = "pdf"))]
+/// Marks a page loop or stage that honours the soft stop as running; dropping it marks it as done.
 #[derive(Debug)]
 pub(crate) struct PageLoopGuard(Arc<StopState>);
 
-#[cfg(any(test, feature = "pdf"))]
 impl Drop for PageLoopGuard {
     fn drop(&mut self) {
         self.0.active_page_loops.fetch_sub(1, Ordering::Relaxed);
@@ -168,6 +172,36 @@ impl CancellationToken {
         self.stop.requested.store(true, Ordering::Relaxed);
     }
 
+    /// Record the instant the extraction time limit ends, for stages that run too long between two
+    /// awaits to be reached by the timeout: the future that enforces the limit is polled by the
+    /// extraction's own task, so a model call that never yields keeps it from firing at all.
+    #[cfg(any(test, all(feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+    pub(crate) fn set_deadline(&self, deadline: Instant) {
+        let _ = self.stop.deadline.set(deadline);
+    }
+
+    /// Whether the extraction time limit has been reached: a stop was requested or the deadline
+    /// passed. Stages that run model calls ask this between batches and stop early when it holds.
+    pub(crate) fn time_limit_reached(&self) -> bool {
+        self.stop_requested()
+            || self
+                .stop
+                .deadline
+                .get()
+                .is_some_and(|deadline| Instant::now() >= *deadline)
+    }
+
+    /// Record that a post-processing stage gave up its output because the time limit was reached.
+    pub(crate) fn note_stage_cut(&self) {
+        self.stop.stage_cut.store(true, Ordering::Relaxed);
+    }
+
+    /// Whether the returned document is partial: a page loop left pages unread or a post-processing
+    /// stage dropped its output. Such a document must not be cached.
+    pub(crate) fn result_is_partial(&self) -> bool {
+        self.cut_short_by_time_limit() || self.stop.stage_cut.load(Ordering::Relaxed)
+    }
+
     /// Returns `true` once [`request_stop`](Self::request_stop) was called on this extraction's token.
     pub(crate) fn stop_requested(&self) -> bool {
         self.stop.requested.load(Ordering::Relaxed)
@@ -178,6 +212,13 @@ impl CancellationToken {
     /// the guard is dropped, so a timeout in a later stage does not wait for a loop that is over.
     #[cfg(any(test, feature = "pdf"))]
     pub(crate) fn enter_page_loop(&self) -> PageLoopGuard {
+        self.enter_stoppable_stage()
+    }
+
+    /// Mark a post-processing stage that checks [`time_limit_reached`](Self::time_limit_reached)
+    /// as running, so a limit that passes inside it asks the stage to stop and waits out the grace
+    /// for its partial document instead of failing with a timeout at once.
+    pub(crate) fn enter_stoppable_stage(&self) -> PageLoopGuard {
         self.stop.active_page_loops.fetch_add(1, Ordering::Relaxed);
         PageLoopGuard(Arc::clone(&self.stop))
     }
@@ -329,5 +370,46 @@ mod tests {
         let unstopped = CancellationToken::new();
         unstopped.note_unread_page(5);
         assert!(!unstopped.cut_short_by_time_limit());
+    }
+
+    #[test]
+    fn the_time_limit_is_reached_by_a_stop_request_or_a_passed_deadline_only() {
+        let token = CancellationToken::new();
+        assert!(!token.time_limit_reached(), "no deadline and no stop is no limit");
+
+        token.set_deadline(Instant::now() + std::time::Duration::from_secs(3600));
+        assert!(!token.time_limit_reached());
+
+        let past = CancellationToken::new();
+        past.set_deadline(Instant::now());
+        assert!(past.time_limit_reached(), "a passed deadline needs no stop request");
+
+        let stopped = CancellationToken::new();
+        stopped.request_stop();
+        assert!(stopped.time_limit_reached());
+    }
+
+    #[test]
+    fn a_stage_cut_makes_the_result_partial_even_when_no_page_was_left_unread() {
+        let token = CancellationToken::new();
+        assert!(!token.result_is_partial());
+
+        token.note_stage_cut();
+        assert!(token.result_is_partial());
+        assert!(!token.cut_short_by_time_limit(), "the page loops were not cut short");
+
+        let unread = CancellationToken::new();
+        unread.request_stop();
+        unread.note_unread_page(2);
+        assert!(unread.result_is_partial());
+    }
+
+    #[test]
+    fn a_stoppable_stage_counts_as_a_running_loop_until_its_guard_drops() {
+        let token = CancellationToken::new();
+        let guard = token.enter_stoppable_stage();
+        assert!(token.page_loop_running());
+        drop(guard);
+        assert!(!token.page_loop_running());
     }
 }

@@ -97,6 +97,10 @@ pub(crate) async fn extract_bytes_with_layout_pages(
             .cancel_token
             .as_ref()
             .map(crate::cancellation::CancellationToken::scoped);
+        super::time_limit::arm(
+            owned.cancel_token.as_ref(),
+            owned.extraction_timeout_secs.unwrap_or_default(),
+        );
         owned_config_with_cancel_token = owned;
         &owned_config_with_cancel_token
     } else {
