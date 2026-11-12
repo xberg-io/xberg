@@ -3961,18 +3961,16 @@ async fn extract_pages_with_per_page_pipeline(
         .map(|(page, _)| *page)
         .min()
         .and_then(|page| structured_pages.get(&page))
-    {
-        if let Some((key, value)) = first
+        && let Some((key, value)) = first
             .metadata
             .additional
             .get_key_value(crate::ocr_metadata_keys::OCR_AUTO_ROTATED_METADATA_KEY)
-        {
-            document
-                .metadata
-                .additional
-                .entry(key.clone())
-                .or_insert_with(|| value.clone());
-        }
+    {
+        document
+            .metadata
+            .additional
+            .entry(key.clone())
+            .or_insert_with(|| value.clone());
     }
     if let Some(psm) = document
         .metadata
