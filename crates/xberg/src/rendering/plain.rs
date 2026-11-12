@@ -29,8 +29,8 @@ pub(crate) struct ElementSpans {
     /// `doc.elements`. `None` for an element that writes nothing. The trailing whitespace of the
     /// text is cut after the ranges are recorded, so the last ranges can end after the text.
     pub(crate) by_element: Vec<Option<(usize, usize)>>,
-    /// The end of the body, which is the end of the last range. The note and comment
-    /// definitions and the annotations follow it.
+    /// The end of the body in the text, after the cut of the trailing whitespace. The note and
+    /// comment definitions and the annotations follow it.
     pub(crate) body_end: usize,
 }
 
@@ -60,6 +60,9 @@ fn render_plain_into(
     let body_end = out.len();
     let annotation_separator = append_tail_plain(doc, &footnotes, &mut out);
     out.truncate(out.trim_end().len());
+    // ~keep When the last elements write only whitespace, the cut moves the end of the body back to
+    // the end of the text, so the last page with text reaches the note definitions.
+    let body_end = body_end.min(out.len());
     (out, annotation_separator, body_end)
 }
 

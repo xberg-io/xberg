@@ -1084,6 +1084,20 @@ mod plain_page_rerender_tests {
     }
 
     #[test]
+    fn the_last_page_with_text_keeps_its_range_when_a_later_page_writes_only_whitespace() {
+        let mut doc = office_doc_with(
+            vec![page(1, "one"), page(2, "two"), page(3, " ")],
+            &[(1, "one"), (2, "two"), (3, " ")],
+        );
+        let (content, pages) = derive_plain(&mut doc);
+        assert_eq!(content, "one\n\ntwo");
+        assert_eq!(pages[1].content, "two");
+        assert!(!warned(&doc));
+        assert_eq!(boundary_pages(&doc), vec![1, 2]);
+        assert_ranges(&doc, &content, &pages[..2]);
+    }
+
+    #[test]
     fn a_page_whose_elements_write_only_whitespace_loses_its_range_without_a_warning() {
         let mut doc = office_doc_with(
             vec![page(1, "one"), page(2, " "), page(3, "three")],
