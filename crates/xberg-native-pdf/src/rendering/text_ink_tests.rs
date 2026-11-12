@@ -127,3 +127,19 @@ fn a_render_without_images_keeps_the_text_and_drops_the_picture_under_it() {
     assert!(text_ink > 100, "the text still paints: {text_ink}");
     assert!(text_ink < 200 * 200 / 2, "the picture does not: {text_ink}");
 }
+
+#[test]
+fn a_render_without_images_leaves_out_an_image_mask() {
+    let document = text_pdf(
+        "q 200 0 0 200 0 0 cm 0 g BI /W 1 /H 1 /IM true /BPC 1 ID \u{0} EI Q 0 g BT /F1 60 Tf 20 80 Td (HHH) Tj ET",
+    );
+    let with_images = render_text_ink_rasters(&document, 0, 72, 1 << 26, || false)
+        .unwrap()
+        .unwrap();
+    let drawn = dark(&with_images.drawn);
+    assert!(drawn > 200 * 200 / 2, "the mask paints the page: {drawn}");
+    let (_, _, without_images) = super::render_page_without_images(&document, 0, 72, 1 << 26).unwrap();
+    let left = dark(&without_images);
+    assert!(left > 100, "the text still paints: {left}");
+    assert!(left < 200 * 200 / 2, "the mask is left out: {left}");
+}

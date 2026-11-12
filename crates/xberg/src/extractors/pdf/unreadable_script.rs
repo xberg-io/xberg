@@ -1247,6 +1247,14 @@ mod tests {
         assert!(warnings[0].message.contains("kept"), "{}", warnings[0].message);
     }
 
+    /// #2826: a layer with no glyphs over the picture leaves no ink to measure, so the page is its
+    /// picture.
+    #[test]
+    fn a_blank_layer_over_a_full_page_picture_reads_as_a_scan() {
+        let document = xberg_native_pdf::PdfDocument::from_bytes(SCAN_WITH_OVERLAY.to_vec()).unwrap();
+        assert!(page_reads_as_scan(&document, 0, " ", &config_with(&["eng"])));
+    }
+
     #[test]
     fn a_text_heavy_page_with_a_figure_is_kept_although_a_picture_covers_a_quarter_of_it() {
         let document = xberg_native_pdf::PdfDocument::from_bytes(TEXT_WITH_FIGURE.to_vec()).unwrap();
