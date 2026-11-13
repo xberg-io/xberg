@@ -5975,6 +5975,43 @@ impl PageRenderer {
         }
     }
 
+    fn overprint_source(&self, gs: &GraphicsState, fill_side: bool) -> Option<OverprintSource> {
+        let source = source_for_overprint(gs, fill_side)?;
+        if source.class != SourceCsClass::SeparationOrDeviceN {
+            return Some(source);
+        }
+        let (name, inks) = if fill_side {
+            (&gs.fill_color_space, &gs.fill_spot_inks)
+        } else {
+            (&gs.stroke_color_space, &gs.stroke_spot_inks)
+        };
+        let is_separation = self
+            .color_spaces
+            .get(name)
+            .and_then(Object::as_array)
+            .and_then(|space| space.first())
+            .and_then(Object::as_name)
+            == Some("Separation");
+        let [(ink, tint)] = inks.as_slice() else {
+            return Some(source);
+        };
+        if !is_separation {
+            return Some(source);
+        }
+        let tint = tint.clamp(0.0, 1.0);
+        let (channel, cmyk) = match ink.as_str() {
+            "Cyan" => (ProcessChannel::C, (tint, 0.0, 0.0, 0.0)),
+            "Magenta" => (ProcessChannel::M, (0.0, tint, 0.0, 0.0)),
+            "Yellow" => (ProcessChannel::Y, (0.0, 0.0, tint, 0.0)),
+            "Black" => (ProcessChannel::K, (0.0, 0.0, 0.0, tint)),
+            _ => return Some(source),
+        };
+        Some(OverprintSource {
+            class: SourceCsClass::ProcessSeparation(channel),
+            cmyk,
+        })
+    }
+
     /// Take a snapshot of `pixmap` when the graphics state has the
     /// overprint parameter active for the targeted side. Used by
     /// [`Self::apply_overprint_after_paint`] to recover the pre-paint
@@ -5988,7 +6025,7 @@ impl PageRenderer {
     /// on the source class; without the snapshot the painted region
     /// could not be identified for compositing.
     fn overprint_snapshot(&self, pixmap: &Pixmap, gs: &GraphicsState, fill_side: bool) -> Option<Vec<u8>> {
-        if source_for_overprint(gs, fill_side).is_some() {
+        if self.overprint_source(gs, fill_side).is_some() {
             Some(pixmap.data().to_vec())
         } else {
             None
@@ -6031,7 +6068,7 @@ impl PageRenderer {
             return;
         }
 
-        let Some(source) = source_for_overprint(gs, fill_side) else {
+        let Some(source) = self.overprint_source(gs, fill_side) else {
             return;
         };
         let opm = gs.overprint_mode;
@@ -6700,7 +6737,7 @@ impl PageRenderer {
         doc: &PdfDocument,
         fill_side: bool,
     ) {
-        let Some(source) = source_for_overprint(gs, fill_side) else {
+        let Some(source) = self.overprint_source(gs, fill_side) else {
             return;
         };
         let opm = gs.overprint_mode;
@@ -6731,7 +6768,19 @@ impl PageRenderer {
         // and recover effective coverage·alpha per pixel. Mirrors the
         // `apply_cmyk_compose_after_paint` recovery for byte-identity
         // with the compose-first path. ~keep
-        let src_rgb_ic = if let Some(transform) = icc_transform.as_ref() {
+        let src_rgb_ic = if matches!(source.class, SourceCsClass::ProcessSeparation(_)) {
+            // Coverage must be recovered from the alternate RGB the paint actually used. ~keep
+            let side = if fill_side { PaintSide::Fill } else { PaintSide::Stroke };
+            let (r, g, b) = self.pipeline_resolve_rgba(doc, gs, side).map_or(
+                if fill_side {
+                    gs.fill_color_rgb
+                } else {
+                    gs.stroke_color_rgb
+                },
+                |(r, g, b, _)| (r, g, b),
+            );
+            [r, g, b]
+        } else if let Some(transform) = icc_transform.as_ref() {
             let c_u8 = (sc.clamp(0.0, 1.0) * 255.0).round() as u8;
             let m_u8 = (sm.clamp(0.0, 1.0) * 255.0).round() as u8;
             let y_u8 = (sy.clamp(0.0, 1.0) * 255.0).round() as u8;
@@ -8970,7 +9019,9 @@ enum SourceCsClass {
     /// in the graphics state when the current colour space is
     /// DeviceCMYK").
     OtherProcess,
-    /// `Separation` or non-process `DeviceN`. Table 149 row 3: process
+    /// A Separation naming one of the four process plates writes that plate only.
+    ProcessSeparation(ProcessChannel),
+    /// Spot Separation or non-process DeviceN. Table 149 row 3: process
     /// colour components preserve backdrop (`B = c_b`); the named-spot
     /// lanes carry `c_s`; unnamed spot lanes preserve backdrop. The
     /// process-side override is the dispositive difference from the
@@ -9159,7 +9210,7 @@ fn source_for_overprint(gs: &GraphicsState, fill_side: bool) -> Option<Overprint
 /// - `alpha` — effective shape × opacity for the pixel.
 fn compose_overprint_channel(
     class: SourceCsClass,
-    _channel: ProcessChannel,
+    channel: ProcessChannel,
     c_s: f32,
     c_b: f32,
     opm: u8,
@@ -9177,6 +9228,13 @@ fn compose_overprint_channel(
             // Table 149 row 2: B = c_s for every process colour
             // component of the group CS regardless of OPM. ~keep
             c_s
+        }
+        SourceCsClass::ProcessSeparation(named) => {
+            if channel == named {
+                c_s
+            } else {
+                c_b
+            }
         }
         SourceCsClass::SeparationOrDeviceN => {
             // Table 149 row 3: process colour components preserve

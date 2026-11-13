@@ -109,7 +109,8 @@
 /// Invalidate native PDFs whose indexed rows merged with surrounding prose (#2616). ~keep
 /// Invalidate cached PDF results missing certified embedded predictor prose (#2327). ~keep
 /// Invalidate cached mixed PDFs missing verified sideways prose (#3092). ~keep
-pub(crate) const CACHE_SCHEMA_VERSION: u32 = 23;
+/// Invalidate OCR results from rasters missing overprinted Separation text (#2817). ~keep
+pub(crate) const CACHE_SCHEMA_VERSION: u32 = 24;
 
 /// Number of hex characters in the cache version tag.
 const VERSION_TAG_HEX_LEN: usize = 8;
