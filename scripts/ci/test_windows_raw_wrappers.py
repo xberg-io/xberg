@@ -325,7 +325,12 @@ def assert_raw_workflow(source: str, job: str, root: str, archive_argument: str)
     assert f'-NativeGlob "{root}" -ArtifactKind raw -RequireCrtNotices' in step
 
 
-RAW_JOBS = {"php-extension", "cli-binaries", "c-ffi-libraries", "elixir-natives"}
+RAW_RUNNER_SELECTORS = {
+    "php-extension": "matrix.platform.os",
+    "cli-binaries": "matrix.os",
+    "c-ffi-libraries": "matrix.os",
+    "elixir-natives": "matrix.os",
+}
 
 
 def raw_job_block(source: str, job: str) -> str:
@@ -337,10 +342,13 @@ def raw_job_block(source: str, job: str) -> str:
 def assert_raw_runners(source: str) -> None:
     jobs = re.findall(r"(?m)^  ([a-z][\w-]+):$", source.split("\njobs:\n", 1)[1])
     consumers = {job for job in jobs if "-ArtifactKind raw" in raw_job_block(source, job)}
-    assert consumers == RAW_JOBS, f"raw closure consumer inventory changed: {consumers}"
-    for job in consumers:
+    assert consumers == RAW_RUNNER_SELECTORS.keys(), f"raw closure consumer inventory changed: {consumers}"
+    for job, selector in RAW_RUNNER_SELECTORS.items():
         block = raw_job_block(source, job)
         matrix = block.split("    steps:", 1)[0]
+        runs_on = re.findall(r"(?m)^    runs-on:[ \t]*(.*)$", matrix)
+        expected = "${{ " + selector + " }}"
+        assert runs_on == [expected], f"{job} must select its runner with {selector}: {runs_on}"
         runners = set(re.findall(r"(?<![\w-])windows-(?:latest|[0-9][a-z0-9-]*)(?![\w-])", matrix))
         assert runners == {"windows-2022"}, f"{job} must use windows-2022 for raw CRT staging: {runners}"
     assert "ImageOS=win25" not in raw_job_block(source, "elixir-natives"), "Elixir must use the runner's ImageOS"
@@ -364,12 +372,21 @@ class RawWorkflowTests(unittest.TestCase):
         assert_raw_runners(self.source)
 
     def test_runner_guard_rejects_drift_in_each_raw_consumer(self) -> None:
-        for job in RAW_JOBS:
+        for job in RAW_RUNNER_SELECTORS:
             with self.subTest(job=job):
                 block = raw_job_block(self.source, job)
                 mutated = self.source.replace(block, block.replace("windows-2022", "windows-latest"), 1)
                 with expected_error(AssertionError, f"{job} must use windows-2022"):
                     assert_raw_runners(mutated)
+
+    def test_runner_guard_rejects_a_cli_target_as_the_runner(self) -> None:
+        block = raw_job_block(self.source, "cli-binaries")
+        selector = "    runs-on: ${{ matrix.os }}"
+        assert block.count(selector) == 1
+        wrong_runner = block.replace(selector, "    runs-on: ${{ matrix.target }}")
+        mutated = self.source.replace(block, wrong_runner, 1)
+        with expected_error(AssertionError, "cli-binaries must select its runner with matrix.os"):
+            assert_raw_runners(mutated)
 
     def test_workflow_guard_rejects_audit_of_cli_staging_tree(self) -> None:
         archive = '-Artifact "${STAGE}.zip"'
@@ -379,7 +396,7 @@ class RawWorkflowTests(unittest.TestCase):
             assert_raw_workflow(mutated, "cli-binaries", "xberg.exe", archive)
 
 
-MINIMUM_CLOSURE_TESTS = 98
+MINIMUM_CLOSURE_TESTS = 99
 
 
 def main() -> int:
