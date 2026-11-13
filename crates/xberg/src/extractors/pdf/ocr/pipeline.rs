@@ -2688,15 +2688,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         page_idx,
                         &extraction_result,
                         &limits,
+                    ) && let Some(rows) = super::layer_token_recovery::apply_minority_khmer(
+                        &mut extraction_result,
+                        &additions,
+                        leading,
+                        limits.cancelled,
                     ) {
-                        if let Some(rows) = super::layer_token_recovery::apply_minority_khmer(
-                            &mut extraction_result,
-                            &additions,
-                            leading,
-                            limits.cancelled,
-                        ) {
-                            leading_khmer_rows.insert((page_idx + 1) as u32, rows);
-                        }
+                        leading_khmer_rows.insert((page_idx + 1) as u32, rows);
                     }
                 }
                 if let Some(metadata) = extraction_result.metadata.image_preprocessing.clone() {
