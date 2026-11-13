@@ -346,7 +346,7 @@ fn model_fingerprint_with_reader(
         *revision
     } else {
         let revision = read_revision(&directory)?;
-        revisions.insert(directory, revision);
+        revisions.insert(directory.clone(), revision);
         revision
     };
     hash.update(revision.as_bytes());
