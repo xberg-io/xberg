@@ -9,9 +9,8 @@ use super::*;
 
 impl<'doc> TextExtractor<'doc> {
     pub(super) fn sort_spans_preserving_script_geometry(&mut self) {
-        // Cached Form XObjects can reuse source sequence numbers. Use temporary
-        // indices during sorting, then restore source IDs and raw baselines before
-        // deduplication or merging can consume their geometry (GH#2275). ~keep
+        // Use dense indices during sorting, then restore source sequence gaps
+        // and raw baselines before deduplication or merging (GH#2275). ~keep
         let original_geometry = self.preserve_script_baselines.then(|| {
             self.spans
                 .iter_mut()

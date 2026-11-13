@@ -50,6 +50,7 @@ impl<'doc> TextExtractor<'doc> {
             resources: None,
             document: None,
             processed_xobjects: HashSet::new(),
+            nested_xobject_placements: Vec::new(),
             cached_xobject_refs: HashMap::new(),
             xobject_depth: 0,
             xobject_subtree_depth: Some(0),

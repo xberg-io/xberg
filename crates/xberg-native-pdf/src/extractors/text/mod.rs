@@ -1901,9 +1901,8 @@ enum PenSeam {
 
 /// The identity of a span before the merge: its sequence number and the bits of its x and y coordinates.
 ///
-/// Sequence numbers are unique within one extraction, but a cached form XObject replays spans with
-/// the sequence numbers of an earlier extraction, so the key holds the position too. The script snap
-/// moves the mark of a span it rewrites to the span's snapped y. ~keep
+/// Cached Forms rebase the sequence in this key along with the span. The script snap moves the mark
+/// of a span it rewrites to the span's snapped y. ~keep
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct SpanKey {
     sequence: usize,
@@ -1917,6 +1916,13 @@ impl SpanKey {
             sequence,
             x_bits: x.to_bits(),
             y_bits: y.to_bits(),
+        }
+    }
+
+    pub(crate) fn shift_sequence(self, from: usize, to: usize) -> Self {
+        Self {
+            sequence: self.sequence - from + to,
+            ..self
         }
     }
 
@@ -2401,13 +2407,15 @@ pub struct TextExtractor<'doc> {
     /// Reference to the document (for loading XObjects)
     document: Option<&'doc crate::document::PdfDocument>,
     /// Set of processed XObject references to avoid duplicates.
-    /// Key is `(ObjectRef, ctm_key)` where `ctm_key` is the CTM at the time of
+    /// The key includes the object, the filtered nonpainting state, and the CTM at the time of
     /// the `Do` operator call, encoded as 6 millipoint-rounded i64 values.
     /// Using the CTM as part of the key allows the same Form XObject to be
     /// processed multiple times when invoked with different transformation
     /// matrices (e.g., the same XObject stamped at different positions on a page),
     /// while still preventing infinite recursion (same ref + same CTM).
-    processed_xobjects: HashSet<(ObjectRef, [i64; 6], bool)>,
+    processed_xobjects: HashSet<crate::document::XObjectPlacement>,
+    /// Placements visited below the current top-level invocation, in walk order.
+    nested_xobject_placements: Vec<crate::document::XObjectPlacement>,
     /// Cached XObject name → ObjectRef mapping for current resources context.
     /// Avoids expensive repeated resolution of the resources/XObject dict chain.
     cached_xobject_refs: HashMap<String, Option<ObjectRef>>,

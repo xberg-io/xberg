@@ -434,6 +434,33 @@ fn should_keep_raised_exponents_inside_their_line_on_a_real_page() {
 }
 
 #[test]
+fn should_attach_the_first_author_ordinal_on_arxiv_01153_page_1() {
+    let Some(markdown) = regression_page_markdown("arxiv-2403.01153v1-p1") else {
+        return;
+    };
+    assert!(markdown.contains("1<sup>st</sup> Zhiyuan He"), "{markdown}");
+    assert!(
+        !markdown
+            .lines()
+            .any(|line| { matches!(line.trim(), "st nd rd th" | "st nd rd") }),
+        "{markdown}"
+    );
+}
+
+#[test]
+fn should_keep_the_squared_parenthesized_term_on_gutenberg_36670_page_106() {
+    let Some(markdown) = regression_page_markdown("gutenberg-36670-p106") else {
+        return;
+    };
+    for expression in [
+        "Resolve into factors a<sup>2</sup> − (3b − 5c)<sup>2</sup>",
+        "Therefore a<sup>2</sup> − (3b − 5c)<sup>2</sup> =",
+    ] {
+        assert!(markdown.contains(expression), "missing {expression:?} in\n{markdown}");
+    }
+}
+
+#[test]
 fn should_keep_a_footnote_mark_inside_its_sentence_on_a_real_page() {
     let Some(markdown) = regression_page_markdown("fr-2026-08190-hcbs-p2") else {
         return;

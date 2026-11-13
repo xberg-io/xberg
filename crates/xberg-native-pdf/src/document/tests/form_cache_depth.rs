@@ -224,3 +224,179 @@ fn text_config_and_word_reads_cannot_cache_depth_truncated_form_spans() {
         assert!(!root_form_is_cached(&document, 0), "truncated root, mode {mode}");
     }
 }
+
+fn placed_form_budget_pdf() -> Vec<u8> {
+    let placements: String = (0..500)
+        .map(|index| format!("q 1 0 0 1 {} {} cm /Root Do Q\n", 28 * (index % 20), 28 * (index / 20)))
+        .collect();
+    let probe = format!("BT /F1 12 Tf 20 760 Td (Prefix) Tj ET\n{placements}/Tail Do");
+    let page = |content| {
+        format!(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Contents {content} 0 R \
+            /Resources << /Font << /F1 7 0 R >> /XObject << /Root 8 0 R /Tail 9 0 R >> >> >>"
+        )
+    };
+    let form = "/Type /XObject /Subtype /Form /BBox [0 0 600 800] /Resources << /Font << /F1 7 0 R >> >>";
+    build_catalog_test_pdf(
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+        &[
+            (3, page(5).as_bytes()),
+            (4, page(6).as_bytes()),
+            (5, &stream("", &placements)),
+            (6, &stream("", &probe)),
+            (7, b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"),
+            (
+                8,
+                &stream(
+                    form,
+                    "BT /F1 12 Tf 4 16 Td [(A)] TJ /F1 8 Tf 8 4 Td [(B)] TJ ET \
+                     BT /F1 12 Tf 4 4 Td [(C)] TJ ET",
+                ),
+            ),
+            (9, &stream(form, "BT /F1 12 Tf 20 740 Td (BudgetTail) Tj ET")),
+        ],
+    )
+}
+
+#[test]
+fn warm_form_spans_keep_script_sequence_gaps_without_spending_decode_budget() {
+    let pdf = placed_form_budget_pdf();
+    let extract = |document: &PdfDocument| {
+        document
+            .extract_page_text_with_script_geometry(1, super::super::ReadingOrder::TopToBottom)
+            .expect("extract script geometry")
+            .spans
+    };
+    let cold = PdfDocument::from_bytes(pdf.clone()).expect("open cold control");
+    let cold_spans = extract(&cold);
+    assert!(cold_spans.iter().any(|span| span.text == "C"));
+    assert!(!cold_spans.iter().any(|span| span.text == "BudgetTail"));
+
+    let warm = PdfDocument::from_bytes(pdf).expect("open cache replay regression");
+    assert!(!raw_span_text(&warm, 0).is_empty());
+    assert_eq!(warm.xobject_spans_cache.lock().unwrap().len(), 500);
+    warm.xobject_stream_cache.lock().unwrap().clear();
+    let mut spans = extract(&warm);
+    assert!(spans.iter().any(|span| span.text == "BudgetTail"));
+    assert_eq!(warm.xobject_stream_cache.lock().unwrap().len(), 1);
+
+    spans.sort_unstable_by_key(|span| span.sequence);
+    assert!(spans.windows(2).all(|pair| pair[0].sequence < pair[1].sequence));
+    let [prefix, a, b, c, next_a, ..] = spans.as_slice() else {
+        panic!("expected source spans from the caller and two Form placements");
+    };
+    assert_eq!(
+        (
+            prefix.text.as_str(),
+            a.text.as_str(),
+            b.text.as_str(),
+            c.text.as_str(),
+            next_a.text.as_str()
+        ),
+        ("Prefix", "A", "B", "C", "A")
+    );
+    assert!(a.sequence > prefix.sequence + 1);
+    assert_eq!(b.sequence, a.sequence + 1);
+    assert!(c.sequence > b.sequence + 1);
+    assert!(next_a.sequence > c.sequence + 1);
+}
+
+fn clipped_nested_form_pdf(probe: &str, child_invocation: &str) -> Vec<u8> {
+    let page = |content| {
+        format!(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Contents {content} 0 R \
+             /Resources << /XObject << /ParentForm 8 0 R /ChildForm 9 0 R >> >> >>"
+        )
+    };
+    let parent = stream(
+        "/Type /XObject /Subtype /Form /BBox [0 0 100 100] \
+         /Resources << /Font << /F1 7 0 R >> /XObject << /ChildForm 9 0 R >> >>",
+        &format!("BT /F1 12 Tf 20 60 Td (ParentPaint) Tj ET {child_invocation}"),
+    );
+    let child = stream(
+        "/Type /XObject /Subtype /Form /BBox [0 0 600 800] /Resources << /Font << /F1 7 0 R >> >>",
+        "BT /F1 12 Tf 20 220 Td (ChildPaint) Tj ET",
+    );
+    build_catalog_test_pdf(
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+        &[
+            (3, page(5).as_bytes()),
+            (4, page(6).as_bytes()),
+            (5, &stream("", "/ParentForm Do")),
+            (6, &stream("", probe)),
+            (7, b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"),
+            (8, &parent),
+            (9, &child),
+        ],
+    )
+}
+
+#[test]
+fn cached_parent_reserves_clipped_child_placement_without_suppressing_translations() {
+    let pdf = clipped_nested_form_pdf(
+        "/ParentForm Do /ChildForm Do q 1 0 0 1 160 0 cm /ChildForm Do Q",
+        "/ChildForm Do",
+    );
+    let cold = PdfDocument::from_bytes(pdf.clone()).expect("open cold placement control");
+    assert_eq!(raw_span_text(&cold, 1), "ChildPaintParentPaint");
+
+    let warm = PdfDocument::from_bytes(pdf).expect("open warm placement control");
+    assert_eq!(raw_span_text(&warm, 0), "ParentPaint");
+    assert_eq!(warm.xobject_spans_cache.lock().unwrap().len(), 2);
+    warm.xobject_stream_cache.lock().unwrap().clear();
+    assert_eq!(raw_span_text(&warm, 1), "ChildPaintParentPaint");
+    assert_eq!(warm.xobject_stream_cache.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn cached_parent_walks_again_when_direct_child_has_already_painted() {
+    let pdf = clipped_nested_form_pdf("/ChildForm Do /ParentForm Do", "/ChildForm Do");
+    let cold = PdfDocument::from_bytes(pdf.clone()).expect("open cold placement control");
+    assert_eq!(raw_span_text(&cold, 1), "ChildPaintParentPaint");
+
+    let warm = PdfDocument::from_bytes(pdf).expect("open warm placement control");
+    assert_eq!(raw_span_text(&warm, 0), "ParentPaint");
+    assert_eq!(warm.xobject_spans_cache.lock().unwrap().len(), 2);
+    warm.xobject_stream_cache.lock().unwrap().clear();
+    assert_eq!(raw_span_text(&warm, 1), "ChildPaintParentPaint");
+    assert!(
+        warm.xobject_stream_cache
+            .lock()
+            .unwrap()
+            .get(&crate::object::ObjectRef::new(8, 0))
+            .is_some(),
+        "the parent must walk again when its child placement already exists"
+    );
+}
+
+#[test]
+fn cached_parent_uses_exact_caller_transform_for_rounded_child_placements() {
+    let parent = "q 1 0 0 1 0.0004 0 cm /ParentForm Do Q";
+    let nested_child = "q 1 0 0 1 0.0004 0 cm /ChildForm Do Q";
+    let direct_child = "q 1 0 0 1 0.0008 0 cm /ChildForm Do Q";
+
+    for (probe, expected) in [
+        (format!("{parent} {direct_child}"), "ParentPaint"),
+        (format!("{direct_child} {parent}"), "ChildPaintParentPaint"),
+    ] {
+        let pdf = clipped_nested_form_pdf(&probe, nested_child);
+        let cold = PdfDocument::from_bytes(pdf.clone()).expect("open cold rounding control");
+        assert_eq!(raw_span_text(&cold, 1), expected, "{probe}");
+
+        let warm = PdfDocument::from_bytes(pdf).expect("open warm rounding control");
+        assert_eq!(raw_span_text(&warm, 0), "ParentPaint");
+        assert_eq!(warm.xobject_spans_cache.lock().unwrap().len(), 2);
+        warm.xobject_stream_cache.lock().unwrap().clear();
+        assert_eq!(raw_span_text(&warm, 1), expected, "{probe}");
+        assert!(
+            warm.xobject_stream_cache
+                .lock()
+                .unwrap()
+                .get(&crate::object::ObjectRef::new(8, 0))
+                .is_some(),
+            "the parent must walk with the shifted caller transform: {probe}"
+        );
+    }
+}

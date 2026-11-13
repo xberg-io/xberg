@@ -6,6 +6,7 @@ fn span(text: &str, x: f32, y: f32, width: f32, size: f32) -> TextSpan {
         text: text.to_owned(),
         bbox: Rect::new(x, y, width, size),
         font_size: size,
+        mcid_scope: Some(xberg_native_pdf::structure::McidScope::Page(0)),
         ..Default::default()
     }
 }
@@ -102,6 +103,23 @@ fn should_leave_measured_ordinal_overlap_unsupported_regardless_of_final_offsets
         0,
         "interior insertion is unsupported"
     );
+}
+
+#[test]
+fn should_attach_measured_ordinal_edge_overlap_only_with_adjacent_source() {
+    let mut base = span("1", 117.746, 661.49, 5.479_45, 10.958_9);
+    let mut suffix = span("st", 123.225_006, 665.449, 5.116_690_6, 7.671_2);
+    base.provenance = Some(MappingProvenance::ToUnicode);
+    suffix.provenance = base.provenance;
+    suffix.sequence = 1;
+    assert!(suffix.bbox.x < base.bbox.right());
+    assert_eq!(page(vec![base.clone(), suffix.clone()]).owners.len(), 1);
+    assert!(page(vec![base.clone(), base.clone(), suffix.clone()]).owners.is_empty());
+    let mut wrong_ordinal = suffix.clone();
+    wrong_ordinal.text = "nd".into();
+    assert!(page(vec![base.clone(), wrong_ordinal]).owners.is_empty());
+    suffix.sequence = 2;
+    assert!(page(vec![base, suffix]).owners.is_empty());
 }
 
 #[test]
@@ -542,4 +560,18 @@ fn should_not_attach_a_raised_mark_to_an_opening_bracket_or_bare_symbol() {
 #[test]
 fn should_attach_a_raised_suffix_to_a_parenthesized_label_as_before() {
     assert_eq!(page(bracket_pair("(1)", "2")).owners.len(), 1);
+}
+
+#[test]
+fn should_attach_a_numeric_exponent_with_a_closing_bracket_edge_overlap() {
+    for base in [")", "]", "(3b − 5c)"] {
+        let mut spans = bracket_pair(base, "2");
+        spans[1].bbox.x = 109.983;
+        assert_eq!(page(spans.clone()).owners.len(), 1, "{base}");
+        spans[1].sequence += 1;
+        assert!(page(spans).owners.is_empty(), "{base}");
+    }
+    let mut spans = bracket_pair("(", "2");
+    spans[1].bbox.x = 109.983;
+    assert!(page(spans).owners.is_empty());
 }

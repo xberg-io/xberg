@@ -771,3 +771,26 @@ fn stretched_tm_does_not_start_at_the_pen_of_an_empty_run() {
     buffer.unicode.clear();
     assert!(!TextExtractor::stretched_tm_starts_at_the_pen(&buffer, 2.0, 10.0, -1.0));
 }
+
+#[test]
+fn separate_text_objects_break_script_adjacency_at_identical_positions() {
+    let extract = |stream: &[u8]| {
+        let mut extractor = TextExtractor::new();
+        extractor.preserve_script_baselines = true;
+        extractor.add_font("F1".to_owned(), create_test_font());
+        let spans = extractor.extract_text_spans(stream).unwrap();
+        let base = spans.iter().find(|span| span.text == "1").unwrap();
+        let suffix = spans.iter().find(|span| span.text == "st").unwrap();
+        assert_eq!(base.mcid, None);
+        assert_eq!(suffix.mcid, None);
+        (base.bbox, suffix.bbox, suffix.sequence == base.sequence + 1)
+    };
+    let (base, suffix, adjacent) = extract(b"BT /F1 12 Tf 100 700 Td [(1)] TJ /F1 8 Tf 6 4 Td [(st)] TJ ET");
+    assert!(adjacent);
+    for stream in [
+        b"BT /F1 12 Tf 100 700 Td [(1)] TJ ET BT /F1 8 Tf 106 704 Td [(st)] TJ ET".as_slice(),
+        b"BT /F1 12 Tf 100 700 Td [(1)] TJ /F1 8 Tf 1 0 0 1 106 704 Tm [(st)] TJ ET".as_slice(),
+    ] {
+        assert_eq!(extract(stream), (base, suffix, false));
+    }
+}

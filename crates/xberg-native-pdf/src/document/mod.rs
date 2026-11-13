@@ -167,21 +167,32 @@ pub(crate) use crate::cache::BoundedEntryCache;
 
 type ExtractorFonts = HashMap<String, Arc<crate::fonts::FontInfo>>;
 
+pub(crate) type XObjectPlacement = (ObjectRef, [i64; 6], bool);
+
 pub(crate) struct CachedFormSpans {
     /// Includes this Form and the deepest descendant visited by the complete run.
     pub(crate) required_depth: u32,
     pub(crate) spans: Option<Vec<crate::layout::TextSpan>>,
     /// The spans among `spans` that start at the pen of the previous `TJ` array (GH#2664).
-    pub(crate) pen_continuations: Vec<crate::extractors::text::SpanKey>,
+    pen_continuations: Vec<crate::extractors::text::SpanKey>,
+    sequence_len: usize,
+    pub(crate) descendants: FormDescendantPlacements,
     /// Weak references retain allocation identity without retaining font data.
     fonts: Vec<(String, Weak<crate::fonts::FontInfo>)>,
     local_scope: bool,
 }
 
+pub(crate) struct FormDescendantPlacements {
+    pub(crate) caller_ctm_bits: [u32; 6],
+    pub(crate) placements: Vec<XObjectPlacement>,
+}
+
 impl CachedFormSpans {
     pub(crate) fn new(
         required_depth: u32,
-        spans: Option<Vec<crate::layout::TextSpan>>,
+        mut spans: Option<Vec<crate::layout::TextSpan>>,
+        sequence: std::ops::Range<usize>,
+        descendants: FormDescendantPlacements,
         inherited: &ExtractorFonts,
         active: &ExtractorFonts,
     ) -> Self {
@@ -194,18 +205,64 @@ impl CachedFormSpans {
         if local_scope {
             fonts.sort_unstable_by(|(left, _), (right, _)| left.cmp(right));
         }
+        for span in spans.iter_mut().flatten() {
+            span.sequence -= sequence.start;
+        }
         Self {
             required_depth,
             spans,
             pen_continuations: Vec::new(),
+            sequence_len: sequence.len(),
+            descendants,
             fonts,
             local_scope,
         }
     }
 
-    pub(crate) fn with_pen_continuations(mut self, keys: Vec<crate::extractors::text::SpanKey>) -> Self {
-        self.pen_continuations = keys;
+    pub(crate) fn with_pen_continuations(
+        mut self,
+        keys: impl Iterator<Item = crate::extractors::text::SpanKey>,
+        sequence_start: usize,
+    ) -> Self {
+        self.pen_continuations = keys.map(|key| key.shift_sequence(sequence_start, 0)).collect();
         self
+    }
+
+    pub(crate) fn replay_pen_continuations(
+        &self,
+        destination: &mut HashSet<crate::extractors::text::SpanKey>,
+        sequence_start: usize,
+    ) {
+        destination.extend(
+            self.pen_continuations
+                .iter()
+                .map(|key| key.shift_sequence(0, sequence_start)),
+        );
+    }
+
+    pub(crate) fn matches_descendant_placements(
+        &self,
+        caller_ctm_bits: [u32; 6],
+        processed: &HashSet<XObjectPlacement>,
+    ) -> bool {
+        // A child transform can cross a rounding boundary even when both
+        // callers have the same rounded parent key. ~keep
+        self.descendants.placements.is_empty()
+            || (self.descendants.caller_ctm_bits == caller_ctm_bits
+                && self
+                    .descendants
+                    .placements
+                    .iter()
+                    .all(|placement| !processed.contains(placement)))
+    }
+
+    pub(crate) fn replay(&self, next_sequence: &mut usize) -> Vec<crate::layout::TextSpan> {
+        let mut spans = self.spans.clone().unwrap_or_default();
+        for span in &mut spans {
+            span.sequence += *next_sequence;
+        }
+        *next_sequence += self.sequence_len;
+        spans
     }
 
     pub(crate) fn matches_inherited_fonts(&self, inherited: &ExtractorFonts) -> bool {

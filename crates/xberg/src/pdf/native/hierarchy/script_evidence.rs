@@ -289,13 +289,36 @@ fn has_adjacent_numeric_source(base: &TextSpan, script: &TextSpan) -> bool {
         || is_numeric_span(&script.text),
         |digits| numeric_base && (digits.is_empty() || is_numeric_span(digits)),
     );
-    (numeric_base || (base.text.len() == 1 && base.text.as_bytes()[0].is_ascii_alphabetic()))
+    (numeric_base
+        || (base.text.len() == 1 && base.text.as_bytes()[0].is_ascii_alphabetic())
+        || (base.text.ends_with([')', ']']) && is_numeric_span(&script.text)))
         && numeric_suffix
         && has_adjacent_source(base, script)
 }
 
+fn has_adjacent_ordinal_source(base: &TextSpan, suffix: &TextSpan) -> bool {
+    let Some(last) = base.text.bytes().last().filter(u8::is_ascii_digit) else {
+        return false;
+    };
+    if !is_numeric_span(&base.text) || !has_adjacent_source(base, suffix) {
+        return false;
+    }
+    let teen = base.text.bytes().rev().nth(1) == Some(b'1');
+    let expected = match (teen, last) {
+        (false, b'1') => "st",
+        (false, b'2') => "nd",
+        (false, b'3') => "rd",
+        _ => "th",
+    };
+    suffix.text == expected
+}
+
 fn has_adjacent_source(left: &TextSpan, right: &TextSpan) -> bool {
+    // Preserved-geometry extraction leaves gaps at BT and absolute Tm.
+    // Relative Td remains eligible for a raised continuation. ~keep
     left.sequence.checked_add(1) == Some(right.sequence)
+        && left.mcid_scope.is_some()
+        && left.mcid_scope == right.mcid_scope
         && left.mcid == right.mcid
         && [left, right].into_iter().all(|span| {
             span.provenance == Some(MappingProvenance::ToUnicode)
@@ -311,7 +334,8 @@ fn eligible_base(base: &TextSpan, script: &TextSpan) -> bool {
     let ratio = script.font_size / base.font_size;
     let gap = script.bbox.x - base.bbox.right();
     let supported_gap = if gap < 0.0 || script.text.starts_with('−') {
-        gap >= -base.font_size * NUMERIC_SUFFIX_OVERHANG_EM && has_adjacent_numeric_source(base, script)
+        gap >= -base.font_size * NUMERIC_SUFFIX_OVERHANG_EM
+            && (has_adjacent_numeric_source(base, script) || has_adjacent_ordinal_source(base, script))
     } else {
         true
     };
@@ -375,7 +399,8 @@ fn complete_run(spans: &[TextSpan], base: usize, first: usize) -> Option<Vec<usi
     }
     let has_overhang = spans[first].bbox.x < spans[base].bbox.right();
     let has_minus = members.iter().any(|&index| spans[index].text.contains('−'));
-    if (has_overhang || has_minus) && !is_complete_numeric_suffix(&spans[base], spans, &members) {
+    let complete_ordinal = members.len() == 1 && has_adjacent_ordinal_source(&spans[base], &spans[first]);
+    if (has_overhang || has_minus) && !complete_ordinal && !is_complete_numeric_suffix(&spans[base], spans, &members) {
         return None;
     }
     Some(members)

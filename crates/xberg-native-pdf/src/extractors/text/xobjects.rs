@@ -144,6 +144,7 @@ impl<'doc> TextExtractor<'doc> {
             return Ok(());
         }
         if self.xobject_decode_count >= Self::MAX_XOBJECT_DECODES {
+            self.xobject_subtree_depth = None;
             return Ok(());
         }
 
@@ -175,12 +176,16 @@ impl<'doc> TextExtractor<'doc> {
 
         // A containing form skipped this text because of an earlier paint on this
         // page, so its partial result must not enter the shared cache. ~keep
-        if self.processed_xobjects.contains(&xobj_key) {
+        if !self.processed_xobjects.insert(xobj_key) {
             self.page_bound_forms += 1;
             return Ok(());
         }
 
-        self.processed_xobjects.insert(xobj_key);
+        if self.xobject_depth != 0 {
+            self.nested_xobject_placements.push(xobj_key);
+        } else {
+            self.nested_xobject_placements.clear();
+        }
 
         let doc = match self.document {
             Some(d) => d,
@@ -212,6 +217,15 @@ impl<'doc> TextExtractor<'doc> {
             .map(|(llx, lly, urx, ury)| ((urx - llx) * (ury - lly)).abs())
             .filter(|area| *area > 0.0);
         let spans_cache_key = (xobject_ref, ctm_key, page_area.map(f32::to_bits));
+        let caller_ctm_bits = [
+            current_ctm.a,
+            current_ctm.b,
+            current_ctm.c,
+            current_ctm.d,
+            current_ctm.e,
+            current_ctm.f,
+        ]
+        .map(f32::to_bits);
         let has_filters =
             self.skip_nonpainting_text || !self.excluded_layers.is_empty() || !self.excluded_inks.is_empty();
         // Cached spans carry no hold identity. A placed scope or a character
@@ -225,20 +239,23 @@ impl<'doc> TextExtractor<'doc> {
                 .filter(|cached| {
                     cached.required_depth <= Self::MAX_XOBJECT_DEPTH - self.xobject_depth
                         && cached.matches_inherited_fonts(&self.fonts)
+                        && cached.matches_descendant_placements(caller_ctm_bits, &self.processed_xobjects)
                 })
                 .map(|cached| {
-                    (
-                        cached.required_depth,
-                        cached.spans.clone(),
-                        cached.pen_continuations.clone(),
-                    )
+                    // A flattened hit must reserve the placements its cold walk would visit,
+                    // including descendants whose text was clipped by the parent. ~keep
+                    self.processed_xobjects
+                        .extend(cached.descendants.placements.iter().copied());
+                    if self.xobject_depth != 0 {
+                        self.nested_xobject_placements
+                            .extend_from_slice(&cached.descendants.placements);
+                    }
+                    cached.replay_pen_continuations(&mut self.pen_continuations, self.span_sequence_counter);
+                    (cached.required_depth, cached.replay(&mut self.span_sequence_counter))
                 });
-            if let Some((required_depth, spans, pen_continuations)) = cached_spans {
+            if let Some((required_depth, spans)) = cached_spans {
                 self.xobject_subtree_depth = self.xobject_subtree_depth.map(|depth| depth.max(required_depth));
-                if let Some(spans) = spans {
-                    self.spans.extend(spans);
-                }
-                self.pen_continuations.extend(pen_continuations);
+                self.spans.extend(spans);
                 return Ok(());
             }
         }
@@ -384,7 +401,8 @@ impl<'doc> TextExtractor<'doc> {
                 }
 
                 let spans_before = self.spans.len();
-                let pen_continuations_before = self.pen_continuations.clone();
+                let sequence_start = self.span_sequence_counter;
+                let descendants_start = self.nested_xobject_placements.len();
                 // The /BBox clip below must prune the character layer on the
                 // same decision it prunes spans, or `extract_chars` reports
                 // marks `extract_text` correctly dropped. ~keep
@@ -559,20 +577,23 @@ impl<'doc> TextExtractor<'doc> {
                     && span_cache_open
                     && self.page_bound_forms == page_bound_before
                 {
-                    let new_spans = if self.spans.len() > spans_before {
-                        Some(self.spans[spans_before..].to_vec())
-                    } else {
-                        None
-                    };
-                    // The replayed spans keep their sequence numbers, so their pen marks replay too. ~keep
-                    let new_continuations: Vec<SpanKey> = self
-                        .pen_continuations
-                        .difference(&pen_continuations_before)
-                        .copied()
-                        .collect();
-                    let cached =
-                        crate::document::CachedFormSpans::new(required_depth, new_spans, caller_fonts, &self.fonts)
-                            .with_pen_continuations(new_continuations);
+                    let new_spans = (self.spans.len() > spans_before).then(|| self.spans[spans_before..].to_vec());
+                    let new_continuations = self.spans[spans_before..]
+                        .iter()
+                        .map(SpanKey::of)
+                        .filter(|key| self.pen_continuations.contains(key));
+                    let cached = crate::document::CachedFormSpans::new(
+                        required_depth,
+                        new_spans,
+                        sequence_start..self.span_sequence_counter,
+                        crate::document::FormDescendantPlacements {
+                            caller_ctm_bits,
+                            placements: self.nested_xobject_placements[descendants_start..].to_vec(),
+                        },
+                        caller_fonts,
+                        &self.fonts,
+                    )
+                    .with_pen_continuations(new_continuations, sequence_start);
                     doc.xobject_spans_cache
                         .lock_or_recover()
                         .insert(spans_cache_key, cached);

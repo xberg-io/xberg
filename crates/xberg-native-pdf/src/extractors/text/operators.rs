@@ -170,6 +170,9 @@ impl<'doc> TextExtractor<'doc> {
                 if !is_continuation {
                     self.flush_tj_span_buffer()?;
                 }
+                // An absolute repositioning starts a new source run, even if
+                // glyphs coalesce into one span. ~keep
+                self.span_sequence_counter += 1;
 
                 self.position_pen(Matrix { a, b, c, d, e, f });
             }
@@ -739,6 +742,8 @@ impl<'doc> TextExtractor<'doc> {
             // "At the beginning of a text object, Tm and Tlm shall be
             // initialized to the identity matrix." ~keep
             Operator::BeginText => {
+                self.flush_tj_span_buffer()?;
+                self.span_sequence_counter += 1;
                 self.position_pen(Matrix::identity());
             }
             Operator::EndText => {
@@ -916,6 +921,9 @@ impl<'doc> TextExtractor<'doc> {
                 self.flush_tj_span_buffer()?;
                 self.forget_drawn_end();
 
+                // Separate each invocation from the caller's source runs. ~keep
+                self.span_sequence_counter += 1;
+
                 // Process Form XObjects to extract text from reusable content.
                 // Form XObjects can contain text that is not duplicated in the main stream.
                 // We track processed XObjects to avoid infinite loops and duplicates. ~keep
@@ -928,6 +936,7 @@ impl<'doc> TextExtractor<'doc> {
                     );
                 }
                 self.forget_drawn_end();
+                self.span_sequence_counter += 1;
             }
 
             _ => {}
