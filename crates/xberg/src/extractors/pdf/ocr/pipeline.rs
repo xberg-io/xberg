@@ -406,6 +406,8 @@ fn push_mixed_ocr_page_failure_warning(
 pub(crate) struct FailedOcrRun {
     pub(crate) error: crate::XbergError,
     pub(crate) page_failures: Vec<crate::types::OcrPageFailure>,
+    /// Count from the single-page native-ink rejection, when that caused the run to fail.
+    pub(crate) unrecovered_glyphs_on_page_one: usize,
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -417,6 +419,7 @@ impl From<crate::XbergError> for FailedOcrRun {
         Self {
             error,
             page_failures: Vec::new(),
+            unrecovered_glyphs_on_page_one: 0,
         }
     }
 }
@@ -3285,7 +3288,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             .all(|page_idx| failed_page_errors.contains_key(page_idx))
     {
         let error = run_error_for_failed_pages(&page_indices, &mut failed_page_errors);
-        return Err(FailedOcrRun { error, page_failures });
+        return Err(FailedOcrRun {
+            page_failures,
+            ..error.into()
+        });
     }
 
     // Pipeline stages already assess their output in `extract_with_ocr_for_page` using the
@@ -3844,21 +3850,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             ocr_confidence_by_page.remove(&page);
             preprocessing_by_page.remove(&page);
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-            if let Some(lost) = lost_glyph_ink_pages.get(&page) {
-                if all_pages_failed_policy == AllPagesFailedPolicy::ReturnError
-                    && pages.single_native_type0_page.is_some()
-                {
-                    return Err(lost_glyph_ocr_rejection(*lost));
-                }
-                crate::core::diagnostics::push_warning_deduped(
-                    &mut accumulated_warnings,
-                    crate::core::diagnostics::warning(
-                        "ocr",
-                        format!(
-                            "Page {page} retained native text; {lost} glyphs have no Unicode value and its OCR read did not recover them, only re-read glyph ink the native text paints."
-                        ),
-                    ),
-                );
+            if all_pages_failed_policy == AllPagesFailedPolicy::ReturnError
+                && pages.single_native_type0_page.is_some()
+                && let Some(lost) = lost_glyph_ink_pages.get(&page)
+            {
+                return Err(lost_glyph_ocr_rejection(*lost));
             }
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             if type0_loss_pages.contains(&page)
@@ -3951,6 +3947,19 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         }
     }
 
+    for boundary in boundaries {
+        let page = boundary.page_number;
+        if !accepted_replacements.contains_key(&page)
+            && ocr_results.contains_key(&page)
+            && let Some(native) = native_text.get(boundary.byte_start..boundary.byte_end)
+            && let Some(warning) = super::super::unmapped_glyphs::unrecovered_page_glyph_warning(
+                page,
+                native.matches(super::super::unmapped_glyphs::is_lost_glyph).count(),
+            )
+        {
+            crate::core::diagnostics::push_warning_deduped(&mut accumulated_warnings, warning);
+        }
+    }
     let result = apply_ocr_page_replacements(native_text, boundaries, &accepted_replacements);
     page_failures.sort_by_key(|failure| failure.page);
 
@@ -4800,11 +4809,16 @@ pub(super) struct OcrReadEvidence {
 
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 fn lost_glyph_ocr_rejection(lost: usize) -> FailedOcrRun {
-    crate::XbergError::Ocr {
-        message: format!("Page 1 OCR read did not recover the {lost} glyphs without a Unicode value; it only re-read glyph ink that the native text paints"),
-        source: None,
+    FailedOcrRun {
+        error: crate::XbergError::Ocr {
+            message: format!(
+                "Page 1 OCR read did not recover the {lost} glyphs without a Unicode value; it only re-read glyph ink that the native text paints"
+            ),
+            source: None,
+        },
+        page_failures: Vec::new(),
+        unrecovered_glyphs_on_page_one: lost,
     }
-    .into()
 }
 
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
@@ -7362,6 +7376,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 plugin_name: "ocr".to_string(),
             },
             page_failures,
+            unrecovered_glyphs_on_page_one: 0,
         });
     }
 

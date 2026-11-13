@@ -53,6 +53,7 @@ fn a_failed_run_keeps_its_own_records_only_for_the_pages_without_native_text() {
             message: "every page failed".to_string(),
             source: None,
         },
+        unrecovered_glyphs_on_page_one: 0,
         page_failures: vec![
             page_record(3, "third page error", false),
             page_record(1, "first page error", false),
@@ -78,6 +79,7 @@ fn a_failed_run_without_page_boundaries_gives_no_record() {
             message: "every page failed".to_string(),
             source: None,
         },
+        unrecovered_glyphs_on_page_one: 0,
         page_failures: vec![page_record(2, "second page error", false)],
     };
 

@@ -14,6 +14,8 @@ use xberg::types::ExtractionMethod;
 use xberg::{ExtractionConfig, OcrConfig, PageConfig};
 
 const MAPPED_EXPRESSION: &str = "Vmax = 1000 V";
+const LOST_GLYPH_WARNING: &str =
+    "Page 1 retained native text; 8 glyphs have no Unicode value and its OCR read did not recover them.";
 
 #[test]
 fn automatic_ocr_preserves_the_mapped_expression_on_the_nist_checklist() {
@@ -42,7 +44,14 @@ fn automatic_ocr_preserves_the_mapped_expression_on_the_nist_checklist() {
         "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
     );
     std::fs::write(models.path().join("eng.traineddata"), english).unwrap();
-    for format in [OutputFormat::Plain, OutputFormat::Markdown] {
+    for format in [
+        OutputFormat::Plain,
+        OutputFormat::Markdown,
+        OutputFormat::Djot,
+        OutputFormat::Html,
+        OutputFormat::Json,
+        OutputFormat::DocTags,
+    ] {
         let extract = |disable_ocr, force_ocr| {
             let config = ExtractionConfig {
                 use_cache: false,
@@ -63,8 +72,36 @@ fn automatic_ocr_preserves_the_mapped_expression_on_the_nist_checklist() {
             assert_eq!(document.pages.as_ref().unwrap().len(), 1);
             document
         };
+        let automatic = extract(false, false);
+        assert_eq!(
+            automatic
+                .processing_warnings
+                .iter()
+                .filter(|warning| warning.source == "ocr" && warning.message == LOST_GLYPH_WARNING)
+                .count(),
+            1,
+            "{format:?}: expected one per-page warning, got {:?}",
+            automatic.processing_warnings
+        );
         let native = extract(true, false);
         assert_eq!(native.extraction_method, Some(ExtractionMethod::Native));
+        assert!(
+            native
+                .processing_warnings
+                .iter()
+                .all(|warning| warning.message != LOST_GLYPH_WARNING),
+            "{format:?}: disabled OCR cannot report a failed read"
+        );
+        assert_eq!(
+            automatic.extraction_method,
+            Some(ExtractionMethod::Native),
+            "{format:?}"
+        );
+        assert!(!automatic.content.contains(char::REPLACEMENT_CHARACTER), "{format:?}");
+        assert_eq!(automatic.content, native.content, "{format:?}");
+        if !matches!(format, OutputFormat::Plain | OutputFormat::Markdown) {
+            continue;
+        }
         assert!(
             native.content.contains(MAPPED_EXPRESSION),
             "{format:?}: Native source expression"
@@ -73,30 +110,13 @@ fn automatic_ocr_preserves_the_mapped_expression_on_the_nist_checklist() {
         assert_eq!(forced.extraction_method, Some(ExtractionMethod::Ocr));
         assert!(!forced.content.trim().is_empty());
         assert!(!forced.content.contains(MAPPED_EXPRESSION));
-        let automatic = extract(false, false);
-        assert_eq!(
-            automatic.extraction_method,
-            Some(ExtractionMethod::Native),
-            "{format:?}"
+        assert!(
+            forced
+                .processing_warnings
+                .iter()
+                .all(|warning| warning.message != LOST_GLYPH_WARNING),
+            "{format:?}: forced OCR did not retain the native page"
         );
-        assert!(!automatic.content.contains(char::REPLACEMENT_CHARACTER), "{format:?}");
-        assert_eq!(automatic.content, native.content, "{format:?}");
-        // Only the Plain route reports the OCR read's lost-glyph count; Markdown keeps the native
-        // page through its own branch and carries the PDF-level warning.
-        let fragments: &[&str] = if format == OutputFormat::Plain {
-            &["8 glyphs have no Unicode value", "did not recover them"]
-        } else {
-            &["have no Unicode value"]
-        };
-        for fragment in fragments {
-            assert!(
-                automatic
-                    .processing_warnings
-                    .iter()
-                    .any(|warning| warning.message.contains(fragment)),
-                "{format:?}: a warning names the lost glyphs ({fragment:?})"
-            );
-        }
         for (projection, content) in [
             ("document", &automatic.content),
             ("page", &automatic.pages.as_ref().unwrap()[0].content),

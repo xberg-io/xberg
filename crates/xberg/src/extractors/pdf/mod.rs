@@ -3888,6 +3888,15 @@ impl PdfExtractor {
                                         .as_ref()
                                         .is_some_and(Vec::is_empty);
                                 if preserve_native_after_discard {
+                                    if let Some(warning) = unmapped_glyphs::unrecovered_page_glyph_warning(
+                                        1,
+                                        native_text.matches(unmapped_glyphs::is_lost_glyph).count(),
+                                    ) {
+                                        crate::core::diagnostics::push_warning_deduped(
+                                            &mut ocr_fallback_warnings,
+                                            warning,
+                                        );
+                                    }
                                     let (warnings, failures) = ocr_doc
                                         .map(|doc| (doc.processing_warnings, doc.ocr_page_failures))
                                         .unwrap_or_default();
@@ -3955,6 +3964,12 @@ impl PdfExtractor {
                                         &native_text,
                                         boundaries.as_deref().unwrap_or(&[]),
                                     ));
+                                }
+                                if let Some(warning) = unmapped_glyphs::unrecovered_page_glyph_warning(
+                                    1,
+                                    failed_run.unrecovered_glyphs_on_page_one,
+                                ) {
+                                    crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
                                 }
                                 let e = &failed_run.error;
                                 ocr_fallback_warnings.push(crate::types::ProcessingWarning {
