@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use crate::core::config::{OcrQualityThresholds, PageConfig};
-use crate::types::OcrElementConfig;
 use crate::{ExtractedDocument, ExtractionConfig, OcrConfig, OutputFormat};
 
 fn count(text: &str, target: &str) -> usize {
@@ -20,11 +19,6 @@ async fn read(path: &Path, format: OutputFormat, prune: bool) -> ExtractedDocume
         }),
         ocr: Some(OcrConfig {
             tessdata_path: std::env::var_os("XBERG_2943_TESSDATA").map(Into::into),
-            element_config: Some(OcrElementConfig {
-                include_elements: true,
-                build_hierarchy: true,
-                ..Default::default()
-            }),
             quality_thresholds: Some(OcrQualityThresholds {
                 prune_symbol_noise_lines: prune,
                 ..Default::default()
@@ -62,6 +56,8 @@ async fn qualified_pcb_texture_is_pruned_without_losing_the_faint_word() {
                     (after, removals)
                 })
                 .await;
+            assert!(before.ocr_elements.as_ref().is_none_or(Vec::is_empty));
+            assert!(after.ocr_elements.as_ref().is_none_or(Vec::is_empty));
             let before_pages = before.pages.as_ref().unwrap();
             let after_pages = after.pages.as_ref().unwrap();
             assert_eq!(before_pages.len(), after_pages.len());
@@ -110,6 +106,42 @@ async fn qualified_pcb_texture_is_pruned_without_losing_the_faint_word() {
                 }
                 eprintln!("{file} {format:?}: {} intended removals", removals.len());
             }
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires the public PDFs in XBERG_2943_SOURCE_CONTROLS"]
+async fn original_photo_and_recognized_same_pad_print_controls() {
+    let directory = std::env::var_os("XBERG_2943_SOURCE_CONTROLS").expect("set XBERG_2943_SOURCE_CONTROLS");
+    let word = concat!("Sa", "de");
+    for (file, page, expected_word) in [
+        ("photo-title.pdf", 1, word),
+        ("preflight.pdf", 3, word),
+        ("heldout.pdf", 3, "Nina"),
+    ] {
+        for format in [OutputFormat::Plain, OutputFormat::Markdown] {
+            let path = Path::new(&directory).join(file);
+            let control = super::REPLAY.scope(None, read(&path, format.clone(), true)).await;
+            let actual = read(&path, format.clone(), true).await;
+            let page_text = |result: ExtractedDocument| {
+                result
+                    .pages
+                    .unwrap()
+                    .into_iter()
+                    .find(|p| p.page_number == page)
+                    .unwrap()
+                    .content
+            };
+            let before = page_text(control);
+            let after = page_text(actual);
+            assert_eq!(count(&before, expected_word), 1, "{file} {format:?} control");
+            assert_eq!(count(&after, expected_word), 1, "{file} {format:?} candidate");
+            if page == 1 {
+                assert_eq!(after, before, "{file} {format:?}");
+                assert_eq!(after.matches("SECTION TITLE").count(), 1);
+            }
+            eprintln!("{file} {format:?}: {expected_word}=1 in control and candidate");
         }
     }
 }

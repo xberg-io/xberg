@@ -3318,9 +3318,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 && !alternative_raster_pages.contains(page)
                 && !config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled())
                 && let Some(read) = ocr_results.get(page)
-                && let Some(document) = structured_ocr_pages.get(page)
             {
-                let candidates = evidence.reconciled_tokens(text, read, document);
+                let candidates = evidence.reconciled_tokens(text, read);
                 let (removed, texture_removed) = super::symbol_noise_lines::texture::prune(
                     text,
                     ocr_results.get_mut(page),

@@ -280,7 +280,11 @@ pub(in crate::extractors::pdf::ocr) fn capture(
     if image.dimensions() != render {
         return None;
     }
-    let occurrences = find_repeated_lines(&image, &boxes, lines);
+    let margins = crate::pdf::native::text::PageMarginFractions::from_extraction_config(Some(config));
+    let occurrences = find_repeated_lines(&image, &boxes, lines)
+        .into_iter()
+        .filter(|source| source.inside_margins(processed.1, margins))
+        .collect::<Vec<_>>();
     (!occurrences.is_empty()).then(|| Evidence {
         transcript: blake3::hash(read.content.as_bytes()),
         occurrences,
@@ -318,45 +322,34 @@ fn find_repeated_lines<'a>(
         .collect()
 }
 
+impl Occurrence {
+    fn inside_margins(&self, height: u32, margins: crate::pdf::native::text::PageMarginFractions) -> bool {
+        let OcrBoundingGeometry::Rectangle {
+            top,
+            height: box_height,
+            ..
+        } = self.geometry
+        else {
+            return false;
+        };
+        let Some(baseline) = top
+            .checked_add(box_height)
+            .and_then(|bottom| height.checked_sub(bottom))
+        else {
+            return false;
+        };
+        crate::pdf::native::text::baseline_is_inside_page_margins(baseline as f32, 0.0, height as f32, margins)
+    }
+}
+
 impl Evidence {
-    pub(in crate::extractors::pdf::ocr) fn reconciled_tokens<'a>(
-        &'a self,
-        text: &str,
-        read: &str,
-        document: &InternalDocument,
-    ) -> Vec<&'a str> {
-        // A changed transcript can move a spelling from a clipped occurrence to a
-        // different owner. Require identity before consulting the published geometry.
+    pub(in crate::extractors::pdf::ocr) fn reconciled_tokens<'a>(&'a self, text: &str, read: &str) -> Vec<&'a str> {
+        // Source geometry is checked before publication filters. If mixed assembly
+        // changed the transcript, the original occurrence can no longer authorize removal.
         if text != read || blake3::hash(read.as_bytes()) != self.transcript {
             return Vec::new();
         }
-        if !super::elements_are_prunable(document) {
-            return Vec::new();
-        }
-        let Some(elements) = document.prebuilt_ocr_elements.as_deref() else {
-            return Vec::new();
-        };
-        self.occurrences
-            .iter()
-            .filter(|source| {
-                let mut owners = elements
-                    .iter()
-                    .filter(|line| line.level == OcrElementLevel::Line && line.text.trim() == source.text);
-                let owned =
-                    owners.next().is_some_and(|line| line.geometry == source.geometry) && owners.next().is_none();
-                #[cfg(test)]
-                if REPLAY.try_with(Option::is_some).unwrap_or(false)
-                    && matches!(source.text.as_str(), "ceeces" | "ccccee")
-                {
-                    eprintln!(
-                        "reconciliation {}: geometry={:?} owned={owned}",
-                        source.text, source.geometry
-                    );
-                }
-                owned
-            })
-            .map(|source| source.text.as_str())
-            .collect()
+        self.occurrences.iter().map(|source| source.text.as_str()).collect()
     }
 }
 
@@ -614,43 +607,26 @@ mod revision_tests {
 
     #[test]
     fn surviving_margin_or_body_token_must_own_the_original_box_and_transcript() {
-        let make_line = |top| {
-            let mut line = OcrElement::new(
-                "ccccee",
-                OcrBoundingGeometry::Rectangle {
-                    left: 50,
-                    top,
-                    width: 72,
-                    height: 8,
-                },
-                crate::types::OcrConfidence::default(),
-            );
-            line.level = OcrElementLevel::Line;
-            line
+        let occurrence = Occurrence {
+            text: "ccccee".into(),
+            geometry: OcrBoundingGeometry::Rectangle {
+                left: 50,
+                top: 20,
+                width: 72,
+                height: 8,
+            },
         };
-        let original = make_line(20);
-        let body = make_line(200);
+        let margins = crate::pdf::native::text::PageMarginFractions { top: 0.1, bottom: 0.0 };
+        assert!(!occurrence.inside_margins(400, margins));
+        assert!(occurrence.inside_margins(400, Default::default()));
         let text = "ccccee genuine text";
         let evidence = Evidence {
             transcript: blake3::hash(text.as_bytes()),
-            occurrences: vec![Occurrence {
-                text: original.text.clone(),
-                geometry: original.geometry.clone(),
-            }],
+            occurrences: vec![occurrence],
         };
-        let mut document = InternalDocument::new("pdf");
-        document.prebuilt_ocr_elements = Some(vec![body.clone()]);
-        assert!(evidence.reconciled_tokens(text, text, &document).is_empty());
-        document.prebuilt_ocr_elements = Some(vec![original.clone(), body]);
-        assert!(evidence.reconciled_tokens(text, text, &document).is_empty());
-        document.prebuilt_ocr_elements = Some(vec![original]);
-        assert!(
-            evidence
-                .reconciled_tokens("genuine text ccccee", text, &document)
-                .is_empty()
-        );
-        assert!(evidence.reconciled_tokens("ccccee", "ccccee", &document).is_empty());
-        assert_eq!(evidence.reconciled_tokens(text, text, &document), ["ccccee"]);
+        assert!(evidence.reconciled_tokens("genuine text ccccee", text).is_empty());
+        assert!(evidence.reconciled_tokens("ccccee", "ccccee").is_empty());
+        assert_eq!(evidence.reconciled_tokens(text, text), ["ccccee"]);
     }
 
     #[test]
