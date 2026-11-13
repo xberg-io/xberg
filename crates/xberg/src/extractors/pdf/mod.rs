@@ -2588,6 +2588,9 @@ fn native_page_texts_for_restore(
         .collect()
 }
 
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+type RestoredPageReads = (Vec<String>, Vec<(u32, usize)>);
+
 /// Put the native text of every page whose forced OCR read was discarded back into the
 /// whole-document output, so the document agrees with the pages (GH#3013).
 ///
@@ -2603,7 +2606,7 @@ fn restore_discarded_page_reads(
     ocr_page_texts: &[String],
     native_pages: &[String],
     config: &ExtractionConfig,
-) -> Option<(Vec<String>, Vec<(u32, usize)>)> {
+) -> Option<RestoredPageReads> {
     let whole_document_blank = ocr_page_texts.len() == 1 && ocr_page_texts[0].trim().is_empty();
     if native_pages.is_empty() || (ocr_page_texts.len() != native_pages.len() && !whole_document_blank) {
         return None;
