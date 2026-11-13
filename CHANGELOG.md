@@ -241,6 +241,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Report native text recovery after forced OCR fails.** The page failure record and warning now agree when readable native text is restored. (#3148)
 
+- **(pdf): Reduce OCR work on pages with a few unmapped glyphs.** Eligible pages start at a lower raster resolution and retry at the usual resolution if the first read cannot recover the missing text. (#3150)
+
 - **(extraction): Preserve valid page byte ranges.** Exact ranges survive when page text cannot be located or appears out of order, while ambiguous ranges are omitted. (#3149)
 
 - **(pdf): Render standard Latin Type 1 fonts using WinAnsi glyphs when the text extraction map disagrees.** OCR can read the visible text even when the PDF maps its glyphs to unrelated characters. (Refs #2826, #3147)
