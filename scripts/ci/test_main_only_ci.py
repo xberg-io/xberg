@@ -21,6 +21,7 @@ EXPECTED_CHECKOUTS = 77
 # The one sanctioned pull-request workflow: fixed regression tests, for same-repository branches only.
 FOCUSED_PR_WORKFLOW = "ci-focused-pr.yaml"
 FOCUSED_PR_GUARDS = (
+    "github.event_name == 'push' && github.ref == 'refs/heads/main'",
     "github.repository == 'xberg-io/xberg'",
     "github.event.pull_request.head.repo.full_name == github.repository",
 )
@@ -69,8 +70,23 @@ def focused_pr_violations(workflow: dict) -> list[str]:
     """Keep the pull-request exemption from widening into secrets, forks or superseded runs."""
     triggers = workflow.get("on", workflow.get(True))
     violations = []
-    if set(triggers) != {"pull_request", "workflow_dispatch"}:
+    if set(triggers) != {"pull_request", "push", "workflow_dispatch"}:
         violations.append(f"triggers: {sorted(triggers)}")
+    push = triggers.get("push") or {}
+    if push.get("branches") != ["main"]:
+        violations.append("push must target main only")
+    required_inputs = set(triggers.get("pull_request", {}).get("paths", [])) | {
+        ".github/workflows/ci-rust.yaml",
+        ".github/actions/setup-onnx-runtime/**",
+        "scripts/ci/actions/setup-onnx-runtime/**",
+        "mise-tasks/nli/**",
+        "tools/benchmark-harness/nli_qualification/**",
+        "vendored/**",
+        "test_documents",
+    }
+    missing_inputs = required_inputs - set(push.get("paths", []))
+    if missing_inputs:
+        violations.append(f"missing push inputs: {sorted(missing_inputs)}")
     if workflow.get("permissions") != {"contents": "read"}:
         violations.append("permissions must stay contents: read")
     if not keeps_latest_ci_run(workflow.get("concurrency"), Path(FOCUSED_PR_WORKFLOW).stem):
@@ -99,6 +115,12 @@ class MainOnlyCiTests(unittest.TestCase):
         def add_target_trigger(workflow: dict) -> None:
             workflow[True]["pull_request_target"] = None
 
+        def admit_non_main_push(workflow: dict) -> None:
+            workflow[True]["push"]["branches"].append("develop")
+
+        def omit_nli_input(workflow: dict) -> None:
+            workflow[True]["push"]["paths"].remove("mise-tasks/nli/**")
+
         def grant_write(workflow: dict) -> None:
             workflow["permissions"] = {"contents": "write"}
 
@@ -115,7 +137,15 @@ class MainOnlyCiTests(unittest.TestCase):
                 if str(step.get("uses", "")).startswith("actions/checkout@")
             )["with"]["persist-credentials"] = True
 
-        for change in [add_target_trigger, grant_write, stop_cancelling, admit_forks, persist_credentials]:
+        for change in [
+            add_target_trigger,
+            admit_non_main_push,
+            omit_nli_input,
+            grant_write,
+            stop_cancelling,
+            admit_forks,
+            persist_credentials,
+        ]:
             with self.subTest(change=change.__name__):
                 assert focused_pr_violations(mutated(change))
 
