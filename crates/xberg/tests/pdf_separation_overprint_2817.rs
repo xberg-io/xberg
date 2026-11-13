@@ -61,3 +61,93 @@ fn automatic_ocr_keeps_overprinted_separation_text_and_native_sibling() {
         );
     }
 }
+
+#[test]
+fn reporter_folio_keeps_the_exact_transcript_with_automatic_ocr() {
+    let tessdata = tempfile::tempdir().expect("create an isolated tessdata directory");
+    let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English data");
+    std::fs::write(tessdata.path().join("eng.traineddata"), english).expect("seed bundled English data");
+    let mut config = ExtractionConfig {
+        use_cache: false,
+        output_format: OutputFormat::Plain,
+        ocr: Some(OcrConfig {
+            backend: "tesseract".into(),
+            language: vec!["eng".into()],
+            tessdata_path: Some(tessdata.path().to_owned()),
+            ..Default::default()
+        }),
+        pages: Some(PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let body = EXPECTED
+        .strip_prefix("Library Planning Notes")
+        .expect("mixed fixture title");
+    let expected = format!("{body}\nPage 12");
+    let native_incomplete = expected.replace("quiet queue", "uiet ueue");
+    assert_eq!(expected.split_whitespace().count(), 218);
+    assert_eq!(expected.matches("quiet queue").count(), 4);
+
+    for (label, bytes, incomplete) in [
+        (
+            "Separation Black overprint",
+            include_bytes!("fixtures/pdf/separation-overprint-2817/folio-sepop.pdf").as_slice(),
+            true,
+        ),
+        (
+            "plain black",
+            include_bytes!("fixtures/pdf/separation-overprint-2817/folio-black.pdf").as_slice(),
+            true,
+        ),
+        (
+            "complete ToUnicode",
+            include_bytes!("fixtures/pdf/separation-overprint-2817/folio-mapped.pdf").as_slice(),
+            false,
+        ),
+    ] {
+        config.disable_ocr = true;
+        let native = if incomplete { &native_incomplete } else { &expected };
+        assert_folio(bytes, &config, native, ExtractionMethod::Native, label);
+
+        config.disable_ocr = false;
+        let method = if incomplete {
+            ExtractionMethod::Mixed
+        } else {
+            ExtractionMethod::Native
+        };
+        assert_folio(bytes, &config, &expected, method, label);
+    }
+}
+
+fn assert_folio(bytes: &[u8], config: &ExtractionConfig, expected: &str, method: ExtractionMethod, label: &str) {
+    let mode = if config.disable_ocr { "native-only" } else { "Auto" };
+    let result =
+        helpers::extract_bytes_document_blocking(bytes, "application/pdf", config).expect("extract the public folio");
+    assert_eq!(result.extraction_method, Some(method), "{label} {mode}");
+    let pages = result.pages.as_deref().expect("requested page output");
+    let [page] = pages else {
+        panic!("{label} {mode}: expected one page, got {}", pages.len());
+    };
+    assert_eq!(page.page_number, 1, "{label} {mode}");
+    let tokens = expected.split_whitespace().collect::<Vec<_>>();
+    for (surface, content) in [("document", &result.content), ("page", &page.content)] {
+        assert_eq!(
+            content.split_whitespace().collect::<Vec<_>>(),
+            tokens,
+            "{label} {mode} {surface}"
+        );
+        assert_eq!(content.matches("Page 12").count(), 1, "{label} {mode} {surface}");
+        for phrase in [
+            "committee met on Tuesday",
+            "parking area",
+            "architect said that building work",
+        ] {
+            assert!(
+                content.contains(phrase),
+                "{label} {mode} {surface} is missing {phrase:?}"
+            );
+        }
+    }
+}
