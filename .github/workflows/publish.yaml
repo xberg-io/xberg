@@ -5647,16 +5647,17 @@ jobs:
 
   publish-integrations-npm:
     name: Publish ${{ matrix.package }} to npm
-    needs: [prepare, publish-node, publish-crates]
-    # Runs on dry runs too. Each integration package pins `@xberg-io/xberg` to the exact release
-    # version, and a dry-run `publish-node` never puts that version on npm, so `npm install` would die
-    # with ETARGET "No matching version found for @xberg-io/xberg@<version>" before anything ran. The
-    # "Resolve core dependency for dry run" step below repoints the pin at whatever version is
-    # currently on npm, so the dry run still exercises install/build/pack against a real, resolvable
-    # dependency -- it just isn't proof this exact release version resolves (publish-node's own
-    # dry-run pack step is what covers that). ~keep
+    needs: [prepare, check-npm, publish-node, publish-crates]
+    # A skipped core publish is usable for a real release only when the exact version is already on npm.
+    # Dry runs can use the published fallback version resolved below. ~keep
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.publish-node.result != 'failure' && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_node == 'true' && needs.prepare.outputs.is_tag == 'true') }}
+      ${{ !inputs.plugins-only && !cancelled() &&
+          needs.prepare.result == 'success' && needs.check-npm.result == 'success' &&
+          needs.publish-crates.result != 'failure' &&
+          needs.prepare.outputs.release_node == 'true' && needs.prepare.outputs.is_tag == 'true' &&
+          (needs.publish-node.result == 'success' ||
+           (needs.publish-node.result == 'skipped' &&
+            (needs.check-npm.outputs.node_exists == 'true' || needs.prepare.outputs.dry_run == 'true'))) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
