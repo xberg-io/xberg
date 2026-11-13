@@ -65,20 +65,32 @@ fn complete_plain_cells(table: &Table) -> bool {
 
 /// Infer one leading header only when text styling and independently painted cell backgrounds
 /// agree. Numeric first rows and styled body tiers do not establish header roles. ~keep
-pub(super) fn infer_complete_leading_header(table: &mut Table, shading: &[Rect]) {
+pub(super) fn infer_complete_leading_header(table: &mut Table, paths: &[PathContent]) {
     if table.has_header || !complete_plain_cells(table) {
         return;
     }
+    let Some(bounds) = table.bbox else {
+        return;
+    };
+    let nearby: Vec<_> = paths
+        .iter()
+        .filter(|path| path.fill_color.is_some() && path.is_rectangle() && near_header(path, bounds))
+        .take(MAX_GROUPED_HEADER_PATHS + 1)
+        .collect();
+    if nearby.len() > MAX_GROUPED_HEADER_PATHS {
+        return;
+    }
+    let visible_shading = uncovered_shading(&nearby, |earlier, later| earlier.fill_color != later.fill_color);
+    let possible_shading = shading_rectangles(nearby);
     let first = &table.rows[0];
     let header_evidence = first.cells.iter().all(|cell| {
         cell.text.chars().any(char::is_alphabetic)
             && cell.spans.iter().all(|span| span.font_weight.is_bold())
-            && cell_is_shaded(cell, shading)
+            && cell_is_shaded(cell, &visible_shading)
     });
-    let body_contrasts = table.rows[1..]
-        .iter()
-        .flat_map(|row| &row.cells)
-        .all(|cell| cell.spans.iter().all(|span| !span.font_weight.is_bold()) && !cell_is_shaded(cell, shading));
+    let body_contrasts = table.rows[1..].iter().flat_map(|row| &row.cells).all(|cell| {
+        cell.spans.iter().all(|span| !span.font_weight.is_bold()) && !cell_is_shaded(cell, &possible_shading)
+    });
     if !header_evidence || !body_contrasts {
         return;
     }
@@ -210,7 +222,7 @@ fn repeated_schema_over_shaded_body(
         return false;
     }
     let possible_header_shading = shading_rectangles(paths.iter().copied());
-    let body_shading = uncovered_shading(paths);
+    let body_shading = uncovered_shading(paths, |_, _| true);
     groups.cells.iter().chain(&leaves.cells).all(|cell| {
         cell.bbox.is_some_and(|bounds| {
             possible_header_shading
@@ -231,7 +243,7 @@ fn repeated_schema_over_shaded_body(
 
 /// Reject a background touched by later rectangular paint, even if that paint is transparent:
 /// PathContent does not carry fill opacity, so visibility cannot be certified in that case. ~keep
-fn uncovered_shading(paths: &[&PathContent]) -> Vec<Rect> {
+fn uncovered_shading(paths: &[&PathContent], obscures: impl Fn(&PathContent, &PathContent) -> bool) -> Vec<Rect> {
     shading_rectangles(paths.iter().enumerate().filter_map(|(index, path)| {
         if path.fill_color.is_none() || !path.is_rectangle() {
             return None;
@@ -239,6 +251,7 @@ fn uncovered_shading(paths: &[&PathContent]) -> Vec<Rect> {
         let covered = paths[index + 1..].iter().any(|later| {
             later.fill_color.is_some()
                 && later.is_rectangle()
+                && obscures(path, later)
                 && later
                     .rendered_bbox()
                     .intersection(&path.rendered_bbox())

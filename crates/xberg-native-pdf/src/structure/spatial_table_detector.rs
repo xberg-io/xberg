@@ -3220,9 +3220,8 @@ fn detect_intersections(
         })
     });
     let stacked_row_cuts = merge_vertically_adjacent_tables(&mut tables, &h_edges, &v_edges);
-    let shading = source_headers::shading_rectangles(lines);
     for table in &mut tables {
-        source_headers::infer_complete_leading_header(table, &shading);
+        source_headers::infer_complete_leading_header(table, lines);
     }
     #[cfg(test)]
     header_source_diagnostic::event("intersection_merged", || header_source_diagnostic::tables(&tables));
@@ -6560,6 +6559,7 @@ mod tests {
         bold_rows: &[usize],
         shaded_rows: &[usize],
         unshaded_header_column: Option<usize>,
+        overpaint: bool,
     ) -> Vec<Table> {
         use crate::elements::PathContent;
         let mut paths = Vec::new();
@@ -6590,6 +6590,12 @@ mod tests {
                 }
             }
         }
+        if overpaint {
+            let mut cover = PathContent::rect(0., 40., 240., 20.);
+            cover.stroke_color = None;
+            cover.fill_color = Some(Color::new(1., 1., 1.));
+            paths.push(cover);
+        }
         let tables = detect_tables_with_lines(&spans, &paths, &TableDetectionConfig::strict());
         assert_eq!(tables.len(), 1, "actual ruled detector must execute: {tables:?}");
         assert_eq!((tables[0].rows.len(), tables[0].col_count), (3, 3));
@@ -6598,7 +6604,7 @@ mod tests {
 
     #[test]
     fn source_header_complete_shaded_bold_labels_have_one_header_row() {
-        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], None);
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], None, false);
         assert!(tables[0].has_header);
         assert!(tables[0].rows[0].is_header);
         assert!(tables[0].rows[0].cells.iter().all(|cell| cell.is_header));
@@ -6607,35 +6613,51 @@ mod tests {
 
     #[test]
     fn source_header_bold_numeric_first_row_is_not_promoted() {
-        let tables = source_header_probe(["10", "20", "30"], &[0], &[0], None);
+        let tables = source_header_probe(["10", "20", "30"], &[0], &[0], None, false);
         assert!(!tables[0].has_header);
         assert!(tables[0].rows.iter().all(|row| !row.is_header));
     }
 
     #[test]
     fn source_header_bold_body_is_not_promoted_to_a_second_tier() {
-        let tables = source_header_probe(["Item", "Count", "Status"], &[0, 1], &[0], None);
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0, 1], &[0], None, false);
         assert!(!tables[0].rows[1].is_header);
         assert!(tables[0].rows[1].cells.iter().all(|cell| !cell.is_header));
     }
 
     #[test]
     fn source_header_bold_without_independent_shading_is_not_promoted() {
-        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[], None);
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[], None, false);
         assert!(!tables[0].has_header);
     }
 
     #[test]
     fn source_header_body_shading_does_not_prove_a_leading_header() {
-        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0, 1, 2], None);
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0, 1, 2], None, false);
         assert!(!tables[0].has_header);
     }
 
     #[test]
     fn source_header_partial_shading_is_not_promoted() {
-        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], Some(1));
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], Some(1), false);
         assert!(!tables[0].has_header);
         assert!(tables[0].rows.iter().all(|row| !row.is_header));
+    }
+
+    #[test]
+    fn source_header_overpainted_shading_does_not_promote_bold_labels() {
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], None, true);
+        let table = &tables[0];
+        assert!(!table.has_header);
+        assert!(table.rows.iter().flat_map(|row| &row.cells).all(|cell| !cell.is_header));
+        assert_eq!(
+            table.rows[0]
+                .cells
+                .iter()
+                .map(|cell| cell.text.as_str())
+                .collect::<Vec<_>>(),
+            ["Item", "Count", "Status"]
+        );
     }
 
     fn nested_fill_source() -> (
