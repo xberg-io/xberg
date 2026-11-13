@@ -974,6 +974,31 @@ mod plain_page_rerender_tests {
     }
 
     #[test]
+    fn recovered_khmer_digits_have_exact_plain_byte_ranges() {
+        for count in 1..=2 {
+            let mut pages = vec![page(1, "VOU ០")];
+            let mut tagged = vec![(1, "VOU០")];
+            if count == 2 {
+                pages.push(page(2, "Total ១២"));
+                tagged.push((2, "Total១២"));
+            }
+            let mut doc = doc_with(pages, &tagged);
+            let (content, pages) = derive_plain(&mut doc);
+            let expected = if count == 1 { "VOU០" } else { "VOU០\n\nTotal១២" };
+            assert_eq!(content, expected);
+            assert_eq!(pages.len(), count);
+            assert!(!warned(&doc), "{:?}", doc.processing_warnings);
+            assert_ranges(&doc, &content, &pages);
+            let boundaries = doc.metadata.pages.unwrap().boundaries.unwrap();
+            let actual: Vec<_> = boundaries
+                .iter()
+                .map(|b| (b.page_number, b.byte_start, b.byte_end))
+                .collect();
+            assert_eq!(actual, [(1, 0, 6), (2, 8, 19)][..count]);
+        }
+    }
+
+    #[test]
     fn markdown_table_page_text_is_replaced_by_the_plain_rendering_of_its_elements() {
         let content = "Intro\n\na b\n1 2";
         let mut doc = doc_with(

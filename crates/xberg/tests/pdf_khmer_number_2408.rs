@@ -244,14 +244,28 @@ fn assert_plain_page_ranges(result: &ExtractedDocument) {
         .as_ref()
         .expect("recovered Plain pages retain byte ranges");
     assert_eq!(boundaries.len(), pages.len());
-    for (boundary, page) in boundaries.iter().zip(pages) {
+    let mut offset = 0;
+    for (index, (boundary, page)) in boundaries.iter().zip(pages).enumerate() {
+        if index > 0 {
+            let separator = result
+                .content
+                .get(offset..boundary.byte_start)
+                .expect("ordered byte ranges");
+            assert!(!separator.is_empty() && separator.bytes().all(|byte| byte == b'\n'));
+            offset = boundary.byte_start;
+        }
+        assert_eq!(page.page_number as usize, index + 1);
         assert_eq!(boundary.page_number, page.page_number);
+        assert_eq!(boundary.byte_start, offset);
+        offset += page.content.len();
+        assert_eq!(boundary.byte_end, offset);
         assert_eq!(
             result.content.get(boundary.byte_start..boundary.byte_end),
             Some(page.content.as_str()),
             "each Plain page must be the exact document slice"
         );
     }
+    assert_eq!(offset, result.content.len());
 }
 
 fn provisioned_config() -> (tempfile::TempDir, ExtractionConfig) {
