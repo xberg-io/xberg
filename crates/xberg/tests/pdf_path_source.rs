@@ -1,5 +1,6 @@
 #![cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
 
+use lopdf::dictionary;
 use std::io::{Read, Seek, Write};
 use xberg::core::config::{ExtractInput, ExtractionConfig, PageConfig, PdfConfig};
 use xberg::extractors::security::{SecurityError, SecurityLimits};
@@ -152,12 +153,12 @@ async fn pdf_path_with_embedded_files_keeps_attachment_discovery() {
     let path = dir.path().join("attachments.pdf");
     write_pdf(&path, 0, false);
     let mut pdf = lopdf::Document::load(&path).unwrap();
-    let data = pdf.add_object(lopdf::Stream::new(lopdf::dictionary! {}, b"Attachment text".to_vec()));
-    let filespec = pdf.add_object(lopdf::dictionary! { "EF" => lopdf::dictionary! { "F" => data } });
+    let data = pdf.add_object(lopdf::Stream::new(dictionary! {}, b"Attachment text".to_vec()));
+    let filespec = pdf.add_object(dictionary! { "EF" => dictionary! { "F" => data } });
     pdf.catalog_mut().unwrap().set(
         "Names",
-        lopdf::dictionary! {
-            "EmbeddedFiles" => lopdf::dictionary! {
+        dictionary! {
+            "EmbeddedFiles" => dictionary! {
                 "Names" => vec![lopdf::Object::string_literal("attachment.txt"), filespec.into()],
             },
         },
