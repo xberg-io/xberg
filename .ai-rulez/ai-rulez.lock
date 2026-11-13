@@ -4,7 +4,7 @@
 version = 1
 ai_rulez_version = '5.12.0'
 scope = 'all'
-tree = 'sha256:414b5de6b2ff6a4364a9824415056801de6890c01a19dc6fa0047b47d3afb92a'
+tree = 'sha256:25af590e3619d71f7a4455d7952e4f7fe17f0e3c2784a2d5e1f5f0645ba03234'
 
 [[include]]
 name = 'xberg-bindings'
@@ -281,7 +281,7 @@ digest = 'sha256:d78be30b9b194c4cf8f94351f473e5085cf17f45adaf0560cbd2122f285e56d
 name = 'ocr-pipeline-and-quality'
 source = '.ai-rulez/skills/ocr-pipeline-and-quality/SKILL.md'
 commit = ''
-digest = 'sha256:8405323c00fa21d510f611a827db53e14875f6f48e80a8e132b6782bff496419'
+digest = 'sha256:68a7d50ae4cba9c83540cef9a35fc535a84e1a36491a6f6accf7cd48401d01a9'
 
 [[served]]
 name = 'owasp-quick-reference'
@@ -736,7 +736,7 @@ digest = 'sha256:3df5d0f1cd2bc8dde3511bad614fb2d0456fe314f2edb4e5dc0eb605233cfe8
 kind = 'skill'
 id = 'ocr-pipeline-and-quality'
 path = 'skills/ocr-pipeline-and-quality'
-digest = 'sha256:1aba6c27de86ba34711992f2da9badab2e42add15417dad7a5bb2005586190c8'
+digest = 'sha256:43c0a942b849f4d7c5b893bf8d02efe0ff420a36e9d656cfb254e451fbbf958d'
 
 [[item]]
 kind = 'skill'

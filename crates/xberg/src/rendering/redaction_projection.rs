@@ -54,6 +54,7 @@ enum PlainAtomKind {
     FootnoteReference,
     FootnoteDefinition,
     DisplayMath,
+    Math { display: bool, escaped: bool },
 }
 
 struct PlainAtom {
@@ -65,11 +66,34 @@ pub(crate) struct VisibleMarkdown {
     pub text: String,
     origins: Vec<Origin>,
     atoms: Vec<PlainAtom>,
+    normalized_math: Option<Vec<Range<usize>>>,
     budget: Budget,
+    /// The Markdown is xberg's own output, whose dollar math is escaped as Markdown text.
+    written_by_xberg: bool,
 }
 
 impl VisibleMarkdown {
+    /// Text that the Markdown writer did not produce. Its dollar math stays as written, since a
+    /// backslash there is the author's own.
     pub fn parse(markdown: &str, limits: &SecurityLimits) -> Option<Self> {
+        Self::parse_with(markdown, limits, false, false)
+    }
+
+    /// Markdown that the Markdown writer produced, whose dollar math is escaped as Markdown text.
+    pub fn parse_written(markdown: &str, limits: &SecurityLimits) -> Option<Self> {
+        Self::parse_with(markdown, limits, true, false)
+    }
+
+    pub fn parse_binary(markdown: &str, limits: &SecurityLimits) -> Option<Self> {
+        Self::parse_with(markdown, limits, true, true)
+    }
+
+    fn parse_with(
+        markdown: &str,
+        limits: &SecurityLimits,
+        written_by_xberg: bool,
+        normalize_math: bool,
+    ) -> Option<Self> {
         if markdown.len() > limits.max_content_size {
             return None;
         }
@@ -91,7 +115,9 @@ impl VisibleMarkdown {
             text: String::new(),
             origins: Vec::new(),
             atoms: Vec::new(),
+            normalized_math: normalize_math.then(Vec::new),
             budget,
+            written_by_xberg,
         };
         for node in root.descendants() {
             let depth = node.ancestors().take(limits.max_nesting_depth.checked_add(1)?).count();
@@ -189,6 +215,9 @@ impl VisibleMarkdown {
     }
 
     fn inline_math(&mut self, node: &AstNode<'_>, math: &NodeMath, markdown: &str, lines: &[usize]) -> Option<()> {
+        if self.normalized_math.is_some() {
+            return self.append_binary_math(math);
+        }
         let (opening, closing) = if !math.dollar_math {
             ("$`", "`$")
         } else if math.display_math {
@@ -210,12 +239,53 @@ impl VisibleMarkdown {
                 && payload.strip_prefix(' ')?.strip_suffix(' ')? == math.literal)
                 .then_some(start + 1..range.end - closing.len() - 1)
         });
-        if let Some(source) = source {
-            self.leaf(&math.literal, markdown, source, false)
+        let escaped = self.written_by_xberg && !super::common::markdown_math_is_unescaped(math);
+        // The writer adds a space before the display closer when the payload ends in a dollar or backslash. ~keep
+        let literal = if escaped && math.display_math {
+            math.literal.trim_end_matches(' ')
         } else {
-            self.unmapped(&math.literal);
+            math.literal.as_str()
+        };
+        let visible = if escaped {
+            super::common::unescape_markdown_text(literal)
+        } else {
+            literal.to_owned()
+        };
+        if self.written_by_xberg && !visible.is_empty() {
+            if !self.budget.spend(size_of::<PlainAtom>(), 1) {
+                return None;
+            }
+            self.atoms.push(PlainAtom {
+                visible: self.text.len()..self.text.len() + visible.len(),
+                kind: PlainAtomKind::Math {
+                    display: math.display_math,
+                    escaped: escaped && visible != literal,
+                },
+            });
+        }
+        // A character reference is not a CommonMark backslash escape, so `leaf` cannot map it. ~keep
+        if let Some(mut source) = source.filter(|_| !(escaped && literal.contains("&#"))) {
+            source.end -= math.literal.len() - literal.len();
+            self.leaf(&visible, markdown, source, escaped)
+        } else {
+            self.unmapped(&visible);
             Some(())
         }
+    }
+
+    fn append_binary_math(&mut self, math: &NodeMath) -> Option<()> {
+        let decoded = super::common::math_node_literal(math);
+        let normalized = super::common::join_tex_lines(&decoded);
+        if normalized != decoded.as_ref() {
+            if !self.budget.spend(size_of::<Range<usize>>(), decoded.len()) {
+                return None;
+            }
+            self.normalized_math
+                .as_mut()?
+                .push(self.text.len()..self.text.len().checked_add(normalized.len())?);
+        }
+        self.unmapped(&normalized);
+        Some(())
     }
 
     fn inline_code(&mut self, node: &AstNode<'_>, code: &NodeCode, markdown: &str, lines: &[usize]) -> Option<()> {
@@ -231,6 +301,10 @@ impl VisibleMarkdown {
     }
 
     fn leaf(&mut self, visible: &str, markdown: &str, source: Range<usize>, escapes: bool) -> Option<()> {
+        if self.normalized_math.is_some() {
+            self.unmapped(visible);
+            return Some(());
+        }
         let raw = markdown.get(source.clone())?;
         let mut offset = 0;
         for character in visible.chars() {
@@ -358,6 +432,32 @@ impl VisibleMarkdown {
         }
     }
 
+    pub fn has_escaped_math_match(&self, sensitive: &[Range<usize>]) -> bool {
+        self.atoms.iter().any(|atom| {
+            if !matches!(atom.kind, PlainAtomKind::Math { escaped: true, .. }) {
+                return false;
+            }
+            let index = sensitive.partition_point(|range| range.end <= atom.visible.start);
+            sensitive.get(index).is_some_and(|range| range.start < atom.visible.end)
+        })
+    }
+
+    pub fn has_normalized_math(&self) -> bool {
+        self.normalized_math.as_ref().is_some_and(|changes| !changes.is_empty())
+    }
+
+    pub fn has_normalized_math_match(&self, sensitive: &[Range<usize>]) -> bool {
+        self.normalized_math.iter().flatten().any(|change| {
+            if change.is_empty() {
+                // A deleted formula can expose a match starting or ending at the deletion. ~keep
+                let index = sensitive.partition_point(|range| range.end < change.start);
+                return sensitive.get(index).is_some_and(|range| range.start <= change.start);
+            }
+            let index = sensitive.partition_point(|range| range.end <= change.start);
+            sensitive.get(index).is_some_and(|range| range.start < change.end)
+        })
+    }
+
     pub fn covered(&self, sensitive: &[Range<usize>], selected: &[Range<usize>]) -> bool {
         sensitive.iter().all(|finding| {
             let start = self
@@ -389,7 +489,10 @@ impl VisibleMarkdown {
                 result.discarded_label(text);
                 return start.checked_add(kind.len());
             }
-            PlainAtomKind::DisplayMath => math_plain_payload(plain, start, text)?,
+            PlainAtomKind::DisplayMath | PlainAtomKind::Math { display: true, .. } => {
+                math_plain_payload(plain, start, text, "$$")?
+            }
+            PlainAtomKind::Math { display: false, .. } => math_plain_payload(plain, start, text, "$")?,
             kind @ (PlainAtomKind::FootnoteReference | PlainAtomKind::FootnoteDefinition) => {
                 let suffix = if matches!(kind, PlainAtomKind::FootnoteDefinition) {
                     ":"
@@ -420,7 +523,9 @@ impl VisibleMarkdown {
             text: String::new(),
             origins: Vec::new(),
             atoms: Vec::new(),
+            normalized_math: None,
             budget: self.budget.clone(),
+            written_by_xberg: self.written_by_xberg,
         };
         if !self.text.starts_with(char::is_whitespace) {
             while let Some((_, character)) = source.next_if(|(_, character)| character.is_whitespace()) {
@@ -477,17 +582,17 @@ impl VisibleMarkdown {
     }
 }
 
-fn math_plain_payload(plain: &str, start: usize, text: &str) -> Option<(Range<usize>, usize)> {
+fn math_plain_payload(plain: &str, start: usize, text: &str, delimiter: &str) -> Option<(Range<usize>, usize)> {
     let direct_end = start.checked_add(text.len())?;
     if plain.get(start..direct_end) == Some(text) {
         return Some((start..direct_end, direct_end));
     }
-    let payload_start = start.checked_add("$$".len())?;
+    let payload_start = start.checked_add(delimiter.len())?;
     let payload_end = payload_start.checked_add(text.len())?;
-    let end = payload_end.checked_add("$$".len())?;
-    (plain.get(start..payload_start) == Some("$$")
+    let end = payload_end.checked_add(delimiter.len())?;
+    (plain.get(start..payload_start) == Some(delimiter)
         && plain.get(payload_start..payload_end) == Some(text)
-        && plain.get(payload_end..end) == Some("$$"))
+        && plain.get(payload_end..end) == Some(delimiter))
     .then_some((payload_start..payload_end, end))
 }
 
@@ -555,5 +660,24 @@ mod tests {
             projection.on_plain(fake, Some(fake.rfind(":\n").unwrap())).is_none(),
             "a colon in the source body cannot borrow the appendix certificate"
         );
+    }
+
+    #[test]
+    fn math_backslashes_are_unescaped_only_for_markdown_the_writer_produced() {
+        let limits = SecurityLimits::default();
+        let markdown = r"Let $a \\ b$ hold.";
+        let written = VisibleMarkdown::parse_written(markdown, &limits).unwrap();
+        let foreign = VisibleMarkdown::parse(markdown, &limits).unwrap();
+        assert!(written.text.contains(r"a \ b"), "{:?}", written.text);
+        assert!(foreign.text.contains(r"a \\ b"), "{:?}", foreign.text);
+    }
+
+    #[test]
+    fn math_that_the_writer_does_not_escape_keeps_its_backslashes() {
+        let limits = SecurityLimits::default();
+        let display = VisibleMarkdown::parse_written("$$\na \\\\ b\n$$\n", &limits).unwrap();
+        assert!(display.text.contains(r"a \\ b"), "{:?}", display.text);
+        let code = VisibleMarkdown::parse_written("Let $`a \\\\ b`$ hold.\n", &limits).unwrap();
+        assert!(code.text.contains(r"a \\ b"), "{:?}", code.text);
     }
 }

@@ -23,11 +23,15 @@ pub(super) fn derive_pages(
     spans: Option<&crate::rendering::ElementSpans>,
     observer: &mut impl super::surfaces::DerivationObserver,
 ) -> Option<Vec<PageContent>> {
-    // ~keep A page of a source whose pages are not OCR text gets its text and its range from
-    // the spans, so the range selects the page text by construction. PDF, image and OCR pages
-    // keep their own text, and their ranges are located below.
+    // ~keep Renderer spans own native page text and ranges. Adopted OCR documents can
+    // declare any source format, so their transcripts follow the OCR page marks below.
+    let adopted_ocr = doc
+        .metadata
+        .additional
+        .remove(super::ADOPTED_OCR_DOCUMENT_KEY)
+        .is_some_and(|value| value.as_bool() == Some(true));
     let native_ranges = spans
-        .filter(|_| content_is_plain && !source_short_circuits_ocr_page_text(&doc.source_format))
+        .filter(|_| content_is_plain && !adopted_ocr && !source_short_circuits_ocr_page_text(&doc.source_format))
         .map(|spans| plain_page_ranges(doc, content, spans))
         .filter(|ranges| ranges.values().any(Option::is_some));
     let native_ranges = native_ranges.as_ref();
@@ -50,11 +54,13 @@ pub(super) fn derive_pages(
         }
         return pages;
     }
+    let had_boundaries = has_page_boundaries(&doc.metadata);
     let mut reconciled = !content_is_plain || reconcile_page_boundaries(&mut doc.metadata, content, pages.as_deref());
     // ~keep Prebuilt page text (OCR) renders tables and block separators its own way, so it
     // cannot be found in the plain content. Render the pages that are not found from their
     // elements as `render_plain` does and locate that instead (#2825).
     if !reconciled
+        && has_page_boundaries(&doc.metadata)
         && let Some((rerendered, diverging)) = rerender_pages_plain(pages.as_deref(), doc, content)
         && reconcile_located_page_boundaries(&mut doc.metadata, content, &rerendered, &diverging)
     {
@@ -71,7 +77,10 @@ pub(super) fn derive_pages(
             );
         }
     }
-    if !reconciled && drop_unusable_page_boundaries(&mut doc.metadata, content) {
+    if !reconciled
+        && ((had_boundaries && !has_page_boundaries(&doc.metadata))
+            || drop_unusable_page_boundaries(&mut doc.metadata, content))
+    {
         crate::core::diagnostics::push_warning(
             &mut doc.processing_warnings,
             "page_boundaries",
@@ -181,20 +190,21 @@ fn set_plain_page_boundaries(
     Some(omitted)
 }
 
-/// Re-point `metadata.pages.boundaries` at `content` by locating each page's text in it, in
-/// order. Returns `true` only when every page was located exactly and the boundaries were
-/// replaced; otherwise the boundaries are left as they were. A metadata with no boundaries
-/// returns `false`.
+fn has_page_boundaries(metadata: &crate::types::Metadata) -> bool {
+    metadata.pages.as_ref().is_some_and(|pages| pages.boundaries.is_some())
+}
+
+/// Locate page bodies in order. Keep the old offsets on a missing match so the caller
+/// can try another representation of the page. Drop them when the mapping is ambiguous.
 pub(crate) fn reconcile_page_boundaries(
     metadata: &mut crate::types::Metadata,
     content: &str,
     pages: Option<&[PageContent]>,
 ) -> bool {
-    let Some(boundaries) = metadata
-        .pages
-        .as_mut()
-        .and_then(|structure| structure.boundaries.as_mut())
-    else {
+    let Some(structure) = metadata.pages.as_mut() else {
+        return false;
+    };
+    let Some(boundaries) = structure.boundaries.as_mut() else {
         return false;
     };
     let Some(pages) = pages.filter(|pages| pages.len() == boundaries.len()) else {
@@ -232,8 +242,18 @@ pub(crate) fn reconcile_page_boundaries(
     if !located_any {
         return false;
     }
-    // ~keep OCR boundaries can describe an intermediate rendering with different separators (#2128).
-    // Replace only a complete exact match; unmatched pages retain their original extraction metadata.
+    // Both scans must agree: a marker or preamble can contain a complete page body. ~keep
+    let mut end = content.len();
+    for (page, boundary) in pages.iter().zip(&reconciled).rev() {
+        if page.content.is_empty() {
+            continue;
+        }
+        if content[..end].rfind(page.content.as_str()) != Some(boundary.byte_start) {
+            structure.boundaries = None;
+            return false;
+        }
+        end = boundary.byte_start;
+    }
     *boundaries = reconciled;
     true
 }
@@ -579,8 +599,8 @@ fn is_ocr_page_text(doc: &InternalDocument, page: &PageContent) -> bool {
 /// `is_ocr_page_text`) keeps its text, and so does an OCR page whose re-rendering is empty or
 /// not found. `None` when no page has elements.
 ///
-/// Pages are located with the leftmost `find` after the previous page, so short or repeated
-/// page text can match early, as in `reconcile_page_boundaries`.
+/// The search here selects page representations. Boundary reconciliation separately checks
+/// whether their positions are unique.
 fn rerender_pages_plain(
     pages: Option<&[PageContent]>,
     doc: &InternalDocument,
@@ -588,9 +608,6 @@ fn rerender_pages_plain(
 ) -> Option<(Vec<PageContent>, Vec<u32>)> {
     let pages = pages?;
     let elements_by_page = compute_page_membership(doc);
-    if elements_by_page.is_empty() {
-        return None;
-    }
     let mut search_offset = 0;
     let mut out = Vec::with_capacity(pages.len());
     let mut diverging = Vec::new();
@@ -626,9 +643,8 @@ fn rerender_pages_plain(
     Some((out, diverging))
 }
 
-/// Re-point the boundaries of the pages not in `diverging` at `content`, omitting the boundaries
-/// of the diverging pages. Leaves the boundaries as they were and returns `false` when the
-/// remaining pages cannot be located.
+/// Re-point the boundaries of the pages not in `diverging` at `content`.
+/// If recovery fails after finding a diverging page, discard the unverified ranges.
 fn reconcile_located_page_boundaries(
     metadata: &mut crate::types::Metadata,
     content: &str,
@@ -654,8 +670,11 @@ fn reconcile_located_page_boundaries(
         .cloned()
         .collect();
     let reconciled = reconcile_page_boundaries(metadata, content, Some(&located));
-    if !reconciled && let Some(structure) = metadata.pages.as_mut() {
-        structure.boundaries = Some(original);
+    if !reconciled
+        && let Some(structure) = metadata.pages.as_mut()
+        && structure.boundaries.is_some()
+    {
+        structure.boundaries = diverging.is_empty().then_some(original);
     }
     reconciled
 }

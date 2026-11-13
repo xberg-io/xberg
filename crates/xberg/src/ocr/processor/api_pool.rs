@@ -30,6 +30,7 @@ struct ApiKey {
     language: String,
     oem: u8,
     osd_revision: Option<blake3::Hash>,
+    primary_revision: Option<blake3::Hash>,
 }
 
 impl ApiKey {
@@ -39,6 +40,7 @@ impl ApiKey {
             language: language.into(),
             oem,
             osd_revision: models.osd_revision,
+            primary_revision: models.primary_revision(),
         }
     }
 }
@@ -303,24 +305,31 @@ impl TesseractApiPool {
         let tessdata_path = &models.directory;
         let key = ApiKey::for_models(models, language, oem);
         let lease = self.resources.checkout(key, || {
-            let api = TesseractAPI::new().map_err(|error| {
-                OcrError::TesseractInitializationFailed(format!("Failed to allocate Tesseract engine: {error}"))
-            })?;
-            api.init_2(tessdata_path, language, i32::from(oem)).map_err(|error| {
-                OcrError::TesseractInitializationFailed(format!(
-                    "Failed to initialize language '{language}' with OCR engine mode {oem}: {error}"
-                ))
-            })?;
-            api.clear().map_err(|error| {
-                OcrError::ProcessingFailed(format!("Failed to clear newly initialized Tesseract API: {error}"))
-            })?;
             Ok(PooledTesseractApi {
-                primary: api,
+                primary: new_engine(tessdata_path, language, oem)?,
                 secondary: super::dictionary::SecondaryDictionaries::new(tessdata_path, language, oem),
             })
         })?;
         TesseractApiLease::begin(lease, models)
     }
+}
+
+/// A Tesseract engine initialised with `language` from `tessdata_path`, cleared and ready for a
+/// page. The pool builds its handles with it; the script retry builds its own engines with it.
+/// `oem` is validated by the caller.
+pub(super) fn new_engine(tessdata_path: &str, language: &str, oem: u8) -> Result<TesseractAPI, OcrError> {
+    let api = TesseractAPI::new().map_err(|error| {
+        OcrError::TesseractInitializationFailed(format!("Failed to allocate Tesseract engine: {error}"))
+    })?;
+    api.init_2(tessdata_path, language, i32::from(oem)).map_err(|error| {
+        OcrError::TesseractInitializationFailed(format!(
+            "Failed to initialize language '{language}' with OCR engine mode {oem}: {error}"
+        ))
+    })?;
+    api.clear().map_err(|error| {
+        OcrError::ProcessingFailed(format!("Failed to clear newly initialized Tesseract API: {error}"))
+    })?;
+    Ok(api)
 }
 
 /// Tells the caller why a pooled handle cannot start a lease.
@@ -569,6 +578,43 @@ mod tests {
     }
 
     #[test]
+    fn retry_primary_model_replacement_never_reuses_the_old_pooled_engine() {
+        use super::super::model_context::ModelContext;
+        use crate::ocr::types::TesseractConfig;
+
+        let root = tempfile::tempdir().unwrap();
+        let config = TesseractConfig {
+            language: "xberg_retry_pool_fixture".into(),
+            tessdata_path: Some(root.path().into()),
+            psm: 3,
+            ..Default::default()
+        };
+        let primary = root.path().join(format!("{}.traineddata", config.language));
+        for file in [
+            &primary,
+            &root.path().join("osd.traineddata"),
+            &root.path().join("chi_sim.traineddata"),
+        ] {
+            std::fs::write(file, b"old").unwrap();
+        }
+        let snapshot = || ModelContext::resolve_with_retry(&config, Some(75.0)).unwrap();
+        let pool = ResourcePool::new(1);
+        let checkout = |models: &ModelContext, handle| {
+            pool.checkout::<(), _>(ApiKey::for_models(models, &config.language, config.oem), || Ok(handle))
+                .unwrap()
+        };
+        let before = snapshot();
+        drop(checkout(&before, 1));
+        let reused = checkout(&snapshot(), 2);
+        assert_eq!(*reused, 1);
+        drop(reused);
+
+        std::fs::write(&primary, b"new").unwrap();
+        let after = snapshot();
+        assert_eq!(*checkout(&after, 2), 2);
+    }
+
+    #[test]
     fn should_keep_requested_engine_modes_separate_in_pool_keys() {
         let pool = ResourcePool::new(1);
         let key = |oem| ApiKey {
@@ -576,6 +622,7 @@ mod tests {
             language: "eng".into(),
             oem,
             osd_revision: None,
+            primary_revision: None,
         };
         drop(pool.checkout::<(), _>(key(1), || Ok(1)).unwrap());
         let reused = pool
@@ -794,6 +841,7 @@ mod tests {
             language: language.to_owned(),
             oem,
             osd_revision: None,
+            primary_revision: None,
         }
     }
 

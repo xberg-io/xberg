@@ -170,6 +170,7 @@ pub(crate) fn extract_spans_from_page(
 /// Some OCR routes replace only *some* pages rather than the whole document, and those routes
 /// need the boundaries this predicate gates:
 ///
+/// - `force_ocr` needs the native page offsets to restore empty reads (GH#3013).
 /// - `force_ocr_pages` non-empty and an `ocr` block both already required boundaries before
 ///   GH#1752.
 /// - `ocr_near_empty_fallback == Some(true)` and `ocr_scanned_page_quality_gate == Some(true)`
@@ -185,7 +186,8 @@ pub(crate) fn extract_spans_from_page(
 /// boundaries nobody ends up using, which is silent-safe, while being wrong "too narrow" is the
 /// bug this function fixes. ~keep
 pub(crate) fn page_boundaries_required(config: &ExtractionConfig) -> bool {
-    config.force_ocr_pages.as_ref().is_some_and(|pages| !pages.is_empty())
+    (cfg!(any(feature = "ocr", feature = "ocr-pipeline")) && config.force_ocr)
+        || config.force_ocr_pages.as_ref().is_some_and(|pages| !pages.is_empty())
         || config.ocr.is_some()
         || config.ocr_near_empty_fallback == Some(true)
         || config.ocr_scanned_page_quality_gate == Some(true)
@@ -8010,6 +8012,28 @@ mod tests {
             "a default config must stay on the fast path with no boundaries -- this is what \
              proves the widening is byte-identical to the pre-GH#1752 predicate at defaults"
         );
+    }
+
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[test]
+    fn page_boundaries_required_force_ocr_retains_offsets_without_page_contents() {
+        let pdf = build_paged_text_pdf(2, 3);
+        let mut doc = NativeDocument::open_bytes(&pdf).expect("fixture must open");
+        let config = ExtractionConfig {
+            force_ocr: true,
+            ..ExtractionConfig::default()
+        };
+
+        let (text, boundaries, pages, _) =
+            extract_text_from_native_document(&mut doc, None, Some(&config), PageMarginFractions::default())
+                .expect("extraction must succeed");
+
+        assert!(pages.is_none());
+        let boundaries = boundaries.expect("forced OCR needs native page offsets");
+        assert_eq!(boundaries.len(), 2);
+        for boundary in boundaries {
+            assert!(!text[boundary.byte_start..boundary.byte_end].trim().is_empty());
+        }
     }
 
     #[test]

@@ -33,7 +33,12 @@ outputs are not interchangeable measurements.
   resource limits.
 - Check `PageOrientationHandling` before assuming a backend handles rotated input.
 - Validate ISO 639 language codes and required tessdata before execution. Language detection runs after extraction
-  and does not choose traineddata automatically.
+  and does not choose traineddata automatically. One exception: when the first Tesseract read of a page is noisy and
+  OSD names Han, the page is read again with `chi_sim` if `osd` and `chi_sim` are installed. OSD alone chooses the
+  script. The retry never downloads a model, and it does not run when `ocr.pipeline` is set. A line takes the second
+  read under four rules (mostly Han letters, a confidence gain, every Latin or digit word kept or replaced by Han
+  letters, word coverage). A page takes the second read only when one third of its lines pass. Table detection does
+  not stop the retry: it is on by default, so a gate on it would make the retry dead.
 
 ## Configuration and cache
 

@@ -1,7 +1,9 @@
-"""usage: generate.py OUT.pdf WIDTH_IN HEIGHT_IN DPI [--mixed]
+"""usage: generate.py OUT.pdf WIDTH_IN HEIGHT_IN DPI [--mixed | --twice] [--lettered]
 
 Writes an image-only PDF of a site plan: mostly one or two character labels and a notes block,
 stored as one DeviceRGB JPEG covering the page. With --mixed, a native text page precedes the scan.
+With --twice, the document has two scan pages, each with its own copy of the image. With --lettered,
+each lot label is a two letter code, so a read of the sheet is mostly short words.
 """
 
 import hashlib
@@ -28,7 +30,7 @@ STREETS = ["OAK ST", "ELM DR", "PINE CT", "CEDAR LN", "MAPLE AVE", "BIRCH WAY", 
 NATIVE_TEXT = b"BT /F1 12 Tf 16 TL 72 720 Td " + b"(The native page remains unchanged.) ' " * 10 + b"ET"
 
 
-def render(w_in: float, h_in: float, dpi: int) -> bytes:
+def render(w_in: float, h_in: float, dpi: int, lettered: bool = False) -> bytes:
     if hashlib.sha256(FONT.read_bytes()).hexdigest() != FONT_SHA256:
         raise SystemExit(f"{FONT} does not match the pinned font")
     width, height = int(w_in * dpi), int(h_in * dpi)
@@ -45,7 +47,8 @@ def render(w_in: float, h_in: float, dpi: int) -> bytes:
             for row in (0, 1):
                 y0 = gy + row * cell
                 d.rectangle([gx, y0, gx + cell, y0 + cell], outline=0, width=max(1, int(4 * s)))
-                d.text((gx + cell // 3, y0 + cell // 3), str(lot), font=font(70), fill=0)
+                label = chr(65 + lot // 26 % 26) + chr(65 + lot % 26) if lettered else str(lot)
+                d.text((gx + cell // 3, y0 + cell // 3), label, font=font(70), fill=0)
                 if lot % 4 == 0:
                     d.text((gx + 20 * s, y0 + cell - 70 * s), "B" + str(lot % 9), font=font(40), fill=0)
                 lot += 1
@@ -73,7 +76,7 @@ def stream(fields: bytes, data: bytes) -> bytes:
     return b"<< " + fields + b" /Length %d >>\nstream\n" % len(data) + data + b"\nendstream"
 
 
-def build(jpeg: bytes, w_in: float, h_in: float, dpi: int, mixed: bool) -> bytes:
+def build(jpeg: bytes, w_in: float, h_in: float, dpi: int, mixed: bool, twice: bool = False) -> bytes:
     pw, ph = w_in * 72, h_in * 72
     width, height = int(w_in * dpi), int(h_in * dpi)
     paint = f"q {pw:.2f} 0 0 {ph:.2f} 0 0 cm /Im0 Do Q".encode()
@@ -81,10 +84,10 @@ def build(jpeg: bytes, w_in: float, h_in: float, dpi: int, mixed: bool) -> bytes
         f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {pw:.2f} {ph:.2f}] "
         f"/Resources << /XObject << /Im0 5 0 R >> >> /Contents 4 0 R >>"
     ).encode()
-    kids = b"[6 0 R 3 0 R]" if mixed else b"[3 0 R]"
+    kids = b"[6 0 R 3 0 R]" if mixed else b"[3 0 R 6 0 R]" if twice else b"[3 0 R]"
     objs = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids " + kids + b" /Count %d >>" % (2 if mixed else 1),
+        b"<< /Type /Pages /Kids " + kids + b" /Count %d >>" % (2 if mixed or twice else 1),
         scan_page,
         stream(b"", paint),
         stream(
@@ -100,6 +103,15 @@ def build(jpeg: bytes, w_in: float, h_in: float, dpi: int, mixed: bool) -> bytes
             stream(b"", NATIVE_TEXT),
             b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
         ]
+    if twice:
+        image = (
+            b"/Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB "
+            b"/BitsPerComponent 8 /Filter /DCTDecode" % (width, height)
+        )
+        objs += [
+            scan_page.replace(b"/Im0 5 0 R", b"/Im0 7 0 R"),
+            stream(image, jpeg),
+        ]
     pdf = bytearray(b"%PDF-1.5\n%\xe2\xe3\xcf\xd3\n")
     offsets = []
     for number, body in enumerate(objs, 1):
@@ -113,11 +125,15 @@ def build(jpeg: bytes, w_in: float, h_in: float, dpi: int, mixed: bool) -> bytes
 
 
 def main() -> None:
-    args = [arg for arg in sys.argv[1:] if arg != "--mixed"]
+    flags = ("--mixed", "--twice", "--lettered")
+    args = [arg for arg in sys.argv[1:] if arg not in flags]
     if len(args) != 4:
         raise SystemExit(__doc__)
     out, w_in, h_in, dpi = args[0], float(args[1]), float(args[2]), int(args[3])
-    Path(out).write_bytes(build(render(w_in, h_in, dpi), w_in, h_in, dpi, "--mixed" in sys.argv))
+    if "--mixed" in sys.argv and "--twice" in sys.argv:
+        raise SystemExit(__doc__)
+    jpeg = render(w_in, h_in, dpi, "--lettered" in sys.argv)
+    Path(out).write_bytes(build(jpeg, w_in, h_in, dpi, "--mixed" in sys.argv, "--twice" in sys.argv))
 
 
 if __name__ == "__main__":
