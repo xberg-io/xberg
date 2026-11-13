@@ -3,6 +3,10 @@
 use std::ops::Deref;
 use std::sync::{Arc, Condvar, Mutex};
 
+mod retry;
+
+pub(super) use retry::{RetryApiPools, RetryStage};
+
 use crate::ocr::error::OcrError;
 use xberg_tesseract::TesseractAPI;
 
@@ -280,13 +284,23 @@ impl PooledTesseractApi {
 
 pub(super) struct TesseractApiPool {
     resources: Arc<ResourcePool<ApiKey, PooledTesseractApi>>,
+    retry: RetryApiPools,
 }
 
 impl TesseractApiPool {
     pub(super) fn new() -> Arc<Self> {
+        Self::with_capacity(tesseract_api_capacity())
+    }
+
+    fn with_capacity(capacity: usize) -> Arc<Self> {
         Arc::new(Self {
-            resources: ResourcePool::new(tesseract_api_capacity()),
+            resources: ResourcePool::new(capacity),
+            retry: RetryApiPools::new(capacity),
         })
+    }
+
+    pub(super) fn retry(&self) -> &RetryApiPools {
+        &self.retry
     }
 
     #[cfg(test)]
@@ -315,9 +329,9 @@ impl TesseractApiPool {
 }
 
 /// A Tesseract engine initialised with `language` from `tessdata_path`, cleared and ready for a
-/// page. The pool builds its handles with it; the script retry builds its own engines with it.
+/// page.
 /// `oem` is validated by the caller.
-pub(super) fn new_engine(tessdata_path: &str, language: &str, oem: u8) -> Result<TesseractAPI, OcrError> {
+fn new_engine(tessdata_path: &str, language: &str, oem: u8) -> Result<TesseractAPI, OcrError> {
     let api = TesseractAPI::new().map_err(|error| {
         OcrError::TesseractInitializationFailed(format!("Failed to allocate Tesseract engine: {error}"))
     })?;
@@ -636,7 +650,7 @@ mod tests {
     }
 
     #[cfg(feature = "bundle-tessdata-eng")]
-    fn bundled_tessdata() -> tempfile::TempDir {
+    pub(super) fn bundled_tessdata() -> tempfile::TempDir {
         let directory = tempfile::tempdir().expect("temporary native model directory");
         std::fs::write(
             directory.path().join("eng.traineddata"),
@@ -651,9 +665,7 @@ mod tests {
     fn should_release_native_capacity_after_unavailable_engine_initialization() {
         let directory = bundled_tessdata();
         let path = directory.path().to_str().expect("UTF-8 native model path");
-        let pool = Arc::new(TesseractApiPool {
-            resources: ResourcePool::new(1),
-        });
+        let pool = TesseractApiPool::with_capacity(1);
         for unavailable in [0, 2] {
             let lstm = pool
                 .checkout(
@@ -689,9 +701,7 @@ mod tests {
 
     #[test]
     fn should_reject_invalid_engine_mode_before_native_initialization() {
-        let pool = Arc::new(TesseractApiPool {
-            resources: ResourcePool::new(1),
-        });
+        let pool = TesseractApiPool::with_capacity(1);
         assert!(matches!(
             pool.checkout(
                 &super::super::model_context::ModelContext::for_path(String::new(), 6).unwrap(),

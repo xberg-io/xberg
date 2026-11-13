@@ -6,7 +6,7 @@ use std::path::Path;
 
 use xberg_tesseract::{TessPageSegMode, TesseractAPI};
 
-use super::api_pool::new_engine;
+use super::api_pool::{RetryApiPools, RetryStage};
 use super::validation::{TessdataEnv, first_directory_holding, tessdata_search_dirs};
 use crate::core::extractor::cacheability;
 use crate::ocr::error::OcrError;
@@ -116,25 +116,45 @@ fn list_reads_script_of(language: &str, model: &str) -> bool {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct ModelSet {
-    directory: String,
-    languages: String,
+    pub(super) directory: String,
+    pub(super) languages: String,
     revision: blake3::Hash,
+    implicit_osd: bool,
 }
 
 impl ModelSet {
-    fn snapshot(directory: String, languages: &[String], implicit_osd: bool) -> Result<Self, OcrError> {
-        let root = Path::new(&directory);
-        let mut hash = hash_language_models(root, languages.iter().map(String::as_str))?;
+    pub(super) fn snapshot(directory: String, languages: &[String], implicit_osd: bool) -> Result<Self, OcrError> {
+        Ok(Self {
+            revision: Self::revision(&directory, languages.iter().map(String::as_str), implicit_osd)?,
+            directory,
+            languages: languages.join("+"),
+            implicit_osd,
+        })
+    }
+
+    pub(super) fn validate(&self) -> Result<(), OcrError> {
+        let current = Self::revision(&self.directory, self.languages.split('+'), self.implicit_osd)?;
+        if current != self.revision {
+            return Err(OcrError::ProcessingFailed(
+                "Tesseract script retry models changed during OCR".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn revision<'a>(
+        directory: &str,
+        languages: impl IntoIterator<Item = &'a str>,
+        implicit_osd: bool,
+    ) -> Result<blake3::Hash, OcrError> {
+        let root = Path::new(directory);
+        let mut hash = hash_language_models(root, languages)?;
         if implicit_osd {
             let revision = crate::core::extractor::cacheability::osd_revision(root)
                 .map_err(|error| engine_error("fingerprint implicit OSD model", error))?;
             hash.update(revision.as_bytes());
         }
-        Ok(Self {
-            directory,
-            languages: languages.join("+"),
-            revision: hash.finalize(),
-        })
+        Ok(hash.finalize())
     }
 
     fn hash_into(&self, hash: &mut blake3::Hasher) {
@@ -258,17 +278,18 @@ fn osd_script(image: &xberg_tesseract::Pix, pass: &Pass<'_>, models: &ModelSet) 
     if cacheability::ocr_stop_requested() {
         return Ok(None);
     }
-    let osd = new_engine(&models.directory, &models.languages, 3)?;
-    osd.set_page_seg_mode(TessPageSegMode::PSM_OSD_ONLY)
-        .map_err(|e| engine_error("OSD mode", e))?;
-    osd.set_image_2(image.as_ptr())
-        .map_err(|e| engine_error("OSD image", e))?;
-    osd.set_source_resolution(pass.source_dpi)
-        .map_err(|e| engine_error("OSD resolution", e))?;
-    retry_stage(|| {
-        osd.detect_os()
-            .map(|result| result.2)
-            .map_err(|e| engine_error("OSD", e))
+    pass.pool.with_engine(RetryStage::Osd, models, 3, |osd| {
+        osd.set_page_seg_mode(TessPageSegMode::PSM_OSD_ONLY)
+            .map_err(|e| engine_error("OSD mode", e))?;
+        osd.set_image_2(image.as_ptr())
+            .map_err(|e| engine_error("OSD image", e))?;
+        osd.set_source_resolution(pass.source_dpi)
+            .map_err(|e| engine_error("OSD resolution", e))?;
+        retry_stage(|| {
+            osd.detect_os()
+                .map(|result| result.2)
+                .map_err(|e| engine_error("OSD", e))
+        })
     })
 }
 
@@ -290,6 +311,7 @@ impl Outcome {
 pub(super) struct Pass<'a> {
     pub(super) config: &'a crate::ocr::types::TesseractConfig,
     pub(super) source_dpi: i32,
+    pub(super) pool: &'a RetryApiPools,
 }
 
 fn engine_error(step: &str, error: impl std::fmt::Display) -> OcrError {
@@ -306,11 +328,7 @@ fn retry_stage<T>(action: impl FnOnce() -> Result<T, OcrError>) -> Result<Option
 
 /// Retry Han when same-page OSD identifies it. For a mixed PDF's Khmer candidate, corroborate
 /// the supplemental read on the same pixels using a second segmentation mode.
-/// OSD and retry reads use engines built for the page and dropped with it, never
-/// on the pool: the page holds its pooled first engine the whole time, and two pages that each
-/// hold one and wait for a second pooled engine wait forever (measured: every document of a
-/// corpus hit the 600 s limit). Both models are looked up in the installed tessdata only: a model
-/// that is absent keeps the first read, and nothing is downloaded. ~keep
+/// Models come from the installed tessdata. If a model is absent, keep the first read. ~keep
 pub(super) fn run(
     first: &TesseractAPI,
     first_tsv: &str,
@@ -430,7 +448,7 @@ fn read_han(
     let Some(model) = model_for_script(&script) else {
         return Ok(None);
     };
-    let Some(retry_words) = read_retry_words(image, pass, &han.recognition, pass.config.psm)? else {
+    let Some(retry_words) = read_retry_words(image, pass, &han.recognition, RetryStage::Han, pass.config.psm)? else {
         return Ok(None);
     };
     let merged = merge(parse_words(first_tsv), retry_words, &script, RETRY_MIN_CONF_GAIN);
@@ -447,11 +465,11 @@ fn read_khmer_supplement(
     pass: &Pass<'_>,
     models: &ModelSet,
 ) -> Result<Option<Merged>, OcrError> {
-    let Some(retry) = read_retry_words(image, pass, models, pass.config.psm)? else {
+    let Some(retry) = read_retry_words(image, pass, models, RetryStage::Khmer, pass.config.psm)? else {
         return Ok(None);
     };
     let alternate_psm = if pass.config.psm == 6 { 11 } else { 6 };
-    let Some(alternate) = read_retry_words(image, pass, models, alternate_psm)? else {
+    let Some(alternate) = read_retry_words(image, pass, models, RetryStage::Khmer, alternate_psm)? else {
         return Ok(None);
     };
     Ok(corroborated_khmer(retry, &alternate))
@@ -461,27 +479,29 @@ fn read_retry_words(
     image: &xberg_tesseract::Pix,
     pass: &Pass<'_>,
     models: &ModelSet,
+    stage: RetryStage,
     psm: u8,
 ) -> Result<Option<Vec<TsvWord>>, OcrError> {
     if cacheability::ocr_stop_requested() {
         return Ok(None);
     }
-    let retry = new_engine(&models.directory, &models.languages, pass.config.oem)?;
-    retry
-        .set_page_seg_mode(TessPageSegMode::from_int(i32::from(psm)))
-        .map_err(|e| engine_error("retry mode", e))?;
-    super::config::apply_tesseract_variables(&retry, pass.config)?;
-    retry
-        .set_image_2(image.as_ptr())
-        .map_err(|e| engine_error("retry image", e))?;
-    retry
-        .set_source_resolution(pass.source_dpi)
-        .map_err(|e| engine_error("retry resolution", e))?;
-    if retry_stage(|| retry.recognize().map_err(|e| engine_error("retry recognize", e)))?.is_none() {
-        return Ok(None);
-    }
-    let tsv = retry.get_tsv_text(0).map_err(|e| engine_error("retry word table", e))?;
-    Ok(Some(parse_words(&tsv)))
+    pass.pool.with_engine(stage, models, pass.config.oem, |retry| {
+        retry
+            .set_page_seg_mode(TessPageSegMode::from_int(i32::from(psm)))
+            .map_err(|e| engine_error("retry mode", e))?;
+        super::config::apply_tesseract_variables(retry, pass.config)?;
+        retry
+            .set_image_2(image.as_ptr())
+            .map_err(|e| engine_error("retry image", e))?;
+        retry
+            .set_source_resolution(pass.source_dpi)
+            .map_err(|e| engine_error("retry resolution", e))?;
+        if retry_stage(|| retry.recognize().map_err(|e| engine_error("retry recognize", e)))?.is_none() {
+            return Ok(None);
+        }
+        let tsv = retry.get_tsv_text(0).map_err(|e| engine_error("retry word table", e))?;
+        Ok(Some(parse_words(&tsv)))
+    })
 }
 
 /// Record the outcome in the result metadata: the merge counts and, for a page that took the

@@ -2458,7 +2458,11 @@ pub(super) fn perform_ocr(
         .then(|| models.retry_models(config, f64::from(mean_text_conf)))
         .flatten()
         .and_then(|retry_models| {
-            let pass = script_retry::Pass { config, source_dpi };
+            let pass = script_retry::Pass {
+                config,
+                source_dpi,
+                pool: api_pool.retry(),
+            };
             retry_with_tsv(
                 models,
                 tsv_data_for_tables.as_deref(),
