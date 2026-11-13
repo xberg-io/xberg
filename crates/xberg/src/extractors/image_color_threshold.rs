@@ -184,6 +184,21 @@ mod tests {
         }
     }
 
+    #[test]
+    fn known_confident_words_must_meet_the_three_quarter_boundary() {
+        let primary = document(KNOWN);
+        let at_boundary = document("Monday Tuesday Wednesday Harbor Dredge Quarry Ridge Library");
+        let below_boundary = document("Monday Tuesday Harbor Dredge Quarry Ridge Library Hours");
+        assert!(improves(&primary, &at_boundary));
+        assert!(!improves(&primary, &below_boundary));
+    }
+
+    #[test]
+    fn the_known_good_public_fixture_qualifies_for_the_color_probe() {
+        let image = include_bytes!("../../tests/fixtures/ocr_color_library_2959.png");
+        assert!(has_colored_background(image, &SecurityLimits::default()));
+    }
+
     #[tokio::test]
     async fn cancellation_before_the_probe_prevents_all_retry_work() {
         let token = CancellationToken::new();

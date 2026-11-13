@@ -47,3 +47,14 @@ async fn standalone_clean_table_keeps_its_ordinary_read() {
     assert!(ordinary.split_whitespace().count() >= 5, "{ordinary}");
     assert_eq!(ordinary, explicit_otsu);
 }
+
+#[tokio::test]
+async fn standalone_colored_library_preserves_the_known_good_otsu_read() {
+    let image = include_bytes!("fixtures/ocr_color_library_2959.png");
+    let explicit_otsu = read(image, Some(TesseractConfig::default())).await;
+    assert_eq!(
+        explicit_otsu.split_whitespace().collect::<Vec<_>>().join(" "),
+        "Public library schedule Reading room opens Monday Visitors are welcome"
+    );
+    assert_eq!(read(image, None).await, explicit_otsu);
+}
