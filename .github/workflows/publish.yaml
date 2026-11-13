@@ -545,6 +545,13 @@ jobs:
           manylinux-aarch64-image: "manylinux_2_28"
           cibw-before-build-linux: |
             set -euo pipefail
+            if [ "$(uname -m)" = aarch64 ]; then
+              if [ "${CARGO_PROFILE_RELEASE_LTO:-}" != thin ]; then
+                echo "ARM64 manylinux build requires CARGO_PROFILE_RELEASE_LTO=thin" >&2
+                exit 1
+              fi
+              printf 'ARM64 manylinux Cargo release LTO: %s\n' "$CARGO_PROFILE_RELEASE_LTO"
+            fi
             pip install maturin uv
             source ~/.cargo/env
             # Prevent GCC 14+ from emitting C23-versioned glibc symbols (__isoc23_strtoll etc.)
@@ -562,7 +569,12 @@ jobs:
             case "$(uname -m)" in aarch64 | arm64) ort_arch=aarch64 ;; *) ort_arch=x64 ;; esac
             curl -fsSL -o /tmp/ort.tgz "https://github.com/microsoft/onnxruntime/releases/download/v${ort_version}/onnxruntime-linux-${ort_arch}-${ort_version}.tgz"
             mkdir -p /opt/msort && tar -xzf /tmp/ort.tgz -C /opt/msort --strip-components=1
-          cibw-environment: 'MATURIN_BUILD_ARGS="--compatibility manylinux_2_28" CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=gcc CC_x86_64_unknown_linux_gnu=gcc CC_aarch64_unknown_linux_gnu=gcc CXX_x86_64_unknown_linux_gnu=g++ CXX_aarch64_unknown_linux_gnu=g++ ORT_STRATEGY=system ORT_LIB_LOCATION=/opt/msort/lib ORT_SKIP_DOWNLOAD=1 ORT_PREFER_DYNAMIC_LINK=1 LD_LIBRARY_PATH=/opt/msort/lib'
+          cibw-environment: >-
+            MATURIN_BUILD_ARGS="--compatibility manylinux_2_28"
+            CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=gcc
+            CC_x86_64_unknown_linux_gnu=gcc CC_aarch64_unknown_linux_gnu=gcc CXX_x86_64_unknown_linux_gnu=g++ CXX_aarch64_unknown_linux_gnu=g++
+            ORT_STRATEGY=system ORT_LIB_LOCATION=/opt/msort/lib ORT_SKIP_DOWNLOAD=1 ORT_PREFER_DYNAMIC_LINK=1 LD_LIBRARY_PATH=/opt/msort/lib
+            ${{ matrix.os == 'ubuntu-24.04-arm' && 'CARGO_PROFILE_RELEASE_LTO=thin' || '' }}
           # The deployment target is the wheel's macOS floor, 15.0: the oldest macOS Apple
           # still supports. delocate bundles the libheif closure, so the hook builds it
           # from source at the target and PKG_CONFIG_PATH links the wheel against it

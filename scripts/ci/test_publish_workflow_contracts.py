@@ -2,6 +2,7 @@ import ast
 import itertools
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -488,6 +489,38 @@ def test_cli_release_enables_metal_only_for_macos_arm64() -> None:
     assert macos_arm64 is not None
     assert "candle-metal" in macos_arm64.group(1).split(",")
     assert block.count("candle-metal") == 1
+
+
+def test_python_manylinux_arm64_requires_thin_lto_in_container() -> None:
+    block = job_block(WORKFLOW.read_text(), "python-wheels")
+    [matrix] = re.findall(r"(?m)^        os: \[([^\]]+)\]$", block)
+    runners = matrix.split(", ")
+    assert "ubuntu-24.04-arm" in runners
+    [environment] = re.findall(r"(?m)^          cibw-environment: >-\n((?: {12}[^\n]+\n)+)", block)
+    [selector] = re.findall(r"\$\{\{ (.+) \}\}", environment)
+    [guard] = re.findall(r"(?ms)^          cibw-before-build-linux: \|\n(.*?)^            pip install", block)
+    lto_key = "CARGO_PROFILE_RELEASE_LTO"
+    for runner in runners:
+        resolved = evaluate_expression(selector, {"matrix": {"os": runner}})
+        rendered = environment.replace("${{ " + selector + " }}", str(resolved))
+        lto_flags = [flag for flag in shlex.split(rendered) if flag.startswith(lto_key + "=")]
+        assert lto_flags == ([lto_key + "=thin"] if runner == "ubuntu-24.04-arm" else []), runner
+
+    for arch, lto, expected in [
+        ("aarch64", "thin", 0),
+        ("aarch64", "", 1),
+        ("aarch64", "fat", 1),
+        ("x86_64", "", 0),
+    ]:
+        script = 'uname() { printf "%s\\n" "$TEST_ARCH"; }\n'
+        result = run(
+            ["bash", "-c", script + textwrap.dedent(guard)],
+            WORKFLOW.parent,
+            env={"TEST_ARCH": arch, lto_key: lto},
+        )
+        assert result.returncode == expected, (arch, lto, result.stderr)
+        if expected:
+            assert "ARM64 manylinux build requires CARGO_PROFILE_RELEASE_LTO=thin" in result.stderr
 
 
 def test_docker_preflight_checks_out_the_resolved_candidate() -> None:
