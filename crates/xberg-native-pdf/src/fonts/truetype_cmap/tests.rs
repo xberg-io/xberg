@@ -952,7 +952,7 @@ fn format4_bounds_reads_and_preserves_delta_and_glyph_array_mappings() {
     let mut font = build_truetype_with_cmap_format4(&[(65, 1), (66, 2)]);
     let subtable = &mut font[40..];
     subtable[2..4].copy_from_slice(&42u16.to_be_bytes());
-    subtable[38..40].copy_from_slice(&4u16.to_be_bytes());
+    subtable[36..38].copy_from_slice(&4u16.to_be_bytes());
     font.extend_from_slice(&5u16.to_be_bytes());
     font.extend_from_slice(b"adjacent table");
     let cmap = TrueTypeCMap::from_font_data(&font).unwrap();
