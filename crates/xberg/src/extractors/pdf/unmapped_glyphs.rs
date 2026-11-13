@@ -15,7 +15,9 @@ use crate::types::{PageBoundary, PageContent, ProcessingWarning, Table};
 /// The marker the native extractor leaves for a glyph without a Unicode value.
 pub(super) const LOST_GLYPH_MARKER: char = '\u{FFFD}';
 
-pub(super) use xberg_native_pdf::{LOST_SYMBOL_GLYPH_MARKER, is_lost_glyph_marker as is_lost_glyph};
+#[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) use xberg_native_pdf::LOST_SYMBOL_GLYPH_MARKER;
+pub(super) use xberg_native_pdf::is_lost_glyph_marker as is_lost_glyph;
 
 /// A run of consecutive markers in a text, and what replaces it. One lost glyph, or several in a
 /// row, stands for characters that exist on the page, so the run leaves a single space between
