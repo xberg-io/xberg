@@ -261,8 +261,8 @@ pub(crate) fn reconcile_page_boundaries(
 /// Remove `metadata.pages.boundaries` when they cannot index `content`.
 ///
 /// The offsets were measured on another rendering of the document, so a range that falls
-/// outside `content` or inside a UTF-8 sequence is provably stale. Returns `true` when
-/// the boundaries were dropped.
+/// outside `content`, inside a UTF-8 sequence, or overlapping another page is unusable.
+/// Returns `true` when the boundaries were dropped.
 pub(crate) fn drop_unusable_page_boundaries(metadata: &mut crate::types::Metadata, content: &str) -> bool {
     let Some(structure) = metadata.pages.as_mut() else {
         return false;
@@ -270,7 +270,8 @@ pub(crate) fn drop_unusable_page_boundaries(metadata: &mut crate::types::Metadat
     let usable = structure.boundaries.as_ref().is_none_or(|boundaries| {
         boundaries
             .iter()
-            .all(|b| b.byte_start <= b.byte_end && content.get(b.byte_start..b.byte_end).is_some())
+            .all(|b| content.get(b.byte_start..b.byte_end).is_some())
+            && overlapping_page_ranges(boundaries, 0).is_empty()
     });
     if usable {
         return false;
@@ -664,7 +665,7 @@ fn reconcile_located_page_boundaries(
         .into_iter()
         .partition(|boundary| !unlocated.contains(&boundary.page_number));
     structure.boundaries = Some(ordered);
-    reconcile_page_boundaries(metadata, content, Some(&located));
+    let reconciled = reconcile_page_boundaries(metadata, content, Some(&located));
     let structure = metadata.pages.as_mut()?;
     let boundaries = structure.boundaries.as_mut()?;
     let mut omitted = Vec::new();
@@ -675,6 +676,7 @@ fn reconcile_located_page_boundaries(
         }
         usable
     });
+    let reconciled_count = if reconciled { boundaries.len() } else { 0 };
     for (boundary, page) in remaining.into_iter().zip(&unlocated_pages) {
         if usable_unlocated_boundary(content, &boundary, &page.content) {
             boundaries.push(boundary);
@@ -682,6 +684,16 @@ fn reconcile_located_page_boundaries(
             omitted.push(boundary.page_number);
         }
     }
+    let overlapping = overlapping_page_ranges(boundaries, reconciled_count);
+    let mut index = 0;
+    boundaries.retain(|boundary| {
+        let keep = !overlapping.contains(&index);
+        index += 1;
+        if !keep {
+            omitted.push(boundary.page_number);
+        }
+        keep
+    });
     if boundaries.is_empty() {
         structure.boundaries = None;
     } else {
@@ -689,6 +701,36 @@ fn reconcile_located_page_boundaries(
     }
     omitted.sort_unstable();
     Some(omitted)
+}
+
+/// Find conflicting retained ranges by byte position. Reconciled ranges are already disjoint.
+fn overlapping_page_ranges(
+    boundaries: &[crate::types::PageBoundary],
+    reconciled_count: usize,
+) -> std::collections::BTreeSet<usize> {
+    let mut by_start: Vec<_> = boundaries
+        .iter()
+        .enumerate()
+        .filter(|(_, boundary)| boundary.byte_start < boundary.byte_end)
+        .collect();
+    by_start.sort_unstable_by_key(|(_, boundary)| boundary.byte_start);
+    let mut conflicts = std::collections::BTreeSet::new();
+    let mut furthest: Option<(usize, usize)> = None;
+    for (index, boundary) in by_start {
+        if let Some((prior, end)) = furthest.filter(|&(_, end)| boundary.byte_start < end) {
+            if prior >= reconciled_count {
+                conflicts.insert(prior);
+            }
+            if index >= reconciled_count {
+                conflicts.insert(index);
+            }
+            if boundary.byte_end <= end {
+                continue;
+            }
+        }
+        furthest = Some((index, boundary.byte_end));
+    }
+    conflicts
 }
 
 fn usable_unlocated_boundary(content: &str, boundary: &crate::types::PageBoundary, page_text: &str) -> bool {
@@ -1195,6 +1237,41 @@ mod plain_page_rerender_tests {
             content.get(boundaries[1].byte_start..boundaries[1].byte_end),
             Some("two")
         );
+    }
+
+    #[test]
+    fn a_retained_range_cannot_reuse_the_span_of_a_reconciled_page() {
+        let mut doc = doc_with(vec![page(1, "one"), page(2, "one")], &[]);
+        set_boundaries(&mut doc, &[(1, 0, 999), (2, 0, 3)]);
+        let pages = derive(&mut doc, "one");
+        assert_eq!(boundary_pages(&doc), vec![1]);
+        assert_ranges(&doc, "one", &pages[..1]);
+        assert!(warned(&doc));
+    }
+
+    #[test]
+    fn overlapping_stale_ranges_are_omitted_even_when_their_endpoints_are_valid() {
+        let content = "one two three";
+        let mut doc = doc_with(
+            vec![page(1, "one"), page(2, "| two three |"), page(3, "| three |")],
+            &[],
+        );
+        set_boundaries(&mut doc, &[(1, 0, 999), (2, 4, 13), (3, 8, 13)]);
+        let pages = derive(&mut doc, content);
+        assert_eq!(boundary_pages(&doc), vec![1]);
+        assert_ranges(&doc, content, &pages[..1]);
+        assert!(warned(&doc));
+    }
+
+    #[test]
+    fn retained_ranges_with_endpoints_inside_multibyte_characters_are_omitted() {
+        let content = "one é";
+        let mut doc = doc_with(vec![page(1, "one"), page(2, "| é |"), page(3, "| e |")], &[]);
+        set_boundaries(&mut doc, &[(1, 0, 999), (2, 5, 6), (3, 4, 5)]);
+        let pages = derive(&mut doc, content);
+        assert_eq!(boundary_pages(&doc), vec![1]);
+        assert_ranges(&doc, content, &pages[..1]);
+        assert!(warned(&doc));
     }
 
     #[test]
