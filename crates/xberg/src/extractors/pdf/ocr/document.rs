@@ -2189,6 +2189,10 @@ pub(super) fn put_layers_first_in_run(
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "updates document and page projections together with per-page recovery"
+)]
 pub(super) fn put_layers_first_in_run_with_recovered_rows(
     text: &mut String,
     page_texts: &mut [String],
