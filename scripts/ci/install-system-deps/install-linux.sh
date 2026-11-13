@@ -164,17 +164,65 @@ libheif_runtime_links() {
   fi
 }
 
+libheif_artifacts() (
+  local root="$1" entry target runtime
+  local -a artifacts
+  [[ ! -L "$root" ]] || return 1
+  cd "$root" || return 1
+  for entry in lib lib/pkgconfig include include/libheif lib/cmake lib/cmake/libheif share share/libheif; do
+    [[ ! -L "$entry" && (! -e "$entry" || -d "$entry") ]] || return 1
+  done
+
+  runtime="$(realpath lib/libheif.so.1)" || return 1
+  [[ "${runtime%/*}" == "$(pwd -P)/lib" ]] || return 1
+  runtime="${runtime##*/}"
+  [[ "$runtime" == libheif.so.1 || "$runtime" =~ ^libheif\.so\.1(\.[0-9]+)+$ ]] || return 1
+  [[ -f "lib/$runtime" && ! -L "lib/$runtime" ]] || return 1
+  artifacts=("lib/$runtime")
+  for entry in lib/libheif.so.1 lib/libheif.so; do
+    [[ "$entry" != "lib/$runtime" ]] || continue
+    target="$(readlink "$entry")" || return 1
+    [[ "$target" == "$runtime" || ("$entry" == lib/libheif.so && "$target" == libheif.so.1) ]] || return 1
+    artifacts+=("$entry")
+  done
+
+  shopt -s nullglob
+  for entry in lib/pkgconfig/libheif.pc include/libheif/*.h lib/cmake/libheif/libheif-config*.cmake \
+    share/libheif/example.heic share/libheif/example.avif; do
+    [[ ! -L "$entry" ]] || return 1
+    [[ -e "$entry" ]] || continue
+    [[ -f "$entry" ]] || return 1
+    artifacts+=("$entry")
+  done
+  printf '%s\0' "${artifacts[@]}"
+)
+
+promote_libheif() (
+  local source_root="$1" destination="$2" entry manifest
+  local -a artifacts=()
+  manifest="$(mktemp)" || return 1
+  trap 'rm -f -- "$manifest"' EXIT
+  libheif_artifacts "$source_root" >"$manifest" || return 1
+  while IFS= read -r -d '' entry; do
+    artifacts+=("$entry")
+  done <"$manifest"
+  for entry in "$destination" "$destination"/{lib,lib/pkgconfig,lib/cmake,lib/cmake/libheif,include,include/libheif,share,share/libheif}; do
+    [[ ! -L "$entry" && (! -e "$entry" || -d "$entry") ]] || return 1
+  done
+  cd "$source_root" || return 1
+  sudo mkdir -p "$destination" &&
+    sudo cp -P --parents --remove-destination -- "${artifacts[@]}" "$destination/"
+)
+
 libheif_candidate_is_usable() {
-  local candidate="$1" marker="$1/lib/pkgconfig/libheif.pc" search_path runtime
+  local candidate="$1" marker="$1/lib/pkgconfig/libheif.pc" search_path
   if [[ ! -s "$candidate/include/libheif/heif.h" || ! -f "$candidate/lib/libheif.so" ||
     ! -f "$candidate/lib/libheif.so.1" || ! -s "$marker" ]]; then
     echo "::warning::Incomplete libheif candidate at $candidate." >&2
     return 1
   fi
-  runtime="$(realpath "$candidate/lib/libheif.so.1")" || return 1
-  if [[ "$runtime" != "$(realpath "$candidate/lib")"/libheif.so.* ||
-  ! "$candidate/lib/libheif.so" -ef "$candidate/lib/libheif.so.1" ]]; then
-    echo "::warning::The libheif linker and runtime names must resolve to the same library in $candidate." >&2
+  if ! libheif_artifacts "$candidate" >/dev/null; then
+    echo "::warning::Unsafe libheif artifact paths in $candidate." >&2
     return 1
   fi
   search_path="$(libheif_search_path "$candidate/lib/pkgconfig" "${PKG_CONFIG_PATH:-}")"
@@ -225,8 +273,7 @@ else
 fi
 
 if [[ "$candidate" != "$LIBHEIF_PREFIX" ]]; then
-  sudo mkdir -p "$LIBHEIF_PREFIX"
-  sudo cp -a "$candidate/." "$LIBHEIF_PREFIX/"
+  promote_libheif "$candidate" "$LIBHEIF_PREFIX"
 fi
 sudo ldconfig
 if ! libheif_candidate_is_usable "$LIBHEIF_PREFIX"; then

@@ -190,3 +190,47 @@ run_cache_check() {
 	[ "$(cat "$LIBHEIF_CACHE/lib/libheif.so.1")" = fresh ]
 	[ ! -e "$LIBHEIF_CACHE/lib/libheif.so.stale" ]
 }
+
+run_cache_promotion() {
+	run bash -euo pipefail -c 'source "$1"; promote_libheif "$2" "$LIBHEIF_PREFIX"' \
+		_ "$XBERG_WORK/libheif-checks.sh" "$CACHE_CANDIDATE"
+}
+
+@test "install_linux should leave the destination untouched when candidate lib is an external symlink" {
+	prepare_cache_candidate
+	mv "$CACHE_CANDIDATE/lib" "$XBERG_WORK/external-lib"
+	ln -s "$XBERG_WORK/external-lib" "$CACHE_CANDIDATE/lib"
+	printf '%s\n' original >"$LIBHEIF_PREFIX/lib/libheif.so.1"
+	xberg_stub sudo 'printf "%s\n" "$*" >>"$XBERG_TRACE"; "$@"'
+	run_cache_check
+	xberg_assert_output_contains "rebuilding"
+	run_cache_promotion
+	xberg_assert_status 1
+	[ ! -e "$XBERG_TRACE" ]
+	[ "$(cat "$LIBHEIF_PREFIX/lib/libheif.so.1")" = original ]
+}
+
+
+@test "install_linux should reject external header symlinks before privileged promotion" {
+	prepare_cache_candidate
+	printf '%s\n' original >"$LIBHEIF_PREFIX/include/libheif/heif.h"
+	ln -s "$LIBHEIF_PREFIX/include/libheif/heif.h" "$CACHE_CANDIDATE/include/libheif/heif_external.h"
+	xberg_stub sudo 'printf "%s\n" "$*" >>"$XBERG_TRACE"; "$@"'
+	run_cache_promotion
+	xberg_assert_status 1
+	[ ! -e "$XBERG_TRACE" ]
+	[ "$(cat "$LIBHEIF_PREFIX/include/libheif/heif.h")" = original ]
+}
+
+@test "install_linux should pass only expected artifacts to privileged copy" {
+	prepare_cache_candidate
+	mkdir -p "$CACHE_CANDIDATE/bin"
+	touch "$CACHE_CANDIDATE/bin/unexpected" "$CACHE_CANDIDATE/lib/libunrelated.so"
+	xberg_stub sudo 'printf "%s\n" "$@" >>"$XBERG_TRACE"'
+	run_cache_promotion
+	xberg_assert_status 0
+	local expected
+	expected="$(printf '%s\n' mkdir -p "$LIBHEIF_PREFIX" cp -P --parents --remove-destination -- lib/libheif.so.1 lib/libheif.so \
+		lib/pkgconfig/libheif.pc include/libheif/heif.h "$LIBHEIF_PREFIX/")"
+	[ "$(cat "$XBERG_TRACE")" = "$expected" ]
+}
