@@ -116,6 +116,7 @@ fn certified_rgb_page(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::extractors::pdf::ocr::rendering::render_selected_pages_with_dpi;
 
     fn configuration() -> ExtractionConfig {
         crate::plugins::ensure_ocr_backends_initialized();
@@ -134,8 +135,7 @@ mod tests {
                 max_content_size: 80 * 1024 * 1024,
                 ..Default::default()
             };
-            let (_, mut failures, _) =
-                super::super::render_selected_pages_with_dpi(&document, &rotations, &[0], &limits, None, None);
+            let (_, mut failures, _) = render_selected_pages_with_dpi(&document, &rotations, &[0], &limits, None, None);
             assert_eq!(failures.len(), 1, "the actual RGB render must refuse the budget");
             return failures.pop().unwrap().1.into();
         }
