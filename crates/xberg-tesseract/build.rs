@@ -686,6 +686,18 @@ mod build_tesseract {
         let tessdata_prefix_cmake = normalize_cmake_path(&tessdata_prefix);
 
         let tesseract_link_name = build_static_library("tesseract", &tesseract_install_dir, || {
+            if mingw_target {
+                let baseapi_path = tesseract_dir.join("src/api/baseapi.cpp");
+                let source = fs::read_to_string(&baseapi_path).expect("Failed to read Tesseract baseapi.cpp");
+                let original = "double rot_theta = -(re_theta - classify_theta) * 2.0 / M_PI;";
+                let portable = "double rot_theta = -(re_theta - classify_theta) * 2.0 / 3.14159265358979323846;";
+                if source.contains(original) {
+                    fs::write(&baseapi_path, source.replacen(original, portable, 1))
+                        .expect("Failed to patch Tesseract baseapi.cpp");
+                } else {
+                    assert!(source.contains(portable), "Tesseract rotation formula changed");
+                }
+            }
             let cmakelists_path = tesseract_dir.join("CMakeLists.txt");
             let cmakelists = std::fs::read_to_string(&cmakelists_path)
                 .expect("Failed to read CMakeLists.txt")
