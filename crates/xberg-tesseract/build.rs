@@ -686,18 +686,6 @@ mod build_tesseract {
         let tessdata_prefix_cmake = normalize_cmake_path(&tessdata_prefix);
 
         let tesseract_link_name = build_static_library("tesseract", &tesseract_install_dir, || {
-            if mingw_target {
-                let baseapi_path = tesseract_dir.join("src/api/baseapi.cpp");
-                let source = fs::read_to_string(&baseapi_path).expect("Failed to read Tesseract baseapi.cpp");
-                let original = "double rot_theta = -(re_theta - classify_theta) * 2.0 / M_PI;";
-                let portable = "double rot_theta = -(re_theta - classify_theta) * 2.0 / 3.14159265358979323846;";
-                if source.contains(original) {
-                    fs::write(&baseapi_path, source.replacen(original, portable, 1))
-                        .expect("Failed to patch Tesseract baseapi.cpp");
-                } else {
-                    assert!(source.contains(portable), "Tesseract rotation formula changed");
-                }
-            }
             let cmakelists_path = tesseract_dir.join("CMakeLists.txt");
             let cmakelists = std::fs::read_to_string(&cmakelists_path)
                 .expect("Failed to read CMakeLists.txt")
@@ -781,6 +769,11 @@ mod build_tesseract {
             if env::var("CI").is_err() && env::var("RUSTC_WRAPPER").unwrap_or_default() == "sccache" {
                 tesseract_config.env("CC", "sccache cc").env("CXX", "sccache c++");
             }
+            let tesseract_cxx_flags = if mingw_target {
+                format!("{cmake_cxx_flags} -D_USE_MATH_DEFINES")
+            } else {
+                cmake_cxx_flags.clone()
+            };
             tesseract_config
                 .define("CMAKE_POLICY_VERSION_MINIMUM", "3.5")
                 .define("CMAKE_BUILD_TYPE", "Release")
@@ -822,7 +815,7 @@ mod build_tesseract {
                 .define("LEPT_TIFF_RESULT", "FALSE")
                 .define("INSTALL_CONFIGS", "ON")
                 .define("USE_SYSTEM_ICU", "ON")
-                .define("CMAKE_CXX_FLAGS", &cmake_cxx_flags)
+                .define("CMAKE_CXX_FLAGS", &tesseract_cxx_flags)
                 .define("CMAKE_C_FLAGS", &cmake_c_flags);
 
             if is_zigbuild() {
