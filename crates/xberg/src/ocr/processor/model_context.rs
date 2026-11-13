@@ -59,7 +59,7 @@ impl ModelContext {
                 crate::core::extractor::cacheability::invalidate_current();
             }
         })?;
-        let mut context = Self::for_path(directory, config.psm)?;
+        let mut context = Self::for_config(directory, config.psm, languages)?;
         if let Some(noisy_below) = retry_threshold.filter(|_| script_retry::supports_retry(config))
             && !crate::core::extractor::cacheability::ocr_stop_requested()
         {
@@ -84,7 +84,7 @@ impl ModelContext {
             }
         };
         let models = RetryModels::from_snapshots(han, khmer);
-        if models.is_some() {
+        if models.is_some() && self.primary.is_none() {
             // ~keep The first pass can use a different directory from the complete retry set.
             let languages: Vec<String> = config.language.split('+').map(|name| name.trim().into()).collect();
             match self.read_primary_revision(&languages) {
@@ -238,7 +238,17 @@ impl ModelContext {
                 OcrError::InvalidConfiguration("Provisioned OCR requires an explicit model directory".into())
             })?;
         super::validation::validate_language_and_traineddata(&config.language, directory)?;
-        Self::for_path(directory.to_owned(), config.psm)
+        let languages = config.language.split('+').map(|name| name.trim().to_owned()).collect();
+        Self::for_config(directory.to_owned(), config.psm, languages)
+    }
+
+    fn for_config(directory: String, psm: u8, languages: Vec<String>) -> Result<Self, OcrError> {
+        let mut context = Self::for_path(directory, psm)?;
+        if context.osd_revision.is_some() {
+            let revision = context.read_primary_revision(&languages)?;
+            context.primary = Some(PrimaryModels { languages, revision });
+        }
+        Ok(context)
     }
 
     pub(super) fn for_path(directory: String, psm: u8) -> Result<Self, OcrError> {
@@ -316,9 +326,12 @@ impl ModelContext {
             return base;
         };
         let mut hash = blake3::Hasher::new();
-        hash.update(b"tesseract-osd-model-result-v1");
+        hash.update(b"tesseract-osd-model-result-v2");
         hash.update(base.as_bytes());
         hash.update(revision.as_bytes());
+        if let Some(primary) = self.primary_revision() {
+            hash.update(primary.as_bytes());
+        }
         hash.finalize().to_hex().to_string()
     }
 }

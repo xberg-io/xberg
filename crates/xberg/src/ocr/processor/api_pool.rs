@@ -636,6 +636,41 @@ mod tests {
     }
 
     #[test]
+    fn osd_pool_and_result_keys_change_when_only_english_changes() {
+        use super::super::model_context::ModelContext;
+        use crate::ocr::types::TesseractConfig;
+
+        let root = tempfile::tempdir().unwrap();
+        let english = root.path().join("eng.traineddata");
+        std::fs::write(&english, b"old").unwrap();
+        std::fs::write(root.path().join("osd.traineddata"), b"same OSD").unwrap();
+        let config = TesseractConfig {
+            language: "eng".into(),
+            tessdata_path: Some(root.path().into()),
+            psm: 1,
+            ..Default::default()
+        };
+        let check = |resolve: &dyn Fn() -> ModelContext| {
+            std::fs::write(&english, b"old").unwrap();
+            let old = resolve();
+            let pool = ResourcePool::new(1);
+            let checkout = |models: &ModelContext, value| {
+                pool.checkout::<(), _>(ApiKey::for_models(models, "eng", config.oem), || Ok(value))
+                    .unwrap()
+            };
+            drop(checkout(&old, 1));
+            assert_eq!(*checkout(&resolve(), 2), 1);
+            std::fs::write(&english, b"new").unwrap();
+            let new = resolve();
+            assert_eq!(old.osd_revision, new.osd_revision);
+            assert_ne!(old.result_key(&config), new.result_key(&config));
+            assert_eq!(*checkout(&new, 2), 2);
+        };
+        check(&|| ModelContext::resolve_with_retry(&config, None).unwrap());
+        check(&|| ModelContext::for_provisioned(&config).unwrap());
+    }
+
+    #[test]
     fn should_keep_requested_engine_modes_separate_in_pool_keys() {
         let pool = ResourcePool::new(1);
         let key = |oem| ApiKey {
