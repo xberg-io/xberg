@@ -2646,6 +2646,41 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     &mut extraction_result,
                     config.security_limits.as_ref().unwrap_or(&Default::default()),
                 )?;
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                if correction_degrees == 0
+                    && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
+                    && config.pdf_options.as_ref().is_none_or(|pdf| {
+                        pdf.top_margin_fraction.unwrap_or_default() == 0.0
+                            && pdf.bottom_margin_fraction.unwrap_or_default() == 0.0
+                    })
+                    && !khmer_supplements.contains_key(&((page_idx + 1) as u32))
+                    && !alternative_raster_pages.contains(&((page_idx + 1) as u32))
+                    && super::document::native_preservation_is_automatic(config, (page_idx + 1) as u32)
+                    && super::document::resolved_ocr_correction_degrees(&extraction_result.metadata)
+                        .is_none_or(|angle| angle == 0)
+                    && crate::plugins::registry::get_ocr_backend_registry()
+                        .read()
+                        .is_builtin_tesseract(backend)
+                    && super::layer_token_recovery::is_english_read(&extraction_result)
+                {
+                    let limits = super::native_word_coverage::InkProofLimits {
+                        thresholds: &ocr_output_thresholds,
+                        max_working_bytes: super::hidden_layer::preview_byte_limit(config),
+                        cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
+                    };
+                    if let Some(additions) = super::layer_token_recovery::plan_minority_khmer(
+                        &render_doc,
+                        page_idx,
+                        &extraction_result,
+                        &limits,
+                    ) {
+                        super::layer_token_recovery::apply_minority_khmer(
+                            &mut extraction_result,
+                            &additions,
+                            limits.cancelled,
+                        );
+                    }
+                }
                 if let Some(metadata) = extraction_result.metadata.image_preprocessing.clone() {
                     preprocessing_by_page.insert((page_idx + 1) as u32, metadata);
                 }
@@ -6132,6 +6167,23 @@ pub(super) async fn extract_with_ocr_for_page(
                     .map(|source| source.document)
                     .or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf.as_ref()))
             {
+                let limits = super::native_word_coverage::InkProofLimits {
+                    thresholds: &ocr_output_thresholds,
+                    max_working_bytes: super::hidden_layer::preview_byte_limit(config),
+                    cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
+                };
+                let additions = if config.ocr_strategy == crate::core::config::OcrStrategy::Auto
+                    && config.pdf_options.as_ref().is_none_or(|pdf| {
+                        pdf.top_margin_fraction.unwrap_or_default() == 0.0
+                            && pdf.bottom_margin_fraction.unwrap_or_default() == 0.0
+                    })
+                    && !forced_khmer_supplements.contains_key(&page_idx)
+                    && super::layer_token_recovery::is_english_read(&ocr_result)
+                {
+                    super::layer_token_recovery::plan_minority_khmer(pdf, document_page_idx, &ocr_result, &limits)
+                } else {
+                    None
+                };
                 super::layer_token_recovery::recover_page(
                     pdf,
                     document_page_idx,
@@ -6139,12 +6191,15 @@ pub(super) async fn extract_with_ocr_for_page(
                     page_ocr_hints
                         .as_ref()
                         .and_then(|hints| hints.decision_layer(document_page_number)),
-                    super::native_word_coverage::InkProofLimits {
-                        thresholds: &ocr_output_thresholds,
-                        max_working_bytes: super::hidden_layer::preview_byte_limit(config),
-                        cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
-                    },
+                    super::native_word_coverage::InkProofLimits { ..limits },
                 );
+                if let Some(additions) = additions {
+                    let before = ocr_result.content.len();
+                    super::layer_token_recovery::apply_minority_khmer(&mut ocr_result, &additions, limits.cancelled);
+                    if detached_page.is_some() && ocr_result.content.len() > before {
+                        tracing::debug!(page = document_page_number, "Detached Tesseract read recovered Khmer");
+                    }
+                }
             }
             if let Some(psm) = effective_tesseract_psm(&ocr_result.metadata, &backend_name) {
                 page_segmentation_modes.insert(document_page_number, psm);

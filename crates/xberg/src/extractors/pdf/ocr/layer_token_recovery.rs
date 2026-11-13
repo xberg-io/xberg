@@ -724,6 +724,24 @@ fn add(
     let Some(insertion) = content_insertion(&read.content, text, &area) else {
         return false;
     };
+    insert_recovered_text(read, text, token, (left, top, width, height), page, (insertion, None));
+    true
+}
+
+fn insert_recovered_text(
+    read: &mut ExtractedDocument,
+    text: &mut PageText,
+    token: &str,
+    (left, top, width, height): (u32, u32, u32, u32),
+    page: u32,
+    (insertion, structured_position): (Insertion, Option<usize>),
+) {
+    let area = PixelBox {
+        left: i64::from(left),
+        top: i64::from(top),
+        right: i64::from(left + width),
+        bottom: i64::from(top + height),
+    };
     insertion.apply(&mut read.content, token);
     text.insert(token, area);
     let geometry = OcrBoundingGeometry::Rectangle {
@@ -764,10 +782,9 @@ fn add(
             y1: area.bottom as f64,
         });
         element.ocr_geometry = Some(geometry);
-        let position = reading_position(&document.elements, &area);
+        let position = structured_position.unwrap_or_else(|| reading_position(&document.elements, &area));
         document.elements.insert(position, element);
     }
-    true
 }
 
 /// Where in the document's elements a block at `area` reads: right after the last element, in the
@@ -940,3 +957,7 @@ mod tests;
 #[cfg(test)]
 #[path = "layer_token_recovery_pdf_tests.rs"]
 mod pdf_tests;
+
+#[path = "layer_token_recovery/minority_khmer.rs"]
+mod minority_khmer;
+pub(super) use minority_khmer::{apply_minority_khmer, is_english_read, plan_minority_khmer};

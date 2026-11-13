@@ -429,8 +429,16 @@ pub fn render_text_ink_rasters(
     max_working_bytes: usize,
     cancelled: impl Fn() -> bool,
 ) -> Result<Option<TextInkRasters>> {
-    let render =
-        |without_glyphs: bool| render_luminance(doc, page_num, dpi, max_working_bytes, (!without_glyphs, true));
+    let render = |without_glyphs: bool| {
+        render_luminance(
+            doc,
+            page_num,
+            dpi,
+            max_working_bytes,
+            (!without_glyphs, true, true),
+            None,
+        )
+    };
     if cancelled() {
         return Ok(None);
     }
@@ -452,6 +460,35 @@ pub fn render_text_ink_rasters(
     }))
 }
 
+/// Compare page content with and without the selected font's outline paint, excluding annotations.
+#[doc(hidden)]
+pub fn render_font_ink_rasters(
+    doc: &crate::document::PdfDocument,
+    page: usize,
+    dpi: u32,
+    max_bytes: usize,
+    font: &str,
+    cancelled: impl Fn() -> bool,
+) -> Result<Option<TextInkRasters>> {
+    if cancelled() {
+        return Ok(None);
+    }
+    let (width, height, drawn) = render_luminance(doc, page, dpi, max_bytes, (true, true, false), None)?;
+    if cancelled() {
+        return Ok(None);
+    }
+    let (w, h, without_glyphs) = render_luminance(doc, page, dpi, max_bytes, (true, true, false), Some(font))?;
+    if (w, h) != (width, height) {
+        return Ok(None);
+    }
+    Ok(Some(TextInkRasters {
+        width,
+        height,
+        drawn,
+        without_glyphs,
+    }))
+}
+
 /// Internal Core bridge: the row-major luminance of a page rendered with every image left unpainted,
 /// so its text and vector art stand on blank paper. Returns the width, the height and the pixels.
 #[doc(hidden)]
@@ -461,7 +498,7 @@ pub fn render_page_without_images(
     dpi: u32,
     max_working_bytes: usize,
 ) -> Result<(u32, u32, Vec<u8>)> {
-    render_luminance(doc, page_num, dpi, max_working_bytes, (true, false))
+    render_luminance(doc, page_num, dpi, max_working_bytes, (true, false, true), None)
 }
 
 /// Internal Core bridge for reading a scanned picture without its native glyphs. ~keep
@@ -472,7 +509,7 @@ pub fn render_page_without_glyphs(
     dpi: u32,
     max_working_bytes: usize,
 ) -> Result<(u32, u32, Vec<u8>)> {
-    render_luminance(doc, page_num, dpi, max_working_bytes, (false, true))
+    render_luminance(doc, page_num, dpi, max_working_bytes, (false, true, true), None)
 }
 
 /// One raw render of a page reduced to luminance; `(glyphs, images)` says which of the two to paint.
@@ -481,16 +518,22 @@ fn render_luminance(
     page_num: usize,
     dpi: u32,
     max_working_bytes: usize,
-    (glyphs, images): (bool, bool),
+    (glyphs, images, annotations): (bool, bool, bool),
+    suppressed_font: Option<&str>,
 ) -> Result<(u32, u32, Vec<u8>)> {
     let budget = page_renderer::PngRenderBudget {
         max_working_bytes,
         minimum_dpi: dpi,
     };
     let _scope = crate::extractors::recovery_tally::RecoveryScope::enter(doc.recovery_counts());
-    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(dpi).as_raw());
+    let mut options = RenderOptions::with_dpi(dpi).as_raw();
+    options.render_annotations = annotations;
+    let mut renderer = PageRenderer::new(options);
     if !glyphs {
         renderer = renderer.without_text_ink();
+    }
+    if let Some(font) = suppressed_font {
+        renderer = renderer.without_font_ink(font);
     }
     if !images {
         renderer = renderer.without_images();

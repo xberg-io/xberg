@@ -23,7 +23,13 @@ passed=0
 run_exact() {
   local test_name="$1"
   shift
-  local -a cargo_args=(test --locked -p xberg --no-default-features --features "$features" "$@")
+  local -a cargo_args
+  if [[ "${1:-}" == --native-pdf ]]; then
+    shift
+    cargo_args=(test --locked -p xberg-native-pdf "$@")
+  else
+    cargo_args=(test --locked -p xberg --no-default-features --features "$features" "$@")
+  fi
   cargo "${cargo_args[@]}" -- --exact "$test_name" --list --color never 2>&1 | tee "$log_dir/list.log"
   if ! grep -Fxq "$test_name: test" "$log_dir/list.log" ||
     ! grep -Fxq '1 test, 0 benchmarks' "$log_dir/list.log"; then
@@ -40,6 +46,16 @@ run_exact() {
 }
 
 run_pdf_cases() {
+  run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::repeated_khmer_anchor_abstains_when_structured_intervening_words_disagree' --lib
+  run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::same_height_columns_with_repeated_words_do_not_share_an_inline_anchor' --lib
+  run_exact font_ink_proof_excludes_overlapping_annotation_appearances --native-pdf --test annotation_appearance_normal
+  run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::missing_middle_khmer_repeat_uses_the_original_occurrence_position' --lib
+  run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::located_english_word_keeps_its_place_between_khmer_occurrences' --lib
+  run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::missing_khmer_occurrence_is_published_inline_in_both_surfaces' --lib
+  run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::partial_khmer_read_spends_one_of_two_identical_occurrences' --lib
+  run_exact automatic_english_ocr_keeps_visible_minority_khmer_on_a_fragmented_page --test pdf_khmer_minority_2826
+  run_exact automatic_english_ocr_keeps_clean_khmer_and_rejects_hidden_and_wrong_mapped_khmer --test pdf_khmer_minority_2826
+  run_exact mixed_ocr_keeps_khmer_between_english_and_rejects_unrelated_ink --test pdf_khmer_minority_2826
   run_exact every_native_page_keeps_a_range_that_selects_its_text --test plain_page_ranges_select_page_text
   run_exact 'pdf::structure::paragraphs::tests::display_rows_tests::continuation_merge_keeps_indexed_display_rows_with_changed_source_literals' --lib
   run_exact cached_default_recovers_embedded_line_in_cold_and_warm_reads \
@@ -340,7 +356,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=94
+  expected=104
   run_pdf_cases
   run_retained_read_cases
   expected=$((expected + 11 + 7))

@@ -13,6 +13,7 @@ impl PageRenderer {
             path_rasterizer: PathRasterizer::new(),
             text_rasterizer: TextRasterizer::new(),
             text_ink_suppressed: false,
+            suppressed_text_font: None,
             images_suppressed: false,
             fonts: HashMap::new(),
             color_spaces: HashMap::new(),
@@ -140,6 +141,11 @@ impl PageRenderer {
 
     pub(in crate::rendering) fn without_text_ink(mut self) -> Self {
         self.text_ink_suppressed = true;
+        self
+    }
+
+    pub(in crate::rendering) fn without_font_ink(mut self, font: &str) -> Self {
+        self.suppressed_text_font = Some(font.to_owned());
         self
     }
 

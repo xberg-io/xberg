@@ -140,3 +140,29 @@ fn annotation_appearance_with_normal_entry_is_deterministic() {
         "the /N appearance stream must actually be drawn"
     );
 }
+
+#[test]
+fn font_ink_proof_excludes_overlapping_annotation_appearances() {
+    let font = "/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >>";
+    let objects = vec![
+        obj("<< /Type /Catalog /Pages 2 0 R >>"),
+        obj("<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
+        obj(&format!(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 60 60] /Contents 4 0 R /Resources << {font} >> /Annots [5 0 R] >>"
+        )),
+        stream_obj("", b"1 g BT /F1 18 Tf 10 20 Td (ID) Tj ET"),
+        obj("<< /Type /Annot /Subtype /Square /Rect [10 20 40 50] /F 4 /AP << /N 6 0 R >> >>"),
+        stream_obj(
+            &format!("/Type /XObject /Subtype /Form /BBox [0 0 30 30] /Resources << {font} >>"),
+            b"BT /F1 18 Tf 0 0 Td (ID) Tj ET",
+        ),
+    ];
+    let doc = PdfDocument::from_bytes(build_pdf(&objects)).unwrap();
+    let visible = render_page(&doc, 0, &RenderOptions::with_dpi(72).as_raw()).unwrap();
+    assert!(visible.data.chunks_exact(4).any(|pixel| pixel[0] < 128));
+    let proof = xberg_native_pdf::rendering::render_font_ink_rasters(&doc, 0, 72, 1 << 26, "F1", || false)
+        .unwrap()
+        .unwrap();
+    assert_eq!(proof.drawn, proof.without_glyphs);
+    assert!(proof.drawn.iter().all(|pixel| *pixel > 240));
+}
