@@ -39,6 +39,21 @@ pub(super) struct Run {
     budget_warning: std::sync::atomic::AtomicBool,
 }
 
+#[derive(Clone)]
+pub(crate) struct DetachedSource {
+    pub(super) document: std::sync::Arc<PdfDocument>,
+    pub(super) run: std::sync::Arc<Run>,
+    pub(super) raster: Option<crate::pdf::render::OcrRasterDpi>,
+    pub(super) layers: std::sync::Arc<ahash::AHashMap<u32, String>>,
+    pub(super) config: ExtractionConfig,
+}
+
+impl DetachedSource {
+    pub(super) fn layer(&self, page: u32) -> Option<&str> {
+        self.layers.get(&page).map(String::as_str)
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(super) struct PagePolicy<'a> {
     pub(super) page_index_offset: usize,

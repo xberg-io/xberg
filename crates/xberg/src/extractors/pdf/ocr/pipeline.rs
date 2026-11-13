@@ -1102,6 +1102,26 @@ pub(in crate::extractors::pdf) async fn probe_incomplete_hidden_layers(
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+
+fn mixed_layer_lines_to_put_first(
+    layer: &str,
+    independent_read: &str,
+    rendered_read: &str,
+    noise_verdict: bool,
+    thresholds: &crate::core::config::OcrQualityThresholds,
+    boxes: Option<&super::document::PageLineBoxes>,
+    plain_rows: super::document::PlainOcrRows,
+) -> Option<super::document::LayerFirst> {
+    if !noise_verdict
+        && independent_read != rendered_read
+        && !super::document::ocr_confirms_layer(layer, independent_read, thresholds)
+    {
+        return None;
+    }
+    super::document::layer_lines_to_put_first(layer, rendered_read, noise_verdict, thresholds, boxes, plain_rows)
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 async fn extract_mixed_ocr_native_with_layout_inputs(
     native_text: &str,
     boundaries: &[crate::types::PageBoundary],
@@ -1136,6 +1156,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let (render_doc, page_count, page_rotations) = open_pdf_for_page_ocr(content)?;
     // Shared with each spawned pipeline task below, whose embedded-image retry reads it (#1912).
     let render_doc = std::sync::Arc::new(render_doc);
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let mixed_number_recovery = Arc::new(super::number_recovery::Run::default());
     // A listed page that carries a scan keeps the scan's segmentation mode; see
     // `single_block_for_ocr_page`.
     let single_block_pages = std::sync::Arc::new(
@@ -1220,6 +1247,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // recognition noise or confirms the layer. A forced page is replaced by definition and keeps
     // none. ~keep
     let ocr_output_thresholds = route_noise_thresholds(config);
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let number_layers = pages.native_layers.clone();
     let page_layers = match pages.native_layers {
         Some(layers) => Some(layers),
         None if !probing_hidden_layer && all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative => {
@@ -1540,6 +1569,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut khmer_supplements = ahash::AHashMap::new();
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let mut leading_khmer_rows = ahash::AHashMap::new();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut number_primary_texts = ahash::AHashMap::new();
     let mut ocr_results: ahash::AHashMap<u32, String> = ahash::AHashMap::with_capacity(total);
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut original_tesseract_raster_pages = ahash::AHashSet::new();
@@ -1880,6 +1911,25 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     let whole_page_raster =
                         crate::pdf::scan_detect::full_page_raster_density(&render_doc, page_idx).is_some();
                     let page_ocr_hints = PageOcrHints {
+                        #[cfg(all(
+                            feature = "pdf",
+                            feature = "ocr",
+                            feature = "tokio-runtime",
+                            not(target_arch = "wasm32")
+                        ))]
+                        number_source: (!probing_hidden_layer
+                            && !mixed_route_layout_active
+                            && config.ocr.as_ref().is_some_and(|ocr| ocr.backend_options.is_none())
+                            && number_layers
+                                .as_ref()
+                                .is_some_and(|layers| layers.contains_key(&((idx + 1) as u32))))
+                        .then(|| super::number_recovery::DetachedSource {
+                            document: Arc::clone(&render_doc),
+                            run: Arc::clone(&mixed_number_recovery),
+                            raster: raster_dpis.get(&idx).copied(),
+                            layers: number_layers.clone().unwrap_or_default(),
+                            config: config.clone(),
+                        }),
                         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                         probe_reads: pages.probe_reads.clone(),
                         source_dpi: rendered_page_source_dpi(&render_doc, page_idx, image_arc.width()),
@@ -2126,6 +2176,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             std::mem::take(&mut d.processing_warnings),
                         );
                         structured_ocr_pages.insert(page_number, d);
+                    }
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    if let Some(primary) = read_evidence.number_primary_text {
+                        number_primary_texts.insert(page_number, primary);
                     }
                     ocr_results.insert(page_number, page_text);
                 }
@@ -3562,9 +3616,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 }
                 None => Some((1.0, 1.0)),
             };
+            let confirmation_text = text.as_str();
+            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            let confirmation_text = number_primary_texts
+                .get(page_number)
+                .map_or(confirmation_text, String::as_str);
             let boxes = layers.get(page_number).and_then(|layer| {
                 if noise_verdict_pages.contains(page_number)
-                    || !super::document::ocr_confirms_layer(layer, text, &ocr_output_thresholds)
+                    || !super::document::ocr_confirms_layer(layer, confirmation_text, &ocr_output_thresholds)
                 {
                     return None;
                 }
@@ -3581,14 +3640,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     super::native_word_coverage::has_only_certified_tesseract_text(doc)
                         || super::native_word_coverage::ink_owned_table_structure_can_yield_to_native(
                             doc,
-                            text,
+                            confirmation_text,
                             clean_ink_layer,
                         )
                 })
                 && layers.get(page_number).is_some_and(|layer| {
                     let mut stripped = layer.clone();
                     super::super::unmapped_glyphs::strip_native_fragment(&mut stripped);
-                    super::document::ocr_confirms_layer(&stripped, text, &ocr_output_thresholds)
+                    super::document::ocr_confirms_layer(&stripped, confirmation_text, &ocr_output_thresholds)
                 })
             {
                 complete_native_pages.insert(*page_number);
@@ -3604,7 +3663,12 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     .get(page_number)
                     .is_some_and(super::document::ocr_page_has_only_plain_payload)
                 && layers.get(page_number).is_some_and(|layer| {
-                    super::document::native_page_covers_ocr(layer, text, &ocr_output_thresholds, boxes.as_ref())
+                    super::document::native_page_covers_ocr(
+                        layer,
+                        confirmation_text,
+                        &ocr_output_thresholds,
+                        boxes.as_ref(),
+                    )
                 })
             {
                 complete_native_pages.insert(*page_number);
@@ -3613,16 +3677,20 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             let remaining = leading_khmer_rows
                 .get(page_number)
                 .zip(layers.get(page_number))
-                .map_or_else(Default::default, |(rows, layer)| rows.prepend_policy(layer, text));
+                .map_or_else(Default::default, |(rows, layer)| {
+                    rows.prepend_policy(layer, confirmation_text)
+                });
             #[cfg(not(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))))]
             let remaining = super::document::NativePrepend::Original;
             // A page whose native script the OCR read kept is replaced by that read: the script rule
             // decided it, so no native row is put first. ~keep
             if !pages.native_script.contains(page_number)
                 && let Some(layer) = layers.get(page_number)
-                && let Some((source, read)) = remaining.inputs(layer, text)
-                && let Some(first) = super::document::layer_lines_to_put_first(
+                && let Some((source, independent_read)) = remaining.inputs(layer, confirmation_text)
+                && let Some((_, read)) = remaining.inputs(layer, text)
+                && let Some(first) = mixed_layer_lines_to_put_first(
                     source,
+                    independent_read,
                     read,
                     noise_verdict_pages.contains(page_number),
                     &ocr_output_thresholds,
@@ -3644,7 +3712,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     && structured_ocr_pages
                         .get(page_number)
                         .is_some_and(super::native_word_coverage::has_only_certified_tesseract_text)
-                    && super::document::unique_literal_embedding(layer, text)
+                    && super::document::unique_literal_embedding(layer, confirmation_text)
                 {
                     complete_native_pages.insert(*page_number);
                 }
@@ -3864,6 +3932,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             .get(&page)
             .zip(ocr_results.get(&page))
             .is_some_and(|(doc, text)| {
+                let text = text.as_str();
+                #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                let text = number_primary_texts.get(&page).map_or(text, String::as_str);
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 let yields_to_native = super::native_word_coverage::final_ocr_structure_can_yield_to_native(
                     page,
@@ -4754,6 +4825,13 @@ pub(super) struct DetachedOcrPage<'a> {
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[derive(Clone, Default)]
 pub(crate) struct PageOcrHints {
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    pub(crate) number_source: Option<super::number_recovery::DetachedSource>,
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     pub(crate) probe_reads: Option<std::sync::Arc<super::read_reuse::ProbeReads>>,
     pub(crate) source_dpi: Option<f64>,
@@ -4845,6 +4923,8 @@ pub(super) struct OcrReadEvidence {
         not(target_arch = "wasm32")
     ))]
     matched_layer_occurrences: Option<super::document::MatchedLayerOccurrences>,
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    number_primary_text: Option<String>,
     original_tesseract_raster: bool,
     discarded_visible_native_page: bool,
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
@@ -5562,7 +5642,30 @@ pub(super) async fn extract_with_ocr_for_page(
         feature = "tokio-runtime",
         not(target_arch = "wasm32")
     ))]
-    let number_recovery = Arc::new(super::number_recovery::Run::default());
+    let detached_number_source = page_ocr_hints.as_ref().and_then(|hints| hints.number_source.as_ref());
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let number_config = detached_number_source.map_or(config, |source| &source.config);
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let number_recovery = detached_number_source
+        .map(|source| Arc::clone(&source.run))
+        .unwrap_or_else(|| Arc::new(super::number_recovery::Run::default()));
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let mut number_primary_text = None;
     #[cfg(all(
         feature = "pdf",
         feature = "ocr",
@@ -5855,12 +5958,20 @@ pub(super) async fn extract_with_ocr_for_page(
                     if get_ocr_backend_registry().read().is_builtin_tesseract(&backend) {
                         super::number_recovery::prepare_read(
                             config_clone,
-                            config,
+                            number_config,
                             page_index_offset + *page_idx,
-                            page_index_offset,
-                            page_ocr_hints
-                                .as_ref()
-                                .and_then(|hints| hints.native_layer((page_index_offset + *page_idx + 1) as u32)),
+                            if detached_number_source.is_some() {
+                                0
+                            } else {
+                                page_index_offset
+                            },
+                            detached_number_source
+                                .and_then(|source| source.layer((page_index_offset + *page_idx + 1) as u32))
+                                .or_else(|| {
+                                    page_ocr_hints.as_ref().and_then(|hints| {
+                                        hints.native_layer((page_index_offset + *page_idx + 1) as u32)
+                                    })
+                                }),
                             &number_recovery,
                         )
                     } else {
@@ -6953,11 +7064,17 @@ pub(super) async fn extract_with_ocr_for_page(
             ))]
             let number_page = super::number_recovery::PreparedPage {
                 policy: super::number_recovery::PagePolicy {
-                    page_index_offset,
+                    page_index_offset: if detached_number_source.is_some() {
+                        0
+                    } else {
+                        page_index_offset
+                    },
                     accepted: false,
                     scale_only: number_frame_reads[offset],
-                    deferred_structure: skip_document_global_heuristic,
-                    raster: raster_dpis.get(&page_idx),
+                    deferred_structure: skip_document_global_heuristic && detached_number_source.is_none(),
+                    raster: detached_number_source
+                        .and_then(|source| source.raster.as_ref())
+                        .or_else(|| raster_dpis.get(&page_idx)),
                     layout: has_layout_detections,
                     transformed: tall_source_used
                         || batch_upright_correction[offset].0 != 0
@@ -6965,14 +7082,19 @@ pub(super) async fn extract_with_ocr_for_page(
                     structured: false,
                     builtin: get_ocr_backend_registry().read().is_builtin_tesseract(&backend),
                 },
-                source: lazy_pdf_render_state
-                    .as_ref()
-                    .map(|(pdf, _, _)| Arc::clone(pdf))
-                    .zip(
-                        page_ocr_hints
-                            .as_ref()
-                            .and_then(|hints| hints.native_layer(document_page_number)),
-                    )
+                source: detached_number_source
+                    .and_then(|source| {
+                        source
+                            .layer(document_page_number)
+                            .map(|layer| (Arc::clone(&source.document), layer))
+                    })
+                    .or_else(|| {
+                        lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| Arc::clone(pdf)).zip(
+                            page_ocr_hints
+                                .as_ref()
+                                .and_then(|hints| hints.native_layer(document_page_number)),
+                        )
+                    })
                     .map(|(document, layer)| super::number_recovery::PageSource {
                         document,
                         index: document_page_idx,
@@ -6981,7 +7103,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         dimensions: (encoded_batch[offset].2, encoded_batch[offset].3),
                         metadata: &ocr_result.metadata,
                     }),
-                config,
+                config: number_config,
                 run: &number_recovery,
             };
 
@@ -7260,6 +7382,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     not(target_arch = "wasm32")
                 ))]
                 {
+                    let original = detached_number_source.is_some().then(|| page_texts[page_idx].clone());
                     number_recovered_pages[page_idx] = number_page
                         .apply(
                             super::number_recovery::AcceptedRead {
@@ -7272,6 +7395,9 @@ pub(super) async fn extract_with_ocr_for_page(
                             &accumulated_formulas,
                         )
                         .await;
+                    if number_recovered_pages[page_idx] && original.is_some() {
+                        number_primary_text = original;
+                    }
                 }
 
                 if let Some(verdict) = acceptance.verdict {
@@ -7381,6 +7507,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 not(target_arch = "wasm32")
             ))]
             {
+                let original = detached_number_source.is_some().then(|| page_texts[page_idx].clone());
                 number_recovered_pages[page_idx] = number_page
                     .apply(
                         super::number_recovery::AcceptedRead {
@@ -7393,6 +7520,9 @@ pub(super) async fn extract_with_ocr_for_page(
                         &accumulated_formulas,
                     )
                     .await;
+                if number_recovered_pages[page_idx] && original.is_some() {
+                    number_primary_text = original;
+                }
             }
 
             if let Some(verdict) = acceptance.verdict {
@@ -7520,6 +7650,16 @@ pub(super) async fn extract_with_ocr_for_page(
         }
         join_pages(&texts)
     });
+
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    if let Some(primary) = &number_primary_text {
+        unpruned_text = Some(join_pages(std::slice::from_ref(primary)));
+    }
 
     // A page the quality gate rejected must not keep its structured paragraphs either.
     //
@@ -8018,6 +8158,8 @@ pub(super) async fn extract_with_ocr_for_page(
             ))]
             matched_layer_occurrences: matched_layer_occurrences
                 .filter(|_| !tall_source_used && pages_with_recovered_xobject_payload == [false]),
+            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            number_primary_text,
             original_tesseract_raster: {
                 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                 {
@@ -9740,6 +9882,19 @@ async fn run_ocr_pipeline_stages(
             "Pipeline: trying OCR backend"
         );
 
+        let page_ocr_hints = inputs.page_ocr_hints.clone();
+        #[cfg(all(
+            feature = "pdf",
+            feature = "ocr",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
+        let page_ocr_hints = page_ocr_hints.map(|mut hints| {
+            if !automatic_paddle || stage.backend != "tesseract" {
+                hints.number_source = None;
+            }
+            hints
+        });
         let result = Box::pin(extract_with_ocr_for_page(
             inputs.content,
             inputs.images,
@@ -9750,7 +9905,7 @@ async fn run_ocr_pipeline_stages(
             inputs.page_rotation_degrees,
             inputs.skip_document_global_heuristic,
             inputs.points_per_pixel_override,
-            inputs.page_ocr_hints.clone(),
+            page_ocr_hints,
             inputs.page_index_offset,
             inputs.detached_page,
         ))
@@ -9837,6 +9992,8 @@ async fn run_ocr_pipeline_stages(
                             not(target_arch = "wasm32")
                         ))]
                         matched_layer_occurrences: read_evidence.matched_layer_occurrences,
+                        #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                        number_primary_text: read_evidence.number_primary_text,
                         ..Default::default()
                     }
                 };
