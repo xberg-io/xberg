@@ -1533,6 +1533,7 @@ fn a_misread_ocr_row_leaves_the_structured_page_once_and_an_emptied_element_leav
             line: Some(0),
             bbox: Some(super::row_box(0)),
             key: "total 12 cm\u{2019}".into(),
+            native_key: "total 12 cm3".into(),
         }],
     };
     let mut text = "total 12 cm\u{2019}\nalpha beta\ntotal 12 cm\u{2019}\ngamma".to_string();
@@ -1583,6 +1584,7 @@ fn an_ambiguous_misread_row_preserves_the_plain_paragraph_and_heading() {
                 line: Some(0),
                 bbox: None,
                 key: misread.into(),
+                native_key: "total 12 cm3".into(),
             }],
         };
         let original = doc.elements.clone();

@@ -278,7 +278,7 @@ pub(crate) fn layer_lines_absent_from_ocr<'a>(layer: &'a str, ocr_text: &str) ->
             continue;
         }
         if let Some(at) = candidates.take_best(&mut pool, &NativeRow::new(&line_key(line), true), row) {
-            misread.push(MisreadOcrRow::at_line(lines[at], &ocr[at]));
+            misread.push(MisreadOcrRow::at_line(lines[at], &ocr[at], line_key(line)));
         }
     }
     let rows: Vec<&str> = rows
@@ -307,15 +307,17 @@ pub(crate) struct MisreadOcrRow {
     pub(crate) line: Option<usize>,
     pub(crate) bbox: Option<LineBox>,
     pub(crate) key: String,
+    pub(crate) native_key: String,
 }
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 impl MisreadOcrRow {
-    fn at_line(line: usize, key: &str) -> Self {
+    fn at_line(line: usize, key: &str, native_key: String) -> Self {
         Self {
             page: None,
             line: Some(line),
             bbox: None,
             key: key.to_string(),
+            native_key,
         }
     }
 }
@@ -1564,11 +1566,12 @@ fn layer_lines_missing_and_owned<'a>(
     let layer_keys: std::collections::HashSet<String> = layer.lines().map(line_key).collect();
     let index = OcrRowIndex::new(&boxes.ocr);
     let candidates = MisreadCandidates::new(boxes.ocr.iter().map(|line| line.key.as_str()));
-    let misread_at = |at: usize| MisreadOcrRow {
+    let misread_at = |at: usize, native_key: String| MisreadOcrRow {
         page: None,
         line: row_lines.get(at).copied().flatten(),
         bbox: Some(boxes.ocr[at].bbox),
         key: boxes.ocr[at].key.clone(),
+        native_key,
     };
     let mut layer_boxes: ahash::AHashMap<&str, std::collections::VecDeque<usize>> = ahash::AHashMap::new();
     for (at, line) in boxes.layer.iter().enumerate() {
@@ -1603,7 +1606,7 @@ fn layer_lines_missing_and_owned<'a>(
                 } else {
                     missing.push((row, line));
                     if candidates.misreads(&NativeRow::new(&key, false), at) {
-                        misread.push(misread_at(at));
+                        misread.push(misread_at(at, key));
                     }
                 }
             }
@@ -1625,7 +1628,7 @@ fn layer_lines_missing_and_owned<'a>(
         }
         missing.push((row, line));
         if let Some(at) = candidates.take_best(&mut pool, &NativeRow::new(&key, false), row) {
-            misread.push(misread_at(at));
+            misread.push(misread_at(at, key));
         }
     }
     missing.sort_unstable_by_key(|(row, _)| *row);
