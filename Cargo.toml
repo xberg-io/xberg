@@ -116,8 +116,8 @@ rayon = "1.12.0"
 reqwest = { version = "0.13.5", default-features = false }
 # SVG rendering (resvg re-exports tiny_skia and usvg; default-features = false
 # drops text, system-fonts, memmap-fonts, raster-images — all pure-Rust, WASM-safe).
-resvg = { version = "0.49", default-features = false }
-rusqlite = { version = "0.41", default-features = false, features = ["bundled", "hooks", "serialize"] }
+resvg = { version = "0.50", default-features = false }
+rusqlite = { version = "0.42", default-features = false, features = ["bundled", "hooks", "serialize"] }
 same-file = "1.0.6"
 sceptre = { version = "0.10.1", default-features = false }
 
@@ -156,7 +156,7 @@ url = "2.5.8"
 # / `WriteOptions` are available for SVG sanitize re-serialization. `writer` pulls
 # just xmlwriter + base64 — pure-Rust, WASM-safe, no fonts. resvg forwards no
 # `writer` feature, so usvg is enabled directly at the matching version. ~keep
-usvg = { version = "0.49", default-features = false, features = ["writer"] }
+usvg = { version = "0.50", default-features = false, features = ["writer"] }
 wasm-bindgen = { version = "0.2", features = ["enable-interning"] }
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = [
