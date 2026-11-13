@@ -47,6 +47,8 @@ run_exact() {
 
 run_pdf_cases() {
   run_exact font_ink_proof_excludes_overlapping_annotation_appearances --native-pdf --test annotation_appearance_normal
+  run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::missing_middle_khmer_repeat_uses_the_original_occurrence_position' --lib
+  run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::located_english_word_keeps_its_place_between_khmer_occurrences' --lib
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::missing_khmer_occurrence_is_published_inline_in_both_surfaces' --lib
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::partial_khmer_read_spends_one_of_two_identical_occurrences' --lib
   run_exact automatic_english_ocr_keeps_visible_minority_khmer_on_a_fragmented_page --test pdf_khmer_minority_2826
@@ -351,7 +353,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=99
+  expected=101
   run_pdf_cases
   run_retained_read_cases
   expected=$((expected + 11 + 7))

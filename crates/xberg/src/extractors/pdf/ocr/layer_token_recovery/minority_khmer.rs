@@ -43,8 +43,8 @@ pub(in crate::extractors::pdf::ocr) fn apply_minority_khmer(
     additions: &[AddedWord],
     cancelled: &dyn Fn() -> bool,
 ) {
-    let mut text = PageText::of(read);
-    let mut inline = Vec::new();
+    let mut blocks = Vec::new();
+    let mut inline = std::collections::BTreeMap::<usize, Vec<_>>::new();
     let page = read
         .ocr_elements
         .as_deref()
@@ -64,26 +64,29 @@ pub(in crate::extractors::pdf::ocr) fn apply_minority_khmer(
         if !outside_tables(read, &area) {
             continue;
         }
-        match inline_khmer_anchor(read, &text, &area) {
-            Some(anchor) => {
-                inline.push((anchor, (run.as_str(), *place)));
-            }
-            None => {
-                if let Some(insertion) = line_insertion(read, &text, &area) {
-                    insert_recovered_text(read, &mut text, run, *place, page, insertion);
-                }
-            }
+        match inline_khmer_anchor(read, &area) {
+            InlineAnchor::Word(index, after) => inline.entry(index).or_default().push((after, (run.as_str(), *place))),
+            InlineAnchor::Ambiguous => {}
+            InlineAnchor::Separate => blocks.push((run, *place, area)),
         }
     }
-    // Resolve every occurrence against the original OCR words before adding any copies.
-    let mut groups = std::collections::BTreeMap::<String, Vec<_>>::new();
-    for ((anchor, after), run) in inline {
-        groups.entry(anchor).or_default().push((after, run));
+    apply_inline_runs(read, inline);
+    let mut text = PageText::of(read);
+    for (run, place, area) in blocks {
+        if cancelled() {
+            break;
+        }
+        if let Some(insertion) = line_insertion(read, &text, &area) {
+            insert_recovered_text(read, &mut text, run, place, page, insertion);
+        }
     }
+}
+
+fn apply_inline_runs(read: &mut ExtractedDocument, groups: std::collections::BTreeMap<usize, Vec<InlineRun<'_>>>) {
     let mut edits = Vec::new();
-    for (anchor, mut runs) in groups {
+    for (word_index, mut runs) in groups {
         runs.sort_by_key(|(after, (_, (left, _, _, _)))| (*after, *left));
-        if let Some(edit) = inline_edit(read, &anchor, runs) {
+        if let Some(edit) = inline_edit(read, word_index, runs) {
             edits.push(edit);
         }
     }
@@ -111,25 +114,52 @@ pub(in crate::extractors::pdf::ocr) fn apply_minority_khmer(
     }
 }
 
-fn inline_khmer_anchor(read: &ExtractedDocument, text: &PageText, area: &PixelBox) -> Option<(String, bool)> {
-    read.content
-        .split_whitespace()
-        .filter(|word| word.chars().all(is_khmer))
-        .filter_map(|word| {
-            let place = text.once(word)?;
-            if !place.shares_line_with(area) {
-                return None;
-            }
-            let after = place.right <= area.left;
-            let gap = if after {
-                area.left - place.right
-            } else {
-                place.left - area.right
-            };
-            (gap >= 0 && gap <= area.height() * MAX_LINE_GAP_HEIGHTS).then_some((gap, word, after))
-        })
-        .min_by_key(|(gap, _, _)| *gap)
-        .map(|(_, word, after)| (word.to_owned(), after))
+enum InlineAnchor {
+    Word(usize, bool),
+    Ambiguous,
+    Separate,
+}
+
+fn inline_khmer_anchor(read: &ExtractedDocument, area: &PixelBox) -> InlineAnchor {
+    let mut left = None;
+    let mut right = None;
+    let mut has_khmer = false;
+    let mut overlaps_word = false;
+    for (index, word) in read.ocr_elements.iter().flatten().enumerate() {
+        if word.level != OcrElementLevel::Word || word.text.trim().is_empty() {
+            continue;
+        }
+        let Some(place) = PixelBox::of(word).filter(|place| place.shares_line_with(area)) else {
+            continue;
+        };
+        let after = place.right <= area.left;
+        let gap = if after {
+            area.left - place.right
+        } else {
+            place.left - area.right
+        };
+        has_khmer |= word.text.chars().any(is_khmer) && gap <= area.height() * MAX_LINE_GAP_HEIGHTS;
+        if gap < 0 {
+            overlaps_word = true;
+            continue;
+        }
+        let side = if after { &mut left } else { &mut right };
+        if side.is_none_or(|(best, _)| gap < best) {
+            *side = Some((gap, index));
+        }
+    }
+    if !has_khmer {
+        return InlineAnchor::Separate;
+    }
+    if overlaps_word || matches!((left, right), (Some((_, a)), Some((_, b))) if a >= b) {
+        return InlineAnchor::Ambiguous;
+    }
+    match (left, right) {
+        (Some((a, index)), Some((b, _))) if a <= b => InlineAnchor::Word(index, true),
+        (_, Some((_, index))) => InlineAnchor::Word(index, false),
+        (Some((_, index)), None) => InlineAnchor::Word(index, true),
+        _ => InlineAnchor::Ambiguous,
+    }
 }
 
 type InlineRun<'a> = (bool, (&'a str, (u32, u32, u32, u32)));
@@ -143,30 +173,51 @@ struct InlineEdit {
     words: Vec<OcrElement>,
 }
 
-fn inline_edit(read: &ExtractedDocument, anchor: &str, runs: Vec<InlineRun<'_>>) -> Option<InlineEdit> {
-    let flat = whole_token_offset(&read.content, anchor)?;
+fn inline_edit(read: &ExtractedDocument, word_index: usize, runs: Vec<InlineRun<'_>>) -> Option<InlineEdit> {
+    let elements = read.ocr_elements.as_ref()?;
+    let source = elements.get(word_index)?;
+    let anchor = source.text.trim();
+    if anchor.split_whitespace().count() != 1 {
+        return None;
+    }
+    let occurrences = elements
+        .iter()
+        .enumerate()
+        .filter(|(_, word)| word.level == OcrElementLevel::Word && word.text.trim() == anchor)
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    let ordinal = occurrences.iter().position(|&index| index == word_index)?;
+    let flat_offsets = whole_token_offsets(&read.content, anchor);
+    if flat_offsets.len() != occurrences.len() {
+        return None;
+    }
+    let flat = flat_offsets[ordinal];
     let structured = match &read.ocr_internal_document {
         Some(doc) => {
-            let mut owners = doc.elements.iter().enumerate().filter_map(|(index, element)| {
-                Some((index, whole_token_offset(&element.text, anchor)?, element.bbox?))
-            });
-            let (index, offset, bbox) = owners.next()?;
-            if owners.next().is_some()
-                || runs.iter().any(|(_, (_, (_, top, _, height)))| {
-                    bbox.y0 >= f64::from(*top) + f64::from(*height) || bbox.y1 <= f64::from(*top)
+            let owners = doc
+                .elements
+                .iter()
+                .enumerate()
+                .flat_map(|(index, element)| {
+                    whole_token_offsets(&element.text, anchor)
+                        .into_iter()
+                        .map(move |offset| (index, offset))
                 })
-            {
+                .collect::<Vec<_>>();
+            if owners.len() != occurrences.len() {
+                return None;
+            }
+            let (index, offset) = owners[ordinal];
+            let bbox = doc.elements[index].bbox?;
+            if runs.iter().any(|(_, (_, (_, top, _, height)))| {
+                bbox.y0 >= f64::from(*top) + f64::from(*height) || bbox.y1 <= f64::from(*top)
+            }) {
                 return None;
             }
             Some((index, offset))
         }
         None => None,
     };
-    let elements = read.ocr_elements.as_ref()?;
-    let word_index = elements
-        .iter()
-        .position(|element| element.level == OcrElementLevel::Word && element.text == anchor)?;
-    let source = &elements[word_index];
     let mut words = Vec::with_capacity(runs.len() + 1);
     let split = runs.partition_point(|(after, _)| !after);
     words.extend(runs[..split].iter().map(|run| recovered_word(source, run)));
@@ -203,16 +254,18 @@ fn recovered_word(source: &OcrElement, (_, (run, (left, top, width, height))): &
     recovered
 }
 
-fn whole_token_offset(content: &str, token: &str) -> Option<usize> {
-    let mut matches = content.match_indices(token).filter(|(at, found)| {
-        content[..*at].chars().next_back().is_none_or(char::is_whitespace)
-            && content[*at + found.len()..]
-                .chars()
-                .next()
-                .is_none_or(char::is_whitespace)
-    });
-    let (offset, _) = matches.next()?;
-    matches.next().is_none().then_some(offset)
+fn whole_token_offsets(content: &str, token: &str) -> Vec<usize> {
+    content
+        .match_indices(token)
+        .filter_map(|(at, found)| {
+            (content[..at].chars().next_back().is_none_or(char::is_whitespace)
+                && content[at + found.len()..]
+                    .chars()
+                    .next()
+                    .is_none_or(char::is_whitespace))
+            .then_some(at)
+        })
+        .collect()
 }
 
 fn line_insertion(read: &ExtractedDocument, text: &PageText, area: &PixelBox) -> Option<(Insertion, Option<usize>)> {
@@ -511,53 +564,55 @@ fn partial_khmer_read_spends_one_of_two_identical_occurrences() {
 }
 
 #[cfg(test)]
-#[test]
-fn missing_khmer_occurrence_is_published_inline_in_both_surfaces() {
+fn assert_inline_recovery(
+    input: &str,
+    words: &[(&str, u32)],
+    additions: &[AddedWord],
+    expected: &str,
+    expected_lefts: &[u32],
+) {
     let mut doc = crate::types::internal::InternalDocument::new("ocr");
-    let mut line = InternalElement::text(ElementKind::Paragraph, "Before ក after".to_owned(), 0);
+    let mut line = InternalElement::text(ElementKind::Paragraph, input.to_owned(), 0);
     line.bbox = Some(crate::types::BoundingBox {
         x0: 0.0,
         y0: 10.0,
-        x1: 100.0,
+        x1: 180.0,
         y1: 30.0,
     });
     doc.push_element(line);
     let mut read = ExtractedDocument {
-        content: "Before ក after".into(),
+        content: input.into(),
         ocr_internal_document: Some(doc),
-        ocr_elements: Some(vec![OcrElement {
-            text: "ក".into(),
-            geometry: OcrBoundingGeometry::Rectangle {
-                left: 30,
-                top: 10,
-                width: 10,
-                height: 20,
-            },
-            confidence: OcrConfidence {
-                detection: None,
-                recognition: 0.9,
-            },
-            level: OcrElementLevel::Word,
-            rotation: None,
-            page_number: 1,
-            parent_id: None,
-            backend_metadata: Default::default(),
-        }]),
+        ocr_elements: Some(
+            words
+                .iter()
+                .map(|(text, left)| OcrElement {
+                    text: (*text).into(),
+                    geometry: OcrBoundingGeometry::Rectangle {
+                        left: *left,
+                        top: 10,
+                        width: 10,
+                        height: 20,
+                    },
+                    confidence: OcrConfidence {
+                        detection: None,
+                        recognition: 0.9,
+                    },
+                    level: OcrElementLevel::Word,
+                    rotation: None,
+                    page_number: 1,
+                    parent_id: None,
+                    backend_metadata: Default::default(),
+                })
+                .collect(),
+        ),
         ..Default::default()
     };
-    apply_minority_khmer(
-        &mut read,
-        &[
-            ("ក".into(), (60, 10, 10, 20)),
-            ("ក".into(), (45, 10, 10, 20)),
-            ("ក".into(), (15, 10, 10, 20)),
-        ],
-        &|| false,
-    );
-    assert_eq!(read.content, "Before ក ក ក ក after");
+    apply_minority_khmer(&mut read, additions, &|| false);
+    assert_eq!(read.content, expected);
     let document = read.ocr_internal_document.as_ref().unwrap();
     assert_eq!(document.elements.len(), 1);
-    assert_eq!(document.elements[0].text, read.content);
+    assert_eq!(document.elements[0].text, expected);
     let lefts: Vec<_> = read
         .ocr_elements
         .as_ref()
@@ -570,5 +625,45 @@ fn missing_khmer_occurrence_is_published_inline_in_both_surfaces() {
             left
         })
         .collect();
-    assert_eq!(lefts, [15, 30, 45, 60]);
+    assert_eq!(lefts, expected_lefts);
+}
+
+#[cfg(test)]
+#[test]
+fn missing_khmer_occurrence_is_published_inline_in_both_surfaces() {
+    assert_inline_recovery(
+        "Before ក after",
+        &[("ក", 30)],
+        &[
+            ("ក".into(), (60, 10, 10, 20)),
+            ("ក".into(), (45, 10, 10, 20)),
+            ("ក".into(), (15, 10, 10, 20)),
+        ],
+        "Before ក ក ក ក after",
+        &[15, 30, 45, 60],
+    );
+}
+
+#[cfg(test)]
+#[test]
+fn missing_middle_khmer_repeat_uses_the_original_occurrence_position() {
+    assert_inline_recovery(
+        "Before ក ក after",
+        &[("ក", 20), ("ក", 80)],
+        &[("ក".into(), (50, 10, 10, 20))],
+        "Before ក ក ក after",
+        &[20, 50, 80],
+    );
+}
+
+#[cfg(test)]
+#[test]
+fn located_english_word_keeps_its_place_between_khmer_occurrences() {
+    assert_inline_recovery(
+        "Before ក English ខ after",
+        &[("ក", 20), ("English", 45), ("ខ", 120)],
+        &[("ក".into(), (65, 10, 10, 20))],
+        "Before ក English ក ខ after",
+        &[20, 45, 65, 120],
+    );
 }
