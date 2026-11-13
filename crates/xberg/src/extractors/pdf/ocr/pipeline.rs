@@ -1,3 +1,7 @@
+#[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+#[path = "pipeline/sparse_glyph_read.rs"]
+mod sparse_glyph_read;
+
 #[cfg(all(
     feature = "pdf",
     feature = "ocr",
@@ -94,7 +98,7 @@ use super::rendering::{
     clone_rgb_for_png_encode, fallback_render_document, open_pdf_for_full_ocr, open_pdf_for_page_ocr,
     page_dimensions_pt, page_needs_xobject_fallback, pre_rendered_page_geometry, pre_rendered_page_source_dpi,
     recover_page_text_from_bounded_image_xobjects, recover_page_text_from_image_xobjects,
-    render_full_pdf_ocr_batch_with_dpi, render_selected_pages_with_dpi, share_rendered_page_images,
+    render_full_pdf_ocr_batch_with_dpi, render_selected_pages_with_image_config, share_rendered_page_images,
     single_block_for_ocr_page, valid_page_indices, validate_png_encode_pages_individually,
     whole_page_raster_for_ocr_page,
 };
@@ -1575,6 +1579,19 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     };
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut alternative_raster_pages = ahash::AHashSet::new();
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let sparse_glyph_pages =
+        sparse_glyph_read::eligible_pages(config, &render_doc, native_coverage_layers.as_deref(), backend.as_ref());
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let sparse_glyph_images = sparse_glyph_read::images_config();
+    let images_for_page = |page_index: usize| {
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+        if sparse_glyph_pages.contains_key(&page_index) {
+            return Some(&sparse_glyph_images);
+        }
+        let _ = page_index;
+        config.images.as_ref()
+    };
     // Tesseract's own mean confidence for each page it read, 0-100. Captured here because
     // the per-page metadata is gone by the time `ocr_results` is judged.
     let mut page_mean_confidence: ahash::AHashMap<u32, f64> = ahash::AHashMap::new();
@@ -1660,22 +1677,22 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             }
             (page_images, render_failures, super::rendering::PageRasterDpis::new())
         } else {
-            render_selected_pages_with_dpi(
+            render_selected_pages_with_image_config(
                 &render_doc,
                 &page_rotations,
                 &page_indices[batch_start..batch_end],
                 security_limits,
-                config.images.as_ref(),
+                images_for_page,
                 preprocessing_render_dpi,
             )
         };
         #[cfg(not(feature = "layout-detection"))]
-        let (page_images, render_failures, batch_raster_dpis) = render_selected_pages_with_dpi(
+        let (page_images, render_failures, batch_raster_dpis) = render_selected_pages_with_image_config(
             &render_doc,
             &page_rotations,
             &page_indices[batch_start..batch_end],
             security_limits,
-            config.images.as_ref(),
+            images_for_page,
             preprocessing_render_dpi,
         );
         raster_dpis.extend(batch_raster_dpis);
@@ -2424,6 +2441,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     .is_builtin_tesseract(backend)
                     && use_khmer_hint(*page_idx, whole_page_raster);
                 let config_clone = config_clone.into_owned();
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                let normal_page_config = sparse_glyph_pages.contains_key(page_idx).then(|| config_clone.clone());
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                let config_clone = sparse_glyph_read::ocr_config(config_clone, normal_page_config.is_some());
                 let (upright_data, upright_width, upright_height, correction_degrees) = match upright_raster_for_backend(
                     data,
                     *width,
@@ -2460,6 +2481,22 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             .as_ref()
                             .is_some_and(|layers| layers.contains_key(&((idx + 1) as u32)))
                             && super::document::native_preservation_is_automatic(config, (idx + 1) as u32)));
+                #[cfg(feature = "ocr")]
+                let sparse_glyph_retry =
+                    sparse_glyph_pages
+                        .get(page_idx)
+                        .cloned()
+                        .zip(normal_page_config)
+                        .map(|(words, normal)| {
+                            (
+                                words,
+                                Arc::clone(&render_doc),
+                                security_limits.clone(),
+                                normal,
+                                ocr_config_resolved.clone(),
+                                ocr_output_thresholds.clone(),
+                            )
+                        });
                 let task = crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         return (
@@ -2469,6 +2506,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             upright_height,
                             Err(crate::XbergError::Cancelled),
                             false,
+                            None,
                         );
                     }
                     let (original_config, config_clone) = match crate::extractors::image::reserve_retained_ocr_raster(
@@ -2485,6 +2523,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                 upright_height,
                                 Err(error),
                                 false,
+                                None,
                             );
                         }
                     };
@@ -2560,6 +2599,40 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         cancel_token.as_ref(),
                     )
                     .await;
+                    #[cfg(all(test, feature = "ocr", feature = "bundle-tessdata-eng"))]
+                    let result = sparse_glyph_read::test_attempt(
+                        result,
+                        &original_config,
+                        upright_width,
+                        upright_height,
+                        sparse_glyph_retry.as_ref().map(|(words, ..)| words),
+                    );
+                    #[cfg(feature = "ocr")]
+                    if let Some((words, pdf, limits, normal_config, original, thresholds)) = sparse_glyph_retry
+                        && !matches!(&result, Err(crate::XbergError::Cancelled))
+                        && !result.as_ref().is_ok_and(|read| {
+                            words.accounted_for(read)
+                                && !sparse_glyph_read::rejected_by_page_quality(
+                                    read,
+                                    &thresholds,
+                                    backend_clone.confidence_semantics(),
+                                )
+                        })
+                    {
+                        return match sparse_glyph_read::retry(
+                            pdf,
+                            idx,
+                            &backend_clone,
+                            (&original, normal_config),
+                            limits,
+                            cancel_token.as_ref(),
+                        )
+                        .await
+                        {
+                            Ok((read, width, height, dpi)) => (idx, 0, width, height, Ok(read), false, Some(dpi)),
+                            Err(error) => (idx, 0, upright_width, upright_height, Err(error), false, None),
+                        };
+                    }
                     (
                         idx,
                         correction_degrees,
@@ -2567,6 +2640,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         upright_height,
                         result,
                         scale_only,
+                        None,
                     )
                 });
                 pending_pages.insert(*page_idx);
@@ -2591,11 +2665,21 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             break;
                         }
                     };
-                let (page_idx, correction_degrees, upright_width, upright_height, result, observed_scale_only) =
-                    join_result.map_err(|e| crate::XbergError::Plugin {
-                        message: format!("OCR task panicked: {}", e),
-                        plugin_name: "ocr".to_string(),
-                    })?;
+                let (
+                    page_idx,
+                    correction_degrees,
+                    upright_width,
+                    upright_height,
+                    result,
+                    observed_scale_only,
+                    retry_dpi,
+                ) = join_result.map_err(|e| crate::XbergError::Plugin {
+                    message: format!("OCR task panicked: {}", e),
+                    plugin_name: "ocr".to_string(),
+                })?;
+                if let Some(dpi) = retry_dpi {
+                    raster_dpis.insert(page_idx, dpi);
+                }
                 pending_pages.remove(&page_idx);
                 #[cfg(all(
                     feature = "ocr",
@@ -2762,10 +2846,12 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 if let Some(usage) = extraction_result.llm_usage.take() {
                     accumulated_llm_usage.extend(usage);
                 }
-                let page_dims = encoded
-                    .iter()
-                    .find(|(encoded_page, ..)| *encoded_page == page_idx)
-                    .map(|(_, _, w, h)| (*w, *h));
+                let page_dims = retry_dpi.map(|_| (upright_width, upright_height)).or_else(|| {
+                    encoded
+                        .iter()
+                        .find(|(encoded_page, ..)| *encoded_page == page_idx)
+                        .map(|(_, _, w, h)| (*w, *h))
+                });
                 for mut formula in std::mem::take(&mut extraction_result.formulas) {
                     formula.page = Some((page_idx + 1) as u32);
                     if let Some((w, h)) = page_dims {
@@ -2804,10 +2890,12 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 {
                     texture_noise_by_page.insert((page_idx + 1) as u32, candidates);
                 }
-                let (width, height) = encoded
-                    .iter()
-                    .find(|(encoded_page, ..)| *encoded_page == page_idx)
-                    .map_or((0, 0), |(_, _, w, h)| (*w, *h));
+                let (width, height) = retry_dpi.map(|_| (upright_width, upright_height)).unwrap_or_else(|| {
+                    encoded
+                        .iter()
+                        .find(|(encoded_page, ..)| *encoded_page == page_idx)
+                        .map_or((0, 0), |(_, _, w, h)| (*w, *h))
+                });
                 let (page_width_pt, page_height_pt) = page_dimensions_pt(&render_doc, page_idx);
                 let page_psm = effective_tesseract_psm(&extraction_result.metadata, backend.name());
                 if let Some((mut page_doc, paragraphs)) = build_mixed_ocr_page_document(

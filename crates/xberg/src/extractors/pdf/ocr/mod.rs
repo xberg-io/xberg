@@ -189,6 +189,25 @@ mod proven_read_tests;
 mod recognition_noise_tests;
 #[cfg(all(test, feature = "ocr", feature = "tokio-runtime"))]
 mod security_limits_tests;
+#[cfg(all(test, feature = "ocr", feature = "pdf"))]
+fn run_on_ocr_test_stack<F: std::future::Future<Output = ()>>(
+    stack_bytes: usize,
+    test: impl FnOnce() -> F + Send + 'static,
+) {
+    std::thread::Builder::new()
+        .stack_size(stack_bytes)
+        .spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("build OCR test runtime")
+                .block_on(test())
+        })
+        .expect("spawn OCR test thread")
+        .join()
+        .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+}
+
 #[cfg(all(test, feature = "ocr"))]
 mod tests;
 
