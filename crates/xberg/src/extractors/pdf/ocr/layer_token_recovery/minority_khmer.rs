@@ -214,7 +214,11 @@ fn inline_edit(read: &ExtractedDocument, word_index: usize, runs: Vec<InlineRun<
             if owners.iter().any(|&(owner, _)| owner != index) {
                 return None;
             }
-            let bbox = doc.elements[index].bbox?;
+            let element = &doc.elements[index];
+            if !intervening_tokens_agree(&read.content, &flat_offsets, &element.text, &owners, anchor.len()) {
+                return None;
+            }
+            let bbox = element.bbox?;
             let source_place = PixelBox::of(source)?;
             if bbox.x0 > source_place.left as f64 || bbox.x1 < source_place.right as f64 {
                 return None;
@@ -246,6 +250,25 @@ fn inline_edit(read: &ExtractedDocument, word_index: usize, runs: Vec<InlineRun<
         text,
         words,
     })
+}
+
+fn intervening_tokens_agree(
+    flat_text: &str,
+    flat_offsets: &[usize],
+    structured_text: &str,
+    owners: &[(usize, usize)],
+    anchor_len: usize,
+) -> bool {
+    flat_offsets
+        .windows(2)
+        .zip(owners.windows(2))
+        .all(|(flat, structured)| {
+            let flat_between = &flat_text[flat[0] + anchor_len..flat[1]];
+            let structured_between = &structured_text[structured[0].1 + anchor_len..structured[1].1];
+            flat_between
+                .split_whitespace()
+                .eq(structured_between.split_whitespace())
+        })
 }
 
 // Ordinals identify repeats only inside one verified left-to-right line. Across lines or
@@ -614,8 +637,19 @@ fn assert_inline_recovery(
     expected: &str,
     expected_lefts: &[u32],
 ) {
+    assert_inline_surfaces((input, input), words, additions, (expected, expected), expected_lefts);
+}
+
+#[cfg(test)]
+fn assert_inline_surfaces(
+    (input, structured_input): (&str, &str),
+    words: &[(&str, u32)],
+    additions: &[AddedWord],
+    (expected, structured_expected): (&str, &str),
+    expected_lefts: &[u32],
+) {
     let mut doc = crate::types::internal::InternalDocument::new("ocr");
-    let mut line = InternalElement::text(ElementKind::Paragraph, input.to_owned(), 0);
+    let mut line = InternalElement::text(ElementKind::Paragraph, structured_input.to_owned(), 0);
     line.bbox = Some(crate::types::BoundingBox {
         x0: 0.0,
         y0: 10.0,
@@ -655,7 +689,7 @@ fn assert_inline_recovery(
     assert_eq!(read.content, expected);
     let document = read.ocr_internal_document.as_ref().unwrap();
     assert_eq!(document.elements.len(), 1);
-    assert_eq!(document.elements[0].text, expected);
+    assert_eq!(document.elements[0].text, structured_expected);
     let lefts: Vec<_> = read
         .ocr_elements
         .as_ref()
@@ -669,6 +703,15 @@ fn assert_inline_recovery(
         })
         .collect();
     assert_eq!(lefts, expected_lefts);
+    if input == expected && structured_input == structured_expected {
+        let unchanged = read
+            .ocr_elements
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|word| word.text.as_str());
+        assert!(unchanged.eq(words.iter().map(|(text, _)| *text)));
+    }
 }
 
 #[cfg(test)]
@@ -761,4 +804,23 @@ fn same_height_columns_with_repeated_words_do_not_share_an_inline_anchor() {
         ["Right ក", "Left ក"]
     );
     assert_eq!(read.ocr_elements.as_ref().unwrap().len(), 2);
+}
+
+#[cfg(test)]
+#[test]
+fn repeated_khmer_anchor_abstains_when_structured_intervening_words_disagree() {
+    assert_inline_surfaces(
+        ("ក English ក", "ក ក English"),
+        &[("ក", 20), ("English", 45), ("ក", 80)],
+        &[("ខ".into(), (65, 10, 10, 20))],
+        ("ក English ក", "ក ក English"),
+        &[20, 45, 80],
+    );
+    assert_inline_recovery(
+        "ក English ក",
+        &[("ក", 20), ("English", 45), ("ក", 80)],
+        &[("ខ".into(), (65, 10, 10, 20))],
+        "ក English ខ ក",
+        &[20, 45, 65, 80],
+    );
 }

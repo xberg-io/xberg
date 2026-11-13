@@ -46,6 +46,7 @@ run_exact() {
 }
 
 run_pdf_cases() {
+  run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::repeated_khmer_anchor_abstains_when_structured_intervening_words_disagree' --lib
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::same_height_columns_with_repeated_words_do_not_share_an_inline_anchor' --lib
   run_exact font_ink_proof_excludes_overlapping_annotation_appearances --native-pdf --test annotation_appearance_normal
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::missing_middle_khmer_repeat_uses_the_original_occurrence_position' --lib
@@ -354,7 +355,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=102
+  expected=103
   run_pdf_cases
   run_retained_read_cases
   expected=$((expected + 11 + 7))
