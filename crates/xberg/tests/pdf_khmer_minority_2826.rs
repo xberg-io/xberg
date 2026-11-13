@@ -134,6 +134,13 @@ fn mixed_ocr_keeps_khmer_between_english_and_rejects_unrelated_ink() {
                     "{name} {:?}",
                     config.output_format
                 );
+                if name == "mixed-map" {
+                    assert!(
+                        content
+                            .split_whitespace()
+                            .any(|word| word.trim_matches(|ch: char| ch.is_ascii_punctuation()) == "ID")
+                    );
+                }
                 if expected != 0 {
                     let first = content.find(is_khmer).unwrap();
                     let last = content.rfind(is_khmer).unwrap();

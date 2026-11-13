@@ -60,12 +60,110 @@ pub(in crate::extractors::pdf::ocr) fn apply_minority_khmer(
             right: i64::from(left) + i64::from(width),
             bottom: i64::from(top) + i64::from(height),
         };
-        if outside_tables(read, &area)
-            && let Some(insertion) = line_insertion(read, &text, &area)
-        {
-            insert_recovered_text(read, &mut text, run, *place, page, insertion);
+        if !outside_tables(read, &area) {
+            continue;
+        }
+        match inline_khmer_anchor(read, &text, &area) {
+            Some(anchor) => {
+                let _ = insert_inline_khmer(read, &mut text, run, (area, *place), anchor);
+            }
+            None => {
+                if let Some(insertion) = line_insertion(read, &text, &area) {
+                    insert_recovered_text(read, &mut text, run, *place, page, insertion);
+                }
+            }
         }
     }
+}
+
+fn inline_khmer_anchor(read: &ExtractedDocument, text: &PageText, area: &PixelBox) -> Option<(String, bool)> {
+    read.content
+        .split_whitespace()
+        .filter(|word| word.chars().all(is_khmer))
+        .filter_map(|word| {
+            let place = text.once(word)?;
+            if !place.shares_line_with(area) {
+                return None;
+            }
+            let after = place.right <= area.left;
+            let gap = if after {
+                area.left - place.right
+            } else {
+                place.left - area.right
+            };
+            (gap >= 0 && gap <= area.height() * MAX_LINE_GAP_HEIGHTS).then_some((gap, word, after))
+        })
+        .min_by_key(|(gap, _, _)| *gap)
+        .map(|(_, word, after)| (word.to_owned(), after))
+}
+
+fn insert_inline_khmer(
+    read: &mut ExtractedDocument,
+    text: &mut PageText,
+    run: &str,
+    (area, (left, top, width, height)): (PixelBox, (u32, u32, u32, u32)),
+    (anchor, after): (String, bool),
+) -> Option<()> {
+    let offset = whole_token_offset(&read.content, &anchor)?;
+    let structured = match read.ocr_internal_document.as_mut() {
+        Some(doc) => {
+            let mut owners = doc
+                .elements
+                .iter_mut()
+                .filter_map(|element| Some((whole_token_offset(&element.text, &anchor)?, element)));
+            let (offset, owner) = owners.next()?;
+            if owners.next().is_some() {
+                return None;
+            }
+            let bbox = owner.bbox?;
+            if bbox.y0 >= area.bottom as f64 || bbox.y1 <= area.top as f64 {
+                return None;
+            }
+            Some((offset, owner))
+        }
+        None => None,
+    };
+    let insert = |content: &mut String, offset| {
+        let offset = if after { offset + anchor.len() } else { offset };
+        Insertion::Beside { offset, after }.apply(content, run);
+    };
+    if let Some((offset, owner)) = structured {
+        insert(&mut owner.text, offset);
+    }
+    insert(&mut read.content, offset);
+    if let Some(elements) = read.ocr_elements.as_mut()
+        && let Some(index) = elements
+            .iter()
+            .position(|element| element.level == OcrElementLevel::Word && element.text == anchor)
+    {
+        let mut recovered = elements[index].clone();
+        recovered.text = run.to_owned();
+        recovered.geometry = OcrBoundingGeometry::Rectangle {
+            left,
+            top,
+            width,
+            height,
+        };
+        recovered.confidence.recognition = 1.0;
+        recovered
+            .backend_metadata
+            .insert("backend".into(), RECOVERY_BACKEND.into());
+        elements.insert(index + usize::from(after), recovered);
+    }
+    text.insert(run, area);
+    Some(())
+}
+
+fn whole_token_offset(content: &str, token: &str) -> Option<usize> {
+    let mut matches = content.match_indices(token).filter(|(at, found)| {
+        content[..*at].chars().next_back().is_none_or(char::is_whitespace)
+            && content[*at + found.len()..]
+                .chars()
+                .next()
+                .is_none_or(char::is_whitespace)
+    });
+    let (offset, _) = matches.next()?;
+    matches.next().is_none().then_some(offset)
 }
 
 fn line_insertion(read: &ExtractedDocument, text: &PageText, area: &PixelBox) -> Option<(Insertion, Option<usize>)> {
@@ -274,7 +372,8 @@ fn unmatched_runs(
     }
     let latin_label = local.iter().any(|word| {
         let word = word.trim_matches(|ch: char| ch.is_ascii_punctuation());
-        word.len() >= 4 && word.bytes().all(|byte| byte.is_ascii_alphabetic())
+        (word.len() >= 4 || word.len() >= 2 && word.bytes().all(|byte| byte.is_ascii_uppercase()))
+            && word.bytes().all(|byte| byte.is_ascii_alphabetic())
     });
     if corroborating < MIN_LOCATED_WORDS
         || latin_label
@@ -358,4 +457,47 @@ fn partial_khmer_read_spends_one_of_two_identical_occurrences() {
     assert_eq!(remaining[0].text, "ក");
     assert_eq!(remaining[0].place.left, 30.0);
     assert!(unmatched_occurrences(&span, &[read.clone(), read]).is_none());
+}
+
+#[cfg(test)]
+#[test]
+fn missing_khmer_occurrence_is_published_inline_in_both_surfaces() {
+    let mut doc = crate::types::internal::InternalDocument::new("ocr");
+    let mut line = InternalElement::text(ElementKind::Paragraph, "Before ក after".to_owned(), 0);
+    line.bbox = Some(crate::types::BoundingBox {
+        x0: 0.0,
+        y0: 10.0,
+        x1: 100.0,
+        y1: 30.0,
+    });
+    doc.push_element(line);
+    let mut read = ExtractedDocument {
+        content: "Before ក after".into(),
+        ocr_internal_document: Some(doc),
+        ocr_elements: Some(vec![OcrElement {
+            text: "ក".into(),
+            geometry: OcrBoundingGeometry::Rectangle {
+                left: 30,
+                top: 10,
+                width: 10,
+                height: 20,
+            },
+            confidence: OcrConfidence {
+                detection: None,
+                recognition: 0.9,
+            },
+            level: OcrElementLevel::Word,
+            rotation: None,
+            page_number: 1,
+            parent_id: None,
+            backend_metadata: Default::default(),
+        }]),
+        ..Default::default()
+    };
+    apply_minority_khmer(&mut read, &[("ក".into(), (45, 10, 10, 20))], &|| false);
+    assert_eq!(read.content, "Before ក ក after");
+    let document = read.ocr_internal_document.as_ref().unwrap();
+    assert_eq!(document.elements.len(), 1);
+    assert_eq!(document.elements[0].text, read.content);
+    assert_eq!(read.ocr_elements.as_ref().unwrap().len(), 2);
 }

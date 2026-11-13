@@ -37,7 +37,7 @@ if control == "overlap":
     content = content.replace(b"BT /EN 9 Tf", b"BT 0 g /EN 9 Tf", 1)
     content += b"BT /EN 12 Tf 1 0 0 1 54 724 Tm (Visible library volunteers prepare supplies.) Tj ET\n"
 if control == "mixed-map":
-    content += b"BT /BAD 12 Tf 1 0 0 1 54 748 Tm (Volunteers deliver library supplies before the community meeting.) Tj ET\n"
+    content += b"BT /BAD 12 Tf 1 0 0 1 54 748 Tm (Volunteers deliver library supplies before the community meeting.) Tj 1 0 0 1 470 704 Tm (ID) Tj ET\n"
 if control == "wrong-map":
     content = content[content.index(b"\nQ\n") + 3:]
     content += b"BT /BAD 12 Tf 1 0 0 1 54 760 Tm (Volunteers deliver library supplies before the community meeting.) Tj 1 0 0 1 54 735 Tm (Families can collect the remaining equipment at the reception desk.) Tj ET\n"
@@ -50,7 +50,11 @@ cmap = b"/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CIDSystem
 if control in ("wrong-map", "mixed-map"):
     letters = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
     sample = ["ស្រ", "លា", "ញ់", "ប្រ", "ទេ", "សា", "ខ្ញុំ"]
-    mapping = " ".join(f"<{byte:02X}> <{sample[i % len(sample)].encode('utf-16-be').hex()}>" for i, byte in enumerate(letters)).encode()
+    label_map = {ord("I"): "សាលា", ord("D"): "រៀន"} if control == "mixed-map" else {}
+    mapping = " ".join(
+        f"<{byte:02X}> <{label_map.get(byte, sample[i % len(sample)]).encode('utf-16-be').hex()}>"
+        for i, byte in enumerate(letters)
+    ).encode()
     cmap = cmap.replace(b"1 beginbfchar <4E> <FFFD>", b"52 beginbfchar " + mapping)
 objects[12] = b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding /ToUnicode 13 0 R >>"
 objects[13] = f"<< /Length {len(cmap)} >>\nstream\n".encode() + cmap + b"\nendstream"

@@ -136,3 +136,18 @@ jobs:
           else
             mise run rust:test:focused-pr "$FOCUSED_SUITE"
           fi
+
+      - name: Verify Khmer recovery with the implicit Paddle fallback enabled
+        if: matrix.suite == 'pdf-ocr'
+        shell: bash
+        run: |
+          set -euo pipefail
+          features="pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types,paddle-ocr-tract"
+          route="extractors::pdf::ocr::tests::tests::implicit_classical_fallback_is_decided_per_page_on_all_pdf_routes"
+          cargo test --locked -p xberg --no-default-features --features "$features" --lib \
+            -- --exact "$route" --color never 2>&1 | tee "$RUNNER_TEMP/khmer-paddle-route.log"
+          grep -F 'test result: ok. 1 passed; 0 failed; 0 ignored;' "$RUNNER_TEMP/khmer-paddle-route.log"
+          name="mixed_ocr_keeps_khmer_between_english_and_rejects_unrelated_ink"
+          cargo test --locked -p xberg --no-default-features --features "$features" --test pdf_khmer_minority_2826 \
+            -- --exact "$name" --color never 2>&1 | tee "$RUNNER_TEMP/khmer-paddle-output.log"
+          grep -F 'test result: ok. 1 passed; 0 failed; 0 ignored;' "$RUNNER_TEMP/khmer-paddle-output.log"
