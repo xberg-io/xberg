@@ -6,7 +6,7 @@
 ))]
 
 use sha2::{Digest, Sha256};
-use xberg::types::ExtractionMethod;
+use xberg::types::{ExtractionMethod, OcrElementConfig, OcrElementLevel};
 use xberg::{ExtractInput, ExtractionConfig, OcrConfig, OutputFormat, PageConfig, TesseractConfig};
 
 #[tokio::test]
@@ -45,6 +45,11 @@ async fn verify_intel_page(pipeline: Option<xberg::OcrPipelineConfig>) {
             enabled: true,
             backend: "tesseract".into(),
             pipeline,
+            element_config: Some(OcrElementConfig {
+                include_elements: true,
+                min_level: OcrElementLevel::Word,
+                ..Default::default()
+            }),
             language: vec!["eng".into()],
             tessdata_path: Some(tessdata.path().to_path_buf()),
             tesseract_config: Some(TesseractConfig {
@@ -71,6 +76,17 @@ async fn verify_intel_page(pipeline: Option<xberg::OcrPipelineConfig>) {
         let pages = document.pages.as_ref().expect("per-page output");
         assert_eq!(pages.len(), 7, "{format:?}");
         let page = &pages[3];
+        let words = document.ocr_elements.as_ref().expect("selected OCR elements");
+        assert!(
+            words.iter().any(|word| {
+                word.page_number == page.page_number
+                    && word.level == OcrElementLevel::Word
+                    && word.text == "769"
+                    && word.backend_metadata.get("backend").and_then(serde_json::Value::as_str)
+                        == Some("tesseract-iterator")
+            }),
+            "{format:?}: expected the selected Tesseract stage to own 769"
+        );
         assert!(page.content.contains("Monitoring Management Facility"), "{format:?}");
         for (source, transcript) in [("page", &page.content), ("document", &document.content)] {
             let count = transcript

@@ -1549,6 +1549,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let mut matched_layer_occurrences = ahash::AHashMap::new();
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut paragraphs_in_page_points = ahash::AHashSet::new();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let mut caption_rewrites = ahash::AHashMap::new();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut native_words_covered_pages = ahash::AHashSet::new();
@@ -2071,6 +2073,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         leading_khmer_rows.insert(page_number, rows);
                     }
                     let paragraphs_in_points = paragraph_page.place_detached_in_points();
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    if paragraphs_in_points {
+                        paragraphs_in_page_points.insert(page_number);
+                    }
                     if !paragraph_page.paragraphs.is_empty() {
                         ocr_page_paragraphs.insert(page_number, paragraph_page.paragraphs);
                     }
@@ -2253,6 +2259,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         leading_khmer_rows.insert(page_number, rows);
                     }
                     let paragraphs_in_points = paragraph_page.place_detached_in_points();
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    if paragraphs_in_points {
+                        paragraphs_in_page_points.insert(page_number);
+                    }
                     if !paragraph_page.paragraphs.is_empty() {
                         ocr_page_paragraphs.insert(page_number, paragraph_page.paragraphs);
                     }
@@ -2925,6 +2935,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     );
                     if !paragraphs.is_empty() {
                         ocr_page_paragraphs.insert((page_idx + 1) as u32, paragraphs);
+                        #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                        paragraphs_in_page_points.insert((page_idx + 1) as u32);
                     }
                     if let Some(psm) = page_psm {
                         attach_page_segmentation_modes(&mut page_doc, [((page_idx + 1) as u32, psm)]);
@@ -3069,6 +3081,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     );
                     if !paragraphs.is_empty() {
                         ocr_page_paragraphs.insert((*page_idx + 1) as u32, paragraphs);
+                        #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                        paragraphs_in_page_points.insert((*page_idx + 1) as u32);
                     }
                     if let Some(psm) = page_psm {
                         attach_page_segmentation_modes(&mut page_doc, [((*page_idx + 1) as u32, psm)]);
@@ -3697,15 +3711,20 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 Some(mut new_page_doc) => {
                     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
                     if config.output_format == crate::core::config::OutputFormat::Markdown {
-                        let scale = match ocr_raster_by_page.get(page_number) {
+                        match ocr_raster_by_page.get(page_number) {
                             Some(&(width, height)) if width > 0 && height > 0 => {
                                 let (width_pt, height_pt) =
                                     page_dimensions_pt(&render_doc, page_number.saturating_sub(1) as usize);
-                                (width_pt / width as f32, height_pt / height as f32)
+                                if width_pt.is_finite() && height_pt.is_finite() && width_pt > 0.0 && height_pt > 0.0 {
+                                    reflow_scales
+                                        .insert(*page_number, (width_pt / width as f32, height_pt / height as f32));
+                                }
                             }
-                            _ => (1.0, 1.0),
-                        };
-                        reflow_scales.insert(*page_number, scale);
+                            None if paragraphs_in_page_points.contains(page_number) => {
+                                reflow_scales.insert(*page_number, (1.0, 1.0));
+                            }
+                            _ => {}
+                        }
                     }
                     carry_page_ocr_payload_forward(existing, &mut new_page_doc);
                     new_page_doc

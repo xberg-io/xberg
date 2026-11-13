@@ -1743,6 +1743,36 @@ mod matched_layer_occurrences_tests {
     }
 
     #[test]
+    fn reflowed_row_checks_overlap_in_page_points() {
+        use super::{OutputLiterals, PositionedRows, unique_reflowed_owner};
+
+        let text = "header register 769 scope footer";
+        let rendered = OutputLiterals::new(text, &Default::default());
+        let mut word = occurrence("register 769 scope", 1);
+        word.bbox = at(20.0);
+        let owners = PositionedRows::from([(
+            text.to_owned(),
+            vec![(
+                LineBox {
+                    left: 40.0,
+                    top: 0.0,
+                    right: 60.0,
+                    bottom: 40.0,
+                },
+                None,
+            )],
+        )]);
+        assert!(!unique_reflowed_owner(
+            "769",
+            std::slice::from_ref(&word),
+            &rendered,
+            &owners,
+            (1.0, 1.0)
+        ));
+        assert!(unique_reflowed_owner("769", &[word], &rendered, &owners, (0.5, 0.25)));
+    }
+
+    #[test]
     fn preserves_literal_if_its_prepend_or_either_output_has_ambiguous_multiplicity() {
         let proof = MatchedLayerOccurrences(
             ahash::AHashMap::from([(
