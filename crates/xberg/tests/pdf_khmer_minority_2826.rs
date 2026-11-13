@@ -138,7 +138,9 @@ fn mixed_ocr_keeps_khmer_between_english_and_rejects_unrelated_ink() {
                     assert!(
                         content
                             .split_whitespace()
-                            .any(|word| word.trim_matches(|ch: char| ch.is_ascii_punctuation()) == "id")
+                            .any(|word| word.trim_matches(|ch: char| ch.is_ascii_punctuation()) == "id"),
+                        "{:?}: {content}",
+                        config.output_format
                     );
                 }
                 if expected != 0 {

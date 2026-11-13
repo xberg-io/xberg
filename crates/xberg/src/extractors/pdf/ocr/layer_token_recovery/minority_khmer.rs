@@ -70,7 +70,11 @@ pub(in crate::extractors::pdf::ocr) fn apply_minority_khmer(
             InlineAnchor::Separate => blocks.push((run, *place, area)),
         }
     }
+    let has_existing_khmer = read.content.chars().any(is_khmer);
     apply_inline_runs(read, inline);
+    if has_existing_khmer {
+        return;
+    }
     let mut text = PageText::of(read);
     for (run, place, area) in blocks {
         if cancelled() {
@@ -78,6 +82,12 @@ pub(in crate::extractors::pdf::ocr) fn apply_minority_khmer(
         }
         if let Some(insertion) = line_insertion(read, &text, &area) {
             insert_recovered_text(read, &mut text, run, place, page, insertion);
+        } else if let Some((flat, index, offset)) = shared_line_boundary(read, &text, &area) {
+            let prefix = format!("{run}\n");
+            read.content.insert_str(flat, &prefix);
+            if let Some(doc) = read.ocr_internal_document.as_mut() {
+                doc.elements[index].text.insert_str(offset, &prefix);
+            }
         }
     }
 }
@@ -388,6 +398,52 @@ fn line_insertion(read: &ExtractedDocument, text: &PageText, area: &PixelBox) ->
     Some((Insertion::Block { offset, trailing_break }, position))
 }
 
+// A multiline OCR element can own lines on both sides of a recovered run. In that
+// case use the same uniquely located whole line as the insertion boundary on both surfaces.
+fn shared_line_boundary(read: &ExtractedDocument, text: &PageText, area: &PixelBox) -> Option<(usize, usize, usize)> {
+    let doc = read.ocr_internal_document.as_ref()?;
+    let mut offset = 0;
+    for line in read.content.split_inclusive('\n') {
+        let flat = offset;
+        offset += line.len();
+        let line = line.trim_end_matches('\n');
+        let placed = line
+            .split_whitespace()
+            .filter_map(|word| text.once(word))
+            .reduce(|left, right| left.union(&right));
+        if placed.is_none_or(|place| place.top < area.top) {
+            continue;
+        }
+        if read
+            .content
+            .lines()
+            .filter(|candidate| *candidate == line)
+            .take(2)
+            .count()
+            != 1
+        {
+            return None;
+        }
+        let mut owners = doc.elements.iter().enumerate().flat_map(|(index, element)| {
+            element
+                .text
+                .match_indices(line)
+                .filter(move |(at, found)| {
+                    (*at == 0 || element.text.as_bytes()[*at - 1] == b'\n')
+                        && element
+                            .text
+                            .as_bytes()
+                            .get(*at + found.len())
+                            .is_none_or(|byte| *byte == b'\n')
+                })
+                .map(move |(offset, _)| (index, offset))
+        });
+        let (index, offset) = owners.next()?;
+        return owners.next().is_none().then_some((flat, index, offset));
+    }
+    None
+}
+
 fn painting_candidates(
     pdf: &PdfDocument,
     page: usize,
@@ -403,6 +459,9 @@ fn painting_candidates(
     }
     let (painting, spans) = pdf.extract_painting_text_and_spans(page).ok()?;
     let khmer = minority_transcript(&painting)?;
+    if !fragmented_latin_layer(&painting) {
+        return None;
+    }
     if spans.len() > MAX_LAYER_WORDS {
         return None;
     }
@@ -438,6 +497,7 @@ fn painting_candidates(
     let places: Vec<_> = ordered.iter().map(|item| native_box(item.span.bbox)).collect();
     let mut font = None;
     let mut admitted = Vec::new();
+    let mut font_resources = HashMap::new();
     for run in candidates {
         let mut owners = ordered
             .iter()
@@ -447,21 +507,37 @@ fn painting_candidates(
         if owners.next().is_some() {
             continue;
         }
+        let Some(resource) = font_resources
+            .entry(owner.span.font_name.as_str())
+            .or_insert_with(|| isolated_outline_font_resource(pdf, page, &owner.span.font_name))
+            .as_ref()
+        else {
+            continue;
+        };
         let remaining = unmatched_runs(read, &frame, run, &owner.span)?;
         if remaining.is_empty() {
             continue;
         }
-        if font.as_ref().is_some_and(|font| font != &owner.span.font_name) {
+        if font.as_ref().is_some_and(|font| font != resource) {
             return None;
         }
-        font.get_or_insert_with(|| owner.span.font_name.clone());
+        font.get_or_insert_with(|| resource.clone());
         admitted.extend(remaining);
     }
-    let font = font?;
-    if !isolated_outline_font(pdf, page, &font) {
-        return None;
+    Some((frame, font?, admitted))
+}
+
+fn fragmented_latin_layer(painting: &str) -> bool {
+    let mut total = 0;
+    let mut short = 0;
+    for token in painting.split_whitespace() {
+        let latin = token.bytes().filter(u8::is_ascii_alphabetic).count();
+        if latin != 0 {
+            total += 1;
+            short += usize::from(latin <= 2);
+        }
     }
-    Some((frame, font, admitted))
+    total >= 10 && short * 5 >= total * 4
 }
 
 fn minority_transcript(painting: &str) -> Option<String> {
@@ -479,27 +555,35 @@ fn minority_transcript(painting: &str) -> Option<String> {
     unreadable_script::is_complete_khmer_retry_witness(&khmer).then_some(khmer)
 }
 
-fn isolated_outline_font(pdf: &PdfDocument, page: usize, font: &str) -> bool {
+fn isolated_outline_font_resource(pdf: &PdfDocument, page: usize, font: &str) -> Option<String> {
     use xberg_native_pdf::content::{Operator, parse_content_stream};
-    let check = || {
-        let resources = pdf.get_page_resources(page).ok()?;
-        let resources = resources.as_dict()?;
-        if ["XObject", "Pattern", "ExtGState"]
-            .iter()
-            .any(|key| resources.contains_key(*key))
-        {
-            return Some(false);
+    let resources = pdf.get_page_resources(page).ok()?;
+    let resources = resources.as_dict()?;
+    if ["XObject", "Pattern", "ExtGState"]
+        .iter()
+        .any(|key| resources.contains_key(*key))
+    {
+        return None;
+    }
+    let fonts = pdf.resolve_object(resources.get("Font")?).ok()?;
+    let mut resource_key = None;
+    for (key, value) in fonts.as_dict()? {
+        let resolved = pdf.resolve_object(value).ok()?;
+        let dictionary = resolved.as_dict()?;
+        let base_font = dictionary.get("BaseFont").and_then(|value| value.as_name());
+        if key != font && base_font != Some(font) {
+            continue;
         }
-        let fonts = pdf.resolve_object(resources.get("Font")?).ok()?;
-        let selected = pdf.resolve_object(fonts.as_dict()?.get(font)?).ok()?;
-        if selected.as_dict()?.get("Subtype")?.as_name()? == "Type3" {
-            return Some(false);
+        if dictionary.get("Subtype")?.as_name()? != "Type0" || resource_key.replace(key.clone()).is_some() {
+            return None;
         }
-        let data = pdf.get_page_content_data(page).ok()?;
-        let operators = parse_content_stream(&data).ok()?;
-        Some(!operators.iter().any(|operator| matches!(operator, Operator::Do { .. })))
-    };
-    check() == Some(true)
+    }
+    let data = pdf.get_page_content_data(page).ok()?;
+    let operators = parse_content_stream(&data).ok()?;
+    if operators.iter().any(|operator| matches!(operator, Operator::Do { .. })) {
+        return None;
+    }
+    resource_key
 }
 
 fn khmer_run(text: &str) -> String {
