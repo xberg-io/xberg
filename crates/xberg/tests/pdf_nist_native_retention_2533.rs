@@ -220,12 +220,17 @@ fn explicit_pipeline_reports_unrecovered_glyphs_after_a_real_ocr_read() {
     .unwrap();
     let config = ExtractionConfig {
         use_cache: false,
+        force_ocr: true,
         output_format: OutputFormat::Markdown,
         ocr: Some(OcrConfig {
             tessdata_path: Some(models.path().to_path_buf()),
             pipeline: Some(
                 serde_json::from_value(serde_json::json!({
-                    "stages": [{"backend": "tesseract"}]
+                    "stages": [{"backend": "tesseract"}],
+                    "quality_thresholds": {
+                        "discard_suspected_ocr_noise": true,
+                        "min_ocr_mean_confidence": 100.0
+                    }
                 }))
                 .unwrap(),
             ),
@@ -250,14 +255,13 @@ fn explicit_pipeline_reports_unrecovered_glyphs_after_a_real_ocr_read() {
     );
     assert!(
         document.processing_warnings.iter().any(|warning| {
-            warning.message.contains("All OCR pipeline backends failed")
-                && warning
-                    .message
-                    .contains("only re-read glyph ink that the native text paints")
+            warning
+                .message
+                .contains("its text was discarded because discard_suspected_ocr_noise is enabled")
         }),
         "{:?}",
         document.processing_warnings
     );
-    assert_eq!(document.extraction_method, Some(ExtractionMethod::Native));
+    assert_eq!(document.extraction_method, Some(ExtractionMethod::Ocr));
     assert!(document.content.contains(MAPPED_EXPRESSION));
 }

@@ -2730,13 +2730,7 @@ fn whole_document_ocr_hints(
     }
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     if config.ocr_strategy == crate::core::config::OcrStrategy::Auto
-        && config.ocr.as_ref().is_some_and(|ocr_config| {
-            ocr::uses_default_ocr_pipeline(ocr_config)
-                || ocr_config
-                    .pipeline
-                    .as_ref()
-                    .is_some_and(|pipeline| pipeline.stages.iter().any(|stage| stage.backend == "tesseract"))
-        })
+        && config.ocr.as_ref().is_some_and(ocr::uses_default_ocr_pipeline)
         && let Some([boundary]) = boundaries
         && boundary.page_number == 1
         && let Some(native) = native_text.get(boundary.byte_start..boundary.byte_end)
