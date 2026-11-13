@@ -13,7 +13,7 @@ impl RetryModelFiles {
         for language in languages.clone() {
             files.copy_model(source, language)?;
         }
-        let mut hash = hash_language_models(files.0.path(), languages)?;
+        let mut hash = hash_language_models(files.0.path(), languages, crate::cache::blake3_hash_file)?;
         if models.implicit_osd {
             hash.update(files.capture_osd(source)?.as_bytes());
         }

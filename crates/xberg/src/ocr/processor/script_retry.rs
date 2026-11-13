@@ -118,7 +118,11 @@ mod model_files;
 #[cfg(unix)]
 mod model_stamps;
 
+#[cfg(not(unix))]
+pub(super) use crate::cache::blake3_hash_file as hash_model_file;
 pub(super) use model_files::RetryModelFiles;
+#[cfg(unix)]
+pub(super) use model_stamps::hash_model_file;
 
 #[derive(Clone, Debug)]
 pub(super) struct ModelSet {
@@ -194,9 +198,9 @@ impl ModelSet {
         implicit_osd: bool,
     ) -> Result<blake3::Hash, OcrError> {
         let root = Path::new(directory);
-        let mut hash = hash_language_models(root, languages)?;
+        let mut hash = hash_language_models(root, languages, hash_model_file)?;
         if implicit_osd {
-            let revision = crate::core::extractor::cacheability::osd_revision(root)
+            let revision = crate::core::extractor::cacheability::osd_revision_with(root, hash_model_file)
                 .map_err(|error| engine_error("fingerprint implicit OSD model", error))?;
             hash.update(revision.as_bytes());
         }
@@ -215,11 +219,12 @@ impl ModelSet {
 pub(super) fn hash_language_models<'a>(
     root: &Path,
     languages: impl IntoIterator<Item = &'a str>,
+    read_hash: impl Fn(&Path) -> crate::Result<String>,
 ) -> Result<blake3::Hasher, OcrError> {
     let mut hash = blake3::Hasher::new();
     for language in languages {
         let path = root.join(format!("{language}.traineddata"));
-        let revision = crate::cache::blake3_hash_file(&path)
+        let revision = read_hash(&path)
             .map_err(|error| engine_error(&format!("fingerprint model '{}'", path.display()), error))?;
         hash.update(revision.as_bytes());
     }

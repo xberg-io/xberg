@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use super::script_retry::{self, RetryModels, hash_language_models};
+use super::script_retry::{self, RetryModels, hash_language_models, hash_model_file};
 use super::validation::{TessdataEnv, resolve_tessdata_path_in, tessdata_search_dirs};
 use crate::ocr::error::OcrError;
 use crate::ocr::types::TesseractConfig;
@@ -107,6 +107,7 @@ impl ModelContext {
         hash_language_models(
             std::path::Path::new(&self.directory),
             languages.iter().map(String::as_str),
+            hash_model_file,
         )
         .map(|hash| hash.finalize())
     }
@@ -295,7 +296,7 @@ impl ModelContext {
 }
 
 fn osd_revision(directory: &std::path::Path) -> Result<blake3::Hash, OcrError> {
-    crate::core::extractor::cacheability::osd_revision(directory)
+    crate::core::extractor::cacheability::osd_revision_with(directory, hash_model_file)
         .map_err(|error| model_read_error(&directory.join("osd.traineddata"), error))
 }
 

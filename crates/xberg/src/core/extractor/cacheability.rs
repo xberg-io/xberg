@@ -232,7 +232,15 @@ pub(crate) fn blocking<F: FnOnce() -> T, T>(operation: F) -> impl FnOnce() -> T 
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(crate) fn osd_revision(directory: &Path) -> crate::Result<blake3::Hash> {
-    let result = read_osd_revision(directory);
+    osd_revision_with(directory, crate::cache::blake3_hash_file)
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn osd_revision_with(
+    directory: &Path,
+    read_hash: impl FnOnce(&Path) -> crate::Result<String>,
+) -> crate::Result<blake3::Hash> {
+    let result = read_osd_revision(directory, read_hash);
     match &result {
         Ok((root, revision)) => {
             if let Some(context) = current() {
@@ -245,10 +253,13 @@ pub(crate) fn osd_revision(directory: &Path) -> crate::Result<blake3::Hash> {
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-fn read_osd_revision(directory: &Path) -> crate::Result<(PathBuf, blake3::Hash)> {
+fn read_osd_revision(
+    directory: &Path,
+    read_hash: impl FnOnce(&Path) -> crate::Result<String>,
+) -> crate::Result<(PathBuf, blake3::Hash)> {
     let root = std::fs::canonicalize(directory)?;
     let path = root.join("osd.traineddata");
-    let revision = fingerprint_osd_file(&path, crate::cache::blake3_hash_file)?;
+    let revision = fingerprint_osd_file(&path, read_hash)?;
     Ok((root, revision))
 }
 
