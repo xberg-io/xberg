@@ -228,6 +228,77 @@ async fn selected_scan_renders_prose_before_and_after_the_ocr_table() {
     assert!(before < table && table < after, "{body}");
 }
 
+/// Two tables drawn below the scanned table, each with a one-word section label on the line above
+/// its first row. Recognition joins each label to its table's rows and table assembly drops it as a
+/// leading caption row, while the table's rectangle still covers it, so the Markdown transcript
+/// loses the label and only the page elements keep it (xberg-io/xberg#3046). ~keep
+const LABELLED_TABLES: [(u16, u8, [&str; 5]); 13] = [
+    (360, 14, ["Fund sources by year", "", "", "", ""]),
+    (330, 11, ["", "2024", "Share", "2025", "Share"]),
+    (290, 11, ["Revenues", "", "", "", ""]),
+    (274, 11, ["Taxes", "1,200", "56.6%", "1,350", "58.1%"]),
+    (260, 11, ["Grants", "400", "18.9%", "420", "18.1%"]),
+    (246, 11, ["Fees", "320", "15.1%", "330", "14.2%"]),
+    (232, 11, ["Rents", "200", "9.4%", "225", "9.7%"]),
+    (184, 11, ["Spending", "", "", "", ""]),
+    (168, 11, ["Staff", "900", "50.5%", "950", "51.0%"]),
+    (154, 11, ["Supplies", "300", "16.8%", "310", "16.6%"]),
+    (140, 11, ["Services", "380", "21.3%", "390", "20.9%"]),
+    (126, 11, ["Capital", "205", "11.5%", "215", "11.5%"]),
+    (80, 11, ["Net change for the year", "", "", "", ""]),
+];
+
+fn scan_with_labelled_tables() -> Vec<u8> {
+    let mut source = Document::load_mem(include_bytes!("../fixtures/ocr/shaded_table_scan.pdf")).unwrap();
+    let page_id = *source.get_pages().values().next().unwrap();
+    let mut page = source.get_dictionary(page_id).unwrap().clone();
+    let font = source.add_object(dictionary! {
+        "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica",
+    });
+    let mut resources = super::structured_output::resources(&source, &page);
+    resources.set("Font", dictionary! {"ReviewFont" => font});
+    page.set("Resources", resources);
+    source.objects.insert(page_id, Object::Dictionary(page));
+    let mut content = String::new();
+    for (y, size, cells) in LABELLED_TABLES {
+        for (x, text) in [72, 220, 300, 380, 460].into_iter().zip(cells) {
+            if !text.is_empty() {
+                content.push_str(&format!("BT /ReviewFont {size} Tf {x} {y} Td ({text}) Tj ET\n"));
+            }
+        }
+    }
+    source.add_page_contents(page_id, content.into_bytes()).unwrap();
+    let mut bytes = Vec::new();
+    source.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+#[tokio::test]
+async fn selected_scan_keeps_section_labels_that_table_assembly_drops() {
+    let models = tempfile::tempdir().unwrap();
+    let mut config = super::pinned_config(models.path());
+    config.force_ocr_pages = Some(vec![1]);
+    let actual = read(&scan_with_labelled_tables(), &config).await;
+    assert_eq!(actual.extraction_method, Some(xberg::types::ExtractionMethod::Mixed));
+    let body = &actual.pages.as_ref().unwrap()[0].content;
+    let at = |word: &str| {
+        assert_eq!(body.matches(word).count(), 1, "{word} once in the page: {body}");
+        body.find(word).unwrap()
+    };
+    let order = [
+        "Revenues",
+        "Taxes",
+        "58.1%",
+        "Spending",
+        "Staff",
+        "51.0%",
+        "Net change for the year",
+    ];
+    let positions: Vec<usize> = order.into_iter().map(at).collect();
+    assert!(positions.is_sorted(), "{order:?} in reading order: {body}");
+    super::plain_contract::assert_page_ranges(&actual);
+}
+
 struct TablePage {
     name: &'static str,
     pdf: &'static [u8],

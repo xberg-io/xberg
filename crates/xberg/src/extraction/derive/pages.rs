@@ -558,9 +558,13 @@ fn build_sub_doc(elem_indices: &[usize], doc: &InternalDocument) -> InternalDocu
 }
 
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
-pub(crate) fn render_plain_page_elements(doc: &InternalDocument, page: u32) -> Option<String> {
-    let membership = compute_page_membership(doc);
-    membership.get(&page).map(|indices| render_plain_elements(indices, doc))
+pub(crate) fn render_plain_page_elements(
+    doc: &InternalDocument,
+    page: u32,
+) -> Option<(String, crate::rendering::ElementSpans, Vec<usize>)> {
+    let indices = compute_page_membership(doc).remove(&page)?;
+    let rendered = crate::rendering::render_plain_with_spans(&build_sub_doc(&indices, doc));
+    Some((rendered.text, rendered.spans, indices))
 }
 
 fn render_plain_elements(indices: &[usize], doc: &InternalDocument) -> String {
