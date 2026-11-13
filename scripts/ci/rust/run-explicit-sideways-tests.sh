@@ -17,7 +17,7 @@ case "$profile" in
 warm | paddle)
   features+=",auto-rotate-tract"
   [ "$profile" = paddle ] && features+=",paddle-ocr-ort"
-  expected=22
+  expected=24
   expected_names=(
     caller_psm1_word_elements_on_an_upside_down_page_carry_no_internal_marker
     cached_context_changed_during_extraction_is_not_written
@@ -27,6 +27,8 @@ warm | paddle)
     prose::explicit_language_block_recovers_the_sideways_source_paragraph
     prose::mixed_document_reads_a_sideways_prose_scan_page_alike_in_every_build
     prose::mixed_document_abstains_on_extra_prose_regions_alike_in_every_build
+    prose::mixed_document_withholds_prose_retry_from_a_scan_with_native_text
+    prose::mixed_document_keeps_sparse_prose_without_osd
     prose::partial_ocr_selection_on_a_scanned_document_reads_alike_in_every_build
     explicit_language_block_recovers_the_counterclockwise_source_grid
     explicit_language_block_recovers_the_upside_down_source_grid
@@ -55,7 +57,7 @@ warm | paddle)
   fi
   ;;
 native)
-  expected=12
+  expected=14
   expected_names=(
     caller_psm1_word_elements_on_an_upside_down_page_carry_no_internal_marker
     cached_context_changed_during_extraction_is_not_written
@@ -65,6 +67,8 @@ native)
     prose::explicit_language_block_recovers_the_sideways_source_paragraph
     prose::mixed_document_reads_a_sideways_prose_scan_page_alike_in_every_build
     prose::mixed_document_abstains_on_extra_prose_regions_alike_in_every_build
+    prose::mixed_document_withholds_prose_retry_from_a_scan_with_native_text
+    prose::mixed_document_keeps_sparse_prose_without_osd
     prose::partial_ocr_selection_on_a_scanned_document_reads_alike_in_every_build
     explicit_language_block_recovers_the_counterclockwise_source_grid
     explicit_language_block_recovers_the_upside_down_source_grid

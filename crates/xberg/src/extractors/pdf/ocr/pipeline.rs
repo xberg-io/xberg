@@ -1379,15 +1379,28 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         None
     };
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let automatic_mixed_prose = cfg!(auto_rotate)
+        && !probing_hidden_layer
+        && !mixed_route_layout_active
+        && config.force_ocr_pages.is_none()
+        && matches!(config.ocr_strategy, crate::core::config::OcrStrategy::Auto)
+        && !capture_rasters
+        && uses_default_ocr_pipeline(&ocr_config_owned)
+        && config
+            .ocr
+            .as_ref()
+            .is_some_and(super::orientation_retry::recognition_retry_eligible);
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let whole_document_scan = (1..=page_count as u32).all(|page| ocr_set.contains(&page));
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let orientation_retry = effective_pipeline
         .as_ref()
         .filter(|_| super::orientation_retry::OrientationRetry::allows(config) && !mixed_route_layout_active)
         .map(|pipeline| {
-            let whole_document_scan = (1..=page_count as u32).all(|page| ocr_set.contains(&page));
-            Arc::new(
-                super::orientation_retry::OrientationRetry::new(config, pipeline.quality_thresholds.clone())
-                    .with_prose_recovery(whole_document_scan),
-            )
+            Arc::new(super::orientation_retry::OrientationRetry::new(
+                config,
+                pipeline.quality_thresholds.clone(),
+            ))
         });
 
     // Each invocation below owns exactly one page. Page markers belong to the outer document
@@ -1417,17 +1430,26 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         None
     };
 
+    #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+    let direct_prose_retry = (automatic_mixed_prose
+        && backend.as_ref().is_some_and(|backend| {
+            crate::plugins::registry::get_ocr_backend_registry()
+                .read()
+                .is_builtin_tesseract(backend)
+        }))
+    .then(|| {
+        Arc::new(super::orientation_retry::OrientationRetry::new(
+            config,
+            ocr_config_owned.effective_thresholds(),
+        ))
+    });
+
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let allow_khmer_hint = !probing_hidden_layer
         && crate::ocr::processor::script_retry::may_retry_khmer(
             &ocr_config_owned.effective_tesseract_language().join("+"),
         )
-        && matches!(config.ocr_strategy, crate::core::config::OcrStrategy::Auto)
-        && backend.as_ref().is_some_and(|backend| {
-            crate::plugins::registry::get_ocr_backend_registry()
-                .read()
-                .is_builtin_tesseract(backend)
-        });
+        && matches!(config.ocr_strategy, crate::core::config::OcrStrategy::Auto);
 
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let use_khmer_hint = |page_idx, whole_page_raster| {
@@ -1436,6 +1458,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             && super::document::native_preservation_is_automatic(config, (page_idx + 1) as u32)
             && preceding_native_khmer_page(native_text, boundaries, &ocr_set, page_idx)
             && !crate::pdf::scan_detect::carries_scan_raster(&render_doc, page_idx - 1)
+    };
+
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let mixed_page_allows_prose = |page_idx, whole_page_raster| {
+        automatic_mixed_prose
+            && whole_page_raster
+            && !mixed_native_page_has_content(native_text, boundaries, page_idx)
+            && !use_khmer_hint(page_idx, whole_page_raster)
     };
 
     let total = page_indices.len();
@@ -1766,12 +1796,23 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     // resolve the wrong page's rotation (or none at all) for anything but the
                     // document's first OCR'd page (#651).
                     let page_rotation_degrees = page_rotations.get(page_idx).copied().unwrap_or(0);
+                    let whole_page_raster =
+                        crate::pdf::scan_detect::full_page_raster_density(&render_doc, page_idx).is_some();
                     let page_ocr_hints = PageOcrHints {
                         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                         probe_reads: pages.probe_reads.clone(),
                         source_dpi: rendered_page_source_dpi(&render_doc, page_idx, image_arc.width()),
-                        known_full_page_scan: crate::pdf::scan_detect::full_page_raster_density(&render_doc, page_idx)
-                            .is_some(),
+                        known_full_page_scan: whole_page_raster,
+                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                        detached_recognition_recovery: Some(if whole_document_scan {
+                            super::orientation_retry::RecognitionRecovery::TableOrProse
+                        } else if automatic_mixed_prose {
+                            super::orientation_retry::RecognitionRecovery::MixedPage {
+                                allow_prose: mixed_page_allows_prose(page_idx, whole_page_raster),
+                            }
+                        } else {
+                            super::orientation_retry::RecognitionRecovery::Table
+                        }),
                         single_block_pages: Some(std::sync::Arc::clone(&single_block_pages)),
                         native_page_layers: None,
                         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -2311,7 +2352,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     layout_assembly,
                 );
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                let khmer_hint = use_khmer_hint(*page_idx, whole_page_raster);
+                let khmer_hint = crate::plugins::registry::get_ocr_backend_registry()
+                    .read()
+                    .is_builtin_tesseract(backend)
+                    && use_khmer_hint(*page_idx, whole_page_raster);
                 let config_clone = config_clone.into_owned();
                 let (upright_data, upright_width, upright_height, correction_degrees) = match upright_raster_for_backend(
                     data,
@@ -2329,6 +2373,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 };
                 let idx = *page_idx;
                 let cancel_token = config.cancel_token.clone();
+                #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+                let prose_retry = direct_prose_retry
+                    .as_ref()
+                    .filter(|_| mixed_page_allows_prose(idx, whole_page_raster))
+                    .map(|retry| (Arc::clone(retry), Arc::clone(&upright_data)));
                 let original_config = ocr_config_resolved.clone();
                 let retained_bytes = retained_ocr_source_bytes(data, &upright_data, 0);
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -2417,6 +2466,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             .await
                     } else {
                         read.await
+                    };
+                    #[cfg(all(auto_rotate, feature = "ocr", not(target_arch = "wasm32")))]
+                    let result = if let Some((retry, raster)) = prose_retry {
+                        retry
+                            .after_mixed_prose(&backend_clone, raster, &config_clone, result, cancel_token.as_ref())
+                            .await
+                    } else {
+                        result
                     };
                     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
                     let scale_only = scale_only.into_inner();
@@ -4410,6 +4467,8 @@ pub(crate) struct PageOcrHints {
     /// `true` is authoritative; `false` means the detached caller has no positive scan signal,
     /// so a content-backed whole-document route still performs its normal per-page detection.
     pub(crate) known_full_page_scan: bool,
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    pub(crate) detached_recognition_recovery: Option<super::orientation_retry::RecognitionRecovery>,
     /// One-indexed document page numbers selected by automatic fabricated-map routing.
     pub(crate) single_block_pages: Option<std::sync::Arc<std::collections::HashSet<u32>>>,
     /// Readable text layers by one-indexed document page, for a whole-document run. After the run
@@ -5511,14 +5570,22 @@ pub(super) async fn extract_with_ocr_for_page(
                     })
                     .map(|retry| (Arc::clone(retry), Arc::clone(&upright_data)));
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-                // The prose proof reads only the page's own words and geometry, so it holds wherever the
-                // raster came from: a detached render, including one a stored scan replaced. Caller-supplied
-                // images carry no page of this document, and a detached page of a mixed document stays on the
-                // read the default build gives it, which runs no retry there (GH#3007, GH#3050). ~keep
-                let allow_prose = images.is_none()
-                    || detached_page
-                        .and_then(|source| source.orientation_retry)
-                        .is_some_and(|retry| retry.recovers_prose());
+                let mut recognition_recovery = if images.is_none() {
+                    super::orientation_retry::RecognitionRecovery::TableOrProse
+                } else {
+                    page_ocr_hints
+                        .as_ref()
+                        .and_then(|hints| hints.detached_recognition_recovery)
+                        .unwrap_or(super::orientation_retry::RecognitionRecovery::Table)
+                };
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                if matches!(
+                    recognition_recovery,
+                    super::orientation_retry::RecognitionRecovery::MixedPage { .. }
+                ) && !get_ocr_backend_registry().read().is_builtin_tesseract(&backend)
+                {
+                    recognition_recovery = super::orientation_retry::RecognitionRecovery::Table;
+                }
                 #[cfg(feature = "ocr")]
                 let caption_raster =
                     (capture_caption && retry.is_some() && page_rotation_degrees == 0 && correction_degrees == 0).then(
@@ -5718,7 +5785,7 @@ pub(super) async fn extract_with_ocr_for_page(
                                 &config_clone,
                                 result,
                                 cancel_token.as_ref(),
-                                allow_prose,
+                                recognition_recovery,
                             )
                             .await
                     } else {

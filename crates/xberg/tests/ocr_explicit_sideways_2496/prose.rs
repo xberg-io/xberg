@@ -1,5 +1,8 @@
 use super::*;
 
+const SOURCE_PROSE: &str =
+    "Docling bundles PDF document conversion to JSON and Markdown in an easy self contained package";
+
 #[test]
 #[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
 fn explicit_language_block_recovers_the_sideways_source_paragraph() {
@@ -33,7 +36,6 @@ fn recovers_the_sideways_source_paragraph_case() {
         ocr: Some(OcrConfig::default()),
         ..Default::default()
     };
-    let source = "Docling bundles PDF document conversion to JSON and Markdown in an easy self contained package";
     config
         .ocr
         .as_mut()
@@ -44,7 +46,7 @@ fn recovers_the_sideways_source_paragraph_case() {
     let forced = extract("prose-source-psm1", &pdf, &config);
     assert_eq!(
         forced.content.split_whitespace().collect::<Vec<_>>(),
-        source.split_whitespace().collect::<Vec<_>>()
+        SOURCE_PROSE.split_whitespace().collect::<Vec<_>>()
     );
     assert!(forced.tables.is_empty());
     config.ocr.as_mut().unwrap().tesseract_config.as_mut().unwrap().psm = Some(11);
@@ -58,7 +60,7 @@ fn recovers_the_sideways_source_paragraph_case() {
     // Correct behavior in every build: the language-only read recovers the source paragraph.
     assert_eq!(
         actual.content.split_whitespace().collect::<Vec<_>>(),
-        source.split_whitespace().collect::<Vec<_>>()
+        SOURCE_PROSE.split_whitespace().collect::<Vec<_>>()
     );
     let actual_document = actual.document.as_ref().unwrap();
     let forced_document = forced.document.as_ref().unwrap();
@@ -82,7 +84,7 @@ fn recovers_the_sideways_source_paragraph_case() {
     let upright = extract("prose-source-upright", &bytes, &config);
     assert_eq!(
         upright.content.split_whitespace().collect::<Vec<_>>(),
-        source.split_whitespace().collect::<Vec<_>>()
+        SOURCE_PROSE.split_whitespace().collect::<Vec<_>>()
     );
     assert_psm(&upright, "11");
 }
@@ -205,7 +207,19 @@ fn mixed_document_reads_a_sideways_prose_scan_page_alike_in_every_build() {
         run_private_child(CASE);
         return;
     }
-    assert_mixed_page_keeps_the_sparse_read("mixed-prose-source", &prose_source());
+    let scan = prose_source();
+    let (mixed, config) = extract_mixed_prose_page("mixed-prose-source", &scan);
+    let page = &mixed.pages.as_ref().unwrap()[1];
+    #[cfg(auto_rotate)]
+    assert_eq!(
+        page.content.split_whitespace().collect::<Vec<_>>(),
+        SOURCE_PROSE.split_whitespace().collect::<Vec<_>>()
+    );
+    #[cfg(not(auto_rotate))]
+    assert_sparse_scan(&page.content, "mixed-prose-source", &scan, config);
+    #[cfg(auto_rotate)]
+    let _ = config;
+    assert!(mixed.tables.is_empty());
 }
 
 #[test]
@@ -218,11 +232,155 @@ fn mixed_document_abstains_on_extra_prose_regions_alike_in_every_build() {
     }
     let pdf = prose_source();
     for (protected, label) in [(false, "package"), (true, "Docling")] {
-        assert_mixed_page_keeps_the_sparse_read(
-            &format!("mixed-prose-extra-{label}"),
-            &prose_with_extra_region(&pdf, protected),
+        let scan = prose_with_extra_region(&pdf, protected);
+        let name = format!("mixed-prose-extra-{label}");
+        let (mixed, config) = extract_mixed_prose_page(&name, &scan);
+        let mut explicit = config.clone();
+        explicit.force_ocr = true;
+        explicit
+            .ocr
+            .as_mut()
+            .unwrap()
+            .tesseract_config
+            .get_or_insert_default()
+            .psm = Some(1);
+        let candidate = extract(&format!("{name}-psm1"), &scan, &explicit);
+        assert_eq!(
+            candidate
+                .content
+                .split_whitespace()
+                .filter(|word| *word == label)
+                .count(),
+            2
         );
+        assert_sparse_scan(&mixed.pages.as_ref().unwrap()[1].content, &name, &scan, config);
     }
+}
+
+#[test]
+#[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
+fn mixed_document_withholds_prose_retry_from_a_scan_with_native_text() {
+    const CASE: &str = "prose::mixed_document_withholds_prose_retry_from_a_scan_with_native_text";
+    if std::env::var(CHILD).as_deref() != Ok(CASE) {
+        run_private_child(CASE);
+        return;
+    }
+
+    let scan = prose_source();
+    let mut config = mixed_prose_config();
+    let pdf = with_hybrid_scan(&scan);
+    let mut native_config = config.clone();
+    native_config.disable_ocr = true;
+    let native = helpers::extract_bytes_document_blocking(&pdf, "application/pdf", &native_config).unwrap();
+    const SIDECAR: &str = "! ! ! ! ! ! ! ! ! ! ! !";
+    assert_eq!(
+        native.pages.as_ref().unwrap()[2].content.trim(),
+        SIDECAR,
+        "the hybrid scan has a native layer that fails the alphanumeric quality gate"
+    );
+
+    let (automatic, ocr_pages) = read_with_ocr_progress(&pdf, &config);
+    assert_eq!(ocr_pages, [2, 3], "both scans must enter automatic OCR");
+    config.ocr.as_mut().unwrap().auto_rotate = Some(false);
+    let (control, ocr_pages) = read_with_ocr_progress(&pdf, &config);
+    assert_eq!(ocr_pages, [2, 3], "both scans must enter the control OCR route");
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Mixed));
+    let pages = automatic.pages.as_ref().unwrap();
+    assert_eq!(pages.len(), 3);
+    assert_eq!(pages[0].content, native.pages.as_ref().unwrap()[0].content);
+    assert!(!pages[2].content.split_whitespace().eq(SOURCE_PROSE.split_whitespace()));
+    assert_eq!(pages[2].content, control.pages.as_ref().unwrap()[2].content);
+    #[cfg(auto_rotate)]
+    assert!(pages[1].content.split_whitespace().eq(SOURCE_PROSE.split_whitespace()));
+}
+
+#[derive(Default)]
+struct OcrPages(std::sync::Mutex<Vec<usize>>);
+
+impl xberg::engine::seams::ProgressSink for OcrPages {
+    fn emit(&self, _: xberg::engine::seams::ProgressEvent) {}
+
+    fn emit_ocr_page(&self, page: usize, _: usize, _: usize, _: &str, _: Option<usize>) {
+        self.0.lock().unwrap().push(page);
+    }
+}
+
+fn read_with_ocr_progress(pdf: &[u8], config: &ExtractionConfig) -> (ExtractedDocument, Vec<usize>) {
+    let progress = std::sync::Arc::new(OcrPages::default());
+    let engine = xberg::engine::Engine::builder()
+        .with_progress_sink(progress.clone())
+        .build();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let result = runtime
+        .block_on(engine.extract(
+            xberg::ExtractInput::from_bytes(pdf.to_vec(), "application/pdf", None),
+            config,
+        ))
+        .unwrap();
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let [document]: [ExtractedDocument; 1] = result.results.try_into().expect("one PDF result");
+    let mut pages = progress.0.lock().unwrap().clone();
+    pages.sort_unstable();
+    (document, pages)
+}
+
+#[test]
+#[ignore = "Run mise run rust:test:explicit-sideways with verified cached models"]
+fn mixed_document_keeps_sparse_prose_without_osd() {
+    const CASE: &str = "prose::mixed_document_keeps_sparse_prose_without_osd";
+    if std::env::var(CHILD).as_deref() != Ok(CASE) {
+        run_private_child(CASE);
+        return;
+    }
+    let models = tempfile::tempdir().unwrap();
+    seed_english(models.path());
+    let scan = prose_source();
+    let mut config = mixed_prose_config();
+    config.ocr.as_mut().unwrap().tessdata_path = Some(models.path().into());
+    let mixed = read_mixed_prose_page("mixed-prose-without-osd", &scan, &config);
+    assert_sparse_scan(
+        &mixed.pages.as_ref().unwrap()[1].content,
+        "mixed-prose-without-osd",
+        &scan,
+        config,
+    );
+}
+
+fn with_hybrid_scan(scan: &[u8]) -> Vec<u8> {
+    let mut document = Document::load_mem(&with_native_first_page(scan)).unwrap();
+    let scan_id = document.get_pages()[&2];
+    let mut hybrid = document.get_dictionary(scan_id).unwrap().clone();
+    let parent = hybrid.get(b"Parent").unwrap().as_reference().unwrap();
+    let mut resources = match hybrid.get(b"Resources").unwrap() {
+        Object::Reference(id) => document.get_dictionary(*id).unwrap().clone(),
+        Object::Dictionary(resources) => resources.clone(),
+        other => panic!("unexpected scan resources: {other:?}"),
+    };
+    let font = document.add_object(dictionary! {
+        "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica",
+    });
+    resources.set("Font", dictionary! { "ReviewFont" => font });
+    hybrid.set("Resources", resources);
+    let hybrid_id = document.add_object(hybrid);
+    document
+        .add_page_contents(
+            hybrid_id,
+            b"BT /ReviewFont 10 Tf 3 Tr 40 40 Td (! ! ! ! ! ! ! ! ! ! ! !) Tj ET".to_vec(),
+        )
+        .unwrap();
+    let root = document.get_dictionary_mut(parent).unwrap();
+    root.get_mut(b"Kids")
+        .unwrap()
+        .as_array_mut()
+        .unwrap()
+        .push(hybrid_id.into());
+    root.set("Count", 3);
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).unwrap();
+    bytes
 }
 
 #[test]
@@ -303,10 +461,8 @@ fn with_second_scan_page(scan: &[u8]) -> Vec<u8> {
     bytes
 }
 
-/// The default build's mixed route runs no orientation retry, so a Paddle build must not recover the
-/// scan page's paragraph either: the page reads exactly as the sparse-text read of the same scan. ~keep
-fn assert_mixed_page_keeps_the_sparse_read(name: &str, scan: &[u8]) {
-    let mut config = ExtractionConfig {
+fn mixed_prose_config() -> ExtractionConfig {
+    ExtractionConfig {
         use_cache: false,
         pages: Some(PageConfig {
             extract_pages: true,
@@ -314,8 +470,16 @@ fn assert_mixed_page_keeps_the_sparse_read(name: &str, scan: &[u8]) {
         }),
         ocr: Some(OcrConfig::default()),
         ..Default::default()
-    };
-    let mixed = helpers::extract_bytes_document_blocking(&with_native_first_page(scan), "application/pdf", &config)
+    }
+}
+
+fn extract_mixed_prose_page(name: &str, scan: &[u8]) -> (ExtractedDocument, ExtractionConfig) {
+    let config = mixed_prose_config();
+    (read_mixed_prose_page(name, scan, &config), config)
+}
+
+fn read_mixed_prose_page(name: &str, scan: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
+    let mixed = helpers::extract_bytes_document_blocking(&with_native_first_page(scan), "application/pdf", config)
         .expect("actual public mixed PDF extraction");
     record_result(name, &mixed);
     let pages = mixed.pages.as_ref().expect("requested pages");
@@ -330,7 +494,10 @@ fn assert_mixed_page_keeps_the_sparse_read(name: &str, scan: &[u8]) {
     );
     assert_eq!(mixed.extraction_method, Some(ExtractionMethod::Mixed), "{name}");
     assert!(!mixed.metadata.additional.contains_key("auto_rotated"), "{name}");
+    mixed
+}
 
+fn assert_sparse_scan(text: &str, name: &str, scan: &[u8], mut config: ExtractionConfig) {
     config.force_ocr = true;
     config
         .ocr
@@ -341,9 +508,9 @@ fn assert_mixed_page_keeps_the_sparse_read(name: &str, scan: &[u8]) {
         .psm = Some(11);
     let sparse = extract(&format!("{name}-sparse"), scan, &config);
     assert_eq!(
-        pages[1].content.split_whitespace().collect::<Vec<_>>(),
+        text.split_whitespace().collect::<Vec<_>>(),
         sparse.content.split_whitespace().collect::<Vec<_>>(),
-        "{name}: the scan page must read as the sparse read, in every build"
+        "{name}: the scan page must retain its sparse read"
     );
 }
 

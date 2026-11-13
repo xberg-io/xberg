@@ -17,7 +17,7 @@ use xberg_native_pdf::PdfDocument;
 #[cfg(feature = "auto-rotate-tract")]
 const CASE: &str = "explicit_language_block_retains_the_sideways_source_table";
 const CHILD: &str = "XBERG_EXPLICIT_SIDEWAYS_CHILD";
-#[cfg(feature = "auto-rotate-tract")]
+#[cfg(auto_rotate)]
 const MODEL_SHA256: &str = "6b742aebce6f0f7f71f747931ac7becfc7c96c51641e14943b291eeb334e7947";
 const ENGLISH_SHA256: &str = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2";
 // Official tessdata_fast@87416418657359cb625c412a48b6e1d6d41c29bd, blob 527457ca8f8fe1fda7c2f88bce3c0e4be12be9d0.
@@ -844,11 +844,11 @@ fn run_private_child_without_classifier(case: &str) {
 }
 
 fn spawn_private_child(case: &str, seed_classifier: bool) {
-    #[cfg(not(feature = "auto-rotate-tract"))]
+    #[cfg(not(auto_rotate))]
     let _ = seed_classifier;
     let root = tempfile::tempdir().unwrap();
     let hub = root.path().join("hub");
-    #[cfg(feature = "auto-rotate-tract")]
+    #[cfg(auto_rotate)]
     if seed_classifier {
         let model = std::fs::read(
             std::env::var_os("XBERG_ORIENTATION_TEST_MODEL")

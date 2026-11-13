@@ -29,13 +29,37 @@ pub(crate) fn recognition_retry_eligible(config: &OcrConfig) -> bool {
     recognition::eligible(config)
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum RecognitionRecovery {
+    Table,
+    TableOrProse,
+    MixedPage {
+        allow_prose: bool,
+    },
+    #[cfg(all(auto_rotate, feature = "pdf"))]
+    ProseOnly,
+}
+
+impl RecognitionRecovery {
+    fn allows_prose(self) -> bool {
+        !matches!(self, Self::Table | Self::MixedPage { allow_prose: false })
+    }
+
+    fn prose_only(self) -> bool {
+        match self {
+            #[cfg(all(auto_rotate, feature = "pdf"))]
+            Self::ProseOnly => true,
+            _ => false,
+        }
+    }
+}
+
 pub(super) struct OrientationRetry {
     thresholds: OcrQualityThresholds,
     attempts: parking_lot::Mutex<SecurityBudget>,
     #[cfg(auto_rotate)]
     cached_model_ready: tokio::sync::OnceCell<bool>,
     recognition_config: Option<OcrConfig>,
-    recovers_prose: bool,
 }
 
 impl OrientationRetry {
@@ -50,20 +74,7 @@ impl OrientationRetry {
                 .as_ref()
                 .filter(|config| recognition_retry_eligible(config))
                 .cloned(),
-            recovers_prose: true,
         }
-    }
-
-    /// Sideways prose recovery belongs to a call that OCRs every page of the document. Any page
-    /// left to its native layer, including by `force_ocr_pages`, makes the output a mixed one whose
-    /// scan pages keep the read the default build gives them, so both builds agree (GH#3050). ~keep
-    pub(super) fn with_prose_recovery(mut self, recovers_prose: bool) -> Self {
-        self.recovers_prose = recovers_prose;
-        self
-    }
-
-    pub(super) fn recovers_prose(&self) -> bool {
-        self.recovers_prose
     }
 
     pub(super) fn allows(config: &ExtractionConfig) -> bool {
@@ -138,10 +149,10 @@ impl OrientationRetry {
         config: &OcrConfig,
         original: crate::Result<ExtractedDocument>,
         cancel: Option<&CancellationToken>,
-        allow_prose: bool,
+        recovery: RecognitionRecovery,
     ) -> crate::Result<ExtractedDocument> {
         let mut result = self
-            .after_ocr_unscrubbed(backend, raster, config, original, cancel, allow_prose)
+            .after_ocr_unscrubbed(backend, raster, config, original, cancel, recovery)
             .await?;
         result
             .metadata
@@ -157,20 +168,22 @@ impl OrientationRetry {
         config: &OcrConfig,
         original: crate::Result<ExtractedDocument>,
         cancel: Option<&CancellationToken>,
-        allow_prose: bool,
+        recovery: RecognitionRecovery,
     ) -> crate::Result<ExtractedDocument> {
         let original = original?;
         check_cancelled(cancel)?;
         if let Some(requested) = &self.recognition_config {
             let result = self
-                .after_recognition(backend, raster, config, original, cancel, allow_prose)
+                .after_recognition(backend, raster, config, original, cancel, recovery)
                 .await?;
             check_cancelled(cancel)?;
             return Ok(recognition::restore_elements(result, requested));
         }
         #[cfg(auto_rotate)]
         {
-            let mut result = self.after_implicit(backend, raster, config, original, cancel).await?;
+            let mut result = self
+                .after_implicit(backend, raster, config, original, cancel, false)
+                .await?;
             check_cancelled(cancel)?;
             if config.element_config.is_none() {
                 result.ocr_elements = None;
@@ -183,6 +196,30 @@ impl OrientationRetry {
         }
     }
 
+    #[cfg(all(auto_rotate, feature = "pdf"))]
+    pub(super) async fn after_mixed_prose(
+        &self,
+        backend: &Arc<dyn OcrBackend>,
+        raster: Arc<Vec<u8>>,
+        config: &OcrConfig,
+        original: crate::Result<ExtractedDocument>,
+        cancel: Option<&CancellationToken>,
+    ) -> crate::Result<ExtractedDocument> {
+        check_cancelled(cancel)?;
+        let result = self
+            .after_recognition(
+                backend,
+                raster,
+                config,
+                original?,
+                cancel,
+                RecognitionRecovery::ProseOnly,
+            )
+            .await?;
+        check_cancelled(cancel)?;
+        Ok(result)
+    }
+
     #[cfg(auto_rotate)]
     async fn after_implicit(
         &self,
@@ -191,6 +228,7 @@ impl OrientationRetry {
         config: &OcrConfig,
         original: ExtractedDocument,
         cancel: Option<&CancellationToken>,
+        tables_only: bool,
     ) -> crate::Result<ExtractedDocument> {
         let confidence = backend.confidence_semantics();
         let empty = original.content.trim().is_empty();
@@ -228,6 +266,10 @@ impl OrientationRetry {
         #[cfg(not(feature = "pdf"))]
         let retry = backend.process_image_owned(raster, &rotated_config).await;
         check_cancelled(cancel)?;
+        // A mixed page needs OSD for prose, but still uses the existing classifier table proof. ~keep
+        if tables_only && retry.as_ref().is_ok_and(|candidate| candidate.tables.is_empty()) {
+            return Ok(original);
+        }
         self.select_implicit(retry, original, config, confidence, row_threshold)
     }
 
@@ -276,7 +318,7 @@ impl OrientationRetry {
         config: &OcrConfig,
         original: ExtractedDocument,
         cancel: Option<&CancellationToken>,
-        allow_prose: bool,
+        recovery: RecognitionRecovery,
     ) -> crate::Result<ExtractedDocument> {
         let confidence = backend.confidence_semantics();
         if !recognition::plain_primary(&original)
@@ -285,11 +327,11 @@ impl OrientationRetry {
         {
             return Ok(original);
         }
-        // A page-down primary is the half-turn's target and an upside-down read routinely fails the
-        // word checks `accepts` demands (the sideways e2e recovers 1 of 480 tokens if they gate this
-        // read), so only the marker decides whether the unsupported primary is replaced. ~keep
         let probe = lookup_osd_directory(config.clone());
         let Some(directory) = self.prepare_recognition(cancel, probe).await? else {
+            if recovery.prose_only() {
+                return Ok(original);
+            }
             // Without a cached OSD model the omitted policy takes the classifier route that
             // extraction without an `ocr` block uses. The plain-primary check above already
             // excludes tables and formulas, so `after_implicit`'s own early return on them
@@ -303,7 +345,16 @@ impl OrientationRetry {
                     crate::core::extractor::cacheability::invalidate_current();
                     return Ok(original);
                 }
-                return self.after_implicit(backend, raster, config, original, cancel).await;
+                return self
+                    .after_implicit(
+                        backend,
+                        raster,
+                        config,
+                        original,
+                        cancel,
+                        matches!(recovery, RecognitionRecovery::MixedPage { .. }),
+                    )
+                    .await;
             }
             #[cfg(not(auto_rotate))]
             return Ok(original);
@@ -321,16 +372,19 @@ impl OrientationRetry {
                     .additional
                     .remove(OCR_RECOGNITION_PAGE_DOWN_METADATA_KEY)
                     .is_some();
-                if recognition::accepts_candidate(
-                    &original,
-                    &candidate,
-                    &self.thresholds,
-                    confidence,
-                    config,
-                    allow_prose,
-                ) {
+                if (!recovery.prose_only() || candidate.tables.is_empty())
+                    && recognition::accepts_candidate(
+                        &original,
+                        &candidate,
+                        &self.thresholds,
+                        confidence,
+                        config,
+                        recovery.allows_prose(),
+                    )
+                {
                     Ok(recognition::adopt(original, candidate))
-                } else if page_down {
+                } else if page_down && !recovery.prose_only() {
+                    // Page-down reads can fail the ordinary word checks before a half-turn. ~keep
                     let witness = recognition::witness_tokens(&candidate);
                     self.after_half_turn(backend, raster, config, original, &witness, cancel)
                         .await
@@ -1211,7 +1265,7 @@ mod tests {
                 &ocr,
                 Ok(primary),
                 None,
-                false,
+                RecognitionRecovery::Table,
             )
             .await
             .unwrap();
@@ -1246,7 +1300,7 @@ mod tests {
                 &ocr,
                 Ok(inverted_primary()),
                 None,
-                false,
+                RecognitionRecovery::Table,
             )
             .await
             .unwrap();
