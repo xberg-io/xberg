@@ -15,7 +15,7 @@ Libs: -lheif
 Cflags: -I/example/heif
 PC
 	# Execute the actual preflight without installing packages or rebuilding libheif. ~keep
-	awk '/^resolved_libheif_version=/{capture=1} /^echo "libheif symbol verification:/{capture=0} capture' \
+	awk '/^resolved_libheif_version=/{capture=1} /^if ! libheif_runtime_links;/{capture=0} capture' \
 		"$INSTALL_SCRIPT" >"$XBERG_WORK/validate-libheif.sh"
 	[ "$(grep -c '^resolved_libheif_version=' "$XBERG_WORK/validate-libheif.sh")" -eq 1 ]
 }
@@ -100,4 +100,30 @@ PC
 	run env LIBHEIF_VERSION=9.9.9 bash -euo pipefail "$XBERG_WORK/select-version.sh"
 	xberg_assert_status 1
 	xberg_assert_output_contains "Unverified libheif version: 9.9.9"
+}
+
+@test "install_linux should rebuild a cached libheif with an unresolved x265 SONAME" {
+	awk '/^LIBHEIF_MARKER=/{capture=1} /^  echo "Building libheif/{capture=0} capture' \
+		"$INSTALL_SCRIPT" >"$XBERG_WORK/check-cache.sh"
+	printf '%s\n' '  echo rebuilding' 'fi' >>"$XBERG_WORK/check-cache.sh"
+	touch "$LIBHEIF_PREFIX/lib/libheif.so.1"
+	xberg_stub ldd '[[ "$1" == -r && "$2" == "$LIBHEIF_PREFIX/lib/libheif.so.1" ]] || exit 2' \
+		'echo "libx265.so.215 => not found"'
+	run bash -euo pipefail "$XBERG_WORK/check-cache.sh"
+	xberg_assert_status 0
+	xberg_assert_output_contains "libx265.so.215 => not found"
+	xberg_assert_output_contains "rebuilding"
+}
+
+@test "install_linux should reuse cached libheif when its runtime dependencies resolve" {
+	awk '/^LIBHEIF_MARKER=/{capture=1} /^  echo "Building libheif/{capture=0} capture' \
+		"$INSTALL_SCRIPT" >"$XBERG_WORK/check-cache.sh"
+	printf '%s\n' '  echo rebuilding' 'fi' >>"$XBERG_WORK/check-cache.sh"
+	touch "$LIBHEIF_PREFIX/lib/libheif.so.1"
+	xberg_stub ldd '[[ "$1" == -r && "$2" == "$LIBHEIF_PREFIX/lib/libheif.so.1" ]] || exit 2' \
+		'echo "libx265.so.199 => /usr/lib/libx265.so.199"'
+	run bash -euo pipefail "$XBERG_WORK/check-cache.sh"
+	xberg_assert_status 0
+	xberg_assert_output_contains "already installed (cached)"
+	[[ "$output" != *rebuilding* ]]
 }

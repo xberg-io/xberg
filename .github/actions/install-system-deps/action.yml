@@ -62,6 +62,15 @@ runs:
           tesseract-linux-${{ runner.arch }}-v5-
           tesseract-linux-${{ runner.arch }}-
 
+    - name: Identify Linux distribution for libheif cache
+      if: runner.os == 'Linux'
+      id: libheif-linux-distro
+      shell: bash
+      run: |
+        set -euo pipefail
+        source /etc/os-release
+        printf 'distro=%s-%s\n' "$ID" "${VERSION_ID:-rolling}" >>"$GITHUB_OUTPUT"
+
     - name: Restore libheif cache (Linux)
       if: runner.os == 'Linux'
       id: cache-libheif-linux
@@ -72,9 +81,7 @@ runs:
           /tmp/libheif-cache/usr/local/lib/pkgconfig/libheif.pc
           /tmp/libheif-cache/usr/local/include/libheif/
           /tmp/libheif-cache/usr/local/share/libheif/
-        key: libheif-linux-${{ runner.arch }}-v${{ inputs.libheif-version }}-cache-v5
-        restore-keys: |
-          libheif-linux-${{ runner.arch }}-v${{ inputs.libheif-version }}-cache-v5
+        key: libheif-linux-${{ steps.libheif-linux-distro.outputs.distro }}-${{ runner.arch }}-v${{ inputs.libheif-version }}-cache-v6
 
     - name: Restore cached libheif to /usr/local (Linux)
       if: runner.os == 'Linux' && steps.cache-libheif-linux.outputs.cache-hit == 'true'

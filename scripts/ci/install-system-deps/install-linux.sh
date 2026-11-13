@@ -135,7 +135,23 @@ fi
 
 LIBHEIF_MARKER="$LIBHEIF_PREFIX/lib/pkgconfig/libheif.pc"
 
-if [ -f "$LIBHEIF_MARKER" ] && pkg-config --modversion libheif 2>/dev/null | grep -q "^${LIBHEIF_VERSION}$"; then
+libheif_runtime_links() {
+  local library="$LIBHEIF_PREFIX/lib/libheif.so.1" report
+  if [ ! -f "$library" ]; then
+    echo "::warning::Required libheif runtime $library is missing." >&2
+    return 1
+  fi
+  if ! report="$(LC_ALL=C LD_LIBRARY_PATH="$LIBHEIF_PREFIX/lib:${LD_LIBRARY_PATH:-}" ldd -r "$library" 2>&1)" ||
+    grep -Eq 'not found|undefined symbol' <<<"$report"; then
+    echo "::warning::Cannot resolve runtime dependencies for $library." >&2
+    printf '%s\n' "$report" >&2
+    return 1
+  fi
+}
+
+if [ -f "$LIBHEIF_MARKER" ] &&
+  [ "$(PKG_CONFIG_PATH="$LIBHEIF_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}" pkg-config --modversion libheif 2>/dev/null)" = "$LIBHEIF_VERSION" ] &&
+  libheif_runtime_links; then
   echo "✓ libheif ${LIBHEIF_VERSION} already installed (cached)"
 else
   echo "Building libheif ${LIBHEIF_VERSION} from source..."
@@ -170,20 +186,6 @@ fi
 
 sudo ldconfig
 
-# Fail loudly: what this seeds is exactly what the next run's cache-restore step copies back,
-# so a silently dropped file here poisons every later job with a half-populated cache. The
-# copies below were `2>/dev/null || true` and could not be distinguished from success. ~keep
-if [ -n "${GITHUB_ACTION:-}" ]; then
-  mkdir -p /tmp/libheif-cache/usr/local/lib/pkgconfig
-  mkdir -p /tmp/libheif-cache/usr/local/include
-  mkdir -p /tmp/libheif-cache/usr/local/share
-  cp -a /usr/local/lib/libheif* /tmp/libheif-cache/usr/local/lib/
-  cp -a /usr/local/lib/pkgconfig/libheif.pc /tmp/libheif-cache/usr/local/lib/pkgconfig/
-  [ -d /usr/local/include/libheif ] && cp -a /usr/local/include/libheif /tmp/libheif-cache/usr/local/include/
-  # libheif 1.19.x installs no share/libheif; newer releases do. Genuinely optional. ~keep
-  [ -d /usr/local/share/libheif ] && cp -a /usr/local/share/libheif /tmp/libheif-cache/usr/local/share/
-fi
-
 # Assert what pkg-config will actually report to libheif-sys's build script. Without this the
 # only symptom of a version/ordering mistake is `Package 'libheif' has version 'x', required
 # version is '>= y'` thrown from a cargo build script hundreds of lines later. ~keep
@@ -200,6 +202,25 @@ if ! PKG_CONFIG_PATH="$LIBHEIF_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}" \
   exit 1
 fi
 echo "✓ pkg-config resolves libheif ${resolved_libheif_version}"
+
+if ! libheif_runtime_links; then
+  echo "::error::The selected libheif failed the runtime dependency check after installation."
+  exit 1
+fi
+
+# Fail loudly: what this seeds is exactly what the next run's cache-restore step copies back,
+# so a silently dropped file here poisons every later job with a half-populated cache. The
+# copies below were `2>/dev/null || true` and could not be distinguished from success. ~keep
+if [ -n "${GITHUB_ACTION:-}" ]; then
+  mkdir -p /tmp/libheif-cache/usr/local/lib/pkgconfig
+  mkdir -p /tmp/libheif-cache/usr/local/include
+  mkdir -p /tmp/libheif-cache/usr/local/share
+  cp -a /usr/local/lib/libheif* /tmp/libheif-cache/usr/local/lib/
+  cp -a /usr/local/lib/pkgconfig/libheif.pc /tmp/libheif-cache/usr/local/lib/pkgconfig/
+  [ -d /usr/local/include/libheif ] && cp -a /usr/local/include/libheif /tmp/libheif-cache/usr/local/include/
+  # libheif 1.19.x installs no share/libheif; newer releases do. Genuinely optional. ~keep
+  [ -d /usr/local/share/libheif ] && cp -a /usr/local/share/libheif /tmp/libheif-cache/usr/local/share/
+fi
 
 echo ""
 echo "libheif symbol verification:"
