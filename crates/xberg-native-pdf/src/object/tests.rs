@@ -768,3 +768,24 @@ fn test_object_text_string_empty() {
         _ => panic!("expected String"),
     }
 }
+
+#[test]
+fn generic_stream_keeps_legacy_predictor_placement() {
+    let params = Object::Dictionary(HashMap::from([("Predictor".into(), Object::Integer(15))]));
+    let object = Object::Stream {
+        dict: HashMap::from([
+            (
+                "Filter".into(),
+                Object::Array(vec![
+                    Object::Name("ASCIIHexDecode".into()),
+                    Object::Name("RunLengthDecode".into()),
+                ]),
+            ),
+            ("DecodeParms".into(), Object::Array(vec![Object::Null, params])),
+        ]),
+        data: bytes::Bytes::from_static(b"01004180>"),
+    };
+
+    assert_eq!(object.decode_stream_data().unwrap(), b"A");
+    assert_eq!(object.decode_image_stream_data(None).unwrap(), b"\0A");
+}

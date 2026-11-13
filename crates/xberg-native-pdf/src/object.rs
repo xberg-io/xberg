@@ -199,8 +199,8 @@ impl Object {
         self.decode_stream_data_with_decryption(None, 0, 0)
     }
 
-    pub(crate) fn decode_image_stream_data(&self, expected_filter_output_size: usize) -> Result<Vec<u8>> {
-        self.decode_stream_data_with_decryption_and_expected_size(None, 0, 0, Some(expected_filter_output_size))
+    pub(crate) fn decode_image_stream_data(&self, expected_filter_output_size: Option<usize>) -> Result<Vec<u8>> {
+        self.decode_stream_data_with_decryption_and_expected_size(None, 0, 0, expected_filter_output_size, true)
     }
 
     /// Decode stream data with optional decryption.
@@ -223,7 +223,7 @@ impl Object {
         obj_num: u32,
         gen_num: u32,
     ) -> Result<Vec<u8>> {
-        self.decode_stream_data_with_decryption_and_expected_size(decryption_fn, obj_num, gen_num, None)
+        self.decode_stream_data_with_decryption_and_expected_size(decryption_fn, obj_num, gen_num, None, false)
     }
 
     pub(crate) fn decode_stream_data_with_decryption_and_expected_size(
@@ -232,6 +232,7 @@ impl Object {
         obj_num: u32,
         gen_num: u32,
         expected_filter_output_size: Option<usize>,
+        image_stream: bool,
     ) -> Result<Vec<u8>> {
         match self {
             Object::Stream { dict, data } => {
@@ -248,6 +249,16 @@ impl Object {
                 } else {
                     // Get decode parameters if present
                     // PDF Spec: ISO 32000-1:2008, Section 7.4.2 - DecodeParms ~keep
+                    if image_stream
+                        && let Some(predictors) = filter_predictor_params(dict.get("Filter"), dict.get("DecodeParms"))
+                    {
+                        return crate::decoders::decode_stream_with_filter_predictors(
+                            &decrypted_data,
+                            &filters,
+                            &predictors,
+                            expected_filter_output_size,
+                        );
+                    }
                     let decode_params = extract_decode_params(dict.get("DecodeParms"));
 
                     if let Some(expected_size) = expected_filter_output_size {
@@ -347,6 +358,34 @@ fn extract_filter_names(filter_obj: &Object) -> Vec<String> {
     }
 }
 
+pub(crate) fn filter_predictor_params(
+    filters: Option<&Object>,
+    params: Option<&Object>,
+) -> Option<Vec<Option<crate::decoders::DecodeParams>>> {
+    let (Object::Array(filters), Object::Array(params)) = (filters?, params?) else {
+        return None;
+    };
+    if filters.iter().any(|filter| filter.as_name().is_none()) {
+        return None;
+    }
+    Some(
+        filters
+            .iter()
+            .enumerate()
+            .map(|(index, filter)| {
+                let name = filter.as_name()?;
+                if !crate::decoders::supports_filter_predictor(name) {
+                    return None;
+                }
+                let Object::Dictionary(dict) = params.get(index)? else {
+                    return None;
+                };
+                Some(parse_predictor_params(dict))
+            })
+            .collect(),
+    )
+}
+
 /// Extract decode parameters from a DecodeParms object.
 ///
 /// PDF Spec: ISO 32000-1:2008, Section 7.4.2 - LZWDecode and FlateDecode Parameters
@@ -364,6 +403,10 @@ pub(crate) fn extract_decode_params(params_obj: Option<&Object>) -> Option<crate
         _ => return None,
     };
 
+    Some(parse_predictor_params(dict))
+}
+
+fn parse_predictor_params(dict: &std::collections::HashMap<String, Object>) -> crate::decoders::DecodeParams {
     // Extract predictor parameters per PDF Spec Table 3.7 ~keep
     let predictor = dict.get("Predictor").and_then(|obj| obj.as_integer()).unwrap_or(1); // Default: no prediction ~keep
 
@@ -376,12 +419,12 @@ pub(crate) fn extract_decode_params(params_obj: Option<&Object>) -> Option<crate
         .and_then(|obj| obj.as_integer())
         .unwrap_or(8) as usize;
 
-    Some(crate::decoders::DecodeParams {
+    crate::decoders::DecodeParams {
         predictor,
         columns,
         colors,
         bits_per_component,
-    })
+    }
 }
 
 /// Extract CCITT-specific decode parameters from a DecodeParms object.

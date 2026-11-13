@@ -452,16 +452,16 @@ impl PdfDocument {
     ///
     /// ISO 32000-1:2008, Section 7.6.2 - Streams must be decrypted BEFORE applying filters.
     pub(crate) fn decode_stream_with_encryption(&self, stream_obj: &Object, obj_ref: ObjectRef) -> Result<Vec<u8>> {
-        self.decode_stream_with_encryption_and_expected_size(stream_obj, obj_ref, None)
+        self.decode_stream_with_encryption_and_expected_size(stream_obj, obj_ref, None, false)
     }
 
     pub(crate) fn decode_image_stream_with_encryption(
         &self,
         stream_obj: &Object,
         obj_ref: ObjectRef,
-        expected_filter_output_size: usize,
+        expected_filter_output_size: Option<usize>,
     ) -> Result<Vec<u8>> {
-        self.decode_stream_with_encryption_and_expected_size(stream_obj, obj_ref, Some(expected_filter_output_size))
+        self.decode_stream_with_encryption_and_expected_size(stream_obj, obj_ref, expected_filter_output_size, true)
     }
 
     fn decode_stream_with_encryption_and_expected_size(
@@ -469,6 +469,7 @@ impl PdfDocument {
         stream_obj: &Object,
         obj_ref: ObjectRef,
         expected_filter_output_size: Option<usize>,
+        image_stream: bool,
     ) -> Result<Vec<u8>> {
         if matches!(stream_obj, Object::Null) {
             return Ok(Vec::new());
@@ -488,29 +489,25 @@ impl PdfDocument {
         };
 
         let handler_ref = self.encryption_handler.lock_or_recover();
-        if let Some(handler) = handler_ref.as_ref() {
-            if is_unencrypted_stream_type {
-                drop(handler_ref);
-                return match expected_filter_output_size {
-                    Some(expected_size) => stream_obj.decode_image_stream_data(expected_size),
-                    None => stream_obj.decode_stream_data(),
-                };
-            }
+        if let Some(handler) = handler_ref.as_ref()
+            && !is_unencrypted_stream_type
+        {
             let decrypt_fn = |data: &[u8]| -> Result<Vec<u8>> {
                 handler.decrypt_stream(data, obj_ref.id, obj_ref.generation as u32)
             };
-            stream_obj.decode_stream_data_with_decryption_and_expected_size(
+            return stream_obj.decode_stream_data_with_decryption_and_expected_size(
                 Some(&decrypt_fn),
                 obj_ref.id,
                 obj_ref.generation as u32,
                 expected_filter_output_size,
-            )
+                image_stream,
+            );
+        }
+        drop(handler_ref);
+        if image_stream {
+            stream_obj.decode_image_stream_data(expected_filter_output_size)
         } else {
-            drop(handler_ref);
-            match expected_filter_output_size {
-                Some(expected_size) => stream_obj.decode_image_stream_data(expected_size),
-                None => stream_obj.decode_stream_data(),
-            }
+            stream_obj.decode_stream_data()
         }
     }
 

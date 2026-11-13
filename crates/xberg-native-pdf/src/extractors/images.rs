@@ -999,7 +999,12 @@ fn expected_image_filter_output_size(
         .checked_mul(height as usize)
         .ok_or_else(|| Error::Decode("image raster byte count overflow".to_string()))?;
 
-    let Some(params) = crate::object::extract_decode_params(dict.get("DecodeParms")) else {
+    let predictors = crate::object::filter_predictor_params(dict.get("Filter"), dict.get("DecodeParms"));
+    let final_predictor = match &predictors {
+        Some(stages) => stages.last().and_then(Option::as_ref).cloned(),
+        None => crate::object::extract_decode_params(dict.get("DecodeParms")),
+    };
+    let Some(params) = final_predictor else {
         return Ok(Some(raster_bytes));
     };
     if params.predictor == 1 {
@@ -1016,19 +1021,50 @@ fn expected_image_filter_output_size(
     Ok(Some(encoded_bytes))
 }
 
+fn resolve_image_decode_parms(
+    doc: Option<&crate::document::PdfDocument>,
+    xobject: &crate::object::Object,
+) -> Result<Option<crate::object::Object>> {
+    use crate::object::Object;
+
+    let (Some(doc), Object::Stream { dict, data }) = (doc, xobject) else {
+        return Ok(None);
+    };
+    let Some(params) = dict.get("DecodeParms") else {
+        return Ok(None);
+    };
+    let resolve = |value: &Object| {
+        doc.resolve_object(value)
+            .map_err(|error| Error::Image(format!("Unable to resolve image /DecodeParms: {error}")))
+    };
+    let resolved = match params {
+        Object::Reference(_) => resolve(params)?,
+        Object::Array(values) if values.iter().any(|value| value.as_reference().is_some()) => params.clone(),
+        _ => return Ok(None),
+    };
+    let resolved = match resolved {
+        Object::Array(values) => Object::Array(values.iter().map(resolve).collect::<Result<Vec<_>>>()?),
+        value => value,
+    };
+    let mut dict = dict.clone();
+    dict.insert("DecodeParms".into(), resolved);
+    Ok(Some(Object::Stream {
+        dict,
+        data: data.clone(),
+    }))
+}
+
 fn decode_dimension_bounded_image_stream(
     doc: Option<&crate::document::PdfDocument>,
     xobject: &crate::object::Object,
     obj_ref: Option<ObjectRef>,
     expected_filter_output_size: Option<usize>,
 ) -> Result<Vec<u8>> {
-    match (doc, obj_ref, expected_filter_output_size) {
-        (Some(document), Some(reference), Some(expected_size)) => {
-            document.decode_image_stream_with_encryption(xobject, reference, expected_size)
+    match (doc, obj_ref) {
+        (Some(document), Some(reference)) => {
+            document.decode_image_stream_with_encryption(xobject, reference, expected_filter_output_size)
         }
-        (Some(document), Some(reference), None) => document.decode_stream_with_encryption(xobject, reference),
-        (_, _, Some(expected_size)) => xobject.decode_image_stream_data(expected_size),
-        (_, _, None) => xobject.decode_stream_data(),
+        _ => xobject.decode_image_stream_data(expected_filter_output_size),
     }
 }
 
@@ -1536,7 +1572,16 @@ pub fn extract_image_from_xobject(
             }
             jpx_data
         }
-    } else if is_jpeg_only || is_jpeg_chain {
+    } else if is_jpeg_chain {
+        let resolved = resolve_image_decode_parms(doc, xobject)?;
+        let decode_object = resolved.as_ref().unwrap_or(xobject);
+        ImageData::Jpeg(decode_dimension_bounded_image_stream(
+            doc,
+            decode_object,
+            obj_ref,
+            None,
+        )?)
+    } else if is_jpeg_only {
         let decoded = if let (Some(d), Some(ref_id)) = (doc.as_ref(), obj_ref) {
             d.decode_stream_with_encryption(xobject, ref_id)?
         } else {
@@ -1568,9 +1613,22 @@ pub fn extract_image_from_xobject(
             format: PixelFormat::Grayscale,
         }
     } else {
-        let expected_filter_output_size =
-            expected_image_filter_output_size(dict, width, height, color_space.components(), bits_per_component)?;
-        let decoded_data = decode_dimension_bounded_image_stream(doc, xobject, obj_ref, expected_filter_output_size)?;
+        let resolved = if bits_per_component == 8 && color_space.components() == 3 {
+            resolve_image_decode_parms(doc, xobject)?
+        } else {
+            None
+        };
+        let decode_object = resolved.as_ref().unwrap_or(xobject);
+        let decode_dict = decode_object.as_dict().unwrap_or(dict);
+        let expected_filter_output_size = expected_image_filter_output_size(
+            decode_dict,
+            width,
+            height,
+            color_space.components(),
+            bits_per_component,
+        )?;
+        let decoded_data =
+            decode_dimension_bounded_image_stream(doc, decode_object, obj_ref, expected_filter_output_size)?;
         if let Some(ir) = indexed_resolution.as_ref() {
             let expanded =
                 expand_indexed_image(&decoded_data, ir, width, height, bits_per_component, rendering_intent)?;

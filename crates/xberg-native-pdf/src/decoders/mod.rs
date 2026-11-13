@@ -264,13 +264,22 @@ pub fn decode_stream_with_options(
     params: Option<&DecodeParams>,
     options: Option<&ParserOptions>,
 ) -> Result<Vec<u8>> {
-    decode_stream_with_options_and_expected_size(data, filters, params, options, None)
+    decode_stream_with_options_and_expected_size(data, filters, PredictorPlacement::AfterFilters(params), options, None)
+}
+
+enum PredictorPlacement<'a> {
+    AfterFilters(Option<&'a DecodeParams>),
+    PerFilter(&'a [Option<DecodeParams>]),
+}
+
+pub(crate) fn supports_filter_predictor(filter: &str) -> bool {
+    matches!(normalize_filter_name(filter), Ok("FlateDecode" | "LZWDecode"))
 }
 
 fn decode_stream_with_options_and_expected_size(
     data: &[u8],
     filters: &[String],
-    params: Option<&DecodeParams>,
+    predictors: PredictorPlacement<'_>,
     options: Option<&ParserOptions>,
     expected_filter_output_size: Option<usize>,
 ) -> Result<Vec<u8>> {
@@ -319,9 +328,15 @@ fn decode_stream_with_options_and_expected_size(
                 max_size
             )));
         }
+        if let PredictorPlacement::PerFilter(stages) = predictors
+            && let Some(Some(params)) = stages.get(filter_index)
+            && params.predictor != 1
+        {
+            current = decode_predictor(&current, params)?;
+        }
     }
 
-    if let Some(params) = params
+    if let PredictorPlacement::AfterFilters(Some(params)) = predictors
         && params.predictor != 1
     {
         current = decode_predictor(&current, params)?;
@@ -367,7 +382,28 @@ pub(crate) fn decode_stream_with_params_and_expected_size(
     params: Option<&DecodeParams>,
     expected_filter_output_size: usize,
 ) -> Result<Vec<u8>> {
-    decode_stream_with_options_and_expected_size(data, filters, params, None, Some(expected_filter_output_size))
+    decode_stream_with_options_and_expected_size(
+        data,
+        filters,
+        PredictorPlacement::AfterFilters(params),
+        None,
+        Some(expected_filter_output_size),
+    )
+}
+
+pub(crate) fn decode_stream_with_filter_predictors(
+    data: &[u8],
+    filters: &[String],
+    predictors: &[Option<DecodeParams>],
+    expected_filter_output_size: Option<usize>,
+) -> Result<Vec<u8>> {
+    decode_stream_with_options_and_expected_size(
+        data,
+        filters,
+        PredictorPlacement::PerFilter(predictors),
+        None,
+        expected_filter_output_size,
+    )
 }
 
 #[cfg(test)]
