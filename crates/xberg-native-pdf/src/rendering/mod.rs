@@ -429,26 +429,8 @@ pub fn render_text_ink_rasters(
     max_working_bytes: usize,
     cancelled: impl Fn() -> bool,
 ) -> Result<Option<TextInkRasters>> {
-    let render = |without_glyphs: bool| -> Result<(u32, u32, Vec<u8>)> {
-        let budget = page_renderer::PngRenderBudget {
-            max_working_bytes,
-            minimum_dpi: dpi,
-        };
-        let _scope = crate::extractors::recovery_tally::RecoveryScope::enter(doc.recovery_counts());
-        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(dpi).as_raw());
-        if without_glyphs {
-            renderer = renderer.without_text_ink();
-        }
-        let (image, _) = renderer.render_page_with_budget(page_num, doc, Some(budget))?;
-        let luminance = image
-            .data
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .map(text_contrast_probe::luminance)
-            .collect();
-        Ok((image.width, image.height, luminance))
-    };
+    let render =
+        |without_glyphs: bool| render_luminance(doc, page_num, dpi, max_working_bytes, (!without_glyphs, true));
     if cancelled() {
         return Ok(None);
     }
@@ -468,6 +450,60 @@ pub fn render_text_ink_rasters(
         drawn,
         without_glyphs,
     }))
+}
+
+/// Internal Core bridge: the row-major luminance of a page rendered with every image left unpainted,
+/// so its text and vector art stand on blank paper. Returns the width, the height and the pixels.
+#[doc(hidden)]
+pub fn render_page_without_images(
+    doc: &crate::document::PdfDocument,
+    page_num: usize,
+    dpi: u32,
+    max_working_bytes: usize,
+) -> Result<(u32, u32, Vec<u8>)> {
+    render_luminance(doc, page_num, dpi, max_working_bytes, (true, false))
+}
+
+/// Internal Core bridge for reading a scanned picture without its native glyphs. ~keep
+#[doc(hidden)]
+pub fn render_page_without_glyphs(
+    doc: &crate::document::PdfDocument,
+    page_num: usize,
+    dpi: u32,
+    max_working_bytes: usize,
+) -> Result<(u32, u32, Vec<u8>)> {
+    render_luminance(doc, page_num, dpi, max_working_bytes, (false, true))
+}
+
+/// One raw render of a page reduced to luminance; `(glyphs, images)` says which of the two to paint.
+fn render_luminance(
+    doc: &crate::document::PdfDocument,
+    page_num: usize,
+    dpi: u32,
+    max_working_bytes: usize,
+    (glyphs, images): (bool, bool),
+) -> Result<(u32, u32, Vec<u8>)> {
+    let budget = page_renderer::PngRenderBudget {
+        max_working_bytes,
+        minimum_dpi: dpi,
+    };
+    let _scope = crate::extractors::recovery_tally::RecoveryScope::enter(doc.recovery_counts());
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(dpi).as_raw());
+    if !glyphs {
+        renderer = renderer.without_text_ink();
+    }
+    if !images {
+        renderer = renderer.without_images();
+    }
+    let (image, _) = renderer.render_page_with_budget(page_num, doc, Some(budget))?;
+    let luminance = image
+        .data
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(text_contrast_probe::luminance)
+        .collect();
+    Ok((image.width, image.height, luminance))
 }
 
 /// Check for actual pixel contrast in each glyph region of an audited literal text show.

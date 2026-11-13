@@ -112,8 +112,10 @@ impl<'doc> TextExtractor<'doc> {
     }
 
     /// Emit a span, unless the current state suppresses it.
-    pub(super) fn push_span(&mut self, span: TextSpan) {
-        if let Some(hold) = self.emit_hold() {
+    pub(super) fn push_span(&mut self, span: TextSpan, render_mode: u8) {
+        if (!self.skip_nonpainting_text || !matches!(render_mode, 3 | 7))
+            && let Some(hold) = self.emit_hold()
+        {
             push_held(&mut self.spans, &mut self.span_holds, span, hold);
         }
     }

@@ -4385,6 +4385,33 @@ pub(crate) async fn extract_with_ocr_with_page_hints_and_evidence(
     .map(|(output, discarded_visible_native_page, _)| (output, discarded_visible_native_page))
 }
 
+/// One read of a raster the caller rendered, through the page route with `config`: the page text
+/// and its confidence, when the backend reports one.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(in crate::extractors::pdf) async fn read_rendered_page(
+    image: image::DynamicImage,
+    config: &ExtractionConfig,
+) -> crate::Result<(String, Option<crate::types::page::PageOcrConfidence>)> {
+    let images = [image];
+    let run = Box::pin(extract_with_ocr_for_page(
+        None,
+        Some(&images),
+        #[cfg(feature = "layout-detection")]
+        None,
+        config,
+        None,
+        0,
+        false,
+        None,
+        None,
+        0,
+        None,
+    ))
+    .await
+    .map_err(|failed| failed.error)?;
+    Ok((run.0, run.11.get(&1).cloned()))
+}
+
 /// [`extract_with_ocr_with_page_hints_and_evidence`] plus the page text as it was before
 /// symbol-noise pruning, when a page was pruned, for callers that score the read (#2312).
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]

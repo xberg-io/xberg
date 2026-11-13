@@ -334,6 +334,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(pdf): A scanned PDF page's tables on the layout-detection route are reported in page points.** (GH#3078)
   Backend and detected tables use page points when layout OCR uses a whole-page raster aligned with the MediaBox. Standalone image tables stay in pixels.
 
+- **(pdf): Keep a Khmer text layer printed over a full-page picture.** (GH#2826)
+  Automatic OCR in a language that cannot read the layer's script now keeps the layer when it is drawn visibly over a
+  background picture, as on a flyer. A layer that leaves no ink on the page, such as an invisible, white or clipped
+  layer, or one under the picture, still goes to OCR. To catch a layer whose font maps English letters to another
+  script, the page is read once with the English OCR model, which is downloaded on first use when it is not installed.
+  If that read fails, the page still goes to OCR. On a retained overlay, a confident read of the picture adds raster-only
+  text beside the native text and leaves out nonpainting sidecar text.
+
 - **(ocr): Preserve failed-page warnings when the PDF time limit skips embedded-image OCR retries.** (GH#3102)
   Partial results retain available native text and bypass the file cache. If every requested OCR page fails, extraction returns the time-limit error.
 

@@ -3003,7 +3003,7 @@ pub(super) fn accepted_ocr_page_replacements(
         .collect()
 }
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(super) fn apply_ocr_page_replacements(
+pub(in crate::extractors::pdf) fn apply_ocr_page_replacements(
     native_text: &str,
     boundaries: &[crate::types::PageBoundary],
     accepted: &ahash::AHashMap<u32, String>,
@@ -3448,7 +3448,7 @@ pub(super) fn rebuild_planned_elements(
     (rebuilt, old_to_new, planned_to_new)
 }
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(super) fn remap_relationships(
+pub(in crate::extractors::pdf) fn remap_relationships(
     relationships: &mut Vec<crate::types::internal::Relationship>,
     old_to_new: &[Option<u32>],
     rebuilt: &[crate::types::internal::InternalElement],

@@ -6,9 +6,11 @@
 
 mod helpers;
 
+use helpers::pdf_picture::{PicturePlacement, padded_past, with_full_page_picture};
+
 use xberg::core::config::{OcrStrategy, PageConfig};
 use xberg::types::{ExtractedDocument, ExtractionMethod};
-use xberg::{ExtractionConfig, OcrConfig, OutputFormat};
+use xberg::{ExtractionConfig, OcrConfig, OutputFormat, SecurityLimits};
 
 const ARABIC: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/arabic.pdf");
 const BENGALI: &[u8] = include_bytes!("fixtures/pdf/wrong-script-tounicode-2830/bengali.pdf");
@@ -27,8 +29,8 @@ const PHRASES: [&str; 3] = [
     "architect said that building work",
 ];
 
-fn extract(source: &[u8], models: &std::path::Path) -> ExtractedDocument {
-    let config = ExtractionConfig {
+fn config(models: &std::path::Path) -> ExtractionConfig {
+    ExtractionConfig {
         use_cache: false,
         output_format: OutputFormat::Plain,
         pages: Some(PageConfig {
@@ -41,8 +43,11 @@ fn extract(source: &[u8], models: &std::path::Path) -> ExtractedDocument {
         }),
         ocr_strategy: OcrStrategy::Auto,
         ..Default::default()
-    };
-    helpers::extract_bytes_document_blocking(source, "application/pdf", &config).unwrap()
+    }
+}
+
+fn extract(source: &[u8], models: &std::path::Path) -> ExtractedDocument {
+    helpers::extract_bytes_document_blocking(source, "application/pdf", &config(models)).unwrap()
 }
 
 fn skipped(result: &ExtractedDocument) -> bool {
@@ -214,4 +219,120 @@ fn a_document_of_wrong_script_pages_is_read_whole() {
         }
     }
     assert!(!skipped(&result), "{:?}", result.processing_warnings);
+}
+
+/// #2826: on a light picture and on a dark, blocky one that turns a read of the whole page into
+/// noise, the layer's ink is read without the picture and contradicts the layer, so OCR replaces
+/// it. Only the light picture leaves the page's own OCR read clean enough to hold the phrases.
+#[test]
+fn a_wrong_mapped_layer_drawn_over_a_full_page_picture_is_still_read_by_ocr() {
+    let models = models();
+    for placement in [PicturePlacement::Background, PicturePlacement::TexturedBackground] {
+        let result = extract(&with_full_page_picture(ARABIC, placement), models.path());
+        assert!(!skipped(&result), "{placement:?}: {:?}", result.processing_warnings);
+        assert_ne!(
+            result.extraction_method,
+            Some(ExtractionMethod::Native),
+            "{placement:?}"
+        );
+        assert_eq!(arabic_letters(&result.content), 0, "{placement:?}");
+        if matches!(placement, PicturePlacement::Background) {
+            for phrase in PHRASES {
+                assert!(
+                    result.content.contains(phrase),
+                    "missing {phrase:?} in {:?}",
+                    result.content
+                );
+            }
+        }
+    }
+}
+
+/// #2826: the layer over a picture is read without the picture whatever the document's size. Only
+/// the page-route read of the other pages stops at the OCR preview size limit, so a wrong map over
+/// a picture in a file larger than that limit still goes to OCR, as it does at base.
+#[test]
+fn a_wrong_mapped_layer_over_a_picture_in_a_file_over_the_preview_size_limit_is_still_read_by_ocr() {
+    const LIMIT: usize = 40 << 20;
+    let models = models();
+    let source = padded_past(&with_full_page_picture(ARABIC, PicturePlacement::Background), LIMIT);
+    assert!(source.len() > LIMIT, "{} bytes", source.len());
+    let config = ExtractionConfig {
+        security_limits: Some(SecurityLimits {
+            max_content_size: LIMIT,
+            ..Default::default()
+        }),
+        ..config(models.path())
+    };
+    let result = helpers::extract_bytes_document_blocking(&source, "application/pdf", &config).unwrap();
+    assert!(!skipped(&result), "{:?}", result.processing_warnings);
+    assert_ne!(result.extraction_method, Some(ExtractionMethod::Native));
+    assert_eq!(arabic_letters(&result.content), 0, "{:?}", result.content);
+    for phrase in PHRASES {
+        assert!(
+            result.content.contains(phrase),
+            "missing {phrase:?} in {:?}",
+            result.content
+        );
+    }
+}
+
+#[test]
+fn a_genuine_arabic_layer_drawn_over_a_full_page_picture_stays_native() {
+    let models = models();
+    let result = extract(
+        &with_full_page_picture(GENUINE_ARABIC, PicturePlacement::Background),
+        models.path(),
+    );
+    assert!(skipped(&result), "{:?}", result.processing_warnings);
+    assert_eq!(result.extraction_method, Some(ExtractionMethod::Native));
+    assert!(arabic_letters(&result.content) > 100, "{:?}", result.content);
+}
+
+/// The English model and the installed Khmer model, or `None` when Khmer is not installed.
+fn english_and_khmer_models() -> Option<tempfile::TempDir> {
+    let khm = std::env::var_os("TESSDATA_PREFIX")
+        .map(std::path::PathBuf::from)
+        .into_iter()
+        .chain(
+            [
+                "/opt/homebrew/share/tessdata",
+                "/usr/share/tesseract-ocr/5/tessdata",
+                "/usr/share/tessdata",
+            ]
+            .map(Into::into),
+        )
+        .map(|dir| dir.join("khm.traineddata"))
+        .find(|path| path.is_file())?;
+    let models = models();
+    std::fs::copy(khm, models.path().join("khm.traineddata")).unwrap();
+    Some(models)
+}
+
+/// #2826: with only Khmer configured, the layer's ink is still read with the English model, which
+/// contradicts the wrong map, so the page over its picture goes to OCR as at base.
+#[test]
+#[ignore = "needs khm.traineddata in TESSDATA_PREFIX or a system tessdata directory"]
+#[allow(clippy::print_stderr)]
+fn a_wrong_mapped_layer_over_a_picture_goes_to_ocr_with_only_khmer_configured() {
+    let Some(models) = english_and_khmer_models() else {
+        eprintln!("skipped: khm.traineddata is not installed");
+        return;
+    };
+    let config = ExtractionConfig {
+        use_cache: false,
+        output_format: OutputFormat::Plain,
+        ocr: Some(OcrConfig {
+            language: vec!["khm".to_string()],
+            tessdata_path: Some(models.path().into()),
+            ..Default::default()
+        }),
+        ocr_strategy: OcrStrategy::Auto,
+        ..Default::default()
+    };
+    let source = with_full_page_picture(ARABIC, PicturePlacement::Background);
+    let result = helpers::extract_bytes_document_blocking(&source, "application/pdf", &config).unwrap();
+    assert!(!skipped(&result), "{:?}", result.processing_warnings);
+    assert_ne!(result.extraction_method, Some(ExtractionMethod::Native));
+    assert_eq!(arabic_letters(&result.content), 0, "{:?}", result.content);
 }

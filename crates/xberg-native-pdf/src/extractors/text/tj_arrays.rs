@@ -109,7 +109,7 @@ impl<'doc> TextExtractor<'doc> {
         };
         self.span_sequence_counter += 1;
 
-        self.push_span(span);
+        self.push_span(span, buffer.render_mode);
         Ok(())
     }
 

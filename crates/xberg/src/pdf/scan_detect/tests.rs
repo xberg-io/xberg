@@ -894,3 +894,181 @@ fn carries_scan_raster_reads_raster_coverage_only() {
     let blank = PdfDocument::from_bytes(crate::pdf::render::build_minimal_pdf_with_mediabox(100.0, 100.0)).unwrap();
     assert!(!carries_scan_raster(&blank, 0), "a page without images carries no scan");
 }
+
+/// The raster fixture's page (100 pt square, one 40 px image `/Im0`, font `/F1`) with `content`.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn raster_page_with_content(content: &str) -> PdfDocument {
+    raster_page_with_forms(content, &[])
+}
+
+/// One form XObject of [`raster_page_with_forms`]: its name, `/Matrix` and content.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+type FormSpec<'a> = (&'a str, [f32; 6], &'a str);
+
+/// [`raster_page_with_content`], plus form XObjects that use the page's resources.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn raster_page_with_forms(content: &str, forms: &[FormSpec]) -> PdfDocument {
+    use lopdf::dictionary;
+
+    let mut source = lopdf::Document::load_mem(&crate::pdf::render::build_full_page_raster_pdf(
+        (100.0, 100.0),
+        (40, 40),
+        1.0,
+        0,
+    ))
+    .expect("load raster fixture");
+    let page_id = *source.get_pages().get(&1).expect("fixture has one page");
+    for (name, matrix, form_content) in forms {
+        let form = source.add_object(lopdf::Stream::new(
+            dictionary! {
+                "Type" => "XObject",
+                "Subtype" => "Form",
+                "BBox" => vec![0.into(), 0.into(), 100.into(), 100.into()],
+                "Matrix" => matrix.iter().map(|value| (*value).into()).collect::<Vec<lopdf::Object>>(),
+            },
+            form_content.as_bytes().to_vec(),
+        ));
+        source.add_xobject(page_id, *name, form).expect("add form");
+    }
+    source
+        .change_page_content(page_id, content.as_bytes().to_vec())
+        .expect("replace page content");
+    let mut bytes = Vec::new();
+    source.save_to(&mut bytes).expect("serialize fixture");
+    PdfDocument::from_bytes(bytes).expect("open fixture")
+}
+
+/// #2826: text drawn visibly after a picture that covers the page is over it; text under the
+/// picture, invisible text, text beside a smaller picture and text a later picture covers are not.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+fn text_is_drawn_over_a_full_page_picture_only_when_painted_visibly_after_it() {
+    let picture = "q 100 0 0 100 0 0 cm /Im0 Do Q\n";
+    let small_picture = "q 100 0 0 70 0 0 cm /Im0 Do Q\n";
+    let inline_picture = "q 100 0 0 100 0 0 cm BI /W 1 /H 1 /CS /G /BPC 8 ID \u{7f} EI Q\n";
+    let not_a_picture = "q 100 0 0 100 0 0 cm /Fm0 Do Q\n";
+    let text = "BT /F1 4 Tf 2 80 Td (Line of the native text) Tj ET\n";
+    let short = "BT /F1 4 Tf 2 70 Td (Short) Tj ET\n";
+    let cases = [
+        ("picture then text", format!("{picture}{text}"), true),
+        ("text then picture", format!("{text}{picture}"), false),
+        ("picture then invisible text", format!("{picture}3 Tr {text}"), false),
+        ("picture then clip-only text", format!("{picture}7 Tr {text}"), false),
+        ("invisible mode restored", format!("{picture}q 3 Tr Q {text}"), true),
+        ("picture under 80% of the page", format!("{small_picture}{text}"), false),
+        (
+            "most text under a second picture",
+            format!("{picture}{text}{picture}{short}"),
+            false,
+        ),
+        (
+            "most text over the last picture",
+            format!("{picture}{short}{picture}{text}"),
+            true,
+        ),
+        ("inline picture then text", format!("{inline_picture}{text}"), true),
+        ("a name that is not a picture", format!("{not_a_picture}{text}"), false),
+        ("no picture", text.to_string(), false),
+        (
+            "a long sidecar under a short visible stamp",
+            format!("{picture}q 3 Tr {text}{text}{text} Q {short}"),
+            true,
+        ),
+        ("only a sidecar", format!("{picture}3 Tr {text}"), false),
+    ];
+    for (name, content, over) in cases {
+        let doc = raster_page_with_content(&content);
+        assert_eq!(glyph_share_over_full_page_picture(&doc, 0).is_some(), over, "{name}");
+    }
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+fn the_share_over_a_full_page_picture_excludes_nonpainting_glyphs() {
+    let picture = "q 100 0 0 100 0 0 cm /Im0 Do Q\n";
+    let sidecar = "q 3 Tr BT /F1 4 Tf 2 80 Td (Line of the native text) Tj ET Q\n";
+    let stamp = "BT /F1 4 Tf 2 70 Td (Short) Tj ET\n";
+    let doc = raster_page_with_content(&format!("{picture}{}{stamp}", sidecar.repeat(128)));
+    assert_eq!(glyph_share_over_full_page_picture(&doc, 0), Some(1.0));
+    let alone = raster_page_with_content(&format!("{picture}{stamp}"));
+    assert_eq!(glyph_share_over_full_page_picture(&alone, 0), Some(1.0));
+}
+
+/// #2826: a picture and a text layer each drawn inside a form XObject, as a merged overlay is, are
+/// seen through the form, its matrix and its own graphics state.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+fn text_and_picture_inside_form_xobjects_are_seen_in_paint_order() {
+    let unit = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+    let half = [0.5, 0.0, 0.0, 0.5, 0.0, 0.0];
+    let picture = "q 100 0 0 100 0 0 cm /Im0 Do Q";
+    let text = "BT /F1 4 Tf 2 80 Td (Line of the native text) Tj ET";
+    let invisible = "3 Tr BT /F1 4 Tf 2 80 Td (Line of the native text) Tj ET";
+    let cases: [(&str, &str, Vec<FormSpec>, bool); 6] = [
+        (
+            "picture form then text form",
+            "/Fp Do /Ft Do",
+            vec![("Fp", unit, picture), ("Ft", unit, text)],
+            true,
+        ),
+        (
+            "text form then picture form",
+            "/Ft Do /Fp Do",
+            vec![("Fp", unit, picture), ("Ft", unit, text)],
+            false,
+        ),
+        (
+            "invisible text form",
+            "/Fp Do /Ft Do",
+            vec![("Fp", unit, picture), ("Ft", unit, invisible)],
+            false,
+        ),
+        (
+            "a form's render mode ends with it",
+            "/Fp Do /Fm Do BT /F1 4 Tf 2 80 Td (Line of the native text) Tj ET",
+            vec![("Fp", unit, picture), ("Fm", unit, "3 Tr")],
+            true,
+        ),
+        (
+            "a form matrix that shrinks the picture",
+            "/Fp Do /Ft Do",
+            vec![("Fp", half, picture), ("Ft", unit, text)],
+            false,
+        ),
+        (
+            "a form that paints itself",
+            "/Fp Do /Fr Do /Ft Do",
+            vec![("Fp", unit, picture), ("Fr", unit, "/Fr Do"), ("Ft", unit, text)],
+            true,
+        ),
+    ];
+    for (name, content, forms, over) in cases {
+        let doc = raster_page_with_forms(content, &forms);
+        assert_eq!(glyph_share_over_full_page_picture(&doc, 0).is_some(), over, "{name}");
+    }
+}
+
+/// #2826: a chain of forms that each paint the next one twice is walked 2^depth times. The walk
+/// stops at its operator budget and gives no verdict, so the page stays a scan.
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+fn a_form_chain_that_doubles_at_each_level_stops_the_walk_without_a_verdict() {
+    let unit = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+    let picture = "q 100 0 0 100 0 0 cm /Im0 Do Q";
+    let text = "BT /F1 4 Tf 2 80 Td (Line of the native text) Tj ET";
+    let depth = 22;
+    let names: Vec<String> = (0..=depth).map(|level| format!("F{level}")).collect();
+    let bodies: Vec<String> = (0..depth)
+        .map(|level| format!("/F{next} Do /F{next} Do", next = level + 1))
+        .chain([String::new()])
+        .collect();
+    let mut forms = vec![("Fp", unit, picture), ("Ft", unit, text)];
+    forms.extend(
+        names
+            .iter()
+            .zip(&bodies)
+            .map(|(name, body)| (name.as_str(), unit, body.as_str())),
+    );
+    let doc = raster_page_with_forms("/Fp Do /Ft Do /F0 Do", &forms);
+    assert_eq!(glyph_share_over_full_page_picture(&doc, 0), None);
+}
