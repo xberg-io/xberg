@@ -415,50 +415,13 @@ fn inherited_sibling_group_page() -> PdfDocument {
 
 #[test]
 fn a_group_can_invoke_a_sibling_through_inherited_resources() {
-    use crate::rendering::page_renderer::{SpotPlaneUse, spot_plane_use};
-
     let doc = inherited_sibling_group_page();
-    assert_eq!(
-        spot_plane_use(&doc, 0, &doc.get_page_resources(0).expect("resources")),
-        SpotPlaneUse {
-            groups: 3,
-            ..SpotPlaneUse::default()
-        }
-    );
     let limit = workspace_limit(4 * CANVAS + NORMAL_FILL);
     assert_eq!(
         budgeted_dpi(&doc, limit, BUDGET_REQUESTED_DPI),
         Some(BUDGET_REQUESTED_DPI)
     );
     assert!(budgeted_dpi(&doc, limit - 1, BUDGET_REQUESTED_DPI).is_none());
-}
-
-#[test]
-fn a_shared_form_resolves_names_in_each_inherited_scope() {
-    use crate::rendering::page_renderer::{SpotPlaneUse, spot_plane_use};
-
-    let outer = group_form_obj(5, "/XObject << /A 6 0 R /B 7 0 R >>", "/A Do /B Do");
-    let a = group_form_obj(6, "/XObject << /Bridge 8 0 R /G 9 0 R >>", "/Bridge Do");
-    let b = group_form_obj(7, "/XObject << /Bridge 8 0 R /G 10 0 R >>", "/Bridge Do");
-    let bridge = transparency_form(8, "", "/K true", "/G Do");
-    let knockout = transparency_form(9, "/Resources << >>", "/K true", "");
-    let nested = group_form_obj(10, "/XObject << /Inner 11 0 R >>", "/Inner Do");
-    let inner = group_form_obj(11, "", "");
-    let doc = build_page_with(
-        "/F Do",
-        SPOT_A,
-        "/BM /Multiply",
-        &[&outer, &a, &b, &bridge, &knockout, &nested, &inner],
-    );
-    // Each scope contributes a different maximum, regardless of which is scanned first. ~keep
-    assert_eq!(
-        spot_plane_use(&doc, 0, &doc.get_page_resources(0).expect("resources")),
-        SpotPlaneUse {
-            soft_mask: false,
-            groups: 5,
-            knockouts: 2,
-        }
-    );
 }
 
 fn soft_mask_in_group_page() -> PdfDocument {
@@ -537,32 +500,6 @@ fn the_page_renderer_lowers_dpi_for_the_transient_spot_plate_copy() {
         budgeted_dpi(&doc, one_ink_charge(BUDGET_MINIMUM_DPI, 1) - 1, BUDGET_MINIMUM_DPI),
         None,
         "under the peak charge even the minimum raster is refused, not lowered"
-    );
-}
-
-/// The scan names what a page's resources declare. Patterns and annotation appearance
-/// resources are not walked.
-#[test]
-fn the_page_scan_reports_the_widest_spot_plane_use() {
-    use crate::rendering::page_renderer::{SpotPlaneUse, spot_plane_use};
-    let scan = |doc: &PdfDocument| spot_plane_use(doc, 0, &doc.get_page_resources(0).expect("resources"));
-    let used = |soft_mask, groups, knockouts| SpotPlaneUse {
-        soft_mask,
-        groups,
-        knockouts,
-    };
-    assert_eq!(scan(&knockout_group_page()), used(false, 1, 1));
-    assert_eq!(scan(&soft_mask_page()), used(true, 0, 0));
-    let group = group_form("/I true", "0.5 g 0 0 20 20 re f");
-    let plain = build_page_with("/F Do", SPOT_A, "/BM /Normal", &[&group]);
-    assert_eq!(scan(&plain), used(false, 1, 0));
-    assert_eq!(scan(&nested_group_page()), used(false, 2, 0));
-    assert_eq!(scan(&soft_mask_in_group_page()), used(true, 2, 0));
-    assert_eq!(scan(&build_page("/BM /Multiply", &[])), used(false, 0, 0));
-    assert_eq!(
-        scan(&build_page("/SMask /None", &[])),
-        used(false, 0, 0),
-        "/SMask /None clears a mask"
     );
 }
 
@@ -831,8 +768,6 @@ fn a_soft_mask_inside_a_group_is_charged_its_workspaces() {
 
 #[test]
 fn groups_reachable_only_through_a_soft_mask_are_charged() {
-    use crate::rendering::page_renderer::{SpotPlaneUse, spot_plane_use};
-
     let mask = group_form_obj(5, "/XObject << /G 6 0 R >>", "/G Do");
     let inner = transparency_form(6, "/Resources << >>", "/K true", "0.4 g 0 0 100 100 re f");
     let doc = build_page_with(
@@ -840,15 +775,6 @@ fn groups_reachable_only_through_a_soft_mask_are_charged() {
         SPOT_A,
         "/SMask << /Type /Mask /S /Luminosity /G 5 0 R >>",
         &[&mask, &inner],
-    );
-    let resources = doc.get_page_resources(0).expect("resources");
-    assert_eq!(
-        spot_plane_use(&doc, 0, &resources),
-        SpotPlaneUse {
-            soft_mask: true,
-            groups: 2,
-            knockouts: 1,
-        }
     );
     let without_nested_groups = one_ink_charge(BUDGET_REQUESTED_DPI, 1);
     let dpi = budgeted_dpi(&doc, without_nested_groups, BUDGET_MINIMUM_DPI).expect("the reduced DPI renders");
@@ -968,6 +894,51 @@ fn increasing_workspace_preserves_masked_knockout_resolution() {
         assert!(
             large > small,
             "{case:?}: {large} dpi at higher budget vs {small} dpi at lower budget"
+        );
+    }
+}
+
+#[test]
+fn a_form_local_soft_mask_changes_strict_png_admission() {
+    let mask = transparency_form(6, "/Resources << >>", "/CS /DeviceGray", "0.4 g 0 0 100 100 re f");
+    for has_mask in [false, true] {
+        let state = if has_mask {
+            "<< /SMask << /S /Luminosity /G 6 0 R >> >>"
+        } else {
+            "<< /SMask /None >>"
+        };
+        let resources = format!("/Resources << /ExtGState << /Local {state} >> >>");
+        let form = transparency_form(5, &resources, "", "");
+        let doc = build_page_with(&format!("{CONTENT}\n% /F Do"), SPOT_A, "/BM /Multiply", &[&form, &mask]);
+        let limit = one_ink_charge(BUDGET_REQUESTED_DPI, 0);
+        assert_eq!(
+            budgeted_dpi(&doc, limit, BUDGET_REQUESTED_DPI),
+            (!has_mask).then_some(BUDGET_REQUESTED_DPI),
+            "the same paint fits unless a reachable form declares a soft mask"
+        );
+    }
+}
+
+#[test]
+fn exhausting_the_resource_scan_depth_requires_mask_headroom() {
+    for count in [63, 64] {
+        let forms: Vec<_> = (5..5 + count)
+            .map(|number| {
+                let resources = if number + 1 < 5 + count {
+                    format!("/Resources << /XObject << /Next {} 0 R >> >>", number + 1)
+                } else {
+                    "/Resources << >>".into()
+                };
+                transparency_form(number, &resources, "", "")
+            })
+            .collect();
+        let extras: Vec<_> = forms.iter().map(String::as_str).collect();
+        // Declare /F through the fixture helper while leaving it unpainted. ~keep
+        let doc = build_page_with(&format!("{CONTENT}\n% /F Do"), SPOT_A, "/BM /Multiply", &extras);
+        assert_eq!(
+            budgeted_dpi(&doc, one_ink_charge(BUDGET_REQUESTED_DPI, 0), BUDGET_REQUESTED_DPI),
+            (count == 63).then_some(BUDGET_REQUESTED_DPI),
+            "{count} resource levels"
         );
     }
 }

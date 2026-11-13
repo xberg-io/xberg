@@ -57,12 +57,12 @@ use super::text_rasterizer::TextRun;
 use group_process_text::GroupTextPaint;
 #[path = "raster_budget.rs"]
 mod raster_budget;
+pub(super) use raster_budget::PngRenderBudget;
 #[cfg(test)]
 use raster_budget::png_working_bytes_fit;
 #[cfg(test)]
 pub(super) use raster_budget::{PNG_FIXED_OVERHEAD, RGBA_AND_PNG_BYTES_PER_PIXEL};
-pub(super) use raster_budget::{PngRenderBudget, SpotPlaneUse, spot_plane_use};
-use raster_budget::{encode_png, fit_png_dpi, raster_dimensions, resize_rgba};
+use raster_budget::{declares_spot_soft_mask, encode_png, fit_png_dpi, raster_dimensions, resize_rgba};
 
 /// Which path-paint side(s) [`PageRenderer::pipeline_resolve_paint_gs`]
 /// should resolve for the current operator.
@@ -634,12 +634,9 @@ impl PageRenderer {
                 // Top-level mask snapshots can be outside a reservation scope. Keep their
                 // preflight allowance for ink pages. Group and paint workspace is checked
                 // by the live reservations before allocation, including during source replay.
-                let transient = if spots.as_deref().is_some_and(|inks| !inks.is_empty()) {
-                    spot_plane_use(doc, page_num, &resources)
-                } else {
-                    SpotPlaneUse::default()
-                };
-                dpi = fit_png_dpi(dpi, budget, spots.as_deref(), transient, dimensions_at_dpi)?;
+                let soft_mask =
+                    spots.as_deref().is_some_and(|inks| !inks.is_empty()) && declares_spot_soft_mask(doc, &resources);
+                dpi = fit_png_dpi(dpi, budget, spots.as_deref(), soft_mask, dimensions_at_dpi)?;
                 Ok::<_, Error>((resources, spots))
             })
             .transpose()?;

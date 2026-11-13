@@ -1,6 +1,6 @@
 //! Page raster sizing, working-memory checks, and PNG encoding.
 
-use super::{PageRenderer, knockout, knockout_resources};
+use super::{PageRenderer, knockout_resources};
 use crate::content::{operators::Operator, parser::parse_content_stream};
 use crate::document::PdfDocument;
 use crate::error::{Error, Result};
@@ -71,7 +71,7 @@ pub(super) fn raster_dimensions(page_width: f32, page_height: f32, scale: f32, h
 struct SpotPlaneScan {
     // Depth preserves the remaining recursion allowance. Forms without local resources
     // can resolve the same name differently in each enclosing scope. ~keep
-    memo: HashMap<(ObjectRef, bool, u32, Option<usize>), SpotPlaneUse>,
+    memo: HashMap<(ObjectRef, u32, Option<usize>), bool>,
     next_scope: usize,
 }
 
@@ -81,74 +81,27 @@ struct ResourceScope<'a> {
     id: usize,
 }
 
-#[derive(Default)]
-struct InheritedNames {
-    xobjects: HashSet<String>,
-    states: HashSet<String>,
+fn inherited_form_calls(doc: &PdfDocument, stream: &Object, reference: Option<ObjectRef>) -> HashSet<String> {
+    let data = match reference {
+        Some(reference) => doc.decode_stream_with_encryption(stream, reference),
+        None => stream.decode_stream_data(),
+    };
+    data.and_then(|data| parse_content_stream(&data))
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|op| match op {
+            Operator::Do { name } => Some(name),
+            _ => None,
+        })
+        .collect()
 }
 
-impl InheritedNames {
-    fn from_form(doc: &PdfDocument, stream: &Object, reference: Option<ObjectRef>) -> Self {
-        let data = match reference {
-            Some(reference) => doc.decode_stream_with_encryption(stream, reference),
-            None => stream.decode_stream_data(),
-        };
-        let mut names = Self::default();
-        if let Ok(operators) = data.and_then(|data| parse_content_stream(&data)) {
-            for op in operators {
-                match op {
-                    Operator::Do { name } => {
-                        names.xobjects.insert(name);
-                    }
-                    Operator::SetExtGState { dict_name } => {
-                        names.states.insert(dict_name);
-                    }
-                    _ => {}
-                }
-            }
-        }
-        names
-    }
-}
-
-/// What painting a page can hold beyond the live sidecar planes, read from its resources.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(in crate::rendering) struct SpotPlaneUse {
-    /// An ExtGState soft mask (`smask_spot_snapshot`).
-    pub(in crate::rendering) soft_mask: bool,
-    /// Deepest nesting of transparency groups, knockout groups included.
-    pub(in crate::rendering) groups: usize,
-    /// Deepest nesting of knockout groups.
-    pub(in crate::rendering) knockouts: usize,
-}
-
-impl SpotPlaneUse {
-    fn nested_in_group(self, is_group: bool, is_knockout: bool) -> Self {
-        Self {
-            soft_mask: self.soft_mask,
-            groups: self.groups + usize::from(is_group),
-            knockouts: self.knockouts + usize::from(is_knockout),
-        }
-    }
-
-    fn widest(self, other: Self) -> Self {
-        Self {
-            soft_mask: self.soft_mask || other.soft_mask,
-            groups: self.groups.max(other.groups),
-            knockouts: self.knockouts.max(other.knockouts),
-        }
-    }
-}
-
-/// Scans the page and the resources a form can reach (ExtGState and XObject only; pattern and
-/// annotation appearance resources are not walked, and the runtime reservations in
-/// `knockout_resources` still bound them). A scan that hits the depth cap answers conservatively.
-pub(in crate::rendering) fn spot_plane_use(doc: &PdfDocument, page_num: usize, resources: &Object) -> SpotPlaneUse {
-    let page_knockout = knockout::page_is_knockout(doc, page_num);
+/// Detect a declared soft mask on the page or in its reachable forms. Pattern and
+/// annotation resources are outside this scan. At the depth cap, allow for a mask.
+pub(in crate::rendering) fn declares_spot_soft_mask(doc: &PdfDocument, resources: &Object) -> bool {
     let mut scan = SpotPlaneScan::default();
     let scope = scan.scope(resources);
     scan.resources(doc, scope, None, 0)
-        .nested_in_group(page_knockout, page_knockout)
 }
 
 impl SpotPlaneScan {
@@ -158,103 +111,82 @@ impl SpotPlaneScan {
         ResourceScope { resources, id }
     }
 
-    fn form(
-        &mut self,
-        doc: &PdfDocument,
-        raw: &Object,
-        parent: ResourceScope<'_>,
-        depth: u32,
-        as_mask: bool,
-    ) -> SpotPlaneUse {
+    fn form(&mut self, doc: &PdfDocument, raw: &Object, parent: ResourceScope<'_>, depth: u32) -> bool {
         let reference = raw.as_reference();
         if let Some(reference) = reference
             && let Some(known) = self
                 .memo
-                .get(&(reference, as_mask, depth, None))
-                .or_else(|| self.memo.get(&(reference, as_mask, depth, Some(parent.id))))
+                .get(&(reference, depth, None))
+                .or_else(|| self.memo.get(&(reference, depth, Some(parent.id))))
         {
             return *known;
         }
         let Ok(stream) = doc.resolve_object(raw) else {
-            return SpotPlaneUse::default();
+            return false;
         };
         let Object::Stream { dict, .. } = &stream else {
-            return SpotPlaneUse::default();
+            return false;
         };
-        if !as_mask && dict.get("Subtype").and_then(Object::as_name) != Some("Form") {
-            return SpotPlaneUse::default();
+        if dict.get("Subtype").and_then(Object::as_name) != Some("Form") {
+            return false;
         }
 
         let local = dict.get("Resources");
-        let key = reference.map(|reference| (reference, as_mask, depth, local.is_none().then_some(parent.id)));
-        let inner = if let Some(local) = local {
-            doc.resolve_object(local)
-                .ok()
-                .map_or_else(SpotPlaneUse::default, |resources| {
-                    let scope = self.scope(&resources);
-                    self.resources(doc, scope, None, depth + 1)
-                })
+        let key = reference.map(|reference| (reference, depth, local.is_none().then_some(parent.id)));
+        let found = if let Some(local) = local {
+            doc.resolve_object(local).ok().is_some_and(|resources| {
+                let scope = self.scope(&resources);
+                self.resources(doc, scope, None, depth + 1)
+            })
         } else {
             // A form inherits name bindings, but only its operators can invoke
             // siblings. Walking all bindings here would invent self-recursion. ~keep
-            let names = InheritedNames::from_form(doc, &stream, reference);
+            let names = inherited_form_calls(doc, &stream, reference);
             self.resources(doc, parent, Some(&names), depth + 1)
         };
 
-        let group = dict.get("Group").and_then(|group| doc.resolve_object(group).ok());
-        let is_knockout = group.as_ref().is_some_and(knockout::group_is_knockout);
-        let is_group = group
-            .as_ref()
-            .and_then(Object::as_dict)
-            .is_some_and(|group| group.get("S").and_then(Object::as_name) == Some("Transparency"));
-        // The mask allowance covers a plain mask group unless it holds child group reservations. ~keep
-        let scanned = inner.nested_in_group(is_group && (!as_mask || inner.groups != 0 || is_knockout), is_knockout);
         if let Some(key) = key {
-            self.memo.insert(key, scanned);
+            self.memo.insert(key, found);
         }
-        scanned
+        found
     }
 
     fn resources(
         &mut self,
         doc: &PdfDocument,
         scope: ResourceScope<'_>,
-        names: Option<&InheritedNames>,
+        names: Option<&HashSet<String>>,
         depth: u32,
-    ) -> SpotPlaneUse {
+    ) -> bool {
         use crate::rendering::ext_gstate::SoftMaskValue;
 
         let Some(dict) = scope.resources.as_dict() else {
-            return SpotPlaneUse::default();
+            return false;
         };
         if depth >= knockout_resources::MAX_NESTING_DEPTH as u32 {
-            return SpotPlaneUse {
-                soft_mask: true,
-                groups: knockout_resources::MAX_NESTING_DEPTH,
-                knockouts: knockout_resources::MAX_NESTING_DEPTH,
-            };
+            return true;
         }
         let resolve = |kind| dict.get(kind).and_then(|object| doc.resolve_object(object).ok());
-        let states = resolve("ExtGState");
-        let mut found = SpotPlaneUse::default();
-        for (name, state) in states.iter().filter_map(Object::as_dict).flatten() {
-            if names.is_some_and(|names| !names.states.contains(name)) {
-                continue;
-            }
-            if let Ok(state) = parse_ext_g_state_inner(state, doc)
-                && let Some(SoftMaskValue::Form(form)) = state.smask
-            {
-                found.soft_mask = true;
-                found = found.widest(self.form(doc, &Object::Reference(form.form_ref), scope, depth, true));
-            }
+        // ~keep An inherited scope already checked every state before following its forms.
+        if names.is_none()
+            && resolve("ExtGState")
+                .as_ref()
+                .and_then(Object::as_dict)
+                .into_iter()
+                .flatten()
+                .any(|(_, state)| {
+                    parse_ext_g_state_inner(state, doc)
+                        .is_ok_and(|state| matches!(state.smask, Some(SoftMaskValue::Form(_))))
+                })
+        {
+            return true;
         }
         let xobjects = resolve("XObject");
-        for (name, raw) in xobjects.iter().filter_map(Object::as_dict).flatten() {
-            if names.is_none_or(|names| names.xobjects.contains(name)) {
-                found = found.widest(self.form(doc, raw, scope, depth, false));
-            }
-        }
-        found
+        xobjects
+            .iter()
+            .filter_map(Object::as_dict)
+            .flatten()
+            .any(|(name, raw)| names.is_none_or(|names| names.contains(name)) && self.form(doc, raw, scope, depth))
     }
 }
 
@@ -268,12 +200,12 @@ pub(super) fn fit_png_dpi(
     requested: u32,
     budget: &PngRenderBudget,
     spot_names: Option<&[String]>,
-    transient: SpotPlaneUse,
+    soft_mask: bool,
     dimensions: impl Fn(u32) -> (u32, u32),
 ) -> Result<u32> {
     let fits = |dpi| {
         let (width, height) = dimensions(dpi);
-        png_working_bytes_fit(width, height, spot_names, transient, budget.max_working_bytes)
+        png_working_bytes_fit(width, height, spot_names, soft_mask, budget.max_working_bytes)
     };
     if fits(requested) {
         return Ok(requested);
@@ -317,7 +249,7 @@ pub(super) fn png_working_bytes_fit(
     width: u32,
     height: u32,
     spot_names: Option<&[String]>,
-    transient: SpotPlaneUse,
+    soft_mask: bool,
     limit: usize,
 ) -> bool {
     // The canvas and PNG demultiply copy are both RGBA. Reserve the same per-pixel
@@ -325,7 +257,7 @@ pub(super) fn png_working_bytes_fit(
     let sidecar_bytes_per_pixel = spot_names.map_or(Some(0), |names| names.len().checked_mul(2)?.checked_add(4));
     let charge = sidecar_bytes_per_pixel
         .and_then(|sidecar| {
-            let copies = 1 + usize::from(transient.soft_mask);
+            let copies = 1 + usize::from(soft_mask);
             RGBA_AND_PNG_BYTES_PER_PIXEL.checked_add(sidecar.checked_mul(copies)?)
         })
         .and_then(|bytes| (width as usize).checked_mul(height as usize)?.checked_mul(bytes))

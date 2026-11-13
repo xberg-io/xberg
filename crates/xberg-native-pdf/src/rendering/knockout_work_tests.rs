@@ -1061,3 +1061,180 @@ fn a_visible_layer_of_path_paints_that_cannot_fit_degrades_before_painting() {
         "a hidden layer charges nothing, so the same room holds it"
     );
 }
+
+fn alpha_mask() -> crate::content::graphics_state::SoftMaskForm {
+    use crate::content::graphics_state::{SoftMaskForm, SoftMaskSubtype};
+    SoftMaskForm {
+        form_ref: crate::object::ObjectRef::new(5, 0),
+        subtype: SoftMaskSubtype::Alpha,
+        backdrop: None,
+        transfer: None,
+    }
+}
+
+#[test]
+fn soft_mask_runtime_tracks_spot_snapshots_on_budgeted_pages() {
+    use super::super::image_budget::ImageBudget;
+    use crate::content::GraphicsState;
+    use crate::rendering::sidecar::CmykSidecar;
+    let pixmap = tiny_skia::Pixmap::new(2, 2).expect("paint canvas");
+    let gs = GraphicsState {
+        smask: Some(alpha_mask()),
+        ..Default::default()
+    };
+    for (budgeted, spots, charged) in [(true, true, 24), (true, false, 0), (false, true, 0)] {
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+        renderer.source_image_budget = budgeted.then(|| ImageBudget::new(1024));
+        let inks = if spots { vec!["InkA".into()] } else { vec![] };
+        renderer.cmyk_sidecar = Some(CmykSidecar::new(2, 2, inks));
+        let snapshots = renderer
+            .paint_mask_snapshots(&pixmap, &gs)
+            .expect("snapshot reservation");
+        assert!(snapshots.is_some());
+        assert_eq!(
+            renderer.knockout_resources.retained_bytes(),
+            charged,
+            "{budgeted}, {spots}"
+        );
+        drop(snapshots);
+        assert_eq!(renderer.knockout_resources.retained_bytes(), 0);
+    }
+}
+
+#[test]
+fn soft_mask_runtime_charges_the_canvas_and_alpha_plane() {
+    let doc = pdf(&[
+        "<< /Type /Catalog /Pages 2 0 R >>".into(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 2 2] /Contents 4 0 R /Resources << >> >>".into(),
+        stream("", ""),
+        stream("/Subtype /Form /BBox [0 0 2 2]", ""),
+    ]);
+    let resources = doc.get_page_resources(0).expect("page resources");
+    let snapshot = [255; 16];
+    for limit in [31, 32] {
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+        renderer.knockout_resources.reset(Some(limit));
+        let _group = renderer.knockout_resources.reserve(Some(0)).expect("group scope");
+        let mut pixmap = tiny_skia::Pixmap::new(2, 2).expect("paint canvas");
+        let result = renderer.apply_smask_after_paint_inner(
+            &mut pixmap,
+            &snapshot,
+            None,
+            None,
+            &alpha_mask(),
+            &doc,
+            0,
+            &resources,
+            tiny_skia::Transform::identity(),
+        );
+        if limit == 32 {
+            assert!(result.expect("two four-byte planes fit"));
+            assert_eq!(pixmap.data(), snapshot);
+        } else {
+            assert!(
+                result
+                    .expect_err("the overlapping planes exceed the limit")
+                    .to_string()
+                    .contains("workspace")
+            );
+            assert_eq!(renderer.knockout_resources.workspace_shortfall(), Some((32, 31)));
+        }
+        assert_eq!(renderer.knockout_resources.retained_bytes(), 0);
+    }
+}
+
+#[test]
+fn soft_mask_runtime_keeps_the_canvas_reserved_while_rendering_the_form() {
+    let body = "/Nested Do";
+    let doc = pdf(&[
+        "<< /Type /Catalog /Pages 2 0 R >>".into(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 2 2] /Contents 4 0 R /Resources << >> >>".into(),
+        stream("", ""),
+        stream(
+            "/Subtype /Form /BBox [0 0 2 2] /Group << /S /Transparency /I true >> /Resources << /XObject << /Nested 6 0 R >> >>",
+            body,
+        ),
+        stream(
+            "/Subtype /Form /BBox [0 0 2 2] /Group << /S /Transparency /I true >>",
+            "",
+        ),
+    ]);
+    let resources = doc.get_page_resources(0).expect("page resources");
+    for limit in [47, 48] {
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+        renderer.knockout_resources.reset(Some(limit));
+        let _group = renderer.knockout_resources.reserve(Some(0)).expect("group scope");
+        let mut pixmap = tiny_skia::Pixmap::new(2, 2).expect("paint canvas");
+        let result = renderer.apply_smask_after_paint_inner(
+            &mut pixmap,
+            &[255; 16],
+            None,
+            None,
+            &alpha_mask(),
+            &doc,
+            0,
+            &resources,
+            tiny_skia::Transform::identity(),
+        );
+        if limit == 48 {
+            assert!(result.expect("mask and two group canvases fit"));
+        } else {
+            assert!(
+                result
+                    .expect_err("mask overlaps two group canvases")
+                    .to_string()
+                    .contains("workspace")
+            );
+            assert_eq!(renderer.knockout_resources.workspace_shortfall(), Some((48, 47)));
+        }
+        assert_eq!(renderer.knockout_resources.retained_bytes(), 0);
+    }
+}
+
+#[test]
+fn an_image_do_in_a_group_reserves_both_sidecar_snapshots() {
+    use crate::rendering::sidecar::CmykSidecar;
+    let doc = pdf(&[
+        "<< /Type /Catalog /Pages 2 0 R >>".into(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 2 2] /Contents 4 0 R /Resources << /XObject << /Im 5 0 R >> >> >>"
+            .into(),
+        stream("", "/Im Do"),
+        stream(
+            "/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /ASCIIHexDecode",
+            "00>",
+        ),
+    ]);
+    let resources = doc.get_page_resources(0).expect("page resources");
+    let operators = crate::content::parse_content_stream(b"/Im Do").expect("image invocation");
+    for limit in [55, 56] {
+        let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+        renderer.load_resources(&doc, &resources).expect("load resources");
+        renderer.cmyk_sidecar = Some(CmykSidecar::new(2, 2, vec![]));
+        renderer.knockout_resources.reset(Some(limit));
+        let _group = renderer.knockout_resources.reserve(Some(0)).expect("group scope");
+        let mut pixmap = tiny_skia::Pixmap::new(2, 2).expect("paint canvas");
+        let result = renderer.execute_operators(
+            &mut pixmap,
+            tiny_skia::Transform::identity(),
+            &operators,
+            &doc,
+            0,
+            &resources,
+        );
+        if limit == 56 {
+            result.expect("six coverage bytes and two RGBA snapshots per pixel fit");
+            assert!(pixmap.data().chunks_exact(4).any(|pixel| pixel == [0, 0, 0, 255]));
+        } else {
+            assert!(
+                result
+                    .expect_err("the second RGBA snapshot exceeds the limit")
+                    .to_string()
+                    .contains("workspace")
+            );
+            assert_eq!(renderer.knockout_resources.workspace_shortfall(), Some((56, 55)));
+        }
+    }
+}
