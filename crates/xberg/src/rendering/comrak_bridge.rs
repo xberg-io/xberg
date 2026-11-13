@@ -1055,8 +1055,8 @@ fn build_retained_grid_html<'a>(
     table: &crate::types::Table,
     attributes: Option<&ahash::AHashMap<String, String>>,
 ) -> Option<&'a AstNode<'a>> {
-    let grid = crate::types::internal::table_grid::retained_grid(table, attributes)?;
-    let occupied = validated_grid_occupancy(table, &grid)?;
+    let grid = crate::types::internal::table_grid::decode_retained_grid(attributes)?;
+    let occupied = crate::extraction::derive::validated_table_grid_occupancy(table, &grid)?;
     let anchors: ahash::AHashMap<_, _> = grid.cells.iter().map(|cell| ((cell.row, cell.col), cell)).collect();
     let mut annotations = super::table_math::read_annotations(attributes, &table.cells);
     for (position, scripts) in super::table_scripts::read_annotations(attributes, &table.cells) {
@@ -1085,35 +1085,6 @@ fn build_retained_grid_html<'a>(
             ..Default::default()
         }),
     ))
-}
-
-#[cfg(any(
-    feature = "pdf",
-    all(feature = "layout-detection", any(feature = "ocr", feature = "ocr-wasm"))
-))]
-fn validated_grid_occupancy(table: &crate::types::Table, grid: &crate::types::TableGrid) -> Option<Vec<Vec<bool>>> {
-    if grid.rows == 0 || grid.cols == 0 {
-        return None;
-    }
-    let mut occupied = vec![vec![false; grid.cols as usize]; grid.rows as usize];
-    for cell in &grid.cells {
-        let row_end = cell.row.checked_add(cell.row_span)?;
-        let col_end = cell.col.checked_add(cell.col_span)?;
-        if cell.row_span == 0 || cell.col_span == 0 || row_end > grid.rows || col_end > grid.cols {
-            return None;
-        }
-        for row in cell.row..row_end {
-            for col in cell.col..col_end {
-                let covered_text =
-                    (row != cell.row || col != cell.col) && !table.cells[row as usize][col as usize].is_empty();
-                if occupied[row as usize][col as usize] || covered_text {
-                    return None;
-                }
-                occupied[row as usize][col as usize] = true;
-            }
-        }
-    }
-    Some(occupied)
 }
 
 #[cfg(any(

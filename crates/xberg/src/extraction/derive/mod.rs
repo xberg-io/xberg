@@ -601,21 +601,45 @@ fn raw_block_node_content(elem: &mut InternalElement) -> NodeContent {
     }
 }
 
-/// Convert an internal `Table` to a `TableGrid`.
+/// Check that retained geometry still describes the dense table after table repair.
 pub(crate) fn native_grid_matches_table(table: &Table, grid: &TableGrid) -> bool {
-    // ~keep: Later table repair may replace the dense cells. Only reuse native geometry
-    // while its dimensions and text still describe that same table.
-    grid.rows as usize == table.cells.len()
-        && table.cells.iter().all(|row| row.len() == grid.cols as usize)
-        && grid.cells.iter().all(|cell| {
-            table
-                .cells
-                .get(cell.row as usize)
-                .and_then(|row| row.get(cell.col as usize))
-                == Some(&cell.content)
-        })
-        && grid.cells.iter().filter(|cell| !cell.content.is_empty()).count()
-            == table.cells.iter().flatten().filter(|cell| !cell.is_empty()).count()
+    validated_table_grid_occupancy(table, grid).is_some()
+}
+
+pub(crate) fn validated_table_grid_occupancy(table: &Table, grid: &TableGrid) -> Option<Vec<Vec<bool>>> {
+    if grid.rows == 0
+        || grid.cols == 0
+        || grid.rows as usize != table.cells.len()
+        || table.cells.iter().any(|row| row.len() != grid.cols as usize)
+    {
+        return None;
+    }
+
+    let mut occupied = vec![vec![false; grid.cols as usize]; grid.rows as usize];
+    let mut nonempty_anchors = 0;
+    for cell in &grid.cells {
+        let row_end = cell.row.checked_add(cell.row_span)?;
+        let col_end = cell.col.checked_add(cell.col_span)?;
+        if cell.row_span == 0 || cell.col_span == 0 || row_end > grid.rows || col_end > grid.cols {
+            return None;
+        }
+        if table.cells[cell.row as usize][cell.col as usize] != cell.content {
+            return None;
+        }
+        nonempty_anchors += usize::from(!cell.content.is_empty());
+        for row in cell.row..row_end {
+            for col in cell.col..col_end {
+                let slot = &mut occupied[row as usize][col as usize];
+                let covered_text =
+                    (row != cell.row || col != cell.col) && !table.cells[row as usize][col as usize].is_empty();
+                if *slot || covered_text {
+                    return None;
+                }
+                *slot = true;
+            }
+        }
+    }
+    (nonempty_anchors == table.cells.iter().flatten().filter(|text| !text.is_empty()).count()).then_some(occupied)
 }
 
 fn table_to_grid(table: &Table, native_grid: Option<&TableGrid>) -> TableGrid {

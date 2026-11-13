@@ -697,3 +697,34 @@ fn a_custom_format_name_with_no_renderer_gives_plain_page_content_with_the_ocr_t
     assert_eq!(words_in_content, 1);
     assert_eq!(page_content, format!("Stock list\n\n{PICTURE_WORDS}"));
 }
+
+#[test]
+fn retained_table_grid_requires_exclusive_span_ownership() {
+    let table = Table {
+        cells: vec![
+            vec!["Header".into(), String::new()],
+            vec!["Record".into(), "Value".into()],
+        ],
+        columns: Some(vec!["Header".into(), String::new()]),
+        ..Default::default()
+    };
+    let mut grid = table_to_grid(&table, None);
+    grid.cells.remove(1);
+    grid.cells[0].col_span = 2;
+    assert_eq!(table_to_grid(&table, Some(&grid)), grid, "preserve a proven colspan");
+
+    for (row_span, col_span) in [(2, 2), (0, 2), (1, 3), (1, u32::MAX)] {
+        let mut invalid = grid.clone();
+        invalid.cells[0].row_span = row_span;
+        invalid.cells[0].col_span = col_span;
+        assert_eq!(
+            table_to_grid(&table, Some(&invalid)),
+            table_to_grid(&table, None),
+            "invalid span {row_span} by {col_span} must fall back to the original table cells",
+        );
+    }
+
+    let mut duplicate = grid.clone();
+    duplicate.cells[2] = duplicate.cells[1].clone();
+    assert_eq!(table_to_grid(&table, Some(&duplicate)), table_to_grid(&table, None));
+}
