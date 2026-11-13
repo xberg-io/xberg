@@ -12,7 +12,7 @@ const IDS_PDF: &[u8] = include_bytes!("fixtures/ocr_layer_tokens_2952/ids.pdf");
 
 const IDENTIFIERS: [&str; 18] = [
     "AB1234", "XK7021", "B0X92Q", "QR5L18", "1ZA340", "MN80P4", "TV2B77", "D4K9L1", "ZZ0185", "HG6R03", "P9W2E5",
-    "C7V1B8", "LM3X46", "S5T0U9", "J8H4G2", "RF1D29", "Y6N7M3", "K2Q5W0",
+    "C7V1B8", "LM3X46", "R4M7H3", "J8H4G2", "RF1D29", "Y6N7M3", "K2Q5W0",
 ];
 const LABELS: [&str; 5] = ["Norte", "Sur", "Este", "Oeste", "Centro"];
 const VALUES: [&str; 5] = ["120", "80", "150", "60", "100"];
@@ -82,7 +82,7 @@ fn token_counts(text: &str) -> BTreeMap<String, usize> {
 }
 
 // Platform OCR can leave these substitutions or split a token across words. ~keep
-const OCR_VARIANTS: [(&str, &str); 3] = [("B0X92Q", "BOX92Q"), ("S5T0U9", "S5TOU9"), ("J8H4G2", "J 8H4G2")];
+const OCR_VARIANTS: [(&str, &str); 2] = [("B0X92Q", "BOX92Q"), ("J8H4G2", "J 8H4G2")];
 
 fn assert_layer_tokens_recovered(text: &str) {
     let counts = token_counts(text);
