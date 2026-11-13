@@ -191,6 +191,9 @@ fn inline_edit(read: &ExtractedDocument, word_index: usize, runs: Vec<InlineRun<
     if flat_offsets.len() != occurrences.len() {
         return None;
     }
+    if occurrences.len() > 1 && !repeated_anchor_is_one_line(read, elements, &occurrences, &flat_offsets) {
+        return None;
+    }
     let flat = flat_offsets[ordinal];
     let structured = match &read.ocr_internal_document {
         Some(doc) => {
@@ -208,7 +211,14 @@ fn inline_edit(read: &ExtractedDocument, word_index: usize, runs: Vec<InlineRun<
                 return None;
             }
             let (index, offset) = owners[ordinal];
+            if owners.iter().any(|&(owner, _)| owner != index) {
+                return None;
+            }
             let bbox = doc.elements[index].bbox?;
+            let source_place = PixelBox::of(source)?;
+            if bbox.x0 > source_place.left as f64 || bbox.x1 < source_place.right as f64 {
+                return None;
+            }
             if runs.iter().any(|(_, (_, (_, top, _, height)))| {
                 bbox.y0 >= f64::from(*top) + f64::from(*height) || bbox.y1 <= f64::from(*top)
             }) {
@@ -235,6 +245,39 @@ fn inline_edit(read: &ExtractedDocument, word_index: usize, runs: Vec<InlineRun<
         anchor_len: anchor.len(),
         text,
         words,
+    })
+}
+
+// Ordinals identify repeats only inside one verified left-to-right line. Across lines or
+// structured elements, OCR and rendering can traverse equal-height columns differently.
+fn repeated_anchor_is_one_line(
+    read: &ExtractedDocument,
+    elements: &[OcrElement],
+    occurrences: &[usize],
+    offsets: &[usize],
+) -> bool {
+    let Some((&first, &last)) = offsets.first().zip(offsets.last()) else {
+        return false;
+    };
+    if read.content[first..last].contains('\n') {
+        return false;
+    }
+    occurrences.windows(2).zip(offsets.windows(2)).all(|(pair, bounds)| {
+        let anchor_len = elements[pair[0]].text.trim().len();
+        let between = &read.content[bounds[0] + anchor_len..bounds[1]];
+        if !between.split_whitespace().eq(elements[pair[0] + 1..pair[1]]
+            .iter()
+            .filter(|word| word.level == OcrElementLevel::Word)
+            .map(|word| word.text.trim()))
+        {
+            return false;
+        }
+        let Some((left, right)) = PixelBox::of(&elements[pair[0]]).zip(PixelBox::of(&elements[pair[1]])) else {
+            return false;
+        };
+        left.shares_line_with(&right)
+            && left.right <= right.left
+            && right.left - left.right <= left.height().min(right.height()) * MAX_LINE_GAP_HEIGHTS
     })
 }
 
@@ -666,4 +709,56 @@ fn located_english_word_keeps_its_place_between_khmer_occurrences() {
         "Before ក English ក ខ after",
         &[20, 45, 65, 120],
     );
+}
+
+#[cfg(test)]
+#[test]
+fn same_height_columns_with_repeated_words_do_not_share_an_inline_anchor() {
+    let mut doc = crate::types::internal::InternalDocument::new("ocr");
+    for (text, x0, x1) in [("Right ក", 120.0, 190.0), ("Left ក", 0.0, 100.0)] {
+        let mut paragraph = InternalElement::text(ElementKind::Paragraph, text.to_owned(), 0);
+        paragraph.bbox = Some(crate::types::BoundingBox {
+            x0,
+            y0: 10.0,
+            x1,
+            y1: 30.0,
+        });
+        doc.push_element(paragraph);
+    }
+    let mut read = ExtractedDocument {
+        content: "Right ក\n\nLeft ក".into(),
+        ocr_internal_document: Some(doc),
+        ocr_elements: Some(
+            [20, 150]
+                .into_iter()
+                .map(|left| OcrElement {
+                    text: "ក".into(),
+                    geometry: OcrBoundingGeometry::Rectangle {
+                        left,
+                        top: 10,
+                        width: 10,
+                        height: 20,
+                    },
+                    confidence: OcrConfidence {
+                        detection: None,
+                        recognition: 0.9,
+                    },
+                    level: OcrElementLevel::Word,
+                    rotation: None,
+                    page_number: 1,
+                    parent_id: None,
+                    backend_metadata: Default::default(),
+                })
+                .collect(),
+        ),
+        ..Default::default()
+    };
+    apply_minority_khmer(&mut read, &[("ខ".into(), (40, 10, 10, 20))], &|| false);
+    assert_eq!(read.content, "Right ក\n\nLeft ក");
+    let elements = &read.ocr_internal_document.as_ref().unwrap().elements;
+    assert_eq!(
+        elements.iter().map(|e| e.text.as_str()).collect::<Vec<_>>(),
+        ["Right ក", "Left ក"]
+    );
+    assert_eq!(read.ocr_elements.as_ref().unwrap().len(), 2);
 }
