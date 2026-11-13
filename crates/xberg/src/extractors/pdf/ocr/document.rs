@@ -92,12 +92,21 @@ pub(super) fn assemble_mixed_ocr_page_document(
         );
         copy_source_strip_frames(&doc.metadata, &mut assembled.metadata);
         assembled.processing_warnings = std::mem::take(&mut doc.processing_warnings);
+        // PDF assembly skips empty Markdown. Keep OCR cell data in the page inventory. ~keep
+        assembled
+            .tables
+            .extend(doc.tables.into_iter().filter(is_cell_only_ocr_table));
         doc = assembled;
     }
 
     normalize_mixed_ocr_document_page(&mut doc, page_number);
     (doc, paragraphs, outcome)
 }
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn is_cell_only_ocr_table(table: &crate::types::Table) -> bool {
+    table.markdown.trim().is_empty() && table.cells.iter().flatten().any(|cell| !cell.trim().is_empty())
+}
+
 /// Flat OCR-text document for a page whose backend produced tables or OCR elements
 /// but no structured document.
 ///
@@ -679,7 +688,7 @@ fn marked_row_pattern_reading(key: &str, whole: bool, symbols_glue: bool) -> Opt
 }
 /// The whole words of a text: runs of letters and digits, lowercase. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn whole_words(text: &str) -> impl Iterator<Item = String> + '_ {
+pub(super) fn whole_words(text: &str) -> impl Iterator<Item = String> + '_ {
     text.split(|c: char| !c.is_alphanumeric())
         .filter(|word| !word.is_empty())
         .map(str::to_lowercase)
@@ -940,6 +949,36 @@ pub(super) fn ocr_page_only_segments_text_with(
         && block_words == solid_words(read)
 }
 
+/// Whether a page's structure holds only text cut into blocks, lists and tables, with no image,
+/// link, formula or markup. Its words are not compared with the read: block building rewrites
+/// them, and the caller keeps a native layer it already compared with that read. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) fn ocr_page_only_structures_text_with(
+    doc: &crate::types::internal::InternalDocument,
+    is_private_metadata: impl Fn(&str, &serde_json::Value) -> bool,
+) -> bool {
+    use crate::types::internal::ElementKind;
+
+    let mut metadata = doc.metadata.clone();
+    metadata.additional.retain(|key, value| {
+        key != crate::ocr_metadata_keys::OCR_PAGE_SEGMENTATION_MODES_METADATA_KEY && !is_private_metadata(key, value)
+    });
+    let structure = |element: &crate::types::internal::InternalElement| {
+        matches!(
+            element.kind,
+            ElementKind::Table { .. } | ElementKind::ListStart { .. } | ElementKind::ListEnd
+        ) && element.layer == crate::types::document_structure::ContentLayer::Body
+            && element.annotations.is_empty()
+    };
+    no_ocr_rich_assets_besides_tables(doc)
+        && metadata.is_empty()
+        && !doc.elements.is_empty()
+        && doc
+            .elements
+            .iter()
+            .all(|element| segmenting_ocr_text(element) || structure(element))
+}
+
 /// Whether a page's structure holds nothing but its read text cut into blocks and tables: the
 /// same words, each once, with no image, link, formula or markup. Tables reorder the words into
 /// cells and add rulings, so the words are compared by their letters and digits alone. ~keep
@@ -1119,16 +1158,29 @@ fn is_unspaced_script(c: char) -> bool {
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 pub(super) const MIN_SHARED_UNSPACED_BIGRAMS: usize = 6;
 
-/// The distinct meaningful words of a read, how many the native text also spells, and whether any
-/// of those is alphabetic. Lost-glyph markers are removed from the native text first so a word
-/// the render dropped a letter from still matches its read. Words in unspaced scripts are left to
-/// `read_bigrams_in_native`. ~keep
+/// How a read's distinct meaningful words meet the native layer: how many the native text also
+/// spells, how many of those the read shows at a native word's own place, how many distinct words
+/// the read has, and whether any shared word is alphabetic. Lost-glyph markers are removed from the
+/// native text first so a word the render dropped a letter from still matches its read. Words in
+/// unspaced scripts are left to `read_bigrams_in_native`. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+#[derive(Debug, PartialEq, Eq)]
+pub(super) struct ReadWordsInNative {
+    pub(super) shared: usize,
+    pub(super) placed: usize,
+    pub(super) distinct: usize,
+    pub(super) alphabetic: bool,
+}
+
+/// See [`ReadWordsInNative`]. `placed_words` holds the read's words that a word box shows at a
+/// native word's own place; only those the native text also spells are counted. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 pub(super) fn read_words_in_native(
     native: &str,
     read: &str,
+    placed_words: &std::collections::HashSet<String>,
     thresholds: &OcrQualityThresholds,
-) -> (usize, usize, bool) {
+) -> ReadWordsInNative {
     use super::super::unmapped_glyphs::is_lost_glyph;
 
     let spaced = |word: &String| !word.chars().any(is_unspaced_script);
@@ -1139,8 +1191,12 @@ pub(super) fn read_words_in_native(
         .filter(|word| word.chars().count() >= thresholds.min_meaningful_word_len)
         .collect();
     let shared: Vec<&String> = distinct.iter().filter(|word| spelled.contains(*word)).collect();
-    let alphabetic = shared.iter().any(|word| word.chars().any(char::is_alphabetic));
-    (shared.len(), distinct.len(), alphabetic)
+    ReadWordsInNative {
+        shared: shared.len(),
+        placed: shared.iter().filter(|word| placed_words.contains(**word)).count(),
+        distinct: distinct.len(),
+        alphabetic: shared.iter().any(|word| word.chars().any(char::is_alphabetic)),
+    }
 }
 
 /// The distinct character bigrams of the unspaced-script runs of a text. ~keep
@@ -1179,20 +1235,41 @@ pub(super) fn read_bigrams_in_native(native: &str, read: &str) -> (usize, usize)
 
 /// Whether the native text spells enough of the read to be the page's visible content. Spaced
 /// scripts need at least the quality floor of distinct shared words (never fewer than two), one of
-/// them alphabetic, and the minimum share of the read's distinct words; a short read cannot pass
-/// on one shared word. Unspaced scripts (Han, kana, Hangul, Thai, Khmer) need the minimum share of
-/// the read's distinct bigrams and at least `MIN_SHARED_UNSPACED_BIGRAMS` of them. ~keep
+/// them alphabetic, so a short read cannot pass on one shared word. Then either the shared words
+/// are the minimum share of the read's distinct words, or at least the floor of them are read at
+/// a native word's own place: noise in the render adds words to the read and lowers the share
+/// while the layer stays right, and a covered layer that spells a few visible words by chance has
+/// them elsewhere on the page. Unspaced scripts (Han, kana, Hangul, Thai, Khmer) need the minimum
+/// share of the read's distinct bigrams and at least `MIN_SHARED_UNSPACED_BIGRAMS` of them; they
+/// have no whole words to place, so the share alone decides. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
-pub(super) fn native_spells_read(native: &str, read: &str, thresholds: &OcrQualityThresholds) -> bool {
-    let (shared, distinct, alphabetic) = read_words_in_native(native, read, thresholds);
-    let words = distinct > 0
-        && alphabetic
-        && shared >= thresholds.min_meaningful_words.max(2)
-        && shared as f64 >= distinct as f64 * MIN_READ_WORD_SHARE_SPELLED_BY_NATIVE;
+pub(super) fn native_spells_read(
+    native: &str,
+    read: &str,
+    placed_words: &std::collections::HashSet<String>,
+    thresholds: &OcrQualityThresholds,
+) -> bool {
+    let words = read_words_in_native(native, read, placed_words, thresholds);
+    let floor = thresholds.min_meaningful_words.max(2);
+    let spelled = words.distinct > 0
+        && words.alphabetic
+        && words.shared >= floor
+        && (words.shared as f64 >= words.distinct as f64 * MIN_READ_WORD_SHARE_SPELLED_BY_NATIVE
+            || words.placed >= floor);
     let (shared, distinct) = read_bigrams_in_native(native, read);
     let bigrams = shared >= MIN_SHARED_UNSPACED_BIGRAMS
         && shared as f64 >= distinct as f64 * MIN_READ_WORD_SHARE_SPELLED_BY_NATIVE;
-    words || bigrams
+    spelled || bigrams
+}
+
+/// What the page's geometry says about a Type0 native layer and its read: whether the layer owns
+/// the read ink, whether the read covers its words, and the read's words shown at a native word's
+/// own place. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+pub(super) struct Type0ReadEvidence<'a> {
+    pub(super) ink_owned: bool,
+    pub(super) words_covered: bool,
+    pub(super) placed_words: &'a std::collections::HashSet<String>,
 }
 
 /// A native layer that lost Type0 ink survives only when the page also shows it is visible
@@ -1203,10 +1280,11 @@ pub(super) fn type0_native_is_corroborated(
     native: &str,
     read: &str,
     thresholds: &OcrQualityThresholds,
-    ink_owned: bool,
-    words_covered: bool,
+    evidence: Type0ReadEvidence<'_>,
 ) -> bool {
-    (ink_owned || words_covered || native_spells_read(native, read, thresholds))
+    (evidence.ink_owned
+        || evidence.words_covered
+        || native_spells_read(native, read, evidence.placed_words, thresholds))
         && native_survives_type0_ink_loss(native, read, thresholds)
 }
 
@@ -2155,6 +2233,14 @@ pub(super) fn carry_page_ocr_payload_forward(
     existing: &crate::types::internal::InternalDocument,
     new_page_doc: &mut crate::types::internal::InternalDocument,
 ) {
+    // Both rebuild paths skip cell-only tables. Final native yield and output still need them. ~keep
+    new_page_doc.tables.extend(
+        existing
+            .tables
+            .iter()
+            .filter(|table| is_cell_only_ocr_table(table))
+            .cloned(),
+    );
     new_page_doc.prebuilt_ocr_elements = existing.prebuilt_ocr_elements.clone();
     new_page_doc.processing_warnings = existing.processing_warnings.clone();
     new_page_doc.ocr_coordinate_frame = existing.ocr_coordinate_frame;

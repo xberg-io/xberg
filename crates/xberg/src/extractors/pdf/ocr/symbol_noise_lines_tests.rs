@@ -107,7 +107,89 @@ fn keeps_accented_and_non_english_latin_lines() {
 
 #[test]
 fn keeps_single_token_answers_and_unspaced_equations() {
-    assert_kept_exactly(&["No.", "Yes", "Qty", "x=y", "ABC", "pqr", "LouvRe"]);
+    assert_kept_exactly(&["No.", "Yes.", "Qty?", "x=y", "ABC", "pqr", "LouvRe"]);
+}
+
+#[test]
+fn prunes_a_lone_capitalized_trigram_without_a_closing_mark_and_keeps_an_accented_one() {
+    for line in [
+        "Tee",
+        "Ces",
+        "Ane",
+        "Jot",
+        "Bid",
+        "Gun",
+        "Aah",
+        "CAS",
+        "NOo",
+        "Yes",
+        "Qty",
+        "\u{e9}t\u{e9}",
+    ] {
+        assert!(is_symbol_noise_line(line), "{line}");
+    }
+    for line in ["Yes.", "Qty?", "Bid!", "\u{c9}t\u{e9}", "ABC", "pqr"] {
+        assert!(!is_symbol_noise_line(line), "{line}");
+    }
+}
+
+#[test]
+fn a_lone_capitalized_trigram_is_dropped_from_a_noise_page_but_does_not_make_one() {
+    let real = ["alpha beta", "gamma delta", "epsilon zeta", "theta iota"];
+    let mut lines = real.to_vec();
+    lines.extend(noise_filler(3));
+    lines.push("Tee");
+    let text = lines.join("\n\n");
+    assert!(!page_is_dominated_by_noise_lines(text.lines()), "{text:?}");
+    let noisy = page(&["SECTION TITLE"], 12) + "\n\nTee\n\nBid";
+    assert_eq!(prune_text(&noisy).0, "SECTION TITLE");
+}
+
+#[test]
+fn a_lowercase_trigram_or_a_trigram_among_glyphs_still_counts_toward_a_noise_page() {
+    for extra in ["mal", "Tee ~ ~", "T~ee"] {
+        let mut lines = vec!["alpha beta", "gamma delta", "epsilon zeta", "theta iota"];
+        lines.extend(noise_filler(3));
+        lines.push(extra);
+        let text = lines.join("\n\n");
+        assert!(page_is_dominated_by_noise_lines(text.lines()), "{text:?}");
+    }
+}
+
+#[test]
+fn keeps_real_words_beside_stray_glyphs() {
+    assert_kept_exactly(&[
+        "Annual report q z",
+        "Harbour Lights x y",
+        "Quarterly budget summary ~ ~",
+        "Red box q z",
+        "open the north gate ee",
+        "the committee met on Tuesday a",
+    ]);
+}
+
+#[test]
+fn a_short_function_word_pair_survives_a_flagged_noise_page() {
+    let text = page(&["Go to q z", "I am q z", "were ee", "a a q z"], 12);
+    assert!(page_is_dominated_by_noise_lines(text.lines()));
+    assert_eq!(prune_text(&text).0, "Go to q z\n\nI am q z");
+}
+
+#[test]
+fn a_noise_page_keeps_real_short_names_and_mixed_content() {
+    assert_kept_exactly(&["Sade", "Yes.", "Sade Nina ~ q", "Cecil Cecile Cecelia ~"]);
+}
+
+#[test]
+fn prunes_one_word_beside_stray_glyphs() {
+    for line in ["were ee", "Rays ae", "Settee e", "tail) \u{ab}"] {
+        assert!(is_symbol_noise_line(line), "{line}");
+    }
+}
+
+#[test]
+fn a_list_label_a_contraction_and_an_unspaced_word_each_keep_a_line_of_stray_glyphs() {
+    assert_kept_exactly(&["a) b) and c)", "a i'm to ~", "~ \u{5546}\u{54c1} ~ ~"]);
 }
 
 #[test]
@@ -323,4 +405,51 @@ fn a_document_with_relationships_is_not_prunable_and_keeps_its_elements() {
     prune_document_elements(&mut document);
     assert_eq!(document.elements.len(), 2);
     assert_eq!(document.elements[0].text, "oe\nae");
+}
+
+#[test]
+fn the_word_rule_needs_two_words_that_are_at_least_half_the_tokens() {
+    // Two words of four tokens is the boundary that keeps; one of two and two of five are pruned.
+    assert_kept_exactly(&[
+        "Annual report q z",
+        "north gate",
+        "well-known report q ~",
+        "I'm ready q ~",
+    ]);
+    for line in ["were ee", "xyz ~", "Tee ~", "Annual report q z ~", "a~b~c d~e~f ~ ~"] {
+        assert!(is_symbol_noise_line(line), "{line}");
+    }
+}
+
+#[cfg(all(feature = "ocr", feature = "pdf"))]
+#[test]
+fn the_page_level_pruners_drop_a_lone_capitalized_trigram_and_keep_a_marked_one() {
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+
+    let mut paragraphs = vec![crate::pdf::structure::types::PdfParagraph {
+        text: "Tee\nSECTION TITLE\nYes.".to_string(),
+        lines: vec![],
+        dominant_font_size: 12.0,
+        heading_level: None,
+        is_bold: false,
+        is_list_item: false,
+        is_code_block: false,
+        is_formula: false,
+        is_page_furniture: false,
+        layout_class: None,
+        layout_region_path: None,
+        caption_for: None,
+        block_bbox: None,
+        word_count: 4,
+    }];
+    prune_paragraphs(&mut paragraphs);
+    assert_eq!(paragraphs[0].text, "SECTION TITLE\nYes.");
+    let mut document = InternalDocument::new("pdf");
+    document.elements = vec![
+        InternalElement::text(ElementKind::Paragraph, "CAS\nSECTION TITLE", 0),
+        InternalElement::text(ElementKind::Paragraph, "Bid", 0),
+    ];
+    prune_document_elements(&mut document);
+    let texts: Vec<&str> = document.elements.iter().map(|element| element.text.as_str()).collect();
+    assert_eq!(texts, vec!["SECTION TITLE"]);
 }

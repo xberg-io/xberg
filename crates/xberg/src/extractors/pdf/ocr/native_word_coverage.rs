@@ -119,30 +119,20 @@ pub(super) fn native_text_paints_all_read_ink(
     {
         return false;
     }
-    let Some(raster) = processed_ocr_layout_dimensions(&read.metadata) else {
+    let Some(placement) = ReadPlacement::of(pdf, page_index, read) else {
         return false;
     };
-    let (Some(media), Ok(lines)) = (upright_media_box(pdf, page_index), pdf.extract_text_lines(page_index)) else {
-        return false;
-    };
-    let Some(read_boxes) = words()
-        .map(|word| ocr_word_in_page_points(word, raster, media))
+    let Some(read_words) = words()
+        .map(|word| placement.read_word(word))
         .collect::<Option<Vec<_>>>()
     else {
         return false;
     };
-    let read_words: Vec<(String, LineBox)> = words()
-        .map(|w| w.text.clone())
-        .zip(read_boxes.iter().copied())
-        .collect();
+    let ReadPlacement { media, lines, .. } = placement;
     if !lost_glyphs_leave_native_text(&lines, lost, &read_words) {
         return false;
     }
-    let native_words: Vec<(String, LineBox)> = lines
-        .iter()
-        .flat_map(|line| &line.words)
-        .map(|word| (word.text.clone(), native_box(word.bbox)))
-        .collect();
+    let native_words = native_words_with_boxes(&lines);
     let Some(placed) = read_on_native_lines(&read_words, &lines) else {
         return false;
     };
@@ -168,6 +158,112 @@ pub(super) fn native_text_paints_all_read_ink(
     !native_word_glues_separate_cells(&native_words, &read_words)
         && agreement_share(&native_words, &read_words) >= MIN_NATIVE_READ_AGREEMENT
         && ink_is_glyph_ink(&rasters, media, &placed, &read_words, &native_words)
+}
+
+/// What places a Tesseract read on its page: the raster its word boxes are in, the page's upright
+/// media box and the page's native text lines. The ink proof and the placed-word count both build
+/// their word boxes from it. ~keep
+struct ReadPlacement {
+    raster: (u32, u32),
+    media: Rect,
+    lines: Vec<xberg_native_pdf::layout::TextLine>,
+}
+
+impl ReadPlacement {
+    /// The placement of a read with a raster size on an unrotated, uncropped page with text lines.
+    fn of(pdf: &PdfDocument, page_index: usize, read: &ExtractedDocument) -> Option<Self> {
+        let raster = processed_ocr_layout_dimensions(&read.metadata)?;
+        let media = upright_media_box(pdf, page_index)?;
+        let lines = pdf.extract_text_lines(page_index).ok()?;
+        Some(Self { raster, media, lines })
+    }
+
+    /// A read word with its box in page points, or none when its box falls outside the raster.
+    fn read_word(&self, word: &OcrElement) -> Option<(String, LineBox)> {
+        ocr_word_in_page_points(word, self.raster, self.media).map(|placed| (word.text.clone(), placed))
+    }
+}
+
+/// The page's native words with their boxes, in line order.
+fn native_words_with_boxes(lines: &[xberg_native_pdf::layout::TextLine]) -> Vec<(String, LineBox)> {
+    lines
+        .iter()
+        .flat_map(|line| &line.words)
+        .map(|word| (word.text.clone(), native_box(word.bbox)))
+        .collect()
+}
+
+/// Repeated words can share an index bucket. Limit the geometry work across all buckets. ~keep
+const MAX_NATIVE_PLACEMENT_COMPARISONS: usize = 16_384;
+
+/// Distinct iterator words read at a matching native word's place. Missing geometry or
+/// exhausted comparison budget leaves placement unproved. ~keep
+pub(super) fn read_words_at_native_place(
+    pdf: &PdfDocument,
+    page_index: usize,
+    read: &ExtractedDocument,
+) -> std::collections::HashSet<String> {
+    let Some(elements) = read.ocr_elements.as_deref() else {
+        return std::collections::HashSet::new();
+    };
+    let mut words = elements
+        .iter()
+        .filter(|element| element.level == OcrElementLevel::Word && is_iterator_word(element))
+        .peekable();
+    if words.peek().is_none() {
+        return std::collections::HashSet::new();
+    }
+    let Some(placement) = ReadPlacement::of(pdf, page_index, read) else {
+        return std::collections::HashSet::new();
+    };
+    let native = placement
+        .lines
+        .iter()
+        .flat_map(|line| &line.words)
+        .map(|word| (word.text.as_str(), native_box(word.bbox)));
+    let read = words.filter_map(|word| {
+        ocr_word_in_page_points(word, placement.raster, placement.media).map(|bbox| (word.text.as_str(), bbox))
+    });
+    placed_word_keys(native, read, MAX_NATIVE_PLACEMENT_COMPARISONS)
+}
+
+fn single_placement_word(text: &str) -> Option<String> {
+    let mut words = super::document::whole_words(text);
+    let word = words.next()?;
+    words.next().is_none().then_some(word)
+}
+
+fn placed_word_keys<'a>(
+    native: impl IntoIterator<Item = (&'a str, LineBox)>,
+    read: impl IntoIterator<Item = (&'a str, LineBox)>,
+    mut comparisons: usize,
+) -> std::collections::HashSet<String> {
+    let mut native_boxes = std::collections::HashMap::<String, Vec<LineBox>>::new();
+    for (text, bbox) in native {
+        if let Some(key) = single_placement_word(text) {
+            native_boxes.entry(key).or_default().push(bbox);
+        }
+    }
+    let mut placed = std::collections::HashSet::new();
+    for (text, bbox) in read {
+        let Some(key) = single_placement_word(text) else {
+            continue;
+        };
+        if placed.contains(&key) {
+            continue;
+        }
+        for native in native_boxes.get(&key).into_iter().flatten() {
+            let Some(remaining) = comparisons.checked_sub(1) else {
+                return std::collections::HashSet::new();
+            };
+            comparisons = remaining;
+            if native.owns(&bbox) {
+                placed.insert(key);
+                break;
+            }
+        }
+    }
+    placed
 }
 
 /// Whether the read's text is the iterator words and nothing else. A read that Tesseract laid out
@@ -639,6 +735,28 @@ pub(super) fn only_segments_certified_tesseract_text_and_tables(doc: &InternalDo
         && super::document::ocr_page_only_segments_text_and_tables_with(doc, read, is_hocr_bookkeeping_with_tables)
 }
 
+/// Whether the single-page Type0 decision can discard the final OCR payload. ~keep
+pub(super) fn single_page_type0_structure_can_yield_to_native(
+    doc: Option<&InternalDocument>,
+    read: &str,
+    collected_tables: &[crate::types::Table],
+) -> bool {
+    // Cell-only sidecar tables can be absent from the structured document. ~keep
+    collected_tables.is_empty()
+        && doc.is_none_or(|doc| {
+            super::document::plain_ocr_page_can_yield_to_native(doc, read)
+                || only_structures_certified_tesseract_text(doc)
+        })
+}
+
+/// The Type0 shape check may discard text segmentation. It has no cell-level proof
+/// that the native layer can replace an OCR table. ~keep
+pub(super) fn only_structures_certified_tesseract_text(doc: &InternalDocument) -> bool {
+    doc.tables.is_empty()
+        && doc.prebuilt_ocr_elements.is_none()
+        && super::document::ocr_page_only_structures_text_with(doc, is_hocr_bookkeeping)
+}
+
 /// Only for a complete read already certified by `native_text_paints_all_read_ink`: its final
 /// structure may omit words, but every retained occurrence and asset must remain certified. ~keep
 pub(super) fn uses_only_certified_tesseract_text_and_tables(doc: &InternalDocument, read: &str) -> bool {
@@ -668,19 +786,29 @@ pub(super) struct FinalOcrStructureYieldSets<'a> {
     pub(super) native_ink_owned_pages: &'a ahash::AHashSet<u32>,
     pub(super) native_coverage_layers: Option<&'a std::sync::Arc<ahash::AHashMap<u32, String>>>,
     pub(super) clean_native_ink_pages: &'a std::collections::HashSet<u32>,
+    /// Pages whose native layer the Type0 keep rule judged against this same read. ~keep
+    pub(super) type0_loss_pages: &'a ahash::AHashSet<u32>,
 }
 
 /// The pipeline's final call on whether a `complete_native_pages` member yields its OCR page to the
-/// native replacement: plain acceptance first, then the words-covered route, then ink ownership —
-/// whose clean layer reaches the check only for pages the clean-ink admission accepted. The formula
-/// and automatic-preservation gates stay with the pipeline caller. ~keep
+/// native replacement: plain acceptance first, then the Type0 route, then the words-covered route,
+/// then ink ownership — whose clean layer reaches the check only for pages the clean-ink admission
+/// accepted. The formula and automatic-preservation gates stay with the pipeline caller. ~keep
 pub(super) fn final_ocr_structure_can_yield_to_native(
     page: u32,
     doc: &InternalDocument,
     read: &str,
     sets: FinalOcrStructureYieldSets<'_>,
 ) -> bool {
+    let type0_loss = sets.type0_loss_pages.contains(&page);
+    if type0_loss && !doc.tables.is_empty() {
+        return false;
+    }
     if super::document::plain_ocr_page_can_yield_to_native(doc, read) {
+        return true;
+    }
+    // The Type0 rule judged this read before it was split into blocks and lists. ~keep
+    if type0_loss && only_structures_certified_tesseract_text(doc) {
         return true;
     }
     if sets.native_words_covered_pages.contains(&page) {

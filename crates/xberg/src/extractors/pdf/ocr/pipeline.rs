@@ -1085,11 +1085,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // The readable text layers that a replaced page keeps first when its OCR text is judged
     // recognition noise or confirms the layer. A forced page is replaced by definition and keeps
     // none. ~keep
-    let ocr_output_thresholds = config
-        .ocr
-        .as_ref()
-        .and_then(|ocr| ocr.quality_thresholds.clone())
-        .unwrap_or_default();
+    let ocr_output_thresholds = route_noise_thresholds(config);
     let page_layers = match pages.native_layers {
         Some(layers) => Some(layers),
         None if !probing_hidden_layer && all_pages_failed_policy == AllPagesFailedPolicy::PreserveNative => {
@@ -1358,6 +1354,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut ocr_results: ahash::AHashMap<u32, String> = ahash::AHashMap::with_capacity(total);
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut original_tesseract_raster_pages = ahash::AHashSet::new();
+    // The read words each page shows at a native word's own place, for the Type0 keep rule. ~keep
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let mut native_placed_words_pages: ahash::AHashMap<u32, std::collections::HashSet<String>> = ahash::AHashMap::new();
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let mut matched_layer_occurrences = ahash::AHashMap::new();
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
@@ -1835,6 +1834,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         if read_evidence.native_ink_owned {
                             native_ink_owned_pages.insert(page_number);
                         }
+                        native_placed_words_pages.insert(page_number, read_evidence.native_placed_words);
                     }
                     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
                     let _ = read_evidence;
@@ -2012,6 +2012,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         if read_evidence.native_ink_owned {
                             native_ink_owned_pages.insert(page_number);
                         }
+                        native_placed_words_pages.insert(page_number, read_evidence.native_placed_words);
                     }
                     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
                     let _ = read_evidence;
@@ -2428,6 +2429,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         .is_builtin_tesseract(backend)
                 {
                     let page_number = (page_idx + 1) as u32;
+                    native_placed_words_pages.insert(
+                        page_number,
+                        super::native_word_coverage::read_words_at_native_place(
+                            render_doc.as_ref(),
+                            page_idx,
+                            &extraction_result,
+                        ),
+                    );
                     if super::native_word_coverage::covers_complete_native_page(
                         render_doc.as_ref(),
                         page_idx,
@@ -2792,6 +2801,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     native_words_covered_pages.remove(&page_number);
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                     native_ink_owned_pages.remove(&page_number);
+                    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                    native_placed_words_pages.remove(&page_number);
                     // The render's paragraphs, confidence and word count describe the blank
                     // render, not the recovered text.
                     let recovered_paragraphs =
@@ -3341,6 +3352,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     .read()
                     .is_builtin_tesseract(backend)
             });
+        let no_placed_words = std::collections::HashSet::new();
         for boundary in boundaries {
             let page = boundary.page_number;
             let native = if page_count == 1 && page == 1 {
@@ -3359,8 +3371,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     native,
                     read,
                     &ocr_output_thresholds,
-                    native_ink_owned_pages.contains(&page),
-                    native_words_covered_pages.contains(&page),
+                    super::document::Type0ReadEvidence {
+                        ink_owned: native_ink_owned_pages.contains(&page),
+                        words_covered: native_words_covered_pages.contains(&page),
+                        placed_words: native_placed_words_pages.get(&page).unwrap_or(&no_placed_words),
+                    },
                 )
             {
                 complete_native_pages.insert(page);
@@ -3397,6 +3412,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         native_ink_owned_pages: &native_ink_owned_pages,
                         native_coverage_layers: native_coverage_layers.as_ref(),
                         clean_native_ink_pages: &clean_native_ink_pages,
+                        type0_loss_pages: &type0_loss_pages,
                     },
                 );
                 // Without the real OCR backends there are no admission sets to consult, so the
@@ -4702,6 +4718,9 @@ pub(super) struct OcrReadEvidence {
     complete_native_words: bool,
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     native_ink_owned: bool,
+    /// The read words shown at a native word's own place (see `read_words_at_native_place`).
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    native_placed_words: std::collections::HashSet<String>,
 }
 
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
@@ -5265,6 +5284,8 @@ pub(super) async fn extract_with_ocr_for_page(
     let mut complete_native_words = false;
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     let mut native_ink_owned = false;
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    let mut native_placed_words = std::collections::HashSet::new();
     #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
     let tall_source_used = false;
     #[cfg(all(
@@ -6123,6 +6144,8 @@ pub(super) async fn extract_with_ocr_for_page(
                     pdf,
                     coverage_layer.filter(|_| detached_page.is_some()).or(lost_glyph_layer),
                 ) {
+                    native_placed_words =
+                        super::native_word_coverage::read_words_at_native_place(pdf, document_page_idx, &ocr_result);
                     native_ink_owned = !complete_native_words
                         && super::document::native_preservation_is_automatic(config, document_page_number)
                         && super::native_word_coverage::native_text_paints_all_read_ink(
@@ -7487,18 +7510,22 @@ pub(super) async fn extract_with_ocr_for_page(
         && !tall_source_used
         && pages_with_recovered_xobject_payload == [false]
         && public_ocr_pages.is_empty()
-        && collected_tables.is_empty()
         && accumulated_formulas.is_empty()
         && accumulated_llm_usage.is_empty()
-        && ocr_doc
-            .as_ref()
-            .is_none_or(|doc| super::document::plain_ocr_page_can_yield_to_native(doc, read))
+        && super::native_word_coverage::single_page_type0_structure_can_yield_to_native(
+            ocr_doc.as_ref(),
+            read,
+            &collected_tables,
+        )
         && super::document::type0_native_is_corroborated(
             native,
             read,
             &ocr_output_thresholds,
-            native_ink_owned,
-            complete_native_words,
+            super::document::Type0ReadEvidence {
+                ink_owned: native_ink_owned,
+                words_covered: complete_native_words,
+                placed_words: &native_placed_words,
+            },
         )
     {
         for warning in render_warnings {
@@ -7642,6 +7669,8 @@ pub(super) async fn extract_with_ocr_for_page(
             complete_native_words,
             #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
             native_ink_owned,
+            #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+            native_placed_words,
             original_tesseract_raster: {
                 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                 {
@@ -8246,6 +8275,46 @@ impl PipelineXObjectRecoveryOutcome {
             || !self.formulas.is_empty()
     }
 }
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn plain_budget_recovery_list_document(
+    recovery: &PipelineXObjectRecoveryOutcome,
+    config: &ExtractionConfig,
+) -> Option<crate::types::internal::InternalDocument> {
+    if config.output_format != crate::core::config::OutputFormat::Plain
+        || config.pages.as_ref().is_some_and(|pages| pages.insert_page_markers)
+    {
+        return None;
+    }
+    let table_pages: ahash::AHashSet<_> = recovery.tables.iter().map(|table| table.page_number).collect();
+    let pages: Vec<_> = recovery
+        .page_texts
+        .iter()
+        .enumerate()
+        .map(|(index, text)| {
+            let mut paragraphs = crate::pdf::structure::adapters::ocr_text_to_paragraphs(text);
+            if !table_pages.contains(&((index + 1) as u32)) {
+                apply_ocr_text_list_fallback(&mut paragraphs);
+            }
+            paragraphs
+        })
+        .collect();
+    if !pages.iter().flatten().any(|paragraph| paragraph.is_list_item) {
+        return None;
+    }
+    let mut document =
+        crate::pdf::structure::assemble_internal_document(pages, &recovery.tables, None, &[], &Default::default());
+    // The assembler skips tables without Markdown, but their sidecars still belong to the result. ~keep
+    document.tables.extend(
+        recovery
+            .tables
+            .iter()
+            .filter(|table| table.markdown.trim().is_empty())
+            .cloned(),
+    );
+    Some(document)
+}
+
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) struct XObjectRecoveryContext<'a> {
     pub(super) budget: &'a mut crate::extractors::security::SecurityBudget,
@@ -8259,6 +8328,16 @@ pub(super) struct XObjectRecoveryContext<'a> {
     /// How each image read made at a proven resolution is judged for noise. `None` leaves every
     /// read to the page policy.
     pub(super) proven_read: Option<ProvenReadPolicy<'a>>,
+}
+
+/// The recognition-noise thresholds every route judges a page read or an image retry read by.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn route_noise_thresholds(config: &ExtractionConfig) -> crate::core::config::OcrQualityThresholds {
+    config
+        .ocr
+        .as_ref()
+        .and_then(|ocr| ocr.quality_thresholds.clone())
+        .unwrap_or_default()
 }
 
 /// The noise policy a route applies to each retry read made at a placement-proven resolution.
@@ -8285,6 +8364,19 @@ impl<'a> XObjectRecoveryContext<'a> {
             use_proven_source_dpi: false,
             proven_read: None,
         }
+    }
+
+    /// The context of a route that reads an embedded image at its proven resolution and judges each
+    /// read for noise by `thresholds`, warning about a read it keeps. The whole-document recovery
+    /// never passes its text through the page-level noise check, so its reads warn here; the
+    /// mixed route's retry of a page does pass through it and sets `warn_when_kept` to false.
+    fn with_proven_reads(mut self, thresholds: &'a crate::core::config::OcrQualityThresholds) -> Self {
+        self.use_proven_source_dpi = true;
+        self.proven_read = Some(ProvenReadPolicy {
+            thresholds,
+            warn_when_kept: true,
+        });
+        self
     }
 
     pub(super) fn check_cancelled(&self) -> crate::Result<()> {
@@ -8321,6 +8413,8 @@ pub(super) async fn collect_pipeline_xobject_pages(
     for page_idx in 0..page_count {
         let mut page_context = XObjectRecoveryContext::with_budget(context.budget, context.cancel_token);
         page_context.stored_jpegs = Some(&mut stored_jpegs);
+        page_context.use_proven_source_dpi = context.use_proven_source_dpi;
+        page_context.proven_read = context.proven_read;
         if matches!(projection, XObjectProjection::CompletePage)
             && !super::rendering::can_project_stored_jpeg_page(doc, page_idx, &limits, &mut page_context)?
         {
@@ -8379,7 +8473,17 @@ fn append_pipeline_xobject_page(
             xobject_fallback_warning(page_idx, recovery.attempted, true)
         };
         outcome.warnings.push(warning);
+    } else if !recovery.failure_causes.is_empty() {
+        outcome.page_failures.push(crate::types::OcrPageFailure {
+            page: (page_idx + 1) as u32,
+            recovered: false,
+            error: format!(
+                "Embedded-image retry recovered no text ({})",
+                retry_cause_summary(&recovery.failure_causes)
+            ),
+        });
     }
+    outcome.warnings.append(&mut recovery.warnings);
     outcome.llm_usage.append(&mut recovery.llm_usage);
     outcome.tables.append(&mut recovery.tables);
     outcome.formulas.append(&mut recovery.formulas);
@@ -8470,12 +8574,14 @@ pub(super) async fn recover_pipeline_document_from_image_xobjects(
 
     let mut budget = crate::extractors::security::SecurityBudget::from_config(config);
     let recovery_ocr_config = pipeline_xobject_recovery_ocr_config(config, ocr_config);
+    let thresholds = route_noise_thresholds(config);
+    let context = XObjectRecoveryContext::with_budget(&mut budget, cancel_token).with_proven_reads(&thresholds);
     let mut outcome = collect_pipeline_xobject_pages(
         &backend,
         &doc,
         page_count,
         &recovery_ocr_config,
-        XObjectRecoveryContext::with_budget(&mut budget, cancel_token),
+        context,
         XObjectProjection::CompletePage,
     )
     .await?;
@@ -8795,11 +8901,7 @@ fn run_merge_geometry(
 ) -> ahash::AHashMap<u32, super::document::PageLineBoxes> {
     let mut boxes = ahash::AHashMap::new();
     let mut geometry = run.content.map(|content| MergeGeometrySession::new(content, config));
-    let thresholds = config
-        .ocr
-        .as_ref()
-        .and_then(|ocr| ocr.quality_thresholds.clone())
-        .unwrap_or_default();
+    let thresholds = route_noise_thresholds(config);
     for (&page_number, layer) in layers {
         if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
             break;
@@ -9106,24 +9208,27 @@ pub(super) fn judge_proven_read(
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 const RETRY_CAUSES_SHOWN: usize = 3;
 
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn retry_cause_summary(causes: &[String]) -> String {
+    let mut named = causes.iter().take(RETRY_CAUSES_SHOWN).cloned().collect::<Vec<_>>();
+    if causes.len() > RETRY_CAUSES_SHOWN {
+        named.push(format!("+{} more", causes.len() - RETRY_CAUSES_SHOWN));
+    }
+    named.join("; ")
+}
+
 /// The error of a page whose embedded-image retry also recovered nothing, naming why each image
 /// failed. The typed source stays, so callers still match on the original cause.
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 fn with_retry_causes(error: crate::XbergError, causes: &[String]) -> crate::XbergError {
     match error {
-        crate::XbergError::Parsing { message, source } if !causes.is_empty() => {
-            let mut named = causes.iter().take(RETRY_CAUSES_SHOWN).cloned().collect::<Vec<_>>();
-            if causes.len() > RETRY_CAUSES_SHOWN {
-                named.push(format!("+{} more", causes.len() - RETRY_CAUSES_SHOWN));
-            }
-            crate::XbergError::Parsing {
-                message: format!(
-                    "{message}; embedded-image retry recovered no text ({})",
-                    named.join("; ")
-                ),
-                source,
-            }
-        }
+        crate::XbergError::Parsing { message, source } if !causes.is_empty() => crate::XbergError::Parsing {
+            message: format!(
+                "{message}; embedded-image retry recovered no text ({})",
+                retry_cause_summary(causes)
+            ),
+            source,
+        },
         other => other,
     }
 }
@@ -9217,6 +9322,8 @@ async fn run_ocr_pipeline_stages(
     let mut stage_failures: Vec<(String, String)> = Vec::new();
     #[cfg(feature = "pdf")]
     let mut preferred_recovery_config = None;
+    #[cfg(feature = "pdf")]
+    let mut preferred_recovery_budget_refused = false;
 
     let automatic_paddle = inputs.detached_page.is_some()
         && uses_default_ocr_pipeline(ocr_config)
@@ -9240,7 +9347,9 @@ async fn run_ocr_pipeline_stages(
             ..config.clone()
         };
         #[cfg(feature = "pdf")]
-        if preferred_recovery_config.is_none() {
+        let is_preferred_recovery_stage = preferred_recovery_config.is_none();
+        #[cfg(feature = "pdf")]
+        if is_preferred_recovery_stage {
             preferred_recovery_config = Some(pre_page_ocr_config(&stage_config).into_owned());
         }
 
@@ -9422,6 +9531,10 @@ async fn run_ocr_pipeline_stages(
                 if crate::extraction::derive::is_invalid_public_ocr_document(&failed_stage.error) {
                     return Err(failed_stage);
                 }
+                #[cfg(feature = "pdf")]
+                if is_preferred_recovery_stage {
+                    preferred_recovery_budget_refused = render_refused_by_source_image_budget(&failed_stage.error);
+                }
                 tracing::warn!(
                     backend = %stage.backend,
                     error = %failed_stage.error,
@@ -9548,8 +9661,13 @@ async fn run_ocr_pipeline_stages(
             #[cfg(feature = "pdf")]
             if let Some(mut recovery) = xobject_recovery {
                 accumulated_usage.append(&mut recovery.llm_usage);
+                let doc = if preferred_recovery_budget_refused && inputs.content.is_some() {
+                    plain_budget_recovery_list_document(&recovery, config)
+                } else {
+                    None
+                };
                 let doc =
-                    attach_ocr_pipeline_stage_warnings(None, &recovery.text, &unavailable_backends, &stage_failures);
+                    attach_ocr_pipeline_stage_warnings(doc, &recovery.text, &unavailable_backends, &stage_failures);
                 let mut doc = attach_ocr_fallback_warnings(doc, &recovery.text, recovery.warnings);
                 if let Some(doc) = doc.as_mut() {
                     merge_ocr_page_failures(&mut doc.ocr_page_failures, std::mem::take(&mut recovery.page_failures));

@@ -7,12 +7,16 @@ use std::sync::{Arc, Mutex};
 
 pub(super) const BACKEND: &str = "xobject-budget-parity-routing-only-2339";
 pub(super) const TEXT: &str = "routing-only fixture response";
+pub(super) const LIST_PAGE_TEXT: &str = "Notes\n\n1. Check the first label\n\nNorth";
+pub(super) const TABLE_PAGE_TEXT: &str = "Table page";
 
 #[derive(Clone, Copy)]
 pub(super) enum Reply {
     Text,
     Empty,
     Fail,
+    TableThenList,
+    TextThenNoise { final_dpi: i32 },
 }
 
 pub(super) struct Observed {
@@ -50,7 +54,9 @@ impl OcrBackend for Observer {
         true
     }
     async fn process_image(&self, bytes: &[u8], config: &OcrConfig) -> crate::Result<ExtractedDocument> {
-        self.records.lock().unwrap().push(Observed {
+        let mut records = self.records.lock().unwrap();
+        let first_read = records.is_empty();
+        records.push(Observed {
             bytes: bytes.to_vec(),
             config: config.clone(),
         });
@@ -60,11 +66,49 @@ impl OcrBackend for Observer {
                 source: None,
             }),
             Reply::Empty => Ok(ExtractedDocument::default()),
-            Reply::Text => Ok(ExtractedDocument {
+            Reply::TextThenNoise { final_dpi } if !first_read => Ok(noisy_read(final_dpi)),
+            Reply::Text | Reply::TextThenNoise { .. } => Ok(ExtractedDocument {
                 content: TEXT.to_string(),
                 ..Default::default()
             }),
+            Reply::TableThenList if first_read => Ok(ExtractedDocument {
+                content: TABLE_PAGE_TEXT.to_string(),
+                tables: vec![crate::types::Table {
+                    cells: vec![vec!["Sample".into(), "Count".into()], vec!["Amber".into(), "4".into()]],
+                    markdown: "| Sample | Count |\n| --- | --- |\n| Amber | 4 |".into(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }),
+            Reply::TableThenList => Ok(ExtractedDocument {
+                content: LIST_PAGE_TEXT.to_string(),
+                ..Default::default()
+            }),
         }
+    }
+}
+
+fn noisy_read(final_dpi: i32) -> ExtractedDocument {
+    ExtractedDocument {
+        content: "ab ".repeat(20).trim_end().to_owned(),
+        metadata: crate::types::Metadata {
+            image_preprocessing: Some(crate::types::ImagePreprocessingMetadata {
+                original_dimensions: (3600, 2550).into(),
+                original_dpi: (300.0, 300.0).into(),
+                target_dpi: 300,
+                scale_factor: f64::from(final_dpi) / 300.0,
+                auto_adjusted: true,
+                final_dpi,
+                new_dimensions: None,
+                resample_method: "test".into(),
+                dimension_clamped: false,
+                calculated_dpi: None,
+                skipped_resize: final_dpi == 300,
+                resize_error: None,
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
     }
 }
 

@@ -673,6 +673,9 @@ jobs:
       ${{ github.ref == 'refs/heads/main' && (github.event.pull_request.draft != true) }}
     uses: xberg-io/actions/.github/workflows/reusable-validate.yml@v1
     with:
+      # ~keep On Ubuntu 26.04 bindgen pairs the default Clang 21 headers with libclang 22.
+      # The Ubuntu 24.04 image uses Clang 18 for both sides of the PHP header parse.
+      runner: ubuntu-24.04
       # poly-version is deliberately unset so the reusable workflow resolves the
       # newest release. A pin goes stale against the tree: an alef regen reformats
       # with the poly bundled in the alef toolchain, so `poly fmt --check` then fails
