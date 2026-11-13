@@ -5267,10 +5267,7 @@ fn can_merge_tables(upper: &Table, lower: &Table, x_tol: f32, y_tol: f32) -> boo
         return false;
     }
     let min_height = u_bbox.height.min(l_bbox.height);
-    if -gap > min_height * 0.5 {
-        return false;
-    }
-    true
+    (-gap).partial_cmp(&(min_height * 0.5)) != Some(std::cmp::Ordering::Greater)
 }
 
 fn merge_table_into(upper: &mut Table, lower: Table) {

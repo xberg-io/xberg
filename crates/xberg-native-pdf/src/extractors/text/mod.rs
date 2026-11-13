@@ -1739,11 +1739,7 @@ fn is_email_context(preceding_text: &str, following_text: &str) -> bool {
         }
     }
 
-    if prev.ends_with('@') && next.chars().next().is_some_and(|c| c.is_ascii_alphanumeric()) {
-        return true;
-    }
-
-    false
+    prev.ends_with('@') && next.chars().next().is_some_and(|c| c.is_ascii_alphanumeric())
 }
 
 /// Detect if bounding boxes indicate citation marker context.
