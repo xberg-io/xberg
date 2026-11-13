@@ -321,11 +321,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Render complex spot-color pages within the PNG memory budget.** Pages with transparency or knockout groups can render at reduced DPI when needed. (#2870)
 
-- **(pdf): Preserve native text when a PDF OCR read is discarded.** Forced whole-document OCR restores available native text to page and document output when the page text can be matched. Automatic whole-document OCR can keep the native content of a one-page PDF when the discarded read leaves a verified visible text layer. Ambiguous page placements omit byte ranges. (#3013, #3014, #3129)
+- **(pdf): Preserve native text when a PDF OCR read is discarded.** Forced whole-document OCR restores available native text to page `content` and document output when the page text can be matched. Restored pages leave `native_content` unset, regardless of `keep_native_content`. Automatic whole-document OCR can return the original native result for a one-page PDF when the discarded read leaves a verified visible text layer. Ambiguous page placements omit byte ranges. (#3013, #3014, #3129)
 
 - **(pdf): Remove duplicate text from automatic mixed OCR output.** Source matches preserve split words and repeated identifiers, including in table cells, while keeping distinct occurrences and OCR-only cells. (#2534)
 
-- **(ocr): Recover sideways prose on automatically selected scan pages in mixed PDFs.** With the default Tesseract OCR policy and installed orientation data, builds with orientation support, including Paddle-enabled builds, can recover a verified paragraph on an eligible full-page scan without native text. This change applies to the automatic mixed-PDF route. Partial `force_ocr_pages` selections keep their existing behavior. (#3050, #3092)
+- **(ocr): Recover sideways prose on automatically selected scan pages in mixed PDFs.** With the default Tesseract OCR policy and installed orientation data, builds with orientation support, including Paddle-enabled builds, can recover a verified paragraph on an eligible full-page scan without native text. This change applies to the automatic mixed-PDF route. Partial `force_ocr_pages` selections keep their existing behavior. OCR routes that render their own page images remain eligible for sideways-prose recovery under their existing orientation policy. (#3050, #3062, #3092, #3093)
 
 - **(ocr): Preserve sideways-prose recovery and orientation metadata for whole-document Tesseract OCR in Paddle-enabled builds.** (#3007)
 
