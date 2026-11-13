@@ -6194,7 +6194,11 @@ pub(super) async fn extract_with_ocr_for_page(
                     super::native_word_coverage::InkProofLimits { ..limits },
                 );
                 if let Some(additions) = additions {
+                    let before = ocr_result.content.len();
                     super::layer_token_recovery::apply_minority_khmer(&mut ocr_result, &additions, limits.cancelled);
+                    if detached_page.is_some() && ocr_result.content.len() > before {
+                        tracing::debug!(page = document_page_number, "Detached Tesseract read recovered Khmer");
+                    }
                 }
             }
             if let Some(psm) = effective_tesseract_psm(&ocr_result.metadata, &backend_name) {

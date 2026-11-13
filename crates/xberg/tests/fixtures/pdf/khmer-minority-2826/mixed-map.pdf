@@ -721,7 +721,7 @@ BT /EN 9 Tf 0 Tc
 1 0 0 1 225 88 Tm (ma il .) Tj
 ET
 BT /EN 12 Tf 1 0 0 1 54 770 Tm (Morning volunteers prepare the auditorium.) Tj 1 0 0 1 54 28 Tm (Evening visitors collect supplies at reception.) Tj ET
-BT /BAD 12 Tf 1 0 0 1 54 748 Tm (Volunteers deliver library supplies before the community meeting.) Tj 1 0 0 1 470 704 Tm (ID) Tj ET
+BT /BAD 12 Tf 1 0 0 1 54 748 Tm (Volunteers deliver library supplies before the community meeting.) Tj 1 0 0 1 470 704 Tm (id) Tj ET
 endstream
 endobj
 11 0 obj
@@ -731,9 +731,9 @@ endobj
 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding /ToUnicode 13 0 R >>
 endobj
 13 0 obj
-<< /Length 1293 >>
+<< /Length 1285 >>
 stream
-/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def /CMapName /Control def /CMapType 2 def 1 begincodespacerange <00> <FF> endcodespacerange 52 beginbfchar <41> <179f17d2179a> <42> <179b17b6> <43> <178917cb> <44> <179a17c01793> <45> <179117c1> <46> <179f17b6> <47> <178117d2178917bb17c6> <48> <179f17d2179a> <49> <179f17b6179b17b6> <4A> <178917cb> <4B> <179417d2179a> <4C> <179117c1> <4D> <179f17b6> <4E> <178117d2178917bb17c6> <4F> <179f17d2179a> <50> <179b17b6> <51> <178917cb> <52> <179417d2179a> <53> <179117c1> <54> <179f17b6> <55> <178117d2178917bb17c6> <56> <179f17d2179a> <57> <179b17b6> <58> <178917cb> <59> <179417d2179a> <5A> <179117c1> <61> <179f17b6> <62> <178117d2178917bb17c6> <63> <179f17d2179a> <64> <179b17b6> <65> <178917cb> <66> <179417d2179a> <67> <179117c1> <68> <179f17b6> <69> <178117d2178917bb17c6> <6A> <179f17d2179a> <6B> <179b17b6> <6C> <178917cb> <6D> <179417d2179a> <6E> <179117c1> <6F> <179f17b6> <70> <178117d2178917bb17c6> <71> <179f17d2179a> <72> <179b17b6> <73> <178917cb> <74> <179417d2179a> <75> <179117c1> <76> <179f17b6> <77> <178117d2178917bb17c6> <78> <179f17d2179a> <79> <179b17b6> <7A> <178917cb> endbfchar endcmap CMapName currentdict /CMap defineresource pop end end
+/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def /CMapName /Control def /CMapType 2 def 1 begincodespacerange <00> <FF> endcodespacerange 52 beginbfchar <41> <179f17d2179a> <42> <179b17b6> <43> <178917cb> <44> <179417d2179a> <45> <179117c1> <46> <179f17b6> <47> <178117d2178917bb17c6> <48> <179f17d2179a> <49> <179b17b6> <4A> <178917cb> <4B> <179417d2179a> <4C> <179117c1> <4D> <179f17b6> <4E> <178117d2178917bb17c6> <4F> <179f17d2179a> <50> <179b17b6> <51> <178917cb> <52> <179417d2179a> <53> <179117c1> <54> <179f17b6> <55> <178117d2178917bb17c6> <56> <179f17d2179a> <57> <179b17b6> <58> <178917cb> <59> <179417d2179a> <5A> <179117c1> <61> <179f17b6> <62> <178117d2178917bb17c6> <63> <179f17d2179a> <64> <179a17c01793> <65> <178917cb> <66> <179417d2179a> <67> <179117c1> <68> <179f17b6> <69> <179f17b6179b17b6> <6A> <179f17d2179a> <6B> <179b17b6> <6C> <178917cb> <6D> <179417d2179a> <6E> <179117c1> <6F> <179f17b6> <70> <178117d2178917bb17c6> <71> <179f17d2179a> <72> <179b17b6> <73> <178917cb> <74> <179417d2179a> <75> <179117c1> <76> <179f17b6> <77> <178117d2178917bb17c6> <78> <179f17d2179a> <79> <179b17b6> <7A> <178917cb> endbfchar endcmap CMapName currentdict /CMap defineresource pop end end
 endstream
 endobj
 xref
@@ -750,5 +750,5 @@ xref
 trailer
 << /Size 14 /Root 1 0 R /Prev 19894 >>
 startxref
-32873
+32865
 %%EOF

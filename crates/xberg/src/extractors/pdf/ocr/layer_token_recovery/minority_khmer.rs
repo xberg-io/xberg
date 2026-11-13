@@ -44,6 +44,7 @@ pub(in crate::extractors::pdf::ocr) fn apply_minority_khmer(
     cancelled: &dyn Fn() -> bool,
 ) {
     let mut text = PageText::of(read);
+    let mut inline = Vec::new();
     let page = read
         .ocr_elements
         .as_deref()
@@ -65,13 +66,47 @@ pub(in crate::extractors::pdf::ocr) fn apply_minority_khmer(
         }
         match inline_khmer_anchor(read, &text, &area) {
             Some(anchor) => {
-                let _ = insert_inline_khmer(read, &mut text, run, (area, *place), anchor);
+                inline.push((anchor, (run.as_str(), *place)));
             }
             None => {
                 if let Some(insertion) = line_insertion(read, &text, &area) {
                     insert_recovered_text(read, &mut text, run, *place, page, insertion);
                 }
             }
+        }
+    }
+    // Resolve every occurrence against the original OCR words before adding any copies.
+    let mut groups = std::collections::BTreeMap::<String, Vec<_>>::new();
+    for ((anchor, after), run) in inline {
+        groups.entry(anchor).or_default().push((after, run));
+    }
+    let mut edits = Vec::new();
+    for (anchor, mut runs) in groups {
+        runs.sort_by_key(|(after, (_, (left, _, _, _)))| (*after, *left));
+        if let Some(edit) = inline_edit(read, &anchor, runs) {
+            edits.push(edit);
+        }
+    }
+    // Apply from right to left in each surface so original byte and word offsets stay valid.
+    edits.sort_by_key(|edit| std::cmp::Reverse(edit.flat));
+    for edit in &edits {
+        read.content
+            .replace_range(edit.flat..edit.flat + edit.anchor_len, &edit.text);
+    }
+    if let Some(doc) = read.ocr_internal_document.as_mut() {
+        edits.sort_by_key(|edit| std::cmp::Reverse(edit.structured));
+        for edit in &edits {
+            if let Some((index, offset)) = edit.structured {
+                doc.elements[index]
+                    .text
+                    .replace_range(offset..offset + edit.anchor_len, &edit.text);
+            }
+        }
+    }
+    if let Some(elements) = read.ocr_elements.as_mut() {
+        edits.sort_by_key(|edit| std::cmp::Reverse(edit.word_index));
+        for edit in edits {
+            elements.splice(edit.word_index..=edit.word_index, edit.words);
         }
     }
 }
@@ -97,61 +132,75 @@ fn inline_khmer_anchor(read: &ExtractedDocument, text: &PageText, area: &PixelBo
         .map(|(_, word, after)| (word.to_owned(), after))
 }
 
-fn insert_inline_khmer(
-    read: &mut ExtractedDocument,
-    text: &mut PageText,
-    run: &str,
-    (area, (left, top, width, height)): (PixelBox, (u32, u32, u32, u32)),
-    (anchor, after): (String, bool),
-) -> Option<()> {
-    let offset = whole_token_offset(&read.content, &anchor)?;
-    let structured = match read.ocr_internal_document.as_mut() {
+type InlineRun<'a> = (bool, (&'a str, (u32, u32, u32, u32)));
+
+struct InlineEdit {
+    flat: usize,
+    structured: Option<(usize, usize)>,
+    word_index: usize,
+    anchor_len: usize,
+    text: String,
+    words: Vec<OcrElement>,
+}
+
+fn inline_edit(read: &ExtractedDocument, anchor: &str, runs: Vec<InlineRun<'_>>) -> Option<InlineEdit> {
+    let flat = whole_token_offset(&read.content, anchor)?;
+    let structured = match &read.ocr_internal_document {
         Some(doc) => {
-            let mut owners = doc
-                .elements
-                .iter_mut()
-                .filter_map(|element| Some((whole_token_offset(&element.text, &anchor)?, element)));
-            let (offset, owner) = owners.next()?;
-            if owners.next().is_some() {
+            let mut owners = doc.elements.iter().enumerate().filter_map(|(index, element)| {
+                Some((index, whole_token_offset(&element.text, anchor)?, element.bbox?))
+            });
+            let (index, offset, bbox) = owners.next()?;
+            if owners.next().is_some()
+                || runs.iter().any(|(_, (_, (_, top, _, height)))| {
+                    bbox.y0 >= f64::from(*top) + f64::from(*height) || bbox.y1 <= f64::from(*top)
+                })
+            {
                 return None;
             }
-            let bbox = owner.bbox?;
-            if bbox.y0 >= area.bottom as f64 || bbox.y1 <= area.top as f64 {
-                return None;
-            }
-            Some((offset, owner))
+            Some((index, offset))
         }
         None => None,
     };
-    let insert = |content: &mut String, offset| {
-        let offset = if after { offset + anchor.len() } else { offset };
-        Insertion::Beside { offset, after }.apply(content, run);
+    let elements = read.ocr_elements.as_ref()?;
+    let word_index = elements
+        .iter()
+        .position(|element| element.level == OcrElementLevel::Word && element.text == anchor)?;
+    let source = &elements[word_index];
+    let mut words = Vec::with_capacity(runs.len() + 1);
+    let split = runs.partition_point(|(after, _)| !after);
+    words.extend(runs[..split].iter().map(|run| recovered_word(source, run)));
+    words.push(source.clone());
+    words.extend(runs[split..].iter().map(|run| recovered_word(source, run)));
+    let text = words
+        .iter()
+        .map(|word| word.text.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    Some(InlineEdit {
+        flat,
+        structured,
+        word_index,
+        anchor_len: anchor.len(),
+        text,
+        words,
+    })
+}
+
+fn recovered_word(source: &OcrElement, (_, (run, (left, top, width, height))): &InlineRun<'_>) -> OcrElement {
+    let mut recovered = source.clone();
+    recovered.text = (*run).to_owned();
+    recovered.geometry = OcrBoundingGeometry::Rectangle {
+        left: *left,
+        top: *top,
+        width: *width,
+        height: *height,
     };
-    if let Some((offset, owner)) = structured {
-        insert(&mut owner.text, offset);
-    }
-    insert(&mut read.content, offset);
-    if let Some(elements) = read.ocr_elements.as_mut()
-        && let Some(index) = elements
-            .iter()
-            .position(|element| element.level == OcrElementLevel::Word && element.text == anchor)
-    {
-        let mut recovered = elements[index].clone();
-        recovered.text = run.to_owned();
-        recovered.geometry = OcrBoundingGeometry::Rectangle {
-            left,
-            top,
-            width,
-            height,
-        };
-        recovered.confidence.recognition = 1.0;
-        recovered
-            .backend_metadata
-            .insert("backend".into(), RECOVERY_BACKEND.into());
-        elements.insert(index + usize::from(after), recovered);
-    }
-    text.insert(run, area);
-    Some(())
+    recovered.confidence.recognition = 1.0;
+    recovered
+        .backend_metadata
+        .insert("backend".into(), RECOVERY_BACKEND.into());
+    recovered
 }
 
 fn whole_token_offset(content: &str, token: &str) -> Option<usize> {
@@ -364,21 +413,23 @@ fn unmatched_runs(
             if word.text.chars().any(is_khmer) {
                 matched.push((khmer_run(&word.text), place));
             } else if word.confidence.recognition >= MAX_CORRECTED_CONFIDENCE {
-                local.push(word.text.as_str());
+                local.push((word.text.as_str(), place));
             }
         } else if word.text.chars().any(|ch| ch.is_ascii_alphabetic()) {
             corroborating += 1;
         }
     }
-    let latin_label = local.iter().any(|word| {
+    let latin_label = local.iter().any(|(word, place)| {
         let word = word.trim_matches(|ch: char| ch.is_ascii_punctuation());
-        (word.len() >= 4 || word.len() >= 2 && word.bytes().all(|byte| byte.is_ascii_uppercase()))
-            && word.bytes().all(|byte| byte.is_ascii_alphabetic())
+        if word.len() < 2 || !word.bytes().all(|byte| byte.is_ascii_alphabetic()) {
+            return false;
+        }
+        let overlap = run.place.right.min(place.right) - run.place.left.max(place.left);
+        let narrower = (run.place.right - run.place.left).min(place.right - place.left);
+        word.len() >= 4 || overlap >= narrower * 0.75
     });
-    if corroborating < MIN_LOCATED_WORDS
-        || latin_label
-        || ink_probe::read_contradicts_layer(&run.text, &local.join(" "))
-    {
+    let local_text = local.iter().map(|(word, _)| *word).collect::<Vec<_>>().join(" ");
+    if corroborating < MIN_LOCATED_WORDS || latin_label || ink_probe::read_contradicts_layer(&run.text, &local_text) {
         return Some(Vec::new());
     }
     if matched.is_empty() {
@@ -494,10 +545,30 @@ fn missing_khmer_occurrence_is_published_inline_in_both_surfaces() {
         }]),
         ..Default::default()
     };
-    apply_minority_khmer(&mut read, &[("ក".into(), (45, 10, 10, 20))], &|| false);
-    assert_eq!(read.content, "Before ក ក after");
+    apply_minority_khmer(
+        &mut read,
+        &[
+            ("ក".into(), (60, 10, 10, 20)),
+            ("ក".into(), (45, 10, 10, 20)),
+            ("ក".into(), (15, 10, 10, 20)),
+        ],
+        &|| false,
+    );
+    assert_eq!(read.content, "Before ក ក ក ក after");
     let document = read.ocr_internal_document.as_ref().unwrap();
     assert_eq!(document.elements.len(), 1);
     assert_eq!(document.elements[0].text, read.content);
-    assert_eq!(read.ocr_elements.as_ref().unwrap().len(), 2);
+    let lefts: Vec<_> = read
+        .ocr_elements
+        .as_ref()
+        .unwrap()
+        .iter()
+        .map(|word| {
+            let OcrBoundingGeometry::Rectangle { left, .. } = word.geometry else {
+                panic!("expected rectangle")
+            };
+            left
+        })
+        .collect();
+    assert_eq!(lefts, [15, 30, 45, 60]);
 }
