@@ -2051,6 +2051,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     }
                     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
                     let _ = read_evidence;
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    if let Some(matched) = read_evidence.matched_layer_occurrences {
+                        matched_layer_occurrences.insert(page_number, matched);
+                    }
                     if noise_verdicts.iter().any(|verdict| !verdict.discarded) {
                         noise_verdict_pages.insert(page_number);
                     }
@@ -2233,6 +2237,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     }
                     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
                     let _ = read_evidence;
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    if let Some(matched) = read_evidence.matched_layer_occurrences {
+                        matched_layer_occurrences.insert(page_number, matched);
+                    }
                     if noise_verdicts.iter().any(|verdict| !verdict.discarded) {
                         noise_verdict_pages.insert(page_number);
                     }
@@ -3641,6 +3649,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // accepted OCR'd page's paragraphs at once: the heuristic clusters font sizes
     // document-wide and needs several pages in hand, which is exactly what the per-page
     // callers above could not give it on their own.
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut reflow_scales = ahash::AHashMap::new();
     if !structured_ocr_pages.is_empty() {
         let mut pages_for_heuristic: Vec<Vec<crate::pdf::structure::types::PdfParagraph>> =
             vec![Vec::new(); page_count];
@@ -3685,6 +3695,18 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 // above (`carry_page_ocr_payload_forward`); only the *structural* elements
                 // (headings/paragraphs/list items/tables) come from the document-global pass.
                 Some(mut new_page_doc) => {
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    if config.output_format == crate::core::config::OutputFormat::Markdown {
+                        let scale = match ocr_raster_by_page.get(page_number) {
+                            Some(&(width, height)) if width > 0 && height > 0 => {
+                                let (width_pt, height_pt) =
+                                    page_dimensions_pt(&render_doc, page_number.saturating_sub(1) as usize);
+                                (width_pt / width as f32, height_pt / height as f32)
+                            }
+                            _ => (1.0, 1.0),
+                        };
+                        reflow_scales.insert(*page_number, scale);
+                    }
                     carry_page_ocr_payload_forward(existing, &mut new_page_doc);
                     new_page_doc
                 }
@@ -3900,7 +3922,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             && let Some(matched) = matched_layer_occurrences.get(page_number)
             && let Some(doc) = page_doc.as_deref_mut()
         {
-            matched.trim_prepend(first, text, doc, *page_number);
+            matched.trim_prepend(first, text, doc, *page_number, reflow_scales.get(page_number).copied());
             matched.replace_split_literals(first, text, doc);
             matched.replace_repeated_identifiers(first, text, doc);
         }
@@ -4796,6 +4818,13 @@ pub(super) struct OcrReadEvidence {
     /// The page text joined as it was before symbol-noise pruning, when any page was pruned, so
     /// pipeline stage scoring judges the same text as without pruning (#2312).
     pub(super) unpruned_text: Option<String>,
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    matched_layer_occurrences: Option<super::document::MatchedLayerOccurrences>,
     original_tesseract_raster: bool,
     discarded_visible_native_page: bool,
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
@@ -5466,6 +5495,13 @@ pub(super) async fn extract_with_ocr_for_page(
     let mut native_ink_owned = false;
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     let mut native_placed_words = std::collections::HashSet::new();
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let mut matched_layer_occurrences = None;
     #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
     let tall_source_used = false;
     #[cfg(all(
@@ -6378,6 +6414,26 @@ pub(super) async fn extract_with_ocr_for_page(
                             },
                         );
                 }
+            }
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            if can_retry_orientation
+                && batch_upright_correction[offset].0 == 0
+                && let Some(source) = detached_page.filter(|_| !has_stored_scan)
+                && let Some(layer) = page_ocr_hints
+                    .as_ref()
+                    .and_then(|hints| hints.decision_layer(document_page_number))
+            {
+                matched_layer_occurrences = super::document::MatchedLayerOccurrences::capture(
+                    source.document,
+                    document_page_idx,
+                    layer,
+                    &ocr_result,
+                );
             }
             crate::extraction::derive::adopt_public_ocr_document(
                 &mut ocr_result,
@@ -7934,6 +7990,14 @@ pub(super) async fn extract_with_ocr_for_page(
             native_ink_owned,
             #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
             native_placed_words,
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            matched_layer_occurrences: matched_layer_occurrences
+                .filter(|_| !tall_source_used && pages_with_recovered_xobject_payload == [false]),
             original_tesseract_raster: {
                 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                 {
@@ -9745,7 +9809,16 @@ async fn run_ocr_pipeline_stages(
                 let selected_read_evidence = if automatic_paddle && read_evidence.original_tesseract_raster {
                     read_evidence
                 } else {
-                    OcrReadEvidence::default()
+                    OcrReadEvidence {
+                        #[cfg(all(
+                            feature = "pdf",
+                            feature = "ocr",
+                            feature = "tokio-runtime",
+                            not(target_arch = "wasm32")
+                        ))]
+                        matched_layer_occurrences: read_evidence.matched_layer_occurrences,
+                        ..Default::default()
+                    }
                 };
                 if score >= pipeline.quality_thresholds.pipeline_min_quality || skip_automatic_paddle {
                     let (text, stage_page_texts, stage_doc) = with_run_layers_first(

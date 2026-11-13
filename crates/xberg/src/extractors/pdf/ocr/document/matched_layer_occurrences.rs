@@ -130,6 +130,7 @@ impl MatchedLayerOccurrences {
         flat: &str,
         structured: &crate::types::internal::InternalDocument,
         page: u32,
+        reflow_scale: Option<(f32, f32)>,
     ) {
         let flat_text = flat;
         let flat = OutputLiterals::new(flat, &table_rows(&structured.tables, |bbox| bbox));
@@ -154,8 +155,11 @@ impl MatchedLayerOccurrences {
                     .get(token.as_str())
                     .is_some_and(|prepended| *prepended <= occurrences.len())
                     && flat.contains(token, occurrences)
-                    && structured.contains(token, occurrences)
-                    && occurrences.iter().all(|word| has_positioned_owner(&positioned, word))
+                    && ((structured.contains(token, occurrences)
+                        && occurrences.iter().all(|word| has_positioned_owner(&positioned, word)))
+                        || reflow_scale.is_some_and(|scale| {
+                            unique_reflowed_owner(token, occurrences, &structured, &positioned, scale)
+                        }))
             })
             .map(|(token, occurrences)| (token.as_str(), occurrences.len()))
             .collect();
@@ -817,6 +821,41 @@ fn has_positioned_owner(rows: &PositionedRows, word: &OutputOccurrence) -> bool 
         })
         .count()
         == 1
+}
+
+fn unique_reflowed_owner(
+    token: &str,
+    occurrences: &[OutputOccurrence],
+    rendered: &OutputLiterals<'_>,
+    positioned: &PositionedRows,
+    (sx, sy): (f32, f32),
+) -> bool {
+    let [word] = occurrences else { return false };
+    if word.table.is_some() || rendered.original.get(token) != Some(&1) {
+        return false;
+    }
+    let source: Vec<_> = word.row.split_whitespace().collect();
+    if source.len() < 2 {
+        return false;
+    }
+    let Some([(row, _)]) = rendered.positions.get(token).map(Vec::as_slice) else {
+        return false;
+    };
+    let row = &rendered.rows[*row].text;
+    let tokens: Vec<_> = row.split_whitespace().collect();
+    tokens.windows(source.len()).filter(|window| *window == source).count() == 1
+        && positioned.get(row.as_ref()).is_some_and(|owners| {
+            let [(bbox, None)] = owners.as_slice() else {
+                return false;
+            };
+            LineBox {
+                left: bbox.left * sx,
+                right: bbox.right * sx,
+                top: bbox.top * sy,
+                bottom: bbox.bottom * sy,
+            }
+            .owns(&word.bbox)
+        })
 }
 
 fn positioned_rows(doc: &crate::types::internal::InternalDocument) -> PositionedRows {
@@ -1609,7 +1648,7 @@ mod matched_layer_occurrences_tests {
             "{}\nchanged Unmatched",
             crate::rendering::common::render_table_markdown(&doc.tables[0].cells)
         );
-        proof.trim_prepend(&mut first, &flat, &doc, 1);
+        proof.trim_prepend(&mut first, &flat, &doc, 1, None);
         assert_eq!(first.lines, "native\nchanged Unmatched pand");
         assert_eq!(doc.tables[0].cells[1], ["PAND", "row2", "OCR-only |"]);
         doc.tables[0].cells.swap(0, 1);
@@ -1618,7 +1657,7 @@ mod matched_layer_occurrences_tests {
             lost_glyphs: 0,
             misread_ocr_rows: Vec::new(),
         };
-        proof.trim_prepend(&mut first, &flat, &doc, 1);
+        proof.trim_prepend(&mut first, &flat, &doc, 1, None);
         assert_eq!(first.lines, "PAND PAND");
     }
 
@@ -1671,6 +1710,39 @@ mod matched_layer_occurrences_tests {
     }
 
     #[test]
+    fn reflowed_row_requires_a_unique_literal_and_positioned_owner() {
+        let row = "register 769 scope";
+        let proof = MatchedLayerOccurrences(
+            ahash::AHashMap::from([("769".into(), vec![occurrence(row, 1)])]),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        );
+        for (structured, positioned, allow_reflow, expected) in [
+            ("header register 769 scope footer", true, true, "native"),
+            ("header register 769 scope footer", true, false, "769 native"),
+            ("header register 769 scope footer", false, true, "769 native"),
+            ("header register 769 scope and 769 footer", true, true, "769 native"),
+            ("header other 769 scope footer", true, true, "769 native"),
+        ] {
+            let mut first = LayerFirst {
+                lines: "769 native".into(),
+                lost_glyphs: 0,
+                misread_ocr_rows: Vec::new(),
+            };
+            let mut doc = flat_ocr_page_document(structured);
+            doc.elements[0].bbox = positioned.then_some(BoundingBox {
+                x0: 0.0,
+                y0: 0.0,
+                x1: 100.0,
+                y1: 100.0,
+            });
+            proof.trim_prepend(&mut first, row, &doc, 1, allow_reflow.then_some((1.0, 1.0)));
+            assert_eq!(first.lines, expected, "{structured}");
+        }
+    }
+
+    #[test]
     fn preserves_literal_if_its_prepend_or_either_output_has_ambiguous_multiplicity() {
         let proof = MatchedLayerOccurrences(
             ahash::AHashMap::from([(
@@ -1699,7 +1771,7 @@ mod matched_layer_occurrences_tests {
                 x1: 100.0,
                 y1: 100.0,
             });
-            proof.trim_prepend(&mut first, flat, &doc, 1);
+            proof.trim_prepend(&mut first, flat, &doc, 1, Some((1.0, 1.0)));
             assert_eq!(first.lines, prepend);
         }
     }
