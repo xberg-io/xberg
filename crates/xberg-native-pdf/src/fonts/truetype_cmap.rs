@@ -335,27 +335,36 @@ impl TrueTypeCMap {
 
     /// Parse cmap format 4 (BMP - supports characters U+0000 to U+FFFF)
     fn parse_cmap_format4(cursor: &mut Cursor<&[u8]>) -> Result<HashMap<u16, char>, String> {
+        Self::parse_cmap_format4_with_budget(cursor, u16::MAX as usize)
+    }
+
+    fn cmap_format4_subtable<'a>(cursor: &mut Cursor<&'a [u8]>) -> Result<&'a [u8], String> {
         let start = cursor.position() as usize - 2;
         let length = cursor
             .read_u16::<BigEndian>()
             .map_err(|e| format!("Failed to read format 4 length: {e}"))? as usize;
         const HEADER_BYTES: usize = 16;
-        const SEGMENT_BYTES: usize = 8;
         if length < HEADER_BYTES || length % 2 != 0 {
             return Err("Invalid cmap format 4 subtable length".into());
         }
-        let data = cursor
+        cursor
             .get_ref()
             .get(start..start.saturating_add(length))
-            .ok_or("Truncated cmap format 4 subtable")?;
+            .ok_or_else(|| "Truncated cmap format 4 subtable".into())
+    }
+
+    fn parse_cmap_format4_with_budget(cursor: &mut Cursor<&[u8]>, budget: usize) -> Result<HashMap<u16, char>, String> {
+        const HEADER_BYTES: usize = 16;
+        const SEGMENT_BYTES: usize = 8;
+        let data = Self::cmap_format4_subtable(cursor)?;
         let mut subtable = Cursor::new(&data[4..]);
         let seg_count = Self::read_cmap_format4_header(&mut subtable)?;
-        if seg_count > (length - HEADER_BYTES) / SEGMENT_BYTES {
+        if seg_count > (data.len() - HEADER_BYTES) / SEGMENT_BYTES {
             return Err("Cmap format 4 segment arrays exceed subtable length".into());
         }
         let (end_codes, start_codes, id_deltas, id_range_offsets, glyph_id_array) =
             Self::read_cmap_format4_segments(&mut subtable, seg_count)?;
-        Self::validate_cmap_format4_segments(&start_codes, &end_codes, u16::MAX as usize)?;
+        Self::validate_cmap_format4_segments(&start_codes, &end_codes, budget)?;
         Ok(Self::build_cmap_format4_gid_map(
             seg_count,
             &end_codes,

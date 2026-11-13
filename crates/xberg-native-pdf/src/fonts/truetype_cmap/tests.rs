@@ -937,13 +937,32 @@ fn test_platform_priority_windows_full_over_bmp() {
 }
 
 #[test]
-fn format4_budget_counts_valid_code_points_before_mapping() {
-    let starts = [65, 97, u16::MAX];
-    let ends = [66, 98, u16::MAX];
-    assert_eq!(TrueTypeCMap::validate_cmap_format4_segments(&starts, &ends, 4), Ok(()));
+fn format4_parser_accepts_exact_budget_and_rejects_one_below() {
+    let font = build_truetype_with_cmap_format4(&[(65, 1), (66, 2)]);
+    let mut cursor = Cursor::new(&font[40..]);
+    cursor.set_position(2);
     assert_eq!(
-        TrueTypeCMap::validate_cmap_format4_segments(&starts, &ends, 3),
+        TrueTypeCMap::parse_cmap_format4_with_budget(&mut cursor, 2).unwrap(),
+        HashMap::from([(1, 'A'), (2, 'B')])
+    );
+
+    cursor.set_position(2);
+    assert_eq!(
+        TrueTypeCMap::parse_cmap_format4_with_budget(&mut cursor, 1),
         Err("Cmap format 4 iteration budget exhausted".into())
+    );
+}
+
+#[test]
+fn format4_subtable_slice_excludes_trailing_padding() {
+    let mut font = build_truetype_with_cmap_format4(&[(65, 1), (66, 2)]);
+    let end = font.len();
+    font.extend_from_slice(&[0; 8]);
+    let mut cursor = Cursor::new(font.as_slice());
+    cursor.set_position(42);
+    assert_eq!(
+        TrueTypeCMap::cmap_format4_subtable(&mut cursor).unwrap(),
+        &font[40..end]
     );
 }
 
