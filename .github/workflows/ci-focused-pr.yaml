@@ -189,3 +189,28 @@ jobs:
           cargo "${args[@]}" -- --exact "$name" --color never 2>&1 | tee "$RUNNER_TEMP/layer-token-run.log"
           grep -Fx "test $name ... ok" "$RUNNER_TEMP/layer-token-run.log"
           grep -F 'test result: ok. 1 passed; 0 failed; 0 ignored;' "$RUNNER_TEMP/layer-token-run.log"
+
+      - name: Verify default-route Khmer number recovery and refusals
+        if: matrix.suite == 'pdf-ocr'
+        shell: bash
+        run: |
+          set -euo pipefail
+          source scripts/lib/tessdata.sh
+          export XBERG_2408_KHM_MODEL="$RUNNER_TEMP/xberg-focused-khm/khm.traineddata"
+          mkdir -p "$(dirname "$XBERG_2408_KHM_MODEL")"
+          download_traineddata khm "$XBERG_2408_KHM_MODEL" \
+            https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/khm.traineddata
+          printf '%s  %s\n' 47f110575341b322052f3becbefee61a3ecf1ef549352b5d4d33d28afe30d099 \
+            "$XBERG_2408_KHM_MODEL" | sha256sum --check
+          features="pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types,paddle-ocr-tract"
+          args=(test --locked -p xberg --no-default-features --features "$features" --test pdf_khmer_number_2408)
+          for name in recovers_the_painted_zero_once_at_its_source_position \
+            provisioned_recognition_still_refuses_false_native_digits \
+            provisioned_recognition_refuses_painted_latin_lookalikes; do
+            cargo "${args[@]}" -- --exact "$name" --ignored --list --color never 2>&1 | tee "$RUNNER_TEMP/$name-list.log"
+            grep -Fx "$name: test" "$RUNNER_TEMP/$name-list.log"
+            grep -Fx '1 test, 0 benchmarks' "$RUNNER_TEMP/$name-list.log"
+            cargo "${args[@]}" -- --exact "$name" --ignored --color never 2>&1 | tee "$RUNNER_TEMP/$name-run.log"
+            grep -Fx "test $name ... ok" "$RUNNER_TEMP/$name-run.log"
+            grep -F 'test result: ok. 1 passed; 0 failed; 0 ignored;' "$RUNNER_TEMP/$name-run.log"
+          done
