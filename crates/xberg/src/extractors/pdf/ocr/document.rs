@@ -2147,7 +2147,9 @@ pub(in crate::extractors::pdf) fn join_run_pages(
 pub(super) enum NativePrepend {
     #[default]
     Original,
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     Recovered(String, String),
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     Abstain,
 }
 
@@ -2156,7 +2158,9 @@ impl NativePrepend {
     pub(super) fn inputs<'a>(&'a self, source: &'a str, read: &'a str) -> Option<(&'a str, &'a str)> {
         match self {
             Self::Original => Some((source, read)),
+            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
             Self::Recovered(source, read) => Some((source, read)),
+            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
             Self::Abstain => None,
         }
     }
