@@ -561,6 +561,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Keep the first read of a picture when the table re-read finds no table.** (#2732)
   A standalone picture that the lattice test admits is now read again as one uniform block, and that read is adopted only if it finds a table. An upside-down table page, which the second read does not turn into a table, keeps its first read instead of the second.
+- **(ocr): Read a noisy Han page again with `chi_sim` when OSD names Han.** (#2300)
+  A page read with `eng` alone came out as Latin noise when it held Han text. If the first read is noisy and OSD names Han, the page is now read again with `chi_sim` added. This needs `osd` and `chi_sim` in an installed tessdata directory: the second read never downloads a model, and a page whose model is missing keeps its first read. A line takes the second read only when more than half of its letters are Han, its mean word confidence beats the first read's by 20 points, and every first-read word with a Latin letter or a digit is read again on its box or sits under Han letters only. A page takes the second read only when at least one third of its lines pass. A page that takes the second read feeds table detection with the merged words.
 - **(pdf): Apply graphics states recovered while visiting a Form XObject.** (#2752)
   Failed graphics-state dictionaries and indirect dash or opacity operands are retried only after object-stream loading publishes recovered objects, so later page strokes use recovered settings without repeatedly decoding a permanently broken stream.
 

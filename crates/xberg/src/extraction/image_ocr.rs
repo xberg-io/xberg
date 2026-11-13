@@ -197,7 +197,7 @@ fn build_pending_ocr_tasks(
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
 fn spawn_ocr_task(join_set: &mut tokio::task::JoinSet<OcrTaskResult>, task: PendingOcrTask) {
     let (idx, image_data, ocr_config_clone) = task;
-    join_set.spawn(async move {
+    let worker = async move {
         let backend = {
             let registry = crate::plugins::registry::get_ocr_backend_registry();
             let registry = registry.read();
@@ -217,7 +217,10 @@ fn spawn_ocr_task(join_set: &mut tokio::task::JoinSet<OcrTaskResult>, task: Pend
 
         let ocr_result = backend.process_image(&image_data, &ocr_config_clone).await;
         (idx, ocr_result)
-    });
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    let worker = crate::core::extractor::cacheability::inherit(worker);
+    join_set.spawn(worker);
 }
 
 /// Apply one completed OCR task's result onto `images[idx]`, recording a warning on failure.
@@ -272,11 +275,11 @@ mod tests {
     const BACKEND_NAME: &str = "thread-budget-concurrency-test-backend";
     const POLICY_BACKEND_NAME: &str = "embedded-image-element-policy-test-backend";
 
-    struct RegistrationGuard;
+    struct RegistrationGuard(&'static str);
 
     impl Drop for RegistrationGuard {
         fn drop(&mut self) {
-            let _ = crate::plugins::unregister_ocr_backend(BACKEND_NAME);
+            let _ = crate::plugins::unregister_ocr_backend(self.0);
         }
     }
 
@@ -490,7 +493,7 @@ mod tests {
             gate: Arc::clone(&gate),
         }))
         .expect("register gated OCR backend");
-        let _registration = RegistrationGuard;
+        let _registration = RegistrationGuard(BACKEND_NAME);
 
         let config = crate::core::config::ExtractionConfig {
             ocr: Some(OcrConfig {
@@ -561,5 +564,92 @@ mod tests {
         assert!(nested.ocr_elements.is_none());
         assert!(warnings.is_empty());
         crate::plugins::unregister_ocr_backend(POLICY_BACKEND_NAME).unwrap();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    mod cache_publication {
+        use super::*;
+        use crate::core::extractor::cacheability;
+
+        const BACKEND: &str = "embedded-image-cache-publication-test-backend";
+        const RETRIED_IMAGE: &[u8] = b"image with a script retry";
+
+        struct RetryBackend;
+
+        impl Plugin for RetryBackend {
+            fn name(&self) -> &str {
+                BACKEND
+            }
+
+            fn version(&self) -> String {
+                "1.0.0".to_string()
+            }
+
+            fn initialize(&self) -> crate::Result<()> {
+                Ok(())
+            }
+
+            fn shutdown(&self) -> crate::Result<()> {
+                Ok(())
+            }
+        }
+
+        #[async_trait]
+        impl OcrBackend for RetryBackend {
+            async fn process_image(&self, image_bytes: &[u8], _: &OcrConfig) -> crate::Result<ExtractedDocument> {
+                let retried = image_bytes == RETRIED_IMAGE;
+                let result = tokio::task::spawn_blocking(cacheability::blocking(move || {
+                    if retried {
+                        cacheability::block_outer_result_publication();
+                    }
+                    ExtractedDocument {
+                        content: "embedded OCR".into(),
+                        ..Default::default()
+                    }
+                }))
+                .await
+                .expect("OCR worker completes");
+                Ok(result)
+            }
+
+            fn supports_language(&self, _: &str) -> bool {
+                true
+            }
+
+            fn backend_type(&self) -> OcrBackendType {
+                OcrBackendType::Custom
+            }
+        }
+
+        #[tokio::test]
+        async fn embedded_image_retry_blocks_outer_cache_publication() {
+            crate::plugins::register_ocr_backend(Arc::new(RetryBackend)).expect("register retry backend");
+            let _registration = RegistrationGuard(BACKEND);
+            let config = crate::core::config::ExtractionConfig {
+                ocr: Some(OcrConfig {
+                    backend: BACKEND.into(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            for (data, publish) in [(RETRIED_IMAGE, false), (b"image without retry".as_slice(), true)] {
+                cacheability::scope(async {
+                    assert!(cacheability::can_publish_outer_result());
+                    let images = vec![ExtractedImage {
+                        data: Bytes::from_static(data),
+                        ..Default::default()
+                    }];
+                    let mut warnings = Vec::new();
+                    let images = process_images_with_ocr(images, &config, &mut warnings)
+                        .await
+                        .expect("embedded OCR succeeds");
+                    assert!(warnings.is_empty());
+                    assert_eq!(images[0].ocr_result.as_ref().unwrap().content, "embedded OCR");
+                    assert!(cacheability::is_cacheable());
+                    assert_eq!(cacheability::can_publish_outer_result(), publish);
+                })
+                .await;
+            }
+        }
     }
 }
