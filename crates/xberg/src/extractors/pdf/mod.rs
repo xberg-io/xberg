@@ -374,6 +374,8 @@ fn extract_lopdf_compatibility_data(
 #[cfg(feature = "pdf")]
 struct NativeBlockingOutput {
     source: Vec<u8>,
+    #[cfg(feature = "tokio-runtime")]
+    may_have_embedded_files: bool,
     extraction: extraction::PdfExtractionPhaseResult,
     #[cfg(all(
         feature = "pdf",
@@ -479,6 +481,15 @@ fn extract_native_blocking(
         }
         None => None,
     };
+    #[cfg(feature = "tokio-runtime")]
+    // The fallback parser eagerly loads every stream. A catalog without /Names
+    // needs no attachment walk. Keep the fallback for compatibility and encrypted sources. ~keep
+    let may_have_embedded_files = compatibility_data.is_some()
+        || native_document.doc.is_encrypted()
+        || !native_document
+            .doc
+            .catalog()
+            .is_ok_and(|catalog| catalog.as_dict().is_some_and(|dict| !dict.contains_key("Names")));
     let (outline_entries, bookmark_uris, pdf_revisions) = compatibility_data.unwrap_or_default();
     ensure_pdf_not_cancelled(&config)?;
     let diagrams = if wants_dot_output(&config) {
@@ -517,6 +528,8 @@ fn extract_native_blocking(
 
     Ok(NativeBlockingOutput {
         source: std::mem::take(&mut native_document.doc.source_bytes),
+        #[cfg(feature = "tokio-runtime")]
+        may_have_embedded_files,
         extraction,
         #[cfg(all(
             feature = "pdf",
@@ -4707,7 +4720,7 @@ impl PdfExtractor {
         }
 
         #[cfg(all(feature = "pdf", feature = "tokio-runtime"))]
-        {
+        if native_output.may_have_embedded_files {
             let (embedded_children, embedded_warnings) =
                 crate::pdf::embedded_files::extract_and_process_embedded_files(content, config).await;
             if !embedded_children.is_empty() {

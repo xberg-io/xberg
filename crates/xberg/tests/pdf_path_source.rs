@@ -145,3 +145,41 @@ async fn encrypted_pdf_path_matches_bytes_with_password() {
     };
     assert_bytes_parity(&path, &config, document).await;
 }
+
+#[tokio::test]
+async fn pdf_path_with_embedded_files_keeps_attachment_discovery() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("attachments.pdf");
+    write_pdf(&path, 0, false);
+    let mut pdf = lopdf::Document::load(&path).unwrap();
+    let data = pdf.add_object(lopdf::Stream::new(lopdf::dictionary! {}, b"Attachment text".to_vec()));
+    let filespec = pdf.add_object(lopdf::dictionary! { "EF" => lopdf::dictionary! { "F" => data } });
+    pdf.catalog_mut().unwrap().set(
+        "Names",
+        lopdf::dictionary! {
+            "EmbeddedFiles" => lopdf::dictionary! {
+                "Names" => vec![lopdf::Object::string_literal("attachment.txt"), filespec.into()],
+            },
+        },
+    );
+    pdf.save(&path).unwrap();
+
+    let config = ExtractionConfig {
+        use_cache: false,
+        disable_ocr: true,
+        ..Default::default()
+    };
+    let result = Box::pin(xberg::extract(ExtractInput::from_uri(path.to_str().unwrap()), &config))
+        .await
+        .unwrap();
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let [document] = result.results.as_slice() else {
+        panic!("expected one PDF");
+    };
+    assert_eq!(document.content.trim(), "Path source");
+    let [child] = document.children.as_deref().unwrap() else {
+        panic!("expected one attachment");
+    };
+    assert_eq!(child.path, "attachment.txt");
+    assert_eq!(child.result.content.trim(), "Attachment text");
+}
