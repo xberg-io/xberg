@@ -6,16 +6,6 @@ use crate::extractors::pdf::unmapped_glyphs::{LOST_SYMBOL_GLYPH_MARKER, is_lost_
 use crate::types::document_structure::{AnnotationKind, TextAnnotation};
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
 
-/// A misread OCR row with no page and no line: it leaves the first plain row with its key. ~keep
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn misread_row(key: &str) -> super::super::document::MisreadOcrRow {
-    super::super::document::MisreadOcrRow {
-        page: None,
-        line: None,
-        key: key.to_string(),
-    }
-}
-
 fn repeated_rows(count: usize) -> (InternalDocument, LayerFirst, InternalElement) {
     let mut document = InternalDocument::new("pdf");
     let mut source = Vec::new();
@@ -1516,15 +1506,18 @@ fn should_print_a_row_once_when_its_ocr_misread_is_a_paragraph_on_a_page_with_a_
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[test]
 fn a_misread_ocr_row_leaves_the_structured_page_once_and_an_emptied_element_leaves_it() {
-    use super::super::document::{LayerFirst, put_layer_first_in_document};
+    use super::super::document::{LayerFirst, MisreadOcrRow, finish_mixed_layer_prepend};
     use crate::types::internal::{
         ElementKind, InternalDocument, InternalElement, Relationship, RelationshipKind, RelationshipTarget,
     };
 
     let mut doc = InternalDocument::new("pdf");
-    for text in ["total 12 cm\u{2019}", "alpha beta\ntotal 12 cm\u{2019}", "gamma"] {
+    for (index, text) in ["total 12 cm\u{2019}", "alpha beta\ntotal 12 cm\u{2019}", "gamma"]
+        .into_iter()
+        .enumerate()
+    {
         let mut element = InternalElement::text(ElementKind::Paragraph, text, 0);
-        element.page = Some(1);
+        element.bbox = Some(test_row_bbox(super::row_box(index)));
         doc.push_element(element);
     }
     doc.relationships.push(Relationship {
@@ -1535,9 +1528,15 @@ fn a_misread_ocr_row_leaves_the_structured_page_once_and_an_emptied_element_leav
     let first = LayerFirst {
         lines: "total 12 cm3".to_string(),
         lost_glyphs: 0,
-        misread_ocr_rows: vec![misread_row("total 12 cm\u{2019}")],
+        misread_ocr_rows: vec![MisreadOcrRow {
+            page: None,
+            line: Some(0),
+            bbox: Some(super::row_box(0)),
+            key: "total 12 cm\u{2019}".into(),
+        }],
     };
-    put_layer_first_in_document(&mut doc, Some(1), &first);
+    let mut text = "total 12 cm\u{2019}\nalpha beta\ntotal 12 cm\u{2019}\ngamma".to_string();
+    finish_mixed_layer_prepend(&mut text, Some(&mut doc), &first);
     let texts: Vec<&str> = doc.elements.iter().map(|element| element.text.as_str()).collect();
     assert_eq!(
         texts,
@@ -1553,17 +1552,15 @@ fn a_misread_ocr_row_leaves_the_structured_page_once_and_an_emptied_element_leav
         matches!(doc.relationships[0].target, RelationshipTarget::Index(1)),
         "the target moves down one, then up one"
     );
-    let text =
-        super::super::document::text_with_layer_first("total 12 cm\u{2019}\nalpha beta\ntotal 12 cm\u{2019}", &first);
-    assert_eq!(text, "total 12 cm3\n\nalpha beta\ntotal 12 cm\u{2019}");
+    assert_eq!(text, "total 12 cm3\n\nalpha beta\ntotal 12 cm\u{2019}\ngamma");
 }
 
-/// A heading and a plain paragraph hold the same misread row: the paragraph leaves, the heading
-/// stays, whatever their order on the page. ~keep
+/// A heading and a plain paragraph hold the same misread row: both stay without evidence that
+/// identifies the paragraph occurrence. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[test]
-fn a_misread_row_leaves_the_plain_paragraph_and_not_the_heading_with_the_same_text() {
-    use super::super::document::{LayerFirst, put_layer_first_in_document};
+fn an_ambiguous_misread_row_preserves_the_plain_paragraph_and_heading() {
+    use super::super::document::{LayerFirst, MisreadOcrRow, finish_mixed_layer_prepend};
     let misread = "total 12 cm\u{2019}";
     for heading_first in [true, false] {
         let mut doc = InternalDocument::new("pdf");
@@ -1581,16 +1578,18 @@ fn a_misread_row_leaves_the_plain_paragraph_and_not_the_heading_with_the_same_te
         let first = LayerFirst {
             lines: "total 12 cm3".to_string(),
             lost_glyphs: 0,
-            misread_ocr_rows: vec![misread_row(misread)],
+            misread_ocr_rows: vec![MisreadOcrRow {
+                page: Some(1),
+                line: Some(0),
+                bbox: None,
+                key: misread.into(),
+            }],
         };
-        put_layer_first_in_document(&mut doc, Some(1), &first);
-        let kinds: Vec<&str> = doc.elements.iter().map(|element| element.kind.discriminant()).collect();
-        let texts: Vec<&str> = doc.elements.iter().map(|element| element.text.as_str()).collect();
-        assert_eq!(texts, ["total 12 cm3", misread], "heading first: {heading_first}");
-        assert_eq!(
-            kinds[1], "heading",
-            "the heading keeps its row; the emptied paragraph leaves"
-        );
+        let original = doc.elements.clone();
+        let mut flat = format!("{misread}\n{misread}");
+        finish_mixed_layer_prepend(&mut flat, Some(&mut doc), &first);
+        assert_eq!(flat, format!("total 12 cm3\n\n{misread}\n{misread}"));
+        assert_eq!(doc.elements[1..], original);
     }
 }
 
@@ -2519,4 +2518,70 @@ fn a_misread_row_leaves_the_page_text_at_its_own_line() {
         "total 12 cm3\n\ntotal 12 cm\u{2019}\nalpha\nbeta\ngamma",
         "the misread row after the shared rows leaves; the one before them stays"
     );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn boxed_duplicate_misread_leaves_only_its_own_flat_and_structured_row() {
+    use super::super::document::{PlainOcrRows, finish_mixed_layer_prepend, layer_lines_to_put_first};
+    use crate::core::config::OcrQualityThresholds;
+
+    let (native, mut read) = measure_rows();
+    read.insert(0, read[3].clone());
+    let positions: Vec<_> = std::iter::once(native.len() + 1).chain(0..native.len()).collect();
+    let read = read.join("\n");
+    let rows = super::lines_at_rows(&read, &positions);
+    let native_refs: Vec<_> = native.iter().map(String::as_str).collect();
+    let boxes = super::page_boxes(&native_refs, &rows);
+
+    for ambiguous in [false, true] {
+        let mut doc = InternalDocument::new("pdf");
+        for (index, (text, row)) in read.lines().zip(&rows).enumerate() {
+            let mut element = InternalElement::text(ElementKind::Paragraph, text, 0);
+            let bbox = if ambiguous && index == 0 {
+                rows[4].bbox
+            } else {
+                row.bbox
+            };
+            element.bbox = Some(test_row_bbox(bbox));
+            doc.push_element(element);
+        }
+        let first = layer_lines_to_put_first(
+            &stored_layer(&native.join("\n")),
+            &read,
+            false,
+            &OcrQualityThresholds::default(),
+            Some(&boxes),
+            PlainOcrRows::of_page(Some(&doc), None),
+        )
+        .expect("the native measure row is restored");
+        assert_eq!(first.lines, native[3]);
+        let mut expected = doc.elements.clone();
+        if !ambiguous {
+            expected.remove(4);
+        }
+        let mut flat = read.clone();
+        finish_mixed_layer_prepend(&mut flat, Some(&mut doc), &first);
+        let expected_flat = expected
+            .iter()
+            .map(|element| element.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(
+            flat,
+            format!("{}\n\n{expected_flat}", native[3]),
+            "ambiguous: {ambiguous}"
+        );
+        assert_eq!(doc.elements[1..], expected, "ambiguous: {ambiguous}");
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn test_row_bbox(bbox: super::super::document::LineBox) -> crate::types::BoundingBox {
+    crate::types::BoundingBox {
+        x0: f64::from(bbox.left),
+        y0: f64::from(bbox.top),
+        x1: f64::from(bbox.right),
+        y1: f64::from(bbox.bottom),
+    }
 }

@@ -299,12 +299,13 @@ pub(crate) struct RowsToRestore<'a> {
 }
 /// One OCR row that misreads a native row put first: the page it was matched on (`None` for a
 /// one-page document), the index of its line in the page's OCR text, and its key (`line_key`).
-/// It leaves that page only, and from the page text that line only. ~keep
+/// A boxed row also carries its page-point geometry for the structured view. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct MisreadOcrRow {
     pub(crate) page: Option<u32>,
     pub(crate) line: Option<usize>,
+    pub(crate) bbox: Option<LineBox>,
     pub(crate) key: String,
 }
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -313,6 +314,7 @@ impl MisreadOcrRow {
         Self {
             page: None,
             line: Some(line),
+            bbox: None,
             key: key.to_string(),
         }
     }
@@ -1565,6 +1567,7 @@ fn layer_lines_missing_and_owned<'a>(
     let misread_at = |at: usize| MisreadOcrRow {
         page: None,
         line: row_lines.get(at).copied().flatten(),
+        bbox: Some(boxes.ocr[at].bbox),
         key: boxes.ocr[at].key.clone(),
     };
     let mut layer_boxes: ahash::AHashMap<&str, std::collections::VecDeque<usize>> = ahash::AHashMap::new();
@@ -1802,13 +1805,15 @@ fn rows_the_ocr_text_lacks_too<'a>(
     Some(RowsToRestore { rows, misread })
 }
 /// The line of each OCR row of `boxes` in the page's OCR text: the n-th row with a key is the n-th
-/// line with it, `None` when the text has fewer lines with the key. ~keep
+/// line with it, provided both inventories have the same number of occurrences. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn boxed_row_lines(ocr_text: &str, boxes: &PageLineBoxes) -> Vec<Option<usize>> {
     let mut lines: ahash::AHashMap<String, std::collections::VecDeque<usize>> = ahash::AHashMap::new();
     for (at, line) in ocr_text.lines().enumerate() {
         lines.entry(line_key(line)).or_default().push_back(at);
     }
+    let boxed_counts = KeyCounts::new(boxes.ocr.iter().map(|row| row.key.clone()));
+    lines.retain(|key, positions| boxed_counts.0.get(key) == Some(&positions.len()));
     boxes
         .ocr
         .iter()
@@ -1879,44 +1884,70 @@ pub(crate) fn text_with_layer_first(ocr_text: &str, first: &LayerFirst) -> Strin
     let newline = if ocr_text.ends_with('\n') { "\n" } else { "" };
     format!("{}\n\n{}{newline}", first.lines, kept.join("\n"))
 }
-/// The indices of the lines of `ocr_text` that the misread rows name: each row's own line when it
-/// holds the row's key, else the first line with the key that no row took. ~keep
+/// Resolve an exact line, or a unique text-only occurrence when no line was recorded. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn flat_misread_line(keys: &[String], row: &MisreadOcrRow) -> Option<usize> {
+    if let Some(at) = row.line {
+        return keys.get(at).is_some_and(|key| *key == row.key).then_some(at);
+    }
+    if row.bbox.is_some() {
+        return None;
+    }
+    let mut matches = keys.iter().enumerate().filter(|(_, key)| **key == row.key);
+    let (at, _) = matches.next()?;
+    matches.next().is_none().then_some(at)
+}
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn misread_lines(ocr_text: &str, rows: &[MisreadOcrRow]) -> ahash::AHashSet<usize> {
     let keys: Vec<String> = ocr_text.lines().map(line_key).collect();
-    let mut taken = ahash::AHashSet::new();
-    let mut unplaced = Vec::new();
-    for row in rows {
-        match row.line.filter(|at| keys.get(*at).is_some_and(|key| *key == row.key)) {
-            Some(at) if taken.insert(at) => {}
-            _ => unplaced.push(row.key.as_str()),
-        }
-    }
-    for key in unplaced {
-        if let Some(at) = (0..keys.len()).find(|at| !taken.contains(at) && keys[*at] == key) {
-            taken.insert(at);
-        }
-    }
-    taken
+    rows.iter().filter_map(|row| flat_misread_line(&keys, row)).collect()
 }
-/// Whether `line` of an element on `page` is one of the OCR rows in `misread` matched on that
-/// page, which then gives up that row, so each misread row leaves its page once. ~keep
+
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn take_misread_row(misread: &mut Vec<MisreadOcrRow>, page: Option<u32>, line: &str) -> bool {
-    if misread.is_empty() {
-        return false;
-    }
-    let key = line_key(line);
-    match misread
-        .iter()
-        .position(|row| row.key == key && row.page.is_none_or(|matched| page == Some(matched)))
-    {
-        Some(at) => {
-            misread.swap_remove(at);
-            true
+type StructuredMisreadLine = (usize, usize);
+
+/// Index every candidate, including protected elements, so a duplicate cannot stand in for the
+/// selected line unless its geometry gives it a unique owner. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn structured_misread_lines(
+    doc: &crate::types::internal::InternalDocument,
+    page: Option<u32>,
+    rows: &[MisreadOcrRow],
+) -> Vec<Option<StructuredMisreadLine>> {
+    let mut candidates: ahash::AHashMap<String, Vec<StructuredMisreadLine>> = ahash::AHashMap::new();
+    for (index, element) in doc.elements.iter().enumerate() {
+        if page.is_none_or(|page| element.page == Some(page)) {
+            for (line, text) in element.text.lines().enumerate() {
+                candidates.entry(line_key(text)).or_default().push((index, line));
+            }
         }
-        None => false,
     }
+    rows.iter()
+        .map(|row| unique_structured_misread(doc, row, candidates.get(&row.key)?))
+        .collect()
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn unique_structured_misread(
+    doc: &crate::types::internal::InternalDocument,
+    row: &MisreadOcrRow,
+    candidates: &[StructuredMisreadLine],
+) -> Option<StructuredMisreadLine> {
+    let mut found = candidates.iter().copied().filter(|&(index, _)| {
+        let element = &doc.elements[index];
+        row.page.is_none_or(|page| element.page == Some(page))
+            && row.bbox.zip(element.bbox).is_none_or(|(line, block)| {
+                line.owns(&LineBox {
+                    left: block.x0 as f32,
+                    top: block.y0 as f32,
+                    right: block.x1 as f32,
+                    bottom: block.y1 as f32,
+                })
+            })
+    });
+    let at = found.next()?;
+    (found.next().is_none() && holds_plain_ocr_rows(&doc.elements[at.0])).then_some(at)
 }
 
 /// Put layer lines first on a structured OCR document, before its first element of `page`
@@ -1957,43 +1988,38 @@ pub(super) fn insert_layer_into_document(
 /// on the page it was matched on, an element left without text leaves the document, and the
 /// restored rows go first. Every other OCR row, annotation, anchor and rich payload is unchanged.
 /// ~keep
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) fn put_layer_first_in_document(
     doc: &mut crate::types::internal::InternalDocument,
     page: Option<u32>,
     first: &LayerFirst,
 ) {
     if !first.misread_ocr_rows.is_empty() {
-        remove_misread_rows_from_document(doc, page, &first.misread_ocr_rows);
+        let positions = structured_misread_lines(doc, page, &first.misread_ocr_rows);
+        remove_misread_rows_from_document(doc, &positions.into_iter().flatten().collect());
     }
     insert_layer_into_document(doc, page, &first.lines);
 }
-/// Remove each of `rows` once from the text of the plain OCR text elements of `page` and of the
-/// page the row was matched on, and remove an element left without text. Relationships of a
+/// Remove the certified element/line pairs and any element left without text. Relationships of a
 /// removed element go with it; the others move down by the elements removed before them. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn remove_misread_rows_from_document(
     doc: &mut crate::types::internal::InternalDocument,
-    page: Option<u32>,
-    rows: &[MisreadOcrRow],
+    positions: &ahash::AHashSet<StructuredMisreadLine>,
 ) {
     use crate::types::internal::RelationshipTarget;
 
-    let mut misread = rows.to_vec();
+    if positions.is_empty() {
+        return;
+    }
     let mut emptied = Vec::new();
     for (at, element) in doc.elements.iter_mut().enumerate() {
-        if misread.is_empty() {
-            break;
-        }
-        if page.is_some_and(|page| element.page != Some(page)) || !holds_plain_ocr_rows(element) {
-            continue;
-        }
         let before = element.text.lines().count();
-        let element_page = element.page;
         let kept: Vec<&str> = element
             .text
             .lines()
-            .filter(|line| !take_misread_row(&mut misread, element_page, line))
+            .enumerate()
+            .filter_map(|(line, text)| (!positions.contains(&(at, line))).then_some(text))
             .collect();
         if kept.len() == before {
             continue;
@@ -2030,12 +2056,54 @@ pub(super) fn finish_mixed_layer_prepend(
     structured: Option<&mut crate::types::internal::InternalDocument>,
     first: &LayerFirst,
 ) {
-    if !first.lines.is_empty()
-        && let Some(page) = structured
-    {
-        put_layer_first_in_document(page, None, first);
+    finish_layer_prepend_on_page(text, structured, None, first);
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn finish_layer_prepend_on_page(
+    text: &mut String,
+    structured: Option<&mut crate::types::internal::InternalDocument>,
+    page: Option<u32>,
+    first: &LayerFirst,
+) {
+    if first.lines.trim().is_empty() {
+        return;
     }
-    *text = text_with_layer_first(text, first);
+    let Some(doc) = structured else {
+        *text = text_with_layer_first(text, first);
+        return;
+    };
+    let mut certified = LayerFirst {
+        lines: first.lines.clone(),
+        lost_glyphs: first.lost_glyphs,
+        misread_ocr_rows: Vec::new(),
+    };
+    if !first.misread_ocr_rows.is_empty() {
+        let keys: Vec<_> = text.lines().map(line_key).collect();
+        let positions = structured_misread_lines(doc, page, &first.misread_ocr_rows);
+        let mut pairs = Vec::new();
+        let mut flat_counts = ahash::AHashMap::new();
+        let mut structured_counts = ahash::AHashMap::new();
+        for (row, position) in first.misread_ocr_rows.iter().zip(positions) {
+            if let Some((flat, structured)) = flat_misread_line(&keys, row).zip(position) {
+                *flat_counts.entry(flat).or_insert(0) += 1;
+                *structured_counts.entry(structured).or_insert(0) += 1;
+                pairs.push((row, flat, structured));
+            }
+        }
+        let positions = pairs
+            .into_iter()
+            .filter_map(|(row, flat, structured)| {
+                (flat_counts[&flat] == 1 && structured_counts[&structured] == 1).then(|| {
+                    certified.misread_ocr_rows.push(row.clone());
+                    structured
+                })
+            })
+            .collect();
+        remove_misread_rows_from_document(doc, &positions);
+    }
+    insert_layer_into_document(doc, page, &first.lines);
+    *text = text_with_layer_first(text, &certified);
 }
 
 /// The page's noise verdict in a whole-document run: `None` when the noise gate discarded the OCR
@@ -2119,10 +2187,7 @@ pub(super) fn put_layers_first_in_run(
         if first.lines.is_empty() {
             continue;
         }
-        *page_text = text_with_layer_first(page_text, &first);
-        if let Some(doc) = doc.as_deref_mut() {
-            put_layer_first_in_document(doc, Some(page), &first);
-        }
+        finish_layer_prepend_on_page(page_text, doc.as_deref_mut(), Some(page), &first);
     }
     if flat_is_page_join {
         *text = join_run_pages(page_texts, marker_format, page_index_offset);

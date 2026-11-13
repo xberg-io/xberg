@@ -118,6 +118,7 @@ fn mixed_prepend_keeps_769_once_and_preserves_a_standalone_ocr_cell() {
     first.misread_ocr_rows.push(MisreadOcrRow {
         page: None,
         line: None,
+        bbox: None,
         key: "nativealternate".into(),
     });
     structured.tables = read.tables;
