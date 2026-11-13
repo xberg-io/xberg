@@ -751,7 +751,7 @@ fn partial_khmer_read_spends_one_of_two_identical_occurrences() {
         ..Default::default()
     };
     let read = ("ក".to_owned(), native_box(Rect::new(10.0, 20.0, 10.0, 10.0)));
-    let remaining = unmatched_occurrences(&span, &[read.clone()]).unwrap();
+    let remaining = unmatched_occurrences(&span, std::slice::from_ref(&read)).unwrap();
     assert_eq!(remaining.len(), 1);
     assert_eq!(remaining[0].text, "ក");
     assert_eq!(remaining[0].place.left, 30.0);
