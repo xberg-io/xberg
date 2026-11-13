@@ -448,3 +448,165 @@ fn mixed_plain_keeps_a_typed_table_that_only_intersects_the_prose_bounds() {
         "Opening\nNorth 10\n\nNew label\n\nNorth 10"
     );
 }
+
+#[test]
+fn declined_mixed_plain_renders_transcript_table_rows_and_keeps_literal_prose() {
+    use crate::core::config::OutputFormat;
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+    use crate::types::{ExtractionMethod, PageBoundary, Table};
+
+    let cells = vec![
+        vec!["Region".into(), "Total".into()],
+        vec!["North | West".into(), "10\n11".into()],
+    ];
+    let table = crate::rendering::common::render_table_markdown(&cells);
+    let literal = "Café **literal** prose with a | pipe.";
+    let accepted = format!("{literal}\n\n{table}\nA final accepted sentence.");
+    let expected = format!("{literal}\n\nRegion Total\nNorth | West 10\n11\n\nA final accepted sentence.");
+    let mut document = InternalDocument::new("pdf");
+    let table_index = document.push_table(Table {
+        cells,
+        page_number: 2,
+        ..Default::default()
+    });
+    document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(2));
+    assert_eq!(reconcile_mixed_plain_page(&accepted, &document, 2), Err(PROSE));
+
+    let boundaries = [
+        PageBoundary {
+            byte_start: 0,
+            byte_end: 6,
+            page_number: 1,
+        },
+        PageBoundary {
+            byte_start: 8,
+            byte_end: 8,
+            page_number: 2,
+        },
+        PageBoundary {
+            byte_start: 10,
+            byte_end: 14,
+            page_number: 3,
+        },
+    ];
+    let documents = ahash::AHashMap::from([(2, document)]);
+    for (format, page) in [
+        (OutputFormat::Markdown, accepted.as_str()),
+        (OutputFormat::Plain, expected.as_str()),
+    ] {
+        let mut text = format!("Native\n\n{accepted}\n\nTail");
+        let mut replacements = ahash::AHashMap::from([(2, accepted.clone())]);
+        render_mixed_plain_pages(
+            ExtractionMethod::Mixed,
+            &mut text,
+            &boundaries,
+            &mut replacements,
+            &documents,
+            &format,
+        );
+        assert_eq!(replacements[&2], page);
+        assert_eq!(text, format!("Native\n\n{page}\n\nTail"));
+    }
+}
+
+#[test]
+fn declined_mixed_plain_requires_unambiguous_page_owned_table_occurrences() {
+    use crate::types::Table;
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+
+    let mut document = InternalDocument::new("pdf");
+    let table_index = document.push_table(Table {
+        cells: vec![vec!["Name".into(), "Count".into()], vec!["North".into(), "2".into()]],
+        page_number: 2,
+        ..Default::default()
+    });
+    let table_element = InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(2);
+    let table = "|Name |Count|\n| :--- | ---: |\n| North|2 |";
+    let plain = "Name Count\nNorth 2";
+    let duplicated = format!("{table}\n\nLiteral **middle**.\n\n{table}");
+    assert_eq!(render_transcript_tables_as_plain(table, &document, 2), None);
+
+    document.push_element(table_element.clone().with_page(1));
+    assert_eq!(render_transcript_tables_as_plain(table, &document, 2), None);
+    document.push_element(table_element.clone());
+    assert_eq!(render_transcript_tables_as_plain(table, &document, 1), None);
+    assert_eq!(
+        render_transcript_tables_as_plain(table, &document, 2).as_deref(),
+        Some(plain)
+    );
+    assert_eq!(render_transcript_tables_as_plain(&duplicated, &document, 2), None);
+
+    document.push_element(table_element);
+    assert_eq!(render_transcript_tables_as_plain(&duplicated, &document, 2), None);
+    let table_index = document.push_table(document.tables[0].clone());
+    document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(2));
+    assert_eq!(render_transcript_tables_as_plain(table, &document, 2), None);
+    assert_eq!(
+        render_transcript_tables_as_plain(&duplicated, &document, 2),
+        Some(format!("{plain}\n\nLiteral **middle**.\n\n{plain}"))
+    );
+}
+
+#[test]
+fn declined_mixed_plain_preserves_excess_cells_and_literal_table_examples() {
+    use crate::types::Table;
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+
+    let mut document = InternalDocument::new("pdf");
+    let table_index = document.push_table(Table {
+        cells: vec![vec!["Name".into(), "Count".into()], vec!["North".into(), "2".into()]],
+        page_number: 1,
+        ..Default::default()
+    });
+    document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(1));
+    let valid = "| Name | Count |\n| :--- | ---: |\n| North | 2 |";
+    let excess = format!("{valid} Extra accepted text |");
+    let empty_excess = format!("{valid} |");
+    let headerless = "|  |  |\n| :--- | ---: |\n| Name | Count |\n| North | 2 |";
+    assert_eq!(
+        render_transcript_tables_as_plain(headerless, &document, 1).as_deref(),
+        Some("Name Count\nNorth 2")
+    );
+    assert_eq!(render_transcript_tables_as_plain(&excess, &document, 1), None);
+    assert_eq!(render_transcript_tables_as_plain(&empty_excess, &document, 1), None);
+
+    let literal = format!("```markdown\n{valid}\n```");
+    let accepted = format!("{excess}\n\n{literal}\n\n{valid}");
+    assert_eq!(
+        render_transcript_tables_as_plain(&accepted, &document, 1),
+        Some(format!("{excess}\n\n{literal}\n\nName Count\nNorth 2"))
+    );
+}
+
+#[test]
+fn declined_mixed_plain_groups_many_distinct_and_repeated_tables() {
+    use crate::types::Table;
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+
+    let mut document = InternalDocument::new("pdf");
+    let mut source = Vec::new();
+    let mut expected = Vec::new();
+    for index in 0..2048 {
+        let value = index / 2;
+        let table_index = document.push_table(Table {
+            cells: vec![
+                vec!["Region".into(), "Total".into()],
+                vec![format!("Region {value}"), value.to_string()],
+            ],
+            page_number: 1,
+            ..Default::default()
+        });
+        document.push_element(InternalElement::text(ElementKind::Table { table_index }, "", 0).with_page(1));
+        source.push(format!("|Region| Total |\n| :--- | ---: |\n| Region {value}|{value}|"));
+        expected.push(format!("Region Total\nRegion {value} {value}"));
+    }
+    let unmatched = source[0].clone();
+    source.push(unmatched.clone());
+    expected[0] = unmatched.clone();
+    expected[1] = unmatched.clone();
+    expected.push(unmatched);
+    assert_eq!(
+        render_transcript_tables_as_plain(&source.join("\n\n"), &document, 1),
+        Some(expected.join("\n\n"))
+    );
+}

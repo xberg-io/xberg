@@ -1056,6 +1056,7 @@ After: `a b`.
     let odd_pipe = source.replace(r"North\\|", r"North\|");
     assert_mixed_plain_declines_with_diagnostic(
         &odd_pipe,
+        &odd_pipe,
         &documents,
         &root,
         "Plain page omitted or changed accepted table cells",
@@ -1063,7 +1064,20 @@ After: `a b`.
     let mut incomplete = documents.clone();
     incomplete.get_mut(&1).unwrap().elements.last_mut().unwrap().text =
         r#"[review]: https://example.org "keep - this""#.into();
-    assert_mixed_plain_declines_with_diagnostic(source, &incomplete, &root, "Plain page omitted accepted prose");
+    let fallback = source.replace(
+        r"| Name | Count |
+| --- | --- |
+| North\\| **Gross** |",
+        r"Name Count
+North\\ **Gross**",
+    );
+    assert_mixed_plain_declines_with_diagnostic(
+        source,
+        &fallback,
+        &incomplete,
+        &root,
+        "Plain page omitted accepted prose",
+    );
 
     for method in [ExtractionMethod::Native, ExtractionMethod::Ocr] {
         ocr::render_mixed_plain_pages(
@@ -1184,12 +1198,14 @@ fn mixed_plain_added_words_with_diagnostic_child() {
     // A cell the table assembly failed to suppress repeats as its own paragraph.
     assert_mixed_plain_declines_with_diagnostic(
         source,
+        "Name Count\nNorth 2",
         &document(Some("Name"), None),
         &root,
         "Plain page omitted or changed accepted table cells",
     );
     assert_mixed_plain_declines_with_diagnostic(
         source,
+        "Name Count\nNorth 2",
         &document(None, Some("North")),
         &root,
         "Plain page added text absent from the accepted transcript",
@@ -1199,6 +1215,7 @@ fn mixed_plain_added_words_with_diagnostic_child() {
     let prose = format!("Before `a b` after.\n\n{source}");
     assert_mixed_plain_declines_with_diagnostic(
         &prose,
+        "Before `a b` after.\n\nName Count\nNorth 2",
         &document(Some("Before a x b after."), None),
         &root,
         "Plain page omitted accepted prose",
@@ -1251,10 +1268,10 @@ fn mixed_plain_accepts_a_heading_marker_whether_or_not_the_element_spells_it() {
         render(InternalElement::text(ElementKind::Heading { level: 1 }, "Status", 0)),
         "Status\nName Count\nNorth 2"
     );
-    // A different marker is not the accepted one, so the page keeps its transcript.
+    // Keep the accepted heading marker while rendering the typed table.
     assert_eq!(
         render(InternalElement::text(ElementKind::Paragraph, "## Status", 0)),
-        source
+        "# Status\n\nName Count\nNorth 2"
     );
 }
 
@@ -1348,13 +1365,14 @@ fn mixed_plain_keeps_section_labels_the_transcript_lacks_on_a_three_table_page()
     // A label before the first transcript paragraph is kept as well.
     let leading = "Summary\nBudget 2030\nNorth 10\nSouth 20\nStaff 5\nTools 3\nNet change 7";
     assert_eq!(render(leading), format!("{leading}\n\n{last}"));
-    // A paragraph that only repeats the cells loses nothing when declined, so the page keeps its transcript.
+    // A decline keeps the accepted section order and converts only the table blocks.
+    let fallback = "Budget 2030\n\nNorth 10\nSouth 20\n\nStaff 5\nTools 3\n\nNet change 7\n\nFund Plan\nParks 4";
     assert_eq!(
         render("Budget 2030\nNorth 10\nSouth 20\nStaff 5\nTools 3\nNet change 7"),
-        source
+        fallback
     );
     // A label does not excuse transcript words out of order: the line "Net change 7" comes before the first table.
-    assert_eq!(render("IncomeGroups\nNet change 7\nBudget 2030"), source);
+    assert_eq!(render("IncomeGroups\nNet change 7\nBudget 2030"), fallback);
 }
 
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -1433,6 +1451,7 @@ fn mixed_plain_admits_shared_writer_cell_with_backslash_and_pipe() {
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn assert_mixed_plain_declines_with_diagnostic(
     source: &str,
+    expected: &str,
     documents: &ahash::AHashMap<u32, InternalDocument>,
     root: &std::path::Path,
     reason: &str,
@@ -1463,8 +1482,8 @@ fn assert_mixed_plain_declines_with_diagnostic(
             &OutputFormat::Plain,
         );
     });
-    assert_eq!(text, source);
-    assert_eq!(replacements[&1], source);
+    assert_eq!(text, expected);
+    assert_eq!(replacements[&1], expected);
     let log = std::fs::read_to_string(log.path()).unwrap();
     assert!(log.contains("Declined mixed OCR Plain page rendering"), "{log}");
     assert!(
@@ -1544,11 +1563,12 @@ fn mixed_plain_derives_prose_and_tables_from_elements_and_reconciles_following_p
         &incomplete,
         &OutputFormat::Plain,
     );
-    assert_eq!(
-        text, original,
-        "unrepresented accepted prose must retain its transcript"
-    );
+    let fallback = "Lead | prose\n\nName Count\nA|B \n South <br> literal\n\n| Status --- pending |";
+    assert_eq!(text, [raw_ocr_page, fallback, native_page].join("\n\n"));
+    assert_eq!(replacements[&2], fallback);
 
+    text = original;
+    replacements.insert(2, raw_table_page.clone());
     ocr::render_mixed_plain_pages(
         ExtractionMethod::Mixed,
         &mut text,

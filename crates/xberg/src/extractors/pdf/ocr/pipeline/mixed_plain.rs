@@ -1,4 +1,8 @@
+#[path = "mixed_plain_tables.rs"]
+mod mixed_plain_tables;
+
 use super::super::document::{apply_ocr_page_replacements, boundaries_after_replacements};
+use mixed_plain_tables::{render_transcript_tables_as_plain, source_table_has_cells};
 
 pub(in crate::extractors::pdf) fn render_mixed_plain_pages(
     method: crate::types::ExtractionMethod,
@@ -21,19 +25,20 @@ pub(in crate::extractors::pdf) fn render_mixed_plain_pages(
         if document.tables.is_empty() {
             continue;
         }
-        let candidate = (|| {
-            if text.get(boundary.byte_start..boundary.byte_end) != Some(accepted.as_str()) {
-                return Err("page range differs from the accepted transcript");
-            }
-            reconcile_mixed_plain_page(accepted, document, page)
-        })();
-        match candidate {
+        if text.get(boundary.byte_start..boundary.byte_end) != Some(accepted.as_str()) {
+            tracing::warn!(page, "Mixed OCR Plain page range differs from the accepted transcript");
+            continue;
+        }
+        match reconcile_mixed_plain_page(accepted, document, page) {
             Ok(plain) => {
                 rendered.insert(page, plain);
             }
-            // ~keep The page keeps its Markdown transcript in Plain output, so the decline is a
-            // degraded result, not routine flow.
-            Err(reason) => tracing::warn!(page, reason, "Declined mixed OCR Plain page rendering"),
+            Err(reason) => {
+                tracing::warn!(page, reason, "Declined mixed OCR Plain page rendering");
+                if let Some(plain) = render_transcript_tables_as_plain(accepted, document, page) {
+                    rendered.insert(page, plain);
+                }
+            }
         }
     }
     if !rendered.is_empty() {
@@ -804,51 +809,6 @@ fn record_block_markers(
             markers.push(range.start + end.len() - last.len());
         }
     }
-}
-
-fn source_table_has_cells(source: &str, cells: &[Vec<String>]) -> bool {
-    // ~keep Verify every source cell before relying on the typed table. GFM can omit excess
-    // cells from its events, and a source <br> can represent either a line break or literal text.
-    // ~keep The shared writer copies existing backslashes when escaping a cell pipe.
-    // Its full serialization proves those cells even when the pipe has even parity.
-    if source.trim() == crate::rendering::common::render_table_markdown(cells).trim() {
-        return true;
-    }
-    let mut rows = source.lines().enumerate().filter(|(index, _)| *index != 1);
-    let columns = cells.iter().map(Vec::len).max().unwrap_or(0);
-    for row in cells {
-        let Some((_, source_row)) = rows.next() else {
-            return false;
-        };
-        let mut remainder = source_row.trim();
-        remainder = remainder.strip_prefix('|').unwrap_or(remainder);
-        for column in 0..columns {
-            let delimiter = remainder.match_indices('|').find(|(index, _)| {
-                remainder.as_bytes()[..*index]
-                    .iter()
-                    .rev()
-                    .take_while(|&&byte| byte == b'\\')
-                    .count()
-                    .is_multiple_of(2)
-            });
-            let (source_cell, rest) = match delimiter {
-                Some((index, _)) => (&remainder[..index], &remainder[index + 1..]),
-                None => (remainder, ""),
-            };
-            let mut encoded = String::new();
-            if let Some(cell) = row.get(column) {
-                crate::rendering::common::push_escaped_cell(&mut encoded, cell);
-            }
-            if source_cell.trim() != encoded.trim() {
-                return false;
-            }
-            remainder = rest;
-        }
-        if !remainder.trim().is_empty() {
-            return false;
-        }
-    }
-    rows.next().is_none()
 }
 
 #[cfg(test)]
