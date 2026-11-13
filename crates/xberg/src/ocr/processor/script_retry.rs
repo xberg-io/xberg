@@ -115,14 +115,8 @@ fn list_reads_script_of(language: &str, model: &str) -> bool {
 }
 
 mod model_files;
-#[cfg(unix)]
-mod model_stamps;
-
-#[cfg(not(unix))]
-pub(super) use crate::cache::blake3_hash_file as hash_model_file;
+pub(super) use crate::core::extractor::cacheability::request_model_digest as hash_model_file;
 pub(super) use model_files::RetryModelFiles;
-#[cfg(unix)]
-pub(super) use model_stamps::hash_model_file;
 
 #[derive(Clone, Debug)]
 pub(super) struct ModelSet {
@@ -130,8 +124,6 @@ pub(super) struct ModelSet {
     pub(super) languages: String,
     revision: blake3::Hash,
     implicit_osd: bool,
-    #[cfg(unix)]
-    stable_files: Option<model_stamps::ModelStamps>,
 }
 
 impl PartialEq for ModelSet {
@@ -147,42 +139,30 @@ impl Eq for ModelSet {}
 
 impl ModelSet {
     pub(super) fn snapshot(directory: String, languages: &[String], implicit_osd: bool) -> Result<Self, OcrError> {
-        #[cfg(unix)]
-        let before = model_stamps::ModelStamps::read(
-            Path::new(&directory),
-            languages.iter().map(String::as_str),
-            implicit_osd,
-        );
         let revision = Self::revision(&directory, languages.iter().map(String::as_str), implicit_osd)?;
-        #[cfg(unix)]
-        let stable_files = before.filter(|expected| {
-            model_stamps::ModelStamps::read(
-                Path::new(&directory),
-                languages.iter().map(String::as_str),
-                implicit_osd,
-            )
-            .as_ref()
-                == Some(expected)
-        });
         Ok(Self {
             revision,
             directory,
             languages: languages.join("+"),
             implicit_osd,
-            #[cfg(unix)]
-            stable_files,
         })
     }
 
-    pub(super) fn validate(&self) -> Result<(), OcrError> {
-        #[cfg(unix)]
-        if let Some(expected) = &self.stable_files
-            && model_stamps::ModelStamps::read(Path::new(&self.directory), self.languages.split('+'), self.implicit_osd)
-                .as_ref()
-                == Some(expected)
-        {
-            return Ok(());
+    pub(super) fn from_revision(
+        directory: String,
+        languages: String,
+        revision: blake3::Hash,
+        implicit_osd: bool,
+    ) -> Self {
+        Self {
+            directory,
+            languages,
+            revision,
+            implicit_osd,
         }
+    }
+
+    pub(super) fn validate(&self) -> Result<(), OcrError> {
         let current = Self::revision(&self.directory, self.languages.split('+'), self.implicit_osd)?;
         if current != self.revision {
             return Err(OcrError::ProcessingFailed(

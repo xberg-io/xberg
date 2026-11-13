@@ -65,6 +65,7 @@ impl CachedOcrResult {
 
 /// File-backed msgpack cache for OCR extraction results, keyed by image + config hash.
 #[cfg_attr(alef, alef(skip))]
+#[derive(Clone)]
 pub struct OcrCache {
     cache_dir: PathBuf,
 }

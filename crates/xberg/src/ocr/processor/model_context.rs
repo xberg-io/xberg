@@ -99,17 +99,51 @@ impl ModelContext {
         });
     }
 
+    pub(super) fn capture_primary(&self, language: &str) -> Result<Option<script_retry::RetryModelFiles>, OcrError> {
+        let Some(primary) = &self.primary else {
+            return Ok(None);
+        };
+        if !language
+            .split('+')
+            .map(str::trim)
+            .eq(primary.languages.iter().map(String::as_str))
+        {
+            return Err(OcrError::ProcessingFailed(
+                "Primary Tesseract language list changed before initialization".into(),
+            ));
+        }
+        let mut hash = self.primary_hasher(&primary.languages)?;
+        if hash.finalize() != primary.revision {
+            return Err(OcrError::ProcessingFailed(
+                "Primary Tesseract models changed before initialization".into(),
+            ));
+        }
+        if let Some(expected) = self.osd_revision {
+            hash.update(expected.as_bytes());
+        }
+        let models = script_retry::ModelSet::from_revision(
+            self.directory.clone(),
+            primary.languages.join("+"),
+            hash.finalize(),
+            self.osd_revision.is_some(),
+        );
+        script_retry::RetryModelFiles::capture(&models).map(Some)
+    }
+
     pub(super) fn primary_revision(&self) -> Option<blake3::Hash> {
         self.primary.as_ref().map(|primary| primary.revision)
     }
 
     fn read_primary_revision(&self, languages: &[String]) -> Result<blake3::Hash, OcrError> {
+        self.primary_hasher(languages).map(|hash| hash.finalize())
+    }
+
+    fn primary_hasher(&self, languages: &[String]) -> Result<blake3::Hasher, OcrError> {
         hash_language_models(
             std::path::Path::new(&self.directory),
             languages.iter().map(String::as_str),
             hash_model_file,
         )
-        .map(|hash| hash.finalize())
     }
 
     fn primary_is_current(&self) -> bool {

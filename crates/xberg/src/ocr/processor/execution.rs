@@ -3298,15 +3298,16 @@ fn process_image_resolved(
         policy,
     )?;
 
-    let stored = models.if_result_current(config, || {
-        if config.use_cache && !crate::core::extractor::cacheability::ocr_stop_requested() {
-            cache.set_cached_result(&image_hash, "tesseract", &config_str, output_format.as_ref(), &result)
-        } else {
-            Ok(())
-        }
-    });
-    if let Some(Err(error)) = stored {
-        tracing::warn!(%error, "Failed to cache the OCR result; the next identical request will re-run OCR");
+    if config.use_cache && !crate::core::extractor::cacheability::ocr_stop_requested() {
+        models.if_result_current(config, || {
+            let cache = cache.clone();
+            let result = result.clone();
+            crate::core::extractor::cacheability::defer_ocr_cache_write(move || {
+                if let Err(error) = cache.set_cached_result(&image_hash, "tesseract", &config_str, output_format.as_ref(), &result) {
+                    tracing::warn!(%error, "Failed to cache the OCR result; the next identical request will re-run OCR");
+                }
+            });
+        });
     }
 
     block_outer_cache_for_retry(&result);

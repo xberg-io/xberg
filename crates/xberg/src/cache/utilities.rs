@@ -70,10 +70,6 @@ pub(crate) fn blake3_hash_bytes(data: &[u8]) -> String {
 pub(crate) fn blake3_hash_file(path: &Path) -> Result<String> {
     let file = std::fs::File::open(path)
         .map_err(|e| crate::error::XbergError::cache(format!("Failed to open file for hashing: {e}")))?;
-    blake3_hash_open_file(file)
-}
-
-pub(crate) fn blake3_hash_open_file(file: std::fs::File) -> Result<String> {
     let mut reader = std::io::BufReader::with_capacity(64 * 1024, file);
     let mut hasher = blake3::Hasher::new();
 

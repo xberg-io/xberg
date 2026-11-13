@@ -257,6 +257,7 @@ impl<K: PartialEq, V> Drop for ReleaseReservation<K, V> {
 struct PooledTesseractApi {
     primary: TesseractAPI,
     secondary: super::dictionary::SecondaryDictionaries,
+    _files: Option<super::script_retry::RetryModelFiles>,
 }
 
 impl PooledTesseractApi {
@@ -316,12 +317,17 @@ impl TesseractApiPool {
     ) -> Result<TesseractApiLease, OcrError> {
         crate::core::config_validation::validate_tesseract_oem(i32::from(oem))
             .map_err(|error| OcrError::InvalidConfiguration(error.to_string()))?;
-        let tessdata_path = &models.directory;
         let key = ApiKey::for_models(models, language, oem);
         let lease = self.resources.checkout(key, || {
+            let files = models.capture_primary(language)?;
+            let tessdata_path = match &files {
+                Some(files) => files.directory()?,
+                None => &models.directory,
+            };
             Ok(PooledTesseractApi {
                 primary: new_engine(tessdata_path, language, oem)?,
                 secondary: super::dictionary::SecondaryDictionaries::new(tessdata_path, language, oem),
+                _files: files,
             })
         })?;
         TesseractApiLease::begin(lease, models)
@@ -441,6 +447,7 @@ mod tests {
         PooledTesseractApi {
             primary: TesseractAPI::new().expect("create the primary handle"),
             secondary,
+            _files: None,
         }
     }
 

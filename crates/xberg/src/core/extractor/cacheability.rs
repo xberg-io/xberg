@@ -32,6 +32,7 @@ const MAX_MODEL_ROOTS: usize = 64;
 pub(crate) struct Cacheability(
     Arc<Operation>,
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))] Option<crate::cancellation::CancellationToken>,
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))] Option<Arc<request_models::RequestModels>>,
 );
 
 #[derive(Default)]
@@ -133,14 +134,19 @@ pub(crate) async fn with_ocr_cancellation<F: Future>(
     token: Option<&crate::cancellation::CancellationToken>,
     future: F,
 ) -> F::Output {
-    let Some(token) = token else {
-        return future.await;
-    };
     let mut context = current().unwrap_or_default();
-    context.1 = Some(token.clone());
+    if let Some(token) = token {
+        context.1 = Some(token.clone());
+    }
+    let models = Arc::new(request_models::RequestModels::default());
+    context.2 = Some(Arc::clone(&models));
     ASYNC_CONTEXT
         .scope(context, async {
             let result = future.await;
+            if let Err(error) = tokio::task::spawn_blocking(blocking(move || models.finish())).await {
+                tracing::warn!(%error, "Could not finish OCR model validation");
+                invalidate_current();
+            }
             // The engine checks the shared operation after this per-input token leaves scope. ~keep
             if ocr_stop_requested() {
                 block_outer_result_publication();
@@ -227,6 +233,21 @@ pub(crate) fn blocking<F: FnOnce() -> T, T>(operation: F) -> impl FnOnce() -> T 
     move || {
         let _restore = BlockingScope(BLOCKING_CONTEXT.with(|context| context.replace(inherited)));
         operation()
+    }
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+mod request_models;
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) use request_models::request_model_digest;
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn defer_ocr_cache_write(write: impl FnOnce() + Send + 'static) {
+    if let Some(models) = current().and_then(|context| context.2) {
+        models.defer(write);
+    } else {
+        write();
     }
 }
 
