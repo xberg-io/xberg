@@ -8,6 +8,8 @@ import subprocess
 import tempfile
 import textwrap
 import tomllib
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from test_macos_deployment_target import macos_floor
@@ -480,6 +482,94 @@ def test_go_release_packaging_matches_static_and_musl_setup_contracts() -> None:
     musl_script = GO_MUSL_RELEASE_SCRIPT.read_text()
     assert "xberg-go-v$VERSION-$PLATFORM.tar.gz" in musl_script
     assert 'grep -q "/lib/libxberg_ffi.so$"' in musl_script
+
+
+@contextmanager
+def rejected_contract(message: str) -> Iterator[None]:
+    try:
+        yield
+    except AssertionError as error:
+        if str(error) != message:
+            raise
+    else:
+        raise AssertionError(f"expected rejection: {message}")
+
+
+def test_node_musl_smoke_uses_workflow_launcher_with_release_checkout() -> None:
+    block = job_block(WORKFLOW.read_text(), "node-bindings-musl")
+    assert "ref: ${{ needs.prepare.outputs.checkout_ref }}" in block
+    launcher = block.split("      - name: Check out Node smoke launcher", 1)[1].split("      - name:", 1)[0]
+    assert "ref: ${{ github.workflow_sha }}" in launcher
+    assert "path: .release-tools" in launcher
+    assert "sparse-checkout: scripts/ci/smoke-test-musl-node-binding.sh" in launcher
+    assert (
+        'bash .release-tools/scripts/ci/smoke-test-musl-node-binding.sh "staging/npm/${platform}" "$GITHUB_WORKSPACE"'
+        in block
+    )
+
+
+def test_node_musl_launcher_mounts_both_release_wrappers() -> None:
+    launcher = Path(__file__).with_name("smoke-test-musl-node-binding.sh")
+    mount = '  -v "$BINDING_CJS:/smoke/binding.cjs:ro" \\' + "\n"
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        release = root / "release"
+        staged = root / "staged"
+        staged.mkdir()
+        (staged / "xberg.node").touch()
+        for name in (
+            "crates/xberg-node/index.js",
+            "crates/xberg-node/binding.cjs",
+            "scripts/ci/fixtures/musl-python-smoke.pdf",
+            "scripts/ci/smoke_test_node_binding.js",
+        ):
+            path = release / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
+
+        docker = root / "docker"
+        docker.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+        docker.chmod(0o755)
+        env = {**os.environ, "PATH": f"{root}{os.pathsep}{os.environ['PATH']}"}
+        command = ["bash", str(launcher), str(staged), str(release)]
+        expected = f"{release.resolve()}/crates/xberg-node"
+
+        result = run(command, root, env)
+        assert result.returncode == 0, result.stderr
+
+        def assert_mounts(output: str) -> None:
+            assert f"{expected}/index.js:/smoke/index.js:ro" in output.splitlines()
+            assert f"{expected}/binding.cjs:/smoke/binding.cjs:ro" in output.splitlines(), "missing binding.cjs mount"
+            assert "node /smoke/smoke_test_node_binding.js /smoke/index.js" in output
+
+        assert_mounts(result.stdout)
+
+        source = launcher.read_text()
+        assert source.count(mount) == 1
+        broken = root / launcher.name
+        broken.write_text(source.replace(mount, "", 1))
+        result = run(["bash", str(broken), str(staged), str(release)], root, env)
+        assert result.returncode == 0, result.stderr
+        with rejected_contract("missing binding.cjs mount"):
+            assert_mounts(result.stdout)
+
+
+def assert_go_zig_install_is_gnu_only(block: str) -> None:
+    setup = block.split("      - name: Set up mise and install Zig", 1)[1].split("      - ", 1)[0]
+    assert "uses: xberg-io/actions/setup-mise@v1" in setup
+    assert "install-args: zig" in setup
+    assert "\n        if:" not in setup, "musl still needs mise to run its packaging task"
+    expected = "install: ${{ contains(matrix.target, '-linux-gnu') && 'true' || 'false' }}"
+    assert expected in setup, "Zig installation must be restricted to GNU targets"
+
+
+def test_go_zig_install_keeps_mise_on_the_musl_legs() -> None:
+    block = job_block(WORKFLOW.read_text(), "go-ffi-libraries")
+    assert_go_zig_install_is_gnu_only(block)
+    mutated = re.sub(r"(?m)^          install: .*\n", "", block, count=1)
+    assert mutated != block
+    with rejected_contract("Zig installation must be restricted to GNU targets"):
+        assert_go_zig_install_is_gnu_only(mutated)
 
 
 def test_glibc_native_closures_are_strictly_verified() -> None:

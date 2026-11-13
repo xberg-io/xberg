@@ -963,6 +963,15 @@ jobs:
           tar -czf node-bindings-${{ matrix.target }}.tar.gz -C staging npm
           python3 scripts/ci/package-notices.py verify "node-bindings-${{ matrix.target }}.tar.gz" "npm/${platform}"
 
+      - name: Check out Node smoke launcher from the workflow revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout: scripts/ci/smoke-test-musl-node-binding.sh
+          sparse-checkout-cone-mode: false
+
       # The steps above only prove a .node file (and its vendored shared-lib
       # closure) exist on disk -- never that require()ing it actually works.
       # This installs it into a real Alpine (musl libc) container and runs a
@@ -974,7 +983,7 @@ jobs:
       - name: Smoke-test musl Node binding (real extraction, not just require)
         run: |
           platform="linux-${{ matrix.napi_arch }}-musl"
-          bash scripts/ci/smoke-test-musl-node-binding.sh "staging/npm/${platform}"
+          bash .release-tools/scripts/ci/smoke-test-musl-node-binding.sh "staging/npm/${platform}" "$GITHUB_WORKSPACE"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -2020,9 +2029,10 @@ jobs:
           submodules: false
       # Zig is used only by the linux-gnu legs' glibc 2.28 floor build; one setup-mise call per
       # job keeps the mise cache for this key from carrying tools another call installed. ~keep
-      - name: Install Zig
+      - name: Set up mise and install Zig for GNU targets
         uses: xberg-io/actions/setup-mise@v1
         with:
+          install: ${{ contains(matrix.target, '-linux-gnu') && 'true' || 'false' }}
           install-args: zig
           config-ref: ${{ github.sha }}
 
