@@ -51,11 +51,10 @@ fn improves(primary: &ExtractedDocument, candidate: &ExtractedDocument) -> bool 
     let candidate = confident_words(candidate);
     let before: usize = primary.values().sum();
     let after: usize = candidate.values().sum();
-    let retained: usize = primary
-        .iter()
-        .map(|(word, count)| (*count).min(candidate.get(word).copied().unwrap_or(0)))
-        .sum();
-    after >= before + (before / 4).max(4) && retained * 4 >= before * 3
+    after >= before + (before / 4).max(4)
+        && primary
+            .iter()
+            .all(|(word, count)| candidate.get(word).copied().unwrap_or(0) >= *count)
 }
 
 pub(super) async fn retry(
@@ -185,12 +184,12 @@ mod tests {
     }
 
     #[test]
-    fn known_confident_words_must_meet_the_three_quarter_boundary() {
-        let primary = document(KNOWN);
-        let at_boundary = document("Monday Tuesday Wednesday Harbor Dredge Quarry Ridge Library");
-        let below_boundary = document("Monday Tuesday Harbor Dredge Quarry Ridge Library Hours");
-        assert!(improves(&primary, &at_boundary));
-        assert!(!improves(&primary, &below_boundary));
+    fn losing_one_confident_occurrence_rejects_the_candidate() {
+        let primary = document("Monday Monday Tuesday Wednesday");
+        let complete = document("Monday Monday Tuesday Wednesday Harbor Dredge Quarry Ridge");
+        let one_missing = document("Monday Tuesday Wednesday Harbor Dredge Quarry Ridge Library");
+        assert!(improves(&primary, &complete));
+        assert!(!improves(&primary, &one_missing));
     }
 
     #[test]
