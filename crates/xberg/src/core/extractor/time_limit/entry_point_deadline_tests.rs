@@ -125,14 +125,42 @@ async fn assert_entry_point_deadline(file: bool) {
     );
 }
 
-#[tokio::test]
-#[serial_test::serial]
-async fn bytes_entry_point_arms_the_processor_deadline() {
-    Box::pin(assert_entry_point_deadline(false)).await;
+fn run_isolated_deadline_case(name: &str, file: bool) {
+    const CHILD: &str = "XBERG_DEADLINE_TEST_CHILD";
+    let module = module_path!().split_once("::").expect("crate module prefix").1;
+    let qualified = format!("{module}::{name}");
+    if std::env::var(CHILD).as_deref() == Ok(qualified.as_str()) {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(Box::pin(assert_entry_point_deadline(file)));
+        return;
+    }
+
+    let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
+        .args(["--exact", &qualified, "--nocapture"])
+        .env(CHILD, &qualified)
+        .env("RUST_MIN_STACK", "16777216")
+        .output()
+        .expect("run isolated deadline test");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let expected = format!("test {qualified} ... ok");
+    assert!(
+        output.status.success()
+            && stdout.lines().any(|line| line == "running 1 test")
+            && stdout.lines().any(|line| line == expected),
+        "expected exactly one successful child test ({qualified}): {stdout}\n{stderr}"
+    );
 }
 
-#[tokio::test]
-#[serial_test::serial]
-async fn file_entry_point_arms_the_processor_deadline() {
-    Box::pin(assert_entry_point_deadline(true)).await;
+#[test]
+fn bytes_entry_point_arms_the_processor_deadline() {
+    run_isolated_deadline_case("bytes_entry_point_arms_the_processor_deadline", false);
+}
+
+#[test]
+fn file_entry_point_arms_the_processor_deadline() {
+    run_isolated_deadline_case("file_entry_point_arms_the_processor_deadline", true);
 }
