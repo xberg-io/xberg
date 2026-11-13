@@ -108,6 +108,16 @@ pub(crate) async fn extract_bytes_with_layout_pages(
     };
 
     let extraction_future = Box::pin(run_byte_extraction(content, mime_type, config, pages));
+    // Type-erase before adding the OCR scope to bound the Send proof for native batches. ~keep
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let extraction_future: std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<ExtractedDocument>> + Send + '_>,
+    > = extraction_future;
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let extraction_future = Box::pin(super::cacheability::with_ocr_cancellation(
+        config.cancel_token.as_ref(),
+        extraction_future,
+    ));
 
     // without a JS/WASI shim), which aborts the whole module with an uncatchable
     // `unreachable` trap. `tokio-runtime` can be enabled transitively on that target

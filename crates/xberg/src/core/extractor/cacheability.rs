@@ -29,11 +29,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 const MAX_MODEL_ROOTS: usize = 64;
 
 #[derive(Clone, Default)]
-pub(crate) struct Cacheability(Arc<Operation>);
+pub(crate) struct Cacheability(
+    Arc<Operation>,
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))] Option<crate::cancellation::CancellationToken>,
+);
 
 #[derive(Default)]
 struct Operation {
     invalidated: AtomicBool,
+    // Retry results carry model identity only in the OCR cache. ~keep
+    outer_publication_blocked: AtomicBool,
     #[cfg(any(
         all(test, feature = "tokio-runtime", not(target_arch = "wasm32")),
         all(feature = "ocr", not(target_arch = "wasm32"))
@@ -105,6 +110,67 @@ pub(crate) fn invalidate_current() {
     if let Some(context) = current() {
         context.invalidate();
     }
+}
+
+pub(crate) fn can_publish_outer_result() -> bool {
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    if ocr_stop_requested() {
+        return false;
+    }
+    current()
+        .is_none_or(|context| context.is_cacheable() && !context.0.outer_publication_blocked.load(Ordering::Acquire))
+}
+
+#[cfg(feature = "ocr")]
+pub(crate) fn block_outer_result_publication() {
+    if let Some(context) = current() {
+        context.0.outer_publication_blocked.store(true, Ordering::Release);
+    }
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) async fn with_ocr_cancellation<F: Future>(
+    token: Option<&crate::cancellation::CancellationToken>,
+    future: F,
+) -> F::Output {
+    let Some(token) = token else {
+        return future.await;
+    };
+    let mut context = current().unwrap_or_default();
+    context.1 = Some(token.clone());
+    ASYNC_CONTEXT
+        .scope(context, async {
+            let result = future.await;
+            // The engine checks the shared operation after this per-input token leaves scope. ~keep
+            if ocr_stop_requested() {
+                block_outer_result_publication();
+            }
+            result
+        })
+        .await
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn ocr_stop_requested() -> bool {
+    current()
+        .and_then(|context| context.1)
+        .is_some_and(|token| token.is_cancelled() || token.time_limit_reached())
+}
+
+#[cfg(all(feature = "ocr", target_arch = "wasm32"))]
+pub(crate) fn ocr_stop_requested() -> bool {
+    false
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn check_ocr_cancelled() -> crate::Result<()> {
+    if current()
+        .and_then(|context| context.1)
+        .is_some_and(|token| token.is_cancelled())
+    {
+        return Err(crate::XbergError::Cancelled);
+    }
+    Ok(())
 }
 
 pub(crate) async fn scope<F: Future>(future: F) -> F::Output {

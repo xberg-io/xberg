@@ -28,6 +28,7 @@ use super::api_pool::TesseractApiPool;
 use super::config::apply_tesseract_variables;
 use super::dictionary::WordDictionary;
 use super::model_context::ModelContext;
+use super::script_retry;
 use super::validation::{
     resolve_all_installed_languages, resolve_tessdata_path, strip_control_characters, validate_language_and_traineddata,
 };
@@ -1744,7 +1745,7 @@ fn restore_rejected_table_words(
     Some((content, restored.document))
 }
 
-fn insert_retained_word_confidence_metadata(
+pub(super) fn insert_retained_word_confidence_metadata(
     metadata: &mut HashMap<String, serde_json::Value>,
     stats: &RetainedWordConfidenceStats,
 ) {
@@ -2027,6 +2028,34 @@ fn security_limits_for_ocr(
         .clone()
         .or_else(|| extraction_config.and_then(|config| config.security_limits.clone()))
         .unwrap_or_default()
+}
+
+/// The word table that table detection reads: the merged page's table when the second read changed
+/// the page, otherwise the first read's table.
+fn table_tsv(first_read: Option<String>, merged: Option<&script_retry::Merged>) -> Option<String> {
+    match (first_read, merged) {
+        (Some(_), Some(merged)) => Some(merged.tsv()),
+        (first_read, _) => first_read,
+    }
+}
+
+fn retry_with_tsv<T>(
+    models: &ModelContext,
+    cached_tsv: Option<&str>,
+    read_tsv: impl FnOnce() -> Result<String, OcrError>,
+    run: impl FnOnce(&str) -> Result<Option<T>, OcrError>,
+) -> Option<T> {
+    let outcome = match cached_tsv {
+        Some(tsv) => run(tsv),
+        None => read_tsv().and_then(|tsv| run(&tsv)),
+    };
+    match outcome {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            models.invalidate_retry(&error);
+            None
+        }
+    }
 }
 
 /// The symbols of every word with an underscore, which table reconstruction reads to cut a mark
@@ -2397,7 +2426,7 @@ pub(super) fn perform_ocr(
         }
     };
 
-    let tsv_data_for_tables = if config.enable_table_detection || config.output_format == "tsv" {
+    let mut tsv_data_for_tables = if config.enable_table_detection || config.output_format == "tsv" {
         Some(
             api.get_tsv_text(0)
                 .map_err(|e| OcrError::ProcessingFailed(format!("Failed to extract TSV: {}", e)))?,
@@ -2405,6 +2434,30 @@ pub(super) fn perform_ocr(
     } else {
         None
     };
+    let script_retry = (!crate::core::extractor::cacheability::ocr_stop_requested())
+        .then(|| models.retry_models(config, f64::from(mean_text_conf)))
+        .flatten()
+        .and_then(|retry_models| {
+            let pass = script_retry::Pass { config, source_dpi };
+            retry_with_tsv(
+                models,
+                tsv_data_for_tables.as_deref(),
+                || {
+                    api.get_tsv_text(0).map_err(|error| {
+                        OcrError::ProcessingFailed(format!(
+                            "Failed to extract first-pass TSV for script retry: {error}"
+                        ))
+                    })
+                },
+                |tsv| script_retry::run(&api, tsv, &pass, retry_models),
+            )
+            .filter(|_| models.retry_is_current(config) && !crate::core::extractor::cacheability::ocr_stop_requested())
+        });
+    let merged_read = script_retry
+        .as_ref()
+        .map(|outcome| &outcome.merged)
+        .filter(|merged| merged.changed());
+    tsv_data_for_tables = table_tsv(tsv_data_for_tables, merged_read);
     let table_mark_symbols = match tsv_data_for_tables.as_deref() {
         Some(tsv) if config.enable_table_detection && tsv.contains('_') => underscore_word_symbols(&api),
         _ => Vec::new(),
@@ -2420,7 +2473,7 @@ pub(super) fn perform_ocr(
         is_valid_word: &|text| dictionary.is_valid_word(text),
         max_invalid_ratio: crate::ocr::hocr_parser::DEFAULT_DICT_INVALID_LINE_RATIO,
     };
-    let (raw_content, mime_type) = match config.output_format.as_str() {
+    let (mut raw_content, mime_type) = match config.output_format.as_str() {
         "text" => {
             let text = api
                 .get_utf8_text()
@@ -2486,6 +2539,18 @@ pub(super) fn perform_ocr(
             )));
         }
     };
+
+    if let Some(merged) = merged_read {
+        // The merged page has no hOCR: its lines come from two engines, so the text is rebuilt
+        // from the merged word table and the hOCR-only steps (dictionary filter, table repair
+        // from hOCR) do not run for it. ~keep
+        raw_content = merged.text();
+        hocr_document = None;
+        hocr_for_tables = None;
+        dictionary_filtered_line_count = 0;
+        dictionary_kept_numeral_line_count = 0;
+        retained_hocr_confidence_stats = None;
+    }
 
     let mut metadata = HashMap::new();
     if let Some(image_preprocessing) = image_preprocessing {
@@ -2581,15 +2646,28 @@ pub(super) fn perform_ocr(
         }
     }
 
+    if let Some(outcome) = script_retry.as_ref() {
+        // After the first read's confidence metadata, so the merged page reports its own. ~keep
+        script_retry::record(&mut metadata, outcome);
+    }
+
     let mut content = strip_control_characters(&raw_content).into_owned();
     let retained_text = (config.output_format == "text").then_some(content.as_str());
-    let iterator_extraction = extract_elements_via_iterator(
-        &api,
-        &dictionary,
-        config.page_number,
-        config.min_confidence,
-        retained_text,
-    );
+    let iterator_extraction = if merged_read.is_some() {
+        // The first engine holds only the first read; the merged elements come from the word
+        // table below. ~keep
+        Err(OcrError::ProcessingFailed(
+            "merged read has no result iterator".to_string(),
+        ))
+    } else {
+        extract_elements_via_iterator(
+            &api,
+            &dictionary,
+            config.page_number,
+            config.min_confidence,
+            retained_text,
+        )
+    };
     let mut ocr_elements = None;
     if let Ok(extraction) = &iterator_extraction
         && let Some(stats) = extraction.retained_text_confidence_stats.as_ref()
@@ -2623,7 +2701,8 @@ pub(super) fn perform_ocr(
             ocr_elements = Some(extraction.elements);
         }
         _ => {
-            if let Some(ref tsv_data) = tsv_data_for_tables {
+            let merged_tsv = merged_read.map(|merged| merged.tsv());
+            if let Some(tsv_data) = merged_tsv.as_deref().or(tsv_data_for_tables.as_deref()) {
                 let elements = parse_tsv_to_elements(tsv_data, config.min_confidence, config.page_number);
                 if !elements.is_empty() {
                     ocr_elements = Some(elements);
@@ -2997,14 +3076,23 @@ pub(super) fn process_image_file_with_cache(
     cache: &OcrCache,
     api_pool: &Arc<TesseractApiPool>,
     output_format: Option<crate::core::config::OutputFormat>,
+    retry_threshold: Option<f64>,
 ) -> Result<OcrExtractionResult, OcrError> {
     let image_bytes = std::fs::read(file_path)
         .map_err(|e| OcrError::IOError(format!("Failed to read file '{}': {}", file_path, e)))?;
-    process_image_with_cache(&image_bytes, config, cache, api_pool, output_format)
+    process_image_with_retry(
+        &image_bytes,
+        config,
+        cache,
+        api_pool,
+        output_format,
+        ImageOcrPolicy::Default,
+        retry_threshold,
+    )
 }
 
 /// Check if a language value is the "all" wildcard (case-insensitive).
-fn is_all_languages(lang: &str) -> bool {
+pub(super) fn is_all_languages(lang: &str) -> bool {
     let lower = lang.to_ascii_lowercase();
     lower == "all" || lower == "*"
 }
@@ -3042,6 +3130,7 @@ fn resolve_config_language(config: &TesseractConfig) -> Result<Option<TesseractC
 /// # Returns
 ///
 /// OCR extraction result
+#[cfg(test)]
 pub(super) fn process_image_with_cache(
     image_bytes: &[u8],
     config: &TesseractConfig,
@@ -3059,6 +3148,7 @@ pub(super) fn process_image_with_cache(
     )
 }
 
+#[cfg(test)]
 pub(super) fn process_image_with_cache_and_policy(
     image_bytes: &[u8],
     config: &TesseractConfig,
@@ -3066,6 +3156,18 @@ pub(super) fn process_image_with_cache_and_policy(
     api_pool: &Arc<TesseractApiPool>,
     output_format: Option<crate::core::config::OutputFormat>,
     policy: ImageOcrPolicy,
+) -> Result<OcrExtractionResult, OcrError> {
+    process_image_with_retry(image_bytes, config, cache, api_pool, output_format, policy, None)
+}
+
+pub(super) fn process_image_with_retry(
+    image_bytes: &[u8],
+    config: &TesseractConfig,
+    cache: &OcrCache,
+    api_pool: &Arc<TesseractApiPool>,
+    output_format: Option<crate::core::config::OutputFormat>,
+    policy: ImageOcrPolicy,
+    retry_threshold: Option<f64>,
 ) -> Result<OcrExtractionResult, OcrError> {
     config.validate().map_err(OcrError::InvalidConfiguration)?;
 
@@ -3076,7 +3178,15 @@ pub(super) fn process_image_with_cache_and_policy(
     };
     let config = resolved.as_ref().unwrap_or(config);
 
-    process_image_resolved(image_bytes, config, cache, api_pool, output_format, policy)
+    process_image_resolved(
+        image_bytes,
+        config,
+        cache,
+        api_pool,
+        output_format,
+        policy,
+        retry_threshold,
+    )
 }
 
 /// Inner implementation operating on an already-resolved config.
@@ -3091,6 +3201,7 @@ fn process_image_resolved(
     api_pool: &Arc<TesseractApiPool>,
     output_format: Option<crate::core::config::OutputFormat>,
     policy: ImageOcrPolicy,
+    retry_threshold: Option<f64>,
 ) -> Result<OcrExtractionResult, OcrError> {
     let image_hash = crate::cache::blake3_hash_bytes(image_bytes);
 
@@ -3098,7 +3209,7 @@ fn process_image_resolved(
     let models = if policy.requires_provisioned_models() {
         ModelContext::for_provisioned(config)?
     } else {
-        ModelContext::resolve(config)?
+        ModelContext::resolve_with_retry(config, retry_threshold)?
     };
     let mut config_str = models.result_key(config);
     config_str.push_str(match policy {
@@ -3117,10 +3228,12 @@ fn process_image_resolved(
     if config.use_cache
         && let Some(cached_result) =
             cache.get_cached_result(&image_hash, "tesseract", &config_str, output_format.as_ref())?
-        && models.if_current(|| ()).is_some()
+        && models.if_result_current(config, || ()).is_some()
+        && !crate::core::extractor::cacheability::ocr_stop_requested()
     {
         #[cfg(feature = "otel")]
         tracing::Span::current().record("cache.hit", true);
+        block_outer_cache_for_retry(&cached_result);
         return Ok(cached_result);
     }
 
@@ -3141,15 +3254,25 @@ fn process_image_resolved(
         policy,
     )?;
 
-    if config.use_cache
-        && let Some(Err(e)) = models.if_current(|| {
+    let stored = models.if_result_current(config, || {
+        if config.use_cache && !crate::core::extractor::cacheability::ocr_stop_requested() {
             cache.set_cached_result(&image_hash, "tesseract", &config_str, output_format.as_ref(), &result)
-        })
-    {
-        tracing::warn!(error = %e, "Failed to cache the OCR result; the next identical request will re-run OCR");
+        } else {
+            Ok(())
+        }
+    });
+    if let Some(Err(error)) = stored {
+        tracing::warn!(%error, "Failed to cache the OCR result; the next identical request will re-run OCR");
     }
 
+    block_outer_cache_for_retry(&result);
     Ok(result)
+}
+
+fn block_outer_cache_for_retry(result: &OcrExtractionResult) {
+    if result.metadata.contains_key(script_retry::METADATA_KEY) {
+        crate::core::extractor::cacheability::block_outer_result_publication();
+    }
 }
 
 /// Process multiple image files in parallel using Rayon.
@@ -3215,7 +3338,15 @@ pub(super) fn process_image_files_batch(
                         };
                     }
                 };
-                match process_image_resolved(&image_bytes, config, cache, api_pool, None, ImageOcrPolicy::Default) {
+                match process_image_resolved(
+                    &image_bytes,
+                    config,
+                    cache,
+                    api_pool,
+                    None,
+                    ImageOcrPolicy::Default,
+                    None,
+                ) {
                     Ok(result) => BatchItemResult {
                         file_path: path.clone(),
                         success: true,
@@ -3250,7 +3381,15 @@ pub(super) fn process_image_files_batch(
                         };
                     }
                 };
-                match process_image_resolved(&image_bytes, config, cache, api_pool, None, ImageOcrPolicy::Default) {
+                match process_image_resolved(
+                    &image_bytes,
+                    config,
+                    cache,
+                    api_pool,
+                    None,
+                    ImageOcrPolicy::Default,
+                    None,
+                ) {
                     Ok(result) => BatchItemResult {
                         file_path: path.clone(),
                         success: true,
@@ -5003,7 +5142,7 @@ mod tests {
         };
 
         let api_pool = TesseractApiPool::new();
-        let result = process_image_file_with_cache("/nonexistent/file.png", &config, &cache, &api_pool, None);
+        let result = process_image_file_with_cache("/nonexistent/file.png", &config, &cache, &api_pool, None, None);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Failed to read file"));
     }
@@ -5131,6 +5270,261 @@ mod tests {
         let cache = OcrCache::new(Some(cache_dir.path().to_path_buf())).unwrap();
         process_image_with_cache(&corpus_image(image), &config, &cache, &TesseractApiPool::new(), None)
             .expect("OCR must succeed")
+    }
+
+    fn han_letters(text: &str) -> usize {
+        text.chars().filter(|c| ('\u{4e00}'..='\u{9fff}').contains(c)).count()
+    }
+
+    fn read_with_retry_settings(retry: bool, table_detection: bool) -> OcrExtractionResult {
+        let config = TesseractConfig {
+            language: "eng".to_string(),
+            output_format: "markdown".to_string(),
+            enable_table_detection: table_detection,
+            use_cache: false,
+            ..TesseractConfig::default()
+        };
+        let cache_dir = tempdir().unwrap();
+        let cache = OcrCache::new(Some(cache_dir.path().to_path_buf())).unwrap();
+        process_image_with_retry(
+            &corpus_image("chi_sim_image.jpeg"),
+            &config,
+            &cache,
+            &TesseractApiPool::new(),
+            None,
+            ImageOcrPolicy::Default,
+            retry.then_some(75.0),
+        )
+        .expect("OCR must succeed")
+    }
+
+    #[test]
+    fn retry_tsv_failure_keeps_the_first_read_and_bypasses_cache() {
+        let models = ModelContext::for_path("unused".into(), 3).unwrap();
+        let first_read = "first pass text";
+        let retried = retry_with_tsv(
+            &models,
+            None,
+            || Err(OcrError::ProcessingFailed("injected retry TSV failure".into())),
+            |_| panic!("retry cannot run without first-pass TSV"),
+        );
+        assert_eq!(retried.unwrap_or(first_read), first_read);
+        assert!(models.if_current(|| ()).is_none());
+    }
+
+    #[cfg(feature = "bundle-tessdata-eng")]
+    #[test]
+    #[serial]
+    fn failed_script_retry_preserves_the_processor_result_and_does_not_cache_it() {
+        let tessdata = tempdir().unwrap();
+        let eng = xberg_tesseract::bundled_eng_traineddata().expect("the test bundles English tessdata");
+        std::fs::write(tessdata.path().join("eng.traineddata"), eng).unwrap();
+        for model in ["osd", "chi_sim"] {
+            std::fs::write(tessdata.path().join(format!("{model}.traineddata")), b"invalid model").unwrap();
+        }
+
+        let config = TesseractConfig {
+            tessdata_path: Some(tessdata.path().into()),
+            ..Default::default()
+        };
+        let cache_dir = tempdir().unwrap();
+        let baseline_cache = OcrCache::new(Some(cache_dir.path().join("baseline"))).unwrap();
+        let retry_cache = OcrCache::new(Some(cache_dir.path().join("retry"))).unwrap();
+        let pool = TesseractApiPool::new();
+        let image = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/ocr_dot_leader_2503/clean_table.png"
+        ));
+        let read = |cache, threshold| {
+            process_image_with_retry(image, &config, cache, &pool, None, ImageOcrPolicy::Default, threshold)
+                .expect("OCR must return the first pass")
+        };
+
+        let first = read(&baseline_cache, None);
+        assert!(!first.content.is_empty() || !first.tables.is_empty());
+        assert_eq!(baseline_cache.get_stats().unwrap().total_files, 1);
+        let fallback = read(&retry_cache, Some(101.0));
+        assert_eq!(
+            serde_json::to_value(fallback).unwrap(),
+            serde_json::to_value(first).unwrap()
+        );
+        assert_eq!(retry_cache.get_stats().unwrap().total_files, 0);
+    }
+
+    #[tokio::test]
+    async fn retry_cache_hit_blocks_outer_publication_after_models_are_removed() {
+        use crate::core::extractor::{cache_context, cacheability};
+
+        let root = tempdir().unwrap();
+        let language = "xberg_retry_publication_fixture";
+        let config = TesseractConfig {
+            language: language.into(),
+            tessdata_path: Some(root.path().into()),
+            psm: 3,
+            use_cache: true,
+            ..Default::default()
+        };
+        let outer_config = ExtractionConfig {
+            ocr: Some(crate::core::config::OcrConfig {
+                language: vec![language.into()],
+                tessdata_path: config.tessdata_path.clone(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let dependencies = [cache_context::CacheDependency::for_config(
+            &outer_config,
+            Some("image/png"),
+        )];
+        let snapshot = || cache_context::fingerprint(&dependencies, None);
+
+        cacheability::scope(async {
+            let before = snapshot().await.unwrap();
+            assert!(before.as_ref().is_some_and(|context| !context.is_empty()));
+            for model in [language, "osd", "chi_sim"] {
+                std::fs::write(root.path().join(format!("{model}.traineddata")), model).unwrap();
+            }
+            assert_eq!(snapshot().await.unwrap(), None);
+
+            let threshold = Some(75.0);
+            let models = ModelContext::resolve_with_retry(&config, threshold).unwrap();
+            let cache = OcrCache::new(Some(root.path().join("results"))).unwrap();
+            // A miss would try to decode these bytes and fail. ~keep
+            let image = b"inner cache fixture, not an image";
+            let cached = OcrExtractionResult {
+                content: "汉字".into(),
+                mime_type: "text/plain".into(),
+                metadata: HashMap::from([(
+                    script_retry::METADATA_KEY.into(),
+                    serde_json::json!({"model": "chi_sim"}),
+                )]),
+                tables: vec![],
+                ocr_elements: None,
+                internal_document: None,
+                raw_ocr_source_frame: None,
+            };
+            cache
+                .set_cached_result(
+                    &crate::cache::blake3_hash_bytes(image),
+                    "tesseract",
+                    &models.result_key(&config),
+                    None,
+                    &cached,
+                )
+                .unwrap();
+            let read = tokio::task::spawn_blocking(cacheability::blocking(move || {
+                process_image_with_retry(
+                    image,
+                    &config,
+                    &cache,
+                    &TesseractApiPool::new(),
+                    None,
+                    ImageOcrPolicy::Default,
+                    threshold,
+                )
+            }))
+            .await
+            .unwrap()
+            .unwrap();
+            assert_eq!(read.content, cached.content);
+            assert_eq!(read.metadata, cached.metadata);
+
+            std::fs::remove_file(root.path().join("chi_sim.traineddata")).unwrap();
+            assert_eq!(snapshot().await.unwrap(), before);
+            assert!(cacheability::is_cacheable(), "only outer publication is blocked");
+            assert!(!cacheability::can_publish_outer_result());
+        })
+        .await;
+        assert!(cacheability::can_publish_outer_result());
+    }
+
+    #[test]
+    fn retry_reuses_table_tsv_without_a_second_native_read() {
+        let models = ModelContext::for_path("unused".into(), 3).unwrap();
+        let outcome = retry_with_tsv(
+            &models,
+            Some("first pass TSV"),
+            || panic!("table TSV is already available"),
+            |tsv| Ok(Some(tsv.to_owned())),
+        );
+        assert_eq!(outcome.as_deref(), Some("first pass TSV"));
+    }
+
+    #[test]
+    fn table_detection_reads_the_merged_page_only_when_the_page_changed() {
+        let word = |text: &str| script_retry::TsvWord {
+            line_key: (1, 1, 1),
+            left: 10,
+            top: 10,
+            width: 40,
+            height: 20,
+            conf: 90.0,
+            text: text.to_string(),
+        };
+        let merged = script_retry::Merged {
+            lines: vec![vec![word("汉字")]],
+            admitted: 1,
+            refused: 0,
+            added: 0,
+        };
+        let first = Some("first read table".to_string());
+
+        let with_merge = table_tsv(first.clone(), Some(&merged)).expect("a table");
+        assert!(
+            with_merge.contains("汉字"),
+            "the merged words feed table detection: {with_merge}"
+        );
+        assert!(!with_merge.contains("first read table"));
+        assert_eq!(
+            table_tsv(first.clone(), None),
+            first,
+            "no merge keeps the first read's table"
+        );
+        assert_eq!(table_tsv(None, Some(&merged)), None, "no table asked for, none made");
+    }
+
+    /// A Han image read with `eng` alone is noise. With the retry settings, and `osd` and `chi_sim`
+    /// installed, the page is read again and its metadata names the retry; without the settings
+    /// the page keeps the noise. Table detection is on in the first read, as it is by default.
+    /// Skips when the models are not installed, because the retry never downloads them.
+    #[tokio::test]
+    #[serial]
+    async fn a_han_image_read_with_eng_is_read_again_with_chi_sim() {
+        use crate::core::extractor::cacheability;
+        let config = TesseractConfig {
+            output_format: "markdown".into(),
+            ..Default::default()
+        };
+        let models = ModelContext::resolve_with_retry(&config, Some(75.0)).expect("resolve first-pass models");
+        if models.retry_models(&config, 0.0).is_none() {
+            eprintln!("skipped: osd and chi_sim are not installed");
+            return;
+        }
+        cacheability::scope(async {
+            let plain = read_with_retry_settings(false, true);
+            assert_eq!(han_letters(&plain.content), 0, "the first read is Latin noise");
+            assert!(!plain.metadata.contains_key(script_retry::METADATA_KEY));
+            assert!(cacheability::can_publish_outer_result());
+        })
+        .await;
+        for table_detection in [true, false] {
+            cacheability::scope(async {
+                let retried = read_with_retry_settings(true, table_detection);
+                assert!(
+                    han_letters(&retried.content) > 0,
+                    "table detection {table_detection}: {:?}",
+                    retried.content
+                );
+                assert_eq!(
+                    retried.metadata[script_retry::METADATA_KEY]["model"],
+                    "chi_sim",
+                    "the record names the model"
+                );
+                assert!(cacheability::is_cacheable());
+                assert!(!cacheability::can_publish_outer_result());
+            })
+            .await;
+        }
     }
 
     /// Lines OCR read in the secondary language of a `lang1+lang2` run must survive the

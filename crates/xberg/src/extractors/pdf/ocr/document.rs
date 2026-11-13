@@ -2093,15 +2093,13 @@ fn finish_layer_prepend_on_page(
                 pairs.push((row, flat, structured));
             }
         }
-        let positions = pairs
-            .into_iter()
-            .filter_map(|(row, flat, structured)| {
-                (flat_counts[&flat] == 1 && structured_counts[&structured] == 1).then(|| {
-                    certified.misread_ocr_rows.push(row.clone());
-                    structured
-                })
-            })
-            .collect();
+        let mut positions = ahash::AHashSet::new();
+        for (row, flat, structured) in pairs {
+            if flat_counts[&flat] == 1 && structured_counts[&structured] == 1 {
+                certified.misread_ocr_rows.push(row.clone());
+                positions.insert(structured);
+            }
+        }
         remove_misread_rows_from_document(doc, &positions);
     }
     insert_layer_into_document(doc, page, &first.lines);
