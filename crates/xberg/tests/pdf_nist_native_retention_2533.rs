@@ -17,8 +17,7 @@ const MAPPED_EXPRESSION: &str = "Vmax = 1000 V";
 const LOST_GLYPH_WARNING: &str =
     "Page 1 retained native text; 8 glyphs have no Unicode value and its OCR read did not recover them.";
 
-#[test]
-fn automatic_ocr_preserves_the_mapped_expression_on_the_nist_checklist() {
+fn nist_fixture() -> Vec<u8> {
     let path = std::env::var_os("XBERG_NIST_FIXTURE")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| helpers::get_test_file_path("pdf/regression_pages/nist-sp811-2008-p7.pdf"));
@@ -27,6 +26,12 @@ fn automatic_ocr_preserves_the_mapped_expression_on_the_nist_checklist() {
         hex::encode(Sha256::digest(&bytes)),
         "71c2a76af332a9b796899a78e99ce2d835026d624048cf239069276fcacce79b"
     );
+    bytes
+}
+
+#[test]
+fn automatic_ocr_preserves_the_mapped_expression_on_the_nist_checklist() {
+    let bytes = nist_fixture();
     let native_pdf = xberg_native_pdf::PdfDocument::from_bytes(bytes.clone()).unwrap();
     let page = native_pdf.extract_page_text(0).unwrap();
     assert_eq!(
@@ -128,4 +133,78 @@ fn automatic_ocr_preserves_the_mapped_expression_on_the_nist_checklist() {
             );
         }
     }
+}
+
+struct EmptyRead;
+
+impl xberg::plugins::Plugin for EmptyRead {
+    fn name(&self) -> &str {
+        "nist-2893-empty-read"
+    }
+
+    fn version(&self) -> String {
+        "1.0.0".into()
+    }
+
+    fn initialize(&self) -> xberg::Result<()> {
+        Ok(())
+    }
+
+    fn shutdown(&self) -> xberg::Result<()> {
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl xberg::plugins::OcrBackend for EmptyRead {
+    fn supports_language(&self, _: &str) -> bool {
+        true
+    }
+
+    fn backend_type(&self) -> xberg::plugins::OcrBackendType {
+        xberg::plugins::OcrBackendType::Custom
+    }
+
+    async fn process_image(&self, _: &[u8], _: &OcrConfig) -> xberg::Result<xberg::ExtractedDocument> {
+        Ok(xberg::ExtractedDocument::default())
+    }
+}
+
+#[test]
+fn forced_ocr_restoration_reports_the_unrecovered_glyphs() {
+    use xberg::plugins::{Plugin, register_ocr_backend, unregister_ocr_backend};
+
+    let bytes = nist_fixture();
+    let backend = EmptyRead;
+    let name = backend.name().to_owned();
+    register_ocr_backend(std::sync::Arc::new(backend)).unwrap();
+    let config = ExtractionConfig {
+        use_cache: false,
+        force_ocr: true,
+        output_format: OutputFormat::Markdown,
+        ocr: Some(OcrConfig {
+            backend: name.clone(),
+            ..Default::default()
+        }),
+        pages: Some(PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let result = helpers::extract_bytes_document_blocking(&bytes, "application/pdf", &config);
+    unregister_ocr_backend(&name).unwrap();
+    let document = result.unwrap();
+    assert_eq!(document.extraction_method, Some(ExtractionMethod::Ocr));
+    assert!(document.content.contains(MAPPED_EXPRESSION));
+    assert_eq!(
+        document
+            .processing_warnings
+            .iter()
+            .filter(|warning| warning.source == "ocr" && warning.message == LOST_GLYPH_WARNING)
+            .count(),
+        1,
+        "{:?}",
+        document.processing_warnings
+    );
 }

@@ -9616,6 +9616,7 @@ async fn run_ocr_pipeline_stages(
     // authentication) so the failure is surfaced to the caller instead of being
     // silently replaced by a lower-quality earlier result (issue #1339).
     let mut stage_failures: Vec<(String, String)> = Vec::new();
+    let mut unrecovered_glyphs_on_page_one = 0;
     #[cfg(feature = "pdf")]
     let mut preferred_recovery_config = None;
     #[cfg(feature = "pdf")]
@@ -9837,6 +9838,8 @@ async fn run_ocr_pipeline_stages(
                     "Pipeline: backend failed, trying next"
                 );
                 stage_failures.push((stage.backend.clone(), failed_stage.error.to_string()));
+                unrecovered_glyphs_on_page_one =
+                    unrecovered_glyphs_on_page_one.max(failed_stage.unrecovered_glyphs_on_page_one);
                 merge_ocr_page_failures(stage_page_failures, failed_stage.page_failures);
             }
         }
@@ -9996,11 +9999,14 @@ async fn run_ocr_pipeline_stages(
                     .join("; ");
                 format!(" ({causes})")
             };
-            Err(crate::XbergError::Parsing {
-                message: format!("All OCR pipeline backends failed{detail}"),
-                source: None,
-            }
-            .into())
+            Err(FailedOcrRun {
+                error: crate::XbergError::Parsing {
+                    message: format!("All OCR pipeline backends failed{detail}"),
+                    source: None,
+                },
+                page_failures: Vec::new(),
+                unrecovered_glyphs_on_page_one,
+            })
         }
     }
 }

@@ -481,3 +481,54 @@ async fn a_failed_page_by_page_pipeline_run_carries_every_page_record() {
         failed_run.page_failures
     );
 }
+
+#[cfg(feature = "bundle-tessdata-eng")]
+#[tokio::test]
+async fn an_aggregate_pipeline_error_preserves_the_native_ink_rejection_count() {
+    use super::pipeline::PageOcrHints;
+
+    let path = std::env::var_os("XBERG_NIST_FIXTURE")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../test_documents/pdf/regression_pages/nist-sp811-2008-p7.pdf")
+        });
+    let bytes = std::fs::read(path).unwrap();
+    let mut native = crate::pdf::native::NativeDocument::open_bytes(&bytes).unwrap();
+    let (layer, ..) = crate::pdf::native::text::extract_text_and_metadata(&mut native, None).unwrap();
+    assert_eq!(layer.matches(xberg_native_pdf::is_lost_glyph_marker).count(), 8);
+    let models = tempfile::tempdir().unwrap();
+    std::fs::write(
+        models.path().join("eng.traineddata"),
+        xberg_tesseract::bundled_eng_traineddata().unwrap(),
+    )
+    .unwrap();
+
+    let (mut config, mut pipeline) = two_stage_config("tesseract", "tesseract", 0.7);
+    let ocr = config.ocr.as_mut().unwrap();
+    ocr.tessdata_path = Some(models.path().to_path_buf());
+    // Isolate stage aggregation from public routing's explicit-pipeline preservation policy. ~keep
+    ocr.pipeline = None;
+    config.use_cache = false;
+    pipeline.stages.truncate(1);
+    let hints = PageOcrHints {
+        single_native_type0_page: Some(layer.into()),
+        ..Default::default()
+    };
+    let failed = run_ocr_pipeline(
+        Some(&bytes),
+        None,
+        #[cfg(feature = "layout-detection")]
+        None,
+        &config,
+        &pipeline,
+        None,
+        Some(hints),
+    )
+    .await
+    .expect_err("the certified native-ink read is rejected");
+    let error = failed.error.to_string();
+    assert!(error.contains("All OCR pipeline backends failed"), "{error}");
+    assert!(error.contains("did not recover the 8 glyphs"), "{error}");
+    assert_eq!(failed.unrecovered_glyphs_on_page_one, 8);
+}

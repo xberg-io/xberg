@@ -2594,7 +2594,7 @@ fn native_page_texts_for_restore(
 /// The whole-document read has no text for such a page, so the document content, the structured
 /// document and the page boundaries would otherwise lose it while the page keeps it. A single
 /// blank read stands for the whole document and discards every page. Returns the per-page texts
-/// of the restored document and the count of lost native glyphs, or `None` when no page was
+/// of the restored document and the lost native glyph counts by page, or `None` when no page was
 /// restored or the flat text was assembled independently of its page texts.
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn restore_discarded_page_reads(
@@ -2603,7 +2603,7 @@ fn restore_discarded_page_reads(
     ocr_page_texts: &[String],
     native_pages: &[String],
     config: &ExtractionConfig,
-) -> Option<(Vec<String>, usize)> {
+) -> Option<(Vec<String>, Vec<(u32, usize)>)> {
     let whole_document_blank = ocr_page_texts.len() == 1 && ocr_page_texts[0].trim().is_empty();
     if native_pages.is_empty() || (ocr_page_texts.len() != native_pages.len() && !whole_document_blank) {
         return None;
@@ -2616,13 +2616,17 @@ fn restore_discarded_page_reads(
     } else {
         ocr_page_texts.to_vec()
     };
-    let mut lost_glyphs = 0;
+    let mut lost_glyphs = Vec::new();
     let mut restored = ahash::AHashMap::new();
     for (index, (read, native)) in reads.iter_mut().zip(native_pages).enumerate() {
         if read.trim().is_empty() && !native.trim().is_empty() {
             read.clone_from(native);
-            lost_glyphs += unmapped_glyphs::strip_native_fragment(read);
-            restored.insert((index + 1) as u32, read.clone());
+            let page = (index + 1) as u32;
+            let lost = unmapped_glyphs::strip_native_fragment(read);
+            if lost > 0 {
+                lost_glyphs.push((page, lost));
+            }
+            restored.insert(page, read.clone());
         }
     }
     if restored.is_empty() {
@@ -3335,8 +3339,14 @@ impl PdfExtractor {
                     restore_discarded_page_reads(&mut ocr_text, &mut ocr_doc, &ocr_pts, &native_pages, config)
                 {
                     ocr_document_page_texts = Some(pages);
-                    if let Some(warning) = unmapped_glyphs::lost_glyph_warning(lost_glyphs, config) {
+                    let total_lost = lost_glyphs.iter().map(|&(_, lost)| lost).sum();
+                    if let Some(warning) = unmapped_glyphs::lost_glyph_warning(total_lost, config) {
                         crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
+                    }
+                    for (page, lost) in lost_glyphs {
+                        if let Some(warning) = unmapped_glyphs::unrecovered_page_glyph_warning(page, lost) {
+                            crate::core::diagnostics::push_warning_deduped(&mut ocr_fallback_warnings, warning);
+                        }
                     }
                 }
             }

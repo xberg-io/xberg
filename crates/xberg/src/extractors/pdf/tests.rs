@@ -7515,8 +7515,7 @@ fn a_discarded_read_in_the_middle_is_restored_into_the_document() {
         text,
         "[read one, page 1]read one[read one, page 2]native 2[read one, page 3]read three"
     );
-    assert_eq!(lost_glyphs, 1);
-    assert!(unmapped_glyphs::lost_glyph_warning(lost_glyphs, &config).is_some());
+    assert_eq!(lost_glyphs, vec![(2, 1)]);
     assert_eq!(pages, vec!["read one", "native 2", "read three"]);
     let paragraphs: Vec<(&str, Option<u32>)> = document
         .as_ref()
@@ -7572,7 +7571,7 @@ fn a_blank_whole_document_read_restores_every_page_and_complete_reads_restore_no
             .expect("a blank whole-document read discards every page");
     assert_eq!(text, "native 1\n\nnative 2\n\nnative 3");
     assert_eq!(pages, natives);
-    assert_eq!(lost_glyphs, 0);
+    assert!(lost_glyphs.is_empty());
 
     let reads: Vec<String> = (1..=3).map(|n| format!("read {n}")).collect();
     let mut text = "read 1\n\nread 2\n\nread 3".to_string();
