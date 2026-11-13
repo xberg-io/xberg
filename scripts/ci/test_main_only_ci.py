@@ -84,7 +84,9 @@ def focused_pr_violations(workflow: dict) -> list[str]:
         "vendored/**",
         "test_documents",
     }
-    missing_inputs = required_inputs - set(push.get("paths", []))
+    push_paths = push.get("paths", [])
+    violations.extend(f"negated push path: {path}" for path in push_paths if path.startswith("!"))
+    missing_inputs = required_inputs - set(push_paths)
     if missing_inputs:
         violations.append(f"missing push inputs: {sorted(missing_inputs)}")
     if workflow.get("permissions") != {"contents": "read"}:
@@ -105,6 +107,11 @@ class MainOnlyCiTests(unittest.TestCase):
     def test_focused_pr_workflow_stays_read_only_and_same_repository(self) -> None:
         workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())
         assert focused_pr_violations(workflow) == []
+
+    def test_focused_pr_check_rejects_negated_push_path(self) -> None:
+        workflow = yaml.safe_load((WORKFLOWS / FOCUSED_PR_WORKFLOW).read_text())
+        workflow[True]["push"]["paths"].append("!mise-tasks/nli/**")
+        assert focused_pr_violations(workflow) == ["negated push path: !mise-tasks/nli/**"]
 
     def test_focused_pr_check_rejects_each_widening(self) -> None:
         def mutated(change: Callable[[dict], None]) -> dict:
