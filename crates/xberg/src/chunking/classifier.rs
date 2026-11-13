@@ -162,10 +162,7 @@ fn is_formula(content: &str) -> bool {
     let latex_patterns = [
         r"\frac", r"\sum", r"\int", r"\sqrt", r"\alpha", r"\beta", r"\delta", r"$$", r"\[",
     ];
-    if latex_patterns.iter().any(|p| lower.contains(p)) {
-        return true;
-    }
-    false
+    latex_patterns.iter().any(|p| lower.contains(p))
 }
 
 fn is_schedule(content: &str, ctx: Option<&HeadingContext>) -> bool {

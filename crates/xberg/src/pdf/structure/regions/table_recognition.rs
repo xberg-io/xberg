@@ -123,10 +123,7 @@ pub(in crate::pdf::structure) fn recognize_tables_for_native_page(
     let table_hints: Vec<&LayoutHint> = hints
         .iter()
         .filter(|h| {
-            if h.class_name != LayoutHintClass::Table || h.confidence < 0.5 {
-                return false;
-            }
-            true
+            h.class_name == LayoutHintClass::Table && h.confidence.partial_cmp(&0.5) != Some(std::cmp::Ordering::Less)
         })
         .collect();
 
