@@ -133,13 +133,136 @@ else
   echo "✓ apt libheif not installed"
 fi
 
-LIBHEIF_MARKER="$LIBHEIF_PREFIX/lib/pkgconfig/libheif.pc"
+libheif_search_path() {
+  local result="$1" entry
+  local -a entries
+  IFS=: read -r -a entries <<<"$2"
+  for entry in "${entries[@]}"; do
+    if [ -n "$entry" ]; then
+      result+=":$entry"
+    fi
+  done
+  printf '%s\n' "$result"
+}
 
-if [ -f "$LIBHEIF_MARKER" ] && pkg-config --modversion libheif 2>/dev/null | grep -q "^${LIBHEIF_VERSION}$"; then
-  echo "✓ libheif ${LIBHEIF_VERSION} already installed (cached)"
+libheif_runtime_links() {
+  local library="$1/lib/libheif.so.1" elf report runtime_path
+  if ! elf="$(LC_ALL=C readelf -W -h -l -d "$library" 2>&1)" ||
+    ! grep -Eq '^[[:space:]]*Type:[[:space:]]+DYN' <<<"$elf" ||
+    ! grep -Eq '\(SONAME\).*\[libheif\.so\.1\]' <<<"$elf"; then
+    echo "::warning::Expected a libheif.so.1 ELF shared library at $library." >&2
+    return 1
+  fi
+  if grep -Eq '\((RPATH|RUNPATH)\)' <<<"$elf"; then
+    echo "::warning::$library has an embedded RPATH or RUNPATH." >&2
+    return 1
+  fi
+  if grep -Eq '^[[:space:]]*INTERP[[:space:]]|^[[:space:]]*0x[[:xdigit:]]+[[:space:]]+\((AUDIT|DEPAUDIT|FILTER|AUXILIARY)\)' <<<"$elf" ||
+    grep -Eq '\(NEEDED\)[[:space:]]+[^[]*\[[^]]*[/$]' <<<"$elf"; then
+    echo "::warning::$library has unsupported ELF loader metadata." >&2
+    return 1
+  fi
+  runtime_path="${LD_LIBRARY_PATH:-}"
+  runtime_path="$(libheif_search_path "$1/lib" "${runtime_path//;/:}")"
+  if ! report="$(LC_ALL=C LD_LIBRARY_PATH="$runtime_path" ldd -r "$library" 2>&1)" ||
+    grep -Eq 'not found|undefined symbol' <<<"$report" ||
+    ! grep -Eq '^[[:space:]]*[^[:space:]]+ => /[^[:space:]]+ \(0x[[:xdigit:]]+\)' <<<"$report"; then
+    echo "::warning::Cannot verify runtime dependencies for $library." >&2
+    printf '%s\n' "$report" >&2
+    return 1
+  fi
+}
+
+libheif_artifacts() (
+  local root="$1" entry target runtime
+  local -a artifacts
+  [[ ! -L "$root" ]] || return 1
+  cd "$root" || return 1
+  for entry in lib lib/pkgconfig include include/libheif lib/cmake lib/cmake/libheif share share/libheif; do
+    [[ ! -L "$entry" && (! -e "$entry" || -d "$entry") ]] || return 1
+  done
+
+  runtime="$(realpath lib/libheif.so.1)" || return 1
+  [[ "${runtime%/*}" == "$(pwd -P)/lib" ]] || return 1
+  runtime="${runtime##*/}"
+  [[ "$runtime" == libheif.so.1 || "$runtime" =~ ^libheif\.so\.1(\.[0-9]+)+$ ]] || return 1
+  [[ -f "lib/$runtime" && ! -L "lib/$runtime" ]] || return 1
+  artifacts=("lib/$runtime")
+  for entry in lib/libheif.so.1 lib/libheif.so; do
+    [[ "$entry" != "lib/$runtime" ]] || continue
+    target="$(readlink "$entry")" || return 1
+    [[ "$target" == "$runtime" || ("$entry" == lib/libheif.so && "$target" == libheif.so.1) ]] || return 1
+    artifacts+=("$entry")
+  done
+
+  shopt -s nullglob
+  for entry in lib/pkgconfig/libheif.pc include/libheif/*.h lib/cmake/libheif/libheif-config*.cmake \
+    share/libheif/example.heic share/libheif/example.avif; do
+    [[ ! -L "$entry" ]] || return 1
+    [[ -e "$entry" ]] || continue
+    [[ -f "$entry" ]] || return 1
+    artifacts+=("$entry")
+  done
+  printf '%s\0' "${artifacts[@]}"
+)
+
+promote_libheif() (
+  local source_root="$1" destination="$2" entry manifest
+  local -a artifacts=()
+  manifest="$(mktemp)" || return 1
+  trap 'rm -f -- "$manifest"' EXIT
+  libheif_artifacts "$source_root" >"$manifest" || return 1
+  while IFS= read -r -d '' entry; do
+    artifacts+=("$entry")
+  done <"$manifest"
+  for entry in "$destination" "$destination"/{lib,lib/pkgconfig,lib/cmake,lib/cmake/libheif,include,include/libheif,share,share/libheif}; do
+    [[ ! -L "$entry" && (! -e "$entry" || -d "$entry") ]] || return 1
+  done
+  cd "$source_root" || return 1
+  sudo mkdir -p "$destination" &&
+    sudo cp -P --parents --remove-destination -- "${artifacts[@]}" "$destination/"
+)
+
+probe_libheif_artifacts() (
+  local source_root="$1" staging entry
+  staging="$(mktemp -d)" || return 1
+  trap 'rm -rf -- "$staging"' EXIT
+  libheif_artifacts "$source_root" >"$staging/manifest" || return 1
+  while IFS= read -r -d '' entry; do
+    mkdir -p "$staging/${entry%/*}" &&
+      cp -P -- "$source_root/$entry" "$staging/$entry" || return 1
+  done <"$staging/manifest"
+  cd "$staging" || return 1
+  LD_LIBRARY_PATH='' libheif_runtime_links "$staging"
+)
+
+libheif_candidate_is_usable() {
+  local candidate="$1" marker="$1/lib/pkgconfig/libheif.pc" search_path
+  if [[ ! -s "$candidate/include/libheif/heif.h" || ! -f "$candidate/lib/libheif.so" ||
+    ! -f "$candidate/lib/libheif.so.1" || ! -s "$marker" ]]; then
+    echo "::warning::Incomplete libheif candidate at $candidate." >&2
+    return 1
+  fi
+  if ! libheif_artifacts "$candidate" >/dev/null; then
+    echo "::warning::Unsafe libheif artifact paths in $candidate." >&2
+    return 1
+  fi
+  search_path="$(libheif_search_path "$candidate/lib/pkgconfig" "${PKG_CONFIG_PATH:-}")"
+  [[ "$(PKG_CONFIG_PATH="$search_path" pkg-config --modversion "$marker")" == "$LIBHEIF_VERSION" ]] &&
+    PKG_CONFIG_PATH="$search_path" pkg-config --cflags --libs "$marker" &&
+    probe_libheif_artifacts "$candidate"
+}
+
+LIBHEIF_CACHE=/tmp/libheif-cache
+if [[ -n "${GITHUB_ACTION:-}" ]] && libheif_candidate_is_usable "$LIBHEIF_CACHE"; then
+  candidate="$LIBHEIF_CACHE"
+  echo "✓ Reusing cached libheif $LIBHEIF_VERSION"
+elif [[ -z "${GITHUB_ACTION:-}" ]] && libheif_candidate_is_usable "$LIBHEIF_PREFIX"; then
+  candidate="$LIBHEIF_PREFIX"
 else
   echo "Building libheif ${LIBHEIF_VERSION} from source..."
   build_dir="$(mktemp -d)"
+  trap 'rm -rf -- "$build_dir"' EXIT
   pushd "$build_dir" >/dev/null
 
   if retry_with_backoff_timeout 300 curl -fsSL -o libheif.tar.gz \
@@ -153,72 +276,47 @@ else
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX="$LIBHEIF_PREFIX" \
       -DCMAKE_INSTALL_LIBDIR=lib \
+      -DCMAKE_SKIP_INSTALL_RPATH=ON \
       -DWITH_EXAMPLES=OFF \
       -DWITH_GDK_PIXBUF=OFF \
       -DBUILD_TESTING=OFF
     make -j"$(nproc)"
-    sudo make install
-    echo "✓ libheif ${LIBHEIF_VERSION} installed to $LIBHEIF_PREFIX"
+    make DESTDIR="$build_dir/staged" install
   else
     echo "::error::Failed to download libheif source"
     exit 1
   fi
 
   popd >/dev/null
-  rm -rf "$build_dir"
-fi
-
-sudo ldconfig
-
-# Fail loudly: what this seeds is exactly what the next run's cache-restore step copies back,
-# so a silently dropped file here poisons every later job with a half-populated cache. The
-# copies below were `2>/dev/null || true` and could not be distinguished from success. ~keep
-if [ -n "${GITHUB_ACTION:-}" ]; then
-  mkdir -p /tmp/libheif-cache/usr/local/lib/pkgconfig
-  mkdir -p /tmp/libheif-cache/usr/local/include
-  mkdir -p /tmp/libheif-cache/usr/local/share
-  cp -a /usr/local/lib/libheif* /tmp/libheif-cache/usr/local/lib/
-  cp -a /usr/local/lib/pkgconfig/libheif.pc /tmp/libheif-cache/usr/local/lib/pkgconfig/
-  [ -d /usr/local/include/libheif ] && cp -a /usr/local/include/libheif /tmp/libheif-cache/usr/local/include/
-  # libheif 1.19.x installs no share/libheif; newer releases do. Genuinely optional. ~keep
-  [ -d /usr/local/share/libheif ] && cp -a /usr/local/share/libheif /tmp/libheif-cache/usr/local/share/
-fi
-
-# Assert what pkg-config will actually report to libheif-sys's build script. Without this the
-# only symptom of a version/ordering mistake is `Package 'libheif' has version 'x', required
-# version is '>= y'` thrown from a cargo build script hundreds of lines later. ~keep
-resolved_libheif_version="$(PKG_CONFIG_PATH="$LIBHEIF_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}" \
-  pkg-config --modversion libheif 2>/dev/null || true)"
-if [ "$resolved_libheif_version" != "$LIBHEIF_VERSION" ]; then
-  echo "::error::pkg-config resolves libheif ${resolved_libheif_version:-<not found>}, expected ${LIBHEIF_VERSION}."
-  echo "::error::The selected runtime must match its versioned CI cache and build receipt."
-  exit 1
-fi
-if ! PKG_CONFIG_PATH="$LIBHEIF_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}" \
-  pkg-config --cflags --libs libheif; then
-  echo "::error::pkg-config cannot resolve libheif's compiler and linker dependencies."
-  exit 1
-fi
-echo "✓ pkg-config resolves libheif ${resolved_libheif_version}"
-
-echo ""
-echo "libheif symbol verification:"
-if [ -f "$LIBHEIF_PREFIX/lib/libheif.so.1" ]; then
-  if nm -D "$LIBHEIF_PREFIX/lib/libheif.so.1" 2>/dev/null | grep -q "heif_image_get_plane_readonly2"; then
-    echo "✓ $LIBHEIF_PREFIX/lib/libheif.so.1 has heif_image_get_plane_readonly2"
-  else
-    echo "::warning::$LIBHEIF_PREFIX/lib/libheif.so.1 missing heif_image_get_plane_readonly2"
+  candidate="$build_dir/staged$LIBHEIF_PREFIX"
+  if ! libheif_candidate_is_usable "$candidate"; then
+    echo "::error::The freshly built libheif failed validation."
+    exit 1
   fi
-else
-  echo "::warning::$LIBHEIF_PREFIX/lib/libheif.so.1 not found"
+fi
+
+if [[ "$candidate" != "$LIBHEIF_PREFIX" ]]; then
+  promote_libheif "$candidate" "$LIBHEIF_PREFIX"
+fi
+sudo ldconfig
+if ! libheif_candidate_is_usable "$LIBHEIF_PREFIX"; then
+  echo "::error::The installed libheif failed runtime validation."
+  exit 1
+fi
+
+if [[ -n "${GITHUB_ACTION:-}" && "$candidate" != "$LIBHEIF_CACHE" ]]; then
+  # Seed from the fresh DESTDIR, which contains only this build's files. ~keep
+  rm -rf -- "$LIBHEIF_CACHE"
+  mv "$candidate" "$LIBHEIF_CACHE"
 fi
 
 echo "ldconfig cache contains:"
 ldconfig -p | grep libheif || echo "(no libheif in ldconfig cache)"
 
 if [[ -n "${GITHUB_ENV:-}" ]]; then
-  echo "PKG_CONFIG_PATH=$LIBHEIF_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >>"$GITHUB_ENV"
-  echo "LD_LIBRARY_PATH=$LIBHEIF_PREFIX/lib:${LD_LIBRARY_PATH:-}" >>"$GITHUB_ENV"
+  echo "PKG_CONFIG_PATH=$(libheif_search_path "$LIBHEIF_PREFIX/lib/pkgconfig" "${PKG_CONFIG_PATH:-}")" >>"$GITHUB_ENV"
+  runtime_path="${LD_LIBRARY_PATH:-}"
+  echo "LD_LIBRARY_PATH=$(libheif_search_path "$LIBHEIF_PREFIX/lib" "${runtime_path//;/:}")" >>"$GITHUB_ENV"
 fi
 
 echo "::endgroup::"
