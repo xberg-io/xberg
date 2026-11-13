@@ -2543,6 +2543,9 @@ async fn select_rtl_retry_result(
 mod image_ocr_budget;
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[path = "image_color_threshold.rs"]
+mod image_color_threshold;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 #[path = "image_photo_title.rs"]
 mod image_photo_title;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -3319,7 +3322,7 @@ impl ImageExtractor {
         #[cfg(not(target_arch = "wasm32"))]
         let ocr_result = process_whole_image_ocr(
             &backend,
-            ocr_bytes,
+            std::sync::Arc::clone(&ocr_bytes),
             (ocr_config, &ocr_config_with_format),
             SparseRetryPolicy {
                 whole_page_raster: true,
@@ -3340,6 +3343,19 @@ impl ImageExtractor {
             },
         )
         .await?;
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+        let ocr_result = if mime_type == "image/png"
+            && ocr_config.tesseract_config.is_none()
+            && let Some(tesseract) = standalone_tesseract.as_deref()
+        {
+            let limits = ocr_config_with_format
+                .security_limits
+                .as_ref()
+                .unwrap_or(&default_security_limits);
+            image_color_threshold::retry(tesseract, ocr_bytes, &ocr_config_with_format, limits, ocr_result).await?
+        } else {
+            ocr_result
+        };
         #[cfg(target_arch = "wasm32")]
         let ocr_result = backend.process_image(ocr_input, &ocr_config_with_format).await?;
         let ocr_result = {
