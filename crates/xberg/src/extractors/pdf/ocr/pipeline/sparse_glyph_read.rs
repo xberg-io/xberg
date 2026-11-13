@@ -138,6 +138,26 @@ impl MarkedWords {
     }
 }
 
+pub(super) fn rejected_by_page_quality(
+    read: &ExtractedDocument,
+    thresholds: &crate::core::config::OcrQualityThresholds,
+    semantics: crate::plugins::ConfidenceSemantics,
+) -> bool {
+    if read.content.trim().is_empty() {
+        return true;
+    }
+    if !thresholds.discard_suspected_ocr_noise {
+        return false;
+    }
+    use super::super::scoring::{is_dictionary_invalid_noise, mean_text_conf_of, ocr_recognition_noise_decision};
+    let metadata = &read.metadata.additional;
+    let dictionary_ratio = metadata
+        .get(crate::ocr_metadata_keys::OCR_TESSERACT_DICT_INVALID_WORD_RATIO_METADATA_KEY)
+        .and_then(serde_json::Value::as_f64);
+    ocr_recognition_noise_decision(&read.content, thresholds, semantics, mean_text_conf_of(metadata)).suspected()
+        || is_dictionary_invalid_noise(dictionary_ratio, thresholds)
+}
+
 fn matches_marked_word(native: &str, recognized: &str) -> bool {
     let trim = |character: char| !character.is_alphanumeric() && character != LOST_GLYPH_MARKER;
     let native = native.trim_matches(trim).to_lowercase();
@@ -181,7 +201,7 @@ pub(super) async fn retry(
     }
     let (original, effective) =
         crate::extractors::image::reserve_retained_ocr_raster(backend, (original.clone(), effective), bytes.len())?;
-    let mut result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
+    let result = crate::extractors::image::process_whole_image_ocr_with_sparse_retry(
         backend,
         bytes,
         &original,
@@ -192,7 +212,10 @@ pub(super) async fn retry(
         },
         cancel,
     )
-    .await?;
+    .await;
+    #[cfg(all(test, feature = "bundle-tessdata-eng"))]
+    let result = test_attempt(result, &original, width, height, None);
+    let mut result = result?;
     crate::core::diagnostics::dedup_extend_warnings(&mut result.processing_warnings, warnings);
     Ok((result, width, height, raster_dpi))
 }
@@ -233,4 +256,135 @@ mod tests {
         assert!(!matches_marked_word("�uiet", "?uiet"));
         assert!(!matches_marked_word("�uiet", "quite"));
     }
+}
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+type Attempt = (bool, u32, u32, Option<i32>);
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+const QUALITY_CASE: usize = 0x3150_5101;
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+static QUALITY_ATTEMPTS: std::sync::Mutex<Vec<Attempt>> = std::sync::Mutex::new(Vec::new());
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+pub(super) fn test_attempt(
+    mut result: crate::Result<ExtractedDocument>,
+    config: &OcrConfig,
+    width: u32,
+    height: u32,
+    marked_words: Option<&MarkedWords>,
+) -> crate::Result<ExtractedDocument> {
+    if config
+        .security_limits
+        .as_ref()
+        .is_some_and(|limits| limits.max_archive_size == QUALITY_CASE)
+        && let Ok(read) = &mut result
+    {
+        let retry = marked_words.is_none();
+        assert!(marked_words.is_none_or(|words| words.accounted_for(read)));
+        let target = read
+            .metadata
+            .image_preprocessing
+            .as_ref()
+            .map(|metadata| metadata.target_dpi);
+        QUALITY_ATTEMPTS.lock().unwrap().push((retry, width, height, target));
+        // Exercise the quality verdict independently of Tesseract model confidence drift. ~keep
+        read.metadata
+            .additional
+            .insert("mean_text_conf".into(), serde_json::json!(if retry { 100 } else { 0 }));
+    }
+    result
+}
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+#[tokio::test]
+async fn page_quality_rejection_retries_sparse_glyphs_with_normal_raster_and_preprocessing() {
+    const FIXTURE: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/pdf/separation-overprint-2817/"
+    );
+    let pdf = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/pdf/separation-overprint-2817/folio-black.pdf"
+    ));
+    let expected = std::fs::read_to_string(format!("{FIXTURE}sepop.ocr.txt")).unwrap();
+    let expected = expected
+        .split_whitespace()
+        .skip(3)
+        .chain(["Page", "12"])
+        .collect::<Vec<_>>();
+    let models = tempfile::tempdir().unwrap();
+    std::fs::write(
+        models.path().join("eng.traineddata"),
+        xberg_tesseract::bundled_eng_traineddata().unwrap(),
+    )
+    .unwrap();
+    let config = ExtractionConfig {
+        use_cache: false,
+        security_limits: Some(crate::extractors::security::SecurityLimits {
+            max_archive_size: QUALITY_CASE,
+            ..Default::default()
+        }),
+        pages: Some(crate::core::config::PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ocr: Some(OcrConfig {
+            tessdata_path: Some(models.path().to_path_buf()),
+            quality_thresholds: Some(crate::core::config::OcrQualityThresholds {
+                discard_suspected_ocr_noise: true,
+                min_ocr_mean_confidence: 50.0,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let result = crate::core::extractor::extract_bytes(pdf, "application/pdf", &config)
+        .await
+        .unwrap();
+    let attempts = std::mem::take(&mut *QUALITY_ATTEMPTS.lock().unwrap());
+    assert_eq!(attempts.len(), 2, "{attempts:?}");
+    assert_eq!(attempts[0], (false, 1020, 1320, Some(120)));
+    assert_eq!((attempts[1].0, attempts[1].1, attempts[1].2), (true, 1275, 1650));
+    let normal = normal_density_control(pdf, &config).await;
+    let normal_page = &normal.pages.as_ref().unwrap()[0];
+    let normal_target = normal_page
+        .image_preprocessing
+        .as_ref()
+        .map(|metadata| metadata.target_dpi);
+    assert_eq!(attempts[1], (true, 1275, 1650, normal_target));
+    let [page] = result.pages.as_deref().unwrap() else {
+        panic!("expected one page");
+    };
+    for content in [&page.content, &result.content] {
+        assert_eq!(content.split_whitespace().collect::<Vec<_>>(), expected);
+    }
+    assert_eq!(
+        serde_json::to_value(&page.image_preprocessing).unwrap(),
+        serde_json::to_value(&normal_page.image_preprocessing).unwrap(),
+    );
+    assert_eq!(page.ocr_confidence.as_ref().unwrap().score, Some(1.0));
+    assert!(
+        result
+            .processing_warnings
+            .iter()
+            .all(|warning| !warning.message.contains("suspected OCR recognition noise"))
+    );
+}
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+async fn normal_density_control(pdf: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
+    let mut normal_config = config.clone();
+    normal_config.security_limits.as_mut().unwrap().max_archive_size = QUALITY_CASE + 1;
+    normal_config.images = Some(ImageExtractionConfig {
+        target_dpi: crate::image::dpi::DEFAULT_PDF_RENDER_DPI,
+        auto_adjust_dpi: false,
+        extract_images: false,
+        ..Default::default()
+    });
+    crate::core::extractor::extract_bytes(pdf, "application/pdf", &normal_config)
+        .await
+        .unwrap()
 }
