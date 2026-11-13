@@ -358,7 +358,57 @@ impl<'doc> TextExtractor<'doc> {
         }
 
         let repair_zero_widths = !Self::has_following_tj_displacement(array, idx);
-        self.append_advance_buffer(buffer, s, repair_zero_widths)
+        self.append_tj_string_with_tracking_boundaries(buffer, s, repair_zero_widths)
+    }
+
+    fn append_tj_string_with_tracking_boundaries(
+        &mut self,
+        buffer: &mut TjBuffer,
+        text: &[u8],
+        repair_zero_widths: bool,
+    ) -> Result<()> {
+        let state = self.state_stack.current();
+        let tracking = state.char_space * (state.horizontal_scaling / 100.0);
+        const COLUMN_TRACKING_EM: f32 = 2.0;
+        let can_split = state.font_size > 0.0
+            && state.char_space >= state.font_size * COLUMN_TRACKING_EM
+            && tracking.is_finite()
+            && tracking > 0.0
+            && buffer.wmode == 0
+            && buffer.rotation_degrees == 0.0
+            && !buffer.mirrored
+            && buffer.render_mode == 0
+            && text.len() <= 32_767
+            && text
+                .windows(2)
+                .any(|pair| pair[0].is_ascii_alphanumeric() && pair[1].is_ascii_alphanumeric())
+            && text.is_ascii();
+        if !can_split || !self.has_literal_tj_decoding(text) {
+            return self.append_advance_buffer(buffer, text, repair_zero_widths);
+        }
+
+        let unicode_start = buffer.unicode.len();
+        let widths_start = buffer.char_widths.len();
+        self.append_advance_buffer(buffer, text, repair_zero_widths)?;
+        if buffer.unicode.as_bytes().get(unicode_start..) != Some(text)
+            || buffer.char_widths.len() - widths_start != text.len()
+        {
+            return Ok(());
+        }
+
+        let widths = buffer.char_widths.split_off(widths_start);
+        buffer.unicode.truncate(unicode_start);
+        append_tracking_boundaries(&mut buffer.unicode, &mut buffer.char_widths, text, widths, tracking);
+        Ok(())
+    }
+
+    fn has_literal_tj_decoding(&self, text: &[u8]) -> bool {
+        self.cached_current_font.as_ref().is_some_and(|font| {
+            matches!(font.subtype.as_str(), "Type1" | "TrueType")
+                && text
+                    .iter()
+                    .all(|&byte| font.get_byte_to_char_table()[usize::from(byte)] == char::from(byte))
+        })
     }
 
     /// Apply one `TJ` numeric offset: update the running statistics, decide
@@ -664,5 +714,53 @@ impl<'doc> TextExtractor<'doc> {
             word_spacing: state.word_space,
             char_spacing: state.char_space,
         }
+    }
+}
+
+// Preserve the span and pen advance by assigning the inter-glyph tracking to a separator.
+fn append_tracking_boundaries(
+    unicode: &mut String,
+    char_widths: &mut Vec<f32>,
+    text: &[u8],
+    widths: impl IntoIterator<Item = f32>,
+    tracking: f32,
+) {
+    unicode.reserve(text.len() * 2);
+    char_widths.reserve(text.len() * 2);
+    for (index, (&byte, width)) in text.iter().zip(widths).enumerate() {
+        unicode.push(char::from(byte));
+        if width.is_finite()
+            && width > tracking
+            && byte.is_ascii_alphanumeric()
+            && text.get(index + 1).is_some_and(u8::is_ascii_alphanumeric)
+        {
+            unicode.push(' ');
+            char_widths.extend([width - tracking, tracking]);
+        } else {
+            char_widths.push(width);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tracking_boundary_tests {
+    use super::append_tracking_boundaries;
+
+    #[test]
+    fn rebuilds_a_long_tracked_suffix_with_one_visit_per_width() {
+        const GLYPHS: usize = 32_767;
+        let text = vec![b'A'; GLYPHS];
+        let mut unicode = String::from("prefix:");
+        let mut widths = vec![2.0; unicode.len()];
+        let mut visits = 0;
+        let input_widths = std::iter::repeat_n(30.0, GLYPHS).inspect(|_| visits += 1);
+        append_tracking_boundaries(&mut unicode, &mut widths, &text, input_widths, 25.0);
+
+        assert_eq!(visits, GLYPHS);
+        assert_eq!(unicode, format!("prefix:{}A", "A ".repeat(GLYPHS - 1)));
+        assert_eq!(&widths[..7], &[2.0; 7]);
+        assert_eq!(&widths[7..widths.len() - 1], [5.0, 25.0].repeat(GLYPHS - 1));
+        assert_eq!(widths.last(), Some(&30.0));
+        assert_eq!(widths.iter().sum::<f32>(), 14.0 + GLYPHS as f32 * 30.0);
     }
 }
