@@ -143,6 +143,7 @@ fn script_retry_requires_bypass(
             && (checked.len() > MAX_MODEL_SELECTIONS
                 || script_retry::requires_outer_cache_bypass(
                     &model.languages.join("+"),
+                    model.vertical_japanese_retry,
                     model.directory.as_deref(),
                     &env,
                 )
@@ -173,6 +174,7 @@ struct ModelSelection {
     languages: Vec<String>,
     directory: Option<std::path::PathBuf>,
     mixed_pdf_khmer: bool,
+    vertical_japanese_retry: bool,
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -228,6 +230,11 @@ impl ModelSelection {
             languages,
             directory: ocr.tessdata_path.clone(),
             mixed_pdf_khmer,
+            vertical_japanese_retry: ocr
+                .tesseract_config
+                .as_ref()
+                .and_then(|tesseract| tesseract.psm)
+                .is_none_or(|psm| matches!(psm, 3 | 11)),
         })
     }
 
@@ -267,6 +274,7 @@ impl ModelSelection {
             languages: ocr.effective_tesseract_language(),
             directory: ocr.tessdata_path.clone(),
             mixed_pdf_khmer: false,
+            vertical_japanese_retry: false,
         })
     }
 }
@@ -408,6 +416,7 @@ impl CacheDependency {
                 languages: inputs.languages(),
                 directory: inputs.directory().map(std::path::Path::to_path_buf),
                 mixed_pdf_khmer: false,
+                vertical_japanese_retry: false,
             };
             if !self.stage_models.contains(&model) {
                 self.stage_models.push(model);

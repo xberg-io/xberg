@@ -23,6 +23,7 @@ pub(super) struct ModelContext {
     retry: Option<RetryContext>,
     invalidated: Arc<AtomicBool>,
     han_cache_invalidated: Arc<AtomicBool>,
+    vertical_cache_invalidated: Arc<AtomicBool>,
     khmer_cache_invalidated: Arc<AtomicBool>,
     operation: Option<crate::core::extractor::cacheability::Cacheability>,
 }
@@ -163,6 +164,10 @@ impl ModelContext {
         invalidate_script_cache(&self.han_cache_invalidated, "Han", error);
     }
 
+    pub(super) fn invalidate_vertical_cache(&self, error: &OcrError) {
+        invalidate_script_cache(&self.vertical_cache_invalidated, "vertical Japanese", error);
+    }
+
     pub(super) fn invalidate_khmer_cache(&self, error: &OcrError) {
         invalidate_script_cache(&self.khmer_cache_invalidated, "Khmer", error);
     }
@@ -222,7 +227,10 @@ impl ModelContext {
     }
 
     pub(super) fn if_result_current<T>(&self, config: &TesseractConfig, action: impl FnOnce() -> T) -> Option<T> {
-        if !self.han_retry_is_current(config) || !self.khmer_retry_is_current(config) {
+        if self.vertical_cache_invalidated.load(Ordering::Acquire)
+            || !self.han_retry_is_current(config)
+            || !self.khmer_retry_is_current(config)
+        {
             return None;
         }
         self.if_current(action)
@@ -265,6 +273,7 @@ impl ModelContext {
             retry: None,
             invalidated: Arc::new(AtomicBool::new(false)),
             han_cache_invalidated: Arc::new(AtomicBool::new(false)),
+            vertical_cache_invalidated: Arc::new(AtomicBool::new(false)),
             khmer_cache_invalidated: Arc::new(AtomicBool::new(false)),
             operation: osd_revision.and_then(|_| crate::core::extractor::cacheability::current()),
         })

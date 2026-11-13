@@ -2458,6 +2458,7 @@ pub(super) fn perform_ocr(
         .then(|| {
             models.retry_models(config, f64::from(mean_text_conf), || {
                 script_retry::first_read_suggests_han(&api, tsv_data_for_tables.as_deref())
+                    || script_retry::first_read_suggests_vertical_japanese(&api, tsv_data_for_tables.as_deref(), config)
             })
         })
         .flatten()
@@ -2488,6 +2489,8 @@ pub(super) fn perform_ocr(
                         |model, error| {
                             if model == script_retry::KHMER_MODEL {
                                 models.invalidate_khmer_cache(&error);
+                            } else if model == script_retry::VERTICAL_JAPANESE_MODEL {
+                                models.invalidate_vertical_cache(&error);
                             } else {
                                 models.invalidate_han_cache(&error);
                             }
@@ -5590,6 +5593,161 @@ mod tests {
             "no merge keeps the first read's table"
         );
         assert_eq!(table_tsv(None, Some(&merged)), None, "no table asked for, none made");
+    }
+
+    fn vertical_japanese_fixture(name: &str) -> Option<Vec<u8>> {
+        let models = super::super::validation::tessdata_search_dirs(
+            None,
+            &super::super::validation::TessdataEnv::from_process(),
+        );
+        let has_model = models
+            .iter()
+            .any(|dir| std::path::Path::new(dir).join("jpn_vert.traineddata").is_file());
+        let bytes = crate::utils::read_test_fixture(name);
+        if std::env::var_os("XBERG_REQUIRE_VERTICAL_JAPANESE_FIXTURES").is_some() {
+            assert!(has_model, "qualification requires jpn_vert.traineddata");
+            assert!(bytes.is_some(), "qualification requires fixture {name}");
+        }
+        bytes.filter(|_| has_model)
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn mixed_vertical_japanese_preserves_the_horizontal_heading() {
+        let Some(vertical) = vertical_japanese_fixture("images/ndl_meiji_vertical_03.jpg") else {
+            return;
+        };
+        let vertical = image::load_from_memory(&vertical).unwrap().to_rgb8();
+        let heading = image::load_from_memory(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/ocr/vertical_japanese_horizontal_heading.png"
+        )))
+        .unwrap()
+        .to_rgb8();
+        let mut page = image::RgbImage::from_pixel(vertical.width(), vertical.height() + 300, image::Rgb([255; 3]));
+        image::imageops::replace(&mut page, &heading, 380, 65);
+        image::imageops::replace(&mut page, &vertical, 0, 300);
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        page.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
+        let primary_config = TesseractConfig {
+            psm: 11,
+            output_format: "text".into(),
+            use_cache: false,
+            ..Default::default()
+        };
+        let cache_dir = tempdir().unwrap();
+        let cache = OcrCache::new(Some(cache_dir.path().to_path_buf())).unwrap();
+        let primary = process_image_with_retry(
+            bytes.get_ref(),
+            &primary_config,
+            &cache,
+            &TesseractApiPool::new(),
+            None,
+            ImageOcrPolicy::Default,
+            None,
+        )
+        .expect("read the mixed fixture without retry");
+        assert!(
+            primary.content.contains("Thoroughly cook meat and eggs"),
+            "{:?}",
+            primary.content
+        );
+        assert_eq!(han_letters(&primary.content), 0);
+        let config = crate::ExtractionConfig {
+            use_cache: false,
+            ocr: Some(crate::core::config::OcrConfig {
+                backend_options: Some(serde_json::json!({"use_cache": false})),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = crate::core::extractor::extract_bytes(bytes.get_ref(), "image/png", &config)
+            .await
+            .unwrap();
+        assert!(
+            result.content.contains("Thoroughly cook meat and eggs"),
+            "{:?}",
+            result.content
+        );
+        let text: String = result.content.chars().filter(|c| !c.is_whitespace()).collect();
+        assert!(text.contains("胎盤") && text.contains("出血"), "{text:?}");
+    }
+
+    #[test]
+    #[serial]
+    fn default_image_ocr_recovers_vertical_japanese_without_replacing_english() {
+        let Some(vertical) = vertical_japanese_fixture("images/ndl_meiji_vertical_03.jpg") else {
+            return;
+        };
+        let Some(english) = vertical_japanese_fixture("images/english.png") else {
+            return;
+        };
+        let config = TesseractConfig {
+            output_format: "markdown".into(),
+            use_cache: false,
+            psm: 11,
+            ..Default::default()
+        };
+        let cache_dir = tempdir().unwrap();
+        let cache = OcrCache::new(Some(cache_dir.path().to_path_buf())).unwrap();
+        let pool = TesseractApiPool::new();
+        let read = |image: &[u8], config: &TesseractConfig, retry| {
+            process_image_with_retry(image, config, &cache, &pool, None, ImageOcrPolicy::Default, retry)
+                .expect("image OCR must succeed")
+        };
+        let primary = read(&vertical, &config, None);
+        let recovered = read(&vertical, &config, Some(75.0));
+        let explicit = read(
+            &vertical,
+            &TesseractConfig {
+                language: "jpn_vert".into(),
+                psm: 5,
+                ..config.clone()
+            },
+            Some(75.0),
+        );
+        let plain_english = read(&english, &config, None);
+        let retry_english = read(&english, &config, Some(75.0));
+        assert!(!retry_english.metadata.contains_key(script_retry::METADATA_KEY));
+        assert!(!explicit.metadata.contains_key(script_retry::METADATA_KEY));
+
+        assert_eq!(retry_english.content, plain_english.content);
+        assert!(plain_english.content.contains("Thoroughly cook meat and eggs"));
+        assert_eq!(han_letters(&primary.content), 0, "{:?}", primary.content);
+        let explicit_text: String = explicit.content.chars().filter(|c| !c.is_whitespace()).collect();
+        assert!(
+            explicit_text.contains("流産") && explicit_text.contains("出血"),
+            "{explicit_text:?}"
+        );
+        let recovered_text: String = recovered.content.chars().filter(|c| !c.is_whitespace()).collect();
+        assert!(
+            recovered_text.contains("流産") && recovered_text.contains("出血"),
+            "expected Japanese source words, got {:?}; retry: {:?}",
+            recovered.content,
+            recovered.metadata.get(script_retry::METADATA_KEY),
+        );
+        assert_eq!(recovered.metadata[script_retry::METADATA_KEY]["model"], "jpn_vert");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn public_image_extraction_reads_vertical_japanese_with_default_language() {
+        let Some(image) = vertical_japanese_fixture("images/ndl_meiji_vertical_03.jpg") else {
+            return;
+        };
+        let config = crate::ExtractionConfig {
+            use_cache: false,
+            ocr: Some(crate::core::config::OcrConfig {
+                backend_options: Some(serde_json::json!({"use_cache": false})),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let result = crate::core::extractor::extract_bytes(&image, "image/jpeg", &config)
+            .await
+            .expect("public image extraction must succeed");
+        let text: String = result.content.chars().filter(|c| !c.is_whitespace()).collect();
+        assert!(text.contains("流産") && text.contains("出血"), "{text:?}");
     }
 
     /// A Han image read with `eng` alone is noise. With the retry settings, and `osd` and `chi_sim`
