@@ -658,7 +658,7 @@ fn test_format4_id_range_offset_index_underflow_yields_no_glyph() {
     data.write_u32::<BigEndian>(4 + 8).unwrap();
 
     data.write_u16::<BigEndian>(4).unwrap();
-    data.write_u16::<BigEndian>(0).unwrap(); // length (unused by the parser)
+    data.write_u16::<BigEndian>(44).unwrap(); // header, three segments, two glyph IDs
     data.write_u16::<BigEndian>(0).unwrap(); // language
     data.write_u16::<BigEndian>(6).unwrap(); // segCountX2: three segments
     data.write_u16::<BigEndian>(0).unwrap();
@@ -934,4 +934,46 @@ fn test_platform_priority_windows_full_over_bmp() {
 
     let cmap = TrueTypeCMap::from_font_data(&data).unwrap();
     assert_eq!(cmap.get_unicode(1), Some('A'));
+}
+
+#[test]
+fn format4_budget_counts_valid_code_points_before_mapping() {
+    let starts = [65, 97, u16::MAX];
+    let ends = [66, 98, u16::MAX];
+    assert_eq!(TrueTypeCMap::validate_cmap_format4_segments(&starts, &ends, 4), Ok(()));
+    assert_eq!(
+        TrueTypeCMap::validate_cmap_format4_segments(&starts, &ends, 3),
+        Err("Cmap format 4 iteration budget exhausted".into())
+    );
+}
+
+#[test]
+fn format4_bounds_reads_and_preserves_delta_and_glyph_array_mappings() {
+    let mut font = build_truetype_with_cmap_format4(&[(65, 1), (66, 2)]);
+    let subtable = &mut font[40..];
+    subtable[2..4].copy_from_slice(&42u16.to_be_bytes());
+    subtable[38..40].copy_from_slice(&4u16.to_be_bytes());
+    font.extend_from_slice(&5u16.to_be_bytes());
+    font.extend_from_slice(b"adjacent table");
+    let cmap = TrueTypeCMap::from_font_data(&font).unwrap();
+    assert_eq!(cmap.len(), 2);
+    assert_eq!(cmap.get_unicode(1), Some('A'));
+    assert_eq!(cmap.get_unicode(5u16.wrapping_add_signed(2 - 66)), Some('B'));
+}
+
+#[test]
+fn format4_dejavu_sans_mono_maps_ascii() {
+    let font = include_bytes!("../../../tests/fixtures/fonts/DejaVuSansMono.ttf");
+    let mut directory = Cursor::new(font.as_slice());
+    let (count, search, selector, shift) = TrueTypeCMap::parse_sfnt_header(&mut directory).unwrap();
+    let cmap = TrueTypeCMap::find_cmap_table(&mut directory, count, search, selector, shift).unwrap();
+    directory.set_position(u64::from(cmap) + 4);
+    assert_eq!(directory.read_u16::<BigEndian>().unwrap(), 0);
+    assert_eq!(directory.read_u16::<BigEndian>().unwrap(), 3);
+    let offset = directory.read_u32::<BigEndian>().unwrap();
+    directory.set_position(u64::from(cmap) + u64::from(offset));
+    assert_eq!(directory.read_u16::<BigEndian>().unwrap(), 4);
+    let map = TrueTypeCMap::parse_cmap_format4(&mut directory).unwrap();
+    assert_eq!(map.get(&36), Some(&'A'));
+    assert_eq!(map.get(&37), Some(&'B'));
 }
