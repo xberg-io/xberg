@@ -1376,7 +1376,7 @@ jobs:
           - { os: ubuntu-latest, label: linux-x86_64, target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-24.04-arm, label: linux-arm64, target: aarch64-unknown-linux-gnu }
           - { os: macos-26, label: macos-arm64, target: aarch64-apple-darwin }
-          - { os: windows-latest, label: windows-x86_64, target: x86_64-pc-windows-msvc }
+          - { os: windows-2022, label: windows-x86_64, target: x86_64-pc-windows-msvc }
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1703,7 +1703,7 @@ jobs:
               target: x86_64-apple-darwin,
               extra_cargo_args: "--features ort-dynamic,mcp,mcp-http,api,heic",
             }
-          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+          - { os: windows-2022, target: x86_64-pc-windows-msvc }
     steps:
       - uses: actions/checkout@v7
         with:
@@ -2605,13 +2605,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-26, windows-latest]
+        os: [macos-26, windows-2022]
         nif: ["2.16"]
         include:
           - os: macos-26
             label: macos-arm64
             target: aarch64-apple-darwin
-          - os: windows-latest
+          - os: windows-2022
             label: windows-x86_64
             target: x86_64-pc-windows-msvc
     steps:
@@ -2621,11 +2621,6 @@ jobs:
           fetch-depth: 0
 
           submodules: false
-      - name: Override ImageOS on Windows runners
-        if: runner.os == 'Windows'
-        shell: bash
-        run: echo "ImageOS=win25" >> "$GITHUB_ENV"
-
       # BEAM stays on its setup action until mise's Erlang/Elixir install is evaluated. ~keep
       - uses: erlef/setup-beam@v1
         with:

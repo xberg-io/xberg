@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -324,6 +325,27 @@ def assert_raw_workflow(source: str, job: str, root: str, archive_argument: str)
     assert f'-NativeGlob "{root}" -ArtifactKind raw -RequireCrtNotices' in step
 
 
+RAW_JOBS = {"php-extension", "cli-binaries", "c-ffi-libraries", "elixir-natives"}
+
+
+def raw_job_block(source: str, job: str) -> str:
+    match = re.search(rf"(?ms)^  {re.escape(job)}:\n.*?(?=^  [\w-]+:|\Z)", source)
+    assert match is not None, f"missing release job: {job}"
+    return match[0]
+
+
+def assert_raw_runners(source: str) -> None:
+    jobs = re.findall(r"(?m)^  ([a-z][\w-]+):$", source.split("\njobs:\n", 1)[1])
+    consumers = {job for job in jobs if "-ArtifactKind raw" in raw_job_block(source, job)}
+    assert consumers == RAW_JOBS, f"raw closure consumer inventory changed: {consumers}"
+    for job in consumers:
+        block = raw_job_block(source, job)
+        matrix = block.split("    steps:", 1)[0]
+        runners = set(re.findall(r"(?<![\w-])windows-(?:latest|[0-9][a-z0-9-]*)(?![\w-])", matrix))
+        assert runners == {"windows-2022"}, f"{job} must use windows-2022 for raw CRT staging: {runners}"
+    assert "ImageOS=win25" not in raw_job_block(source, "elixir-natives"), "Elixir must use the runner's ImageOS"
+
+
 class RawWorkflowTests(unittest.TestCase):
     source = (ROOT / ".github/workflows/publish.yaml").read_text(encoding="utf-8")
 
@@ -338,6 +360,17 @@ class RawWorkflowTests(unittest.TestCase):
             with self.subTest(job=job):
                 assert_raw_workflow(self.source, job, root, artifact)
 
+    def test_all_raw_closure_jobs_use_the_vs2022_runner(self) -> None:
+        assert_raw_runners(self.source)
+
+    def test_runner_guard_rejects_drift_in_each_raw_consumer(self) -> None:
+        for job in RAW_JOBS:
+            with self.subTest(job=job):
+                block = raw_job_block(self.source, job)
+                mutated = self.source.replace(block, block.replace("windows-2022", "windows-latest"), 1)
+                with expected_error(AssertionError, f"{job} must use windows-2022"):
+                    assert_raw_runners(mutated)
+
     def test_workflow_guard_rejects_audit_of_cli_staging_tree(self) -> None:
         archive = '-Artifact "${STAGE}.zip"'
         assert self.source.count(archive) == 1
@@ -346,7 +379,7 @@ class RawWorkflowTests(unittest.TestCase):
             assert_raw_workflow(mutated, "cli-binaries", "xberg.exe", archive)
 
 
-MINIMUM_CLOSURE_TESTS = 96
+MINIMUM_CLOSURE_TESTS = 98
 
 
 def main() -> int:
