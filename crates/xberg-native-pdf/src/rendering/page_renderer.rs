@@ -533,22 +533,22 @@ impl PageRenderer {
         self.knockout_resources
             .reset(png_budget.as_ref().map(|budget| budget.max_working_bytes));
 
-        // A retry can reveal a later reservation peak. Bound the number of renders and
-        // use the minimum on the final attempt if the observed peaks have not converged.
-        for _ in 0..raster_budget::MAX_WORKSPACE_DPI_RETRIES {
+        let mut retries_left = raster_budget::MAX_WORKSPACE_DPI_RETRIES;
+        loop {
             let result = self.render_page_at_dpi(page_num, doc, png_budget.as_ref(), &mut dpi);
             let Some((required, limit)) = self.knockout_resources.workspace_shortfall() else {
                 return result;
             };
-            if result.is_ok() || !can_resize || dpi <= minimum {
+            // ~keep A refusal can expose the next reservation peak. Keep taking measured steps
+            // while work remains, and return the refusal if the retry bound is exhausted.
+            if result.is_ok() || !can_resize || dpi <= minimum || retries_left == 0 {
                 return result;
             }
+            retries_left -= 1;
             self.cmyk_sidecar = None;
             self.knockout_resources.reset_attempt();
             dpi = raster_budget::dpi_after_workspace_refusal(dpi, minimum, required, limit);
         }
-        dpi = minimum;
-        self.render_page_at_dpi(page_num, doc, png_budget.as_ref(), &mut dpi)
     }
 
     fn render_page_at_dpi(

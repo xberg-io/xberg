@@ -22,6 +22,17 @@ fn build_page(state_body: &str, extras: &[&str]) -> PdfDocument {
 }
 
 pub(super) fn build_page_with(content: &str, colour_spaces: &str, state_body: &str, extras: &[&str]) -> PdfDocument {
+    build_sized_page(content, colour_spaces, state_body, extras, 100, "")
+}
+
+fn build_sized_page(
+    content: &str,
+    colour_spaces: &str,
+    state_body: &str,
+    extras: &[&str],
+    side: u32,
+    page_group: &str,
+) -> PdfDocument {
     let mut buf: Vec<u8> = Vec::new();
     buf.extend_from_slice(b"%PDF-1.4\n");
     let mut offs: Vec<usize> = Vec::new();
@@ -44,7 +55,7 @@ pub(super) fn build_page_with(content: &str, colour_spaces: &str, state_body: &s
     push(
         &mut buf,
         &format!(
-            "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R \
+            "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {side} {side}] /Contents 4 0 R {page_group} \
              /Resources << /ColorSpace << {colour_spaces} >> {xobjects} {fonts} \
              /ExtGState << /T << /Type /ExtGState {state_body} >> >> >> >>\nendobj\n"
         ),
@@ -842,4 +853,121 @@ fn groups_reachable_only_through_a_soft_mask_are_charged() {
     let without_nested_groups = one_ink_charge(BUDGET_REQUESTED_DPI, 1);
     let dpi = budgeted_dpi(&doc, without_nested_groups, BUDGET_MINIMUM_DPI).expect("the reduced DPI renders");
     assert!(dpi < BUDGET_REQUESTED_DPI, "the nested group lowers DPI, got {dpi}");
+}
+
+const LARGE_PAGE_POINTS: u32 = 2_000;
+const REQUESTED_KNOCKOUT_DPI: u32 = 150;
+const LARGE_KNOCKOUT_BUDGET: usize = 288_262_144;
+const SMALL_KNOCKOUT_BUDGET: usize = 104_857_600;
+const PAGE_KNOCKOUT: &str = "/Group << /S /Transparency /I true /K true >>";
+const LARGE_PAGE_PAINT: &str = "/CS0 cs 0.8 scn 10 10 60 60 re f";
+
+#[derive(Clone, Copy, Debug)]
+enum LargeKnockout {
+    Nested,
+    MaskedPaint,
+    MaskedStroke,
+    KnockoutMask,
+}
+
+fn large_knockout_page(case: LargeKnockout) -> PdfDocument {
+    const MASK: &str = "0.4 g 0 0 100 100 re f";
+    const SCALE: &str = "20 0 0 20 0 0 cm";
+    if matches!(case, LargeKnockout::KnockoutMask) {
+        let mask = transparency_form(5, "/Resources << >>", "/K true /I true /CS /DeviceGray", MASK);
+        return build_sized_page(
+            &format!("{SCALE} q /T gs {LARGE_PAGE_PAINT} Q /CS0 cs 0.8 scn 75 75 15 15 re f"),
+            SPOT_A,
+            "/SMask << /S /Luminosity /G 5 0 R >>",
+            &[&mask],
+            LARGE_PAGE_POINTS,
+            PAGE_KNOCKOUT,
+        );
+    }
+    let mask = transparency_form(6, "/Resources << >>", "/I true /CS /DeviceGray", MASK);
+    let resources = format!(
+        "/Resources << /ColorSpace << {SPOT_A} >> /ExtGState << /M << /SMask << /S /Luminosity /G 6 0 R >> >> >> >>"
+    );
+    let paint = match case {
+        LargeKnockout::Nested => LARGE_PAGE_PAINT,
+        LargeKnockout::MaskedPaint => "/M gs /CS0 cs 0.8 scn 10 10 60 60 re f",
+        LargeKnockout::MaskedStroke => "/M gs /CS0 CS 0.8 SCN 18 w 10 40 m 80 40 l S",
+        LargeKnockout::KnockoutMask => unreachable!(),
+    };
+    let form = transparency_form(5, &resources, "/K true", paint);
+    build_sized_page(
+        &format!("{SCALE} /F Do"),
+        SPOT_A,
+        "/BM /Normal",
+        &[&form, &mask],
+        LARGE_PAGE_POINTS,
+        PAGE_KNOCKOUT,
+    )
+}
+
+fn render_large_knockout(
+    doc: &PdfDocument,
+    requested: u32,
+    limit: usize,
+    minimum: u32,
+) -> (crate::rendering::RenderedImage, u32) {
+    crate::rendering::render_png_page_with_dpi_budget(doc, 0, requested, minimum, limit)
+        .expect("render large knockout page within its workspace budget")
+}
+
+fn assert_useful_knockout_raster(case: LargeKnockout, image: &crate::rendering::RenderedImage, dpi: u32) {
+    assert!((40..REQUESTED_KNOCKOUT_DPI).contains(&dpi), "{case:?}: {dpi} dpi");
+    assert_eq!(image.width, image.height);
+    assert!((image.width as f64 - f64::from(LARGE_PAGE_POINTS) * f64::from(dpi) / 72.0).abs() <= 1.0);
+    let raster = image::load_from_memory(&image.data)
+        .expect("decode the budgeted PNG")
+        .into_rgb8();
+    let paper = raster.get_pixel(image.width / 20, image.height / 20);
+    let ink = if matches!(case, LargeKnockout::KnockoutMask) {
+        raster.get_pixel(image.width * 4 / 5, image.height / 5)
+    } else {
+        raster.get_pixel(image.width * 2 / 5, image.height * 3 / 5)
+    };
+    assert_eq!(paper.0, [255; 3], "{case:?}: unpainted corner");
+    assert!(
+        ink[0] > ink[1] && ink[0] > ink[2],
+        "{case:?}: spot ink must survive, got {ink:?}"
+    );
+}
+
+#[test]
+fn large_knockout_pages_keep_useful_resolution() {
+    for case in [
+        LargeKnockout::Nested,
+        LargeKnockout::MaskedPaint,
+        LargeKnockout::MaskedStroke,
+        LargeKnockout::KnockoutMask,
+    ] {
+        let doc = large_knockout_page(case);
+        let (image, dpi) = render_large_knockout(&doc, REQUESTED_KNOCKOUT_DPI, LARGE_KNOCKOUT_BUDGET, 1);
+        eprintln!("{case:?}: {dpi} dpi, {} x {}", image.width, image.height);
+        assert_useful_knockout_raster(case, &image, dpi);
+        let (strict, strict_dpi) = render_large_knockout(&doc, dpi, LARGE_KNOCKOUT_BUDGET, dpi);
+        assert_eq!(strict_dpi, dpi);
+        assert!(
+            image.data == strict.data,
+            "{case:?}: retry must match a fresh render at the admitted DPI"
+        );
+    }
+}
+
+#[test]
+fn increasing_workspace_preserves_masked_knockout_resolution() {
+    for case in [LargeKnockout::MaskedPaint, LargeKnockout::KnockoutMask] {
+        let doc = large_knockout_page(case);
+        let (_, small) = render_large_knockout(&doc, REQUESTED_KNOCKOUT_DPI, SMALL_KNOCKOUT_BUDGET, 1);
+        let (_, large) = render_large_knockout(&doc, REQUESTED_KNOCKOUT_DPI, LARGE_KNOCKOUT_BUDGET, 1);
+        eprintln!(
+            "{case:?}: {small} dpi at {SMALL_KNOCKOUT_BUDGET} bytes, {large} dpi at {LARGE_KNOCKOUT_BUDGET} bytes"
+        );
+        assert!(
+            large > small,
+            "{case:?}: {large} dpi at higher budget vs {small} dpi at lower budget"
+        );
+    }
 }

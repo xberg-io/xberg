@@ -304,7 +304,7 @@ pub(super) fn fit_png_dpi(
     Ok(low)
 }
 
-pub(super) const MAX_WORKSPACE_DPI_RETRIES: usize = 3;
+pub(super) const MAX_WORKSPACE_DPI_RETRIES: usize = 16;
 
 pub(super) fn dpi_after_workspace_refusal(dpi: u32, minimum: u32, required: usize, limit: usize) -> u32 {
     // Raster workspace normally scales with area. Rounding and later paint phases can
