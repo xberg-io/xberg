@@ -283,43 +283,59 @@ async fn probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer
 }
 
 async fn capture_with_sibling(pdf: &[u8]) -> (ExtractedDocument, Vec<super::probe_capture::Decision>) {
-    let (capture_started, wait_for_capture) = tokio::sync::oneshot::channel();
-    let (sibling_finished, wait_for_sibling) = tokio::sync::oneshot::channel();
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    const PROBE_WAIT: Duration = Duration::from_secs(60);
+    let (captured_at_probe, wait_for_captured_probe) = mpsc::channel();
+    let (sibling_at_probe, wait_for_sibling_probe) = mpsc::channel();
+    let sibling_pdf = pdf.to_vec();
+    let sibling = tokio::task::spawn_blocking(move || {
+        wait_for_captured_probe
+            .recv_timeout(PROBE_WAIT)
+            .expect("captured extraction reached its first probe");
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("build sibling PDF runtime")
+            .block_on(Box::pin(check_sibling_probe(&sibling_pdf, sibling_at_probe)));
+    });
+    let settings = config();
     let captured = super::probe_capture::capture(
-        async {
-            capture_started.send(()).expect("sibling is waiting for capture");
-            let document = Box::pin(extract(pdf, &config())).await;
-            wait_for_sibling.await.expect("sibling completed under active capture");
-            document
-        },
+        extract(pdf, &settings),
         "needed",
+        Some(Box::new(move || {
+            captured_at_probe
+                .send(())
+                .expect("sibling is waiting at the probe gate");
+            // ~keep The captured extraction cannot leave its first probe event until the sibling emits its own.
+            wait_for_sibling_probe
+                .recv_timeout(PROBE_WAIT)
+                .expect("sibling reached its first probe while captured extraction was at its probe");
+        })),
     );
-    let sibling = async {
-        wait_for_capture
-            .await
-            .expect("capture is active before sibling extraction");
-        assert_sibling_extraction(pdf).await;
-        sibling_finished.send(()).expect("capture is still active");
-    };
-    // ~keep Each future is polled separately so the sibling runs outside the capture dispatcher.
-    let (captured, ()) = tokio::time::timeout(std::time::Duration::from_secs(60), async {
-        tokio::join!(Box::pin(captured), Box::pin(sibling))
-    })
-    .await
-    .expect("both overlapping extractions must complete within 60 seconds");
+    let (captured, sibling) = tokio::time::timeout(2 * PROBE_WAIT, async { tokio::join!(Box::pin(captured), sibling) })
+        .await
+        .expect("both overlapping extractions must complete within 120 seconds");
+    sibling.expect("sibling probe extraction completed");
     captured
 }
 
-async fn assert_sibling_extraction(pdf: &[u8]) {
-    let document = Box::pin(extract(
-        pdf,
-        &ExtractionConfig {
-            use_cache: false,
-            ocr: Some(OcrConfig::default()),
-            ..Default::default()
-        },
-    ))
+async fn check_sibling_probe(pdf: &[u8], at_probe: std::sync::mpsc::Sender<()>) {
+    let settings = ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig::default()),
+        ..Default::default()
+    };
+    let (document, decisions) = super::probe_capture::capture(
+        extract(pdf, &settings),
+        "needed",
+        Some(Box::new(move || {
+            at_probe.send(()).expect("captured extraction is still at its probe")
+        })),
+    )
     .await;
+    assert_eq!(decisions.len(), 2, "sibling must emit both probe decisions");
     assert_eq!(document.extraction_method, Some(ExtractionMethod::Mixed));
     assert!(document.content.contains("Across the quiet harbor"));
     assert!(document.content.contains(LAYER_ONLY_WORD));

@@ -22,6 +22,7 @@ impl tracing::field::Visit for Fields {
 struct ProbeDecisions {
     field: &'static str,
     decisions: Arc<Mutex<Vec<Decision>>>,
+    on_first_decision: Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
 
 impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for ProbeDecisions {
@@ -35,15 +36,24 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for ProbeDecisions {
                 fields.0["probed"].clone(),
             );
             self.decisions.lock().expect("decision lock").push(decision);
+            let callback = self.on_first_decision.lock().expect("callback lock").take();
+            if let Some(callback) = callback {
+                callback();
+            }
         }
     }
 }
 
-pub(super) async fn capture<F: Future>(extraction: F, field: &'static str) -> (F::Output, Vec<Decision>) {
+pub(super) async fn capture<F: Future>(
+    extraction: F,
+    field: &'static str,
+    on_first_decision: Option<Box<dyn FnOnce() + Send>>,
+) -> (F::Output, Vec<Decision>) {
     let decisions = Arc::new(Mutex::new(Vec::new()));
     let subscriber = tracing_subscriber::registry().with(ProbeDecisions {
         field,
         decisions: Arc::clone(&decisions),
+        on_first_decision: Mutex::new(on_first_decision),
     });
     // ~keep Set the dispatcher for each poll so unrelated tasks on this thread do not inherit it.
     let result = Box::pin(extraction).with_subscriber(subscriber).await;

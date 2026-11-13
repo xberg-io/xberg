@@ -43,9 +43,10 @@ ten exact cases in total, including these five.
 
 With the public NIST fixture configured as above, repeat the whole target
 with four test threads. The marker probe must capture exactly two decisions
-while an uncaptured sibling future extracts the same synthetic PDF. One-shot
-channels keep the capture open from before the sibling starts until after it
-finishes. A 60-second timeout bounds both extractions.
+while the sibling extracts the same synthetic PDF on its own current-thread
+runtime and dispatcher. The first captured probe event releases the sibling
+and waits inside the event handler for the sibling's first probe event.
+Each channel wait is bounded at 60 seconds, and the joint timeout is 120 seconds.
 
 ```sh
 for run in 1 2 3 4 5; do
@@ -58,16 +59,10 @@ cargo test --locked -p xberg --no-default-features \
   --test pdf_partial_hidden_ocr_layer -- --test-threads 4
 ```
 
-For the issue reproducer, use a disposable checkout with this patch and
-replace the scoped capture with the pre-fix global subscriber and case-span
-filter, keeping the sibling extraction and its handshake. Repeat the four-thread run. The
-failure to look for is an empty decision list in
-`probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer`,
-while the sibling succeeds. The original race is scheduling-dependent.
-
-For a deterministic sensitivity check in a disposable checkout, replace
-`Box::pin(extraction).with_subscriber(subscriber).await` in the shared helper
-with `Box::pin(extraction).await`, and remove the now-unused subscriber
-construction and imports. Run the Type0 target with the filter
+For a deterministic overlap control in a disposable checkout, suppress the
+sibling's first-probe callback by passing `None` in `check_sibling_probe`
+and keeping its sender alive until the end of that function (or dropping it
+explicitly after extraction). Run the Type0 target with the exact filter
 `marker_probe::probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer`.
-The test must fail at the exact decision assertion with an empty list.
+The captured event handler must fail with the diagnostic that the sibling
+failed to reach its probe while the captured extraction was at its probe.

@@ -741,6 +741,7 @@ async fn the_probe_decision_follows_the_language_check_on_a_covered_layer() {
     let (_, judged) = probe_capture::capture(
         extract(&covered_prose_layer_scan(&raster), &default_tesseract()),
         "plausible",
+        None,
     )
     .await;
     assert_eq!(judged, [("1".into(), "true".into(), "false".into())]);
@@ -748,6 +749,7 @@ async fn the_probe_decision_follows_the_language_check_on_a_covered_layer() {
     let (_, abstained) = probe_capture::capture(
         extract(&junk_layer_scan(&raster, COMPLETE, 3), &default_tesseract()),
         "plausible",
+        None,
     )
     .await;
     assert_eq!(abstained, [("1".into(), "false".into(), "true".into())]);
@@ -759,6 +761,7 @@ async fn stock_use_native_probe_publishes_text_without_tables_and_keeps_page_ran
     let (document, decisions) = probe_capture::capture(
         extract(&junk_layer_scan(&raster, COMPLETE, 3), &default_tesseract()),
         "plausible",
+        None,
     )
     .await;
     assert_eq!(decisions, [("1".into(), "false".into(), "true".into())]);
