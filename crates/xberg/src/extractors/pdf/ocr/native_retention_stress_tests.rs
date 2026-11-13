@@ -2266,7 +2266,7 @@ fn native_spells_read_needs_distinct_alphabetic_words_above_the_floor_and_share_
 fn the_symbol_marker_inside_a_native_word_is_removed_like_the_other_lost_glyph_marker() {
     use super::super::document::{read_bigrams_in_native, read_words_in_native};
     let thresholds = crate::core::config::OcrQualityThresholds::default();
-    let layer = |marker: char| format!("The commit{marker}tee met on Tuesd{marker}y to review the budget and design");
+    let layer = |marker: char| format!("The commit{marker}tee met on Tuesd{marker}ay to review the budget and design");
     let read = "The committee met on Tuesday to review the budget and design";
     let placed_words = placed(&["committee", "tuesday"]);
     let words = read_words_in_native(&layer('\u{FFFD}'), read, &placed_words, &thresholds);
