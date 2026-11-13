@@ -85,12 +85,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Custom` representation with name `xberg.math` and value `inline` or `display`. Annotation byte ranges include
   the equation's `$...$` or `$$...$$` delimiters; unannotated dollar signs remain prose.
 
-- **(ocr): Recover corroborated Khmer numbers on eligible English-primary PDF pages.** Requires installed `khm.traineddata` in the selected tessdata directory. Recovery preserves neighboring text and reports missing models or unverified geometry. The original reporter page remains unverified. (#2408)
+- **(ocr): Recover corroborated Khmer numbers on eligible English-primary PDF pages.** Requires installed `khm.traineddata` in the selected tessdata directory. Recovery preserves neighboring text and reports missing models or unverified geometry. (#2408)
 
 - **(layout): Add an experimental `model` selector for layout detection.** (#2284)
   `LayoutDetectionConfig.model` (`--layout-model`) chooses `rt_detr` (default) or `pp_doc_layout_v3`. PP-DocLayout-V3 is ONNX Runtime only (selecting it on a tract or WASM build is an error from `extract` and `extract_batch`, including per-input overrides, not a fallback), uses bounding boxes and classes only, downloads about 131 MB, and its quality relative to RT-DETR is not yet qualified.
 
-- **(ocr): Recover oversized PDF scans from their embedded JPEG at the placement-proven resolution.** When a page render exceeds the image budget, eligible embedded scans can still be read within it. (#2530)
+- **(ocr): Recover oversized PDF scans from their embedded JPEG at the original image resolution.** When a page render exceeds the image budget, eligible embedded scans can still be read within it. (#2530)
 
 - **(classification): Add an experimental Rust API for CPU ONNX NLI.** (#2335)
   Prepare pinned model artifacts explicitly; classification preserves model identity, bounded execution and cancellation.
@@ -185,8 +185,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Elixir no longer forces decompressor 6.0.1 when another dependency requires a newer compatible release.
 - **(ocr): Statically built Tesseract moves to 5.5.4.**
   `build-tesseract` and `build-tesseract-wasm` builds compile the signed 5.5.4 tag and need CMake 3.22 or newer.
-- **(pdf): The OCR structure heuristic's retention gate reads ligature code points through the text repair's ligature table (#2689).**
-  The gate carried its own copy of the U+FB00..FB06 mapping; behavior is unchanged.
 
 ### Security
 
@@ -399,10 +397,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   One subscript run held the scripts of two bases: `H^{Z_2}_{⟨xy⟩,f}` of arxiv-2305.08917 p2 read `H<sup>Z</sup>~2 ⟨xy⟩,f~`, and `R_+^{n_x}` of plos-journal.pcbi.1010783 p4 read `R<sup>n</sup>~x þ~`. A stack member that starts where a larger member ends, on the same side of the base line, is now a script of that member, and a stack that holds a script of a script reads the scripts of the base set below its line first, then each exponent with its index, unless that joins more runs than the raised-first order (or as many, when it joins any): `H~⟨xy⟩,f~ <sup>Z</sup>~2~` and `R~þ~ <sup>n</sup>~x~`. A base with a subscript and a superscript side by side, and no script of a script, reads the scripts above its line as one group and the scripts on or below it as another, and the group whose first member starts further left reads first, and a tie goes to the exponent, so a product limit such as bayesian_data_analysis_third_edition p79 and `A/p~i~ <sup>i,j</sup>` of the algebra book p1246 keep their markup on one line, and an exponent with a subscript that starts after it reads exponent first (#3110). A stack with a script of a script keeps the raised-first order where the lowered-first order would join the superscript of a lowered script to the superscript of the base: `γ^j_K^+` reads `γ<sup>j</sup> ~K~<sup>+</sup>`, not `γ~K~<sup>+ j</sup>`. A stack of eight members is placed and marked, one of nine is not, at both places that decide it.
 - **(pdf): Keep the correctly mapped Greek, Cyrillic or Arabic text of an English page that has a lost glyph.** (#2861)
   Since #2830, a page whose layer was mostly in a script no OCR language reads, with a lost glyph, was read once in the configured languages and sent to OCR when that read was confident prose. An English page with long identifiers in another script passed that test, because the read found the English the layer already held, and the other script was lost with no warning. Such a page is now probed only when fewer than a tenth of its letters are in scripts the configured languages read; a wrong map leaves almost none, since it sends every letter of its font to the other script.
-- **(ocr): Drop the symbol-noise lines of a page flagged as OCR recognition noise.** (#2312)
-  This applies to any page the recognition-noise verdict flags and `discard_suspected_ocr_noise` retains, not only photographs. The new `OcrQualityThresholds.prune_symbol_noise_lines` (default `true`; `false` keeps every line) removes lines in which fewer than half the tokens are word-shaped, only when the page has at least 8 non-blank lines and at least half of them are such lines. A line is kept if it has any digit, a CJK, Kana, Hangul, Thai, Lao, Khmer or Myanmar character, a non-Latin letter, an `=`/`+`/`<`/`>` between two operands (`x = y`, not `oe = ie` or `i - l`), or is an English phrase (`I am.`, `IS IT`, not `ee so`) or contraction (`I'm`); a single-token answer such as `No.`, `Yes` or `Qty`, a non-English short line such as `de la gare`, and `x=y` without spaces are pruned on a flagged page. Pruning runs after the verdict, backend choice and table acceptance, skips pages with tables, adds a warning naming the page and the number of lines removed, and covers standalone images and PDF OCR pages, including a photograph after native text; multi-stage pipeline scoring and the single-page first-pass gate read the text before pruning, and an annotation that crosses a line is dropped with its lines. Title recovery now also runs when `quality_thresholds` differs from the default only in this flag. A fixture photograph keeps 0 of 840 noise characters as an image and 169 of 1056 as a PDF page, where the lines with a digit stay.
-- **(ocr): Drop the symbol-noise lines of a page flagged as OCR recognition noise.** (#2312, #2887)
-  This applies to any page the recognition-noise verdict flags and `discard_suspected_ocr_noise` retains, not only photographs. The new `OcrQualityThresholds.prune_symbol_noise_lines` (default `true`; `false` keeps every line) removes only lines made of symbols and fragments, and only when the page has at least 8 non-blank lines and at least half of them are such lines. A line that reads as text is kept: words of 3 or more letters, capitalized short words and function words in English and other Latin-script languages (`Go to Al`, `Mr X Is In`, `de la gare`, `Mairie du I`), list labels (`b)`, `c) if so`), single words such as `No.`, `Yes`, `Qty`, `ABC` and `pqr`, equations and assignments with or without spaces (`x = y`, `X= Y`, `x=y`, `a=`, `f(x) = x`), any line with a digit, and any line with a CJK, Kana, Hangul, Thai, Lao, Khmer, Myanmar or other non-Latin letter. Fragment lines (`ee so`, `we SY`, `oe = ie`, `i - l`) and a digit with a stray quotation or section mark (`"9`, `5§`) are pruned. Pruning runs after the verdict, backend choice and table acceptance, skips pages with tables, adds a warning naming the page and the number of lines removed, and covers standalone images and PDF OCR pages, including a photograph after native text; multi-stage pipeline scoring and the single-page first-pass gate read the text before pruning, and an annotation that crosses a line is dropped with its lines. Title recovery now also runs when `quality_thresholds` differs from the default only in this flag. A fixture photograph keeps 0 of 840 noise characters as an image and 194 of 1056 as a PDF page, where the lines with a digit and capitalized trigrams stay.
+- **(ocr): Remove fragmented symbol lines from images and PDF pages flagged for OCR noise.** (#2312, #2887)
+  Xberg preserves readable short phrases, equations, numbers, and non-Latin text, and skips pages with tables.
+  Set `OcrQualityThresholds.prune_symbol_noise_lines` to `false` to keep all lines.
+
 - **(pdf): Apply horizontal scaling (`Tz`) to a string's advance and glyph outlines in the page render.** (#2677)
 - **(pdf): Scale the fallback glyph box and the invisible-text advance on a separation plate by `Tz`, and cover every `Tz` text route.** (#2914, #2915)
   The placeholder box drawn when no font loads kept its full width while its pitch shrank, so boxes overlapped below `Tz` 80; its width now follows `Tz`, and a negative `Tz` mirrors it to the left. Skipped (render mode 3 or 7) text on a plate now measures with the rasterizer's own advance, so it adds `Tw` for a one-byte space (also in a Type0 font), keeps an odd trailing byte, and uses the same 0.6 em estimate when no font loads. Regression tests pin `Tz` on the Unicode, CID-direct, substituted CJK, CJK-fallback, measure-only, Type 3 placement, plate and fallback routes, and `Tz` 0, vanishing and negative values.
@@ -1149,14 +1147,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(layout): Align PP-DocLayoutV3 cubic inputs, singleton dispatch and output validation.** (#2284)
   Use fixed-support cubic resizing and ordered single-image forwards while validating paired rank-bearing rows and masks.
-  Capture tasks require one executed test and two forwards with complete named tensor artifacts and matching sizes and hashes.
-  Bind preserved producer sources to compiled bytes before constructing the model.
-  Decode captured PNGs from hashed bytes and reject input changes during a forward.
-  Restore Clippy-clean V3 and ORT test builds without changing inference or capture behavior.
   Public detection ordering and model defaults stay unchanged; model-quality qualification remains pending.
 
 - **(ocr): Compile the standalone Sceptre ORT feature with its existing discovery module.** (#2364)
-  Check the isolated feature closure in CI so other engines cannot mask the required module gate.
 
 - **(pdf): Preserve admitted table rows when a section would be too small to retain.** (#2332)
   Keep the original table and metadata together instead of dropping a partition; valid multi-section tables still split.

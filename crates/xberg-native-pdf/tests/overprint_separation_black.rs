@@ -34,7 +34,9 @@ fn dark_pixels(content: &str) -> usize {
     let image = render_page(&doc, 0, &options).expect("render");
     image
         .data
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .filter(|px| px[..3].iter().all(|&v| v < 96))
         .count()
 }
