@@ -204,8 +204,54 @@ fn expected(rows: &[usize]) -> Vec<&'static str> {
         .collect()
 }
 
-#[tokio::test(flavor = "current_thread")]
-async fn probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer() {
+#[test]
+fn probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer() {
+    const CHILD: &str = "XBERG_3069_PROBE_CHILD";
+    if std::env::var_os(CHILD).is_some() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("build captured PDF runtime")
+            .block_on(Box::pin(check_marker_probe()));
+        return;
+    }
+    run_probe_child(CHILD);
+}
+
+fn run_probe_child(child_flag: &str) {
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    const CASE: &str = "marker_probe::probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer";
+    const DEADLINE: Duration = Duration::from_secs(120);
+    let output = tempfile::NamedTempFile::new().expect("create probe child log");
+    let mut child = Command::new(std::env::current_exe().expect("probe test executable"))
+        .args(["--exact", CASE, "--nocapture"])
+        .env(child_flag, "1")
+        .stdout(Stdio::from(output.reopen().expect("open probe child log")))
+        .spawn()
+        .expect("spawn probe test child");
+    let deadline = Instant::now() + DEADLINE;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(25)),
+            outcome => {
+                // ~keep Killing the process also stops OCR workers that Tokio cannot cancel.
+                child.kill().expect("kill probe test child");
+                child.wait().expect("reap probe test child");
+                panic!("probe test child failed to exit within its deadline: {outcome:?}");
+            }
+        }
+    };
+    let stdout = std::fs::read_to_string(output.path()).expect("read probe child log");
+    assert!(
+        status.success() && stdout.contains("test result: ok. 1 passed; 0 failed; 0 ignored;"),
+        "probe test child exited {status}\n{stdout}"
+    );
+}
+
+async fn check_marker_probe() {
     let pdf = scanned_pages();
 
     let native = extract(
@@ -314,9 +360,7 @@ async fn capture_with_sibling(pdf: &[u8]) -> (ExtractedDocument, Vec<super::prob
                 .expect("sibling reached its first probe while captured extraction was at its probe");
         })),
     );
-    let (captured, sibling) = tokio::time::timeout(2 * PROBE_WAIT, async { tokio::join!(Box::pin(captured), sibling) })
-        .await
-        .expect("both overlapping extractions must complete within 120 seconds");
+    let (captured, sibling) = tokio::join!(Box::pin(captured), sibling);
     sibling.expect("sibling probe extraction completed");
     captured
 }
