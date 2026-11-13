@@ -1102,7 +1102,6 @@ pub(in crate::extractors::pdf) async fn probe_incomplete_hidden_layers(
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-
 fn mixed_layer_lines_to_put_first(
     layer: &str,
     independent_read: &str,
