@@ -45,6 +45,35 @@ run_exact() {
   passed=$((passed + 1))
 }
 
+check_mixed_decision_layer_handoffs() {
+  # Recovery can fall back to decoded PDF words, and it requires Tokio. Check both callers here. ~keep
+  python3 - <<'PYTHON'
+from pathlib import Path
+import re
+
+source = Path("crates/xberg/src/extractors/pdf/ocr/pipeline.rs").read_text()
+mixed = source.split("async fn extract_mixed_ocr_native_with_layout_inputs(", 1)[1].split("\n}", 1)[0]
+handoff = r"\blet page_ocr_hints = PageOcrHints \{(?P<fields>.*?)\n\s*\};"
+call = r"\brun_ocr_pipeline_for_page\((?P<args>.*?)\n\s*\)\)"
+for route, loop, page in (
+    ("Tokio", "for (page_idx, image_arc) in page_images {", "idx"),
+    ("sequential", "for (page_idx, image) in &page_images {", "*page_idx"),
+):
+    loop_start = mixed.index(loop)
+    branch = mixed[loop_start:].split("let result = match result.map_err", 1)[0]
+    hints = re.search(handoff, branch, re.S)
+    assert hints is not None, f"{route} mixed OCR must construct page hints"
+    assert re.search(r"^\s*decision_layers: page_layers\.clone\(\),\s*$", hints["fields"], re.M), (
+        f"{route} mixed OCR must supply the decision layers"
+    )
+    invocation = re.search(call, branch[hints.end():], re.S)
+    assert invocation is not None and re.search(
+        rf"Some\(page_ocr_hints\),\s*{re.escape(page)},\s*Some\(source\),", invocation["args"]
+    ), f"{route} mixed OCR must pass the hints and the page index to detached OCR"
+    print(f"{route} mixed OCR decision-layer handoff verified")
+PYTHON
+}
+
 run_pdf_cases() {
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::repeated_khmer_anchor_abstains_when_structured_intervening_words_disagree' --lib
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::same_height_columns_with_repeated_words_do_not_share_an_inline_anchor' --lib
@@ -360,6 +389,7 @@ run_api_cases() {
 case "$suite" in
 pdf-ocr)
   expected=107
+  check_mixed_decision_layer_handoffs
   run_pdf_cases
   run_retained_read_cases
   expected=$((expected + 11 + 7))

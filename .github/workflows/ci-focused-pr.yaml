@@ -21,6 +21,20 @@ on:
       - "mise-tasks/nli/**"
       - "tools/benchmark-harness/nli_qualification/**"
       - "scripts/ci/rust/run-focused-pr-tests.sh"
+  push:
+    branches: [main]
+    paths:
+      - ".cargo/**"
+      - ".github/workflows/ci-focused-pr.yaml"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "mise.toml"
+      - "mise.lock"
+      - "mise-tasks/rust.toml"
+      - "scripts/ci/rust/run-focused-pr-tests.sh"
+      - "test_documents"
   workflow_dispatch:
 
 permissions:
@@ -44,8 +58,9 @@ jobs:
   regressions:
     if: >-
       ${{ github.repository == 'xberg-io/xberg' &&
-          (github.event_name == 'workflow_dispatch' ||
-           github.event.pull_request.head.repo.full_name == github.repository) }}
+          ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+           github.event_name == 'workflow_dispatch' ||
+           (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) }}
     name: Focused ${{ matrix.suite }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
