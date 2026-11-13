@@ -256,3 +256,21 @@ run_cache_promotion() {
 	[ ! -e "$XBERG_TRACE" ]
 	[ "$(cat "$LIBHEIF_PREFIX/lib/libheif.so.1")" = original ]
 }
+
+@test "install_linux should reject embedded RPATH and RUNPATH before probing cached libheif" {
+	prepare_cache_candidate
+	printf '%s\n' original >"$LIBHEIF_PREFIX/lib/libheif.so.1"
+	printf '%s\n' 'source "$3"' >>"$XBERG_WORK/check-cache.sh"
+	xberg_stub sudo 'printf "%s\n" "$@" >>"$XBERG_TRACE"; exit 1'
+	for tag in RPATH RUNPATH; do
+		xberg_stub readelf 'echo " Type: DYN (Shared object file)"' 'echo " (SONAME) Library soname: [libheif.so.1]"' \
+			"echo ' ($tag) Library search path: [$CACHE_CANDIDATE/lib]'"
+		xberg_stub ldd 'echo "unexpected ldd invocation"; echo "libx265.so.215 => /cache/lib/libx265.so.215 (0x123)"'
+		run_cache_check
+		xberg_assert_output_contains "embedded RPATH or RUNPATH"
+		xberg_assert_output_contains "rebuilding"
+		[[ "$output" != *"unexpected ldd invocation"* ]]
+		[ ! -e "$XBERG_TRACE" ]
+		[ "$(cat "$LIBHEIF_PREFIX/lib/libheif.so.1")" = original ]
+	done
+}

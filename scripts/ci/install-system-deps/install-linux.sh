@@ -153,6 +153,10 @@ libheif_runtime_links() {
     echo "::warning::Expected a libheif.so.1 ELF shared library at $library." >&2
     return 1
   fi
+  if grep -Eq '\((RPATH|RUNPATH)\)' <<<"$elf"; then
+    echo "::warning::$library has an embedded RPATH or RUNPATH." >&2
+    return 1
+  fi
   runtime_path="${LD_LIBRARY_PATH:-}"
   runtime_path="$(libheif_search_path "$1/lib" "${runtime_path//;/:}")"
   if ! report="$(LC_ALL=C LD_LIBRARY_PATH="$runtime_path" ldd -r "$library" 2>&1)" ||
@@ -267,6 +271,7 @@ else
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX="$LIBHEIF_PREFIX" \
       -DCMAKE_INSTALL_LIBDIR=lib \
+      -DCMAKE_SKIP_INSTALL_RPATH=ON \
       -DWITH_EXAMPLES=OFF \
       -DWITH_GDK_PIXBUF=OFF \
       -DBUILD_TESTING=OFF
