@@ -1,10 +1,10 @@
 #![cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
 
 use std::io::{Read, Seek, Write};
-use xberg::core::config::{ExtractInput, ExtractionConfig, PageConfig};
-use xberg::extractors::security::SecurityLimits;
+use xberg::core::config::{ExtractInput, ExtractionConfig, PageConfig, PdfConfig};
+use xberg::extractors::security::{SecurityError, SecurityLimits};
 
-fn write_pdf(path: &std::path::Path, unused_stream_size: usize) {
+fn write_pdf(path: &std::path::Path, unused_stream_size: usize, outlines: bool) {
     let mut pdf = std::io::BufWriter::new(std::fs::File::create(path).unwrap());
     pdf.write_all(b"%PDF-1.7\n").unwrap();
     let content = b"BT /F1 24 Tf 72 720 Td (Path source) Tj ET";
@@ -13,8 +13,13 @@ fn write_pdf(path: &std::path::Path, unused_stream_size: usize) {
         content.len(),
         String::from_utf8_lossy(content)
     );
+    let catalog = if outlines {
+        "<< /Type /Catalog /Pages 2 0 R /Outlines 7 0 R >>"
+    } else {
+        "<< /Type /Catalog /Pages 2 0 R >>"
+    };
     let objects = [
-        "<< /Type /Catalog /Pages 2 0 R >>",
+        catalog,
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
         &stream,
@@ -29,12 +34,31 @@ fn write_pdf(path: &std::path::Path, unused_stream_size: usize) {
     writeln!(pdf, "6 0 obj\n<< /Length {unused_stream_size} >>\nstream").unwrap();
     std::io::copy(&mut std::io::repeat(b'X').take(unused_stream_size as u64), &mut pdf).unwrap();
     writeln!(pdf, "\nendstream\nendobj").unwrap();
+    if outlines {
+        offsets.push(pdf.stream_position().unwrap());
+        writeln!(
+            pdf,
+            "7 0 obj\n<< /Type /Outlines /First 8 0 R /Last 8 0 R /Count 1 >>\nendobj"
+        )
+        .unwrap();
+        offsets.push(pdf.stream_position().unwrap());
+        writeln!(
+            pdf,
+            "8 0 obj\n<< /Title (Path bookmark) /Parent 7 0 R /Dest [3 0 R /Fit] >>\nendobj"
+        )
+        .unwrap();
+    }
+    let object_count = offsets.len() + 1;
     let xref = pdf.stream_position().unwrap();
-    writeln!(pdf, "xref\n0 7\n0000000000 65535 f ").unwrap();
+    writeln!(pdf, "xref\n0 {object_count}\n0000000000 65535 f ").unwrap();
     for offset in offsets {
         writeln!(pdf, "{offset:010} 00000 n ").unwrap();
     }
-    writeln!(pdf, "trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF").unwrap();
+    writeln!(
+        pdf,
+        "trailer\n<< /Size {object_count} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF"
+    )
+    .unwrap();
     pdf.flush().unwrap();
 }
 
@@ -56,8 +80,8 @@ async fn small_and_large_pdf_paths_preserve_native_text_and_page_limit() {
         ..Default::default()
     };
     let input = || ExtractInput::from_uri(path.to_str().unwrap());
-    for unused_stream_size in [0, 2 * 1024 * 1024] {
-        write_pdf(&path, unused_stream_size);
+    for (unused_stream_size, outlines) in [(0, false), (2 * 1024 * 1024, false), (0, true)] {
+        write_pdf(&path, unused_stream_size, outlines);
         let result = Box::pin(xberg::extract(input(), &config)).await.unwrap();
         assert!(result.errors.is_empty(), "{:?}", result.errors);
         let [document] = result.results.as_slice() else {
@@ -68,8 +92,56 @@ async fn small_and_large_pdf_paths_preserve_native_text_and_page_limit() {
             panic!("expected one page");
         };
         assert_eq!(page.content.trim(), "Path source");
+        assert_bytes_parity(&path, &config, document).await;
     }
     config.security_limits.as_mut().unwrap().max_pages = Some(0);
-    let result = Box::pin(xberg::extract(input(), &config)).await;
-    assert!(result.is_err() || result.is_ok_and(|result| result.results.is_empty() && result.errors.len() == 1));
+    let error = Box::pin(xberg::extract(input(), &config)).await.unwrap_err();
+    assert!(matches!(
+        error,
+        xberg::XbergError::Security { source: Some(source), .. }
+            if matches!(source.downcast_ref::<SecurityError>(), Some(SecurityError::TooManyPages { count: 1, max: 0 }))
+    ));
+}
+
+async fn assert_bytes_parity(
+    path: &std::path::Path,
+    config: &ExtractionConfig,
+    document: &xberg::types::ExtractedDocument,
+) {
+    let input = ExtractInput::from_bytes(std::fs::read(path).unwrap(), "application/pdf", None);
+    let result = Box::pin(xberg::extract(input, config)).await.unwrap();
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let [bytes] = result.results.as_slice() else {
+        panic!("expected one bytes document");
+    };
+    assert_eq!(document.content, bytes.content);
+    assert_eq!(
+        serde_json::to_value(&document.pages).unwrap(),
+        serde_json::to_value(&bytes.pages).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(&document.processing_warnings).unwrap(),
+        serde_json::to_value(&bytes.processing_warnings).unwrap(),
+    );
+}
+
+#[tokio::test]
+async fn encrypted_pdf_path_matches_bytes_with_password() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/pdf/encrypted_needs_password.pdf");
+    let config = ExtractionConfig {
+        disable_ocr: true,
+        use_cache: false,
+        pdf_options: Some(PdfConfig {
+            passwords: Some(vec!["secret".into()]),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let input = ExtractInput::from_uri(path.to_str().unwrap());
+    let result = Box::pin(xberg::extract(input, &config)).await.unwrap();
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let [document] = result.results.as_slice() else {
+        panic!("expected one encrypted document");
+    };
+    assert_bytes_parity(&path, &config, document).await;
 }

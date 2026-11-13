@@ -373,6 +373,7 @@ fn extract_lopdf_compatibility_data(
 
 #[cfg(feature = "pdf")]
 struct NativeBlockingOutput {
+    source: Vec<u8>,
     extraction: extraction::PdfExtractionPhaseResult,
     #[cfg(all(
         feature = "pdf",
@@ -493,7 +494,7 @@ fn extract_native_blocking(
     ))]
     let mut image_gap = None;
     let extraction = extract_all_from_native_document(
-        native_document,
+        &mut native_document,
         &config,
         &outline_entries,
         #[cfg(all(
@@ -515,6 +516,7 @@ fn extract_native_blocking(
     ensure_pdf_not_cancelled(&config)?;
 
     Ok(NativeBlockingOutput {
+        source: std::mem::take(&mut native_document.doc.source_bytes),
         extraction,
         #[cfg(all(
             feature = "pdf",
@@ -2833,25 +2835,21 @@ impl InternalDocumentExtractor for PdfExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
-        crate::pdf::render::with_task_render_warnings(self.extract_core(content, mime_type, config, None)).await
+        crate::pdf::render::with_task_render_warnings(self.extract_core(content.into(), mime_type, config, None)).await
     }
 
     #[cfg(feature = "tokio-runtime")]
     async fn extract_path(&self, path: &Path, mime_type: &str, config: &ExtractionConfig) -> Result<InternalDocument> {
-        #[cfg(not(target_arch = "wasm32"))]
-        let bytes = {
-            let path = path.to_path_buf();
-            tokio::task::spawn_blocking(move || crate::core::io::open_file_bytes(&path))
-                .await
-                .map_err(|error| crate::XbergError::Other(format!("PDF source loading task failed: {error}")))??
-        };
-        #[cfg(target_arch = "wasm32")]
         let bytes = crate::core::io::read_file_async(path).await?;
         #[cfg(feature = "pdf")]
         crate::pdf::native_text::set_current_pdf_path(Some(path.to_path_buf()));
-        let result =
-            crate::pdf::render::with_task_render_warnings(self.extract_core(&bytes, mime_type, config, Some(path)))
-                .await;
+        let result = crate::pdf::render::with_task_render_warnings(self.extract_core(
+            std::borrow::Cow::Owned(bytes),
+            mime_type,
+            config,
+            Some(path),
+        ))
+        .await;
         #[cfg(feature = "pdf")]
         crate::pdf::native_text::set_current_pdf_path(None);
         result
@@ -2887,7 +2885,7 @@ impl crate::core::layout_pages::LayoutPagesExtractor for PdfExtractor {
             crate::XbergError::validation("unable to count PDF pages for explicit layout selection".to_string())
         })?;
         let mut document = self
-            .extract_core_native_with_layout_pages(content, mime_type, config, None, Some(pages))
+            .extract_core_native_with_layout_pages(content.into(), mime_type, config, None, Some(pages))
             .await?;
         for warning in pages.warnings(page_count) {
             crate::core::diagnostics::push_warning_deduped(&mut document.processing_warnings, warning);
@@ -2915,7 +2913,7 @@ impl PdfExtractor {
     /// as pdfium.
     async fn extract_core(
         &self,
-        content: &[u8],
+        content: std::borrow::Cow<'_, [u8]>,
         mime_type: &str,
         config: &ExtractionConfig,
         path: Option<&std::path::Path>,
@@ -2936,7 +2934,7 @@ impl PdfExtractor {
                     self.extract_core_native(content, mime_type, config, path).await
                 }
                 crate::core::config::PdfBackend::Pdfium => {
-                    self.extract_core_pdfium(content, mime_type, config, path).await
+                    self.extract_core_pdfium(&content, mime_type, config, path).await
                 }
             }
         }
@@ -2997,7 +2995,7 @@ impl PdfExtractor {
     #[cfg(feature = "pdf")]
     async fn extract_core_native(
         &self,
-        content: &[u8],
+        content: std::borrow::Cow<'_, [u8]>,
         mime_type: &str,
         config: &ExtractionConfig,
         path: Option<&std::path::Path>,
@@ -3009,7 +3007,7 @@ impl PdfExtractor {
     #[cfg(feature = "pdf")]
     async fn extract_core_native_with_layout_pages(
         &self,
-        content: &[u8],
+        content: std::borrow::Cow<'_, [u8]>,
         mime_type: &str,
         config: &ExtractionConfig,
         path: Option<&std::path::Path>,
@@ -3017,7 +3015,7 @@ impl PdfExtractor {
     ) -> Result<InternalDocument> {
         let _ = (&path, &layout_pages);
 
-        enforce_page_limit(content, config)?;
+        enforce_page_limit(&content, config)?;
 
         #[cfg(all(feature = "pdf", feature = "layout-detection"))]
         #[allow(unused_mut, unused_variables)]
@@ -3031,9 +3029,12 @@ impl PdfExtractor {
             mut markdown_layout_acceleration_override,
             markdown_layout_glyph_drop_warnings,
             mut markdown_rendered_pages,
-        ) = layout_runner::maybe_run_layout_for_markdown_with_pages(content, config, layout_pages).await;
+        ) = layout_runner::maybe_run_layout_for_markdown_with_pages(&content, config, layout_pages).await;
 
-        let blocking_content = content.to_vec();
+        let (blocking_content, borrowed_content) = match content {
+            std::borrow::Cow::Owned(bytes) => (bytes, None),
+            std::borrow::Cow::Borrowed(bytes) => (bytes.to_vec(), Some(bytes)),
+        };
         let blocking_config = config.clone();
         #[cfg(feature = "layout-detection")]
         let region_text_layout = layout_pages
@@ -3065,6 +3066,7 @@ impl PdfExtractor {
             )
         })
         .await?;
+        let content = borrowed_content.unwrap_or(&native_output.source);
         let bookmark_uris = native_output.bookmark_uris;
         let pdf_revisions = native_output.pdf_revisions;
         let diagrams = native_output.diagrams;
@@ -4857,7 +4859,7 @@ impl PdfExtractor {
     #[cfg(not(feature = "pdf"))]
     async fn extract_core_native(
         &self,
-        _content: &[u8],
+        _content: std::borrow::Cow<'_, [u8]>,
         mime_type: &str,
         _config: &ExtractionConfig,
         _path: Option<&std::path::Path>,
