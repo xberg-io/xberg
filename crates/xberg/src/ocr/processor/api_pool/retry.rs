@@ -216,6 +216,38 @@ mod tests {
     #[test]
     #[ignore = "requires local Tesseract eng/osd packs and the verified Chinese fixture"]
     fn warm_retry_loads_deferred_osd_from_its_private_models() {
+        const CASE: &str = "XBERG_RETRY_OSD_TEST_CASE";
+        const TEST: &str = concat!(
+            module_path!(),
+            "::warm_retry_loads_deferred_osd_from_its_private_models"
+        );
+        if let Some(case) = std::env::var_os(CASE) {
+            deferred_osd_child(case == "warm");
+            return;
+        }
+        for (case, expected) in [("missing", false), ("warm", true)] {
+            let child = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", TEST.split_once("::").unwrap().1, "--ignored", "--nocapture"])
+                .env(CASE, case)
+                .output()
+                .unwrap();
+            let stderr = String::from_utf8_lossy(&child.stderr);
+            let stdout = String::from_utf8_lossy(&child.stdout);
+            assert!(
+                child.status.success() && stdout.contains("1 passed"),
+                "{case}: {stdout}\n{stderr}"
+            );
+            assert_eq!(stderr.contains("OSD: Weak margin"), expected, "{case}: {stderr}");
+            assert_eq!(
+                stderr.contains("osd language failed to load"),
+                !expected,
+                "{case}: {stderr}"
+            );
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn deferred_osd_child(warm: bool) {
         use xberg_tesseract::{Pix, TessPageSegMode};
 
         let tessdata = std::env::var_os("XBERG_OSD_TESSDATA").expect("set XBERG_OSD_TESSDATA");
@@ -228,33 +260,30 @@ mod tests {
         let path = source.path().to_str().unwrap().to_owned();
         let tessdata = std::path::Path::new(&tessdata);
         std::fs::copy(tessdata.join("eng.traineddata"), source.path().join("eng.traineddata")).unwrap();
-        let read = |api: &TesseractAPI, mode| {
+        let recognize = |api: &TesseractAPI, mode| {
             api.set_page_seg_mode(mode).unwrap();
             api.set_image_2(pixels.as_ptr()).unwrap();
             api.set_source_resolution(300).unwrap();
+            // Force the native OSD branch to emit its diagnostic regardless of fixture confidence. ~keep
+            api.set_min_orientation_margin(f64::from(i32::MAX)).unwrap();
             api.recognize().unwrap();
-            api.get_utf8_text()
         };
-        let baseline = |mode| read(&new_engine(&path, "eng", 3).unwrap(), mode).unwrap();
-        let without_osd = baseline(TessPageSegMode::PSM_AUTO_OSD);
+        if !warm {
+            recognize(&new_engine(&path, "eng", 3).unwrap(), TessPageSegMode::PSM_AUTO_OSD);
+            return;
+        }
         let osd_file = source.path().join("osd.traineddata");
         std::fs::copy(tessdata.join("osd.traineddata"), &osd_file).unwrap();
-        let with_osd = baseline(TessPageSegMode::PSM_AUTO_OSD);
-        assert!(!with_osd.trim().is_empty());
-        assert_ne!(
-            with_osd, without_osd,
-            "the fixture must distinguish actual implicit OSD"
-        );
         let models = ModelSet::snapshot(path, &["eng".into()], true).unwrap();
         let pools = RetryApiPools::new(1);
         pools
             .with_engine(RetryStage::Han, &models, 3, |api| {
-                read(api, TessPageSegMode::PSM_AUTO).unwrap();
+                recognize(api, TessPageSegMode::PSM_AUTO);
                 Ok(())
             })
             .unwrap();
         let parked_model = source.path().join("parked-osd");
-        let warm = pools
+        pools
             .with_initializer(
                 RetryStage::Han,
                 &models,
@@ -262,13 +291,12 @@ mod tests {
                 |_, _, _| panic!("the deferred OSD read must use the warm engine"),
                 |api| {
                     std::fs::rename(&osd_file, &parked_model).unwrap();
-                    let text = read(api, TessPageSegMode::PSM_AUTO_OSD);
+                    recognize(api, TessPageSegMode::PSM_AUTO_OSD);
                     std::fs::rename(&parked_model, &osd_file).unwrap();
-                    Ok(text.unwrap())
+                    Ok(())
                 },
             )
             .unwrap();
-        assert_eq!(warm, with_osd);
     }
 
     #[cfg(unix)]
