@@ -11,6 +11,8 @@ mod helpers;
 mod marker_probe;
 #[path = "pdf_type0_scope_2533/negative.rs"]
 mod negative;
+#[path = "support/hidden_probe_capture.rs"]
+mod probe_capture;
 
 use lopdf::{Document, Object, ObjectId, Stream, dictionary};
 use sha2::{Digest, Sha256};

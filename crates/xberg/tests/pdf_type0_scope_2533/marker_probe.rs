@@ -4,7 +4,6 @@
 
 use lopdf::{Dictionary, Document, Object, Stream, dictionary};
 use std::fmt::Write as _;
-use std::sync::{Arc, Mutex};
 use xberg::core::config::{ExtractInput, ExtractionConfig, OcrConfig, PageConfig};
 use xberg::types::{ExtractedDocument, ExtractionMethod};
 
@@ -205,7 +204,7 @@ fn expected(rows: &[usize]) -> Vec<&'static str> {
         .collect()
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer() {
     let pdf = scanned_pages();
 
@@ -240,7 +239,7 @@ async fn probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer
         native.processing_warnings
     );
 
-    let decisions = probe_decisions("marker-probe", &pdf).await;
+    let (automatic, decisions) = super::probe_capture::capture(extract(&pdf, &config()), "needed").await;
     assert_eq!(
         decisions,
         vec![
@@ -250,7 +249,6 @@ async fn probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer
         "the probe reads page 1 only; page 2's marker layer is never probed"
     );
 
-    let automatic = extract(&pdf, &config()).await;
     assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Mixed));
     assert!(automatic.metadata.ocr_used);
     assert_eq!(
@@ -284,91 +282,19 @@ async fn probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer
     );
 }
 
-#[derive(Default)]
-struct Fields(std::collections::BTreeMap<String, String>);
-
-impl tracing::field::Visit for Fields {
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        self.0.insert(field.name().to_owned(), format!("{value:?}"));
-    }
-
-    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-        self.0.insert(field.name().to_owned(), value.to_owned());
-    }
-}
-
-struct Case(String);
-
-/// Probe decisions as `(page, needed, probed)` from the `Hidden PDF text probe decision`
-/// events, keyed by the `case` span that was current when they were logged.
-#[derive(Clone, Default)]
-struct ProbeDecisions(Arc<Mutex<Vec<(String, Fields)>>>);
-
-impl<S> tracing_subscriber::Layer<S> for ProbeDecisions
-where
-    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
-{
-    fn on_new_span(
-        &self,
-        attrs: &tracing::span::Attributes<'_>,
-        id: &tracing::Id,
-        context: tracing_subscriber::layer::Context<'_, S>,
-    ) {
-        let mut fields = Fields::default();
-        attrs.record(&mut fields);
-        if let Some(case) = fields.0.remove("case") {
-            context
-                .span(id)
-                .expect("new span exists")
-                .extensions_mut()
-                .insert(Case(case));
-        }
-    }
-
-    fn on_event(&self, event: &tracing::Event<'_>, context: tracing_subscriber::layer::Context<'_, S>) {
-        let mut fields = Fields::default();
-        event.record(&mut fields);
-        if fields.0.get("message").map(String::as_str) != Some("Hidden PDF text probe decision") {
-            return;
-        }
-        let case = context
-            .event_scope(event)
-            .and_then(|scope| {
-                scope
-                    .from_root()
-                    .find_map(|span| span.extensions().get::<Case>().map(|c| c.0.clone()))
-            })
-            .unwrap_or_default();
-        self.0.lock().expect("decision lock").push((case, fields));
-    }
-}
-
-async fn probe_decisions(case: &str, pdf: &[u8]) -> Vec<(String, String, String)> {
-    use tracing::Instrument as _;
-    use tracing_subscriber::layer::SubscriberExt as _;
-    static LOG: std::sync::OnceLock<ProbeDecisions> = std::sync::OnceLock::new();
-    let log = LOG.get_or_init(|| {
-        let decisions = ProbeDecisions::default();
-        let subscriber = tracing_subscriber::registry().with(decisions.clone());
-        tracing::subscriber::set_global_default(subscriber).expect("the only subscriber in this test binary");
-        // Tests that ran earlier cached "no subscriber" as every call site's interest.
-        tracing::callsite::rebuild_interest_cache();
-        decisions
-    });
-    extract(pdf, &config())
-        .instrument(tracing::info_span!("probe", case = case))
-        .await;
-    log.0
-        .lock()
-        .expect("decision lock")
-        .iter()
-        .filter(|(logged, _)| logged == case)
-        .map(|(_, fields)| {
-            (
-                fields.0["page"].clone(),
-                fields.0["needed"].clone(),
-                fields.0["probed"].clone(),
-            )
-        })
-        .collect()
+#[tokio::test(flavor = "current_thread")]
+async fn same_scanned_pages_extract_without_probe_capture() {
+    let pdf = scanned_pages();
+    let document = extract(
+        &pdf,
+        &ExtractionConfig {
+            use_cache: false,
+            ocr: Some(OcrConfig::default()),
+            ..Default::default()
+        },
+    )
+    .await;
+    assert_eq!(document.extraction_method, Some(ExtractionMethod::Mixed));
+    assert!(document.content.contains("Across the quiet harbor"));
+    assert!(document.content.contains(LAYER_ONLY_WORD));
 }

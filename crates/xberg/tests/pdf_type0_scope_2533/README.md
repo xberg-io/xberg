@@ -38,3 +38,34 @@ NIST page. Focused PDF CI checks out the corpus manifest, fetches only
 `--exact`, requiring one collected and one passed case each. A missing fixture or
 excluded feature configuration is a failure, never a skip. The PDF suite requires
 ten exact cases in total, including these five.
+
+## Hidden-layer probe isolation (#3069)
+
+With the public NIST fixture configured as above, repeat the whole target
+with four test threads. The marker probe must capture exactly two decisions
+while the sibling test extracts the same synthetic PDF without a capture.
+
+```sh
+for run in 1 2 3 4 5; do
+  cargo test --locked -p xberg --no-default-features \
+    --features pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types \
+    --test pdf_type0_scope_2533 -- --test-threads 4 || exit 1
+done
+cargo test --locked -p xberg --no-default-features \
+  --features pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types \
+  --test pdf_partial_hidden_ocr_layer -- --test-threads 4
+```
+
+For the issue reproducer, use a disposable checkout with this patch and
+replace the marker probe and its capture code with the pre-fix version,
+keeping the new sibling extraction test. Repeat the four-thread run. The
+failure to look for is an empty decision list in
+`probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer`,
+while the sibling succeeds. The original race is scheduling-dependent.
+
+For a deterministic sensitivity check in a disposable checkout, replace
+`Box::pin(extraction).with_subscriber(subscriber).await` in the shared helper
+with `Box::pin(extraction).await`, and remove the now-unused subscriber
+construction and imports. Run the Type0 target with the filter
+`marker_probe::probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer`.
+The test must fail at the exact decision assertion with an empty list.

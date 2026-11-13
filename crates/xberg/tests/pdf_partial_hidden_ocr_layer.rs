@@ -1,5 +1,8 @@
 #![cfg(all(feature = "pdf", feature = "ocr", feature = "tokio-runtime"))]
 
+#[path = "support/hidden_probe_capture.rs"]
+mod probe_capture;
+
 use lopdf::{Dictionary, Document, Object, Stream, dictionary};
 use std::fmt::Write;
 use xberg::core::config::{ExtractInput, ExtractionConfig, OcrConfig};
@@ -734,115 +737,32 @@ async fn a_covered_invisible_layer_judged_plausible_prose_does_not_run_the_probe
     assert_eq!(automatic.content, native.content);
 }
 
-#[derive(Default)]
-struct Fields(std::collections::BTreeMap<String, String>);
-
-impl tracing::field::Visit for Fields {
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        self.0.insert(field.name().to_owned(), format!("{value:?}"));
-    }
-
-    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-        self.0.insert(field.name().to_owned(), value.to_owned());
-    }
-}
-
-struct Case(String);
-
-/// Probe decisions by the `case` span that was current when they were logged.
-#[derive(Clone, Default)]
-struct ProbeDecisions(std::sync::Arc<std::sync::Mutex<Vec<(String, Fields)>>>);
-
-impl<S> tracing_subscriber::Layer<S> for ProbeDecisions
-where
-    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
-{
-    fn on_new_span(
-        &self,
-        attrs: &tracing::span::Attributes<'_>,
-        id: &tracing::Id,
-        context: tracing_subscriber::layer::Context<'_, S>,
-    ) {
-        let mut fields = Fields::default();
-        attrs.record(&mut fields);
-        if let Some(case) = fields.0.remove("case") {
-            context
-                .span(id)
-                .expect("new span exists")
-                .extensions_mut()
-                .insert(Case(case));
-        }
-    }
-
-    fn on_event(&self, event: &tracing::Event<'_>, context: tracing_subscriber::layer::Context<'_, S>) {
-        let mut fields = Fields::default();
-        event.record(&mut fields);
-        if fields.0.get("message").map(String::as_str) != Some("Hidden PDF text probe decision") {
-            return;
-        }
-        let case = context
-            .event_scope(event)
-            .and_then(|scope| {
-                scope
-                    .from_root()
-                    .find_map(|span| span.extensions().get::<Case>().map(|c| c.0.clone()))
-            })
-            .unwrap_or_default();
-        self.0.lock().expect("decision lock").push((case, fields));
-    }
-}
-
-fn probe_log() -> &'static ProbeDecisions {
-    use tracing_subscriber::layer::SubscriberExt as _;
-    static LOG: std::sync::OnceLock<ProbeDecisions> = std::sync::OnceLock::new();
-    LOG.get_or_init(|| {
-        let log = ProbeDecisions::default();
-        let subscriber = tracing_subscriber::registry().with(log.clone());
-        tracing::subscriber::set_global_default(subscriber).expect("the only subscriber in this test binary");
-        // Tests that ran earlier cached "no subscriber" as every call site's interest.
-        tracing::callsite::rebuild_interest_cache();
-        log
-    })
-}
-
-async fn extract_with_probe_decisions(case: &str, pdf: &[u8]) -> (ExtractedDocument, Vec<(String, String, String)>) {
-    use tracing::Instrument as _;
-    let log = probe_log();
-    let document = extract(pdf, &default_tesseract())
-        .instrument(tracing::info_span!("probe", case = case))
-        .await;
-    let decisions = log
-        .0
-        .lock()
-        .expect("decision lock")
-        .iter()
-        .filter(|(logged, _)| logged == case)
-        .map(|(_, fields)| {
-            (
-                fields.0["page"].clone(),
-                fields.0["plausible"].clone(),
-                fields.0["probed"].clone(),
-            )
-        })
-        .collect();
-    (document, decisions)
-}
-
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn the_probe_decision_follows_the_language_check_on_a_covered_layer() {
     let raster = make_raster();
-    let (_, judged) = extract_with_probe_decisions("prose", &covered_prose_layer_scan(&raster)).await;
+    let (_, judged) = probe_capture::capture(
+        extract(&covered_prose_layer_scan(&raster), &default_tesseract()),
+        "plausible",
+    )
+    .await;
     assert_eq!(judged, [("1".into(), "true".into(), "false".into())]);
 
-    let (_, abstained) = extract_with_probe_decisions("junk", &junk_layer_scan(&raster, COMPLETE, 3)).await;
+    let (_, abstained) = probe_capture::capture(
+        extract(&junk_layer_scan(&raster, COMPLETE, 3), &default_tesseract()),
+        "plausible",
+    )
+    .await;
     assert_eq!(abstained, [("1".into(), "false".into(), "true".into())]);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn stock_use_native_probe_publishes_text_without_tables_and_keeps_page_ranges() {
     let raster = make_raster();
-    let (document, decisions) =
-        extract_with_probe_decisions("use-native-text", &junk_layer_scan(&raster, COMPLETE, 3)).await;
+    let (document, decisions) = probe_capture::capture(
+        extract(&junk_layer_scan(&raster, COMPLETE, 3), &default_tesseract()),
+        "plausible",
+    )
+    .await;
     assert_eq!(decisions, [("1".into(), "false".into(), "true".into())]);
     assert_eq!(document.extraction_method, Some(ExtractionMethod::Mixed));
     assert_eq!(words(&document), expected(COMPLETE));
