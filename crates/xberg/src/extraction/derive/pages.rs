@@ -61,17 +61,17 @@ pub(super) fn derive_pages(
     // elements as `render_plain` does and locate that instead (#2825).
     if !reconciled
         && has_page_boundaries(&doc.metadata)
-        && let Some((rerendered, diverging)) = rerender_pages_plain(pages.as_deref(), doc, content)
-        && reconcile_located_page_boundaries(&mut doc.metadata, content, &rerendered, &diverging)
+        && let Some((rerendered, unlocated)) = rerender_pages_plain(pages.as_deref(), doc, content)
+        && let Some(omitted) = reconcile_located_page_boundaries(&mut doc.metadata, content, &rerendered, &unlocated)
     {
         pages = Some(rerendered);
         reconciled = true;
-        if !diverging.is_empty() {
+        if !omitted.is_empty() {
             crate::core::diagnostics::push_warning(
                 &mut doc.processing_warnings,
                 "page_boundaries",
                 format!(
-                    "Page byte ranges of pages {diverging:?} were measured on a different rendering of the text \
+                    "Page byte ranges of pages {omitted:?} were measured on a different rendering of the text \
                      and could not be mapped onto the returned content, so they were omitted"
                 ),
             );
@@ -595,9 +595,9 @@ fn is_ocr_page_text(doc: &InternalDocument, page: &PageContent) -> bool {
 
 /// OCR pages whose prebuilt text is not found in `content` (in page order) rendered from their
 /// own elements by `render_plain`; a page whose text is found keeps it. Returns the pages and
-/// the numbers of those that still diverge from `content`: a page that is not OCR text (see
+/// the numbers of those still unlocated in page order: a page that is not OCR text (see
 /// `is_ocr_page_text`) keeps its text, and so does an OCR page whose re-rendering is empty or
-/// not found. `None` when no page has elements.
+/// not found.
 ///
 /// The search here selects page representations. Boundary reconciliation separately checks
 /// whether their positions are unique.
@@ -610,7 +610,7 @@ fn rerender_pages_plain(
     let elements_by_page = compute_page_membership(doc);
     let mut search_offset = 0;
     let mut out = Vec::with_capacity(pages.len());
-    let mut diverging = Vec::new();
+    let mut unlocated = Vec::new();
     for page in pages {
         let mut page = page.clone();
         let found = |text: &str, from: usize| content.get(from..).and_then(|rest| rest.find(text)).map(|i| from + i);
@@ -634,49 +634,70 @@ fn rerender_pages_plain(
                         search_offset = start + rendered.len();
                         page.content = rendered;
                     }
-                    None => diverging.push(page.page_number),
+                    None => unlocated.push(page.page_number),
                 }
             }
         }
         out.push(page);
     }
-    Some((out, diverging))
+    Some((out, unlocated))
 }
 
-/// Re-point the boundaries of the pages not in `diverging` at `content`.
-/// If recovery fails after finding a diverging page, discard the unverified ranges.
+/// Reconcile the ordered matches first, then check the original ranges of the remaining pages.
 fn reconcile_located_page_boundaries(
     metadata: &mut crate::types::Metadata,
     content: &str,
     pages: &[PageContent],
-    diverging: &[u32],
-) -> bool {
-    let Some(structure) = metadata.pages.as_mut() else {
-        return false;
-    };
-    let Some(original) = structure.boundaries.take() else {
-        return false;
-    };
-    structure.boundaries = Some(
-        original
-            .iter()
-            .filter(|boundary| !diverging.contains(&boundary.page_number))
-            .cloned()
-            .collect(),
-    );
-    let located: Vec<PageContent> = pages
-        .iter()
-        .filter(|page| !diverging.contains(&page.page_number))
-        .cloned()
-        .collect();
-    let reconciled = reconcile_page_boundaries(metadata, content, Some(&located));
-    if !reconciled
-        && let Some(structure) = metadata.pages.as_mut()
-        && structure.boundaries.is_some()
-    {
-        structure.boundaries = diverging.is_empty().then_some(original);
+    unlocated: &[u32],
+) -> Option<Vec<u32>> {
+    let structure = metadata.pages.as_mut()?;
+    let original = structure.boundaries.as_ref()?;
+    if original.len() != pages.len() || original.iter().zip(pages).any(|(b, p)| b.page_number != p.page_number) {
+        return None;
     }
-    reconciled
+    let original = structure.boundaries.take()?;
+    let (located, unlocated_pages): (Vec<_>, Vec<_>) = pages
+        .iter()
+        .cloned()
+        .partition(|page| !unlocated.contains(&page.page_number));
+    let (ordered, remaining): (Vec<_>, Vec<_>) = original
+        .into_iter()
+        .partition(|boundary| !unlocated.contains(&boundary.page_number));
+    structure.boundaries = Some(ordered);
+    reconcile_page_boundaries(metadata, content, Some(&located));
+    let structure = metadata.pages.as_mut()?;
+    let boundaries = structure.boundaries.as_mut()?;
+    let mut omitted = Vec::new();
+    boundaries.retain(|boundary| {
+        let usable = content.get(boundary.byte_start..boundary.byte_end).is_some();
+        if !usable {
+            omitted.push(boundary.page_number);
+        }
+        usable
+    });
+    for (boundary, page) in remaining.into_iter().zip(&unlocated_pages) {
+        if usable_unlocated_boundary(content, &boundary, &page.content) {
+            boundaries.push(boundary);
+        } else {
+            omitted.push(boundary.page_number);
+        }
+    }
+    if boundaries.is_empty() {
+        structure.boundaries = None;
+    } else {
+        boundaries.sort_by_key(|boundary| boundary.page_number);
+    }
+    omitted.sort_unstable();
+    Some(omitted)
+}
+
+fn usable_unlocated_boundary(content: &str, boundary: &crate::types::PageBoundary, page_text: &str) -> bool {
+    let Some(slice) = content.get(boundary.byte_start..boundary.byte_end) else {
+        return false;
+    };
+    content.find(page_text).is_none_or(|start| {
+        start == boundary.byte_start && slice == page_text && content.rfind(page_text) == Some(start)
+    })
 }
 
 /// Re-render one page's `content` from just the elements (and the tables/images they
@@ -1151,9 +1172,40 @@ mod plain_page_rerender_tests {
         let content = "two\n\none";
         let mut doc = doc_with(vec![page(1, "one"), page(2, "two")], &[]);
         set_boundaries(&mut doc, &[(1, 5, 8), (2, 0, 3)]);
+        let pages = derive(&mut doc, content);
+        assert!(!warned(&doc));
+        assert_eq!(boundary_pages(&doc), vec![1, 2]);
+        assert_ranges(&doc, content, &pages);
+    }
+
+    #[test]
+    fn a_located_page_is_reconciled_alongside_an_unmatched_page_with_a_usable_range() {
+        let content = "one\n\ntwo";
+        let mut doc = doc_with(vec![page(1, "one"), page(2, "| two |")], &[]);
+        set_boundaries(&mut doc, &[(1, 0, 999), (2, 5, 8)]);
         derive(&mut doc, content);
         assert!(!warned(&doc));
         assert_eq!(boundary_pages(&doc), vec![1, 2]);
+        let boundaries = doc.metadata.pages.unwrap().boundaries.unwrap();
+        assert_eq!(
+            content.get(boundaries[0].byte_start..boundaries[0].byte_end),
+            Some("one")
+        );
+        assert_eq!(
+            content.get(boundaries[1].byte_start..boundaries[1].byte_end),
+            Some("two")
+        );
+    }
+
+    #[test]
+    fn an_out_of_order_page_with_multiple_placements_loses_its_range() {
+        let content = "two\n\ntwo\n\none";
+        let mut doc = doc_with(vec![page(1, "one"), page(2, "two")], &[]);
+        set_boundaries(&mut doc, &[(1, 10, 13), (2, 0, 3)]);
+        let pages = derive(&mut doc, content);
+        assert!(warned(&doc));
+        assert_eq!(boundary_pages(&doc), vec![1]);
+        assert_ranges(&doc, content, &pages[..1]);
     }
 
     /// A DOCX document with a note reference on each of its two pages, and page ranges measured on
