@@ -2614,6 +2614,7 @@ fn restore_discarded_page_reads(
     *text = ocr::join_run_pages(&reads, ocr_page_marker_format(config), 0);
 
     if let Some(document) = document.as_mut() {
+        report_restored_native_page_failures(document, &restored);
         ocr::merge_ocr_pages_into_internal_document(document, &restored);
         // The merge writes a page's text as OCR blocks, but these pages hold native text with no
         // OCR geometry or confidence, so they must not surface as OCR elements.
@@ -2627,6 +2628,28 @@ fn restore_discarded_page_reads(
     }
 
     Some((reads, lost_glyphs))
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn report_restored_native_page_failures(document: &mut InternalDocument, restored: &ahash::AHashMap<u32, String>) {
+    for failure in &mut document.ocr_page_failures {
+        if failure.recovered || restored.get(&failure.page).is_none_or(|text| text.trim().is_empty()) {
+            continue;
+        }
+        failure.recovered = true;
+        if !ocr::update_discarded_xobject_retry_warning(&mut document.processing_warnings, failure) {
+            crate::core::diagnostics::push_warning_deduped(
+                &mut document.processing_warnings,
+                crate::core::diagnostics::warning(
+                    "ocr",
+                    format!(
+                        "OCR of page {} failed ({}); the page's native text was kept.",
+                        failure.page, failure.error
+                    ),
+                ),
+            );
+        }
+    }
 }
 
 /// Attach the OCR text page list to the selected document where its reader honors it.

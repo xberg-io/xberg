@@ -681,18 +681,27 @@ fn merge_returned_page_failures(
         let native_kept =
             mixed_native_page_has_content(native_text, boundaries, failure.page.saturating_sub(1) as usize);
         if native_kept && !failure.recovered && page_text.trim().is_empty() {
-            let discarded = discarded_xobject_retry_warning(failure, false);
-            if let Some(warning) = returned
-                .processing_warnings
-                .iter_mut()
-                .find(|warning| warning.source == discarded.source && warning.message == discarded.message)
-            {
-                *warning = discarded_xobject_retry_warning(failure, true);
-            }
+            update_discarded_xobject_retry_warning(&mut returned.processing_warnings, failure);
         }
         failure.recovered |= native_kept;
     }
     merge_ocr_page_failures(failures, std::mem::take(&mut returned.ocr_page_failures));
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(in crate::extractors::pdf) fn update_discarded_xobject_retry_warning(
+    warnings: &mut [crate::types::ProcessingWarning],
+    failure: &crate::types::OcrPageFailure,
+) -> bool {
+    let discarded = discarded_xobject_retry_warning(failure, false);
+    let Some(warning) = warnings
+        .iter_mut()
+        .find(|warning| warning.source == discarded.source && warning.message == discarded.message)
+    else {
+        return false;
+    };
+    *warning = discarded_xobject_retry_warning(failure, true);
+    true
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]

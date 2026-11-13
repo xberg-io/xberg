@@ -28,17 +28,7 @@ fn noise_config(pipeline: bool, whole_document: bool, discard: bool) -> Extracti
 fn assert_noisy_recovery(pipeline: bool, whole_document: bool, discard: bool) {
     let config = noise_config(pipeline, whole_document, discard);
     let name = if pipeline { "tesseract" } else { DIRECT_BACKEND };
-    let result = if pipeline && whole_document {
-        extract_from_pdf(
-            name,
-            RenderOutcome::Fails,
-            RasterOutcome::Noise,
-            &config,
-            &pdf_with_native_text_and_image(),
-        )
-    } else {
-        extract_with(name, RenderOutcome::Fails, RasterOutcome::Noise, &config)
-    };
+    let result = extract_with(name, RenderOutcome::Fails, RasterOutcome::Noise, &config);
     let policy_message = if discard {
         "its text was discarded"
     } else {
@@ -71,13 +61,7 @@ fn assert_noisy_recovery(pipeline: bool, whole_document: bool, discard: bool) {
     );
     assert_eq!(result.tables.len(), usize::from(!discard));
     if discard {
-        // ~keep Forced OCR restores the native page when its OCR read was discarded (#3013).
-        let expected = if pipeline && whole_document {
-            "The original native words stay."
-        } else {
-            ""
-        };
-        assert_eq!(result.content.trim(), expected);
+        assert!(result.content.trim().is_empty());
         assert_backend_failure_warning(&result);
     } else {
         assert!(!result.content.trim().is_empty());
@@ -170,8 +154,40 @@ fn discarded_noisy_pipeline_retry_reports_native_text_kept() {
 
 #[test]
 #[serial_test::serial]
-fn discarded_noisy_all_pages_pipeline_retry_has_no_recovery_claim() {
-    assert_noisy_recovery(true, true, true);
+fn discarded_noisy_all_pages_pipeline_retry_reports_native_text_kept() {
+    let result = extract_from_pdf(
+        "tesseract",
+        RenderOutcome::Fails,
+        RasterOutcome::Noise,
+        &noise_config(true, true, true),
+        &pdf_with_native_text_and_image(),
+    );
+
+    assert_eq!(result.content.trim(), "The original native words stay.");
+    assert!(result.tables.is_empty());
+    let failures = result.ocr_page_failures.as_ref().unwrap();
+    assert_eq!(failures.len(), 2);
+    assert_eq!((failures[0].page, failures[0].recovered), (1, false));
+    assert_eq!(&failures[1..], recovered_page_two().as_slice());
+    let page_failure_warnings: Vec<_> = result
+        .processing_warnings
+        .iter()
+        .filter(|warning| warning.source == "ocr" && warning.message.starts_with("OCR of page 2 failed"))
+        .map(|warning| warning.message.as_ref())
+        .collect();
+    assert_eq!(
+        page_failure_warnings,
+        [
+            "OCR of page 2 failed (OCR error: stub render failure); its embedded-image retry was discarded \
+          and the page's native text was kept."
+        ]
+    );
+    assert!(
+        result
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.message.contains("its text was discarded"))
+    );
 }
 
 fn assert_discarded_retry_keeps_native(pipeline: bool) {

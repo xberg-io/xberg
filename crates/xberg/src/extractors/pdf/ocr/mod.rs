@@ -57,8 +57,6 @@ pub(crate) use pipeline::extract_mixed_ocr_native_with_probe_reads;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(in crate::extractors::pdf) use pipeline::read_rendered_page;
 mod pipeline;
-#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-pub(in crate::extractors::pdf) use pipeline::TIME_LIMIT_UNREAD_PAGE_ERROR;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) use pipeline::render_mixed_plain_pages;
 #[cfg(all(
@@ -66,6 +64,8 @@ pub(super) use pipeline::render_mixed_plain_pages;
     any(paddle_ocr, all(feature = "ocr", not(target_arch = "wasm32")))
 ))]
 pub(super) use pipeline::uses_default_ocr_pipeline;
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(in crate::extractors::pdf) use pipeline::{TIME_LIMIT_UNREAD_PAGE_ERROR, update_discarded_xobject_retry_warning};
 mod plausibility;
 mod rendering;
 mod scoring;
