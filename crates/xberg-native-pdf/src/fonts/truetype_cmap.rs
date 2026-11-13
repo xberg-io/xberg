@@ -344,7 +344,7 @@ impl TrueTypeCMap {
             .read_u16::<BigEndian>()
             .map_err(|e| format!("Failed to read format 4 length: {e}"))? as usize;
         const HEADER_BYTES: usize = 16;
-        if length < HEADER_BYTES || length % 2 != 0 {
+        if length < HEADER_BYTES || !length.is_multiple_of(2) {
             return Err("Invalid cmap format 4 subtable length".into());
         }
         cursor
@@ -385,7 +385,7 @@ impl TrueTypeCMap {
         let seg_count_x2 = cursor
             .read_u16::<BigEndian>()
             .map_err(|e| format!("Failed to read segCountX2: {}", e))? as usize;
-        if seg_count_x2 == 0 || seg_count_x2 % 2 != 0 {
+        if seg_count_x2 == 0 || !seg_count_x2.is_multiple_of(2) {
             return Err("Invalid cmap format 4 segCountX2".into());
         }
         let seg_count = seg_count_x2 / 2;
