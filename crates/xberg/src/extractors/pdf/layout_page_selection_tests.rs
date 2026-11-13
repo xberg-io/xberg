@@ -572,8 +572,28 @@ async fn selected_chart_refuses_crop_that_only_equals_media_after_f32_rounding()
 }
 
 #[cfg(feature = "redaction")]
+const SELECTED_CHART_REDACTION_ROOT: &str = "XBERG_SELECTED_CHART_REDACTION_ROOT";
+
+#[cfg(feature = "redaction")]
+#[test]
+fn selected_chart_omits_text_for_per_input_and_empty_external_redaction() {
+    let root = tempfile::tempdir().unwrap();
+    crate::utils::test_support::run_child_test(
+        "extractors::pdf::layout_page_selection_tests::selected_chart_redaction_child",
+        SELECTED_CHART_REDACTION_ROOT,
+        root.path(),
+        |_| {},
+    );
+}
+
+#[cfg(feature = "redaction")]
 #[tokio::test]
-async fn selected_chart_omits_text_for_per_input_and_empty_external_redaction() {
+#[ignore = "requires a redaction registry isolated from sibling tests"]
+async fn selected_chart_redaction_child() {
+    if crate::utils::test_support::child_test_root(SELECTED_CHART_REDACTION_ROOT).is_none() {
+        return;
+    }
+
     use crate::core::config::RedactionOffsetEncoding;
     use crate::core::config::redaction::{RedactionConfig, RedactionTerm};
     use crate::text::redaction::external::{ExternalRedactionRequest, scope_external_redaction};
