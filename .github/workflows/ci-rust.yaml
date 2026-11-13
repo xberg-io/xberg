@@ -75,7 +75,8 @@ jobs:
           # on x86_64 Linux: scripts/ci/rust/run-unit-tests.sh substitutes
           # `full-no-heic,heic` on Linux aarch64 (candle's gemm-f16 needs fullfp16), so
           # the candle backends' tests only ever ran on Apple Silicon. ~keep
-          - os: ubuntu-latest
+          # ~keep PHP bindgen needs matching Clang headers and libclang. Ubuntu 26.04 can mix them.
+          - os: ubuntu-24.04
           - os: ubuntu-24.04-arm
           - os: macos-26
     steps:
@@ -121,16 +122,16 @@ jobs:
       - name: Install mise
         uses: xberg-io/actions/setup-mise@v1
         with:
-          install: ${{ matrix.os == 'ubuntu-latest' && 'true' || 'false' }}
+          install: ${{ matrix.os == 'ubuntu-24.04' && 'true' || 'false' }}
           install-args: cargo-deny
 
       - name: Verify system Tesseract dynamic linking
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         run: mise run rust:check:tesseract-dynamic
         shell: bash
 
       - name: Verify NLI qualification contracts and runtime
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         run: mise run nli:ci
         shell: bash
 
@@ -193,7 +194,7 @@ jobs:
         shell: bash
 
       - name: Verify native VLM auto gate without formula recognition
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         run: mise run rust:test:vlm-auto-gate
         shell: bash
 
@@ -322,12 +323,12 @@ jobs:
       # orientation model only and never reach the Paddle stage (their Tesseract read is accepted), so
       # det/cls/rec are not provisioned. ~keep
       - name: Provision the orientation model for the sideways suite
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         uses: ./.github/actions/setup-paddle-ocr-models
         with: { models: doc-ori, cache-key-suffix: document-orientation-onnx }
 
       - name: Qualify explicit sideways OCR with Paddle OCR
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         uses: ./.github/actions/qualify-ocr-paddle-sideways
 
       - name: Check no-default-features
