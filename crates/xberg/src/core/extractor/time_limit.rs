@@ -190,3 +190,6 @@ mod tests {
         assert!(token.is_cancelled(), "the hard bound must cancel the token");
     }
 }
+
+#[cfg(test)]
+mod entry_point_deadline_tests;
