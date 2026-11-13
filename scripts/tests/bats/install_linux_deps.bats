@@ -274,3 +274,22 @@ run_cache_promotion() {
 		[ "$(cat "$LIBHEIF_PREFIX/lib/libheif.so.1")" = original ]
 	done
 }
+
+@test "install_linux should reject path-based dependencies and alternate loader tags before ldd or promotion" {
+	prepare_cache_candidate
+	printf '%s\n' original >"$LIBHEIF_PREFIX/lib/libheif.so.1"
+	printf '%s\n' 'source "$3"' >>"$XBERG_WORK/check-cache.sh"
+	xberg_stub sudo 'printf "%s\n" "$@" >>"$XBERG_TRACE"; exit 1'
+	xberg_stub ldd 'echo "unexpected ldd invocation"; echo "libx265.so.215 => /cache/lib/libx265.so.215 (0x123)"'
+	local metadata
+	for metadata in 		"(NEEDED) Shared library: [$CACHE_CANDIDATE/lib/libx265.so.215]" 		'(NEEDED) Shared library: [../cache/libx265.so.215]' 		'(NEEDED) Shared library: [$ORIGIN]' 		'0x123 (AUDIT) Audit library: [/cache/audit.so]' 		'0x123 (DEPAUDIT) Dependency audit library: [/cache/audit.so]' 		'0x123 (FILTER) Filter library: [/cache/filter.so]' 		'0x123 (AUXILIARY) Auxiliary library: [/cache/aux.so]' 		'  INTERP 0x123 0x123'; do
+		xberg_stub readelf 'echo " Type: DYN (Shared object file)"' 'echo " (SONAME) Library soname: [libheif.so.1]"' \
+			"echo '$metadata'"
+		run_cache_check
+		xberg_assert_output_contains "unsupported ELF loader metadata"
+		xberg_assert_output_contains "rebuilding"
+		[[ "$output" != *"unexpected ldd invocation"* ]]
+		[ ! -e "$XBERG_TRACE" ]
+		[ "$(cat "$LIBHEIF_PREFIX/lib/libheif.so.1")" = original ]
+	done
+}

@@ -147,7 +147,7 @@ libheif_search_path() {
 
 libheif_runtime_links() {
   local library="$1/lib/libheif.so.1" elf report runtime_path
-  if ! elf="$(LC_ALL=C readelf -h -d "$library" 2>&1)" ||
+  if ! elf="$(LC_ALL=C readelf -W -h -l -d "$library" 2>&1)" ||
     ! grep -Eq '^[[:space:]]*Type:[[:space:]]+DYN' <<<"$elf" ||
     ! grep -Eq '\(SONAME\).*\[libheif\.so\.1\]' <<<"$elf"; then
     echo "::warning::Expected a libheif.so.1 ELF shared library at $library." >&2
@@ -155,6 +155,11 @@ libheif_runtime_links() {
   fi
   if grep -Eq '\((RPATH|RUNPATH)\)' <<<"$elf"; then
     echo "::warning::$library has an embedded RPATH or RUNPATH." >&2
+    return 1
+  fi
+  if grep -Eq '^[[:space:]]*INTERP[[:space:]]|^[[:space:]]*0x[[:xdigit:]]+[[:space:]]+\((AUDIT|DEPAUDIT|FILTER|AUXILIARY)\)' <<<"$elf" ||
+    grep -Eq '\(NEEDED\)[[:space:]]+[^[]*\[[^]]*[/$]' <<<"$elf"; then
+    echo "::warning::$library has unsupported ELF loader metadata." >&2
     return 1
   fi
   runtime_path="${LD_LIBRARY_PATH:-}"
