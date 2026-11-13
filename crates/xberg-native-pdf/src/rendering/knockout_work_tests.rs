@@ -535,6 +535,46 @@ fn paint_operation_count_starts_again_on_each_page() {
 }
 
 #[test]
+fn exhausted_workspace_retries_use_the_fitting_floor_and_share_the_paint_cap() {
+    use crate::rendering::page_renderer::{PNG_FIXED_OVERHEAD, PngRenderBudget};
+
+    const REQUESTED_DPI: u32 = 288;
+    const MINIMUM_DPI: u32 = 72;
+    let doc = forms_document(
+        "100 100",
+        "/Outer Do",
+        &[
+            form("Outer", Some(false), "0 g 0 0 10 10 re f /Middle Do"),
+            form("Middle", Some(false), "/Inner Do"),
+            form("Inner", Some(false), "0 g 0 0 10 10 re f"),
+        ],
+    );
+    let budget = || PngRenderBudget {
+        max_working_bytes: 400 * 400 * 12 + PNG_FIXED_OVERHEAD,
+        minimum_dpi: MINIMUM_DPI,
+    };
+    let mut strict = PageRenderer::new(RenderOptions::with_dpi(MINIMUM_DPI).as_raw());
+    let (reference, _) = strict.render_page_with_budget(0, &doc, Some(budget())).unwrap();
+    let floor_paints = strict.knockout_resources.paint_operations;
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(REQUESTED_DPI).as_raw());
+    let (image, dpi) = renderer
+        .render_page_with_workspace_retries(0, &doc, Some(budget()), 0)
+        .expect("one floor attempt after the initial workspace refusal");
+    assert_eq!(dpi, MINIMUM_DPI);
+    assert_eq!(image.data, reference.data);
+    assert!(renderer.knockout_resources.paint_operations > floor_paints);
+
+    renderer.knockout_resources.paint_operation_limit = floor_paints;
+    let error = renderer
+        .render_page_with_workspace_retries(0, &doc, Some(budget()), 0)
+        .err()
+        .expect("earlier paints leave insufficient operations for the final attempt");
+    assert!(error.to_string().contains("paint operations"), "{error}");
+    assert_eq!(renderer.knockout_resources.paint_operations, floor_paints);
+    assert_eq!(renderer.knockout_resources.workspace_shortfall(), None);
+}
+
+#[test]
 fn dpi_retries_share_the_page_paint_cap_and_the_next_page_starts_fresh() {
     use crate::rendering::page_renderer::{PNG_FIXED_OVERHEAD, PngRenderBudget};
 

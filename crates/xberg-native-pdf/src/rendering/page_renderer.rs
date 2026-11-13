@@ -525,6 +525,16 @@ impl PageRenderer {
         doc: &PdfDocument,
         png_budget: Option<PngRenderBudget>,
     ) -> Result<(RenderedImage, u32)> {
+        self.render_page_with_workspace_retries(page_num, doc, png_budget, raster_budget::MAX_WORKSPACE_DPI_RETRIES)
+    }
+
+    fn render_page_with_workspace_retries(
+        &mut self,
+        page_num: usize,
+        doc: &PdfDocument,
+        png_budget: Option<PngRenderBudget>,
+        mut retries_left: usize,
+    ) -> Result<(RenderedImage, u32)> {
         let mut dpi = self.options.dpi;
         let minimum = png_budget
             .as_ref()
@@ -533,20 +543,23 @@ impl PageRenderer {
         self.knockout_resources
             .reset(png_budget.as_ref().map(|budget| budget.max_working_bytes));
 
-        let mut retries_left = raster_budget::MAX_WORKSPACE_DPI_RETRIES;
         loop {
             let result = self.render_page_at_dpi(page_num, doc, png_budget.as_ref(), &mut dpi);
             let Some((required, limit)) = self.knockout_resources.workspace_shortfall() else {
                 return result;
             };
-            // ~keep A refusal can expose the next reservation peak. Keep taking measured steps
-            // while work remains, and return the refusal if the retry bound is exhausted.
-            if result.is_ok() || !can_resize || dpi <= minimum || retries_left == 0 {
+            if result.is_ok() || !can_resize || dpi <= minimum {
                 return result;
             }
-            retries_left -= 1;
             self.cmyk_sidecar = None;
             self.knockout_resources.reset_attempt();
+            // ~keep Each refused reservation may expose a later peak. When measured retries
+            // run out, try the floor once without resetting the page's paint count.
+            if retries_left == 0 {
+                dpi = minimum;
+                return self.render_page_at_dpi(page_num, doc, png_budget.as_ref(), &mut dpi);
+            }
+            retries_left -= 1;
             dpi = raster_budget::dpi_after_workspace_refusal(dpi, minimum, required, limit);
         }
     }
