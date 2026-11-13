@@ -572,6 +572,17 @@ def test_go_zig_install_keeps_mise_on_the_musl_legs() -> None:
         assert_go_zig_install_is_gnu_only(mutated)
 
 
+def test_android_release_guards_use_workflow_revision_and_precede_publish() -> None:
+    block = job_block(WORKFLOW.read_text(), "publish-kotlin-android")
+    assert "ref: ${{ needs.prepare.outputs.ref }}" in block
+    guard = block.index("ref: ${{ github.workflow_sha }}")
+    stage = block.index("verify-android-jni.py stage")
+    publish = block.index("uses: xberg-io/actions/publish-maven-gradle@v1")
+    assert guard < stage < publish
+    assert "extra-args: -I ../../.release-tools/scripts/ci/verify-android-aar.init.gradle" in block
+    assert "-Palef.skipAndroidJni=true" in block
+
+
 def test_glibc_native_closures_are_strictly_verified() -> None:
     workflow = WORKFLOW.read_text()
     for job in ("csharp-natives", "dart-server-natives"):

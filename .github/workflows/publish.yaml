@@ -4668,17 +4668,21 @@ jobs:
           path: kotlin-android-artifacts
           merge-multiple: true
 
-      - name: Stage Android natives into Kotlin Android module
-        shell: bash
+      - name: Check out Android release guards from the workflow revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/ci/verify-android-jni.py
+            scripts/ci/verify-android-aar.init.gradle
+          sparse-checkout-cone-mode: false
+
+      - name: Validate and stage both Android JNI libraries
         run: |
-          for abi in arm64-v8a x86_64; do
-            dest="packages/kotlin-android/src/main/jniLibs/${abi}"
-            mkdir -p "$dest"
-            src="kotlin-android-artifacts/${abi}/libxberg_jni.so"
-            if [[ -f "$src" ]]; then
-              cp -v "$src" "$dest/"
-            fi
-          done
+          python3 .release-tools/scripts/ci/verify-android-jni.py stage \
+            kotlin-android-artifacts packages/kotlin-android/src/main/jniLibs
 
       # The Android SDK/NDK stays on its setup action (toolchain-management rule). ~keep
       - uses: android-actions/setup-android@v4
@@ -4689,6 +4693,7 @@ jobs:
         with:
           working-directory: packages/kotlin-android
           gradle-task: publishAndReleaseToMavenCentral
+          extra-args: -I ../../.release-tools/scripts/ci/verify-android-aar.init.gradle -Palef.skipAndroidJni=true
           dry-run: ${{ needs.prepare.outputs.dry_run }}
         env:
           MAVEN_USERNAME: ${{ secrets.CENTRAL_USERNAME }}

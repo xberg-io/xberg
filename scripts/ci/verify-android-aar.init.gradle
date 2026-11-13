@@ -1,0 +1,24 @@
+gradle.projectsEvaluated {
+    def project = gradle.rootProject
+    def bundle = project.tasks.named("bundleReleaseAar")
+    def verify = project.tasks.register("verifyReleaseAarJni") {
+        dependsOn(bundle)
+        doLast {
+            def archives = bundle.get().outputs.files.files.findAll { it.name.endsWith(".aar") }
+            if (archives.size() != 1) {
+                throw new GradleException("Expected one release AAR from bundleReleaseAar, found: ${archives}")
+            }
+            def check = project.providers.exec {
+                commandLine "python3", project.file("../../.release-tools/scripts/ci/verify-android-jni.py"),
+                    "verify-aar", archives.first()
+                ignoreExitValue = true
+            }
+            if (check.result.get().exitValue != 0) {
+                throw new GradleException(check.standardError.asText.get().trim())
+            }
+        }
+    }
+    project.tasks.matching { it.name.startsWith("publish") }.configureEach {
+        dependsOn(verify)
+    }
+}
