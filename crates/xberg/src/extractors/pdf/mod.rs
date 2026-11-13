@@ -447,6 +447,15 @@ where
     work()
 }
 
+#[cfg(all(feature = "pdf", feature = "tokio-runtime"))]
+fn may_have_embedded_files(document: &xberg_native_pdf::PdfDocument) -> bool {
+    document.is_encrypted()
+        || !document.has_unrecovered_catalog()
+        || !document
+            .catalog()
+            .is_ok_and(|catalog| catalog.as_dict().is_some_and(|dict| !dict.contains_key("Names")))
+}
+
 #[cfg(feature = "pdf")]
 fn extract_native_blocking(
     content: Vec<u8>,
@@ -482,14 +491,7 @@ fn extract_native_blocking(
         None => None,
     };
     #[cfg(feature = "tokio-runtime")]
-    // The fallback parser eagerly loads every stream. A catalog without /Names
-    // needs no attachment walk. Keep the fallback for compatibility and encrypted sources. ~keep
-    let may_have_embedded_files = compatibility_data.is_some()
-        || native_document.doc.is_encrypted()
-        || !native_document
-            .doc
-            .catalog()
-            .is_ok_and(|catalog| catalog.as_dict().is_some_and(|dict| !dict.contains_key("Names")));
+    let may_have_embedded_files = compatibility_data.is_some() || may_have_embedded_files(&native_document.doc);
     let (outline_entries, bookmark_uris, pdf_revisions) = compatibility_data.unwrap_or_default();
     ensure_pdf_not_cancelled(&config)?;
     let diagrams = if wants_dot_output(&config) {
@@ -4884,3 +4886,31 @@ impl PdfExtractor {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime"))]
+#[test]
+fn recovered_catalog_without_names_keeps_attachment_compatibility() {
+    use xberg_native_pdf::PdfDocument;
+
+    let mut pdf = lopdf::Document::with_version("1.7");
+    let pages =
+        pdf.add_object(lopdf::dictionary! { "Type" => "Pages", "Count" => 0, "Kids" => Vec::<lopdf::Object>::new() });
+    let root = pdf.add_object(lopdf::dictionary! { "Type" => "Catalog", "Pages" => pages });
+    pdf.trailer.set("Root", root);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    let clean = PdfDocument::from_bytes(bytes.clone()).unwrap();
+    assert!(clean.has_unrecovered_catalog());
+    assert!(!may_have_embedded_files(&clean));
+
+    let startxref = bytes
+        .windows(b"startxref".len())
+        .rposition(|window| window == b"startxref")
+        .unwrap();
+    bytes.truncate(startxref);
+    let recovered = PdfDocument::from_bytes(bytes).unwrap();
+    let catalog = recovered.catalog().unwrap();
+    assert!(!catalog.as_dict().unwrap().contains_key("Names"));
+    assert!(!recovered.has_unrecovered_catalog());
+    assert!(may_have_embedded_files(&recovered));
+}
