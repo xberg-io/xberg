@@ -1822,9 +1822,20 @@ fn margin_text_keys(normalized: &str) -> Vec<String> {
     vec![alphanum_key, word_set_key]
 }
 
+pub(super) fn reads_vertically(para: &PdfParagraph) -> bool {
+    let mut text_segments = para
+        .lines
+        .iter()
+        .flat_map(|line| &line.segments)
+        .filter(|segment| !segment.text.trim().is_empty())
+        .peekable();
+    text_segments.peek().is_some() && text_segments.all(|segment| reads_up_or_down(segment.rotation_degrees))
+}
+
 /// True when a paragraph sits in a page margin and is not already page furniture.
 fn is_margin_candidate(para: &PdfParagraph, top_margin_y: f32, bottom_margin_y: f32) -> bool {
     if para.is_page_furniture
+        || reads_vertically(para)
         || matches!(
             para.layout_class,
             Some(LayoutHintClass::PageHeader | LayoutHintClass::PageFooter)
@@ -1839,9 +1850,8 @@ fn is_margin_candidate(para: &PdfParagraph, top_margin_y: f32, bottom_margin_y: 
 /// Detect paragraphs in page margins that repeat across pages.
 ///
 /// Only considers paragraphs whose bounding box falls in the page margins
-/// (top 10%, bottom 10%, or narrow left/right strips). If the same text
-/// appears in the margins on >50% of pages, it's furniture (running headers,
-/// footers, metadata stamps, watermarks). Text matches when its characters
+/// (top or bottom 10%) and reads across the page. If the same text appears
+/// there on >50% of pages, it's running furniture. Text matches when its characters
 /// match, or when its words match in any order (see `margin_text_keys`).
 ///
 /// `page_heights` provides the height of each page for margin calculation.
@@ -3213,6 +3223,28 @@ mod tests {
         assert!(pages[2][0].is_page_furniture);
         assert!(pages[3][0].is_page_furniture);
         assert!(!pages[0][1].is_page_furniture);
+    }
+
+    #[test]
+    fn should_preserve_repeated_vertical_text_and_strip_horizontal_running_text() {
+        let mut pages: Vec<_> = (0..5)
+            .map(|page| {
+                let mut stamp = make_margin_body("Vertical printed stamp");
+                stamp.lines[0].segments[0].rotation_degrees = if page % 2 == 0 { 90.0 } else { 270.0 };
+                vec![stamp, make_margin_body("Running header"), make_body_center("Body text")]
+            })
+            .collect();
+
+        mark_cross_page_repeating_text(&mut pages, &[792.0; 5]);
+
+        for (index, page) in pages.iter().enumerate() {
+            assert!(!page[0].is_page_furniture, "vertical stamp on page {index}");
+            assert_eq!(
+                page[1].is_page_furniture,
+                index > 0,
+                "horizontal header on page {index}"
+            );
+        }
     }
 
     #[test]

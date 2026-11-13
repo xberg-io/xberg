@@ -12,6 +12,14 @@ impl<'doc> TextExtractor<'doc> {
     ///
     /// Updates the graphics state and extracts text as appropriate.
     pub(super) fn execute_operator(&mut self, op: Operator) -> Result<()> {
+        self.execute_operator_with_paint_restarts(op, None)
+    }
+
+    pub(crate) fn execute_operator_with_paint_restarts(
+        &mut self,
+        op: Operator,
+        mut paint_restarts: Option<&mut Vec<usize>>,
+    ) -> Result<()> {
         // The seam of the previous `TJ` array reaches this operator only (see `PenSeam`). ~keep
         let seam = self.pen_seam.take();
         match op {
@@ -370,6 +378,11 @@ impl<'doc> TextExtractor<'doc> {
                                     // Adjust text position by offset (in thousandths of em) ~keep
                                     let state = self.state_stack.current();
                                     let tx = -offset / 1000.0 * state.font_size * state.horizontal_scaling / 100.0;
+                                    if tx != 0.0
+                                        && let Some(restarts) = paint_restarts.as_deref_mut()
+                                    {
+                                        restarts.push(self.chars.len());
+                                    }
 
                                     // HEURISTIC: Insert space character for significant negative offsets
                                     //

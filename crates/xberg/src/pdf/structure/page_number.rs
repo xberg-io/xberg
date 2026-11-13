@@ -446,6 +446,10 @@ const MIN_SEQUENCE_PAGES: usize = 2;
 /// correctly-progressing folios is already an overwhelming signal; more adds nothing.
 const SEQUENCE_SATURATION_PAGES: f32 = 4.0;
 
+/// Four alternating recto or verso folios can span six pages. Distant uses of
+/// a margin slot, such as chapter-opening folios, do not confirm a running slot.
+const MAX_SEQUENCE_PAGE_DISTANCE: usize = 6;
+
 /// Allowed mismatch between the page step and the value step of two consecutive
 /// candidates.
 ///
@@ -524,7 +528,7 @@ impl PageNumberSequence {
     /// number. Call only after every page has been observed. Returns 0.0 when nothing was
     /// recorded there.
     pub(crate) fn confidence_at(&self, page_index: usize, band: MarginBand, x_ratio: f32) -> f32 {
-        let cohort = self.positional_cohort(band, x_ratio);
+        let cohort = self.positional_cohort(page_index, band, x_ratio);
         if !cohort.iter().any(|observation| observation.page_index == page_index) {
             return 0.0;
         }
@@ -537,12 +541,15 @@ impl PageNumberSequence {
         }
     }
 
-    /// Every page that carries a candidate at this band and x position, one per page
+    /// Nearby pages that carry a candidate at this band and x position, one per page
     /// (the horizontally nearest), ordered by page index.
-    fn positional_cohort(&self, band: MarginBand, x_ratio: f32) -> Vec<&Observation> {
+    fn positional_cohort(&self, page_index: usize, band: MarginBand, x_ratio: f32) -> Vec<&Observation> {
         let mut nearest_per_page: BTreeMap<usize, &Observation> = BTreeMap::new();
         for observation in &self.observations {
-            if observation.band != band || (observation.x_ratio - x_ratio).abs() > X_RATIO_TOLERANCE {
+            if observation.page_index.abs_diff(page_index) > MAX_SEQUENCE_PAGE_DISTANCE
+                || observation.band != band
+                || (observation.x_ratio - x_ratio).abs() > X_RATIO_TOLERANCE
+            {
                 continue;
             }
             nearest_per_page
@@ -880,6 +887,30 @@ mod tests {
         let confidence = sequence.confidence_at(4, MarginBand::Bottom, CENTRE_X);
         assert_close(confidence, 0.79, "confidence with one page missing");
         assert!(confidence >= PageNumberSequence::DELETION_THRESHOLD);
+    }
+
+    #[test]
+    fn should_preserve_sparse_chapter_opening_folios_but_confirm_running_folios() {
+        let mut sequence = PageNumberSequence::new();
+        for page in 0..40 {
+            let text = (page + 1).to_string();
+            let candidate = classify_page_number_text(&text).expect("digits classify");
+            let (band, x) = if page % 8 == 0 {
+                (MarginBand::Bottom, CENTRE_X)
+            } else if page % 2 == 0 {
+                (MarginBand::Top, 0.1)
+            } else {
+                (MarginBand::Top, 0.9)
+            };
+            sequence.observe(page, band, x, &candidate);
+        }
+
+        for page in (0..40).step_by(8) {
+            assert!(
+                sequence.confidence_at(page, MarginBand::Bottom, CENTRE_X) < PageNumberSequence::DELETION_THRESHOLD
+            );
+        }
+        assert!(sequence.confidence_at(17, MarginBand::Top, 0.9) >= PageNumberSequence::DELETION_THRESHOLD);
     }
 
     #[test]

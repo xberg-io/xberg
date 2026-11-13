@@ -253,3 +253,10 @@ impl<'doc> TextExtractor<'doc> {
         self.chars.clear();
     }
 }
+
+impl TextExtractor<'_> {
+    pub(crate) fn take_body_paint_chars(&mut self) -> Vec<TextChar> {
+        self.extract_spans = false;
+        std::mem::take(&mut self.chars)
+    }
+}

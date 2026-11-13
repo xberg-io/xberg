@@ -48,9 +48,7 @@ impl PdfDocument {
         configs: [&TableDetectionConfig; N],
         recover_wide: bool,
     ) -> Result<[RuledSourceTables; N]> {
-        // Use words instead of spans for better granularity.
-        // This ensures that strings with spaces are split into separate columns
-        // for the spatial detector. ~keep
+        // Word spans let the detector assign strings across separate columns. ~keep
         let spans = self.extract_table_word_spans(page_index)?;
         #[cfg(test)]
         crate::structure::spatial_table_detector::header_source_diagnostic::event("table_word_spans", || {
@@ -111,15 +109,48 @@ impl PdfDocument {
             (tables, ownership)
         });
         certify_empty_legacy_routes(&mut results, configs, &spans, &lines);
-        if recover_wide
-            && results.iter().all(|(tables, _)| tables.is_empty())
-            && let Some(config) = configs.last()
-            && let Some(last) = results.last_mut()
-            && let Some(recovered) = recover_wide_source_table(config, &spans, &lines, page_bounds)
-        {
-            *last = recovered;
+        if recover_wide {
+            recover_empty_ruled_routes(self, page_index, configs, &mut results, (&spans, &lines), page_bounds);
         }
         Ok(results)
+    }
+}
+
+fn replace_collapsed_grids<const N: usize>(
+    document: &PdfDocument,
+    page: usize,
+    configs: [&TableDetectionConfig; N],
+    results: &mut [RuledSourceTables; N],
+) {
+    for (config, (tables, ownership)) in configs.into_iter().zip(results) {
+        if is_line_only(config)
+            && ownership.is_none()
+            && let [ordinary] = tables.as_mut_slice()
+            && let Some(recovered) = super::body_paint::replace_collapsed(document, page, config, ordinary)
+            && is_public_ruled_table(&recovered)
+        {
+            *ordinary = recovered;
+        }
+    }
+}
+
+fn recover_empty_ruled_routes<const N: usize>(
+    document: &PdfDocument,
+    page: usize,
+    configs: [&TableDetectionConfig; N],
+    results: &mut [RuledSourceTables; N],
+    (spans, lines): (&[crate::layout::TextSpan], &[crate::elements::PathContent]),
+    page_bounds: impl FnOnce() -> Option<crate::geometry::Rect>,
+) {
+    if results.iter().any(|(tables, _)| !tables.is_empty()) {
+        replace_collapsed_grids(document, page, configs, results);
+        return;
+    }
+    let (Some(config), Some(last)) = (configs.last().copied(), results.last_mut()) else {
+        return;
+    };
+    if let Some(recovered) = recover_wide_source_table(config, spans, lines, page_bounds) {
+        *last = recovered;
     }
 }
 

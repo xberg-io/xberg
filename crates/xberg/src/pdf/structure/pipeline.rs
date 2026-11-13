@@ -17,7 +17,7 @@ use super::assembly::assemble_internal_document;
 use super::classify::{
     classify_paragraphs, demote_heading_runs, demote_structure_annotation_headings, demote_unnumbered_subsections,
     is_body_size_bold_heading_candidate, is_body_size_bold_signal, is_numbered_section_heading, mark_arxiv_noise,
-    mark_cross_page_repeating_short_text, mark_cross_page_repeating_text, refine_heading_hierarchy,
+    mark_cross_page_repeating_short_text, mark_cross_page_repeating_text, reads_vertically, refine_heading_hierarchy,
 };
 use super::constants::{FULL_LINE_FRACTION, MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO};
 use super::lines::{is_cjk_char, segments_need_space};
@@ -7182,6 +7182,7 @@ fn page_number_observation(
         || paragraph.is_list_item
         || paragraph.is_code_block
         || paragraph.is_page_furniture
+        || reads_vertically(paragraph)
         || paragraph.word_count > MAX_PAGE_NUMBER_WORD_COUNT
     {
         return None;
@@ -7236,6 +7237,7 @@ fn running_margin_key(paragraph: &PdfParagraph, height: f32, hints: Option<&[Lay
         || paragraph.is_formula
         || paragraph.is_code_block
         || paragraph.lines.len() != 1
+        || reads_vertically(paragraph)
         || paragraph.word_count > RUNNING_MARGIN_MAX_WORDS
     {
         return None;

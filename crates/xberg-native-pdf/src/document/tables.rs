@@ -6,6 +6,7 @@
 
 use super::*;
 
+mod body_paint;
 mod source_ownership;
 
 /// Gap, in em, within which two source-adjacent word fragments are re-glued into

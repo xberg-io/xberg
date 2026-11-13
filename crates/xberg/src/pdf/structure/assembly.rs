@@ -328,10 +328,27 @@ const MIN_TABLE_COVERAGE_AREA_RATIO: f32 = 0.5;
 /// and `document.rs`'s), each over different geometry/visibility; consolidating them behind
 /// one shared home is a reasonable follow-up but out of scope for this fix. ~keep
 fn table_coverage_tokens(text: &str) -> Vec<String> {
-    text.split(|character: char| !character.is_alphanumeric())
-        .filter(|token| !token.is_empty())
-        .map(str::to_lowercase)
-        .collect()
+    let mut tokens = Vec::new();
+    let mut start = 0;
+    let mut previous = None;
+    let mut characters = text.char_indices().peekable();
+    while let Some((index, character)) = characters.next() {
+        // A decimal value must be carried whole. Its digit groups can also occur in unrelated cells. ~keep
+        let decimal_point = character == '.'
+            && previous.is_some_and(|c: char| c.is_ascii_digit())
+            && characters.peek().is_some_and(|(_, next)| next.is_ascii_digit());
+        if !character.is_alphanumeric() && !decimal_point {
+            if start < index {
+                tokens.push(text[start..index].to_lowercase());
+            }
+            start = index + character.len_utf8();
+        }
+        previous = Some(character);
+    }
+    if start < text.len() {
+        tokens.push(text[start..].to_lowercase());
+    }
+    tokens
 }
 
 /// Multiset of tokens everything a table actually carries -- cells when populated, otherwise
@@ -3903,6 +3920,24 @@ mod tests {
             "a paragraph carrying text the grid does not represent must not be deleted, got {labels:?}"
         );
         assert!(labels.contains(&"<table>"));
+    }
+
+    #[test]
+    fn should_keep_overlapping_decimal_paragraph_unless_the_table_carries_whole_values() {
+        let paragraph_text = "14.3 (13.6)";
+        for (cells, expected) in [
+            (&["14", "3", "13", "6"][..], vec!["<table>", paragraph_text]),
+            (&["(13.6)", "14.3"][..], vec!["<table>"]),
+        ] {
+            let markdown = format!("| {} |", cells.join(" | "));
+            let mut table = make_table_in_box(&markdown, 40.0, 560.0, 800.0);
+            table.cells = vec![cells.iter().map(|cell| (*cell).to_string()).collect()];
+            let paragraph = make_paragraph_in_box(paragraph_text, 760.0, 40.0, 560.0);
+            let document = assemble_internal_document(vec![vec![paragraph]], &[table], None, &[], &Default::default());
+            let labels = page_element_labels(&document);
+            assert_eq!(labels.len(), expected.len(), "unexpected elements: {labels:?}");
+            assert!(expected.iter().all(|label| labels.contains(label)), "{labels:?}");
+        }
     }
 
     /// GH#1622: TATR's cell grid can reassemble the same words in a different order than the
