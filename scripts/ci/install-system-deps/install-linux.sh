@@ -214,6 +214,19 @@ promote_libheif() (
     sudo cp -P --parents --remove-destination -- "${artifacts[@]}" "$destination/"
 )
 
+probe_libheif_artifacts() (
+  local source_root="$1" staging entry
+  staging="$(mktemp -d)" || return 1
+  trap 'rm -rf -- "$staging"' EXIT
+  libheif_artifacts "$source_root" >"$staging/manifest" || return 1
+  while IFS= read -r -d '' entry; do
+    mkdir -p "$staging/${entry%/*}" &&
+      cp -P -- "$source_root/$entry" "$staging/$entry" || return 1
+  done <"$staging/manifest"
+  cd "$staging" || return 1
+  LD_LIBRARY_PATH='' libheif_runtime_links "$staging"
+)
+
 libheif_candidate_is_usable() {
   local candidate="$1" marker="$1/lib/pkgconfig/libheif.pc" search_path
   if [[ ! -s "$candidate/include/libheif/heif.h" || ! -f "$candidate/lib/libheif.so" ||
@@ -228,7 +241,7 @@ libheif_candidate_is_usable() {
   search_path="$(libheif_search_path "$candidate/lib/pkgconfig" "${PKG_CONFIG_PATH:-}")"
   [[ "$(PKG_CONFIG_PATH="$search_path" pkg-config --modversion "$marker")" == "$LIBHEIF_VERSION" ]] &&
     PKG_CONFIG_PATH="$search_path" pkg-config --cflags --libs "$marker" &&
-    libheif_runtime_links "$candidate"
+    probe_libheif_artifacts "$candidate"
 }
 
 LIBHEIF_CACHE=/tmp/libheif-cache

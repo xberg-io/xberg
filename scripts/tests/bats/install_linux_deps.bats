@@ -118,12 +118,15 @@ prepare_cache_candidate() {
 		/^LIBHEIF_CACHE=/{capture=1; printf "LIBHEIF_CACHE=\042%s\042\n", cache; next}
 		/^  echo "Building libheif/{capture=0}
 		capture' "$INSTALL_SCRIPT" >"$XBERG_WORK/check-cache.sh"
-	printf '%s\n' '  echo rebuilding' 'fi' >>"$XBERG_WORK/check-cache.sh"
+	printf '%s\n' '  echo rebuilding' '  exit 0' 'fi' >>"$XBERG_WORK/check-cache.sh"
+	awk '/^if \[\[ "\$candidate" != "\$LIBHEIF_PREFIX"/{capture=1} capture; capture && /^fi$/{exit}' \
+		"$INSTALL_SCRIPT" >"$XBERG_WORK/promote-cache.sh"
+	grep -q 'promote_libheif' "$XBERG_WORK/promote-cache.sh"
 }
 
 run_cache_check() {
 	run bash -euo pipefail -c 'source "$1"; source "$2"' \
-		_ "$XBERG_WORK/libheif-checks.sh" "$XBERG_WORK/check-cache.sh"
+		_ "$XBERG_WORK/libheif-checks.sh" "$XBERG_WORK/check-cache.sh" "$XBERG_WORK/promote-cache.sh"
 	xberg_assert_status 0
 }
 
@@ -139,8 +142,8 @@ run_cache_check() {
 	prepare_cache_candidate
 	export LD_LIBRARY_PATH=':/opt/codecs::;/opt/extra:'
 	xberg_stub ldd '[[ "$1" == -r ]] || exit 2' \
-		'[[ "$2" == "$CACHE_CANDIDATE/lib/libheif.so.1" ]] || exit 3' \
-		'[[ "$LD_LIBRARY_PATH" == "$CACHE_CANDIDATE/lib:/opt/codecs:/opt/extra" ]] || exit 4' \
+		'[[ "$2" != "$CACHE_CANDIDATE/lib/libheif.so.1" && -f "$2" ]] || exit 3' \
+		'[[ "$LD_LIBRARY_PATH" == "${2%/*}" ]] || exit 4' \
 		'echo "libx265.so.199 => /usr/lib/libx265.so.199 (0x123)"'
 	export CACHE_CANDIDATE
 	run_cache_check
@@ -233,4 +236,23 @@ run_cache_promotion() {
 	expected="$(printf '%s\n' mkdir -p "$LIBHEIF_PREFIX" cp -P --parents --remove-destination -- lib/libheif.so.1 lib/libheif.so \
 		lib/pkgconfig/libheif.pc include/libheif/heif.h "$LIBHEIF_PREFIX/")"
 	[ "$(cat "$XBERG_TRACE")" = "$expected" ]
+}
+
+@test "install_linux should reject libheif that only links with an unpromoted x265 library" {
+	prepare_cache_candidate
+	touch "$CACHE_CANDIDATE/lib/libx265.so.215"
+	printf '%s\n' original >"$LIBHEIF_PREFIX/lib/libheif.so.1"
+	printf '%s\n' 'source "$3"' >>"$XBERG_WORK/check-cache.sh"
+	xberg_stub sudo 'printf "%s\n" "$@" >>"$XBERG_TRACE"; exit 1'
+	xberg_stub ldd 'probe_dir="${2%/*}"' \
+		'if [[ -f "$probe_dir/libx265.so.215" ]]; then' \
+		'  echo "libx265.so.215 => $probe_dir/libx265.so.215 (0x123)"' \
+		'else' \
+		'  echo "libx265.so.215 => not found"' \
+		'fi'
+	run_cache_check
+	xberg_assert_output_contains "libx265.so.215 => not found"
+	xberg_assert_output_contains "rebuilding"
+	[ ! -e "$XBERG_TRACE" ]
+	[ "$(cat "$LIBHEIF_PREFIX/lib/libheif.so.1")" = original ]
 }
