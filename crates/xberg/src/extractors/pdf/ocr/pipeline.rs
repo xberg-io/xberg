@@ -1149,7 +1149,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // decides each page on its OCR text alone and puts the layer first only on a replaced page.
     let mut noise_verdict_pages: std::collections::HashSet<u32> = std::collections::HashSet::new();
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-    let mut texture_noise_by_page = ahash::AHashMap::<u32, Vec<String>>::new();
+    let mut texture_noise_by_page = ahash::AHashMap::<u32, super::symbol_noise_lines::texture::Evidence>::new();
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let mut texture_work = super::hidden_layer::PreviewWorkBudget::new(config);
     // Pages whose calibrated mean confidence fell below `min_ocr_mean_confidence`.
@@ -3314,10 +3314,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 continue;
             }
             #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-            if let Some(candidates) = texture_noise_by_page.remove(page)
+            if let Some(evidence) = texture_noise_by_page.remove(page)
                 && !alternative_raster_pages.contains(page)
                 && !config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled())
+                && let Some(read) = ocr_results.get(page)
+                && let Some(document) = structured_ocr_pages.get(page)
             {
+                let candidates = evidence.reconciled_tokens(text, read, document);
                 let (removed, texture_removed) = super::symbol_noise_lines::texture::prune(
                     text,
                     ocr_results.get_mut(page),

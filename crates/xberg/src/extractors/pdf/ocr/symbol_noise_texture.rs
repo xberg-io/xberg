@@ -1,8 +1,6 @@
 //! Positive raster evidence for word-shaped OCR noise on repeating backgrounds.
 
-use super::{
-    is_prunable_element, is_symbol_noise_line, page_is_dominated_by_noise_lines, prune_document_elements, prune_text,
-};
+use super::{is_prunable_element, page_is_dominated_by_noise_lines, prune_document_elements, prune_text};
 use crate::pdf::structure::types::PdfParagraph;
 use crate::types::internal::InternalDocument;
 use crate::types::{ExtractedDocument, OcrBoundingGeometry, OcrElement, OcrElementLevel};
@@ -15,8 +13,9 @@ const SAMPLE_WIDTH: usize = 32;
 const SAMPLE_HEIGHT: usize = 16;
 const MAX_MEAN_DIFFERENCE: u32 = 25;
 const MIN_CONTRAST: u8 = 48;
+const MAX_SCALE_MISMATCH: f64 = 0.01;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct BoxInRaster {
     x: u32,
     y: u32,
@@ -72,30 +71,87 @@ fn candidate(line: &OcrElement) -> bool {
         && word.bytes().filter(|byte| matches!(byte, b'c' | b'e' | b'o')).count() * 4 >= word.len() * 3
 }
 
-fn sample(image: &image::RgbImage, rect: BoxInRaster, dx: i32, dy: i32) -> Option<[u8; SAMPLE_WIDTH * SAMPLE_HEIGHT]> {
-    let x = (rect.x.checked_add(rect.width / 2)?).checked_add_signed(dx)?;
-    let y = rect.y.checked_add_signed(dy)?;
-    let left = x.checked_sub(rect.width * 3 / 5)?;
-    let top = y.checked_sub(rect.height * 2)?;
-    let width = rect.width * 6 / 5;
-    let height = rect.height * 5;
-    if width < SAMPLE_WIDTH as u32
-        || height < SAMPLE_HEIGHT as u32
-        || left.checked_add(width)? > image.width()
-        || top.checked_add(height)? > image.height()
+type Sample = [u8; SAMPLE_WIDTH * SAMPLE_HEIGHT];
+
+impl BoxInRaster {
+    fn window(self, dx: i32, dy: i32) -> Option<Self> {
+        Some(Self {
+            x: self
+                .x
+                .checked_add(self.width / 2)?
+                .checked_add_signed(dx)?
+                .checked_sub(self.width * 3 / 5)?,
+            y: self.y.checked_add_signed(dy)?.checked_sub(self.height * 2)?,
+            width: self.width * 6 / 5,
+            height: self.height * 5,
+        })
+    }
+
+    fn overlaps(self, other: Self) -> bool {
+        self.x < other.x + other.width
+            && other.x < self.x + self.width
+            && self.y < other.y + other.height
+            && other.y < self.y + self.height
+    }
+}
+
+fn sample(image: &image::RgbImage, window: BoxInRaster) -> Option<Sample> {
+    if window.width < SAMPLE_WIDTH as u32
+        || window.height < SAMPLE_HEIGHT as u32
+        || window.x.checked_add(window.width)? > image.width()
+        || window.y.checked_add(window.height)? > image.height()
     {
         return None;
     }
     Some(std::array::from_fn(|i| {
-        let x = left + (i % SAMPLE_WIDTH) as u32 * width / SAMPLE_WIDTH as u32;
-        let y = top + (i / SAMPLE_WIDTH) as u32 * height / SAMPLE_HEIGHT as u32;
+        let x = window.x + (i % SAMPLE_WIDTH) as u32 * window.width / SAMPLE_WIDTH as u32;
+        let y = window.y + (i / SAMPLE_WIDTH) as u32 * window.height / SAMPLE_HEIGHT as u32;
         let [r, g, b] = image.get_pixel(x, y).0;
         ((u16::from(r) + u16::from(g) + u16::from(b)) / 3) as u8
     }))
 }
 
+fn sample_difference(target: &Sample, peer: &Sample) -> u32 {
+    target.iter().zip(peer).map(|(&a, &b)| u32::from(a.abs_diff(b))).sum()
+}
+
+fn collar_difference(target: &Sample, peer: &Sample) -> u32 {
+    target
+        .iter()
+        .zip(peer)
+        .enumerate()
+        .filter(|(i, _)| !(6..10).contains(&(i / SAMPLE_WIDTH)))
+        .map(|(_, (&a, &b))| u32::from(a.abs_diff(b)))
+        .sum()
+}
+
+fn best_peer(
+    image: &image::RgbImage,
+    peer: BoxInRaster,
+    dimensions: BoxInRaster,
+    target: &Sample,
+) -> Option<(BoxInRaster, Sample)> {
+    let peer = BoxInRaster {
+        width: dimensions.width,
+        height: dimensions.height,
+        ..peer
+    };
+    (-1..=1)
+        .flat_map(|dy| (-1..=1).map(move |dx| (dx, dy)))
+        .filter_map(|(dx, dy)| {
+            let window = peer.window(dx, dy)?;
+            let pixels = sample(image, window)?;
+            Some((window, pixels))
+        })
+        .min_by_key(|(_, pixels)| collar_difference(target, pixels))
+        .filter(|(_, pixels)| sample_difference(target, pixels) <= MAX_MEAN_DIFFERENCE * target.len() as u32)
+}
+
 fn matching_peers(image: &image::RgbImage, target: BoxInRaster, peers: impl Iterator<Item = BoxInRaster>) -> bool {
-    let Some(sampled) = sample(image, target, 0, 0) else {
+    let Some(window) = target.window(0, 0) else {
+        return false;
+    };
+    let Some(sampled) = sample(image, window) else {
         return false;
     };
     let Some((&low, &high)) = sampled.iter().min().zip(sampled.iter().max()) else {
@@ -104,24 +160,77 @@ fn matching_peers(image: &image::RgbImage, target: BoxInRaster, peers: impl Iter
     if high - low < MIN_CONTRAST {
         return false;
     }
-    peers
-        .filter(|peer| {
-            (-1..=1).any(|dy| {
-                (-1..=1).any(|dx| {
-                    sample(image, *peer, dx, dy).is_some_and(|pixels| {
-                        sampled
-                            .iter()
-                            .zip(pixels)
-                            .map(|(&a, b)| u32::from(a.abs_diff(b)))
-                            .sum::<u32>()
-                            <= MAX_MEAN_DIFFERENCE * sampled.len() as u32
-                    })
-                })
-            })
-        })
-        .take(MIN_PEERS)
-        .count()
-        == MIN_PEERS
+    let mut distinct = Vec::<(BoxInRaster, Sample)>::with_capacity(MIN_PEERS);
+    for peer in peers {
+        if let Some((donor, pixels)) = best_peer(image, peer, target, &sampled)
+            && !donor.overlaps(window)
+            && distinct.iter().all(|(previous, _)| !donor.overlaps(*previous))
+        {
+            distinct.push((donor, pixels));
+            if distinct.len() == MIN_PEERS {
+                return !has_local_residual(&sampled, &distinct);
+            }
+        }
+    }
+    false
+}
+
+fn has_local_residual(target: &Sample, donors: &[(BoxInRaster, Sample)]) -> bool {
+    // A localized mark can survive a low whole-window average. Test the OCR box interior
+    // against the full donor range so small registration differences do not become ink.
+    let mut outside = [false; SAMPLE_WIDTH * SAMPLE_HEIGHT];
+    for y in 6..10 {
+        for x in 3..SAMPLE_WIDTH - 3 {
+            let i = y * SAMPLE_WIDTH + x;
+            outside[i] = donors
+                .iter()
+                .all(|(_, pixels)| target[i] > pixels[i].saturating_add(20))
+                || donors
+                    .iter()
+                    .all(|(_, pixels)| pixels[i] > target[i].saturating_add(20));
+            if outside[i] && outside[i - 1] && outside[i - SAMPLE_WIDTH] && outside[i - SAMPLE_WIDTH - 1] {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+#[cfg(test)]
+tokio::task_local! {
+    static REPLAY: Option<ReplayTokens>;
+}
+
+#[cfg(test)]
+type ReplayTokens = std::sync::Arc<parking_lot::Mutex<Vec<String>>>;
+
+#[cfg(test)]
+#[path = "symbol_noise_texture_replay.rs"]
+mod public_replay;
+
+pub(in crate::extractors::pdf::ocr) struct Evidence {
+    transcript: blake3::Hash,
+    occurrences: Vec<Occurrence>,
+}
+
+struct Occurrence {
+    text: String,
+    geometry: OcrBoundingGeometry,
+}
+
+fn decoder_limits(
+    config: &crate::core::config::ExtractionConfig,
+    encoded: usize,
+    pixels: usize,
+) -> Option<crate::extractors::security::SecurityLimits> {
+    let mut limits = config.security_limits.clone().unwrap_or_default();
+    let cap = super::super::hidden_layer::preview_byte_limit(config);
+    if encoded.checked_add(pixels.checked_mul(3)?)? > cap {
+        return None;
+    }
+    // The standard decoder accounts for encoded bytes in its own peak estimate.
+    limits.max_content_size = cap;
+    Some(limits)
 }
 
 pub(in crate::extractors::pdf::ocr) fn capture(
@@ -129,26 +238,27 @@ pub(in crate::extractors::pdf::ocr) fn capture(
     read: &ExtractedDocument,
     config: &crate::core::config::ExtractionConfig,
     remaining_work: &mut usize,
-) -> Option<Vec<String>> {
+) -> Option<Evidence> {
+    #[cfg(test)]
+    if REPLAY.try_with(Option::is_none).unwrap_or(false) {
+        return None;
+    }
     let render = (raster.2, raster.3);
     let processed = super::super::document::processed_ocr_layout_dimensions(&read.metadata)?;
     let scale_x = f64::from(render.0) / f64::from(processed.0);
     let scale_y = f64::from(render.1) / f64::from(processed.1);
-    if (scale_x - scale_y).abs()
-        > scale_x.max(scale_y) * crate::extractors::image::MAX_OCR_COORDINATE_SCALE_RELATIVE_DIFFERENCE
-    {
+    if (scale_x - scale_y).abs() > scale_x.max(scale_y) * MAX_SCALE_MISMATCH {
         return None;
     }
     let px = u64::from(render.0) * u64::from(render.1);
-    let limits = config.security_limits.clone().unwrap_or_default();
     if px == 0
         || px > MAX_RASTER_PIXELS
-        || px * 3 > super::super::hidden_layer::preview_byte_limit(config) as u64
         || config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled())
         || !page_is_dominated_by_noise_lines(read.content.lines())
     {
         return None;
     }
+    let limits = decoder_limits(config, raster.1.len(), px as usize)?;
     let elements = read.ocr_elements.as_deref()?;
     let lines = elements.iter().filter(|line| line.level == OcrElementLevel::Line);
     if elements.len() > MAX_LINE_BOXES * 8 || lines.clone().take(MAX_LINE_BOXES + 1).count() > MAX_LINE_BOXES {
@@ -157,7 +267,7 @@ pub(in crate::extractors::pdf::ocr) fn capture(
     let boxes = lines
         .clone()
         .filter(|line| candidate(line))
-        .filter_map(|line| Some((line.text.trim(), BoxInRaster::from_line(line, processed, render)?)))
+        .filter_map(|line| Some((line, BoxInRaster::from_line(line, processed, render)?)))
         .take(MAX_CANDIDATES + 1)
         .collect::<Vec<_>>();
     if !(MIN_PEERS + 1..=MAX_CANDIDATES).contains(&boxes.len()) {
@@ -166,35 +276,88 @@ pub(in crate::extractors::pdf::ocr) fn capture(
     // Charge the worst-case pair and registration search before decoding.
     let comparisons = boxes.len().pow(2) * 9 * SAMPLE_WIDTH * SAMPLE_HEIGHT;
     *remaining_work = remaining_work.checked_sub(px as usize * 3 + comparisons)?;
-    let image = crate::extraction::image::load_image_for_ocr(&raster.1, &limits)
-        .ok()?
-        .into_rgb8();
+    let image = crate::extraction::image_decode::decode_standard_rgb8_with_security_limits(&raster.1, &limits).ok()?;
     if image.dimensions() != render {
         return None;
     }
-    let result = find_repeated_lines(&image, &boxes, lines);
-    (!result.is_empty()).then_some(result)
+    let occurrences = find_repeated_lines(&image, &boxes, lines);
+    (!occurrences.is_empty()).then(|| Evidence {
+        transcript: blake3::hash(read.content.as_bytes()),
+        occurrences,
+    })
 }
 
 fn find_repeated_lines<'a>(
     image: &image::RgbImage,
-    boxes: &[(&str, BoxInRaster)],
+    boxes: &[(&OcrElement, BoxInRaster)],
     lines: impl Iterator<Item = &'a OcrElement> + Clone,
-) -> Vec<String> {
+) -> Vec<Occurrence> {
     boxes
         .iter()
-        .filter(|&&(text, target)| {
-            lines.clone().filter(|line| line.text.trim() == text).take(2).count() == 1
+        .filter(|&&(line, target)| {
+            let text = line.text.trim();
+            let unique = lines.clone().filter(|line| line.text.trim() == text).take(2).count() == 1;
+            let matched = unique
                 && matching_peers(
                     image,
                     target,
                     boxes
                         .iter()
-                        .filter_map(|&(other, peer)| (text != other && target.peer(peer)).then_some(peer)),
-                )
+                        .filter_map(|&(other, peer)| (text != other.text.trim() && target.peer(peer)).then_some(peer)),
+                );
+            #[cfg(test)]
+            if REPLAY.try_with(Option::is_some).unwrap_or(false) && matches!(text, "ceeces" | "ccccee") {
+                eprintln!("raster {text}: box={target:?} unique={unique} matched={matched}");
+            }
+            matched
         })
-        .map(|&(text, _)| text.to_owned())
+        .map(|&(line, _)| Occurrence {
+            text: line.text.trim().to_owned(),
+            geometry: line.geometry.clone(),
+        })
         .collect()
+}
+
+impl Evidence {
+    pub(in crate::extractors::pdf::ocr) fn reconciled_tokens<'a>(
+        &'a self,
+        text: &str,
+        read: &str,
+        document: &InternalDocument,
+    ) -> Vec<&'a str> {
+        // A changed transcript can move a spelling from a clipped occurrence to a
+        // different owner. Require identity before consulting the published geometry.
+        if text != read || blake3::hash(read.as_bytes()) != self.transcript {
+            return Vec::new();
+        }
+        if !super::elements_are_prunable(document) {
+            return Vec::new();
+        }
+        let Some(elements) = document.prebuilt_ocr_elements.as_deref() else {
+            return Vec::new();
+        };
+        self.occurrences
+            .iter()
+            .filter(|source| {
+                let mut owners = elements
+                    .iter()
+                    .filter(|line| line.level == OcrElementLevel::Line && line.text.trim() == source.text);
+                let owned =
+                    owners.next().is_some_and(|line| line.geometry == source.geometry) && owners.next().is_none();
+                #[cfg(test)]
+                if REPLAY.try_with(Option::is_some).unwrap_or(false)
+                    && matches!(source.text.as_str(), "ceeces" | "ccccee")
+                {
+                    eprintln!(
+                        "reconciliation {}: geometry={:?} owned={owned}",
+                        source.text, source.geometry
+                    );
+                }
+                owned
+            })
+            .map(|source| source.text.as_str())
+            .collect()
+    }
 }
 
 pub(in crate::extractors::pdf::ocr) fn prune(
@@ -202,7 +365,7 @@ pub(in crate::extractors::pdf::ocr) fn prune(
     read: Option<&mut String>,
     paragraphs: Option<&mut Vec<PdfParagraph>>,
     document: Option<&mut InternalDocument>,
-    candidates: &[String],
+    candidates: &[&str],
 ) -> (usize, usize) {
     let owned = |candidate: &str| {
         unique(text.split_whitespace(), candidate)
@@ -219,11 +382,17 @@ pub(in crate::extractors::pdf::ocr) fn prune(
     // Reconcile against every text surface before changing any of them.
     let accepted = candidates
         .iter()
+        .copied()
         .filter(|text| owned(text))
-        .map(String::as_str)
         .collect::<Vec<_>>();
     let (pruned, removed) = prune_text(text);
     let (pruned, texture_removed) = strip_tokens(&pruned, &accepted);
+    #[cfg(test)]
+    let _ = REPLAY.try_with(|replay| {
+        if let Some(tokens) = replay {
+            tokens.lock().extend(accepted.iter().map(|token| (*token).to_owned()));
+        }
+    });
     *text = pruned;
     if let Some(read) = read {
         *read = strip_tokens(&prune_text(read).0, &accepted).0;
@@ -363,6 +532,11 @@ mod tests {
         });
         assert!(matching_peers(&texture, target, peers.into_iter()));
         assert!(!matching_peers(&texture, target, peers.into_iter().take(3)));
+        assert!(!matching_peers(
+            &texture,
+            target,
+            [rect(110), rect(111), rect(200), rect(201)].into_iter()
+        ));
         assert!(!matching_peers(&blank, target, peers.into_iter()));
         let mut different = texture;
         for y in 30..68 {
@@ -377,10 +551,7 @@ mod tests {
     fn unique_noise_token_is_removed_from_a_joined_read() {
         let mut output = format!("{FAINT_WORD} ccccee Nina");
         let mut read = format!("{FAINT_WORD}\nccccee\nNina");
-        assert_eq!(
-            prune(&mut output, Some(&mut read), None, None, &["ccccee".to_owned()]),
-            (0, 1)
-        );
+        assert_eq!(prune(&mut output, Some(&mut read), None, None, &["ccccee"]), (0, 1));
         assert_eq!(output, format!("{FAINT_WORD} Nina"));
         assert_eq!(read, format!("{FAINT_WORD}\nNina"));
     }
@@ -393,10 +564,7 @@ mod tests {
         ] {
             let mut output = input.to_owned();
             let mut read = format!("{FAINT_WORD}\nccccee\nNina");
-            assert_eq!(
-                prune(&mut output, Some(&mut read), None, None, &["ccccee".to_owned()]),
-                (0, 0)
-            );
+            assert_eq!(prune(&mut output, Some(&mut read), None, None, &["ccccee"]), (0, 0));
             assert_eq!(output, input);
             assert_eq!(read, format!("{FAINT_WORD}\nccccee\nNina"));
         }
@@ -411,5 +579,145 @@ pub(in crate::extractors::pdf::ocr) fn warning(page: u32, removed: usize) -> cra
              set prune_symbol_noise_lines to false to keep them."
         )
         .into(),
+    }
+}
+
+#[cfg(test)]
+mod revision_tests {
+    use super::*;
+
+    #[test]
+    fn localized_faint_ink_vetoes_same_pad_texture_match() {
+        let rect = |x| BoxInRaster {
+            x,
+            y: 45,
+            width: 72,
+            height: 8,
+        };
+        let mut texture = image::RgbImage::from_fn(480, 100, |x, _| {
+            let tone = if x % 90 < 45 { 48 } else { 160 };
+            image::Rgb([tone; 3])
+        });
+        let target = rect(20);
+        let peers = [rect(110), rect(200), rect(290), rect(380)];
+        assert!(matching_peers(&texture, target, peers.into_iter()));
+        for y in 44..54 {
+            for x in 32..43 {
+                texture.put_pixel(x, y, image::Rgb([78; 3]));
+            }
+        }
+        let reference = sample(&texture, rect(110).window(0, 0).unwrap()).unwrap();
+        let marked = sample(&texture, target.window(0, 0).unwrap()).unwrap();
+        assert!(sample_difference(&reference, &marked) <= MAX_MEAN_DIFFERENCE * marked.len() as u32);
+        assert!(!matching_peers(&texture, target, peers.into_iter()));
+    }
+
+    #[test]
+    fn surviving_margin_or_body_token_must_own_the_original_box_and_transcript() {
+        let make_line = |top| {
+            let mut line = OcrElement::new(
+                "ccccee",
+                OcrBoundingGeometry::Rectangle {
+                    left: 50,
+                    top,
+                    width: 72,
+                    height: 8,
+                },
+                crate::types::OcrConfidence::default(),
+            );
+            line.level = OcrElementLevel::Line;
+            line
+        };
+        let original = make_line(20);
+        let body = make_line(200);
+        let text = "ccccee genuine text";
+        let evidence = Evidence {
+            transcript: blake3::hash(text.as_bytes()),
+            occurrences: vec![Occurrence {
+                text: original.text.clone(),
+                geometry: original.geometry.clone(),
+            }],
+        };
+        let mut document = InternalDocument::new("pdf");
+        document.prebuilt_ocr_elements = Some(vec![body.clone()]);
+        assert!(evidence.reconciled_tokens(text, text, &document).is_empty());
+        document.prebuilt_ocr_elements = Some(vec![original.clone(), body]);
+        assert!(evidence.reconciled_tokens(text, text, &document).is_empty());
+        document.prebuilt_ocr_elements = Some(vec![original]);
+        assert!(
+            evidence
+                .reconciled_tokens("genuine text ccccee", text, &document)
+                .is_empty()
+        );
+        assert!(evidence.reconciled_tokens("ccccee", "ccccee", &document).is_empty());
+        assert_eq!(evidence.reconciled_tokens(text, text, &document), ["ccccee"]);
+    }
+
+    #[test]
+    fn decoder_receives_minimum_cap_and_charges_the_encoded_payload() {
+        use crate::core::config::{ExtractionConfig, OcrConfig};
+        use crate::extractors::security::SecurityLimits;
+
+        for (extraction, ocr) in [(100, 500), (500, 100)] {
+            let config = ExtractionConfig {
+                security_limits: Some(SecurityLimits {
+                    max_content_size: extraction,
+                    ..Default::default()
+                }),
+                ocr: Some(OcrConfig {
+                    security_limits: Some(SecurityLimits {
+                        max_content_size: ocr,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            assert!(decoder_limits(&config, 41, 20).is_none());
+            assert_eq!(decoder_limits(&config, 40, 20).unwrap().max_content_size, 100);
+            assert!(decoder_limits(&config, usize::MAX, 20).is_none());
+        }
+    }
+
+    #[test]
+    fn real_png_decode_rejects_combined_budget_one_byte_short() {
+        use image::{ExtendedColorType, ImageEncoder};
+
+        let mut encoded = Vec::new();
+        let rgb = [42; 12];
+        image::codecs::png::PngEncoder::new(&mut encoded)
+            .write_image(&rgb, 2, 2, ExtendedColorType::Rgb8)
+            .unwrap();
+        let cap = encoded.len() + rgb.len();
+        let config = |max_content_size| crate::core::config::ExtractionConfig {
+            ocr: Some(crate::core::config::OcrConfig {
+                security_limits: Some(crate::extractors::security::SecurityLimits {
+                    max_content_size,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(decoder_limits(&config(cap - 1), encoded.len(), 4).is_none());
+        let limits = decoder_limits(&config(cap), encoded.len(), 4).unwrap();
+        assert_eq!(
+            crate::extraction::image_decode::decode_standard_rgb8_with_security_limits(&encoded, &limits)
+                .unwrap()
+                .as_raw(),
+            &rgb
+        );
+    }
+
+    #[test]
+    fn removing_texture_conserves_every_other_token_and_separator() {
+        let gap = "\u{2003}\u{2003}";
+        assert_eq!(
+            strip_tokens(
+                &format!("ccccee café{gap}Nina ccccee\n\tother  prose\nccccee"),
+                &["ccccee"]
+            ),
+            (format!("café{gap}Nina\n\tother  prose"), 3),
+        );
     }
 }
