@@ -5,11 +5,13 @@
 //! wrong `ToUnicode` map fills the layer of an English page with Arabic or Bengali code points just
 //! the same. Where nothing but lost-glyph markers vouches for such a layer (no cluster structure
 //! to check), the page is read once in the configured languages, and the layer is given up only
-//! when the read is confident prose that spells none of the layer's script.
+//! when the read is confident prose that spells none of the layer's script. A page whose layer is
+//! drawn over a full-page picture is read with the English model whatever the configured languages,
+//! so the verdict depends on the page alone. ~keep
 
 use super::unreadable_script::{
-    NativeLayer, first_stage, judgeable_boundaries, ocr_dropped_native_script, page_is_scan, script_letters,
-    structured_scripts, uncovered_script_counts,
+    NativeLayer, first_stage, judgeable_boundaries, ocr_dropped_native_script, page_is_scan, page_reads_as_scan,
+    page_text, script_letters, structured_scripts, uncovered_script_counts,
 };
 use crate::core::config::ExtractionConfig;
 use crate::extractors::pdf::ocr::OcrFallbackDecision;
@@ -93,7 +95,7 @@ pub(super) fn unstructured_script_pages(
                 .find(|boundary| boundary.page_number == *page)
                 .and_then(|boundary| layer.text.get(boundary.byte_start..boundary.byte_end))
                 .is_some_and(|text| {
-                    text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER)
+                    text.contains(super::unmapped_glyphs::is_lost_glyph)
                         && uncovered_script_counts(text, &stage.languages)
                             .is_some_and(|counts| structured_scripts(text, counts).is_none())
                         && !layer_spells_read_scripts(text, &stage.languages)
@@ -148,7 +150,7 @@ fn read_is_prose(read: &str) -> bool {
 pub(super) fn read_contradicts_layer(native_page: &str, read: &str) -> bool {
     let native_letters = native_page
         .chars()
-        .filter(|c| c.is_alphabetic() && *c != super::unmapped_glyphs::LOST_GLYPH_MARKER)
+        .filter(|c| c.is_alphabetic() && !super::unmapped_glyphs::is_lost_glyph(*c))
         .count();
     let read_letters = read.chars().filter(|c| c.is_alphabetic()).count();
     native_letters > 0
@@ -231,17 +233,20 @@ fn warning(message: String) -> crate::types::ProcessingWarning {
 }
 
 /// The failing pages whose layer only its lost-glyph markers vouch for (see
-/// [`unstructured_script_pages`]) and whose ink an OCR read in the configured languages
-/// contradicts (see [`read_contradicts_layer`]): the script rule must leave them to OCR.
+/// [`unstructured_script_pages`]) and whose ink an OCR read contradicts (see
+/// [`read_contradicts_layer`]): the script rule must leave them to OCR.
 ///
 /// The read goes through the ordinary page route with noise discarding forced on, and only a read
-/// whose page confidence clears the acceptance gate counts. Scan pages are left out, since OCR
-/// reads them anyway. A document over the OCR preview size limit is not read, and a probe that
-/// fails leaves the layer native with a warning. Cancellation is returned as the error.
+/// whose page confidence clears the acceptance gate counts. Scan pages (see [`page_reads_as_scan`])
+/// are left out, since OCR reads them anyway. Each page whose layer is drawn over its full-page
+/// picture is read from a render without its pictures (see [`read_without_pictures`]), whatever the
+/// document's size: that render and read are bounded by the OCR working-byte budget. A document over
+/// the OCR preview size limit is not read through the page route, and a probe that fails leaves the
+/// layer native with a warning. Cancellation is returned as the error.
 ///
-/// Up to four pages spread across the candidates (first, last, evenly spaced) are read first; the
-/// rest of the first [`MAX_PROBED_PAGES`] candidates only if one of them is contradicted. A sentinel
-/// outside those first candidates is read in addition to the cap.
+/// Of the other pages, up to four spread across the candidates (first, last, evenly spaced) are
+/// read first; the rest of the first [`MAX_PROBED_PAGES`] candidates only if a page is
+/// contradicted. A sentinel outside those first candidates is read in addition to the cap.
 pub(super) async fn contradicted_pages(
     decision: &OcrFallbackDecision,
     layer: NativeLayer<'_>,
@@ -254,13 +259,6 @@ pub(super) async fn contradicted_pages(
     let (Some(boundaries), false) = (layer.boundaries, candidates.is_empty()) else {
         return Ok(outcome);
     };
-    if content.len() > super::ocr::preview_byte_limit(config) {
-        outcome.warnings.push(warning(format!(
-            "The ink of pages {candidates:?} was not checked against their text layer because the document \
-             exceeds the OCR preview size limit; their native text is kept."
-        )));
-        return Ok(outcome);
-    }
     let document = match xberg_native_pdf::PdfDocument::from_bytes(content.to_vec()) {
         Ok(document) => document,
         Err(error) => {
@@ -270,15 +268,34 @@ pub(super) async fn contradicted_pages(
     };
     let mut eligible: Vec<u32> = candidates
         .into_iter()
-        .filter(|page| *page > 0 && !page_is_scan(&document, *page as usize - 1))
+        .filter(|page| *page > 0 && !page_reads_as_scan(&document, *page as usize - 1, config))
         .collect();
     eligible.sort_unstable();
     eligible.dedup();
+    let (pictures, eligible): (Vec<u32>, Vec<u32>) = eligible
+        .into_iter()
+        .partition(|page| page_is_scan(&document, *page as usize - 1));
     let (probe_config, thresholds) = discarding_noise(config);
     let retention_limit = config.security_limits.clone().unwrap_or_default().max_content_size;
     outcome.reads = Some(std::sync::Arc::new(super::ocr::read_reuse::ProbeReads::new(
         retention_limit,
     )));
+    let probe = Probe {
+        layer: layer.text,
+        boundaries,
+        config: &probe_config,
+        thresholds: &thresholds,
+    };
+    read_without_pictures(&probe, &document, &pictures, &mut outcome).await?;
+    if content.len() > super::ocr::preview_byte_limit(config) {
+        if !eligible.is_empty() {
+            outcome.warnings.push(warning(format!(
+                "The ink of pages {eligible:?} was not checked against their text layer because the document \
+                 exceeds the OCR preview size limit; their native text is kept."
+            )));
+        }
+        return Ok(outcome);
+    }
     let mut probed: Vec<u32> = Vec::new();
     loop {
         let batch = next_batch(&eligible, &probed, !outcome.contradicted.is_empty());
@@ -286,58 +303,172 @@ pub(super) async fn contradicted_pages(
             return Ok(outcome);
         }
         probed.extend_from_slice(&batch);
-        let run = super::ocr::extract_mixed_ocr_native_with_probe_reads(
-            layer.text,
-            boundaries,
-            (&batch, &[]),
-            content,
-            &probe_config,
-            layout_pages,
-            (&[], &[], outcome.reads.clone()),
-        )
-        .await;
-        super::ensure_pdf_not_cancelled(config)?;
-        let run = match run {
-            Ok(run) => run,
-            Err(error) => {
-                tracing::debug!(%error, "script evidence kept the layer: the ink probe failed");
-                outcome.warnings.push(warning(format!(
-                    "The ink of pages {batch:?} could not be checked against their text layer ({error}); \
-                     their native text is kept."
-                )));
-                return Ok(outcome);
-            }
-        };
-        let (replacements, confidence) = (&run.output.1, &run.output.7);
-        let unread = unread_pages(&batch, confidence);
-        if !unread.is_empty() {
-            outcome.warnings.push(warning(format!(
-                "The ink of pages {unread:?} could not be checked against their text layer (the OCR read \
-                 failed); their native text is kept."
-            )));
+        if !read_through_page_route(&probe, &batch, content, layout_pages, &mut outcome).await? {
+            return Ok(outcome);
         }
-        let (uncalibrated, unscored) = unscored_pages(&batch, confidence);
-        if !uncalibrated.is_empty() {
-            outcome.warnings.push(warning(format!(
-                "The ink of pages {uncalibrated:?} could not be checked against their text layer because the \
-                 OCR backend reports no calibrated confidence; their native text is kept."
-            )));
-        }
-        if !unscored.is_empty() {
-            outcome.warnings.push(warning(format!(
-                "The ink of pages {unscored:?} could not be checked against their text layer (the OCR read \
-                 had no scored words); their native text is kept."
-            )));
-        }
-        outcome.contradicted.extend(batch.iter().copied().filter(|page| {
-            page_text(layer.text, boundaries, *page)
-                .zip(replacements.get(page))
-                .is_some_and(|(native, read)| {
-                    read_is_confident(confidence.get(page).and_then(|c| c.score), &thresholds)
-                        && read_contradicts_layer(native, read)
-                })
-        }));
     }
+}
+
+/// What the probe judges a read against: the native layer, and the config and thresholds it reads
+/// with (see [`discarding_noise`]).
+struct Probe<'a> {
+    layer: &'a str,
+    boundaries: &'a [PageBoundary],
+    config: &'a ExtractionConfig,
+    thresholds: &'a crate::core::config::OcrQualityThresholds,
+}
+
+/// Reads `pages` through the ordinary page route and judges the reads (see [`judge_reads`]). False
+/// when the run failed, after a warning that the layers are kept; an error when the extraction is
+/// cancelled.
+async fn read_through_page_route(
+    probe: &Probe<'_>,
+    pages: &[u32],
+    content: &[u8],
+    layout_pages: Option<&crate::core::layout_pages::LayoutPageSelection>,
+    outcome: &mut ProbeOutcome,
+) -> crate::Result<bool> {
+    let run = super::ocr::extract_mixed_ocr_native_with_probe_reads(
+        probe.layer,
+        probe.boundaries,
+        (pages, &[]),
+        content,
+        probe.config,
+        layout_pages,
+        (&[], &[], outcome.reads.clone()),
+    )
+    .await;
+    super::ensure_pdf_not_cancelled(probe.config)?;
+    Ok(match run {
+        Ok(run) => {
+            judge_reads(probe, pages, (&run.output.1, &run.output.7), outcome);
+            true
+        }
+        Err(error) => {
+            tracing::debug!(%error, "script evidence kept the layer: the ink probe failed");
+            outcome.warnings.push(warning(format!(
+                "The ink of pages {pages:?} could not be checked against their text layer ({error}); \
+                 their native text is kept."
+            )));
+            false
+        }
+    })
+}
+
+/// Reads each of `pages`, whose layer is drawn over a full-page picture, from a render without its
+/// pictures (see [`super::picture_layer::page_without_pictures`]) with the English reference reader
+/// (see [`reference_reader`]), and judges the reads (see [`judge_reads`]). The picture is left out
+/// because a textured picture turns the read of the glyphs on it into noise. A page whose render or
+/// read fails, as when the English model is missing and cannot be downloaded, has no verdict: it is
+/// listed as contradicted, so it is read as the scan it was taken for. An error when the extraction
+/// is cancelled. ~keep
+async fn read_without_pictures(
+    probe: &Probe<'_>,
+    document: &xberg_native_pdf::PdfDocument,
+    pages: &[u32],
+    outcome: &mut ProbeOutcome,
+) -> crate::Result<()> {
+    let reader = reference_reader(probe);
+    let (mut reads, mut confidence) = (ahash::AHashMap::new(), ahash::AHashMap::new());
+    for page in pages {
+        let Some(image) = super::picture_layer::page_without_pictures(document, *page as usize - 1, &reader) else {
+            continue;
+        };
+        let read = super::ocr::read_rendered_page(image, &reader).await;
+        super::ensure_pdf_not_cancelled(&reader)?;
+        match read {
+            Ok((read, page_confidence)) => {
+                reads.insert(*page, read);
+                confidence.extend(page_confidence.map(|page_confidence| (*page, page_confidence)));
+            }
+            Err(error) => tracing::debug!(%error, page, "script evidence could not read the page without pictures"),
+        }
+    }
+    let unread = unread_pages(pages, &confidence);
+    if !unread.is_empty() {
+        outcome.warnings.push(warning(format!(
+            "The ink of pages {unread:?} could not be read with the English OCR model to check their text \
+             layer; they are read as scans."
+        )));
+        outcome.contradicted.extend_from_slice(&unread);
+    }
+    let read: Vec<u32> = pages.iter().copied().filter(|page| !unread.contains(page)).collect();
+    judge_reads(probe, &read, (&reads, &confidence), outcome);
+    Ok(())
+}
+
+/// The config of the read that judges a layer drawn over a picture: the probe's config with OCR
+/// set to Tesseract's English model (`eng`, downloaded on first use like any language) and the
+/// probe's thresholds, whatever backend and languages the caller configured. The pipeline holds
+/// that one stage, so a weak read is judged as it is, never replaced by another backend's. The
+/// caller's model directory and OCR limits are kept. ~keep
+fn reference_reader(probe: &Probe<'_>) -> ExtractionConfig {
+    let mut reader = probe.config.clone();
+    let configured = reader.ocr.take().unwrap_or_default();
+    let latin = crate::core::config::OcrConfig::default();
+    let stage = crate::core::config::OcrPipelineStage {
+        backend: latin.backend.clone(),
+        priority: 100,
+        language: Some(latin.language.clone()),
+        tesseract_config: None,
+        paddle_ocr_config: None,
+        paddle_ocr_settings: None,
+        vlm_config: None,
+        backend_options: None,
+    };
+    reader.ocr = Some(crate::core::config::OcrConfig {
+        quality_thresholds: Some(probe.thresholds.clone()),
+        pipeline: Some(crate::core::config::OcrPipelineConfig {
+            stages: vec![stage],
+            quality_thresholds: probe.thresholds.clone(),
+        }),
+        tessdata_path: configured.tessdata_path,
+        security_limits: configured.security_limits,
+        ..latin
+    });
+    reader
+}
+
+/// Adds to `outcome` the pages of `pages` whose confident read contradicts their layer, and a
+/// warning for each kind of page that has no usable read: no read at all, a read whose backend
+/// reports no calibrated confidence, and a read with no scored words.
+fn judge_reads(
+    probe: &Probe<'_>,
+    pages: &[u32],
+    (reads, confidence): (
+        &ahash::AHashMap<u32, String>,
+        &ahash::AHashMap<u32, crate::types::page::PageOcrConfidence>,
+    ),
+    outcome: &mut ProbeOutcome,
+) {
+    let unread = unread_pages(pages, confidence);
+    if !unread.is_empty() {
+        outcome.warnings.push(warning(format!(
+            "The ink of pages {unread:?} could not be checked against their text layer (the OCR read \
+             failed); their native text is kept."
+        )));
+    }
+    let (uncalibrated, unscored) = unscored_pages(pages, confidence);
+    if !uncalibrated.is_empty() {
+        outcome.warnings.push(warning(format!(
+            "The ink of pages {uncalibrated:?} could not be checked against their text layer because the \
+             OCR backend reports no calibrated confidence; their native text is kept."
+        )));
+    }
+    if !unscored.is_empty() {
+        outcome.warnings.push(warning(format!(
+            "The ink of pages {unscored:?} could not be checked against their text layer (the OCR read \
+             had no scored words); their native text is kept."
+        )));
+    }
+    outcome.contradicted.extend(pages.iter().copied().filter(|page| {
+        page_text(probe.layer, probe.boundaries, *page)
+            .zip(reads.get(page))
+            .is_some_and(|(native, read)| {
+                read_is_confident(confidence.get(page).and_then(|c| c.score), probe.thresholds)
+                    && read_contradicts_layer(native, read)
+            })
+    }));
 }
 
 /// The config the probe reads with: suspected recognition noise is discarded whatever the caller
@@ -351,13 +482,6 @@ fn discarding_noise(config: &ExtractionConfig) -> (ExtractionConfig, crate::core
         ocr.quality_thresholds = Some(thresholds.clone());
     }
     (probe, thresholds)
-}
-
-fn page_text<'a>(text: &'a str, boundaries: &[PageBoundary], page: u32) -> Option<&'a str> {
-    boundaries
-        .iter()
-        .find(|boundary| boundary.page_number == page)
-        .and_then(|boundary| text.get(boundary.byte_start..boundary.byte_end))
 }
 
 #[cfg(test)]
@@ -501,5 +625,43 @@ mod tests {
         assert!(!read_is_prose(few_long), "thirteen short words hold too few long ones");
         assert!(!read_contradicts_layer(&layer, short));
         assert!(!read_contradicts_layer(&layer, few_long));
+    }
+
+    /// #2826: a layer over a picture is judged by Tesseract's English model whatever the caller
+    /// configured, in the caller's model directory and with the probe's thresholds.
+    #[test]
+    fn a_layer_over_a_picture_is_read_with_the_english_model_whatever_the_configured_languages() {
+        let configured = ExtractionConfig {
+            ocr: Some(crate::OcrConfig {
+                backend: "paddleocr".to_string(),
+                language: vec!["khm".to_string()],
+                tesseract_config: Some(crate::types::TesseractConfig {
+                    language: vec!["khm".to_string()],
+                    ..Default::default()
+                }),
+                tessdata_path: Some("/models".into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let (config, thresholds) = discarding_noise(&configured);
+        let probe = Probe {
+            layer: "",
+            boundaries: &[],
+            config: &config,
+            thresholds: &thresholds,
+        };
+        let reader = reference_reader(&probe);
+        let ocr = reader.ocr.as_ref().unwrap();
+        assert_eq!(ocr.backend, "tesseract");
+        assert_eq!(ocr.effective_tesseract_language(), ["eng"]);
+        assert_eq!(ocr.tessdata_path.as_deref(), Some(std::path::Path::new("/models")));
+        assert!(ocr.effective_thresholds().discard_suspected_ocr_noise);
+        let pipeline = ocr.effective_pipeline().expect("one fixed stage");
+        assert_eq!(pipeline.stages.len(), 1, "no other backend replaces a weak read");
+        let stage = crate::extractors::pdf::ocr::stage_model_inputs::StageModelInputs::new(ocr, &pipeline.stages[0]);
+        assert_eq!(stage.backend(), "tesseract");
+        assert_eq!(stage.languages(), ["eng"]);
+        assert!(pipeline.quality_thresholds.discard_suspected_ocr_noise);
     }
 }

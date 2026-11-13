@@ -1,13 +1,16 @@
 //! A replaced page keeps its readable text layer first when its OCR text is judged recognition
 //! noise, or when its OCR text confirms a layer that passes the per-page quality check.
 
-use super::document::{clean_native_page_layers, layer_lines_absent_from_ocr};
+use super::document::clean_native_page_layers;
 use super::scoring::native_layer_is_clean;
 use crate::core::config::OcrQualityThresholds;
 use crate::types::PageBoundary;
 
 #[path = "native_retention_stress_tests.rs"]
 mod native_retention_stress_tests;
+
+#[path = "misread_row_bound_tests.rs"]
+mod misread_row_bound_tests;
 
 #[path = "photo_layer_tests/review_2505.rs"]
 mod review_2505;
@@ -24,6 +27,11 @@ fn should_not_call_empty_or_symbol_only_text_a_clean_layer() {
     assert!(!native_layer_is_clean("-- | ~ ..", &thresholds));
 }
 
+/// The native rows of `layer` that the OCR text lacks, one per line. ~keep
+fn layer_lines_absent_from_ocr(layer: &str, ocr: &str) -> Option<String> {
+    super::document::layer_lines_absent_from_ocr(layer, ocr).map(|restore| restore.rows.join("\n"))
+}
+
 #[test]
 fn should_require_complete_source_rows_before_omitting_native_lines_without_geometry() {
     let ocr = "intro\nMEETING  notes!\nbody";
@@ -36,6 +44,83 @@ fn should_require_complete_source_rows_before_omitting_native_lines_without_geom
         layer_lines_absent_from_ocr("Meeting Notes\nBudget 2026", ocr).as_deref(),
         Some("Meeting Notes\nBudget 2026")
     );
+}
+
+/// The OCR text renders a recognised table as Markdown cell rows. A native row that such a row
+/// reads whole is covered; an empty cell adds no word, and the separator row covers nothing. ~keep
+#[test]
+fn should_read_a_markdown_table_row_of_the_ocr_text_as_the_plain_row_it_holds() {
+    let layer = "7 Elm Township 1,200,400 45\n8 Oak Township 950,300 38\nTotals --- ---";
+    let table = "| No |  | Township | Value |\n| --- | --- | --- | --- |\n| 7 | Elm Township | 1,200,400 | 45 |\n\
+                 | 8 | Oak Township | 950,300 | 39 |";
+    let restored = Some("8 Oak Township 950,300 38\nTotals --- ---");
+    assert_eq!(
+        layer_lines_absent_from_ocr(layer, table).as_deref(),
+        restored,
+        "the row the table reads whole is covered; the misread cell and the separator cover nothing"
+    );
+    let plain = "No Township Value\n7 Elm Township 1,200,400 45\n8 Oak Township 950,300 39";
+    assert_eq!(
+        layer_lines_absent_from_ocr(layer, plain).as_deref(),
+        restored,
+        "control: the same rows as plain OCR lines give the same answer"
+    );
+}
+
+/// With geometry, the cells of a recognised table have no OCR line box, so the geometry cannot
+/// place the native rows the table reads. The OCR text covers them: a row the table reads whole
+/// (a table border read as `\|` adds no word) is not put first, and the one row the table misreads
+/// is put first in place of its table row. ~keep
+#[test]
+fn should_hold_the_rows_the_geometry_cannot_place_against_the_ocr_table_text() {
+    use super::document::{PlainOcrRows, layer_lines_to_put_first, text_with_layer_first};
+    let table_rows = [
+        "7 Elm Township 1,200,400 45",
+        "8 Oak Township – 950,300 38",
+        "9 Ash Township 410,000 12",
+    ];
+    let layer: Vec<&str> = MINUTES[..3]
+        .iter()
+        .chain(&table_rows)
+        .chain(&MINUTES[3..])
+        .copied()
+        .collect();
+    let (before, after) = (MINUTES[..3].join("\n"), MINUTES[3..].join("\n"));
+    let ocr = format!(
+        "{before}\n| No | Township | Value | Seats |\n| --- | --- | --- | --- |\n\
+         | \\| 7 | Elm Township | 1,200,400 | 45 |\n| 8 | Oak Township - | 950,300 | 38 |\n\
+         | 9 | Ash Township | 410,000 | 13 |\n{after}"
+    );
+    // Only the plain OCR lines have a line box, on the rows of their layer lines. ~keep
+    let boxes = page_boxes(
+        &layer,
+        &lines_at_rows(&format!("{before}\n{after}"), &[0, 1, 2, 6, 7, 8, 9, 10]),
+    );
+    let first = layer_lines_to_put_first(
+        &layer.join("\n"),
+        &ocr,
+        false,
+        &OcrQualityThresholds::default(),
+        Some(&boxes),
+        PlainOcrRows::every(),
+    )
+    .expect("the misread row and the row with a wrong digit are put first");
+    assert_eq!(
+        first.lines, "8 Oak Township – 950,300 38\n9 Ash Township 410,000 12",
+        "the row the table reads whole is covered, the misread row and the row with a differing digit are not"
+    );
+    let merged = text_with_layer_first(&ocr, &first);
+    assert_eq!(
+        merged.matches("Oak Township").count(),
+        1,
+        "the table row that misreads a restored row (a dash read as a hyphen) is not printed beside it: {merged}"
+    );
+    assert_eq!(
+        merged.matches("Ash Township").count(),
+        2,
+        "a differing digit is no misread, both rows print: {merged}"
+    );
+    assert_eq!(merged.matches("Elm Township").count(), 1, "{merged}");
 }
 
 /// The letters of a layer word that occur in the OCR text only across a word boundary, or in a
@@ -673,6 +758,8 @@ fn misread_longest_word(line: &str) -> String {
 fn layer_first_fixture(layer: &str) -> super::document::LayerFirst {
     super::document::LayerFirst {
         lines: layer.to_string(),
+        lost_glyphs: 0,
+        misread_ocr_rows: Vec::new(),
     }
 }
 

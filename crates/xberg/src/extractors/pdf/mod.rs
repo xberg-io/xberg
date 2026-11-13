@@ -19,6 +19,8 @@ mod loses_whole_read_tests;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 mod mixed_tables;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+mod picture_layer;
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 mod unreadable_script;
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "tokio-runtime"))]
 pub(crate) use layout_runner::inherit_test_selected_page_detections;
@@ -74,8 +76,7 @@ fn boundaries_for_ocr_output(
     config: &ExtractionConfig,
 ) -> Option<Vec<crate::types::PageBoundary>> {
     match extraction_method {
-        ExtractionMethod::Native => native_boundaries.map(<[_]>::to_vec),
-        ExtractionMethod::Mixed => native_boundaries.map(|boundaries| {
+        ExtractionMethod::Native | ExtractionMethod::Mixed => native_boundaries.map(|boundaries| {
             replacements.map_or_else(
                 || boundaries.to_vec(),
                 |accepted| ocr::boundaries_after_replacements(boundaries, accepted),
@@ -311,7 +312,7 @@ fn enforce_page_limit(content: &[u8], config: &ExtractionConfig) -> Result<()> {
 /// propagates the identical error with `?`.
 ///
 /// Whitespace-only counts as nothing: a document yielding `"\n\n  "` is as total a loss as `""`.
-/// So does text of only U+FFFD: it is the same predicate that sends the page to OCR. ~keep
+/// So does text of only lost-glyph markers: it is the same predicate that sends the page to OCR. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn failed_ocr_fallback_is_total_loss(native_text: &str) -> bool {
     native_text_holds_no_content(native_text)
@@ -1048,12 +1049,14 @@ fn scanned_page_quality_gate_enabled(config: &ExtractionConfig) -> bool {
         .unwrap_or(config.ocr.is_some())
 }
 
-/// True when the native text is blank or holds only U+FFFD. The extractor keeps one U+FFFD for
-/// each Type0 glyph without a Unicode value, so a page that lost every glyph reads as U+FFFD
-/// and must count as absent text. ~keep
+/// True when the native text is blank or holds only lost-glyph markers. The extractor keeps one
+/// marker for each Type0 glyph without a Unicode value, so a page that lost every glyph reads as
+/// markers and must count as absent text. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn native_text_holds_no_content(native_text: &str) -> bool {
-    native_text.chars().all(|c| c.is_whitespace() || c == '\u{FFFD}')
+    native_text
+        .chars()
+        .all(|c| c.is_whitespace() || unmapped_glyphs::is_lost_glyph(c))
 }
 
 /// Whether the `Auto` near-empty fallback branch runs for this document.
@@ -2698,7 +2701,7 @@ fn whole_document_ocr_hints(
         && let Some([boundary]) = boundaries
         && boundary.page_number == 1
         && let Some(native) = native_text.get(boundary.byte_start..boundary.byte_end)
-        && native.contains(unmapped_glyphs::LOST_GLYPH_MARKER)
+        && native.contains(unmapped_glyphs::is_lost_glyph)
     {
         hints.get_or_insert_with(Default::default).single_native_type0_page = Some(native.into());
     }
@@ -3138,6 +3141,8 @@ impl PdfExtractor {
         let mut ocr_results_map: Option<ahash::AHashMap<u32, String>> = None;
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         let mut structured_ocr_pages: Option<ahash::AHashMap<u32, InternalDocument>> = None;
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+        let mut picture_pages = ahash::AHashMap::new();
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         let mut ocr_page_rasters: Option<Vec<crate::types::ExtractedImage>> = None;
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -3500,6 +3505,8 @@ impl PdfExtractor {
             #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
             let native_script_pages: Vec<u32> = Vec::new();
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            let mut picture_candidates = Vec::new();
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             let probe_reads = {
                 let layer = unreadable_script::NativeLayer {
                     text: &native_text,
@@ -3508,6 +3515,7 @@ impl PdfExtractor {
                 };
                 let ink = ink_probe::contradicted_pages(&decision, layer, content, config, layout_pages).await?;
                 let reads = ink.reads.filter(|reads| reads.finish(&ink.contradicted));
+                picture_candidates.clone_from(&decision.failing_pages);
                 crate::core::diagnostics::dedup_extend_warnings(&mut ocr_fallback_warnings, ink.warnings);
                 crate::core::diagnostics::dedup_extend_warnings(
                     &mut ocr_fallback_warnings,
@@ -3569,6 +3577,9 @@ impl PdfExtractor {
                 ocr::apply_flagged_pages(&mut decision, &outlined_ocr_pages, has_boundaries, None);
             }
 
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            picture_candidates.retain(|page| !decision.failing_pages.contains(page));
+
             tracing::debug!(
                 target: "xberg::pdf::ocr",
                 fallback = decision.fallback,
@@ -3619,7 +3630,7 @@ impl PdfExtractor {
             } else {
                 outcome
             };
-            match outcome {
+            let routed = match outcome {
                 ocr::OcrGateOutcome::SkipNonText => {
                     tracing::debug!(
                         alnum_ws_ratio,
@@ -4050,7 +4061,42 @@ impl PdfExtractor {
                         (native_text, ExtractionMethod::Native)
                     }
                 }
-            }
+            };
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+            let routed = {
+                let (mut text, mut method) = routed;
+                if method != ExtractionMethod::Ocr
+                    && !picture_candidates.is_empty()
+                    && let Some(bounds) = boundaries.as_deref()
+                {
+                    let current_bounds = ocr_results_map.as_ref().map_or_else(
+                        || bounds.to_vec(),
+                        |accepted| ocr::boundaries_after_replacements(bounds, accepted),
+                    );
+                    picture_pages = picture_layer::read_retained_picture_pages(
+                        content,
+                        &text,
+                        &current_bounds,
+                        &picture_candidates,
+                        ocr_results_map.as_ref(),
+                        config,
+                    )
+                    .await?;
+                    if !picture_pages.is_empty() {
+                        let additions = picture_pages
+                            .iter()
+                            .map(|(&page, read)| (page, read.transcript()))
+                            .collect();
+                        text = ocr::apply_ocr_page_replacements(&text, &current_bounds, &additions);
+                        ocr_results_map.get_or_insert_with(Default::default).extend(additions);
+                        if picture_pages.values().any(|page| page.raster.is_some()) {
+                            method = ExtractionMethod::Mixed;
+                        }
+                    }
+                }
+                (text, method)
+            };
+            routed
         } else {
             (native_text, ExtractionMethod::Native)
         };
@@ -4283,13 +4329,30 @@ impl PdfExtractor {
             page_structure.boundaries = boundaries.clone();
         }
         #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+        let selector_replacements = ocr_results_map.as_ref();
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+        let filtered_replacements;
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+        let selector_replacements = if picture_pages.is_empty() {
+            selector_replacements
+        } else {
+            filtered_replacements =
+                picture_layer::unapplied_replacements(pre_rendered_doc.as_mut(), &picture_pages, selector_replacements);
+            if extraction_method == ExtractionMethod::Native
+                && let (Some(document), Some(unapplied)) = (pre_rendered_doc.as_mut(), filtered_replacements.as_ref())
+            {
+                ocr::merge_ocr_pages_into_internal_document(document, unapplied);
+            }
+            filtered_replacements.as_ref()
+        };
+        #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
         let (mut doc, document_origin, document_is_structured) = select_pdf_document(
             extraction_method,
             &text,
             mime_type,
             pre_rendered_doc,
             ocr_internal_doc.take(),
-            ocr_results_map.as_ref(),
+            selector_replacements,
             structured_ocr_pages.as_ref(),
             selector_boundaries.as_deref(),
             &config.output_format,

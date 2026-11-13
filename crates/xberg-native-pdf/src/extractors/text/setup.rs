@@ -44,6 +44,7 @@ impl<'doc> TextExtractor<'doc> {
             font_provenance_cache: Default::default(),
             spans: Vec::new(),
             preserve_script_baselines: false,
+            skip_nonpainting_text: false,
             chars: Vec::new(),
             after_ligature: false,
             resources: None,

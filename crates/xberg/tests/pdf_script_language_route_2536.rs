@@ -2,6 +2,8 @@
 
 mod helpers;
 
+use helpers::pdf_picture::{PicturePlacement, with_full_page_picture, with_invisible_text};
+
 use xberg::core::config::{OcrStrategy, PageConfig};
 use xberg::types::{ExtractedDocument, ExtractionMethod};
 use xberg::{ExtractionConfig, OcrConfig, OutputFormat};
@@ -14,6 +16,98 @@ const KHMER_SHORT_FULLY_MAPPED: &[u8] = include_bytes!("fixtures/pdf/khmer-clust
 const KHMER_TEXT_WITH_FIGURE: &[u8] = include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-text-with-figure.pdf");
 const KHMER_THEN_SCANNED_ENGLISH: &[u8] =
     include_bytes!("fixtures/pdf/khmer-cluster-2536/khmer-then-scanned-english.pdf");
+
+const RASTER_BODY: &str = "20,000 bottles of water";
+const HIDDEN_SIDECAR: &str = "Stale sidecar transcript only";
+const NEIGHBOR_TEXT: &str = "The second page contains a separate native paragraph about the town library.";
+const FLYER_LINES: [&str; 4] = [
+    "Community water event this Saturday at the town hall.",
+    "Volunteers will hand out 20,000 bottles of water.",
+    "Bring a bag and a neighbour. Free parking behind the library.",
+    "Questions? Call the front desk on weekdays.",
+];
+
+/// Add native English lines without changing the original image or Khmer layer. ~keep
+fn with_native_english_lines(source: &[u8], lines: &[&str], render_mode: u8) -> Vec<u8> {
+    with_positioned_english_lines(source, lines, render_mode, 11, 24, "OverlayAcceptanceText")
+}
+
+fn with_positioned_english_lines(
+    source: &[u8],
+    lines: &[&str],
+    render_mode: u8,
+    font_size: u32,
+    y: u32,
+    resource: &str,
+) -> Vec<u8> {
+    use lopdf::{Document, Stream, dictionary};
+
+    let mut document = Document::load_mem(source).expect("load the overlay fixture");
+    let page = document.get_pages()[&1];
+    let font = document.add_object(dictionary! {
+        "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica",
+    });
+    let mut content = format!("BT /FixtureFont {font_size} Tf {render_mode} Tr 0 g 16 TL 0 64 Td\n");
+    for (index, line) in lines.iter().enumerate() {
+        if index > 0 {
+            content.push_str("T*\n");
+        }
+        content.push_str(&format!("({line}) Tj\n"));
+    }
+    content.push_str("ET\n");
+    let form = document.add_object(Stream::new(
+        dictionary! {
+            "Type" => "XObject",
+            "Subtype" => "Form",
+            "BBox" => vec![0.into(), 0.into(), 540.into(), 80.into()],
+            "Resources" => dictionary! { "Font" => dictionary! { "FixtureFont" => font } },
+        },
+        content.into_bytes(),
+    ));
+    document.add_xobject(page, resource, form).unwrap();
+    document
+        .add_page_contents(page, format!("q 1 0 0 1 36 {y} cm /{resource} Do Q\n").into_bytes())
+        .unwrap();
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+fn with_neighbor_page(source: &[u8]) -> Vec<u8> {
+    use lopdf::{Document, Stream, dictionary};
+
+    let mut document = Document::load_mem(source).unwrap();
+    let first = document.get_pages()[&1];
+    let parent = document
+        .get_dictionary(first)
+        .unwrap()
+        .get(b"Parent")
+        .unwrap()
+        .as_reference()
+        .unwrap();
+    let font = document.add_object(dictionary! {
+        "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica",
+    });
+    let contents = document.add_object(Stream::new(
+        dictionary! {},
+        format!("BT /FixtureFont 12 Tf 40 720 Td ({NEIGHBOR_TEXT}) Tj ET").into_bytes(),
+    ));
+    let page = document.add_object(dictionary! {
+        "Type" => "Page", "Parent" => parent, "Contents" => contents,
+        "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        "Resources" => dictionary! { "Font" => dictionary! { "FixtureFont" => font } },
+    });
+    let tree = document.get_dictionary_mut(parent).unwrap();
+    tree.get_mut(b"Kids").unwrap().as_array_mut().unwrap().push(page.into());
+    tree.set("Count", 2);
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+fn normalized_words(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
 
 fn khmer_count(text: &str) -> usize {
     text.chars().filter(|c| ('\u{1780}'..='\u{17ff}').contains(c)).count()
@@ -105,18 +199,177 @@ fn forced_ocr_still_replaces_the_page_so_the_automatic_result_is_the_routing() {
 }
 
 #[test]
-fn automatic_english_ocr_still_reads_a_scanned_page_that_carries_a_khmer_text_overlay() {
+fn automatic_english_ocr_still_reads_a_scanned_page_whose_khmer_layer_is_invisible() {
     let models = english_model();
-    let native = extract(SCANNED_ENGLISH_KHMER_OVERLAY, models.path(), |config| {
-        config.disable_ocr = true
-    });
+    let sidecar = with_invisible_text(SCANNED_ENGLISH_KHMER_OVERLAY);
+    let native = extract(&sidecar, models.path(), |config| config.disable_ocr = true);
     assert!(khmer_count(&native.content) > 0 && !native.content.contains("bottles"));
-    let automatic = extract(SCANNED_ENGLISH_KHMER_OVERLAY, models.path(), |_| {});
+    let automatic = extract(&sidecar, models.path(), |_| {});
     assert!(
         automatic.content.contains("20,000 bottles of water"),
         "the rasterised English body was not read: {:?}",
         automatic.content
     );
+}
+
+/// #2826: the visible stamp and the raster-only English body both belong to the page. ~keep
+#[test]
+fn automatic_english_ocr_keeps_a_khmer_stamp_drawn_over_a_scanned_page() {
+    let models = english_model();
+    let native = extract(SCANNED_ENGLISH_KHMER_OVERLAY, models.path(), |config| {
+        config.disable_ocr = true
+    });
+    assert_eq!(khmer_count(&native.content), 222, "{:?}", native.content);
+    let automatic = extract(SCANNED_ENGLISH_KHMER_OVERLAY, models.path(), |_| {});
+    assert!(!picture_warning(&automatic), "{:?}", automatic.processing_warnings);
+    for text in [&automatic.content, &automatic.pages.as_ref().unwrap()[0].content] {
+        assert_eq!(khmer_count(text), 222, "the visible Khmer stamp is retained: {text:?}");
+        assert_eq!(normalized_words(text).matches(RASTER_BODY).count(), 1, "{text:?}");
+    }
+}
+
+#[test]
+fn automatic_english_ocr_keeps_visible_stamp_and_raster_body_without_a_distinct_hidden_sidecar() {
+    let models = english_model();
+    let source = with_native_english_lines(SCANNED_ENGLISH_KHMER_OVERLAY, &[HIDDEN_SIDECAR], 3);
+    let source = with_neighbor_page(&source);
+    let native = extract(&source, models.path(), |config| config.disable_ocr = true);
+    assert_eq!(
+        khmer_count(&native.content),
+        222,
+        "the fixture still has the visible stamp"
+    );
+    assert!(normalized_words(&native.content).contains(HIDDEN_SIDECAR));
+    assert!(!normalized_words(&native.content).contains(RASTER_BODY));
+
+    for format in [OutputFormat::Plain, OutputFormat::Markdown] {
+        let automatic = extract(&source, models.path(), |config| config.output_format = format.clone());
+        let pages = automatic.pages.as_ref().unwrap();
+        assert_eq!(pages.len(), 2);
+        assert_eq!(normalized_words(&pages[1].content), NEIGHBOR_TEXT);
+        assert!(!pages[0].content.contains(NEIGHBOR_TEXT));
+        assert_eq!(automatic.content.matches(NEIGHBOR_TEXT).count(), 1);
+        if format == OutputFormat::Plain {
+            let boundaries = automatic.metadata.pages.as_ref().unwrap().boundaries.as_ref().unwrap();
+            assert_eq!(boundaries.len(), 2);
+            for (boundary, page) in boundaries.iter().zip(pages) {
+                assert_eq!(boundary.page_number, page.page_number);
+                assert_eq!(
+                    automatic.content.get(boundary.byte_start..boundary.byte_end),
+                    Some(page.content.as_str())
+                );
+            }
+        }
+        for text in [&automatic.content, &pages[0].content] {
+            assert_eq!(khmer_count(text), 222, "the visible Khmer stamp is retained: {text:?}");
+            let words = normalized_words(text);
+            assert!(!words.contains(HIDDEN_SIDECAR), "the stale sidecar is hidden: {text:?}");
+            assert_eq!(
+                words.matches(RASTER_BODY).count(),
+                1,
+                "the raster body is read once: {text:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn hidden_budget_heading_cannot_claim_the_painted_budget_paragraph() {
+    use xberg::types::document_structure::NodeContent;
+
+    let models = english_model();
+    let source = with_positioned_english_lines(SCANNED_ENGLISH_KHMER_OVERLAY, &["Budget"], 3, 34, 610, "HiddenBudget");
+    let source = with_positioned_english_lines(&source, &["Budget"], 0, 8, 24, "VisibleBudget");
+    let read = |disable_ocr| {
+        extract(&source, models.path(), |config| {
+            config.disable_ocr = disable_ocr;
+            config.output_format = OutputFormat::Markdown;
+            config.include_document_structure = true;
+        })
+    };
+    let native = read(true);
+    assert_eq!(native.content.matches("Budget").count(), 2, "{:?}", native.content);
+    let result = read(false);
+    assert_eq!(
+        result.extraction_method,
+        Some(ExtractionMethod::Mixed),
+        "{:?} {:?}",
+        result.processing_warnings,
+        result.content
+    );
+    let budget_bounds = |result: &ExtractedDocument| {
+        result
+            .document
+            .as_ref()
+            .unwrap()
+            .nodes
+            .iter()
+            .filter_map(|node| match &node.content {
+                NodeContent::Heading { text, .. } | NodeContent::Paragraph { text } if text.contains("Budget") => {
+                    Some((
+                        matches!(node.content, NodeContent::Heading { .. }),
+                        node.bbox.map(|bbox| bbox.y0),
+                    ))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let original = budget_bounds(&native);
+    assert!(
+        original
+            .iter()
+            .any(|&(heading, y)| heading && y.is_some_and(|y| y > 600.0)),
+        "{original:?}"
+    );
+    let kept = budget_bounds(&result);
+    assert_eq!(kept.len(), 1, "{kept:?}");
+    match kept[0] {
+        (_, Some(y)) => assert!(y < 100.0, "{kept:?}"),
+        (heading, None) => assert!(!heading, "fallback cannot carry the hidden heading"),
+    }
+    for text in [&result.content, &result.pages.as_ref().unwrap()[0].content] {
+        assert_eq!(text.matches("Budget").count(), 1, "{text:?}");
+        assert_eq!(khmer_count(text), 222, "{text:?}");
+        assert_eq!(normalized_words(text).matches(RASTER_BODY).count(), 1, "{text:?}");
+    }
+}
+
+#[test]
+fn rejected_raster_read_still_removes_the_distinct_nonpainting_sidecar() {
+    let models = english_model();
+    let source = with_native_english_lines(SCANNED_ENGLISH_KHMER_OVERLAY, &[HIDDEN_SIDECAR], 3);
+    let result = extract(&source, models.path(), |config| {
+        config.ocr.as_mut().unwrap().quality_thresholds = Some(xberg::core::config::OcrQualityThresholds {
+            min_ocr_mean_confidence: 100.0,
+            ..Default::default()
+        });
+    });
+    assert_eq!(result.extraction_method, Some(ExtractionMethod::Native));
+    for text in [&result.content, &result.pages.as_ref().unwrap()[0].content] {
+        assert_eq!(khmer_count(text), 222, "{text:?}");
+        assert!(!normalized_words(text).contains(HIDDEN_SIDECAR), "{text:?}");
+        assert!(!normalized_words(text).contains(RASTER_BODY), "{text:?}");
+    }
+}
+
+/// #2826: an OCR sidecar much longer than a Khmer stamp drawn visibly over the same picture does
+/// not make the page a scan: invisible glyphs count on neither side of the share over the picture.
+#[test]
+fn automatic_english_ocr_keeps_a_khmer_stamp_beside_a_longer_invisible_sidecar() {
+    let models = english_model();
+    let page = with_full_page_picture(COMPLETE, PicturePlacement::BesideSidecar);
+    let native = extract(&page, models.path(), |config| config.disable_ocr = true);
+    assert!(khmer_count(&native.content) >= 222, "{:?}", native.content);
+    let automatic = extract(&page, models.path(), |_| {});
+    assert_eq!(
+        khmer_count(&automatic.content),
+        222,
+        "retain the visible stamp without copies from the hidden sidecar: {:?}",
+        automatic.content
+    );
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
+    assert!(!picture_warning(&automatic), "{:?}", automatic.processing_warnings);
 }
 
 #[test]
@@ -165,7 +418,11 @@ fn automatic_ocr_through_an_english_only_pipeline_keeps_the_khmer_page() {
 #[test]
 fn a_scanned_page_with_a_khmer_layer_read_with_english_warns_to_add_khm() {
     let models = english_model();
-    let automatic = extract(SCANNED_ENGLISH_KHMER_OVERLAY, models.path(), |_| {});
+    let automatic = extract(
+        &with_invisible_text(SCANNED_ENGLISH_KHMER_OVERLAY),
+        models.path(),
+        |_| {},
+    );
     let warnings: Vec<_> = automatic
         .processing_warnings
         .iter()
@@ -207,7 +464,8 @@ fn the_scan_page_warning_names_the_stage_language_when_the_first_stage_sets_one(
     let pipeline = serde_json::json!({"stages": [
         {"backend": "tesseract", "priority": 100, "language": ["eng"]},
     ]});
-    let automatic = extract(SCANNED_ENGLISH_KHMER_OVERLAY, models.path(), |config| {
+    let sidecar = with_invisible_text(SCANNED_ENGLISH_KHMER_OVERLAY);
+    let automatic = extract(&sidecar, models.path(), |config| {
         config.ocr.as_mut().unwrap().pipeline = Some(serde_json::from_value(pipeline).unwrap());
     });
     let warnings = khmer_warnings(&automatic);
@@ -387,4 +645,92 @@ fn a_khmer_stage_before_an_english_stage_reads_a_page_that_lost_glyphs_with_ocr(
         "{:?}",
         automatic.processing_warnings
     );
+}
+
+fn picture_warning(document: &ExtractedDocument) -> bool {
+    document
+        .processing_warnings
+        .iter()
+        .any(|w| w.source == "ocr" && w.message.contains("carries a picture"))
+}
+
+#[test]
+fn automatic_english_ocr_keeps_a_khmer_layer_drawn_over_a_full_page_picture() {
+    let models = english_model();
+    let flyer = with_full_page_picture(COMPLETE, PicturePlacement::Background);
+    let native = extract(&flyer, models.path(), |config| config.disable_ocr = true);
+    assert_eq!(khmer_count(&native.content), 222, "{:?}", native.content);
+    for keep_native_content in [false, true] {
+        let automatic = extract(&flyer, models.path(), |config| {
+            config.pages.as_mut().unwrap().keep_native_content = keep_native_content;
+        });
+        let pages = automatic.pages.as_ref().unwrap();
+        assert_eq!(khmer_count(&pages[0].content), 222, "{:?}", automatic.content);
+        assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
+        assert!(!picture_warning(&automatic), "{:?}", automatic.processing_warnings);
+        assert_eq!(
+            khmer_warnings(&automatic).len(),
+            1,
+            "{:?}",
+            automatic.processing_warnings
+        );
+    }
+}
+
+#[test]
+fn automatic_english_ocr_keeps_the_original_english_and_khmer_flyer_words() {
+    let models = english_model();
+    let flyer = with_full_page_picture(COMPLETE, PicturePlacement::Background);
+    let flyer = with_native_english_lines(&flyer, &FLYER_LINES, 0);
+    let native = extract(&flyer, models.path(), |config| config.disable_ocr = true);
+    assert_eq!(khmer_count(&native.content), 222);
+    let words = normalized_words(&native.content);
+    for line in FLYER_LINES {
+        assert_eq!(
+            words.matches(line).count(),
+            1,
+            "the native fixture spells {line:?}: {words:?}"
+        );
+    }
+
+    let automatic = extract(&flyer, models.path(), |_| {});
+    assert_eq!(automatic.extraction_method, Some(ExtractionMethod::Native));
+    for text in [&automatic.content, &automatic.pages.as_ref().unwrap()[0].content] {
+        assert_eq!(khmer_count(text), 222, "{text:?}");
+        let words = normalized_words(text);
+        for line in FLYER_LINES {
+            assert_eq!(words.matches(line).count(), 1, "original flyer line {line:?}: {text:?}");
+        }
+    }
+}
+
+#[test]
+fn automatic_english_ocr_still_reads_a_picture_over_or_under_an_invisible_khmer_layer() {
+    let models = english_model();
+    for placement in [
+        PicturePlacement::Cover,
+        PicturePlacement::BehindInvisibleLayer,
+        PicturePlacement::BehindWhiteLayer,
+        PicturePlacement::BehindClippedLayer,
+        PicturePlacement::WhiteLayerOverDarkPicture,
+        PicturePlacement::BlackLayerOverBlackPicture,
+    ] {
+        let source = with_full_page_picture(COMPLETE, placement);
+        // The warning names a Khmer layer the rule saw, so the layer was read and the picture won. ~keep
+        let automatic = extract(&source, models.path(), |_| {});
+        assert!(
+            picture_warning(&automatic),
+            "{placement:?}: {:?}",
+            automatic.processing_warnings
+        );
+        // On an all-black page the OCR route still returns the layer's text, so only the warning shows the route. ~keep
+        if !matches!(placement, PicturePlacement::BlackLayerOverBlackPicture) {
+            assert_eq!(
+                khmer_count(&automatic.content),
+                0,
+                "{placement:?}: {:?}",
+                automatic.content
+            );
+        }
+    }
 }

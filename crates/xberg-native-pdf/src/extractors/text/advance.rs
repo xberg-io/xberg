@@ -176,6 +176,7 @@ impl<'doc> TextExtractor<'doc> {
                             }
                             w_sum += w;
                         }
+                        let decoded = without_symbol_marker(decoded);
                         let char_count = decoded.chars().count();
                         if char_count > 0 {
                             let per_char = w_sum / char_count as f32;
@@ -206,7 +207,7 @@ impl<'doc> TextExtractor<'doc> {
                         // Rare: multi-char mapping or unmapped byte ~keep
                         if let Some(s) = font.char_to_unicode(byte as u32) {
                             if s != "\u{FFFD}" || preserve_unmapped_glyphs() {
-                                for ch in s.chars() {
+                                for ch in mark_inline_symbol_loss(s, font).chars() {
                                     if ch >= '\x20' || ch == '\t' || ch == '\n' || ch == '\r' {
                                         buffer.unicode.push(ch);
                                     }
@@ -215,7 +216,7 @@ impl<'doc> TextExtractor<'doc> {
                         } else {
                             let fb = fallback_extraction_char_to_unicode(buffer.unmapped_type3, byte as u32);
                             if fb != "\u{FFFD}" || preserve_unmapped_glyphs() {
-                                for ch in fb.chars() {
+                                for ch in mark_inline_symbol_loss(fb, font).chars() {
                                     if ch >= '\x20' || ch == '\t' || ch == '\n' || ch == '\r' {
                                         buffer.unicode.push(ch);
                                     }
@@ -380,6 +381,7 @@ impl<'doc> TextExtractor<'doc> {
                                     }
                                     w_sum += w;
                                 }
+                                let decoded = without_symbol_marker(decoded);
                                 let char_count = decoded.chars().count();
                                 if char_count > 0 {
                                     let per_char = w_sum / char_count as f32;
@@ -436,7 +438,7 @@ impl<'doc> TextExtractor<'doc> {
                         buffer.unicode.push(c);
                     } else if let Some(s) = font.char_to_unicode(byte as u32) {
                         if s != "\u{FFFD}" || preserve_unmapped_glyphs() {
-                            for ch in s.chars() {
+                            for ch in mark_inline_symbol_loss(s, font).chars() {
                                 if ch >= '\x20' || ch == '\t' || ch == '\n' || ch == '\r' {
                                     buffer.unicode.push(ch);
                                 }
@@ -445,7 +447,7 @@ impl<'doc> TextExtractor<'doc> {
                     } else {
                         let fb = fallback_extraction_char_to_unicode(buffer.unmapped_type3, byte as u32);
                         if fb != "\u{FFFD}" || preserve_unmapped_glyphs() {
-                            for ch in fb.chars() {
+                            for ch in mark_inline_symbol_loss(fb, font).chars() {
                                 if ch >= '\x20' || ch == '\t' || ch == '\n' || ch == '\r' {
                                     buffer.unicode.push(ch);
                                 }
@@ -659,7 +661,7 @@ impl<'doc> TextExtractor<'doc> {
 
         tracing::trace!(target: LOG_TARGET, "PUSH space span with offset_semantic={}", span.offset_semantic);
 
-        self.push_span(span);
+        self.push_span(span, state.render_mode);
 
         // Do NOT advance the text matrix here. The caller drives the
         // matrix forward by the *actual* TJ offset via
@@ -945,7 +947,7 @@ impl<'doc> TextExtractor<'doc> {
                 span.offset_semantic
             );
 
-            self.push_span(span);
+            self.push_span(span, buffer.render_mode);
         }
         Ok(())
     }

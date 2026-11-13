@@ -165,6 +165,8 @@ pub(crate) fn clean_native_page_layers(
         let Some(layer) = native_text.get(boundary.byte_start..boundary.byte_end) else {
             continue;
         };
+        // The layer keeps its markers: a row is matched against OCR rows with each marker run read
+        // as an unknown run, and the markers are stripped only from the rows put first. ~keep
         if super::scoring::native_layer_is_clean(layer, thresholds) {
             layers.insert(boundary.page_number, layer.trim().to_string());
         }
@@ -226,21 +228,465 @@ pub(super) fn marker_native_ink_layers(
 mod marker_native_ink_layers_tests;
 
 /// Native rows without an equal whole OCR row, consuming each OCR occurrence once. Case and
-/// whitespace may differ; signs, units, punctuation and order remain source evidence. ~keep
+/// whitespace may differ; signs, units, punctuation and order remain source evidence. A native row
+/// put first takes with it the unused OCR row that misreads it best of the few nearest to it in
+/// length, so that row is not printed (`MisreadCandidates::take_best`). ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(crate) fn layer_lines_absent_from_ocr(layer: &str, ocr_text: &str) -> Option<String> {
-    let mut available: ahash::AHashMap<String, usize> = ahash::AHashMap::new();
-    for line in ocr_text.lines().map(line_key).filter(|line| !line.is_empty()) {
-        *available.entry(line).or_default() += 1;
+pub(crate) fn layer_lines_absent_from_ocr<'a>(layer: &'a str, ocr_text: &str) -> Option<RowsToRestore<'a>> {
+    // Each OCR row key with the index of its line in `ocr_text`. ~keep
+    let (lines, ocr): (Vec<usize>, Vec<String>) = ocr_text
+        .lines()
+        .map(line_key)
+        .enumerate()
+        .filter(|(_, key)| !key.is_empty())
+        .unzip();
+    let mut unused: ahash::AHashMap<&str, std::collections::VecDeque<usize>> = ahash::AHashMap::new();
+    for (at, line) in ocr.iter().enumerate() {
+        unused.entry(line.as_str()).or_default().push_back(at);
     }
-    let mut kept = Vec::new();
-    for line in layer.lines().map(str::trim).filter(|line| !line.is_empty()) {
-        match available.get_mut(&line_key(line)) {
-            Some(count) if *count > 0 => *count -= 1,
-            _ => kept.push(line),
+    let rows: Vec<&str> = layer_source_rows(layer).collect();
+    let mut used = vec![false; ocr.len()];
+    let mut covered = vec![false; rows.len()];
+    // Equal rows take their OCR occurrences first, so a marked row never takes the read of an
+    // equal one. ~keep
+    for (row, line) in rows.iter().enumerate() {
+        if let Some(at) = unused
+            .get_mut(line_key(line).as_str())
+            .and_then(std::collections::VecDeque::pop_front)
+        {
+            used[at] = true;
+            covered[row] = true;
         }
     }
-    (!kept.is_empty()).then(|| kept.join("\n"))
+    for (row, line) in rows.iter().enumerate() {
+        if covered[row] {
+            continue;
+        }
+        let Some(pattern) = marked_row_pattern(&line_key(line), true) else {
+            continue;
+        };
+        if let Some(at) = (0..ocr.len()).find(|at| !used[*at] && pattern.is_match(&ocr[*at])) {
+            used[at] = true;
+            covered[row] = true;
+        }
+    }
+    let candidates = MisreadCandidates::new(ocr.iter().map(String::as_str));
+    let mut pool = candidates.pool(&used);
+    let mut misread = Vec::new();
+    for (row, line) in rows.iter().enumerate() {
+        if covered[row] {
+            continue;
+        }
+        if let Some(at) = candidates.take_best(&mut pool, &NativeRow::new(&line_key(line), true), row) {
+            misread.push(MisreadOcrRow::at_line(lines[at], &ocr[at]));
+        }
+    }
+    let rows: Vec<&str> = rows
+        .iter()
+        .zip(&covered)
+        .filter(|(_, covered)| !**covered)
+        .map(|(row, _)| *row)
+        .collect();
+    (!rows.is_empty()).then_some(RowsToRestore { rows, misread })
+}
+/// The native rows to put first on a page, and the OCR rows that misread one of them, which are
+/// not printed beside it. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[derive(Debug, Default, PartialEq)]
+pub(crate) struct RowsToRestore<'a> {
+    pub(crate) rows: Vec<&'a str>,
+    pub(crate) misread: Vec<MisreadOcrRow>,
+}
+/// One OCR row that misreads a native row put first: the page it was matched on (`None` for a
+/// one-page document), the index of its line in the page's OCR text, and its key (`line_key`).
+/// A boxed row also carries its page-point geometry for the structured view. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct MisreadOcrRow {
+    pub(crate) page: Option<u32>,
+    pub(crate) line: Option<usize>,
+    pub(crate) bbox: Option<LineBox>,
+    pub(crate) key: String,
+}
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl MisreadOcrRow {
+    fn at_line(line: usize, key: &str) -> Self {
+        Self {
+            page: None,
+            line: Some(line),
+            bbox: None,
+            key: key.to_string(),
+        }
+    }
+}
+/// The least similarity of the folded characters of two rows at which an OCR row reads as a
+/// misread of a native row. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+const MISREAD_ROW_SIMILARITY: f64 = 0.9;
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
+thread_local! {
+    /// How many row similarity tests this thread ran: the work a page's misread matching costs. ~keep
+    pub(crate) static MISREAD_SIMILARITY_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many OCR rows the native rows of this thread read as misread candidates: only rows whose
+    /// length can reach the similarity count. ~keep
+    pub(crate) static MISREAD_CANDIDATES_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+/// The parts of a row that the misread test compares: its letters and digits with case,
+/// punctuation and whitespace folded away, their count, its letter runs (`letter_runs`) and its
+/// tokens that hold a numeric character (a digit, `²`). ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+struct RowShape {
+    folded: String,
+    length: usize,
+    runs: Vec<String>,
+    numbers: Vec<String>,
+}
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl RowShape {
+    fn new(text: &str) -> Self {
+        let folded: String = text
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect();
+        let numbers = text
+            .split_whitespace()
+            .filter(|token| token.chars().any(char::is_numeric))
+            .map(str::to_owned)
+            .collect();
+        Self {
+            length: folded.chars().count(),
+            folded,
+            runs: letter_runs(text),
+            numbers,
+        }
+    }
+}
+/// The highest similarity that two folded rows of these lengths can reach: the edit distance is at
+/// least the difference of the lengths. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn similarity_bound(native: usize, read: usize) -> f64 {
+    let longer = native.max(read);
+    1.0 - (longer - native.min(read)) as f64 / longer.max(1) as f64
+}
+/// A native row as the misread test reads it, built once per row: its readable text without
+/// lost-glyph markers, and the pattern of a row that glued the read of a lost symbol glyph at a
+/// word edge to the word (`glued_symbol_row_pattern`), such as `oyes no` for `<s>yes no`. `whole`
+/// as for `marked_row_pattern`. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+struct NativeRow {
+    shape: RowShape,
+    runs: ahash::AHashSet<String>,
+    tokens: ahash::AHashSet<String>,
+    glued: Option<regex::Regex>,
+}
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl NativeRow {
+    fn new(key: &str, whole: bool) -> Self {
+        let native = super::super::unmapped_glyphs::readable_text(key);
+        let shape = RowShape::new(&native);
+        Self {
+            runs: shape.runs.iter().cloned().collect(),
+            tokens: native.split_whitespace().map(str::to_owned).collect(),
+            shape,
+            glued: glued_symbol_row_pattern(key, whole),
+        }
+    }
+    /// The score at which the OCR row `ocr_key` misreads this row, or `None`: its similarity, or
+    /// `MISREAD_ROW_SIMILARITY` for a row that only the glued pattern matches. ~keep
+    fn misread_score(&self, ocr_key: &str, ocr: &RowShape) -> Option<f64> {
+        self.similarity(ocr).or_else(|| {
+            self.glued
+                .as_ref()
+                .is_some_and(|pattern| pattern.is_match(ocr_key))
+                .then_some(MISREAD_ROW_SIMILARITY)
+        })
+    }
+    /// The similarity of an OCR row that misreads this row, or `None`. The two rows must agree on
+    /// their folded characters to a similarity of at least `MISREAD_ROW_SIMILARITY` (`cm3` reads
+    /// as `cm’`); every letter word of the OCR row, one letter included, must be in the native row,
+    /// so the OCR row adds no word that the native row lacks; and every numeric token of the OCR
+    /// row must be a token of the native row, sign and unit included, so `Total 100` is no misread
+    /// of `Total -100` and both rows print. The length, word and number checks run first: each is
+    /// cheap, and the edit distance runs only for a pair that passes them. ~keep
+    fn similarity(&self, ocr: &RowShape) -> Option<f64> {
+        let (native, read) = (self.shape.length, ocr.length);
+        if native == 0 || read == 0 || similarity_bound(native, read) < MISREAD_ROW_SIMILARITY {
+            return None;
+        }
+        if !ocr.runs.iter().all(|run| self.runs.contains(run))
+            || !ocr.numbers.iter().all(|token| self.tokens.contains(token))
+        {
+            return None;
+        }
+        #[cfg(test)]
+        MISREAD_SIMILARITY_CALLS.with(|calls| calls.set(calls.get() + 1));
+        let score = strsim::normalized_levenshtein(&self.shape.folded, &ocr.folded);
+        (score >= MISREAD_ROW_SIMILARITY).then_some(score)
+    }
+}
+/// How many unused OCR rows one native row reads for its misread: half of them the rows nearest
+/// to it in folded length, the rest the rows nearest to its place in reading order. The cap bounds
+/// the work of a page to this many similarity tests per native row, whatever its rows. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+const MISREAD_CANDIDATE_CAP: usize = 16;
+/// The OCR rows of a page that a native row can misread, each read once. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+struct MisreadCandidates<'k> {
+    keys: Vec<&'k str>,
+    shapes: Vec<RowShape>,
+}
+/// The OCR rows that no native row has taken yet, by `(folded length, row)` and by row: a native
+/// row reads the rows nearest to its own length and place, and the row it takes leaves the pool. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+struct MisreadPool {
+    by_length: std::collections::BTreeSet<(usize, usize)>,
+    by_place: std::collections::BTreeSet<usize>,
+}
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl<'k> MisreadCandidates<'k> {
+    fn new(keys: impl IntoIterator<Item = &'k str>) -> Self {
+        let keys: Vec<&str> = keys.into_iter().collect();
+        let shapes: Vec<RowShape> = keys.iter().map(|key| RowShape::new(key)).collect();
+        Self { keys, shapes }
+    }
+    /// Whether OCR row `at` misreads `native`. ~keep
+    fn misreads(&self, native: &NativeRow, at: usize) -> bool {
+        native.misread_score(self.keys[at], &self.shapes[at]).is_some()
+    }
+    /// The OCR rows that `used` leaves free, for the native rows that look for their misread. ~keep
+    fn pool(&self, used: &[bool]) -> MisreadPool {
+        let by_place: std::collections::BTreeSet<usize> = (0..self.shapes.len())
+            .filter(|at| !used.get(*at).copied().unwrap_or(true))
+            .collect();
+        let by_length = by_place.iter().map(|&at| (self.shapes[at].length, at)).collect();
+        MisreadPool { by_length, by_place }
+    }
+    /// The OCR row of `pool` that misreads `native` best, taken out of the pool. A native row reads
+    /// at most `MISREAD_CANDIDATE_CAP` rows. The first half are the rows of the lengths nearest to
+    /// its folded length (the longer on a tie); only lengths that can reach the similarity count,
+    /// unless it has a glued pattern, which ignores the length. The rest are the rows nearest to
+    /// `row`, its place in reading order. Of the rows read, the highest score wins, then the least
+    /// distance from `row`. ~keep
+    fn take_best(&self, pool: &mut MisreadPool, native: &NativeRow, row: usize) -> Option<usize> {
+        let length = native.shape.length;
+        let glued = native.glued.is_some();
+        let reaches = |read: usize| glued || similarity_bound(length, read) >= MISREAD_ROW_SIMILARITY;
+        let mut read: Vec<usize> = Vec::with_capacity(MISREAD_CANDIDATE_CAP);
+        let mut longer = pool.length_from(length).filter(|next| reaches(*next));
+        let mut shorter = pool.length_below(length).filter(|next| reaches(*next));
+        while read.len() < MISREAD_CANDIDATE_CAP / 2 {
+            let level = match (longer, shorter) {
+                (Some(long), Some(short)) if long - length > length - short => short,
+                (Some(long), _) => long,
+                (None, Some(short)) => short,
+                (None, None) => break,
+            };
+            let room = MISREAD_CANDIDATE_CAP / 2 - read.len();
+            read.extend(pool.at_length(level).take(room));
+            if level >= length {
+                longer = pool.length_above(level).filter(|next| reaches(*next));
+            } else {
+                shorter = pool.length_below(level).filter(|next| reaches(*next));
+            }
+        }
+        let room = MISREAD_CANDIDATE_CAP - read.len();
+        let near: Vec<usize> = pool
+            .nearest_in_place(row)
+            .filter(|at| !read.contains(at))
+            .take(room)
+            .collect();
+        read.extend(near);
+        let mut best: Option<(f64, usize, usize)> = None;
+        for at in read {
+            if !reaches(self.shapes[at].length) {
+                continue;
+            }
+            #[cfg(test)]
+            MISREAD_CANDIDATES_READ.with(|count| count.set(count.get() + 1));
+            let Some(score) = native.misread_score(self.keys[at], &self.shapes[at]) else {
+                continue;
+            };
+            let distance = row.abs_diff(at);
+            if best.is_none_or(|(top, near, _)| score > top || (score == top && distance < near)) {
+                best = Some((score, distance, at));
+            }
+        }
+        let (_, _, at) = best?;
+        pool.by_length.remove(&(self.shapes[at].length, at));
+        pool.by_place.remove(&at);
+        Some(at)
+    }
+}
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl MisreadPool {
+    /// The least folded length in the pool that is `length` or more. ~keep
+    fn length_from(&self, length: usize) -> Option<usize> {
+        self.by_length.range((length, 0)..).next().map(|(read, _)| *read)
+    }
+    /// The least folded length in the pool above `length`. ~keep
+    fn length_above(&self, length: usize) -> Option<usize> {
+        length.checked_add(1).and_then(|next| self.length_from(next))
+    }
+    /// The greatest folded length in the pool below `length`. ~keep
+    fn length_below(&self, length: usize) -> Option<usize> {
+        self.by_length.range(..(length, 0)).next_back().map(|(read, _)| *read)
+    }
+    /// The rows of folded length `length`, in reading order. ~keep
+    fn at_length(&self, length: usize) -> impl Iterator<Item = usize> + '_ {
+        self.by_length
+            .range((length, 0)..=(length, usize::MAX))
+            .map(|(_, at)| *at)
+    }
+    /// The rows of the pool, the nearest to `row` first. ~keep
+    fn nearest_in_place(&self, row: usize) -> impl Iterator<Item = usize> + '_ {
+        nearest_first(
+            row,
+            self.by_place.range(row..).copied(),
+            self.by_place.range(..row).rev().copied(),
+        )
+    }
+}
+/// The rows of `after` (from `row` up) and `before` (from below `row` down), merged so that the
+/// nearest to `row` comes first, the earlier on a tie. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn nearest_first(
+    row: usize,
+    after: impl Iterator<Item = usize>,
+    before: impl Iterator<Item = usize>,
+) -> impl Iterator<Item = usize> {
+    let (mut after, mut before) = (after.peekable(), before.peekable());
+    std::iter::from_fn(move || match (after.peek(), before.peek()) {
+        (Some(&late), Some(&early)) if late - row >= row - early => before.next(),
+        (Some(_), _) => after.next(),
+        (None, _) => before.next(),
+    })
+}
+/// The runs of letters in a text, lowercase, one letter included: `12 cm3` holds the one run `cm`,
+/// and `c total` the runs `c` and `total`. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn letter_runs(text: &str) -> Vec<String> {
+    text.split(|c: char| !c.is_alphabetic())
+        .filter(|run| !run.is_empty())
+        .map(str::to_lowercase)
+        .collect()
+}
+/// The OCR rows of a page that plain OCR text holds, by row key (`line_key`): an OCR row that
+/// misreads a native row leaves the page only when one of these holds it. A row inside a table
+/// cell, a heading, an annotated or an anchored element stays beside the native row. Without a
+/// structured document every row of the OCR text is plain. `page` is the page the rows come
+/// from, `None` for every page of a one-page document. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(crate) struct PlainOcrRows {
+    page: Option<u32>,
+    rows: Option<KeyCounts>,
+}
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl PlainOcrRows {
+    /// Every OCR row is plain: the page has no structured document. ~keep
+    pub(crate) fn every() -> Self {
+        Self { page: None, rows: None }
+    }
+    /// The rows of the unannotated OCR text elements of `page` in `doc`, or of every page when
+    /// `page` is `None`. `None` for `doc` is a page without a structured document. ~keep
+    #[cfg(feature = "pdf")]
+    pub(crate) fn of_page(doc: Option<&crate::types::internal::InternalDocument>, page: Option<u32>) -> Self {
+        let Some(doc) = doc else {
+            return Self::every();
+        };
+        let keys = doc
+            .elements
+            .iter()
+            .filter(|element| page.is_none_or(|page| element.page == Some(page)))
+            .filter(|element| unannotated_ocr_text(element))
+            .flat_map(|element| element.text.lines().map(line_key));
+        Self {
+            page,
+            rows: Some(KeyCounts::new(keys)),
+        }
+    }
+    /// Without the `pdf` feature no element kind of a page is known as plain OCR text: no misread
+    /// row leaves. ~keep
+    #[cfg(not(feature = "pdf"))]
+    pub(crate) fn of_page(_: Option<&crate::types::internal::InternalDocument>, page: Option<u32>) -> Self {
+        Self {
+            page,
+            rows: Some(KeyCounts::new([])),
+        }
+    }
+    /// Whether a plain OCR row has the key, which then spends that row. ~keep
+    fn take(&mut self, key: &str) -> bool {
+        match &mut self.rows {
+            None => true,
+            Some(counts) => counts.take(key),
+        }
+    }
+}
+/// The source rows of a layer: trimmed, and holding a character that is not a lost-glyph marker.
+/// A row of markers alone has no text to restore and reads as no OCR row. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn layer_source_rows(layer: &str) -> impl Iterator<Item = &str> {
+    layer.lines().map(str::trim).filter(|line| {
+        line.chars()
+            .any(|c| !c.is_whitespace() && !super::super::unmapped_glyphs::is_lost_glyph(c))
+    })
+}
+/// The pattern an OCR row key must match to read a marked layer row key: each run of markers is one
+/// unknown run of characters with no space inside it, which may be empty and takes the space on
+/// each side of it. So `approved <m> the` reads as `approved - the` and as `approved the`, and
+/// `nor<m>hern` reads as `northern`. A run of symbol-font markers at a word edge (`<s>yes`,
+/// `yes <s>`) is a glyph that is no letter of the word: it reads as one optional whole OCR token,
+/// so `o yes` and `yes` read `<s>yes` and `oyes` does not. Every other character must be equal and
+/// in order. `whole` anchors the pattern at both ends of the OCR row; otherwise it may match any
+/// run of whole words inside it. `None` for a key without a marker. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn marked_row_pattern(key: &str, whole: bool) -> Option<regex::Regex> {
+    marked_row_pattern_reading(key, whole, false)
+}
+/// The pattern of a marked row key with each symbol run read as a text run, which lets an OCR row
+/// glue the glyph's read to a word: that row is the misread of the native row, not its cover.
+/// `None` for a key without a symbol run. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn glued_symbol_row_pattern(key: &str, whole: bool) -> Option<regex::Regex> {
+    key.contains(super::super::unmapped_glyphs::LOST_SYMBOL_GLYPH_MARKER)
+        .then(|| marked_row_pattern_reading(key, whole, true))
+        .flatten()
+}
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn marked_row_pattern_reading(key: &str, whole: bool, symbols_glue: bool) -> Option<regex::Regex> {
+    const UNKNOWN_RUN: &str = " ?[^ ]* ?";
+    let is_lost_glyph = super::super::unmapped_glyphs::is_lost_glyph;
+    let symbol_marker = super::super::unmapped_glyphs::LOST_SYMBOL_GLYPH_MARKER;
+    if !key.contains(is_lost_glyph) {
+        return None;
+    }
+    let mut pattern = String::from(if whole { "^" } else { "(?:^| )" });
+    let mut rest = key.trim();
+    while let Some(start) = rest.find(is_lost_glyph) {
+        let end = rest[start..]
+            .find(|c: char| !is_lost_glyph(c))
+            .map_or(rest.len(), |run| start + run);
+        let (before, run, after) = (&rest[..start], &rest[start..end], &rest[end..]);
+        let at_word_edge = before.is_empty() || before.ends_with(' ') || after.is_empty() || after.starts_with(' ');
+        pattern.push_str(&regex::escape(before.trim()));
+        let token = if before.trim().is_empty() {
+            "(?:[^ ]+ )?"
+        } else if after.trim().is_empty() {
+            "(?: [^ ]+)?"
+        } else {
+            "(?: [^ ]+)? "
+        };
+        let symbol = run.chars().all(|c| c == symbol_marker);
+        pattern.push_str(if symbol && at_word_edge && !symbols_glue {
+            token
+        } else {
+            UNKNOWN_RUN
+        });
+        rest = after;
+    }
+    pattern.push_str(&regex::escape(rest.trim()));
+    pattern.push_str(if whole { "$" } else { "(?: |$)" });
+    regex::Regex::new(&pattern).ok()
 }
 /// The whole words of a text: runs of letters and digits, lowercase. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
@@ -268,7 +714,8 @@ const MIN_NUMBER_ONLY_LAYER_WORDS: usize = 3;
 /// quality check runs last, and only for a layer that the words confirm. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn ocr_confirms_layer(layer: &str, ocr_text: &str, thresholds: &OcrQualityThresholds) -> bool {
-    let all_words: std::collections::HashSet<String> = whole_words(layer).collect();
+    let layer = super::super::unmapped_glyphs::readable_text(layer);
+    let all_words: std::collections::HashSet<String> = whole_words(&layer).collect();
     let lettered: std::collections::HashSet<String> = all_words
         .iter()
         .filter(|word| word.chars().any(char::is_alphabetic))
@@ -284,7 +731,7 @@ pub(crate) fn ocr_confirms_layer(layer: &str, ocr_text: &str, thresholds: &OcrQu
     };
     holds_half(&all_words)
         && holds_half(&lettered)
-        && !evaluate_native_text_for_ocr(layer, Some(1), thresholds).fallback
+        && !evaluate_native_text_for_ocr(&layer, Some(1), thresholds).fallback
 }
 /// Whether the OCR text holds at least half of the layer's words with a letter: the letter share
 /// of `ocr_confirms_layer` without its share of all words and its quality check, so numbers the
@@ -421,6 +868,21 @@ fn no_ocr_rich_assets_besides_tables(doc: &crate::types::internal::InternalDocum
         && doc.processing_warnings.is_empty()
         && doc.ocr_page_failures.is_empty()
         && doc.uris_dropped == 0
+}
+
+/// Whether a misread OCR row may leave `element`: plain OCR text only (`PlainOcrRows`). Without
+/// the `pdf` feature no element kind is known as plain, and no misread row names an element. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn holds_plain_ocr_rows(element: &crate::types::internal::InternalElement) -> bool {
+    #[cfg(feature = "pdf")]
+    {
+        unannotated_ocr_text(element)
+    }
+    #[cfg(not(feature = "pdf"))]
+    {
+        let _ = element;
+        false
+    }
 }
 
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
@@ -660,6 +1122,20 @@ pub(in crate::extractors::pdf) fn native_preservation_is_automatic(config: &Extr
         })
 }
 
+/// Whether a page with lost-glyph markers is judged on its readable text when OCR may replace it.
+/// Only a page the run keeps native automatically qualifies (not forced, no configured pipeline, no
+/// hidden-layer probe), and only when the same page's ink corroborates its native text: the
+/// markers alone prove a loss, not that what remains is right. ~keep
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(super) fn marked_page_is_judged_on_readable_text(
+    config: &ExtractionConfig,
+    page: u32,
+    probing_hidden_layer: bool,
+    ink_corroborated: bool,
+) -> bool {
+    ink_corroborated && !probing_hidden_layer && native_preservation_is_automatic(config, page)
+}
+
 /// The share of a read's distinct meaningful words the native text must also spell before the
 /// native layer counts as the page's visible content. It sits below the share the legitimate
 /// Type0 pages of `pdf_cid_glyph_raster_2309` reach and above none, which a covered layer beside
@@ -707,12 +1183,11 @@ pub(super) fn read_words_in_native(
     placed_words: &std::collections::HashSet<String>,
     thresholds: &OcrQualityThresholds,
 ) -> ReadWordsInNative {
-    use super::super::unmapped_glyphs::LOST_GLYPH_MARKER;
+    use super::super::unmapped_glyphs::is_lost_glyph;
 
     let spaced = |word: &String| !word.chars().any(is_unspaced_script);
-    let spelled: std::collections::HashSet<String> = whole_words(&native.replace(LOST_GLYPH_MARKER, ""))
-        .filter(spaced)
-        .collect();
+    let spelled: std::collections::HashSet<String> =
+        whole_words(&native.replace(is_lost_glyph, "")).filter(spaced).collect();
     let distinct: std::collections::HashSet<String> = whole_words(read)
         .filter(spaced)
         .filter(|word| word.chars().count() >= thresholds.min_meaningful_word_len)
@@ -750,9 +1225,9 @@ fn unspaced_bigrams(text: &str) -> std::collections::HashSet<(char, char)> {
 /// lost-glyph markers removed from the native text as for words. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 pub(super) fn read_bigrams_in_native(native: &str, read: &str) -> (usize, usize) {
-    use super::super::unmapped_glyphs::LOST_GLYPH_MARKER;
+    use super::super::unmapped_glyphs::is_lost_glyph;
 
-    let spelled = unspaced_bigrams(&native.replace(LOST_GLYPH_MARKER, ""));
+    let spelled = unspaced_bigrams(&native.replace(is_lost_glyph, ""));
     let distinct = unspaced_bigrams(read);
     (
         distinct.iter().filter(|bigram| spelled.contains(*bigram)).count(),
@@ -818,9 +1293,9 @@ pub(super) fn type0_native_is_corroborated(
 /// Compare recoverable native word occurrences only after the same page render lost Type0 ink. ~keep
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 pub(super) fn native_survives_type0_ink_loss(native: &str, read: &str, thresholds: &OcrQualityThresholds) -> bool {
-    use super::super::unmapped_glyphs::{LOST_GLYPH_MARKER, strip_native_fragment};
+    use super::super::unmapped_glyphs::{is_lost_glyph, strip_native_fragment};
 
-    if !native.contains(LOST_GLYPH_MARKER) {
+    if !native.contains(is_lost_glyph) {
         return false;
     }
     let mut cleaned = native.to_owned();
@@ -852,12 +1327,21 @@ pub(super) fn native_survives_type0_ink_loss(native: &str, read: &str, threshold
 pub(crate) struct LayerFirst {
     /// Native source rows whose complete literal coverage is unproved, one per line. ~keep
     pub(crate) lines: String,
+    /// The lost-glyph markers stripped from `lines`: the glyphs the restored rows lack. ~keep
+    pub(crate) lost_glyphs: usize,
+    /// The OCR rows that misread a row of `lines`: each leaves the OCR text and the structured
+    /// page of its own page once, so the row is printed once, as the native read it. ~keep
+    pub(crate) misread_ocr_rows: Vec<MisreadOcrRow>,
 }
-/// Literal source identity normalizes case and whitespace but preserves semantic delimiters.
-/// Fuzzy page confirmation uses `whole_words` separately. ~keep
+/// Literal source identity normalizes case, whitespace and the Markdown cell delimiter (`|`, and
+/// `\|` for a cell that holds one), so that a table row of the OCR text keys like the plain native
+/// row it reads; every other delimiter stays. Fuzzy page confirmation uses `whole_words`
+/// separately. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn line_key(line: &str) -> String {
-    line.split_whitespace()
+    line.replace("\\|", " ")
+        .split(|c: char| c.is_whitespace() || c == '|')
+        .filter(|word| !word.is_empty())
         .map(str::to_lowercase)
         .collect::<Vec<_>>()
         .join(" ")
@@ -934,7 +1418,7 @@ pub(crate) struct PageLineBoxes {
 /// lower coordinate on the vertical axis: both sides of a merge give their boxes in the same
 /// bottom-left frame, so the overlap test does not depend on which way the axis runs. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn segments_line_at(segments: &[crate::pdf::hierarchy::SegmentData]) -> Option<LineAt> {
+fn segments_line_at(segments: &[crate::pdf::hierarchy::SegmentData], strip_markers: bool) -> Option<LineAt> {
     let mut bbox: Option<LineBox> = None;
     for segment in segments {
         let next = LineBox {
@@ -958,6 +1442,13 @@ fn segments_line_at(segments: &[crate::pdf::hierarchy::SegmentData]) -> Option<L
         .map(|segment| segment.text.as_str())
         .collect::<Vec<_>>()
         .join(" ");
+    // A native box is keyed on its readable text, so a row whose segments break at a marker
+    // still finds its box. ~keep
+    let text = if strip_markers {
+        super::super::unmapped_glyphs::readable_text(&text).into_owned()
+    } else {
+        text
+    };
     let line = LineAt::new(&text, bbox?);
     (!line.key.is_empty()).then_some(line)
 }
@@ -983,17 +1474,17 @@ pub(crate) fn page_line_boxes(
             (last.baseline_y - segment.baseline_y).abs() <= SAME_LINE_BASELINE_SHARE * last.height.max(1.0)
         });
         if !same_line && !run.is_empty() {
-            layer.extend(segments_line_at(&run));
+            layer.extend(segments_line_at(&run, true));
             run.clear();
         }
         run.push(segment.clone());
     }
-    layer.extend(segments_line_at(&run));
+    layer.extend(segments_line_at(&run, true));
     let (scale_x, scale_y) = ocr_scale;
     let ocr: Vec<LineAt> = ocr
         .iter()
         .flat_map(|paragraph| paragraph.lines.iter())
-        .filter_map(|line| segments_line_at(&line.segments))
+        .filter_map(|line| segments_line_at(&line.segments, false))
         .map(|line| LineAt {
             bbox: LineBox {
                 left: line.bbox.left * scale_x,
@@ -1044,6 +1535,9 @@ impl OcrRowIndex {
 /// Geometry establishes the row; ordered literal tokens establish complete native coverage. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn owned_row_covers_source(source: &str, read: &str) -> bool {
+    if let Some(pattern) = marked_row_pattern(source, false) {
+        return pattern.is_match(read);
+    }
     let source: Vec<_> = source.split_whitespace().collect();
     let read: Vec<_> = read.split_whitespace().collect();
     !source.is_empty() && read.windows(source.len()).any(|window| window == source)
@@ -1054,25 +1548,43 @@ fn owned_row_covers_source(source: &str, read: &str) -> bool {
 /// key, and takes a unique unused OCR line of its band whose place that box owns and that is
 /// not an exact read of another layer line. The line is missing when the owned OCR line lacks
 /// ordered literal coverage. An owned OCR row with complete native coverage needs no
-/// restoration, and all OCR payload remains unchanged. A known native box without an owned OCR occurrence is
-/// missing even if equal words appear elsewhere. A line without a native box is unproved and
-/// retained without deleting OCR. A line-wise test
-/// keeps an OCR-only line that holds the words of the layer line elsewhere on the page from
-/// masking the layer line. ~keep
+/// restoration. A line that the geometry cannot place (no native box with its text, or no single
+/// owned OCR line) is missing unless one OCR line holds it whole in words that no other layer
+/// line took. A line-wise test keeps the words of a layer line spread over several OCR lines
+/// from masking the layer line. A missing line takes with it the OCR line that misreads it: its
+/// owned line, or for an unplaced line the unused OCR line that misreads it best of the few
+/// nearest to it in length (`MisreadCandidates::take_best`); every other OCR line remains.
+/// `row_lines` holds the line of each OCR row in the page's OCR text (`boxed_row_lines`). ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-fn layer_lines_missing_and_owned(layer: &str, boxes: &PageLineBoxes) -> String {
+fn layer_lines_missing_and_owned<'a>(
+    layer: &'a str,
+    boxes: &PageLineBoxes,
+    row_lines: &[Option<usize>],
+) -> RowsToRestore<'a> {
     let layer_keys: std::collections::HashSet<String> = layer.lines().map(line_key).collect();
     let index = OcrRowIndex::new(&boxes.ocr);
+    let candidates = MisreadCandidates::new(boxes.ocr.iter().map(|line| line.key.as_str()));
+    let misread_at = |at: usize| MisreadOcrRow {
+        page: None,
+        line: row_lines.get(at).copied().flatten(),
+        bbox: Some(boxes.ocr[at].bbox),
+        key: boxes.ocr[at].key.clone(),
+    };
     let mut layer_boxes: ahash::AHashMap<&str, std::collections::VecDeque<usize>> = ahash::AHashMap::new();
     for (at, line) in boxes.layer.iter().enumerate() {
         layer_boxes.entry(line.key.as_str()).or_default().push_back(at);
     }
     let mut ocr_used = vec![false; boxes.ocr.len()];
+    let mut read = OcrRowSpans::new(&boxes.ocr);
     let mut missing = Vec::new();
-    for line in layer.lines().map(str::trim).filter(|line| !line.is_empty()) {
+    let mut misread = Vec::new();
+    let mut unplaced = Vec::new();
+    for (row, line) in layer_source_rows(layer).enumerate() {
         let key = line_key(line);
+        // The native boxes are keyed on their readable text (see `segments_line_at`). ~keep
+        let box_key = line_key(&super::super::unmapped_glyphs::readable_text(line));
         let owner = layer_boxes
-            .get_mut(key.as_str())
+            .get_mut(box_key.as_str())
             .and_then(std::collections::VecDeque::pop_front)
             .map(|at| boxes.layer[at].bbox);
         let owned = owner.and_then(|owner| {
@@ -1086,20 +1598,121 @@ fn layer_lines_missing_and_owned(layer: &str, boxes: &PageLineBoxes) -> String {
         match owned {
             Some(at) => {
                 ocr_used[at] = true;
-                let read = &boxes.ocr[at].key;
-                if !owned_row_covers_source(&key, read) {
-                    missing.push(line);
+                if owned_row_covers_source(&key, &boxes.ocr[at].key) {
+                    read.spend(at, &key);
+                } else {
+                    missing.push((row, line));
+                    if candidates.misreads(&NativeRow::new(&key, false), at) {
+                        misread.push(misread_at(at));
+                    }
                 }
             }
-            None => missing.push(line),
+            None => unplaced.push((row, line)),
         }
     }
-    missing.join("\n")
+    // A row the geometry cannot place (no native box with its text, or no single OCR row that
+    // its box owns) comes from OCR when one OCR row holds it whole, in words no other row took.
+    // Rows without markers take their words first, so a marked row never takes the read of an
+    // equal one. ~keep
+    let (marked, unmarked): (Vec<_>, Vec<_>) = unplaced
+        .into_iter()
+        .partition(|(_, line)| line.contains(super::super::unmapped_glyphs::is_lost_glyph));
+    let mut pool = candidates.pool(&ocr_used);
+    for (row, line) in unmarked.into_iter().chain(marked) {
+        let key = line_key(line);
+        if read.take_whole(&key) {
+            continue;
+        }
+        missing.push((row, line));
+        if let Some(at) = candidates.take_best(&mut pool, &NativeRow::new(&key, false), row) {
+            misread.push(misread_at(at));
+        }
+    }
+    missing.sort_unstable_by_key(|(row, _)| *row);
+    RowsToRestore {
+        rows: missing.into_iter().map(|(_, line)| line).collect(),
+        misread,
+    }
+}
+/// The words of each OCR row of a page, and which of them a layer row has taken. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+struct OcrRowSpans<'a> {
+    rows: Vec<Vec<&'a str>>,
+    taken: Vec<Vec<bool>>,
+}
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl<'a> OcrRowSpans<'a> {
+    fn new(ocr: &'a [LineAt]) -> Self {
+        let rows: Vec<Vec<&str>> = ocr.iter().map(|line| line.key.split_whitespace().collect()).collect();
+        let taken = rows.iter().map(|row| vec![false; row.len()]).collect();
+        Self { rows, taken }
+    }
+    /// The first untaken run of the words of `key` in OCR row `at`, marked taken. A row with
+    /// lost-glyph markers takes the untaken words its pattern matches. ~keep
+    fn spend(&mut self, at: usize, key: &str) -> bool {
+        if let Some(pattern) = marked_row_pattern(key, false) {
+            return self.take_marked(at, &pattern);
+        }
+        let words: Vec<&str> = key.split_whitespace().collect();
+        self.take_words(at, &words)
+    }
+    /// The first untaken run of `words` in OCR row `at`, marked taken. ~keep
+    fn take_words(&mut self, at: usize, words: &[&str]) -> bool {
+        let (Some(row), Some(taken)) = (self.rows.get(at), self.taken.get_mut(at)) else {
+            return false;
+        };
+        if words.is_empty() || words.len() > row.len() {
+            return false;
+        }
+        let Some(start) = (0..=row.len() - words.len()).find(|start| {
+            row[*start..*start + words.len()] == *words && !taken[*start..*start + words.len()].contains(&true)
+        }) else {
+            return false;
+        };
+        taken[start..start + words.len()].fill(true);
+        true
+    }
+    /// The first match of a marked row pattern in OCR row `at` whose words are all untaken,
+    /// marked taken: a marked row consumes its match as an equal row does. ~keep
+    fn take_marked(&mut self, at: usize, pattern: &regex::Regex) -> bool {
+        let (Some(row), Some(taken)) = (self.rows.get(at), self.taken.get_mut(at)) else {
+            return false;
+        };
+        let joined = row.join(" ");
+        for found in pattern.find_iter(&joined) {
+            let text = found.as_str();
+            let span = text.trim_matches(' ');
+            if span.is_empty() {
+                continue;
+            }
+            let start = found.start() + (text.len() - text.trim_start_matches(' ').len());
+            let first = joined[..start].matches(' ').count();
+            let count = span.split(' ').count();
+            if first + count <= taken.len() && !taken[first..first + count].contains(&true) {
+                taken[first..first + count].fill(true);
+                return true;
+            }
+        }
+        false
+    }
+    /// Whether one OCR row holds `key` whole in untaken words, read marker-aware. The pattern of a
+    /// marked key and the words of a plain key are read once for all rows. ~keep
+    fn take_whole(&mut self, key: &str) -> bool {
+        if let Some(pattern) = marked_row_pattern(key, false) {
+            return (0..self.rows.len()).any(|at| self.take_marked(at, &pattern));
+        }
+        let words: Vec<&str> = key.split_whitespace().collect();
+        (0..self.rows.len()).any(|at| self.take_words(at, &words))
+    }
 }
 /// Restore unproved native rows after the OCR stage has been chosen. Without geometry, only
-/// complete equal OCR row occurrences certify coverage and nothing is deleted. With geometry,
-/// complete ordered native-token coverage is sufficient. Ambiguous and differing OCR payloads
-/// remain beside restored native rows. ~keep
+/// complete equal OCR row occurrences certify coverage. With geometry, complete ordered
+/// native-token coverage is sufficient, and a row the geometry leaves uncovered is then held
+/// against the OCR text as without geometry: a row OCR read into a table (its cells have no line
+/// box) is covered. Ambiguous and differing OCR payloads remain beside restored native rows,
+/// except the one OCR row that misreads a restored row and that plain OCR text holds
+/// (`MisreadCandidates`, `PlainOcrRows`): that row is not printed, and it leaves only the page
+/// of `plain_rows`. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn layer_lines_to_put_first(
     layer: &str,
@@ -1107,16 +1720,130 @@ pub(crate) fn layer_lines_to_put_first(
     noise_verdict: bool,
     thresholds: &OcrQualityThresholds,
     boxes: Option<&PageLineBoxes>,
+    mut plain_rows: PlainOcrRows,
 ) -> Option<LayerFirst> {
     if !noise_verdict && !ocr_confirms_layer(layer, ocr_text, thresholds) {
         return None;
     }
-    let lines = match boxes {
-        Some(boxes) if !noise_verdict => layer_lines_missing_and_owned(layer, boxes),
+    let restore = match boxes {
+        Some(boxes) if !noise_verdict => {
+            let geometry = layer_lines_missing_and_owned(layer, boxes, &boxed_row_lines(ocr_text, boxes));
+            rows_the_ocr_text_lacks_too(layer, geometry, ocr_text, boxes)?
+        }
         _ => layer_lines_absent_from_ocr(layer, ocr_text)?,
     };
-    (!lines.is_empty()).then_some(LayerFirst { lines })
+    let mut lines = restore.rows.join("\n");
+    // The rows put first are the only layer text that reaches the output: strip them once. ~keep
+    let lost_glyphs = super::super::unmapped_glyphs::strip_native_fragment(&mut lines);
+    // A misread row leaves only from plain OCR text: a table cell, heading, annotated or anchored
+    // element keeps its row beside the native one. ~keep
+    let page = plain_rows.page;
+    let misread_ocr_rows: Vec<MisreadOcrRow> = restore
+        .misread
+        .into_iter()
+        .filter(|row| plain_rows.take(&row.key))
+        .map(|row| MisreadOcrRow { page, ..row })
+        .collect();
+    (!lines.is_empty()).then_some(LayerFirst {
+        lines,
+        lost_glyphs,
+        misread_ocr_rows,
+    })
 }
+/// The rows of `geometry` that the OCR text lines without a line box (the rows of a recognised
+/// table) lack as well, in their order: as many rows of each key as `layer_lines_absent_from_ocr`
+/// finds absent over the whole layer, so one OCR occurrence covers one native occurrence whichever
+/// one each check took. With them, the OCR rows that misread one of them, from the geometry and
+/// from the text. `None` when those lines hold every row. The lines with a box were the geometry's
+/// work, which stays bounded to one band per layer line. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn rows_the_ocr_text_lacks_too<'a>(
+    layer: &'a str,
+    geometry: RowsToRestore<'a>,
+    ocr_text: &str,
+    boxes: &PageLineBoxes,
+) -> Option<RowsToRestore<'a>> {
+    let boxed: std::collections::HashSet<&str> = boxes.ocr.iter().map(|line| line.key.as_str()).collect();
+    // Each unboxed line with the index of its line in `ocr_text`. ~keep
+    let (unboxed_lines, unboxed): (Vec<usize>, Vec<&str>) = ocr_text
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| {
+            let key = line_key(line);
+            !key.is_empty() && !boxed.contains(key.as_str())
+        })
+        .unzip();
+    if unboxed.is_empty() {
+        return Some(geometry);
+    }
+    let unboxed = unboxed.join("\n");
+    let text = layer_lines_absent_from_ocr(layer, &unboxed)?;
+    let mut lacking = KeyCounts::new(text.rows.iter().map(|row| line_key(row)));
+    let geometry_row_count = geometry.rows.len();
+    let rows: Vec<&'a str> = geometry
+        .rows
+        .into_iter()
+        .filter(|row| lacking.take(&line_key(row)))
+        .collect();
+    if rows.is_empty() {
+        return None;
+    }
+    let joined = rows.join("\n");
+    let from_text = layer_lines_absent_from_ocr(&joined, &unboxed).map_or_else(Vec::new, |found| found.misread);
+    // A row of the unboxed text names its line in `ocr_text`. The geometry names boxed lines
+    // only, so no line is named twice. ~keep
+    // A boxed misread can leave only if its replacement survived the unboxed-row check. ~keep
+    let mut misread = if rows.len() == geometry_row_count {
+        geometry.misread
+    } else {
+        Vec::new()
+    };
+    misread.extend(from_text.into_iter().map(|row| MisreadOcrRow {
+        line: row.line.and_then(|at| unboxed_lines.get(at).copied()),
+        ..row
+    }));
+    Some(RowsToRestore { rows, misread })
+}
+/// The line of each OCR row of `boxes` in the page's OCR text: the n-th row with a key is the n-th
+/// line with it, provided both inventories have the same number of occurrences. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn boxed_row_lines(ocr_text: &str, boxes: &PageLineBoxes) -> Vec<Option<usize>> {
+    let mut lines: ahash::AHashMap<String, std::collections::VecDeque<usize>> = ahash::AHashMap::new();
+    for (at, line) in ocr_text.lines().enumerate() {
+        lines.entry(line_key(line)).or_default().push_back(at);
+    }
+    let boxed_counts = KeyCounts::new(boxes.ocr.iter().map(|row| row.key.clone()));
+    lines.retain(|key, positions| boxed_counts.0.get(key) == Some(&positions.len()));
+    boxes
+        .ocr
+        .iter()
+        .map(|row| lines.get_mut(&row.key).and_then(std::collections::VecDeque::pop_front))
+        .collect()
+}
+/// How often each row key occurs in a list of rows; `take` spends one occurrence. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+struct KeyCounts(ahash::AHashMap<String, usize>);
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl KeyCounts {
+    fn new(keys: impl IntoIterator<Item = String>) -> Self {
+        let mut counts = ahash::AHashMap::new();
+        for key in keys {
+            *counts.entry(key).or_default() += 1;
+        }
+        Self(counts)
+    }
+    /// Whether `key` had an occurrence left, which is spent. ~keep
+    fn take(&mut self, key: &str) -> bool {
+        match self.0.get_mut(key) {
+            Some(left) if *left > 0 => {
+                *left -= 1;
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
 #[cfg(all(
     feature = "pdf",
     feature = "ocr",
@@ -1134,13 +1861,95 @@ pub(super) use matched_layer_occurrences::MatchedLayerOccurrences;
 #[path = "document/matched_layer_occurrences.rs"]
 mod matched_layer_occurrences;
 
-/// The restored native rows and unchanged OCR text of a page. ~keep
+/// The restored native rows, then the OCR text of a page without the rows that misread one of
+/// them. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn text_with_layer_first(ocr_text: &str, first: &LayerFirst) -> String {
     if first.lines.trim().is_empty() {
         return ocr_text.to_string();
     }
-    format!("{}\n\n{ocr_text}", first.lines)
+    if first.misread_ocr_rows.is_empty() {
+        return format!("{}\n\n{ocr_text}", first.lines);
+    }
+    let misread = misread_lines(ocr_text, &first.misread_ocr_rows);
+    let kept: Vec<&str> = ocr_text
+        .lines()
+        .enumerate()
+        .filter(|(at, _)| !misread.contains(at))
+        .map(|(_, line)| line)
+        .collect();
+    if kept.iter().all(|line| line.trim().is_empty()) {
+        return first.lines.clone();
+    }
+    let newline = if ocr_text.ends_with('\n') { "\n" } else { "" };
+    format!("{}\n\n{}{newline}", first.lines, kept.join("\n"))
+}
+/// Resolve an exact line, or a unique text-only occurrence when no line was recorded. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn flat_misread_line(keys: &[String], row: &MisreadOcrRow) -> Option<usize> {
+    if let Some(at) = row.line {
+        return keys.get(at).is_some_and(|key| *key == row.key).then_some(at);
+    }
+    if row.bbox.is_some() {
+        return None;
+    }
+    let mut matches = keys.iter().enumerate().filter(|(_, key)| **key == row.key);
+    let (at, _) = matches.next()?;
+    matches.next().is_none().then_some(at)
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn misread_lines(ocr_text: &str, rows: &[MisreadOcrRow]) -> ahash::AHashSet<usize> {
+    let keys: Vec<String> = ocr_text.lines().map(line_key).collect();
+    rows.iter().filter_map(|row| flat_misread_line(&keys, row)).collect()
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+type StructuredMisreadLine = (usize, usize);
+
+/// Index every candidate, including protected elements, so a duplicate cannot stand in for the
+/// selected line unless its geometry gives it a unique owner. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn structured_misread_lines(
+    doc: &crate::types::internal::InternalDocument,
+    page: Option<u32>,
+    rows: &[MisreadOcrRow],
+) -> Vec<Option<StructuredMisreadLine>> {
+    let mut candidates: ahash::AHashMap<String, Vec<StructuredMisreadLine>> = ahash::AHashMap::new();
+    for (index, element) in doc.elements.iter().enumerate() {
+        if page.is_none_or(|page| element.page == Some(page)) {
+            for (line, text) in element.text.lines().enumerate() {
+                candidates.entry(line_key(text)).or_default().push((index, line));
+            }
+        }
+    }
+    rows.iter()
+        .map(|row| unique_structured_misread(doc, row, candidates.get(&row.key)?))
+        .collect()
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn unique_structured_misread(
+    doc: &crate::types::internal::InternalDocument,
+    row: &MisreadOcrRow,
+    candidates: &[StructuredMisreadLine],
+) -> Option<StructuredMisreadLine> {
+    let mut found = candidates.iter().copied().filter(|&(index, _)| {
+        let element = &doc.elements[index];
+        row.page.is_none_or(|page| element.page == Some(page))
+            && row.bbox.is_none_or(|line| {
+                element.bbox.is_some_and(|block| {
+                    line.owns(&LineBox {
+                        left: block.x0 as f32,
+                        top: block.y0 as f32,
+                        right: block.x1 as f32,
+                        bottom: block.y1 as f32,
+                    })
+                })
+            })
+    });
+    let at = found.next()?;
+    (found.next().is_none() && holds_plain_ocr_rows(&doc.elements[at.0])).then_some(at)
 }
 
 /// Put layer lines first on a structured OCR document, before its first element of `page`
@@ -1176,27 +1985,125 @@ pub(super) fn insert_layer_into_document(
     doc.elements.splice(at..at, layer_elements);
 }
 
-/// Restore native rows without changing any OCR text, annotations, anchors or rich payload. ~keep
-#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+/// Restore native rows on a structured OCR document. The OCR rows that misread a restored row
+/// leave the plain OCR text elements of `page` (of every page when `page` is `None`), each only
+/// on the page it was matched on, an element left without text leaves the document, and the
+/// restored rows go first. Every other OCR row, annotation, anchor and rich payload is unchanged.
+/// ~keep
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) fn put_layer_first_in_document(
     doc: &mut crate::types::internal::InternalDocument,
     page: Option<u32>,
     first: &LayerFirst,
 ) {
+    if !first.misread_ocr_rows.is_empty() {
+        let positions = structured_misread_lines(doc, page, &first.misread_ocr_rows);
+        remove_misread_rows_from_document(doc, &positions.into_iter().flatten().collect());
+    }
     insert_layer_into_document(doc, page, &first.lines);
 }
+/// Remove the certified element/line pairs and any element left without text. Relationships of a
+/// removed element go with it; the others move down by the elements removed before them. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn remove_misread_rows_from_document(
+    doc: &mut crate::types::internal::InternalDocument,
+    positions: &ahash::AHashSet<StructuredMisreadLine>,
+) {
+    use crate::types::internal::RelationshipTarget;
+
+    if positions.is_empty() {
+        return;
+    }
+    let mut emptied = Vec::new();
+    for (at, element) in doc.elements.iter_mut().enumerate() {
+        let before = element.text.lines().count();
+        let kept: Vec<&str> = element
+            .text
+            .lines()
+            .enumerate()
+            .filter_map(|(line, text)| (!positions.contains(&(at, line))).then_some(text))
+            .collect();
+        if kept.len() == before {
+            continue;
+        }
+        if kept.is_empty() {
+            emptied.push(at);
+        } else {
+            let text = kept.join("\n");
+            element.text = text;
+        }
+    }
+    for at in emptied.into_iter().rev() {
+        let at_u32 = at as u32;
+        doc.elements.remove(at);
+        doc.relationships.retain(|relationship| {
+            relationship.source != at_u32 && relationship.target != RelationshipTarget::Index(at_u32)
+        });
+        for relationship in &mut doc.relationships {
+            if relationship.source > at_u32 {
+                relationship.source -= 1;
+            }
+            if let RelationshipTarget::Index(index) = &mut relationship.target
+                && *index > at_u32
+            {
+                *index -= 1;
+            }
+        }
+    }
+}
+
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) fn finish_mixed_layer_prepend(
     text: &mut String,
     structured: Option<&mut crate::types::internal::InternalDocument>,
     first: &LayerFirst,
 ) {
-    if !first.lines.is_empty()
-        && let Some(page) = structured
-    {
-        put_layer_first_in_document(page, None, first);
+    finish_layer_prepend_on_page(text, structured, None, first);
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn finish_layer_prepend_on_page(
+    text: &mut String,
+    structured: Option<&mut crate::types::internal::InternalDocument>,
+    page: Option<u32>,
+    first: &LayerFirst,
+) {
+    if first.lines.trim().is_empty() {
+        return;
     }
-    *text = text_with_layer_first(text, first);
+    let Some(doc) = structured else {
+        *text = text_with_layer_first(text, first);
+        return;
+    };
+    let mut certified = LayerFirst {
+        lines: first.lines.clone(),
+        lost_glyphs: first.lost_glyphs,
+        misread_ocr_rows: Vec::new(),
+    };
+    if !first.misread_ocr_rows.is_empty() {
+        let keys: Vec<_> = text.lines().map(line_key).collect();
+        let positions = structured_misread_lines(doc, page, &first.misread_ocr_rows);
+        let mut pairs = Vec::new();
+        let mut flat_counts = ahash::AHashMap::new();
+        let mut structured_counts = ahash::AHashMap::new();
+        for (row, position) in first.misread_ocr_rows.iter().zip(positions) {
+            if let Some((flat, structured)) = flat_misread_line(&keys, row).zip(position) {
+                *flat_counts.entry(flat).or_insert(0) += 1;
+                *structured_counts.entry(structured).or_insert(0) += 1;
+                pairs.push((row, flat, structured));
+            }
+        }
+        let mut positions = ahash::AHashSet::new();
+        for (row, flat, structured) in pairs {
+            if flat_counts[&flat] == 1 && structured_counts[&structured] == 1 {
+                certified.misread_ocr_rows.push(row.clone());
+                positions.insert(structured);
+            }
+        }
+        remove_misread_rows_from_document(doc, &positions);
+    }
+    insert_layer_into_document(doc, page, &first.lines);
+    *text = text_with_layer_first(text, &certified);
 }
 
 /// The page's noise verdict in a whole-document run: `None` when the noise gate discarded the OCR
@@ -1265,20 +2172,22 @@ pub(super) fn put_layers_first_in_run(
         else {
             continue;
         };
-        let Some(mut first) =
-            layer_lines_to_put_first(layer, page_text, noise_verdict, &thresholds, layers.boxes.get(&page))
-        else {
+        let plain_rows = PlainOcrRows::of_page(doc.as_deref(), Some(page));
+        let Some(first) = layer_lines_to_put_first(
+            layer,
+            page_text,
+            noise_verdict,
+            &thresholds,
+            layers.boxes.get(&page),
+            plain_rows,
+        ) else {
             continue;
         };
-        lost_glyphs =
-            lost_glyphs.saturating_add(super::super::unmapped_glyphs::strip_native_fragment(&mut first.lines));
+        lost_glyphs = lost_glyphs.saturating_add(first.lost_glyphs);
         if first.lines.is_empty() {
             continue;
         }
-        *page_text = text_with_layer_first(page_text, &first);
-        if let Some(doc) = doc.as_deref_mut() {
-            put_layer_first_in_document(doc, Some(page), &first);
-        }
+        finish_layer_prepend_on_page(page_text, doc.as_deref_mut(), Some(page), &first);
     }
     if flat_is_page_join {
         *text = join_run_pages(page_texts, marker_format, page_index_offset);
@@ -1957,24 +2866,45 @@ pub(crate) fn merge_ocr_pages_into_native(
     boundaries: &[crate::types::PageBoundary],
     ocr_results: &ahash::AHashMap<u32, String>,
 ) -> String {
-    let accepted =
-        accepted_ocr_page_replacements(native_text, boundaries, ocr_results, &OcrQualityThresholds::default());
+    let accepted = accepted_ocr_page_replacements(
+        native_text,
+        boundaries,
+        ocr_results,
+        &OcrQualityThresholds::default(),
+        |_| true,
+    );
     apply_ocr_page_replacements(native_text, boundaries, &accepted)
 }
+/// Whether the OCR text of a page would discard most of a healthy native text layer, as the
+/// alnum count the page held and the count OCR read. With `judge_marked_pages`, a page with
+/// lost-glyph markers is judged on its readable text, and each lost glyph is a character the page
+/// holds and the readable text lacks, so the page is judged against what it held, not against what
+/// survived. Without it, the markers count as the garble they are, so a marked page is judged as
+/// before the markers were kept: a pipeline the user configured keeps its replacement. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn destructive_ocr_information_loss(
     native_page: &str,
     ocr_text: &str,
     thresholds: &OcrQualityThresholds,
+    judge_marked_pages: bool,
 ) -> Option<(usize, usize)> {
-    let native_decision = evaluate_native_text_for_ocr(native_page, Some(1), thresholds);
+    let (readable, lost_glyphs) = if judge_marked_pages {
+        let lost = native_page
+            .matches(super::super::unmapped_glyphs::is_lost_glyph)
+            .count();
+        (super::super::unmapped_glyphs::readable_text(native_page), lost)
+    } else {
+        (std::borrow::Cow::Borrowed(native_page), 0)
+    };
+    let native_decision = evaluate_native_text_for_ocr(&readable, Some(1), thresholds);
     if native_decision.fallback {
         return None;
     }
 
+    let page_alnum = native_decision.stats.alnum.saturating_add(lost_glyphs);
     let ocr_stats = NativeTextStats::compute(ocr_text, thresholds);
-    let retained_ratio = ocr_stats.alnum as f64 / native_decision.stats.alnum.max(1) as f64;
-    (retained_ratio < MIN_OCR_NATIVE_ALNUM_RETENTION_RATIO).then_some((native_decision.stats.alnum, ocr_stats.alnum))
+    let retained_ratio = ocr_stats.alnum as f64 / page_alnum.max(1) as f64;
+    (retained_ratio < MIN_OCR_NATIVE_ALNUM_RETENTION_RATIO).then_some((page_alnum, ocr_stats.alnum))
 }
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) fn valid_page_boundary(native_text: &str, boundary: &crate::types::PageBoundary) -> bool {
@@ -1982,12 +2912,17 @@ pub(crate) fn valid_page_boundary(native_text: &str, boundary: &crate::types::Pa
 }
 /// Keep only OCR results that can be applied consistently to every mixed-output
 /// representation: non-empty text with a matching, valid UTF-8 page boundary.
+/// `judge_marked_page` says per page whether `destructive_ocr_information_loss` judges a marked
+/// page on its readable text: only a page the run may keep native (automatic mode, no configured
+/// pipeline, no hidden-layer probe) and whose native text the same page's ink corroborates. A
+/// page it refuses is judged as before the markers were kept. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn accepted_ocr_page_replacements(
     native_text: &str,
     boundaries: &[crate::types::PageBoundary],
     ocr_results: &ahash::AHashMap<u32, String>,
     thresholds: &OcrQualityThresholds,
+    judge_marked_page: impl Fn(u32) -> bool,
 ) -> ahash::AHashMap<u32, String> {
     let mut page_counts = std::collections::HashMap::new();
     for boundary in boundaries {
@@ -2052,7 +2987,8 @@ pub(super) fn accepted_ocr_page_replacements(
                 return false;
             }
             let native_page = &native_text[byte_start..byte_end];
-            if let Some((native_alnum, ocr_alnum)) = destructive_ocr_information_loss(native_page, text, thresholds) {
+            let loss = destructive_ocr_information_loss(native_page, text, thresholds, judge_marked_page(**page));
+            if let Some((native_alnum, ocr_alnum)) = loss {
                 tracing::warn!(
                     page = **page,
                     native_alnum,
@@ -2067,7 +3003,7 @@ pub(super) fn accepted_ocr_page_replacements(
         .collect()
 }
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(super) fn apply_ocr_page_replacements(
+pub(in crate::extractors::pdf) fn apply_ocr_page_replacements(
     native_text: &str,
     boundaries: &[crate::types::PageBoundary],
     accepted: &ahash::AHashMap<u32, String>,
@@ -2512,7 +3448,7 @@ pub(super) fn rebuild_planned_elements(
     (rebuilt, old_to_new, planned_to_new)
 }
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
-pub(super) fn remap_relationships(
+pub(in crate::extractors::pdf) fn remap_relationships(
     relationships: &mut Vec<crate::types::internal::Relationship>,
     old_to_new: &[Option<u32>],
     rebuilt: &[crate::types::internal::InternalElement],
@@ -3831,6 +4767,7 @@ mod public_ocr_handoff_tests {
             &boundaries,
             &ahash::AHashMap::from_iter([(1, text.into())]),
             &Default::default(),
+            |_| true,
         )
     }
 

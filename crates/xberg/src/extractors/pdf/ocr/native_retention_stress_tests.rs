@@ -1,6 +1,8 @@
 #![cfg(feature = "pdf")]
 
 use super::super::document::{LayerFirst, LineAt, put_layer_first_in_document};
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+use crate::extractors::pdf::unmapped_glyphs::{LOST_SYMBOL_GLYPH_MARKER, is_lost_glyph};
 use crate::types::document_structure::{AnnotationKind, TextAnnotation};
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
 
@@ -37,6 +39,7 @@ fn repeated_rows(count: usize) -> (InternalDocument, LayerFirst, InternalElement
         false,
         &crate::core::config::OcrQualityThresholds::default(),
         Some(&boxes),
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .expect("each native occurrence lacks literal OCR coverage");
     (document, first, unowned)
@@ -84,7 +87,15 @@ fn preserved_payload_case(kind: ElementKind, extra: bool, annotated: bool) {
         );
     }
     let text = read.join("\n");
-    let first = layer_lines_to_put_first(&layer, &text, false, &OcrQualityThresholds::default(), None).unwrap();
+    let first = layer_lines_to_put_first(
+        &layer,
+        &text,
+        false,
+        &OcrQualityThresholds::default(),
+        None,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
+    )
+    .unwrap();
     let mut document = InternalDocument::new("pdf");
     for (index, text) in read.iter().enumerate() {
         let mut element = InternalElement::text(if index == 0 { kind } else { ElementKind::Paragraph }, *text, 0);
@@ -429,7 +440,15 @@ fn should_reject_sparse_native_unmapped_markers_without_stripping_ocr_payload() 
         document.push_element(InternalElement::text(ElementKind::Paragraph, &read, 0));
         assert!(plain_ocr_page_can_yield_to_native(&document, &read));
         assert!(!native_page_covers_ocr(&layer, &read, &thresholds, Some(&boxes)));
-        let first = layer_lines_to_put_first(&layer, &read, false, &thresholds, Some(&boxes)).unwrap();
+        let first = layer_lines_to_put_first(
+            &layer,
+            &read,
+            false,
+            &thresholds,
+            Some(&boxes),
+            crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
+        )
+        .unwrap();
         let merged = text_with_layer_first(&read, &first);
         assert!(merged.ends_with(&read));
         if marker_read {
@@ -456,6 +475,7 @@ fn lexical_copy_case(native: &str, read: &str) -> LexicalCopyCase {
         false,
         &crate::core::config::OcrQualityThresholds::default(),
         Some(&boxes),
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
     )
     .unwrap();
     let mut document = InternalDocument::new("pdf");
@@ -569,6 +589,1490 @@ fn type0_retention_counts_meaningful_literal_occurrences_and_requires_markers() 
         "wrong",
         &thresholds
     ));
+}
+
+/// A readable page that lost six glyphs: the lost-glyph markers sit between its words.
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn readable_page_with_lost_glyphs() -> String {
+    let words = "the committee reviewed the annual budget and approved the design of the new archive reader \
+                 for every branch library after the long public meeting about the shared reading room";
+    let mut page = String::new();
+    for (at, word) in words.split(' ').enumerate() {
+        if at % 3 == 0 && at < 18 {
+            page.push('\u{FFFD}');
+            page.push(' ');
+        }
+        page.push_str(word);
+        page.push(' ');
+    }
+    assert_eq!(page.matches('\u{FFFD}').count(), 6, "the fixture holds six markers");
+    page
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn one_page(page: &str) -> Vec<crate::types::PageBoundary> {
+    vec![crate::types::PageBoundary {
+        byte_start: 0,
+        byte_end: page.len(),
+        page_number: 1,
+    }]
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_marked_page_still_routes_to_ocr_but_keeps_its_readable_layer() {
+    use super::super::document::clean_native_page_layers;
+    use super::super::scoring::evaluate_native_text_for_ocr;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let page = readable_page_with_lost_glyphs();
+    assert!(
+        evaluate_native_text_for_ocr(&page, Some(1), &thresholds).fallback,
+        "control: the routing gate still counts the markers"
+    );
+    let layers = clean_native_page_layers(&page, &one_page(&page), None, &thresholds);
+    assert!(layers.contains_key(&1), "the readable words of the page stay a layer");
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn ocr_that_drops_the_readable_words_of_a_marked_page_is_not_accepted() {
+    use super::super::document::accepted_ocr_page_replacements;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let read: ahash::AHashMap<u32, String> = [(1, "two stray words only".to_string())].into_iter().collect();
+    let page = readable_page_with_lost_glyphs();
+    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, |_| true);
+    assert!(accepted.is_empty(), "OCR keeps under half of the readable words");
+    let all_lost = "\u{FFFD} ".repeat(20);
+    let accepted = accepted_ocr_page_replacements(&all_lost, &one_page(&all_lost), &read, &thresholds, |_| true);
+    assert!(
+        accepted.contains_key(&1),
+        "control: a page with no readable word keeps no protection"
+    );
+}
+
+const ROW_WORDS: [&str; 20] = [
+    "committee",
+    "budget",
+    "archive",
+    "library",
+    "reader",
+    "harbour",
+    "treasurer",
+    "notice",
+    "pier",
+    "repairs",
+    "minutes",
+    "hours",
+    "spring",
+    "public",
+    "design",
+    "branch",
+    "reading",
+    "room",
+    "annual",
+    "meeting",
+];
+
+/// Forty distinct readable rows. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn forty_rows() -> Vec<String> {
+    (0..40)
+        .map(|n| {
+            format!(
+                "section {n} the {} {} approved the {} {} after the {}",
+                ROW_WORDS[n % 20],
+                ROW_WORDS[(n * 7 + 3) % 20],
+                ROW_WORDS[(n * 3 + 1) % 20],
+                ROW_WORDS[(n * 11 + 5) % 20],
+                ROW_WORDS[(n * 13 + 2) % 20],
+            )
+        })
+        .collect()
+}
+
+/// The ways a page loses glyphs, each on every fourth row: the native rows with markers, and the
+/// rows as OCR reads them whole. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn marked_cases() -> Vec<(&'static str, Vec<String>, Vec<String>)> {
+    type Loss = fn(usize, &str) -> (String, String);
+    let cases: [(&str, Loss); 5] = [
+        ("between, OCR reads no glyph", |_, row| {
+            (row.replacen(" approved", " \u{FFFD} approved", 1), row.to_string())
+        }),
+        ("between, OCR reads the glyph", |_, row| {
+            (
+                row.replacen(" approved", " \u{FFFD} approved", 1),
+                row.replacen(" approved", " - approved", 1),
+            )
+        }),
+        ("inside a word", |_, row| {
+            (row.replacen("approved", "appr\u{FFFD}ved", 1), row.to_string())
+        }),
+        ("inside a number", |n, row| {
+            let from = format!("section {n} ");
+            (
+                row.replacen(&from, &format!("section {n}\u{FFFD}5 "), 1),
+                row.replacen(&from, &format!("section {n}35 "), 1),
+            )
+        }),
+        ("a whole word", |_, row| {
+            (row.replacen("approved", &"\u{FFFD}".repeat(8), 1), row.to_string())
+        }),
+    ];
+    cases
+        .into_iter()
+        .map(|(name, loss)| {
+            let (native, read) = forty_rows()
+                .iter()
+                .enumerate()
+                .map(|(n, row)| {
+                    if n % 4 == 0 {
+                        loss(n, row)
+                    } else {
+                        (row.clone(), row.clone())
+                    }
+                })
+                .unzip();
+            (name, native, read)
+        })
+        .collect()
+}
+
+/// The stored layer of a one-page native text, which keeps its markers. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn stored_layer(native: &str) -> String {
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let layers = super::super::document::clean_native_page_layers(native, &one_page(native), None, &thresholds);
+    let layer = layers
+        .get(&1)
+        .expect("the readable words of the marked page stay a layer")
+        .clone();
+    assert_eq!(layer, native.trim(), "a stored layer keeps its markers");
+    layer
+}
+
+/// The page the caller gets after the rows the layer owns are put first: the production steps of
+/// the mixed route, from the native text of the page to the merged text. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn merged_page(native: &str, read: &str, boxes: Option<&super::super::document::PageLineBoxes>) -> String {
+    use super::super::document::{layer_lines_to_put_first, text_with_layer_first};
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    layer_lines_to_put_first(
+        &stored_layer(native),
+        read,
+        false,
+        &thresholds,
+        boxes,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
+    )
+    .map_or_else(|| read.to_string(), |first| text_with_layer_first(read, &first))
+}
+
+/// The line boxes of a page whose native rows and OCR rows lie on the same baselines. Each native
+/// row with a marker comes as two segments that break before its first marker, as a text layer
+/// can give it. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn row_boxes(native: &[String], read: &[String]) -> super::super::document::PageLineBoxes {
+    let read: Vec<(String, usize)> = read.iter().map(|row| (row.clone(), 1)).collect();
+    spanning_row_boxes(native, &read)
+}
+
+/// As `row_boxes`, with each OCR row given as its text and the number of native rows its box
+/// spans, from the row after the one before it. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn spanning_row_boxes(native: &[String], read: &[(String, usize)]) -> super::super::document::PageLineBoxes {
+    use crate::pdf::hierarchy::SegmentData;
+    use crate::pdf::structure::types::{PdfLine, PdfParagraph};
+    let tall_segment = |text: &str, row: usize, x: f32, width: f32, rows: usize| SegmentData {
+        text: text.to_string(),
+        x,
+        y: row as f32 * 12.0,
+        width,
+        height: rows as f32 * 12.0 - 2.0,
+        font_size: 10.0,
+        is_bold: false,
+        is_italic: false,
+        is_monospace: false,
+        baseline_y: row as f32 * 12.0,
+        rotation_degrees: 0.0,
+        assigned_role: None,
+    };
+    let segment = |text: &str, row: usize, x: f32, width: f32| tall_segment(text, row, x, width, 1);
+    let native: Vec<SegmentData> = native
+        .iter()
+        .enumerate()
+        .flat_map(|(row, text)| match text.find(is_lost_glyph) {
+            Some(at) if at > 0 => vec![
+                segment(&text[..at], row, 0.0, 250.0),
+                segment(&text[at..], row, 250.0, 250.0),
+            ],
+            _ => vec![segment(text, row, 0.0, 500.0)],
+        })
+        .collect();
+    let mut next_row = 0;
+    let lines = read
+        .iter()
+        .map(|(text, rows)| {
+            let row = next_row;
+            next_row += rows;
+            (text, row, *rows)
+        })
+        .map(|(text, row, rows)| PdfLine {
+            segments: vec![tall_segment(text, row, 0.0, 500.0, rows)],
+            native_scripts: Vec::new(),
+            baseline_y: row as f32 * 12.0,
+            dominant_font_size: 10.0,
+            is_bold: false,
+            is_monospace: false,
+        })
+        .collect();
+    let paragraph = PdfParagraph {
+        text: String::new(),
+        lines,
+        dominant_font_size: 10.0,
+        heading_level: None,
+        is_bold: false,
+        is_list_item: false,
+        is_code_block: false,
+        is_formula: false,
+        is_page_furniture: false,
+        layout_class: None,
+        layout_region_path: None,
+        caption_for: None,
+        block_bbox: None,
+        word_count: 0,
+    };
+    let boxes =
+        super::super::document::page_line_boxes(&native, &[paragraph], (1.0, 1.0)).expect("both sides have rows");
+    assert!(
+        boxes.layer.iter().all(|row| !row.key.contains(is_lost_glyph)),
+        "a native box is keyed on its readable text"
+    );
+    boxes
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn marked_rows_that_ocr_read_whole_are_not_printed_twice() {
+    for (name, native, read) in marked_cases() {
+        assert_eq!(
+            native.iter().filter(|row| row.contains('\u{FFFD}')).count(),
+            10,
+            "{name}"
+        );
+        let read = read.join("\n");
+        assert_eq!(merged_page(&native.join("\n"), &read, None), read, "{name}");
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn marked_rows_that_ocr_read_whole_are_not_printed_twice_with_row_geometry() {
+    for (name, native, read) in marked_cases() {
+        let boxes = row_boxes(&native, &read);
+        let read = read.join("\n");
+        assert_eq!(merged_page(&native.join("\n"), &read, Some(&boxes)), read, "{name}");
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_marked_row_is_judged_at_its_own_ocr_row_not_at_a_row_elsewhere() {
+    let mut native = forty_rows();
+    native[3] = "total 1\u{FFFD}0 for the year".to_string();
+    native[9] = "total 100 for the year".to_string();
+    let mut read = native.clone();
+    read[3] = "total 1oo for the year".to_string();
+    let boxes = row_boxes(&native, &read);
+    let read = read.join("\n");
+    assert_eq!(
+        merged_page(&native.join("\n"), &read, Some(&boxes)),
+        format!("total 1 0 for the year\n\n{read}"),
+        "the OCR row at the marked row misreads it, so the row is put first"
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_row_without_a_native_box_of_its_text_comes_from_the_ocr_row_that_holds_it_whole() {
+    let native = forty_rows();
+    let mut segments = native.clone();
+    segments[3] = format!("{} and more", segments[3]);
+    let boxes = row_boxes(&segments, &native);
+    let read = native.join("\n");
+    assert_eq!(merged_page(&read, &read, Some(&boxes)), read);
+    let mut misread = native.clone();
+    misread[3] = misread[3].replacen(" the ", " then ", 1);
+    let boxes = row_boxes(&segments, &misread);
+    let misread = misread.join("\n");
+    assert_eq!(
+        merged_page(&read, &misread, Some(&boxes)),
+        format!("{}\n\n{misread}", native[3]),
+        "a row that no OCR row holds whole is put first; the OCR row read a word the native lacks, so it stays"
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn an_unplaced_native_row_takes_the_ocr_row_that_misreads_it() {
+    let (native, read) = measure_rows();
+    let mut segments = native.clone();
+    segments[3] = format!("{} and more", segments[3]);
+    let boxes = row_boxes(&segments, &read);
+    let mut kept = read.clone();
+    kept.remove(3);
+    assert_eq!(
+        merged_page(&native.join("\n"), &read.join("\n"), Some(&boxes)),
+        format!("{}\n\n{}", native[3], kept.join("\n")),
+        "a row without a native box is put first, and the OCR row that misreads it is not printed"
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn native_rows_that_ocr_reads_as_one_line_are_not_put_first() {
+    let native = forty_rows();
+    let mut read: Vec<(String, usize)> = native.iter().map(|row| (row.clone(), 1)).collect();
+    let joined = format!("{} {}", native[5], native[6]);
+    read.splice(5..7, [(joined, 2)]);
+    let boxes = spanning_row_boxes(&native, &read);
+    let read: Vec<String> = read.into_iter().map(|(row, _)| row).collect();
+    let read = read.join("\n");
+    assert_eq!(merged_page(&native.join("\n"), &read, Some(&boxes)), read);
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn an_ocr_row_covers_each_equal_native_row_once() {
+    let mut native = forty_rows();
+    native[20] = native[2].clone();
+    let mut segments = native.clone();
+    segments[20] = format!("{} and more", segments[20]);
+    let mut read = native.clone();
+    read.remove(20);
+    let mut spans: Vec<(String, usize)> = read.iter().map(|row| (row.clone(), 1)).collect();
+    spans[19].1 = 2;
+    let boxes = spanning_row_boxes(&segments, &spans);
+    let read = read.join("\n");
+    assert_eq!(
+        merged_page(&native.join("\n"), &read, Some(&boxes)),
+        format!("{}\n\n{read}", native[2]),
+        "the second equal row finds the words of the first taken"
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_marked_row_that_ocr_reads_with_another_word_is_put_first() {
+    for (name, native, read) in marked_cases() {
+        let mut read = read;
+        read[8] = read[8].replacen(" the ", " then ", 1);
+        let boxes = row_boxes(&native, &read);
+        let read = read.join("\n");
+        for boxes in [None, Some(&boxes)] {
+            let merged = merged_page(&native.join("\n"), &read, boxes);
+            assert!(merged.ends_with(&format!("\n\n{read}")), "{name}: {merged}");
+            assert_eq!(
+                merged.lines().count(),
+                42,
+                "row 8 is put first once, the OCR row stays: {name}: {merged}"
+            );
+            assert!(!merged.contains('\u{FFFD}'), "{name}: {merged}");
+        }
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_marked_row_the_ocr_read_lacks_is_put_first_once_and_counts_only_its_own_markers() {
+    use super::super::document::layer_lines_to_put_first;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let (_, native, read) = marked_cases().swap_remove(2);
+    let mut read = read;
+    read.remove(4);
+    let read = read.join("\n");
+    let layer = stored_layer(&native.join("\n"));
+    let first = layer_lines_to_put_first(
+        &layer,
+        &read,
+        false,
+        &thresholds,
+        None,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
+    )
+    .expect("row 4 is missing");
+    assert_eq!(first.lines, forty_rows()[4].replacen("approved", "appr ved", 1));
+    assert_eq!(
+        first.lost_glyphs, 1,
+        "the nine marked rows that OCR read are not counted"
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_row_of_markers_alone_is_not_put_first() {
+    use super::super::document::layer_lines_to_put_first;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let clean = forty_rows();
+    let native = format!("{}\n\u{FFFD}\u{FFFD}", clean.join("\n"));
+    let read = clean[..39].join("\n");
+    let first = layer_lines_to_put_first(
+        &stored_layer(&native),
+        &read,
+        false,
+        &thresholds,
+        None,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
+    )
+    .expect("row 39 is missing");
+    assert_eq!(first.lines, clean[39]);
+    assert_eq!(first.lost_glyphs, 0);
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn an_equal_row_takes_its_ocr_row_before_a_marked_row_does() {
+    use super::super::document::layer_lines_to_put_first;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let clean = forty_rows();
+    let marked = clean[0].replacen("approved", "appr\u{FFFD}ved", 1);
+    let native = format!("{marked}\n{}", clean.join("\n"));
+    let read = clean.join("\n");
+    let first = layer_lines_to_put_first(
+        &stored_layer(&native),
+        &read,
+        false,
+        &thresholds,
+        None,
+        crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
+    )
+    .expect("one of the two rows 0 is missing");
+    assert_eq!(first.lines, clean[0].replacen("approved", "appr ved", 1));
+}
+
+/// The ways geometry can hold two native rows that one OCR row reads: none (the text check), both
+/// rows with their own box under the one OCR row that spans them (placed), and both rows without a
+/// native box of their text (unplaced). The OCR read is the forty clean rows. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn one_ocr_row_under_two_native_rows(
+    native: &[String],
+) -> Vec<(&'static str, Option<super::super::document::PageLineBoxes>)> {
+    let read = forty_rows();
+    let mut spans: Vec<(String, usize)> = read.iter().map(|row| (row.clone(), 1)).collect();
+    spans[0].1 = 2;
+    let mut unplaced = native.to_vec();
+    for row in &mut unplaced[..2] {
+        row.push_str(" and more");
+    }
+    vec![
+        ("no geometry", None),
+        ("placed", Some(spanning_row_boxes(native, &spans))),
+        ("unplaced", Some(spanning_row_boxes(&unplaced, &spans))),
+    ]
+}
+
+/// Review point 3 of #2637: a marked row consumes the OCR row it matches, with row geometry as
+/// without it, and an equal row takes its OCR row before a marked row does. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn an_equal_row_takes_its_ocr_row_before_a_marked_row_does_with_row_geometry() {
+    let clean = forty_rows();
+    let marked = clean[0].replacen("approved", "appr\u{FFFD}ved", 1);
+    let native: Vec<String> = std::iter::once(marked).chain(clean.iter().cloned()).collect();
+    let read = clean.join("\n");
+    let expected = format!("{}\n\n{read}", clean[0].replacen("approved", "appr ved", 1));
+    let failures: Vec<String> = one_ocr_row_under_two_native_rows(&native)
+        .into_iter()
+        .map(|(name, boxes)| (name, merged_page(&native.join("\n"), &read, boxes.as_ref())))
+        .filter(|(_, merged)| *merged != expected)
+        .map(|(name, merged)| format!("{name}: the marked row is put first once: {merged:?}"))
+        .collect();
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
+/// Review point 3 of #2637: two native copies of a marked row and one OCR row that reads it: the
+/// OCR row covers one copy, and the other copy is put first. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn two_marked_copies_of_a_row_that_ocr_reads_once_put_one_copy_first() {
+    let clean = forty_rows();
+    let marked = clean[0].replacen("approved", "appr\u{FFFD}ved", 1);
+    let native: Vec<String> = [marked.clone(), marked]
+        .into_iter()
+        .chain(clean[1..].iter().cloned())
+        .collect();
+    let read = clean.join("\n");
+    let expected = format!("{}\n\n{read}", clean[0].replacen("approved", "appr ved", 1));
+    let failures: Vec<String> = one_ocr_row_under_two_native_rows(&native)
+        .into_iter()
+        .map(|(name, boxes)| (name, merged_page(&native.join("\n"), &read, boxes.as_ref())))
+        .filter(|(_, merged)| *merged != expected)
+        .map(|(name, merged)| format!("{name}: one copy is put first: {merged:?}"))
+        .collect();
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
+/// Two native copies of one marked row and one OCR occurrence of it: the occurrence covers one
+/// copy, so the other is put first, once, with and without row geometry. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn one_ocr_occurrence_covers_one_of_two_marked_copies() {
+    use super::super::document::layer_lines_to_put_first;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let clean = forty_rows();
+    let marked = clean[0].replacen("approved", "appr\u{FFFD}ved", 1);
+    let mut native = vec![marked.clone(), marked];
+    native.extend(clean[2..].iter().cloned());
+    let mut read: Vec<(String, usize)> = vec![(clean[0].clone(), 2)];
+    read.extend(clean[2..].iter().map(|row| (row.clone(), 1)));
+    let boxes = spanning_row_boxes(&native, &read);
+    let read_text = read.iter().map(|(row, _)| row.as_str()).collect::<Vec<_>>().join("\n");
+    for boxes in [None, Some(&boxes)] {
+        let first = layer_lines_to_put_first(
+            &stored_layer(&native.join("\n")),
+            &read_text,
+            false,
+            &thresholds,
+            boxes,
+            crate::extractors::pdf::ocr::document::PlainOcrRows::every(),
+        )
+        .expect("the second copy has no OCR occurrence");
+        assert_eq!(
+            first.lines,
+            clean[0].replacen("approved", "appr ved", 1),
+            "geometry: {}",
+            boxes.is_some()
+        );
+        assert_eq!(first.lost_glyphs, 1);
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_marker_inside_a_word_does_not_fuse_the_word_the_ocr_confirms() {
+    use super::super::document::ocr_confirms_layer;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let split = "caf\u{FFFD}e ba\u{FFFD}nk li\u{FFFD}brary pa\u{FFFD}rk sc\u{FFFD}hool ma\u{FFFD}rket";
+    let between = "caf \u{FFFD} e ba \u{FFFD} nk li \u{FFFD} brary pa \u{FFFD} rk sc \u{FFFD} hool ma \u{FFFD} rket";
+    let whole = "cafe bank library park school market";
+    assert!(
+        !ocr_confirms_layer(split, whole, &thresholds),
+        "caf<m>e is not the word cafe"
+    );
+    assert!(
+        !ocr_confirms_layer(between, whole, &thresholds),
+        "a marker between letters is a hole too"
+    );
+    let numbers = "1\u{FFFD}2 3\u{FFFD}4 5\u{FFFD}6 7\u{FFFD}8";
+    assert!(
+        !ocr_confirms_layer(numbers, "12 34 56 78", &thresholds),
+        "1<m>2 is not the number 12"
+    );
+    let control = "the \u{FFFD} committee reviewed the \u{FFFD} annual budget and approved the \u{FFFD} design of the \
+                   \u{FFFD} new archive reader for every \u{FFFD} branch library";
+    let read = "the committee reviewed the annual budget and approved the design of the new archive reader for every \
+                branch library";
+    assert!(
+        ocr_confirms_layer(control, read, &thresholds),
+        "control: markers between words confirm"
+    );
+}
+
+/// A page whose first twenty rows read and whose other half is lost glyphs, one for each letter or
+/// digit of the readable half: the rows, the native text and its readable half. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn half_lost_page() -> (Vec<String>, String, String) {
+    let clean = forty_rows();
+    let readable = clean[..20].join("\n");
+    let lost: String = "\u{FFFD}".repeat(readable.chars().filter(|c| c.is_alphanumeric()).count());
+    let native = format!("{readable}\n{lost}");
+    (clean, native, readable)
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn half_a_page_lost_to_markers_is_judged_against_the_whole_page() {
+    use super::super::document::accepted_ocr_page_replacements;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let (clean, native, readable) = half_lost_page();
+    // The read holds 80% of the readable half: over the ratio against the layer, under it against
+    // the whole page. ~keep
+    let alnum = |text: &str| text.chars().filter(|c| c.is_alphanumeric()).count();
+    let layer_alnum = alnum(&readable);
+    let rows = (1..=20)
+        .find(|&rows| alnum(&clean[..rows].join("\n")) * 10 >= layer_alnum * 8)
+        .expect("twenty rows hold the layer");
+    let ocr_reads_forty_percent = clean[..rows].join("\n");
+    let read_alnum = alnum(&ocr_reads_forty_percent);
+    assert!(
+        read_alnum * 2 >= layer_alnum && read_alnum < layer_alnum,
+        "fixture: the read holds over half of the layer and under half of the page"
+    );
+    let accepted = accepted_ocr_page_replacements(
+        &native,
+        &one_page(&native),
+        &[(1, ocr_reads_forty_percent.clone())].into_iter().collect(),
+        &thresholds,
+        |_| true,
+    );
+    assert!(
+        accepted.is_empty(),
+        "40% of the real page is not a replacement for 50% of it"
+    );
+    let ocr_reads_all = clean[..20].join("\n");
+    let accepted = accepted_ocr_page_replacements(
+        &native,
+        &one_page(&native),
+        &[(1, ocr_reads_all)].into_iter().collect(),
+        &thresholds,
+        |_| true,
+    );
+    assert!(
+        accepted.contains_key(&1),
+        "control: OCR that reads the readable half is accepted"
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn ocr_that_reads_sixty_percent_of_a_half_lost_page_is_accepted() {
+    use super::super::document::accepted_ocr_page_replacements;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let (clean, native, readable) = half_lost_page();
+    let alnum = |text: &str| text.chars().filter(|c| c.is_alphanumeric()).count();
+    let page_alnum = alnum(&readable) * 2;
+    let rows = (1..=40)
+        .find(|&rows| alnum(&clean[..rows].join("\n")) * 10 >= page_alnum * 6)
+        .expect("forty rows hold the page");
+    let read = clean[..rows].join("\n");
+    let share = alnum(&read) as f64 / page_alnum as f64;
+    assert!(
+        (0.6..0.65).contains(&share),
+        "fixture: the read holds 60% of the page, well over the 0.5 line, not on it: {share}"
+    );
+    let accepted = accepted_ocr_page_replacements(
+        &native,
+        &one_page(&native),
+        &[(1, read)].into_iter().collect(),
+        &thresholds,
+        |_| true,
+    );
+    assert!(
+        accepted.contains_key(&1),
+        "OCR that reads 60% of the real page replaces a layer that holds 50% of it"
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn only_the_marked_page_of_a_document_keeps_its_native_text() {
+    use super::super::document::accepted_ocr_page_replacements;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let clean = forty_rows();
+    let (_, marked, _) = marked_cases().swap_remove(0);
+    let page_one = format!("{}\n", marked[..20].join("\n"));
+    let page_two = format!("{}\n", clean[20..].join("\n"));
+    let native = format!("{page_one}{page_two}");
+    let boundaries = vec![
+        crate::types::PageBoundary {
+            byte_start: 0,
+            byte_end: page_one.len(),
+            page_number: 1,
+        },
+        crate::types::PageBoundary {
+            byte_start: page_one.len(),
+            byte_end: native.len(),
+            page_number: 2,
+        },
+    ];
+    let stray = "two stray words only".to_string();
+    let read = [(1, stray.clone()), (2, stray)].into_iter().collect();
+    let accepted = accepted_ocr_page_replacements(&native, &boundaries, &read, &thresholds, |_| true);
+    assert!(
+        accepted.is_empty(),
+        "both pages are readable, so OCR that keeps a few words replaces neither"
+    );
+    let page_two_lost = "\u{FFFD} ".repeat(60);
+    let native = format!("{page_one}{page_two_lost}");
+    let boundaries = vec![
+        crate::types::PageBoundary {
+            byte_start: 0,
+            byte_end: page_one.len(),
+            page_number: 1,
+        },
+        crate::types::PageBoundary {
+            byte_start: page_one.len(),
+            byte_end: native.len(),
+            page_number: 2,
+        },
+    ];
+    let accepted = accepted_ocr_page_replacements(&native, &boundaries, &read, &thresholds, |_| true);
+    assert_eq!(
+        accepted.keys().copied().collect::<Vec<_>>(),
+        vec![2],
+        "only the page with nothing readable is replaced"
+    );
+}
+
+/// Forty rows whose row 3 ends in a measure, and the same rows as OCR reads them: the measure's
+/// digit as a quote. The OCR row keeps every word of the native row. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn measure_rows() -> (Vec<String>, Vec<String>) {
+    let mut native = forty_rows();
+    native[3] = format!("{} 12 cm3", native[3]);
+    let mut read = native.clone();
+    read[3] = format!("{} 12 cm\u{2019}", forty_rows()[3]);
+    (native, read)
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn an_ocr_row_that_misreads_a_native_row_put_first_is_not_printed() {
+    let (native, read) = measure_rows();
+    let boxes = row_boxes(&native, &read);
+    let mut kept = read.clone();
+    kept.remove(3);
+    let read = read.join("\n");
+    for boxes in [None, Some(&boxes)] {
+        assert_eq!(
+            merged_page(&native.join("\n"), &read, boxes),
+            format!("{}\n\n{}", native[3], kept.join("\n")),
+            "geometry {}",
+            boxes.is_some()
+        );
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn an_ocr_row_with_a_word_the_native_row_lacks_stays_beside_it() {
+    let (native, mut read) = measure_rows();
+    read[3] = format!("{} paid", read[3]);
+    let boxes = row_boxes(&native, &read);
+    let read = read.join("\n");
+    for boxes in [None, Some(&boxes)] {
+        assert_eq!(
+            merged_page(&native.join("\n"), &read, boxes),
+            format!("{}\n\n{read}", native[3]),
+            "geometry {}",
+            boxes.is_some()
+        );
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn an_ocr_row_with_a_number_the_native_row_lacks_stays_beside_it() {
+    let native = forty_rows();
+    let mut read = native.clone();
+    read[3] = read[3].replacen("section 3 ", "section 35 ", 1);
+    let boxes = row_boxes(&native, &read);
+    let read = read.join("\n");
+    for boxes in [None, Some(&boxes)] {
+        assert_eq!(
+            merged_page(&native.join("\n"), &read, boxes),
+            format!("{}\n\n{read}", native[3]),
+            "geometry {}",
+            boxes.is_some()
+        );
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn an_ocr_row_that_drops_the_sign_of_a_number_stays_beside_it() {
+    let mut native = forty_rows();
+    native[3] = format!("{} total -100", native[3]);
+    let mut read = native.clone();
+    read[3] = format!("{} total 100", forty_rows()[3]);
+    let boxes = row_boxes(&native, &read);
+    let read = read.join("\n");
+    for boxes in [None, Some(&boxes)] {
+        assert_eq!(
+            merged_page(&native.join("\n"), &read, boxes),
+            format!("{}\n\n{read}", native[3]),
+            "geometry {}",
+            boxes.is_some()
+        );
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn an_ocr_row_too_unlike_the_native_row_stays_beside_it() {
+    let native = forty_rows();
+    let mut read = native.clone();
+    read[3] = read[3].replacen(" after the ", " ", 1);
+    assert!(native[3].contains(" after the "), "row 3 loses two words");
+    let boxes = row_boxes(&native, &read);
+    let read = read.join("\n");
+    for boxes in [None, Some(&boxes)] {
+        assert_eq!(
+            merged_page(&native.join("\n"), &read, boxes),
+            format!("{}\n\n{read}", native[3]),
+            "geometry {}",
+            boxes.is_some()
+        );
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn an_ocr_row_that_misreads_a_native_row_inside_a_heading_stays_beside_it() {
+    use super::super::document::{PlainOcrRows, layer_lines_to_put_first, text_with_layer_first};
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let (native, read) = measure_rows();
+    let boxes = row_boxes(&native, &read);
+    let mut doc = InternalDocument::new("pdf");
+    for (index, row) in read.iter().enumerate() {
+        let kind = if index == 3 {
+            ElementKind::Heading { level: 2 }
+        } else {
+            ElementKind::Paragraph
+        };
+        let mut element = InternalElement::text(kind, row.as_str(), 0);
+        element.page = Some(1);
+        doc.push_element(element);
+    }
+    let read = read.join("\n");
+    let layer = stored_layer(&native.join("\n"));
+    for boxes in [None, Some(&boxes)] {
+        let plain_rows = PlainOcrRows::of_page(Some(&doc), Some(1));
+        let first =
+            layer_lines_to_put_first(&layer, &read, false, &thresholds, boxes, plain_rows).expect("row 3 is put first");
+        assert_eq!(first.lines, native[3]);
+        assert!(
+            first.misread_ocr_rows.is_empty(),
+            "the misread row is a heading, which no native row replaces"
+        );
+        assert_eq!(text_with_layer_first(&read, &first), format!("{}\n\n{read}", native[3]));
+    }
+}
+
+/// The misread OCR row is a plain paragraph of a page that also holds a table: the row leaves
+/// by the element that holds it, not by the payload of the page. The whole-document run route,
+/// without a noise verdict, so the OCR text has to confirm the layer first. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn should_print_a_row_once_when_its_ocr_misread_is_a_paragraph_on_a_page_with_a_table() {
+    use super::super::document::{PageLayers, put_layers_first_in_run};
+    use crate::core::config::ExtractionConfig;
+    use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+    let (native, read) = measure_rows();
+    let table_row = "| Budget | 12 | 45 |";
+    let mut doc = InternalDocument::new("pdf");
+    for row in &read {
+        let mut element = InternalElement::text(ElementKind::Paragraph, row.as_str(), 0);
+        element.page = Some(1);
+        doc.push_element(element);
+    }
+    let mut table = InternalElement::text(ElementKind::Table { table_index: 0 }, table_row, 0);
+    table.page = Some(1);
+    doc.push_element(table);
+    let layers = ahash::AHashMap::from([(1, stored_layer(&native.join("\n")))]);
+    let mut page_texts = vec![format!("{}\n{table_row}", read.join("\n"))];
+    let mut text = page_texts[0].clone();
+    put_layers_first_in_run(
+        &mut text,
+        &mut page_texts,
+        Some(&mut doc),
+        PageLayers {
+            lines: &layers,
+            boxes: &ahash::AHashMap::default(),
+        },
+        &[],
+        0,
+        &ExtractionConfig::default(),
+    );
+    let mut kept = read.clone();
+    kept.remove(3);
+    assert_eq!(
+        text,
+        format!("{}\n\n{}\n{table_row}", native[3], kept.join("\n")),
+        "the row prints once, as the native read it; the table row stays"
+    );
+    assert_eq!(page_texts[0], text);
+    let texts: Vec<&str> = doc.elements.iter().map(|element| element.text.as_str()).collect();
+    let mut expected = vec![native[3].as_str()];
+    expected.extend(kept.iter().map(String::as_str));
+    expected.push(table_row);
+    assert_eq!(
+        texts, expected,
+        "the misread paragraph leaves the page; the table element stays"
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_misread_ocr_row_leaves_the_structured_page_once_and_an_emptied_element_leaves_it() {
+    use super::super::document::{LayerFirst, MisreadOcrRow, finish_mixed_layer_prepend};
+    use crate::types::internal::{
+        ElementKind, InternalDocument, InternalElement, Relationship, RelationshipKind, RelationshipTarget,
+    };
+
+    let mut doc = InternalDocument::new("pdf");
+    for (index, text) in ["total 12 cm\u{2019}", "alpha beta\ntotal 12 cm\u{2019}", "gamma"]
+        .into_iter()
+        .enumerate()
+    {
+        let mut element = InternalElement::text(ElementKind::Paragraph, text, 0);
+        element.bbox = Some(test_row_bbox(super::row_box(index)));
+        doc.push_element(element);
+    }
+    doc.relationships.push(Relationship {
+        source: 2,
+        target: RelationshipTarget::Index(1),
+        kind: RelationshipKind::InternalLink,
+    });
+    let first = LayerFirst {
+        lines: "total 12 cm3".to_string(),
+        lost_glyphs: 0,
+        misread_ocr_rows: vec![MisreadOcrRow {
+            page: None,
+            line: Some(0),
+            bbox: Some(super::row_box(0)),
+            key: "total 12 cm\u{2019}".into(),
+        }],
+    };
+    let mut text = "total 12 cm\u{2019}\nalpha beta\ntotal 12 cm\u{2019}\ngamma".to_string();
+    finish_mixed_layer_prepend(&mut text, Some(&mut doc), &first);
+    let texts: Vec<&str> = doc.elements.iter().map(|element| element.text.as_str()).collect();
+    assert_eq!(
+        texts,
+        ["total 12 cm3", "alpha beta\ntotal 12 cm\u{2019}", "gamma"],
+        "one native row takes one OCR row; the second equal row stays"
+    );
+    assert_eq!(doc.relationships.len(), 1);
+    assert_eq!(
+        doc.relationships[0].source, 2,
+        "the source moves down one for the removed element, then up one for the layer"
+    );
+    assert!(
+        matches!(doc.relationships[0].target, RelationshipTarget::Index(1)),
+        "the target moves down one, then up one"
+    );
+    assert_eq!(text, "total 12 cm3\n\nalpha beta\ntotal 12 cm\u{2019}\ngamma");
+}
+
+/// A heading and a plain paragraph hold the same misread row: both stay without evidence that
+/// identifies the paragraph occurrence. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn an_ambiguous_misread_row_preserves_the_plain_paragraph_and_heading() {
+    use super::super::document::{LayerFirst, MisreadOcrRow, finish_mixed_layer_prepend};
+    let misread = "total 12 cm\u{2019}";
+    for heading_first in [true, false] {
+        let mut doc = InternalDocument::new("pdf");
+        let heading = InternalElement::text(ElementKind::Heading { level: 1 }, misread, 0);
+        let paragraph = InternalElement::text(ElementKind::Paragraph, misread, 0);
+        let order = if heading_first {
+            [heading, paragraph]
+        } else {
+            [paragraph, heading]
+        };
+        for mut element in order {
+            element.page = Some(1);
+            doc.push_element(element);
+        }
+        let first = LayerFirst {
+            lines: "total 12 cm3".to_string(),
+            lost_glyphs: 0,
+            misread_ocr_rows: vec![MisreadOcrRow {
+                page: Some(1),
+                line: Some(0),
+                bbox: None,
+                key: misread.into(),
+            }],
+        };
+        let original = doc.elements.clone();
+        let mut flat = format!("{misread}\n{misread}");
+        finish_mixed_layer_prepend(&mut flat, Some(&mut doc), &first);
+        assert_eq!(flat, format!("total 12 cm3\n\n{misread}\n{misread}"));
+        assert_eq!(doc.elements[1..], original);
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_whole_document_run_drops_the_misread_row_on_a_plain_page_only() {
+    use super::super::document::{PageLayers, flat_ocr_page_document, put_layers_first_in_run};
+    use super::super::scoring::OcrPageNoiseVerdict;
+    use crate::core::config::ExtractionConfig;
+    use crate::types::document_structure::{AnnotationKind, TextAnnotation};
+
+    let verdict = OcrPageNoiseVerdict {
+        page_index: 0,
+        low_confidence: true,
+        fragmented_noise: false,
+        dictionary_noise: false,
+        fragmented_word_ratio: 0.0,
+        word_count: 4,
+        mean_confidence: Some(0.2),
+        dict_invalid_word_ratio: None,
+        discarded: false,
+    };
+    let layers = ahash::AHashMap::from([(1, "total 12 cm3 of water".to_string())]);
+    for rich in [false, true] {
+        let mut page_texts = vec!["total 12 cm\u{2019} of water".to_string()];
+        let mut text = page_texts[0].clone();
+        let mut doc = flat_ocr_page_document(&text);
+        doc.elements[0].page = Some(1);
+        if rich {
+            doc.elements[0].annotations.push(TextAnnotation {
+                start: 0,
+                end: 5,
+                kind: AnnotationKind::Bold,
+            });
+        }
+        put_layers_first_in_run(
+            &mut text,
+            &mut page_texts,
+            Some(&mut doc),
+            PageLayers {
+                lines: &layers,
+                boxes: &ahash::AHashMap::default(),
+            },
+            std::slice::from_ref(&verdict),
+            0,
+            &ExtractionConfig::default(),
+        );
+        let texts: Vec<&str> = doc.elements.iter().map(|element| element.text.as_str()).collect();
+        if rich {
+            assert_eq!(
+                text, "total 12 cm3 of water\n\ntotal 12 cm\u{2019} of water",
+                "a rich page keeps its OCR row"
+            );
+            assert_eq!(texts, ["total 12 cm3 of water", "total 12 cm\u{2019} of water"]);
+        } else {
+            assert_eq!(
+                text, "total 12 cm3 of water",
+                "a plain page prints the row once, as the native read it"
+            );
+            assert_eq!(texts, ["total 12 cm3 of water"]);
+        }
+        assert_eq!(page_texts[0], text);
+    }
+}
+
+/// Forty rows whose row 0 begins with a lost glyph (`marker`, a checkbox before the text), and the
+/// rows as OCR reads them, with `glyph` for what OCR made of the checkbox. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn checkbox_rows(marker: char, glyph: &str) -> (Vec<String>, Vec<String>) {
+    let (mut native, mut read) = (forty_rows(), forty_rows());
+    native[0] = format!("{marker}{}", native[0]);
+    read[0] = format!("{glyph}{}", read[0]);
+    (native, read)
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_symbol_glyph_the_ocr_glued_to_a_word_puts_the_native_row_first_without_the_glued_row() {
+    let (native, read) = checkbox_rows(LOST_SYMBOL_GLYPH_MARKER, "o");
+    let boxes = row_boxes(&native, &read);
+    let expected = format!("{}\n\n{}", forty_rows()[0], read[1..].join("\n"));
+    for boxes in [None, Some(&boxes)] {
+        assert_eq!(
+            merged_page(&native.join("\n"), &read.join("\n"), boxes),
+            expected,
+            "geometry: {}",
+            boxes.is_some()
+        );
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_symbol_glyph_the_ocr_read_as_its_own_token_or_not_at_all_is_a_whole_read() {
+    for glyph in ["o ", "", "☐ "] {
+        let (native, read) = checkbox_rows(LOST_SYMBOL_GLYPH_MARKER, glyph);
+        let boxes = row_boxes(&native, &read);
+        let read = read.join("\n");
+        for boxes in [None, Some(&boxes)] {
+            assert_eq!(merged_page(&native.join("\n"), &read, boxes), read, "glyph {glyph:?}");
+        }
+    }
+}
+
+/// A lost glyph whose font is unknown may be a letter of the word, so the OCR read wins. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_lost_glyph_of_an_unknown_font_glued_by_the_ocr_is_a_whole_read() {
+    let (native, read) = checkbox_rows('\u{FFFD}', "o");
+    let boxes = row_boxes(&native, &read);
+    let read = read.join("\n");
+    for boxes in [None, Some(&boxes)] {
+        assert_eq!(merged_page(&native.join("\n"), &read, boxes), read);
+    }
+}
+
+/// The native text lost a ligature inside a word; OCR read the word whole, so the page is the OCR
+/// read, whichever font the lost glyph had. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_word_with_a_lost_glyph_inside_comes_from_the_ocr_that_read_it_whole() {
+    let mut native = forty_rows();
+    native[0] = native[0].replacen("approved", "appr\u{FFFD}ved", 1);
+    native[1] = native[1].replacen("approved", &format!("appr{LOST_SYMBOL_GLYPH_MARKER}ved"), 1);
+    let read = forty_rows();
+    let boxes = row_boxes(&native, &read);
+    let read = read.join("\n");
+    for boxes in [None, Some(&boxes)] {
+        assert_eq!(merged_page(&native.join("\n"), &read, boxes), read);
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_marked_page_whose_remainder_is_garbage_keeps_no_layer() {
+    use super::super::document::{accepted_ocr_page_replacements, clean_native_page_layers};
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let page = format!("{m} #%& \u{FFFD} @!* ~~ {m}{m} |||\n", m = LOST_SYMBOL_GLYPH_MARKER).repeat(30);
+    assert!(
+        !clean_native_page_layers(&page, &one_page(&page), None, &thresholds).contains_key(&1),
+        "nothing readable remains to keep"
+    );
+    let read = [(1, "two stray words only".to_string())].into_iter().collect();
+    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, |_| true);
+    assert!(accepted.contains_key(&1), "the OCR text replaces the page");
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn the_marked_page_judgement_is_off_under_a_configured_pipeline() {
+    use super::super::document::accepted_ocr_page_replacements;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let read: ahash::AHashMap<u32, String> = [(1, "two stray words only".to_string())].into_iter().collect();
+    let page = readable_page_with_lost_glyphs();
+    let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, |_| false);
+    assert!(
+        accepted.contains_key(&1),
+        "a configured pipeline judges the marked page as before: its markers are garble"
+    );
+    let clean = format!("{}\n", forty_rows()[..20].join("\n"));
+    for judge in [false, true] {
+        let accepted = accepted_ocr_page_replacements(&clean, &one_page(&clean), &read, &thresholds, |_| judge);
+        assert!(
+            accepted.is_empty(),
+            "control: a clean page keeps its text under either arm ({judge})"
+        );
+    }
+}
+
+/// A mixed-route config whose OCR runs the named fake backend alone, or as a configured pipeline. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn mixed_route_config(backend: &str, pipeline: bool) -> crate::core::config::ExtractionConfig {
+    use crate::core::config::{ExtractionConfig, OcrConfig, OcrPipelineConfig, OcrPipelineStage, OcrQualityThresholds};
+    ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig {
+            backend: backend.to_string(),
+            pipeline: pipeline.then(|| OcrPipelineConfig {
+                stages: vec![OcrPipelineStage {
+                    backend: backend.to_string(),
+                    priority: 100,
+                    language: None,
+                    tesseract_config: None,
+                    paddle_ocr_config: None,
+                    paddle_ocr_settings: None,
+                    vlm_config: None,
+                    backend_options: None,
+                }],
+                quality_thresholds: OcrQualityThresholds {
+                    pipeline_min_quality: 0.0,
+                    ..Default::default()
+                },
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
+/// The mixed route replaces a marked page when no ink proof of the same page backs its native
+/// text, whatever the route: a short read of a layer nothing corroborates is no reason to keep the
+/// layer. A forced page and a configured pipeline replace it too. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[tokio::test]
+#[serial_test::serial]
+async fn the_mixed_route_replaces_a_marked_page_its_ink_does_not_corroborate() {
+    use super::super::pipeline::extract_mixed_ocr_native;
+    const BACKEND: &str = "marked-page-route-backend";
+    const READ: &str = "two stray words only";
+    crate::plugins::register_ocr_backend(std::sync::Arc::new(super::StageBackend {
+        name: BACKEND,
+        text: READ,
+        noisy: false,
+    }))
+    .unwrap();
+    let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(612.0, 792.0);
+    let page = readable_page_with_lost_glyphs();
+    let mut results = Vec::new();
+    for (name, pipeline, forced) in [
+        ("single", false, false),
+        ("pipeline", true, false),
+        ("forced", false, true),
+    ] {
+        let mut config = mixed_route_config(BACKEND, pipeline);
+        config.force_ocr_pages = forced.then(|| vec![1]);
+        let run = extract_mixed_ocr_native(&page, &one_page(&page), &[1], &pdf, &config, None).await;
+        results.push((name, run));
+    }
+    crate::plugins::unregister_ocr_backend(BACKEND).unwrap();
+    assert_eq!(results.len(), 3);
+    for (name, run) in results {
+        let (text, replaced, ..) = run.unwrap();
+        assert!(
+            replaced.get(&1).is_some_and(|text| text.contains(READ)),
+            "{name}: the uncorroborated marked page is replaced: {text:?} {replaced:?}"
+        );
+    }
+}
+
+/// A two-page PDF whose pages have no content; the fake backend reads whichever page is rendered. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn blank_two_page_pdf() -> Vec<u8> {
+    let mut buf = b"%PDF-1.4\n".to_vec();
+    let mut offsets = Vec::new();
+    let objects = [
+        "<</Type /Catalog /Pages 2 0 R>>",
+        "<</Type /Pages /Kids [3 0 R 4 0 R] /Count 2>>",
+        "<</Type /Page /MediaBox [0 0 612 792] /Parent 2 0 R>>",
+        "<</Type /Page /MediaBox [0 0 612 792] /Parent 2 0 R>>",
+    ];
+    for (n, body) in objects.iter().enumerate() {
+        offsets.push(buf.len());
+        buf.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", n + 1).as_bytes());
+    }
+    let xref = buf.len();
+    buf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+    for offset in offsets {
+        buf.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    buf.extend_from_slice(
+        format!(
+            "trailer\n<</Size {} /Root 1 0 R>>\nstartxref\n{xref}\n%%EOF\n",
+            objects.len() + 1
+        )
+        .as_bytes(),
+    );
+    buf
+}
+
+/// A long marked native layer that nothing corroborates, beside a short correct read: the read
+/// replaces the page and the other page is untouched, whichever page comes first and whichever
+/// output format. The whole text is compared, so a row printed twice fails. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[tokio::test]
+#[serial_test::serial]
+async fn a_long_marked_layer_nothing_corroborates_gives_way_to_the_short_correct_read() {
+    use super::super::pipeline::extract_mixed_ocr_native;
+    use crate::core::config::OutputFormat;
+    const BACKEND: &str = "covered-layer-route-backend";
+    const READ: &str = "visible invoice total";
+    crate::plugins::register_ocr_backend(std::sync::Arc::new(super::StageBackend {
+        name: BACKEND,
+        text: READ,
+        noisy: false,
+    }))
+    .unwrap();
+    let pdf = blank_two_page_pdf();
+    let (_, marked_rows, _) = marked_cases().swap_remove(0);
+    let marked = format!("{}\n", marked_rows[..20].join("\n"));
+    let clean = format!("{}\n", forty_rows()[20..].join("\n"));
+    let mut runs = Vec::new();
+    for format in [OutputFormat::Plain, OutputFormat::Markdown] {
+        for marked_first in [true, false] {
+            let (native, marked_page) = if marked_first {
+                (format!("{marked}{clean}"), 1u32)
+            } else {
+                (format!("{clean}{marked}"), 2u32)
+            };
+            let (first, second) = if marked_first {
+                (marked.len(), clean.len())
+            } else {
+                (clean.len(), marked.len())
+            };
+            let boundaries = vec![
+                crate::types::PageBoundary {
+                    byte_start: 0,
+                    byte_end: first,
+                    page_number: 1,
+                },
+                crate::types::PageBoundary {
+                    byte_start: first,
+                    byte_end: first + second,
+                    page_number: 2,
+                },
+            ];
+            let mut config = mixed_route_config(BACKEND, false);
+            config.output_format = format.clone();
+            let run = extract_mixed_ocr_native(&native, &boundaries, &[marked_page], &pdf, &config, None).await;
+            runs.push((format!("{:?}", config.output_format), marked_first, marked_page, run));
+        }
+    }
+    crate::plugins::unregister_ocr_backend(BACKEND).unwrap();
+    assert_eq!(runs.len(), 4);
+    for (format, marked_first, marked_page, run) in runs {
+        let (text, replaced, ..) = run.unwrap();
+        let label = format!("{format}, marked first: {marked_first}");
+        let expected = if marked_first {
+            format!("{READ}{clean}")
+        } else {
+            format!("{clean}{READ}")
+        };
+        assert_eq!(text, expected, "{label}");
+        assert_eq!(
+            replaced.keys().copied().collect::<Vec<_>>(),
+            vec![marked_page],
+            "{label}"
+        );
+        assert_eq!(replaced[&marked_page], READ, "{label}");
+    }
+}
+
+/// The same covered layer under the automatic Tesseract config, where the ink gate decides: without
+/// ink proof the short correct read replaces the marked page in either page order, and with it the
+/// page stays native. The merged text is compared whole. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[test]
+fn the_ink_gate_decides_whether_a_short_read_replaces_a_long_marked_layer() {
+    use super::super::document::{
+        accepted_ocr_page_replacements, apply_ocr_page_replacements, marked_page_is_judged_on_readable_text as judged,
+    };
+    const READ: &str = "visible invoice total";
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let config = mixed_route_config("tesseract", false);
+    let (_, marked_rows, _) = marked_cases().swap_remove(0);
+    let marked = format!("{}\n", marked_rows[..20].join("\n"));
+    let clean = format!("{}\n", forty_rows()[20..].join("\n"));
+    for marked_first in [true, false] {
+        let (native, marked_page, boundaries) = if marked_first {
+            let native = format!("{marked}{clean}");
+            (native, 1u32, page_pair(marked.len(), clean.len()))
+        } else {
+            let native = format!("{clean}{marked}");
+            (native, 2u32, page_pair(clean.len(), marked.len()))
+        };
+        let read: ahash::AHashMap<u32, String> = [(marked_page, READ.to_string())].into_iter().collect();
+        for (ink, replaced) in [(false, true), (true, false)] {
+            let accepted = accepted_ocr_page_replacements(&native, &boundaries, &read, &thresholds, |page| {
+                judged(&config, page, false, ink)
+            });
+            let merged = apply_ocr_page_replacements(&native, &boundaries, &accepted);
+            let expected = match (replaced, marked_first) {
+                (false, _) => native.clone(),
+                (true, true) => format!("{READ}{clean}"),
+                (true, false) => format!("{clean}{READ}"),
+            };
+            assert_eq!(merged, expected, "marked first: {marked_first}, ink proof: {ink}");
+        }
+    }
+}
+
+/// The boundaries of a two-page text whose pages are `first` and `second` bytes long. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn page_pair(first: usize, second: usize) -> Vec<crate::types::PageBoundary> {
+    vec![
+        crate::types::PageBoundary {
+            byte_start: 0,
+            byte_end: first,
+            page_number: 1,
+        },
+        crate::types::PageBoundary {
+            byte_start: first,
+            byte_end: first + second,
+            page_number: 2,
+        },
+    ]
+}
+
+/// With ink proof present the ink gate alone would keep the marked page native; a forced page or
+/// `force_ocr` must still let the OCR read replace it. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[test]
+fn ink_proof_does_not_keep_a_forced_marked_page_native() {
+    use super::super::document::{accepted_ocr_page_replacements, marked_page_is_judged_on_readable_text as judged};
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let page = readable_page_with_lost_glyphs();
+    let read: ahash::AHashMap<u32, String> = [(1, "two stray words only".to_string())].into_iter().collect();
+    let mut by_pages = mixed_route_config("tesseract", false);
+    by_pages.force_ocr_pages = Some(vec![1]);
+    let mut by_flag = mixed_route_config("tesseract", false);
+    by_flag.force_ocr = true;
+    for (name, config, native_kept) in [
+        ("automatic", mixed_route_config("tesseract", false), true),
+        ("force_ocr_pages", by_pages, false),
+        ("force_ocr", by_flag, false),
+    ] {
+        let accepted = accepted_ocr_page_replacements(&page, &one_page(&page), &read, &thresholds, |p| {
+            judged(&config, p, false, true)
+        });
+        assert_eq!(accepted.is_empty(), native_kept, "{name}: {accepted:?}");
+    }
+}
+
+/// A marked page is judged on its readable text only where the run may keep native text
+/// automatically and the page's ink corroborates it. ~keep
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+#[test]
+fn a_marked_page_is_judged_on_readable_text_only_in_automatic_mode_with_ink() {
+    use super::super::document::marked_page_is_judged_on_readable_text as judged;
+    let auto = mixed_route_config("tesseract", false);
+    assert!(judged(&auto, 1, false, true), "automatic mode with ink");
+    assert!(!judged(&auto, 1, false, false), "no ink corroboration");
+    assert!(!judged(&auto, 1, true, true), "a hidden-layer probe");
+    let mut forced = mixed_route_config("tesseract", false);
+    forced.force_ocr_pages = Some(vec![1]);
+    assert!(!judged(&forced, 1, false, true), "a forced page");
+    assert!(judged(&forced, 2, false, true), "control: another page of the same run");
+    let mut all = mixed_route_config("tesseract", false);
+    all.force_ocr = true;
+    assert!(!judged(&all, 2, false, true), "force_ocr");
+    assert!(
+        !judged(&mixed_route_config("tesseract", true), 1, false, true),
+        "a configured pipeline"
+    );
+}
+
+/// With the page-wise judgement, only the page the ink corroborates keeps its native text. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn only_the_corroborated_marked_page_keeps_its_native_text() {
+    use super::super::document::accepted_ocr_page_replacements;
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let (_, marked, _) = marked_cases().swap_remove(0);
+    let page = format!("{}\n", marked[..20].join("\n"));
+    let native = format!("{page}{page}");
+    let boundaries = vec![
+        crate::types::PageBoundary {
+            byte_start: 0,
+            byte_end: page.len(),
+            page_number: 1,
+        },
+        crate::types::PageBoundary {
+            byte_start: page.len(),
+            byte_end: native.len(),
+            page_number: 2,
+        },
+    ];
+    let stray = "two stray words only".to_string();
+    let read = [(1, stray.clone()), (2, stray)].into_iter().collect();
+    let accepted = accepted_ocr_page_replacements(&native, &boundaries, &read, &thresholds, |page| page == 1);
+    assert_eq!(accepted.keys().copied().collect::<Vec<_>>(), vec![2]);
+}
+
+/// The premise of the route test: under the `full` build the default config has an effective
+/// pipeline (the paddle fallback) that the user did not configure, so the gate reads `pipeline`. ~keep
+#[cfg(all(paddle_ocr, feature = "ocr"))]
+#[test]
+fn the_full_build_makes_a_pipeline_the_user_did_not_configure() {
+    let config = crate::core::config::OcrConfig::default();
+    assert!(config.pipeline.is_none());
+    assert!(
+        config.effective_pipeline().is_some(),
+        "the default backend gets a paddle fallback stage"
+    );
 }
 
 /// The read's words a word box shows at a native word's own place, for `native_spells_read`.
@@ -754,6 +2258,29 @@ fn native_spells_read_needs_distinct_alphabetic_words_above_the_floor_and_share_
     );
 }
 
+/// The extractor's two lost-glyph markers read the same: a marker inside a word of the native
+/// layer is removed before the words and the bigrams are matched, whichever marker it is. ~keep
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+fn the_symbol_marker_inside_a_native_word_is_removed_like_the_other_lost_glyph_marker() {
+    use super::super::document::{read_bigrams_in_native, read_words_in_native};
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let layer = |marker: char| format!("The commit{marker}tee met on Tuesd{marker}ay to review the budget and design");
+    let read = "The committee met on Tuesday to review the budget and design";
+    let placed_words = placed(&["committee", "tuesday"]);
+    let words = read_words_in_native(&layer('\u{FFFD}'), read, &placed_words, &thresholds);
+    assert_eq!(words.placed, 2, "the control shares both placed words: {words:?}");
+    assert_eq!(
+        read_words_in_native(&layer(LOST_SYMBOL_GLYPH_MARKER), read, &placed_words, &thresholds),
+        words
+    );
+    let thai = |marker: char| format!("\u{0e2a}\u{0e27}{marker}\u{0e31}\u{0e2a}\u{0e14}\u{0e35}");
+    let read = "\u{0e2a}\u{0e27}\u{0e31}\u{0e2a}\u{0e14}\u{0e35}";
+    let bigrams = read_bigrams_in_native(&thai('\u{FFFD}'), read);
+    assert!(bigrams.0 > 0, "the control shares bigrams: {bigrams:?}");
+    assert_eq!(read_bigrams_in_native(&thai(LOST_SYMBOL_GLYPH_MARKER), read), bigrams);
+}
+
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 #[test]
 fn native_spells_read_rejects_a_read_whose_shared_words_are_all_numbers() {
@@ -823,4 +2350,237 @@ fn native_spells_read_compares_unspaced_scripts_by_bigrams() {
     let diluted = "我们的委员会审查季度收入有所增长利润率保持稳定季节变化天气预报明天下雨";
     assert!(!native_spells_read(native, diluted, &none, &thresholds));
     assert!(!native_spells_read(native, diluted, &placed(&[diluted]), &thresholds));
+}
+
+/// An OCR row that adds a one-letter word to a native row is no misread of it: it prints beside
+/// the native row, so the letter stays on the page. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn an_ocr_row_with_one_more_letter_than_the_native_row_stays() {
+    let native = forty_rows();
+    let mut read = native.clone();
+    read[3] = format!("c {}", native[3]);
+    let merged = merged_page(&native.join("\n"), &read.join("\n"), None);
+    assert!(
+        merged.lines().any(|line| line == format!("c {}", native[3])),
+        "the OCR row with the extra letter stays: {merged:?}"
+    );
+}
+
+/// Native row B comes before native row A. OCR row x misreads A and also passes for B; OCR row y
+/// misreads only B. Each native row takes its best misread, so both x and y leave. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn each_native_row_takes_its_best_misread_not_the_first() {
+    let base = forty_rows();
+    let a = format!("{} 12 cm3", base[3]);
+    let b = format!("{} 12 cm3 now", base[3]);
+    let x = format!("{} 12 cm\u{2019}", base[3]);
+    let y = format!("{} 12 cm\u{2019} now", base[3]);
+    let mut native = base.clone();
+    native.splice(3..4, [b.clone(), a.clone()]);
+    let mut read = base.clone();
+    read.splice(3..4, [x.clone(), y.clone()]);
+    let merged = merged_page(&native.join("\n"), &read.join("\n"), None);
+    assert!(
+        merged.lines().any(|line| line == b) && merged.lines().any(|line| line == a),
+        "{merged:?}"
+    );
+    assert!(
+        !merged.lines().any(|line| line == y),
+        "y is the misread of B and leaves with it: {merged:?}"
+    );
+    assert!(
+        !merged.lines().any(|line| line == x),
+        "x is the misread of A: {merged:?}"
+    );
+}
+
+/// Two pages hold the same OCR row and page 2 misreads a native row with it: only the row of
+/// page 2 leaves the structured document, even when the caller names no page. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_misread_row_leaves_only_the_page_it_was_matched_on() {
+    use super::super::document::{PlainOcrRows, layer_lines_to_put_first};
+    let misread = "total 12 cm\u{2019}";
+    let mut doc = InternalDocument::new("pdf");
+    for page in [1, 2] {
+        let mut element = InternalElement::text(ElementKind::Paragraph, misread, 0);
+        element.page = Some(page);
+        doc.push_element(element);
+    }
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let plain_rows = PlainOcrRows::of_page(Some(&doc), Some(2));
+    let first = layer_lines_to_put_first("total 12 cm3", misread, true, &thresholds, None, plain_rows)
+        .expect("the native row is put first");
+    put_layer_first_in_document(&mut doc, None, &first);
+    let rows_of = |page: u32| {
+        doc.elements
+            .iter()
+            .filter(|element| element.page == Some(page) && element.text == misread)
+            .count()
+    };
+    assert_eq!(
+        rows_of(1),
+        1,
+        "the row of page 1 stays: the misread was matched on page 2"
+    );
+    assert_eq!(rows_of(2), 0, "the misread row of page 2 leaves");
+}
+
+/// The rows of a page, each with a tag word, two row words, a number and a unit. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn tagged_rows(count: usize, tag: &str, unit: &str) -> String {
+    (0..count)
+        .map(|n| {
+            let (one, two) = (ROW_WORDS[n % 20], ROW_WORDS[(n * 7) % 20]);
+            format!("{tag} row {n} {one} {two} total {} {unit}", n * 3)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The row similarity tests that putting the native rows first runs on a page. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn similarity_tests_of(native: &str, read: &str) -> (usize, String) {
+    use super::super::document::{
+        MISREAD_SIMILARITY_CALLS, PlainOcrRows, layer_lines_to_put_first, text_with_layer_first,
+    };
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let before = MISREAD_SIMILARITY_CALLS.with(std::cell::Cell::get);
+    let first = layer_lines_to_put_first(native, read, true, &thresholds, None, PlainOcrRows::every())
+        .expect("the native rows are put first");
+    let calls = MISREAD_SIMILARITY_CALLS.with(std::cell::Cell::get) - before;
+    (calls, text_with_layer_first(read, &first))
+}
+
+/// A page whose OCR rows read no native row runs no similarity test: a cheap check of the words
+/// rejects each pair first, so the work grows with the rows and not with their square. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn rows_that_share_no_words_run_no_similarity_test() {
+    for count in [300, 600] {
+        let (native, read) = (
+            tagged_rows(count, "native", "cm3"),
+            tagged_rows(count, "scanned", "cm3"),
+        );
+        let (calls, _) = similarity_tests_of(&native, &read);
+        assert_eq!(calls, 0, "{count} rows ran {calls} similarity tests");
+    }
+}
+
+/// A native row reads only the OCR rows whose length can reach the similarity: OCR rows far longer
+/// than every native row are never read. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn ocr_rows_too_long_to_misread_a_native_row_are_not_read() {
+    use super::super::document::MISREAD_CANDIDATES_READ;
+    let native = tagged_rows(300, "native", "cm3");
+    let read = tagged_rows(300, "scanned and a far longer tail of other words", "cm3");
+    let before = MISREAD_CANDIDATES_READ.with(std::cell::Cell::get);
+    let _ = similarity_tests_of(&native, &read);
+    let rows = MISREAD_CANDIDATES_READ.with(std::cell::Cell::get) - before;
+    assert_eq!(rows, 0, "the native rows read {rows} OCR rows");
+}
+
+/// A page whose every OCR row misreads one native row runs about one similarity test per row, and
+/// every misread row leaves. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn misread_rows_run_about_one_similarity_test_each() {
+    let count = 300;
+    let (native, read) = (
+        tagged_rows(count, "native", "cm3"),
+        tagged_rows(count, "native", "cm\u{2019}"),
+    );
+    let (calls, merged) = similarity_tests_of(&native, &read);
+    assert!(calls <= 2 * count, "{count} rows ran {calls} similarity tests");
+    assert_eq!(
+        merged, native,
+        "each misread row leaves and each native row prints once"
+    );
+}
+
+/// The OCR text holds a misread row twice, before and after the rows it shares with the native
+/// text. The native row takes the nearer one in reading order, and the page text drops that line,
+/// not the first line with the same text. ~keep
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn a_misread_row_leaves_the_page_text_at_its_own_line() {
+    use super::super::document::{PlainOcrRows, layer_lines_to_put_first, text_with_layer_first};
+    let thresholds = crate::core::config::OcrQualityThresholds::default();
+    let native = "alpha\nbeta\ngamma\ntotal 12 cm3";
+    let read = "total 12 cm\u{2019}\nalpha\nbeta\ngamma\ntotal 12 cm\u{2019}";
+    let first = layer_lines_to_put_first(native, read, true, &thresholds, None, PlainOcrRows::every())
+        .expect("the native row is put first");
+    assert_eq!(
+        text_with_layer_first(read, &first),
+        "total 12 cm3\n\ntotal 12 cm\u{2019}\nalpha\nbeta\ngamma",
+        "the misread row after the shared rows leaves; the one before them stays"
+    );
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[test]
+fn boxed_duplicate_misread_leaves_only_its_own_flat_and_structured_row() {
+    use super::super::document::{PlainOcrRows, finish_mixed_layer_prepend, layer_lines_to_put_first};
+    use crate::core::config::OcrQualityThresholds;
+
+    let (native, mut read) = measure_rows();
+    read.insert(0, read[3].clone());
+    let positions: Vec<_> = std::iter::once(native.len() + 1).chain(0..native.len()).collect();
+    let read = read.join("\n");
+    let rows = super::lines_at_rows(&read, &positions);
+    let native_refs: Vec<_> = native.iter().map(String::as_str).collect();
+    let boxes = super::page_boxes(&native_refs, &rows);
+
+    for (scenario, first_box, omit_matched) in [
+        ("distinct", Some(rows[0].bbox), false),
+        ("coincident", Some(rows[4].bbox), false),
+        ("only unboxed duplicate remains", None, true),
+    ] {
+        let mut doc = InternalDocument::new("pdf");
+        for (index, (text, row)) in read.lines().zip(&rows).enumerate() {
+            if omit_matched && index == 4 {
+                continue;
+            }
+            let mut element = InternalElement::text(ElementKind::Paragraph, text, 0);
+            element.bbox = if index == 0 { first_box } else { Some(row.bbox) }.map(test_row_bbox);
+            doc.push_element(element);
+        }
+        let first = layer_lines_to_put_first(
+            &stored_layer(&native.join("\n")),
+            &read,
+            false,
+            &OcrQualityThresholds::default(),
+            Some(&boxes),
+            PlainOcrRows::of_page(Some(&doc), None),
+        )
+        .expect("the native measure row is restored");
+        assert_eq!(first.lines, native[3]);
+        let mut expected = doc.elements.clone();
+        let mut expected_flat: Vec<_> = read.lines().collect();
+        if scenario == "distinct" {
+            expected.remove(4);
+            expected_flat.remove(4);
+        }
+        let mut flat = read.clone();
+        finish_mixed_layer_prepend(&mut flat, Some(&mut doc), &first);
+        assert_eq!(
+            flat,
+            format!("{}\n\n{}", native[3], expected_flat.join("\n")),
+            "{scenario}"
+        );
+        assert_eq!(doc.elements[1..], expected, "{scenario}");
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn test_row_bbox(bbox: super::super::document::LineBox) -> crate::types::BoundingBox {
+    crate::types::BoundingBox {
+        x0: f64::from(bbox.left),
+        y0: f64::from(bbox.top),
+        x1: f64::from(bbox.right),
+        y1: f64::from(bbox.bottom),
+    }
 }
