@@ -724,7 +724,7 @@ fn add(
     let Some(insertion) = content_insertion(&read.content, text, &area) else {
         return false;
     };
-    insert_recovered_text(read, text, token, (left, top, width, height), page, insertion);
+    insert_recovered_text(read, text, token, (left, top, width, height), page, (insertion, None));
     true
 }
 
@@ -734,7 +734,7 @@ fn insert_recovered_text(
     token: &str,
     (left, top, width, height): (u32, u32, u32, u32),
     page: u32,
-    insertion: Insertion,
+    (insertion, structured_position): (Insertion, Option<usize>),
 ) {
     let area = PixelBox {
         left: i64::from(left),
@@ -782,7 +782,7 @@ fn insert_recovered_text(
             y1: area.bottom as f64,
         });
         element.ocr_geometry = Some(geometry);
-        let position = reading_position(&document.elements, &area);
+        let position = structured_position.unwrap_or_else(|| reading_position(&document.elements, &area));
         document.elements.insert(position, element);
     }
 }

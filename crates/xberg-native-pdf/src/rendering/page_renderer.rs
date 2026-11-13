@@ -239,6 +239,7 @@ pub struct PageRenderer {
     /// Draw text in the invisible rendering modes (3, or 7 where it clips) so the raster shows
     /// everything on the page except glyph ink.
     text_ink_suppressed: bool,
+    suppressed_text_font: Option<String>,
     /// Leave every image XObject, image mask and inline image unpainted.
     images_suppressed: bool,
     /// Font cache (name -> FontInfo) for current context
@@ -501,7 +502,12 @@ impl PageRenderer {
     /// mode 3 for fill and stroke, mode 7 where the glyphs also clip. A clip silhouette is drawn
     /// through `coverage_only_gs`, which sets mode 0, so it keeps its glyph paint.
     fn text_paint_state<'a>(&self, gs: &'a GraphicsState) -> std::borrow::Cow<'a, GraphicsState> {
-        if !self.text_ink_suppressed {
+        if !self.text_ink_suppressed
+            && self
+                .suppressed_text_font
+                .as_deref()
+                .is_none_or(|font| gs.font_name.as_deref() != Some(font))
+        {
             return std::borrow::Cow::Borrowed(gs);
         }
         let mut invisible = gs.clone();
