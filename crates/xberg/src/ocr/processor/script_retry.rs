@@ -22,6 +22,16 @@ const PAGE_FLOOR_DENOMINATOR: usize = 3;
 
 /// The traineddata model used when OSD identifies Han.
 const HAN_MODEL: &str = "chi_sim";
+pub(super) const KHMER_MODEL: &str = "khm";
+pub(crate) const KHMER_SUPPLEMENT_KEY: &str = "xberg_mixed_pdf_khmer_supplement";
+
+tokio::task_local! {
+    pub(crate) static MIXED_PDF_KHMER_RETRY: bool;
+}
+pub(crate) fn mixed_pdf_khmer_retry_requested() -> bool {
+    MIXED_PDF_KHMER_RETRY.try_with(|enabled| *enabled).unwrap_or(false)
+}
+
 pub(super) const METADATA_KEY: &str = "script_retry";
 
 /// Tesseract OSD script names the retry knows a model for.
@@ -30,7 +40,9 @@ fn model_for_script(script: &str) -> Option<&'static str> {
 }
 
 pub(super) fn supports_retry(config: &crate::ocr::types::TesseractConfig) -> bool {
-    supports_retry_format(&config.output_format) && supports_retry_language(&config.language)
+    supports_retry_format(&config.output_format)
+        && (supports_retry_language(&config.language)
+            || (mixed_pdf_khmer_retry_requested() && may_retry_khmer(&config.language)))
 }
 
 pub(crate) fn supports_retry_format(format: &str) -> bool {
@@ -58,6 +70,23 @@ pub(crate) fn requires_outer_cache_bypass(language: &str, override_path: Option<
         .is_some()
 }
 
+pub(crate) fn may_retry_khmer(language: &str) -> bool {
+    !list_reads_script_of(language, KHMER_MODEL)
+}
+
+pub(crate) fn requires_khmer_outer_cache_bypass(
+    language: &str,
+    override_path: Option<&Path>,
+    env: &TessdataEnv,
+) -> bool {
+    may_retry_khmer(language)
+        && first_directory_holding(
+            &tessdata_search_dirs(override_path, env),
+            &retry_list(language, KHMER_MODEL),
+        )
+        .is_some()
+}
+
 /// Whether the configured `+`-joined list already reads the script of `model`.
 fn list_reads_script_of(language: &str, model: &str) -> bool {
     let readers: &[&str] = match model {
@@ -76,6 +105,7 @@ fn list_reads_script_of(language: &str, model: &str) -> bool {
             "script/japanese",
             "script/hangul",
         ],
+        KHMER_MODEL => &["khm", "script/khmer"],
         _ => &[],
     };
     language
@@ -85,7 +115,7 @@ fn list_reads_script_of(language: &str, model: &str) -> bool {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct ModelSet {
+pub(super) struct ModelSet {
     directory: String,
     languages: String,
     revision: blake3::Hash,
@@ -132,8 +162,14 @@ pub(super) fn hash_language_models<'a>(
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct RetryModels {
+    pub(super) han: Option<HanModels>,
+    pub(super) khmer: Option<ModelSet>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct HanModels {
     osd: ModelSet,
-    han: ModelSet,
+    recognition: ModelSet,
 }
 
 fn retry_directories(directories: &[String], han: &[String]) -> Option<(String, String)> {
@@ -143,21 +179,67 @@ fn retry_directories(directories: &[String], han: &[String]) -> Option<(String, 
 }
 
 impl RetryModels {
-    pub(super) fn resolve(directories: &[String], language: &str, psm: u8) -> Result<Option<Self>, OcrError> {
+    pub(super) fn from_snapshots(han: Option<HanModels>, khmer: Option<ModelSet>) -> Option<Self> {
+        (han.is_some() || khmer.is_some()).then_some(Self { han, khmer })
+    }
+
+    #[cfg(test)]
+    fn resolve(directories: &[String], language: &str, psm: u8) -> Result<Option<Self>, OcrError> {
+        Ok(Self::from_snapshots(
+            Self::resolve_han(directories, language, psm)?,
+            Self::resolve_requested_khmer(directories, language, psm)?,
+        ))
+    }
+
+    pub(super) fn resolve_requested_khmer(
+        directories: &[String],
+        language: &str,
+        psm: u8,
+    ) -> Result<Option<ModelSet>, OcrError> {
+        if mixed_pdf_khmer_retry_requested() && may_retry_khmer(language) {
+            Self::resolve_khmer(directories, language, psm)
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub(super) fn resolve_han(directories: &[String], language: &str, psm: u8) -> Result<Option<HanModels>, OcrError> {
+        if !supports_retry_language(language) {
+            return Ok(None);
+        }
         let osd = ["osd".to_string()];
         let han = retry_list(language, HAN_MODEL);
         let Some((osd_directory, han_directory)) = retry_directories(directories, &han) else {
             return Ok(None);
         };
-        Ok(Some(Self {
+        Ok(Some(HanModels {
             osd: ModelSet::snapshot(osd_directory, &osd, false)?,
-            han: ModelSet::snapshot(han_directory, &han, matches!(psm, 0 | 1 | 12))?,
+            recognition: ModelSet::snapshot(han_directory, &han, matches!(psm, 0 | 1 | 12))?,
         }))
     }
 
+    fn resolve_khmer(directories: &[String], language: &str, psm: u8) -> Result<Option<ModelSet>, OcrError> {
+        let languages = retry_list(language, KHMER_MODEL);
+        let implicit_osd = matches!(psm, 0 | 1 | 12);
+        let mut required = languages.clone();
+        if implicit_osd {
+            required.push("osd".to_owned());
+        }
+        let Some(directory) = first_directory_holding(directories, &required) else {
+            return Ok(None);
+        };
+        ModelSet::snapshot(directory, &languages, implicit_osd).map(Some)
+    }
+
     pub(super) fn hash_into(&self, hash: &mut blake3::Hasher) {
-        self.osd.hash_into(hash);
-        self.han.hash_into(hash);
+        if let Some(han) = &self.han {
+            han.osd.hash_into(hash);
+            han.recognition.hash_into(hash);
+        }
+        if let Some(khmer) = &self.khmer {
+            hash.update(b"khm");
+            khmer.hash_into(hash);
+        }
     }
 }
 
@@ -190,11 +272,18 @@ fn osd_script(image: &xberg_tesseract::Pix, pass: &Pass<'_>, models: &ModelSet) 
     })
 }
 
-/// A second read of a page that was merged with the first.
+/// The second read used for a primary merge or an additive Khmer supplement.
 pub(super) struct Outcome {
     script: String,
     model: &'static str,
     pub(super) merged: Merged,
+    khmer_supplement: Option<Merged>,
+}
+
+impl Outcome {
+    pub(super) fn replaces_primary(&self) -> bool {
+        self.model != KHMER_MODEL && self.khmer_supplement.is_none()
+    }
 }
 
 /// The models and settings of the page's first read, which the second read repeats.
@@ -215,9 +304,9 @@ fn retry_stage<T>(action: impl FnOnce() -> Result<T, OcrError>) -> Result<Option
     Ok((!cacheability::ocr_stop_requested()).then_some(result))
 }
 
-/// Name the page's script with OSD on the pixels the first read saw, and when the configured list
-/// cannot read that script, read the page again with its model added and merge line by line.
-/// OSD and the retry run on engines of their own, built for the page and dropped with it, never
+/// Retry Han when same-page OSD identifies it. For a mixed PDF's Khmer candidate, corroborate
+/// the supplemental read on the same pixels using a second segmentation mode.
+/// OSD and retry reads use engines built for the page and dropped with it, never
 /// on the pool: the page holds its pooled first engine the whole time, and two pages that each
 /// hold one and wait for a second pooled engine wait forever (measured: every document of a
 /// corpus hit the 600 s limit). Both models are looked up in the installed tessdata only: a model
@@ -227,6 +316,9 @@ pub(super) fn run(
     first_tsv: &str,
     pass: &Pass<'_>,
     models: &RetryModels,
+    validate_khmer: impl FnOnce() -> bool,
+    validate_han: impl FnOnce() -> bool,
+    on_error: impl Fn(&str, OcrError),
 ) -> Result<Option<Outcome>, OcrError> {
     if cacheability::ocr_stop_requested() {
         return Ok(None);
@@ -235,15 +327,148 @@ pub(super) fn run(
     let image = first
         .thresholded_image()
         .map_err(|e| engine_error("thresholded image", e))?;
-    let Some(script) = osd_script(&image, pass, &models.osd)? else {
+    let Some(outcome) = run_on_image(&image, first_tsv, pass, models, validate_khmer, validate_han, on_error)? else {
+        return Ok(None);
+    };
+    let Outcome {
+        script, model, merged, ..
+    } = &outcome;
+    tracing::debug!(
+        script,
+        model,
+        elapsed_ms = started.elapsed().as_millis() as u64,
+        lines_admitted = merged.admitted,
+        lines_refused = merged.refused,
+        words_added = merged.added,
+        "script retry read the page again"
+    );
+    Ok(Some(outcome))
+}
+
+fn run_on_image(
+    image: &xberg_tesseract::Pix,
+    first_tsv: &str,
+    pass: &Pass<'_>,
+    models: &RetryModels,
+    validate_khmer: impl FnOnce() -> bool,
+    validate_han: impl FnOnce() -> bool,
+    on_error: impl Fn(&str, OcrError),
+) -> Result<Option<Outcome>, OcrError> {
+    read_script_recoveries(
+        || match &models.khmer {
+            Some(khmer) => Ok(read_khmer_supplement(image, pass, khmer)?
+                .and_then(|supplement| new_khmer_occurrences(supplement, &parse_words(first_tsv)))),
+            None => Ok(None),
+        },
+        validate_khmer,
+        on_error,
+        || {
+            let han = read_han(image, first_tsv, pass, models)?;
+            Ok(han.filter(|_| validate_han()))
+        },
+    )
+}
+
+fn read_script_recoveries(
+    read_khmer: impl FnOnce() -> Result<Option<Merged>, OcrError>,
+    validate_khmer: impl FnOnce() -> bool,
+    on_error: impl Fn(&str, OcrError),
+    read_han: impl FnOnce() -> Result<Option<Outcome>, OcrError>,
+) -> Result<Option<Outcome>, OcrError> {
+    if cacheability::ocr_stop_requested() {
+        return Ok(None);
+    }
+    let khmer = match read_khmer() {
+        Ok(supplement) => supplement,
+        Err(error) => {
+            on_error(KHMER_MODEL, error);
+            None
+        }
+    };
+    if cacheability::ocr_stop_requested() {
+        return Ok(None);
+    }
+    let han = match read_han() {
+        Ok(han) => han,
+        Err(error) => {
+            on_error(HAN_MODEL, error);
+            None
+        }
+    };
+    if cacheability::ocr_stop_requested() {
+        return Ok(None);
+    }
+    // Han runs after Khmer and may outlive the model revision used by the earlier read. ~keep
+    let khmer = khmer.filter(|_| validate_khmer());
+    if cacheability::ocr_stop_requested() {
+        return Ok(None);
+    }
+    if let Some(mut outcome) = han {
+        outcome.khmer_supplement = khmer;
+        return Ok(Some(outcome));
+    }
+    Ok(khmer.map(|merged| Outcome {
+        script: "Khmer".into(),
+        model: KHMER_MODEL,
+        merged,
+        khmer_supplement: None,
+    }))
+}
+
+fn read_han(
+    image: &xberg_tesseract::Pix,
+    first_tsv: &str,
+    pass: &Pass<'_>,
+    models: &RetryModels,
+) -> Result<Option<Outcome>, OcrError> {
+    let Some(han) = &models.han else {
+        return Ok(None);
+    };
+    let Some(script) = osd_script(image, pass, &han.osd)? else {
         return Ok(None);
     };
     let Some(model) = model_for_script(&script) else {
         return Ok(None);
     };
-    let retry = new_engine(&models.han.directory, &models.han.languages, pass.config.oem)?;
+    let Some(retry_words) = read_retry_words(image, pass, &han.recognition, pass.config.psm)? else {
+        return Ok(None);
+    };
+    let merged = merge(parse_words(first_tsv), retry_words, &script, RETRY_MIN_CONF_GAIN);
+    Ok(Some(Outcome {
+        script,
+        model,
+        merged,
+        khmer_supplement: None,
+    }))
+}
+
+fn read_khmer_supplement(
+    image: &xberg_tesseract::Pix,
+    pass: &Pass<'_>,
+    models: &ModelSet,
+) -> Result<Option<Merged>, OcrError> {
+    let Some(retry) = read_retry_words(image, pass, models, pass.config.psm)? else {
+        return Ok(None);
+    };
+    let alternate_psm = if pass.config.psm == 6 { 11 } else { 6 };
+    let Some(alternate) = read_retry_words(image, pass, models, alternate_psm)? else {
+        return Ok(None);
+    };
+    Ok(corroborated_khmer(retry, &alternate))
+}
+
+fn read_retry_words(
+    image: &xberg_tesseract::Pix,
+    pass: &Pass<'_>,
+    models: &ModelSet,
+    psm: u8,
+) -> Result<Option<Vec<TsvWord>>, OcrError> {
+    if cacheability::ocr_stop_requested() {
+        return Ok(None);
+    }
+    let retry = new_engine(&models.directory, &models.languages, pass.config.oem)?;
     retry
-        .set_page_seg_mode(TessPageSegMode::from_int(pass.config.psm as i32))
+        .set_page_seg_mode(TessPageSegMode::from_int(i32::from(psm)))
         .map_err(|e| engine_error("retry mode", e))?;
     super::config::apply_tesseract_variables(&retry, pass.config)?;
     retry
@@ -255,23 +480,8 @@ pub(super) fn run(
     if retry_stage(|| retry.recognize().map_err(|e| engine_error("retry recognize", e)))?.is_none() {
         return Ok(None);
     }
-    let retry_tsv = retry.get_tsv_text(0).map_err(|e| engine_error("retry word table", e))?;
-    let merged = merge(
-        parse_words(first_tsv),
-        parse_words(&retry_tsv),
-        &script,
-        RETRY_MIN_CONF_GAIN,
-    );
-    tracing::debug!(
-        script,
-        model,
-        elapsed_ms = started.elapsed().as_millis() as u64,
-        lines_admitted = merged.admitted,
-        lines_refused = merged.refused,
-        words_added = merged.added,
-        "script retry read the page again"
-    );
-    Ok(Some(Outcome { script, model, merged }))
+    let tsv = retry.get_tsv_text(0).map_err(|e| engine_error("retry word table", e))?;
+    Ok(Some(parse_words(&tsv)))
 }
 
 /// Record the outcome in the result metadata: the merge counts and, for a page that took the
@@ -291,7 +501,19 @@ pub(super) fn record(metadata: &mut HashMap<String, serde_json::Value>, outcome:
     // A page that keeps its first read keeps the first read's confidence metadata too: the merged
     // table's stats describe the same words from the TSV, not the hOCR, and moved ndl_meiji's page
     // confidence with its text unchanged. ~keep
-    if merged.changed() {
+    if let Some(khmer) = &outcome.khmer_supplement {
+        let han = merged.han_supplement();
+        let khmer = khmer.text();
+        let text = if han.is_empty() {
+            khmer
+        } else {
+            format!("{han}\n\n{khmer}")
+        };
+        metadata.insert(KHMER_SUPPLEMENT_KEY.to_string(), text.into());
+    } else if outcome.model == KHMER_MODEL {
+        metadata.insert(KHMER_SUPPLEMENT_KEY.to_string(), merged.text().into());
+    }
+    if outcome.replaces_primary() && merged.changed() {
         let mut stats = RetainedWordConfidenceStats::default();
         for word in merged.words() {
             stats.record(word.conf);
@@ -567,9 +789,14 @@ pub(super) struct Merged {
     pub(super) admitted: usize,
     pub(super) refused: usize,
     pub(super) added: usize,
+    pub(super) admitted_script_lines: Vec<String>,
 }
 
 impl Merged {
+    fn han_supplement(&self) -> String {
+        self.admitted_script_lines.join("\n")
+    }
+
     pub(super) fn changed(&self) -> bool {
         self.admitted > 0 || self.added > 0
     }
@@ -634,6 +861,123 @@ impl Merged {
     }
 }
 
+// Pair equal text at overlapping positions. Maximize the number of pairs, using
+// overlap and then source order to make contested assignments deterministic. ~keep
+fn matched_primary_occurrences<'a>(
+    primary: impl IntoIterator<Item = &'a TsvWord>,
+    retry: impl IntoIterator<Item = &'a TsvWord>,
+) -> Vec<bool> {
+    let mut by_text: HashMap<&str, Vec<(usize, &TsvWord)>> = HashMap::new();
+    let mut primary_count = 0;
+    for word in primary {
+        by_text
+            .entry(occurrence_text(&word.text))
+            .or_default()
+            .push((primary_count, word));
+        primary_count += 1;
+    }
+    let mut edges = Vec::new();
+    let mut matched = Vec::new();
+    for (index, word) in retry.into_iter().enumerate() {
+        matched.push(false);
+        if let Some(originals) = by_text.get(occurrence_text(&word.text)) {
+            for &(original_index, original) in originals {
+                let width = x_overlap(word, original);
+                let height = y_overlap(word.top, word.bottom(), original);
+                if width > 0 && height > 0 {
+                    edges.push((std::cmp::Reverse(width.saturating_mul(height)), index, original_index));
+                }
+            }
+        }
+    }
+    edges.sort_unstable();
+    let mut choices = vec![Vec::new(); matched.len()];
+    let mut owners = vec![None; primary_count];
+    for (_, retry, primary) in edges {
+        choices[retry].push(primary);
+        if !matched[retry] && owners[primary].is_none() {
+            matched[retry] = true;
+            owners[primary] = Some(retry);
+        }
+    }
+    for (retry, matched) in matched.iter_mut().enumerate() {
+        if !*matched && !choices[retry].is_empty() {
+            *matched = augment_occurrence_pairing(retry, &choices, &mut owners);
+        }
+    }
+    matched
+}
+
+// Visit each vertex at most once per search. The queue and predecessors bound
+// working space by the number of occurrences and avoid recursive reassignment. ~keep
+fn augment_occurrence_pairing(start: usize, choices: &[Vec<usize>], owners: &mut [Option<usize>]) -> bool {
+    let mut queue = vec![(start, None)];
+    let mut visited = vec![false; choices.len()];
+    let mut previous = vec![None; owners.len()];
+    visited[start] = true;
+    let mut cursor = 0;
+    while let Some(&(retry, incoming)) = queue.get(cursor) {
+        cursor += 1;
+        for &primary in &choices[retry] {
+            if previous[primary].is_some() {
+                continue;
+            }
+            previous[primary] = Some((retry, incoming));
+            if let Some(owner) = owners[primary] {
+                if !visited[owner] {
+                    visited[owner] = true;
+                    queue.push((owner, Some(primary)));
+                }
+                continue;
+            }
+            let mut free = Some(primary);
+            while let Some(slot) = free {
+                let (retry, incoming) = previous[slot].expect("augmenting path has a predecessor");
+                owners[slot] = Some(retry);
+                free = incoming;
+            }
+            return true;
+        }
+    }
+    false
+}
+
+fn occurrence_text(text: &str) -> &str {
+    // Khmer vowel signs are combining marks and can be the final code point. ~keep
+    text.trim_matches(|c: char| !c.is_alphanumeric() && c != '_' && !('\u{1780}'..='\u{17ff}').contains(&c))
+}
+
+fn newly_admitted_script_lines(
+    primary: &[((i64, i64), Vec<TsvWord>)],
+    admitted: &[((i64, i64), Vec<TsvWord>)],
+    script: &str,
+) -> Vec<String> {
+    let matches = matched_primary_occurrences(
+        primary.iter().flat_map(|(_, words)| words),
+        admitted.iter().flat_map(|(_, words)| words),
+    );
+    let mut matches = matches.into_iter();
+    admitted
+        .iter()
+        .filter_map(|(_, words)| {
+            let text = words
+                .iter()
+                .zip(matches.by_ref())
+                .filter(|(_, matched)| !matched)
+                .map(|(word, _)| {
+                    word.text
+                        .chars()
+                        .filter(|&c| script_letter(script, c))
+                        .collect::<String>()
+                })
+                .filter(|word| !word.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
+            (!text.is_empty()).then_some(text)
+        })
+        .collect()
+}
+
 /// Merge the retry into the first pass line by line: a line takes the retry's words only when
 /// they are mostly letters of `script`, beat the first read's confidence by `margin`,
 /// keep every protected first-pass word and cover half of every first-pass word.
@@ -652,6 +996,7 @@ pub(super) fn merge(first: Vec<TsvWord>, retry: Vec<TsvWord>, script: &str, marg
     let mut merged = Merged::default();
     let mut lines: Vec<((i64, i64), Vec<TsvWord>)> = Vec::new();
     let mut kept: Vec<((i64, i64), Vec<TsvWord>)> = Vec::new();
+    let mut admitted_script = Vec::new();
     for (line, mut candidates) in first_lines.into_iter().zip(by_line) {
         let position = (line.top, line.left);
         match admit_line(&line.words, &candidates, script, margin) {
@@ -659,6 +1004,7 @@ pub(super) fn merge(first: Vec<TsvWord>, retry: Vec<TsvWord>, script: &str, marg
                 tracing::debug!(gain, "script retry: line takes the retry's read");
                 merged.admitted += 1;
                 reading_order(&mut candidates);
+                admitted_script.push((position, candidates.clone()));
                 let key = line.words.first().map(|word| word.line_key);
                 if let Some(key) = key {
                     for word in &mut candidates {
@@ -688,6 +1034,7 @@ pub(super) fn merge(first: Vec<TsvWord>, retry: Vec<TsvWord>, script: &str, marg
         for line in lines_of(extra) {
             if mostly_script(&line.words, script).is_ok() {
                 merged.added += line.words.len();
+                admitted_script.push(((line.top, line.left), line.words.clone()));
                 let words = line
                     .words
                     .into_iter()
@@ -699,10 +1046,96 @@ pub(super) fn merge(first: Vec<TsvWord>, retry: Vec<TsvWord>, script: &str, marg
                 lines.push(((line.top, line.left), words));
             }
         }
+        admitted_script.sort_by_key(|(position, _)| *position);
+        merged.admitted_script_lines = newly_admitted_script_lines(&kept, &admitted_script, script);
     }
     lines.sort_by_key(|(position, _)| *position);
     merged.lines = lines.into_iter().map(|(_, words)| words).collect();
     merged
+}
+
+fn is_khmer_letter(character: char) -> bool {
+    ('\u{1780}'..='\u{17a2}').contains(&character)
+}
+
+fn eligible_khmer_word(word: &TsvWord) -> bool {
+    const MIN_CONFIDENCE: f64 = 60.0;
+    word.conf >= MIN_CONFIDENCE
+        && word.width > 0
+        && word.height > 0
+        && !is_protected_text(&word.text)
+        && word.text.chars().any(is_khmer_letter)
+}
+
+fn khmer_boxes_agree(first: &TsvWord, second: &TsvWord) -> bool {
+    x_overlap(first, second) > first.width.max(second.width) / 2
+        && y_overlap(first.top, first.bottom(), second) > first.height.max(second.height) / 2
+}
+
+fn unique_khmer_matches(retry: &[TsvWord], alternate: &[TsvWord]) -> Vec<bool> {
+    let mut alternate_by_text: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (index, word) in alternate
+        .iter()
+        .enumerate()
+        .filter(|(_, word)| eligible_khmer_word(word))
+    {
+        alternate_by_text.entry(&word.text).or_default().push(index);
+    }
+    let mut matched_by = vec![0usize; alternate.len()];
+    let unique_candidates: Vec<_> = retry
+        .iter()
+        .map(|word| {
+            let mut candidates = alternate_by_text
+                .get(word.text.as_str())?
+                .iter()
+                .copied()
+                .filter(|&index| khmer_boxes_agree(word, &alternate[index]));
+            let first = candidates.next()?;
+            matched_by[first] += 1;
+            let mut unique = true;
+            for index in candidates {
+                matched_by[index] += 1;
+                unique = false;
+            }
+            unique.then_some(first)
+        })
+        .collect();
+    unique_candidates
+        .into_iter()
+        .map(|index| index.is_some_and(|index| matched_by[index] == 1))
+        .collect()
+}
+
+fn new_khmer_occurrences(mut supplement: Merged, primary: &[TsvWord]) -> Option<Merged> {
+    let mut matches = matched_primary_occurrences(primary, supplement.words()).into_iter();
+    for line in &mut supplement.lines {
+        line.retain(|_| matches.next() == Some(false));
+    }
+    supplement.lines.retain(|line| !line.is_empty());
+    supplement.added = supplement.lines.iter().map(Vec::len).sum();
+    (supplement.added > 0).then_some(supplement)
+}
+
+fn corroborated_khmer(mut retry: Vec<TsvWord>, alternate: &[TsvWord]) -> Option<Merged> {
+    const MIN_MATCHED_LINES: usize = 2;
+    const MIN_MATCHED_WORDS_PER_LINE: usize = 2;
+
+    retry.retain(eligible_khmer_word);
+    let matched = unique_khmer_matches(&retry, alternate);
+    let words = retry
+        .into_iter()
+        .zip(matched)
+        .filter_map(|(word, matched)| matched.then_some(word));
+    let lines: Vec<_> = lines_of(words.collect()).into_iter().map(|line| line.words).collect();
+    let matched_lines = lines
+        .iter()
+        .filter(|line| line.len() >= MIN_MATCHED_WORDS_PER_LINE)
+        .count();
+    (matched_lines >= MIN_MATCHED_LINES).then(|| Merged {
+        added: lines.iter().map(Vec::len).sum(),
+        lines,
+        ..Merged::default()
+    })
 }
 
 #[cfg(test)]
@@ -1191,6 +1624,7 @@ mod tests {
             script: HAN.to_string(),
             model: "chi_sim",
             merged: merge_han(first, retry),
+            khmer_supplement: None,
         };
         let first_read_mean = serde_json::json!(31);
         let mut metadata = HashMap::from([("mean_text_conf".to_string(), first_read_mean.clone())]);
@@ -1412,12 +1846,252 @@ mod tests {
         }
         let directories = [&absent, &first, &second, &last].map(|dir| dir.to_str().unwrap().to_owned());
         assert!(RetryModels::resolve(&directories[..3], "eng+deu", 3).unwrap().is_none());
-        let models = RetryModels::resolve(&directories, "eng+deu", 3).unwrap().unwrap();
+        let models = RetryModels::resolve(&directories, "eng+deu", 3)
+            .unwrap()
+            .unwrap()
+            .han
+            .unwrap();
         assert_eq!(models.osd.directory, directories[1]);
         assert_eq!(models.osd.languages, "osd");
-        assert_eq!(models.han.directory, directories[3]);
-        assert_eq!(models.han.languages, "eng+deu+chi_sim");
+        assert_eq!(models.recognition.directory, directories[3]);
+        assert_eq!(models.recognition.languages, "eng+deu+chi_sim");
         assert!(!absent.exists());
+    }
+
+    #[test]
+    fn khmer_retry_requires_an_installed_complete_model_set() {
+        let root = tempfile::tempdir().unwrap();
+        let directories = [root.path().to_str().unwrap().to_owned()];
+        for name in ["eng", "deu"] {
+            std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
+        }
+        assert!(
+            RetryModels::resolve_khmer(&directories, "deu+eng", 3)
+                .unwrap()
+                .is_none()
+        );
+        std::fs::write(root.path().join("khm.traineddata"), b"khm").unwrap();
+        let models = RetryModels::resolve_khmer(&directories, "deu+eng", 3).unwrap().unwrap();
+        assert_eq!(models.languages, "deu+eng+khm");
+        assert!(
+            RetryModels::resolve_khmer(&directories, "deu+eng", 1)
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn khmer_supplement_requires_matching_words_on_multiple_same_page_lines() {
+        let first_line = line(
+            &[("កម្ពុជា", 92.0, 10, 30), ("សួស្តី", 90.0, 50, 30), ("Ref3124", 99.0, 90, 30)],
+            1,
+            10,
+        );
+        let second_line = line(
+            &[("អរគុណ", 92.0, 10, 30), ("ភ្នំពេញ", 90.0, 50, 30), ("3124", 99.0, 90, 30)],
+            2,
+            60,
+        );
+        let retry = [first_line.clone(), second_line].concat();
+        assert!(corroborated_khmer(retry.clone(), &first_line).is_none());
+        let mut displaced = retry.clone();
+        for word in &mut displaced {
+            word.left += 150;
+        }
+        assert!(corroborated_khmer(retry.clone(), &displaced).is_none());
+        let mut noisy_retry = retry.clone();
+        noisy_retry.extend(line(&[("មិនស្គាល់", 95.0, 130, 30)], 1, 10));
+        noisy_retry.extend(line(&[("រ", 90.0, 10, 30)], 3, 110));
+        let supplement = corroborated_khmer(noisy_retry, &retry).unwrap();
+        assert_eq!(supplement.text(), "កម្ពុជា សួស្តី\nអរគុណ ភ្នំពេញ");
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn khmer_error_reports_failure_and_only_runs_han_before_stop() {
+        use crate::cancellation::CancellationToken;
+
+        for stop in [None, Some("cancel"), Some("soft stop"), Some("deadline")] {
+            let token = CancellationToken::new();
+            cacheability::with_ocr_cancellation(Some(&token), async {
+                let error = std::cell::RefCell::new(None);
+                let result = read_script_recoveries(
+                    || {
+                        match stop {
+                            Some("cancel") => token.cancel(),
+                            Some("soft stop") => token.request_stop(),
+                            Some("deadline") => token.set_deadline(std::time::Instant::now()),
+                            _ => {}
+                        }
+                        Err(engine_error("retry recognize", "injected Khmer error"))
+                    },
+                    || true,
+                    |model, failure| {
+                        assert_eq!(model, KHMER_MODEL);
+                        *error.borrow_mut() = Some(failure);
+                    },
+                    || {
+                        assert!(stop.is_none(), "Han ran after the operation stopped");
+                        Ok(Some(Outcome {
+                            script: "Han".into(),
+                            model: HAN_MODEL,
+                            merged: Merged::default(),
+                            khmer_supplement: None,
+                        }))
+                    },
+                )
+                .unwrap();
+                assert_eq!(result.map(|outcome| outcome.model), stop.is_none().then_some(HAN_MODEL));
+                assert!(error.into_inner().unwrap().to_string().contains("injected Khmer error"));
+            })
+            .await;
+        }
+    }
+
+    #[test]
+    fn successful_khmer_does_not_skip_han_or_replace_its_merge() {
+        let result = read_script_recoveries(
+            || {
+                Ok(Some(Merged {
+                    lines: vec![line(&[("កម្ពុជា", 95.0, 0, 50)], 1, 0)],
+                    ..Merged::default()
+                }))
+            },
+            || true,
+            |_, error| panic!("{error}"),
+            || {
+                Ok(Some(Outcome {
+                    script: "Han".into(),
+                    model: HAN_MODEL,
+                    merged: Merged {
+                        lines: vec![line(&[("漢字", 95.0, 0, 50), ("Ref3124", 95.0, 60, 50)], 1, 0)],
+                        admitted: 1,
+                        admitted_script_lines: vec!["漢字".into()],
+                        ..Merged::default()
+                    },
+                    khmer_supplement: None,
+                }))
+            },
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(result.merged.text(), "漢字 Ref3124");
+        let mut metadata = HashMap::new();
+        record(&mut metadata, &result);
+        assert!(!result.replaces_primary());
+        assert_eq!(metadata[KHMER_SUPPLEMENT_KEY], "漢字\n\nកម្ពុជា");
+        assert_eq!(metadata[METADATA_KEY]["model"], HAN_MODEL);
+    }
+
+    #[test]
+    fn khmer_revalidation_runs_after_han_and_discards_only_stale_khmer() {
+        use std::cell::Cell;
+        for drift in [false, true] {
+            let han_ran = Cell::new(false);
+            let result = read_script_recoveries(
+                || Ok(Some(Merged::default())),
+                || {
+                    assert!(han_ran.get(), "Khmer revision must be checked after Han");
+                    !drift
+                },
+                |_, error| panic!("{error}"),
+                || {
+                    han_ran.set(true);
+                    Ok(Some(Outcome {
+                        script: "Han".into(),
+                        model: HAN_MODEL,
+                        merged: Merged::default(),
+                        khmer_supplement: None,
+                    }))
+                },
+            )
+            .unwrap()
+            .unwrap();
+            assert_eq!(result.model, HAN_MODEL);
+            assert_eq!(result.khmer_supplement.is_some(), !drift);
+        }
+    }
+
+    #[test]
+    fn han_supplement_reassigns_contested_overlap() {
+        let primary = line(&[("漢字", 20.0, 0, 50), ("漢字", 20.0, 45, 35)], 1, 0);
+        let retry = line(&[("漢字", 95.0, 0, 65), ("漢字", 95.0, 0, 30)], 1, 0);
+        assert_eq!(merge_han(primary, retry).han_supplement(), "");
+    }
+
+    #[test]
+    fn khmer_supplement_reassigns_contested_overlap() {
+        let primary = line(&[("កម្ពុជា", 20.0, 0, 50), ("កម្ពុជា", 20.0, 45, 35)], 1, 0);
+        let retry = line(&[("កម្ពុជា", 95.0, 0, 55), ("កម្ពុជា", 95.0, 0, 30)], 1, 0);
+        let supplement = Merged {
+            lines: vec![retry],
+            added: 2,
+            ..Merged::default()
+        };
+        assert!(new_khmer_occurrences(supplement, &primary).is_none());
+    }
+
+    #[test]
+    fn han_supplement_consumes_one_primary_for_two_overlapping_retry_occurrences() {
+        let first = line(&[("漢字", 20.0, 0, 70)], 1, 0);
+        let retry = line(&[("漢字", 95.0, 0, 40), ("漢字", 95.0, 35, 40)], 1, 0);
+        assert_eq!(merge_han(first, retry).han_supplement(), "漢字");
+    }
+
+    #[test]
+    fn khmer_supplement_excludes_existing_primary_occurrences() {
+        let retry = [
+            line(&[("កម្ពុជា", 95.0, 0, 50), ("សួស្តី", 95.0, 70, 50)], 1, 0),
+            line(&[("កម្ពុជា", 95.0, 0, 50), ("អរគុណ", 95.0, 70, 50)], 2, 60),
+        ]
+        .concat();
+        let primary = line(&[("កម្ពុជា", 20.0, 0, 50), ("សួស្តី", 30.0, 70, 50)], 1, 0);
+        let result = new_khmer_occurrences(corroborated_khmer(retry.clone(), &retry).unwrap(), &primary).unwrap();
+        assert_eq!(result.text(), "កម្ពុជា អរគុណ");
+        assert!(new_khmer_occurrences(corroborated_khmer(retry.clone(), &retry).unwrap(), &retry).is_none());
+    }
+
+    #[test]
+    fn han_supplement_omits_primary_han_but_keeps_new_occurrences() {
+        let first = [
+            line(&[("漢字", 20.0, 0, 35), ("|", 20.0, 50, 35)], 1, 0),
+            line(&[("留存", 95.0, 0, 35)], 2, 60),
+        ]
+        .concat();
+        let retry = line(&[("漢字", 95.0, 0, 35), ("漢字", 95.0, 50, 35)], 1, 0);
+        let result = merge_han(first.clone(), retry);
+        assert_eq!(result.han_supplement(), "漢字");
+        assert_eq!(result.text(), "漢字 漢字\n留存");
+        let only_retained = line(&[("漢字", 95.0, 0, 35)], 1, 0);
+        assert!(merge_han(first, only_retained).han_supplement().is_empty());
+    }
+
+    #[test]
+    fn khmer_corroboration_rejects_ambiguous_spatial_matches_in_both_directions() {
+        let words = line(&[("កម្ពុជា", 92.0, 10, 30), ("កម្ពុជា", 92.0, 65, 30)], 1, 10);
+        assert_eq!(unique_khmer_matches(&words, &words), [true, true]);
+        let mut duplicate = words.clone();
+        duplicate.push(words[0].clone());
+        assert_eq!(unique_khmer_matches(&duplicate, &words), [false, true, false]);
+        assert_eq!(unique_khmer_matches(&words, &duplicate), [false, true]);
+    }
+
+    #[test]
+    fn khmer_hint_keeps_han_models_with_or_without_khmer_installed() {
+        let root = tempfile::tempdir().unwrap();
+        let directories = [root.path().to_str().unwrap().to_owned()];
+        for name in ["eng", "osd", "chi_sim"] {
+            std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
+        }
+        MIXED_PDF_KHMER_RETRY.sync_scope(true, || {
+            let missing = RetryModels::resolve(&directories, "eng", 3).unwrap().unwrap();
+            assert!(missing.khmer.is_none());
+            assert_eq!(missing.han.as_ref().unwrap().recognition.languages, "eng+chi_sim");
+            std::fs::write(root.path().join("khm.traineddata"), b"khm").unwrap();
+            let installed = RetryModels::resolve(&directories, "eng", 3).unwrap().unwrap();
+            assert_eq!(installed.khmer.unwrap().languages, "eng+khm");
+            assert_eq!(installed.han, missing.han);
+        });
     }
 
     #[test]

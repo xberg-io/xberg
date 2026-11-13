@@ -538,6 +538,14 @@ fn has_cluster_structure(text: &str, script: Script) -> bool {
         .any(|character| script_of(character) == Some(script) && part_of(script, character) != Part::Other)
 }
 
+pub(super) fn is_complete_khmer_retry_witness(text: &str) -> bool {
+    let languages = ["eng".to_owned()];
+    uncovered_script_counts(text, &languages)
+        .and_then(|counts| structured_scripts(text, counts))
+        .is_some_and(|scripts| scripts.as_slice() == [Script::Khmer])
+        && !layer_is_lost(text, &languages)
+}
+
 /// Whether the layer lost text of a script `languages` cannot read, for the scripts that carry
 /// weight on the page and have cluster structure that [`part_of`] knows. It is lost when the signs
 /// no longer attach to letters ([`clusters_are_valid`]), or when the markers outnumber the letters

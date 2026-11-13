@@ -599,6 +599,71 @@ fn mixed_native_page_has_content(
         .is_some_and(|text| !text.trim().is_empty())
 }
 
+#[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+fn preceding_native_khmer_page(
+    native_text: &str,
+    boundaries: &[crate::types::PageBoundary],
+    ocr_pages: &std::collections::HashSet<u32>,
+    page_idx: usize,
+) -> bool {
+    let Ok(previous) = u32::try_from(page_idx) else {
+        return false;
+    };
+    if previous == 0
+        || ocr_pages.contains(&previous)
+        || mixed_native_page_has_content(native_text, boundaries, page_idx)
+    {
+        return false;
+    }
+    boundaries
+        .iter()
+        .find(|boundary| boundary.page_number == previous)
+        .and_then(|boundary| native_text.get(boundary.byte_start..boundary.byte_end))
+        .is_some_and(super::super::unreadable_script::is_complete_khmer_retry_witness)
+}
+
+#[cfg(all(test, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+#[test]
+fn khmer_retry_hint_stays_with_the_immediate_raster_only_neighbor() {
+    let text = include_str!("../../../../tests/fixtures/pdf/khmer-cluster-2536/layers/complete.txt");
+    let boundaries = [
+        crate::types::PageBoundary {
+            page_number: 1,
+            byte_start: 0,
+            byte_end: text.len(),
+        },
+        crate::types::PageBoundary {
+            page_number: 2,
+            byte_start: text.len(),
+            byte_end: text.len(),
+        },
+    ];
+    assert!(preceding_native_khmer_page(
+        text,
+        &boundaries,
+        &std::collections::HashSet::from([2]),
+        1
+    ));
+    assert!(!preceding_native_khmer_page(
+        text,
+        &boundaries,
+        &std::collections::HashSet::from([2, 3]),
+        2
+    ));
+    assert!(!preceding_native_khmer_page(
+        text,
+        &boundaries,
+        &std::collections::HashSet::from([1, 2]),
+        1
+    ));
+    assert!(!preceding_native_khmer_page(
+        text,
+        &boundaries,
+        &std::collections::HashSet::from([1]),
+        0
+    ));
+}
+
 /// Add to `failures` the records of a pipeline run that the route for selected pages got back.
 ///
 /// The pipeline does not see the native text, so its record says only what its stages read.
@@ -1352,10 +1417,33 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         None
     };
 
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let allow_khmer_hint = !probing_hidden_layer
+        && crate::ocr::processor::script_retry::may_retry_khmer(
+            &ocr_config_owned.effective_tesseract_language().join("+"),
+        )
+        && matches!(config.ocr_strategy, crate::core::config::OcrStrategy::Auto)
+        && backend.as_ref().is_some_and(|backend| {
+            crate::plugins::registry::get_ocr_backend_registry()
+                .read()
+                .is_builtin_tesseract(backend)
+        });
+
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let use_khmer_hint = |page_idx, whole_page_raster| {
+        allow_khmer_hint
+            && whole_page_raster
+            && super::document::native_preservation_is_automatic(config, (page_idx + 1) as u32)
+            && preceding_native_khmer_page(native_text, boundaries, &ocr_set, page_idx)
+            && !crate::pdf::scan_detect::carries_scan_raster(&render_doc, page_idx - 1)
+    };
+
     let total = page_indices.len();
     let mut raster_dpis = pages.raster_dpis.as_deref().cloned().unwrap_or_default();
     #[cfg(feature = "layout-detection")]
     raster_dpis.extend(layout_raster_dpis);
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut khmer_supplements = ahash::AHashMap::new();
     let mut ocr_results: ahash::AHashMap<u32, String> = ahash::AHashMap::with_capacity(total);
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut original_tesseract_raster_pages = ahash::AHashSet::new();
@@ -2221,8 +2309,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     whole_page_raster,
                     single_block_pages.contains(&(*page_idx as u32 + 1)),
                     layout_assembly,
-                )
-                .into_owned();
+                );
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                let khmer_hint = use_khmer_hint(*page_idx, whole_page_raster);
+                let config_clone = config_clone.into_owned();
                 let (upright_data, upright_width, upright_height, correction_degrees) = match upright_raster_for_backend(
                     data,
                     *width,
@@ -2284,8 +2374,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                     let scale_only = std::sync::atomic::AtomicBool::new(false);
                     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-                    let result = super::read_reuse::read(
-                        probe_reads.as_ref(),
+                    let read = super::read_reuse::read(
+                        if khmer_hint { None } else { probe_reads.as_ref() },
                         super::read_reuse::ReadIdentity {
                             page: (idx + 1) as u32,
                             backend: &backend_clone,
@@ -2319,8 +2409,15 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                 }
                             }
                         },
-                    )
-                    .await;
+                    );
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    let result = if khmer_hint {
+                        crate::ocr::processor::script_retry::MIXED_PDF_KHMER_RETRY
+                            .scope(true, read)
+                            .await
+                    } else {
+                        read.await
+                    };
                     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
                     let scale_only = scale_only.into_inner();
                     #[cfg(not(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))))]
@@ -2422,6 +2519,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         continue;
                     }
                 };
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                if let Some(serde_json::Value::String(text)) = extraction_result
+                    .metadata
+                    .additional
+                    .remove(crate::ocr::processor::script_retry::KHMER_SUPPLEMENT_KEY)
+                {
+                    khmer_supplements.insert((page_idx + 1) as u32, text);
+                }
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 if correction_degrees == 0
                     && !alternative_raster_pages.contains(&((page_idx + 1) as u32))
@@ -3528,6 +3633,20 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         }
     }
 
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    for (page, supplement) in khmer_supplements {
+        if let Some(text) = accepted_replacements.get_mut(&page) {
+            text.push_str("\n\n");
+            text.push_str(&supplement);
+            if let Some(document) = structured_ocr_pages.get_mut(&page) {
+                use crate::types::internal::{ElementKind, InternalElement};
+                let mut paragraph = InternalElement::text(ElementKind::Paragraph, supplement, 0);
+                paragraph.page = Some(page);
+                document.push_element(paragraph);
+            }
+        }
+    }
+
     let result = apply_ocr_page_replacements(native_text, boundaries, &accepted_replacements);
     page_failures.sort_by_key(|failure| failure.page);
 
@@ -4429,6 +4548,65 @@ impl<OrderedProof, CaptionProof> PageRead<OrderedProof, CaptionProof> {
     }
 }
 
+#[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+fn forced_khmer_retry_allowed(config: &ExtractionConfig, ocr: &crate::core::config::OcrConfig) -> bool {
+    #[cfg(feature = "layout-types")]
+    if config.layout.is_some() {
+        return false;
+    }
+    config.force_ocr
+        && config
+            .ocr
+            .as_ref()
+            .is_some_and(|ocr| ocr.enabled && uses_default_ocr_pipeline(ocr))
+        && uses_default_ocr_pipeline(ocr)
+        && ocr.effective_tesseract_language().as_slice() == ["eng"]
+        && ocr.auto_rotate != Some(true)
+        && ocr.element_config.is_none()
+        && !config.images.as_ref().is_some_and(|images| images.include_page_rasters)
+}
+
+#[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+fn append_forced_script_paragraphs(
+    document: &mut crate::types::internal::InternalDocument,
+    supplements: &ahash::AHashMap<usize, String>,
+    page_index_offset: usize,
+) {
+    use crate::types::internal::{ElementKind, InternalElement};
+
+    let mut insertions = std::collections::BTreeMap::<usize, Vec<InternalElement>>::new();
+    for (&index, text) in supplements {
+        let page = (page_index_offset + index + 1) as u32;
+        let slot = document
+            .elements
+            .iter()
+            .position(|element| element.page.is_some_and(|next| next > page))
+            .unwrap_or(document.elements.len());
+        let slot = if slot > 0 && matches!(document.elements[slot - 1].kind, ElementKind::PageBreak) {
+            slot - 1
+        } else {
+            slot
+        };
+        insertions
+            .entry(slot)
+            .or_default()
+            .push(InternalElement::text(ElementKind::Paragraph, text.clone(), 0).with_page(page));
+    }
+    for elements in insertions.values_mut() {
+        elements.sort_by_key(|element| element.page);
+    }
+    let original = std::mem::take(&mut document.elements);
+    let mut remap = Vec::with_capacity(original.len());
+    for (index, element) in original.into_iter().enumerate() {
+        if let Some(paragraphs) = insertions.remove(&index) {
+            document.elements.extend(paragraphs);
+        }
+        remap.push(Some(document.push_element(element)));
+    }
+    document.elements.extend(insertions.into_values().flatten());
+    super::document::remap_relationships(&mut document.relationships, &remap, &document.elements);
+}
+
 /// Same as [`extract_with_ocr`], but `page_rotation_override` -- when non-zero -- is used as
 /// the known `/Rotate` value for every image in `images` instead of this function's own
 /// content-based per-page lookup (`lazy_pdf_render_state` / `external_image_page_rotations`).
@@ -4608,6 +4786,14 @@ pub(super) async fn extract_with_ocr_for_page(
         not(target_arch = "wasm32")
     ))]
     let mut tall_ordered_primary = None;
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    let force_khmer_retry = content.is_some()
+        && detached_page.is_none()
+        && !has_layout_detections
+        && get_ocr_backend_registry().read().is_builtin_tesseract(&backend)
+        && forced_khmer_retry_allowed(config, base_ocr_config);
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    let mut forced_khmer_supplements = ahash::AHashMap::new();
     let backend_confidence_semantics = backend.confidence_semantics();
     // Owned up front: the per-page summaries below outlive the borrow-heavy OCR loop, and
     // the backend that actually produced a page is part of what `ocr_confidence` reports. ~keep
@@ -5375,7 +5561,9 @@ pub(super) async fn extract_with_ocr_for_page(
                     let read_config = &config_clone;
                     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                     let read = super::read_reuse::read(
-                        probe_reads.as_ref().filter(|_| primary_config.is_none()),
+                        probe_reads
+                            .as_ref()
+                            .filter(|_| primary_config.is_none() && !force_khmer_retry),
                         super::read_reuse::ReadIdentity {
                             page: (page_index_offset + idx + 1) as u32,
                             backend: &backend_clone,
@@ -5417,6 +5605,16 @@ pub(super) async fn extract_with_ocr_for_page(
                             retry.read_primary(&config_clone, read).await
                         } else {
                             read.await
+                        }
+                    };
+                    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+                    let primary = async {
+                        if force_khmer_retry {
+                            crate::ocr::processor::script_retry::MIXED_PDF_KHMER_RETRY
+                                .scope(true, primary)
+                                .await
+                        } else {
+                            primary.await
                         }
                     };
                     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
@@ -5768,6 +5966,15 @@ pub(super) async fn extract_with_ocr_for_page(
             let document_page_idx = page_index_offset + page_idx;
             let document_page_number = (document_page_idx + 1) as u32;
             let mut ocr_result = batch_ocr_results[offset].take().expect("OCR result missing for page");
+            #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+            if force_khmer_retry
+                && let Some(serde_json::Value::String(text)) = ocr_result
+                    .metadata
+                    .additional
+                    .remove(crate::ocr::processor::script_retry::KHMER_SUPPLEMENT_KEY)
+            {
+                forced_khmer_supplements.insert(page_idx, text);
+            }
             #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
             if can_retry_orientation && batch_upright_correction[offset].0 == 0 {
                 let coverage_layer = page_ocr_hints
@@ -7278,6 +7485,25 @@ pub(super) async fn extract_with_ocr_for_page(
             attach_page_segmentation_modes(doc, accepted_modes);
         }
         ocr_doc
+    };
+    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+    let ocr_doc = if forced_khmer_supplements.is_empty() {
+        ocr_doc
+    } else {
+        forced_khmer_supplements
+            .retain(|&index, _| !rejected_pages[index] && !pages_with_recovered_xobject_payload[index]);
+        let mut document = ocr_doc;
+        if let Some(document) = document.as_mut() {
+            append_forced_script_paragraphs(document, &forced_khmer_supplements, page_index_offset);
+        }
+        for (index, supplement) in forced_khmer_supplements {
+            if !page_texts[index].is_empty() {
+                page_texts[index].push_str("\n\n");
+            }
+            page_texts[index].push_str(&supplement);
+        }
+        result = join_pages(&page_texts);
+        document
     };
     // Without `pdf` there is no page renderer, so no page-level OCR runs and the vector is
     // always empty; bind it so the non-pdf build does not warn about an unused value.

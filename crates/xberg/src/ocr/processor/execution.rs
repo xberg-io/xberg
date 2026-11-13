@@ -2058,6 +2058,26 @@ fn retry_with_tsv<T>(
     }
 }
 
+fn finish_script_retry<T>(
+    outcome: Option<T>,
+    is_han: impl FnOnce(&T) -> bool,
+    models: &ModelContext,
+    config: &TesseractConfig,
+) -> Option<T> {
+    let outcome = outcome?;
+    if crate::core::extractor::cacheability::ocr_stop_requested() {
+        return None;
+    }
+    if is_han(&outcome) {
+        // Khmer drift blocks the shared cache, even when the independent Han read is valid. ~keep
+        models.khmer_retry_is_current(config);
+        if !models.han_retry_is_current(config) {
+            return None;
+        }
+    }
+    (!crate::core::extractor::cacheability::ocr_stop_requested()).then_some(outcome)
+}
+
 /// The symbols of every word with an underscore, which table reconstruction reads to cut a mark
 /// out of a word. Empty when Tesseract gives no result iterator or cannot read the symbols: the
 /// cut then estimates each piece's box from its share of the word's characters. ~keep
@@ -2449,12 +2469,28 @@ pub(super) fn perform_ocr(
                         ))
                     })
                 },
-                |tsv| script_retry::run(&api, tsv, &pass, retry_models),
+                |tsv| {
+                    script_retry::run(
+                        &api,
+                        tsv,
+                        &pass,
+                        &retry_models,
+                        || models.khmer_retry_is_current(config),
+                        || finish_script_retry(Some(()), |_| true, models, config).is_some(),
+                        |model, error| {
+                            if model == script_retry::KHMER_MODEL {
+                                models.invalidate_khmer_cache(&error);
+                            } else {
+                                models.invalidate_han_cache(&error);
+                            }
+                        },
+                    )
+                },
             )
-            .filter(|_| models.retry_is_current(config) && !crate::core::extractor::cacheability::ocr_stop_requested())
         });
     let merged_read = script_retry
         .as_ref()
+        .filter(|outcome| outcome.replaces_primary())
         .map(|outcome| &outcome.merged)
         .filter(|merged| merged.changed());
     tsv_data_for_tables = table_tsv(tsv_data_for_tables, merged_read);
@@ -5298,6 +5334,67 @@ mod tests {
         .expect("OCR must succeed")
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn khmer_failure_keeps_the_validated_han_result_and_blocks_cache() {
+        use crate::core::extractor::cacheability;
+
+        cacheability::scope(async {
+            let models = ModelContext::for_path("unused".into(), 3).unwrap();
+            let config = TesseractConfig::default();
+            assert!(models.if_result_current(&config, || ()).is_some());
+            assert!(cacheability::can_publish_outer_result());
+            models.invalidate_khmer_cache(&OcrError::TesseractInitializationFailed(
+                "injected Khmer init failure".into(),
+            ));
+            let han = finish_script_retry(Some("Han result"), |_| true, &models, &config);
+            assert_eq!(han, Some("Han result"));
+            assert!(
+                models
+                    .if_result_current(&config, || panic!("invalidated result reached cache"))
+                    .is_none()
+            );
+            assert!(!cacheability::can_publish_outer_result());
+        })
+        .await;
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn khmer_post_read_drift_keeps_validated_han_and_blocks_cache() {
+        use crate::core::extractor::cacheability;
+
+        cacheability::scope(async {
+            let root = tempfile::tempdir().unwrap();
+            for name in ["eng", "osd", "chi_sim", "khm"] {
+                std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
+            }
+            script_retry::MIXED_PDF_KHMER_RETRY.sync_scope(true, || {
+                let config = TesseractConfig {
+                    psm: 3,
+                    tessdata_path: Some(root.path().into()),
+                    ..Default::default()
+                };
+                let models = ModelContext::resolve_with_retry(&config, Some(75.0)).unwrap();
+                assert!(models.retry_models(&config, 30.0).is_some());
+                assert!(models.if_result_current(&config, || ()).is_some());
+                std::fs::write(root.path().join("khm.traineddata"), b"changed").unwrap();
+                assert_eq!(
+                    finish_script_retry(Some("Han result"), |_| true, &models, &config),
+                    Some("Han result")
+                );
+                assert!(models.if_result_current(&config, || ()).is_none());
+                assert!(!cacheability::can_publish_outer_result());
+                std::fs::write(root.path().join("chi_sim.traineddata"), b"changed").unwrap();
+                assert_eq!(
+                    finish_script_retry(Some("Han result"), |_| true, &models, &config),
+                    None
+                );
+            });
+        })
+        .await;
+    }
+
     #[test]
     fn retry_tsv_failure_keeps_the_first_read_and_bypasses_cache() {
         let models = ModelContext::for_path("unused".into(), 3).unwrap();
@@ -5464,8 +5561,7 @@ mod tests {
         let merged = script_retry::Merged {
             lines: vec![vec![word("汉字")]],
             admitted: 1,
-            refused: 0,
-            added: 0,
+            ..Default::default()
         };
         let first = Some("first read table".to_string());
 

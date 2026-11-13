@@ -66,6 +66,7 @@ fn snapshot_selection_cap_prevents_the_first_excess_model_read() {
             model: Some(ModelSelection {
                 languages: vec![format!("model-{index}")],
                 directory: None,
+                mixed_pdf_khmer: false,
             }),
             ..Default::default()
         })
@@ -88,6 +89,7 @@ fn distinct_stage_languages_sharing_a_canonical_root_hash_osd_once_per_snapshot(
     let models = ["eng", "fra"].map(|language| ModelSelection {
         languages: vec![language.into()],
         directory: Some(root.path().into()),
+        mixed_pdf_khmer: false,
     });
     let mut revisions = std::collections::HashMap::new();
     let mut reads = 0;

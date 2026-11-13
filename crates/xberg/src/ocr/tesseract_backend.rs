@@ -615,6 +615,8 @@ impl TesseractBackend {
 
         #[cfg(all(feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
         let geometry = crate::ocr::preprocessing::geometry_evidence::GeometryEvidence::requested();
+        use crate::ocr::processor::script_retry::{MIXED_PDF_KHMER_RETRY, mixed_pdf_khmer_retry_requested};
+        let khmer_retry = mixed_pdf_khmer_retry_requested();
         let operation = move || {
             #[cfg(not(target_arch = "wasm32"))]
             let _permit = permit;
@@ -624,13 +626,15 @@ impl TesseractBackend {
             }
             let run = || {
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    processor.process_image_with_retry(
-                        image_bytes.as_slice(),
-                        &tess_config_clone,
-                        output_format,
-                        policy,
-                        retry_threshold,
-                    )
+                    MIXED_PDF_KHMER_RETRY.sync_scope(khmer_retry, || {
+                        processor.process_image_with_retry(
+                            image_bytes.as_slice(),
+                            &tess_config_clone,
+                            output_format,
+                            policy,
+                            retry_threshold,
+                        )
+                    })
                 }))
                 .unwrap_or_else(|_| {
                     Err(crate::ocr::error::OcrError::ProcessingFailed(
@@ -1983,6 +1987,24 @@ mod tests {
         };
 
         assert_eq!(backend.config_to_tesseract(&ocr_config).source_dpi, Some(150.0));
+    }
+
+    #[tokio::test]
+    async fn mixed_pdf_khmer_hint_is_internal_and_call_local() {
+        use crate::ocr::processor::script_retry::{MIXED_PDF_KHMER_RETRY, mixed_pdf_khmer_retry_requested};
+        let config: OcrConfig = serde_json::from_value(serde_json::json!({
+            "backend_options": { "xberg_mixed_pdf_khmer_retry": true }
+        }))
+        .unwrap();
+        assert!(config.backend_options.is_some());
+        assert!(!mixed_pdf_khmer_retry_requested());
+        MIXED_PDF_KHMER_RETRY
+            .scope(true, async {
+                assert!(mixed_pdf_khmer_retry_requested());
+                assert!(!tokio::spawn(async { mixed_pdf_khmer_retry_requested() }).await.unwrap());
+            })
+            .await;
+        assert!(!mixed_pdf_khmer_retry_requested());
     }
 
     #[test]

@@ -8,6 +8,13 @@ use super::validation::{TessdataEnv, resolve_tessdata_path_in, tessdata_search_d
 use crate::ocr::error::OcrError;
 use crate::ocr::types::TesseractConfig;
 
+fn invalidate_script_cache(invalidated: &AtomicBool, script: &str, error: &OcrError) {
+    if !invalidated.swap(true, Ordering::AcqRel) {
+        crate::core::extractor::cacheability::invalidate_current();
+        tracing::warn!(script, %error, "script retry skipped or changed; bypassing result cache");
+    }
+}
+
 #[derive(Clone)]
 pub(super) struct ModelContext {
     pub(super) directory: String,
@@ -15,6 +22,8 @@ pub(super) struct ModelContext {
     primary: Option<PrimaryModels>,
     retry: Option<RetryContext>,
     invalidated: Arc<AtomicBool>,
+    han_cache_invalidated: Arc<AtomicBool>,
+    khmer_cache_invalidated: Arc<AtomicBool>,
     operation: Option<crate::core::extractor::cacheability::Cacheability>,
 }
 
@@ -60,10 +69,21 @@ impl ModelContext {
     }
 
     fn select_retry(&mut self, config: &TesseractConfig, directories: Vec<String>, noisy_below: f64) {
-        let models = match RetryModels::resolve(&directories, &config.language, config.psm) {
-            Ok(models) => models,
-            Err(error) => return self.invalidate_retry(&error),
+        let han = match RetryModels::resolve_han(&directories, &config.language, config.psm) {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                self.invalidate_han_cache(&error);
+                None
+            }
         };
+        let khmer = match RetryModels::resolve_requested_khmer(&directories, &config.language, config.psm) {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                self.invalidate_khmer_cache(&error);
+                None
+            }
+        };
+        let models = RetryModels::from_snapshots(han, khmer);
         if models.is_some() {
             // ~keep The first pass can use a different directory from the complete retry set.
             let languages: Vec<String> = config.language.split('+').map(|name| name.trim().into()).collect();
@@ -110,30 +130,65 @@ impl ModelContext {
         tracing::warn!(%error, "script retry skipped or changed; bypassing result cache");
     }
 
-    pub(super) fn retry_models(&self, config: &TesseractConfig, mean_confidence: f64) -> Option<&RetryModels> {
-        let retry = self.retry.as_ref()?;
-        let models = retry.models.as_ref()?;
-        (mean_confidence < retry.noisy_below && self.retry_is_current(config)).then_some(models)
+    pub(super) fn invalidate_han_cache(&self, error: &OcrError) {
+        invalidate_script_cache(&self.han_cache_invalidated, "Han", error);
     }
 
-    pub(super) fn retry_is_current(&self, config: &TesseractConfig) -> bool {
-        if self.invalidated.load(Ordering::Acquire) {
+    pub(super) fn invalidate_khmer_cache(&self, error: &OcrError) {
+        invalidate_script_cache(&self.khmer_cache_invalidated, "Khmer", error);
+    }
+
+    pub(super) fn retry_models(&self, config: &TesseractConfig, mean_confidence: f64) -> Option<RetryModels> {
+        let retry = self.retry.as_ref()?;
+        if mean_confidence >= retry.noisy_below || self.invalidated.load(Ordering::Acquire) {
+            return None;
+        }
+        let mut models = retry.models.clone()?;
+        if !self.han_retry_is_current(config) {
+            models.han = None;
+        }
+        if !self.khmer_retry_is_current(config) {
+            models.khmer = None;
+        }
+        (models.han.is_some() || models.khmer.is_some()).then_some(models)
+    }
+
+    pub(super) fn han_retry_is_current(&self, config: &TesseractConfig) -> bool {
+        if self.invalidated.load(Ordering::Acquire) || self.han_cache_invalidated.load(Ordering::Acquire) {
             return false;
         }
         let Some(retry) = &self.retry else {
             return true;
         };
-        let error = match RetryModels::resolve(&retry.directories, &config.language, config.psm) {
-            Ok(current) if current == retry.models => return true,
-            Ok(_) => OcrError::ProcessingFailed("Selected script retry models changed during OCR".into()),
+        let expected = retry.models.as_ref().and_then(|models| models.han.as_ref());
+        let error = match RetryModels::resolve_han(&retry.directories, &config.language, config.psm) {
+            Ok(current) if current.as_ref() == expected => return true,
+            Ok(_) => OcrError::ProcessingFailed("Selected Han retry models changed during OCR".into()),
             Err(error) => error,
         };
-        self.invalidate_retry(&error);
+        self.invalidate_han_cache(&error);
+        false
+    }
+
+    pub(super) fn khmer_retry_is_current(&self, config: &TesseractConfig) -> bool {
+        if self.invalidated.load(Ordering::Acquire) || self.khmer_cache_invalidated.load(Ordering::Acquire) {
+            return false;
+        }
+        let Some(retry) = &self.retry else {
+            return true;
+        };
+        let expected = retry.models.as_ref().and_then(|models| models.khmer.as_ref());
+        let error = match RetryModels::resolve_requested_khmer(&retry.directories, &config.language, config.psm) {
+            Ok(current) if current.as_ref() == expected => return true,
+            Ok(_) => OcrError::ProcessingFailed("Selected Khmer retry models changed during OCR".into()),
+            Err(error) => error,
+        };
+        self.invalidate_khmer_cache(&error);
         false
     }
 
     pub(super) fn if_result_current<T>(&self, config: &TesseractConfig, action: impl FnOnce() -> T) -> Option<T> {
-        if !self.retry_is_current(config) {
+        if !self.han_retry_is_current(config) || !self.khmer_retry_is_current(config) {
             return None;
         }
         self.if_current(action)
@@ -165,6 +220,8 @@ impl ModelContext {
             primary: None,
             retry: None,
             invalidated: Arc::new(AtomicBool::new(false)),
+            han_cache_invalidated: Arc::new(AtomicBool::new(false)),
+            khmer_cache_invalidated: Arc::new(AtomicBool::new(false)),
             operation: osd_revision.and_then(|_| crate::core::extractor::cacheability::current()),
         })
     }
@@ -210,6 +267,9 @@ impl ModelContext {
             hash.update(b"tesseract-script-retry-v4");
             hash.update(base.as_bytes());
             hash.update(&retry.noisy_below.to_bits().to_le_bytes());
+            if script_retry::mixed_pdf_khmer_retry_requested() {
+                hash.update(b"mixed-pdf-khmer-supplement-v6");
+            }
             if let Some(models) = &retry.models {
                 models.hash_into(&mut hash);
             }
@@ -311,6 +371,88 @@ mod tests {
         );
         let missing = ModelContext::for_path(root.path().to_str().unwrap().into(), 1).unwrap();
         assert_ne!(key, missing.result_key(&config));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn khmer_snapshot_io_failure_keeps_han_and_blocks_cache() {
+        use crate::core::extractor::cacheability;
+
+        cacheability::scope(async {
+            let root = tempfile::tempdir().unwrap();
+            let directory = root.path().to_str().unwrap().to_owned();
+            for name in ["eng", "osd", "chi_sim"] {
+                std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
+            }
+            std::fs::create_dir(root.path().join("khm.traineddata")).unwrap();
+            script_retry::MIXED_PDF_KHMER_RETRY.sync_scope(true, || {
+                let config = TesseractConfig {
+                    psm: 3,
+                    ..Default::default()
+                };
+                let mut context = ModelContext::for_path(directory.clone(), config.psm).unwrap();
+                context.select_retry(&config, vec![directory], 75.0);
+                assert!(
+                    context.retry_models(&config, 30.0).is_some(),
+                    "Han must remain selectable"
+                );
+                assert!(context.if_result_current(&config, || ()).is_none());
+                assert!(!cacheability::can_publish_outer_result());
+            });
+        })
+        .await;
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn han_snapshot_io_failure_keeps_khmer_and_blocks_cache() {
+        assert_han_snapshot_failure_keeps_khmer(true).await;
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn han_pre_read_drift_keeps_khmer_and_blocks_cache() {
+        assert_han_snapshot_failure_keeps_khmer(false).await;
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn assert_han_snapshot_failure_keeps_khmer(fail_at_selection: bool) {
+        use crate::core::extractor::cacheability;
+
+        cacheability::scope(async {
+            let root = tempfile::tempdir().unwrap();
+            let directory = root.path().to_str().unwrap().to_owned();
+            let han = root.path().join("chi_sim.traineddata");
+            for name in ["eng", "osd", "khm"] {
+                std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
+            }
+            if fail_at_selection {
+                std::fs::create_dir(&han).unwrap();
+            } else {
+                std::fs::write(&han, b"Han revision one").unwrap();
+            }
+            script_retry::MIXED_PDF_KHMER_RETRY.sync_scope(true, || {
+                let config = TesseractConfig {
+                    psm: 3,
+                    ..Default::default()
+                };
+                let mut context = ModelContext::for_path(directory.clone(), config.psm).unwrap();
+                context.select_retry(&config, vec![directory], 75.0);
+                if !fail_at_selection {
+                    assert!(context.if_result_current(&config, || ()).is_some());
+                    std::fs::write(&han, b"Han revision two").unwrap();
+                }
+                let models = context
+                    .retry_models(&config, 30.0)
+                    .expect("Khmer must remain selectable");
+                assert!(models.han.is_none());
+                assert!(models.khmer.is_some());
+                assert!(context.khmer_retry_is_current(&config));
+                assert!(context.if_result_current(&config, || ()).is_none());
+                assert!(!cacheability::can_publish_outer_result());
+            });
+        })
+        .await;
     }
 
     #[test]

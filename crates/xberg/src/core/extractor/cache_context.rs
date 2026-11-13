@@ -130,7 +130,7 @@ fn script_retry_requires_bypass(
     dependencies: &[CacheDependency],
     cancel: Option<&CancellationToken>,
 ) -> crate::Result<bool> {
-    use crate::ocr::processor::{script_retry::requires_outer_cache_bypass, validation::TessdataEnv};
+    use crate::ocr::processor::{script_retry, validation::TessdataEnv};
 
     let env = TessdataEnv::from_process();
     let mut checked = std::collections::HashSet::new();
@@ -141,7 +141,17 @@ fn script_retry_requires_bypass(
         check_cancelled(cancel)?;
         if checked.insert(model)
             && (checked.len() > MAX_MODEL_SELECTIONS
-                || requires_outer_cache_bypass(&model.languages.join("+"), model.directory.as_deref(), &env))
+                || script_retry::requires_outer_cache_bypass(
+                    &model.languages.join("+"),
+                    model.directory.as_deref(),
+                    &env,
+                )
+                || (model.mixed_pdf_khmer
+                    && script_retry::requires_khmer_outer_cache_bypass(
+                        &model.languages.join("+"),
+                        model.directory.as_deref(),
+                        &env,
+                    )))
         {
             return Ok(true);
         }
@@ -162,6 +172,7 @@ fn check_cancelled(cancel: Option<&CancellationToken>) -> crate::Result<()> {
 struct ModelSelection {
     languages: Vec<String>,
     directory: Option<std::path::PathBuf>,
+    mixed_pdf_khmer: bool,
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
@@ -202,12 +213,21 @@ impl ModelSelection {
             return None;
         }
         let languages = ocr.effective_tesseract_language();
-        if !crate::ocr::processor::script_retry::may_retry_language(&languages.join("+")) {
+        let mixed_pdf_khmer = (pdf || mime.is_none_or(str::is_empty))
+            && cfg!(feature = "pdf")
+            && config.ocr.is_some()
+            && if config.force_ocr {
+                languages.as_slice() == ["eng"]
+            } else {
+                matches!(config.ocr_strategy, crate::core::config::OcrStrategy::Auto)
+            };
+        if !mixed_pdf_khmer && !crate::ocr::processor::script_retry::may_retry_language(&languages.join("+")) {
             return None;
         }
         Some(Self {
             languages,
             directory: ocr.tessdata_path.clone(),
+            mixed_pdf_khmer,
         })
     }
 
@@ -246,6 +266,7 @@ impl ModelSelection {
         Some(Self {
             languages: ocr.effective_tesseract_language(),
             directory: ocr.tessdata_path.clone(),
+            mixed_pdf_khmer: false,
         })
     }
 }
@@ -373,6 +394,7 @@ impl CacheDependency {
             let model = ModelSelection {
                 languages: inputs.languages(),
                 directory: inputs.directory().map(std::path::Path::to_path_buf),
+                mixed_pdf_khmer: false,
             };
             if !self.stage_models.contains(&model) {
                 self.stage_models.push(model);
