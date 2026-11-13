@@ -294,7 +294,7 @@ run_discarded_recovery_cases() {
     retained_noisy_whole_document_retry_keeps_its_recovery_claim \
     discarded_noisy_retry_reports_native_text_kept \
     discarded_noisy_pipeline_retry_reports_native_text_kept \
-    discarded_noisy_all_pages_pipeline_retry_has_no_recovery_claim; do
+    discarded_noisy_all_pages_pipeline_retry_reports_native_text_kept; do
     run_exact "discarded_noise_2908::$test_name" --test ocr_page_failures
   done
   run_exact a_directly_called_backend_records_the_page_recovered_as_a_table --test ocr_page_failures
