@@ -1474,8 +1474,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     raster_dpis.extend(layout_raster_dpis);
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let mut khmer_supplements = ahash::AHashMap::new();
-    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-    let mut minority_khmer_pages = ahash::AHashSet::new();
     let mut ocr_results: ahash::AHashMap<u32, String> = ahash::AHashMap::with_capacity(total);
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut original_tesseract_raster_pages = ahash::AHashSet::new();
@@ -2670,15 +2668,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         max_working_bytes: super::hidden_layer::preview_byte_limit(config),
                         cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
                     };
-                    if let Some(supplement) = super::layer_token_recovery::minority_khmer_supplement(
+                    if let Some(additions) = super::layer_token_recovery::plan_minority_khmer(
                         &render_doc,
                         page_idx,
                         &extraction_result,
                         &limits,
                     ) {
-                        let page = (page_idx + 1) as u32;
-                        minority_khmer_pages.insert(page);
-                        khmer_supplements.insert(page, supplement);
+                        super::layer_token_recovery::apply_minority_khmer(
+                            &mut extraction_result,
+                            &additions,
+                            limits.cancelled,
+                        );
                     }
                 }
                 if let Some(metadata) = extraction_result.metadata.image_preprocessing.clone() {
@@ -3727,9 +3727,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
 
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     for (page, supplement) in khmer_supplements {
-        if let Some(text) = accepted_replacements.get_mut(&page)
-            && (!minority_khmer_pages.contains(&page) || !super::layer_token_recovery::contains_khmer(text))
-        {
+        if let Some(text) = accepted_replacements.get_mut(&page) {
             text.push_str("\n\n");
             text.push_str(&supplement);
             if let Some(document) = structured_ocr_pages.get_mut(&page) {
@@ -6174,7 +6172,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     max_working_bytes: super::hidden_layer::preview_byte_limit(config),
                     cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
                 };
-                let supplement = if config.ocr_strategy == crate::core::config::OcrStrategy::Auto
+                let additions = if config.ocr_strategy == crate::core::config::OcrStrategy::Auto
                     && config.pdf_options.as_ref().is_none_or(|pdf| {
                         pdf.top_margin_fraction.unwrap_or_default() == 0.0
                             && pdf.bottom_margin_fraction.unwrap_or_default() == 0.0
@@ -6182,7 +6180,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     && !forced_khmer_supplements.contains_key(&page_idx)
                     && super::layer_token_recovery::is_english_read(&ocr_result)
                 {
-                    super::layer_token_recovery::minority_khmer_supplement(pdf, document_page_idx, &ocr_result, &limits)
+                    super::layer_token_recovery::plan_minority_khmer(pdf, document_page_idx, &ocr_result, &limits)
                 } else {
                     None
                 };
@@ -6193,12 +6191,10 @@ pub(super) async fn extract_with_ocr_for_page(
                     page_ocr_hints
                         .as_ref()
                         .and_then(|hints| hints.decision_layer(document_page_number)),
-                    limits,
+                    super::native_word_coverage::InkProofLimits { ..limits },
                 );
-                if let Some(supplement) = supplement
-                    && !super::layer_token_recovery::contains_khmer(&ocr_result.content)
-                {
-                    forced_khmer_supplements.insert(page_idx, supplement);
+                if let Some(additions) = additions {
+                    super::layer_token_recovery::apply_minority_khmer(&mut ocr_result, &additions, limits.cancelled);
                 }
             }
             if let Some(psm) = effective_tesseract_psm(&ocr_result.metadata, &backend_name) {

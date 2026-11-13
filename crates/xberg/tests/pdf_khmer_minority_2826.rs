@@ -110,3 +110,41 @@ fn automatic_english_ocr_keeps_clean_khmer_and_rejects_hidden_and_wrong_mapped_k
         }
     }
 }
+
+#[test]
+fn mixed_ocr_keeps_khmer_between_english_and_rejects_unrelated_ink() {
+    const ORDERED: &[u8] = include_bytes!("fixtures/pdf/khmer-minority-2826/ordered.pdf");
+    const OVERLAP: &[u8] = include_bytes!("fixtures/pdf/khmer-minority-2826/overlap.pdf");
+    const MIXED_MAP: &[u8] = include_bytes!("fixtures/pdf/khmer-minority-2826/mixed-map.pdf");
+    for output_format in [OutputFormat::Plain, OutputFormat::Markdown] {
+        let config = ExtractionConfig {
+            output_format,
+            ..automatic_english()
+        };
+        for (name, pdf, expected) in [
+            ("ordered", ORDERED, 222),
+            ("overlap", OVERLAP, 0),
+            ("mixed-map", MIXED_MAP, 222),
+        ] {
+            let result = helpers::extract_bytes_document_blocking(pdf, "application/pdf", &config).unwrap();
+            for content in [&result.content, &result.pages.as_ref().unwrap()[0].content] {
+                assert_eq!(
+                    khmer(content).chars().count(),
+                    expected,
+                    "{name} {:?}",
+                    config.output_format
+                );
+                if expected != 0 {
+                    let first = content.find(is_khmer).unwrap();
+                    let last = content.rfind(is_khmer).unwrap();
+                    assert!(content[..first].contains("auditorium"), "{content}");
+                    assert!(content[last..].contains("reception"), "{content}");
+                }
+            }
+        }
+    }
+}
+
+fn is_khmer(ch: char) -> bool {
+    ('\u{1780}'..='\u{17ff}').contains(&ch)
+}

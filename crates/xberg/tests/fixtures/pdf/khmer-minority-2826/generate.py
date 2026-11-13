@@ -11,14 +11,16 @@ prior = int(re.findall(rb"startxref\s+(\d+)", original)[-1])
 khmer = subprocess.check_output(["mutool", "show", "-b", source, "8"])
 # Reuse the public fixture's embedded Khmer font and text, then add independent
 # visible Helvetica text in two columns below and beside the smaller Khmer block.
-latin = " ".join(namespace["LINES"] * 3)
+latin = " ".join(namespace["LINES"] * (2 if control in ("ordered", "overlap", "mixed-map") else 3))
 spacing = {"clean": 0, "tc1": 1, "tc2": 2, "tc3": 3, "tc4": 4, "tc6": 6, "fragmented": 0, "garbled": 0}[variant]
 if variant == "fragmented":
     latin = " ".join(" ".join(word[i:i+2] for i in range(0, len(word), 2)) for word in latin.split())
-lines = textwrap.wrap(latin, width=38 if spacing else 62)
+lines = textwrap.wrap(latin, width=38 if spacing or control in ("ordered", "overlap", "mixed-map") else 62)
 commands = []
 for i, line in enumerate(lines):
-    x, y = 40 + 280 * (i // 32), 470 - 13 * (i % 32)
+    ordered_fixture = control in ("ordered", "overlap", "mixed-map")
+    x = 40 + (280 if not ordered_fixture else 185) * (i // 26 if ordered_fixture else i // 32)
+    y = (410 - 14 * (i % 26)) if ordered_fixture else (470 - 13 * (i % 32))
     text = line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
     commands.append(f"1 0 0 1 {x} {y} Tm ({text}) Tj")
 content = b"q 0.75 0 0 0.75 0 218 cm\n" + khmer + f"\nQ\nBT /EN 9 Tf {spacing} Tc\n".encode() + "\n".join(commands).encode() + b"\nET\n"
@@ -27,6 +29,15 @@ if variant == "garbled":
 if control == "hidden":
     content = content.replace(b"BT /F1 18 Tf", b"BT /F1 18 Tf 3 Tr", 1)
     content += b"BT /EN 11 Tf 1 0 0 1 54 770 Tm (Community water volunteers collect supplies at the library.) Tj ET\n"
+if control in ("ordered", "overlap", "mixed-map"):
+    content = content.replace(b"0 218 cm", b"0 168 cm")
+    content += b"BT /EN 12 Tf 1 0 0 1 54 770 Tm (Morning volunteers prepare the auditorium.) Tj 1 0 0 1 54 28 Tm (Evening visitors collect supplies at reception.) Tj ET\n"
+if control == "overlap":
+    content = content.replace(b"BT /F1 18 Tf", b"BT /F1 18 Tf 1 g", 1)
+    content = content.replace(b"BT /EN 9 Tf", b"BT 0 g /EN 9 Tf", 1)
+    content += b"BT /EN 12 Tf 1 0 0 1 54 724 Tm (Visible library volunteers prepare supplies.) Tj ET\n"
+if control == "mixed-map":
+    content += b"BT /BAD 12 Tf 1 0 0 1 54 748 Tm (Volunteers deliver library supplies before the community meeting.) Tj ET\n"
 if control == "wrong-map":
     content = content[content.index(b"\nQ\n") + 3:]
     content += b"BT /BAD 12 Tf 1 0 0 1 54 760 Tm (Volunteers deliver library supplies before the community meeting.) Tj 1 0 0 1 54 735 Tm (Families can collect the remaining equipment at the reception desk.) Tj ET\n"
@@ -36,7 +47,7 @@ objects = {
     11: b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
 }
 cmap = b"/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def /CMapName /Control def /CMapType 2 def 1 begincodespacerange <00> <FF> endcodespacerange 1 beginbfchar <4E> <FFFD> endbfchar endcmap CMapName currentdict /CMap defineresource pop end end"
-if control == "wrong-map":
+if control in ("wrong-map", "mixed-map"):
     letters = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
     sample = ["ស្រ", "លា", "ញ់", "ប្រ", "ទេ", "សា", "ខ្ញុំ"]
     mapping = " ".join(f"<{byte:02X}> <{sample[i % len(sample)].encode('utf-16-be').hex()}>" for i, byte in enumerate(letters)).encode()
