@@ -239,7 +239,7 @@ async fn probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer
         native.processing_warnings
     );
 
-    let (automatic, decisions) = super::probe_capture::capture(extract(&pdf, &config()), "needed").await;
+    let (automatic, decisions) = Box::pin(capture_with_sibling(&pdf)).await;
     assert_eq!(
         decisions,
         vec![
@@ -282,17 +282,43 @@ async fn probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer
     );
 }
 
-#[tokio::test(flavor = "current_thread")]
-async fn same_scanned_pages_extract_without_probe_capture() {
-    let pdf = scanned_pages();
-    let document = extract(
-        &pdf,
+async fn capture_with_sibling(pdf: &[u8]) -> (ExtractedDocument, Vec<super::probe_capture::Decision>) {
+    let (capture_started, wait_for_capture) = tokio::sync::oneshot::channel();
+    let (sibling_finished, wait_for_sibling) = tokio::sync::oneshot::channel();
+    let captured = super::probe_capture::capture(
+        async {
+            capture_started.send(()).expect("sibling is waiting for capture");
+            let document = Box::pin(extract(pdf, &config())).await;
+            wait_for_sibling.await.expect("sibling completed under active capture");
+            document
+        },
+        "needed",
+    );
+    let sibling = async {
+        wait_for_capture
+            .await
+            .expect("capture is active before sibling extraction");
+        assert_sibling_extraction(pdf).await;
+        sibling_finished.send(()).expect("capture is still active");
+    };
+    // ~keep Each future is polled separately so the sibling runs outside the capture dispatcher.
+    let (captured, ()) = tokio::time::timeout(std::time::Duration::from_secs(60), async {
+        tokio::join!(Box::pin(captured), Box::pin(sibling))
+    })
+    .await
+    .expect("both overlapping extractions must complete within 60 seconds");
+    captured
+}
+
+async fn assert_sibling_extraction(pdf: &[u8]) {
+    let document = Box::pin(extract(
+        pdf,
         &ExtractionConfig {
             use_cache: false,
             ocr: Some(OcrConfig::default()),
             ..Default::default()
         },
-    )
+    ))
     .await;
     assert_eq!(document.extraction_method, Some(ExtractionMethod::Mixed));
     assert!(document.content.contains("Across the quiet harbor"));

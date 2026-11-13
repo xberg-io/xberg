@@ -43,7 +43,9 @@ ten exact cases in total, including these five.
 
 With the public NIST fixture configured as above, repeat the whole target
 with four test threads. The marker probe must capture exactly two decisions
-while the sibling test extracts the same synthetic PDF without a capture.
+while an uncaptured sibling future extracts the same synthetic PDF. One-shot
+channels keep the capture open from before the sibling starts until after it
+finishes. A 60-second timeout bounds both extractions.
 
 ```sh
 for run in 1 2 3 4 5; do
@@ -57,8 +59,8 @@ cargo test --locked -p xberg --no-default-features \
 ```
 
 For the issue reproducer, use a disposable checkout with this patch and
-replace the marker probe and its capture code with the pre-fix version,
-keeping the new sibling extraction test. Repeat the four-thread run. The
+replace the scoped capture with the pre-fix global subscriber and case-span
+filter, keeping the sibling extraction and its handshake. Repeat the four-thread run. The
 failure to look for is an empty decision list in
 `probe_read_replaces_the_partial_scan_and_keeps_no_marker_coverage_layer`,
 while the sibling succeeds. The original race is scheduling-dependent.

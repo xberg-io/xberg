@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use tracing::instrument::WithSubscriber as _;
 use tracing_subscriber::layer::SubscriberExt as _;
 
-type Decision = (String, String, String);
+pub(super) type Decision = (String, String, String);
 
 #[derive(Default)]
 struct Fields(BTreeMap<String, String>);

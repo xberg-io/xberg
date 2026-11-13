@@ -163,8 +163,6 @@ fn default_tesseract() -> ExtractionConfig {
 }
 
 async fn extract(bytes: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
-    // Every test installs the one global subscriber before its first event, so none is cached off.
-    probe_log();
     let mut batch = xberg::extract(
         ExtractInput::from_bytes(bytes.to_vec(), "application/pdf", None),
         config,
