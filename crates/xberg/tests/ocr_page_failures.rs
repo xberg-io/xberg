@@ -104,10 +104,9 @@ impl OcrBackend for StubBackend {
         match self.render {
             RenderOutcome::Blank => Ok(ExtractedDocument::default()),
             RenderOutcome::WordOnLandscape if png_size(image_bytes).is_some_and(|(width, height)| width > height) => {
-                Ok(ExtractedDocument {
-                    content: RECOVERED_WORD.to_string(),
-                    ..Default::default()
-                })
+                let mut recovered = ExtractedDocument::default();
+                recovered.content = RECOVERED_WORD.to_string();
+                Ok(recovered)
             }
             RenderOutcome::Fails | RenderOutcome::WordOnLandscape => Err(xberg::XbergError::Ocr {
                 message: "stub render failure".to_string(),
