@@ -162,10 +162,10 @@ fn extract_database(
     cancel_token: Option<CancellationToken>,
 ) -> Result<InternalDocument> {
     check_cancelled(cancel_token.as_ref())?;
-    let connection = open_database(content, cancel_token.as_ref())?;
+    let mut connection = open_database(content, cancel_token.as_ref())?;
     configure_connection(&connection, cancel_token.as_ref())?;
     if let Some(token) = cancel_token.clone() {
-        install_progress_handler(&connection, move || token.is_cancelled())
+        install_progress_handler(&mut connection, move || token.is_cancelled())
             .map_err(|error| sqlite_error("install the cancellation handler for", error, cancel_token.as_ref()))?;
     }
 
@@ -209,7 +209,7 @@ fn configure_connection(connection: &Connection, cancel_token: Option<&Cancellat
 }
 
 fn install_progress_handler(
-    connection: &Connection,
+    connection: &mut Connection,
     should_cancel: impl FnMut() -> bool + Send + 'static,
 ) -> rusqlite::Result<()> {
     connection.progress_handler(SQLITE_PROGRESS_HANDLER_OPS, Some(should_cancel))
@@ -490,12 +490,12 @@ mod tests {
 
     #[test]
     fn should_interrupt_sqlite_work_through_the_progress_handler() {
-        let connection = Connection::open_in_memory().expect("in-memory SQLite should open");
+        let mut connection = Connection::open_in_memory().expect("in-memory SQLite should open");
         let token = CancellationToken::new();
         token.cancel();
         let callback_count = Arc::new(AtomicUsize::new(0));
         let observed_count = Arc::clone(&callback_count);
-        install_progress_handler(&connection, move || {
+        install_progress_handler(&mut connection, move || {
             observed_count.fetch_add(1, Ordering::Relaxed);
             token.is_cancelled()
         })
