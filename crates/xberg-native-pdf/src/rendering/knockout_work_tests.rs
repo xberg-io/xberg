@@ -1226,7 +1226,14 @@ fn an_image_do_in_a_group_reserves_both_sidecar_snapshots() {
         );
         if limit == 56 {
             result.expect("six coverage bytes and two RGBA snapshots per pixel fit");
-            assert!(pixmap.data().chunks_exact(4).any(|pixel| pixel == [0, 0, 0, 255]));
+            assert!(
+                pixmap
+                    .data()
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .any(|pixel| *pixel == [0, 0, 0, 255])
+            );
         } else {
             assert!(
                 result
