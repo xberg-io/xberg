@@ -1148,6 +1148,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // Pages whose OCR text got the recognition-noise verdict and was not discarded. The caller
     // decides each page on its OCR text alone and puts the layer first only on a replaced page.
     let mut noise_verdict_pages: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut texture_noise_by_page = ahash::AHashMap::<u32, super::symbol_noise_lines::texture::Evidence>::new();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut texture_work = super::hidden_layer::PreviewWorkBudget::new(config);
     // Pages whose calibrated mean confidence fell below `min_ocr_mean_confidence`.
     let mut low_confidence_pages: std::collections::HashSet<u32> = std::collections::HashSet::new();
     // Pages whose dictionary-invalid word ratio crossed its threshold.
@@ -2383,15 +2387,16 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 let probe_reads = pages.probe_reads.clone();
                 #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-                let observe_layer_overlap = correction_degrees == 0
+                let observe_source_geometry = correction_degrees == 0
                     && !mixed_route_layout_active
-                    && page_layers
-                        .as_ref()
-                        .is_some_and(|layers| layers.contains_key(&((idx + 1) as u32)))
-                    && super::document::native_preservation_is_automatic(config, (idx + 1) as u32)
                     && crate::plugins::registry::get_ocr_backend_registry()
                         .read()
-                        .is_builtin_tesseract(backend);
+                        .is_builtin_tesseract(backend)
+                    && (ocr_output_thresholds.prune_symbol_noise_lines
+                        || (page_layers
+                            .as_ref()
+                            .is_some_and(|layers| layers.contains_key(&((idx + 1) as u32)))
+                            && super::document::native_preservation_is_automatic(config, (idx + 1) as u32)));
                 let task = crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         return (
@@ -2448,7 +2453,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             );
                             let scale_only = &scale_only;
                             async move {
-                                if observe_layer_overlap {
+                                if observe_source_geometry {
                                     let (result, observed) =
                                         crate::ocr::preprocessing::geometry_evidence::observe(read).await;
                                     scale_only.store(observed, std::sync::atomic::Ordering::Relaxed);
@@ -2716,6 +2721,25 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     &mut accumulated_warnings,
                     std::mem::take(&mut extraction_result.processing_warnings),
                 );
+                #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                if observed_scale_only
+                    && correction_degrees == 0
+                    && ocr_output_thresholds.prune_symbol_noise_lines
+                    && !alternative_raster_pages.contains(&((page_idx + 1) as u32))
+                    && extraction_result.tables.is_empty()
+                    && !extraction_result
+                        .metadata
+                        .additional
+                        .get(crate::ocr_metadata_keys::OCR_AUTO_ROTATED_METADATA_KEY)
+                        .and_then(serde_json::Value::as_bool)
+                        .unwrap_or(false)
+                    && let Some(raster) = encoded.iter().find(|(index, ..)| *index == page_idx)
+                    && let Some(candidates) = texture_work.probe_page(|work| {
+                        super::symbol_noise_lines::texture::capture(raster, &extraction_result, config, work)
+                    })
+                {
+                    texture_noise_by_page.insert((page_idx + 1) as u32, candidates);
+                }
                 let (width, height) = encoded
                     .iter()
                     .find(|(encoded_page, ..)| *encoded_page == page_idx)
@@ -3287,6 +3311,32 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 .is_some_and(|doc| !doc.tables.is_empty() || !super::symbol_noise_lines::elements_are_prunable(doc))
                 || !super::symbol_noise_lines::page_is_dominated_by_noise_lines(text.lines())
             {
+                continue;
+            }
+            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            if let Some(evidence) = texture_noise_by_page.remove(page)
+                && !alternative_raster_pages.contains(page)
+                && !config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled())
+                && let Some(read) = ocr_results.get(page)
+            {
+                let candidates = evidence.reconciled_tokens(text, read);
+                let (removed, texture_removed) = super::symbol_noise_lines::texture::prune(
+                    text,
+                    ocr_results.get_mut(page),
+                    ocr_page_paragraphs.get_mut(page),
+                    structured_ocr_pages.get_mut(page),
+                    &candidates,
+                );
+                crate::core::diagnostics::push_warning_deduped(
+                    &mut accumulated_warnings,
+                    super::symbol_noise_lines::pruned_lines_warning(*page as usize, removed),
+                );
+                if texture_removed != 0 {
+                    crate::core::diagnostics::push_warning_deduped(
+                        &mut accumulated_warnings,
+                        super::symbol_noise_lines::texture::warning(*page, texture_removed),
+                    );
+                }
                 continue;
             }
             let (pruned, removed) = super::symbol_noise_lines::prune_text(text);
