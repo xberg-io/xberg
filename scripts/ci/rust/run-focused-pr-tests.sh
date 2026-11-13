@@ -51,6 +51,7 @@ run_pdf_cases() {
     --test pdf_embedded_psm6_addition_2327
   run_type0_cases
   run_type0_noisy_render_cases
+  run_exact automatic_ocr_keeps_overprinted_separation_text_and_native_sibling --test pdf_separation_overprint_2817
   local type0_structure='extractors::pdf::ocr::native_word_coverage::structure_tests::type0_structure'
   run_exact "$type0_structure::single_page_type0_keeps_cell_only_tables_absent_from_the_structure" --lib
   local mixed_tables='extractors::pdf::ocr::tests::tests::mixed_cell_only_tables'
@@ -339,7 +340,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=93
+  expected=94
   run_pdf_cases
   run_retained_read_cases
   expected=$((expected + 11 + 7))
