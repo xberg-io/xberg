@@ -65,7 +65,7 @@ pub(super) use pipeline::render_mixed_plain_pages;
 ))]
 pub(super) use pipeline::uses_default_ocr_pipeline;
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-pub(in crate::extractors::pdf) use pipeline::{TIME_LIMIT_UNREAD_PAGE_ERROR, update_discarded_xobject_retry_warning};
+pub(in crate::extractors::pdf) use pipeline::{TIME_LIMIT_UNREAD_PAGE_ERROR, report_native_page_recovery};
 mod plausibility;
 mod rendering;
 mod scoring;

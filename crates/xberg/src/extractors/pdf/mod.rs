@@ -2637,18 +2637,7 @@ fn report_restored_native_page_failures(document: &mut InternalDocument, restore
             continue;
         }
         failure.recovered = true;
-        if !ocr::update_discarded_xobject_retry_warning(&mut document.processing_warnings, failure) {
-            crate::core::diagnostics::push_warning_deduped(
-                &mut document.processing_warnings,
-                crate::core::diagnostics::warning(
-                    "ocr",
-                    format!(
-                        "OCR of page {} failed ({}); the page's native text was kept.",
-                        failure.page, failure.error
-                    ),
-                ),
-            );
-        }
+        ocr::report_native_page_recovery(&mut document.processing_warnings, failure);
     }
 }
 

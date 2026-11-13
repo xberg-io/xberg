@@ -689,7 +689,7 @@ fn merge_returned_page_failures(
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-pub(in crate::extractors::pdf) fn update_discarded_xobject_retry_warning(
+fn update_discarded_xobject_retry_warning(
     warnings: &mut [crate::types::ProcessingWarning],
     failure: &crate::types::OcrPageFailure,
 ) -> bool {
@@ -718,6 +718,50 @@ fn discarded_xobject_retry_warning(
         "ocr",
         format!("OCR of page {} failed ({}); {outcome}.", failure.page, failure.error),
     )
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(in crate::extractors::pdf) fn report_native_page_recovery(
+    warnings: &mut Vec<crate::types::ProcessingWarning>,
+    failure: &crate::types::OcrPageFailure,
+) {
+    if update_discarded_xobject_retry_warning(warnings, failure) {
+        return;
+    }
+    let no_retry = unread_page_failure_message(failure.page, &failure.error, false);
+    let empty_retry = unread_page_failure_message(failure.page, &failure.error, true);
+    let previous = warnings
+        .iter_mut()
+        .find(|warning| warning.source == "ocr" && (warning.message == no_retry || warning.message == empty_retry));
+    let retry_detail = match &previous {
+        Some(warning) if warning.message == empty_retry => {
+            "the retry on the page's embedded image XObjects also returned no text, and "
+        }
+        _ => "",
+    };
+    let updated = crate::core::diagnostics::warning(
+        "ocr",
+        format!(
+            "OCR of page {} failed ({}); {retry_detail}the page's native text was kept.",
+            failure.page, failure.error
+        ),
+    );
+    if let Some(warning) = previous {
+        *warning = updated;
+    } else {
+        crate::core::diagnostics::push_warning_deduped(warnings, updated);
+    }
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+fn unread_page_failure_message(page: u32, error: &str, empty_retry: bool) -> String {
+    if empty_retry {
+        format!(
+            "OCR of page {page} failed ({error}); the retry on the page's embedded image XObjects also returned no text."
+        )
+    } else {
+        format!("OCR of page {page} failed and could not be recovered: {error}")
+    }
 }
 
 /// Records for an OCR run that failed as a whole: one for each page the run was asked to read.
@@ -6693,17 +6737,8 @@ pub(super) async fn extract_with_ocr_for_page(
                              embedded image XObjects instead.",
                             document_page_number
                         )
-                    } else if xobject_retry_ran_empty {
-                        format!(
-                            "OCR of page {} failed ({error}); the retry on the page's embedded image \
-                             XObjects also returned no text.",
-                            document_page_number
-                        )
                     } else {
-                        format!(
-                            "OCR of page {} failed and could not be recovered: {error}",
-                            document_page_number
-                        )
+                        unread_page_failure_message(document_page_number, &error, xobject_retry_ran_empty)
                     }),
                 };
                 pending_page_failure_warnings.push((page_idx, recovered, warning));

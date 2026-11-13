@@ -190,6 +190,40 @@ fn discarded_noisy_all_pages_pipeline_retry_reports_native_text_kept() {
     );
 }
 
+#[test]
+#[serial_test::serial]
+fn all_pages_ocr_failure_without_an_embedded_image_reports_native_text_kept() {
+    let result = extract_from_pdf(
+        "tesseract",
+        RenderOutcome::Fails,
+        RasterOutcome::Word,
+        &noise_config(true, true, true),
+        &pdf_with_text_cover_and_two_scans(5),
+    );
+
+    assert!(result.content.contains("word0 word1 word2 word3 word4"));
+    assert!(result.content.contains(RECOVERED_WORD));
+    let failures = result.ocr_page_failures.as_ref().unwrap();
+    assert_eq!(
+        failures.iter().find(|failure| failure.page == 1),
+        Some(&OcrPageFailure {
+            page: 1,
+            error: "OCR error: stub render failure".to_string(),
+            recovered: true,
+        })
+    );
+    let warnings: Vec<_> = result
+        .processing_warnings
+        .iter()
+        .filter(|warning| warning.source == "ocr" && warning.message.starts_with("OCR of page 1 failed"))
+        .map(|warning| warning.message.as_ref())
+        .collect();
+    assert_eq!(
+        warnings,
+        ["OCR of page 1 failed (OCR error: stub render failure); the page's native text was kept."]
+    );
+}
+
 fn assert_discarded_retry_keeps_native(pipeline: bool) {
     let result = extract_from_pdf(
         if pipeline { "tesseract" } else { DIRECT_BACKEND },
