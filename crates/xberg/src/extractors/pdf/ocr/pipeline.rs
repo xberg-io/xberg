@@ -1,3 +1,7 @@
+#[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+#[path = "pipeline/sparse_glyph_read.rs"]
+mod sparse_glyph_read;
+
 #[cfg(all(
     feature = "pdf",
     feature = "ocr",
@@ -94,7 +98,7 @@ use super::rendering::{
     clone_rgb_for_png_encode, fallback_render_document, open_pdf_for_full_ocr, open_pdf_for_page_ocr,
     page_dimensions_pt, page_needs_xobject_fallback, pre_rendered_page_geometry, pre_rendered_page_source_dpi,
     recover_page_text_from_bounded_image_xobjects, recover_page_text_from_image_xobjects,
-    render_full_pdf_ocr_batch_with_dpi, render_selected_pages_with_dpi, share_rendered_page_images,
+    render_full_pdf_ocr_batch_with_dpi, render_selected_pages_with_image_config, share_rendered_page_images,
     single_block_for_ocr_page, valid_page_indices, validate_png_encode_pages_individually,
     whole_page_raster_for_ocr_page,
 };
@@ -1522,6 +1526,19 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     };
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut alternative_raster_pages = ahash::AHashSet::new();
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let sparse_glyph_pages =
+        sparse_glyph_read::eligible_pages(config, &render_doc, native_coverage_layers.as_deref(), backend.as_ref());
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let sparse_glyph_images = sparse_glyph_read::images_config();
+    let images_for_page = |page_index: usize| {
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+        if sparse_glyph_pages.contains(&page_index) {
+            return Some(&sparse_glyph_images);
+        }
+        let _ = page_index;
+        config.images.as_ref()
+    };
     // Tesseract's own mean confidence for each page it read, 0-100. Captured here because
     // the per-page metadata is gone by the time `ocr_results` is judged.
     let mut page_mean_confidence: ahash::AHashMap<u32, f64> = ahash::AHashMap::new();
@@ -1607,22 +1624,22 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             }
             (page_images, render_failures, super::rendering::PageRasterDpis::new())
         } else {
-            render_selected_pages_with_dpi(
+            render_selected_pages_with_image_config(
                 &render_doc,
                 &page_rotations,
                 &page_indices[batch_start..batch_end],
                 security_limits,
-                config.images.as_ref(),
+                images_for_page,
                 preprocessing_render_dpi,
             )
         };
         #[cfg(not(feature = "layout-detection"))]
-        let (page_images, render_failures, batch_raster_dpis) = render_selected_pages_with_dpi(
+        let (page_images, render_failures, batch_raster_dpis) = render_selected_pages_with_image_config(
             &render_doc,
             &page_rotations,
             &page_indices[batch_start..batch_end],
             security_limits,
-            config.images.as_ref(),
+            images_for_page,
             preprocessing_render_dpi,
         );
         raster_dpis.extend(batch_raster_dpis);
@@ -2371,6 +2388,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     .is_builtin_tesseract(backend)
                     && use_khmer_hint(*page_idx, whole_page_raster);
                 let config_clone = config_clone.into_owned();
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                let config_clone = sparse_glyph_read::ocr_config(config_clone, sparse_glyph_pages.contains(page_idx));
                 let (upright_data, upright_width, upright_height, correction_degrees) = match upright_raster_for_backend(
                     data,
                     *width,
@@ -2818,6 +2837,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     single_block_pages.contains(&(*page_idx as u32 + 1)),
                     layout_assembly,
                 );
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                let config_for_page = Cow::Owned(sparse_glyph_read::ocr_config(
+                    config_for_page.into_owned(),
+                    sparse_glyph_pages.contains(page_idx),
+                ));
                 let (upright_data, upright_width, upright_height, correction_degrees) = match upright_raster_for_backend(
                     data,
                     *width,

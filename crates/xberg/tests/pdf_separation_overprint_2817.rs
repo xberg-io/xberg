@@ -47,6 +47,10 @@ fn automatic_ocr_keeps_overprinted_separation_text_and_native_sibling() {
             panic!("{label}: expected two pages, got {}", pages.len());
         };
         assert_eq!(ocr.content.split_whitespace().collect::<Vec<_>>(), expected, "{label}");
+        let raster = ocr.image_preprocessing.as_ref().expect("OCR raster provenance");
+        assert_eq!(raster.original_dimensions.width, 1020, "{label}");
+        assert_eq!(raster.target_dpi, 120, "{label}");
+        assert!(raster.new_dimensions.is_none(), "{label}: raster was resized");
         assert_eq!(
             native.content.trim(),
             "Native sibling control remains unchanged.",
@@ -131,6 +135,12 @@ fn assert_folio(bytes: &[u8], config: &ExtractionConfig, expected: &str, method:
         panic!("{label} {mode}: expected one page, got {}", pages.len());
     };
     assert_eq!(page.page_number, 1, "{label} {mode}");
+    if method == ExtractionMethod::Mixed {
+        let raster = page.image_preprocessing.as_ref().expect("OCR raster provenance");
+        assert_eq!(raster.original_dimensions.width, 1020, "{label}");
+        assert_eq!(raster.target_dpi, 120, "{label}");
+        assert!(raster.new_dimensions.is_none(), "{label}: raster was resized");
+    }
     let tokens = expected.split_whitespace().collect::<Vec<_>>();
     for (surface, content) in [("document", &result.content), ("page", &page.content)] {
         assert_eq!(

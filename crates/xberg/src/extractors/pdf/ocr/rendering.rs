@@ -1191,12 +1191,32 @@ pub(super) fn render_selected_pages_from_document(
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[cfg(test)]
 pub(super) fn render_selected_pages_with_dpi(
     doc: &xberg_native_pdf::PdfDocument,
     page_rotations: &[u32],
     page_indices: &[usize],
     security_limits: &crate::extractors::security::SecurityLimits,
     images_config: Option<&crate::core::config::ImageExtractionConfig>,
+    preprocessing_dpi: Option<i32>,
+) -> (RenderedPages, PageRenderFailures, PageRasterDpis) {
+    render_selected_pages_with_image_config(
+        doc,
+        page_rotations,
+        page_indices,
+        security_limits,
+        |_| images_config,
+        preprocessing_dpi,
+    )
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn render_selected_pages_with_image_config<'a>(
+    doc: &xberg_native_pdf::PdfDocument,
+    page_rotations: &[u32],
+    page_indices: &[usize],
+    security_limits: &crate::extractors::security::SecurityLimits,
+    images_config: impl Fn(usize) -> Option<&'a crate::core::config::ImageExtractionConfig> + Sync,
     preprocessing_dpi: Option<i32>,
 ) -> (RenderedPages, PageRenderFailures, PageRasterDpis) {
     // rayon's work-stealing pool needs OS threads; wasm32 has none, so this falls back to a
@@ -1210,7 +1230,7 @@ pub(super) fn render_selected_pages_with_dpi(
                 page_rotations,
                 idx,
                 security_limits,
-                images_config,
+                images_config(idx),
                 preprocessing_dpi,
             )
         });
@@ -1228,7 +1248,7 @@ pub(super) fn render_selected_pages_with_dpi(
                         page_rotations,
                         idx,
                         security_limits,
-                        images_config,
+                        images_config(idx),
                         preprocessing_dpi,
                     ),
                 )
