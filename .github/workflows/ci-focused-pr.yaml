@@ -60,6 +60,7 @@ jobs:
             documents: |
               pdf/regression_pages/nist-sp811-2008-p7.pdf
               pdf/regression_pages/irs-fw9--2024-p1.pdf
+              pdf/a_course_in_machine_learning_ciml_v0_9_all.pdf
           - suite: office-pages
             documents: |
               docx/budget_fy2027_memo.docx
@@ -151,3 +152,18 @@ jobs:
           cargo test --locked -p xberg --no-default-features --features "$features" --test pdf_khmer_minority_2826 \
             -- --exact "$name" --color never 2>&1 | tee "$RUNNER_TEMP/khmer-paddle-output.log"
           grep -F 'test result: ok. 1 passed; 0 failed; 0 ignored;' "$RUNNER_TEMP/khmer-paddle-output.log"
+
+      - name: Verify layer-token recovery with the implicit Paddle fallback enabled
+        if: matrix.suite == 'pdf-ocr'
+        shell: bash
+        run: |
+          set -euo pipefail
+          features="pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types,paddle-ocr-tract"
+          name="the_mixed_route_keeps_the_layer_tokens_of_its_ocr_page"
+          args=(test --locked -p xberg --no-default-features --features "$features" --test ocr_layer_tokens_2952)
+          cargo "${args[@]}" -- --exact "$name" --list --color never 2>&1 | tee "$RUNNER_TEMP/layer-token-list.log"
+          grep -Fx "$name: test" "$RUNNER_TEMP/layer-token-list.log"
+          grep -Fx '1 test, 0 benchmarks' "$RUNNER_TEMP/layer-token-list.log"
+          cargo "${args[@]}" -- --exact "$name" --color never 2>&1 | tee "$RUNNER_TEMP/layer-token-run.log"
+          grep -Fx "test $name ... ok" "$RUNNER_TEMP/layer-token-run.log"
+          grep -F 'test result: ok. 1 passed; 0 failed; 0 ignored;' "$RUNNER_TEMP/layer-token-run.log"

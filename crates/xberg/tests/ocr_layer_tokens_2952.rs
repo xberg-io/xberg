@@ -1,6 +1,7 @@
 #![cfg(all(feature = "pdf", feature = "ocr", feature = "bundle-tessdata-eng"))]
 
 use std::collections::BTreeMap;
+use xberg::types::ExtractionMethod;
 use xberg::{ExtractInput, ExtractionConfig, OcrConfig, OutputFormat, PageConfig};
 
 /// One page: a header in a Type0 font whose ToUnicode map points into the Private Use Area (so the
@@ -19,18 +20,28 @@ const VALUES: [&str; 5] = ["120", "80", "150", "60", "100"];
 /// `ids.pdf` behind a clean, fully decodable first page: only the second page needs OCR, so the
 /// document takes the mixed native and OCR route, whose page decision compares each OCR page with
 /// the layer it keeps.
+#[cfg(any(feature = "paddle-ocr-ort", feature = "paddle-ocr-tract"))]
 const MIXED_PDF: &[u8] = include_bytes!("fixtures/ocr_layer_tokens_2952/mixed.pdf");
 
 async fn page_text(tessdata: &std::path::Path, format: OutputFormat) -> String {
-    pages_of(IDS_PDF, tessdata, format).await.remove(0)
+    pages_of(IDS_PDF, tessdata, format, ExtractionMethod::Ocr)
+        .await
+        .remove(0)
 }
 
-async fn pages_of(pdf: &[u8], tessdata: &std::path::Path, format: OutputFormat) -> Vec<String> {
+async fn pages_of(
+    pdf: &[u8],
+    tessdata: &std::path::Path,
+    format: OutputFormat,
+    expected_method: ExtractionMethod,
+) -> Vec<String> {
     let model = xberg_tesseract::bundled_eng_traineddata().expect("bundled English model");
     std::fs::write(tessdata.join("eng.traineddata"), model).unwrap();
     let config = ExtractionConfig {
         use_cache: false,
         output_format: format,
+        // Exercise the same structured OCR read for Plain and Markdown. ~keep
+        include_document_structure: true,
         pages: Some(PageConfig {
             extract_pages: true,
             ..Default::default()
@@ -55,6 +66,7 @@ async fn pages_of(pdf: &[u8], tessdata: &std::path::Path, format: OutputFormat) 
         "the undecodable header must send the page to OCR: {:?}",
         document.extraction_method
     );
+    assert_eq!(document.extraction_method, Some(expected_method));
     let pages = document.pages.expect("per-page output requested");
     pages.into_iter().map(|page| page.content).collect()
 }
@@ -117,10 +129,18 @@ async fn the_structured_markdown_page_keeps_the_same_layer_tokens_in_reading_ord
     );
 }
 
+// The implicit fallback routes mixed OCR through the per-page stage that consumes the decision layer. ~keep
+#[cfg(any(feature = "paddle-ocr-ort", feature = "paddle-ocr-tract"))]
 #[tokio::test]
 async fn the_mixed_route_keeps_the_layer_tokens_of_its_ocr_page() {
     let directory = tempfile::tempdir().unwrap();
-    let pages = pages_of(MIXED_PDF, directory.path(), OutputFormat::Plain).await;
+    let pages = pages_of(
+        MIXED_PDF,
+        directory.path(),
+        OutputFormat::Plain,
+        ExtractionMethod::Mixed,
+    )
+    .await;
     assert_eq!(pages.len(), 2);
     assert!(pages[0].contains("Quarterly regional summary"), "{}", pages[0]);
     assert_layer_tokens_recovered(&pages[1]);

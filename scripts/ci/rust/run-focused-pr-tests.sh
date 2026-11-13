@@ -65,6 +65,9 @@ run_pdf_cases() {
   run_exact tall_lower_density_plain_gray_flate_recovers_all_source_words_in_order --test pdf_tall_scan_strips
   run_exact png_predictor_panel_recovers_missing_line_without_changing_primary_ocr \
     --test pdf_embedded_psm6_addition_2327
+  run_exact automatic_ocr_keeps_every_decodable_layer_token_of_a_page_with_an_undecodable_header --test ocr_layer_tokens_2952
+  run_exact the_structured_markdown_page_keeps_the_same_layer_tokens_in_reading_order --test ocr_layer_tokens_2952
+  run_exact the_table_of_contents_page_keeps_its_clean_read_without_the_layers_question_marks --test ocr_layer_tokens_toc_3027
   run_type0_cases
   run_type0_noisy_render_cases
   run_exact automatic_ocr_keeps_overprinted_separation_text_and_native_sibling --test pdf_separation_overprint_2817
@@ -356,7 +359,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=104
+  expected=107
   run_pdf_cases
   run_retained_read_cases
   expected=$((expected + 11 + 7))
