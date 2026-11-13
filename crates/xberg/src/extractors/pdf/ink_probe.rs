@@ -268,15 +268,7 @@ pub(super) async fn contradicted_pages(
     };
     let mut eligible: Vec<u32> = candidates
         .into_iter()
-        .filter(|page| {
-            *page > 0
-                && !page_reads_as_scan(
-                    &document,
-                    *page as usize - 1,
-                    page_text(layer.text, boundaries, *page).unwrap_or_default(),
-                    config,
-                )
-        })
+        .filter(|page| *page > 0 && !page_reads_as_scan(&document, *page as usize - 1, config))
         .collect();
     eligible.sort_unstable();
     eligible.dedup();

@@ -55,6 +55,14 @@ use group_compositing::{FormInvocation, GroupReplay, GroupSidecar};
 mod group_process_text;
 use super::text_rasterizer::TextRun;
 use group_process_text::GroupTextPaint;
+#[path = "raster_budget.rs"]
+mod raster_budget;
+#[cfg(test)]
+use raster_budget::png_working_bytes_fit;
+#[cfg(test)]
+pub(super) use raster_budget::{PNG_FIXED_OVERHEAD, RGBA_AND_PNG_BYTES_PER_PIXEL};
+pub(super) use raster_budget::{PngRenderBudget, SpotPlaneUse, spot_plane_use};
+use raster_budget::{encode_png, fit_png_dpi, raster_dimensions, resize_rgba};
 
 /// Which path-paint side(s) [`PageRenderer::pipeline_resolve_paint_gs`]
 /// should resolve for the current operator.
@@ -194,11 +202,6 @@ impl RenderOptions {
         self.format = ImageFormat::RawRgba8;
         self
     }
-}
-
-pub(super) struct PngRenderBudget {
-    pub(super) max_working_bytes: usize,
-    pub(super) minimum_dpi: u32,
 }
 
 /// A rendered page image.
@@ -516,13 +519,42 @@ impl PageRenderer {
         doc: &PdfDocument,
         png_budget: Option<PngRenderBudget>,
     ) -> Result<(RenderedImage, u32)> {
-        self.knockout_shape = None;
+        let mut dpi = self.options.dpi;
+        let minimum = png_budget
+            .as_ref()
+            .map_or(dpi, |budget| budget.minimum_dpi.max(1).min(dpi));
+        let can_resize = self.options.scale_override.is_none();
         self.knockout_resources
             .reset(png_budget.as_ref().map(|budget| budget.max_working_bytes));
+
+        // A retry can reveal a later reservation peak. Bound the number of renders and
+        // use the minimum on the final attempt if the observed peaks have not converged.
+        for _ in 0..raster_budget::MAX_WORKSPACE_DPI_RETRIES {
+            let result = self.render_page_at_dpi(page_num, doc, png_budget.as_ref(), &mut dpi);
+            let Some((required, limit)) = self.knockout_resources.workspace_shortfall() else {
+                return result;
+            };
+            if result.is_ok() || !can_resize || dpi <= minimum {
+                return result;
+            }
+            self.cmyk_sidecar = None;
+            self.knockout_resources.reset_attempt();
+            dpi = raster_budget::dpi_after_workspace_refusal(dpi, minimum, required, limit);
+        }
+        dpi = minimum;
+        self.render_page_at_dpi(page_num, doc, png_budget.as_ref(), &mut dpi)
+    }
+
+    fn render_page_at_dpi(
+        &mut self,
+        page_num: usize,
+        doc: &PdfDocument,
+        png_budget: Option<&PngRenderBudget>,
+        admitted_dpi: &mut u32,
+    ) -> Result<(RenderedImage, u32)> {
+        self.knockout_shape = None;
         self.reported_source_budget_exceeded = false;
-        self.source_image_budget = png_budget
-            .as_ref()
-            .map(|budget| image_budget::ImageBudget::new(budget.max_working_bytes));
+        self.source_image_budget = png_budget.map(|budget| image_budget::ImageBudget::new(budget.max_working_bytes));
         self.fonts.clear();
         self.color_spaces.clear();
         // The qcms transform cache is per-page: dropping every entry
@@ -575,15 +607,24 @@ impl PageRenderer {
         let scale_at_dpi = |dpi| scale_override.unwrap_or(dpi as f32 / 72.0);
         let dimensions_at_dpi = |dpi| raster_dimensions(page_w, page_h, scale_at_dpi(dpi), scale_override.is_some());
 
-        let mut dpi = self.options.dpi;
+        let mut dpi = *admitted_dpi;
         let admitted_png = png_budget
             .map(|budget| {
                 let resources = doc.get_page_resources(page_num)?;
                 let spots = self.page_sidecar_spots(doc, page_num, &resources);
-                dpi = fit_png_dpi(dpi, &budget, spots.as_deref(), dimensions_at_dpi)?;
+                // Top-level mask snapshots can be outside a reservation scope. Keep their
+                // preflight allowance for ink pages. Group and paint workspace is checked
+                // by the live reservations before allocation, including during source replay.
+                let transient = if spots.as_deref().is_some_and(|inks| !inks.is_empty()) {
+                    spot_plane_use(doc, page_num, &resources)
+                } else {
+                    SpotPlaneUse::default()
+                };
+                dpi = fit_png_dpi(dpi, budget, spots.as_deref(), transient, dimensions_at_dpi)?;
                 Ok::<_, Error>((resources, spots))
             })
             .transpose()?;
+        *admitted_dpi = dpi;
         let scale = scale_at_dpi(dpi);
         let (width, height) = dimensions_at_dpi(dpi);
 
@@ -685,17 +726,6 @@ impl PageRenderer {
             },
             dpi,
         ))
-    }
-
-    fn check_source_image_budget(&mut self) -> Result<()> {
-        self.knockout_resources.check()?;
-        if let Some(budget) = &self.source_image_budget
-            && let Some(error) = budget.error()
-        {
-            self.reported_source_budget_exceeded = budget.exceeded();
-            return Err(error);
-        }
-        Ok(())
     }
 
     fn page_sidecar_spots(&self, doc: &PdfDocument, page_num: usize, resources: &Object) -> Option<Vec<String>> {
@@ -2395,7 +2425,7 @@ impl PageRenderer {
                         let _image_workspace = if is_form {
                             None
                         } else {
-                            self.reserve_raster_workspace(pixmap, &gs_clone, 6)?
+                            self.reserve_raster_workspace(pixmap, &gs_clone, 6, knockout::SIDECAR_SNAPSHOT_COPIES)?
                         };
                         let _ordinary_form_mask = if is_form && !group_boundary && gs_clone.smask.is_some() {
                             Some(self.knockout_resources.reserve(Some(0))?)
@@ -5007,7 +5037,13 @@ impl PageRenderer {
             }
             Some(bytes)
         })();
-        let workspace = if group {
+        let track_mask = group
+            || (self.source_image_budget.is_some()
+                && self
+                    .cmyk_sidecar
+                    .as_ref()
+                    .is_some_and(|sidecar| !sidecar.spot_names().is_empty()));
+        let workspace = if track_mask {
             Some(self.knockout_resources.reserve(bytes)?)
         } else {
             None
@@ -6488,8 +6524,9 @@ impl PageRenderer {
     ///    formulas operate on additive components, so
     ///    [`blend_subtractive_tint`](crate::rendering::sidecar::blend_subtractive_tint)
     ///    complements the tints before the blend and the result after
-    ///    it, and mixes the blend with the source by the lane's backdrop
-    ///    alpha (§11.3.6). Only /Normal skips the round trip: `B = c_s`
+    ///    it. With nonzero backdrop alpha `a_b`, it blends against the
+    ///    unpremultiplied tint `t_b / a_b` and mixes the blend with the
+    ///    source by `a_b` (§11.3.6). Only /Normal skips the round trip: `B = c_s`
     ///    holds in both representations. The backdrop alpha is the
     ///    sidecar's per-lane painted plane, so an explicit tint-0 paint
     ///    is a backdrop and untouched paper is not.
@@ -6921,8 +6958,9 @@ impl PageRenderer {
         // For /S /Luminosity the optional /BC backdrop pre-fills with
         // the declared colour; absent /BC the spec default is the
         // colour space's black point (also fills with zeros). ~keep
-        let _mask_workspace = if self.knockout_resources.active() {
-            Some(self.knockout_resources.reserve(pixmap.data().len().checked_mul(2))?)
+        let track_mask = self.knockout_resources.active();
+        let mask_workspace = if track_mask {
+            Some(self.knockout_resources.reserve(Some(pixmap.data().len()))?)
         } else {
             None
         };
@@ -7072,6 +7110,18 @@ impl PageRenderer {
         // is allocated, every spot lane against its pre-mirror
         // snapshot. ~keep
         let pixel_count = dest.len() / 4;
+        // The alpha plane overlaps the mask pixmap, but starts after the mask form's
+        // group and paint reservations have dropped.
+        let _mask_and_alpha_workspace = if let Some(mask_workspace) = mask_workspace {
+            // Exchange the reservation in place so this phase uses one nesting slot.
+            drop(mask_workspace);
+            let bytes = pixel_count
+                .checked_mul(std::mem::size_of::<f32>())
+                .and_then(|alpha| alpha.checked_add(mask_data.len()));
+            Some(self.knockout_resources.reserve(bytes)?)
+        } else {
+            None
+        };
         let mut mask_alpha: Vec<f32> = Vec::with_capacity(pixel_count);
         for px in 0..pixel_count {
             let off = px * 4;
@@ -8637,129 +8687,6 @@ fn build_logical_color<'a>(
             }
         }
     }
-}
-
-/// Resize a premultiplied RGBA byte buffer using SIMD-accelerated bilinear filtering.
-///
-/// The resizer's default treats alpha as straight and multiplies every pixel by it before
-/// filtering, then divides it out after; on a premultiplied buffer that leaves a soft edge with
-/// more colour than its opacity allows, so the alpha pass is turned off. (GH#1905)
-///
-/// Returns `None` on failure (zero dimensions, SIMD dispatch error) so callers
-/// can fall back to tiny_skia's own resampling path.
-fn resize_rgba(src: &[u8], src_w: u32, src_h: u32, dst_w: u32, dst_h: u32) -> Option<Vec<u8>> {
-    use fast_image_resize::images::Image;
-    use fast_image_resize::pixels::PixelType;
-    use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
-
-    // from_slice_u8 needs a mutable slice; copy into a local buffer. ~keep
-    let mut buf = src.to_vec();
-    let src_img = Image::from_slice_u8(src_w, src_h, &mut buf, PixelType::U8x4).ok()?;
-    let mut dst_img = Image::new(dst_w, dst_h, PixelType::U8x4);
-    Resizer::new()
-        .resize(
-            &src_img,
-            &mut dst_img,
-            &ResizeOptions::new()
-                .resize_alg(ResizeAlg::Convolution(FilterType::Bilinear))
-                .use_alpha(false),
-        )
-        .ok()?;
-    Some(dst_img.into_vec())
-}
-
-fn raster_dimensions(page_width: f32, page_height: f32, scale: f32, has_scale_override: bool) -> (u32, u32) {
-    let width = page_width * scale;
-    let height = page_height * scale;
-    if has_scale_override {
-        // Exact fractional scale uses rounding and allows very narrow pages to stay one pixel.
-        ((width.round() as u32).max(1), (height.round() as u32).max(1))
-    } else {
-        (width.ceil() as u32, height.ceil() as u32)
-    }
-}
-
-fn fit_png_dpi(
-    requested: u32,
-    budget: &PngRenderBudget,
-    spot_names: Option<&[String]>,
-    dimensions: impl Fn(u32) -> (u32, u32),
-) -> Result<u32> {
-    let fits = |dpi| {
-        let (width, height) = dimensions(dpi);
-        png_working_bytes_fit(width, height, spot_names, budget.max_working_bytes)
-    };
-    if fits(requested) {
-        return Ok(requested);
-    }
-
-    let minimum = budget.minimum_dpi.max(1).min(requested);
-    if minimum == requested || !fits(minimum) {
-        let (width, height) = dimensions(minimum);
-        if width == 0 || height == 0 {
-            return Err(Error::InvalidPdf("Failed to create pixmap".to_string()));
-        }
-        return Err(Error::InvalidOperation(format!(
-            "PDF raster {width}x{height} exceeds security_limits.max_content_size ({} bytes) or platform allocation bounds",
-            budget.max_working_bytes
-        )));
-    }
-
-    let mut low = minimum;
-    let mut high = requested - 1;
-    while low < high {
-        let middle = low + (high - low) / 2 + 1;
-        if fits(middle) {
-            low = middle;
-        } else {
-            high = middle - 1;
-        }
-    }
-    Ok(low)
-}
-
-fn png_working_bytes_fit(width: u32, height: u32, spot_names: Option<&[String]>, limit: usize) -> bool {
-    // The canvas and PNG demultiply copy are both RGBA. Reserve the same per-pixel
-    // and fixed PNG allowance as Core image encoding, plus the CMYK plane and two planes per spot ink.
-    const RGBA_AND_PNG_BYTES_PER_PIXEL: usize = 12;
-    const PNG_FIXED_OVERHEAD: usize = 256 * 1024;
-    let sidecar_bytes_per_pixel = spot_names.map_or(Some(0), |names| names.len().checked_mul(2)?.checked_add(4));
-    let charge = sidecar_bytes_per_pixel
-        .and_then(|bytes| RGBA_AND_PNG_BYTES_PER_PIXEL.checked_add(bytes))
-        .and_then(|bytes| (width as usize).checked_mul(height as usize)?.checked_mul(bytes))
-        .and_then(|bytes| bytes.checked_add(PNG_FIXED_OVERHEAD));
-    width > 0 && height > 0 && charge.is_some_and(|bytes| bytes <= limit && bytes <= isize::MAX as usize)
-}
-
-/// Encode a tiny_skia `Pixmap` to PNG.
-///
-/// Uses fdeflate (ultra-fast) compression via the `image` crate instead of
-/// tiny_skia's built-in `encode_png`, which defaults to flate2 level 6 and is
-/// 3–5× slower on typical page images.
-fn encode_png(pixmap: &Pixmap) -> Result<Vec<u8>> {
-    let w = pixmap.width();
-    let h = pixmap.height();
-
-    // Demultiply: tiny_skia stores premultiplied RGBA; PNG expects straight alpha. ~keep
-    let src = pixmap.data();
-    let mut data = src.to_vec();
-    for chunk in data.as_chunks_mut::<4>().0 {
-        let a = chunk[3];
-        if a != 0 && a != 255 {
-            let a32 = a as u32;
-            chunk[0] = ((chunk[0] as u32 * 255 + a32 / 2) / a32).min(255) as u8;
-            chunk[1] = ((chunk[1] as u32 * 255 + a32 / 2) / a32).min(255) as u8;
-            chunk[2] = ((chunk[2] as u32 * 255 + a32 / 2) / a32).min(255) as u8;
-        }
-    }
-
-    use image::ImageEncoder;
-    use image::codecs::png::{CompressionType, FilterType, PngEncoder};
-    let mut output = Vec::new();
-    PngEncoder::new_with_quality(&mut output, CompressionType::Fast, FilterType::Sub)
-        .write_image(&data, w, h, image::ExtendedColorType::Rgba8)
-        .map_err(|e| Error::InvalidPdf(format!("PNG encoding failed: {}", e)))?;
-    Ok(output)
 }
 
 /// Combine two transformations.
@@ -10758,80 +10685,6 @@ mod tests {
             assert_eq!(rows, (56..70).collect::<Vec<_>>(), "{show}");
         }
     }
-
-    /// Build a minimal single-page PDF whose only content is a `Do` of an
-    /// image XObject declaring `/Height 0`. The image decodes to an empty
-    /// buffer, so the blit dimensions computed by `render_image` are
-    /// degenerate.
-    fn build_zero_height_image_pdf() -> Vec<u8> {
-        let mut pdf = Vec::new();
-        let mut offsets: Vec<usize> = Vec::new();
-        pdf.extend_from_slice(b"%PDF-1.4\n");
-
-        offsets.push(pdf.len());
-        pdf.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n\n");
-
-        offsets.push(pdf.len());
-        pdf.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n\n");
-
-        offsets.push(pdf.len());
-        pdf.extend_from_slice(
-            b"3 0 obj\n\
-              << /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100]\n\
-                 /Contents 4 0 R\n\
-                 /Resources << /XObject << /Im0 5 0 R >> >>\n\
-              >>\nendobj\n\n",
-        );
-
-        let content = b"q 100 0 0 100 0 0 cm /Im0 Do Q";
-        offsets.push(pdf.len());
-        let hdr = format!("4 0 obj\n<< /Length {} >>\nstream\n", content.len());
-        pdf.extend_from_slice(hdr.as_bytes());
-        pdf.extend_from_slice(content);
-        pdf.extend_from_slice(b"\nendstream\nendobj\n\n");
-
-        offsets.push(pdf.len());
-        pdf.extend_from_slice(
-            b"5 0 obj\n\
-              << /Type /XObject /Subtype /Image /Width 4 /Height 0\n\
-                 /ColorSpace /DeviceGray /BitsPerComponent 8 /Length 0 >>\n\
-              stream\n\nendstream\nendobj\n\n",
-        );
-
-        let xref_offset = pdf.len();
-        let n_obj = offsets.len() + 1;
-        let mut xref = format!("xref\n0 {}\n", n_obj);
-        xref.push_str("0000000000 65535 f \n");
-        for off in &offsets {
-            xref.push_str(&format!("{:010} 00000 n \n", off));
-        }
-        pdf.extend_from_slice(xref.as_bytes());
-        let trailer = format!(
-            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n",
-            n_obj, xref_offset
-        );
-        pdf.extend_from_slice(trailer.as_bytes());
-        pdf
-    }
-
-    /// `IntSize::from_wh` rejects a zero dimension, so a degenerate image must
-    /// take the same quiet-skip path as any other pixmap that cannot be built.
-    #[test]
-    fn zero_dimension_image_blit_is_skipped() {
-        use crate::document::PdfDocument;
-
-        let pdf = build_zero_height_image_pdf();
-        let doc = PdfDocument::from_bytes(pdf).expect("parse degenerate-image PDF");
-
-        let opts = RenderOptions {
-            format: ImageFormat::RawRgba8,
-            ..RenderOptions::with_dpi(72)
-        };
-        let mut renderer = PageRenderer::new(opts);
-        let img = renderer.render_page(&doc, 0).expect("render page");
-
-        assert_eq!(img.data.len(), (img.width * img.height * 4) as usize);
-    }
 }
 
 #[cfg(test)]
@@ -10845,3 +10698,7 @@ mod sampled_function_tests;
 #[cfg(test)]
 #[path = "spot_mirror_tests.rs"]
 mod spot_mirror_tests;
+
+#[cfg(test)]
+#[path = "zero_dimension_image_tests.rs"]
+mod zero_dimension_image_tests;

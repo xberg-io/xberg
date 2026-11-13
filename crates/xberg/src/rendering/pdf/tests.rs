@@ -201,6 +201,25 @@ fn should_set_dollar_math_as_text_without_delimiters() {
 }
 
 #[test]
+fn should_set_the_tex_that_the_markdown_writer_escaped() {
+    assert_eq!(
+        text(r"Let $a \\\ b \\{c\\} \\% x&#42;y$ hold."),
+        r"Let a \\ b \{c\} \% x*y hold."
+    );
+}
+
+#[test]
+fn should_set_display_math_on_one_line_without_its_comments() {
+    assert_eq!(text("$$\na % note\nb\n$$\n"), "a b");
+}
+
+#[test]
+fn should_keep_the_backslashes_of_math_that_the_writer_does_not_escape() {
+    assert_eq!(text("$$\na \\\\ b\n$$\n"), "a \\\\ b");
+    assert_eq!(text("Let $`a \\\\ b`$ hold.\n"), "Let a \\\\ b hold.");
+}
+
+#[test]
 fn should_draw_bold_and_italic_from_the_regular_face() {
     let runs = all_runs("**bold** *italic* plain\n");
     let flags: Vec<(&str, bool, bool)> = runs

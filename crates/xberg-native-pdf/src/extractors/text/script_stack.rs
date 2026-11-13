@@ -97,7 +97,8 @@ fn holds_fraction(base: &StackSpan<'_>, members: &[&StackSpan<'_>], partners: &[
 /// A stack is two or more compact spans, smaller than the base, that abut the base or the member
 /// before them in x and sit between a tenth and half an em off the base line. It needs two sizes and
 /// a member beyond a single mark's reach, so a lone mark, a fraction, `x_i^2`, a marker pair and
-/// chemical scripts stay with the single-mark rules. So does a fraction in an exponent or index
+/// chemical scripts stay with the single-mark rules. An admitted stack can also carry a sign
+/// that sits beyond the base's reach but directly abuts its own script parent. A fraction in an exponent or index
 /// (`x^{-1/2}`, `f_{j+3/2}`), whose numerator and denominator share an x range. List markers,
 /// phrases and pieces of a large delimiter (`⎞`) are never members, and a base must end in a letter,
 /// digit or closing bracket: a large operator (`∑`) is followed by its body, not by scripts.
@@ -146,11 +147,57 @@ pub fn script_stack(base: &StackSpan<'_>, candidates: &[StackSpan<'_>]) -> Vec<u
     let (min_fs, max_fs) = members.iter().fold((f32::MAX, 0.0f32), |(lo, hi), &i| {
         (lo.min(candidates[i].font_size), hi.max(candidates[i].font_size))
     });
-    if out_of_reach && max_fs - min_fs > max_fs * MIN_SIZE_STEP {
-        members
-    } else {
-        Vec::new()
+    if !out_of_reach || max_fs - min_fs <= max_fs * MIN_SIZE_STEP {
+        return Vec::new();
     }
+    include_outer_signs(base, candidates, first..window_end, &mut members);
+    members
+}
+
+fn include_outer_signs(
+    base: &StackSpan<'_>,
+    candidates: &[StackSpan<'_>],
+    window: std::ops::Range<usize>,
+    members: &mut Vec<usize>,
+) {
+    let roots = members.len();
+    for index in window {
+        if members.len() == MAX_STACK_MEMBERS {
+            break;
+        }
+        let sign = candidates[index];
+        if !matches!(sign.text.trim(), "+" | "−")
+            || sign.font_size <= 0.0
+            || (sign.baseline - base.baseline).abs() <= base.font_size * MAX_SHIFT_EM
+        {
+            continue;
+        }
+        let paired = members[..roots].iter().any(|&index| {
+            let other = candidates[index];
+            matches!(other.text.trim(), "+" | "−")
+                && (other.baseline - base.baseline) * (sign.baseline - base.baseline) < 0.0
+                && (other.x - sign.x).abs() <= sign.font_size * MAX_PARENT_OVERLAP_EM
+                && (other.font_size - sign.font_size).abs() <= sign.font_size * MIN_SIZE_STEP
+        });
+        if !paired {
+            continue;
+        }
+        if members[..roots].iter().any(|&index| {
+            let parent = candidates[index];
+            let rise = sign.baseline - parent.baseline;
+            let gap = sign.x - (parent.x + parent.width);
+            parent.text.trim().ends_with(char::is_alphanumeric)
+                && parent.font_size >= sign.font_size * MIN_BASE_SIZE_FACTOR
+                && rise * (parent.baseline - base.baseline) > 0.0
+                && rise.abs() > parent.font_size * MIN_DISPLACEMENT_EM
+                && rise.abs() <= parent.font_size * MAX_SHIFT_EM
+                && parent.x < sign.x
+                && gap.abs() <= parent.font_size * MAX_PARENT_OVERLAP_EM
+        }) {
+            members.push(index);
+        }
+    }
+    members.sort_unstable();
 }
 
 /// For each stack member (given in x order), the member it is a script of, or `None` for a member
@@ -791,6 +838,23 @@ mod tests {
         ];
         assert_eq!(stack_parents(&base, &members), [None, None, Some(0), None]);
         assert_eq!(stack_reading_order(&base, &members), [1, 0, 2, 3]);
+    }
+
+    #[test]
+    fn should_attach_the_outer_sign_to_its_raised_parent_and_keep_the_lower_chain_separate() {
+        let base = span("γ", 0.0, 0.0, 6.07, 11.9552);
+        let candidates = [
+            span("k", 6.07, -3.88, 4.62, 7.9701),
+            span("j", 6.72, 5.67, 3.88, 7.9701),
+            span("+", 10.60, 7.94, 5.59, 5.9776),
+            span("−", 10.69, -1.61, 5.76, 5.9776),
+        ];
+        let members: Vec<_> = script_stack(&base, &candidates)
+            .into_iter()
+            .map(|i| candidates[i])
+            .collect();
+        assert_eq!(stack_parents(&base, &members), [None, None, Some(1), Some(0)]);
+        assert_eq!(stack_reading_order(&base, &members), [1, 2, 0, 3]);
     }
 
     #[test]

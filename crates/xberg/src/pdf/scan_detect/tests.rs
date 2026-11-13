@@ -982,18 +982,14 @@ fn text_is_drawn_over_a_full_page_picture_only_when_painted_visibly_after_it() {
     }
 }
 
-/// #2826: the share counts every glyph the page shows, the invisible ones too, so a stamp of five
-/// glyphs beside a sidecar of seventy holds a fifteenth of them.
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 #[test]
-fn the_share_over_a_full_page_picture_counts_invisible_glyphs_too() {
+fn the_share_over_a_full_page_picture_excludes_nonpainting_glyphs() {
     let picture = "q 100 0 0 100 0 0 cm /Im0 Do Q\n";
     let sidecar = "q 3 Tr BT /F1 4 Tf 2 80 Td (Line of the native text) Tj ET Q\n";
     let stamp = "BT /F1 4 Tf 2 70 Td (Short) Tj ET\n";
-    let doc = raster_page_with_content(&format!("{picture}{sidecar}{sidecar}{sidecar}{sidecar}{stamp}"));
-    let (stamp_bytes, sidecar_bytes) = ("Short".len(), "Line of the native text".len());
-    let expected = stamp_bytes as f64 / (stamp_bytes + 4 * sidecar_bytes) as f64;
-    assert_eq!(glyph_share_over_full_page_picture(&doc, 0), Some(expected));
+    let doc = raster_page_with_content(&format!("{picture}{}{stamp}", sidecar.repeat(128)));
+    assert_eq!(glyph_share_over_full_page_picture(&doc, 0), Some(1.0));
     let alone = raster_page_with_content(&format!("{picture}{stamp}"));
     assert_eq!(glyph_share_over_full_page_picture(&alone, 0), Some(1.0));
 }

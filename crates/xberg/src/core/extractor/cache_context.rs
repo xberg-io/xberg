@@ -1,4 +1,4 @@
-//! Mutable model dependencies of OSD recognition and optional PDF recovery.
+//! Mutable model dependencies of OSD recognition, script retry and optional PDF recovery.
 
 use crate::cancellation::CancellationToken;
 use crate::core::config::ExtractionConfig;
@@ -10,6 +10,8 @@ pub(crate) struct CacheDependency {
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     stage_models: Vec<ModelSelection>,
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    script_retry: Option<ModelSelection>,
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     uncertifiable: bool,
 }
 
@@ -19,6 +21,7 @@ impl CacheDependency {
         {
             let dependency = Self {
                 model: ModelSelection::for_config(config, mime),
+                script_retry: ModelSelection::for_script_retry(config, mime),
                 ..Self::default()
             };
             #[cfg(feature = "pdf")]
@@ -78,20 +81,35 @@ async fn fingerprint_with_reader(
         super::cacheability::invalidate_current();
         return Ok(None);
     }
-    if dependencies
+    let has_orientation_models = dependencies
         .iter()
-        .any(|dependency| dependency.model.is_some() || !dependency.stage_models.is_empty())
-    {
+        .any(|dependency| dependency.model.is_some() || !dependency.stage_models.is_empty());
+    let has_script_retry = dependencies.iter().any(|dependency| dependency.script_retry.is_some());
+    if has_orientation_models || has_script_retry {
         let dependencies = dependencies.to_vec();
         let worker_cancel = cancel.cloned();
         let result = tokio::task::spawn_blocking(super::cacheability::blocking(move || {
             check_cancelled(worker_cancel.as_ref())?;
-            read_models(&dependencies, worker_cancel.as_ref())
+            // With a complete retry set, the inner OCR cache owns model identity. Recheck this
+            // before an outer write as well, since extraction can make a model set available. ~keep
+            if script_retry_requires_bypass(&dependencies, worker_cancel.as_ref())? {
+                return Ok(None);
+            }
+            let mut context = if has_orientation_models {
+                read_models(&dependencies, worker_cancel.as_ref())?
+            } else {
+                String::new()
+            };
+            if has_script_retry {
+                // ~keep Legacy outer entries may contain a retry result even after its models are removed.
+                context.push_str(":script-retry-outer-v1");
+            }
+            Ok(Some(context))
         }))
         .await;
         check_cancelled(cancel)?;
         return match result {
-            Ok(Ok(context)) => Ok(Some(context)),
+            Ok(Ok(context)) => Ok(context),
             Ok(Err(crate::XbergError::Cancelled)) => Err(crate::XbergError::Cancelled),
             Err(error) if error.is_cancelled() => Err(crate::XbergError::Cancelled),
             result => {
@@ -105,6 +123,30 @@ async fn fingerprint_with_reader(
         };
     }
     Ok(Some(String::new()))
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn script_retry_requires_bypass(
+    dependencies: &[CacheDependency],
+    cancel: Option<&CancellationToken>,
+) -> crate::Result<bool> {
+    use crate::ocr::processor::{script_retry::requires_outer_cache_bypass, validation::TessdataEnv};
+
+    let env = TessdataEnv::from_process();
+    let mut checked = std::collections::HashSet::new();
+    for model in dependencies
+        .iter()
+        .filter_map(|dependency| dependency.script_retry.as_ref())
+    {
+        check_cancelled(cancel)?;
+        if checked.insert(model)
+            && (checked.len() > MAX_MODEL_SELECTIONS
+                || requires_outer_cache_bypass(&model.languages.join("+"), model.directory.as_deref(), &env))
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn check_cancelled(cancel: Option<&CancellationToken>) -> crate::Result<()> {
@@ -124,6 +166,51 @@ struct ModelSelection {
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 impl ModelSelection {
+    fn for_script_retry(config: &ExtractionConfig, mime: Option<&str>) -> Option<Self> {
+        if !config.use_cache || config.effective_disable_ocr() {
+            return None;
+        }
+        let mime = mime.map(|mime| mime.split(';').next().unwrap_or_default().trim());
+        if mime.is_some_and(|mime| mime.eq_ignore_ascii_case("text/plain")) {
+            return None;
+        }
+        let image = mime.is_some_and(|mime| {
+            mime.split('/')
+                .next()
+                .is_some_and(|kind| kind.eq_ignore_ascii_case("image"))
+        });
+        let pdf = cfg!(feature = "pdf") && mime.is_some_and(|mime| mime.eq_ignore_ascii_case("application/pdf"));
+        if !(image || pdf || mime.is_none_or(str::is_empty) || config.runs_ocr_on_embedded_images()) {
+            return None;
+        }
+        let default_ocr = crate::core::config::OcrConfig::default();
+        let ocr = config.ocr.as_ref().unwrap_or(&default_ocr);
+        if ocr.backend != "tesseract" || ocr.pipeline.is_some() {
+            return None;
+        }
+
+        // Layout region OCR can request text even when the whole-image OCR format is hOCR or TSV. ~keep
+        #[cfg(feature = "layout-detection")]
+        let region_ocr = (image || mime.is_none_or(str::is_empty)) && config.layout.is_some();
+        #[cfg(not(feature = "layout-detection"))]
+        let region_ocr = false;
+        if !region_ocr
+            && ocr.tesseract_config.as_ref().is_some_and(|tesseract| {
+                !crate::ocr::processor::script_retry::supports_retry_format(&tesseract.output_format)
+            })
+        {
+            return None;
+        }
+        let languages = ocr.effective_tesseract_language();
+        if !crate::ocr::processor::script_retry::may_retry_language(&languages.join("+")) {
+            return None;
+        }
+        Some(Self {
+            languages,
+            directory: ocr.tessdata_path.clone(),
+        })
+    }
+
     fn for_config(config: &ExtractionConfig, mime: Option<&str>) -> Option<Self> {
         if !config.use_cache || config.effective_disable_ocr() {
             return None;
@@ -309,10 +396,10 @@ mod tests {
         }
     }
 
-    async fn context(config: &ExtractionConfig) -> Option<String> {
-        fingerprint(&[CacheDependency::for_config(config, Some("application/pdf"))], None)
-            .await
-            .unwrap()
+    async fn orientation_context(config: &ExtractionConfig) -> Option<String> {
+        let mut dependency = CacheDependency::for_config(config, Some("application/pdf"));
+        dependency.script_retry = None;
+        fingerprint(&[dependency], None).await.unwrap()
     }
 
     #[tokio::test]
@@ -320,13 +407,13 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("eng.traineddata"), b"language fixture").unwrap();
         let config = configuration(root.path());
-        let missing = context(&config).await;
+        let missing = orientation_context(&config).await;
         std::fs::write(root.path().join("osd.traineddata"), b"model first").unwrap();
-        let present = context(&config).await;
+        let present = orientation_context(&config).await;
         assert_ne!(missing, present);
-        assert_eq!(present, context(&config).await);
+        assert_eq!(present, orientation_context(&config).await);
         std::fs::write(root.path().join("osd.traineddata"), b"model other").unwrap();
-        let changed = context(&config).await;
+        let changed = orientation_context(&config).await;
         assert_ne!(present, changed, "equal-length model bytes must affect result identity");
         let other = tempfile::tempdir().unwrap();
         for name in ["eng", "osd"] {
@@ -336,7 +423,7 @@ mod tests {
             )
             .unwrap();
         }
-        assert_ne!(changed, context(&configuration(other.path())).await);
+        assert_ne!(changed, orientation_context(&configuration(other.path())).await);
     }
 
     #[tokio::test]
@@ -350,7 +437,7 @@ mod tests {
             .tesseract_config
             .get_or_insert_default()
             .psm = Some(11);
-        assert_eq!(context(&config).await.as_deref(), Some(""));
+        assert_eq!(orientation_context(&config).await.as_deref(), Some(""));
         config.ocr.as_mut().unwrap().tesseract_config = None;
         for explicit in [Some(true), Some(false)] {
             config.ocr.as_mut().unwrap().auto_rotate = explicit;
@@ -360,7 +447,7 @@ mod tests {
                     .is_none(),
                 "{explicit:?} never reads OSD"
             );
-            assert_eq!(context(&config).await.as_deref(), Some(""));
+            assert_eq!(orientation_context(&config).await.as_deref(), Some(""));
         }
         config.ocr.as_mut().unwrap().auto_rotate = None;
         assert!(
@@ -375,13 +462,14 @@ mod tests {
                 .model
                 .is_none()
         );
-        assert_eq!(context(&config).await.as_deref(), Some(""));
+        assert_eq!(orientation_context(&config).await.as_deref(), Some(""));
         config.ocr.as_mut().unwrap().language = vec!["eng".into()];
+        config.ocr_embedded_images = Some(false);
         let dependency = CacheDependency::for_config(&config, Some("text/plain"));
         assert!(dependency.model.is_none());
         assert_eq!(fingerprint(&[dependency], None).await.unwrap().as_deref(), Some(""));
         config.disable_ocr = true;
-        assert_eq!(context(&config).await.as_deref(), Some(""));
+        assert_eq!(orientation_context(&config).await.as_deref(), Some(""));
         config.disable_ocr = false;
         config.ocr.as_mut().unwrap().enabled = false;
         assert!(
@@ -389,7 +477,7 @@ mod tests {
                 .model
                 .is_none()
         );
-        assert_eq!(context(&config).await.as_deref(), Some(""));
+        assert_eq!(orientation_context(&config).await.as_deref(), Some(""));
     }
 
     #[cfg(unix)]
@@ -398,9 +486,9 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("eng.traineddata"), b"language fixture").unwrap();
         let config = configuration(root.path());
-        assert!(context(&config).await.is_some());
+        assert!(orientation_context(&config).await.is_some());
         std::os::unix::fs::symlink("osd.traineddata", root.path().join("osd.traineddata")).unwrap();
-        assert!(context(&config).await.is_none());
+        assert!(orientation_context(&config).await.is_none());
     }
 
     #[tokio::test]
@@ -588,13 +676,76 @@ mod explicit_mode_tests {
     }
 
     #[tokio::test]
+    async fn outer_cache_rejects_legacy_retry_entry_after_model_removal() {
+        let root = tempfile::tempdir().unwrap();
+        let language = "xberg_retry_cache_fixture";
+        let mut config = config(Some(3));
+        let ocr = config.ocr.as_mut().unwrap();
+        ocr.language = vec![language.into()];
+        ocr.tessdata_path = Some(root.path().into());
+        let dependency = CacheDependency::for_config(&config, Some("image/png"));
+        let context = || fingerprint(std::slice::from_ref(&dependency), None);
+        assert!(config.runs_ocr_on_embedded_images());
+        let plain = CacheDependency::for_config(&config, Some("Text/Plain; charset=utf-8"));
+
+        std::fs::write(root.path().join(format!("{language}.traineddata")), b"primary").unwrap();
+        std::fs::write(root.path().join("osd.traineddata"), b"orientation").unwrap();
+        let missing = context().await.unwrap();
+        let legacy_key = "warm";
+        let cache = crate::cache::GenericCache::new(
+            "extraction".into(),
+            Some(root.path().to_str().unwrap().into()),
+            30.0,
+            500.0,
+            1000.0,
+        )
+        .unwrap();
+        let legacy_result = "汉字 from the old retry".as_bytes().to_vec();
+        cache.set_default(legacy_key, legacy_result.clone(), None).unwrap();
+
+        let han = root.path().join("chi_sim.traineddata");
+        for bytes in [b"han-v1", b"han-v2"] {
+            std::fs::write(&han, bytes).unwrap();
+            super::super::cacheability::scope(async {
+                assert!(apply_context(Some("warm".into()), &context().await.unwrap()).is_none());
+                let plain_context = fingerprint(std::slice::from_ref(&plain), None).await.unwrap();
+                assert_eq!(
+                    apply_context(Some("warm".into()), &plain_context).as_deref(),
+                    Some("warm")
+                );
+                assert!(
+                    super::super::cacheability::is_cacheable(),
+                    "the inner cache can still be used"
+                );
+            })
+            .await;
+        }
+
+        let mut no_retry = config.clone();
+        no_retry.ocr.as_mut().unwrap().language = vec!["chi_sim".into()];
+        let no_retry = CacheDependency::for_config(&no_retry, Some("image/png"));
+        assert_eq!(fingerprint(&[no_retry], None).await.unwrap().as_deref(), Some(""));
+
+        std::fs::remove_file(han).unwrap();
+        let after_removal = context().await.unwrap();
+        assert_eq!(after_removal, missing);
+        let current_key = apply_context(Some(legacy_key.into()), &after_removal)
+            .expect("an image without the retry models remains cacheable");
+        assert_eq!(cache.get_default(legacy_key, None).unwrap(), Some(legacy_result));
+        assert_eq!(cache.get_default(&current_key, None).unwrap(), None);
+    }
+
+    #[tokio::test]
     async fn image_osd_identity_observes_equal_length_revisions_without_pdf_support() {
         let root = tempfile::tempdir().unwrap();
-        std::fs::write(root.path().join("eng.traineddata"), b"language pack").unwrap();
+        let language = "xberg_osd_cache_fixture";
+        std::fs::write(root.path().join(format!("{language}.traineddata")), b"language pack").unwrap();
         let osd = root.path().join("osd.traineddata");
         for psm in [0, 1, 12] {
             let mut config = config(Some(psm));
-            config.ocr.as_mut().unwrap().tessdata_path = Some(root.path().into());
+            let ocr = config.ocr.as_mut().unwrap();
+            ocr.language = vec![language.into()];
+            ocr.tessdata_path = Some(root.path().into());
             let dependency = CacheDependency::for_config(&config, Some("image/png"));
             std::fs::write(&osd, b"revision one").unwrap();
             let first = fingerprint(std::slice::from_ref(&dependency), None).await.unwrap();
@@ -609,7 +760,9 @@ mod explicit_mode_tests {
     async fn non_osd_image_modes_keep_empty_context_without_model_io() {
         for psm in [None, Some(3), Some(6)] {
             let mut config = config(psm);
-            config.ocr.as_mut().unwrap().tessdata_path = Some("unavailable-model-root".into());
+            let ocr = config.ocr.as_mut().unwrap();
+            ocr.tesseract_config.as_mut().unwrap().output_format = "hocr".into();
+            ocr.tessdata_path = Some("unavailable-model-root".into());
             let dependency = CacheDependency::for_config(&config, Some("image/png"));
             assert!(dependency.model.is_none());
             assert_eq!(fingerprint(&[dependency], None).await.unwrap().as_deref(), Some(""));

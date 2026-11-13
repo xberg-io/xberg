@@ -165,10 +165,10 @@ async fn extract_scoped(
     match &result {
         Ok(output) => {
             if output.errors.is_empty()
-                && cacheability::is_cacheable()
+                && cacheability::can_publish_outer_result()
                 && let Some(key) = cache_key
                 && context == fingerprint(&dependencies, config.cancel_token.as_ref()).await?
-                && cacheability::is_cacheable()
+                && cacheability::can_publish_outer_result()
                 && let Ok(serialized) = serde_json::to_vec(output)
             {
                 inner.cache.put(&key, serialized, None).await;
@@ -391,10 +391,10 @@ async fn extract_batch_scoped<I: BatchInputRef>(
     match &result {
         Ok(output) => {
             if output.errors.is_empty()
-                && cacheability::is_cacheable()
+                && cacheability::can_publish_outer_result()
                 && let Some(key) = cache_key
                 && context == fingerprint(&dependencies, config.cancel_token.as_ref()).await?
-                && cacheability::is_cacheable()
+                && cacheability::can_publish_outer_result()
                 && let Ok(serialized) = serde_json::to_vec(output)
             {
                 inner.cache.put(&key, serialized, None).await;

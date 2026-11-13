@@ -71,7 +71,13 @@ fn assert_noisy_recovery(pipeline: bool, whole_document: bool, discard: bool) {
     );
     assert_eq!(result.tables.len(), usize::from(!discard));
     if discard {
-        assert!(result.content.trim().is_empty(), "{:?}", result.content);
+        // ~keep Forced OCR restores the native page when its OCR read was discarded (#3013).
+        let expected = if pipeline && whole_document {
+            "The original native words stay."
+        } else {
+            ""
+        };
+        assert_eq!(result.content.trim(), expected);
         assert_backend_failure_warning(&result);
     } else {
         assert!(!result.content.trim().is_empty());

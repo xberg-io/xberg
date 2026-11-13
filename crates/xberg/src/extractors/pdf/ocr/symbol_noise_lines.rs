@@ -7,9 +7,12 @@
 //! backend, table and quality decision still sees the unpruned text. A line is pruned only
 //! when it is dominated by tokens that are not plausible text; any line that reads as words,
 //! a list label or an equation is kept. Two 3-letter lowercase tokens together count as
-//! plausible (`mal cad` is kept); a lone one does not. The page decision is
-//! made once by [`page_is_dominated_by_noise_lines`]; the pruners below apply it without
-//! re-deciding, so a page's text and its paragraphs always lose the same lines.
+//! plausible (`mal cad` is kept); a lone 3-letter token needs a capital with a closing mark or
+//! a letter outside ASCII, or an alphabet run (`Yes.`, `\u{c9}t\u{e9}`, `ABC`). A bare
+//! capitalized one such as `Tee` is pruned, but it does not count toward the page decision. The
+//! page decision is made once by
+//! [`page_is_dominated_by_noise_lines`]; the pruners below apply it without re-deciding, so a
+//! page's text and its paragraphs always lose the same lines.
 
 use crate::pdf::structure::types::PdfParagraph;
 
@@ -135,35 +138,51 @@ fn is_plausible_token(token: &str) -> bool {
                 || (is_capitalized(stem) && letter_count(stem) <= 2)))
 }
 
-/// A lone token has nothing around it to vouch for it, so it needs 4 letters, a capital or an
-/// alphabet run at 3 (`Qty`, `Yes`, `ABC`, `pqr`), or a capital and a closing mark at 2 (`No.`).
+/// A lone token has nothing around it to vouch for it, so it needs 4 letters, an alphabet run at 3
+/// (`ABC`, `pqr`), a capital and a letter outside ASCII at 3 (`\u{c9}t\u{e9}`), or a capital and a
+/// closing mark at 2 or 3 (`No.`, `Yes.`). A bare `Tee` or `CAS` has the shape of texture noise.
 fn is_plausible_lone_token(token: &str) -> bool {
     let stem = core(token);
+    let marked = is_capitalized(stem) && token.ends_with(['.', '!', '?']);
     is_word_like(token, MIN_LONE_WORD_LETTERS)
         || (is_alphabetic_token(stem)
             && match letter_count(stem) {
-                MIN_WORD_LETTERS => is_capitalized(stem) || is_alphabet_run(stem),
-                2 => is_capitalized(stem) && token.ends_with(['.', '!', '?']),
+                MIN_WORD_LETTERS => marked || is_alphabet_run(stem) || (is_capitalized(stem) && !stem.is_ascii()),
+                2 => marked,
                 _ => false,
             })
 }
 
-/// Whether a line reads as text: a lone plausible token, or a line of which at least two thirds
-/// of the tokens are plausible and which holds a word of 3 or more letters or two function words,
-/// one of them of 2 or more letters (`a a` and `we SY` are not text).
+/// A line reads as text when at least half its tokens are two or more words, including short
+/// function words (`Annual report q z`, `Go to q z`). A run of single-letter function words
+/// alone is insufficient. The lone-token and two-thirds plausibility rules also apply.
 fn is_plausible_text(tokens: &[&str]) -> bool {
     if let [token] = tokens {
         return is_plausible_lone_token(token);
     }
-    let plausible = tokens.iter().filter(|token| is_plausible_token(token)).count();
     let function_words: Vec<&str> = tokens
         .iter()
         .map(|token| core(token))
         .filter(|stem| is_function_word(stem))
         .collect();
+    let has_multi_letter_function_word = function_words.iter().any(|word| word.len() >= 2);
+    let words = tokens
+        .iter()
+        .filter(|token| is_word_like(token, MIN_WORD_LETTERS) && is_plausible_token(token))
+        .count();
+    // Longer function words already count as word-shaped tokens.
+    let short_function_words = function_words
+        .iter()
+        .filter(|word| word.len() < MIN_WORD_LETTERS)
+        .count();
+    let supported = words + short_function_words;
+    if supported >= 2 && supported * 2 >= tokens.len() && (words > 0 || has_multi_letter_function_word) {
+        return true;
+    }
+    let plausible = tokens.iter().filter(|token| is_plausible_token(token)).count();
     plausible * 3 >= tokens.len() * 2
         && (tokens.iter().any(|token| is_word_like(token, MIN_WORD_LETTERS))
-            || (function_words.len() >= 2 && function_words.iter().any(|word| word.chars().count() >= 2)))
+            || (function_words.len() >= 2 && has_multi_letter_function_word))
 }
 
 /// A token with a digit and a stray quotation mark or a trailing section mark (`\u{201c}9`,
@@ -237,14 +256,26 @@ fn is_symbol_noise_line(line: &str) -> bool {
     !(is_equation(line) || is_plausible_text(&tokens))
 }
 
+/// Whether a line is one capitalized 3-letter token, such as `Tee` or `CAS`. A real short word has
+/// the same shape, so the page decision does not count it as noise.
+fn is_lone_capitalized_trigram(line: &str) -> bool {
+    let mut tokens = line.split_whitespace();
+    let stem = tokens.next().map(core).unwrap_or_default();
+    tokens.next().is_none()
+        && is_alphabetic_token(stem)
+        && letter_count(stem) == MIN_WORD_LETTERS
+        && is_capitalized(stem)
+}
+
 /// Whether symbol-noise lines are at least half of a page's non-blank lines, on a page with at
-/// least [`MIN_LINES`] of them. This is the one page decision; callers apply it to every
-/// rendering of the page.
+/// least [`MIN_LINES`] of them. A lone capitalized trigram is pruned from a noise page but does not
+/// count toward this decision. This is the one page decision; callers apply it to every rendering
+/// of the page.
 pub(super) fn page_is_dominated_by_noise_lines<'a>(lines: impl Iterator<Item = &'a str>) -> bool {
     let (mut total, mut noise) = (0usize, 0usize);
     for line in lines.filter(|line| !line.trim().is_empty()) {
         total += 1;
-        noise += usize::from(is_symbol_noise_line(line));
+        noise += usize::from(is_symbol_noise_line(line) && !is_lone_capitalized_trigram(line));
     }
     total >= MIN_LINES && noise * 2 >= total
 }

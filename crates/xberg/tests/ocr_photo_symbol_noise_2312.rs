@@ -22,19 +22,11 @@ const PROSE_PDF: &[u8] = include_bytes!("fixtures/ocr_photo_noise_2312/prose.pdf
 /// Characters of OCR output before the filter existed, measured on this tree's parent commit.
 const PNG_NOISE_BEFORE: usize = 840;
 const PDF_NOISE_BEFORE: usize = 1056;
-const PDF_PRUNED_LINES: usize = 194;
+const PDF_PRUNED_LINES: usize = 204;
 
-/// Plain-text bytes the photograph PDF keeps after pruning, as a band across platforms.
-///
-/// The quantity is `noise_chars` of the Plain read: everything OCR recognized except the real
-/// title. Its variance comes only from how each platform's Tesseract classifies the
-/// symbol-noise glyphs; the keep rules anchor on unambiguous glyphs -- lines with a digit
-/// (`$5`, `1.`) and capitalized trigrams (`Qty`, `Yes`) -- that every platform reads the same,
-/// which holds the floor: macOS retains 194 bytes and no platform should fall much under that,
-/// while Linux CI read 212 (+9%) because its symbol glyphs misread into more kept bytes.
-/// 190..=220 absorbs that spread with margin on both observed platforms while staying under
-/// the quarter cap of 264; an unpruned page carries ~862 kept noise bytes, far above it.
-const PDF_NOISE_AFTER_PLAIN_BAND: std::ops::RangeInclusive<usize> = 190..=220;
+/// Plain-text noise bytes remaining after pruning. The PR's Linux read retains 157 bytes.
+/// The band allows the platform variation observed before the trigram rule changed.
+const PDF_NOISE_AFTER_PLAIN_BAND: std::ops::RangeInclusive<usize> = 133..=181;
 
 const PROSE: &str = "The committee met on Tuesday to review the annual budget.\n\n\
 Members agreed that the library needs a new roof before winter.\n\n\
@@ -84,11 +76,6 @@ async fn photograph_pdf_keeps_at_most_a_quarter_of_its_symbol_noise() {
         let content = read(PHOTO_PDF, "application/pdf", format).await;
         assert!(noise_chars(&content) * 4 <= PDF_NOISE_BEFORE, "{content:?}");
         if plain {
-            // Lines with a digit are kept (`$5`, `1.`) and so are capitalized trigrams (`Qty`, `Yes`),
-            // which is why macOS retains 194 bytes of the 1056, under the quarter bound of 264.
-            // The OCR read differs by platform in a few lines the keep rules retain
-            // (macOS 194, Linux CI 212), so the count is a band, not a point; the bounds'
-            // reasoning lives on `PDF_NOISE_AFTER_PLAIN_BAND`.
             assert!(
                 PDF_NOISE_AFTER_PLAIN_BAND.contains(&noise_chars(&content)),
                 "{content:?}"
@@ -169,8 +156,9 @@ async fn a_photograph_page_after_native_text_is_pruned_like_the_pdf_route() {
 #[tokio::test]
 async fn a_pruned_pdf_page_carries_a_warning_naming_the_page_and_the_line_count() {
     let document = document(PHOTO_PDF, "application/pdf", &config(OutputFormat::Plain)).await;
-    // The OCR read differs by platform by a line or two (macOS 194 pruned lines, Linux CI 193),
-    // so the count is checked against a narrow band and the rest of the message exactly.
+    // The OCR read differs by platform by a line or two (Linux 204 pruned lines; before the
+    // trigram rule macOS pruned one more than Linux), so the count is checked against a narrow
+    // band and the rest of the message exactly.
     let warnings = prune_warnings(&document);
     assert_eq!(warnings.len(), 1, "{warnings:?}");
     let pruned = (PDF_PRUNED_LINES - 2..=PDF_PRUNED_LINES + 2)

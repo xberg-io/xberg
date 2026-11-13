@@ -21,7 +21,10 @@ use super::classify::{
 };
 use super::constants::{FULL_LINE_FRACTION, MIN_BLOCKS_FOR_FONT_HEADING, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO};
 use super::lines::{is_cjk_char, segments_need_space};
-use super::paragraphs::{accent_letter_over_formula_start, merge_continuation_paragraphs, split_embedded_list_items};
+use super::paragraphs::{
+    accent_letter_over_formula_start, merge_continuation_paragraphs, merge_continuation_paragraphs_with_gaps,
+    split_embedded_list_items,
+};
 use super::text_repair::{
     MIN_LIGATURE_WITNESS_WORD_LEN, TextReplacement, WordWitnesses, apply_to_all_segments, clean_duplicate_punctuation,
     collapse_spaced_hyphens, expand_ligatures, expand_ligatures_mapped, normalize_text_encoding,
@@ -1021,7 +1024,7 @@ fn segments_to_paragraphs(
     let mut paragraphs = blocks_to_paragraphs(segments, heading_map, paragraph_gap_ys);
     apply_text_repair_to_structure_tree_paragraphs(&mut paragraphs, true, witnesses);
     reattach_detached_list_markers(&mut paragraphs, DetachedMarkerFrame::Native);
-    merge_continuation_paragraphs(&mut paragraphs);
+    merge_continuation_paragraphs_with_gaps(&mut paragraphs, paragraph_gap_ys);
     synchronize_paragraph_text_metadata(&mut paragraphs);
     paragraphs
 }
@@ -2186,22 +2189,38 @@ fn blocks_to_paragraphs(
     let mut visual_row: Option<ParagraphVisualRow<'_>> = None;
     let mut stack_end: Option<usize> = None;
     let mut stack_members: Vec<usize> = Vec::new();
+    let mut extended_stack_base = None;
 
     for (line_idx, line) in lines.iter().enumerate() {
         // The members of a nested script stack on the previous run join its row past a single mark's
         // reach; the stack ends at its last member. ~keep
         if stack_end.is_none_or(|end| line_idx > end) {
-            stack_members = line_idx
-                .checked_sub(1)
+            let stack_base = line_idx.checked_sub(1);
+            stack_members = stack_base
                 .map(|base| script_stack_members(&lines, base))
                 .filter(|members| members.contains(&line_idx))
                 .unwrap_or_default();
             stack_end = stack_members.iter().copied().max();
+            extended_stack_base = stack_base.filter(|&base| {
+                let root = &lines[base];
+                stack_members
+                    .iter()
+                    .any(|&member| stack_member_exceeds_row_reach(root, &lines[member]))
+            });
         }
         let in_stack = stack_members.contains(&line_idx);
-        let is_row_script = visual_row
-            .as_ref()
-            .is_some_and(|row| row.carries_script_within(line, in_stack));
+        // A sign admitted through its script parent can cross a gap measured from the
+        // root's baseline. Keep that stack together only while its root is in this paragraph.
+        let in_extended_stack = in_stack
+            && extended_stack_base.is_some_and(|base| {
+                base >= line_idx - current_lines.len()
+                    && lines[base].has_same_rotation(line)
+                    && lines[base].assigned_role == line.assigned_role
+            });
+        let is_row_script = in_extended_stack
+            || visual_row
+                .as_ref()
+                .is_some_and(|row| row.carries_script_within(line, in_stack));
         let should_break = if current_lines.is_empty() {
             false
         } else {
@@ -2241,7 +2260,8 @@ fn blocks_to_paragraphs(
                 );
             let rotation_change = !line.has_same_rotation(prev);
             let starts_new_line = rotation_change
-                || ((line.upright_baseline() - prev.upright_baseline()).abs() > INLINE_STYLE_BASELINE_TOLERANCE
+                || (!in_extended_stack
+                    && (line.upright_baseline() - prev.upright_baseline()).abs() > INLINE_STYLE_BASELINE_TOLERANCE
                     && !is_script_run_of(prev, line));
             let has_same_line_follower = lines.get(line_idx + 1).is_some_and(|next| {
                 next.has_same_rotation(line)
@@ -2355,7 +2375,8 @@ fn blocks_to_paragraphs(
             // #1615 for why a continuation `follows_section` rejects must still be
             // able to cross a gap -- this exemption is scoped to exactly the same
             // boundary `follows_section` accepts, not to headings in general. ~keep
-            let crossed_gap = !heading_continuation_accepted
+            let crossed_gap = !in_extended_stack
+                && !heading_continuation_accepted
                 && paragraph_gap_ys.iter().any(|&gap_y| {
                     let previous_baseline = prev.upright_baseline();
                     let current_baseline = line.upright_baseline();
@@ -2551,37 +2572,83 @@ pub(crate) fn is_script_run_of(previous: &SegmentData, next: &SegmentData) -> bo
 /// longest stack, so a longer one is seen as too long and refused, not cut short.
 pub(super) const SCRIPT_STACK_WINDOW: usize = xberg_native_pdf::document::MAX_STACK_MEMBERS + 1;
 
+fn stack_span(segment: &SegmentData) -> xberg_native_pdf::document::StackSpan<'_> {
+    let (x, right) = segment.upright_advance_extent();
+    xberg_native_pdf::document::StackSpan {
+        text: segment.text.as_str(),
+        x,
+        baseline: segment.upright_baseline(),
+        width: right - x,
+        font_size: segment.font_size,
+    }
+}
+
+fn stack_window<T: std::borrow::Borrow<SegmentData>>(
+    segments: &[T],
+    base: usize,
+) -> (Vec<xberg_native_pdf::document::StackSpan<'_>>, Vec<usize>) {
+    let mut order: Vec<usize> = ((base + 1)..segments.len().min(base + 1 + SCRIPT_STACK_WINDOW)).collect();
+    order.sort_by(|&a, &b| {
+        segments[a]
+            .borrow()
+            .upright_advance_extent()
+            .0
+            .total_cmp(&segments[b].borrow().upright_advance_extent().0)
+    });
+    let candidates = order
+        .iter()
+        .map(|&index| stack_span(segments[index].borrow()))
+        .collect();
+    (candidates, order)
+}
+
+/// A placed outer sign can keep its adjacent parent even when another run interrupts the rest
+/// of the stack. This supplies inline markup evidence without changing paragraph membership.
+pub(super) fn adjacent_outer_sign_parent<'a>(segments: &[&'a SegmentData], sign: usize) -> Option<&'a SegmentData> {
+    use xberg_native_pdf::document::{script_stack, stack_parents};
+
+    let base = sign.checked_sub(2)?;
+    let root = segments[base];
+    let preceding = segments[sign - 1];
+    let sign_segment = segments[sign];
+    if !matches!(sign_segment.text.trim(), "+" | "−")
+        || !stack_member_exceeds_row_reach(root, sign_segment)
+        || !root.has_same_rotation(preceding)
+        || !preceding.has_same_rotation(sign_segment)
+        || root.assigned_role != preceding.assigned_role
+        || preceding.assigned_role != sign_segment.assigned_role
+    {
+        return None;
+    }
+    let root_span = stack_span(root);
+    let (candidates, order) = stack_window(segments, base);
+    let members = script_stack(&root_span, &candidates);
+    let index = members.iter().position(|&member| order[member] == sign)?;
+    let spans: Vec<_> = members.iter().map(|&member| candidates[member]).collect();
+    let parent = stack_parents(&root_span, &spans)[index]?;
+    (order[members[parent]] == sign - 1).then_some(preceding)
+}
+
 /// Indices into `segments` of the members of the nested script stack on `segments[base]`, in reading
 /// order, or none. The rule is `xberg_native_pdf::document::script_stack`, shared with reading-order
 /// snapping.
 pub(super) fn script_stack_members<T: std::borrow::Borrow<SegmentData>>(segments: &[T], base: usize) -> Vec<usize> {
-    use xberg_native_pdf::document::{StackSpan, script_stack};
-
-    let span = |segment: &SegmentData| {
-        let (x, right) = segment.upright_advance_extent();
-        (x, right - x, segment.upright_baseline())
-    };
+    use xberg_native_pdf::document::script_stack;
     let Some(base_segment) = segments.get(base).map(std::borrow::Borrow::borrow) else {
         return Vec::new();
     };
-    let window = (base + 1)..segments.len().min(base + 1 + SCRIPT_STACK_WINDOW);
-    let mut order: Vec<usize> = window.collect();
-    order.sort_by(|&a, &b| span(segments[a].borrow()).0.total_cmp(&span(segments[b].borrow()).0));
-    fn to_stack<'a>(segment: &'a SegmentData, span: &impl Fn(&SegmentData) -> (f32, f32, f32)) -> StackSpan<'a> {
-        let (x, width, baseline) = span(segment);
-        StackSpan {
-            text: segment.text.as_str(),
-            x,
-            baseline,
-            width,
-            font_size: segment.font_size,
-        }
-    }
-    let candidates: Vec<StackSpan<'_>> = order.iter().map(|&i| to_stack(segments[i].borrow(), &span)).collect();
-    script_stack(&to_stack(base_segment, &span), &candidates)
+    let (candidates, order) = stack_window(segments, base);
+    let mut members: Vec<usize> = script_stack(&stack_span(base_segment), &candidates)
         .into_iter()
         .map(|i| order[i])
-        .collect()
+        .collect();
+    // Outer signs are structural evidence only after page ordering placed the full stack
+    // next to its base. A lookahead alone can see signs from a different visual row.
+    let end = base + 1 + members.len();
+    if members.iter().any(|&member| member >= end) {
+        members.retain(|&member| !stack_member_exceeds_row_reach(base_segment, segments[member].borrow()));
+    }
+    members
 }
 
 /// Moves the members of each nested script stack to directly after their base: the members of the
@@ -2597,20 +2664,8 @@ fn place_script_stacks_after_bases(segments: Vec<SegmentData>) -> Vec<SegmentDat
     if segments.iter().any(|segment| !segment.is_unrotated()) {
         return segments;
     }
-    let spans: Vec<StackSpan<'_>> = segments
-        .iter()
-        .map(|segment| {
-            let (x, right) = segment.upright_advance_extent();
-            StackSpan {
-                text: segment.text.as_str(),
-                x,
-                baseline: segment.upright_baseline(),
-                width: right - x,
-                font_size: segment.font_size,
-            }
-        })
-        .collect();
-    let after_base: std::collections::HashMap<usize, Vec<usize>> = script_stacks(&spans)
+    let spans: Vec<StackSpan<'_>> = segments.iter().map(stack_span).collect();
+    let mut after_base: std::collections::HashMap<usize, Vec<usize>> = script_stacks(&spans)
         .into_iter()
         .map(|(base, members)| {
             let member_spans: Vec<StackSpan<'_>> = members.iter().map(|&member| spans[member]).collect();
@@ -2626,6 +2681,18 @@ fn place_script_stacks_after_bases(segments: Vec<SegmentData>) -> Vec<SegmentDat
     for &member in after_base.values().flatten() {
         moved[member] = true;
     }
+    for base in 2..segments.len() {
+        if after_base.get(&base).is_some_and(|members| {
+            members
+                .iter()
+                .any(|&member| stack_member_exceeds_row_reach(&segments[base], &segments[member]))
+        }) && !after_base.contains_key(&(base - 1))
+            && let Some(sign) = preceding_script_sign(&segments, &moved, base)
+        {
+            moved[sign] = true;
+            after_base.insert(base - 1, vec![sign]);
+        }
+    }
     let mut slots: Vec<Option<SegmentData>> = segments.into_iter().map(Some).collect();
     let mut placed = Vec::with_capacity(slots.len());
     for index in 0..slots.len() {
@@ -2639,6 +2706,30 @@ fn place_script_stacks_after_bases(segments: Vec<SegmentData>) -> Vec<SegmentDat
     }
     placed.extend(slots.into_iter().flatten());
     placed
+}
+
+fn stack_member_exceeds_row_reach(base: &SegmentData, member: &SegmentData) -> bool {
+    (member.upright_baseline() - base.upright_baseline()).abs()
+        > base.font_size * crate::script_run::SCRIPT_ROW_MAX_BASELINE_FONT_FACTOR
+}
+
+/// A sign of the preceding script can sort below the main equation row, after
+/// the next stack. Return it only when it fits the preceding parent uniquely.
+fn preceding_script_sign(segments: &[SegmentData], moved: &[bool], stack_base: usize) -> Option<usize> {
+    let parent = &segments[stack_base - 1];
+    if moved[stack_base - 1] || !is_script_run_of(&segments[stack_base - 2], parent) {
+        return None;
+    }
+    let stack_start = segments[stack_base].upright_advance_extent().0;
+    let mut signs = (stack_base + 1..segments.len().min(stack_base + 1 + SCRIPT_STACK_WINDOW)).filter(|&index| {
+        let sign = &segments[index];
+        !moved[index]
+            && matches!(sign.text.trim(), "+" | "−")
+            && sign.upright_advance_extent().1 <= stack_start
+            && is_script_run_of(parent, sign)
+    });
+    let sign = signs.next()?;
+    signs.next().is_none().then_some(sign)
 }
 
 /// Whether `line` reads as the wrapped continuation of the numbered-heading

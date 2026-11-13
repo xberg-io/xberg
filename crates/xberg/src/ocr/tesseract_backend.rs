@@ -253,6 +253,13 @@ impl TesseractBackend {
         internal
     }
 
+    fn script_retry_threshold(config: &OcrConfig) -> Option<f64> {
+        config
+            .pipeline
+            .is_none()
+            .then(|| config.effective_thresholds().min_ocr_mean_confidence)
+    }
+
     /// Read the per-call result-cache override from `backend_options`.
     ///
     /// This keeps callers that only need a cold Tesseract invocation from
@@ -590,6 +597,7 @@ impl TesseractBackend {
     ) -> Result<ExtractedDocument> {
         #[cfg(all(test, feature = "pdf", feature = "tokio-runtime", feature = "bundle-tessdata-eng"))]
         read_counter::record(config);
+        let retry_threshold = Self::script_retry_threshold(config);
         let tess_config = self.config_to_tesseract(config);
         let tess_config_clone = tess_config.clone();
         let output_format = config.output_format.clone();
@@ -610,13 +618,18 @@ impl TesseractBackend {
         let operation = move || {
             #[cfg(not(target_arch = "wasm32"))]
             let _permit = permit;
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Err(error) = crate::core::extractor::cacheability::check_ocr_cancelled() {
+                return Err(crate::ocr::error::OcrError::ProcessingFailed(error.to_string()));
+            }
             let run = || {
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    processor.process_image_with_policy(
+                    processor.process_image_with_retry(
                         image_bytes.as_slice(),
                         &tess_config_clone,
                         output_format,
                         policy,
+                        retry_threshold,
                     )
                 }))
                 .unwrap_or_else(|_| {
@@ -640,6 +653,8 @@ impl TesseractBackend {
             })?;
         #[cfg(target_arch = "wasm32")]
         let ocr_result = operation();
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::core::extractor::cacheability::check_ocr_cancelled()?;
         let mut ocr_result = ocr_result.map_err(|e| crate::XbergError::Ocr {
             message: format!("Tesseract OCR failed: {}", e),
             source: Some(Box::new(e)),
@@ -716,6 +731,7 @@ impl OcrBackend for TesseractBackend {
     }
 
     async fn process_image_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractedDocument> {
+        let retry_threshold = Self::script_retry_threshold(config);
         let tess_config = self.config_to_tesseract(config);
         let tess_config_clone = tess_config.clone();
         let output_format = config.output_format.clone();
@@ -735,9 +751,12 @@ impl OcrBackend for TesseractBackend {
         let operation = move || {
             #[cfg(not(target_arch = "wasm32"))]
             let _permit = permit;
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match output_format {
-                Some(fmt) => processor.process_image_file_with_format(&path_str, &tess_config_clone, fmt),
-                None => processor.process_image_file(&path_str, &tess_config_clone),
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Err(error) = crate::core::extractor::cacheability::check_ocr_cancelled() {
+                return Err(crate::ocr::error::OcrError::ProcessingFailed(error.to_string()));
+            }
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                processor.process_image_file(&path_str, &tess_config_clone, output_format, retry_threshold)
             }))
             .unwrap_or_else(|_| {
                 Err(crate::ocr::error::OcrError::ProcessingFailed(
@@ -754,6 +773,8 @@ impl OcrBackend for TesseractBackend {
             })?;
         #[cfg(target_arch = "wasm32")]
         let ocr_result = operation();
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::core::extractor::cacheability::check_ocr_cancelled()?;
         let mut ocr_result = ocr_result.map_err(|e| crate::XbergError::Ocr {
             message: format!("Tesseract OCR failed: {}", e),
             source: Some(Box::new(e)),
@@ -1903,6 +1924,33 @@ mod tests {
             tess_config.language, "deu",
             "OcrConfig.language must survive a default TesseractConfig"
         );
+    }
+
+    /// GH#2300: every call without an explicit `ocr.pipeline` gets the script retry, with the
+    /// caller's mean-confidence floor as the noise bound; a staged pipeline is the caller's own
+    /// language plan and gets one read.
+    #[test]
+    fn script_retry_uses_the_quality_threshold_only_without_a_pipeline() {
+        assert_eq!(
+            TesseractBackend::script_retry_threshold(&OcrConfig::default()),
+            Some(crate::core::config::ocr::OcrQualityThresholds::default().min_ocr_mean_confidence)
+        );
+        let strict = OcrConfig {
+            quality_thresholds: Some(crate::core::config::ocr::OcrQualityThresholds {
+                min_ocr_mean_confidence: 60.0,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(TesseractBackend::script_retry_threshold(&strict), Some(60.0));
+        let staged = OcrConfig {
+            pipeline: Some(crate::core::config::ocr::OcrPipelineConfig {
+                stages: Vec::new(),
+                quality_thresholds: Default::default(),
+            }),
+            ..Default::default()
+        };
+        assert_eq!(TesseractBackend::script_retry_threshold(&staged), None);
     }
 
     /// #1572, multi-language form: the join must use the configured list, not fall back to "eng".

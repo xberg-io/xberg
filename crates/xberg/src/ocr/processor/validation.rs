@@ -154,9 +154,15 @@ pub(crate) fn existing_tessdata_dir_for(
     override_path: Option<&Path>,
     tessdata_env: &TessdataEnv,
 ) -> Option<String> {
-    tessdata_search_dirs(override_path, tessdata_env)
-        .into_iter()
+    first_directory_holding(&tessdata_search_dirs(override_path, tessdata_env), languages)
+}
+
+/// The first of `directories` that holds a `.traineddata` for every one of `languages`.
+pub(crate) fn first_directory_holding(directories: &[String], languages: &[String]) -> Option<String> {
+    directories
+        .iter()
         .find(|dir| all_languages_exist(dir, languages).unwrap_or(false))
+        .cloned()
 }
 
 /// Candidate tessdata directories in the resolver's priority order:

@@ -25,6 +25,8 @@ mod caption_conversion;
 mod caption_grid_proof;
 mod document;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) use document::join_run_pages;
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 mod markdown;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) use markdown::strip_embedded_gfm_tables;
@@ -49,7 +51,7 @@ pub(crate) use orientation_retry::recognition_retry_eligible;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(super) mod read_reuse;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-pub(in crate::extractors::pdf) use document::{apply_ocr_page_replacements, flat_ocr_page_document};
+pub(in crate::extractors::pdf) use document::{apply_ocr_page_replacements, remap_relationships};
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(crate) use pipeline::extract_mixed_ocr_native_with_probe_reads;
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]

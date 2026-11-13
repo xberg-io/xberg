@@ -219,6 +219,15 @@ impl Pix {
     const MINIMUM_OTSU_TILE_DIMENSION: i32 = 16;
     const STANDARD_OTSU_SCORE_FRACTION: f32 = 0.0;
 
+    /// Takes ownership of a Pix that Leptonica or Tesseract allocated for the caller, so that
+    /// `Drop` frees it with `pixDestroy`. `ptr` must not be null and must not be freed elsewhere.
+    pub(crate) fn from_owned_ptr(ptr: *mut c_void) -> Result<Pix> {
+        if ptr.is_null() {
+            return Err(TesseractError::NullPointerError);
+        }
+        Ok(Pix { ptr })
+    }
+
     /// Creates a 32 bpp Leptonica Pix from a packed RGB byte slice.
     ///
     /// `data` must contain exactly `width * height * 3` bytes in left-to-right,

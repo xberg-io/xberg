@@ -45,6 +45,7 @@ impl FinalPage {
                 native_ink_owned_pages: &self.ink_owned,
                 native_coverage_layers: Some(&self.layers),
                 clean_native_ink_pages: &self.clean_admissions,
+                type0_loss_pages: &ahash::AHashSet::new(),
             },
         )
     }

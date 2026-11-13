@@ -1305,6 +1305,16 @@ pub(super) fn segment_script_kind(
 
 pub(super) fn segment_script(segments: &[&crate::pdf::hierarchy::SegmentData], index: usize) -> Option<SegmentScript> {
     let script = segments[index];
+    if let Some(parent) = super::pipeline::adjacent_outer_sign_parent(segments, index) {
+        return Some(SegmentScript {
+            kind: if script.upright_baseline() > parent.upright_baseline() {
+                AnnotationKind::Superscript
+            } else {
+                AnnotationKind::Subscript
+            },
+            annotate: true,
+        });
+    }
     segments[..index]
         .iter()
         .rev()

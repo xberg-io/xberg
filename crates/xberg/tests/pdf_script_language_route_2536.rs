@@ -29,6 +29,17 @@ const FLYER_LINES: [&str; 4] = [
 
 /// Add native English lines without changing the original image or Khmer layer. ~keep
 fn with_native_english_lines(source: &[u8], lines: &[&str], render_mode: u8) -> Vec<u8> {
+    with_positioned_english_lines(source, lines, render_mode, 11, 24, "OverlayAcceptanceText")
+}
+
+fn with_positioned_english_lines(
+    source: &[u8],
+    lines: &[&str],
+    render_mode: u8,
+    font_size: u32,
+    y: u32,
+    resource: &str,
+) -> Vec<u8> {
     use lopdf::{Document, Stream, dictionary};
 
     let mut document = Document::load_mem(source).expect("load the overlay fixture");
@@ -36,7 +47,7 @@ fn with_native_english_lines(source: &[u8], lines: &[&str], render_mode: u8) -> 
     let font = document.add_object(dictionary! {
         "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica",
     });
-    let mut content = format!("BT /FixtureFont 11 Tf {render_mode} Tr 0 g 16 TL 0 64 Td\n");
+    let mut content = format!("BT /FixtureFont {font_size} Tf {render_mode} Tr 0 g 16 TL 0 64 Td\n");
     for (index, line) in lines.iter().enumerate() {
         if index > 0 {
             content.push_str("T*\n");
@@ -53,9 +64,9 @@ fn with_native_english_lines(source: &[u8], lines: &[&str], render_mode: u8) -> 
         },
         content.into_bytes(),
     ));
-    document.add_xobject(page, "OverlayAcceptanceText", form).unwrap();
+    document.add_xobject(page, resource, form).unwrap();
     document
-        .add_page_contents(page, b"q 1 0 0 1 36 24 cm /OverlayAcceptanceText Do Q\n".to_vec())
+        .add_page_contents(page, format!("q 1 0 0 1 36 {y} cm /{resource} Do Q\n").into_bytes())
         .unwrap();
     let mut bytes = Vec::new();
     document.save_to(&mut bytes).unwrap();
@@ -259,6 +270,86 @@ fn automatic_english_ocr_keeps_visible_stamp_and_raster_body_without_a_distinct_
                 "the raster body is read once: {text:?}"
             );
         }
+    }
+}
+
+#[test]
+fn hidden_budget_heading_cannot_claim_the_painted_budget_paragraph() {
+    use xberg::types::document_structure::NodeContent;
+
+    let models = english_model();
+    let source = with_positioned_english_lines(SCANNED_ENGLISH_KHMER_OVERLAY, &["Budget"], 3, 34, 610, "HiddenBudget");
+    let source = with_positioned_english_lines(&source, &["Budget"], 0, 8, 24, "VisibleBudget");
+    let read = |disable_ocr| {
+        extract(&source, models.path(), |config| {
+            config.disable_ocr = disable_ocr;
+            config.output_format = OutputFormat::Markdown;
+            config.include_document_structure = true;
+        })
+    };
+    let native = read(true);
+    assert_eq!(native.content.matches("Budget").count(), 2, "{:?}", native.content);
+    let result = read(false);
+    assert_eq!(
+        result.extraction_method,
+        Some(ExtractionMethod::Mixed),
+        "{:?} {:?}",
+        result.processing_warnings,
+        result.content
+    );
+    let budget_bounds = |result: &ExtractedDocument| {
+        result
+            .document
+            .as_ref()
+            .unwrap()
+            .nodes
+            .iter()
+            .filter_map(|node| match &node.content {
+                NodeContent::Heading { text, .. } | NodeContent::Paragraph { text } if text.contains("Budget") => {
+                    Some((
+                        matches!(node.content, NodeContent::Heading { .. }),
+                        node.bbox.map(|bbox| bbox.y0),
+                    ))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let original = budget_bounds(&native);
+    assert!(
+        original
+            .iter()
+            .any(|&(heading, y)| heading && y.is_some_and(|y| y > 600.0)),
+        "{original:?}"
+    );
+    let kept = budget_bounds(&result);
+    assert_eq!(kept.len(), 1, "{kept:?}");
+    match kept[0] {
+        (_, Some(y)) => assert!(y < 100.0, "{kept:?}"),
+        (heading, None) => assert!(!heading, "fallback cannot carry the hidden heading"),
+    }
+    for text in [&result.content, &result.pages.as_ref().unwrap()[0].content] {
+        assert_eq!(text.matches("Budget").count(), 1, "{text:?}");
+        assert_eq!(khmer_count(text), 222, "{text:?}");
+        assert_eq!(normalized_words(text).matches(RASTER_BODY).count(), 1, "{text:?}");
+    }
+}
+
+#[test]
+fn rejected_raster_read_still_removes_the_distinct_nonpainting_sidecar() {
+    let models = english_model();
+    let source = with_native_english_lines(SCANNED_ENGLISH_KHMER_OVERLAY, &[HIDDEN_SIDECAR], 3);
+    let result = extract(&source, models.path(), |config| {
+        config.ocr.as_mut().unwrap().quality_thresholds = Some(xberg::core::config::OcrQualityThresholds {
+            min_ocr_mean_confidence: 100.0,
+            ..Default::default()
+        });
+    });
+    assert_eq!(result.extraction_method, Some(ExtractionMethod::Native));
+    for text in [&result.content, &result.pages.as_ref().unwrap()[0].content] {
+        assert_eq!(khmer_count(text), 222, "{text:?}");
+        assert!(!normalized_words(text).contains(HIDDEN_SIDECAR), "{text:?}");
+        assert!(!normalized_words(text).contains(RASTER_BODY), "{text:?}");
     }
 }
 

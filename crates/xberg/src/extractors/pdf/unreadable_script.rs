@@ -272,19 +272,18 @@ pub(super) fn page_is_scan(document: &xberg_native_pdf::PdfDocument, page_index:
 
 /// Whether the script rule leaves the page to OCR as a scan: it carries a picture (see
 /// [`page_is_scan`]) and its text layer `layer` is not drawn over a full-page picture where a
-/// reader sees it (see [`super::picture_layer::layer_is_visible_over_picture`]). A layer printed
+/// reader sees it (see [`super::picture_layer::visible_text_over_picture`]). A layer printed
 /// visibly on a background picture is page content, which the completeness and ink checks judge
 /// like any other layer (#2826); a sidecar, text under the picture and text that leaves no ink stay
 /// with the scan.
 pub(super) fn page_reads_as_scan(
     document: &xberg_native_pdf::PdfDocument,
     page_index: usize,
-    layer: &str,
     config: &ExtractionConfig,
 ) -> bool {
     page_is_scan(document, page_index)
         && scan_verdict(page_index, || {
-            !super::picture_layer::layer_is_visible_over_picture(document, page_index, layer, config)
+            super::picture_layer::visible_text_over_picture(document, page_index, config).is_none()
         })
 }
 
@@ -700,22 +699,6 @@ pub(super) fn retain_unreadable_script_pages(
     let Some(route) = route(ocr) else {
         return Vec::new();
     };
-    let candidates: Vec<(Candidate, usize)> = decision
-        .failing_pages
-        .iter()
-        .filter_map(|page| {
-            let boundary = boundaries.iter().find(|boundary| boundary.page_number == *page)?;
-            let text = native_text.get(boundary.byte_start..boundary.byte_end)?;
-            let (scripts, stage) = judge_page(text, &route)?;
-            Some((
-                (*page, scripts, text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER)),
-                stage,
-            ))
-        })
-        .collect();
-    if candidates.is_empty() {
-        return Vec::new();
-    }
     let document = match xberg_native_pdf::PdfDocument::from_bytes(content.to_vec()) {
         Ok(document) => document,
         Err(error) => {
@@ -725,17 +708,29 @@ pub(super) fn retain_unreadable_script_pages(
     };
     // A scan is read by OCR, so only the stage that reads first can say its text is unreadable. A
     // page with a picture whose ink contradicts its layer is read as the scan it was taken for.
-    let (read, kept): (Vec<_>, Vec<_>) = candidates
-        .into_iter()
-        .filter_map(|(candidate, stage)| {
-            let index = candidate.0 as usize - 1;
-            let scan = if ink_contradicted.contains(&candidate.0) {
-                page_is_scan(&document, index).then_some(true)?
+    let (read, kept): (Vec<_>, Vec<_>) = decision
+        .failing_pages
+        .iter()
+        .filter_map(|&page| {
+            let original = page_text(native_text, boundaries, page)?;
+            let index = page.checked_sub(1)? as usize;
+            let carries_picture = page_is_scan(&document, index);
+            let painting = if carries_picture && !ink_contradicted.contains(&page) {
+                super::picture_layer::visible_text_over_picture(&document, index, config)
             } else {
-                let text = page_text(native_text, boundaries, candidate.0).unwrap_or_default();
-                page_reads_as_scan(&document, index, text, config)
+                None
             };
-            Some((scan, candidate, stage))
+            if ink_contradicted.contains(&page) && !carries_picture {
+                return None;
+            }
+            let scan = carries_picture && painting.is_none();
+            let text = painting.as_deref().unwrap_or(original);
+            let (scripts, stage) = judge_page(text, &route)?;
+            Some((
+                scan,
+                (page, scripts, text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER)),
+                stage,
+            ))
         })
         .filter(|(scan, _, stage)| !scan || *stage == 0)
         .partition(|(scan, ..)| *scan);
@@ -1250,9 +1245,10 @@ mod tests {
     /// #2826: a layer with no glyphs over the picture leaves no ink to measure, so the page is its
     /// picture.
     #[test]
-    fn a_blank_layer_over_a_full_page_picture_reads_as_a_scan() {
-        let document = xberg_native_pdf::PdfDocument::from_bytes(SCAN_WITH_OVERLAY.to_vec()).unwrap();
-        assert!(page_reads_as_scan(&document, 0, " ", &config_with(&["eng"])));
+    fn a_nonpainting_layer_over_a_full_page_picture_reads_as_a_scan() {
+        let document = xberg_native_pdf::PdfDocument::from_bytes(scan_with_sidecar()).unwrap();
+        assert!(page_is_scan(&document, 0));
+        assert!(page_reads_as_scan(&document, 0, &config_with(&["eng"])));
     }
 
     #[test]
