@@ -2455,10 +2455,18 @@ pub(super) fn perform_ocr(
         None
     };
     let script_retry = (!crate::core::extractor::cacheability::ocr_stop_requested())
-        .then(|| models.retry_models(config, f64::from(mean_text_conf)))
+        .then(|| {
+            models.retry_models(config, f64::from(mean_text_conf), || {
+                script_retry::first_read_suggests_han(&api, tsv_data_for_tables.as_deref())
+            })
+        })
         .flatten()
         .and_then(|retry_models| {
-            let pass = script_retry::Pass { config, source_dpi };
+            let pass = script_retry::Pass {
+                config,
+                source_dpi,
+                pool: api_pool.retry(),
+            };
             retry_with_tsv(
                 models,
                 tsv_data_for_tables.as_deref(),
@@ -3290,15 +3298,16 @@ fn process_image_resolved(
         policy,
     )?;
 
-    let stored = models.if_result_current(config, || {
-        if config.use_cache && !crate::core::extractor::cacheability::ocr_stop_requested() {
-            cache.set_cached_result(&image_hash, "tesseract", &config_str, output_format.as_ref(), &result)
-        } else {
-            Ok(())
-        }
-    });
-    if let Some(Err(error)) = stored {
-        tracing::warn!(%error, "Failed to cache the OCR result; the next identical request will re-run OCR");
+    if config.use_cache && !crate::core::extractor::cacheability::ocr_stop_requested() {
+        models.if_result_current(config, || {
+            let cache = cache.clone();
+            let result = result.clone();
+            crate::core::extractor::cacheability::defer_ocr_cache_write(move || {
+                if let Err(error) = cache.set_cached_result(&image_hash, "tesseract", &config_str, output_format.as_ref(), &result) {
+                    tracing::warn!(%error, "Failed to cache the OCR result; the next identical request will re-run OCR");
+                }
+            });
+        });
     }
 
     block_outer_cache_for_retry(&result);
@@ -5312,7 +5321,11 @@ mod tests {
         text.chars().filter(|c| ('\u{4e00}'..='\u{9fff}').contains(c)).count()
     }
 
-    fn read_with_retry_settings(retry: bool, table_detection: bool) -> OcrExtractionResult {
+    fn read_with_retry_settings(
+        retry: bool,
+        table_detection: bool,
+        pool: &Arc<TesseractApiPool>,
+    ) -> OcrExtractionResult {
         let config = TesseractConfig {
             language: "eng".to_string(),
             output_format: "markdown".to_string(),
@@ -5326,7 +5339,7 @@ mod tests {
             &corpus_image("chi_sim_image.jpeg"),
             &config,
             &cache,
-            &TesseractApiPool::new(),
+            pool,
             None,
             ImageOcrPolicy::Default,
             retry.then_some(75.0),
@@ -5376,7 +5389,7 @@ mod tests {
                     ..Default::default()
                 };
                 let models = ModelContext::resolve_with_retry(&config, Some(75.0)).unwrap();
-                assert!(models.retry_models(&config, 30.0).is_some());
+                assert!(models.retry_models(&config, 30.0, || true).is_some());
                 assert!(models.if_result_current(&config, || ()).is_some());
                 std::fs::write(root.path().join("khm.traineddata"), b"changed").unwrap();
                 assert_eq!(
@@ -5412,7 +5425,7 @@ mod tests {
     #[cfg(feature = "bundle-tessdata-eng")]
     #[test]
     #[serial]
-    fn failed_script_retry_preserves_the_processor_result_and_does_not_cache_it() {
+    fn non_han_read_skips_osd_and_caches_with_unusable_retry_models() {
         let tessdata = tempdir().unwrap();
         let eng = xberg_tesseract::bundled_eng_traineddata().expect("the test bundles English tessdata");
         std::fs::write(tessdata.path().join("eng.traineddata"), eng).unwrap();
@@ -5445,7 +5458,7 @@ mod tests {
             serde_json::to_value(fallback).unwrap(),
             serde_json::to_value(first).unwrap()
         );
-        assert_eq!(retry_cache.get_stats().unwrap().total_files, 0);
+        assert_eq!(retry_cache.get_stats().unwrap().total_files, 1);
     }
 
     #[tokio::test]
@@ -5592,20 +5605,23 @@ mod tests {
             ..Default::default()
         };
         let models = ModelContext::resolve_with_retry(&config, Some(75.0)).expect("resolve first-pass models");
-        if models.retry_models(&config, 0.0).is_none() {
+        if models.retry_models(&config, 0.0, || true).is_none() {
             eprintln!("skipped: osd and chi_sim are not installed");
             return;
         }
         cacheability::scope(async {
-            let plain = read_with_retry_settings(false, true);
+            let plain = read_with_retry_settings(false, true, &TesseractApiPool::new());
             assert_eq!(han_letters(&plain.content), 0, "the first read is Latin noise");
             assert!(!plain.metadata.contains_key(script_retry::METADATA_KEY));
             assert!(cacheability::can_publish_outer_result());
         })
         .await;
+        let warmed_pool = TesseractApiPool::new();
         for table_detection in [true, false] {
             cacheability::scope(async {
-                let retried = read_with_retry_settings(true, table_detection);
+                let retried = read_with_retry_settings(true, table_detection, &warmed_pool);
+                let fresh = read_with_retry_settings(true, table_detection, &TesseractApiPool::new());
+                assert_eq!(retried.content, fresh.content);
                 assert!(
                     han_letters(&retried.content) > 0,
                     "table detection {table_detection}: {:?}",

@@ -287,7 +287,7 @@ fn fingerprint_models_using(
 ) -> crate::Result<String> {
     let mut hash = blake3::Hasher::new();
     let mut snapshots = std::collections::HashMap::new();
-    hash.update(b"recognition-osd-cache-context-v3");
+    hash.update(b"recognition-osd-cache-context-v4");
     for (index, dependency) in dependencies.iter().enumerate() {
         check_cancelled(cancel)?;
         for model in dependency.model.iter().chain(&dependency.stage_models) {
@@ -346,10 +346,23 @@ fn model_fingerprint_with_reader(
         *revision
     } else {
         let revision = read_revision(&directory)?;
-        revisions.insert(directory, revision);
+        revisions.insert(directory.clone(), revision);
         revision
     };
     hash.update(revision.as_bytes());
+    for language in &model.languages {
+        let language = language.trim();
+        let model_path = directory.join(format!("{language}.traineddata"));
+        let digest = crate::cache::blake3_hash_file(&model_path).map_err(|error| {
+            crate::XbergError::cache(format!(
+                "Cannot fingerprint primary model '{}': {error}",
+                model_path.display()
+            ))
+        })?;
+        hash.update(&(language.len() as u64).to_le_bytes());
+        hash.update(language.as_bytes());
+        hash.update(digest.as_bytes());
+    }
     Ok(hash.finalize())
 }
 

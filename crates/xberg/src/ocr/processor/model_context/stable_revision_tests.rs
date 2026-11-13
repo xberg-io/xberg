@@ -94,6 +94,48 @@ async fn stable_revisions(route: Route, pdf: bool) {
     }
 }
 
+#[tokio::test]
+async fn english_only_change_misses_outer_cache_with_unchanged_osd() {
+    for route in [Route::Uri, Route::Engine, Route::Batch] {
+        Box::pin(assert_primary_revision_misses(route)).await;
+    }
+}
+
+async fn assert_primary_revision_misses(route: Route) {
+    let root = tempfile::tempdir().unwrap();
+    let english = root.path().join("eng.traineddata");
+    std::fs::write(&english, b"one").unwrap();
+    std::fs::write(root.path().join("osd.traineddata"), b"unchanged OSD").unwrap();
+    let backend = Arc::new(RevisionBackend {
+        models: root.path().into(),
+        calls: AtomicUsize::new(0),
+    });
+    std::fs::write(root.path().join("chi_sim.traineddata"), b"unchanged Chinese model").unwrap();
+    let mut config = revision_config(root.path(), 1, false);
+    // The configured Han model keeps this on the OSD cache path even on hosts with retry packs. ~keep
+    config.ocr.as_mut().unwrap().language = vec!["eng".into(), "chi_sim".into()];
+    let (bytes, mime, extension) = source(false);
+    let path = root.path().join(format!("source.{extension}"));
+    std::fs::write(&path, &bytes).unwrap();
+    let engine = crate::engine::Engine::builder()
+        .with_cache_backend(Arc::new(CountingCache::default()))
+        .build();
+    crate::plugins::registry::with_test_ocr_backend(backend.clone(), async {
+        let first = Box::pin(read(route, &engine, &path, &bytes, mime, &config)).await;
+        assert_eq!(
+            first,
+            Box::pin(read(route, &engine, &path, &bytes, mime, &config)).await
+        );
+        assert_eq!(backend.calls.load(Ordering::SeqCst), 1);
+        std::fs::write(&english, b"two").unwrap();
+        let next = Box::pin(read(route, &engine, &path, &bytes, mime, &config)).await;
+        assert_ne!(first, next);
+        assert_eq!(next, Box::pin(read(route, &engine, &path, &bytes, mime, &config)).await);
+        assert_eq!(backend.calls.load(Ordering::SeqCst), 2);
+    })
+    .await;
+}
+
 async fn stable_revision_case(route: Route, pdf: bool, psm: i32, pipeline: bool) {
     let root = tempfile::tempdir().unwrap();
     for language in ["eng", "deu", "fra"] {

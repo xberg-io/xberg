@@ -26,6 +26,7 @@ runs:
         fi
         mise run rust:test:explicit-sideways warm
         mise run rust:test:explicit-sideways native
+        mise run rust:test:deferred-osd
 
     - name: Qualify native Khmer retention after English OCR
       shell: bash

@@ -3,6 +3,10 @@
 use std::ops::Deref;
 use std::sync::{Arc, Condvar, Mutex};
 
+mod retry;
+
+pub(super) use retry::{RetryApiPools, RetryStage};
+
 use crate::ocr::error::OcrError;
 use xberg_tesseract::TesseractAPI;
 
@@ -83,7 +87,7 @@ impl<K: PartialEq, V> ResourcePool<K, V> {
 
             let total = state.checked_out + state.idle.len();
             if total < self.capacity || !state.idle.is_empty() {
-                let stale = state.idle.pop();
+                let stale = if total == self.capacity { state.idle.pop() } else { None };
                 state.checked_out += 1;
                 drop(state);
                 drop(stale);
@@ -253,6 +257,7 @@ impl<K: PartialEq, V> Drop for ReleaseReservation<K, V> {
 struct PooledTesseractApi {
     primary: TesseractAPI,
     secondary: super::dictionary::SecondaryDictionaries,
+    _files: Option<super::script_retry::RetryModelFiles>,
 }
 
 impl PooledTesseractApi {
@@ -280,13 +285,23 @@ impl PooledTesseractApi {
 
 pub(super) struct TesseractApiPool {
     resources: Arc<ResourcePool<ApiKey, PooledTesseractApi>>,
+    retry: RetryApiPools,
 }
 
 impl TesseractApiPool {
     pub(super) fn new() -> Arc<Self> {
+        Self::with_capacity(tesseract_api_capacity())
+    }
+
+    fn with_capacity(capacity: usize) -> Arc<Self> {
         Arc::new(Self {
-            resources: ResourcePool::new(tesseract_api_capacity()),
+            resources: ResourcePool::new(capacity),
+            retry: RetryApiPools::new(capacity),
         })
+    }
+
+    pub(super) fn retry(&self) -> &RetryApiPools {
+        &self.retry
     }
 
     #[cfg(test)]
@@ -302,12 +317,17 @@ impl TesseractApiPool {
     ) -> Result<TesseractApiLease, OcrError> {
         crate::core::config_validation::validate_tesseract_oem(i32::from(oem))
             .map_err(|error| OcrError::InvalidConfiguration(error.to_string()))?;
-        let tessdata_path = &models.directory;
         let key = ApiKey::for_models(models, language, oem);
         let lease = self.resources.checkout(key, || {
+            let files = models.capture_primary(language)?;
+            let tessdata_path = match &files {
+                Some(files) => files.directory()?,
+                None => &models.directory,
+            };
             Ok(PooledTesseractApi {
                 primary: new_engine(tessdata_path, language, oem)?,
                 secondary: super::dictionary::SecondaryDictionaries::new(tessdata_path, language, oem),
+                _files: files,
             })
         })?;
         TesseractApiLease::begin(lease, models)
@@ -315,9 +335,9 @@ impl TesseractApiPool {
 }
 
 /// A Tesseract engine initialised with `language` from `tessdata_path`, cleared and ready for a
-/// page. The pool builds its handles with it; the script retry builds its own engines with it.
+/// page.
 /// `oem` is validated by the caller.
-pub(super) fn new_engine(tessdata_path: &str, language: &str, oem: u8) -> Result<TesseractAPI, OcrError> {
+fn new_engine(tessdata_path: &str, language: &str, oem: u8) -> Result<TesseractAPI, OcrError> {
     let api = TesseractAPI::new().map_err(|error| {
         OcrError::TesseractInitializationFailed(format!("Failed to allocate Tesseract engine: {error}"))
     })?;
@@ -427,6 +447,7 @@ mod tests {
         PooledTesseractApi {
             primary: TesseractAPI::new().expect("create the primary handle"),
             secondary,
+            _files: None,
         }
     }
 
@@ -615,6 +636,41 @@ mod tests {
     }
 
     #[test]
+    fn osd_pool_and_result_keys_change_when_only_english_changes() {
+        use super::super::model_context::ModelContext;
+        use crate::ocr::types::TesseractConfig;
+
+        let root = tempfile::tempdir().unwrap();
+        let english = root.path().join("eng.traineddata");
+        std::fs::write(&english, b"old").unwrap();
+        std::fs::write(root.path().join("osd.traineddata"), b"same OSD").unwrap();
+        let config = TesseractConfig {
+            language: "eng".into(),
+            tessdata_path: Some(root.path().into()),
+            psm: 1,
+            ..Default::default()
+        };
+        let check = |resolve: &dyn Fn() -> ModelContext| {
+            std::fs::write(&english, b"old").unwrap();
+            let old = resolve();
+            let pool = ResourcePool::new(1);
+            let checkout = |models: &ModelContext, value| {
+                pool.checkout::<(), _>(ApiKey::for_models(models, "eng", config.oem), || Ok(value))
+                    .unwrap()
+            };
+            drop(checkout(&old, 1));
+            assert_eq!(*checkout(&resolve(), 2), 1);
+            std::fs::write(&english, b"new").unwrap();
+            let new = resolve();
+            assert_eq!(old.osd_revision, new.osd_revision);
+            assert_ne!(old.result_key(&config), new.result_key(&config));
+            assert_eq!(*checkout(&new, 2), 2);
+        };
+        check(&|| ModelContext::resolve_with_retry(&config, None).unwrap());
+        check(&|| ModelContext::for_provisioned(&config).unwrap());
+    }
+
+    #[test]
     fn should_keep_requested_engine_modes_separate_in_pool_keys() {
         let pool = ResourcePool::new(1);
         let key = |oem| ApiKey {
@@ -636,7 +692,7 @@ mod tests {
     }
 
     #[cfg(feature = "bundle-tessdata-eng")]
-    fn bundled_tessdata() -> tempfile::TempDir {
+    pub(super) fn bundled_tessdata() -> tempfile::TempDir {
         let directory = tempfile::tempdir().expect("temporary native model directory");
         std::fs::write(
             directory.path().join("eng.traineddata"),
@@ -651,9 +707,7 @@ mod tests {
     fn should_release_native_capacity_after_unavailable_engine_initialization() {
         let directory = bundled_tessdata();
         let path = directory.path().to_str().expect("UTF-8 native model path");
-        let pool = Arc::new(TesseractApiPool {
-            resources: ResourcePool::new(1),
-        });
+        let pool = TesseractApiPool::with_capacity(1);
         for unavailable in [0, 2] {
             let lstm = pool
                 .checkout(
@@ -689,9 +743,7 @@ mod tests {
 
     #[test]
     fn should_reject_invalid_engine_mode_before_native_initialization() {
-        let pool = Arc::new(TesseractApiPool {
-            resources: ResourcePool::new(1),
-        });
+        let pool = TesseractApiPool::with_capacity(1);
         assert!(matches!(
             pool.checkout(
                 &super::super::model_context::ModelContext::for_path(String::new(), 6).unwrap(),
@@ -736,6 +788,18 @@ mod tests {
         assert_eq!(*german, 2);
         let (checked_out, idle) = pool.counts();
         assert_eq!((checked_out, idle), (1, 0));
+    }
+
+    #[test]
+    fn alternating_keys_reuse_idle_handles_when_both_fit() {
+        let pool = ResourcePool::new(2);
+        drop(pool.checkout::<(), _>("eng", || Ok(1)).unwrap());
+        drop(pool.checkout::<(), _>("deu", || Ok(2)).unwrap());
+        assert_eq!(pool.counts(), (0, 2));
+        let english = pool
+            .checkout::<(), _>("eng", || panic!("English handle should be idle"))
+            .unwrap();
+        assert_eq!(*english, 1);
     }
 
     #[test]

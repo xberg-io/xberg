@@ -368,7 +368,12 @@ async fn extract_file_scoped(path: &Path, mime_type: &str, config: &ExtractionCo
     {
         match serialize_extraction_cache_entry(&result, lifecycle_generations_after) {
             Ok(data) => {
-                let _ = cache.set(&cache_key, data, path.to_str(), namespace, config.cache_ttl_secs);
+                let source = path.to_str().map(str::to_owned);
+                let namespace = namespace.map(str::to_owned);
+                let ttl = config.cache_ttl_secs;
+                publish_file_cache_when_validated(move || {
+                    let _ = cache.set(&cache_key, data, source.as_deref(), namespace.as_deref(), ttl);
+                });
             }
             Err(error) => {
                 tracing::warn!(
@@ -383,6 +388,18 @@ async fn extract_file_scoped(path: &Path, mime_type: &str, config: &ExtractionCo
     }
 
     Ok(result)
+}
+
+fn publish_file_cache_when_validated(write: impl FnOnce() + Send + 'static) {
+    let publish = move || {
+        if super::cacheability::can_publish_outer_result() {
+            write();
+        }
+    };
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    super::cacheability::defer_ocr_cache_write(publish);
+    #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+    publish();
 }
 
 #[derive(serde::Deserialize)]
@@ -599,6 +616,35 @@ pub(crate) async fn extract_with_candidates(
 
 #[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]
 mod tests {
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    #[tokio::test]
+    async fn file_cache_publication_waits_for_request_model_validation() {
+        use crate::core::extractor::cacheability;
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
+
+        let directory = tempfile::tempdir().unwrap();
+        let model = directory.path().join("eng.traineddata");
+        let published = Arc::new(AtomicBool::new(false));
+        for changed in [false, true] {
+            published.store(false, Ordering::Release);
+            std::fs::write(&model, b"one").unwrap();
+            cacheability::with_ocr_cancellation(None, async {
+                cacheability::request_model_digest(&model).unwrap();
+                let flag = Arc::clone(&published);
+                super::publish_file_cache_when_validated(move || flag.store(true, Ordering::Release));
+                assert!(!published.load(Ordering::Acquire));
+                if changed {
+                    std::fs::write(&model, b"two").unwrap();
+                }
+            })
+            .await;
+            assert_eq!(published.load(Ordering::Acquire), !changed);
+        }
+    }
+
     use super::*;
     use crate::cache::GenericCache;
     use crate::types::{ContentLayer, DocumentNode, DocumentStructure, GridCell, NodeContent, Table, TableGrid};
