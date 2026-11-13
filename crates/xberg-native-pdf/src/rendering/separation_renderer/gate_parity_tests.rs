@@ -942,3 +942,52 @@ fn exhausting_the_resource_scan_depth_requires_mask_headroom() {
         );
     }
 }
+
+fn shared_bridge_page(bind_next: bool) -> PdfDocument {
+    let mut forms = Vec::new();
+    for number in 5..65 {
+        let resources = format!("/Resources << /XObject << /Next {} 0 R >> >>", number + 1);
+        forms.push(transparency_form(number, &resources, "", ""));
+    }
+    forms.push(transparency_form(
+        65,
+        "/Resources << /XObject << /A 66 0 R /B 67 0 R >> >>",
+        "",
+        "",
+    ));
+    forms.push(transparency_form(
+        66,
+        "/Resources << /XObject << /Bridge 68 0 R >> >>",
+        "",
+        "",
+    ));
+    let next = if bind_next { "/Next 69 0 R" } else { "" };
+    let resources = format!("/Resources << /XObject << /Bridge 68 0 R {next} >> >>");
+    forms.push(transparency_form(67, &resources, "", ""));
+    forms.push(transparency_form(68, "", "", "/Next Do"));
+    forms.push(transparency_form(69, "/Resources << >>", "", ""));
+    let extras: Vec<_> = forms.iter().map(String::as_str).collect();
+    build_page_with(&format!("{CONTENT}\n% /F Do"), SPOT_A, "/BM /Multiply", &extras)
+}
+
+#[test]
+fn the_shared_bridge_memo_uses_its_inherited_resource_scope() {
+    let dpi = BUDGET_REQUESTED_DPI;
+    let live = one_ink_charge(dpi, 0);
+    assert_eq!(budgeted_dpi(&shared_bridge_page(false), live, dpi), Some(dpi));
+    assert_eq!(
+        budgeted_dpi(&shared_bridge_page(true), one_ink_charge(dpi, 1), dpi),
+        Some(dpi)
+    );
+
+    // Resource dictionaries iterate in hash order. Fresh documents exercise both
+    // cache population orders: the scope without /Next must never hide the other. ~keep
+    for _ in 0..32 {
+        let error = render_at_budgeted_dpi(&shared_bridge_page(true), live, dpi)
+            .expect_err("the bridge reaches the scan cap only in the scope that binds /Next");
+        assert!(
+            error.to_string().contains("security_limits.max_content_size"),
+            "{error}"
+        );
+    }
+}
