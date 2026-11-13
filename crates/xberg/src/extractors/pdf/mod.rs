@@ -466,14 +466,14 @@ fn extract_native_blocking(
         .unwrap_or(&[]);
     let raw_compatibility_signal = raw_pdf_needs_lopdf_compatibility_pass(&content);
     let compatibility_data = raw_compatibility_signal.then(|| extract_lopdf_compatibility_data(&content));
-    let mut native_document = crate::pdf::native::NativeDocument::open_bytes_with_passwords(&content, passwords)?;
-
+    let mut native_document = crate::pdf::native::NativeDocument::open_owned_bytes_with_passwords(content, passwords)?;
     let compatibility_data = match compatibility_data {
         Some(data) => Some(data),
         None if parsed_pdf_needs_lopdf_compatibility_pass(&native_document) => {
+            let source = std::mem::take(&mut native_document.doc.source_bytes);
             drop(native_document);
-            let data = extract_lopdf_compatibility_data(&content);
-            native_document = crate::pdf::native::NativeDocument::open_bytes_with_passwords(&content, passwords)?;
+            let data = extract_lopdf_compatibility_data(&source);
+            native_document = crate::pdf::native::NativeDocument::open_owned_bytes_with_passwords(source, passwords)?;
             Some(data)
         }
         None => None,
@@ -2838,11 +2838,17 @@ impl InternalDocumentExtractor for PdfExtractor {
 
     #[cfg(feature = "tokio-runtime")]
     async fn extract_path(&self, path: &Path, mime_type: &str, config: &ExtractionConfig) -> Result<InternalDocument> {
+        #[cfg(not(target_arch = "wasm32"))]
+        let bytes = {
+            let path = path.to_path_buf();
+            tokio::task::spawn_blocking(move || crate::core::io::open_file_bytes(&path))
+                .await
+                .map_err(|error| crate::XbergError::Other(format!("PDF source loading task failed: {error}")))??
+        };
+        #[cfg(target_arch = "wasm32")]
+        let bytes = crate::core::io::read_file_async(path).await?;
         #[cfg(feature = "pdf")]
         crate::pdf::native_text::set_current_pdf_path(Some(path.to_path_buf()));
-        // Async on native (non-blocking tokio::fs); sync fallback on wasm32 where tokio's `fs`
-        // feature is unavailable. See `core::io::read_file_async`. ~keep
-        let bytes = crate::core::io::read_file_async(path).await?;
         let result =
             crate::pdf::render::with_task_render_warnings(self.extract_core(&bytes, mime_type, config, Some(path)))
                 .await;
