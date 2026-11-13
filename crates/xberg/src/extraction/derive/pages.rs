@@ -652,23 +652,34 @@ fn reconcile_located_page_boundaries(
     unlocated: &[u32],
 ) -> Option<Vec<u32>> {
     let structure = metadata.pages.as_mut()?;
-    let original = structure.boundaries.as_ref()?;
-    if original.len() != pages.len() || original.iter().zip(pages).any(|(b, p)| b.page_number != p.page_number) {
-        return None;
-    }
     let original = structure.boundaries.take()?;
-    let (located, unlocated_pages): (Vec<_>, Vec<_>) = pages
+    let page_positions: std::collections::BTreeMap<_, _> = pages
         .iter()
-        .cloned()
-        .partition(|page| !unlocated.contains(&page.page_number));
-    let (ordered, remaining): (Vec<_>, Vec<_>) = original
+        .enumerate()
+        .map(|(index, page)| (page.page_number, index))
+        .collect();
+    let mut ordered = Vec::new();
+    let mut remaining = Vec::new();
+    let mut omitted = Vec::new();
+    for boundary in original {
+        match page_positions.get(&boundary.page_number) {
+            Some(&index) if !unlocated.contains(&boundary.page_number) => ordered.push((index, boundary)),
+            Some(&index) => remaining.push((index, boundary)),
+            None => omitted.push(boundary.page_number),
+        }
+    }
+    ordered.sort_by_key(|&(index, _)| index);
+    let (located, ordered): (Vec<_>, Vec<_>) = ordered
         .into_iter()
-        .partition(|boundary| !unlocated.contains(&boundary.page_number));
+        .map(|(index, boundary)| (pages[index].clone(), boundary))
+        .unzip();
     structure.boundaries = Some(ordered);
     let reconciled = reconcile_page_boundaries(metadata, content, Some(&located));
     let structure = metadata.pages.as_mut()?;
-    let boundaries = structure.boundaries.as_mut()?;
-    let mut omitted = Vec::new();
+    let mut boundaries = structure.boundaries.take().unwrap_or_else(|| {
+        omitted.extend(located.iter().map(|page| page.page_number));
+        Vec::new()
+    });
     boundaries.retain(|boundary| {
         let usable = content.get(boundary.byte_start..boundary.byte_end).is_some();
         if !usable {
@@ -677,14 +688,14 @@ fn reconcile_located_page_boundaries(
         usable
     });
     let reconciled_count = if reconciled { boundaries.len() } else { 0 };
-    for (boundary, page) in remaining.into_iter().zip(&unlocated_pages) {
-        if usable_unlocated_boundary(content, &boundary, &page.content) {
+    for (index, boundary) in remaining {
+        if usable_unlocated_boundary(content, &boundary, &pages[index].content) {
             boundaries.push(boundary);
         } else {
             omitted.push(boundary.page_number);
         }
     }
-    let overlapping = overlapping_page_ranges(boundaries, reconciled_count);
+    let overlapping = overlapping_page_ranges(&boundaries, reconciled_count);
     let mut index = 0;
     boundaries.retain(|boundary| {
         let keep = !overlapping.contains(&index);
@@ -694,12 +705,10 @@ fn reconcile_located_page_boundaries(
         }
         keep
     });
-    if boundaries.is_empty() {
-        structure.boundaries = None;
-    } else {
-        boundaries.sort_by_key(|boundary| boundary.page_number);
-    }
+    boundaries.sort_by_key(|boundary| boundary.page_number);
+    structure.boundaries = (!boundaries.is_empty()).then_some(boundaries);
     omitted.sort_unstable();
+    omitted.dedup();
     Some(omitted)
 }
 
@@ -1237,6 +1246,30 @@ mod plain_page_rerender_tests {
             content.get(boundaries[1].byte_start..boundaries[1].byte_end),
             Some("two")
         );
+    }
+
+    #[test]
+    fn a_page_range_is_repaired_when_another_page_has_no_boundary() {
+        let mut doc = doc_with(vec![page(1, "one"), page(2, "missing")], &[]);
+        set_boundaries(&mut doc, &[(1, 0, 999)]);
+        let pages = derive(&mut doc, "one");
+        assert_eq!(pages[1].content, "missing");
+        assert_eq!(boundary_pages(&doc), vec![1]);
+        assert_ranges(&doc, "one", &pages[..1]);
+        assert!(!warned(&doc));
+    }
+
+    #[test]
+    fn an_exact_out_of_order_range_survives_an_ambiguous_ordered_match() {
+        let content = "two\n\none\n\none";
+        for ranges in [[(1, 5, 8), (2, 0, 3)], [(2, 0, 3), (1, 5, 8)]] {
+            let mut doc = doc_with(vec![page(1, "one"), page(2, "two")], &[]);
+            set_boundaries(&mut doc, &ranges);
+            let pages = derive(&mut doc, content);
+            assert_eq!(boundary_pages(&doc), vec![2], "input ranges: {ranges:?}");
+            assert_ranges(&doc, content, &pages[1..]);
+            assert!(warned(&doc));
+        }
     }
 
     #[test]
