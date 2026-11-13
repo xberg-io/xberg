@@ -4,6 +4,7 @@ setup() {
 	[ -z "${XBERG_EXPECTED_BASH_MAJOR_MINOR:-}" ] || [[ "$BASH_VERSION" == "$XBERG_EXPECTED_BASH_MAJOR_MINOR".* ]]
 	bats_load_library xberg-bats
 	xberg_setup
+	export XBERG_WORK="$(cd "$XBERG_WORK" && pwd -P)"
 	REPOSITORY_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd -P)"
 	export FIXTURE_ROOT="$XBERG_WORK/fixture repository"
 	mkdir -p "$FIXTURE_ROOT/scripts/ci/fixtures/csharp-smoke" "$FIXTURE_ROOT/scripts/ci/fixtures/java-smoke" \
@@ -12,7 +13,8 @@ setup() {
 	cp "$REPOSITORY_ROOT"/scripts/ci/smoke-test-musl-*.sh "$REPOSITORY_ROOT/scripts/ci/smoke-test-php-debian12.sh" "$FIXTURE_ROOT/scripts/ci/"
 	for file in scripts/ci/fixtures/musl-python-smoke.pdf scripts/ci/fixtures/csharp-smoke/Smoke.csproj \
 		scripts/ci/fixtures/java-smoke/Smoke.java packages/java/pom.xml packages/elixir/lib/xberg/native.ex \
-		scripts/ci/smoke_test_elixir_nif.exs scripts/ci/smoke_test_node_binding.js scripts/ci/smoke_test_python_wheel.py crates/xberg-node/index.js; do
+		scripts/ci/smoke_test_elixir_nif.exs scripts/ci/smoke_test_node_binding.js scripts/ci/smoke_test_python_wheel.py crates/xberg-node/index.js \
+		crates/xberg-node/binding.cjs; do
 		printf 'fixture bytes\n' >"$FIXTURE_ROOT/$file"
 	done
 	printf 'native bytes\n' >"$XBERG_WORK/native/libxberg_ffi.so"
@@ -70,6 +72,7 @@ assert_container() {
 	xberg_assert_status 0
 	assert_container alpine:3.24.3 'node /smoke/smoke_test_node_binding.js /smoke/index.js /fixture.pdf'
 	grep -Fxq 'NAPI_RS_NATIVE_LIBRARY_PATH=/native/xberg.node' "$XBERG_TRACE"
+	grep -Fxq "$FIXTURE_ROOT/crates/xberg-node/binding.cjs:/smoke/binding.cjs:ro" "$XBERG_TRACE"
 	grep -Fxq "$XBERG_WORK/native:/native:ro" "$XBERG_TRACE"
 	grep -Fq 'apk add --no-cache --upgrade libstdc++' "$XBERG_TRACE"
 }
@@ -166,5 +169,13 @@ assert_container() {
 	run_native_smoke node-binding
 	xberg_assert_status 1
 	xberg_assert_output_contains 'napi-rs index.js missing'
+	xberg_assert_trace_empty
+}
+
+@test "Node smoke should reject a missing CommonJS binding before invoking Docker" {
+	rm "$FIXTURE_ROOT/crates/xberg-node/binding.cjs"
+	run_native_smoke node-binding
+	xberg_assert_status 1
+	xberg_assert_output_contains 'napi-rs binding.cjs missing'
 	xberg_assert_trace_empty
 }

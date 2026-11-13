@@ -51,7 +51,6 @@ PC
 	read -r -a flags <<<"$output"
 	[ "${flags[*]}" = "-I/example/heif -I/example/sharpyuv -lheif" ]
 
-
 }
 
 @test "install_linux should_install_sharpyuv_development_metadata_for_cached_libheif" {
@@ -213,7 +212,6 @@ run_cache_promotion() {
 	[ "$(cat "$LIBHEIF_PREFIX/lib/libheif.so.1")" = original ]
 }
 
-
 @test "install_linux should reject external header symlinks before privileged promotion" {
 	prepare_cache_candidate
 	printf '%s\n' original >"$LIBHEIF_PREFIX/include/libheif/heif.h"
@@ -282,7 +280,7 @@ run_cache_promotion() {
 	xberg_stub sudo 'printf "%s\n" "$@" >>"$XBERG_TRACE"; exit 1'
 	xberg_stub ldd 'echo "unexpected ldd invocation"; echo "libx265.so.215 => /cache/lib/libx265.so.215 (0x123)"'
 	local metadata
-	for metadata in 		"(NEEDED) Shared library: [$CACHE_CANDIDATE/lib/libx265.so.215]" 		'(NEEDED) Shared library: [../cache/libx265.so.215]' 		'(NEEDED) Shared library: [$ORIGIN]' 		'0x123 (AUDIT) Audit library: [/cache/audit.so]' 		'0x123 (DEPAUDIT) Dependency audit library: [/cache/audit.so]' 		'0x123 (FILTER) Filter library: [/cache/filter.so]' 		'0x123 (AUXILIARY) Auxiliary library: [/cache/aux.so]' 		'  INTERP 0x123 0x123'; do
+	for metadata in "(NEEDED) Shared library: [$CACHE_CANDIDATE/lib/libx265.so.215]" '(NEEDED) Shared library: [../cache/libx265.so.215]' '(NEEDED) Shared library: [$ORIGIN]' '0x123 (AUDIT) Audit library: [/cache/audit.so]' '0x123 (DEPAUDIT) Dependency audit library: [/cache/audit.so]' '0x123 (FILTER) Filter library: [/cache/filter.so]' '0x123 (AUXILIARY) Auxiliary library: [/cache/aux.so]' '  INTERP 0x123 0x123'; do
 		xberg_stub readelf 'echo " Type: DYN (Shared object file)"' 'echo " (SONAME) Library soname: [libheif.so.1]"' \
 			"echo '$metadata'"
 		run_cache_check
