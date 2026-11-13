@@ -2,6 +2,7 @@ use crate::core::config::{ExtractionConfig, PostProcessorConfig};
 use crate::plugins::{Plugin, PostProcessor, ProcessingStage, register_post_processor, unregister_post_processor};
 use crate::types::ExtractedDocument;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 const LIMIT_SECS: u64 = 1;
@@ -13,6 +14,7 @@ const SKIPPED: &str = "entry-deadline-skipped";
 struct DeadlineProcessor {
     name: &'static str,
     stage: ProcessingStage,
+    observed_deadline: Arc<AtomicBool>,
 }
 
 impl Plugin for DeadlineProcessor {
@@ -41,6 +43,11 @@ impl PostProcessor for DeadlineProcessor {
         }
         assert!(token.time_limit_reached(), "entry point never armed the deadline");
         assert!(!token.stop_requested(), "the deadline must fire before timeout grace");
+        assert!(
+            !token.is_cancelled(),
+            "the outer timeout must not have cancelled this processor"
+        );
+        self.observed_deadline.store(true, Ordering::Relaxed);
         Ok(())
     }
 }
@@ -48,8 +55,13 @@ impl PostProcessor for DeadlineProcessor {
 struct Registered(&'static str);
 
 impl Registered {
-    fn new(name: &'static str, stage: ProcessingStage) -> Self {
-        register_post_processor(Arc::new(DeadlineProcessor { name, stage })).unwrap();
+    fn new(name: &'static str, stage: ProcessingStage, observed_deadline: &Arc<AtomicBool>) -> Self {
+        register_post_processor(Arc::new(DeadlineProcessor {
+            name,
+            stage,
+            observed_deadline: Arc::clone(observed_deadline),
+        }))
+        .unwrap();
         Self(name)
     }
 }
@@ -61,8 +73,9 @@ impl Drop for Registered {
 }
 
 async fn assert_entry_point_deadline(file: bool) {
-    let _wait = Registered::new(WAIT, ProcessingStage::Early);
-    let _skipped = Registered::new(SKIPPED, ProcessingStage::Late);
+    let observed_deadline = Arc::new(AtomicBool::new(false));
+    let _wait = Registered::new(WAIT, ProcessingStage::Early, &observed_deadline);
+    let _skipped = Registered::new(SKIPPED, ProcessingStage::Late, &observed_deadline);
     let config = ExtractionConfig {
         extraction_timeout_secs: Some(LIMIT_SECS),
         use_cache: false,
@@ -82,14 +95,26 @@ async fn assert_entry_point_deadline(file: bool) {
         Box::pin(super::super::extract_file(&path, Some("text/plain"), &config)).await
     } else {
         Box::pin(super::super::extract_bytes(input.as_bytes(), "text/plain", &config)).await
-    }
-    .expect("deadline returns the available document");
+    };
     let elapsed = started.elapsed();
 
     assert!(
         elapsed >= Duration::from_secs(LIMIT_SECS) && elapsed < FAILSAFE,
         "{elapsed:?}"
     );
+    assert!(
+        observed_deadline.load(Ordering::Relaxed),
+        "processor must observe the armed deadline before the outer timeout returns: {result:?}"
+    );
+    // File extraction can yield after the processor observes the deadline. With no active
+    // page loop, the outer timeout can then return an error instead of the document. ~keep
+    let result = match result {
+        Err(crate::XbergError::Timeout { limit_ms, .. }) if file => {
+            assert_eq!(limit_ms, LIMIT_SECS * 1000);
+            return;
+        }
+        other => other.expect("deadline returns the available document"),
+    };
     assert_eq!(result.content.trim(), input);
     assert!(
         result.processing_warnings.iter().any(|warning| {
