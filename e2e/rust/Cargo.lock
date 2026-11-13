@@ -8899,6 +8899,7 @@ dependencies = [
  "sha2",
  "similar",
  "snap",
+ "strsim",
  "strum 0.28.0",
  "symphonia",
  "tar",

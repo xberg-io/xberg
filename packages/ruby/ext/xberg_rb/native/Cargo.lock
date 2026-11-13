@@ -9029,6 +9029,7 @@ dependencies = [
  "simdutf8",
  "similar",
  "snap",
+ "strsim",
  "strum 0.28.0",
  "symphonia",
  "tar",
