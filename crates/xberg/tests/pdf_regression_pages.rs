@@ -366,6 +366,45 @@ fn assert_regression_page_has_script(file_name: &str, expected: &str) {
     );
 }
 
+/// The Type 1C fonts of the IRS class-life table page have no ToUnicode map and name their
+/// ligature glyph `f_i` in `/Differences`: every word set with it keeps both letters (#2689). A
+/// refreshed snapshot can take in a lost `i`, so each word is asserted by name. ~keep
+#[test]
+fn regression_page_keeps_both_letters_of_every_fi_ligature_word() {
+    if switch(SKIP_VAR) {
+        assert!(std::env::var_os("CI").is_none(), "{SKIP_VAR}=1 must not be set in CI");
+        eprintln!("Skipping regression page: {SKIP_VAR}=1 (local opt-out)");
+        return;
+    }
+    let file_name = "irs-p946--2024-p105.pdf";
+    let page = get_test_documents_dir().join("pdf/regression_pages").join(file_name);
+    let (_, content) = extract_all(&[page]).pop().expect("one extracted page");
+    let content = content.unwrap_or_else(|error| panic!("{file_name}: {error}. {FETCH_HINT}"));
+    let count = |word: &str| {
+        content
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| *w == word)
+            .count()
+    };
+    let words = [
+        ("defined", "defned"),
+        ("office", "offce"),
+        ("fixed", "fxed"),
+        ("classified", "classifed"),
+        ("qualified", "qualifed"),
+        ("rectification", "rectifcation"),
+        ("amplification", "amplifcation"),
+    ];
+    let read: Vec<String> = words
+        .iter()
+        .map(|(whole, cut)| format!("{whole}={} {cut}={}", count(whole), count(cut)))
+        .collect();
+    assert!(
+        words.iter().all(|(whole, cut)| count(whole) > 0 && count(cut) == 0),
+        "{file_name}: an fi word lost its i: {read:?}"
+    );
+}
+
 #[test]
 fn regression_page_keeps_negative_exponent_with_its_prose_base() {
     assert_regression_page_has_script("plos-journal.pcbi.1012696-p8.pdf", "5.0 × 10<sup>−4</sup>.");

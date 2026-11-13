@@ -758,10 +758,11 @@ end
     // Note: U+FFFD (replacement character) mappings are intentionally rejected per PDF Spec compliance.
     // CMaps with <FFFD> <FFFD> entries are treated as "unmapped" and fall through to Priority 2.
     // This is intentional behavior per ENDASH_ISSUE_ROOT_CAUSE.md to handle broken PDF tooling.
-    // The 0xFFFE -> 0xFFFE mapping works fine though (not the replacement character) ~keep
+    // A font mapping to U+FFFE has a glyph without a Unicode value, like one that maps to U+FFFD.
+    // U+FFFE is the extractor's own symbol-loss marker, so a font never writes it. ~keep
     assert_eq!(
         font.char_to_unicode(0xFFFE),
-        Some("\u{FFFE}".to_string()),
-        "Noncharacter marker"
+        Some("\u{FFFD}".to_string()),
+        "A font mapping to U+FFFE is a glyph without a Unicode value"
     );
 }

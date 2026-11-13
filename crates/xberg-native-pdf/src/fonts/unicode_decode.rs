@@ -140,6 +140,9 @@ pub(crate) fn fallback_char_to_unicode(char_code: u32) -> String {
         if (0xE000..=0xF8FF).contains(&char_code) {
             tracing::trace!("Private Use Area character: U+{:04X}", char_code);
         }
+        if ch == LOST_SYMBOL_GLYPH_MARKER {
+            return "\u{FFFD}".to_string();
+        }
         ch.to_string()
     } else {
         tracing::trace!("Character code 0x{:04X} is not a valid Unicode code point", char_code);
@@ -554,6 +557,23 @@ fn resolve_char(font: &FontInfo, code: u32, policy: DecodePolicy, unmapped_type3
     }
 }
 
+/// The marker a preserved decode leaves for a glyph without a Unicode value when its font is a
+/// symbol font ([`FontInfo::is_symbol_font`]): a noncharacter outside the right-to-left blocks, so
+/// no bidi pass reorders a row that starts with it (U+FDD0 to U+FDEF sit inside Arabic
+/// Presentation Forms-A). A font program can decode a glyph to a noncharacter too (a ToUnicode
+/// entry, a CID read as its own code point: U+FFFF is common), so the extractor keeps this one for
+/// itself: [`FontInfo::char_to_unicode`] and [`fallback_char_to_unicode`] read a U+FFFE as a glyph
+/// without a Unicode value, and the content-stream readers drop it. Every other preserved loss
+/// stays U+FFFD. ~keep
+pub const LOST_SYMBOL_GLYPH_MARKER: char = '\u{FFFE}';
+
+/// Whether `c` is a marker a preserved decode leaves for a glyph without a Unicode value: U+FFFD,
+/// or [`LOST_SYMBOL_GLYPH_MARKER`] for a symbol font.
+#[must_use]
+pub const fn is_lost_glyph_marker(c: char) -> bool {
+    c == '\u{FFFD}' || c == LOST_SYMBOL_GLYPH_MARKER
+}
+
 pub(crate) fn decode_text_to_unicode(
     bytes: &[u8],
     font: Option<&FontInfo>,
@@ -572,7 +592,27 @@ pub(crate) fn decode_text_to_unicode(
         decode_latin1_fallback(bytes)
     };
 
-    filter_decoded_text(&raw_result, policy)
+    filter_decoded_text(&mark_symbol_font_losses(raw_result, font, policy), policy)
+}
+
+/// Text the content stream authors (a UTF-8 literal, `/ActualText`) without the marker: a PDF has
+/// no way to write the extractor's symbol-loss marker, so a U+FFFE in such text is dropped. ~keep
+pub(crate) fn without_symbol_marker(text: &str) -> std::borrow::Cow<'_, str> {
+    if text.contains(LOST_SYMBOL_GLYPH_MARKER) {
+        std::borrow::Cow::Owned(text.replace(LOST_SYMBOL_GLYPH_MARKER, ""))
+    } else {
+        std::borrow::Cow::Borrowed(text)
+    }
+}
+
+/// A preserved U+FFFD of a symbol font becomes [`LOST_SYMBOL_GLYPH_MARKER`]. Runs after the
+/// drop branch of each decoder, so a decode that drops unmapped glyphs never sees it. ~keep
+pub(crate) fn mark_symbol_font_losses(decoded: String, font: Option<&FontInfo>, policy: DecodePolicy) -> String {
+    if policy.preserve_unmapped && font.is_some_and(FontInfo::is_symbol_font) && decoded.contains('\u{FFFD}') {
+        decoded.replace('\u{FFFD}', &LOST_SYMBOL_GLYPH_MARKER.to_string())
+    } else {
+        decoded
+    }
 }
 
 /// Decode `bytes` for a simple (non-Type0) font via its precomputed
@@ -790,6 +830,92 @@ mod tests {
             cjk_substitution: None,
             embedded_cid_map: None,
         }
+    }
+
+    fn symbol_font(base_font: &str) -> FontInfo {
+        FontInfo {
+            base_font: base_font.to_string(),
+            ..utf8_cmap_font()
+        }
+    }
+
+    /// A preserved loss of a symbol font is the symbol marker; a text font, a decode that drops
+    /// losses, and a font-less decode keep U+FFFD.
+    #[test]
+    fn a_preserved_loss_of_a_symbol_font_is_the_symbol_marker() {
+        let preserve = DecodePolicy {
+            preserve_unmapped: true,
+            ..DecodePolicy::default()
+        };
+        let lost = "a\u{FFFD}b \u{FFFD}\u{FFFD}".to_string();
+        for name in [
+            "ABCDEF+Wingdings-Regular",
+            "Webdings",
+            "ZapfDingbats",
+            "SymbolMT",
+            "Marlett",
+        ] {
+            assert_eq!(
+                mark_symbol_font_losses(lost.clone(), Some(&symbol_font(name)), preserve),
+                format!("a{LOST_SYMBOL_GLYPH_MARKER}b {LOST_SYMBOL_GLYPH_MARKER}{LOST_SYMBOL_GLYPH_MARKER}"),
+                "{name}"
+            );
+        }
+        assert_eq!(
+            mark_symbol_font_losses(lost.clone(), Some(&symbol_font("ABCDEF+Calibri")), preserve),
+            lost
+        );
+        assert_eq!(
+            mark_symbol_font_losses(lost.clone(), Some(&symbol_font("Wingdings")), DecodePolicy::default()),
+            lost
+        );
+        assert_eq!(mark_symbol_font_losses(lost.clone(), None, preserve), lost);
+        assert_eq!(LOST_SYMBOL_GLYPH_MARKER.len_utf8(), '\u{FFFD}'.len_utf8());
+    }
+
+    /// A glyph a font program decodes to the marker noncharacter is a lost glyph of that font and
+    /// never the extractor's symbol marker, under both policies; U+FFFF, which a font can decode a
+    /// glyph to as well, passes as text (public docling.pdf decodes its ligatures to it). ~keep
+    #[test]
+    fn a_noncharacter_a_font_decodes_to_is_a_lost_glyph_and_never_the_marker() {
+        let cmap = b"1 begincodespacerange <00> <FF> endcodespacerange \
+            3 beginbfchar <41> <FFFE> <42> <0042> <43> <FFFF> endbfchar";
+        let font = FontInfo {
+            to_unicode: Some(crate::fonts::LazyCMap::new(cmap.to_vec())),
+            ..utf8_cmap_font()
+        };
+        let preserve = DecodePolicy {
+            preserve_unmapped: true,
+            ..DecodePolicy::default()
+        };
+        assert_eq!(
+            decode_text_to_unicode(b"ABC", Some(&font), preserve, None),
+            "\u{FFFD}B\u{FFFF}",
+            "a preserved decode keeps the lost glyph as U+FFFD and the U+FFFF as text"
+        );
+        assert_eq!(
+            decode_text_to_unicode(b"ABC", Some(&font), DecodePolicy::default(), None),
+            "B\u{FFFF}",
+            "a dropping decode drops the lost glyph"
+        );
+        let symbol = FontInfo {
+            base_font: "ABCDEF+Wingdings-Regular".to_string(),
+            ..font
+        };
+        assert_eq!(
+            decode_text_to_unicode(b"ABC", Some(&symbol), preserve, None),
+            format!("{LOST_SYMBOL_GLYPH_MARKER}B\u{FFFF}"),
+            "the marker in a decode is the extractor's, for the symbol font's lost glyph"
+        );
+    }
+
+    /// A row that starts with the symbol marker is not right-to-left text: a marker inside an
+    /// Arabic block made the span pass reverse `<marker>AB` to `BA`. ~keep
+    #[test]
+    fn the_symbol_marker_is_outside_the_right_to_left_blocks() {
+        assert!(!crate::text::rtl_detector::is_rtl_text(LOST_SYMBOL_GLYPH_MARKER as u32));
+        assert!(!crate::text::bidi::looks_rtl(&format!("{LOST_SYMBOL_GLYPH_MARKER}AB")));
+        assert!(!crate::text::bidi::looks_rtl(&format!("{}AB", '\u{FFFD}')));
     }
 
     /// UTF-8-CMap codes are lead-byte-width segmented; an invalid lead byte

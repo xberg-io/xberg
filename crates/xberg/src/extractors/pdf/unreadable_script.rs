@@ -164,7 +164,7 @@ fn unreadable_scripts(text: &str, languages: &[String]) -> Option<Vec<Script>> {
 /// only what the cluster table calls a base or a sign.
 fn is_script_letter(character: char) -> bool {
     !character.is_whitespace()
-        && character != super::unmapped_glyphs::LOST_GLYPH_MARKER
+        && !super::unmapped_glyphs::is_lost_glyph(character)
         && !character.is_numeric()
         && !character.is_ascii_punctuation()
         && !matches!(character as u32, 0x00A0..=0x00BF | 0x2000..=0x206F | 0x3000..=0x3003)
@@ -502,7 +502,7 @@ const MINOR_SCRIPT_SHARE: f64 = 0.10;
 /// reader of it. A substantial script without checkable structure leaves the page to OCR.
 fn judged_scripts(text: &str, languages: &[String]) -> Option<Vec<Script>> {
     let counts = uncovered_script_counts(text, languages)?;
-    if text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER) {
+    if text.contains(super::unmapped_glyphs::is_lost_glyph) {
         return Some(counts.into_iter().map(|(script, _)| script).collect());
     }
     structured_scripts(text, counts)
@@ -559,7 +559,7 @@ fn layer_is_lost(text: &str, languages: &[String]) -> bool {
                 .is_some_and(|script| structured.contains(&script) && part_of(script, *character) != Part::Other)
         })
         .count();
-    let markers = text.matches(super::unmapped_glyphs::LOST_GLYPH_MARKER).count();
+    let markers = text.matches(super::unmapped_glyphs::is_lost_glyph).count();
     !structured.is_empty()
         && (structured.iter().any(|script| !clusters_are_valid(text, *script))
             || markers as f64 > MAX_MARKER_SHARE * (markers + letters) as f64)
@@ -728,7 +728,7 @@ pub(super) fn retain_unreadable_script_pages(
             let (scripts, stage) = judge_page(text, &route)?;
             Some((
                 scan,
-                (page, scripts, text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER)),
+                (page, scripts, text.contains(super::unmapped_glyphs::is_lost_glyph)),
                 stage,
             ))
         })
@@ -2300,6 +2300,48 @@ mod tests {
         );
         let (decision, _) = run(&[&marked], ONE_PAGE, &config_with(&["eng"]));
         assert!(decision.failing_pages.is_empty());
+    }
+
+    #[test]
+    fn a_lost_symbol_glyph_marks_a_layer_like_any_lost_glyph() {
+        let greek_gibberish = "αβχδ εφγη ικλμ νοπθ ρστυ ωξψ ".repeat(6);
+        assert!(
+            judged_scripts(&greek_gibberish, &langs(&["eng"])).is_none(),
+            "control: no marker, no script evidence alone"
+        );
+        for marker in [
+            super::super::unmapped_glyphs::LOST_GLYPH_MARKER,
+            super::super::unmapped_glyphs::LOST_SYMBOL_GLYPH_MARKER,
+        ] {
+            let marked = format!("{greek_gibberish}{marker}");
+            assert!(
+                judged_scripts(&marked, &langs(&["eng"])).is_some(),
+                "a page with {marker:?} is kept on script evidence"
+            );
+        }
+    }
+
+    #[test]
+    fn a_lost_glyph_of_either_kind_is_no_letter_of_any_script() {
+        let greek = "αβχδ εφγη ικλμ νοπθ ρστυ ωξψ ".repeat(2);
+        let letters = greek.chars().filter(|c| c.is_alphabetic()).count();
+        let expected = Some(vec![(Script::Greek, letters)]);
+        assert_eq!(
+            uncovered_script_counts(&greek, &langs(&["eng"])),
+            expected,
+            "control: the letters alone"
+        );
+        for marker in [
+            super::super::unmapped_glyphs::LOST_GLYPH_MARKER,
+            super::super::unmapped_glyphs::LOST_SYMBOL_GLYPH_MARKER,
+        ] {
+            let padded = format!("{greek}{}", marker.to_string().repeat(letters));
+            assert_eq!(
+                uncovered_script_counts(&padded, &langs(&["eng"])),
+                expected,
+                "a run of {marker:?} as long as the text adds no letter to any script"
+            );
+        }
     }
 
     const KHMER_UNMARKED: &str = "ខ្ញុំ ស្រលាញ់ ប្រទេស កម្ពុជា សួស្តី ភ្នំពេញ ក្រុង សៀវភៅ សាលារៀន";

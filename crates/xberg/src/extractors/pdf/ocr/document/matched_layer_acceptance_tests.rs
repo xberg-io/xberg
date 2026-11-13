@@ -1,6 +1,6 @@
 use super::MatchedLayerOccurrences;
 use crate::extractors::pdf::ocr::document::{
-    finish_mixed_layer_prepend, flat_ocr_page_document, layer_lines_to_put_first,
+    MisreadOcrRow, PlainOcrRows, finish_mixed_layer_prepend, flat_ocr_page_document, layer_lines_to_put_first,
     merge_structured_ocr_pages_into_internal_document, text_with_layer_first,
 };
 use crate::ocr_metadata_keys::{OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY};
@@ -97,8 +97,15 @@ fn selected_read(pdf: &xberg_native_pdf::PdfDocument) -> ExtractedDocument {
 fn mixed_prepend_keeps_769_once_and_preserves_a_standalone_ocr_cell() {
     let pdf = source();
     let read = selected_read(&pdf);
-    let mut first = layer_lines_to_put_first(LAYER, &read.content, true, &Default::default(), None)
-        .expect("the native row is absent from the selected OCR read");
+    let mut first = layer_lines_to_put_first(
+        LAYER,
+        &read.content,
+        true,
+        &Default::default(),
+        None,
+        PlainOcrRows::of_page(None, None),
+    )
+    .expect("the native row is absent from the selected OCR read");
     first.lines = format!("  {}\n\n  \n\n  Tail", first.lines);
     let expected_prefix = "  NativeOnly\n\n  \n\n  Tail";
     let count = |text: &str, token: &str| text.split_whitespace().filter(|word| *word == token).count();
@@ -106,8 +113,14 @@ fn mixed_prepend_keeps_769_once_and_preserves_a_standalone_ocr_cell() {
 
     let proof =
         MatchedLayerOccurrences::capture(&pdf, 0, LAYER, &read).expect("selected OCR geometry proves the match");
-    let mut flat = read.content;
-    let mut structured = flat_ocr_page_document("");
+    let mut flat = format!("{}\nNativeAlternate", read.content);
+    let mut structured = flat_ocr_page_document("NativeAlternate");
+    first.misread_ocr_rows.push(MisreadOcrRow {
+        page: None,
+        line: None,
+        bbox: None,
+        key: "nativealternate".into(),
+    });
     structured.tables = read.tables;
     proof.trim_prepend(&mut first, &flat, &structured, 1);
     finish_mixed_layer_prepend(&mut flat, Some(&mut structured), &first);
@@ -122,7 +135,7 @@ fn mixed_prepend_keeps_769_once_and_preserves_a_standalone_ocr_cell() {
         &ahash::AHashMap::from([(1, structured)]),
     );
     for output in [flat, crate::rendering::render_plain(&merged)] {
-        for token in ["769", "NativeOnly", "OcrOnly"] {
+        for token in ["769", "NativeOnly", "OcrOnly", "NativeAlternate"] {
             assert_eq!(count(&output, token), 1, "{token} in {output:?}");
         }
     }
@@ -133,6 +146,8 @@ fn mixed_prepend_keeps_769_once_and_preserves_a_standalone_ocr_cell() {
 fn unmatched_prepend_preserves_legacy_flat_and_structured_bytes() {
     let first = crate::extractors::pdf::ocr::document::LayerFirst {
         lines: "  Native  row\n  indented\n\n  Second paragraph  ".into(),
+        lost_glyphs: 0,
+        misread_ocr_rows: Vec::new(),
     };
     let mut flat = "  OCR text\nwith spacing  \n".to_owned();
     let mut structured = flat_ocr_page_document(&flat);
