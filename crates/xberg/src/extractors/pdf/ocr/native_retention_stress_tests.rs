@@ -2534,16 +2534,18 @@ fn boxed_duplicate_misread_leaves_only_its_own_flat_and_structured_row() {
     let native_refs: Vec<_> = native.iter().map(String::as_str).collect();
     let boxes = super::page_boxes(&native_refs, &rows);
 
-    for ambiguous in [false, true] {
+    for (scenario, first_box, omit_matched) in [
+        ("distinct", Some(rows[0].bbox), false),
+        ("coincident", Some(rows[4].bbox), false),
+        ("only unboxed duplicate remains", None, true),
+    ] {
         let mut doc = InternalDocument::new("pdf");
         for (index, (text, row)) in read.lines().zip(&rows).enumerate() {
+            if omit_matched && index == 4 {
+                continue;
+            }
             let mut element = InternalElement::text(ElementKind::Paragraph, text, 0);
-            let bbox = if ambiguous && index == 0 {
-                rows[4].bbox
-            } else {
-                row.bbox
-            };
-            element.bbox = Some(test_row_bbox(bbox));
+            element.bbox = if index == 0 { first_box } else { Some(row.bbox) }.map(test_row_bbox);
             doc.push_element(element);
         }
         let first = layer_lines_to_put_first(
@@ -2557,22 +2559,19 @@ fn boxed_duplicate_misread_leaves_only_its_own_flat_and_structured_row() {
         .expect("the native measure row is restored");
         assert_eq!(first.lines, native[3]);
         let mut expected = doc.elements.clone();
-        if !ambiguous {
+        let mut expected_flat: Vec<_> = read.lines().collect();
+        if scenario == "distinct" {
             expected.remove(4);
+            expected_flat.remove(4);
         }
         let mut flat = read.clone();
         finish_mixed_layer_prepend(&mut flat, Some(&mut doc), &first);
-        let expected_flat = expected
-            .iter()
-            .map(|element| element.text.as_str())
-            .collect::<Vec<_>>()
-            .join("\n");
         assert_eq!(
             flat,
-            format!("{}\n\n{expected_flat}", native[3]),
-            "ambiguous: {ambiguous}"
+            format!("{}\n\n{}", native[3], expected_flat.join("\n")),
+            "{scenario}"
         );
-        assert_eq!(doc.elements[1..], expected, "ambiguous: {ambiguous}");
+        assert_eq!(doc.elements[1..], expected, "{scenario}");
     }
 }
 

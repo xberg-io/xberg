@@ -1937,12 +1937,14 @@ fn unique_structured_misread(
     let mut found = candidates.iter().copied().filter(|&(index, _)| {
         let element = &doc.elements[index];
         row.page.is_none_or(|page| element.page == Some(page))
-            && row.bbox.zip(element.bbox).is_none_or(|(line, block)| {
-                line.owns(&LineBox {
-                    left: block.x0 as f32,
-                    top: block.y0 as f32,
-                    right: block.x1 as f32,
-                    bottom: block.y1 as f32,
+            && row.bbox.is_none_or(|line| {
+                element.bbox.is_some_and(|block| {
+                    line.owns(&LineBox {
+                        left: block.x0 as f32,
+                        top: block.y0 as f32,
+                        right: block.x1 as f32,
+                        bottom: block.y1 as f32,
+                    })
                 })
             })
     });
