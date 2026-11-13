@@ -433,6 +433,18 @@ def test_glibc_ffi_jobs_build_lzma_statically() -> None:
         assert "contains(matrix.target, '-linux-gnu')" in setup_block, job
 
 
+def test_windows_c_ffi_release_uses_the_reviewed_vs2022_runner() -> None:
+    block = job_block(WORKFLOW.read_text(), "c-ffi-libraries")
+    [runner] = re.findall(
+        r"(?m)^          - \{ os: ([^,]+), platform: windows-x86_64, target: x86_64-pc-windows-msvc \}$",
+        block,
+    )
+    assert runner == "windows-2022"
+    assert "runs-on: ${{ matrix.os }}" in block
+    assert 'vendor-windows-native-closure.ps1" -Artifact "$STAGE"' in block
+    assert '-NativeGlob "xberg_ffi.dll" -ArtifactKind raw -RequireCrtNotices' in block
+
+
 def test_go_release_matrix_covers_every_generated_setup_platform() -> None:
     block = job_block(WORKFLOW.read_text(), "go-ffi-libraries")
     expected = {
