@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::super::script_retry::ModelSet;
+use super::super::script_retry::{ModelSet, RetryModelFiles};
 use super::{ResourceLease, ResourcePool, lease_failure_message, new_engine};
 use crate::ocr::error::OcrError;
 use xberg_tesseract::TesseractAPI;
@@ -11,7 +11,13 @@ pub(in crate::ocr::processor) enum RetryStage {
     Khmer,
 }
 
-type RetryResources = Arc<ResourcePool<(ModelSet, u8), TesseractAPI>>;
+type RetryResources = Arc<ResourcePool<(ModelSet, u8), RetryEngine>>;
+
+struct RetryEngine {
+    api: TesseractAPI,
+    // Tesseract can load implicit OSD after initialization. Keep the private files for the engine lifetime. ~keep
+    _files: RetryModelFiles,
+}
 
 /// A retry holds its primary lease. Separate pools let it proceed when all primary slots are
 /// occupied and let each stage retain its engine even when the configured capacity is one. ~keep
@@ -37,30 +43,44 @@ impl RetryApiPools {
         oem: u8,
         run: impl FnOnce(&TesseractAPI) -> Result<T, OcrError>,
     ) -> Result<T, OcrError> {
+        self.with_initializer(stage, models, oem, new_engine, run)
+    }
+
+    fn with_initializer<T>(
+        &self,
+        stage: RetryStage,
+        models: &ModelSet,
+        oem: u8,
+        initialize: impl FnOnce(&str, &str, u8) -> Result<TesseractAPI, OcrError>,
+        run: impl FnOnce(&TesseractAPI) -> Result<T, OcrError>,
+    ) -> Result<T, OcrError> {
         let resources = match stage {
             RetryStage::Osd => &self.osd,
             RetryStage::Han => &self.han,
             RetryStage::Khmer => &self.khmer,
         };
         let mut lease = RetryLease(resources.checkout((models.clone(), oem), || {
-            new_engine(&models.directory, &models.languages, oem)
+            let files = RetryModelFiles::capture(models)?;
+            let api = initialize(files.directory()?, &models.languages, oem)?;
+            Ok::<_, OcrError>(RetryEngine { api, _files: files })
         })?);
         lease
             .0
+            .api
             .mark_in_use()
             .map_err(|error| OcrError::ProcessingFailed(lease_failure_message(&error).into()))?;
-        let result = run(&lease.0);
+        let result = run(&lease.0.api);
         // OSD also reports failure for ordinary images with too few usable characters. ~keep
         if result.is_err() && !matches!(stage, RetryStage::Osd) {
             return result;
         }
         models.validate()?;
-        lease.0.release_with(reset);
+        lease.0.release_with(|engine| reset(&engine.api));
         result
     }
 }
 
-struct RetryLease(ResourceLease<(ModelSet, u8), TesseractAPI>);
+struct RetryLease(ResourceLease<(ModelSet, u8), RetryEngine>);
 
 impl Drop for RetryLease {
     fn drop(&mut self) {
@@ -119,6 +139,77 @@ mod tests {
             .recv_timeout(Duration::from_secs(10))
             .expect("all retry engines should be reused while the primary lease is held");
         worker.join().unwrap();
+    }
+
+    #[test]
+    fn source_model_rollback_during_native_initialization_cannot_change_the_loaded_bytes() {
+        let source = bundled_tessdata();
+        let path = source.path().to_str().unwrap().to_owned();
+        let model_file = source.path().join("eng.traineddata");
+        let original = std::fs::read(&model_file).unwrap();
+        let osd_file = source.path().join("osd.traineddata");
+        std::fs::write(&osd_file, b"OSD revision A").unwrap();
+        let models = ModelSet::snapshot(path.clone(), &["eng".into()], true).unwrap();
+        let pools = RetryApiPools::new(1);
+        pools
+            .with_initializer(
+                RetryStage::Han,
+                &models,
+                3,
+                |directory, language, oem| {
+                    std::fs::write(&model_file, b"revision B").unwrap();
+                    std::fs::write(&osd_file, b"OSD revision B").unwrap();
+                    let loaded = new_engine(directory, language, oem);
+                    std::fs::write(&model_file, &original).unwrap();
+                    std::fs::write(&osd_file, b"OSD revision A").unwrap();
+                    assert_ne!(directory, path);
+                    assert_eq!(
+                        std::fs::read(std::path::Path::new(directory).join("eng.traineddata")).unwrap(),
+                        original
+                    );
+                    assert_eq!(
+                        std::fs::read(std::path::Path::new(directory).join("osd.traineddata")).unwrap(),
+                        b"OSD revision A"
+                    );
+                    loaded
+                },
+                |api| {
+                    api.set_variable(WHITELIST, "A").unwrap();
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(pools.han.counts(), (0, 1));
+        pools
+            .with_initializer(
+                RetryStage::Han,
+                &models,
+                3,
+                |_, _, _| panic!("verified A should be reused"),
+                |api| {
+                    assert_eq!(api.get_string_variable(WHITELIST).unwrap(), "A");
+                    Ok(())
+                },
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn different_captured_bytes_never_reach_native_initialization() {
+        let source = bundled_tessdata();
+        let path = source.path().to_str().unwrap().to_owned();
+        let models = ModelSet::snapshot(path, &["eng".into()], false).unwrap();
+        std::fs::write(source.path().join("eng.traineddata"), b"revision B").unwrap();
+        let pools = RetryApiPools::new(1);
+        let result: Result<(), OcrError> = pools.with_initializer(
+            RetryStage::Han,
+            &models,
+            3,
+            |_, _, _| panic!("mismatched bytes reached the initializer"),
+            |_| panic!("mismatched bytes reached recognition"),
+        );
+        assert!(matches!(result, Err(OcrError::ProcessingFailed(message)) if message.contains("models changed")));
+        assert_eq!(pools.han.counts(), (0, 0));
     }
 
     #[cfg(unix)]

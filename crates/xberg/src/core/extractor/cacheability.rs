@@ -248,8 +248,17 @@ pub(crate) fn osd_revision(directory: &Path) -> crate::Result<blake3::Hash> {
 fn read_osd_revision(directory: &Path) -> crate::Result<(PathBuf, blake3::Hash)> {
     let root = std::fs::canonicalize(directory)?;
     let path = root.join("osd.traineddata");
+    let revision = fingerprint_osd_file(&path, crate::cache::blake3_hash_file)?;
+    Ok((root, revision))
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn fingerprint_osd_file(
+    path: &Path,
+    read_hash: impl FnOnce(&Path) -> crate::Result<String>,
+) -> crate::Result<blake3::Hash> {
     let mut hash = blake3::Hasher::new();
-    match std::fs::metadata(&path) {
+    match std::fs::metadata(path) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             hash.update(b"missing-osd");
         }
@@ -258,15 +267,15 @@ fn read_osd_revision(directory: &Path) -> crate::Result<(PathBuf, blake3::Hash)>
             hash.update(b"osd-is-not-file");
         }
         Ok(_) => {
-            let resolved = std::fs::canonicalize(&path)?;
+            let resolved = std::fs::canonicalize(path)?;
             hash.update(b"present-osd");
             let name = resolved.as_os_str().as_encoded_bytes();
             hash.update(&(name.len() as u64).to_le_bytes());
             hash.update(name);
-            hash.update(crate::cache::blake3_hash_file(&resolved)?.as_bytes());
+            hash.update(read_hash(&resolved)?.as_bytes());
         }
     }
-    Ok((root, hash.finalize()))
+    Ok(hash.finalize())
 }
 
 #[cfg(all(test, feature = "tokio-runtime", not(target_arch = "wasm32")))]

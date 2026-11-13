@@ -114,8 +114,11 @@ fn list_reads_script_of(language: &str, model: &str) -> bool {
         .any(|item| item == "*" || readers.contains(&item.as_str()))
 }
 
+mod model_files;
 #[cfg(unix)]
 mod model_stamps;
+
+pub(super) use model_files::RetryModelFiles;
 
 #[derive(Clone, Debug)]
 pub(super) struct ModelSet {
@@ -318,7 +321,11 @@ fn retry_list(language: &str, model: &str) -> Vec<String> {
 
 pub(super) fn first_read_suggests_han(api: &TesseractAPI, tsv: Option<&str>) -> bool {
     if let Some(tsv) = tsv {
-        return plausible_han(parse_words(tsv).iter().map(|w| (&*w.text, w.conf, w.width, w.height)));
+        return plausible_han(
+            parse_words(tsv)
+                .iter()
+                .map(|word| (&*word.text, word.conf, word.width, word.height)),
+        );
     }
     match api.get_iterator().and_then(|it| it.extract_all_words()) {
         Ok(read) => plausible_han(read.words.iter().map(|word| {
@@ -345,11 +352,16 @@ fn plausible_han<'a>(words: impl IntoIterator<Item = (&'a str, f64, i64, i64)>) 
         if text.chars().any(|c| script_letter("Han", c)) {
             return true;
         }
+        if confidence >= MAX_MISREAD_CONFIDENCE || !confidence.is_finite() || height <= 0 {
+            continue;
+        }
+        // A wide run of marks can be a whole Han word that the first pass could not read. ~keep
+        if width >= height && text.chars().any(|c| !c.is_whitespace()) && !text.chars().any(char::is_alphanumeric) {
+            return true;
+        }
         // Han glyphs often get read as Latin noise with close to a square of ink per letter. ~keep
         let letters = text.chars().filter(|c| c.is_alphanumeric()).count() as f64;
-        if confidence < MAX_MISREAD_CONFIDENCE
-            && height > 0
-            && letters >= 2.0
+        if letters >= 2.0
             && text.chars().any(is_latin)
             && width as f64 >= MIN_WIDTH_TO_HEIGHT_PER_LETTER * height as f64 * letters
         {

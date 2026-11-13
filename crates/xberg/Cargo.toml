@@ -243,6 +243,7 @@ ocr = [
     "ocr-pipeline",
     "tokio-runtime",
     "dep:xberg-tesseract",
+    "dep:tempfile",
     "dep:image",
     "dep:tiff",
     "dep:fast_image_resize",

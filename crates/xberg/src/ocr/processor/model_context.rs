@@ -269,7 +269,7 @@ impl ModelContext {
         let mut base = super::config::hash_config(config, &self.directory);
         if let Some(retry) = self.retry.as_ref() {
             let mut hash = blake3::Hasher::new();
-            hash.update(b"tesseract-script-retry-v5");
+            hash.update(b"tesseract-script-retry-v6");
             hash.update(base.as_bytes());
             hash.update(&retry.noisy_below.to_bits().to_le_bytes());
             if script_retry::mixed_pdf_khmer_retry_requested() {
@@ -406,6 +406,45 @@ mod tests {
             });
         })
         .await;
+    }
+
+    #[cfg(feature = "bundle-tessdata-eng")]
+    #[test]
+    fn marks_only_first_pass_selects_han_osd() {
+        let api = xberg_tesseract::TesseractAPI::new().unwrap();
+        let root = tempfile::tempdir().unwrap();
+        for name in ["eng", "osd", "chi_sim"] {
+            std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
+        }
+        let directory = root.path().to_str().unwrap().to_owned();
+        let config = TesseractConfig {
+            psm: 3,
+            ..Default::default()
+        };
+        let mut context = ModelContext::for_path(directory.clone(), config.psm).unwrap();
+        context.select_retry(&config, vec![directory], 75.0);
+        let header = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext";
+        let marks =
+            format!("{header}\n5\t1\t1\t1\t1\t1\t0\t100\t120\t40\t20\t|\n5\t1\t1\t1\t1\t2\t140\t100\t160\t40\t25\t~");
+        let narrow = format!("{header}\n5\t1\t1\t1\t1\t1\t0\t100\t3\t40\t20\t|");
+        assert!(
+            context
+                .retry_models(&config, 23.0, || script_retry::first_read_suggests_han(
+                    &api,
+                    Some(&marks)
+                ))
+                .unwrap()
+                .han
+                .is_some()
+        );
+        assert!(
+            context
+                .retry_models(&config, 20.0, || script_retry::first_read_suggests_han(
+                    &api,
+                    Some(&narrow)
+                ))
+                .is_none()
+        );
     }
 
     #[test]
