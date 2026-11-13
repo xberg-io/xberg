@@ -106,11 +106,12 @@ async fn assert_entry_point_deadline(file: bool) {
         observed_deadline.load(Ordering::Relaxed),
         "processor must observe the armed deadline before the outer timeout returns: {result:?}"
     );
-    // File extraction can yield after the processor observes the deadline. With no active
-    // page loop, the outer timeout can then return an error instead of the document. ~keep
+    // Either extraction can yield during finalization after the processor observes the deadline.
+    // With no active page loop, the outer timeout can then return an error. ~keep
     let result = match result {
-        Err(crate::XbergError::Timeout { limit_ms, .. }) if file => {
+        Err(crate::XbergError::Timeout { limit_ms, elapsed_ms }) => {
             assert_eq!(limit_ms, LIMIT_SECS * 1000);
+            assert!(elapsed_ms >= limit_ms);
             return;
         }
         other => other.expect("deadline returns the available document"),
