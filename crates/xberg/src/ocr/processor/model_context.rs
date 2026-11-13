@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use super::script_retry::{self, RetryModels, hash_language_models, hash_model_file};
+use super::script_retry::{self, HanModels, RetryModels, hash_language_models, hash_model_file};
 use super::validation::{TessdataEnv, resolve_tessdata_path_in, tessdata_search_dirs};
 use crate::ocr::error::OcrError;
 use crate::ocr::types::TesseractConfig;
@@ -70,15 +70,17 @@ impl ModelContext {
     }
 
     fn select_retry(&mut self, config: &TesseractConfig, directories: Vec<String>, noisy_below: f64) {
-        let han = match RetryModels::resolve_han(&directories, &config.language, config.psm, |error| {
-            self.invalidate_vertical_cache(error)
-        }) {
-            Ok(snapshot) => snapshot,
-            Err(error) => {
+        let horizontal =
+            RetryModels::resolve_horizontal(&directories, &config.language, config.psm).unwrap_or_else(|error| {
                 self.invalidate_han_cache(&error);
                 None
-            }
-        };
+            });
+        let vertical =
+            RetryModels::resolve_vertical(&directories, &config.language, config.psm).unwrap_or_else(|error| {
+                self.invalidate_vertical_cache(&error);
+                None
+            });
+        let han = HanModels::from_snapshots(horizontal, vertical);
         let khmer = match RetryModels::resolve_requested_khmer(&directories, &config.language, config.psm) {
             Ok(snapshot) => snapshot,
             Err(error) => {
@@ -185,9 +187,12 @@ impl ModelContext {
             return None;
         }
         let mut models = retry.models.clone()?;
-        if models.han.is_some() && (!han_is_plausible() || !self.han_retry_is_current(config)) {
-            models.han = None;
-        }
+        models.han = models.han.filter(|_| han_is_plausible()).and_then(|han| {
+            HanModels::from_snapshots(
+                han.horizontal.filter(|_| self.han_retry_is_current(config)),
+                han.vertical_japanese.filter(|_| self.vertical_retry_is_current(config)),
+            )
+        });
         if models.khmer.is_some() && !self.khmer_retry_is_current(config) {
             models.khmer = None;
         }
@@ -201,15 +206,40 @@ impl ModelContext {
         let Some(retry) = &self.retry else {
             return true;
         };
-        let expected = retry.models.as_ref().and_then(|models| models.han.as_ref());
-        let error = match RetryModels::resolve_han(&retry.directories, &config.language, config.psm, |error| {
-            self.invalidate_vertical_cache(error)
-        }) {
+        let expected = retry
+            .models
+            .as_ref()
+            .and_then(|models| models.han.as_ref())
+            .and_then(|han| han.horizontal.as_ref());
+        match RetryModels::resolve_horizontal(&retry.directories, &config.language, config.psm) {
             Ok(current) if current.as_ref() == expected => return true,
-            Ok(_) => OcrError::ProcessingFailed("Selected Han retry models changed during OCR".into()),
-            Err(error) => error,
+            Ok(_) => self.invalidate_han_cache(&OcrError::ProcessingFailed(
+                "Selected Han retry models changed during OCR".into(),
+            )),
+            Err(error) => self.invalidate_han_cache(&error),
+        }
+        false
+    }
+
+    pub(super) fn vertical_retry_is_current(&self, config: &TesseractConfig) -> bool {
+        if self.invalidated.load(Ordering::Acquire) || self.vertical_cache_invalidated.load(Ordering::Acquire) {
+            return false;
+        }
+        let Some(retry) = &self.retry else {
+            return true;
         };
-        self.invalidate_han_cache(&error);
+        let expected = retry
+            .models
+            .as_ref()
+            .and_then(|models| models.han.as_ref())
+            .and_then(|han| han.vertical_japanese.as_ref());
+        match RetryModels::resolve_vertical(&retry.directories, &config.language, config.psm) {
+            Ok(current) if current.as_ref() == expected => return true,
+            Ok(_) => self.invalidate_vertical_cache(&OcrError::ProcessingFailed(
+                "Selected vertical Japanese model changed during OCR".into(),
+            )),
+            Err(error) => self.invalidate_vertical_cache(&error),
+        }
         false
     }
 
@@ -231,7 +261,7 @@ impl ModelContext {
     }
 
     pub(super) fn if_result_current<T>(&self, config: &TesseractConfig, action: impl FnOnce() -> T) -> Option<T> {
-        if self.vertical_cache_invalidated.load(Ordering::Acquire)
+        if !self.vertical_retry_is_current(config)
             || !self.han_retry_is_current(config)
             || !self.khmer_retry_is_current(config)
         {

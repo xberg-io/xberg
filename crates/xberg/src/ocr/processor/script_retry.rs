@@ -231,8 +231,20 @@ pub(super) struct RetryModels {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct HanModels {
-    horizontal: Option<(ModelSet, ModelSet)>,
-    vertical_japanese: Option<ModelSet>,
+    pub(super) horizontal: Option<(ModelSet, ModelSet)>,
+    pub(super) vertical_japanese: Option<ModelSet>,
+}
+
+impl HanModels {
+    pub(super) fn from_snapshots(
+        horizontal: Option<(ModelSet, ModelSet)>,
+        vertical_japanese: Option<ModelSet>,
+    ) -> Option<Self> {
+        (horizontal.is_some() || vertical_japanese.is_some()).then_some(Self {
+            horizontal,
+            vertical_japanese,
+        })
+    }
 }
 
 fn retry_directories(directories: &[String], han: &[String]) -> Option<(String, String)> {
@@ -273,41 +285,50 @@ impl RetryModels {
         }
     }
 
-    pub(super) fn resolve_han(
+    #[cfg(test)]
+    fn resolve_han(
         directories: &[String],
         language: &str,
         psm: u8,
         on_vertical_error: impl FnOnce(&OcrError),
     ) -> Result<Option<HanModels>, OcrError> {
+        let horizontal = Self::resolve_horizontal(directories, language, psm)?;
+        let vertical_japanese = Self::resolve_vertical(directories, language, psm).unwrap_or_else(|error| {
+            on_vertical_error(&error);
+            None
+        });
+        Ok(HanModels::from_snapshots(horizontal, vertical_japanese))
+    }
+
+    pub(super) fn resolve_horizontal(
+        directories: &[String],
+        language: &str,
+        psm: u8,
+    ) -> Result<Option<(ModelSet, ModelSet)>, OcrError> {
         if !supports_retry_language(language) {
             return Ok(None);
         }
         let han = retry_list(language, HAN_MODEL);
-        let horizontal = match retry_directories(directories, &han) {
-            Some((osd, recognition)) => Some((
-                ModelSet::snapshot(osd, &["osd".into()], false)?,
-                ModelSet::snapshot(recognition, &han, matches!(psm, 0 | 1 | 12))?,
-            )),
-            None => None,
+        let Some((osd, recognition)) = retry_directories(directories, &han) else {
+            return Ok(None);
         };
-        let vertical_japanese = match vertical_japanese_directory(directories, language)
-            .filter(|_| supports_vertical_japanese(language, psm))
-        {
-            Some(directory) => match ModelSet::snapshot(directory, &[VERTICAL_JAPANESE_MODEL.into()], false) {
-                Ok(models) => Some(models),
-                Err(error) => {
-                    on_vertical_error(&error);
-                    None
-                }
-            },
-            None => None,
-        };
-        Ok(
-            (horizontal.is_some() || vertical_japanese.is_some()).then_some(HanModels {
-                horizontal,
-                vertical_japanese,
-            }),
-        )
+        Ok(Some((
+            ModelSet::snapshot(osd, &["osd".into()], false)?,
+            ModelSet::snapshot(recognition, &han, matches!(psm, 0 | 1 | 12))?,
+        )))
+    }
+
+    pub(super) fn resolve_vertical(
+        directories: &[String],
+        language: &str,
+        psm: u8,
+    ) -> Result<Option<ModelSet>, OcrError> {
+        if !supports_vertical_japanese(language, psm) {
+            return Ok(None);
+        }
+        vertical_japanese_directory(directories, language)
+            .map(|directory| ModelSet::snapshot(directory, &[VERTICAL_JAPANESE_MODEL.into()], false))
+            .transpose()
     }
 
     fn resolve_khmer(directories: &[String], language: &str, psm: u8) -> Result<Option<ModelSet>, OcrError> {
@@ -481,7 +502,7 @@ pub(super) fn run(
     pass: &Pass<'_>,
     models: &RetryModels,
     validate_khmer: impl FnOnce() -> bool,
-    validate_han: impl FnOnce() -> bool,
+    validate_han: impl Fn(&str) -> bool,
     on_error: impl Fn(&str, OcrError),
 ) -> Result<Option<Outcome>, OcrError> {
     if cacheability::ocr_stop_requested() {
@@ -515,7 +536,7 @@ fn run_on_image(
     pass: &Pass<'_>,
     models: &RetryModels,
     validate_khmer: impl FnOnce() -> bool,
-    validate_han: impl FnOnce() -> bool,
+    validate_han: impl Fn(&str) -> bool,
     on_error: impl Fn(&str, OcrError),
 ) -> Result<Option<Outcome>, OcrError> {
     read_script_recoveries(
@@ -526,10 +547,7 @@ fn run_on_image(
         },
         validate_khmer,
         &on_error,
-        || {
-            let han = read_han(image, first_tsv, pass, models, &on_error)?;
-            Ok(han.filter(|_| validate_han()))
-        },
+        || read_han(image, first_tsv, pass, models, validate_han, &on_error),
     )
 }
 
@@ -584,6 +602,7 @@ fn read_han(
     first_tsv: &str,
     pass: &Pass<'_>,
     models: &RetryModels,
+    validate_han: impl Fn(&str) -> bool,
     on_error: impl Fn(&str, OcrError),
 ) -> Result<Option<Outcome>, OcrError> {
     let Some(han) = &models.han else {
@@ -592,12 +611,12 @@ fn read_han(
     let first = parse_words(first_tsv);
     if let Some(vertical) = &han.vertical_japanese {
         match vertical_japanese::read(image, pass, vertical, &first) {
-            Ok(Some(outcome)) => return Ok(Some(outcome)),
-            Ok(None) => {}
+            Ok(Some(outcome)) if validate_han(VERTICAL_JAPANESE_MODEL) => return Ok(Some(outcome)),
+            Ok(_) => {}
             Err(error) => on_error(VERTICAL_JAPANESE_MODEL, error),
         }
     }
-    read_horizontal_han(image, pass, han.horizontal.as_ref(), first)
+    Ok(read_horizontal_han(image, pass, han.horizontal.as_ref(), first)?.filter(|_| validate_han(HAN_MODEL)))
 }
 
 fn read_horizontal_han(
@@ -2122,10 +2141,17 @@ mod tests {
             tsv.push_str(&format!("\n5\t1\t1\t1\t{index}\t1\t0\t0\t20\t20\t10\tt?"));
         }
         let failed = std::cell::Cell::new(0);
-        let result = read_han(&pix, &tsv, &pass, &models, |model, _| {
-            assert_eq!(model, VERTICAL_JAPANESE_MODEL);
-            failed.set(failed.get() + 1);
-        })
+        let result = read_han(
+            &pix,
+            &tsv,
+            &pass,
+            &models,
+            |_| true,
+            |model, _| {
+                assert_eq!(model, VERTICAL_JAPANESE_MODEL);
+                failed.set(failed.get() + 1);
+            },
+        )
         .unwrap()
         .expect("horizontal Han fallback succeeds");
         assert_eq!(failed.get(), 1);

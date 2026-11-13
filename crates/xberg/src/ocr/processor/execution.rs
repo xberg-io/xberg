@@ -2485,7 +2485,13 @@ pub(super) fn perform_ocr(
                         &pass,
                         &retry_models,
                         || models.khmer_retry_is_current(config),
-                        || finish_script_retry(Some(()), |_| true, models, config).is_some(),
+                        |model| {
+                            if model == script_retry::VERTICAL_JAPANESE_MODEL {
+                                models.vertical_retry_is_current(config)
+                            } else {
+                                finish_script_retry(Some(()), |_| true, models, config).is_some()
+                            }
+                        },
                         |model, error| {
                             if model == script_retry::KHMER_MODEL {
                                 models.invalidate_khmer_cache(&error);
@@ -5613,7 +5619,7 @@ mod tests {
 
     #[test]
     #[serial]
-    fn vertical_japanese_snapshot_read_failure_preserves_horizontal_han() {
+    fn vertical_japanese_snapshot_failure_and_drift_preserve_horizontal_han() {
         let Some(image) = crate::utils::read_test_fixture("images/chi_sim_image.jpeg") else {
             assert!(std::env::var_os("XBERG_REQUIRE_VERTICAL_JAPANESE_FIXTURES").is_none());
             return;
@@ -5639,37 +5645,28 @@ mod tests {
             std::fs::copy(model, root.path().join(filename)).unwrap();
         }
         let vertical = root.path().join("jpn_vert.traineddata");
-        std::fs::create_dir(&vertical).unwrap();
         let config = TesseractConfig {
             tessdata_path: Some(root.path().into()),
             psm: 3,
             use_cache: true,
             ..Default::default()
         };
-        let cache_dir = tempdir().unwrap();
-        let cache = OcrCache::new(Some(cache_dir.path().to_path_buf())).unwrap();
+        std::fs::write(&vertical, b"initial snapshot").unwrap();
+        let captured = ModelContext::resolve_with_retry(&config, Some(75.0)).unwrap();
+        assert!(captured.vertical_retry_is_current(&config));
+        std::fs::remove_file(&vertical).unwrap();
+        std::fs::create_dir(&vertical).unwrap();
+        let fresh = ModelContext::resolve_with_retry(&config, Some(75.0)).unwrap();
         let pool = TesseractApiPool::new();
-        let models = ModelContext::resolve_with_retry(&config, Some(75.0)).unwrap();
-        assert!(
-            models.retry_models(&config, 0.0, || true).is_some(),
-            "horizontal snapshot survives the unreadable vertical model"
-        );
-        assert!(
-            models.if_result_current(&config, || ()).is_none(),
-            "failed snapshot must not be cached"
-        );
-        let result = process_image_with_retry(
-            &image,
-            &config,
-            &cache,
-            &pool,
-            None,
-            ImageOcrPolicy::Default,
-            Some(75.0),
-        )
-        .unwrap();
-        assert_eq!(result.metadata[script_retry::METADATA_KEY]["model"], "chi_sim");
-        assert!(han_letters(&result.content) > 0, "{:?}", result.content);
+        for models in [captured, fresh] {
+            let result = perform_ocr(&image, &config, &pool, None, &models, ImageOcrPolicy::Default).unwrap();
+            assert_eq!(result.metadata[script_retry::METADATA_KEY]["model"], "chi_sim");
+            assert!(han_letters(&result.content) > 0, "{:?}", result.content);
+            assert!(
+                models.if_result_current(&config, || ()).is_none(),
+                "unreadable model must block caching"
+            );
+        }
     }
 
     #[tokio::test]
