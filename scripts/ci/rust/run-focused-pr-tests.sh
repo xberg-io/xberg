@@ -234,8 +234,9 @@ run_ink_probe_cases() {
   run_exact 'extractors::pdf::ocr::read_reuse::stock_tests::stock_raw_read_of_a_text_raster_matches_an_uncached_final_read' --lib
   run_exact 'extractors::pdf::ocr::read_reuse::stock_tests::stock_public_mixed_route_reads_the_wrong_script_page_once' --lib
   run_exact 'extractors::pdf::ocr::read_reuse::stock_tests::final_mixed_route_frees_a_retained_read_it_did_not_take' --lib
-  if [ "$((passed - before))" -ne 38 ]; then
-    printf 'Expected 38 executed ink-probe reuse tests, observed %s\n' "$((passed - before))" >&2
+  run_exact 'extractors::pdf::ocr::read_reuse::stock_tests::direct_mixed_route_reuses_the_contradicted_pages_probe_read' --lib
+  if [ "$((passed - before))" -ne 39 ]; then
+    printf 'Expected 39 executed ink-probe reuse tests, observed %s\n' "$((passed - before))" >&2
     exit 1
   fi
 }
@@ -394,6 +395,7 @@ pdf-ocr)
   run_retained_read_cases
   expected=$((expected + 11 + 7))
   run_number_budget_cases
+  expected=$((expected + 1))
   run_ink_probe_cases
   run_discarded_recovery_cases
   run_numeral_noise_cases

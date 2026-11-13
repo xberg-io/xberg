@@ -292,6 +292,59 @@ async fn stock_public_mixed_route_reads_the_wrong_script_page_once() {
     );
 }
 
+// Paddle enables the implicit pipeline, which consumes probe reads at a different call site. ~keep
+#[cfg(not(paddle_ocr))]
+#[tokio::test]
+#[serial_test::serial]
+async fn direct_mixed_route_reuses_the_contradicted_pages_probe_read() {
+    const CASE: usize = 0x2862_5104;
+    let pdf = with_healthy_pages(ARABIC);
+    let stock = stock(CASE, serde_json::json!({"use_cache": false}));
+    let mut config = crate::ExtractionConfig {
+        use_cache: false,
+        ocr: Some(stock.config.clone()),
+        result_format: crate::types::ResultFormat::ElementBased,
+        security_limits: Some(limits(CASE)),
+        ..Default::default()
+    };
+    let mut native = crate::pdf::native::NativeDocument::open_bytes(&pdf).unwrap();
+    let (native_text, boundaries, ..) =
+        crate::pdf::native::text::extract_text_and_metadata(&mut native, Some(&config)).unwrap();
+    let boundaries = boundaries.as_deref().expect("three native page ranges");
+    assert_eq!(boundaries.len(), 3);
+    let reuse = Arc::new(ProbeReads::new(SecurityLimits::default().max_content_size));
+    let mut thresholds = stock.config.effective_thresholds();
+    thresholds.discard_suspected_ocr_noise = true;
+    config.ocr.as_mut().unwrap().quality_thresholds = Some(thresholds);
+    let read = async |config: &crate::ExtractionConfig| {
+        super::super::extract_mixed_ocr_native_with_probe_reads(
+            &native_text,
+            boundaries,
+            (&[1], &[]),
+            &pdf,
+            config,
+            None,
+            (&[], &[], Some(Arc::clone(&reuse))),
+        )
+        .await
+    };
+    let probe = read(&config).await.unwrap();
+    assert_source_prose(&probe.output.1[&1]);
+    let probe_reads = read_counter::reads(CASE);
+    assert!(probe_reads > 0, "the probe must run native OCR");
+    assert!(reuse.finish(&[1]), "the contradicted page must have a retained read");
+    let mut final_config = config.clone();
+    final_config.ocr.as_mut().unwrap().quality_thresholds = None;
+    let final_read = read(&final_config).await.unwrap();
+    assert_eq!(final_read.output.1, probe.output.1);
+    assert_eq!(
+        read_counter::reads(CASE),
+        probe_reads,
+        "the final mixed route must not recognize again"
+    );
+    assert_eq!(read_counter::probe_reuses(CASE), 1);
+}
+
 const CLEANUP_CASE: usize = 0x2862_5103;
 
 #[tokio::test]
