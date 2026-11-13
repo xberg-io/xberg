@@ -125,6 +125,48 @@ fn reporter_folio_keeps_the_exact_transcript_with_automatic_ocr() {
     }
 }
 
+#[test]
+fn mixed_size_type0_text_keeps_the_exact_transcript_at_normal_density() {
+    let tessdata = tempfile::tempdir().unwrap();
+    std::fs::write(
+        tessdata.path().join("eng.traineddata"),
+        xberg_tesseract::bundled_eng_traineddata().unwrap(),
+    )
+    .unwrap();
+    let config = ExtractionConfig {
+        use_cache: false,
+        output_format: OutputFormat::Plain,
+        ocr: Some(OcrConfig {
+            tessdata_path: Some(tessdata.path().to_owned()),
+            ..Default::default()
+        }),
+        pages: Some(PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let expected = format!("{}\nPage 12", EXPECTED.strip_prefix("Library Planning Notes").unwrap());
+    let result = helpers::extract_bytes_document_blocking(
+        include_bytes!("fixtures/pdf/separation-overprint-2817/folio-mixed-size.pdf"),
+        "application/pdf",
+        &config,
+    )
+    .unwrap();
+    assert_eq!(result.extraction_method, Some(ExtractionMethod::Mixed));
+    let [page] = result.pages.as_deref().expect("requested page output") else {
+        panic!("expected one page");
+    };
+    for text in [&result.content, &page.content] {
+        assert_eq!(
+            text.split_whitespace().collect::<Vec<_>>(),
+            expected.split_whitespace().collect::<Vec<_>>()
+        );
+    }
+    let raster = page.image_preprocessing.as_ref();
+    assert!(raster.is_none_or(|raster| raster.original_dimensions.width == 1275));
+}
+
 fn assert_folio(bytes: &[u8], config: &ExtractionConfig, expected: &str, method: ExtractionMethod, label: &str) {
     let mode = if config.disable_ocr { "native-only" } else { "Auto" };
     let result =

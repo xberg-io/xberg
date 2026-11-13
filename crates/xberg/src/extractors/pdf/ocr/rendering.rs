@@ -994,7 +994,7 @@ pub(super) use error_source::SourceImageBudgetExceeded;
 use error_source::render_error_source;
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-fn render_one_full_pdf_ocr_page_with_dpi(
+pub(super) fn render_one_full_pdf_ocr_page_with_dpi(
     doc: &xberg_native_pdf::PdfDocument,
     page_rotations: &[u32],
     page_idx: usize,

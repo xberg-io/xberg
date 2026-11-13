@@ -37,3 +37,10 @@ the cmap and post tables as specified by the recipe. Its DejaVu name and
 - `folio-mapped.pdf` SHA-256 `63fda270a0516617ef3cfaf4c19e7b5e7008d3114e087b2b75307bb040e8230f`
 
 [folio]: https://github.com/xberg-io/xberg/issues/2817#issuecomment-6845799306
+
+`folio-mixed-size.pdf` is derived from `folio-black.pdf` by changing the first
+body line containing “quiet queue” from 10 pt to 8 pt and restoring 10 pt for
+the next line. The font program, ToUnicode map, and expected transcript are
+the same.
+
+- SHA-256 `c00fd330a01fd657c0aa3eacc93b15e6f824f99df33e887b645a06e1b95a7a14`
