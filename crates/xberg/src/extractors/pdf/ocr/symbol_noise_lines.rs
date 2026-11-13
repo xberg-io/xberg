@@ -16,6 +16,10 @@
 
 use crate::pdf::structure::types::PdfParagraph;
 
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[path = "symbol_noise_texture.rs"]
+pub(super) mod texture;
+
 /// Fewest non-blank lines a page needs before its line mix says anything.
 const MIN_LINES: usize = 8;
 /// A Latin token with at least this many letters is word-shaped.
@@ -421,21 +425,25 @@ pub(super) fn elements_are_prunable(document: &crate::types::internal::InternalD
 /// Prunes the text elements of a document, unless [`elements_are_prunable`] is false.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn prune_document_elements(document: &mut crate::types::internal::InternalDocument) {
-    use crate::types::internal::ElementKind;
-
     if !elements_are_prunable(document) {
         return;
     }
-    document.elements.retain_mut(|element| {
-        !matches!(
-            element.kind,
-            ElementKind::OcrText { .. }
-                | ElementKind::Title
-                | ElementKind::Heading { .. }
-                | ElementKind::Paragraph
-                | ElementKind::ListItem { .. }
-        ) || prune_element_text(element)
-    });
+    document
+        .elements
+        .retain_mut(|element| !is_prunable_element(element) || prune_element_text(element));
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn is_prunable_element(element: &crate::types::internal::InternalElement) -> bool {
+    use crate::types::internal::ElementKind;
+    matches!(
+        element.kind,
+        ElementKind::OcrText { .. }
+            | ElementKind::Title
+            | ElementKind::Heading { .. }
+            | ElementKind::Paragraph
+            | ElementKind::ListItem { .. }
+    )
 }
 
 /// The warning that names a pruned page and how many lines it lost.
