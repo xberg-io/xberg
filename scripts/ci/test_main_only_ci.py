@@ -15,9 +15,9 @@ if TYPE_CHECKING:
 
 WORKFLOWS = Path(__file__).parents[2] / ".github" / "workflows"
 MAIN_GUARD = ast.dump(ast.parse("github.ref == 'refs/heads/main'", mode="eval").body)
-EXPECTED_WORKFLOWS = 17
-EXPECTED_JOBS = 77
-EXPECTED_CHECKOUTS = 77
+EXPECTED_WORKFLOWS = 18
+EXPECTED_JOBS = 78
+EXPECTED_CHECKOUTS = 78
 # The one sanctioned pull-request workflow: fixed regression tests, for same-repository branches only.
 FOCUSED_PR_WORKFLOW = "ci-focused-pr.yaml"
 FOCUSED_PR_GUARDS = (
@@ -274,6 +274,24 @@ class MainOnlyCiTests(unittest.TestCase):
         setup = [step for step in job["steps"] if step.get("uses") == "xberg-io/actions/setup-mise@v1"]
         assert len(setup) == 1 and setup[0]["with"]["install-args"] == "cargo-deny"
         assert not any("onnx" in str(step.get("uses", "")) for step in job["steps"])
+
+    def test_windows_pdf_path_memory_requires_opt_in_and_uses_shared_onnx_default(self) -> None:
+        workflow = yaml.safe_load((WORKFLOWS / "ci-pdf-path-memory-windows.yaml").read_text())
+        triggers = workflow.get("on", workflow.get(True))
+        assert set(triggers) == {"workflow_dispatch"}
+        inputs = triggers["workflow_dispatch"]["inputs"]
+        assert set(inputs) == {"verify-pdf-path-memory"}
+        assert inputs["verify-pdf-path-memory"]["type"] == "boolean"
+        assert inputs["verify-pdf-path-memory"]["default"] is False
+        assert workflow["permissions"] == {"contents": "read"}
+        assert set(workflow["jobs"]) == {"pdf-path-memory-windows"}
+        job = workflow["jobs"]["pdf-path-memory-windows"]
+        assert " ".join(job["if"].split()) == (
+            "${{ github.ref == 'refs/heads/main' && github.repository == 'xberg-io/xberg' && "
+            "github.event_name == 'workflow_dispatch' && inputs.verify-pdf-path-memory }}"
+        )
+        setup = [step for step in job["steps"] if step.get("uses") == "./.github/actions/setup-onnx-runtime"]
+        assert len(setup) == 1 and not setup[0].get("with")
 
     def test_accepts_main_guard_with_existing_job_conditions(self) -> None:
         conditions = [
