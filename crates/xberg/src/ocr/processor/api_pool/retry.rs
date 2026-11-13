@@ -212,6 +212,65 @@ mod tests {
         assert_eq!(pools.han.counts(), (0, 0));
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    #[ignore = "requires local Tesseract eng/osd packs and the verified Chinese fixture"]
+    fn warm_retry_loads_deferred_osd_from_its_private_models() {
+        use xberg_tesseract::{Pix, TessPageSegMode};
+
+        let tessdata = std::env::var_os("XBERG_OSD_TESSDATA").expect("set XBERG_OSD_TESSDATA");
+        let fixture = std::env::var_os("XBERG_OSD_FIXTURE").expect("set XBERG_OSD_FIXTURE");
+        let image = image::open(fixture)
+            .expect("decode the verified Chinese fixture")
+            .into_rgb8();
+        let pixels = Pix::from_raw_rgb(image.as_raw(), image.width(), image.height()).unwrap();
+        let source = tempfile::tempdir().unwrap();
+        let path = source.path().to_str().unwrap().to_owned();
+        let tessdata = std::path::Path::new(&tessdata);
+        std::fs::copy(tessdata.join("eng.traineddata"), source.path().join("eng.traineddata")).unwrap();
+        let read = |api: &TesseractAPI, mode| {
+            api.set_page_seg_mode(mode).unwrap();
+            api.set_image_2(pixels.as_ptr()).unwrap();
+            api.set_source_resolution(300).unwrap();
+            api.recognize().unwrap();
+            api.get_utf8_text()
+        };
+        let baseline = |mode| read(&new_engine(&path, "eng", 3).unwrap(), mode).unwrap();
+        let without_osd = baseline(TessPageSegMode::PSM_AUTO_OSD);
+        let osd_file = source.path().join("osd.traineddata");
+        std::fs::copy(tessdata.join("osd.traineddata"), &osd_file).unwrap();
+        let with_osd = baseline(TessPageSegMode::PSM_AUTO_OSD);
+        assert!(!with_osd.trim().is_empty());
+        assert_ne!(
+            with_osd, without_osd,
+            "the fixture must distinguish actual implicit OSD"
+        );
+        let models = ModelSet::snapshot(path, &["eng".into()], true).unwrap();
+        let pools = RetryApiPools::new(1);
+        pools
+            .with_engine(RetryStage::Han, &models, 3, |api| {
+                read(api, TessPageSegMode::PSM_AUTO).unwrap();
+                Ok(())
+            })
+            .unwrap();
+        let parked_model = source.path().join("parked-osd");
+        let warm = pools
+            .with_initializer(
+                RetryStage::Han,
+                &models,
+                3,
+                |_, _, _| panic!("the deferred OSD read must use the warm engine"),
+                |api| {
+                    std::fs::rename(&osd_file, &parked_model).unwrap();
+                    let text = read(api, TessPageSegMode::PSM_AUTO_OSD);
+                    std::fs::rename(&parked_model, &osd_file).unwrap();
+                    Ok(text.unwrap())
+                },
+            )
+            .unwrap();
+        assert_eq!(warm, with_osd);
+    }
+
     #[cfg(unix)]
     #[test]
     fn a_same_length_model_change_with_restored_mtime_discards_the_handle() {

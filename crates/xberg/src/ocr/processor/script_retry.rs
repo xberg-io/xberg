@@ -355,8 +355,8 @@ fn plausible_han<'a>(words: impl IntoIterator<Item = (&'a str, f64, i64, i64)>) 
         if confidence >= MAX_MISREAD_CONFIDENCE || !confidence.is_finite() || height <= 0 {
             continue;
         }
-        // A wide run of marks can be a whole Han word that the first pass could not read. ~keep
-        if width >= height && text.chars().any(|c| !c.is_whitespace()) && !text.chars().any(char::is_alphanumeric) {
+        // Low-confidence marks can be failed Han reads even when their boxes are narrow. ~keep
+        if width > 0 && text.chars().any(|c| !c.is_whitespace()) && !text.chars().any(char::is_alphanumeric) {
             return true;
         }
         // Han glyphs often get read as Latin noise with close to a square of ink per letter. ~keep
@@ -1603,12 +1603,20 @@ mod tests {
 
     /// A line the first read saw as marks only takes the Han read that covers it.
     #[test]
-    fn a_line_of_marks_is_replaced_by_the_han_read() {
-        let marks = line(&[("|", 20.0, 0, 120), ("~", 25.0, 140, 160)], 1, 100);
+    fn a_line_of_marks_passes_the_gate_and_is_replaced_by_the_han_read() {
         let han = line(&[("今天天", 92.0, 0, 120), ("气", 92.0, 140, 160)], 1, 100);
-        let merged = merge_han(marks, han);
-        assert_eq!(han_count(&joined(&merged)), 4, "{}", joined(&merged));
-        assert_eq!((merged.admitted, merged.refused, merged.added), (1, 0, 0));
+        for (first_width, second_width) in [(120, 160), (3, 8)] {
+            let marks = line(&[("|", 20.0, 0, first_width), ("~", 25.0, 140, second_width)], 1, 100);
+            assert!(plausible_han(marks.iter().map(|word| (
+                &*word.text,
+                word.conf,
+                word.width,
+                word.height
+            ))));
+            let merged = merge_han(marks, han.clone());
+            assert_eq!(joined(&merged), "今天天 气");
+            assert_eq!((merged.admitted, merged.refused, merged.added), (1, 0, 0));
+        }
     }
 
     #[test]
