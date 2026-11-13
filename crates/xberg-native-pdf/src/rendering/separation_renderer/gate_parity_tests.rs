@@ -871,7 +871,6 @@ fn large_knockout_pages_keep_useful_resolution() {
     ] {
         let doc = large_knockout_page(case);
         let (image, dpi) = render_large_knockout(&doc, REQUESTED_KNOCKOUT_DPI, LARGE_KNOCKOUT_BUDGET, 1);
-        eprintln!("{case:?}: {dpi} dpi, {} x {}", image.width, image.height);
         assert_useful_knockout_raster(case, &image, dpi);
         let (strict, strict_dpi) = render_large_knockout(&doc, dpi, LARGE_KNOCKOUT_BUDGET, dpi);
         assert_eq!(strict_dpi, dpi);
@@ -888,9 +887,6 @@ fn increasing_workspace_preserves_masked_knockout_resolution() {
         let doc = large_knockout_page(case);
         let (_, small) = render_large_knockout(&doc, REQUESTED_KNOCKOUT_DPI, SMALL_KNOCKOUT_BUDGET, 1);
         let (_, large) = render_large_knockout(&doc, REQUESTED_KNOCKOUT_DPI, LARGE_KNOCKOUT_BUDGET, 1);
-        eprintln!(
-            "{case:?}: {small} dpi at {SMALL_KNOCKOUT_BUDGET} bytes, {large} dpi at {LARGE_KNOCKOUT_BUDGET} bytes"
-        );
         assert!(
             large > small,
             "{case:?}: {large} dpi at higher budget vs {small} dpi at lower budget"
