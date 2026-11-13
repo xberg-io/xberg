@@ -6346,7 +6346,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 let lost_glyph_layer = page_ocr_hints
                     .as_ref()
                     .and_then(|hints| hints.single_native_type0_page.as_deref())
-                    .filter(|_| document_page_idx == 0 && super::document::native_preservation_is_automatic(config, 1));
+                    .filter(|_| document_page_idx == 0 && super::document::stage_can_preserve_native_text(config, 1));
                 let pdf = detached_page
                     .map(|source| source.document)
                     .or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf.as_ref()));
@@ -6365,7 +6365,8 @@ pub(super) async fn extract_with_ocr_for_page(
                     native_placed_words =
                         super::native_word_coverage::read_words_at_native_place(pdf, document_page_idx, &ocr_result);
                     native_ink_owned = !complete_native_words
-                        && super::document::native_preservation_is_automatic(config, document_page_number)
+                        && (lost_glyph_layer.is_some()
+                            || super::document::native_preservation_is_automatic(config, document_page_number))
                         && super::native_word_coverage::native_text_paints_all_read_ink(
                             pdf,
                             document_page_idx,

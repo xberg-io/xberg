@@ -1104,6 +1104,11 @@ pub(super) fn ocr_page_has_only_plain_payload_with(
 
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(in crate::extractors::pdf) fn native_preservation_is_automatic(config: &ExtractionConfig, page: u32) -> bool {
+    config.ocr.as_ref().is_some_and(|ocr| ocr.pipeline.is_none()) && stage_can_preserve_native_text(config, page)
+}
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+pub(super) fn stage_can_preserve_native_text(config: &ExtractionConfig, page: u32) -> bool {
     #[cfg(feature = "layout-types")]
     if config.layout.is_some() {
         return false;
@@ -1116,11 +1121,7 @@ pub(in crate::extractors::pdf) fn native_preservation_is_automatic(config: &Extr
         && !config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled())
         && !config.images.as_ref().is_some_and(|images| images.include_page_rasters)
         && config.ocr.as_ref().is_some_and(|ocr| {
-            ocr.enabled
-                && ocr.backend == "tesseract"
-                && ocr.pipeline.is_none()
-                && ocr.element_config.is_none()
-                && ocr.auto_rotate != Some(true)
+            ocr.enabled && ocr.backend == "tesseract" && ocr.element_config.is_none() && ocr.auto_rotate != Some(true)
         })
 }
 

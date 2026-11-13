@@ -208,3 +208,56 @@ fn forced_ocr_restoration_reports_the_unrecovered_glyphs() {
         document.processing_warnings
     );
 }
+
+#[test]
+fn explicit_pipeline_reports_unrecovered_glyphs_after_a_real_ocr_read() {
+    let bytes = nist_fixture();
+    let models = tempfile::tempdir().unwrap();
+    std::fs::write(
+        models.path().join("eng.traineddata"),
+        xberg_tesseract::bundled_eng_traineddata().unwrap(),
+    )
+    .unwrap();
+    let config = ExtractionConfig {
+        use_cache: false,
+        output_format: OutputFormat::Markdown,
+        ocr: Some(OcrConfig {
+            tessdata_path: Some(models.path().to_path_buf()),
+            pipeline: Some(
+                serde_json::from_value(serde_json::json!({
+                    "stages": [{"backend": "tesseract"}]
+                }))
+                .unwrap(),
+            ),
+            ..Default::default()
+        }),
+        pages: Some(PageConfig {
+            extract_pages: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let document = helpers::extract_bytes_document_blocking(&bytes, "application/pdf", &config).unwrap();
+    assert_eq!(
+        document
+            .processing_warnings
+            .iter()
+            .filter(|warning| warning.source == "ocr" && warning.message == LOST_GLYPH_WARNING)
+            .count(),
+        1,
+        "{:?}",
+        document.processing_warnings
+    );
+    assert!(
+        document.processing_warnings.iter().any(|warning| {
+            warning.message.contains("All OCR pipeline backends failed")
+                && warning
+                    .message
+                    .contains("only re-read glyph ink that the native text paints")
+        }),
+        "{:?}",
+        document.processing_warnings
+    );
+    assert_eq!(document.extraction_method, Some(ExtractionMethod::Native));
+    assert!(document.content.contains(MAPPED_EXPRESSION));
+}
