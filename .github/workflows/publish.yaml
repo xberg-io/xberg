@@ -1382,7 +1382,8 @@ jobs:
       matrix:
         php: ["8.3", "8.4", "8.5"]
         platform:
-          - { os: ubuntu-latest, label: linux-x86_64, target: x86_64-unknown-linux-gnu }
+          # ~keep Ubuntu 26.04 can mix Clang headers and libclang during PHP bindgen.
+          - { os: ubuntu-24.04, label: linux-x86_64, target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-24.04-arm, label: linux-arm64, target: aarch64-unknown-linux-gnu }
           - { os: macos-26, label: macos-arm64, target: aarch64-apple-darwin }
           - { os: windows-2022, label: windows-x86_64, target: x86_64-pc-windows-msvc }

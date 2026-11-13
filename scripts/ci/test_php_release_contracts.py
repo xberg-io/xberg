@@ -6,7 +6,34 @@ import tarfile
 import tempfile
 from pathlib import Path
 
-from test_publish_workflow_contracts import PHP_ABI_SCRIPT, PHP_STAGE_SCRIPT, WORKFLOW, job_block, run
+from test_publish_workflow_contracts import (
+    PHP_ABI_SCRIPT,
+    PHP_STAGE_SCRIPT,
+    WORKFLOW,
+    job_block,
+    rejected_contract,
+    run,
+)
+
+
+def assert_php_linux_x86_runner(block: str) -> None:
+    assert "runs-on: ${{ matrix.platform.os }}" in block
+    entries = re.findall(
+        r"(?m)^          - \{ os: ([\w.-]+), label: linux-x86_64, target: x86_64-unknown-linux-gnu \}$",
+        block,
+    )
+    assert entries == ["ubuntu-24.04"], f"PHP Linux x86_64 must use ubuntu-24.04, got {entries}"
+
+
+def test_php_linux_x86_uses_compatible_bindgen_runner() -> None:
+    block = job_block(WORKFLOW.read_text(), "php-extension")
+    assert_php_linux_x86_runner(block)
+    assert 'php: ["8.3", "8.4", "8.5"]' in block
+    assert "ref: ${{ needs.prepare.outputs.checkout_ref }}" in block.split("      # PHP stays", 1)[0]
+    mutated = block.replace("os: ubuntu-24.04, label: linux-x86_64", "os: ubuntu-latest, label: linux-x86_64")
+    assert mutated != block
+    with rejected_contract("PHP Linux x86_64 must use ubuntu-24.04, got ['ubuntu-latest']"):
+        assert_php_linux_x86_runner(mutated)
 
 
 def test_php_linux_artifacts_are_floor_built_and_verified() -> None:
