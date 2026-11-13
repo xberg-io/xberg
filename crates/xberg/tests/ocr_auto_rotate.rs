@@ -379,6 +379,91 @@ fn implicit_pdf_ocr_recovers_the_complete_rotated_table() {
     );
 }
 
+#[cfg(all(feature = "pdf", feature = "layout-detection", feature = "auto-rotate"))]
+#[test]
+#[ignore = "requires pinned PP-LCNet, RT-DETR, and TATR model files"]
+fn forced_layout_ocr_recovers_the_complete_rotated_financial_table() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    use tracing_subscriber::layer::{Context, SubscriberExt};
+    use xberg::types::ExtractionMethod;
+    use xberg::{LayoutDetectionConfig, LayoutStrategy, OutputFormat};
+
+    struct LayoutAcquisition(Arc<AtomicBool>);
+
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for LayoutAcquisition {
+        fn on_event(&self, event: &tracing::Event<'_>, _context: Context<'_, S>) {
+            if event.metadata().fields().field("layout_model").is_some() {
+                self.0.store(true, Ordering::Relaxed);
+            }
+        }
+    }
+
+    let layout_acquired = Arc::new(AtomicBool::new(false));
+    tracing::subscriber::set_global_default(
+        tracing_subscriber::registry().with(LayoutAcquisition(Arc::clone(&layout_acquired))),
+    )
+    .expect("install the layout route observer");
+
+    let bytes = include_bytes!("fixtures/ocr/rotated_financial_table.pdf");
+    let config = xberg::ExtractionConfig {
+        force_ocr: true,
+        use_cache: false,
+        output_format: OutputFormat::Plain,
+        layout: Some(LayoutDetectionConfig {
+            strategy: LayoutStrategy::Always,
+            acceleration: Some(xberg::AccelerationConfig {
+                provider: xberg::ExecutionProviderType::Cpu,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let document = helpers::extract_bytes_document_blocking(bytes, "application/pdf", &config)
+        .expect("forced layout OCR of the financial scan");
+    assert!(
+        layout_acquired.load(Ordering::Relaxed),
+        "layout engine was never acquired"
+    );
+    assert_eq!(document.extraction_method, Some(ExtractionMethod::Ocr));
+    assert!(
+        document.processing_warnings.iter().all(|warning| !matches!(
+            warning.source.as_ref(),
+            "layout" | "layout-ocr" | "pdf_tables" | "image_tables"
+        )),
+        "layout or table inference fell back: {:?}",
+        document.processing_warnings
+    );
+    assert_eq!(
+        document.tables.len(),
+        1,
+        "expected one financial table, got OCR text {:?}",
+        document.content
+    );
+    assert_recovered_financial_table(&document);
+
+    let disabled = helpers::extract_bytes_document_blocking(
+        bytes,
+        "application/pdf",
+        &xberg::ExtractionConfig {
+            ocr: Some(xberg::OcrConfig {
+                auto_rotate: Some(false),
+                ..Default::default()
+            }),
+            ..config
+        },
+    )
+    .expect("forced layout OCR with orientation recovery disabled");
+    assert_eq!(disabled.extraction_method, Some(ExtractionMethod::Ocr));
+    assert!(
+        disabled.tables.is_empty(),
+        "explicit orientation opt-out must be honored"
+    );
+}
+
 #[cfg(all(
     paddle_ocr,
     feature = "pdf",

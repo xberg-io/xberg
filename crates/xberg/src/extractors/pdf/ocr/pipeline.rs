@@ -4729,6 +4729,22 @@ pub(super) async fn extract_with_ocr_for_page(
     let can_prove_no_admitted_images = false;
     #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
     let can_prove_no_admitted_images;
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let forced_layout_frames: Option<&[bool]> = {
+        #[cfg(feature = "pdf")]
+        {
+            page_ocr_hints
+                .as_ref()
+                .filter(|_| config.force_ocr && has_layout_detections && base_ocr_config.auto_rotate.is_none())
+                .and_then(|hints| hints.layout_rasters_in_page_frame.as_deref())
+        }
+        #[cfg(not(feature = "pdf"))]
+        {
+            None
+        }
+    };
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let builtin_tesseract;
     let backend = {
         let registry = get_ocr_backend_registry();
         let registry = registry.read();
@@ -4747,7 +4763,8 @@ pub(super) async fn extract_with_ocr_for_page(
         }
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
         {
-            can_retry_orientation = !has_layout_detections && registry.is_builtin_tesseract(&backend);
+            builtin_tesseract = registry.is_builtin_tesseract(&backend);
+            can_retry_orientation = !has_layout_detections && builtin_tesseract;
         }
         backend
     };
@@ -5182,17 +5199,19 @@ pub(super) async fn extract_with_ocr_for_page(
     // nothing instead of contributing invented words. See `is_ocr_recognition_noise`.
     let ocr_output_thresholds = base_ocr_config.quality_thresholds.clone().unwrap_or_default();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-    let orientation_retry = if can_retry_orientation {
+    let orientation_retry = if can_retry_orientation || (builtin_tesseract && forced_layout_frames.is_some()) {
         detached_page
             .and_then(|source| source.orientation_retry.cloned())
             .or_else(|| {
-                (super::orientation_retry::OrientationRetry::allows(config) && content.is_some() && images.is_none())
-                    .then(|| {
-                        Arc::new(super::orientation_retry::OrientationRetry::new(
-                            config,
-                            ocr_output_thresholds.clone(),
-                        ))
-                    })
+                (super::orientation_retry::OrientationRetry::allows(config)
+                    && content.is_some()
+                    && (images.is_none() || forced_layout_frames.is_some()))
+                .then(|| {
+                    Arc::new(super::orientation_retry::OrientationRetry::new(
+                        config,
+                        ocr_output_thresholds.clone(),
+                    ))
+                })
             })
     } else {
         None
@@ -5482,7 +5501,14 @@ pub(super) async fn extract_with_ocr_for_page(
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 let retry = orientation_retry
                     .as_ref()
-                    .filter(|_| whole_page_raster)
+                    .filter(|_| {
+                        orientation_retry_page_eligible(
+                            whole_page_raster,
+                            has_layout_detections,
+                            forced_layout_frames,
+                            *page_idx,
+                        )
+                    })
                     .map(|retry| (Arc::clone(retry), Arc::clone(&upright_data)));
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 // The prose proof reads only the page's own words and geometry, so it holds wherever the
@@ -10516,4 +10542,27 @@ mod in_flight_page_tests {
             .collect();
         assert!(recovered.contains(&(3, true)) && recovered.contains(&(5, false)));
     }
+}
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+fn orientation_retry_page_eligible(
+    whole_page_raster: bool,
+    has_layout_detections: bool,
+    forced_layout_frames: Option<&[bool]>,
+    page_index: usize,
+) -> bool {
+    whole_page_raster
+        && (!has_layout_detections || forced_layout_frames.and_then(|frames| frames.get(page_index)) == Some(&true))
+}
+
+#[cfg(all(test, feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[test]
+fn layout_orientation_retry_uses_each_siblings_frame() {
+    let frames = Some([false, true, false].as_slice());
+    let eligible: Vec<_> = (0..4)
+        .filter(|&page| orientation_retry_page_eligible(true, true, frames, page))
+        .collect();
+    assert_eq!(eligible, [1]);
+    assert!(!orientation_retry_page_eligible(false, true, frames, 1));
+    assert!(!orientation_retry_page_eligible(true, true, None, 1));
+    assert!(orientation_retry_page_eligible(true, false, None, 1));
 }
