@@ -80,13 +80,12 @@ pub(super) fn infer_complete_leading_header(table: &mut Table, paths: &[PathCont
     if nearby.len() > MAX_GROUPED_HEADER_PATHS {
         return;
     }
-    let visible_shading = uncovered_shading(&nearby, |earlier, later| earlier.fill_color != later.fill_color);
-    let possible_shading = shading_rectangles(nearby);
+    let possible_shading = shading_rectangles(nearby.iter().copied());
     let first = &table.rows[0];
     let header_evidence = first.cells.iter().all(|cell| {
         cell.text.chars().any(char::is_alphabetic)
             && cell.spans.iter().all(|span| span.font_weight.is_bold())
-            && cell_is_shaded(cell, &visible_shading)
+            && cell_has_visible_shading(cell, &nearby)
     });
     let body_contrasts = table.rows[1..].iter().flat_map(|row| &row.cells).all(|cell| {
         cell.spans.iter().all(|span| !span.font_weight.is_bold()) && !cell_is_shaded(cell, &possible_shading)
@@ -99,6 +98,62 @@ pub(super) fn infer_complete_leading_header(table: &mut Table, paths: &[PathCont
     for cell in &mut table.rows[0].cells {
         cell.is_header = true;
     }
+}
+
+fn cell_has_visible_shading(cell: &TableCell, paths: &[&PathContent]) -> bool {
+    let Some(cell) = cell.bbox.filter(|cell| cell.area().is_finite() && cell.area() > 0.0) else {
+        return false;
+    };
+    let required = cell.area() * MIN_SHADED_CELL_AREA_RATIO;
+    paths.iter().enumerate().any(|(index, path)| {
+        let Some(shaded) = shading_rectangles([*path])
+            .first()
+            .and_then(|fill| fill.intersection(&cell))
+            .filter(|fill| fill.area() >= required)
+        else {
+            return false;
+        };
+        visible_area_at_least(shaded, &paths[index + 1..], path.fill_color, required)
+    })
+}
+
+fn visible_area_at_least(
+    shaded: Rect,
+    later_paths: &[&PathContent],
+    color: Option<crate::layout::Color>,
+    required: f32,
+) -> bool {
+    // Bound fragmentation on dense pages and withhold header inference when the proof exceeds it. ~keep
+    const MAX_VISIBLE_FRAGMENTS: usize = 512;
+    let mut visible = vec![shaded];
+    let mut remaining = Vec::new();
+    for cover in later_paths.iter().filter(|path| path.fill_color != color) {
+        let bounds = cover.rendered_bbox();
+        for rect in visible.drain(..) {
+            let Some(overlap) = rect.intersection(&bounds).filter(|overlap| overlap.area() > 0.0) else {
+                remaining.push(rect);
+                continue;
+            };
+            // Four disjoint strips leave only the area outside the overlap. ~keep
+            let strips = [
+                Rect::new(rect.x, rect.y, rect.width, overlap.top() - rect.top()),
+                Rect::new(rect.x, overlap.bottom(), rect.width, rect.bottom() - overlap.bottom()),
+                Rect::new(rect.x, overlap.y, overlap.left() - rect.left(), overlap.height),
+                Rect::new(
+                    overlap.right(),
+                    overlap.y,
+                    rect.right() - overlap.right(),
+                    overlap.height,
+                ),
+            ];
+            remaining.extend(strips.into_iter().filter(|strip| strip.area() > 0.0));
+        }
+        if remaining.len() > MAX_VISIBLE_FRAGMENTS || remaining.iter().map(Rect::area).sum::<f32>() < required {
+            return false;
+        }
+        std::mem::swap(&mut visible, &mut remaining);
+    }
+    true
 }
 
 type RuleStyle = ([u32; 3], u32);
@@ -222,7 +277,7 @@ fn repeated_schema_over_shaded_body(
         return false;
     }
     let possible_header_shading = shading_rectangles(paths.iter().copied());
-    let body_shading = uncovered_shading(paths, |_, _| true);
+    let body_shading = uncovered_shading(paths);
     groups.cells.iter().chain(&leaves.cells).all(|cell| {
         cell.bbox.is_some_and(|bounds| {
             possible_header_shading
@@ -243,7 +298,7 @@ fn repeated_schema_over_shaded_body(
 
 /// Reject a background touched by later rectangular paint, even if that paint is transparent:
 /// PathContent does not carry fill opacity, so visibility cannot be certified in that case. ~keep
-fn uncovered_shading(paths: &[&PathContent], obscures: impl Fn(&PathContent, &PathContent) -> bool) -> Vec<Rect> {
+fn uncovered_shading(paths: &[&PathContent]) -> Vec<Rect> {
     shading_rectangles(paths.iter().enumerate().filter_map(|(index, path)| {
         if path.fill_color.is_none() || !path.is_rectangle() {
             return None;
@@ -251,7 +306,6 @@ fn uncovered_shading(paths: &[&PathContent], obscures: impl Fn(&PathContent, &Pa
         let covered = paths[index + 1..].iter().any(|later| {
             later.fill_color.is_some()
                 && later.is_rectangle()
-                && obscures(path, later)
                 && later
                     .rendered_bbox()
                     .intersection(&path.rendered_bbox())

@@ -6559,7 +6559,7 @@ mod tests {
         bold_rows: &[usize],
         shaded_rows: &[usize],
         unshaded_header_column: Option<usize>,
-        overpaint: bool,
+        overpaint_height: f32,
     ) -> Vec<Table> {
         use crate::elements::PathContent;
         let mut paths = Vec::new();
@@ -6590,8 +6590,8 @@ mod tests {
                 }
             }
         }
-        if overpaint {
-            let mut cover = PathContent::rect(0., 40., 240., 20.);
+        if overpaint_height > 0.0 {
+            let mut cover = PathContent::rect(0., 40., 240., overpaint_height);
             cover.stroke_color = None;
             cover.fill_color = Some(Color::new(1., 1., 1.));
             paths.push(cover);
@@ -6604,7 +6604,7 @@ mod tests {
 
     #[test]
     fn source_header_complete_shaded_bold_labels_have_one_header_row() {
-        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], None, false);
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], None, 0.0);
         assert!(tables[0].has_header);
         assert!(tables[0].rows[0].is_header);
         assert!(tables[0].rows[0].cells.iter().all(|cell| cell.is_header));
@@ -6613,40 +6613,40 @@ mod tests {
 
     #[test]
     fn source_header_bold_numeric_first_row_is_not_promoted() {
-        let tables = source_header_probe(["10", "20", "30"], &[0], &[0], None, false);
+        let tables = source_header_probe(["10", "20", "30"], &[0], &[0], None, 0.0);
         assert!(!tables[0].has_header);
         assert!(tables[0].rows.iter().all(|row| !row.is_header));
     }
 
     #[test]
     fn source_header_bold_body_is_not_promoted_to_a_second_tier() {
-        let tables = source_header_probe(["Item", "Count", "Status"], &[0, 1], &[0], None, false);
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0, 1], &[0], None, 0.0);
         assert!(!tables[0].rows[1].is_header);
         assert!(tables[0].rows[1].cells.iter().all(|cell| !cell.is_header));
     }
 
     #[test]
     fn source_header_bold_without_independent_shading_is_not_promoted() {
-        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[], None, false);
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[], None, 0.0);
         assert!(!tables[0].has_header);
     }
 
     #[test]
     fn source_header_body_shading_does_not_prove_a_leading_header() {
-        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0, 1, 2], None, false);
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0, 1, 2], None, 0.0);
         assert!(!tables[0].has_header);
     }
 
     #[test]
     fn source_header_partial_shading_is_not_promoted() {
-        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], Some(1), false);
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], Some(1), 0.0);
         assert!(!tables[0].has_header);
         assert!(tables[0].rows.iter().all(|row| !row.is_header));
     }
 
     #[test]
     fn source_header_overpainted_shading_does_not_promote_bold_labels() {
-        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], None, true);
+        let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], None, 20.0);
         let table = &tables[0];
         assert!(!table.has_header);
         assert!(table.rows.iter().flat_map(|row| &row.cells).all(|cell| !cell.is_header));
@@ -6658,6 +6658,14 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["Item", "Count", "Status"]
         );
+    }
+
+    #[test]
+    fn source_header_partial_overpaint_applies_the_visible_coverage_threshold() {
+        for (height, expected) in [(1.0, true), (2.0, true), (3.0, false)] {
+            let tables = source_header_probe(["Item", "Count", "Status"], &[0], &[0], None, height);
+            assert_eq!(tables[0].has_header, expected, "overpaint height {height}");
+        }
     }
 
     fn nested_fill_source() -> (
