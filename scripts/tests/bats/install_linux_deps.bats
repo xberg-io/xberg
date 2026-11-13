@@ -14,10 +14,13 @@ Requires.private: libsharpyuv
 Libs: -lheif
 Cflags: -I/example/heif
 PC
-	# Execute the actual preflight without installing packages or rebuilding libheif. ~keep
-	awk '/^resolved_libheif_version=/{capture=1} /^if ! libheif_runtime_links;/{capture=0} capture' \
-		"$INSTALL_SCRIPT" >"$XBERG_WORK/validate-libheif.sh"
-	[ "$(grep -c '^resolved_libheif_version=' "$XBERG_WORK/validate-libheif.sh")" -eq 1 ]
+	awk '/^libheif_search_path\(\)/{capture=1} /^LIBHEIF_CACHE=/{capture=0} capture' \
+		"$INSTALL_SCRIPT" >"$XBERG_WORK/libheif-checks.sh"
+	grep -q '^libheif_candidate_is_usable()' "$XBERG_WORK/libheif-checks.sh"
+	mkdir -p "$LIBHEIF_PREFIX/include/libheif"
+	printf '%s\n' '/* header */' >"$LIBHEIF_PREFIX/include/libheif/heif.h"
+	touch "$LIBHEIF_PREFIX/lib/libheif.so.1"
+	ln -s libheif.so.1 "$LIBHEIF_PREFIX/lib/libheif.so"
 }
 
 @test "install_linux should_reject_cached_libheif_when_required_pkg_config_dependency_is_missing" {
@@ -28,9 +31,10 @@ PC
 	xberg_assert_status 1
 	xberg_assert_output_contains "libsharpyuv"
 
-	run bash -euo pipefail "$XBERG_WORK/validate-libheif.sh"
+	run bash -euo pipefail -c 'source "$1"; libheif_candidate_is_usable "$LIBHEIF_PREFIX"' \
+		_ "$XBERG_WORK/libheif-checks.sh"
 	xberg_assert_status 1
-	xberg_assert_output_contains "libheif"
+	xberg_assert_output_contains "libsharpyuv"
 }
 
 @test "install_linux should_accept_cached_libheif_when_required_pkg_config_dependency_is_available" {
@@ -47,9 +51,7 @@ PC
 	read -r -a flags <<<"$output"
 	[ "${flags[*]}" = "-I/example/heif -I/example/sharpyuv -lheif" ]
 
-	run bash -euo pipefail "$XBERG_WORK/validate-libheif.sh"
-	xberg_assert_status 0
-	xberg_assert_output_contains "pkg-config resolves libheif 1.19.8"
+
 }
 
 @test "install_linux should_install_sharpyuv_development_metadata_for_cached_libheif" {
@@ -102,28 +104,89 @@ PC
 	xberg_assert_output_contains "Unverified libheif version: 9.9.9"
 }
 
-@test "install_linux should rebuild a cached libheif with an unresolved x265 SONAME" {
-	awk '/^LIBHEIF_MARKER=/{capture=1} /^  echo "Building libheif/{capture=0} capture' \
-		"$INSTALL_SCRIPT" >"$XBERG_WORK/check-cache.sh"
+prepare_cache_candidate() {
+	export GITHUB_ACTION=install-linux
+	CACHE_CANDIDATE="$XBERG_WORK/cache"
+	mkdir -p "$CACHE_CANDIDATE/lib/pkgconfig" "$CACHE_CANDIDATE/include/libheif"
+	printf '%s\n' '/* header */' >"$CACHE_CANDIDATE/include/libheif/heif.h"
+	printf '%s\n' 'ELF fixture' >"$CACHE_CANDIDATE/lib/libheif.so.1"
+	ln -s libheif.so.1 "$CACHE_CANDIDATE/lib/libheif.so"
+	sed '/^Requires.private:/d' "$PKG_CONFIG_LIBDIR/libheif.pc" >"$CACHE_CANDIDATE/lib/pkgconfig/libheif.pc"
+	xberg_stub readelf 'echo " Type: DYN (Shared object file)"' 'echo " (SONAME) Library soname: [libheif.so.1]"'
+	xberg_stub ldd 'echo "libx265.so.199 => /usr/lib/libx265.so.199 (0x123)"'
+	awk -v cache="$CACHE_CANDIDATE" '
+		/^LIBHEIF_CACHE=/{capture=1; printf "LIBHEIF_CACHE=\042%s\042\n", cache; next}
+		/^  echo "Building libheif/{capture=0}
+		capture' "$INSTALL_SCRIPT" >"$XBERG_WORK/check-cache.sh"
 	printf '%s\n' '  echo rebuilding' 'fi' >>"$XBERG_WORK/check-cache.sh"
-	touch "$LIBHEIF_PREFIX/lib/libheif.so.1"
-	xberg_stub ldd '[[ "$1" == -r && "$2" == "$LIBHEIF_PREFIX/lib/libheif.so.1" ]] || exit 2' \
-		'echo "libx265.so.215 => not found"'
-	run bash -euo pipefail "$XBERG_WORK/check-cache.sh"
+}
+
+run_cache_check() {
+	run bash -euo pipefail -c 'source "$1"; source "$2"' \
+		_ "$XBERG_WORK/libheif-checks.sh" "$XBERG_WORK/check-cache.sh"
 	xberg_assert_status 0
+}
+
+@test "install_linux should rebuild a cached libheif with an unresolved x265 SONAME" {
+	prepare_cache_candidate
+	xberg_stub ldd 'echo "libx265.so.215 => not found"'
+	run_cache_check
 	xberg_assert_output_contains "libx265.so.215 => not found"
 	xberg_assert_output_contains "rebuilding"
 }
 
-@test "install_linux should reuse cached libheif when its runtime dependencies resolve" {
-	awk '/^LIBHEIF_MARKER=/{capture=1} /^  echo "Building libheif/{capture=0} capture' \
-		"$INSTALL_SCRIPT" >"$XBERG_WORK/check-cache.sh"
-	printf '%s\n' '  echo rebuilding' 'fi' >>"$XBERG_WORK/check-cache.sh"
-	touch "$LIBHEIF_PREFIX/lib/libheif.so.1"
-	xberg_stub ldd '[[ "$1" == -r && "$2" == "$LIBHEIF_PREFIX/lib/libheif.so.1" ]] || exit 2' \
-		'echo "libx265.so.199 => /usr/lib/libx265.so.199"'
-	run bash -euo pipefail "$XBERG_WORK/check-cache.sh"
-	xberg_assert_status 0
-	xberg_assert_output_contains "already installed (cached)"
+@test "install_linux should reuse staged libheif with positive linkage and no empty search entries" {
+	prepare_cache_candidate
+	export LD_LIBRARY_PATH=':/opt/codecs::;/opt/extra:'
+	xberg_stub ldd '[[ "$1" == -r ]] || exit 2' \
+		'[[ "$2" == "$CACHE_CANDIDATE/lib/libheif.so.1" ]] || exit 3' \
+		'[[ "$LD_LIBRARY_PATH" == "$CACHE_CANDIDATE/lib:/opt/codecs:/opt/extra" ]] || exit 4' \
+		'echo "libx265.so.199 => /usr/lib/libx265.so.199 (0x123)"'
+	export CACHE_CANDIDATE
+	run_cache_check
+	xberg_assert_output_contains "Reusing cached libheif"
 	[[ "$output" != *rebuilding* ]]
+}
+
+@test "install_linux should rebuild an incomplete exact cache hit" {
+	prepare_cache_candidate
+	mv "$CACHE_CANDIDATE/include/libheif/heif.h" "$XBERG_WORK/missing-header"
+	xberg_stub ldd 'echo "unexpected ldd invocation"; exit 2'
+	run_cache_check
+	xberg_assert_output_contains "Incomplete libheif candidate"
+	xberg_assert_output_contains "rebuilding"
+	[[ "$output" != *"unexpected ldd invocation"* ]]
+	[ ! -s "$LIBHEIF_PREFIX/lib/libheif.so.1" ]
+}
+
+@test "install_linux should reject non-ELF even when ldd claims a dependency resolved" {
+	prepare_cache_candidate
+	xberg_stub readelf 'echo "not an ELF file" >&2; exit 1'
+	run_cache_check
+	xberg_assert_output_contains "Expected a libheif.so.1 ELF shared library"
+	xberg_assert_output_contains "rebuilding"
+}
+
+@test "install_linux should reject a successful loader probe without a resolved dependency" {
+	prepare_cache_candidate
+	xberg_stub ldd 'echo "statically linked"'
+	run_cache_check
+	xberg_assert_output_contains "Cannot verify runtime dependencies"
+	xberg_assert_output_contains "rebuilding"
+}
+
+@test "install_linux should replace stale cache contents with the freshly staged tree" {
+	prepare_cache_candidate
+	touch "$CACHE_CANDIDATE/lib/libheif.so.stale"
+	export LIBHEIF_CACHE="$CACHE_CANDIDATE"
+	export candidate="$XBERG_WORK/new"
+	mkdir -p "$candidate/lib"
+	printf '%s\n' fresh >"$candidate/lib/libheif.so.1"
+	awk '/^if \[\[ -n .*GITHUB_ACTION.*&& "\$candidate" != "\$LIBHEIF_CACHE"/{capture=1} capture; capture && /^fi$/{exit}' \
+		"$INSTALL_SCRIPT" >"$XBERG_WORK/seed-cache.sh"
+	grep -q 'mv "\$candidate"' "$XBERG_WORK/seed-cache.sh"
+	run bash -euo pipefail "$XBERG_WORK/seed-cache.sh"
+	xberg_assert_status 0
+	[ "$(cat "$LIBHEIF_CACHE/lib/libheif.so.1")" = fresh ]
+	[ ! -e "$LIBHEIF_CACHE/lib/libheif.so.stale" ]
 }

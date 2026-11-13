@@ -76,43 +76,8 @@ runs:
       id: cache-libheif-linux
       uses: actions/cache@v6
       with:
-        path: |
-          /tmp/libheif-cache/usr/local/lib/libheif*
-          /tmp/libheif-cache/usr/local/lib/pkgconfig/libheif.pc
-          /tmp/libheif-cache/usr/local/include/libheif/
-          /tmp/libheif-cache/usr/local/share/libheif/
-        key: libheif-linux-${{ steps.libheif-linux-distro.outputs.distro }}-${{ runner.arch }}-v${{ inputs.libheif-version }}-cache-v6
-
-    - name: Restore cached libheif to /usr/local (Linux)
-      if: runner.os == 'Linux' && steps.cache-libheif-linux.outputs.cache-hit == 'true'
-      shell: bash
-      run: |
-        set -euo pipefail
-        cache_root=/tmp/libheif-cache/usr/local
-        echo "Restoring cached libheif from ${cache_root} to /usr/local..."
-        # Every downstream cargo build resolves libheif through the .pc file this step drops in
-        # /usr/local/lib/pkgconfig, so a failed copy here is not recoverable -- it must abort the
-        # job. The previous `2>/dev/null || true` made a failure indistinguishable from success:
-        # /usr/local/lib/pkgconfig does not exist on a fresh runner, so the .pc copy silently
-        # failed on every cache hit and install-linux.sh rebuilt libheif from source anyway. ~keep
-        for required in \
-          "${cache_root}/lib/pkgconfig/libheif.pc" \
-          "${cache_root}/include/libheif"; do
-          if [ ! -e "${required}" ]; then
-            echo "::error::libheif cache reported a hit but ${required} is missing; the cache entry is incomplete"
-            exit 1
-          fi
-        done
-        sudo mkdir -p /usr/local/lib/pkgconfig /usr/local/include /usr/local/share
-        sudo cp -a "${cache_root}"/lib/libheif* /usr/local/lib/
-        sudo cp -a "${cache_root}/lib/pkgconfig/libheif.pc" /usr/local/lib/pkgconfig/
-        sudo cp -a "${cache_root}/include/libheif" /usr/local/include/
-        # libheif 1.19.x installs no share/libheif; newer releases do. Genuinely optional. ~keep
-        if [ -d "${cache_root}/share/libheif" ]; then
-          sudo cp -a "${cache_root}/share/libheif" /usr/local/share/
-        fi
-        sudo ldconfig
-        echo "✓ Restored cached libheif"
+        path: /tmp/libheif-cache
+        key: libheif-linux-${{ steps.libheif-linux-distro.outputs.distro }}-${{ runner.arch }}-v${{ inputs.libheif-version }}-cache-v7
 
     - name: Install dependencies (Linux)
       if: runner.os == 'Linux'
