@@ -339,21 +339,30 @@ fn remove_marked_word(read: &mut ExtractedDocument, words: &MarkedWords) {
 }
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
-#[tokio::test]
-async fn page_quality_rejection_retries_sparse_glyphs_with_normal_raster_and_preprocessing() {
-    assert_sparse_glyph_attempts(QUALITY_CASE).await;
+const SPARSE_GLYPH_TEST_STACK_BYTES: usize = 32 * 1024 * 1024;
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+#[test]
+fn page_quality_rejection_retries_sparse_glyphs_with_normal_raster_and_preprocessing() {
+    super::super::run_on_ocr_test_stack(SPARSE_GLYPH_TEST_STACK_BYTES, || {
+        assert_sparse_glyph_attempts(QUALITY_CASE)
+    });
 }
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
-#[tokio::test]
-async fn missing_marked_word_retries_sparse_glyphs_with_normal_raster_and_preprocessing() {
-    assert_sparse_glyph_attempts(MISSING_WORD_CASE).await;
+#[test]
+fn missing_marked_word_retries_sparse_glyphs_with_normal_raster_and_preprocessing() {
+    super::super::run_on_ocr_test_stack(SPARSE_GLYPH_TEST_STACK_BYTES, || {
+        assert_sparse_glyph_attempts(MISSING_WORD_CASE)
+    });
 }
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
-#[tokio::test]
-async fn active_pdf_margin_uses_one_normal_density_read() {
-    assert_sparse_glyph_attempts(MARGIN_CASE).await;
+#[test]
+fn active_pdf_margin_uses_one_normal_density_read() {
+    super::super::run_on_ocr_test_stack(SPARSE_GLYPH_TEST_STACK_BYTES, || {
+        assert_sparse_glyph_attempts(MARGIN_CASE)
+    });
 }
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
