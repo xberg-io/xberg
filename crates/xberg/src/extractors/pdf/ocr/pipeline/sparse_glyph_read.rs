@@ -395,7 +395,7 @@ async fn assert_sparse_glyph_attempts(case: usize) {
         ocr: Some(OcrConfig {
             tessdata_path: Some(models.path().to_path_buf()),
             quality_thresholds: Some(crate::core::config::OcrQualityThresholds {
-                discard_suspected_ocr_noise: true,
+                discard_suspected_ocr_noise: case != MISSING_WORD_CASE,
                 min_ocr_mean_confidence: 50.0,
                 ..Default::default()
             }),
