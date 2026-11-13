@@ -69,6 +69,11 @@ depends = ["os:require linux darwin"]
 usage = 'arg "<profile>" help="Use warm or paddle for the classifier controls (paddle adds Paddle OCR) or native for the classifier-free controls"'
 run = 'bash scripts/ci/rust/run-explicit-sideways-tests.sh "$usage_profile"'
 
+["rust:test:deferred-osd"]
+description = "Qualify deferred native OSD on a warm retry engine"
+depends = ["os:require linux darwin"]
+run = "bash scripts/ci/rust/run-deferred-osd-test.sh"
+
 ["rust:test:khmer-native-retention"]
 description = "Qualify native Khmer preservation with the direct English OCR backend"
 depends = ["os:require linux darwin"]

@@ -214,7 +214,7 @@ mod tests {
 
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
-    #[ignore = "requires local Tesseract eng/osd packs and the verified Chinese fixture"]
+    #[ignore = "requires the verified OSD pack and Chinese fixture"]
     fn warm_retry_loads_deferred_osd_from_its_private_models() {
         const CASE: &str = "XBERG_RETRY_OSD_TEST_CASE";
         const TEST: &str = concat!(
@@ -250,7 +250,14 @@ mod tests {
     fn deferred_osd_child(warm: bool) {
         use xberg_tesseract::{Pix, TessPageSegMode};
 
-        let tessdata = std::env::var_os("XBERG_OSD_TESSDATA").expect("set XBERG_OSD_TESSDATA");
+        let osd_model = std::env::var_os("XBERG_OSD_TEST_MODEL")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                std::path::PathBuf::from(
+                    std::env::var_os("XBERG_OSD_TESSDATA").expect("set XBERG_OSD_TEST_MODEL or XBERG_OSD_TESSDATA"),
+                )
+                .join("osd.traineddata")
+            });
         let fixture = std::env::var_os("XBERG_OSD_FIXTURE").expect("set XBERG_OSD_FIXTURE");
         let image = image::open(fixture)
             .expect("decode the verified Chinese fixture")
@@ -258,8 +265,8 @@ mod tests {
         let pixels = Pix::from_raw_rgb(image.as_raw(), image.width(), image.height()).unwrap();
         let source = tempfile::tempdir().unwrap();
         let path = source.path().to_str().unwrap().to_owned();
-        let tessdata = std::path::Path::new(&tessdata);
-        std::fs::copy(tessdata.join("eng.traineddata"), source.path().join("eng.traineddata")).unwrap();
+        let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English model");
+        std::fs::write(source.path().join("eng.traineddata"), english).unwrap();
         let recognize = |api: &TesseractAPI, mode| {
             api.set_page_seg_mode(mode).unwrap();
             api.set_image_2(pixels.as_ptr()).unwrap();
@@ -273,7 +280,7 @@ mod tests {
             return;
         }
         let osd_file = source.path().join("osd.traineddata");
-        std::fs::copy(tessdata.join("osd.traineddata"), &osd_file).unwrap();
+        std::fs::copy(osd_model, &osd_file).unwrap();
         let models = ModelSet::snapshot(path, &["eng".into()], true).unwrap();
         let pools = RetryApiPools::new(1);
         pools

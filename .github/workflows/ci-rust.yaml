@@ -28,6 +28,7 @@ on:
       - ".github/actions/install-system-deps/**"
       - ".github/actions/setup-paddle-ocr-models/**"
       - ".github/actions/qualify-ocr-paddle-sideways/**"
+      - ".github/actions/qualify-ocr-orientation/**"
       # The gitlink selects which corpus fixtures the include_bytes! tests compile against, so a
       # pin bump changes what this workflow actually verifies. ~keep
       - "test_documents"
