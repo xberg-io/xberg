@@ -2646,6 +2646,33 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     &mut extraction_result,
                     config.security_limits.as_ref().unwrap_or(&Default::default()),
                 )?;
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                if correction_degrees == 0
+                    && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
+                    && !alternative_raster_pages.contains(&((page_idx + 1) as u32))
+                    && super::document::native_preservation_is_automatic(config, (page_idx + 1) as u32)
+                    && super::document::resolved_ocr_correction_degrees(&extraction_result.metadata)
+                        .is_none_or(|angle| angle == 0)
+                    && crate::plugins::registry::get_ocr_backend_registry().read().is_builtin_tesseract(backend)
+                    && super::layer_token_recovery::is_english_read(&extraction_result)
+                {
+                    let limits = super::native_word_coverage::InkProofLimits {
+                        thresholds: &ocr_output_thresholds,
+                        max_working_bytes: super::hidden_layer::preview_byte_limit(config),
+                        cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
+                    };
+                    let additions = super::layer_token_recovery::plan_minority_khmer(
+                        &render_doc,
+                        page_idx,
+                        &extraction_result,
+                        &limits,
+                    );
+                    super::layer_token_recovery::apply_minority_khmer(
+                        &mut extraction_result,
+                        &additions,
+                        limits.cancelled,
+                    );
+                }
                 if let Some(metadata) = extraction_result.metadata.image_preprocessing.clone() {
                     preprocessing_by_page.insert((page_idx + 1) as u32, metadata);
                 }

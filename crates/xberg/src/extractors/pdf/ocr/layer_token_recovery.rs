@@ -940,3 +940,7 @@ mod tests;
 #[cfg(test)]
 #[path = "layer_token_recovery_pdf_tests.rs"]
 mod pdf_tests;
+
+#[path = "layer_token_recovery/minority_khmer.rs"]
+mod minority_khmer;
+pub(super) use minority_khmer::{apply_minority_khmer, is_english_read, plan_minority_khmer};
