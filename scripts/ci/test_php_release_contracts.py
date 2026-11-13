@@ -29,11 +29,42 @@ def test_php_linux_x86_uses_compatible_bindgen_runner() -> None:
     block = job_block(WORKFLOW.read_text(), "php-extension")
     assert_php_linux_x86_runner(block)
     assert 'php: ["8.3", "8.4", "8.5"]' in block
-    assert "ref: ${{ needs.prepare.outputs.checkout_ref }}" in block.split("      # PHP stays", 1)[0]
+    assert "ref: ${{ needs.prepare.outputs.php_checkout_sha }}" in block.split("      # PHP stays", 1)[0]
     mutated = block.replace("os: ubuntu-24.04, label: linux-x86_64", "os: ubuntu-latest, label: linux-x86_64")
     assert mutated != block
     with rejected_contract("PHP Linux x86_64 must use ubuntu-24.04, got ['ubuntu-latest']"):
         assert_php_linux_x86_runner(mutated)
+
+
+def test_php_source_resolves_symbolic_refs_before_the_matrix() -> None:
+    workflow = WORKFLOW.read_text()
+    prepare = job_block(workflow, "prepare")
+    php = job_block(workflow, "php-extension")
+    assert "checkout_ref: ${{ steps.meta.outputs.checkout_ref }}" in prepare
+    assert "php_checkout_sha: ${{ steps.php-source.outputs.sha }}" in prepare
+    assert "ref: ${{ needs.prepare.outputs.php_checkout_sha }}" in php
+    assert "ref: ${{ needs.prepare.outputs.checkout_ref }}" not in php
+
+    step = prepare.split("      - name: Resolve PHP source commit", 1)[1].split("\n      #", 1)[0]
+    assert "PHP_CHECKOUT_REF: ${{ steps.meta.outputs.checkout_ref }}" in step
+    script = "\n".join(line[10:] for line in step.split("        run: |\n", 1)[1].splitlines())
+    root = WORKFLOW.parents[2]
+    with tempfile.TemporaryDirectory() as directory:
+        output = Path(directory) / "output"
+        env = {**os.environ, "GITHUB_OUTPUT": str(output)}
+        expected = run(["git", "rev-parse", "HEAD^{commit}"], root)
+        assert expected.returncode == 0, expected.stderr
+        for ref in ("HEAD", expected.stdout.strip()):
+            output.write_text("")
+            result = run(["bash", "-c", script], root, {**env, "PHP_CHECKOUT_REF": ref})
+            assert result.returncode == 0, result.stderr
+            assert output.read_text() == f"sha={expected.stdout}"
+        output.write_text("")
+        result = run(
+            ["bash", "-c", script], root, {**env, "PHP_CHECKOUT_REF": "refs/tags/nonexistent-php-recovery-control"}
+        )
+        assert result.returncode != 0
+        assert output.read_text() == ""
 
 
 def test_php_linux_artifacts_are_floor_built_and_verified() -> None:

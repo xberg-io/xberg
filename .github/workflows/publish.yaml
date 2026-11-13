@@ -90,6 +90,7 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       ref: ${{ steps.meta.outputs.ref }}
       checkout_ref: ${{ steps.meta.outputs.checkout_ref }}
+      php_checkout_sha: ${{ steps.php-source.outputs.sha }}
       target_sha: ${{ steps.meta.outputs.target_sha }}
       matrix_ref: ${{ steps.meta.outputs.matrix_ref }}
       is_tag: ${{ steps.meta.outputs.is_tag }}
@@ -151,6 +152,17 @@ jobs:
       - name: Resolve release metadata
         id: meta
         uses: xberg-io/actions/prepare-release-metadata@v1
+
+      - name: Resolve PHP source commit
+        id: php-source
+        if: steps.meta.outputs.release_php == 'true'
+        shell: bash
+        env:
+          PHP_CHECKOUT_REF: ${{ steps.meta.outputs.checkout_ref }}
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse --verify --end-of-options "${PHP_CHECKOUT_REF:?}^{commit}")"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       # Created NON-draft (published) so the `release: [created]` event fires
       # immediately and publish-docker.yaml runs as an independent parallel
@@ -1390,7 +1402,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.prepare.outputs.checkout_ref }}
+          ref: ${{ needs.prepare.outputs.php_checkout_sha }}
           fetch-depth: 0
 
           submodules: false
