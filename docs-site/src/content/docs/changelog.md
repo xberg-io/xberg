@@ -241,6 +241,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Render standard Latin Type 1 fonts using WinAnsi glyphs when the text extraction map disagrees.** OCR can read the visible text even when the PDF maps its glyphs to unrelated characters. (Refs #2826, #3147)
+
 - **(pdf): Keep overprinted process-color text visible in native PDF rasters used for OCR.** This fixes missing glyphs reproduced with overprinted Separation Black text. (Refs #2817)
 
 - **(pdf): Recover tables on rotated scanned pages during forced layout OCR.** Table bounds are reported in PDF page points. (#3131)

@@ -574,6 +574,37 @@ pub const fn is_lost_glyph_marker(c: char) -> bool {
     c == '\u{FFFD}' || c == LOST_SYMBOL_GLYPH_MARKER
 }
 
+/// Select glyphs for a substitute face using the PDF font's encoding.
+pub(crate) fn decode_winansi_type1_for_paint(
+    font: &FontInfo,
+    bytes: &[u8],
+    policy: DecodePolicy,
+    drops: &mut GlyphDropTally,
+) -> Option<String> {
+    let super::Encoding::Standard(encoding) = &font.encoding else {
+        return None;
+    };
+    if font.subtype != "Type1"
+        || font.embedded_font_data.is_some()
+        || font.to_unicode.is_none()
+        || !font.has_standard_font_metrics()
+        || font.is_symbol_font()
+        || encoding != "WinAnsiEncoding"
+    {
+        return None;
+    }
+    // ToUnicode describes extraction text and can disagree with the encoded glyph. ~keep
+    let mut text = String::with_capacity(bytes.len());
+    for &byte in bytes {
+        if let Some(glyph) = super::font_dict::standard_encoding_lookup(encoding, byte) {
+            text.push_str(&glyph);
+        } else {
+            drops.record("no encoding mapping", u32::from(byte), 0);
+        }
+    }
+    Some(filter_decoded_text(&text, policy))
+}
+
 pub(crate) fn decode_text_to_unicode(
     bytes: &[u8],
     font: Option<&FontInfo>,

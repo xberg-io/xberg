@@ -445,7 +445,7 @@ startxref
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /EN 11 0 R /BAD 12 0 R >> >> /Contents 8 0 R >>
 endobj
 8 0 obj
-<< /Length 10930 >>
+<< /Length 10954 >>
 stream
 q 0.75 0 0 0.75 0 168 cm
 BT /F1 18 Tf
@@ -720,8 +720,8 @@ BT /EN 9 Tf 0 Tc
 1 0 0 1 225 102 Tm (et ar y by po st or by el ec tr on ic) Tj
 1 0 0 1 225 88 Tm (ma il .) Tj
 ET
-BT /EN 12 Tf 1 0 0 1 54 770 Tm (Morning volunteers prepare the auditorium.) Tj 1 0 0 1 54 28 Tm (Evening visitors collect supplies at reception.) Tj ET
-BT /BAD 12 Tf 1 0 0 1 54 748 Tm (Volunteers deliver library supplies before the community meeting.) Tj 1 0 0 1 470 704 Tm (id) Tj ET
+BT /EN 12 Tf 1 0 0 1 54 770 Tm (Morning volunteers prepare the auditorium.) Tj 1 0 0 1 54 28 Tm (Evening visitors collect supplies at reception. Show your ) Tj /BAD 12 Tf (id) Tj /EN 12 Tf ( card.) Tj ET
+BT /BAD 12 Tf 1 0 0 1 54 48 Tm (Volunteers deliver library supplies before the community meeting.) Tj ET
 endstream
 endobj
 11 0 obj
@@ -742,13 +742,13 @@ xref
 8 1
 0000020331 00000 n 
 11 1
-0000031313 00000 n 
+0000031337 00000 n 
 12 1
-0000031411 00000 n 
+0000031435 00000 n 
 13 1
-0000031527 00000 n 
+0000031551 00000 n 
 trailer
 << /Size 14 /Root 1 0 R /Prev 19894 >>
 startxref
-32865
+32889
 %%EOF

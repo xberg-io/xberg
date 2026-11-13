@@ -6183,7 +6183,7 @@ fn builtin_encoding_looks_like_cipher(prog_enc: &HashMap<u8, char>, std_name: &s
 }
 
 /// The Unicode string for this character, or None if not in the encoding.
-fn standard_encoding_lookup(encoding: &str, code: u8) -> Option<String> {
+pub(super) fn standard_encoding_lookup(encoding: &str, code: u8) -> Option<String> {
     match encoding {
         "PDFDocEncoding" => pdfdoc_encoding_lookup(code).map(|c| c.to_string()),
         "WinAnsiEncoding" => {

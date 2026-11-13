@@ -132,6 +132,56 @@ fn raster_with_font_provider(embedded: bool, explicit_winansi: bool, db: fontdb:
     raster
 }
 
+fn render_encoded_type1(encoding: &str, content: &[u8], to_unicode: Option<&[u8]>) -> (String, RenderedImage) {
+    let reference = if to_unicode.is_some() { " /ToUnicode 6 0 R" } else { "" };
+    let mut fonts = vec![
+        format!("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /{encoding}{reference} >>").into_bytes(),
+    ];
+    fonts.extend(to_unicode.map(|map| pdf_stream("", map)));
+    let doc = page_pdf((100, 100), content, fonts);
+    let text = doc
+        .extract_spans(0)
+        .unwrap()
+        .iter()
+        .map(|span| span.text.as_str())
+        .collect();
+    let mut renderer = PageRenderer::new(RenderOptions::with_dpi(72).as_raw());
+    renderer.text_rasterizer = TextRasterizer::with_fontdb(Arc::new(fontdb::Database::new()));
+    (text, renderer.render_page(&doc, 0).unwrap())
+}
+
+#[test]
+fn winansi_type1_paints_declared_encoding_with_conflicting_to_unicode() {
+    let render = |map| render_encoded_type1("WinAnsiEncoding", b"BT /F0 45 Tf 20 30 Td (id) Tj ET", map);
+    let (reference_text, reference) = render(None);
+    let (mapped_text, mapped) = render(Some(
+        b"begincmap 1 begincodespacerange <00> <FF> endcodespacerange \
+          2 beginbfchar <69> <1780> <64> <1781> endbfchar endcmap",
+    ));
+    assert_eq!(reference_text, "id");
+    assert_eq!(mapped_text, "កខ");
+    assert!(reference.data.as_chunks::<4>().0.iter().any(has_ink));
+    assert!(mapped.data == reference.data, "ToUnicode changed the painted glyphs");
+}
+
+#[test]
+fn standard_encoding_quoteleft_keeps_its_shape_with_to_unicode() {
+    let (text, quote) = render_encoded_type1(
+        "StandardEncoding",
+        b"BT /F0 45 Tf 20 30 Td <60> Tj ET",
+        Some(
+            b"begincmap 1 begincodespacerange <00> <FF> endcodespacerange \
+               1 beginbfchar <60> <2018> endbfchar endcmap",
+        ),
+    );
+    let (_, reference) = render_encoded_type1("WinAnsiEncoding", b"BT /F0 45 Tf 20 30 Td <91> Tj ET", None);
+    let (_, grave) = render_encoded_type1("WinAnsiEncoding", b"BT /F0 45 Tf 20 30 Td <60> Tj ET", None);
+    assert_eq!(text, "‘");
+    assert!(reference.data.as_chunks::<4>().0.iter().any(has_ink));
+    assert!(reference.data != grave.data, "quoteleft and grave controls must differ");
+    assert!(quote.data == reference.data, "StandardEncoding 0x60 changed shape");
+}
+
 const LATIN_O: [bool; 5] = [false, true, false, true, false];
 
 #[test]

@@ -14,7 +14,7 @@ khmer = subprocess.check_output(["mutool", "show", "-b", source, "8"])
 latin = " ".join(namespace["LINES"] * (2 if control in ("ordered", "overlap", "mixed-map") else 3))
 spacing = {"clean": 0, "tc1": 1, "tc2": 2, "tc3": 3, "tc4": 4, "tc6": 6, "fragmented": 0, "garbled": 0}[variant]
 if variant == "fragmented":
-    latin = " ".join(" ".join(word[i:i+2] for i in range(0, len(word), 2)) for word in latin.split())
+    latin = " ".join(" ".join(word[i : i + 2] for i in range(0, len(word), 2)) for word in latin.split())
 lines = textwrap.wrap(latin, width=38 if spacing or control in ("ordered", "overlap", "mixed-map") else 62)
 commands = []
 for i, line in enumerate(lines):
@@ -23,7 +23,13 @@ for i, line in enumerate(lines):
     y = (410 - 14 * (i % 26)) if ordered_fixture else (470 - 13 * (i % 32))
     text = line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
     commands.append(f"1 0 0 1 {x} {y} Tm ({text}) Tj")
-content = b"q 0.75 0 0 0.75 0 218 cm\n" + khmer + f"\nQ\nBT /EN 9 Tf {spacing} Tc\n".encode() + "\n".join(commands).encode() + b"\nET\n"
+content = (
+    b"q 0.75 0 0 0.75 0 218 cm\n"
+    + khmer
+    + f"\nQ\nBT /EN 9 Tf {spacing} Tc\n".encode()
+    + "\n".join(commands).encode()
+    + b"\nET\n"
+)
 if variant == "garbled":
     content += b"BT /BAD 9 Tf 1 0 0 1 50 35 Tm (NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN) Tj ET\n"
 if control == "hidden":
@@ -37,9 +43,15 @@ if control == "overlap":
     content = content.replace(b"BT /EN 9 Tf", b"BT 0 g /EN 9 Tf", 1)
     content += b"BT /EN 12 Tf 1 0 0 1 54 724 Tm (Visible library volunteers prepare supplies.) Tj ET\n"
 if control == "mixed-map":
-    content += b"BT /BAD 12 Tf 1 0 0 1 54 748 Tm (Volunteers deliver library supplies before the community meeting.) Tj 1 0 0 1 470 704 Tm (id) Tj ET\n"
+    content = content.replace(
+        b"(Evening visitors collect supplies at reception.) Tj",
+        b"(Evening visitors collect supplies at reception. Show your ) Tj /BAD 12 Tf (id) Tj /EN 12 Tf ( card.) Tj",
+    )
+    content += (
+        b"BT /BAD 12 Tf 1 0 0 1 54 48 Tm (Volunteers deliver library supplies before the community meeting.) Tj ET\n"
+    )
 if control == "wrong-map":
-    content = content[content.index(b"\nQ\n") + 3:]
+    content = content[content.index(b"\nQ\n") + 3 :]
     content += b"BT /BAD 12 Tf 1 0 0 1 54 760 Tm (Volunteers deliver library supplies before the community meeting.) Tj 1 0 0 1 54 735 Tm (Families can collect the remaining equipment at the reception desk.) Tj ET\n"
 objects = {
     3: b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /EN 11 0 R /BAD 12 0 R >> >> /Contents 8 0 R >>",

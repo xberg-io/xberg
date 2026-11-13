@@ -965,16 +965,18 @@ impl TextRasterizer {
     /// about what they draw.
     fn decode_text_to_unicode(&self, bytes: &[u8], font: Option<&crate::fonts::FontInfo>) -> (String, GlyphDropTally) {
         let mut undecodable = GlyphDropTally::default();
-        let result = crate::fonts::unicode_decode::decode_text_to_unicode(
-            bytes,
-            font,
-            DecodePolicy {
-                preserve_unmapped: false,
-                decompose_ligatures: true,
-                question_mark_for_invalid: false,
-            },
-            Some(&mut undecodable),
-        );
+        let policy = DecodePolicy {
+            preserve_unmapped: false,
+            decompose_ligatures: true,
+            question_mark_for_invalid: false,
+        };
+        if let Some(font) = font
+            && let Some(text) =
+                crate::fonts::unicode_decode::decode_winansi_type1_for_paint(font, bytes, policy, &mut undecodable)
+        {
+            return (text, undecodable);
+        }
+        let result = crate::fonts::unicode_decode::decode_text_to_unicode(bytes, font, policy, Some(&mut undecodable));
         (result, undecodable)
     }
 
