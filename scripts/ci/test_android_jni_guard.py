@@ -16,7 +16,11 @@ def elf(machine: int) -> bytes:
     header = bytearray(64)
     header[:7] = b"\x7fELF\x02\x01\x01"
     struct.pack_into("<HH", header, 16, 3, machine)
-    return bytes(header)
+    struct.pack_into("<I", header, 20, 1)
+    struct.pack_into("<Q", header, 32, 64)
+    struct.pack_into("<3H", header, 52, 64, 56, 1)
+    segment = struct.pack("<II6Q", 1, 5, 120, 120, 0, 8, 8, 8)
+    return bytes(header) + segment + bytes(8)
 
 
 class AndroidJniGuardTests(unittest.TestCase):
@@ -33,6 +37,7 @@ class AndroidJniGuardTests(unittest.TestCase):
             (None, "No such file"),
             (b"", "ELF64"),
             (elf(62), "expected arm64-v8a"),
+            (elf(183)[:-1], "truncated ELF segment"),
             (elf(183), ""),
         ]:
             with self.subTest(expected=expected), tempfile.TemporaryDirectory() as directory:
@@ -54,7 +59,13 @@ class AndroidJniGuardTests(unittest.TestCase):
                     assert (destination / "x86_64" / LIBRARY).read_bytes() == elf(62)
 
     def test_aar_requires_both_matching_jni_entries(self) -> None:
-        for payload, expected in [(None, "found 0"), (b"", "ELF64"), (elf(183), "expected x86_64"), (elf(62), "")]:
+        for payload, expected in [
+            (None, "found 0"),
+            (b"", "ELF64"),
+            (elf(183), "expected x86_64"),
+            (elf(62)[:64], "truncated ELF program header table"),
+            (elf(62), ""),
+        ]:
             with self.subTest(expected=expected), tempfile.TemporaryDirectory() as directory:
                 aar = Path(directory) / "release.aar"
                 with zipfile.ZipFile(aar, "w") as archive:

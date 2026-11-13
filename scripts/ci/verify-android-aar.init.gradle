@@ -1,16 +1,24 @@
+import org.gradle.api.publish.PublishingExtension
+import org.gradle.api.publish.maven.MavenPublication
+
 gradle.projectsEvaluated {
     def project = gradle.rootProject
-    def bundle = project.tasks.named("bundleReleaseAar")
+    def publications = project.extensions.getByType(PublishingExtension).publications
+        .withType(MavenPublication).findAll { it.groupId == "io.xberg" && it.artifactId == "xberg-android" }
+    if (publications.size() != 1) {
+        throw new GradleException("Expected one io.xberg:xberg-android Maven publication, found: ${publications*.name}")
+    }
+    def archives = publications.first().artifacts.findAll { it.extension == "aar" && !it.classifier }
+    if (archives.size() != 1) {
+        throw new GradleException("Expected one main AAR in the Android Maven publication, found: ${archives*.file}")
+    }
+    def artifact = archives.first()
     def verify = project.tasks.register("verifyReleaseAarJni") {
-        dependsOn(bundle)
+        dependsOn(artifact.buildDependencies)
         doLast {
-            def archives = bundle.get().outputs.files.files.findAll { it.name.endsWith(".aar") }
-            if (archives.size() != 1) {
-                throw new GradleException("Expected one release AAR from bundleReleaseAar, found: ${archives}")
-            }
             def check = project.providers.exec {
                 commandLine "python3", project.file("../../.release-tools/scripts/ci/verify-android-jni.py"),
-                    "verify-aar", archives.first()
+                    "verify-aar", artifact.file
                 ignoreExitValue = true
             }
             if (check.result.get().exitValue != 0) {
