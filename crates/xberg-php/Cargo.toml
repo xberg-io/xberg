@@ -74,7 +74,7 @@ xml = ["xberg/xml"]
 [dependencies]
 async-trait = "0.1"
 crawlberg = { default-features = false, version = "1.13.0" }
-ext-php-rs = "0.16.4"
+ext-php-rs = "0.16.3"
 html-to-markdown-rs = { default-features = false, version = "3.22.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
