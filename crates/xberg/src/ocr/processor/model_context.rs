@@ -70,7 +70,9 @@ impl ModelContext {
     }
 
     fn select_retry(&mut self, config: &TesseractConfig, directories: Vec<String>, noisy_below: f64) {
-        let han = match RetryModels::resolve_han(&directories, &config.language, config.psm) {
+        let han = match RetryModels::resolve_han(&directories, &config.language, config.psm, |error| {
+            self.invalidate_vertical_cache(error)
+        }) {
             Ok(snapshot) => snapshot,
             Err(error) => {
                 self.invalidate_han_cache(&error);
@@ -200,7 +202,9 @@ impl ModelContext {
             return true;
         };
         let expected = retry.models.as_ref().and_then(|models| models.han.as_ref());
-        let error = match RetryModels::resolve_han(&retry.directories, &config.language, config.psm) {
+        let error = match RetryModels::resolve_han(&retry.directories, &config.language, config.psm, |error| {
+            self.invalidate_vertical_cache(error)
+        }) {
             Ok(current) if current.as_ref() == expected => return true,
             Ok(_) => OcrError::ProcessingFailed("Selected Han retry models changed during OCR".into()),
             Err(error) => error,

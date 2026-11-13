@@ -80,7 +80,11 @@ fn preserve_readable_lines(first: &[TsvWord], merged: &mut Merged) -> bool {
         .into_iter()
         .filter(|line| {
             line.right - line.left >= 2 * (line.bottom - line.top)
-                && line.words.iter().filter(|word| readable(word)).count() >= 3
+                && (line.words.iter().filter(|word| readable(word)).count() >= 3
+                    || line
+                        .words
+                        .iter()
+                        .all(|word| word.conf >= 90.0 && super::is_protected_text(super::core(&word.text))))
         })
         .collect();
     if protected.is_empty() {
@@ -207,6 +211,24 @@ mod tests {
             word.conf = 20.0;
         }
         assert!(!first_read_candidate(&words, 11));
+    }
+
+    #[test]
+    fn short_horizontal_labels_and_numbers_survive_page_replacement() {
+        for text in ["ID", "42", "A3"] {
+            let mut label = word(1, text, 95.0);
+            label.width = 24;
+            label.height = 10;
+            let mut retry = word(2, "流産における出血", 90.0);
+            retry.top = 50;
+            let mut merged = Merged {
+                lines: vec![vec![retry]],
+                admitted: 1,
+                ..Default::default()
+            };
+            assert!(preserve_readable_lines(&[label], &mut merged));
+            assert_eq!(merged.lines[0][0].text, text);
+        }
     }
 
     #[test]

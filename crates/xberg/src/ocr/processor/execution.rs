@@ -5611,6 +5611,67 @@ mod tests {
         bytes.filter(|_| has_model)
     }
 
+    #[test]
+    #[serial]
+    fn vertical_japanese_snapshot_read_failure_preserves_horizontal_han() {
+        let Some(image) = crate::utils::read_test_fixture("images/chi_sim_image.jpeg") else {
+            assert!(std::env::var_os("XBERG_REQUIRE_VERTICAL_JAPANESE_FIXTURES").is_none());
+            return;
+        };
+        let root = tempdir().unwrap();
+        let directories = super::super::validation::tessdata_search_dirs(
+            None,
+            &super::super::validation::TessdataEnv::from_process(),
+        );
+        for name in ["eng", "osd", "chi_sim"] {
+            let filename = format!("{name}.traineddata");
+            let Some(model) = directories
+                .iter()
+                .map(|dir| std::path::Path::new(dir).join(&filename))
+                .find(|p| p.is_file())
+            else {
+                assert!(
+                    std::env::var_os("XBERG_REQUIRE_VERTICAL_JAPANESE_FIXTURES").is_none(),
+                    "missing {filename}"
+                );
+                return;
+            };
+            std::fs::copy(model, root.path().join(filename)).unwrap();
+        }
+        let vertical = root.path().join("jpn_vert.traineddata");
+        std::fs::create_dir(&vertical).unwrap();
+        let config = TesseractConfig {
+            tessdata_path: Some(root.path().into()),
+            psm: 3,
+            use_cache: true,
+            ..Default::default()
+        };
+        let cache_dir = tempdir().unwrap();
+        let cache = OcrCache::new(Some(cache_dir.path().to_path_buf())).unwrap();
+        let pool = TesseractApiPool::new();
+        let models = ModelContext::resolve_with_retry(&config, Some(75.0)).unwrap();
+        assert!(
+            models.retry_models(&config, 0.0, || true).is_some(),
+            "horizontal snapshot survives the unreadable vertical model"
+        );
+        assert!(
+            models.if_result_current(&config, || ()).is_none(),
+            "failed snapshot must not be cached"
+        );
+        let result = process_image_with_retry(
+            &image,
+            &config,
+            &cache,
+            &pool,
+            None,
+            ImageOcrPolicy::Default,
+            Some(75.0),
+        )
+        .unwrap();
+        assert_eq!(result.metadata[script_retry::METADATA_KEY]["model"], "chi_sim");
+        assert!(han_letters(&result.content) > 0, "{:?}", result.content);
+    }
+
     #[tokio::test]
     #[serial]
     async fn mixed_vertical_japanese_preserves_the_horizontal_heading() {

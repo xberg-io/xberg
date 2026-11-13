@@ -256,7 +256,7 @@ impl RetryModels {
     #[cfg(test)]
     fn resolve(directories: &[String], language: &str, psm: u8) -> Result<Option<Self>, OcrError> {
         Ok(Self::from_snapshots(
-            Self::resolve_han(directories, language, psm)?,
+            Self::resolve_han(directories, language, psm, |_| {})?,
             Self::resolve_requested_khmer(directories, language, psm)?,
         ))
     }
@@ -273,7 +273,12 @@ impl RetryModels {
         }
     }
 
-    pub(super) fn resolve_han(directories: &[String], language: &str, psm: u8) -> Result<Option<HanModels>, OcrError> {
+    pub(super) fn resolve_han(
+        directories: &[String],
+        language: &str,
+        psm: u8,
+        on_vertical_error: impl FnOnce(&OcrError),
+    ) -> Result<Option<HanModels>, OcrError> {
         if !supports_retry_language(language) {
             return Ok(None);
         }
@@ -288,7 +293,13 @@ impl RetryModels {
         let vertical_japanese = match vertical_japanese_directory(directories, language)
             .filter(|_| supports_vertical_japanese(language, psm))
         {
-            Some(directory) => Some(ModelSet::snapshot(directory, &[VERTICAL_JAPANESE_MODEL.into()], false)?),
+            Some(directory) => match ModelSet::snapshot(directory, &[VERTICAL_JAPANESE_MODEL.into()], false) {
+                Ok(models) => Some(models),
+                Err(error) => {
+                    on_vertical_error(&error);
+                    None
+                }
+            },
             None => None,
         };
         Ok(
@@ -2071,7 +2082,7 @@ mod tests {
     fn broken_vertical_japanese_engine_falls_through_to_working_horizontal_han() {
         let fixture = crate::utils::read_test_fixture("images/chi_sim_image.jpeg");
         let directories = tessdata_search_dirs(None, &TessdataEnv::from_process());
-        let horizontal = RetryModels::resolve_han(&directories, "eng", 6)
+        let horizontal = RetryModels::resolve_han(&directories, "eng", 6, |_| {})
             .unwrap()
             .and_then(|models| models.horizontal);
         if std::env::var_os("XBERG_REQUIRE_VERTICAL_JAPANESE_FIXTURES").is_some() {
@@ -2126,15 +2137,31 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let directories = [root.path().to_str().unwrap().to_owned()];
         let model = root.path().join("jpn_vert.traineddata");
-        assert!(RetryModels::resolve_han(&directories, "eng", 11).unwrap().is_none());
+        assert!(
+            RetryModels::resolve_han(&directories, "eng", 11, |_| {})
+                .unwrap()
+                .is_none()
+        );
         std::fs::write(&model, b"japanese-v1").unwrap();
-        let first = RetryModels::resolve_han(&directories, "eng", 11).unwrap().unwrap();
+        let first = RetryModels::resolve_han(&directories, "eng", 11, |_| {})
+            .unwrap()
+            .unwrap();
         assert!(first.horizontal.is_none());
         assert_eq!(first.vertical_japanese.as_ref().unwrap().languages, "jpn_vert");
-        assert!(RetryModels::resolve_han(&directories, "eng", 6).unwrap().is_none());
-        assert!(RetryModels::resolve_han(&directories, "jpn_vert", 5).unwrap().is_none());
+        assert!(
+            RetryModels::resolve_han(&directories, "eng", 6, |_| {})
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            RetryModels::resolve_han(&directories, "jpn_vert", 5, |_| {})
+                .unwrap()
+                .is_none()
+        );
         std::fs::write(model, b"japanese-v2").unwrap();
-        let second = RetryModels::resolve_han(&directories, "eng", 11).unwrap().unwrap();
+        let second = RetryModels::resolve_han(&directories, "eng", 11, |_| {})
+            .unwrap()
+            .unwrap();
         assert_ne!(first, second);
     }
 
