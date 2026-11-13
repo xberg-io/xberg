@@ -159,7 +159,7 @@ fn font_ink_proof_excludes_overlapping_annotation_appearances() {
     ];
     let doc = PdfDocument::from_bytes(build_pdf(&objects)).unwrap();
     let visible = render_page(&doc, 0, &RenderOptions::with_dpi(72).as_raw()).unwrap();
-    assert!(visible.data.chunks_exact(4).any(|pixel| pixel[0] < 128));
+    assert!(visible.data.as_chunks::<4>().0.iter().any(|pixel| pixel[0] < 128));
     let proof = xberg_native_pdf::rendering::render_font_ink_rasters(&doc, 0, 72, 1 << 26, "F1", || false)
         .unwrap()
         .unwrap();
