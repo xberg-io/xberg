@@ -114,25 +114,68 @@ fn list_reads_script_of(language: &str, model: &str) -> bool {
         .any(|item| item == "*" || readers.contains(&item.as_str()))
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg(unix)]
+mod model_stamps;
+
+#[derive(Clone, Debug)]
 pub(super) struct ModelSet {
     pub(super) directory: String,
     pub(super) languages: String,
     revision: blake3::Hash,
     implicit_osd: bool,
+    #[cfg(unix)]
+    stable_files: Option<model_stamps::ModelStamps>,
 }
+
+impl PartialEq for ModelSet {
+    fn eq(&self, other: &Self) -> bool {
+        self.directory == other.directory
+            && self.languages == other.languages
+            && self.revision == other.revision
+            && self.implicit_osd == other.implicit_osd
+    }
+}
+
+impl Eq for ModelSet {}
 
 impl ModelSet {
     pub(super) fn snapshot(directory: String, languages: &[String], implicit_osd: bool) -> Result<Self, OcrError> {
+        #[cfg(unix)]
+        let before = model_stamps::ModelStamps::read(
+            Path::new(&directory),
+            languages.iter().map(String::as_str),
+            implicit_osd,
+        );
+        let revision = Self::revision(&directory, languages.iter().map(String::as_str), implicit_osd)?;
+        #[cfg(unix)]
+        let stable_files = before.filter(|expected| {
+            model_stamps::ModelStamps::read(
+                Path::new(&directory),
+                languages.iter().map(String::as_str),
+                implicit_osd,
+            )
+            .as_ref()
+                == Some(expected)
+        });
         Ok(Self {
-            revision: Self::revision(&directory, languages.iter().map(String::as_str), implicit_osd)?,
+            revision,
             directory,
             languages: languages.join("+"),
             implicit_osd,
+            #[cfg(unix)]
+            stable_files,
         })
     }
 
     pub(super) fn validate(&self) -> Result<(), OcrError> {
+        #[cfg(unix)]
+        if let Some(expected) = &self.stable_files
+            && model_stamps::ModelStamps::read(Path::new(&self.directory), self.languages.split('+'), self.implicit_osd)
+                .as_ref()
+                == Some(expected)
+        {
+            return Ok(());
+        }
         let current = Self::revision(&self.directory, self.languages.split('+'), self.implicit_osd)?;
         if current != self.revision {
             return Err(OcrError::ProcessingFailed(
@@ -271,6 +314,52 @@ fn retry_list(language: &str, model: &str) -> Vec<String> {
         .collect::<Vec<_>>();
     languages.push(model.to_string());
     languages
+}
+
+pub(super) fn first_read_suggests_han(api: &TesseractAPI, tsv: Option<&str>) -> bool {
+    if let Some(tsv) = tsv {
+        return plausible_han(parse_words(tsv).iter().map(|w| (&*w.text, w.conf, w.width, w.height)));
+    }
+    match api.get_iterator().and_then(|it| it.extract_all_words()) {
+        Ok(read) => plausible_han(read.words.iter().map(|word| {
+            (
+                word.text.as_str(),
+                f64::from(word.confidence),
+                i64::from(word.right) - i64::from(word.left),
+                i64::from(word.bottom) - i64::from(word.top),
+            )
+        })),
+        Err(error) => {
+            tracing::debug!(%error, "Could not inspect first-pass words for Han script");
+            false
+        }
+    }
+}
+
+fn plausible_han<'a>(words: impl IntoIterator<Item = (&'a str, f64, i64, i64)>) -> bool {
+    const MAX_MISREAD_CONFIDENCE: f64 = 45.0;
+    const MIN_WIDE_MISREADS: usize = 3;
+    const MIN_WIDTH_TO_HEIGHT_PER_LETTER: f64 = 0.8;
+    let mut wide_misreads = 0;
+    for (text, confidence, width, height) in words {
+        if text.chars().any(|c| script_letter("Han", c)) {
+            return true;
+        }
+        // Han glyphs often get read as Latin noise with close to a square of ink per letter. ~keep
+        let letters = text.chars().filter(|c| c.is_alphanumeric()).count() as f64;
+        if confidence < MAX_MISREAD_CONFIDENCE
+            && height > 0
+            && letters >= 2.0
+            && text.chars().any(is_latin)
+            && width as f64 >= MIN_WIDTH_TO_HEIGHT_PER_LETTER * height as f64 * letters
+        {
+            wide_misreads += 1;
+            if wide_misreads >= MIN_WIDE_MISREADS {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// The script OSD names on the first read's pixels.
@@ -1163,6 +1252,30 @@ mod tests {
     use super::*;
 
     const HAN_LINE: &str = "今天天气很好我们去公园散步";
+
+    #[test]
+    fn han_plausibility_requires_script_evidence() {
+        let read = |words: &[(&str, f64, i64, i64)]| {
+            plausible_han(
+                line(words, 1, 0)
+                    .iter()
+                    .map(|word| (&*word.text, word.conf, word.width, word.height)),
+            )
+        };
+        assert!(!read(&[]));
+        assert!(!read(&[
+            ("2026", 10.0, 160, 40),
+            ("Latin", 10.0, 105, 40),
+            ("noise", 12.0, 95, 40)
+        ]));
+        assert!(!read(&[("POS", 20.0, 130, 40), ("HEADS", 28.0, 175, 40)]));
+        assert!(read(&[
+            ("POS", 20.0, 130, 40),
+            ("HEADS", 28.0, 175, 40),
+            ("MHS", 0.0, 140, 40)
+        ]));
+        assert!(read(&[("中文", 70.0, 80, 40)]));
+    }
 
     /// Words of one line from (text, conf, left, width), at `top` with height 40.
     fn line(specs: &[(&str, f64, i64, i64)], key: u32, top: i64) -> Vec<TsvWord> {

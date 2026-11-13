@@ -87,7 +87,7 @@ impl<K: PartialEq, V> ResourcePool<K, V> {
 
             let total = state.checked_out + state.idle.len();
             if total < self.capacity || !state.idle.is_empty() {
-                let stale = state.idle.pop();
+                let stale = if total == self.capacity { state.idle.pop() } else { None };
                 state.checked_out += 1;
                 drop(state);
                 drop(stale);
@@ -746,6 +746,18 @@ mod tests {
         assert_eq!(*german, 2);
         let (checked_out, idle) = pool.counts();
         assert_eq!((checked_out, idle), (1, 0));
+    }
+
+    #[test]
+    fn alternating_keys_reuse_idle_handles_when_both_fit() {
+        let pool = ResourcePool::new(2);
+        drop(pool.checkout::<(), _>("eng", || Ok(1)).unwrap());
+        drop(pool.checkout::<(), _>("deu", || Ok(2)).unwrap());
+        assert_eq!(pool.counts(), (0, 2));
+        let english = pool
+            .checkout::<(), _>("eng", || panic!("English handle should be idle"))
+            .unwrap();
+        assert_eq!(*english, 1);
     }
 
     #[test]

@@ -121,6 +121,26 @@ mod tests {
         worker.join().unwrap();
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn a_same_length_model_change_with_restored_mtime_discards_the_handle() {
+        let directory = bundled_tessdata();
+        let path = directory.path().to_str().unwrap().to_owned();
+        let model_file = directory.path().join("eng.traineddata");
+        let modified = model_file.metadata().unwrap().modified().unwrap();
+        let models = ModelSet::snapshot(path, &["eng".into()], false).unwrap();
+        let pools = RetryApiPools::new(1);
+        let result = pools.with_engine(RetryStage::Han, &models, 3, |_| {
+            use std::io::Write;
+            let mut file = std::fs::OpenOptions::new().write(true).open(&model_file).unwrap();
+            file.write_all(b"XXXX").unwrap();
+            file.set_modified(modified).unwrap();
+            Ok(())
+        });
+        assert!(matches!(result, Err(OcrError::ProcessingFailed(message)) if message.contains("models changed")));
+        assert_eq!(pools.han.counts(), (0, 0));
+    }
+
     #[test]
     fn a_model_change_during_retry_discards_the_handle_even_after_rollback() {
         let directory = bundled_tessdata();

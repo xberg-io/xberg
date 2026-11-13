@@ -138,19 +138,24 @@ impl ModelContext {
         invalidate_script_cache(&self.khmer_cache_invalidated, "Khmer", error);
     }
 
-    pub(super) fn retry_models(&self, config: &TesseractConfig, mean_confidence: f64) -> Option<RetryModels> {
+    pub(super) fn retry_models(
+        &self,
+        config: &TesseractConfig,
+        mean_confidence: f64,
+        han_is_plausible: impl FnOnce() -> bool,
+    ) -> Option<RetryModels> {
         let retry = self.retry.as_ref()?;
         if mean_confidence >= retry.noisy_below || self.invalidated.load(Ordering::Acquire) {
             return None;
         }
         let mut models = retry.models.clone()?;
-        if !self.han_retry_is_current(config) {
+        if models.han.is_some() && (!han_is_plausible() || !self.han_retry_is_current(config)) {
             models.han = None;
         }
-        if !self.khmer_retry_is_current(config) {
+        if models.khmer.is_some() && !self.khmer_retry_is_current(config) {
             models.khmer = None;
         }
-        (models.han.is_some() || models.khmer.is_some()).then_some(models)
+        RetryModels::from_snapshots(models.han, models.khmer)
     }
 
     pub(super) fn han_retry_is_current(&self, config: &TesseractConfig) -> bool {
@@ -264,7 +269,7 @@ impl ModelContext {
         let mut base = super::config::hash_config(config, &self.directory);
         if let Some(retry) = self.retry.as_ref() {
             let mut hash = blake3::Hasher::new();
-            hash.update(b"tesseract-script-retry-v4");
+            hash.update(b"tesseract-script-retry-v5");
             hash.update(base.as_bytes());
             hash.update(&retry.noisy_below.to_bits().to_le_bytes());
             if script_retry::mixed_pdf_khmer_retry_requested() {
@@ -393,7 +398,7 @@ mod tests {
                 let mut context = ModelContext::for_path(directory.clone(), config.psm).unwrap();
                 context.select_retry(&config, vec![directory], 75.0);
                 assert!(
-                    context.retry_models(&config, 30.0).is_some(),
+                    context.retry_models(&config, 30.0, || true).is_some(),
                     "Han must remain selectable"
                 );
                 assert!(context.if_result_current(&config, || ()).is_none());
@@ -401,6 +406,26 @@ mod tests {
             });
         })
         .await;
+    }
+
+    #[test]
+    fn han_gate_keeps_requested_khmer_retry() {
+        let root = tempfile::tempdir().unwrap();
+        for name in ["eng", "osd", "chi_sim", "khm"] {
+            std::fs::write(root.path().join(format!("{name}.traineddata")), name).unwrap();
+        }
+        let directory = root.path().to_str().unwrap().to_owned();
+        let config = TesseractConfig {
+            psm: 3,
+            ..Default::default()
+        };
+        script_retry::MIXED_PDF_KHMER_RETRY.sync_scope(true, || {
+            let mut context = ModelContext::for_path(directory.clone(), config.psm).unwrap();
+            context.select_retry(&config, vec![directory], 75.0);
+            let models = context.retry_models(&config, 30.0, || false).unwrap();
+            assert!(models.han.is_none());
+            assert!(models.khmer.is_some());
+        });
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -443,7 +468,7 @@ mod tests {
                     std::fs::write(&han, b"Han revision two").unwrap();
                 }
                 let models = context
-                    .retry_models(&config, 30.0)
+                    .retry_models(&config, 30.0, || true)
                     .expect("Khmer must remain selectable");
                 assert!(models.han.is_none());
                 assert!(models.khmer.is_some());
@@ -502,20 +527,20 @@ mod tests {
         };
 
         let missing = snapshot(75.0);
-        assert!(missing.retry_models(&config, 30.0).is_none());
+        assert!(missing.retry_models(&config, 30.0, || true).is_none());
         seed(&missing);
         write(&fallback, "eng", b"eng");
         assert!(missing.if_result_current(&config, || ()).is_none());
         let complete = snapshot(75.0);
         assert!(lookup(&complete).is_none());
-        assert!(complete.retry_models(&config, 30.0).is_some());
-        assert!(complete.retry_models(&config, 75.0).is_none());
+        assert!(complete.retry_models(&config, 30.0, || true).is_some());
+        assert!(complete.retry_models(&config, 75.0, || true).is_none());
         seed(&complete);
         assert!(lookup(&snapshot(80.0)).is_none());
 
         write(&primary, "eng", b"ENG");
         let replaced_primary = snapshot(75.0);
-        assert!(replaced_primary.retry_models(&config, 30.0).is_some());
+        assert!(replaced_primary.retry_models(&config, 30.0, || true).is_some());
         assert!(lookup(&replaced_primary).is_none());
         assert!(complete.if_result_current(&config, || ()).is_none());
         seed(&replaced_primary);
