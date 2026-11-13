@@ -89,7 +89,13 @@ impl MatchedLayerOccurrences {
             })
             .map(|(token, occurrences)| (token.as_str(), occurrences.len()))
             .collect();
-        first.lines = trim_rows(&first.lines, &mut available);
+        let trimmed = trim_rows(&first.lines, &mut available);
+        if trimmed != first.lines {
+            // Trimming can remove the native replacement for a misread. Without a surviving
+            // row witness, keep the original OCR rows in both views. ~keep
+            first.misread_ocr_rows.clear();
+        }
+        first.lines = trimmed;
     }
 }
 
@@ -581,6 +587,8 @@ mod matched_layer_occurrences_tests {
         ]));
         let mut first = LayerFirst {
             lines: "PAND   native\nPAND\nchanged Unmatched pand".into(),
+            lost_glyphs: 0,
+            misread_ocr_rows: Vec::new(),
         };
         let flat = format!(
             "{}\nchanged Unmatched",
@@ -592,6 +600,8 @@ mod matched_layer_occurrences_tests {
         doc.tables[0].cells.swap(0, 1);
         let mut first = LayerFirst {
             lines: "PAND PAND".into(),
+            lost_glyphs: 0,
+            misread_ocr_rows: Vec::new(),
         };
         proof.trim_prepend(&mut first, &flat, &doc, 1);
         assert_eq!(first.lines, "PAND PAND");
@@ -657,7 +667,11 @@ mod matched_layer_occurrences_tests {
             ("repeat repeat", "repeat a\nrepeat b", "repeat a"),
             ("repeat repeat", "repeat a\nrepeat b", "repeat a\nrepeat a"),
         ] {
-            let mut first = LayerFirst { lines: prepend.into() };
+            let mut first = LayerFirst {
+                lines: prepend.into(),
+                lost_glyphs: 0,
+                misread_ocr_rows: Vec::new(),
+            };
             let mut doc = flat_ocr_page_document(structured);
             doc.elements[0].bbox = Some(BoundingBox {
                 x0: 0.0,

@@ -4364,7 +4364,8 @@ impl FontInfo {
         }
         let result = self
             .char_to_unicode_uncached(char_code)
-            .map(|s| expand_ligature_forms(&normalize_cjk_radical_forms(&s)));
+            .map(|s| expand_ligature_forms(&normalize_cjk_radical_forms(&s)))
+            .map(|s| s.replace(crate::LOST_SYMBOL_GLYPH_MARKER, "\u{FFFD}"));
         if let Ok(mut memo) = self.type0_unicode_memo.lock() {
             memo.insert(char_code, result.clone());
         }
@@ -5284,6 +5285,15 @@ impl FontInfo {
 
         let name_lower = self.base_font.to_lowercase();
         name_lower.contains("symbol") || name_lower.contains("zapf") || name_lower.contains("dingbat")
+    }
+
+    /// Whether the font's glyphs are symbols and not letters, by its name: Symbol, ZapfDingbats
+    /// and Dingbats, Wingdings, Webdings and Marlett, with or without a subset tag. The descriptor
+    /// flags cannot tell this: a subset text font is symbolic too. ~keep
+    pub fn is_symbol_font(&self) -> bool {
+        const SYMBOL_FONT_NAMES: [&str; 5] = ["symbol", "zapf", "dingbat", "wingdings", "webdings"];
+        let name = super::unicode_decode::strip_subset_prefix(&self.base_font).to_lowercase();
+        SYMBOL_FONT_NAMES.iter().any(|fragment| name.contains(fragment)) || name.starts_with("marlett")
     }
 
     /// Get character from encoding (custom or standard).

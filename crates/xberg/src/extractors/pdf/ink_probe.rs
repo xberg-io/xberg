@@ -93,7 +93,7 @@ pub(super) fn unstructured_script_pages(
                 .find(|boundary| boundary.page_number == *page)
                 .and_then(|boundary| layer.text.get(boundary.byte_start..boundary.byte_end))
                 .is_some_and(|text| {
-                    text.contains(super::unmapped_glyphs::LOST_GLYPH_MARKER)
+                    text.contains(super::unmapped_glyphs::is_lost_glyph)
                         && uncovered_script_counts(text, &stage.languages)
                             .is_some_and(|counts| structured_scripts(text, counts).is_none())
                         && !layer_spells_read_scripts(text, &stage.languages)
@@ -148,7 +148,7 @@ fn read_is_prose(read: &str) -> bool {
 pub(super) fn read_contradicts_layer(native_page: &str, read: &str) -> bool {
     let native_letters = native_page
         .chars()
-        .filter(|c| c.is_alphabetic() && *c != super::unmapped_glyphs::LOST_GLYPH_MARKER)
+        .filter(|c| c.is_alphabetic() && !super::unmapped_glyphs::is_lost_glyph(*c))
         .count();
     let read_letters = read.chars().filter(|c| c.is_alphabetic()).count();
     native_letters > 0

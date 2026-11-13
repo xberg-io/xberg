@@ -112,6 +112,15 @@ use crate::core::config::ExtractionConfig;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 use crate::core::config::OcrQualityThresholds;
 
+/// The native layer of a page when it holds no lost-glyph marker of either kind. ~keep
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn clean_ink_layer_of<'a>(layers: Option<&'a ahash::AHashMap<u32, String>>, page: &u32) -> Option<&'a str> {
+    layers
+        .and_then(|layers| layers.get(page))
+        .map(String::as_str)
+        .filter(|layer| !layer.contains(super::super::unmapped_glyphs::is_lost_glyph))
+}
+
 /// Whether `OcrConfig::numeric_repair` (GH#1789) is turned on for this extraction. Split out
 /// from the call site as its own function so the config-wiring path can be exercised in a unit
 /// test without running a real OCR page (see `pipeline_tests::numeric_repair_enabled_reads_the_
@@ -2990,8 +2999,26 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
         }
     }
 
+    let native_preservation_enabled = effective_pipeline.is_none() && !probing_hidden_layer;
+    #[cfg(feature = "layout-detection")]
+    let native_preservation_enabled = native_preservation_enabled && resolved_layout_inputs.is_none();
+    // The same page's ink proof (native text paints the ink OCR read, or covers its words) is what
+    // lets a marked page be judged on the text it held. A lost Type0 glyph in the render is no such
+    // proof: that case keeps its own check (`native_survives_type0_ink_loss`). ~keep
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    let ink_corroborated =
+        |page: u32| native_ink_owned_pages.contains(&page) || native_words_covered_pages.contains(&page);
+    #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]
+    let ink_corroborated = |_page: u32| false;
     let mut accepted_replacements =
-        accepted_ocr_page_replacements(native_text, boundaries, &ocr_results, &ocr_output_thresholds);
+        accepted_ocr_page_replacements(native_text, boundaries, &ocr_results, &ocr_output_thresholds, |page| {
+            super::document::marked_page_is_judged_on_readable_text(
+                config,
+                page,
+                probing_hidden_layer,
+                ink_corroborated(page),
+            )
+        });
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     for boundary in boundaries {
         let page = boundary.page_number;
@@ -3086,9 +3113,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut complete_native_pages = std::collections::HashSet::new();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut clean_native_ink_pages = std::collections::HashSet::new();
-    let native_preservation_enabled = effective_pipeline.is_none() && !probing_hidden_layer;
-    #[cfg(feature = "layout-detection")]
-    let native_preservation_enabled = native_preservation_enabled && resolved_layout_inputs.is_none();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32"), feature = "layout-detection"))]
     let ink_proof_layout_free = resolved_layout_inputs.is_none();
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32"), not(feature = "layout-detection")))]
@@ -3115,11 +3139,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 geometry.page_boxes(*page_number, ocr_page_paragraphs.get(page_number), ocr_scale)
             });
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-            let clean_ink_layer = native_coverage_layers
-                .as_ref()
-                .and_then(|layers| layers.get(page_number))
-                .map(String::as_str)
-                .filter(|layer| !layer.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER));
+            let clean_ink_layer = clean_ink_layer_of(native_coverage_layers.as_deref(), page_number);
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             if native_ink_owned_pages.contains(page_number)
                 && ink_proof_layout_free
@@ -3157,17 +3177,20 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             {
                 complete_native_pages.insert(*page_number);
             }
-            if let Some(layer) = layers.get(page_number)
-                && let Some(mut first) = super::document::layer_lines_to_put_first(
+            // A page whose native script the OCR read kept is replaced by that read: the script rule
+            // decided it, so no native row is put first. ~keep
+            if !pages.native_script.contains(page_number)
+                && let Some(layer) = layers.get(page_number)
+                && let Some(first) = super::document::layer_lines_to_put_first(
                     layer,
                     text,
                     noise_verdict_pages.contains(page_number),
                     &ocr_output_thresholds,
                     boxes.as_ref(),
+                    super::document::PlainOcrRows::of_page(structured_ocr_pages.get(page_number), None),
                 )
             {
-                let lost = super::super::unmapped_glyphs::strip_native_fragment(&mut first.lines);
-                if let Some(warning) = super::super::unmapped_glyphs::lost_glyph_warning(lost, config) {
+                if let Some(warning) = super::super::unmapped_glyphs::lost_glyph_warning(first.lost_glyphs, config) {
                     crate::core::diagnostics::push_warning_deduped(&mut accumulated_warnings, warning);
                 }
                 if first.lines.is_empty() {
@@ -3343,7 +3366,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 && raster_dpis
                     .get(&(page.saturating_sub(1) as usize))
                     .is_some_and(|raster| raster.type0_ink_loss)
-                && accepted_replacements.contains_key(&page)
                 && let (Some(native), Some(read)) = (native, ocr_results.get(&page))
                 && super::document::type0_native_is_corroborated(
                     native,
@@ -3361,13 +3383,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             }
             if native_ink_owned_pages.contains(&page)
                 && ink_proof_layout_free
-                && native.is_some_and(|native| native.contains(super::super::unmapped_glyphs::LOST_GLYPH_MARKER))
+                && native.is_some_and(|native| native.contains(super::super::unmapped_glyphs::is_lost_glyph))
                 && accepted_replacements.contains_key(&page)
                 && !noise_verdict_pages.contains(&page)
             {
                 complete_native_pages.insert(page);
                 let lost = native.map_or(0, |native| {
-                    native.matches(super::super::unmapped_glyphs::LOST_GLYPH_MARKER).count()
+                    native.matches(super::super::unmapped_glyphs::is_lost_glyph).count()
                 });
                 lost_glyph_ink_pages.insert(page, lost);
             }
@@ -3425,21 +3447,33 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 );
             }
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-            if type0_loss_pages.contains(&page) {
-                if all_pages_failed_policy == AllPagesFailedPolicy::ReturnError
-                    && page_count == 1
-                    && pages.single_native_type0_page.is_some()
-                {
-                    return Err(type0_ocr_rejection());
-                }
-                crate::core::diagnostics::push_warning_deduped(
-                    &mut accumulated_warnings,
-                    crate::core::diagnostics::warning(
-                        "ocr",
-                        format!("Page {page} retained native text after its OCR render lost Type0 glyph ink."),
-                    ),
-                );
+            if type0_loss_pages.contains(&page)
+                && all_pages_failed_policy == AllPagesFailedPolicy::ReturnError
+                && page_count == 1
+                && pages.single_native_type0_page.is_some()
+            {
+                return Err(type0_ocr_rejection());
             }
+        }
+    }
+    // A page whose OCR text the information-loss check already rejected never reaches the loop
+    // above, so the warning is raised here for every such page, whichever check kept it. ~keep
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    {
+        let mut retained: Vec<u32> = type0_loss_pages
+            .iter()
+            .copied()
+            .filter(|page| !accepted_replacements.contains_key(page))
+            .collect();
+        retained.sort_unstable();
+        for page in retained {
+            crate::core::diagnostics::push_warning_deduped(
+                &mut accumulated_warnings,
+                crate::core::diagnostics::warning(
+                    "ocr",
+                    format!("Page {page} retained native text after its OCR render lost Type0 glyph ink."),
+                ),
+            );
         }
     }
     for (page_number, first) in &mut page_layers_first {
@@ -7525,7 +7559,7 @@ pub(super) async fn extract_with_ocr_for_page(
             .as_ref()
             .and_then(|hints| hints.single_native_type0_page.as_deref())
             .map_or(0, |native| {
-                native.matches(super::super::unmapped_glyphs::LOST_GLYPH_MARKER).count()
+                native.matches(super::super::unmapped_glyphs::is_lost_glyph).count()
             });
         return Err(lost_glyph_ocr_rejection(lost));
     }
@@ -8923,8 +8957,9 @@ pub(super) struct RunPageParagraphs {
     pub(super) raster_px: Option<(u32, u32)>,
 }
 
-/// The factor per axis from the raster a page of a whole-document run was read from to PDF
-/// points, the same conversion the mixed route applies to its pipeline pages. `None` when the
+/// The factor per axis from the frame of the OCR paragraphs of a page of a whole-document run
+/// (the raster, or the size preprocessing resampled it to) to PDF points, the same conversion
+/// the mixed route applies to its pipeline pages. `None` when the
 /// run rendered no PDF page or the raster is empty. ~keep
 #[cfg(all(
     any(feature = "ocr", feature = "ocr-pipeline"),
@@ -10369,6 +10404,10 @@ mod second_site_clean_admission_tests;
 #[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
 #[path = "pipeline/budget_refusal_tests.rs"]
 mod budget_refusal_tests;
+
+#[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
+#[path = "pipeline/layer_lost_glyph_tests.rs"]
+mod layer_lost_glyph_tests;
 
 #[cfg(all(
     test,
