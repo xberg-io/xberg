@@ -373,6 +373,9 @@ fn extract_lopdf_compatibility_data(
 
 #[cfg(feature = "pdf")]
 struct NativeBlockingOutput {
+    source: Vec<u8>,
+    #[cfg(feature = "tokio-runtime")]
+    may_have_embedded_files: bool,
     extraction: extraction::PdfExtractionPhaseResult,
     #[cfg(all(
         feature = "pdf",
@@ -444,6 +447,15 @@ where
     work()
 }
 
+#[cfg(all(feature = "pdf", feature = "tokio-runtime"))]
+fn may_have_embedded_files(document: &xberg_native_pdf::PdfDocument) -> bool {
+    document.is_encrypted()
+        || !document.has_unrecovered_catalog()
+        || !document
+            .catalog()
+            .is_ok_and(|catalog| catalog.as_dict().is_some_and(|dict| !dict.contains_key("Names")))
+}
+
 #[cfg(feature = "pdf")]
 fn extract_native_blocking(
     content: Vec<u8>,
@@ -466,18 +478,20 @@ fn extract_native_blocking(
         .unwrap_or(&[]);
     let raw_compatibility_signal = raw_pdf_needs_lopdf_compatibility_pass(&content);
     let compatibility_data = raw_compatibility_signal.then(|| extract_lopdf_compatibility_data(&content));
-    let mut native_document = crate::pdf::native::NativeDocument::open_bytes_with_passwords(&content, passwords)?;
-
+    let mut native_document = crate::pdf::native::NativeDocument::open_owned_bytes_with_passwords(content, passwords)?;
     let compatibility_data = match compatibility_data {
         Some(data) => Some(data),
         None if parsed_pdf_needs_lopdf_compatibility_pass(&native_document) => {
+            let source = std::mem::take(&mut native_document.doc.source_bytes);
             drop(native_document);
-            let data = extract_lopdf_compatibility_data(&content);
-            native_document = crate::pdf::native::NativeDocument::open_bytes_with_passwords(&content, passwords)?;
+            let data = extract_lopdf_compatibility_data(&source);
+            native_document = crate::pdf::native::NativeDocument::open_owned_bytes_with_passwords(source, passwords)?;
             Some(data)
         }
         None => None,
     };
+    #[cfg(feature = "tokio-runtime")]
+    let may_have_embedded_files = compatibility_data.is_some() || may_have_embedded_files(&native_document.doc);
     let (outline_entries, bookmark_uris, pdf_revisions) = compatibility_data.unwrap_or_default();
     ensure_pdf_not_cancelled(&config)?;
     let diagrams = if wants_dot_output(&config) {
@@ -493,7 +507,7 @@ fn extract_native_blocking(
     ))]
     let mut image_gap = None;
     let extraction = extract_all_from_native_document(
-        native_document,
+        &mut native_document,
         &config,
         &outline_entries,
         #[cfg(all(
@@ -515,6 +529,9 @@ fn extract_native_blocking(
     ensure_pdf_not_cancelled(&config)?;
 
     Ok(NativeBlockingOutput {
+        source: std::mem::take(&mut native_document.doc.source_bytes),
+        #[cfg(feature = "tokio-runtime")]
+        may_have_embedded_files,
         extraction,
         #[cfg(all(
             feature = "pdf",
@@ -2833,19 +2850,21 @@ impl InternalDocumentExtractor for PdfExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
-        crate::pdf::render::with_task_render_warnings(self.extract_core(content, mime_type, config, None)).await
+        crate::pdf::render::with_task_render_warnings(self.extract_core(content.into(), mime_type, config, None)).await
     }
 
     #[cfg(feature = "tokio-runtime")]
     async fn extract_path(&self, path: &Path, mime_type: &str, config: &ExtractionConfig) -> Result<InternalDocument> {
+        let bytes = crate::core::io::read_file_async(path).await?;
         #[cfg(feature = "pdf")]
         crate::pdf::native_text::set_current_pdf_path(Some(path.to_path_buf()));
-        // Async on native (non-blocking tokio::fs); sync fallback on wasm32 where tokio's `fs`
-        // feature is unavailable. See `core::io::read_file_async`. ~keep
-        let bytes = crate::core::io::read_file_async(path).await?;
-        let result =
-            crate::pdf::render::with_task_render_warnings(self.extract_core(&bytes, mime_type, config, Some(path)))
-                .await;
+        let result = crate::pdf::render::with_task_render_warnings(self.extract_core(
+            std::borrow::Cow::Owned(bytes),
+            mime_type,
+            config,
+            Some(path),
+        ))
+        .await;
         #[cfg(feature = "pdf")]
         crate::pdf::native_text::set_current_pdf_path(None);
         result
@@ -2881,7 +2900,7 @@ impl crate::core::layout_pages::LayoutPagesExtractor for PdfExtractor {
             crate::XbergError::validation("unable to count PDF pages for explicit layout selection".to_string())
         })?;
         let mut document = self
-            .extract_core_native_with_layout_pages(content, mime_type, config, None, Some(pages))
+            .extract_core_native_with_layout_pages(content.into(), mime_type, config, None, Some(pages))
             .await?;
         for warning in pages.warnings(page_count) {
             crate::core::diagnostics::push_warning_deduped(&mut document.processing_warnings, warning);
@@ -2909,7 +2928,7 @@ impl PdfExtractor {
     /// as pdfium.
     async fn extract_core(
         &self,
-        content: &[u8],
+        content: std::borrow::Cow<'_, [u8]>,
         mime_type: &str,
         config: &ExtractionConfig,
         path: Option<&std::path::Path>,
@@ -2930,7 +2949,7 @@ impl PdfExtractor {
                     self.extract_core_native(content, mime_type, config, path).await
                 }
                 crate::core::config::PdfBackend::Pdfium => {
-                    self.extract_core_pdfium(content, mime_type, config, path).await
+                    self.extract_core_pdfium(&content, mime_type, config, path).await
                 }
             }
         }
@@ -2991,7 +3010,7 @@ impl PdfExtractor {
     #[cfg(feature = "pdf")]
     async fn extract_core_native(
         &self,
-        content: &[u8],
+        content: std::borrow::Cow<'_, [u8]>,
         mime_type: &str,
         config: &ExtractionConfig,
         path: Option<&std::path::Path>,
@@ -3003,7 +3022,7 @@ impl PdfExtractor {
     #[cfg(feature = "pdf")]
     async fn extract_core_native_with_layout_pages(
         &self,
-        content: &[u8],
+        content: std::borrow::Cow<'_, [u8]>,
         mime_type: &str,
         config: &ExtractionConfig,
         path: Option<&std::path::Path>,
@@ -3011,7 +3030,7 @@ impl PdfExtractor {
     ) -> Result<InternalDocument> {
         let _ = (&path, &layout_pages);
 
-        enforce_page_limit(content, config)?;
+        enforce_page_limit(&content, config)?;
 
         #[cfg(all(feature = "pdf", feature = "layout-detection"))]
         #[allow(unused_mut, unused_variables)]
@@ -3025,9 +3044,12 @@ impl PdfExtractor {
             mut markdown_layout_acceleration_override,
             markdown_layout_glyph_drop_warnings,
             mut markdown_rendered_pages,
-        ) = layout_runner::maybe_run_layout_for_markdown_with_pages(content, config, layout_pages).await;
+        ) = layout_runner::maybe_run_layout_for_markdown_with_pages(&content, config, layout_pages).await;
 
-        let blocking_content = content.to_vec();
+        let (blocking_content, borrowed_content) = match content {
+            std::borrow::Cow::Owned(bytes) => (bytes, None),
+            std::borrow::Cow::Borrowed(bytes) => (bytes.to_vec(), Some(bytes)),
+        };
         let blocking_config = config.clone();
         #[cfg(feature = "layout-detection")]
         let region_text_layout = layout_pages
@@ -3059,6 +3081,7 @@ impl PdfExtractor {
             )
         })
         .await?;
+        let content = borrowed_content.unwrap_or(&native_output.source);
         let bookmark_uris = native_output.bookmark_uris;
         let pdf_revisions = native_output.pdf_revisions;
         let diagrams = native_output.diagrams;
@@ -4699,7 +4722,7 @@ impl PdfExtractor {
         }
 
         #[cfg(all(feature = "pdf", feature = "tokio-runtime"))]
-        {
+        if native_output.may_have_embedded_files {
             let (embedded_children, embedded_warnings) =
                 crate::pdf::embedded_files::extract_and_process_embedded_files(content, config).await;
             if !embedded_children.is_empty() {
@@ -4851,7 +4874,7 @@ impl PdfExtractor {
     #[cfg(not(feature = "pdf"))]
     async fn extract_core_native(
         &self,
-        _content: &[u8],
+        _content: std::borrow::Cow<'_, [u8]>,
         mime_type: &str,
         _config: &ExtractionConfig,
         _path: Option<&std::path::Path>,
@@ -4863,3 +4886,31 @@ impl PdfExtractor {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime"))]
+#[test]
+fn recovered_catalog_without_names_keeps_attachment_compatibility() {
+    use xberg_native_pdf::PdfDocument;
+
+    let mut pdf = lopdf::Document::with_version("1.7");
+    let pages =
+        pdf.add_object(lopdf::dictionary! { "Type" => "Pages", "Count" => 0, "Kids" => Vec::<lopdf::Object>::new() });
+    let root = pdf.add_object(lopdf::dictionary! { "Type" => "Catalog", "Pages" => pages });
+    pdf.trailer.set("Root", root);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    let clean = PdfDocument::from_bytes(bytes.clone()).unwrap();
+    assert!(clean.has_unrecovered_catalog());
+    assert!(!may_have_embedded_files(&clean));
+
+    let startxref = bytes
+        .windows(b"startxref".len())
+        .rposition(|window| window == b"startxref")
+        .unwrap();
+    bytes.truncate(startxref);
+    let recovered = PdfDocument::from_bytes(bytes).unwrap();
+    let catalog = recovered.catalog().unwrap();
+    assert!(!catalog.as_dict().unwrap().contains_key("Names"));
+    assert!(!recovered.has_unrecovered_catalog());
+    assert!(may_have_embedded_files(&recovered));
+}
