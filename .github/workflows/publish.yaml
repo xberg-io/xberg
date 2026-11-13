@@ -1290,6 +1290,8 @@ jobs:
       - uses: xberg-io/actions/setup-rust@v1
         with:
           toolchain: ${{ runner.os == 'Windows' && 'stable-x86_64-pc-windows-gnu' || '' }}
+          # sccache's rustc spawn hits Windows error 206 on long GNU compiler arguments. ~keep
+          use-sccache: ${{ runner.os == 'Windows' && 'false' || 'true' }}
 
       # Ruby 3.3 is the ABI the release gem ships; mise.ci.toml locks it. ~keep
       - uses: xberg-io/actions/setup-mise@v1
