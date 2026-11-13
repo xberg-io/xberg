@@ -224,6 +224,47 @@ fn all_pages_ocr_failure_without_an_embedded_image_reports_native_text_kept() {
     );
 }
 
+fn pdf_with_landscape_page_and_native_image_page() -> Vec<u8> {
+    let mut doc = lopdf::Document::load_mem(&pdf_with_native_text_and_image()).unwrap();
+    let page_one = doc.get_pages()[&1];
+    let contents = doc.add_object(lopdf::Stream::new(dictionary! {}, b"0 0 200 200 re f".to_vec()));
+    let page = doc.get_object_mut(page_one).unwrap().as_dict_mut().unwrap();
+    page.set("Contents", contents);
+    page.set("MediaBox", vec![0.into(), 0.into(), 400.into(), 200.into()]);
+    let mut pdf = Vec::new();
+    doc.save_to(&mut pdf).unwrap();
+    pdf
+}
+
+#[test]
+#[serial_test::serial]
+fn all_pages_ocr_failure_with_empty_image_retry_reports_native_text_kept() {
+    let result = extract_from_pdf(
+        "tesseract",
+        RenderOutcome::WordOnLandscape,
+        RasterOutcome::Blank,
+        &noise_config(true, true, true),
+        &pdf_with_landscape_page_and_native_image_page(),
+    );
+
+    assert!(result.content.contains(RECOVERED_WORD));
+    assert!(result.content.contains("The original native words stay."));
+    assert_eq!(result.ocr_page_failures, Some(recovered_page_two()));
+    let warnings: Vec<_> = result
+        .processing_warnings
+        .iter()
+        .filter(|warning| warning.source == "ocr" && warning.message.starts_with("OCR of page 2 failed"))
+        .map(|warning| warning.message.as_ref())
+        .collect();
+    assert_eq!(
+        warnings,
+        [
+            "OCR of page 2 failed (OCR error: stub render failure); the retry on the page's embedded image \
+          XObjects also returned no text, and the page's native text was kept."
+        ]
+    );
+}
+
 fn assert_discarded_retry_keeps_native(pipeline: bool) {
     let result = extract_from_pdf(
         if pipeline { "tesseract" } else { DIRECT_BACKEND },

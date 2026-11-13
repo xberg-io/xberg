@@ -37,6 +37,7 @@ const FAILED_AND_RECOVERED_WARNING: &str = "its text was recovered from the page
 enum RenderOutcome {
     Blank,
     Fails,
+    WordOnLandscape,
 }
 
 /// The width and height from a PNG header, or `None` for bytes that are not a PNG.
@@ -52,6 +53,7 @@ fn png_size(bytes: &[u8]) -> Option<(u32, u32)> {
 /// What the stub reads from the embedded raster.
 #[derive(Clone, Copy)]
 enum RasterOutcome {
+    Blank,
     Word,
     Noise,
     TableOnly,
@@ -84,6 +86,7 @@ impl OcrBackend for StubBackend {
         if png_size(image_bytes) == Some((RASTER_WIDTH_PX, RASTER_HEIGHT_PX)) {
             let mut recovered = ExtractedDocument::default();
             match self.raster {
+                RasterOutcome::Blank => {}
                 RasterOutcome::Word => recovered.content = RECOVERED_WORD.to_string(),
                 RasterOutcome::Noise | RasterOutcome::TableOnly => {
                     if matches!(self.raster, RasterOutcome::Noise) {
@@ -100,7 +103,13 @@ impl OcrBackend for StubBackend {
         }
         match self.render {
             RenderOutcome::Blank => Ok(ExtractedDocument::default()),
-            RenderOutcome::Fails => Err(xberg::XbergError::Ocr {
+            RenderOutcome::WordOnLandscape if png_size(image_bytes).is_some_and(|(width, height)| width > height) => {
+                Ok(ExtractedDocument {
+                    content: RECOVERED_WORD.to_string(),
+                    ..Default::default()
+                })
+            }
+            RenderOutcome::Fails | RenderOutcome::WordOnLandscape => Err(xberg::XbergError::Ocr {
                 message: "stub render failure".to_string(),
                 source: None,
             }),
