@@ -658,10 +658,20 @@ fn reconcile_located_page_boundaries(
         .enumerate()
         .map(|(index, page)| (page.page_number, index))
         .collect();
+    let mut seen = std::collections::BTreeSet::new();
+    let duplicates: std::collections::BTreeSet<_> = original
+        .iter()
+        .map(|boundary| boundary.page_number)
+        .filter(|&number| !seen.insert(number))
+        .collect();
     let mut ordered = Vec::new();
     let mut remaining = Vec::new();
     let mut omitted = Vec::new();
     for boundary in original {
+        if duplicates.contains(&boundary.page_number) {
+            omitted.push(boundary.page_number);
+            continue;
+        }
         match page_positions.get(&boundary.page_number) {
             Some(&index) if !unlocated.contains(&boundary.page_number) => ordered.push((index, boundary)),
             Some(&index) => remaining.push((index, boundary)),
@@ -1268,8 +1278,30 @@ mod plain_page_rerender_tests {
             let pages = derive(&mut doc, content);
             assert_eq!(boundary_pages(&doc), vec![2], "input ranges: {ranges:?}");
             assert_ranges(&doc, content, &pages[1..]);
-            assert!(warned(&doc));
+            let warnings: Vec<&str> = doc
+                .processing_warnings
+                .iter()
+                .filter(|warning| warning.source == "page_boundaries")
+                .map(|warning| warning.message.as_ref())
+                .collect();
+            assert_eq!(
+                warnings,
+                [
+                    "Page byte ranges of pages [1] were measured on a different rendering of the text \
+                  and could not be mapped onto the returned content, so they were omitted"
+                ]
+            );
         }
+    }
+
+    #[test]
+    fn duplicate_boundaries_cannot_make_repeated_page_text_unambiguous() {
+        let mut doc = doc_with(vec![page(1, "one")], &[]);
+        set_boundaries(&mut doc, &[(1, 0, 3), (1, 5, 8)]);
+        let pages = derive(&mut doc, "one\n\none");
+        assert_eq!(pages[0].content, "one");
+        assert!(!has_page_boundaries(&doc.metadata));
+        assert!(warned(&doc));
     }
 
     #[test]
