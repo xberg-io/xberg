@@ -100,20 +100,14 @@ impl ModelContext {
     }
 
     pub(super) fn capture_primary(&self, language: &str) -> Result<Option<script_retry::RetryModelFiles>, OcrError> {
-        let Some(primary) = &self.primary else {
+        if self.primary.is_none() && self.osd_revision.is_none() {
             return Ok(None);
-        };
-        if !language
-            .split('+')
-            .map(str::trim)
-            .eq(primary.languages.iter().map(String::as_str))
-        {
-            return Err(OcrError::ProcessingFailed(
-                "Primary Tesseract language list changed before initialization".into(),
-            ));
         }
-        let mut hash = self.primary_hasher(&primary.languages)?;
-        if hash.finalize() != primary.revision {
+        let languages: Vec<_> = language.split('+').map(|name| name.trim().to_owned()).collect();
+        let mut hash = self.primary_hasher(&languages)?;
+        if let Some(primary) = &self.primary
+            && (languages != primary.languages || hash.finalize() != primary.revision)
+        {
             return Err(OcrError::ProcessingFailed(
                 "Primary Tesseract models changed before initialization".into(),
             ));
@@ -123,7 +117,7 @@ impl ModelContext {
         }
         let models = script_retry::ModelSet::from_revision(
             self.directory.clone(),
-            primary.languages.join("+"),
+            languages.join("+"),
             hash.finalize(),
             self.osd_revision.is_some(),
         );
@@ -344,6 +338,24 @@ fn model_read_error(path: &std::path::Path, error: impl std::fmt::Display) -> Oc
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn osd_only_key_requires_the_captured_osd_bytes() {
+        let root = tempfile::tempdir().unwrap();
+        let osd = root.path().join("osd.traineddata");
+        std::fs::write(root.path().join("eng.traineddata"), b"language").unwrap();
+        std::fs::write(&osd, b"revision A").unwrap();
+        let models = ModelContext::for_path(root.path().to_str().unwrap().to_owned(), 1).unwrap();
+        assert!(models.primary_revision().is_none());
+        let files = models.capture_primary("eng").unwrap().unwrap();
+        let captured = std::path::Path::new(files.directory().unwrap()).join("osd.traineddata");
+        std::fs::write(&osd, b"revision B").unwrap();
+        assert_eq!(std::fs::read(captured).unwrap(), b"revision A");
+        assert!(matches!(
+            models.capture_primary("eng"),
+            Err(OcrError::ProcessingFailed(message)) if message.contains("models changed")
+        ));
+    }
 
     #[test]
     fn missing_present_and_non_file_osd_are_distinct_for_every_osd_mode() {
