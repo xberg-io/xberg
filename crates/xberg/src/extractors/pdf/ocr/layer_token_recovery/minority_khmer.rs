@@ -17,8 +17,8 @@ pub(in crate::extractors::pdf::ocr) fn plan_minority_khmer(
     page: usize,
     read: &ExtractedDocument,
     limits: &InkProofLimits<'_>,
-) -> Option<Vec<AddedWord>> {
-    let (frame, font, candidates) = painting_candidates(pdf, page, read)?;
+) -> Option<(Vec<AddedWord>, Option<String>)> {
+    let (frame, font, candidates, leading) = painting_candidates(pdf, page, read)?;
     let rasters = xberg_native_pdf::rendering::render_font_ink_rasters(
         pdf,
         page,
@@ -29,20 +29,24 @@ pub(in crate::extractors::pdf::ocr) fn plan_minority_khmer(
     )
     .ok()??;
     let scale = INK_PROOF_DPI as f32 / 72.0;
-    Some(
-        candidates
-            .into_iter()
-            .filter(|run| !(limits.cancelled)() && glyph_ink_in(&rasters, &run.place, frame.media, scale))
-            .filter_map(|run| Some((run.text, frame.to_raster(&run.place)?)))
-            .collect(),
-    )
+    let count = candidates.len();
+    let additions: Vec<_> = candidates
+        .into_iter()
+        .filter(|run| !(limits.cancelled)() && glyph_ink_in(&rasters, &run.place, frame.media, scale))
+        .filter_map(|run| Some((run.text, frame.to_raster(&run.place)?)))
+        .collect();
+    (leading.is_none() || additions.len() == count).then_some((additions, leading))
 }
 
 pub(in crate::extractors::pdf::ocr) fn apply_minority_khmer(
     read: &mut ExtractedDocument,
     additions: &[AddedWord],
+    leading: Option<String>,
     cancelled: &dyn Fn() -> bool,
-) {
+) -> Option<LeadingKhmerRows> {
+    if let Some(source) = leading {
+        return leading_khmer::insert(read, additions, source, cancelled);
+    }
     let mut blocks = Vec::new();
     let mut inline = std::collections::BTreeMap::<usize, Vec<_>>::new();
     let page = read
@@ -73,7 +77,7 @@ pub(in crate::extractors::pdf::ocr) fn apply_minority_khmer(
     let has_existing_khmer = read.content.chars().any(is_khmer);
     apply_inline_runs(read, inline);
     if has_existing_khmer {
-        return;
+        return None;
     }
     let mut text = PageText::of(read);
     for (run, place, area) in blocks {
@@ -90,7 +94,12 @@ pub(in crate::extractors::pdf::ocr) fn apply_minority_khmer(
             }
         }
     }
+    None
 }
+
+#[path = "leading_khmer.rs"]
+mod leading_khmer;
+pub(in crate::extractors::pdf::ocr) use leading_khmer::LeadingKhmerRows;
 
 fn apply_inline_runs(read: &mut ExtractedDocument, groups: std::collections::BTreeMap<usize, Vec<InlineRun<'_>>>) {
     let mut edits = Vec::new();
@@ -448,7 +457,7 @@ fn painting_candidates(
     pdf: &PdfDocument,
     page: usize,
     read: &ExtractedDocument,
-) -> Option<(Frame, String, Vec<PlacedWord>)> {
+) -> Option<(Frame, String, Vec<PlacedWord>, Option<String>)> {
     if !pdf.page_image_handles(page).ok()?.is_empty() {
         return None;
     }
@@ -459,13 +468,67 @@ fn painting_candidates(
     }
     let (painting, spans) = pdf.extract_painting_text_and_spans(page).ok()?;
     let khmer = minority_transcript(&painting)?;
-    if !fragmented_latin_layer(&painting) {
+    let leading = !fragmented_latin_layer(&painting);
+    if leading && !corroborated_latin_layer(&painting, &read.content) {
         return None;
     }
     if spans.len() > MAX_LAYER_WORDS {
         return None;
     }
     let ordered = xberg_native_pdf::pipeline::order_page_spans(pdf, page, spans).ok()?;
+    let candidates = ordered_khmer_runs(&ordered, &khmer)?;
+    let count = candidates.len();
+    if leading {
+        let last = candidates.last()?.place.top;
+        if candidates
+            .windows(2)
+            .any(|pair| pair[0].place.top < pair[1].place.bottom)
+            || ordered.iter().any(|item| {
+                item.span.text.chars().any(|ch| !is_khmer(ch) && ch.is_alphanumeric())
+                    && item.span.bbox.y + item.span.bbox.height > last
+            })
+        {
+            return None;
+        }
+    }
+    let frame = Frame { raster, media };
+    let places: Vec<_> = ordered.iter().map(|item| native_box(item.span.bbox)).collect();
+    let mut font = None;
+    let mut admitted = Vec::new();
+    let mut font_resources = HashMap::new();
+    for run in candidates {
+        let mut owners = ordered
+            .iter()
+            .zip(&places)
+            .filter(|(_, place)| overlaps(place, &run.place));
+        let Some((owner, _)) = owners.next() else { continue };
+        if owners.next().is_some() {
+            continue;
+        }
+        let Some(resource) = font_resources
+            .entry(owner.span.font_name.as_str())
+            .or_insert_with(|| isolated_outline_font_resource(pdf, page, &owner.span.font_name))
+            .as_ref()
+        else {
+            continue;
+        };
+        let remaining = unmatched_runs(read, &frame, run, &owner.span)?;
+        if leading && remaining.len() != 1 {
+            return None;
+        }
+        if remaining.is_empty() {
+            continue;
+        }
+        if font.as_ref().is_some_and(|font| font != resource) {
+            return None;
+        }
+        font.get_or_insert_with(|| resource.clone());
+        admitted.extend(remaining);
+    }
+    (!leading || admitted.len() == count).then_some((frame, font?, admitted, leading.then_some(painting)))
+}
+
+fn ordered_khmer_runs(ordered: &[xberg_native_pdf::pipeline::OrderedTextSpan], khmer: &str) -> Option<Vec<PlacedWord>> {
     // Position clustering can rearrange glyphs within a source span when vowel signs
     // and base letters have overlapping advances. Keep each painting span intact.
     let candidates: Vec<_> = ordered
@@ -493,38 +556,20 @@ fn painting_candidates(
     {
         return None;
     }
-    let frame = Frame { raster, media };
-    let places: Vec<_> = ordered.iter().map(|item| native_box(item.span.bbox)).collect();
-    let mut font = None;
-    let mut admitted = Vec::new();
-    let mut font_resources = HashMap::new();
-    for run in candidates {
-        let mut owners = ordered
-            .iter()
-            .zip(&places)
-            .filter(|(_, place)| overlaps(place, &run.place));
-        let Some((owner, _)) = owners.next() else { continue };
-        if owners.next().is_some() {
-            continue;
-        }
-        let Some(resource) = font_resources
-            .entry(owner.span.font_name.as_str())
-            .or_insert_with(|| isolated_outline_font_resource(pdf, page, &owner.span.font_name))
-            .as_ref()
-        else {
-            continue;
-        };
-        let remaining = unmatched_runs(read, &frame, run, &owner.span)?;
-        if remaining.is_empty() {
-            continue;
-        }
-        if font.as_ref().is_some_and(|font| font != resource) {
-            return None;
-        }
-        font.get_or_insert_with(|| resource.clone());
-        admitted.extend(remaining);
+    Some(candidates)
+}
+
+fn corroborated_latin_layer(painting: &str, ocr_text: &str) -> bool {
+    let latin_words = |text: &str| {
+        super::super::document::whole_words(text)
+            .filter(|word| word.bytes().all(|byte| byte.is_ascii_alphabetic()))
+            .collect::<std::collections::HashSet<_>>()
+    };
+    if !painting.chars().any(xberg_native_pdf::is_lost_glyph_marker) {
+        return false;
     }
-    Some((frame, font?, admitted))
+    let native = latin_words(painting);
+    native.len() >= MIN_LOCATED_WORDS && native.is_subset(&latin_words(ocr_text))
 }
 
 fn fragmented_latin_layer(painting: &str) -> bool {
@@ -769,7 +814,7 @@ fn assert_inline_surfaces(
         ),
         ..Default::default()
     };
-    apply_minority_khmer(&mut read, additions, &|| false);
+    apply_minority_khmer(&mut read, additions, None, &|| false);
     assert_eq!(read.content, expected);
     let document = read.ocr_internal_document.as_ref().unwrap();
     assert_eq!(document.elements.len(), 1);
@@ -880,7 +925,7 @@ fn same_height_columns_with_repeated_words_do_not_share_an_inline_anchor() {
         ),
         ..Default::default()
     };
-    apply_minority_khmer(&mut read, &[("ខ".into(), (40, 10, 10, 20))], &|| false);
+    apply_minority_khmer(&mut read, &[("ខ".into(), (40, 10, 10, 20))], None, &|| false);
     assert_eq!(read.content, "Right ក\n\nLeft ក");
     let elements = &read.ocr_internal_document.as_ref().unwrap().elements;
     assert_eq!(

@@ -2143,7 +2143,49 @@ pub(in crate::extractors::pdf) fn join_run_pages(
 /// its OCR text keeps none. The run has already scored and chosen its stage on the OCR text
 /// alone. ~keep
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+#[derive(Default)]
+pub(super) enum NativePrepend {
+    #[default]
+    Original,
+    Recovered(String, String),
+    Abstain,
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+impl NativePrepend {
+    pub(super) fn inputs<'a>(&'a self, source: &'a str, read: &'a str) -> Option<(&'a str, &'a str)> {
+        match self {
+            Self::Original => Some((source, read)),
+            Self::Recovered(source, read) => Some((source, read)),
+            Self::Abstain => None,
+        }
+    }
+}
+
+#[cfg(all(test, any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(super) fn put_layers_first_in_run(
+    text: &mut String,
+    page_texts: &mut [String],
+    doc: Option<&mut crate::types::internal::InternalDocument>,
+    layers: PageLayers<'_>,
+    verdicts: &[super::scoring::OcrPageNoiseVerdict],
+    page_index_offset: usize,
+    config: &ExtractionConfig,
+) -> usize {
+    put_layers_first_in_run_with_recovered_rows(
+        text,
+        page_texts,
+        doc,
+        layers,
+        verdicts,
+        page_index_offset,
+        config,
+        |_, _, _| NativePrepend::Original,
+    )
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) fn put_layers_first_in_run_with_recovered_rows(
     text: &mut String,
     page_texts: &mut [String],
     mut doc: Option<&mut crate::types::internal::InternalDocument>,
@@ -2151,6 +2193,7 @@ pub(super) fn put_layers_first_in_run(
     verdicts: &[super::scoring::OcrPageNoiseVerdict],
     page_index_offset: usize,
     config: &ExtractionConfig,
+    remaining: impl Fn(u32, &str, &str) -> NativePrepend,
 ) -> usize {
     let marker_format = super::super::ocr_page_marker_format(config);
     let thresholds = config
@@ -2175,13 +2218,20 @@ pub(super) fn put_layers_first_in_run(
         else {
             continue;
         };
+        let recovered = remaining(page, layer, page_text);
+        let Some((source, read)) = recovered.inputs(layer, page_text) else {
+            continue;
+        };
         let plain_rows = PlainOcrRows::of_page(doc.as_deref(), Some(page));
         let Some(first) = layer_lines_to_put_first(
-            layer,
-            page_text,
+            source,
+            read,
             noise_verdict,
             &thresholds,
-            layers.boxes.get(&page),
+            layers
+                .boxes
+                .get(&page)
+                .filter(|_| matches!(recovered, NativePrepend::Original)),
             plain_rows,
         ) else {
             continue;

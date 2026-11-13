@@ -1478,6 +1478,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     raster_dpis.extend(layout_raster_dpis);
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let mut khmer_supplements = ahash::AHashMap::new();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut leading_khmer_rows = ahash::AHashMap::new();
     let mut ocr_results: ahash::AHashMap<u32, String> = ahash::AHashMap::with_capacity(total);
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let mut original_tesseract_raster_pages = ahash::AHashSet::new();
@@ -1987,6 +1989,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     // at most one entry -- this page's own, still bare/unclassified because
                     // `skip_document_global_heuristic = true` was passed above.
                     let mut paragraph_page = page_raw_paragraphs.pop().unwrap_or_default();
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    if let Some(rows) = paragraph_page.leading_khmer_rows.take() {
+                        leading_khmer_rows.insert(page_number, rows);
+                    }
                     let paragraphs_in_points = paragraph_page.place_detached_in_points();
                     if !paragraph_page.paragraphs.is_empty() {
                         ocr_page_paragraphs.insert(page_number, paragraph_page.paragraphs);
@@ -2161,6 +2167,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         preprocessing_by_page.insert(page_number, metadata);
                     }
                     let mut paragraph_page = page_raw_paragraphs.pop().unwrap_or_default();
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    if let Some(rows) = paragraph_page.leading_khmer_rows.take() {
+                        leading_khmer_rows.insert(page_number, rows);
+                    }
                     let paragraphs_in_points = paragraph_page.place_detached_in_points();
                     if !paragraph_page.paragraphs.is_empty() {
                         ocr_page_paragraphs.insert(page_number, paragraph_page.paragraphs);
@@ -2673,17 +2683,20 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         max_working_bytes: super::hidden_layer::preview_byte_limit(config),
                         cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
                     };
-                    if let Some(additions) = super::layer_token_recovery::plan_minority_khmer(
+                    if let Some((additions, leading)) = super::layer_token_recovery::plan_minority_khmer(
                         &render_doc,
                         page_idx,
                         &extraction_result,
                         &limits,
                     ) {
-                        super::layer_token_recovery::apply_minority_khmer(
+                        if let Some(rows) = super::layer_token_recovery::apply_minority_khmer(
                             &mut extraction_result,
                             &additions,
+                            leading,
                             limits.cancelled,
-                        );
+                        ) {
+                            leading_khmer_rows.insert((page_idx + 1) as u32, rows);
+                        }
                     }
                 }
                 if let Some(metadata) = extraction_result.metadata.image_preprocessing.clone() {
@@ -3429,16 +3442,26 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             {
                 complete_native_pages.insert(*page_number);
             }
+            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            let remaining = leading_khmer_rows
+                .get(page_number)
+                .zip(layers.get(page_number))
+                .map_or_else(Default::default, |(rows, layer)| rows.prepend_policy(layer, text));
+            #[cfg(not(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+            let remaining = super::document::NativePrepend::Original;
             // A page whose native script the OCR read kept is replaced by that read: the script rule
             // decided it, so no native row is put first. ~keep
             if !pages.native_script.contains(page_number)
                 && let Some(layer) = layers.get(page_number)
+                && let Some((source, read)) = remaining.inputs(layer, text)
                 && let Some(first) = super::document::layer_lines_to_put_first(
-                    layer,
-                    text,
+                    source,
+                    read,
                     noise_verdict_pages.contains(page_number),
                     &ocr_output_thresholds,
-                    boxes.as_ref(),
+                    boxes
+                        .as_ref()
+                        .filter(|_| matches!(remaining, super::document::NativePrepend::Original)),
                     super::document::PlainOcrRows::of_page(structured_ocr_pages.get(page_number), None),
                 )
             {
@@ -5180,6 +5203,13 @@ pub(super) async fn extract_with_ocr_for_page(
         .as_ref()
         .map(|geometry| geometry.dimensions_pt.as_slice());
 
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let mut leading_khmer_rows = ahash::AHashMap::new();
     let mut page_texts = vec![String::new(); total_pages];
     // Which pages the quality gate rejected. Kept separately from `page_texts` because an
     // empty string is ambiguous -- a blank page produces one too -- and the structured
@@ -6243,9 +6273,16 @@ pub(super) async fn extract_with_ocr_for_page(
                         .and_then(|hints| hints.decision_layer(document_page_number)),
                     super::native_word_coverage::InkProofLimits { ..limits },
                 );
-                if let Some(additions) = additions {
+                if let Some((additions, leading)) = additions {
                     let before = ocr_result.content.len();
-                    super::layer_token_recovery::apply_minority_khmer(&mut ocr_result, &additions, limits.cancelled);
+                    if let Some(rows) = super::layer_token_recovery::apply_minority_khmer(
+                        &mut ocr_result,
+                        &additions,
+                        leading,
+                        limits.cancelled,
+                    ) {
+                        leading_khmer_rows.insert(page_idx, rows);
+                    }
                     if detached_page.is_some() && ocr_result.content.len() > before {
                         tracing::debug!(page = document_page_number, "Detached Tesseract read recovered Khmer");
                     }
@@ -7470,6 +7507,13 @@ pub(super) async fn extract_with_ocr_for_page(
                     |(_page_index, ((paragraphs, ocr_scale), detached_ocr_scale))| RunPageParagraphs {
                         #[cfg(feature = "pdf")]
                         raster_px: paragraph_rasters[_page_index],
+                        #[cfg(all(
+                            feature = "pdf",
+                            feature = "ocr",
+                            feature = "tokio-runtime",
+                            not(target_arch = "wasm32")
+                        ))]
+                        leading_khmer_rows: leading_khmer_rows.remove(&_page_index),
                         paragraphs,
                         ocr_scale,
                         detached_ocr_scale,
@@ -8946,7 +8990,32 @@ fn with_run_layers_first(
 ) -> (String, Vec<String>, Option<crate::types::internal::InternalDocument>) {
     if let Some(layers) = layers {
         let boxes = run_merge_geometry(&layers, &run, &page_texts, config);
-        let lost = super::document::put_layers_first_in_run(
+        let remaining = |page: u32, layer: &str, flat: &str| {
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            {
+                (page as usize)
+                    .checked_sub(run.page_index_offset + 1)
+                    .and_then(|index| run.raw_page_paragraphs.get(index))
+                    .and_then(|page| page.leading_khmer_rows.as_ref())
+                    .map_or_else(Default::default, |rows| rows.prepend_policy(layer, flat))
+            }
+            #[cfg(not(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            )))]
+            {
+                let _ = (page, layer, flat);
+                super::document::NativePrepend::Original
+            }
+        };
+        let lost = super::document::put_layers_first_in_run_with_recovered_rows(
             &mut text,
             &mut page_texts,
             doc.as_mut(),
@@ -8957,6 +9026,7 @@ fn with_run_layers_first(
             run.verdicts,
             run.page_index_offset,
             config,
+            remaining,
         );
         if let Some(warning) = super::super::unmapped_glyphs::lost_glyph_warning(lost, config) {
             let doc = doc.get_or_insert_with(|| super::document::flat_ocr_page_document(&text));
@@ -9029,6 +9099,13 @@ pub(super) struct RunPageParagraphs {
     /// Raster dimensions used to assemble paragraphs, after undoing any backend rotation.
     #[cfg(feature = "pdf")]
     pub(super) raster_px: Option<(u32, u32)>,
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    pub(super) leading_khmer_rows: Option<super::layer_token_recovery::LeadingKhmerRows>,
 }
 
 /// The factor per axis from the frame of the OCR paragraphs of a page of a whole-document run

@@ -212,3 +212,55 @@ fn paddle_enabled_pdf_keeps_khmer_from_its_detached_tesseract_read() {
         assert!(content[last..].contains("reception"));
     }
 }
+
+#[test]
+fn reporter_page_keeps_khmer_and_garden_club_under_automatic_english_ocr() {
+    let pdf = include_bytes!("fixtures/pdf/khmer-minority-2826/khmer-in-english-page.pdf");
+    let phrase = "The garden club meets every Monday";
+    let native = helpers::extract_bytes_document_blocking(
+        pdf,
+        "application/pdf",
+        &ExtractionConfig {
+            disable_ocr: true,
+            ocr: None,
+            ..automatic_english()
+        },
+    )
+    .unwrap();
+    let source = khmer(&native.content);
+    assert_eq!(source.chars().count(), 222);
+    assert!(native.content.contains(phrase));
+    for output_format in [OutputFormat::Plain, OutputFormat::Markdown] {
+        let config = ExtractionConfig {
+            output_format,
+            ..automatic_english()
+        };
+        let result = helpers::extract_bytes_document_blocking(pdf, "application/pdf", &config).unwrap();
+        let pages = result.pages.as_ref().unwrap();
+        assert_eq!(pages.len(), 1);
+        for (surface, content) in [("document", &result.content), ("page", &pages[0].content)] {
+            assert_eq!(
+                khmer(content).chars().count(),
+                222,
+                "{:?} {surface} {:?}",
+                config.output_format,
+                result.extraction_method
+            );
+            assert_eq!(
+                khmer(content),
+                source,
+                "{:?} {surface} source order",
+                config.output_format
+            );
+            assert!(
+                content
+                    .split_whitespace()
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .contains(phrase),
+                "{:?} {surface}: {content}",
+                config.output_format
+            );
+        }
+    }
+}
