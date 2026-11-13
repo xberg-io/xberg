@@ -3713,11 +3713,12 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     if config.output_format == crate::core::config::OutputFormat::Markdown {
                         match ocr_raster_by_page.get(page_number) {
                             Some(&(width, height)) if width > 0 && height > 0 => {
-                                let (width_pt, height_pt) =
-                                    page_dimensions_pt(&render_doc, page_number.saturating_sub(1) as usize);
-                                if width_pt.is_finite() && height_pt.is_finite() && width_pt > 0.0 && height_pt > 0.0 {
-                                    reflow_scales
-                                        .insert(*page_number, (width_pt / width as f32, height_pt / height as f32));
+                                let media_box = render_doc.get_page_media_box(page_number.saturating_sub(1) as usize);
+                                if let Some(scale) = super::document::MatchedLayerOccurrences::raster_to_page_scale(
+                                    media_box.ok(),
+                                    (width, height),
+                                ) {
+                                    reflow_scales.insert(*page_number, scale);
                                 }
                             }
                             None if paragraphs_in_page_points.contains(page_number) => {

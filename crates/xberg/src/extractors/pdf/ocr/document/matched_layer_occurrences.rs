@@ -37,6 +37,17 @@ struct RepeatedLine {
 }
 
 impl MatchedLayerOccurrences {
+    pub(in crate::extractors::pdf::ocr) fn raster_to_page_scale(
+        media_box: Option<(f32, f32, f32, f32)>,
+        (width_px, height_px): (u32, u32),
+    ) -> Option<(f32, f32)> {
+        let (left, bottom, right, top) = media_box?;
+        let width = (right - left).abs();
+        let height = (top - bottom).abs();
+        (width_px > 0 && height_px > 0 && width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0)
+            .then(|| (width / width_px as f32, height / height_px as f32))
+    }
+
     pub(in crate::extractors::pdf::ocr) fn capture(
         pdf: &xberg_native_pdf::PdfDocument,
         page_index: usize,
@@ -1739,6 +1750,34 @@ mod matched_layer_occurrences_tests {
             });
             proof.trim_prepend(&mut first, row, &doc, 1, allow_reflow.then_some((1.0, 1.0)));
             assert_eq!(first.lines, expected, "{structured}");
+        }
+    }
+
+    #[test]
+    fn missing_media_box_preserves_native_literal_in_reflowed_row() {
+        let row = "register 769 scope";
+        let proof = MatchedLayerOccurrences(
+            ahash::AHashMap::from([("769".into(), vec![occurrence(row, 1)])]),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        );
+        let mut doc = flat_ocr_page_document("header register 769 scope footer");
+        doc.elements[0].bbox = Some(BoundingBox {
+            x0: 0.0,
+            y0: 0.0,
+            x1: 10.0,
+            y1: 10.0,
+        });
+        for (media, expected) in [(None, "769 native"), (Some((0.0, 0.0, 10.0, 10.0)), "native")] {
+            let mut first = LayerFirst {
+                lines: "769 native".into(),
+                lost_glyphs: 0,
+                misread_ocr_rows: Vec::new(),
+            };
+            let scale = MatchedLayerOccurrences::raster_to_page_scale(media, (10, 10));
+            proof.trim_prepend(&mut first, row, &doc, 1, scale);
+            assert_eq!(first.lines, expected);
         }
     }
 
