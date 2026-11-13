@@ -34,6 +34,7 @@ pub(super) fn eligible_pages(
         return Default::default();
     };
     if config.images.is_some()
+        || margin_filtering_active(config)
         || config.output_format != OutputFormat::Plain
         || config.include_document_structure
         || config.result_format == crate::types::ResultFormat::ElementBased
@@ -58,6 +59,11 @@ pub(super) fn eligible_pages(
             marked_words(pdf, index, layer).map(|words| (index, words))
         })
         .collect()
+}
+
+fn margin_filtering_active(config: &ExtractionConfig) -> bool {
+    let margins = crate::pdf::native::text::PageMarginFractions::from_extraction_config(Some(config));
+    margins.top != 0.0 || margins.bottom != 0.0
 }
 
 fn sparse_loss(layer: &str) -> bool {
@@ -263,9 +269,14 @@ type Attempt = (bool, u32, u32, Option<i32>);
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 const QUALITY_CASE: usize = 0x3150_5101;
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+const MISSING_WORD_CASE: usize = 0x3150_5102;
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+const MARGIN_CASE: usize = 0x3150_5103;
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
-static QUALITY_ATTEMPTS: std::sync::Mutex<Vec<Attempt>> = std::sync::Mutex::new(Vec::new());
+static ATTEMPTS: std::sync::Mutex<std::collections::BTreeMap<usize, Vec<Attempt>>> =
+    std::sync::Mutex::new(std::collections::BTreeMap::new());
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 pub(super) fn test_attempt(
@@ -275,31 +286,78 @@ pub(super) fn test_attempt(
     height: u32,
     marked_words: Option<&MarkedWords>,
 ) -> crate::Result<ExtractedDocument> {
-    if config
-        .security_limits
-        .as_ref()
-        .is_some_and(|limits| limits.max_archive_size == QUALITY_CASE)
+    let case = config.security_limits.as_ref().map(|limits| limits.max_archive_size);
+    if let Some(case @ (QUALITY_CASE | MISSING_WORD_CASE | MARGIN_CASE)) = case
         && let Ok(read) = &mut result
     {
-        let retry = marked_words.is_none();
-        assert!(marked_words.is_none_or(|words| words.accounted_for(read)));
+        let retry = marked_words.is_none() && case != MARGIN_CASE;
+        if let Some(words) = marked_words {
+            assert!(
+                words.accounted_for(read),
+                "unmodified read must account for the marked words"
+            );
+            if case == MISSING_WORD_CASE {
+                remove_marked_word(read, words);
+                assert!(!words.accounted_for(read));
+            }
+        }
         let target = read
             .metadata
             .image_preprocessing
             .as_ref()
             .map(|metadata| metadata.target_dpi);
-        QUALITY_ATTEMPTS.lock().unwrap().push((retry, width, height, target));
-        // Exercise the quality verdict independently of Tesseract model confidence drift. ~keep
+        ATTEMPTS
+            .lock()
+            .unwrap()
+            .entry(case)
+            .or_default()
+            .push((retry, width, height, target));
+        // Exercise each trigger independently of Tesseract model confidence drift. ~keep
+        let confidence = if case == QUALITY_CASE && !retry { 0 } else { 100 };
         read.metadata
             .additional
-            .insert("mean_text_conf".into(), serde_json::json!(if retry { 100 } else { 0 }));
+            .insert("mean_text_conf".into(), serde_json::json!(confidence));
     }
     result
 }
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
+fn remove_marked_word(read: &mut ExtractedDocument, words: &MarkedWords) {
+    let raster = processed_ocr_layout_dimensions(&read.metadata).unwrap();
+    let (native, bounds) = &words.words[0];
+    let elements = read.ocr_elements.as_mut().unwrap();
+    let index = elements
+        .iter()
+        .position(|word| {
+            word.level == crate::types::OcrElementLevel::Word
+                && is_iterator_word(word)
+                && ocr_word_in_page_points(word, raster, words.media).is_some_and(|placed| bounds.owns(&placed))
+                && matches_marked_word(native, &word.text)
+        })
+        .expect("iterator word at the first marked position");
+    elements.remove(index);
+}
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
 #[tokio::test]
 async fn page_quality_rejection_retries_sparse_glyphs_with_normal_raster_and_preprocessing() {
+    assert_sparse_glyph_attempts(QUALITY_CASE).await;
+}
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+#[tokio::test]
+async fn missing_marked_word_retries_sparse_glyphs_with_normal_raster_and_preprocessing() {
+    assert_sparse_glyph_attempts(MISSING_WORD_CASE).await;
+}
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+#[tokio::test]
+async fn active_pdf_margin_uses_one_normal_density_read() {
+    assert_sparse_glyph_attempts(MARGIN_CASE).await;
+}
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+async fn assert_sparse_glyph_attempts(case: usize) {
     const FIXTURE: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/tests/fixtures/pdf/separation-overprint-2817/"
@@ -323,11 +381,15 @@ async fn page_quality_rejection_retries_sparse_glyphs_with_normal_raster_and_pre
     let config = ExtractionConfig {
         use_cache: false,
         security_limits: Some(crate::extractors::security::SecurityLimits {
-            max_archive_size: QUALITY_CASE,
+            max_archive_size: case,
             ..Default::default()
         }),
         pages: Some(crate::core::config::PageConfig {
             extract_pages: true,
+            ..Default::default()
+        }),
+        pdf_options: (case == MARGIN_CASE).then(|| crate::core::config::PdfConfig {
+            top_margin_fraction: Some(0.01),
             ..Default::default()
         }),
         ocr: Some(OcrConfig {
@@ -344,17 +406,25 @@ async fn page_quality_rejection_retries_sparse_glyphs_with_normal_raster_and_pre
     let result = crate::core::extractor::extract_bytes(pdf, "application/pdf", &config)
         .await
         .unwrap();
-    let attempts = std::mem::take(&mut *QUALITY_ATTEMPTS.lock().unwrap());
-    assert_eq!(attempts.len(), 2, "{attempts:?}");
-    assert_eq!(attempts[0], (false, 1020, 1320, Some(120)));
-    assert_eq!((attempts[1].0, attempts[1].1, attempts[1].2), (true, 1275, 1650));
+    let attempts = ATTEMPTS
+        .lock()
+        .unwrap()
+        .remove(&case)
+        .expect("observed at least one OCR attempt");
     let normal = normal_density_control(pdf, &config).await;
     let normal_page = &normal.pages.as_ref().unwrap()[0];
     let normal_target = normal_page
         .image_preprocessing
         .as_ref()
         .map(|metadata| metadata.target_dpi);
-    assert_eq!(attempts[1], (true, 1275, 1650, normal_target));
+    if case == MARGIN_CASE {
+        assert_eq!(attempts, [(false, 1275, 1650, normal_target)]);
+    } else {
+        assert_eq!(
+            attempts,
+            [(false, 1020, 1320, Some(120)), (true, 1275, 1650, normal_target)]
+        );
+    }
     let [page] = result.pages.as_deref().unwrap() else {
         panic!("expected one page");
     };
@@ -377,7 +447,7 @@ async fn page_quality_rejection_retries_sparse_glyphs_with_normal_raster_and_pre
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 async fn normal_density_control(pdf: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
     let mut normal_config = config.clone();
-    normal_config.security_limits.as_mut().unwrap().max_archive_size = QUALITY_CASE + 1;
+    normal_config.security_limits.as_mut().unwrap().max_archive_size = QUALITY_CASE + 16;
     normal_config.images = Some(ImageExtractionConfig {
         target_dpi: crate::image::dpi::DEFAULT_PDF_RENDER_DPI,
         auto_adjust_dpi: false,
