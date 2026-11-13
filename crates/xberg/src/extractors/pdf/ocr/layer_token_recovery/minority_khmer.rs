@@ -12,47 +12,40 @@ fn is_khmer(ch: char) -> bool {
     ('\u{1780}'..='\u{17ff}').contains(&ch)
 }
 
-pub(in crate::extractors::pdf::ocr) fn plan_minority_khmer(
+pub(in crate::extractors::pdf::ocr) fn contains_khmer(text: &str) -> bool {
+    text.chars().any(is_khmer)
+}
+
+pub(in crate::extractors::pdf::ocr) fn minority_khmer_supplement(
     pdf: &PdfDocument,
     page: usize,
     read: &ExtractedDocument,
     limits: &InkProofLimits<'_>,
-) -> Vec<AddedWord> {
-    let Some((frame, candidates)) = painting_candidates(pdf, page, read) else {
-        return Vec::new();
-    };
-    let Ok(Some(rasters)) = xberg_native_pdf::rendering::render_text_ink_rasters(
+) -> Option<String> {
+    let (frame, candidates) = painting_candidates(pdf, page, read)?;
+    let rasters = xberg_native_pdf::rendering::render_text_ink_rasters(
         pdf,
         page,
         INK_PROOF_DPI,
         limits.max_working_bytes,
         limits.cancelled,
-    ) else {
-        return Vec::new();
-    };
+    )
+    .ok()??;
+    let scale = INK_PROOF_DPI as f32 / 72.0;
     candidates
-        .into_iter()
-        .filter_map(|word| {
-            if !glyph_ink_in(&rasters, &word.place, frame.media, INK_PROOF_DPI as f32 / 72.0) {
-                return None;
-            }
-            Some((word.text, frame.to_raster(&word.place)?))
+        .iter()
+        .all(|run| !(limits.cancelled)() && glyph_ink_in(&rasters, &run.place, frame.media, scale))
+        .then(|| {
+            candidates
+                .into_iter()
+                .map(|run| run.text)
+                .collect::<Vec<_>>()
+                .join("\n")
         })
-        .collect()
-}
-
-pub(in crate::extractors::pdf::ocr) fn apply_minority_khmer(
-    read: &mut ExtractedDocument,
-    additions: &[AddedWord],
-    cancelled: &dyn Fn() -> bool,
-) {
-    if !additions.is_empty() && !read.content.chars().any(is_khmer) {
-        apply(read, &[], additions, cancelled);
-    }
 }
 
 fn painting_candidates(pdf: &PdfDocument, page: usize, read: &ExtractedDocument) -> Option<(Frame, Vec<PlacedWord>)> {
-    if read.content.chars().any(is_khmer) || !pdf.page_image_handles(page).ok()?.is_empty() {
+    if contains_khmer(&read.content) || !pdf.page_image_handles(page).ok()?.is_empty() {
         return None;
     }
     let raster = super::super::document::processed_ocr_layout_dimensions(&read.metadata)?;
@@ -77,15 +70,19 @@ fn painting_candidates(pdf: &PdfDocument, page: usize, read: &ExtractedDocument)
     }
 
     let ordered = xberg_native_pdf::pipeline::order_page_spans(pdf, page, spans).ok()?;
-    let spans: Vec<_> = ordered.into_iter().map(|ordered| ordered.span).collect();
-    let (words, _, _) = PdfDocument::assemble_positioned_words(&spans, media, None).ok()?;
-    let candidates: Vec<_> = words
+    // Position clustering can rearrange glyphs within a source span when vowel signs
+    // and base letters have overlapping advances. Keep each painting span intact.
+    let candidates: Vec<_> = ordered
         .into_iter()
-        .filter_map(|word| {
-            let text: String = word.text.chars().filter(|ch| is_khmer(*ch)).collect();
-            (!text.is_empty() && !word.text.chars().any(|ch| ch.is_ascii_alphanumeric())).then(|| PlacedWord {
+        .filter_map(|ordered| {
+            let span = ordered.span;
+            let text = khmer_run(&span.text);
+            (!text.is_empty()
+                && span.rotation_degrees == 0.0
+                && !span.text.chars().any(|ch| ch.is_ascii_alphanumeric()))
+            .then(|| PlacedWord {
                 text,
-                place: native_box(word.bbox),
+                place: native_box(span.bbox),
                 confidence: 1.0,
             })
         })
@@ -95,13 +92,21 @@ fn painting_candidates(pdf: &PdfDocument, page: usize, read: &ExtractedDocument)
     }
     if !candidates
         .iter()
-        .flat_map(|word| word.text.chars())
+        .flat_map(|run| run.text.chars().filter(|ch| is_khmer(*ch)))
         .eq(khmer.chars().filter(|ch| is_khmer(*ch)))
     {
         return None;
     }
     let frame = Frame { raster, media };
     (!region_contradicts_khmer(read, &frame, &candidates)?).then_some((frame, candidates))
+}
+
+fn khmer_run(text: &str) -> String {
+    text.split_whitespace()
+        .map(|word| word.chars().filter(|ch| is_khmer(*ch)).collect::<String>())
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn region_contradicts_khmer(read: &ExtractedDocument, frame: &Frame, candidates: &[PlacedWord]) -> Option<bool> {

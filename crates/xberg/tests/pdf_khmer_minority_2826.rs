@@ -47,9 +47,11 @@ fn automatic_english_ocr_keeps_visible_minority_khmer_on_a_fragmented_page() {
         };
         let actual = helpers::extract_bytes_document_blocking(FRAGMENTED, "application/pdf", &config).unwrap();
         assert_eq!(khmer(&actual.content), expected);
+        assert!(actual.content.contains("library"));
         let pages = actual.pages.as_ref().unwrap();
         assert_eq!(pages.len(), 1);
         assert_eq!(khmer(&pages[0].content), expected);
+        assert!(pages[0].content.contains("library"));
     }
 }
 
@@ -84,11 +86,27 @@ fn automatic_english_ocr_keeps_clean_khmer_and_rejects_hidden_and_wrong_mapped_k
         )
         .unwrap();
         assert_eq!(khmer(&native.content).chars().count(), native_count);
-        let read = helpers::extract_bytes_document_blocking(pdf, "application/pdf", &config).unwrap();
-        assert_eq!(khmer(&read.content).chars().count(), expected);
-        let pages = read.pages.as_ref().unwrap();
-        assert_eq!(pages.len(), 1);
-        assert_eq!(khmer(&pages[0].content).chars().count(), expected);
-        assert!(read.content.chars().any(|ch| ch.is_ascii_alphabetic()));
+        for output_format in [OutputFormat::Plain, OutputFormat::Markdown] {
+            let config = ExtractionConfig {
+                output_format,
+                ..config.clone()
+            };
+            let read = helpers::extract_bytes_document_blocking(pdf, "application/pdf", &config).unwrap();
+            assert_eq!(
+                khmer(&read.content).chars().count(),
+                expected,
+                "{:?}",
+                config.output_format
+            );
+            let pages = read.pages.as_ref().unwrap();
+            assert_eq!(pages.len(), 1);
+            assert_eq!(
+                khmer(&pages[0].content).chars().count(),
+                expected,
+                "{:?}",
+                config.output_format
+            );
+            assert!(read.content.chars().any(|ch| ch.is_ascii_alphabetic()));
+        }
     }
 }
