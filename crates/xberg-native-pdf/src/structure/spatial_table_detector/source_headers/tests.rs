@@ -840,3 +840,17 @@ fn body_column_alignment_is_required_even_when_text_moves_with_its_cell() {
     assert!(cell_is_shaded(&rows[2].cells[2], &shading_rectangles(shading.iter())));
     assert!(!retained(rows, &shading));
 }
+
+#[test]
+fn overlapping_overpaint_counts_shared_area_once() {
+    let cell = cell("Item", 0, 1, 0.0, true);
+    let mut background = white_fill(0.0, 0.0, WIDTH, HEIGHT);
+    background.fill_color = Some(Color::new(0.85, 0.85, 0.85));
+    let first = white_fill(0.0, 0.0, 3.5, 4.0);
+    let overlapping = white_fill(2.5, 0.0, 4.0, 2.0);
+    let disjoint = white_fill(5.0, 0.0, 4.0, 2.0);
+
+    // The 200-point cell loses 22 square points if disjoint, and 20 after counting the overlap once. ~keep
+    assert!(cell_has_visible_shading(&cell, &[&background, &first, &overlapping]));
+    assert!(!cell_has_visible_shading(&cell, &[&background, &first, &disjoint]));
+}
