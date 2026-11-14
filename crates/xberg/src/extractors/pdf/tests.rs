@@ -9999,6 +9999,7 @@ mod unread_page_blank_flag_tests {
     struct SlowAfterStopBackend {
         token: crate::cancellation::CancellationToken,
         calls: std::sync::atomic::AtomicUsize,
+        fail_after_stop: bool,
     }
 
     #[cfg(feature = "ocr")]
@@ -10036,6 +10037,12 @@ mod unread_page_blank_flag_tests {
         ) -> crate::Result<crate::types::ExtractedDocument> {
             if self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
                 self.token.request_stop();
+            } else if self.fail_after_stop {
+                assert!(self.token.stop_requested());
+                return Err(crate::XbergError::Plugin {
+                    message: "recognition stopped".to_string(),
+                    plugin_name: "slow-after-stop-backend".to_string(),
+                });
             } else {
                 tokio::task::spawn_blocking(|| std::thread::sleep(SLOW_PAGE))
                     .await
@@ -10056,12 +10063,25 @@ mod unread_page_blank_flag_tests {
     #[tokio::test]
     #[serial]
     async fn a_page_still_recognizing_after_the_stop_is_abandoned_not_awaited() {
+        assert_page_unread_after_stop(false).await;
+    }
+
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    #[serial]
+    async fn a_page_whose_recognition_returns_an_error_after_stop_is_unread() {
+        assert_page_unread_after_stop(true).await;
+    }
+
+    #[cfg(feature = "ocr")]
+    async fn assert_page_unread_after_stop(fail_after_stop: bool) {
         use crate::core::config::{ConcurrencyConfig, OcrConfig};
 
         let token = crate::cancellation::CancellationToken::new();
         let backend = std::sync::Arc::new(SlowAfterStopBackend {
             token: token.clone(),
             calls: std::sync::atomic::AtomicUsize::new(0),
+            fail_after_stop,
         });
         crate::plugins::register_ocr_backend(backend.clone()).unwrap();
         let _unregister = RegisteredOcrBackendGuard {

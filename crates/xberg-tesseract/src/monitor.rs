@@ -51,17 +51,40 @@ impl TessMonitor {
         Ok(unsafe { TessMonitorGetProgress(*handle) })
     }
 
-    /// Returns the raw underlying monitor handle.
-    ///
-    /// Intended for internal use by [`crate::TesseractAPI::recognize_with_monitor`]
-    /// to pass the monitor into `TessBaseAPIRecognize`.
-    ///
-    /// # Errors
-    ///
-    /// Returns a `TesseractError::MutexLockError` if the mutex lock fails.
-    pub(crate) fn as_ptr(&self) -> Result<*mut c_void> {
+    pub(crate) fn with_handle<T>(&self, action: impl FnOnce(*mut c_void) -> T) -> Result<T> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        Ok(*handle)
+        if handle.is_null() {
+            return Err(TesseractError::OcrError);
+        }
+        Ok(action(*handle))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn with_cancel<F: Fn() -> bool>(
+        &self,
+        stop: &F,
+        recognize: impl FnOnce(*mut c_void) -> Result<()>,
+    ) -> Result<()> {
+        unsafe extern "C" fn cancelled<F: Fn() -> bool>(data: *mut c_void, _: c_int) -> bool {
+            // SAFETY: with_cancel borrows the callback for the synchronous recognition call.
+            let stop = unsafe { &*data.cast::<F>() };
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(stop)).unwrap_or(true)
+        }
+
+        self.with_handle(|handle| {
+            // SAFETY: this private monitor is locked for the call and the callback outlives it.
+            unsafe {
+                TessMonitorSetCancelThis(handle, std::ptr::from_ref(stop).cast_mut().cast());
+                TessMonitorSetCancelFunc(handle, Some(cancelled::<F>));
+            }
+            let result = recognize(handle);
+            // SAFETY: the native call returned and no callback can still be running.
+            unsafe {
+                TessMonitorSetCancelFunc(handle, None);
+                TessMonitorSetCancelThis(handle, std::ptr::null_mut());
+            }
+            result
+        })?
     }
 }
 
@@ -77,5 +100,9 @@ ffi_extern! {
     pub fn TessMonitorCreate() -> *mut c_void;
     pub fn TessMonitorDelete(monitor: *mut c_void);
     pub fn TessMonitorSetDeadlineMSecs(monitor: *mut c_void, deadline: c_int);
+    #[cfg(not(target_arch = "wasm32"))]
+    fn TessMonitorSetCancelFunc(monitor: *mut c_void, callback: Option<unsafe extern "C" fn(*mut c_void, c_int) -> bool>);
+    #[cfg(not(target_arch = "wasm32"))]
+    fn TessMonitorSetCancelThis(monitor: *mut c_void, data: *mut c_void);
     pub fn TessMonitorGetProgress(monitor: *mut c_void) -> c_int;
 }

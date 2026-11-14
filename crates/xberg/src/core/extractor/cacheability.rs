@@ -176,10 +176,13 @@ pub(crate) async fn with_ocr_cancellation<F: Future>(
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn ocr_stop_token() -> Option<crate::cancellation::CancellationToken> {
+    current().and_then(|context| context.1)
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(crate) fn ocr_stop_requested() -> bool {
-    current()
-        .and_then(|context| context.1)
-        .is_some_and(|token| token.is_cancelled() || token.time_limit_reached())
+    ocr_stop_token().is_some_and(|token| token.is_cancelled() || token.time_limit_reached())
 }
 
 #[cfg(all(feature = "ocr", target_arch = "wasm32"))]
@@ -263,6 +266,9 @@ pub(crate) use request_models::request_model_digest;
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 pub(crate) fn defer_ocr_cache_write(write: impl FnOnce() + Send + 'static) {
+    if ocr_stop_requested() {
+        return;
+    }
     if let Some(models) = current().and_then(|context| context.2) {
         models.defer(write);
     } else {

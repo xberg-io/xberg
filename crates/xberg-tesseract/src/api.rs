@@ -495,46 +495,28 @@ impl TesseractAPI {
     ///
     /// Returns `Ok(())` if recognition is successful, otherwise returns an error.
     pub fn recognize(&self) -> Result<()> {
-        let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
-        let result = unsafe { shim::xberg_tess_recognize(*handle) };
-        #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
-        let result = unsafe { TessBaseAPIRecognize(*handle, std::ptr::null_mut()) };
-        if result != 0 {
-            Err(TesseractError::OcrError)
-        } else {
-            ensure_tesseract_cleanup_registered();
-            Ok(())
-        }
+        self.recognize_monitored(std::ptr::null_mut())
     }
 
-    /// Recognizes text in the current image, bounded by a [`TessMonitor`] deadline.
-    ///
-    /// Behaves like [`Self::recognize`], but passes `monitor` into
-    /// `TessBaseAPIRecognize` so a deadline configured via
-    /// [`TessMonitor::set_deadline`] can abort a pathological recognition run
-    /// (e.g. `PSM_AUTO` on a hostile image) instead of letting it run
-    /// unbounded. Prefer this whenever recognition must fail gracefully
-    /// rather than risk a hang.
-    ///
-    /// # Availability
-    ///
-    /// Only the direct-FFI path (used on WASI/`wasm32` builds and any build
-    /// without the `build-tesseract` shim) honors the deadline. When the
-    /// native `build-tesseract` shim is active, `TessBaseAPIRecognize` is
-    /// invoked through `xberg_tess_recognize`, which does not accept a
-    /// monitor; in that configuration this call behaves identically to
-    /// [`Self::recognize`] and the deadline is not enforced.
+    /// Recognizes text using the given progress monitor and its configured deadline.
     pub fn recognize_with_monitor(&self, monitor: &TessMonitor) -> Result<()> {
+        monitor.with_handle(|handle| self.recognize_monitored(handle))?
+    }
+
+    /// Recognizes text with a synchronous cooperative stop check.
+    ///
+    /// The callback must be quick and must not call back into this API instance.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn recognize_with_cancel(&self, stop: impl Fn() -> bool) -> Result<()> {
+        TessMonitor::new().with_cancel(&stop, |monitor| self.recognize_monitored(monitor))
+    }
+
+    fn recognize_monitored(&self, monitor: *mut c_void) -> Result<()> {
         let handle = self.handle.lock().map_err(|_| TesseractError::MutexLockError)?;
-        let monitor_ptr = monitor.as_ptr()?;
         #[cfg(all(feature = "build-tesseract", not(target_arch = "wasm32")))]
-        let result = {
-            let _ = monitor_ptr;
-            unsafe { shim::xberg_tess_recognize(*handle) }
-        };
+        let result = unsafe { shim::xberg_tess_recognize(*handle, monitor) };
         #[cfg(not(all(feature = "build-tesseract", not(target_arch = "wasm32"))))]
-        let result = unsafe { TessBaseAPIRecognize(*handle, monitor_ptr) };
+        let result = unsafe { TessBaseAPIRecognize(*handle, monitor) };
         if result != 0 {
             Err(TesseractError::OcrError)
         } else {
@@ -2189,7 +2171,7 @@ ffi_extern! {
 mod shim {
     use std::os::raw::{c_char, c_float, c_int, c_void};
     unsafe extern "C" {
-        pub(super) fn xberg_tess_recognize(handle: *mut c_void) -> c_int;
+        pub(super) fn xberg_tess_recognize(handle: *mut c_void, monitor: *mut c_void) -> c_int;
         pub(super) fn xberg_tess_get_hocr_text(handle: *mut c_void, page: c_int) -> *mut c_char;
         pub(super) fn xberg_tess_get_utf8_text(handle: *mut c_void) -> *mut c_char;
         pub(super) fn xberg_tess_clear(handle: *mut c_void) -> c_int;

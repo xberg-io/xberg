@@ -2055,6 +2055,18 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         plugin_name: "ocr".to_string(),
                     })?;
                     pending_pages.remove(&page_idx);
+                    if result.is_err()
+                        && let Some(token) = config.cancel_token.as_ref().filter(|token| token.stop_requested())
+                    {
+                        mark_pages_unread(
+                            Some(token),
+                            std::iter::once(page_idx),
+                            &mut page_failures,
+                            &mut failed_page_errors,
+                            |page_idx| mixed_native_page_has_content(native_text, boundaries, page_idx),
+                        );
+                        continue;
+                    }
                     let result = match result.map_err(crate::XbergError::from) {
                         Ok(result) => result,
                         Err(error @ crate::XbergError::Cancelled) => return Err(error.into()),
@@ -2755,6 +2767,19 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     raster_dpis.insert(page_idx, dpi);
                 }
                 pending_pages.remove(&page_idx);
+                if result.is_err()
+                    && let Some(token) = config.cancel_token.as_ref().filter(|token| token.stop_requested())
+                {
+                    mark_pages_unread(
+                        Some(token),
+                        std::iter::once(page_idx),
+                        &mut page_failures,
+                        &mut failed_page_errors,
+                        |page_idx| mixed_native_page_has_content(native_text, boundaries, page_idx),
+                    );
+                    abandoned_pages.insert(page_idx);
+                    continue;
+                }
                 #[cfg(all(
                     feature = "ocr",
                     feature = "pdf",

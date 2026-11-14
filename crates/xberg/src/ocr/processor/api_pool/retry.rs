@@ -74,6 +74,9 @@ impl RetryApiPools {
         if result.is_err() && !matches!(stage, RetryStage::Osd) {
             return result;
         }
+        if crate::core::extractor::cacheability::ocr_stop_requested() {
+            return result;
+        }
         models.validate()?;
         lease.0.release_with(|engine| reset(&engine.api));
         result

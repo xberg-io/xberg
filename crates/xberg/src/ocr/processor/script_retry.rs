@@ -579,8 +579,11 @@ fn retry_stage<T>(action: impl FnOnce() -> Result<T, OcrError>) -> Result<Option
     if cacheability::ocr_stop_requested() {
         return Ok(None);
     }
-    let result = action()?;
-    Ok((!cacheability::ocr_stop_requested()).then_some(result))
+    let result = action();
+    if cacheability::ocr_stop_requested() {
+        return Ok(None);
+    }
+    result.map(Some)
 }
 
 /// Retry Han when same-page OSD identifies it or Japanese when the first read shows noisy
@@ -776,7 +779,11 @@ fn read_retry_words(
         retry
             .set_source_resolution(pass.source_dpi)
             .map_err(|e| engine_error("retry resolution", e))?;
-        if retry_stage(|| retry.recognize().map_err(|e| engine_error("retry recognize", e)))?.is_none() {
+        if retry_stage(|| {
+            super::execution::recognize_until_stop(retry).map_err(|e| engine_error("retry recognize", e))
+        })?
+        .is_none()
+        {
             return Ok(None);
         }
         let tsv = retry.get_tsv_text(0).map_err(|e| engine_error("retry word table", e))?;

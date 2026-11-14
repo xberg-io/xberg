@@ -2,9 +2,10 @@
 
 extern "C" {
 
-int xberg_tess_recognize(void *handle) {
+int xberg_tess_recognize(void *handle, void *monitor) {
   try {
-    return TessBaseAPIRecognize(static_cast<TessBaseAPI *>(handle), nullptr);
+    return TessBaseAPIRecognize(static_cast<TessBaseAPI *>(handle),
+                                static_cast<ETEXT_DESC *>(monitor));
   } catch (...) {
     return -1;
   }

@@ -537,7 +537,7 @@ fn recover_blank_quantity_from_source(
         i32::try_from(width.checked_mul(3)?).ok()?,
     )
     .ok()?;
-    api.recognize().ok()?;
+    recognize_until_stop(&api).ok()?;
     let text = api.get_utf8_text().ok()?;
     let quantity = parse_retry_quantity(&text)?;
     let confidence = f64::from(api.mean_text_conf().ok()?);
@@ -554,6 +554,22 @@ fn recover_blank_quantity_from_source(
     })
 }
 
+pub(super) fn recognize_until_stop(api: &TesseractAPI) -> xberg_tesseract::Result<()> {
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(token) = crate::core::extractor::cacheability::ocr_stop_token() {
+        let stopped = || token.is_cancelled() || token.stop_requested();
+        if stopped() {
+            return Err(xberg_tesseract::TesseractError::OcrError);
+        }
+        let result = api.recognize_with_cancel(stopped);
+        if stopped() {
+            return Err(xberg_tesseract::TesseractError::OcrError);
+        }
+        return result;
+    }
+    api.recognize()
+}
+
 fn recognize_quantity_region(
     api: &TesseractAPI,
     config: &TesseractConfig,
@@ -564,7 +580,7 @@ fn recognize_quantity_region(
     let width = i32::try_from(region.width).ok()?;
     let height = i32::try_from(region.height).ok()?;
     api.set_rectangle(left, top, width, height).ok()?;
-    api.recognize().ok()?;
+    recognize_until_stop(api).ok()?;
     let text = api.get_utf8_text().ok()?;
     let quantity = parse_retry_quantity(&text)?;
     let confidence = api.mean_text_conf().unwrap_or(-1);
@@ -2405,8 +2421,7 @@ pub(super) fn perform_ocr(
 
     drop(image_data);
 
-    api.recognize()
-        .map_err(|e| OcrError::ProcessingFailed(format!("Failed to recognize text: {}", e)))?;
+    recognize_until_stop(&api).map_err(|e| OcrError::ProcessingFailed(format!("Failed to recognize text: {}", e)))?;
 
     let mean_text_conf = api.mean_text_conf().unwrap_or(-1);
 

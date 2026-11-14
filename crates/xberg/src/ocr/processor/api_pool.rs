@@ -401,6 +401,10 @@ impl Deref for TesseractApiLease {
 
 impl Drop for TesseractApiLease {
     fn drop(&mut self) {
+        if crate::core::extractor::cacheability::ocr_stop_requested() {
+            self.inner.release_with(|_| false);
+            return;
+        }
         self.inner
             .release_for_models(&self.models, |api| match api.primary.clear() {
                 Ok(()) => {

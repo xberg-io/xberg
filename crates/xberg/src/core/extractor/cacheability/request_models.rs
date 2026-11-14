@@ -119,3 +119,41 @@ mod tests {
         assert!(published.load(Ordering::Acquire));
     }
 }
+
+#[cfg(test)]
+#[tokio::test]
+async fn timed_out_worker_cannot_publish_deferred_ocr_results() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+
+    let token = crate::cancellation::CancellationToken::new();
+    let early = Arc::new(AtomicBool::new(false));
+    let late = Arc::new(AtomicBool::new(false));
+    let (resume, wait) = std::sync::mpsc::channel();
+    let worker = super::scope(async {
+        let worker = super::with_ocr_cancellation(Some(&token), async {
+            let early = Arc::clone(&early);
+            super::defer_ocr_cache_write(move || early.store(true, Ordering::Relaxed));
+            let late = Arc::clone(&late);
+            let worker = tokio::task::spawn_blocking(super::blocking(move || {
+                wait.recv().unwrap();
+                assert!(super::ocr_stop_token().unwrap().stop_requested());
+                let write_flag = Arc::clone(&late);
+                super::defer_ocr_cache_write(move || write_flag.store(true, Ordering::Relaxed));
+                assert_eq!(Arc::strong_count(&late), 2, "late write must never enter the queue");
+            }));
+            token.request_stop();
+            worker
+        })
+        .await;
+        assert!(!super::can_publish_outer_result());
+        worker
+    })
+    .await;
+    resume.send(()).unwrap();
+    worker.await.unwrap();
+    assert!(!early.load(Ordering::Relaxed));
+    assert!(!late.load(Ordering::Relaxed));
+}

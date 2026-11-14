@@ -84,3 +84,37 @@ fn an_engine_in_use_is_skipped_at_exit_and_stays_leaked() {
         "the cleanup freed an engine in use, or tesseract printed no leak report to detect: {stderr}"
     );
 }
+
+#[test]
+fn native_recognition_observes_the_stop_callback() {
+    use std::cell::Cell;
+    use xberg_tesseract::TessPageSegMode;
+
+    let models = english_models();
+    let api = TesseractAPI::new().expect("create engine");
+    api.init(models.path(), "eng").expect("initialize engine");
+    api.set_page_seg_mode(TessPageSegMode::PSM_SINGLE_BLOCK).unwrap();
+    let image = image::load_from_memory(include_bytes!(
+        "../../xberg/tests/fixtures/ocr/embedded_psm6_panel_2327.png"
+    ))
+    .unwrap()
+    .to_rgb8();
+    let (width, height) = (image.width() as i32, image.height() as i32);
+    let set_image = || api.set_image(image.as_raw(), width, height, 3, width * 3).unwrap();
+
+    set_image();
+    let calls = Cell::new(0);
+    let result = api.recognize_with_cancel(|| {
+        calls.set(calls.get() + 1);
+        true
+    });
+    assert!(calls.get() > 0, "native recognition must reach the callback");
+    assert!(result.is_err());
+
+    let next = TesseractAPI::new().expect("create fresh engine");
+    next.init(models.path(), "eng").unwrap();
+    next.set_page_seg_mode(TessPageSegMode::PSM_SINGLE_BLOCK).unwrap();
+    next.set_image(image.as_raw(), width, height, 3, width * 3).unwrap();
+    next.recognize_with_cancel(|| false).unwrap();
+    assert!(next.get_utf8_text().unwrap().contains("Annual calibration"));
+}
