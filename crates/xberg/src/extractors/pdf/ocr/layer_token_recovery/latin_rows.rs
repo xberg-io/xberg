@@ -1,6 +1,9 @@
 use super::*;
 use std::collections::HashSet;
 
+#[path = "latin_rows/source_glyphs.rs"]
+mod source_glyphs;
+
 const MAX_ROWS: usize = 128;
 const MAX_ROW_CHARS: usize = 256;
 const MIN_MATCHED_ROWS: usize = 4;
@@ -125,7 +128,7 @@ fn has_accent(text: &str) -> bool {
         .any(|ch| latin_accent(ch) != ch)
 }
 
-fn resembles_row(native: &str, read: &str) -> bool {
+fn resembles_row(native: &str, read: &str, glyphs_confirmed: bool) -> bool {
     if read.len() > MAX_ROW_CHARS * 4 {
         return false;
     }
@@ -133,12 +136,12 @@ fn resembles_row(native: &str, read: &str) -> bool {
     let read_letters = row_letters(read);
     native_letters.len() >= 24
         && strsim::normalized_levenshtein(&native_letters, &read_letters) >= 0.85
-        && corroborates_words(native, read)
+        && corroborates_words(native, read, glyphs_confirmed)
 }
 
 // Match one native word to one or two adjacent iterator words. Every change must
 // be explained by accent/case folding or a small set of glyph confusions.
-fn corroborates_words(native: &str, read: &str) -> bool {
+fn corroborates_words(native: &str, read: &str, glyphs_confirmed: bool) -> bool {
     let native: Vec<_> = native.split_whitespace().map(row_letters).collect();
     let read: Vec<_> = read.split_whitespace().map(row_letters).collect();
     let mut reachable = vec![false; read.len() + 1];
@@ -146,13 +149,13 @@ fn corroborates_words(native: &str, read: &str) -> bool {
     for word in native {
         let mut next = vec![false; read.len() + 1];
         for (at, first) in read.iter().enumerate().filter(|(at, _)| reachable[*at]) {
-            if corroborates_word(&word, first) {
+            if corroborates_word(&word, first, glyphs_confirmed) {
                 next[at + 1] = true;
             }
             if let Some(second) = read.get(at + 1)
                 && !first.is_empty()
                 && !second.is_empty()
-                && corroborates_word(&word, &format!("{first}{second}"))
+                && corroborates_word(&word, &format!("{first}{second}"), glyphs_confirmed)
             {
                 next[at + 2] = true;
             }
@@ -162,11 +165,11 @@ fn corroborates_words(native: &str, read: &str) -> bool {
     reachable[read.len()]
 }
 
-fn corroborates_word(native: &str, read: &str) -> bool {
+fn corroborates_word(native: &str, read: &str, glyphs_confirmed: bool) -> bool {
     if native == read {
         return true;
     }
-    if native.len() < 3 || !native.is_ascii() || !read.is_ascii() {
+    if !glyphs_confirmed || native.len() < 3 || !native.is_ascii() || !read.is_ascii() {
         return false;
     }
     const CONFUSIONS: &[(&str, &str)] = &[
@@ -196,6 +199,7 @@ fn source_rows(pdf: &PdfDocument, page: usize, rows: &[RasterRow]) -> Option<Vec
     if lines.len() > MAX_ROWS {
         return None;
     }
+    let glyphs = source_glyphs::painted_standard_rows(pdf, page).unwrap_or_default();
     let mut source = Vec::new();
     for line in lines {
         let text = normalize(&line.text);
@@ -203,7 +207,8 @@ fn source_rows(pdf: &PdfDocument, page: usize, rows: &[RasterRow]) -> Option<Vec
             continue;
         }
         let place = native_box(line.bbox);
-        let owner = row_owner(&text, &place, rows);
+        let glyphs_confirmed = source_glyphs::confirms_row(&glyphs, &text, &place);
+        let owner = row_owner(&text, &place, rows, glyphs_confirmed);
         source.push(SourceRow {
             text,
             place,
@@ -242,10 +247,10 @@ fn unique_phrase(surface: &str, phrase: &str) -> bool {
     matches.next().is_some() && matches.next().is_none()
 }
 
-fn row_owner(text: &str, place: &LineBox, rows: &[RasterRow]) -> Option<usize> {
+fn row_owner(text: &str, place: &LineBox, rows: &[RasterRow], glyphs_confirmed: bool) -> Option<usize> {
     let mut owners = rows.iter().enumerate().filter(|(_, row)| place.owns(&row.place));
     let (index, row) = owners.next()?;
-    (owners.next().is_none() && resembles_row(text, &row.text)).then_some(index)
+    (owners.next().is_none() && resembles_row(text, &row.text, glyphs_confirmed)).then_some(index)
 }
 
 fn corroborates_latin_body(source: &[SourceRow]) -> bool {
@@ -632,12 +637,13 @@ mod tests {
             },
             element: 0,
         };
-        assert_eq!(row_owner(native, &place, &[row(wrong)]), None);
+        assert_eq!(row_owner(native, &place, &[row(wrong)], true), None);
         assert_eq!(
             row_owner(
                 native,
                 &place,
-                &[row("El jardi n de la plaza tendra un sistema de riego automatico.")]
+                &[row("El jardi n de la plaza tendra un sistema de riego automatico.")],
+                false
             ),
             Some(0)
         );
@@ -698,11 +704,13 @@ mod tests {
     fn accent_fold_accepts_split_read_but_rejects_unrelated_row() {
         assert!(resembles_row(
             "El jardín de la plaza tendrá un sistema de riego automático.",
-            "El jardi n de la plaza tendra un sistema de riego automatico."
+            "El jardi n de la plaza tendra un sistema de riego automatico.",
+            false,
         ));
         assert!(!resembles_row(
             "El jardín de la plaza tendrá un sistema de riego automático.",
-            "El informe anual estuvo disponible en la página oficial."
+            "El informe anual estuvo disponible en la página oficial.",
+            true,
         ));
     }
 }
