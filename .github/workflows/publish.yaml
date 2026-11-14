@@ -91,6 +91,7 @@ jobs:
       ref: ${{ steps.meta.outputs.ref }}
       checkout_ref: ${{ steps.meta.outputs.checkout_ref }}
       source_sha: ${{ steps.release-source.outputs.commit }}
+      php_registry_core_available: ${{ steps.php-registry-core.outputs.available }}
       php_checkout_sha: ${{ steps.php-source.outputs.sha }}
       target_sha: ${{ steps.meta.outputs.target_sha }}
       matrix_ref: ${{ steps.meta.outputs.matrix_ref }}
@@ -166,6 +167,23 @@ jobs:
           set -euo pipefail
           sha="$(git rev-parse --verify --end-of-options "${PHP_CHECKOUT_REF:?}^{commit}")"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check exact registry core for PHP qualification
+        id: php-registry-core
+        if: steps.meta.outputs.release_php == 'true' && steps.meta.outputs.dry_run == 'true'
+        shell: bash
+        env:
+          PHP_SOURCE_SHA: ${{ steps.php-source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          version="$(git show "$PHP_SOURCE_SHA:Cargo.toml" | sed -n '/^\[workspace.package\]$/,/^\[/s/^version = "\([^"]*\)"$/\1/p')"
+          test -n "$version"
+          index="$(curl --fail --silent --show-error --retry 3 --max-time 60 https://index.crates.io/xb/er/xberg)"
+          available="$(jq -s --arg version "$version" 'any(.[]; .vers == $version and .yanked == false)' <<< "$index")"
+          printf 'available=%s\n' "$available" >> "$GITHUB_OUTPUT"
+          if [[ "$available" != true ]]; then
+            echo "::notice::Skipping registry-backed PHP qualification: xberg $version is unavailable or yanked"
+          fi
 
       # Created NON-draft (published) so the `release: [created]` event fires
       # immediately and publish-docker.yaml runs as an independent parallel
@@ -1393,11 +1411,12 @@ jobs:
   php-extension:
     name: Build PHP extension (php${{ matrix.php }} ${{ matrix.platform.label }})
     needs: [prepare, check-packagist, publish-crates]
-    # Skipped on dry runs for the same reason as `python-sdist`: the extension is packaged out of the
-    # workspace with internal `path = "..."` keys stripped, so it resolves `xberg = "^<version>"` from
-    # crates.io, which only exists after a real (non-dry-run) `publish-crates`.
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.dry_run != 'true' && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_php == 'true' && (needs.check-packagist.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' &&
+          needs.prepare.outputs.release_php == 'true' &&
+          ((needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.php_registry_core_available == 'true') ||
+           (needs.prepare.outputs.dry_run != 'true' && needs.publish-crates.result != 'failure' &&
+            (needs.check-packagist.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ${{ matrix.platform.os }}
     env:
       MISE_ENV: ci
@@ -1512,7 +1531,7 @@ jobs:
           lib-name: xberg_php
           php-version: ${{ matrix.php }}
           php-ts: nts
-          dry-run: ${{ needs.prepare.outputs.dry_run }}
+          dry-run: "false"
 
       # build-php-extension runs rewrite-native-deps, which strips `path =` from every
       # root [workspace.dependencies] entry so deinherit_workspace() can copy literal
@@ -1580,6 +1599,7 @@ jobs:
           target: ${{ matrix.platform.target }}
           windows-compiler: ${{ contains(matrix.platform.target, 'windows') && 'vs17' || '' }}
           version: ${{ needs.prepare.outputs.version }}
+          dry-run: "false"
           output-dir: dist/php-package
 
       # The static stack's LGPL components (libheif, libde265) need their license texts and the
@@ -3923,7 +3943,7 @@ jobs:
     # release went out with zero assets). Upload whatever legs did produce
     # an artifact instead of requiring all of them to succeed. ~keep
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && needs.php-extension.result != 'skipped') }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.is_tag == 'true' && needs.php-extension.result != 'skipped') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v3
@@ -4625,7 +4645,7 @@ jobs:
     name: Trigger Packagist update
     needs: [prepare, upload-php-pie-release, check-packagist, publish-crates]
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.upload-php-pie-release.result == 'success' && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_php == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-packagist.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.dry_run != 'true' && needs.upload-php-pie-release.result == 'success' && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_php == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-packagist.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: xberg-io/actions/publish-packagist@v1
