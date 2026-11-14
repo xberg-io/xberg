@@ -1426,12 +1426,15 @@ fn mark_embedded_image_rows(doc: &mut InternalDocument, positions: &[usize], rep
         return;
     }
     let repaired: ahash::AHashSet<_> = repaired.iter().map(|&index| positions[index] as u32).collect();
-    for anchor in doc.elements.iter_mut().filter(|element| {
-        element
-            .image_ocr_text_anchor_index()
-            .is_some_and(|index| repaired.contains(&index))
-    }) {
-        anchor.attributes.get_or_insert_with(Default::default).insert(
+    for element in &mut doc.elements {
+        let image_index = match element.kind {
+            crate::types::internal::ElementKind::Image { image_index } => Some(image_index),
+            _ => element.image_ocr_text_anchor_index(),
+        };
+        if !image_index.is_some_and(|index| repaired.contains(&index)) {
+            continue;
+        }
+        element.attributes.get_or_insert_with(Default::default).insert(
             crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(),
             String::new(),
         );

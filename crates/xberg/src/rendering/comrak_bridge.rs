@@ -552,6 +552,25 @@ fn one_line(text: &str) -> String {
     text.replace("\r\n", " ").replace(['\r', '\n'], " ")
 }
 
+fn append_image_ocr<'a>(
+    arena: &'a comrak::Arena<'a>,
+    parent: &'a AstNode<'a>,
+    text: &str,
+    attributes: Option<&ahash::AHashMap<String, String>>,
+) {
+    if let Some(lines) = crate::rendering::common::marked_row_lines(text, &[], attributes) {
+        for line in lines {
+            let paragraph = mk(arena, NodeValue::Paragraph);
+            paragraph.append(mk_text(arena, line));
+            parent.append(paragraph);
+        }
+    } else {
+        let paragraph = mk(arena, NodeValue::Paragraph);
+        paragraph.append(mk_text(arena, text));
+        parent.append(paragraph);
+    }
+}
+
 fn holds_only<'a>(paragraph: &'a AstNode<'a>, node: &'a AstNode<'a>) -> bool {
     matches!(paragraph.data.borrow().value, NodeValue::Paragraph)
         && paragraph.children().all(|child| {
@@ -1504,9 +1523,7 @@ fn build_comrak_ast_with_table_mode<'a>(
 
                 if doc.ocr_text_only && has_ocr {
                     let ocr_result = image.and_then(|img| img.ocr_result.as_ref()).unwrap();
-                    let ocr_para = mk(arena, NodeValue::Paragraph);
-                    ocr_para.append(mk_text(arena, &ocr_result.content));
-                    parent.append(ocr_para);
+                    append_image_ocr(arena, parent, &ocr_result.content, elem_attributes);
                 } else {
                     let para = mk(arena, NodeValue::Paragraph);
                     let img_node = mk(
@@ -1525,9 +1542,7 @@ fn build_comrak_ast_with_table_mode<'a>(
                         && let Some(ocr_result) = image.and_then(|img| img.ocr_result.as_ref())
                         && !ocr_result.content.is_empty()
                     {
-                        let ocr_para = mk(arena, NodeValue::Paragraph);
-                        ocr_para.append(mk_text(arena, &ocr_result.content));
-                        parent.append(ocr_para);
+                        append_image_ocr(arena, parent, &ocr_result.content, elem_attributes);
                     }
                 }
             }
@@ -1858,6 +1873,37 @@ mod tests {
         let mut output = String::new();
         format_commonmark(root, &Options::default(), &mut output).unwrap();
         output
+    }
+
+    #[test]
+    fn marked_image_ocr_keeps_rows_in_both_markdown_image_modes() {
+        use crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE;
+        use crate::types::{ExtractedDocument, ExtractedImage};
+
+        for ocr_text_only in [true, false] {
+            let mut doc = InternalDocument::new("pdf");
+            doc.ocr_text_only = ocr_text_only;
+            doc.append_ocr_text = !ocr_text_only;
+            doc.images.push(ExtractedImage {
+                ocr_result: Some(Box::new(ExtractedDocument {
+                    content: "Item Count\nSnow 12\nField 34".into(),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            });
+            let mut image = InternalElement::text(ElementKind::Image { image_index: 0 }, "", 0);
+            image
+                .attributes
+                .get_or_insert_with(Default::default)
+                .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.into(), String::new());
+            doc.push_element(image);
+            let expected = if ocr_text_only {
+                "Item Count\n\nSnow 12\n\nField 34\n"
+            } else {
+                "![](image_0.bin)\n\nItem Count\n\nSnow 12\n\nField 34\n"
+            };
+            assert_eq!(render(&doc), expected);
+        }
     }
 
     #[test]

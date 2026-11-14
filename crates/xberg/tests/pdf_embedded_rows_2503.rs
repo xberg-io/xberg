@@ -3,15 +3,16 @@
 use xberg::core::config::{ExtractInput, ExtractionConfig};
 
 const HEADING: &str = "The table below lists the yearly service figures.";
-const ROWS: [(&str, &str); 8] = [
-    ("Snow removal", "68 594,898 (8,684)"),
-    ("Field lights", "95 985,652 141.97"),
-    ("Parks and trails", "45 901,761 70,139"),
-    ("Water service", "26 61,656 (3,409)"),
-    ("Street repair", "16 181,811 126.32"),
-    ("Library hours", "28 801,525 54,396"),
-    ("Fleet fuel", "16 863,842 (5,273)"),
-    ("Bridge paint", "39 756,157 176.66"),
+const TABLE: [&str; 9] = [
+    "Item Count Budget Change",
+    "Snow removal......... 68 594,898 (8,684)",
+    "Field lights ............ 95 985,652 141.97",
+    "Parks and trails ........ 45 901,761 70,139",
+    "Water service ......... 26 61,656 (3,409)",
+    "Street repair.......... 16 181,811 126.32",
+    "Library hours .......... 28 801,525 54,396",
+    "Fleet fuel............. 16 863,842 (5,273)",
+    "Bridge paint........... 39 756,157 176.66",
 ];
 
 #[tokio::test]
@@ -37,20 +38,14 @@ async fn embedded_markdown_preserves_table_rows_and_native_heading() {
         .unwrap();
         assert!(batch.errors.is_empty());
         let result = batch.results.remove(0);
+        let mut table = TABLE;
+        if psm == Some(6) {
+            table[4] = "Water service......... 26 61,656 (3,409)";
+        }
+        let expected: Vec<_> = std::iter::once(HEADING).chain(table).collect();
         for text in [&result.content, &result.pages.as_ref().unwrap()[0].content] {
-            assert_eq!(text.matches(HEADING).count(), 1);
-            let rows: Vec<_> = text
-                .lines()
-                .filter(|line| ROWS.iter().any(|(_, values)| line.ends_with(values)))
-                .collect();
-            assert_eq!(rows.len(), ROWS.len(), "PSM {psm:?}\n{text}");
-            for (row, (label, values)) in rows.iter().zip(ROWS) {
-                let leaders = row.strip_prefix(label).and_then(|tail| tail.strip_suffix(values));
-                assert!(
-                    leaders.is_some_and(|marks| marks.trim().bytes().all(|byte| byte == b'.')),
-                    "{row}"
-                );
-            }
+            let lines: Vec<_> = text.lines().filter(|line| !line.trim().is_empty()).collect();
+            assert_eq!(lines, expected, "PSM {psm:?}");
         }
     }
 }
