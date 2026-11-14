@@ -397,7 +397,7 @@ pub(in crate::extractors::pdf::ocr) fn prune(
     candidates: &[&str],
     retained: Option<&str>,
 ) -> (usize, usize) {
-    let owned = |candidate: &str| {
+    let owned_text = |candidate: &str| {
         unique(text.split_whitespace(), candidate)
             && read
                 .as_ref()
@@ -405,18 +405,9 @@ pub(in crate::extractors::pdf::ocr) fn prune(
             && paragraphs
                 .as_ref()
                 .is_none_or(|paragraphs| unique_paragraph_token(paragraphs, candidate))
-            && document
-                .as_ref()
-                .is_none_or(|document| document_owns_token(document, candidate))
     };
-    // Reconcile against every text surface before changing any of them.
-    let accepted = candidates
-        .iter()
-        .copied()
-        .filter(|text| owned(text))
-        .collect::<Vec<_>>();
     let retained = retained.filter(|word| {
-        owned(word)
+        owned_text(word)
             && text.lines().any(|line| line.trim() == *word)
             && paragraphs.as_ref().is_none_or(|paragraphs| {
                 paragraphs
@@ -424,12 +415,21 @@ pub(in crate::extractors::pdf::ocr) fn prune(
                     .any(|paragraph| paragraph.text.lines().any(|line| line.trim() == *word))
             })
             && document.as_ref().is_none_or(|document| {
-                document
-                    .elements
-                    .iter()
-                    .any(|element| element.text.lines().any(|line| line.trim() == *word))
+                unique_document_owner(document, word)
+                    .is_some_and(|element| element.text.lines().any(|line| line.trim() == *word))
             })
     });
+    let accepted = candidates
+        .iter()
+        .copied()
+        .filter(|&word| {
+            Some(word) != retained
+                && owned_text(word)
+                && document.as_ref().is_none_or(|document| {
+                    unique_document_owner(document, word).is_some_and(|element| element.annotations.is_empty())
+                })
+        })
+        .collect::<Vec<_>>();
     let (pruned, removed) = super::prune_text_with_retention(text, retained);
     let (pruned, texture_removed) = strip_tokens(&pruned, &accepted);
     #[cfg(test)]
@@ -519,16 +519,17 @@ fn paragraph_segments(paragraph: &PdfParagraph) -> impl Iterator<Item = &str> {
         .flat_map(|segment| segment.text.split_whitespace())
 }
 
-fn document_owns_token(document: &InternalDocument, candidate: &str) -> bool {
+fn unique_document_owner<'a>(
+    document: &'a InternalDocument,
+    candidate: &str,
+) -> Option<&'a crate::types::internal::InternalElement> {
     let mut owners = document
         .elements
         .iter()
         .filter(|element| element.text.split_whitespace().any(|token| token == candidate));
-    owners.next().is_some_and(|element| {
-        is_prunable_element(element)
-            && element.annotations.is_empty()
-            && unique(element.text.split_whitespace(), candidate)
-    }) && owners.next().is_none()
+    let owner = owners.next()?;
+    (owners.next().is_none() && is_prunable_element(owner) && unique(owner.text.split_whitespace(), candidate))
+        .then_some(owner)
 }
 
 fn strip_paragraph_tokens(paragraphs: &mut Vec<PdfParagraph>, accepted: &[&str]) {
@@ -602,6 +603,40 @@ mod tests {
         );
         assert_eq!(output, format!("{FAINT_WORD} Nina"));
         assert_eq!(read, format!("{FAINT_WORD}\nNina"));
+    }
+
+    #[test]
+    fn mixed_pruning_preserves_annotated_cas_and_remaps_its_span() {
+        use crate::types::document_structure::{AnnotationKind, TextAnnotation};
+        use crate::types::internal::{ElementKind, InternalElement};
+
+        let mut text = String::from("oe\nCAS\nSECTION TITLE");
+        let mut read = text.clone();
+        let mut document = InternalDocument::new("pdf");
+        let mut element = InternalElement::text(ElementKind::Paragraph, &text, 0);
+        element.annotations.push(TextAnnotation {
+            start: 3,
+            end: 6,
+            kind: AnnotationKind::Bold,
+        });
+        document.elements.push(element);
+        assert_eq!(
+            prune(
+                &mut text,
+                Some(&mut read),
+                None,
+                Some(&mut document),
+                &["CAS"],
+                Some("CAS")
+            ),
+            (1, 0)
+        );
+        assert_eq!(text, "CAS\nSECTION TITLE");
+        assert_eq!(read, text);
+        assert_eq!(document.elements[0].text, text);
+        let annotation = &document.elements[0].annotations[0];
+        assert_eq!((annotation.start, annotation.end), (0, 3));
+        assert!(matches!(annotation.kind, AnnotationKind::Bold));
     }
 
     #[test]
