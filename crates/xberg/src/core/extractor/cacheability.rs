@@ -35,6 +35,17 @@ pub(crate) struct Cacheability(
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))] Option<Arc<request_models::RequestModels>>,
 );
 
+#[cfg(any(
+    all(test, feature = "tokio-runtime", not(target_arch = "wasm32")),
+    all(feature = "ocr", not(target_arch = "wasm32"))
+))]
+#[derive(Eq, Hash, PartialEq)]
+enum ModelObservation {
+    Osd(PathBuf),
+    #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+    VerticalJapanese(Vec<String>),
+}
+
 #[derive(Default)]
 struct Operation {
     invalidated: AtomicBool,
@@ -44,7 +55,7 @@ struct Operation {
         all(test, feature = "tokio-runtime", not(target_arch = "wasm32")),
         all(feature = "ocr", not(target_arch = "wasm32"))
     ))]
-    revisions: Mutex<HashMap<PathBuf, blake3::Hash>>,
+    revisions: Mutex<HashMap<ModelObservation, blake3::Hash>>,
 }
 
 #[cfg(feature = "tokio-runtime")]
@@ -71,12 +82,20 @@ impl Cacheability {
         all(feature = "ocr", not(target_arch = "wasm32"))
     ))]
     fn observe(&self, root: PathBuf, revision: blake3::Hash) {
+        self.observe_model(ModelObservation::Osd(root), revision);
+    }
+
+    #[cfg(any(
+        all(test, feature = "tokio-runtime", not(target_arch = "wasm32")),
+        all(feature = "ocr", not(target_arch = "wasm32"))
+    ))]
+    fn observe_model(&self, model: ModelObservation, revision: blake3::Hash) {
         let Ok(mut revisions) = self.0.revisions.lock() else {
             self.invalidate();
             tracing::warn!("Model observation state was poisoned; bypassing operation caches");
             return;
         };
-        match revisions.get(&root) {
+        match revisions.get(&model) {
             Some(previous) if *previous != revision => self.invalidate(),
             Some(_) => {}
             None if revisions.len() >= MAX_MODEL_ROOTS => {
@@ -84,7 +103,7 @@ impl Cacheability {
                 tracing::warn!("Model observation bound reached; bypassing operation caches");
             }
             None => {
-                revisions.insert(root, revision);
+                revisions.insert(model, revision);
             }
         }
     }
@@ -248,6 +267,16 @@ pub(crate) fn defer_ocr_cache_write(write: impl FnOnce() + Send + 'static) {
         models.defer(write);
     } else {
         write();
+    }
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+pub(crate) fn observe_vertical_model(directories: &[String], revision: Option<blake3::Hash>) {
+    if let Some(context) = current() {
+        context.observe_model(
+            ModelObservation::VerticalJapanese(directories.to_vec()),
+            revision.unwrap_or_else(|| blake3::hash(b"missing-vertical-japanese")),
+        );
     }
 }
 

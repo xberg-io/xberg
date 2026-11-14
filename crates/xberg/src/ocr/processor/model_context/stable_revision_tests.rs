@@ -138,7 +138,7 @@ async fn assert_primary_revision_misses(route: Route) {
 
 async fn stable_revision_case(route: Route, pdf: bool, psm: i32, pipeline: bool) {
     let root = tempfile::tempdir().unwrap();
-    for language in ["eng", "deu", "fra"] {
+    for language in ["eng", "deu", "fra", "chi_sim", "khm"] {
         std::fs::write(root.path().join(format!("{language}.traineddata")), b"language pack").unwrap();
     }
     let osd = root.path().join("osd.traineddata");
@@ -147,7 +147,16 @@ async fn stable_revision_case(route: Route, pdf: bool, psm: i32, pipeline: bool)
         models: root.path().into(),
         calls: AtomicUsize::new(0),
     });
-    let config = revision_config(root.path(), psm, pipeline);
+    let mut config = revision_config(root.path(), psm, pipeline);
+    if !pipeline {
+        // Keep host retry packs from bypassing the OSD cache under test. ~keep
+        config.ocr.as_mut().unwrap().language = vec!["eng".into(), "chi_sim".into(), "khm".into()];
+    }
+    let language = if pipeline {
+        "fra".to_owned()
+    } else {
+        config.ocr.as_ref().unwrap().effective_tesseract_language().join("+")
+    };
     let (bytes, mime, extension) = source(pdf);
     let path = root.path().join(format!("source.{extension}"));
     std::fs::write(&path, &bytes).unwrap();
@@ -155,10 +164,10 @@ async fn stable_revision_case(route: Route, pdf: bool, psm: i32, pipeline: bool)
         .with_cache_backend(Arc::new(CountingCache::default()))
         .build();
     crate::plugins::registry::with_test_ocr_backend(backend.clone(), async {
-        for revision in [b"revision one", b"revision two"] {
+        for (index, revision) in [b"revision one", b"revision two"].into_iter().enumerate() {
             std::fs::write(&osd, revision).unwrap();
             assert_eq!(std::fs::metadata(&osd).unwrap().len(), 12);
-            let expected = backend.revision(psm as u8, if pipeline { "fra" } else { "eng" });
+            let expected = backend.revision(psm as u8, &language);
             for _ in 0..2 {
                 let content = read(route, &engine, &path, &bytes, mime, &config).await;
                 assert!(
@@ -166,15 +175,15 @@ async fn stable_revision_case(route: Route, pdf: bool, psm: i32, pipeline: bool)
                     "PSM {psm}; revision {revision:?}; expected {expected}; observed {content}; backend calls {}",
                     backend.calls.load(Ordering::SeqCst)
                 );
+                assert_eq!(
+                    backend.calls.load(Ordering::SeqCst),
+                    index + 1,
+                    "PSM {psm}; revision {revision:?} must miss once and then hit"
+                );
             }
         }
     })
     .await;
-    assert_eq!(
-        backend.calls.load(Ordering::SeqCst),
-        2,
-        "unchanged revisions hit; each stable model change misses"
-    );
 }
 
 async fn read(

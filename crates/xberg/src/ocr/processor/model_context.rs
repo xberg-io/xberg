@@ -296,7 +296,7 @@ impl ModelContext {
     pub(super) fn for_path(directory: String, psm: u8) -> Result<Self, OcrError> {
         // Match pinned Tesseract's PSM_OSD_ENABLED: these modes load and retain osd.traineddata. ~keep
         let osd_revision = if matches!(psm, 0 | 1 | 12) {
-            Some(osd_revision(std::path::Path::new(&directory))?)
+            Some(osd_revision_with(std::path::Path::new(&directory), hash_model_file)?)
         } else {
             None
         };
@@ -327,7 +327,7 @@ impl ModelContext {
             return Some(action());
         };
         // Files can change while waiting for or using a handle; uncertain state must not be retained. ~keep
-        match osd_revision(std::path::Path::new(&self.directory)) {
+        match osd_revision_with(std::path::Path::new(&self.directory), crate::cache::blake3_hash_file) {
             Ok(current) if current == expected => Some(action()),
             Ok(_) => {
                 self.invalidated.store(true, Ordering::Release);
@@ -379,8 +379,11 @@ impl ModelContext {
     }
 }
 
-fn osd_revision(directory: &std::path::Path) -> Result<blake3::Hash, OcrError> {
-    crate::core::extractor::cacheability::osd_revision_with(directory, hash_model_file)
+fn osd_revision_with(
+    directory: &std::path::Path,
+    read_hash: impl FnOnce(&std::path::Path) -> crate::Result<String>,
+) -> Result<blake3::Hash, OcrError> {
+    crate::core::extractor::cacheability::osd_revision_with(directory, read_hash)
         .map_err(|error| model_read_error(&directory.join("osd.traineddata"), error))
 }
 
@@ -778,6 +781,34 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(cached().unwrap().content, "seeded model B result");
+    }
+
+    #[tokio::test]
+    async fn observed_osd_rollback_invalidates_the_request() {
+        use crate::core::extractor::cacheability;
+
+        let root = tempfile::tempdir().unwrap();
+        let osd = root.path().join("osd.traineddata");
+        std::fs::write(&osd, b"revision one").unwrap();
+        let snapshot = || ModelContext::for_path(root.path().to_str().unwrap().into(), 1).unwrap();
+
+        cacheability::scope(async {
+            cacheability::with_ocr_cancellation(None, async {
+                let before = snapshot();
+                assert_eq!(before.if_current(|| 7), Some(7));
+                std::fs::write(&osd, b"revision two").unwrap();
+                let changed = before.if_current(|| ());
+                std::fs::write(&osd, b"revision one").unwrap();
+
+                assert!(changed.is_none());
+                assert!(!cacheability::can_publish_outer_result());
+                assert!(snapshot().if_current(|| ()).is_none());
+            })
+            .await;
+        })
+        .await;
+
+        assert_eq!(snapshot().if_current(|| 7), Some(7));
     }
 
     #[cfg(unix)]

@@ -113,6 +113,8 @@ fn setup(mutation: Mutation) -> (tempfile::TempDir, Arc<ChangingBackend>, Extrac
     for (name, bytes) in [
         ("eng", b"language pack".as_slice()),
         ("osd", b"revision one".as_slice()),
+        ("chi_sim", b"Chinese language pack".as_slice()),
+        ("khm", b"Khmer language pack".as_slice()),
     ] {
         std::fs::write(root.path().join(format!("{name}.traineddata")), bytes).unwrap();
     }
@@ -129,6 +131,12 @@ fn setup(mutation: Mutation) -> (tempfile::TempDir, Arc<ChangingBackend>, Extrac
         ocr: Some(OcrConfig {
             backend: backend.name().into(),
             tessdata_path: Some(root.path().into()),
+            // Include the retry scripts so host tessdata cannot bypass this OSD cache test. ~keep
+            language: vec!["eng".into(), "chi_sim".into(), "khm".into()],
+            tesseract_config: Some(crate::types::TesseractConfig {
+                psm: Some(1),
+                ..Default::default()
+            }),
             ..Default::default()
         }),
         ..Default::default()
@@ -143,7 +151,7 @@ async fn assert_engine_skips_observed_mutation(batch: bool, mutation: Mutation) 
         .with_cache_backend(cache.clone())
         .build();
     crate::plugins::registry::with_test_ocr_backend(backend.clone(), async {
-        for expected in [UNCERTAIN, STABLE, STABLE] {
+        for (expected, calls, puts) in [(UNCERTAIN, 1, 0), (STABLE, 2, 1), (STABLE, 2, 1)] {
             let input = ExtractInput::from_bytes(PDF.to_vec(), "application/pdf", None);
             let output = if batch {
                 engine.extract_batch(vec![input], &config).await
@@ -158,19 +166,15 @@ async fn assert_engine_skips_observed_mutation(batch: bool, mutation: Mutation) 
                 "{}",
                 output.results[0].content
             );
+            assert_eq!(
+                backend.calls.load(Ordering::SeqCst),
+                calls,
+                "backend calls after {expected}"
+            );
+            assert_eq!(cache.puts.load(Ordering::SeqCst), puts, "cache writes after {expected}");
         }
     })
     .await;
-    assert_eq!(
-        backend.calls.load(Ordering::SeqCst),
-        2,
-        "uncertain output must not become an outer hit"
-    );
-    assert_eq!(
-        cache.puts.load(Ordering::SeqCst),
-        1,
-        "only the fresh stable operation may publish"
-    );
 }
 
 #[tokio::test]
@@ -195,19 +199,19 @@ async fn assert_uri_skips_observed_mutation(mutation: Mutation) {
     let path = root.path().join("source.pdf");
     std::fs::write(&path, PDF).unwrap();
     crate::plugins::registry::with_test_ocr_backend(backend.clone(), async {
-        for expected in [UNCERTAIN, STABLE, STABLE] {
+        for (expected, calls) in [(UNCERTAIN, 1), (STABLE, 2), (STABLE, 2)] {
             let output = crate::core::extractor::extract_file(&path, Some("application/pdf"), &config)
                 .await
                 .unwrap();
             assert!(output.content.contains(expected), "{}", output.content);
+            assert_eq!(
+                backend.calls.load(Ordering::SeqCst),
+                calls,
+                "backend calls after {expected}"
+            );
         }
     })
     .await;
-    assert_eq!(
-        backend.calls.load(Ordering::SeqCst),
-        2,
-        "file cache must not retain uncertain output"
-    );
 }
 #[tokio::test]
 async fn observed_mutation_then_rollback_does_not_publish_uri() {

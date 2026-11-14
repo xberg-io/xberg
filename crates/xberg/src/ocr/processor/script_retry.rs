@@ -63,12 +63,7 @@ pub(crate) fn may_retry_language(language: &str) -> bool {
     super::execution::is_all_languages(language) || supports_retry_language(language)
 }
 
-pub(crate) fn requires_outer_cache_bypass(
-    language: &str,
-    vertical_japanese_retry: bool,
-    override_path: Option<&Path>,
-    env: &TessdataEnv,
-) -> bool {
+pub(crate) fn requires_outer_cache_bypass(language: &str, override_path: Option<&Path>, env: &TessdataEnv) -> bool {
     // A wildcard is expanded by the processor after resolving the primary tessdata directory. ~keep
     if super::execution::is_all_languages(language) {
         return true;
@@ -78,7 +73,6 @@ pub(crate) fn requires_outer_cache_bypass(
     }
     let directories = tessdata_search_dirs(override_path, env);
     retry_directories(&directories, &retry_list(language, HAN_MODEL)).is_some()
-        || (vertical_japanese_retry && vertical_japanese_directory(&directories, language).is_some())
 }
 
 pub(crate) fn may_retry_khmer(language: &str) -> bool {
@@ -253,10 +247,109 @@ fn retry_directories(directories: &[String], han: &[String]) -> Option<(String, 
     Some((osd_directory, han_directory))
 }
 
-fn vertical_japanese_directory(directories: &[String], language: &str) -> Option<String> {
+pub(crate) fn outer_vertical_model_fingerprint(
+    language: &str,
+    override_path: Option<&Path>,
+    env: &TessdataEnv,
+) -> crate::Result<Option<blake3::Hash>> {
+    vertical_outer_model_fingerprint(language, &tessdata_search_dirs(override_path, env))
+}
+
+fn vertical_outer_model_fingerprint(language: &str, directories: &[String]) -> crate::Result<Option<blake3::Hash>> {
+    let model =
+        observe_vertical_model(directories, language).map_err(|error| crate::XbergError::cache(error.to_string()))?;
+    Ok(model.as_ref().map(vertical_model_identity))
+}
+
+fn observe_vertical_model(directories: &[String], language: &str) -> Result<Option<ModelSet>, OcrError> {
     if language != "eng" {
-        return None;
+        return Ok(None);
     }
+    let model = vertical_japanese_directory(directories)
+        .map(|directory| -> Result<ModelSet, OcrError> {
+            let revision = hash_language_models(
+                Path::new(&directory),
+                [VERTICAL_JAPANESE_MODEL],
+                crate::cache::blake3_hash_file,
+            )?
+            .finalize();
+            Ok(ModelSet::from_revision(
+                directory,
+                VERTICAL_JAPANESE_MODEL.into(),
+                revision,
+                false,
+            ))
+        })
+        .transpose()?;
+    cacheability::observe_vertical_model(directories, model.as_ref().map(vertical_model_identity));
+    Ok(model)
+}
+
+fn vertical_model_identity(model: &ModelSet) -> blake3::Hash {
+    let mut hash = blake3::Hasher::new();
+    model.hash_into(&mut hash);
+    hash.finalize()
+}
+
+#[tokio::test]
+async fn rejected_vertical_candidate_cannot_publish_after_model_rollback() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().to_str().unwrap().to_owned();
+    let directories = [directory];
+    let path = root.path().join("jpn_vert.traineddata");
+    std::fs::write(&path, b"model one").unwrap();
+
+    cacheability::scope(async {
+        let before = vertical_outer_model_fingerprint("eng", &directories).unwrap();
+        assert!(before.is_some());
+        assert!(cacheability::can_publish_outer_result());
+        cacheability::with_ocr_cancellation(None, async {
+            std::fs::write(&path, b"model two").unwrap();
+            let observed = RetryModels::resolve_vertical(&directories, "eng", 3).unwrap().unwrap();
+            assert_eq!(
+                observed.revision,
+                hash_language_models(root.path(), [VERTICAL_JAPANESE_MODEL], crate::cache::blake3_hash_file)
+                    .unwrap()
+                    .finalize()
+            );
+            // Rejected candidates produce no retry result to block outer publication. ~keep
+            std::fs::write(&path, b"model one").unwrap();
+        })
+        .await;
+
+        assert_eq!(vertical_outer_model_fingerprint("eng", &directories).unwrap(), before);
+        assert!(!cacheability::can_publish_outer_result());
+    })
+    .await;
+}
+
+#[test]
+fn outer_vertical_model_identity_tracks_path_presence_and_content() {
+    let root = tempfile::tempdir().unwrap();
+    let directories = [root.path().to_str().unwrap().to_owned()];
+    let model = root.path().join("jpn_vert.traineddata");
+    let fingerprint = || vertical_outer_model_fingerprint("eng", &directories).unwrap();
+
+    assert_eq!(fingerprint(), None);
+    std::fs::write(&model, b"model one").unwrap();
+    let first = fingerprint();
+    assert!(first.is_some());
+    assert_eq!(fingerprint(), first);
+    std::fs::write(&model, b"model two").unwrap();
+    let second = fingerprint();
+    assert_ne!(second, first);
+    let other = tempfile::tempdir().unwrap();
+    std::fs::copy(&model, other.path().join("jpn_vert.traineddata")).unwrap();
+    let other_directories = [other.path().to_str().unwrap().to_owned()];
+    assert_ne!(
+        vertical_outer_model_fingerprint("eng", &other_directories).unwrap(),
+        second
+    );
+    std::fs::remove_file(model).unwrap();
+    assert_eq!(fingerprint(), None);
+}
+
+fn vertical_japanese_directory(directories: &[String]) -> Option<String> {
     first_directory_holding(directories, &[VERTICAL_JAPANESE_MODEL.to_owned()])
 }
 
@@ -326,9 +419,7 @@ impl RetryModels {
         if !supports_vertical_japanese(language, psm) {
             return Ok(None);
         }
-        vertical_japanese_directory(directories, language)
-            .map(|directory| ModelSet::snapshot(directory, &[VERTICAL_JAPANESE_MODEL.into()], false))
-            .transpose()
+        observe_vertical_model(directories, language)
     }
 
     fn resolve_khmer(directories: &[String], language: &str, psm: u8) -> Result<Option<ModelSet>, OcrError> {
@@ -611,8 +702,11 @@ fn read_han(
     let first = parse_words(first_tsv);
     if let Some(vertical) = &han.vertical_japanese {
         match vertical_japanese::read(image, pass, vertical, &first) {
-            Ok(Some(outcome)) if validate_han(VERTICAL_JAPANESE_MODEL) => return Ok(Some(outcome)),
-            Ok(_) => {}
+            Ok(outcome) => {
+                if validate_han(VERTICAL_JAPANESE_MODEL) && outcome.is_some() {
+                    return Ok(outcome);
+                }
+            }
             Err(error) => on_error(VERTICAL_JAPANESE_MODEL, error),
         }
     }

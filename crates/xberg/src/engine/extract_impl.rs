@@ -264,10 +264,16 @@ async fn extract_uncached(input: ExtractInput, config: &ExtractionConfig) -> Res
 }
 
 fn input_cache_dependency<I: BatchInputRef>(input: &I, config: &ExtractionConfig) -> CacheDependency {
-    CacheDependency::for_config(
-        &effective_input_config(input, config),
-        input.input().mime_type.as_deref(),
-    )
+    let mime = match input.input().mime_type.as_deref() {
+        Some(mime) if !crate::core::mime::is_generic_mime_type(mime) => {
+            match crate::core::mime::validate_mime_type(mime) {
+                Ok(mime) => Some(mime),
+                Err(_) => return CacheDependency::default(),
+            }
+        }
+        _ => None,
+    };
+    CacheDependency::for_config(&effective_input_config(input, config), mime.as_deref())
 }
 
 /// Derive a content-hash cache key for `input`, or `None` when the input is not

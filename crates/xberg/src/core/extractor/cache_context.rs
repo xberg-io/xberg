@@ -90,20 +90,16 @@ async fn fingerprint_with_reader(
         let worker_cancel = cancel.cloned();
         let result = tokio::task::spawn_blocking(super::cacheability::blocking(move || {
             check_cancelled(worker_cancel.as_ref())?;
-            // With a complete retry set, the inner OCR cache owns model identity. Recheck this
-            // before an outer write as well, since extraction can make a model set available. ~keep
-            if script_retry_requires_bypass(&dependencies, worker_cancel.as_ref())? {
+            // Retry models can appear or change during extraction; check again before an outer write. ~keep
+            let Some(retry_context) = script_retry_cache_context(&dependencies, worker_cancel.as_ref())? else {
                 return Ok(None);
-            }
+            };
             let mut context = if has_orientation_models {
                 read_models(&dependencies, worker_cancel.as_ref())?
             } else {
                 String::new()
             };
-            if has_script_retry {
-                // ~keep Legacy outer entries may contain a retry result even after its models are removed.
-                context.push_str(":script-retry-outer-v1");
-            }
+            context.push_str(&retry_context);
             Ok(Some(context))
         }))
         .await;
@@ -126,38 +122,47 @@ async fn fingerprint_with_reader(
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-fn script_retry_requires_bypass(
+fn script_retry_cache_context(
     dependencies: &[CacheDependency],
     cancel: Option<&CancellationToken>,
-) -> crate::Result<bool> {
+) -> crate::Result<Option<String>> {
     use crate::ocr::processor::{script_retry, validation::TessdataEnv};
 
     let env = TessdataEnv::from_process();
     let mut checked = std::collections::HashSet::new();
+    let mut vertical = blake3::Hasher::new();
     for model in dependencies
         .iter()
         .filter_map(|dependency| dependency.script_retry.as_ref())
     {
         check_cancelled(cancel)?;
-        if checked.insert(model)
-            && (checked.len() > MAX_MODEL_SELECTIONS
-                || script_retry::requires_outer_cache_bypass(
-                    &model.languages.join("+"),
-                    model.vertical_japanese_retry,
-                    model.directory.as_deref(),
-                    &env,
-                )
-                || (model.mixed_pdf_khmer
-                    && script_retry::requires_khmer_outer_cache_bypass(
-                        &model.languages.join("+"),
-                        model.directory.as_deref(),
-                        &env,
-                    )))
+        if !checked.insert(model) {
+            continue;
+        }
+        let languages = model.languages.join("+");
+        let directory = model.directory.as_deref();
+        if checked.len() > MAX_MODEL_SELECTIONS
+            || script_retry::requires_outer_cache_bypass(&languages, directory, &env)
+            || (model.mixed_pdf_khmer && script_retry::requires_khmer_outer_cache_bypass(&languages, directory, &env))
         {
-            return Ok(true);
+            return Ok(None);
+        }
+        let revision = if model.vertical_japanese_retry {
+            script_retry::outer_vertical_model_fingerprint(&languages, directory, &env)?
+        } else {
+            None
+        };
+        if let Some(revision) = revision {
+            vertical.update(&[1]);
+            vertical.update(revision.as_bytes());
+        } else {
+            vertical.update(&[0]);
         }
     }
-    Ok(false)
+    if checked.is_empty() {
+        return Ok(Some(String::new()));
+    }
+    Ok(Some(format!(":script-retry-outer-v2:{}", vertical.finalize().to_hex())))
 }
 
 fn check_cancelled(cancel: Option<&CancellationToken>) -> crate::Result<()> {
