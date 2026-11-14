@@ -5980,6 +5980,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 let ((pages, batch_raster_dpis), warnings) = match rendered {
                     Ok(rendered) => rendered,
                     Err(error) => {
+                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                         let error = diagnose_djot_budget_refusal(
                             error,
                             doc,
@@ -9982,7 +9983,7 @@ fn pre_page_ocr_config(config: &ExtractionConfig) -> Cow<'_, crate::core::config
     }
     resolved
 }
-#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 async fn diagnose_djot_budget_refusal(
     error: crate::XbergError,
     doc: &xberg_native_pdf::PdfDocument,
@@ -9999,6 +10000,12 @@ async fn diagnose_djot_budget_refusal(
     {
         return Ok(error);
     }
+    if !crate::plugins::registry::get_ocr_backend_registry()
+        .read()
+        .is_builtin_tesseract(backend)
+    {
+        return Ok(error);
+    }
     let thresholds = route_noise_thresholds(config);
     let mut context =
         XObjectRecoveryContext::with_budget(budget, config.cancel_token.as_ref()).with_proven_reads(&thresholds);
@@ -10008,7 +10015,7 @@ async fn diagnose_djot_budget_refusal(
     finish_djot_budget_probe(error, probe.map(|value| value.map(|read| read.failure_causes)))
 }
 
-#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 fn finish_djot_budget_probe(
     error: crate::XbergError,
     probe: crate::Result<Option<Vec<String>>>,
@@ -10020,7 +10027,7 @@ fn finish_djot_budget_probe(
     }
 }
 
-#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[cfg(all(test, feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 #[test]
 fn djot_budget_probe_preserves_refusal_except_on_cancellation() {
     let refusal = || crate::XbergError::Parsing {
@@ -11381,7 +11388,7 @@ mod native_script_kept_tests;
 #[path = "pipeline/second_site_clean_admission_tests.rs"]
 mod second_site_clean_admission_tests;
 
-#[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
+#[cfg(all(test, feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 #[path = "pipeline/budget_refusal_tests.rs"]
 mod budget_refusal_tests;
 

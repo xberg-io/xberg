@@ -622,6 +622,7 @@ async fn collect_xobject_recovery_result(
     let used_proven_source_dpi = matches!(ocr_config, std::borrow::Cow::Owned(_));
     let mut result = match backend.process_image(&fallback.bytes, &ocr_config).await {
         Ok(result) => result,
+        Err(crate::XbergError::Cancelled) => return Err(crate::XbergError::Cancelled),
         Err(error) => {
             tracing::debug!(
                 page = page_idx,
