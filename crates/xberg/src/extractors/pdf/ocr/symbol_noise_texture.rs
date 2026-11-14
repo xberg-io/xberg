@@ -595,7 +595,7 @@ mod revision_tests {
             height: 8,
         };
         let window = rect.window(0, 0).unwrap();
-        let image = image::RgbImage::from_fn(100, 100, |_, y| {
+        let image = image::RgbImage::from_fn(140, 100, |_, y| {
             let tone = if (window.y + 15..window.y + 25).contains(&y) {
                 100
             } else {
@@ -603,8 +603,13 @@ mod revision_tests {
             };
             image::Rgb([tone; 3])
         });
-        let peer = sample(&image, window).unwrap();
-        assert!(sample_difference(&target, &peer) <= MAX_MEAN_DIFFERENCE * target.len() as u32);
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                let peer = sample(&image, rect.window(dx, dy).unwrap()).expect("registered peer fits the raster");
+                assert!(sample_difference(&target, &peer) <= MAX_MEAN_DIFFERENCE * target.len() as u32);
+                assert!(collar_difference(&target, &peer) > MAX_MEAN_DIFFERENCE * COLLAR_SAMPLES);
+            }
+        }
         assert!(best_peer(&image, rect, rect, &target).is_none());
     }
 
