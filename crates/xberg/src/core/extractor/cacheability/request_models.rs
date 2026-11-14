@@ -149,8 +149,8 @@ async fn timed_out_worker_cannot_publish_deferred_ocr_results() {
     let early = Arc::new(AtomicBool::new(false));
     let late = Arc::new(AtomicBool::new(false));
     let (resume, wait) = std::sync::mpsc::channel();
-    let worker = super::scope(async {
-        let worker = super::with_ocr_cancellation(Some(&token), async {
+    let (worker,) = super::scope(async {
+        let (worker,) = super::with_ocr_cancellation(Some(&token), async {
             let early = Arc::clone(&early);
             super::defer_ocr_cache_write(move || early.store(true, Ordering::Relaxed));
             let late = Arc::clone(&late);
@@ -162,11 +162,11 @@ async fn timed_out_worker_cannot_publish_deferred_ocr_results() {
                 assert_eq!(Arc::strong_count(&late), 2, "late write must never enter the queue");
             }));
             token.request_stop();
-            worker
+            (worker,)
         })
         .await;
         assert!(!super::can_publish_outer_result());
-        worker
+        (worker,)
     })
     .await;
     resume.send(()).unwrap();
@@ -182,16 +182,17 @@ async fn worker_cannot_enqueue_after_deferred_ocr_queue_is_drained() {
 
     let (drained, wait) = std::sync::mpsc::channel();
     let value = Arc::new(());
-    let worker = super::with_ocr_cancellation(None, async {
+    let (worker,) = super::with_ocr_cancellation(None, async {
         super::defer_ocr_cache_write(move || drained.send(()).unwrap());
         let value = Arc::clone(&value);
-        tokio::task::spawn_blocking(super::blocking(move || {
+        let worker = tokio::task::spawn_blocking(super::blocking(move || {
             wait.recv().unwrap();
             assert!(!super::ocr_stop_requested());
             let queued_value = Arc::clone(&value);
             super::defer_ocr_cache_write(move || drop(queued_value));
             assert_eq!(Arc::strong_count(&value), 2);
-        }))
+        }));
+        (worker,)
     })
     .await;
     worker.await.unwrap();

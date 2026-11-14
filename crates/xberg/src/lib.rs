@@ -962,3 +962,8 @@ mod public_api_compile_tests {
         accept_root_types(None, None, None, None, None);
     }
 }
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[path = "../tests/ocr_pixel_phase_2711/fixture.rs"]
+#[allow(dead_code)]
+mod ocr_pixel_phase_fixture;

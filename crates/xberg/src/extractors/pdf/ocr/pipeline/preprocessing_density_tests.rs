@@ -136,8 +136,7 @@ fn first_page_budget_probe_accounts_for_configured_preprocessing_density() {
 }
 
 #[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
-#[path = "../../../../../tests/ocr_pixel_phase_2711/fixture.rs"]
-mod fixture;
+use crate::ocr_pixel_phase_fixture as fixture;
 
 #[cfg(all(feature = "bundle-tessdata-eng", feature = "tokio-runtime"))]
 async fn read_source_dimensions(config: &ExtractionConfig, bytes: &[u8]) -> (usize, usize) {

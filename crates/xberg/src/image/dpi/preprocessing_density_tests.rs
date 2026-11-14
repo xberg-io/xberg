@@ -2,9 +2,7 @@ use super::*;
 use crate::extractors::security::SecurityLimits;
 use xberg_native_pdf::PdfDocument;
 
-#[path = "../../../tests/ocr_pixel_phase_2711/fixture.rs"]
-#[allow(dead_code)]
-mod fixture;
+use crate::ocr_pixel_phase_fixture as fixture;
 
 fn page() -> PdfDocument {
     PdfDocument::from_bytes(crate::pdf::render::build_minimal_pdf_with_mediabox(432.0, 216.0)).unwrap()
