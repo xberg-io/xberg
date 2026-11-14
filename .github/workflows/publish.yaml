@@ -1314,11 +1314,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, label: linux-x86_64 }
-          - { os: ubuntu-24.04-arm, label: linux-aarch64 }
-          - { os: macos-26, label: macos-arm64 }
+          - { os: ubuntu-latest, label: linux-x86_64, gem_platform: x86_64-linux }
+          - { os: ubuntu-24.04-arm, label: linux-aarch64, gem_platform: aarch64-linux }
+          - { os: macos-26, label: macos-arm64, gem_platform: arm64-darwin }
           - os: windows-latest
             label: windows-x86_64
+            gem_platform: x64-mingw-ucrt
             # This leg's binding features and the core features actually compiled are two
             # separate switches: `--no-default-features` here turns xberg-rb's OWN
             # `#[cfg(feature = "...")]`-gated match arms/fields off, while the Windows target
@@ -1388,30 +1389,29 @@ jobs:
           package-dir: packages/ruby
           dry-run: ${{ needs.prepare.outputs.dry_run }}
 
-      - name: Package platform gem
-        working-directory: packages/ruby
-        run: |
-          bundle exec rake compile
-          bundle exec rake build
-        shell: bash
+      - name: Checkout Ruby packaging verifier
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: scripts/ci/package-ruby-native-gem.rb
 
-      - name: Drop source gem on non-canonical builders
-        if: ${{ matrix.label != 'linux-x86_64' }}
+      - name: Package and verify native gem
+        working-directory: packages/ruby
         shell: bash
-        run: |
-          shopt -s nullglob
-          for f in packages/ruby/pkg/*.gem; do
-            base="$(basename "$f")"
-            case "$base" in
-              *-x86_64-linux.gem|*-aarch64-linux.gem|*-arm64-darwin.gem|*-x86_64-darwin.gem|*-x64-mingw-ucrt.gem) ;;
-              *) echo "Removing non-canonical source gem $base"; rm -f "$f" ;;
-            esac
-          done
+        env:
+          GEM_PLATFORM: ${{ matrix.gem_platform }}
+          GEM_VERSION: ${{ needs.prepare.outputs.version }}
+          KEEP_SOURCE: ${{ matrix.label == 'linux-x86_64' }}
+        run: ruby ../../.release-tools/scripts/ci/package-ruby-native-gem.rb "$GEM_PLATFORM" "$GEM_VERSION" "$KEEP_SOURCE"
 
       - uses: actions/upload-artifact@v7
         with:
           name: rubygems-${{ matrix.label }}
           path: packages/ruby/pkg/*.gem
+          if-no-files-found: error
           retention-days: 14
 
   php-extension:
