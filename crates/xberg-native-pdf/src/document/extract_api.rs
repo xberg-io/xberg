@@ -126,6 +126,27 @@ impl PdfDocument {
         script_geometry: ScriptGeometry,
         skip_nonpainting_text: bool,
     ) -> Result<Vec<crate::layout::TextSpan>> {
+        self.extract_spans_with_cmsy_capture(
+            page_index,
+            config,
+            excluded_layers,
+            excluded_inks,
+            script_geometry,
+            skip_nonpainting_text,
+            None,
+        )
+    }
+
+    fn extract_spans_with_cmsy_capture(
+        &self,
+        page_index: usize,
+        config: crate::extractors::TextExtractionConfig,
+        excluded_layers: HashSet<String>,
+        excluded_inks: HashSet<String>,
+        script_geometry: ScriptGeometry,
+        skip_nonpainting_text: bool,
+        cmsy: Option<&mut Vec<crate::layout::TextSpan>>,
+    ) -> Result<Vec<crate::layout::TextSpan>> {
         if self.is_encrypted_unreadable() {
             tracing::warn!(target: LOG_TARGET, "PDF is encrypted and could not be decrypted; returning no spans");
             return Ok(Vec::new());
@@ -205,7 +226,13 @@ impl PdfDocument {
             }
         }
 
+        if cmsy.is_some() {
+            extractor.cmsy_witnesses = Some(Vec::new());
+        }
         let spans = extractor.extract_text_spans(&content_data)?;
+        if let Some(output) = cmsy {
+            *output = extractor.cmsy_witnesses.take().unwrap_or_default();
+        }
         // Drain MCIDs whose in-stream /ActualText was applied during
         // extraction and stash on the document so the struct-tree-
         // scope applier honours MC-scope-wins precedence (§14.9.4).
@@ -745,13 +772,25 @@ impl PdfDocument {
         page_index: usize,
         reading_order: ReadingOrder,
     ) -> Result<crate::layout::PageText> {
-        let spans = self.extract_spans_impl(
+        self.extract_page_text_with_cmsy_capture(page_index, reading_order, None)
+    }
+
+    /// Extract native page text and optionally capture source glyph witnesses from the same pass.
+    #[doc(hidden)]
+    pub fn extract_page_text_with_cmsy_capture(
+        &self,
+        page_index: usize,
+        reading_order: ReadingOrder,
+        witnesses: Option<&mut Vec<crate::layout::TextSpan>>,
+    ) -> Result<crate::layout::PageText> {
+        let spans = self.extract_spans_with_cmsy_capture(
             page_index,
             crate::extractors::TextExtractionConfig::default(),
             HashSet::new(),
             HashSet::new(),
             ScriptGeometry::Preserve,
             false,
+            witnesses,
         )?;
         let spans = self.order_extracted_spans(page_index, reading_order, spans)?;
         let chars = spans.iter().flat_map(|span| span.to_chars()).collect();

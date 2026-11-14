@@ -41,6 +41,8 @@ impl<'doc> TextExtractor<'doc> {
         Self {
             state_stack: GraphicsStateStack::new(),
             fonts: HashMap::new(),
+            cmsy_witnesses: None,
+            cmsy_proof_budget: 32,
             font_provenance_cache: Default::default(),
             spans: Vec::new(),
             preserve_script_baselines: false,

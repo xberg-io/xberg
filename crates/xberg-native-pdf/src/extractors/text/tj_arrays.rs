@@ -51,6 +51,11 @@ impl<'doc> TextExtractor<'doc> {
         let is_italic_span = buffer.is_italic;
 
         // Move owned strings out of buffer (avoids clone) ~keep
+        let resource = self
+            .cmsy_witnesses
+            .is_some()
+            .then(|| buffer.font_name.clone())
+            .flatten();
         let font_name_span = buffer.font_name.take().unwrap_or_else(|| "Unknown".to_string());
 
         // RTL text correction. See `correct_tj_buffer_rtl_order` for the full
@@ -107,6 +112,7 @@ impl<'doc> TextExtractor<'doc> {
             mirrored: buffer.mirrored,
             page_rotation_applied: 0,
         };
+        self.capture_cmsy_witness(&span, &buffer, resource.as_deref());
         self.span_sequence_counter += 1;
 
         self.push_span(span, buffer.render_mode);

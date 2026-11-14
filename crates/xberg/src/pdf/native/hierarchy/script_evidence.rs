@@ -110,6 +110,8 @@ pub(crate) struct NativePageSegments {
     pub(crate) segments: Vec<SegmentData>,
     owners: Vec<ScriptOwner>,
     prose_rows: Vec<Vec<SegmentKey>>,
+    #[cfg(feature = "formula-recognition")]
+    pub(crate) inline_math_glyphs: Vec<SegmentKey>,
 }
 
 impl NativePageSegments {
@@ -153,6 +155,8 @@ impl NativePageSegments {
             .collect();
         let prose_rows = certified_prose_row_keys(&spans, &projected);
         Self {
+            #[cfg(feature = "formula-recognition")]
+            inline_math_glyphs: Vec::new(),
             segments,
             owners,
             prose_rows,
@@ -572,10 +576,23 @@ fn extract_page(
     geometry: ScriptGeometry,
 ) -> crate::pdf::error::Result<NativePageSegments> {
     let mut prime_witnesses = Vec::new();
-    let spans = super::extract_final_spans_from_page_with_primes(doc, page, geometry, Some(&mut prime_witnesses))?;
+    let mut cmsy = Vec::new();
+    let capture = (cfg!(feature = "formula-recognition") && matches!(doc.doc.get_page_rotation(page), Ok(0)))
+        .then_some(&mut cmsy);
+    let spans =
+        super::extract_final_spans_from_page_with_primes(doc, page, geometry, Some(&mut prime_witnesses), capture)?;
+    #[cfg(feature = "formula-recognition")]
+    let inline_math_glyphs = surviving_inline_math_glyphs(&cmsy, &spans, roles, geometry);
+    #[cfg(feature = "formula-recognition")]
+    tracing::trace!(target: "xberg::pdf::cmsy", page, captured = cmsy.len(), surviving = inline_math_glyphs.len(), "native span witness inventory");
+
     let decimal_authority = decimal_power::authority(&doc.doc, page, &spans);
     let mut captured =
         NativePageSegments::from_final_spans_with_primes(spans, roles, artifacts, prime_witnesses, decimal_authority);
+    #[cfg(feature = "formula-recognition")]
+    {
+        captured.inline_math_glyphs = inline_math_glyphs;
+    }
     if !captured.prose_rows.is_empty()
         && (!doc
             .doc
@@ -590,3 +607,138 @@ fn extract_page(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "formula-recognition")]
+fn surviving_inline_math_glyphs(
+    witnesses: &[TextSpan],
+    spans: &[TextSpan],
+    roles: &HashMap<u32, Option<u8>>,
+    geometry: ScriptGeometry,
+) -> Vec<SegmentKey> {
+    witnesses
+        .iter()
+        .filter_map(|witness| {
+            let mut candidates = spans.iter().filter(|span| span.sequence == witness.sequence);
+            let Some(span) = candidates.next() else {
+                tracing::trace!(target: "xberg::pdf::cmsy", sequence = witness.sequence, "source sequence missing");
+                return None;
+            };
+            if candidates.next().is_some()
+                || span.text != witness.text
+                || span.bbox != witness.bbox
+                || span.font_name != witness.font_name
+                || span.mcid_scope != witness.mcid_scope
+            {
+                tracing::trace!(target: "xberg::pdf::cmsy", sequence = witness.sequence,
+                    same_text = span.text == witness.text, same_bounds = span.bbox == witness.bbox,
+                    same_font = span.font_name == witness.font_name, same_scope = span.mcid_scope == witness.mcid_scope,
+                    "source sequence no longer identifies the glyph uniquely");
+                return None;
+            }
+            Some(SegmentKey::from(&super::project_final_span(
+                span.clone(),
+                roles,
+                geometry,
+            )))
+        })
+        .collect()
+}
+
+#[cfg(all(test, feature = "formula-recognition"))]
+#[test]
+fn inline_math_witness_distinguishes_source_slots_and_occurrences() {
+    fn pdf(font_entries: &str, cmsy_cmap: &str, content: &str) -> xberg_native_pdf::PdfDocument {
+        let cmap = "1 begincodespacerange <00> <FF> endcodespacerange 1 beginbfchar <41> <D835DCB1> endbfchar";
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>".into(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>".into(),
+            format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
+            format!("<< /Type /Font /Subtype /Type1 /BaseFont /ABCDEF+CMSY10 {font_entries} >>"),
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /ToUnicode 7 0 R >>".into(),
+            format!("<< /Length {} >>\nstream\n{cmap}\nendstream", cmap.len()),
+            format!("<< /Length {} >>\nstream\n{cmsy_cmap}\nendstream", cmsy_cmap.len()),
+        ];
+        let mut bytes = String::from("%PDF-1.4\n");
+        let mut offsets = Vec::new();
+        for (index, object) in objects.iter().enumerate() {
+            offsets.push(bytes.len());
+            bytes.push_str(&format!("{} 0 obj\n{object}\nendobj\n", index + 1));
+        }
+        let xref = bytes.len();
+        bytes.push_str("xref\n0 9\n0000000000 65535 f \n");
+        for offset in offsets {
+            bytes.push_str(&format!("{offset:010} 00000 n \n"));
+        }
+        bytes.push_str(&format!(
+            "trailer\n<< /Size 9 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n"
+        ));
+        xberg_native_pdf::PdfDocument::from_bytes(bytes.into_bytes()).unwrap()
+    }
+
+    let content = "BT /F1 12 Tf 40 700 Td (V) Tj 0 -30 Td [(V)] TJ /F2 12 Tf 0 -30 Td (A) Tj ET";
+    let codespace = "1 begincodespacerange <00> <FF> endcodespacerange";
+    let identity = format!("{codespace} 1 beginbfrange <41> <5A> <0041> endbfrange");
+    let conflicting = format!("{codespace} 1 beginbfchar <56> <0058> endbfchar");
+    let missing_slot = format!("{codespace} 1 beginbfchar <41> <0041> endbfchar");
+    for (case, font_entries, cmap, glyph, expected) in [
+        ("built-in encoding", "", "", "V", 2),
+        ("identity range", "/ToUnicode 8 0 R", identity.as_str(), "V", 2),
+        ("conflicting mapping", "/ToUnicode 8 0 R", conflicting.as_str(), "X", 0),
+        ("missing slot", "/ToUnicode 8 0 R", missing_slot.as_str(), "V", 0),
+        ("unparseable CMap", "/ToUnicode 8 0 R", "invalid cmap data", "V", 0),
+        ("named encoding", "/Encoding /WinAnsiEncoding", "", "V", 0),
+        (
+            "encoding differences",
+            "/Encoding << /Differences [86 /V] >>",
+            "",
+            "V",
+            0,
+        ),
+    ] {
+        let doc = pdf(font_entries, cmap, content);
+        let mut witnesses = Vec::new();
+        let spans = doc
+            .extract_page_text_with_cmsy_capture(0, xberg_native_pdf::ReadingOrder::TopToBottom, Some(&mut witnesses))
+            .unwrap()
+            .spans;
+        assert!(spans.iter().any(|span| span.text == "𝒱"));
+        assert_eq!(spans.iter().filter(|span| span.text == glyph).count(), 2, "{case}");
+        assert_eq!(witnesses.len(), expected, "{case}");
+        let keys = surviving_inline_math_glyphs(&witnesses, &spans, &HashMap::new(), ScriptGeometry::Preserve);
+        assert_eq!(keys.len(), expected, "{case}");
+        if expected == 2 {
+            assert_ne!(witnesses[0].sequence, witnesses[1].sequence);
+            assert_ne!(keys[0], keys[1]);
+            assert!(witnesses.iter().all(|witness| witness.font_name == "ABCDEF+CMSY10"));
+            for other_font in ["Helvetica", "GHIJKL+CMSY10"] {
+                let mut competing = spans.clone();
+                let candidate = competing
+                    .iter_mut()
+                    .find(|span| span.sequence == witnesses[0].sequence)
+                    .unwrap();
+                candidate.font_name = other_font.into();
+                assert_eq!(
+                    surviving_inline_math_glyphs(&witnesses, &competing, &HashMap::new(), ScriptGeometry::Preserve),
+                    vec![keys[1].clone()],
+                    "{case}: {other_font}"
+                );
+            }
+            let mut ambiguous = spans.clone();
+            ambiguous.push(witnesses[0].clone());
+            assert_eq!(
+                surviving_inline_math_glyphs(&witnesses, &ambiguous, &HashMap::new(), ScriptGeometry::Preserve).len(),
+                1
+            );
+            assert!(keys.iter().all(|key| key.text == "V"));
+        }
+    }
+    let natural = pdf("", "", "BT /F2 12 Tf 40 700 Td (A) Tj ET");
+    let mut witnesses = Vec::new();
+    let spans = natural
+        .extract_page_text_with_cmsy_capture(0, xberg_native_pdf::ReadingOrder::TopToBottom, Some(&mut witnesses))
+        .unwrap()
+        .spans;
+    assert!(spans.iter().any(|span| span.text == "𝒱"));
+    assert!(witnesses.is_empty());
+}

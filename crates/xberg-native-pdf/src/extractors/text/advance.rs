@@ -197,6 +197,7 @@ impl<'doc> TextExtractor<'doc> {
                 let char_table = font.get_byte_to_char_table();
                 let width_table = Self::simple_widths(self.cached_extraction_widths.as_deref(), font, true);
                 let mut w_sum = 0.0f32;
+                buffer.note_cmsy_slot(text);
                 let run_start = buffer.unicode.len();
                 for &byte in text {
                     let len_before = buffer.unicode.len();
@@ -419,6 +420,7 @@ impl<'doc> TextExtractor<'doc> {
                 let width_table =
                     Self::simple_widths(self.cached_extraction_widths.as_deref(), font, repair_zero_widths);
                 let mut w_sum = 0.0f32;
+                buffer.note_cmsy_slot(text);
                 let run_start = buffer.unicode.len();
                 for &byte in text {
                     let len_before = buffer.unicode.len();
@@ -850,6 +852,11 @@ impl<'doc> TextExtractor<'doc> {
             let is_italic_buf = buffer.is_italic;
 
             // Move owned strings out of buffer (avoids clone) ~keep
+            let resource = self
+                .cmsy_witnesses
+                .is_some()
+                .then(|| buffer.font_name.clone())
+                .flatten();
             let font_name_buf = buffer.font_name.take().unwrap_or_else(|| "Unknown".to_string());
 
             // RTL visual-order detection for the Tj-span
@@ -935,6 +942,7 @@ impl<'doc> TextExtractor<'doc> {
                 mirrored: buffer.mirrored,
                 page_rotation_applied: 0,
             };
+            self.capture_cmsy_witness(&span, &buffer, resource.as_deref());
             self.span_sequence_counter += 1;
 
             tracing::trace!(target: LOG_TARGET,

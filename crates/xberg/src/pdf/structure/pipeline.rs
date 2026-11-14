@@ -4461,6 +4461,17 @@ fn build_document_structure_with_native(
     // Native semantic roles are finalized in source order before the
     // independent layout geometry projection controls final reading order.
     reorder_pages_by_layout_region(&mut all_page_paragraphs);
+    #[cfg(feature = "formula-recognition")]
+    let mut inline_math_glyphs = if ocr_text {
+        Vec::new()
+    } else {
+        native_pages
+            .as_ref()
+            .into_iter()
+            .flatten()
+            .map(|page| page.inline_math_glyphs.clone())
+            .collect::<Vec<_>>()
+    };
     if let Some(native_pages) = native_pages {
         let preserve_prose_rows = page_count == 1
             && !used_structure_tree
@@ -4484,6 +4495,47 @@ fn build_document_structure_with_native(
         if inject_placeholders { image_positions } else { &[] },
     );
 
+    #[cfg(feature = "formula-recognition")]
+    let inline_math_bounds: Vec<Vec<_>> = all_page_paragraphs
+        .iter()
+        .zip(inline_math_glyphs.drain(..))
+        .map(|(paragraphs, glyphs)| {
+            glyphs
+                .iter()
+                .filter_map(|glyph| {
+                    let mut owners = paragraphs.iter().flat_map(|paragraph| {
+                        paragraph
+                            .lines
+                            .iter()
+                            .flat_map(|line| &line.segments)
+                            .enumerate()
+                            .filter(|(_, segment)| {
+                                &crate::pdf::native::hierarchy::script_evidence::SegmentKey::from(*segment) == glyph
+                            })
+                            .map(move |(index, _)| (paragraph, index))
+                    });
+                    let (owner, index) = owners.next()?;
+                    if owners.next().is_some() {
+                        return None;
+                    }
+                    let ((text, _), offset) =
+                        super::assembly::extract_text_with_glyph_offset(owner, &witnesses.hyphens, Some(index));
+                    let offset = offset?;
+                    let bbox = owner.block_bbox?;
+                    (paragraphs
+                        .iter()
+                        .filter(|paragraph| paragraph.block_bbox == Some(bbox))
+                        .count()
+                        == 1)
+                        .then_some((bbox, text, offset))
+                })
+                .collect()
+        })
+        .collect();
+
+    #[cfg(feature = "formula-recognition")]
+    tracing::trace!(target: "xberg::pdf::cmsy", matched = inline_math_bounds.iter().map(Vec::len).sum::<usize>(), "paragraph offsets recovered");
+
     let total_paragraphs: usize = all_page_paragraphs.iter().map(|p| p.len()).sum();
     tracing::debug!(
         total_paragraphs,
@@ -4499,6 +4551,28 @@ fn build_document_structure_with_native(
         effective_image_positions,
         &witnesses.hyphens,
     );
+    #[cfg(feature = "formula-recognition")]
+    for element in &mut doc.elements {
+        let bounds = element
+            .page
+            .and_then(|page| page.checked_sub(1))
+            .and_then(|page| inline_math_bounds.get(page as usize));
+        if !matches!(element.kind, crate::types::internal::ElementKind::Paragraph) {
+            continue;
+        }
+        let Some((bounds, bbox)) = bounds.zip(element.bbox) else {
+            continue;
+        };
+        let candidates: Vec<_> = bounds
+            .iter()
+            .filter_map(|((left, bottom, right, top), text, offset)| {
+                (text == &element.text
+                    && [*left, *bottom, *right, *top].map(f64::from) == [bbox.x0, bbox.y0, bbox.x1, bbox.y1])
+                .then_some(*offset)
+            })
+            .collect();
+        super::assembly::annotate_native_volume_limit(&mut element.text, &mut element.annotations, candidates);
+    }
     #[cfg(feature = "layout-detection")]
     {
         super::table_grid::attach_table_grids(&mut doc, &table_grid_sidecars).map_err(|error| {

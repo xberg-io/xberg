@@ -1023,7 +1023,7 @@ fn extract_final_spans_from_page(
     page_index: usize,
     script_geometry: ScriptGeometry,
 ) -> Result<Vec<xberg_native_pdf::layout::TextSpan>> {
-    extract_final_spans_from_page_with_primes(doc, page_index, script_geometry, None)
+    extract_final_spans_from_page_with_primes(doc, page_index, script_geometry, None, None)
 }
 
 fn extract_final_spans_from_page_with_primes(
@@ -1031,11 +1031,12 @@ fn extract_final_spans_from_page_with_primes(
     page_index: usize,
     script_geometry: ScriptGeometry,
     prime_witnesses: Option<&mut Vec<script_evidence::LiteralPrimeWitness>>,
+    cmsy_witnesses: Option<&mut Vec<xberg_native_pdf::layout::TextSpan>>,
 ) -> Result<Vec<xberg_native_pdf::layout::TextSpan>> {
     let reading_order = xberg_native_pdf::document::ReadingOrder::TopToBottom;
     let extracted = if script_geometry == ScriptGeometry::Preserve {
         doc.doc
-            .extract_page_text_with_script_geometry(page_index, reading_order)
+            .extract_page_text_with_cmsy_capture(page_index, reading_order, cmsy_witnesses)
     } else {
         doc.doc.extract_page_text_with_options(page_index, reading_order)
     };

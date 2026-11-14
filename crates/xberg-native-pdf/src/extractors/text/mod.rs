@@ -1785,6 +1785,7 @@ fn is_citation_context(
 /// a single logical text span, only breaking on explicit word boundaries.
 #[derive(Debug)]
 struct TjBuffer {
+    cmsy_v_slot: bool,
     /// Accumulated Unicode text
     unicode: String,
     /// Text matrix at the start of this buffer
@@ -2037,6 +2038,7 @@ impl TjBuffer {
         let text_pos = state.text_matrix.transform_point(0.0, 0.0);
         let user_pos = state.ctm.transform_point(text_pos.x, text_pos.y);
         Self {
+            cmsy_v_slot: false,
             unicode: String::new(),
             start_matrix: state.text_matrix,
             font_name: state.font_name.clone(),
@@ -2213,7 +2215,16 @@ impl TjBuffer {
     }
 
     /// Append a text string to the buffer.
+    fn note_cmsy_slot(&mut self, bytes: &[u8]) {
+        if self.unicode.is_empty() && bytes == b"V" {
+            self.cmsy_v_slot = true;
+        } else if !bytes.is_empty() {
+            self.cmsy_v_slot = false;
+        }
+    }
+
     fn append(&mut self, bytes: &[u8]) -> Result<()> {
+        self.note_cmsy_slot(bytes);
         // PDF spec Section 7.3.4.2: implementation limit of 32,767 bytes per string.
         // Malformed PDFs may exceed this, causing text blowup. ~keep
         let bytes = if bytes.len() > 32_767 { &bytes[..32_767] } else { bytes };
@@ -2385,6 +2396,8 @@ struct MarkedContentContext {
 /// - **Character mode**: Extracts individual characters (for special use cases)
 #[derive(Debug)]
 pub struct TextExtractor<'doc> {
+    pub(crate) cmsy_witnesses: Option<Vec<TextSpan>>,
+    cmsy_proof_budget: usize,
     /// Graphics state stack for handling q/Q operators
     state_stack: GraphicsStateStack,
     /// Loaded fonts (name -> FontInfo). Arc-wrapped to avoid deep cloning across pages.
@@ -2605,6 +2618,76 @@ pub struct TextExtractor<'doc> {
 pub(super) const LOG_TARGET: &str = module_path!();
 
 impl<'doc> TextExtractor<'doc> {
+    fn capture_cmsy_witness(&mut self, span: &TextSpan, buffer: &TjBuffer, resource: Option<&str>) {
+        if self.cmsy_witnesses.as_ref().is_none_or(|items| items.len() >= 32)
+            || self.cmsy_proof_budget == 0
+            || !buffer.cmsy_v_slot
+            || span.text != "V"
+            || buffer.render_mode != 0
+            || !matches!(self.current_mcid_scope(), crate::structure::McidScope::Page(_))
+        {
+            return;
+        }
+        let Some(font) = buffer.cached_font.as_ref() else {
+            return;
+        };
+        let base = font.base_font.as_str();
+        let cmsy = base == "CMSY10"
+            || base.split_once('+').is_some_and(|(tag, name)| {
+                tag.len() == 6 && tag.bytes().all(|byte| byte.is_ascii_uppercase()) && name == "CMSY10"
+            });
+        if cmsy {
+            tracing::trace!(target: "xberg::pdf::cmsy", sequence = span.sequence, "checking source font");
+        }
+        if !cmsy || font.subtype != "Type1" {
+            return;
+        }
+        self.cmsy_proof_budget -= 1;
+        let Some((doc, resources, resource)) = self
+            .document
+            .zip(self.resources.as_ref())
+            .zip(resource)
+            .map(|((doc, resources), resource)| (doc, resources, resource))
+        else {
+            return;
+        };
+        let resolve = |object: &Object| {
+            doc.resolve_object_for_proof(object, 64 * 1024)
+                .ok()
+                .flatten()
+                .map(|(object, _)| object)
+        };
+        let Some(raw) = (|| {
+            let resources = resolve(resources)?;
+            let fonts = resolve(resources.as_dict()?.get("Font")?)?;
+            resolve(fonts.as_dict()?.get(resource)?)
+        })() else {
+            tracing::trace!(target: "xberg::pdf::cmsy", sequence = span.sequence, "bounded resource proof unavailable");
+
+            return;
+        };
+        let Some(dict) = raw.as_dict() else { return };
+        if dict.contains_key("Encoding")
+            || dict.get("BaseFont").and_then(Object::as_name) != Some(base)
+            || dict.get("Subtype").and_then(Object::as_name) != Some("Type1")
+            || (dict.contains_key("ToUnicode")
+                && font
+                    .to_unicode
+                    .as_ref()
+                    .and_then(|map| map.get())
+                    .is_none_or(|map| map.get(&0x56).as_deref() != Some("V")))
+        {
+            return;
+        }
+        tracing::trace!(target: "xberg::pdf::cmsy", sequence = span.sequence, "captured glyph witness");
+        if let Some(witnesses) = &mut self.cmsy_witnesses {
+            let mut witness = span.clone();
+            // Retained spans resolve the resource alias to /BaseFont after merging. ~keep
+            witness.font_name = base.to_owned();
+            witnesses.push(witness);
+        }
+    }
+
     /// Fraction of a glyph's advance width considered "overlap" for
     /// duplicate detection. Used by both `deduplicate_overlapping_chars`
     /// and `deduplicate_overlapping_spans`.

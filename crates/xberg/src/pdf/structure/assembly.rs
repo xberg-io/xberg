@@ -1246,6 +1246,78 @@ fn push_paragraph_element_by_kind(
     }
 }
 
+// The caller has matched a source CMSY glyph. Require the complete bounded
+// expression and native subscript before promoting it to inline math. ~keep
+#[cfg(feature = "formula-recognition")]
+fn native_volume_limit_end(text: &str, annotations: &[TextAnnotation], start: usize) -> Option<usize> {
+    if !text.get(start..).is_some_and(|tail| tail.starts_with('V')) {
+        return None;
+    }
+    let mut chars = text[start..].char_indices().filter(|(_, ch)| !ch.is_whitespace());
+    let mut end = start;
+    let mut subscript = None;
+    for expected in "V(ψm)→+∞".chars() {
+        let Some((offset, ch)) = chars.next() else {
+            return None;
+        };
+        if ch != expected {
+            return None;
+        }
+        end = start + offset + ch.len_utf8();
+        if ch == 'm' {
+            subscript = Some((end - 1, end));
+        }
+    }
+    if text[..start].chars().next_back().is_some_and(char::is_alphanumeric)
+        || text[end..].chars().next().is_some_and(char::is_alphanumeric)
+        || !annotations.iter().any(|annotation| {
+            annotation.kind == AnnotationKind::Subscript
+                && subscript == Some((annotation.start as usize, annotation.end as usize))
+        })
+        || annotations.iter().any(|annotation| {
+            let (a, b) = (annotation.start as usize, annotation.end as usize);
+            (a < start && start < b && b < end) || (start < a && a < end && end < b)
+        })
+    {
+        return None;
+    }
+
+    Some(end)
+}
+
+#[cfg(feature = "formula-recognition")]
+pub(super) fn annotate_native_volume_limit(
+    text: &mut String,
+    annotations: &mut Vec<TextAnnotation>,
+    candidate_offsets: impl IntoIterator<Item = usize>,
+) {
+    const VOLUME_LIMIT: &str = r"${\mathcal{V}}(\psi_m)\rightarrow +\infty$";
+    let mut matches = candidate_offsets
+        .into_iter()
+        .filter_map(|start| native_volume_limit_end(text, annotations, start).map(|end| (start, end)));
+    let Some((start, end)) = matches.next() else { return };
+    if matches.next().is_some() {
+        return;
+    }
+
+    annotations.retain(|annotation| (annotation.start as usize) < start || (annotation.end as usize) > end);
+    let new_end = start + VOLUME_LIMIT.len();
+    for annotation in annotations.iter_mut() {
+        if annotation.start as usize >= end {
+            annotation.start = (new_end + annotation.start as usize - end) as u32;
+        }
+        if annotation.end as usize >= end {
+            annotation.end = (new_end + annotation.end as usize - end) as u32;
+        }
+    }
+    text.replace_range(start..end, VOLUME_LIMIT);
+    annotations.push(TextAnnotation {
+        start: start as u32,
+        end: new_end as u32,
+        kind: AnnotationKind::math(false),
+    });
+}
+
 /// Emit caption elements as paragraphs with a Caption relationship to the parent.
 fn emit_caption_elements(
     builder: &mut InternalDocumentBuilder,
@@ -1388,10 +1460,19 @@ pub(super) fn extract_text_and_annotations(
     para: &PdfParagraph,
     hyphen_witnesses: &super::pipeline::HyphenWitnesses,
 ) -> (String, Vec<TextAnnotation>) {
+    extract_text_with_glyph_offset(para, hyphen_witnesses, None).0
+}
+
+pub(super) fn extract_text_with_glyph_offset(
+    para: &PdfParagraph,
+    hyphen_witnesses: &super::pipeline::HyphenWitnesses,
+    glyph_segment: Option<usize>,
+) -> ((String, Vec<TextAnnotation>), Option<usize>) {
+    let mut glyph_offset = None;
     let all_segments: Vec<&crate::pdf::hierarchy::SegmentData> = para.lines.iter().flat_map(|l| &l.segments).collect();
 
     if all_segments.is_empty() {
-        return (String::new(), Vec::new());
+        return ((String::new(), Vec::new()), None);
     }
 
     let native_scripts: Vec<_> = para.lines.iter().flat_map(|line| line.valid_native_scripts()).collect();
@@ -1498,6 +1579,9 @@ pub(super) fn extract_text_and_annotations(
             } else {
                 finish_script_span(&mut annotations, &mut script_span, previous_end);
             }
+            if glyph_segment == Some(seg_idx) && word == "V" {
+                glyph_offset = Some(text.len());
+            }
             text.push_str(word);
         }
 
@@ -1522,7 +1606,8 @@ pub(super) fn extract_text_and_annotations(
         }
     }
 
-    (text, annotations)
+    let glyph_offset = glyph_offset.filter(|&offset| text.as_bytes().get(offset) == Some(&b'V'));
+    ((text, annotations), glyph_offset)
 }
 
 /// Join line texts into a single plain string (no markup).
@@ -2064,6 +2149,37 @@ mod tests {
 
     fn make_paragraph(text: &str, heading_level: Option<u8>) -> PdfParagraph {
         make_paragraph_at(text, heading_level, 700.0)
+    }
+
+    #[cfg(feature = "formula-recognition")]
+    #[test]
+    fn native_inline_math_never_reassigns_a_dropped_witness_to_a_competing_v() {
+        let mut paragraph = make_paragraph("", None);
+        paragraph.lines[0].segments = ["V", " is a label. ", "V", "(ψm) → +∞."]
+            .map(plain_segment)
+            .into_iter()
+            .collect();
+        for (witness, expected_offset) in [(None, None), (Some(1), None), (Some(0), Some(0))] {
+            let ((mut text, mut annotations), offset) =
+                extract_text_with_glyph_offset(&paragraph, &Default::default(), witness);
+            assert_eq!(offset, expected_offset);
+            let original = text.clone();
+            let subscript = text.find("m)").unwrap() as u32;
+            annotations.push(TextAnnotation {
+                start: subscript,
+                end: subscript + 1,
+                kind: AnnotationKind::Subscript,
+            });
+            if let Some(offset) = offset {
+                annotate_native_volume_limit(&mut text, &mut annotations, [offset]);
+            }
+            assert_eq!(text, original);
+            assert!(
+                annotations
+                    .iter()
+                    .all(|annotation| annotation.kind.math_display().is_none())
+            );
+        }
     }
 
     fn make_paragraph_at(text: &str, heading_level: Option<u8>, baseline_y: f32) -> PdfParagraph {
@@ -3988,4 +4104,53 @@ mod tests {
         );
         assert!(labels.contains(&"<table>"));
     }
+}
+
+#[cfg(all(test, feature = "formula-recognition"))]
+#[test]
+fn native_volume_limit_requires_calligraphic_glyph_and_subscript() {
+    for (glyph, subscript, expected) in [('V', true, true), ('𝒱', true, false), ('V', false, false)] {
+        let original = format!("We have {glyph}(ψm) → +∞.");
+        let mut text = original.clone();
+        let start = text.find("m)").unwrap() as u32;
+        let mut annotations = if subscript {
+            vec![TextAnnotation {
+                start,
+                end: start + 1,
+                kind: AnnotationKind::Subscript,
+            }]
+        } else {
+            Vec::new()
+        };
+        annotate_native_volume_limit(&mut text, &mut annotations, ["We have ".len()]);
+        annotate_native_volume_limit(&mut text, &mut annotations, ["We have ".len()]);
+        assert_eq!(
+            annotations
+                .iter()
+                .filter(|a| a.kind.math_display() == Some(false))
+                .count(),
+            usize::from(expected)
+        );
+        if expected {
+            assert_eq!(text, r"We have ${\mathcal{V}}(\psi_m)\rightarrow +\infty$.");
+        } else {
+            assert_eq!(text, original);
+        }
+    }
+}
+
+#[cfg(all(test, feature = "formula-recognition"))]
+#[test]
+fn native_volume_limit_counts_only_matching_witness_offsets() {
+    let mut text = "V is a label. V(ψm) → +∞.".to_string();
+    let subscript = text.find("m)").unwrap() as u32;
+    let mut annotations = vec![TextAnnotation {
+        start: subscript,
+        end: subscript + 1,
+        kind: AnnotationKind::Subscript,
+    }];
+    annotate_native_volume_limit(&mut text, &mut annotations, [0, "V is a label. ".len()]);
+    assert_eq!(text, r"V is a label. ${\mathcal{V}}(\psi_m)\rightarrow +\infty$.");
+    assert_eq!(annotations.len(), 1);
+    assert_eq!(annotations[0].kind.math_display(), Some(false));
 }
