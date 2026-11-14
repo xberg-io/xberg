@@ -31,21 +31,24 @@ async fn plain_keeps_embedded_ledger_rows_at_document_and_page_level() {
         "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
     );
     std::fs::write(models.path().join("eng.traineddata"), english).unwrap();
+    assert_ledger(models.path(), None, None, false).await;
     for psm in [None, Some(6)] {
         for elements in [None, Some(false), Some(true)] {
-            assert_ledger(models.path(), psm, elements).await;
+            assert_ledger(models.path(), psm, elements, true).await;
         }
     }
 }
 
-async fn assert_ledger(models: &std::path::Path, psm: Option<u8>, elements: Option<bool>) {
+async fn assert_ledger(models: &std::path::Path, psm: Option<u8>, elements: Option<bool>, retain_image: bool) {
     let mut config = serde_json::json!({
         "use_cache": false,
         "output_format": "plain",
         "ocr": {"enabled": true, "backend": "tesseract", "language": ["eng"], "tessdata_path": models},
         "pages": {"extract_pages": true},
-        "images": {"extract_images": true},
     });
+    if retain_image {
+        config["images"] = serde_json::json!({"extract_images": true});
+    }
     if let Some(psm) = psm {
         config["ocr"]["tesseract_config"] = serde_json::json!({"psm": psm});
     }
@@ -62,7 +65,9 @@ async fn assert_ledger(models: &std::path::Path, psm: Option<u8>, elements: Opti
     let [result] = batch.results.as_slice() else {
         panic!("expected one document");
     };
-    assert_nested_ocr(result, psm, elements);
+    if retain_image {
+        assert_nested_ocr(result, psm, elements);
+    }
     let [page] = result.pages.as_deref().expect("requested pages") else {
         panic!("expected one page");
     };
@@ -72,7 +77,10 @@ async fn assert_ledger(models: &std::path::Path, psm: Option<u8>, elements: Opti
     }
     for (surface, text) in [("document", &result.content), ("page", &page.content)] {
         let lines: Vec<_> = text.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
-        assert_eq!(lines, expected, "{surface}, PSM {psm:?}, elements {elements:?}");
+        assert_eq!(
+            lines, expected,
+            "{surface}, PSM {psm:?}, elements {elements:?}, retain image {retain_image}"
+        );
     }
 }
 
@@ -83,15 +91,15 @@ fn assert_nested_ocr(result: &xberg::types::ExtractedDocument, psm: Option<u8>, 
         panic!("expected one embedded image");
     };
     let nested = image.ocr_result.as_deref().expect("embedded OCR result");
-    if elements != Some(true) {
-        assert!(nested.ocr_elements.is_none(), "{elements:?}");
-        return;
-    }
     let Some(FormatMetadata::Ocr(metadata)) = &nested.metadata.format else {
         panic!("expected nested OCR metadata");
     };
     assert_eq!(metadata.language, "eng");
     assert_eq!(metadata.psm, i32::from(psm.unwrap_or(3)));
+    if elements != Some(true) {
+        assert!(nested.ocr_elements.is_none(), "{elements:?}");
+        return;
+    }
     let public = nested.ocr_elements.as_deref().expect("requested nested OCR elements");
     assert!(public.iter().all(|element| element.confidence.recognition >= 0.5));
     let words: Vec<_> = public
