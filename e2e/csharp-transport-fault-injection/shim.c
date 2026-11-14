@@ -13,9 +13,19 @@ int receipts(void) {
 }
 H xberg_extract_input_from_json_with_bytes(void *bytes, size_t len,
                                            const char *meta) {
+  if (mode == 6) {
+    const uint8_t expected[] = {0, 128, 255};
+    if (len != sizeof(expected) || memcmp(bytes, expected, len) ||
+        !strstr(meta, "probe.pdf") || strstr(meta, "[0,128,255]"))
+      abort();
+    calls++;
+    return 0;
+  }
   return 11;
 }
 H xberg_extraction_config_from_json(const char *json) {
+  if (mode == 6)
+    abort();
   return mode == 0 ? 0 : 22;
 }
 void xberg_extract_input_free(H input) {
