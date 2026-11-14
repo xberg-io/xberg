@@ -2,6 +2,7 @@
 
 import io
 import json
+import shutil
 import stat
 import subprocess
 import tarfile
@@ -41,7 +42,26 @@ class PhpHostBoundaries(unittest.TestCase):
         self.reject("PHP host pointer width", int_size=4)
 
     def test_boolean_query_fields_are_not_integer_host_evidence(self) -> None:
-        self.reject("PHP host JSON fields", version_id=True)
+        for field in ("version_id", "zts", "debug", "int_size"):
+            with self.subTest(field=field):
+                self.reject("PHP host JSON fields", **{field: True})
+
+    @unittest.skipUnless(shutil.which("php"), "requires a PHP CLI")
+    def test_php_query_normalizes_host_flags(self) -> None:
+        executable = shutil.which("php")
+        assert executable is not None
+        host = Path(executable)
+        raw = subprocess.check_output(
+            [str(host), "-n", "-r", "echo json_encode([PHP_VERSION_ID, PHP_ZTS, PHP_DEBUG, PHP_INT_SIZE]);"],
+            text=True,
+        )
+        version, zts, debug, int_size = json.loads(raw)
+        assert closure._php_query(host) == {
+            "version_id": version,
+            "zts": int(zts),
+            "debug": int(debug),
+            "int_size": int_size,
+        }
 
     def test_host_executable_architecture_must_match_native_root(self) -> None:
         self.host.write_bytes(pe(["php8.dll"], machine=0xAA64))
