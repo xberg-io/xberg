@@ -27,6 +27,9 @@
 
 use crate::types::{ExtractedDocument, ExtractedImage};
 
+#[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+mod embedded_rows;
+
 #[cfg(all(
     feature = "pdf",
     feature = "ocr",
@@ -40,9 +43,9 @@ pub(crate) mod pdf_gap;
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
 type PendingOcrTask = (usize, bytes::Bytes, crate::core::config::OcrConfig);
 
-/// The image index paired with its OCR outcome, as returned by a spawned task.
+/// The image index, OCR outcome, and whether the task assembled table rows.
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
-type OcrTaskResult = (usize, crate::Result<ExtractedDocument>);
+type OcrTaskResult = (usize, crate::Result<ExtractedDocument>, bool);
 
 /// Process extracted images with OCR if configured.
 ///
@@ -70,6 +73,7 @@ pub(crate) async fn process_images_with_ocr(
     mut images: Vec<ExtractedImage>,
     config: &crate::core::config::ExtractionConfig,
     warnings: &mut Vec<crate::types::ProcessingWarning>,
+    mut repaired_rows: Option<&mut Vec<usize>>,
 ) -> crate::Result<Vec<ExtractedImage>> {
     // `runs_ocr_on_embedded_images` rather than `config.ocr.is_some()`: this early return
     // was a third separately-written copy of the pipeline's gate, so `ocr_embedded_images:
@@ -97,19 +101,22 @@ pub(crate) async fn process_images_with_ocr(
         let Some(task) = pending.pop_front() else {
             break;
         };
-        spawn_ocr_task(&mut join_set, task);
+        spawn_ocr_task(&mut join_set, task, repaired_rows.is_some());
     }
 
     while let Some(join_result) = join_set.join_next().await {
-        let (idx, ocr_result) = join_result.map_err(|e| crate::XbergError::Ocr {
+        let (idx, ocr_result, assembled) = join_result.map_err(|e| crate::XbergError::Ocr {
             message: format!("OCR task panicked: {}", e),
             source: None,
         })?;
 
+        if assembled && let Some(repaired) = repaired_rows.as_deref_mut() {
+            repaired.push(idx);
+        }
         apply_ocr_result(&mut images, idx, ocr_result, ocr_config, warnings);
 
         if let Some(task) = pending.pop_front() {
-            spawn_ocr_task(&mut join_set, task);
+            spawn_ocr_task(&mut join_set, task, repaired_rows.is_some());
         }
     }
 
@@ -195,13 +202,13 @@ fn build_pending_ocr_tasks(
 
 /// Spawn one OCR task onto `join_set`, resolving the backend from the registry at spawn time.
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
-fn spawn_ocr_task(join_set: &mut tokio::task::JoinSet<OcrTaskResult>, task: PendingOcrTask) {
-    let (idx, image_data, ocr_config_clone) = task;
+fn spawn_ocr_task(join_set: &mut tokio::task::JoinSet<OcrTaskResult>, task: PendingOcrTask, repair_rows: bool) {
+    let (idx, image_data, mut ocr_config_clone) = task;
     let worker = async move {
-        let backend = {
+        let (backend, repair_rows) = {
             let registry = crate::plugins::registry::get_ocr_backend_registry();
             let registry = registry.read();
-            match registry.get(&ocr_config_clone.backend) {
+            let backend = match registry.get(&ocr_config_clone.backend) {
                 Ok(b) => b.clone(),
                 Err(e) => {
                     return (
@@ -210,13 +217,37 @@ fn spawn_ocr_task(join_set: &mut tokio::task::JoinSet<OcrTaskResult>, task: Pend
                             message: format!("OCR backend '{}' not found: {}", ocr_config_clone.backend, e),
                             source: None,
                         }),
+                        false,
                     );
                 }
-            }
+            };
+            #[cfg(not(target_arch = "wasm32"))]
+            let repair_rows = repair_rows && registry.builtin_tesseract_for(&backend).is_some();
+            #[cfg(target_arch = "wasm32")]
+            let repair_rows = {
+                let _ = repair_rows;
+                false
+            };
+            (backend, repair_rows)
         };
 
-        let ocr_result = backend.process_image(&image_data, &ocr_config_clone).await;
-        (idx, ocr_result)
+        if repair_rows {
+            let elements = ocr_config_clone.element_config.get_or_insert_with(Default::default);
+            elements.include_elements = true;
+            elements.min_level = crate::types::OcrElementLevel::Word;
+            elements.min_confidence = 0.0;
+        }
+        let mut ocr_result = backend.process_image(&image_data, &ocr_config_clone).await;
+        let assembled = if repair_rows
+            && let Ok(result) = &mut ocr_result
+            && let Some(rows) = embedded_rows::assemble(result)
+        {
+            result.content = rows;
+            true
+        } else {
+            false
+        };
+        (idx, ocr_result, assembled)
     };
     #[cfg(not(target_arch = "wasm32"))]
     let worker = crate::core::extractor::cacheability::inherit(worker);
@@ -379,7 +410,7 @@ mod tests {
         }];
         let mut warnings = Vec::new();
 
-        process_images_with_ocr(images, &config, &mut warnings)
+        process_images_with_ocr(images, &config, &mut warnings, None)
             .await
             .expect("embedded-image OCR must succeed");
 
@@ -526,7 +557,7 @@ mod tests {
         // timed-out future aborts them via `JoinSet`'s `Drop` impl.
         let _ = tokio::time::timeout(
             Duration::from_millis(200),
-            process_images_with_ocr(images, &config, &mut warnings),
+            process_images_with_ocr(images, &config, &mut warnings, None),
         )
         .await;
 
@@ -555,7 +586,7 @@ mod tests {
         }];
         let mut warnings = Vec::new();
 
-        let images = process_images_with_ocr(images, &config, &mut warnings)
+        let images = process_images_with_ocr(images, &config, &mut warnings, None)
             .await
             .expect("embedded-image OCR must succeed");
         let nested = images[0].ocr_result.as_ref().expect("OCR result must be preserved");
@@ -640,7 +671,7 @@ mod tests {
                         ..Default::default()
                     }];
                     let mut warnings = Vec::new();
-                    let images = process_images_with_ocr(images, &config, &mut warnings)
+                    let images = process_images_with_ocr(images, &config, &mut warnings, None)
                         .await
                         .expect("embedded OCR succeeds");
                     assert!(warnings.is_empty());

@@ -635,14 +635,20 @@ async fn run_pipeline_impl(
                 .iter()
                 .map(|&position| doc.images[position].clone())
                 .collect();
+            let mut repaired_rows = Vec::new();
+            let repair_rows = cfg!(not(target_arch = "wasm32"))
+                && doc.source_format == "pdf"
+                && config.output_format == crate::core::config::OutputFormat::Markdown;
             match crate::extraction::image_ocr::process_images_with_ocr(
                 images_to_process,
                 config,
                 &mut doc.processing_warnings,
+                repair_rows.then_some(&mut repaired_rows),
             )
             .await
             {
                 Ok(processed) => {
+                    mark_embedded_image_rows(&mut doc, &image_positions, &repaired_rows);
                     for (position, image) in image_positions.into_iter().zip(processed) {
                         doc.images[position] = image;
                     }
@@ -1414,6 +1420,24 @@ fn apply_element_transform(result: &mut ExtractedDocument, config: &ExtractionCo
     }
 }
 
+#[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
+fn mark_embedded_image_rows(doc: &mut InternalDocument, positions: &[usize], repaired: &[usize]) {
+    if repaired.is_empty() {
+        return;
+    }
+    let repaired: ahash::AHashSet<_> = repaired.iter().map(|&index| positions[index] as u32).collect();
+    for anchor in doc.elements.iter_mut().filter(|element| {
+        element
+            .image_ocr_text_anchor_index()
+            .is_some_and(|index| repaired.contains(&index))
+    }) {
+        anchor.attributes.get_or_insert_with(Default::default).insert(
+            crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(),
+            String::new(),
+        );
+    }
+}
+
 /// Put the OCR text of each embedded picture where every later step reads it.
 ///
 /// An OCR text anchor (`InternalElement::image_ocr_text_anchor`) becomes a paragraph that
@@ -1506,6 +1530,16 @@ fn fold_embedded_image_ocr_text_with_gap(
         };
         let mut paragraph = InternalElement::text(ElementKind::Paragraph, text, depth);
         paragraph.page = page_number.filter(|_| pages_are_tagged);
+        if element
+            .attributes
+            .as_ref()
+            .is_some_and(|attributes| attributes.contains_key(crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE))
+        {
+            paragraph.attributes.get_or_insert_with(Default::default).insert(
+                crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(),
+                String::new(),
+            );
+        }
         doc.elements[index] = paragraph.with_index(index as u32);
     }
 
