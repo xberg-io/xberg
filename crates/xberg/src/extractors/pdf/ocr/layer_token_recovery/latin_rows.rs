@@ -179,6 +179,13 @@ fn corroborates_word(native: &str, read: &str, glyphs_confirmed: bool) -> bool {
     if folded.len() < 3 {
         return false;
     }
+    if native
+        .trim_end_matches(|ch: char| !ch.is_alphanumeric())
+        .ends_with(['ó', 'Ó'])
+        && folded.strip_suffix('o') == Some(read)
+    {
+        return true;
+    }
     if native.match_indices(['ñ', 'Ñ']).any(|(at, glyph)| {
         read.strip_prefix(row_letters(&native[..at]).as_str())
             .and_then(|tail| tail.strip_prefix("jfi"))
@@ -716,11 +723,25 @@ mod tests {
     }
 
     #[test]
-    fn linux_spanish_row_requires_glyph_proof_for_ocr_confusions() {
-        let native = "El niño y la niña visitaron la biblioteca del barrio cada mañana.";
-        let read = "EI nifio y la nifia visitaron la biblioteca del barrio cada majfiana.";
-        assert!(resembles_row(native, read, true));
-        assert!(!resembles_row(native, read, false));
+    fn linux_spanish_rows_require_glyph_proof_for_ocr_confusions() {
+        let pairs = [
+            (
+                "El niño y la niña visitaron la biblioteca del barrio cada mañana.",
+                "EI nifio y la nifia visitaron la biblioteca del barrio cada majfiana.",
+            ),
+            (
+                "La comisión recomendó una reunión extraordinaria después de la inspección.",
+                "La comisién recomend una reuni6n extraordinaria después de la inspeccion.",
+            ),
+        ];
+        for (native, read) in pairs {
+            assert!(resembles_row(native, read, true), "{read}");
+            assert!(!resembles_row(native, read, false), "{read}");
+        }
+        assert!(!corroborates_word("recomendó", "recomend", false));
+        assert!(!corroborates_word("recomendo", "recomend", true));
+        assert!(!corroborates_word("recomendó", "recomen", true));
+        assert!(!corroborates_word("comisión", "comisie", true));
         assert!(!corroborates_word("manana", "majfiana", true));
         assert!(!corroborates_word("al", "ai", true));
     }
