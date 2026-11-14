@@ -142,20 +142,20 @@ fn resembles_row(native: &str, read: &str, glyphs_confirmed: bool) -> bool {
 // Match one native word to one or two adjacent iterator words. Every change must
 // be explained by accent/case folding or a small set of glyph confusions.
 fn corroborates_words(native: &str, read: &str, glyphs_confirmed: bool) -> bool {
-    let native: Vec<_> = native.split_whitespace().map(row_letters).collect();
+    let native = native.split_whitespace();
     let read: Vec<_> = read.split_whitespace().map(row_letters).collect();
     let mut reachable = vec![false; read.len() + 1];
     reachable[0] = true;
     for word in native {
         let mut next = vec![false; read.len() + 1];
         for (at, first) in read.iter().enumerate().filter(|(at, _)| reachable[*at]) {
-            if corroborates_word(&word, first, glyphs_confirmed) {
+            if corroborates_word(word, first, glyphs_confirmed) {
                 next[at + 1] = true;
             }
             if let Some(second) = read.get(at + 1)
                 && !first.is_empty()
                 && !second.is_empty()
-                && corroborates_word(&word, &format!("{first}{second}"), glyphs_confirmed)
+                && corroborates_word(word, &format!("{first}{second}"), glyphs_confirmed)
             {
                 next[at + 2] = true;
             }
@@ -166,12 +166,27 @@ fn corroborates_words(native: &str, read: &str, glyphs_confirmed: bool) -> bool 
 }
 
 fn corroborates_word(native: &str, read: &str, glyphs_confirmed: bool) -> bool {
-    if native == read {
+    let folded = row_letters(native);
+    if folded == read {
         return true;
     }
-    if !glyphs_confirmed || native.len() < 3 || !native.is_ascii() || !read.is_ascii() {
+    if !glyphs_confirmed || !folded.is_ascii() || !read.is_ascii() {
         return false;
     }
+    if folded == "el" && read == "ei" {
+        return true;
+    }
+    if folded.len() < 3 {
+        return false;
+    }
+    if native.match_indices(['ñ', 'Ñ']).any(|(at, glyph)| {
+        read.strip_prefix(row_letters(&native[..at]).as_str())
+            .and_then(|tail| tail.strip_prefix("jfi"))
+            .is_some_and(|tail| tail == row_letters(&native[at + glyph.len()..]))
+    }) {
+        return true;
+    }
+    let native = folded.as_str();
     const CONFUSIONS: &[(&str, &str)] = &[
         ("n", "f"),
         ("n", "fi"),
@@ -698,6 +713,16 @@ mod tests {
         assert_eq!(edits[0].preceding[0].text, source[1].text);
         let repeated = "Antes de la lectura.\nEl jardin tendra riego.\nEl jardin tendra riego.\nDespués de la lectura.";
         assert!(plan_row_edits(&source, &rows, repeated, &|_| true, &|| false).is_none());
+    }
+
+    #[test]
+    fn linux_spanish_row_requires_glyph_proof_for_ocr_confusions() {
+        let native = "El niño y la niña visitaron la biblioteca del barrio cada mañana.";
+        let read = "EI nifio y la nifia visitaron la biblioteca del barrio cada majfiana.";
+        assert!(resembles_row(native, read, true));
+        assert!(!resembles_row(native, read, false));
+        assert!(!corroborates_word("manana", "majfiana", true));
+        assert!(!corroborates_word("al", "ai", true));
     }
 
     #[test]
