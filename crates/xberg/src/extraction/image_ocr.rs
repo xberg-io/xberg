@@ -240,8 +240,11 @@ fn spawn_ocr_task(join_set: &mut tokio::task::JoinSet<OcrTaskResult>, task: Pend
         let mut ocr_result = backend.process_image(&image_data, &ocr_config_clone).await;
         let assembled = if repair_rows
             && let Ok(result) = &mut ocr_result
-            && let Some(rows) = embedded_rows::assemble(result)
-        {
+            && let Some(rows) = if ocr_config_clone.output_format == Some(crate::core::config::OutputFormat::Plain) {
+                embedded_rows::assemble_plain(result)
+            } else {
+                embedded_rows::assemble(result)
+            } {
             result.content = rows;
             true
         } else {
