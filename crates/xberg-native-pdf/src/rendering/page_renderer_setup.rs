@@ -16,6 +16,7 @@ impl PageRenderer {
             suppressed_text_font: None,
             images_suppressed: false,
             image_selection: None,
+            image_selection_matches: 0,
             fonts: HashMap::new(),
             color_spaces: HashMap::new(),
             excluded_layers_snapshot: None,

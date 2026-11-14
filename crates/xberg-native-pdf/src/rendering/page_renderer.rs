@@ -243,6 +243,7 @@ pub struct PageRenderer {
     /// Leave every image XObject, image mask and inline image unpainted.
     images_suppressed: bool,
     image_selection: Option<(ObjectRef, bool)>,
+    image_selection_matches: usize,
     /// Font cache (name -> FontInfo) for current context
     fonts: HashMap<String, Arc<FontInfo>>,
     /// Color space cache (name -> Object) for current context
@@ -715,6 +716,7 @@ impl PageRenderer {
             }
         };
 
+        self.image_selection_matches = 0;
         let knockout = knockout::page_is_knockout(doc, page_num);
         if knockout {
             self.execute_knockout_group(&mut pixmap, transform, &operators, doc, page_num, &resources, Some(0))?;
@@ -723,8 +725,18 @@ impl PageRenderer {
         }
         self.check_source_image_budget()?;
 
+        if self.image_selection.is_some() && self.image_selection_matches != 1 {
+            return Err(Error::Unsupported(
+                "image selection requires exactly one page placement".into(),
+            ));
+        }
         if self.options.render_annotations {
-            self.render_annotations(&mut pixmap, transform, doc, page_num)?;
+            // Annotation resources can reuse the selected page image. Paint appearances without
+            // the page-content selector in both composited views. ~keep
+            let selection = self.image_selection.take();
+            let annotations = self.render_annotations(&mut pixmap, transform, doc, page_num);
+            self.image_selection = selection;
+            annotations?;
         }
         self.check_source_image_budget()?;
 
@@ -3661,6 +3673,18 @@ impl PageRenderer {
         Ok(())
     }
 
+    fn skip_image(&mut self, reference: Option<ObjectRef>) -> bool {
+        if self.images_suppressed {
+            return true;
+        }
+        let Some((selected, include)) = self.image_selection else {
+            return false;
+        };
+        let matches = reference == Some(selected);
+        self.image_selection_matches += usize::from(matches);
+        matches != include
+    }
+
     /// Render an image XObject.
     fn render_image(
         &mut self,
@@ -3676,11 +3700,7 @@ impl PageRenderer {
     ) -> Result<()> {
         use crate::extractors::images::{ImageData, extract_image_from_xobject};
 
-        if self.images_suppressed
-            || self
-                .image_selection
-                .is_some_and(|(selected, include)| (obj_ref == Some(selected)) != include)
-        {
+        if self.skip_image(obj_ref) {
             return Ok(());
         }
         let color_space_map = self.color_spaces.clone();
@@ -4294,11 +4314,7 @@ impl PageRenderer {
         clip_mask: Option<&tiny_skia::Mask>,
         gs: &GraphicsState,
     ) -> Result<()> {
-        if self.images_suppressed
-            || self
-                .image_selection
-                .is_some_and(|(selected, include)| (obj_ref == Some(selected)) != include)
-        {
+        if self.skip_image(obj_ref) {
             return Ok(());
         }
         let dict = xobject

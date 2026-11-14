@@ -542,9 +542,10 @@ fn render_luminance(
 }
 
 /// Render the page, render only the selected image, or omit that image.
-/// Composited views include annotation appearances so covered strokes cannot certify visibility.
-/// The isolated image view excludes them to measure only the source paint.
-/// The caller reconciles the image's paint placement before using these views.
+/// Both composited views paint annotation appearances without image selection.
+/// The isolated image view excludes annotations to measure only the source paint.
+/// Image selection requires exactly one matching page-content placement. The caller
+/// reconciles that placement before using these views.
 #[doc(hidden)]
 pub fn render_image_paint_luminance(
     doc: &crate::document::PdfDocument,

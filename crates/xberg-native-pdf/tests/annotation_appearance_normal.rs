@@ -5,7 +5,8 @@
 //! and never fabricate a plausible-but-wrong result.
 
 use xberg_native_pdf::document::PdfDocument;
-use xberg_native_pdf::rendering::{RenderOptions, render_page};
+use xberg_native_pdf::object::ObjectRef;
+use xberg_native_pdf::rendering::{RenderOptions, render_image_paint_luminance, render_page};
 
 /// Assemble a PDF with a correct xref from raw object bodies.
 /// `objects[i]` is the body of object i+1 (no "N 0 obj"/"endobj" wrapper).
@@ -165,4 +166,56 @@ fn font_ink_proof_excludes_overlapping_annotation_appearances() {
         .unwrap();
     assert_eq!(proof.drawn, proof.without_glyphs);
     assert!(proof.drawn.iter().all(|pixel| *pixel > 240));
+}
+
+fn shared_appearance_image_pdf(content: &[u8]) -> PdfDocument {
+    let objects = vec![
+        obj("<< /Type /Catalog /Pages 2 0 R >>"),
+        obj("<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
+        obj("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 40 30] /Contents 4 0 R \
+             /Resources << /XObject << /Im 7 0 R >> >> /Annots [5 0 R] >>"),
+        stream_obj("", content),
+        obj("<< /Type /Annot /Subtype /Square /Rect [10 5 20 15] /F 4 /AP << /N 6 0 R >> >>"),
+        stream_obj(
+            "/Type /XObject /Subtype /Form /BBox [0 0 10 10] /Resources << /XObject << /Icon 7 0 R >> >>",
+            b"q 10 0 0 10 0 0 cm /Icon Do Q",
+        ),
+        stream_obj(
+            "/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8",
+            &[0],
+        ),
+    ];
+    PdfDocument::from_bytes(build_pdf(&objects)).unwrap()
+}
+
+#[test]
+fn image_omission_keeps_a_shared_image_in_the_annotation_appearance() {
+    let doc = shared_appearance_image_pdf(b"q 10 0 0 10 5 5 cm /Im Do Q");
+    let render = |include| render_image_paint_luminance(&doc, 0, 72, 1 << 26, ObjectRef::new(7, 0), include).unwrap();
+    let (width, height, drawn) = render(None);
+    let (omitted_width, omitted_height, omitted) = render(Some(false));
+    let (isolated_width, isolated_height, isolated) = render(Some(true));
+    assert_eq!((width, height), (40, 30));
+    assert_eq!((omitted_width, omitted_height), (width, height));
+    assert_eq!((isolated_width, isolated_height), (width, height));
+    let pixel = |raster: &[u8], x| raster[(20 * width + x) as usize];
+    assert_eq!((pixel(&drawn, 7), pixel(&omitted, 7)), (0, 255), "page image only");
+    assert_eq!(
+        (pixel(&drawn, 12), pixel(&omitted, 12)),
+        (0, 0),
+        "overlapping annotation paint must survive the page image omission"
+    );
+    assert_eq!((pixel(&drawn, 17), pixel(&omitted, 17)), (0, 0), "annotation only");
+    assert_eq!((pixel(&isolated, 7), pixel(&isolated, 17)), (0, 255));
+}
+
+#[test]
+fn image_omission_refuses_an_ambiguous_page_placement() {
+    let doc = shared_appearance_image_pdf(b"q 10 0 0 10 5 5 cm /Im Do Q q 10 0 0 10 25 5 cm /Im Do Q");
+    for include in [false, true] {
+        let Err(error) = render_image_paint_luminance(&doc, 0, 72, 1 << 26, ObjectRef::new(7, 0), Some(include)) else {
+            panic!("selection must identify exactly one page-content placement");
+        };
+        assert!(error.to_string().contains("exactly one page placement"), "{error}");
+    }
 }
