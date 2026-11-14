@@ -23,6 +23,11 @@ passed=0
 run_exact() {
   local test_name="$1"
   shift
+  local ignored=""
+  if [[ "${1:-}" == --ignored ]]; then
+    ignored="$1"
+    shift
+  fi
   local -a cargo_args
   if [[ "${1:-}" == --native-pdf ]]; then
     shift
@@ -30,13 +35,13 @@ run_exact() {
   else
     cargo_args=(test --locked -p xberg --no-default-features --features "$features" "$@")
   fi
-  cargo "${cargo_args[@]}" -- --exact "$test_name" --list --color never 2>&1 | tee "$log_dir/list.log"
+  cargo "${cargo_args[@]}" -- --exact "$test_name" ${ignored:+"$ignored"} --list --color never 2>&1 | tee "$log_dir/list.log"
   if ! grep -Fxq "$test_name: test" "$log_dir/list.log" ||
     ! grep -Fxq '1 test, 0 benchmarks' "$log_dir/list.log"; then
     printf 'Expected exactly one collected test: %s\n' "$test_name" >&2
     exit 1
   fi
-  cargo "${cargo_args[@]}" -- --exact "$test_name" --color never 2>&1 | tee "$log_dir/run.log"
+  cargo "${cargo_args[@]}" -- --exact "$test_name" ${ignored:+"$ignored"} --color never 2>&1 | tee "$log_dir/run.log"
   if ! grep -Fxq "test $test_name ... ok" "$log_dir/run.log" ||
     ! grep -Fq 'test result: ok. 1 passed; 0 failed; 0 ignored;' "$log_dir/run.log"; then
     printf 'Expected exactly one executed test: %s\n' "$test_name" >&2
@@ -75,6 +80,9 @@ PYTHON
 }
 
 run_pdf_cases() {
+  run_exact english_ocr_preserves_the_reporters_spanish_body --ignored --test issue_2951_spanish_layer
+  run_exact correction_does_not_rewrite_the_same_spelling_at_a_disjoint_position --ignored --test issue_2951_spanish_layer
+  run_exact recovery_does_not_publish_invisible_native_text --ignored --test issue_2951_spanish_layer
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::repeated_khmer_anchor_abstains_when_structured_intervening_words_disagree' --lib
   run_exact 'extractors::pdf::ocr::layer_token_recovery::minority_khmer::same_height_columns_with_repeated_words_do_not_share_an_inline_anchor' --lib
   run_exact font_ink_proof_excludes_overlapping_annotation_appearances --native-pdf --test annotation_appearance_normal
@@ -389,7 +397,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=107
+  expected=110
   check_mixed_decision_layer_handoffs
   run_pdf_cases
   run_retained_read_cases
