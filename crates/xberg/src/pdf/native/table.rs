@@ -24,6 +24,7 @@ use xberg_native_pdf::elements::{PathContent, PathOperation};
 pub(crate) mod scripts;
 mod source_columns;
 pub(crate) mod source_members;
+mod trailing_notes;
 
 #[derive(Debug)]
 pub(crate) struct NativeTable {

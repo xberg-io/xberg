@@ -224,9 +224,18 @@ pub(super) fn reconstruct_region_table(
 ) -> Option<crate::types::Table> {
     let original =
         super::reconstruct_region_table(region, page_height, page_number, allow_single_column, horizontal_rules)?;
+    let trim_notes = || {
+        if !page_rules.eligible {
+            return None;
+        }
+        let (start, prefix) = super::trailing_notes::certified_prefix(region, &original.cells)?;
+        let trimmed =
+            super::reconstruct_region_table(&prefix, page_height, page_number, allow_single_column, horizontal_rules)?;
+        (trimmed.cells == original.cells[..start]).then_some(trimmed)
+    };
     let rules = page_rules.rules();
     if rules.is_empty() {
-        return Some(original);
+        return Some(trim_notes().unwrap_or(original));
     }
     let mut work = RuleWork::default();
     let attempt = |frame, work: &mut RuleWork| {
@@ -266,7 +275,7 @@ pub(super) fn reconstruct_region_table(
         let corrected = attempt(exact, &mut work)?;
         source_boundaries::preserves_old_partitions(&original.cells, &corrected.cells).then_some(corrected)
     });
-    Some(corrected.unwrap_or(original))
+    Some(corrected.or_else(trim_notes).unwrap_or(original))
 }
 
 fn same_cell_words(original: &[Vec<String>], corrected: &[Vec<String>]) -> bool {
