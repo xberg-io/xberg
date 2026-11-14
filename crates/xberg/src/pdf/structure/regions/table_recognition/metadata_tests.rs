@@ -152,7 +152,7 @@ fn native_tatr_stops_year_headers_before_section_and_records() {
     let doc = recognized_document(&result);
     let html = crate::rendering::render_html(&doc);
     assert_eq!(html.matches("<table>").count(), 1, "{html}");
-    for (index, (row, expected)) in grid.cells.chunks_exact(4).zip(rows).enumerate() {
+    for (index, (row, expected)) in grid.cells.as_chunks::<4>().0.iter().zip(rows).enumerate() {
         let tag = if index == 0 { "th" } else { "td" };
         let mut html_row = String::from("<tr>");
         for (cell, text) in row.iter().zip(*expected) {

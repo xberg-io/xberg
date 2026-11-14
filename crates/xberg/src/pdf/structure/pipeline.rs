@@ -7417,9 +7417,7 @@ fn classify_isolated_folio_header(page: &mut [PdfParagraph], height: f32) -> Opt
         return None;
     }
     let title = paragraph_text_whitespace_collapsed(header);
-    let Some((_, byline)) = title.split_once(' ') else {
-        return None;
-    };
+    let (_, byline) = title.split_once(' ')?;
     if !byline
         .split_once(" and ")
         .is_some_and(|(left, right)| initialed_running_author(left) && initialed_running_author(right))
