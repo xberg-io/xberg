@@ -382,6 +382,18 @@ fn no_osd_config(models: &std::path::Path, auto_rotate: Option<bool>) -> Extract
     config
 }
 
+fn cacheable_orientation_ocr(models: &std::path::Path) -> OcrConfig {
+    // Use the pinned English pack under its ISO 639-1 code. The default "eng" enables
+    // supplemental script retries that can bypass the outer cache using system packs. ~keep
+    seed_english_as(models, "en");
+    OcrConfig {
+        language: vec!["en".into()],
+        tessdata_path: Some(models.into()),
+        quality_thresholds: Some(keep_every_line()),
+        ..Default::default()
+    }
+}
+
 fn assert_original_read(result: &ExtractedDocument) {
     assert_eq!(result.content.split_whitespace().count(), 147);
     assert_eq!(source_matches(&result.content), 0);
@@ -499,14 +511,9 @@ fn cached_file_recovers_case() {
     let (_, mut config) = controls();
     let root = tempfile::tempdir().unwrap();
     let models = root.path().join("models");
-    seed_english(&models);
     let source = root.path().join("sideways.pdf");
     std::fs::write(&source, PDF).unwrap();
-    config.ocr = Some(OcrConfig {
-        tessdata_path: Some(models.clone()),
-        quality_thresholds: Some(keep_every_line()),
-        ..Default::default()
-    });
+    config.ocr = Some(cacheable_orientation_ocr(&models));
     config.use_cache = true;
     config.cache_namespace = Some("explicit-osd-transition".into());
     let read = |config: &ExtractionConfig| {
@@ -546,7 +553,8 @@ fn a_read_kept_before_the_classifier_is_installed_is_not_cached_or_served_after_
         return;
     }
     let models = tempfile::tempdir().unwrap();
-    let mut config = no_osd_config(models.path(), None);
+    let (_, mut config) = controls();
+    config.ocr = Some(cacheable_orientation_ocr(models.path()));
     config.use_cache = true;
     let cache = std::sync::Arc::new(DocumentResultsCache::default());
     let engine = xberg::engine::Engine::builder()
@@ -618,12 +626,7 @@ fn cached_engine_bytes_recover_when_osd_is_installed_without_changing_the_config
 fn cached_engine_bytes_recover_case() {
     let (_, mut config) = controls();
     let models = tempfile::tempdir().unwrap();
-    seed_english(models.path());
-    config.ocr = Some(OcrConfig {
-        tessdata_path: Some(models.path().into()),
-        quality_thresholds: Some(keep_every_line()),
-        ..Default::default()
-    });
+    config.ocr = Some(cacheable_orientation_ocr(models.path()));
     config.use_cache = true;
     let cache = std::sync::Arc::new(DocumentResultsCache::default());
     let engine = xberg::engine::Engine::builder()
@@ -673,12 +676,7 @@ fn cached_context_changed_during_extraction_is_not_written() {
 fn cached_context_changed_case() {
     let (_, mut config) = controls();
     let models = tempfile::tempdir().unwrap();
-    seed_english(models.path());
-    config.ocr = Some(OcrConfig {
-        tessdata_path: Some(models.path().into()),
-        quality_thresholds: Some(keep_every_line()),
-        ..Default::default()
-    });
+    config.ocr = Some(cacheable_orientation_ocr(models.path()));
     config.use_cache = true;
     let osd = osd_model();
     let cache = std::sync::Arc::new(DocumentResultsCache {
@@ -886,10 +884,14 @@ fn spawn_private_child(case: &str, seed_classifier: bool) {
 }
 
 fn seed_english(directory: &std::path::Path) {
+    seed_english_as(directory, "eng");
+}
+
+fn seed_english_as(directory: &std::path::Path, language: &str) {
     std::fs::create_dir_all(directory).unwrap();
     let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled real English model");
     assert_eq!(hex::encode(Sha256::digest(english)), ENGLISH_SHA256);
-    std::fs::write(directory.join("eng.traineddata"), english).unwrap();
+    std::fs::write(directory.join(format!("{language}.traineddata")), english).unwrap();
 }
 
 fn osd_model() -> Vec<u8> {
