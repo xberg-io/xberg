@@ -55,6 +55,25 @@ public class BytesTransportTests {
   }
 
   [Fact]
+  public void BytesFacadeAllocatesOnlyOneManagedPayload() {
+    const int payloadSize = 4 * 1024 * 1024;
+    _ = XbergConverter.ExtractInputFromBytes([42], "application/octet-stream",
+                                             "probe.bin");
+    var bytes = new byte[payloadSize];
+    bytes.AsSpan().Fill(255);
+    long before = GC.GetAllocatedBytesForCurrentThread();
+    var input = XbergConverter.ExtractInputFromBytes(
+        bytes, "application/octet-stream", "probe.bin");
+    long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+    Assert.True(
+        allocated <= payloadSize + 512 * 1024,
+        $"Facade allocated {allocated} bytes for a {payloadSize}-byte payload");
+    Assert.NotSame(bytes, input.Bytes);
+    Assert.True(bytes.AsSpan().SequenceEqual(input.Bytes));
+  }
+
+  [Fact]
   public async Task LayoutSelectionAcceptsPdfBytesWithoutMimeHint() {
     const string content = "BT /F1 12 Tf 72 720 Td (Transport probe) Tj ET";
     var objects = new[] {
