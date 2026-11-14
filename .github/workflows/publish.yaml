@@ -1405,7 +1405,13 @@ jobs:
           GEM_PLATFORM: ${{ matrix.gem_platform }}
           GEM_VERSION: ${{ needs.prepare.outputs.version }}
           KEEP_SOURCE: ${{ matrix.label == 'linux-x86_64' }}
-        run: ruby ../../.release-tools/scripts/ci/package-ruby-native-gem.rb "$GEM_PLATFORM" "$GEM_VERSION" "$KEEP_SOURCE"
+          DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [[ "$DRY_RUN" == "true" ]]; then
+            GEM_VERSION="$(ruby -rrubygems -e 'puts Gem::Specification.load("xberg.gemspec").version')"
+          fi
+          ruby ../../.release-tools/scripts/ci/package-ruby-native-gem.rb "$GEM_PLATFORM" "$GEM_VERSION" "$KEEP_SOURCE"
 
       - uses: actions/upload-artifact@v7
         with:
