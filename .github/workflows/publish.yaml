@@ -90,6 +90,7 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       ref: ${{ steps.meta.outputs.ref }}
       checkout_ref: ${{ steps.meta.outputs.checkout_ref }}
+      source_sha: ${{ steps.release-source.outputs.commit }}
       php_checkout_sha: ${{ steps.php-source.outputs.sha }}
       target_sha: ${{ steps.meta.outputs.target_sha }}
       matrix_ref: ${{ steps.meta.outputs.matrix_ref }}
@@ -118,6 +119,7 @@ jobs:
       release_swift: ${{ steps.meta.outputs.release_swift }}
       release_zig: ${{ steps.meta.outputs.release_zig }}
       release_kotlin: ${{ steps.meta.outputs.release_kotlin }}
+      release_kotlin_android: ${{ steps.meta.outputs.release_kotlin_android }}
     steps:
       - uses: actions/create-github-app-token@v3
         id: app-token
@@ -127,6 +129,7 @@ jobs:
           owner: xberg-io
 
       - name: Checkout
+        id: release-source
         uses: actions/checkout@v7
         with:
           ref: ${{ (inputs.republish == true && (inputs.ref || github.event.repository.default_branch)) || inputs.ref || inputs.tag || ((inputs.dry_run == true || inputs.dry_run == 'true' || github.event.client_payload.dry_run == true || github.event.client_payload.dry_run == 'true') && github.sha) || github.ref }}
@@ -257,7 +260,10 @@ jobs:
     name: Check Maven Central for existing version
     needs: prepare
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.is_tag == 'true' && (needs.prepare.outputs.release_java == 'true' || needs.prepare.outputs.release_kotlin == 'true')) }}
+      ${{ !inputs.plugins-only && (needs.prepare.outputs.is_tag == 'true' &&
+          (needs.prepare.outputs.release_java == 'true' ||
+           (needs.prepare.outputs.dry_run != 'true' &&
+            (needs.prepare.outputs.release_kotlin_android == 'true' || needs.prepare.outputs.release_kotlin == 'true')))) }}
     runs-on: ubuntu-latest
     outputs:
       java_exists: ${{ steps.check.outputs.exists }}
@@ -2433,7 +2439,11 @@ jobs:
     name: Build Kotlin Android natives (${{ matrix.abi }})
     needs: [prepare, check-maven]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_kotlin == 'true' && (needs.check-maven.outputs.kotlin_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' &&
+          (needs.prepare.outputs.release_kotlin_android == 'true' || needs.prepare.outputs.release_kotlin == 'true') &&
+          (needs.prepare.outputs.dry_run == 'true' ||
+           (needs.prepare.outputs.is_tag == 'true' && needs.check-maven.result == 'success' &&
+            (needs.check-maven.outputs.kotlin_exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -2444,7 +2454,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.prepare.outputs.checkout_ref }}
+          ref: ${{ needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.source_sha || needs.prepare.outputs.checkout_ref }}
           fetch-depth: 0
           submodules: false
       - uses: xberg-io/actions/setup-rust@v1
@@ -4675,12 +4685,18 @@ jobs:
     name: Publish Kotlin Android (Maven Central via Gradle)
     needs: [prepare, kotlin-android-natives, check-maven, publish-crates]
     if: >-
-      ${{ !inputs.plugins-only && (needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_kotlin == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-maven.outputs.kotlin_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' &&
+          needs.kotlin-android-natives.result == 'success' &&
+          (needs.publish-crates.result == 'success' || needs.publish-crates.result == 'skipped') &&
+          (needs.prepare.outputs.release_kotlin_android == 'true' || needs.prepare.outputs.release_kotlin == 'true') &&
+          (needs.prepare.outputs.dry_run == 'true' ||
+           (needs.prepare.outputs.is_tag == 'true' && needs.check-maven.result == 'success' &&
+            (needs.check-maven.outputs.kotlin_exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.prepare.outputs.ref }}
+          ref: ${{ needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.source_sha || needs.prepare.outputs.ref }}
 
           submodules: false
       - uses: actions/download-artifact@v8
@@ -4716,11 +4732,19 @@ jobs:
           gradle-task: publishAndReleaseToMavenCentral
           extra-args: -I ../../.release-tools/scripts/ci/verify-android-aar.init.gradle -Palef.skipAndroidJni=true
           dry-run: ${{ needs.prepare.outputs.dry_run }}
+          expected-version: ${{ needs.prepare.outputs.tag }}
         env:
-          MAVEN_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
-          MAVEN_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
-          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          MAVEN_USERNAME: ${{ needs.prepare.outputs.dry_run != 'true' && secrets.CENTRAL_USERNAME || '' }}
+          MAVEN_PASSWORD: ${{ needs.prepare.outputs.dry_run != 'true' && secrets.CENTRAL_PASSWORD || '' }}
+          MAVEN_GPG_PRIVATE_KEY: ${{ needs.prepare.outputs.dry_run != 'true' && secrets.GPG_PRIVATE_KEY || '' }}
+          MAVEN_GPG_PASSPHRASE: ${{ needs.prepare.outputs.dry_run != 'true' && secrets.GPG_PASSPHRASE || '' }}
+
+      # The composite only prints its publish command in dry runs. Build the publication's AAR
+      # and verify its JNI contents by invoking the same guard directly. ~keep
+      - name: Verify the staged release AAR in dry runs
+        if: ${{ needs.prepare.outputs.dry_run == 'true' }}
+        working-directory: packages/kotlin-android
+        run: gradle --no-daemon -I ../../.release-tools/scripts/ci/verify-android-aar.init.gradle -Palef.skipAndroidJni=true verifyReleaseAarJni
 
   publish-nuget:
     name: Publish NuGet package
