@@ -247,6 +247,49 @@ impl ExtractInput {
         }
     }
 
+    /// Reconstruct an extraction input from metadata and out-of-band bytes for native bindings.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the metadata is invalid or includes an inline byte payload.
+    pub fn from_json_with_bytes(bytes: impl Into<Vec<u8>>, metadata_json: String) -> crate::Result<Self> {
+        #[derive(Deserialize)]
+        struct Metadata {
+            #[serde(default = "bytes_kind")]
+            kind: ExtractInputKind,
+            bytes: Option<serde::de::IgnoredAny>,
+            uri: Option<serde::de::IgnoredAny>,
+            mime_type: Option<String>,
+            filename: Option<String>,
+            config: Option<super::FileExtractionConfig>,
+        }
+
+        fn bytes_kind() -> ExtractInputKind {
+            ExtractInputKind::Bytes
+        }
+
+        let metadata: Metadata = serde_json::from_str(&metadata_json)?;
+        if metadata.kind != ExtractInputKind::Bytes {
+            return Err(crate::XbergError::validation(
+                "extract input metadata kind must be bytes",
+            ));
+        }
+        if metadata.uri.is_some() {
+            return Err(crate::XbergError::validation("extract input metadata must omit uri"));
+        }
+        if metadata.bytes.is_some() {
+            return Err(crate::XbergError::validation("extract input metadata must omit bytes"));
+        }
+        Ok(Self {
+            kind: ExtractInputKind::Bytes,
+            bytes: Some(bytes.into()),
+            uri: None,
+            mime_type: metadata.mime_type,
+            filename: metadata.filename,
+            config: metadata.config,
+        })
+    }
+
     /// Build a URI input from a local path, `file://` URI, or HTTP(S) URL.
     pub fn from_uri(uri: impl Into<String>) -> Self {
         Self {
