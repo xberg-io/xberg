@@ -229,9 +229,21 @@ pub(super) fn reconstruct_region_table(
             return None;
         }
         let (start, prefix) = super::trailing_notes::certified_prefix(region, &original.cells)?;
-        let trimmed =
-            super::reconstruct_region_table(&prefix, page_height, page_number, allow_single_column, horizontal_rules)?;
-        (trimmed.cells == original.cells[..start]).then_some(trimmed)
+        let reconstruct_prefix = |words: &[HocrWord]| {
+            super::reconstruct_region_table(words, page_height, page_number, allow_single_column, horizontal_rules)
+        };
+        let retained = &original.cells[..start];
+        if let Some(words) = super::trailing_notes::certified_legend_prefix(&prefix, retained)
+            && let Some(mut trimmed) = reconstruct_prefix(&words)
+            && trimmed.cells == retained[..start - 1]
+        {
+            if words.len() <= MAX_SOURCE_PROOF_WORDS && page_rules.paths.len() <= MAX_UNIQUE_VERTICAL_RULES {
+                super::wrapped_labels::consolidate(&mut trimmed, &words, page_rules.paths, page_height);
+            }
+            return Some(trimmed);
+        }
+        let trimmed = reconstruct_prefix(&prefix)?;
+        (trimmed.cells == retained).then_some(trimmed)
     };
     let rules = page_rules.rules();
     if rules.is_empty() {

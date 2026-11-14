@@ -25,6 +25,7 @@ pub(crate) mod scripts;
 mod source_columns;
 pub(crate) mod source_members;
 mod trailing_notes;
+mod wrapped_labels;
 
 #[derive(Debug)]
 pub(crate) struct NativeTable {
