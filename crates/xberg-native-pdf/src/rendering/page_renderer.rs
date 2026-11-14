@@ -242,6 +242,7 @@ pub struct PageRenderer {
     suppressed_text_font: Option<String>,
     /// Leave every image XObject, image mask and inline image unpainted.
     images_suppressed: bool,
+    image_selection: Option<(ObjectRef, bool)>,
     /// Font cache (name -> FontInfo) for current context
     fonts: HashMap<String, Arc<FontInfo>>,
     /// Color space cache (name -> Object) for current context
@@ -1117,6 +1118,16 @@ impl PageRenderer {
         let mut ext_g_state_cache: std::collections::HashMap<String, ParsedExtGState> =
             std::collections::HashMap::new();
         for op in operators {
+            if self.image_selection.is_some_and(|(_, include)| include) {
+                if knockout::is_path_paint(op) {
+                    apply_pending_clip(&mut pending_clip, &mut clip_stack, pixmap, base_transform, &gs_stack);
+                    current_path = PathBuilder::new();
+                    continue;
+                }
+                if matches!(op, Operator::PaintShading { .. }) {
+                    continue;
+                }
+            }
             if is_paint_operator(op) && self.knockout_resources.active() {
                 let pixels = if knockout::is_path_paint(op) {
                     0
@@ -3665,7 +3676,11 @@ impl PageRenderer {
     ) -> Result<()> {
         use crate::extractors::images::{ImageData, extract_image_from_xobject};
 
-        if self.images_suppressed {
+        if self.images_suppressed
+            || self
+                .image_selection
+                .is_some_and(|(selected, include)| (obj_ref == Some(selected)) != include)
+        {
             return Ok(());
         }
         let color_space_map = self.color_spaces.clone();
@@ -4279,7 +4294,11 @@ impl PageRenderer {
         clip_mask: Option<&tiny_skia::Mask>,
         gs: &GraphicsState,
     ) -> Result<()> {
-        if self.images_suppressed {
+        if self.images_suppressed
+            || self
+                .image_selection
+                .is_some_and(|(selected, include)| (obj_ref == Some(selected)) != include)
+        {
             return Ok(());
         }
         let dict = xobject

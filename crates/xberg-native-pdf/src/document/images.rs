@@ -521,8 +521,10 @@ impl PdfDocument {
             if mask_dict.get("Subtype").and_then(Object::as_name) != Some("Image") {
                 continue;
             }
-            if let Some(handle) = image_handle_from_xobject(self, mask_ref, mask_dict, ctm, *paint_order, color_spaces)
+            if let Some(mut handle) =
+                image_handle_from_xobject(self, mask_ref, mask_dict, ctm, *paint_order, color_spaces)
             {
+                handle.referenced_mask = true;
                 handles.push(handle);
                 *paint_order += 1;
             }

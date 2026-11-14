@@ -1252,6 +1252,12 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut texture_noise_by_page = ahash::AHashMap::<u32, super::symbol_noise_lines::texture::Evidence>::new();
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let mut texture_work = super::hidden_layer::PreviewWorkBudget::new(config);
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut paint_retention_by_page = ahash::AHashMap::new();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut background_noise_by_page = ahash::AHashMap::<u32, super::symbol_noise_background::Evidence>::new();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let certified_background = super::symbol_noise_background::certified_source(content);
     // Pages whose calibrated mean confidence fell below `min_ocr_mean_confidence`.
     let mut low_confidence_pages: std::collections::HashSet<u32> = std::collections::HashSet::new();
     // Pages whose dictionary-invalid word ratio crossed its threshold.
@@ -3025,11 +3031,35 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         .and_then(serde_json::Value::as_bool)
                         .unwrap_or(false)
                     && let Some(raster) = encoded.iter().find(|(index, ..)| *index == page_idx)
-                    && let Some(candidates) = texture_work.probe_page(|work| {
-                        super::symbol_noise_lines::texture::capture(raster, &extraction_result, config, work)
-                    })
                 {
-                    texture_noise_by_page.insert((page_idx + 1) as u32, candidates);
+                    if certified_background
+                        && let Some(evidence) =
+                            super::symbol_noise_background::Evidence::capture(&extraction_result, page_idx)
+                    {
+                        background_noise_by_page.insert((page_idx + 1) as u32, evidence);
+                    }
+                    let planned = texture_work.probe_page(|work| {
+                        if let Some(candidates) =
+                            super::symbol_noise_lines::texture::capture(raster, &extraction_result, config, work)
+                        {
+                            texture_noise_by_page.insert((page_idx + 1) as u32, candidates);
+                        }
+                        super::symbol_noise_lines::paint::plan(
+                            &render_doc,
+                            page_idx,
+                            &extraction_result,
+                            config,
+                            &ocr_config_resolved,
+                            work,
+                        )
+                    });
+                    if let Some(planned) = planned
+                        && let Some(retained) = planned
+                            .verify(Arc::clone(&render_doc), config, &ocr_config_resolved)
+                            .await
+                    {
+                        paint_retention_by_page.insert((page_idx + 1) as u32, retained);
+                    }
                 }
                 let (width, height) = retry_dpi.map(|_| (upright_width, upright_height)).unwrap_or_else(|| {
                     encoded
@@ -3615,27 +3645,63 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 continue;
             }
             #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-            if let Some(evidence) = texture_noise_by_page.remove(page)
-                && !alternative_raster_pages.contains(page)
+            if !alternative_raster_pages.contains(page)
                 && !config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled())
                 && let Some(read) = ocr_results.get(page)
+                && (texture_noise_by_page.contains_key(page)
+                    || paint_retention_by_page.contains_key(page)
+                    || background_noise_by_page.contains_key(page))
             {
-                let candidates = evidence.reconciled_tokens(text, read);
-                let (removed, texture_removed) = super::symbol_noise_lines::texture::prune(
+                let background = background_noise_by_page
+                    .get(page)
+                    .filter(|_| text == read)
+                    .and_then(|evidence| evidence.reconcile(text));
+                let pcb_row = texture_noise_by_page
+                    .get(page)
+                    .and_then(|evidence| evidence.reconciled_pcb_row(text, read));
+                let mut candidates = texture_noise_by_page
+                    .get(page)
+                    .map(|evidence| evidence.reconciled_tokens(text, read))
+                    .unwrap_or_default();
+                if let Some(word) = background.filter(|word| !candidates.contains(word)) {
+                    candidates.push(word);
+                }
+                let retained = paint_retention_by_page
+                    .get(page)
+                    .filter(|_| text == read)
+                    .and_then(|evidence| evidence.reconcile(text));
+                let (removed, texture_removed, pcb_removed) = super::symbol_noise_lines::texture::prune_mixed(
                     text,
                     ocr_results.get_mut(page),
                     ocr_page_paragraphs.get_mut(page),
                     structured_ocr_pages.get_mut(page),
-                    &candidates,
+                    super::symbol_noise_lines::texture::MixedPruningEvidence {
+                        candidates: &candidates,
+                        retained,
+                        pcb_row,
+                    },
                 );
                 crate::core::diagnostics::push_warning_deduped(
                     &mut accumulated_warnings,
                     super::symbol_noise_lines::pruned_lines_warning(*page as usize, removed),
                 );
-                if texture_removed != 0 {
+                let background_removed = usize::from(
+                    texture_removed != 0
+                        && background.is_some_and(|word| !text.split_whitespace().any(|token| token == word)),
+                );
+                if background_removed != 0 {
                     crate::core::diagnostics::push_warning_deduped(
                         &mut accumulated_warnings,
-                        super::symbol_noise_lines::texture::warning(*page, texture_removed),
+                        super::symbol_noise_background::warning(*page, background_removed),
+                    );
+                }
+                if texture_removed + pcb_removed > background_removed {
+                    crate::core::diagnostics::push_warning_deduped(
+                        &mut accumulated_warnings,
+                        super::symbol_noise_lines::texture::warning(
+                            *page,
+                            texture_removed + pcb_removed - background_removed,
+                        ),
                     );
                 }
                 continue;
@@ -5041,6 +5107,10 @@ struct PageRead<OrderedProof, CaptionProof> {
     detached_frame_read: bool,
     captured_caption: Option<CaptionProof>,
     number_frame: bool,
+    #[cfg(feature = "ocr")]
+    paint_frame: bool,
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    background: Option<super::symbol_noise_background::Evidence>,
 }
 
 #[cfg(all(
@@ -5060,6 +5130,10 @@ impl<OrderedProof, CaptionProof> PageRead<OrderedProof, CaptionProof> {
             detached_frame_read: false,
             captured_caption: None,
             number_frame: false,
+            #[cfg(feature = "ocr")]
+            paint_frame: false,
+            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            background: None,
         }
     }
 }
@@ -5560,6 +5634,16 @@ pub(super) async fn extract_with_ocr_for_page(
     ))]
     let mut leading_khmer_rows = ahash::AHashMap::new();
     let mut page_texts = vec![String::new(); total_pages];
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut paint_retention = ahash::AHashMap::new();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut background_noise = ahash::AHashMap::<usize, super::symbol_noise_background::Evidence>::new();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let certified_background = content.is_some_and(super::symbol_noise_background::certified_source);
+    #[cfg(all(test, feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let certified_background = certified_background && !super::symbol_noise_lines::texture::replay_disabled();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut paint_work = super::hidden_layer::PreviewWorkBudget::new(config);
     // Which pages the quality gate rejected. Kept separately from `page_texts` because an
     // empty string is ambiguous -- a blank page produces one too -- and the structured
     // paragraphs of a rejected page must be dropped along with its text.
@@ -5930,6 +6014,8 @@ pub(super) async fn extract_with_ocr_for_page(
             not(target_arch = "wasm32")
         ))]
         let mut number_frame_reads = vec![false; batch_count];
+        #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        let mut paint_frames = vec![false; batch_count];
 
         // See the sibling JoinSet block above: `Send` futures aren't available on wasm32. ~keep
         #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
@@ -6044,6 +6130,21 @@ pub(super) async fn extract_with_ocr_for_page(
                     } else {
                         (config_clone, false)
                     };
+                #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+                let config_clone = if ocr_output_thresholds.prune_symbol_noise_lines
+                    && lazy_pdf_render_state.is_some()
+                    && !has_layout_detections
+                    && !has_stored_scan
+                    && get_ocr_backend_registry().read().is_builtin_tesseract(&backend)
+                {
+                    let mut config = ensure_elements_enabled(&config_clone);
+                    if let Some(elements) = config.element_config.as_mut() {
+                        elements.min_confidence = 0.0;
+                    }
+                    config
+                } else {
+                    config_clone
+                };
                 let original_config = ocr_config_owned.clone();
                 // No PDF `/Rotate` is ever known without the `pdf` feature (`page_rotation_degrees`
                 // is always `0` above in that build), so there is nothing to correct upright.
@@ -6125,6 +6226,13 @@ pub(super) async fn extract_with_ocr_for_page(
                     && base_ocr_config.auto_rotate.is_none()
                     && base_ocr_config.tesseract_config.is_none()
                     && base_ocr_config.effective_tesseract_language().as_slice() == ["eng"];
+                #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+                let observe_paint_frame = ocr_output_thresholds.prune_symbol_noise_lines
+                    && lazy_pdf_render_state.is_some()
+                    && !has_layout_detections
+                    && !has_stored_scan
+                    && correction_degrees == 0
+                    && get_ocr_backend_registry().read().is_builtin_tesseract(&backend);
                 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                 let probe_reads = page_ocr_hints.as_ref().and_then(|hints| hints.probe_reads.clone());
                 let task = crate::engine::seams::inherit_progress(async move {
@@ -6215,12 +6323,29 @@ pub(super) async fn extract_with_ocr_for_page(
                     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                     let (result, scale_only, inventory) = if caption_raster.is_some() {
                         crate::ocr::preprocessing::geometry_evidence::observe_with_word_inventory(primary).await
-                    } else if ordered_raster.is_some() || observe_detached_frame || observe_number_frame {
+                    } else if ordered_raster.is_some()
+                        || observe_detached_frame
+                        || observe_number_frame
+                        || observe_paint_frame
+                    {
                         let (result, scale_only) = crate::ocr::preprocessing::geometry_evidence::observe(primary).await;
                         (result, scale_only, None)
                     } else {
                         (primary.await, false, None)
                     };
+                    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+                    let paint_read = (observe_paint_frame && scale_only)
+                        .then(|| result.as_ref().ok().map(|read| blake3::hash(read.content.as_bytes())))
+                        .flatten();
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    let background = (certified_background && scale_only && observe_paint_frame)
+                        .then(|| {
+                            super::symbol_noise_background::Evidence::capture(
+                                result.as_ref().ok()?,
+                                page_index_offset + idx,
+                            )
+                        })
+                        .flatten();
                     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                     let number_proof = observe_number_frame
                         .then(|| {
@@ -6304,6 +6429,12 @@ pub(super) async fn extract_with_ocr_for_page(
                     #[cfg(feature = "ocr")]
                     let captured_caption = captured_caption
                         .filter(|proof| result.as_ref().is_ok_and(|selected| proof.matches_selected(selected)));
+                    #[cfg(feature = "ocr")]
+                    let paint_frame = paint_read.is_some_and(|hash| {
+                        result
+                            .as_ref()
+                            .is_ok_and(|read| hash == blake3::hash(read.content.as_bytes()))
+                    });
                     PageRead {
                         page_idx: idx,
                         correction_degrees,
@@ -6314,6 +6445,10 @@ pub(super) async fn extract_with_ocr_for_page(
                         detached_frame_read,
                         captured_caption,
                         number_frame,
+                        #[cfg(feature = "ocr")]
+                        paint_frame,
+                        #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                        background,
                     }
                 });
                 join_set.spawn(crate::core::extractor::cacheability::inherit(task));
@@ -6329,6 +6464,10 @@ pub(super) async fn extract_with_ocr_for_page(
                     detached_frame_read,
                     captured_caption,
                     number_frame,
+                    #[cfg(feature = "ocr")]
+                    paint_frame,
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    background,
                 } = join_result.map_err(|e| crate::XbergError::Plugin {
                     message: format!("OCR task panicked: {}", e),
                     plugin_name: "ocr".to_string(),
@@ -6339,6 +6478,11 @@ pub(super) async fn extract_with_ocr_for_page(
                 {
                     detached_frame_reads[page_idx - batch_start] = detached_frame_read;
                     number_frame_reads[page_idx - batch_start] = number_frame;
+                    paint_frames[page_idx - batch_start] = paint_frame;
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    if let Some(evidence) = background {
+                        background_noise.insert(page_idx, evidence);
+                    }
                 }
                 #[cfg(all(
                     feature = "ocr",
@@ -6948,6 +7092,38 @@ pub(super) async fn extract_with_ocr_for_page(
                 );
             }
             collected_tables.append(&mut backend_tables);
+
+            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            if page_rotation_override != 0
+                || !paint_frames[offset]
+                || tall_source_used
+                || pages_with_recovered_xobject_payload[page_idx]
+                || forced_khmer_supplements.contains_key(&page_idx)
+            {
+                background_noise.remove(&page_idx);
+            }
+
+            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            if paint_frames[offset]
+                && !tall_source_used
+                && !pages_with_recovered_xobject_payload[page_idx]
+                && !forced_khmer_supplements.contains_key(&page_idx)
+                && ocr_result.tables.is_empty()
+                && let Some((pdf, _, _)) = lazy_pdf_render_state.as_ref()
+                && let Some(planned) = paint_work.probe_page(|work| {
+                    super::symbol_noise_lines::paint::plan(
+                        pdf,
+                        document_page_idx,
+                        &ocr_result,
+                        config,
+                        &ocr_config_owned,
+                        work,
+                    )
+                })
+                && let Some(retained) = planned.verify(Arc::clone(pdf), config, &ocr_config_owned).await
+            {
+                paint_retention.insert(page_idx, retained);
+            }
 
             if let Some(ref mut elems) = ocr_result.ocr_elements {
                 #[cfg(feature = "pdf")]
@@ -7699,10 +7875,50 @@ pub(super) async fn extract_with_ocr_for_page(
         if ocr_output_thresholds.prune_symbol_noise_lines
             && super::symbol_noise_lines::page_is_dominated_by_noise_lines(page_texts[page_idx].lines())
         {
-            let (pruned, removed) = super::symbol_noise_lines::prune_text(&page_texts[page_idx]);
+            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            let retained = paint_retention.get(&page_idx).and_then(|evidence| {
+                evidence.reconcile(&page_texts[page_idx]).filter(|word| {
+                    all_page_paragraphs[page_idx].as_ref().is_none_or(|paragraphs| {
+                        super::symbol_noise_lines::paint::paragraphs_own_line(paragraphs, word)
+                    })
+                })
+            });
+            #[cfg(not(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+            let retained = None;
+            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            if !config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled())
+                && public_ocr_pages
+                    .get(&page_number)
+                    .is_none_or(|doc| doc.tables.is_empty() && super::symbol_noise_lines::elements_are_prunable(doc))
+                && let Some(word) = background_noise
+                    .get(&page_idx)
+                    .and_then(|evidence| evidence.reconcile(&page_texts[page_idx]))
+            {
+                let original = page_texts[page_idx].clone();
+                let (removed, background_removed) = super::symbol_noise_lines::texture::prune(
+                    &mut page_texts[page_idx],
+                    None,
+                    all_page_paragraphs[page_idx].as_mut(),
+                    public_ocr_pages.get_mut(&page_number),
+                    &[word],
+                    retained,
+                );
+                unpruned_page_texts.push((page_idx, original));
+                recognition_noise_warnings.push(super::symbol_noise_lines::pruned_lines_warning(
+                    verdict.page_index + 1,
+                    removed,
+                ));
+                if background_removed != 0 {
+                    recognition_noise_warnings
+                        .push(super::symbol_noise_background::warning(page_number, background_removed));
+                }
+                continue;
+            }
+            let (pruned, removed) =
+                super::symbol_noise_lines::prune_text_with_retention(&page_texts[page_idx], retained);
             unpruned_page_texts.push((page_idx, std::mem::replace(&mut page_texts[page_idx], pruned)));
             if let Some(paragraphs) = all_page_paragraphs[page_idx].as_mut() {
-                super::symbol_noise_lines::prune_paragraphs(paragraphs);
+                super::symbol_noise_lines::prune_paragraphs_with_retention(paragraphs, retained);
             }
             recognition_noise_warnings.push(super::symbol_noise_lines::pruned_lines_warning(
                 verdict.page_index + 1,
