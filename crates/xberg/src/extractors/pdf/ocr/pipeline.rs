@@ -522,12 +522,14 @@ async fn next_page_task<T: 'static>(
     feature = "tokio-runtime",
     not(target_arch = "wasm32")
 ))]
-fn capture_ocr_completion<T, E>(
-    result: Result<T, E>,
+fn capture_ocr_completion<T>(
+    result: crate::Result<T>,
     token: Option<&crate::cancellation::CancellationToken>,
-) -> (Result<T, E>, Option<crate::cancellation::CancellationToken>) {
+) -> (crate::Result<T>, Option<crate::cancellation::CancellationToken>) {
     // A stop can suppress the retry without making the completed backend error a timeout. ~keep
-    let expired = token.filter(|token| result.is_err() && token.deadline_elapsed());
+    let expired = token.filter(|token| {
+        matches!(&result, Err(error) if !matches!(error, crate::XbergError::Cancelled)) && token.deadline_elapsed()
+    });
     (result, expired.cloned())
 }
 
@@ -2004,7 +2006,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         && stored_scan_retry::eligible(config, (idx + 1) as u32);
                     let task = crate::engine::seams::inherit_progress(async move {
                         if config_clone.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-                            return (idx, (Err(crate::XbergError::Cancelled.into()), None));
+                            return (idx, (Err(crate::XbergError::Cancelled), None));
                         }
                         #[cfg(feature = "layout-detection")]
                         let page_detection_slice = page_detection.as_ref().map(std::slice::from_ref);
@@ -2041,7 +2043,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             allow_stored_retry,
                         )
                         .await;
-                        (idx, capture_ocr_completion(result, config_clone.cancel_token.as_ref()))
+                        (
+                            idx,
+                            capture_ocr_completion(
+                                result.map_err(crate::XbergError::from),
+                                config_clone.cancel_token.as_ref(),
+                            ),
+                        )
                     });
                     #[cfg(test)]
                     let task = crate::plugins::registry::inherit_test_ocr_backend(task);
@@ -2070,6 +2078,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         plugin_name: "ocr".to_string(),
                     })?;
                     pending_pages.remove(&page_idx);
+                    if matches!(&result, Err(crate::XbergError::Cancelled)) {
+                        return Err(crate::XbergError::Cancelled.into());
+                    }
                     if let Some(token) = expired.as_ref() {
                         token.request_stop();
                         mark_pages_unread(
@@ -2081,9 +2092,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         );
                         continue;
                     }
-                    let result = match result.map_err(crate::XbergError::from) {
+                    let result = match result {
                         Ok(result) => result,
-                        Err(error @ crate::XbergError::Cancelled) => return Err(error.into()),
                         Err(error) => {
                             let recovered = mixed_native_page_has_content(native_text, boundaries, page_idx);
                             push_mixed_ocr_page_failure_warning(
@@ -2791,6 +2801,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     raster_dpis.insert(page_idx, dpi);
                 }
                 pending_pages.remove(&page_idx);
+                if matches!(&result, Err(crate::XbergError::Cancelled)) {
+                    return Err(crate::XbergError::Cancelled.into());
+                }
                 if let Some(token) = expired.as_ref() {
                     token.request_stop();
                     mark_pages_unread(
@@ -2844,7 +2857,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 crate::engine::seams::emit_ocr_page(page_idx + 1, page_rotations.len(), backend.name());
                 let mut extraction_result = match result {
                     Ok(extraction_result) => extraction_result,
-                    Err(error @ crate::XbergError::Cancelled) => return Err(error.into()),
                     Err(error) => {
                         failed_pages.insert(page_idx, error);
                         continue;
@@ -10172,7 +10184,9 @@ async fn run_ocr_pipeline_stages(
                 }
             }
             Err(failed_stage) => {
-                if crate::extraction::derive::is_invalid_public_ocr_document(&failed_stage.error) {
+                if matches!(failed_stage.error, crate::XbergError::Cancelled)
+                    || crate::extraction::derive::is_invalid_public_ocr_document(&failed_stage.error)
+                {
                     return Err(failed_stage);
                 }
                 #[cfg(feature = "pdf")]
@@ -11228,7 +11242,13 @@ mod in_flight_page_tests {
         let (completed, wait) = tokio::sync::oneshot::channel();
         let mut join_set = JoinSet::new();
         join_set.spawn(async move {
-            let completion = capture_ocr_completion(Err::<(), _>("original OCR error"), Some(&worker_token));
+            let completion = capture_ocr_completion(
+                Err::<(), _>(crate::XbergError::Ocr {
+                    message: "original OCR error".to_string(),
+                    source: None,
+                }),
+                Some(&worker_token),
+            );
             completed.send(()).unwrap();
             completion
         });
@@ -11237,7 +11257,7 @@ mod in_flight_page_tests {
         assert!(token.time_limit_reached());
 
         let (result, expired) = join_set.join_next().await.unwrap().unwrap();
-        assert_eq!(result, Err("original OCR error"));
+        assert!(matches!(result, Err(crate::XbergError::Ocr { message, .. }) if message == "original OCR error"));
         assert!(expired.is_none());
     }
 

@@ -3,7 +3,7 @@ use super::{
     extract_mixed_ocr_native_with_layout_pages,
 };
 use crate::cancellation::CancellationToken;
-use crate::core::config::{ConcurrencyConfig, OcrConfig};
+use crate::core::config::{ConcurrencyConfig, OcrConfig, OcrPipelineConfig, OcrPipelineStage};
 use serial_test::serial;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -15,6 +15,7 @@ const FAILURE: &str = "synthetic page recognition failure";
 enum StopTrigger {
     Request,
     Deadline,
+    CancelAtDeadline,
 }
 
 struct StopOnFailure {
@@ -66,7 +67,13 @@ impl crate::plugins::OcrBackend for StopOnFailure {
             );
             match self.trigger {
                 StopTrigger::Request => self.token.request_stop(),
-                StopTrigger::Deadline => self.token.set_deadline(std::time::Instant::now()),
+                StopTrigger::Deadline | StopTrigger::CancelAtDeadline => {
+                    self.token.set_deadline(std::time::Instant::now());
+                }
+            }
+            if matches!(self.trigger, StopTrigger::CancelAtDeadline) {
+                self.token.cancel();
+                return Err(crate::XbergError::Cancelled);
             }
         }
         if stopping || self.fail_every_call {
@@ -135,6 +142,47 @@ async fn final_page_that_fails_at_the_deadline_is_reported_as_unread() {
     assert_final_failed_page(StopTrigger::Deadline).await;
 }
 
+#[tokio::test]
+#[serial]
+async fn explicit_ocr_cancellation_wins_at_the_deadline() {
+    for pipeline in [false, true] {
+        let (backend, mut config, _registration) = setup(vec![1], false, StopTrigger::CancelAtDeadline);
+        if pipeline {
+            config.ocr.as_mut().unwrap().pipeline = Some(OcrPipelineConfig {
+                stages: vec![OcrPipelineStage {
+                    backend: BACKEND.to_string(),
+                    priority: 100,
+                    language: None,
+                    tesseract_config: None,
+                    paddle_ocr_config: None,
+                    paddle_ocr_settings: None,
+                    vlm_config: None,
+                    backend_options: None,
+                }],
+                quality_thresholds: Default::default(),
+            });
+        }
+        let outcome = extract_mixed_ocr_native_with_layout_pages(
+            "",
+            &[],
+            (&[1], &[]),
+            &build_minimal_multi_page_pdf(1),
+            &config,
+            None,
+            (&[], &[]),
+        )
+        .await;
+        assert_eq!(backend.calls.load(Ordering::Relaxed), 1, "pipeline={pipeline}");
+        assert!(backend.token.deadline_elapsed(), "pipeline={pipeline}");
+        let failure = outcome.err().expect("explicit cancellation must fail extraction");
+        assert!(
+            matches!(failure, crate::XbergError::Cancelled),
+            "pipeline={pipeline}: {failure:?}"
+        );
+        assert_eq!(backend.token.first_unread_page(), None, "pipeline={pipeline}");
+    }
+}
+
 async fn assert_final_failed_page(trigger: StopTrigger) {
     let (backend, config, _registration) = setup(vec![1, 2, 3], false, trigger);
     let native_text = "Native text on the final page";
@@ -178,6 +226,7 @@ async fn assert_final_failed_page(trigger: StopTrigger) {
             assert_eq!(failures[0].error, TIME_LIMIT_UNREAD_PAGE_ERROR);
             assert!(failure_warnings.is_empty(), "{warnings:?}");
         }
+        StopTrigger::CancelAtDeadline => unreachable!("covered by the cancellation test"),
     }
     assert_eq!(backend.token.first_unread_page(), Some(3));
     assert!(backend.token.cut_short_by_time_limit());
