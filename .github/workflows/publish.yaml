@@ -805,7 +805,9 @@ jobs:
     name: Build Node bindings (${{ matrix.target }})
     needs: [prepare, check-npm]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_node == 'true' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' &&
+          needs.prepare.outputs.release_node == 'true' &&
+          (needs.prepare.outputs.dry_run == 'true' || (needs.prepare.outputs.is_tag == 'true' && needs.check-npm.result == 'success' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -939,7 +941,9 @@ jobs:
     name: Build Node bindings (linux-musl-${{ matrix.arch }})
     needs: [prepare, check-npm]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_node == 'true' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' &&
+          needs.prepare.outputs.release_node == 'true' &&
+          (needs.prepare.outputs.dry_run == 'true' || (needs.prepare.outputs.is_tag == 'true' && needs.check-npm.result == 'success' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -1040,7 +1044,9 @@ jobs:
     name: Build Node bindings (linux-gnu-${{ matrix.arch }})
     needs: [prepare, check-npm]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_node == 'true' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' &&
+          needs.prepare.outputs.release_node == 'true' &&
+          (needs.prepare.outputs.dry_run == 'true' || (needs.prepare.outputs.is_tag == 'true' && needs.check-npm.result == 'success' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -4334,7 +4340,9 @@ jobs:
     name: Publish Node packages
     needs: [prepare, node-bindings, node-bindings-musl, node-bindings-manylinux, check-npm, publish-crates]
     if: >-
-      ${{ !inputs.plugins-only && (needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_node == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' &&
+          needs.node-bindings.result == 'success' && needs.node-bindings-musl.result == 'success' && needs.node-bindings-manylinux.result == 'success' && needs.prepare.outputs.release_node == 'true' &&
+          (needs.prepare.outputs.dry_run == 'true' || (needs.check-npm.result == 'success' && (needs.publish-crates.result == 'success' || needs.publish-crates.result == 'skipped') && needs.prepare.outputs.is_tag == 'true' && (needs.check-npm.outputs.node_exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -4342,7 +4350,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.prepare.outputs.ref }}
+          ref: ${{ needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.checkout_ref || needs.prepare.outputs.ref }}
 
           submodules: false
       - uses: actions/download-artifact@v8
@@ -4444,6 +4452,34 @@ jobs:
             crates/xberg-node/package.json > "$tmp_pkg_json"
           mv "$tmp_pkg_json" crates/xberg-node/package.json
 
+      - name: Checkout Node dry-run verification tools
+        if: ${{ needs.prepare.outputs.dry_run == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            .github/workflows/publish.yaml
+            scripts/ci/verify-node-dry-run.py
+
+      - name: Verify and archive local npm packages
+        if: ${{ needs.prepare.outputs.dry_run == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/node-dry-run
+          npm pack ./crates/xberg-node --ignore-scripts --pack-destination dist/node-dry-run
+          python3 .release-tools/scripts/ci/verify-node-dry-run.py
+          cp crates/xberg-node/npm/*.tgz dist/node-dry-run/
+      - uses: actions/upload-artifact@v7
+        if: ${{ needs.prepare.outputs.dry_run == 'true' }}
+        with:
+          name: node-dry-run-packages
+          path: dist/node-dry-run/*.tgz
+          if-no-files-found: error
+
       # ~keep This job is gated only on the MAIN package being absent from npm
       # (check-npm.outputs.node_exists), so a re-run after a partial failure re-publishes
       # every platform sub-package and the ones that already landed answer 403
@@ -4456,6 +4492,7 @@ jobs:
       # "Assert every optionalDependency is installable" step below is the real gate for
       # that -- it queries the registry instead of trusting this step's exit code.
       - name: Publish platform sub-packages
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
         continue-on-error: true
         uses: xberg-io/actions/publish-npm@v1
         with:
@@ -4522,6 +4559,7 @@ jobs:
           echo "OK: every optionalDependency resolves on the npm registry"
 
       - name: Publish main @xberg-io/xberg package
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
         uses: xberg-io/actions/publish-npm@v1
         with:
           package-dir: crates/xberg-node
