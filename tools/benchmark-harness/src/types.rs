@@ -74,6 +74,9 @@ pub enum XbergPipeline {
     Baseline,
     /// Layout: layout detection and structure preservation
     Layout,
+    /// Layout pipeline with the experimental PP-DocLayoutV3 detector instead of RT-DETR
+    #[serde(rename = "layout-v3")]
+    LayoutV3,
     /// PaddleOCR: OCR with PaddleOCR backend
     #[serde(rename = "paddle-ocr")]
     PaddleOcr,
@@ -118,6 +121,7 @@ impl XbergPipeline {
         match self {
             XbergPipeline::Baseline => "baseline",
             XbergPipeline::Layout => "layout",
+            XbergPipeline::LayoutV3 => "layout-v3",
             XbergPipeline::PaddleOcr => "paddle-ocr",
             XbergPipeline::BaselinePaddle => "baseline-paddle",
             XbergPipeline::LayoutPaddle => "layout-paddle",
@@ -147,6 +151,7 @@ impl FromStr for XbergPipeline {
         match s.to_lowercase().as_str() {
             "baseline" => Ok(XbergPipeline::Baseline),
             "layout" => Ok(XbergPipeline::Layout),
+            "layout-v3" | "layout_v3" => Ok(XbergPipeline::LayoutV3),
             "paddle-ocr" | "paddle_ocr" | "paddleocr" => Ok(XbergPipeline::PaddleOcr),
             "baseline-paddle" | "baseline_paddle" => Ok(XbergPipeline::BaselinePaddle),
             "layout-paddle" | "layout_paddle" => Ok(XbergPipeline::LayoutPaddle),
@@ -166,7 +171,7 @@ impl FromStr for XbergPipeline {
                 Ok(XbergPipeline::CandlePaddleocrVl15)
             }
             _ => Err(format!(
-                "unknown Xberg pipeline: {}. Valid: baseline, layout, paddle-ocr, baseline-paddle, layout-paddle, sceptre-ort, sceptre-ort-layout, sceptre-ort-autorotate, sceptre-tract, candle-trocr, candle-paddleocr-vl, candle-glm-ocr, candle-deepseek-ocr, candle-paddleocr-vl-15",
+                "unknown Xberg pipeline: {}. Valid: baseline, layout, layout-v3, paddle-ocr, baseline-paddle, layout-paddle, sceptre-ort, sceptre-ort-layout, sceptre-ort-autorotate, sceptre-tract, candle-trocr, candle-paddleocr-vl, candle-glm-ocr, candle-deepseek-ocr, candle-paddleocr-vl-15",
                 s
             )),
         }
@@ -793,6 +798,22 @@ mod tests {
         for value in ["paddle-ocr", "paddle_ocr", "paddleocr"] {
             assert_eq!(value.parse::<XbergPipeline>(), Ok(XbergPipeline::PaddleOcr));
         }
+    }
+
+    #[test]
+    fn layout_v3_pipeline_round_trips_through_str_and_serde() {
+        for value in ["layout-v3", "layout_v3"] {
+            assert_eq!(value.parse::<XbergPipeline>(), Ok(XbergPipeline::LayoutV3));
+        }
+        assert_eq!(XbergPipeline::LayoutV3.as_str(), "layout-v3");
+        assert_eq!(
+            serde_json::to_string(&XbergPipeline::LayoutV3).unwrap(),
+            "\"layout-v3\""
+        );
+        assert_eq!(
+            serde_json::from_str::<XbergPipeline>("\"layout-v3\"").unwrap(),
+            XbergPipeline::LayoutV3
+        );
     }
 
     #[test]

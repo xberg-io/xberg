@@ -119,6 +119,19 @@ fn run_registration_requires_explicit_legacy_paddle_selection() {
 }
 
 #[test]
+fn run_registration_requires_explicit_layout_v3_selection() {
+    assert!(XBERG_RUN_PIPELINES.contains(&benchmark_harness::XbergPipeline::LayoutV3));
+    assert!(!should_register_xberg_pipeline(
+        benchmark_harness::XbergPipeline::LayoutV3,
+        false
+    ));
+    assert!(should_register_xberg_pipeline(
+        benchmark_harness::XbergPipeline::LayoutV3,
+        true
+    ));
+}
+
+#[test]
 fn run_cli_accepts_exact_cohort_and_model_identity() {
     let cli = Cli::try_parse_from([
         "benchmark-harness",
