@@ -2990,10 +2990,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist/elixir-natives staging
-          # RustlerPrecompiled's `lib_name/4` expects the extracted file to carry the full
-          # versioned name, not the bare crate name -- the tarball name alone is not enough.
-          # The manylinux job below already renames; this one did not, so a musl artifact
-          # would have failed to load had musl ever been added to `nif_targets`. ~keep
+          # RustlerPrecompiled loads the versioned .so by name after extracting the archive. ~keep
           RENAMED="libxberg_nif-v${NIF_VERSION}-nif-${NIF_API}-${TARGET}.so"
           cp -a build-output/*.so* staging/
           mv staging/libxberg_nif.so "staging/${RENAMED}"
@@ -3089,9 +3086,8 @@ jobs:
 
       # Reproduces xberg-io/actions/build-elixir-natives@v1's naming contract
       # (scripts/build.py: lib{crate}-v{version}-nif-{api}-{target}.so[.tar.gz])
-      # by hand, since this leg bypasses that action. Unlike
-      # elixir-natives-musl's tarball (which ships libxberg_nif.so alone), the
-      # FULL vendored closure built inside the container ships beside the
+      # by hand, since this leg bypasses that action. The full vendored native
+      # dependency closure built inside the container ships beside the
       # renamed .so -- verify-glibc-floor.sh below walks every .so in the
       # tarball, and that vendored closure is exactly what was failing the
       # floor check before this fix. ~keep
@@ -5017,13 +5013,10 @@ jobs:
           tag: ${{ needs.prepare.outputs.tag }}
           version: ${{ needs.prepare.outputs.version }}
           lib-name: xberg_nif
-          # Must match the NIF versions actually built (elixir-natives matrix) and
-          # declared in packages/elixir/lib/xberg/native.ex (`nif_versions: ["2.16"]`).
-          # NIF 2.16 loads fine on OTP 27 (NIF minor versions are backward compatible),
-          # so a single 2.16 artifact covers every supported runtime. Requesting 2.17
-          # here made the checksum step hunt for assets that were never built. ~keep
+          # Keep the target list in sync with alef.toml and the three Elixir NIF build matrices.
+          # The loader and all three matrices use NIF 2.16, which also loads on newer OTP releases. ~keep
           nif-versions: "2.16"
-          targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,aarch64-apple-darwin,x86_64-pc-windows-msvc
+          targets: aarch64-apple-darwin,aarch64-unknown-linux-gnu,aarch64-unknown-linux-musl,x86_64-unknown-linux-gnu,x86_64-unknown-linux-musl,x86_64-pc-windows-msvc
           output-path: packages/elixir/checksum-Elixir.Xberg.Native.exs
 
       - name: Build Elixir Hex tarball with dependency rewrite
