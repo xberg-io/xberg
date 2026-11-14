@@ -735,11 +735,15 @@ jobs:
           [ -n "$id" ] || { echo "::error::git rev-parse HEAD produced an empty build id"; exit 1; }
           echo "value=$id" >> "$GITHUB_OUTPUT"
 
+      # The v1.4.0 aarch64 leg died with exit 143 ("runner received a shutdown signal") after
+      # 1h38m in the fat-LTO compile, where v1.3.9 finished in 55 min. Thin LTO bounds the
+      # single-module memory peak, like the other ARM64 legs; x86_64 keeps fat LTO. ~keep
       - name: Build Python wheel via Alpine Docker
         run: |
           docker build -f docker/Dockerfile.musl-python \
             --build-arg XBERG_BUILD_ID=${{ steps.build_id.outputs.value }} \
             --build-arg TARGET=${{ matrix.target }} \
+            --build-arg CARGO_PROFILE_RELEASE_LTO=${{ matrix.arch == 'aarch64' && 'thin' || 'fat' }} \
             --output type=local,dest=./build-output .
 
       - name: Verify musl wheel produced

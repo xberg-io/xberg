@@ -502,6 +502,22 @@ def test_normal_php_retry_preserves_release_and_cancellation_guards() -> None:
         assert evaluate_condition(expression, context) is expected, (dry_run, available, crates_result)
 
 
+def test_python_musl_arm64_builds_with_thin_lto() -> None:
+    block = job_block(WORKFLOW.read_text(), "python-wheels-musl")
+    arches = re.findall(r"arch: (\w+), target:", block)
+    assert sorted(arches) == ["aarch64", "x86_64"]
+    [selector] = re.findall(r"--build-arg CARGO_PROFILE_RELEASE_LTO=\$\{\{ (.+) \}\}", block)
+    for arch in arches:
+        resolved = evaluate_expression(selector, {"matrix": {"arch": arch}})
+        assert resolved == ("thin" if arch == "aarch64" else "fat"), arch
+
+    dockerfile = (WORKFLOW.parents[2] / "docker" / "Dockerfile.musl-python").read_text()
+    build_step = dockerfile.index("maturin build --release")
+    declared = dockerfile.index("ARG CARGO_PROFILE_RELEASE_LTO")
+    exported = dockerfile.index('export CARGO_PROFILE_RELEASE_LTO="${CARGO_PROFILE_RELEASE_LTO')
+    assert declared < exported < build_step
+
+
 def test_php_tagged_dry_run_cannot_upload_or_publish() -> None:
     workflow = WORKFLOW.read_text()
     outputs = {"dry_run": "true", "is_tag": "true", "release_php": "true", "force_republish": "true"}
