@@ -492,3 +492,262 @@ mod html {
         assert_eq!(html.matches("<td").count(), 6, "{html}");
     }
 }
+
+#[test]
+fn ruled_parent_requires_rule_through_final_year_track() {
+    use crate::layout::models::tatr::CellBBox;
+
+    let cells: Vec<_> = (0..4)
+        .map(|col| CellBBox {
+            x1: col as f32 * 50.0,
+            x2: (col + 1) as f32 * 50.0,
+            y1: 30.0,
+            y2: 50.0,
+        })
+        .collect();
+    for (rule_start, rule_end, expected) in [
+        (50, 200, Some((50.0, 200.0, 28.0))),
+        (50, 150, None),
+        (0, 200, None),
+        (55, 200, None),
+        (50, 216, None),
+    ] {
+        let mut image = image::RgbImage::from_pixel(220, 50, image::Rgb([255; 3]));
+        for x in rule_start..rule_end {
+            image.put_pixel(x, 28, image::Rgb([0; 3]));
+        }
+        let crop = TatrCrop {
+            image,
+            px_left: 0,
+            px_top: 0,
+            width: 220,
+            height: 50,
+            sx: 1.0,
+            sy: 1.0,
+            extended_bottom_pt: 50.0,
+        };
+        assert_eq!(
+            ruled_year_parent(&crop, &cells, 54.0, 105.0, 145.0, 25.0, 30.0),
+            expected
+        );
+    }
+}
+
+#[test]
+fn ruled_parent_assembly_preserves_span_and_word_ownership_with_crop_offset() {
+    use crate::layout::models::tatr::{CellBBox, TableStructure};
+
+    let inference = TatrInference {
+        cells: (0..3)
+            .map(|row| {
+                (0..4)
+                    .map(|col| CellBBox {
+                        x1: col as f32 * 50.0,
+                        x2: (col + 1) as f32 * 50.0,
+                        y1: 30.0 + row as f32 * 20.0,
+                        y2: 50.0 + row as f32 * 20.0,
+                    })
+                    .collect()
+            })
+            .collect(),
+        structure: TableStructure {
+            header_row_count: 1,
+            spans: vec![(1, 3, 1, 3)],
+        },
+    };
+    let word = |text: &str, left, top, width| HocrWord {
+        text: text.into(),
+        left,
+        top,
+        width,
+        height: 4,
+        confidence: 99.0,
+    };
+    let words = vec![
+        word("Outside", 2, 5, 10),
+        word("Year", 64, 20, 8),
+        word("Ended", 74, 20, 11),
+        word("December", 87, 20, 12),
+        word("Units", 24, 31, 12),
+        word("2024", 49, 31, 12),
+        word("2023", 74, 31, 12),
+        word("2022", 99, 31, 12),
+        word("Capital", 24, 41, 12),
+        word("Long", 49, 41, 12),
+        word("term", 74, 41, 12),
+        word("12", 99, 41, 12),
+        word("Balance", 24, 51, 12),
+        word("100", 49, 51, 12),
+        word("200", 74, 51, 12),
+        word("300", 99, 51, 12),
+    ];
+    let hint = LayoutHint {
+        class_name: LayoutHintClass::Table,
+        confidence: 0.99,
+        left: 20.0,
+        right: 120.0,
+        top: 80.0,
+        bottom: 42.0,
+    };
+    let page_result = crate::pdf::structure::types::PageLayoutResult {
+        page_width_pts: 120.0,
+        page_height_pts: 100.0,
+    };
+    for (rule_start, rule_end, last_word_offset, accepted) in [
+        (50, 200, 0_i32, true),
+        (50, 150, 0, false),
+        (0, 200, 0, false),
+        (50, 200, 6, false),
+        (50, 200, -3, false),
+    ] {
+        let mut words = words.clone();
+        words[3].left = words[3].left.checked_add_signed(last_word_offset).unwrap();
+        let mut image = image::RgbImage::from_pixel(200, 90, image::Rgb([255; 3]));
+        for x in rule_start..rule_end {
+            image.put_pixel(x, 28, image::Rgb([0; 3]));
+        }
+        let crop = TatrCrop {
+            image: image.clone(),
+            px_left: 40,
+            px_top: 28,
+            width: 200,
+            height: 90,
+            sx: 2.0,
+            sy: 2.0,
+            extended_bottom_pt: 58.0,
+        };
+        let context = TatrPageContext {
+            image: &image,
+            words: &words,
+            page_result: &page_result,
+            page_height: 100.0,
+            page_index: 0,
+            allow_single_column: false,
+        };
+        let result = assemble_tatr_table(&inference, &crop, &hint, None, &context).unwrap();
+        let grid = result.grid.as_ref().unwrap();
+        assert_eq!(grid.rows, 3 + u32::from(accepted));
+        let shifted = grid
+            .cells
+            .iter()
+            .find(|cell| cell.row == 1 + u32::from(accepted) && cell.col == 1)
+            .unwrap();
+        assert_eq!(
+            (shifted.content.as_str(), shifted.row_span, shifted.col_span),
+            ("Long term 100 200", 2, 2)
+        );
+        let consumed: Vec<_> = result.consumed_word_ids.iter().copied().collect();
+        assert_eq!(consumed, ((if accepted { 1 } else { 4 })..16).collect::<Vec<_>>());
+        if accepted {
+            let parent = grid.cells.iter().find(|cell| cell.row == 0 && cell.col == 1).unwrap();
+            assert_eq!(
+                (parent.content.as_str(), parent.col_span, parent.is_header),
+                ("Year Ended December", 3, true)
+            );
+        }
+    }
+}
+
+#[test]
+fn ruled_parent_assembly_accepts_pinned_track_geometry_and_rejects_offset_words() {
+    use crate::layout::models::tatr::{CellBBox, TableStructure};
+
+    let tracks = [(2.60, 751.33), (766.56, 960.33), (969.46, 1060.15), (1059.81, 1106.98)];
+    let inference = TatrInference {
+        cells: [(26.31, 46.70), (46.88, 73.88), (73.88, 100.0)]
+            .map(|(y1, y2)| tracks.iter().map(|&(x1, x2)| CellBBox { x1, y1, x2, y2 }).collect())
+            .to_vec(),
+        structure: TableStructure {
+            header_row_count: 1,
+            spans: vec![],
+        },
+    };
+    let word = |text: &str, left, top, width| HocrWord {
+        text: text.into(),
+        left,
+        top,
+        width,
+        height: 8,
+        confidence: 99.0,
+    };
+    let mut image = image::RgbImage::from_pixel(1140, 110, image::Rgb([255; 3]));
+    for x in 872..1133 {
+        image.put_pixel(x, 24, image::Rgb([0; 3]));
+    }
+    let crop = TatrCrop {
+        image: image.clone(),
+        px_left: 69,
+        px_top: 133,
+        width: 1140,
+        height: 110,
+        sx: 2.0833333,
+        sy: 2.0833333,
+        extended_bottom_pt: 115.0,
+    };
+    let hint = LayoutHint {
+        class_name: LayoutHintClass::Table,
+        confidence: 0.99,
+        left: 34.0,
+        right: 578.0,
+        top: 729.0,
+        bottom: 677.0,
+    };
+    let page_result = crate::pdf::structure::types::PageLayoutResult {
+        page_width_pts: 612.0,
+        page_height_pts: 792.0,
+    };
+    for (shift, expected) in [(0, true), (-20, false)] {
+        let mut words = vec![
+            word("Year", 474, 64, 17),
+            word("Ended", 495, 64, 21),
+            word("December", 521, 64, 34),
+            word("Units", 37, 76, 30),
+            word("2024", 471, 76, 18),
+            word("2023", 514, 76, 18),
+            word("2022", 557, 76, 18),
+            word("Capital", 37, 88, 30),
+            word("100", 471, 88, 18),
+            word("200", 514, 88, 18),
+            word("300", 557, 88, 18),
+            word("Balance", 37, 101, 30),
+            word("400", 471, 101, 18),
+            word("500", 514, 101, 18),
+            word("600", 557, 101, 18),
+        ];
+        for word in &mut words[..3] {
+            word.left = word.left.checked_add_signed(shift).unwrap();
+        }
+        let to_x = |x| x as f32 * crop.sx - crop.px_left as f32;
+        assert_eq!(
+            ruled_year_parent(
+                &crop,
+                &inference.cells[0],
+                to_x(471),
+                to_x(words[0].left),
+                to_x(words[2].left + words[2].width),
+                17.0,
+                inference.cells[0][0].y1,
+            ),
+            Some((872.0, 1133.0, 24.0))
+        );
+        let context = TatrPageContext {
+            image: &image,
+            words: &words,
+            page_result: &page_result,
+            page_height: 792.0,
+            page_index: 0,
+            allow_single_column: false,
+        };
+        let result = assemble_tatr_table(&inference, &crop, &hint, None, &context).unwrap();
+        let grid = result.grid.as_ref().unwrap();
+        assert_eq!(grid.rows, 3 + u32::from(expected));
+        assert_eq!(result.consumed_word_ids.contains(&0), expected);
+        if expected {
+            assert!(grid.cells.iter().any(|cell| cell.row == 0
+                && cell.col == 1
+                && cell.col_span == 3
+                && cell.is_header
+                && cell.content == "Year Ended December"));
+        }
+    }
+}

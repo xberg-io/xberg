@@ -405,6 +405,8 @@ fn assemble_tatr_table(
     if !tatr_grid_is_credible(&grid_output, context.page_index, context.allow_single_column) {
         return None;
     }
+    let recovered = recover_ruled_parent(inference, crop, &table_words, &mut grid_output);
+    let inference = recovered.as_ref().unwrap_or(inference);
     let bounding_box = tatr_table_bbox(hint, &table_words, &grid_output, context.page_height);
     let eligible_word_ids = indexed_table_words.iter().map(|(word_id, _)| *word_id).collect();
     let consumed_word_ids = grid_output
@@ -413,7 +415,8 @@ fn assemble_tatr_table(
         .map(|local_id| indexed_table_words[*local_id].0)
         .collect();
     let grid = structure::apply_structure(&mut grid_output.grid, inference, crop, context.page_height);
-    let columns = (inference.structure.header_row_count > 0).then(|| grid_output.grid[0].clone());
+    let columns =
+        (inference.structure.header_row_count > 0).then(|| grid_output.grid[usize::from(recovered.is_some())].clone());
     grid_output.markdown = render_grid_as_markdown(&grid_output.grid);
     Some(RecognizedTatrTable {
         grid: Some(grid),
@@ -428,6 +431,147 @@ fn assemble_tatr_table(
         eligible_word_ids,
         consumed_word_ids,
     })
+}
+
+#[cfg(feature = "layout-detection")]
+fn recover_ruled_parent(
+    inference: &TatrInference,
+    crop: &TatrCrop,
+    words: &[&crate::pdf::table_reconstruct::HocrWord],
+    output: &mut TatrGridOutput,
+) -> Option<TatrInference> {
+    let first = inference.cells.first()?;
+    let years = output.grid.first()?.get(1..)?;
+    if first.len() < 4
+        || inference.structure.header_row_count == 0
+        || !years
+            .iter()
+            .all(|year| year.len() == 4 && year.bytes().all(|b| b.is_ascii_digit()))
+        || !years.windows(2).all(|pair| pair[0] != pair[1])
+    {
+        return None;
+    }
+    let row_top = first[0].y1;
+    let to_x = |x: u32| x as f32 * crop.sx - crop.px_left as f32;
+    let to_y = |y: u32| y as f32 * crop.sy - crop.px_top as f32;
+    let mut ids: Vec<_> = words
+        .iter()
+        .enumerate()
+        .filter(|(_, word)| {
+            let bottom = to_y(word.top.saturating_add(word.height));
+            bottom <= row_top && row_top - bottom <= 12.0 * crop.sy
+        })
+        .collect();
+    ids.sort_by_key(|(_, word)| word.left);
+    let (_, start) = *ids.first()?;
+    if ids.len() < 2
+        || ids.windows(2).any(|pair| {
+            let (_, previous) = pair[0];
+            let (_, next) = pair[1];
+            let previous_end = previous.left.saturating_add(previous.width);
+            next.left < previous_end || next.left - previous_end > previous.height.min(next.height) / 2 + 1
+        })
+        || ids.iter().any(|(id, word)| {
+            output.consumed_word_indices.contains(id)
+                || word.top.abs_diff(start.top) > 2
+                || !word.text.chars().any(char::is_alphabetic)
+        })
+    {
+        return None;
+    }
+    let left = to_x(start.left);
+    let right = to_x(ids.iter().map(|(_, word)| word.left.saturating_add(word.width)).max()?);
+    let top = to_y(ids.iter().map(|(_, word)| word.top).min()?);
+    let bottom = to_y(ids.iter().map(|(_, word)| word.top.saturating_add(word.height)).max()?);
+    let year_center = |year: &str| {
+        let mut matches = output.consumed_word_indices.iter().filter_map(|&id| {
+            let word = words[id];
+            (word.text == year && to_y(word.top) < first[0].y2 && to_y(word.top.saturating_add(word.height)) > row_top)
+                .then(|| (to_x(word.left), word.width as f32 * crop.sx / 2.0))
+        });
+        let center = matches.next()?;
+        matches.next().is_none().then_some(center)
+    };
+    let (first_label_left, first_half_width) = year_center(years.first()?)?;
+    let (last_label_left, last_half_width) = year_center(years.last()?)?;
+    let track_center = (first_label_left + first_half_width + last_label_left + last_half_width) / 2.0;
+    if ((left + right) / 2.0 - track_center).abs() > 10.0 * crop.sx {
+        return None;
+    }
+    let rule = ruled_year_parent(crop, first, first_label_left, left, right, bottom, row_top)?;
+    let mut recovered = TatrInference {
+        cells: inference.cells.clone(),
+        structure: inference.structure.clone(),
+    };
+    let parent = first
+        .iter()
+        .enumerate()
+        .map(|(col, cell)| crate::layout::models::tatr::CellBBox {
+            x1: if col == 1 { rule.0 } else { cell.x1 },
+            x2: if col + 1 == first.len() { rule.1 } else { cell.x2 },
+            y1: top,
+            y2: rule.2,
+        })
+        .collect();
+    recovered.cells.insert(0, parent);
+    recovered.structure.header_row_count += 1;
+    for span in &mut recovered.structure.spans {
+        span.0 += 1;
+        span.1 += 1;
+    }
+    recovered.structure.spans.push((0, 1, 1, first.len()));
+    let mut row = vec![String::new(); first.len()];
+    row[1] = ids
+        .iter()
+        .map(|(_, word)| word.text.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    output.grid.insert(0, row);
+    output.consumed_word_indices.extend(ids.into_iter().map(|(id, _)| id));
+    Some(recovered)
+}
+
+#[cfg(feature = "layout-detection")]
+fn ruled_year_parent(
+    crop: &TatrCrop,
+    cells: &[crate::layout::models::tatr::CellBBox],
+    first_label_left: f32,
+    left: f32,
+    right: f32,
+    bottom: f32,
+    row_top: f32,
+) -> Option<(f32, f32, f32)> {
+    let last = cells.last()?;
+    if bottom < 0.0 || left < cells[1].x1 || right > last.x2 {
+        return None;
+    }
+    // Model track 1 includes whitespace before its right-aligned year label.
+    // Bound an inset rule start by the assigned label rather than that whitespace. ~keep
+    let start_tolerance = 20.0 * crop.sx;
+    let end_tolerance = 14.0 * crop.sx;
+    for y in bottom.ceil() as u32..(row_top.ceil() as u32).min(crop.height) {
+        let mut x = 0;
+        while x < crop.width {
+            let start = x;
+            while x < crop.width && crop.image.get_pixel(x, y).0.iter().all(|&channel| channel < 200) {
+                x += 1;
+            }
+            let rule_left = start as f32;
+            let rule_right = x as f32;
+            if rule_left >= cells[0].x2
+                && rule_left <= left
+                && rule_right >= right
+                && rule_left <= first_label_left
+                && first_label_left - rule_left <= start_tolerance
+                && rule_right >= last.x2
+                && rule_right - last.x2 <= end_tolerance
+            {
+                return Some((rule_left, rule_right, y as f32));
+            }
+            x += 1;
+        }
+    }
+    None
 }
 
 #[cfg(feature = "layout-detection")]
