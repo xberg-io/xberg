@@ -247,6 +247,16 @@ impl ExtractInput {
         }
     }
 
+    /// Reconstruct an extraction input from metadata and out-of-band bytes for native bindings.
+    pub fn from_json_with_bytes(bytes: Vec<u8>, metadata_json: String) -> crate::Result<Self> {
+        let mut input: Self = serde_json::from_str(&metadata_json)?;
+        if input.bytes.is_some() {
+            return Err(crate::XbergError::validation("extract input metadata must omit bytes"));
+        }
+        input.bytes = Some(bytes);
+        Ok(input)
+    }
+
     /// Build a URI input from a local path, `file://` URI, or HTTP(S) URL.
     pub fn from_uri(uri: impl Into<String>) -> Self {
         Self {

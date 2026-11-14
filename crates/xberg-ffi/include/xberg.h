@@ -11190,6 +11190,16 @@ XBERGAlefHandle xberg_extract_input_from_json(const char *json);
 char *xberg_extract_input_to_json(XBERGAlefHandle handle);
 
 /**
+ * Consume a factory result and return its metadata JSON and optional raw byte
+ * buffer. # Safety All output slots must be writable and disjoint. The caller
+ * owns the handle slot and must free a returned string and byte buffer with the
+ * corresponding library functions.
+ */
+char *xberg_extract_input_alef_take_factory_bytes(XBERGAlefHandle *handle,
+                                                  uint8_t **out_bytes,
+                                                  uintptr_t *out_len);
+
+/**
  * Free a `ExtractInput` handle.
  * # Safety
  * Handle must have been returned by this library, or be zero.
@@ -11265,6 +11275,15 @@ XBERGAlefHandle xberg_extract_input_from_bytes(const uint8_t *bytes,
                                                uintptr_t bytes_len,
                                                const char *mime_type,
                                                const char *filename);
+
+/**
+ * Reconstruct an extraction input from metadata and out-of-band bytes for
+ * native bindings.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+XBERGAlefHandle xberg_extract_input_from_json_with_bytes(
+    const uint8_t *bytes, uintptr_t bytes_len, const char *metadata_json);
 
 /**
  * Build a URI input from a local path, `file://` URI, or HTTP(S) URL.
@@ -30903,6 +30922,18 @@ XBERGAlefHandle xberg_doctor(XBERGAlefHandle config);
 XBERGAlefHandle xberg_extract(XBERGAlefHandle input, XBERGAlefHandle config);
 
 /**
+ * Extract content from a single bytes or URI input.
+ *
+ * The input pointer must address a writable handle. The slot is cleared when
+ * ownership transfers, even if extraction fails. A nonzero handle remains
+ * caller-owned.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+XBERGAlefHandle xberg_extract_owned(XBERGAlefHandle *input,
+                                    XBERGAlefHandle config);
+
+/**
  * Cancellable variant of `xberg_extract`.
  *
  * Takes a trailing `alef_cancel_token` created by `xberg_cancel_token_new`.
@@ -31063,6 +31094,27 @@ XBERGAlefHandle xberg_extract_with_external_redaction(
 
 #if defined(XBERG_FEATURE_REDACTION)
 /**
+ * Extract one bytes input and redact a JSON array or JSON Lines payload from an
+ * external inspection engine.
+ *
+ * The payload is parsed in Rust so vendor aliases and nested fields remain
+ * intact across language bindings. `offset_encoding` defaults to
+ * `unicode_code_points` and `max_findings` defaults to 10,000 when omitted.
+ * Unknown encodings return a validation error.
+ *
+ * The input pointer must address a writable handle. The slot is cleared when
+ * ownership transfers, even if extraction fails. A nonzero handle remains
+ * caller-owned.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+XBERGAlefHandle xberg_extract_with_external_redaction_owned(
+    XBERGAlefHandle *input, XBERGAlefHandle config, const char *findings_json,
+    const char *offset_encoding, uint32_t max_findings);
+#endif
+
+#if defined(XBERG_FEATURE_REDACTION)
+/**
  * Cancellable variant of `xberg_extract_with_external_redaction`.
  *
  * Takes a trailing `alef_cancel_token` created by `xberg_cancel_token_new`.
@@ -31102,6 +31154,28 @@ XBERGAlefHandle xberg_extract_with_external_redaction_cancellable(
 XBERGAlefHandle xberg_extract_with_layout_pages(XBERGAlefHandle input,
                                                 XBERGAlefHandle config,
                                                 const char *pages);
+#endif
+
+#if (defined(XBERG_FEATURE_PDF) && defined(XBERG_FEATURE_LAYOUT_DETECTION))
+/**
+ * Extract one PDF bytes input with layout inference restricted to explicit
+ * 1-based pages.
+ *
+ * This call enables layout on the native PDF route even when ordinary
+ * extraction leaves it disabled. Selected pages override the automatic layout
+ * gate; an empty list skips layout inference. Invalid pages are ignored with
+ * processing warnings. Both extraction caches are bypassed. This additive entry
+ * point leaves existing extraction configuration structs unchanged.
+ *
+ * The input pointer must address a writable handle. The slot is cleared when
+ * ownership transfers, even if extraction fails. A nonzero handle remains
+ * caller-owned.
+ * \note SAFETY: Caller must ensure all pointer arguments are valid or null.
+ * Returned pointers must be freed with the appropriate free function.
+ */
+XBERGAlefHandle xberg_extract_with_layout_pages_owned(XBERGAlefHandle *input,
+                                                      XBERGAlefHandle config,
+                                                      const char *pages);
 #endif
 
 #if (defined(XBERG_FEATURE_PDF) && defined(XBERG_FEATURE_LAYOUT_DETECTION))
