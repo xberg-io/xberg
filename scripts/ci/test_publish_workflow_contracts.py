@@ -315,6 +315,114 @@ def test_python_wheels_build_from_sha_in_dry_run_only() -> None:
             assert not evaluate_condition(publish, context)
 
 
+def test_android_dry_run_and_live_release_gates() -> None:
+    workflow = WORKFLOW.read_text()
+    native = job_if_expression(job_block(workflow, "kotlin-android-natives"))
+    publish = job_if_expression(job_block(workflow, "publish-kotlin-android"))
+    check = job_if_expression(job_block(workflow, "check-maven"))
+    assert "release_kotlin_android: ${{ steps.meta.outputs.release_kotlin_android }}" in job_block(workflow, "prepare")
+    outputs = {"release_kotlin_android": "true", "release_kotlin": "false", "release_java": "false"}
+    needs = {
+        "prepare": {"result": "success", "outputs": outputs},
+        "check_maven": {"result": "skipped", "outputs": {"kotlin_exists": ""}},
+        "publish_crates": {"result": "skipped"},
+        "kotlin_android_natives": {"result": "success"},
+    }
+    context = {"inputs": {"plugins_only": False}, "cancelled": False, "needs": needs}
+    for dry, tag, registry, exists, force, expected in (
+        ("true", "false", "skipped", "", "false", True),
+        ("true", "true", "success", "true", "false", True),
+        ("false", "false", "skipped", "", "false", False),
+        ("false", "true", "skipped", "", "true", False),
+        ("false", "true", "failure", "", "true", False),
+        ("false", "true", "success", "false", "false", True),
+        ("false", "true", "success", "true", "false", False),
+        ("false", "true", "success", "true", "true", True),
+    ):
+        outputs.update(dry_run=dry, is_tag=tag, force_republish=force)
+        needs["check_maven"] = {"result": registry, "outputs": {"kotlin_exists": exists}}
+        assert evaluate_condition(check, context) is (tag == "true" and dry == "false")
+        for expression in (native, publish):
+            assert evaluate_condition(expression, context) is expected, (dry, tag, registry, exists, force)
+
+    outputs.update(release_kotlin_android="false", release_kotlin="true")
+    assert all(evaluate_condition(expr, context) for expr in (check, native, publish))
+    outputs.update(release_kotlin_android="true", release_kotlin="false")
+
+    for dependency, results, expressions in (
+        ("prepare", ("failure", "skipped", "cancelled"), (native, publish)),
+        ("kotlin_android_natives", ("failure", "skipped", "cancelled"), (publish,)),
+        ("publish_crates", ("failure", "cancelled"), (publish,)),
+    ):
+        original = needs[dependency]["result"]
+        for result in results:
+            needs[dependency]["result"] = result
+            assert all(not evaluate_condition(expr, context) for expr in expressions), (dependency, result)
+        needs[dependency]["result"] = original
+
+    for disable in ("cancelled", "plugins_only", "release_kotlin"):
+        context["cancelled"] = disable == "cancelled"
+        context["inputs"]["plugins_only"] = disable == "plugins_only"
+        outputs["release_kotlin_android"] = str(disable != "release_kotlin").lower()
+        assert not evaluate_condition(native, context), disable
+        assert not evaluate_condition(publish, context), disable
+
+
+def test_android_dry_run_stages_both_abis_and_executes_only_aar_verification() -> None:
+    workflow = WORKFLOW.read_text()
+    native = job_block(workflow, "kotlin-android-natives")
+    publish = job_block(workflow, "publish-kotlin-android")
+    assert re.findall(r"(?m)^          - \{ abi: (.+) \}$", native) == ["arm64-v8a", "x86_64"]
+    assert "          abis: ${{ matrix.abi }}" in native
+    assert "          name: kotlin-android-${{ matrix.abi }}" in native
+    assert "          if-no-files-found: error" in native
+
+    [source] = re.findall(r"(?m)^      source_sha: (.+)$", job_block(workflow, "prepare"))
+    assert source == "${{ steps.release-source.outputs.commit }}"
+    assert re.search(
+        r"(?m)^        id: release-source\n        uses: actions/checkout@", job_block(workflow, "prepare")
+    )
+    for block, live_ref in ((native, "checkout_ref"), (publish, "ref")):
+        [ref] = re.findall(r"(?m)^          ref: (.+)$", re.split(r"(?m)^(?=      - )", block)[1])
+        assert ref == (
+            "${{ needs.prepare.outputs.dry_run == 'true' && "
+            f"needs.prepare.outputs.source_sha || needs.prepare.outputs.{live_ref}" + " }}"
+        )
+
+    steps = re.split(r"(?m)^(?=      - )", publish)
+    [download] = [step for step in steps if "uses: actions/download-artifact@" in step]
+    assert "          pattern: kotlin-android-*" in download
+    assert "          merge-multiple: true" in download
+    [stage] = [step for step in steps if "verify-android-jni.py stage" in step]
+    [verify] = [step for step in steps if "run: gradle " in step]
+    [action] = [step for step in steps if "uses: xberg-io/actions/publish-maven-gradle@v1" in step]
+    [guard] = [step for step in steps if "ref: ${{ github.workflow_sha }}" in step]
+    assert steps.index(download) < steps.index(guard) < steps.index(stage) < steps.index(action) < steps.index(verify)
+    assert (
+        "extra-args: -I ../../.release-tools/scripts/ci/verify-android-aar.init.gradle -Palef.skipAndroidJni=true"
+        in action
+    )
+    assert "        if:" not in stage
+    assert "          dry-run: ${{ needs.prepare.outputs.dry_run }}" in action
+    assert "          expected-version: ${{ needs.prepare.outputs.tag }}" in action
+    bindings = re.findall(r"(?m)^          MAVEN_[A-Z_]+: \$\{\{ (.+) \}\}$", action)
+    assert len(bindings) == 4
+    context = {"needs": {"prepare": {"outputs": {"dry_run": "true"}}}}
+    for binding in bindings:
+        assert evaluate_expression(binding, context) == ""
+    assert "        if: ${{ needs.prepare.outputs.dry_run == 'true' }}" in verify
+    assert "        working-directory: packages/kotlin-android" in verify
+    [command] = re.findall(r"(?m)^        run: (.+)$", verify)
+    assert shlex.split(command) == [
+        "gradle",
+        "--no-daemon",
+        "-I",
+        "../../.release-tools/scripts/ci/verify-android-aar.init.gradle",
+        "-Palef.skipAndroidJni=true",
+        "verifyReleaseAarJni",
+    ]
+
+
 def test_normal_php_retry_preserves_release_and_cancellation_guards() -> None:
     expression = job_if_expression(job_block(WORKFLOW.read_text(), "php-extension"))
     for plugins_only, cancelled, dry_run, crates_result, expected in (
@@ -646,17 +754,6 @@ def test_go_zig_install_keeps_mise_on_the_musl_legs() -> None:
     assert mutated != block
     with rejected_contract("Zig installation must be restricted to GNU targets"):
         assert_go_zig_install_is_gnu_only(mutated)
-
-
-def test_android_release_guards_use_workflow_revision_and_precede_publish() -> None:
-    block = job_block(WORKFLOW.read_text(), "publish-kotlin-android")
-    assert "ref: ${{ needs.prepare.outputs.ref }}" in block
-    guard = block.index("ref: ${{ github.workflow_sha }}")
-    stage = block.index("verify-android-jni.py stage")
-    publish = block.index("uses: xberg-io/actions/publish-maven-gradle@v1")
-    assert guard < stage < publish
-    assert "extra-args: -I ../../.release-tools/scripts/ci/verify-android-aar.init.gradle" in block
-    assert "-Palef.skipAndroidJni=true" in block
 
 
 def test_glibc_native_closures_are_strictly_verified() -> None:
