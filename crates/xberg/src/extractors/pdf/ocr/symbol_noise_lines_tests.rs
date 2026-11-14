@@ -134,6 +134,16 @@ fn prunes_a_lone_capitalized_trigram_without_a_closing_mark_and_keeps_an_accente
 }
 
 #[test]
+fn noisy_page_drops_bare_tee_and_ces_but_keeps_printed_phrases() {
+    let printed = ["Tee connector", "Ces notes", "SECTION TITLE", "Yes."];
+    let noisy = page(&["Tee", "Ces"], 12) + "\n\n" + &printed.join("\n\n");
+    assert!(page_is_dominated_by_noise_lines(noisy.lines()));
+    assert_eq!(prune_text(&noisy), (printed.join("\n\n"), 14));
+    let clean = ["Tee", "Ces", "Tee connector", "Ces notes", "SECTION TITLE"];
+    assert!(!page_is_dominated_by_noise_lines(clean.into_iter()));
+}
+
+#[test]
 fn a_lone_capitalized_trigram_is_dropped_from_a_noise_page_but_does_not_make_one() {
     let real = ["alpha beta", "gamma delta", "epsilon zeta", "theta iota"];
     let mut lines = real.to_vec();

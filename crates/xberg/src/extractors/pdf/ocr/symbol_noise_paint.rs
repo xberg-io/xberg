@@ -311,6 +311,79 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires the qualified CAS PDF and English model in XBERG_2943_PAINT and XBERG_2943_TESSDATA"]
+    async fn opaque_annotation_appearance_cannot_prove_covered_letter_strokes() {
+        use lopdf::{Object, Stream, dictionary};
+        use std::sync::Arc;
+
+        let directory = std::env::var_os("XBERG_2943_PAINT").unwrap();
+        let path = std::path::Path::new(&directory).join("cas-ink-280.pdf");
+        let ocr = OcrConfig {
+            tessdata_path: Some(std::env::var_os("XBERG_2943_TESSDATA").unwrap().into()),
+            ..Default::default()
+        };
+        for (x, y, expected) in [(10, 10, true), (63, 483, false)] {
+            let mut doc = lopdf::Document::load(&path).unwrap();
+            let page = doc.get_pages()[&1];
+            let page_dict = doc.get_object(page).unwrap().as_dict().unwrap();
+            assert!(!page_dict.has(b"Annots"));
+            let appearance = doc.add_object(Stream::new(
+                dictionary! {
+                    "Type" => "XObject", "Subtype" => "Form",
+                    "BBox" => vec![0.into(), 0.into(), 41.into(), 27.into()],
+                    "Resources" => lopdf::Dictionary::new(),
+                },
+                b"q 1 g 0 0 41 27 re f Q".to_vec(),
+            ));
+            let annotation = doc.add_object(dictionary! {
+                "Type" => "Annot", "Subtype" => "Square",
+                "Rect" => vec![x.into(), y.into(), (x + 41).into(), (y + 27).into()],
+                "AP" => dictionary! { "N" => Object::Reference(appearance) },
+                "F" => 4,
+            });
+            doc.get_object_mut(page)
+                .unwrap()
+                .as_dict_mut()
+                .unwrap()
+                .set("Annots", vec![Object::Reference(annotation)]);
+            let mut bytes = Vec::new();
+            doc.save_to(&mut bytes).unwrap();
+            let pdf = Arc::new(PdfDocument::from_bytes(bytes).unwrap());
+            let (width, height, luminance) =
+                xberg_native_pdf::rendering::render_page_without_glyphs(&pdf, 0, PROBE_DPI, MAX_WORKING_BYTES).unwrap();
+            let image = GrayImage::from_raw(width, height, luminance).unwrap();
+            let glyph_area = image::imageops::crop_imm(&image, 141, 601, 64, 31).to_image();
+            assert_eq!(
+                glyph_area.pixels().all(|pixel| pixel.0 == [255]),
+                !expected,
+                "the normal page render must paint the overlapping opaque appearance"
+            );
+
+            let planned = PlannedPaint {
+                page: 0,
+                raster: (2550, 3300),
+                image: ObjectRef::new(9, 0),
+                bytes: MAX_WORKING_BYTES,
+                geometry: OcrBoundingGeometry::Rectangle {
+                    left: 281,
+                    top: 1201,
+                    width: 130,
+                    height: 64,
+                },
+                retention: Retention {
+                    transcript: blake3::hash(b"CAS"),
+                    word: "CAS".to_owned(),
+                },
+            };
+            assert_eq!(
+                planned.verify(pdf, &ExtractionConfig::default(), &ocr).await.is_some(),
+                expected,
+                "annotation at ({x}, {y})"
+            );
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires the qualified CAS PDF and English model in XBERG_2943_PAINT and XBERG_2943_TESSDATA"]
     async fn exposed_margin_cannot_prove_occluded_letter_strokes() {
         let directory = std::env::var_os("XBERG_2943_PAINT").unwrap();
         let path = std::path::Path::new(&directory).join("cas-ink-280.pdf");

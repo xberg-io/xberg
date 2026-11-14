@@ -542,8 +542,9 @@ fn render_luminance(
 }
 
 /// Render the page, render only the selected image, or omit that image.
-/// Annotations are excluded from all three views.
-/// The caller reconciles the image's paint placement before using either view.
+/// Composited views include annotation appearances so covered strokes cannot certify visibility.
+/// The isolated image view excludes them to measure only the source paint.
+/// The caller reconciles the image's paint placement before using these views.
 #[doc(hidden)]
 pub fn render_image_paint_luminance(
     doc: &crate::document::PdfDocument,
@@ -559,7 +560,7 @@ pub fn render_image_paint_luminance(
     };
     let _scope = crate::extractors::recovery_tally::RecoveryScope::enter(doc.recovery_counts());
     let mut options = RenderOptions::with_dpi(dpi).as_raw();
-    options.render_annotations = false;
+    options.render_annotations = include != Some(true);
     let mut renderer = PageRenderer::new(options);
     if include == Some(true) {
         renderer = renderer.without_text_ink();
