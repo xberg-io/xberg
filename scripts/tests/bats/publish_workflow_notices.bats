@@ -141,6 +141,50 @@ SH
 	[[ "$output" != *'archive reached smoke'* ]]
 }
 
+@test "musl Elixir dry run should resolve the source package version" {
+	mkdir -p packages/elixir
+	printf '      version: "4.5.6",\n' >packages/elixir/mix.exs
+	export RELEASE_VERSION=0.0.0-dryrun-abcdef DRY_RUN=true
+	extract_run elixir-natives-musl 'Resolve Elixir NIF version'
+	run bash "$XBERG_WORK/step.sh"
+	xberg_assert_status 0
+	grep -Fxq 'version=4.5.6' "$GITHUB_OUTPUT"
+	: >"$GITHUB_OUTPUT"
+	export DRY_RUN=false RELEASE_VERSION=9.8.7
+	run bash "$XBERG_WORK/step.sh"
+	xberg_assert_status 0
+	grep -Fxq 'version=9.8.7' "$GITHUB_OUTPUT"
+}
+
+@test "Elixir rebuild upload should reject failed legs and a missing current-run archive" {
+	extract_run prepare 'List expected Elixir NIF assets'
+	bash "$XBERG_WORK/step.sh"
+	export NIF_ASSETS
+	NIF_ASSETS="$(sed -n 's/^names=//p' "$GITHUB_OUTPUT")"
+	extract_run upload-elixir-release 'Require successful Elixir builds'
+	export BUILD_RESULTS='success failure success'
+	run bash "$XBERG_WORK/step.sh"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'All Elixir NIF build jobs must succeed'
+	export BUILD_RESULTS='success success success'
+	run bash "$XBERG_WORK/step.sh"
+	xberg_assert_status 0
+
+	extract_run upload-elixir-release 'Verify current-run Elixir archives'
+	mkdir -p dist/elixir
+	local -a names
+	IFS=, read -ra names <<<"$NIF_ASSETS"
+	for name in "${names[@]}"; do
+		printf archive >"dist/elixir/$name"
+	done
+	run bash "$XBERG_WORK/step.sh"
+	xberg_assert_status 0
+	rm "dist/elixir/${names[5]}"
+	run bash "$XBERG_WORK/step.sh"
+	xberg_assert_status 1
+	xberg_assert_output_contains "${names[5]}"
+}
+
 @test "Dart desktop workflow should retain canonical bytes in the final checksummed download" {
 	extract_run upload-dart-release 'Package server natives as tarballs'
 	mkdir -p dart-server-artifacts/dart-server-linux-x64

@@ -2971,7 +2971,7 @@ jobs:
     name: Build Elixir NIF (linux-musl-${{ matrix.arch }} nif-${{ matrix.nif }})
     needs: [prepare, check-elixir-release, publish-crates]
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_elixir == 'true' && (needs.check-elixir-release.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_elixir == 'true' && (needs.prepare.outputs.dry_run == 'true' || needs.check-elixir-release.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.timeout }}
     strategy:
@@ -2996,6 +2996,21 @@ jobs:
           fetch-depth: 0
 
           submodules: false
+      - name: Resolve Elixir NIF version
+        id: nif-version
+        shell: bash
+        env:
+          DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          version="$RELEASE_VERSION"
+          if [[ "$DRY_RUN" == 'true' ]]; then
+            version="$(sed -n 's/^ *version: "\([^"]*\)",$/\1/p' packages/elixir/mix.exs)"
+          fi
+          [[ -n "$version" && "$version" != *$'\n'* ]]
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
       # `.dockerignore` excludes `**/.git/`, so build.rs cannot derive XBERG_BUILD_ID inside the
       # container and falls back to `""`, collapsing every artifact built at one crate version into
       # a single OCR cache key space (#1845). Asserted non-empty here because an empty
@@ -3018,7 +3033,7 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
           NIF_API: ${{ matrix.nif }}
-          NIF_VERSION: ${{ needs.prepare.outputs.version }}
+          NIF_VERSION: ${{ steps.nif-version.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
@@ -3037,7 +3052,7 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
           NIF_API: ${{ matrix.nif }}
-          NIF_VERSION: ${{ needs.prepare.outputs.version }}
+          NIF_VERSION: ${{ steps.nif-version.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
@@ -4008,16 +4023,24 @@ jobs:
 
   upload-elixir-release:
     name: Upload Elixir NIF archives to GitHub Release
-    needs: [prepare, elixir-natives, elixir-natives-musl, elixir-natives-manylinux]
-    # `is_tag` alone does NOT exclude a dry run -- prepare synthesizes
-    # `v<version>-dryrun-<sha>`, so `is_tag` is true there too. Without the
-    # dry_run test this job would start uploading release assets as soon as the
-    # native builds stopped failing, and its download-artifact would find
-    # nothing because the dry-run upload above is skipped. ~keep
+    needs: [prepare, check-elixir-release, elixir-natives, elixir-natives-musl, elixir-natives-manylinux]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.elixir-natives.result == 'success' || needs.elixir-natives-musl.result == 'success' || needs.elixir-natives-manylinux.result == 'success')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.dry_run != 'true' &&
+          needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_elixir == 'true' &&
+          (needs.check-elixir-release.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require successful Elixir builds
+        shell: bash
+        env:
+          BUILD_RESULTS: ${{ needs.elixir-natives.result }} ${{ needs.elixir-natives-musl.result }} ${{ needs.elixir-natives-manylinux.result }}
+        run: |
+          set -euo pipefail
+          if [[ "$BUILD_RESULTS" != "success success success" ]]; then
+            echo "::error::All Elixir NIF build jobs must succeed (got $BUILD_RESULTS)"
+            exit 1
+          fi
+
       - uses: actions/create-github-app-token@v3
         id: app-token
         with:
@@ -4030,6 +4053,24 @@ jobs:
           pattern: elixir-*
           path: dist/elixir
           merge-multiple: true
+
+      - name: Verify current-run Elixir archives
+        shell: bash
+        env:
+          NIF_ASSETS: ${{ needs.prepare.outputs.elixir_assets }}
+        run: |
+          set -euo pipefail
+          IFS=, read -ra names <<< "$NIF_ASSETS"
+          if [[ "${#names[@]}" != 6 ]]; then
+            echo "::error::Expected six Elixir NIF asset names"
+            exit 1
+          fi
+          for name in "${names[@]}"; do
+            if [[ ! -s "dist/elixir/$name" ]]; then
+              echo "::error::Missing current-run Elixir NIF archive: $name"
+              exit 1
+            fi
+          done
 
       - uses: xberg-io/actions/upload-release-assets@v1
         with:

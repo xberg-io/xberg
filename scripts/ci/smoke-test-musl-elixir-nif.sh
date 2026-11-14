@@ -56,10 +56,31 @@ docker run --rm \
 
     read -r hash name </staged/checksum
     test "$name" = "$ARCHIVE_NAME"
-    printf "%%{\n  \"%s\" => \"sha256:%s\"\n}\n" "$name" "$hash" >checksum-Elixir.Xberg.Native.exs
+    write_checksum() {
+      printf "%%{\n  \"%s\" => \"sha256:%s\"\n}\n" "$name" "$1" >checksum-Elixir.Xberg.Native.exs
+    }
+    run_loader() {
+      MIX_ENV=prod RUSTLER_PRECOMPILED_GLOBAL_CACHE_PATH="$RUSTLER_CACHE" \
+        elixir -r /loader/lib/rustler_precompiled/config/available_targets.ex \
+          -r /loader/lib/rustler_precompiled/config.ex -r /loader/lib/rustler_precompiled.ex \
+          /smoke/smoke_test_elixir_nif.exs /fixture.pdf "$EXPECTED_TEXT"
+    }
     cp "/staged/$name" "$RUSTLER_CACHE/$name"
-    MIX_ENV=prod RUSTLER_PRECOMPILED_GLOBAL_CACHE_PATH="$RUSTLER_CACHE" \
-      elixir -r /loader/lib/rustler_precompiled/config/available_targets.ex \
-        -r /loader/lib/rustler_precompiled/config.ex -r /loader/lib/rustler_precompiled.ex \
-        /smoke/smoke_test_elixir_nif.exs /fixture.pdf "$EXPECTED_TEXT"
+    write_checksum "$hash"
+    run_loader 2>&1 | tee positive.log
+    grep -F "Copying NIF from cache and extracting to " positive.log | grep -F "${name%.tar.gz}"
+
+    # Keep the same cached archive and change only its expected digest. ~keep
+    rm -r xberg
+    bad_hash=$(printf "%064d" 0)
+    test "$hash" != "$bad_hash"
+    write_checksum "$bad_hash"
+    if run_loader >negative.log 2>&1; then
+      echo "RustlerPrecompiled accepted an incorrect checksum" >&2
+      exit 1
+    fi
+    if ! grep -F "the integrity check failed because the checksum of files does not match" negative.log; then
+      cat negative.log >&2
+      exit 1
+    fi
   '
