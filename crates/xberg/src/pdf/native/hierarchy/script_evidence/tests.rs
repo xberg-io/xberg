@@ -26,11 +26,33 @@ fn should_attach_a_numeric_suffix_with_only_glyph_edge_overhang() {
     assert_eq!(page(vec![base.clone(), script.clone()]).owners.len(), 1);
 
     script.sequence = 32;
+    assert_eq!(page(vec![base.clone(), script.clone()]).owners.len(), 1);
+
+    script.sequence = 33;
     assert_eq!(page(vec![base.clone(), script.clone()]).owners.len(), 0);
+
+    script.sequence = 32;
+    script.mcid_scope = Some(xberg_native_pdf::structure::McidScope::Page(1));
+    assert_eq!(page(vec![base.clone(), script.clone()]).owners.len(), 0);
+    script.mcid_scope = base.mcid_scope;
 
     script.sequence = 31;
     script.bbox.x = 119.9;
     assert_eq!(page(vec![base, script]).owners.len(), 0);
+}
+
+#[test]
+fn should_reject_a_numeric_suffix_when_the_source_gap_contains_a_span() {
+    let mut base = span("R", 100.0, 700.0, 20.0, 12.0);
+    base.sequence = 30;
+    base.provenance = Some(MappingProvenance::ToUnicode);
+    let mut suffix = span("2", 119.96, 704.5, 4.0, 8.0);
+    suffix.sequence = 32;
+    suffix.provenance = base.provenance;
+    let mut intervening = span("unrelated", 300.0, 600.0, 40.0, 12.0);
+    intervening.sequence = 31;
+    intervening.provenance = base.provenance;
+    assert!(page(vec![base, suffix, intervening]).owners.is_empty());
 }
 
 #[test]
@@ -53,10 +75,10 @@ fn should_require_source_continuity_through_a_signed_suffix_run() {
     base.sequence = 30;
     base.provenance = Some(MappingProvenance::ToUnicode);
     let mut sign = span("−", 119.96, 704.5, 4.0, 8.0);
-    sign.sequence = 31;
+    sign.sequence = 32;
     sign.provenance = base.provenance;
     let mut digit = span("4", 123.96, 704.5, 4.0, 8.0);
-    digit.sequence = 32;
+    digit.sequence = 33;
     digit.provenance = base.provenance;
     assert_eq!(page(vec![base.clone(), sign.clone(), digit.clone()]).owners.len(), 2);
 
@@ -65,7 +87,10 @@ fn should_require_source_continuity_through_a_signed_suffix_run() {
     let mut other_marked_content = digit.clone();
     other_marked_content.mcid = Some(1);
     digit.split_boundary_before = true;
-    for unsupported in [inferred, other_marked_content, digit] {
+    let mut after_boundary = digit.clone();
+    after_boundary.split_boundary_before = false;
+    after_boundary.sequence += 1;
+    for unsupported in [inferred, other_marked_content, after_boundary, digit] {
         assert!(page(vec![base.clone(), sign.clone(), unsupported]).owners.is_empty());
     }
 }

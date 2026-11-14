@@ -1,6 +1,6 @@
 //! Private evidence over final preserved spans, with page-local ordinals rather than PDF identities.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use xberg_native_pdf::{fonts::MappingProvenance, layout::TextSpan};
@@ -287,17 +287,22 @@ fn is_numeric_span(text: &str) -> bool {
     !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit())
 }
 
-fn has_adjacent_numeric_source(base: &TextSpan, script: &TextSpan) -> bool {
+fn has_adjacent_numeric_source(base: &TextSpan, script: &TextSpan, occupied_sequences: &HashSet<usize>) -> bool {
     let numeric_base = is_numeric_span(&base.text);
     let numeric_suffix = script.text.strip_prefix('−').map_or_else(
         || is_numeric_span(&script.text),
         |digits| numeric_base && (digits.is_empty() || is_numeric_span(digits)),
     );
-    (numeric_base
-        || (base.text.len() == 1 && base.text.as_bytes()[0].is_ascii_alphabetic())
-        || (base.text.ends_with([')', ']']) && is_numeric_span(&script.text)))
-        && numeric_suffix
-        && has_adjacent_source(base, script)
+    let simple_base = numeric_base || (base.text.len() == 1 && base.text.as_bytes()[0].is_ascii_alphabetic());
+    let bracket_base = base.text.ends_with([')', ']']) && is_numeric_span(&script.text);
+    numeric_suffix
+        && (simple_base || bracket_base)
+        && (has_adjacent_source(base, script)
+            // A separately positioned numeric suffix can start at the next text object. ~keep
+            || (simple_base
+                && base.sequence.checked_add(2) == Some(script.sequence)
+                && !occupied_sequences.contains(&(script.sequence - 1))
+                && has_matching_source_evidence(base, script)))
 }
 
 fn has_adjacent_ordinal_source(base: &TextSpan, suffix: &TextSpan) -> bool {
@@ -320,8 +325,11 @@ fn has_adjacent_ordinal_source(base: &TextSpan, suffix: &TextSpan) -> bool {
 fn has_adjacent_source(left: &TextSpan, right: &TextSpan) -> bool {
     // Preserved-geometry extraction leaves gaps at BT and absolute Tm.
     // Relative Td remains eligible for a raised continuation. ~keep
-    left.sequence.checked_add(1) == Some(right.sequence)
-        && left.mcid_scope.is_some()
+    left.sequence.checked_add(1) == Some(right.sequence) && has_matching_source_evidence(left, right)
+}
+
+fn has_matching_source_evidence(left: &TextSpan, right: &TextSpan) -> bool {
+    left.mcid_scope.is_some()
         && left.mcid_scope == right.mcid_scope
         && left.mcid == right.mcid
         && [left, right].into_iter().all(|span| {
@@ -333,13 +341,14 @@ fn has_adjacent_source(left: &TextSpan, right: &TextSpan) -> bool {
         })
 }
 
-fn eligible_base(base: &TextSpan, script: &TextSpan) -> bool {
+fn eligible_base(base: &TextSpan, script: &TextSpan, occupied_sequences: &HashSet<usize>) -> bool {
     let shift = baseline(script) - baseline(base);
     let ratio = script.font_size / base.font_size;
     let gap = script.bbox.x - base.bbox.right();
     let supported_gap = if gap < 0.0 || script.text.starts_with('−') {
         gap >= -base.font_size * NUMERIC_SUFFIX_OVERHANG_EM
-            && (has_adjacent_numeric_source(base, script) || has_adjacent_ordinal_source(base, script))
+            && (has_adjacent_numeric_source(base, script, occupied_sequences)
+                || has_adjacent_ordinal_source(base, script))
     } else {
         true
     };
@@ -354,7 +363,13 @@ fn eligible_base(base: &TextSpan, script: &TextSpan) -> bool {
         && gap <= base.font_size * super::INLINE_SCRIPT_MAX_SUFFIX_GAP_EM
 }
 
-fn candidate_bases(spans: &[TextSpan], edges: &[(f32, usize)], script: usize, max_font: f32) -> Option<Vec<usize>> {
+fn candidate_bases(
+    spans: &[TextSpan],
+    edges: &[(f32, usize)],
+    script: usize,
+    max_font: f32,
+    occupied_sequences: &HashSet<usize>,
+) -> Option<Vec<usize>> {
     let x = spans[script].bbox.x;
     let start = edges.partition_point(|(right, _)| *right < x - max_font * super::INLINE_SCRIPT_MAX_SUFFIX_GAP_EM);
     let end = edges.partition_point(|(right, _)| *right <= x + max_font * NUMERIC_SUFFIX_OVERHANG_EM);
@@ -364,12 +379,19 @@ fn candidate_bases(spans: &[TextSpan], edges: &[(f32, usize)], script: usize, ma
     Some(
         edges[start..end]
             .iter()
-            .filter_map(|&(_, base)| (base != script && eligible_base(&spans[base], &spans[script])).then_some(base))
+            .filter_map(|&(_, base)| {
+                (base != script && eligible_base(&spans[base], &spans[script], occupied_sequences)).then_some(base)
+            })
             .collect(),
     )
 }
 
-fn complete_run(spans: &[TextSpan], base: usize, first: usize) -> Option<Vec<usize>> {
+fn complete_run(
+    spans: &[TextSpan],
+    base: usize,
+    first: usize,
+    occupied_sequences: &HashSet<usize>,
+) -> Option<Vec<usize>> {
     let mut row: Vec<_> = spans
         .iter()
         .enumerate()
@@ -404,19 +426,27 @@ fn complete_run(spans: &[TextSpan], base: usize, first: usize) -> Option<Vec<usi
     let has_overhang = spans[first].bbox.x < spans[base].bbox.right();
     let has_minus = members.iter().any(|&index| spans[index].text.contains('−'));
     let complete_ordinal = members.len() == 1 && has_adjacent_ordinal_source(&spans[base], &spans[first]);
-    if (has_overhang || has_minus) && !complete_ordinal && !is_complete_numeric_suffix(&spans[base], spans, &members) {
+    if (has_overhang || has_minus)
+        && !complete_ordinal
+        && !is_complete_numeric_suffix(&spans[base], spans, &members, occupied_sequences)
+    {
         return None;
     }
     Some(members)
 }
 
-fn is_complete_numeric_suffix(base: &TextSpan, spans: &[TextSpan], members: &[usize]) -> bool {
+fn is_complete_numeric_suffix(
+    base: &TextSpan,
+    spans: &[TextSpan],
+    members: &[usize],
+    occupied_sequences: &HashSet<usize>,
+) -> bool {
     let Some((&first, rest)) = members.split_first() else {
         return false;
     };
     let first = &spans[first];
     let digits = first.text.strip_prefix('−').unwrap_or(&first.text);
-    has_adjacent_numeric_source(base, first)
+    has_adjacent_numeric_source(base, first, occupied_sequences)
         && (is_numeric_span(digits) || (digits.is_empty() && !rest.is_empty()))
         && rest.iter().all(|&index| is_numeric_span(&spans[index].text))
         && members
@@ -476,19 +506,20 @@ fn collect_owners(spans: &[TextSpan], projected: &[SegmentData]) -> Vec<ScriptOw
         .map(|span| span.font_size)
         .fold(0.0, f32::max);
     let mut owners = Vec::new();
-    let mut claimed = std::collections::HashSet::new();
+    let mut claimed = HashSet::new();
+    let occupied_sequences = spans.iter().map(|span| span.sequence).collect();
     let notes = super::super::text::numeric_notes(spans);
     for (first, _) in spans.iter().enumerate().filter(|(_, span)| compact_marker(span)) {
         if claimed.contains(&first) {
             continue;
         }
-        let Some(candidates) = candidate_bases(spans, &edges, first, max_font) else {
+        let Some(candidates) = candidate_bases(spans, &edges, first, max_font, &occupied_sequences) else {
             continue;
         };
         let [base] = candidates.as_slice() else {
             continue;
         };
-        let Some(members) = complete_run(spans, *base, first) else {
+        let Some(members) = complete_run(spans, *base, first, &occupied_sequences) else {
             continue;
         };
         if has_stacked_counterpart(spans, *base, &members) || has_unclaimed_cohort_record(spans, *base, &members) {
@@ -498,7 +529,7 @@ fn collect_owners(spans: &[TextSpan], projected: &[SegmentData]) -> Vec<ScriptOw
             projected[*base].assigned_role != projected[member].assigned_role
                 || super::super::text::needs_numeric_script_boundary(&spans[*base], &spans[member], &notes, None)
                 || claimed.contains(&member)
-                || candidate_bases(spans, &edges, member, max_font)
+                || candidate_bases(spans, &edges, member, max_font, &occupied_sequences)
                     .is_none_or(|candidates| candidates.iter().any(|candidate| candidate != base))
         }) {
             continue;
