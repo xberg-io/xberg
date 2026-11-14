@@ -11,8 +11,19 @@ fn count(text: &str, target: &str) -> usize {
 }
 
 async fn read(path: &Path, format: OutputFormat, prune: bool, raw_elements: bool) -> ExtractedDocument {
+    read_with_selected_page(path, format, prune, raw_elements, None).await
+}
+
+async fn read_with_selected_page(
+    path: &Path,
+    format: OutputFormat,
+    prune: bool,
+    raw_elements: bool,
+    selected_page: Option<u32>,
+) -> ExtractedDocument {
     let config = ExtractionConfig {
         use_cache: false,
+        force_ocr_pages: selected_page.map(|page| vec![page]),
         output_format: format,
         pages: Some(PageConfig {
             extract_pages: true,
@@ -86,9 +97,10 @@ async fn qualified_pcb_texture_is_pruned_without_losing_the_faint_word() {
                     assert_eq!(count(&after_page.content, anchor), 0, "{file} {format:?} {anchor}");
                     assert!(removals.iter().any(|token| token == anchor));
                 }
-                let mut intended = removals.clone();
-                let expected: Vec<_> = before_page
-                    .content
+                let mut intended: Vec<_> = removals.iter().map(|token| token.replace('’', "'")).collect();
+                let before_content = before_page.content.replace('’', "'");
+                let after_content = after_page.content.replace('’', "'");
+                let expected: Vec<_> = before_content
                     .split_whitespace()
                     .filter(|token| {
                         let Some(index) = intended.iter().position(|removed| removed == token) else {
@@ -102,7 +114,7 @@ async fn qualified_pcb_texture_is_pruned_without_losing_the_faint_word() {
                     intended.is_empty(),
                     "{file} {format:?}: missing intended removals {intended:?}"
                 );
-                let actual: Vec<_> = after_page.content.split_whitespace().collect();
+                let actual: Vec<_> = after_content.split_whitespace().collect();
                 assert_eq!(expected.len(), actual.len(), "{file} {format:?}: token count");
                 if let Some((index, (expected, actual))) = expected
                     .iter()
@@ -123,19 +135,30 @@ async fn qualified_pcb_texture_is_pruned_without_losing_the_faint_word() {
 async fn original_pcb_hole_row_is_removed_in_both_formats() {
     let archive = std::env::var_os("XBERG_2943_ARCHIVE").expect("set XBERG_2943_ARCHIVE");
     let path = Path::new(&archive).join("historical-cli.2Fmdbd/poc-selected.pdf");
+    assert_pcb_row_removed(&path, 3, None).await;
+}
+
+#[tokio::test]
+#[ignore = "requires the original public PDF in XBERG_2943_ORIGINAL_PCB"]
+async fn full_document_page_thirty_three_prunes_only_the_pcb_row() {
+    let path = std::env::var_os("XBERG_2943_ORIGINAL_PCB").expect("set XBERG_2943_ORIGINAL_PCB");
+    assert_pcb_row_removed(Path::new(&path), 33, Some(33)).await;
+}
+
+async fn assert_pcb_row_removed(path: &Path, page: u32, selected_page: Option<u32>) {
     let row = "cece' cocece ceeces coecee wecece cceece ccccee cocece eeeece eeecce ececee";
     let expected: Vec<_> = row.split_whitespace().collect();
     let mut failures = Vec::new();
     for format in [OutputFormat::Plain, OutputFormat::Markdown] {
-        let before = read(&path, format.clone(), false, true).await;
-        let after = read(&path, format.clone(), true, true).await;
+        let before = read_with_selected_page(path, format.clone(), false, true, selected_page).await;
+        let after = read_with_selected_page(path, format.clone(), true, true, selected_page).await;
         assert_eq!(
             serde_json::to_value(&before.ocr_elements).unwrap(),
             serde_json::to_value(&after.ocr_elements).unwrap(),
             "{format:?}: raw recognitions"
         );
-        let before = page_content(&before, 3).replace('’', "'");
-        let after = page_content(&after, 3).replace('’', "'");
+        let before = page_content(&before, page).replace('’', "'");
+        let after = page_content(&after, page).replace('’', "'");
         let tokens: Vec<_> = before.split_whitespace().collect();
         assert_eq!(
             tokens

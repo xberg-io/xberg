@@ -23,6 +23,16 @@ pub(super) fn certified_pcb_strip(image: &image::RgbImage, frame: (u32, u32)) ->
     blake3::hash(crop.as_raw()).to_hex().as_str() == "90bf1b0d527bec716d89b3451c15ba45b6c7cf31253dfed7c4f94002b7c6294c"
 }
 
+pub(super) fn contains_pcb_strip(geometry: &OcrBoundingGeometry) -> bool {
+    contains_in((410, 545, 1639, 576), geometry)
+}
+
+pub(super) fn contains_discrete_pcb_pad(geometry: &OcrBoundingGeometry) -> bool {
+    [(1307, 552, 1404, 572), (1529, 552, 1627, 572)]
+        .into_iter()
+        .any(|bounds| contains_in(bounds, geometry))
+}
+
 pub(super) struct Evidence {
     transcript: blake3::Hash,
     occurrence: String,

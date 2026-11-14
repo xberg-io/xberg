@@ -3656,9 +3656,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     .get(page)
                     .filter(|_| text == read)
                     .and_then(|evidence| evidence.reconcile(text));
-                let pcb_strip = texture_noise_by_page
+                let pcb_row = texture_noise_by_page
                     .get(page)
-                    .is_some_and(|evidence| evidence.matches_pcb_strip(text, read));
+                    .and_then(|evidence| evidence.reconciled_pcb_row(text, read));
                 let mut candidates = texture_noise_by_page
                     .get(page)
                     .map(|evidence| evidence.reconciled_tokens(text, read))
@@ -3670,8 +3670,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     .get(page)
                     .filter(|_| text == read)
                     .and_then(|evidence| evidence.reconcile(text));
-                let pcb_removed = if pcb_strip {
+                let pcb_removed = if let Some(row) = pcb_row {
                     super::symbol_noise_lines::texture::prune_pcb_row(
+                        row,
                         text,
                         ocr_results.get_mut(page),
                         ocr_page_paragraphs.get_mut(page),
