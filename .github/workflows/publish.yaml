@@ -5651,13 +5651,13 @@ jobs:
     # A skipped core publish is usable for a real release only when the exact version is already on npm.
     # Dry runs can use the published fallback version resolved below. ~keep
     if: >-
-      ${{ !inputs.plugins-only && !cancelled() &&
+      ${{ !inputs.plugins-only && (!cancelled() &&
           needs.prepare.result == 'success' && needs.check-npm.result == 'success' &&
           needs.publish-crates.result != 'failure' &&
           needs.prepare.outputs.release_node == 'true' && needs.prepare.outputs.is_tag == 'true' &&
           (needs.publish-node.result == 'success' ||
            (needs.publish-node.result == 'skipped' &&
-            (needs.check-npm.outputs.node_exists == 'true' || needs.prepare.outputs.dry_run == 'true'))) }}
+            (needs.check-npm.outputs.node_exists == 'true' || needs.prepare.outputs.dry_run == 'true')))) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
