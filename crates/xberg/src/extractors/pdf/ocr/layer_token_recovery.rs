@@ -961,3 +961,7 @@ mod pdf_tests;
 #[path = "layer_token_recovery/minority_khmer.rs"]
 mod minority_khmer;
 pub(super) use minority_khmer::{LeadingKhmerRows, apply_minority_khmer, is_english_read, plan_minority_khmer};
+
+#[path = "layer_token_recovery/latin_rows.rs"]
+mod latin_rows;
+pub(super) use latin_rows::recover_latin_rows;

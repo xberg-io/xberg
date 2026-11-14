@@ -2874,6 +2874,26 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 )?;
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 if correction_degrees == 0
+                    && !alternative_raster_pages.contains(&((page_idx + 1) as u32))
+                    && !khmer_supplements.contains_key(&((page_idx + 1) as u32))
+                    && crate::plugins::registry::get_ocr_backend_registry()
+                        .read()
+                        .is_builtin_tesseract(backend)
+                {
+                    recover_automatic_latin_rows(
+                        &render_doc,
+                        (page_idx, (page_idx + 1) as u32),
+                        &mut extraction_result,
+                        page_layers
+                            .as_ref()
+                            .and_then(|layers| layers.get(&((page_idx + 1) as u32)))
+                            .map(String::as_str),
+                        config,
+                        &ocr_output_thresholds,
+                    );
+                }
+                #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                if correction_degrees == 0
                     && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
                     && config.pdf_options.as_ref().is_none_or(|pdf| {
                         pdf.top_margin_fraction.unwrap_or_default() == 0.0
@@ -6576,6 +6596,28 @@ pub(super) async fn extract_with_ocr_for_page(
                 &mut ocr_result,
                 config.security_limits.as_ref().unwrap_or(&Default::default()),
             )?;
+            #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+            if batch_upright_correction[offset].0 == 0
+                && !tall_source_used
+                && !pages_with_recovered_xobject_payload[page_idx]
+                && !forced_khmer_supplements.contains_key(&page_idx)
+                && !has_layout_detections
+                && get_ocr_backend_registry().read().is_builtin_tesseract(&backend)
+                && let Some(pdf) = detached_page
+                    .map(|source| source.document)
+                    .or_else(|| lazy_pdf_render_state.as_ref().map(|(pdf, _, _)| pdf.as_ref()))
+            {
+                recover_automatic_latin_rows(
+                    pdf,
+                    (document_page_idx, document_page_number),
+                    &mut ocr_result,
+                    page_ocr_hints
+                        .as_ref()
+                        .and_then(|hints| hints.decision_layer(document_page_number)),
+                    config,
+                    &ocr_output_thresholds,
+                );
+            }
             #[cfg(all(
                 feature = "pdf",
                 feature = "ocr",
@@ -10266,6 +10308,38 @@ async fn run_ocr_pipeline_stages(
         }
     }
 }
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+fn recover_automatic_latin_rows(
+    pdf: &xberg_native_pdf::PdfDocument,
+    page: (usize, u32),
+    read: &mut crate::types::ExtractedDocument,
+    decision_layer: Option<&str>,
+    config: &ExtractionConfig,
+    thresholds: &crate::core::config::OcrQualityThresholds,
+) {
+    let (page_index, page_number) = page;
+    if config.ocr_strategy != crate::core::config::OcrStrategy::Auto
+        || !super::document::automatic_tesseract_page(config, page_number)
+        || super::document::resolved_ocr_correction_degrees(&read.metadata).is_some_and(|angle| angle != 0)
+        || config.pdf_options.as_ref().is_some_and(|pdf| {
+            pdf.top_margin_fraction.unwrap_or_default() != 0.0 || pdf.bottom_margin_fraction.unwrap_or_default() != 0.0
+        })
+    {
+        return;
+    }
+    super::layer_token_recovery::recover_latin_rows(
+        pdf,
+        page_index,
+        read,
+        decision_layer,
+        &super::native_word_coverage::InkProofLimits {
+            thresholds,
+            max_working_bytes: super::hidden_layer::preview_byte_limit(config),
+            cancelled: &|| config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()),
+        },
+    );
+}
+
 /// Clone an OCR config with word-level elements forced on for structure consumers.
 ///
 /// Table recognition requires word geometry while semantic paragraph assembly
