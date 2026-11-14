@@ -109,6 +109,34 @@ PYTHON
 	[ "$count" -eq 2 ]
 }
 
+@test "musl Elixir publish should smoke the checksummed archive with its relative SONAME links" {
+	ln -s libonnxruntime.so.1 build-output/libonnxruntime.so
+	printf codec >build-output/libheif.so.1
+	extract_run elixir-natives-musl 'Package NIF as RustlerPrecompiled tarball'
+	run bash "$XBERG_WORK/step.sh"
+	xberg_assert_status 0
+
+	cat >scripts/ci/smoke-test-musl-elixir-nif.sh <<'SH'
+set -euo pipefail
+test "$(readlink "$1/libxberg_nif.so")" = "libxberg_nif-v1.4.0-nif-2.16-fixture-target.so"
+test "$(cat "$1/libxberg_nif.so")" = native
+test "$(readlink "$1/libonnxruntime.so")" = libonnxruntime.so.1
+test "$(cat "$1/libonnxruntime.so")" = closure
+test "$(cat "$1/libheif.so.1")" = codec
+echo "archive reached smoke"
+SH
+	extract_run elixir-natives-musl 'Smoke-test the extracted musl Elixir NIF archive'
+	run bash "$XBERG_WORK/step.sh"
+	xberg_assert_status 0
+	xberg_assert_output_contains 'archive reached smoke'
+
+	printf corruption >>dist/elixir-natives/libxberg_nif-v1.4.0-nif-2.16-fixture-target.so.tar.gz
+	run bash "$XBERG_WORK/step.sh"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'FAILED'
+	[[ "$output" != *'archive reached smoke'* ]]
+}
+
 @test "Dart desktop workflow should retain canonical bytes in the final checksummed download" {
 	extract_run upload-dart-release 'Package server natives as tarballs'
 	mkdir -p dart-server-artifacts/dart-server-linux-x64

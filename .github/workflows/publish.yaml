@@ -2936,7 +2936,7 @@ jobs:
     if: >-
       ${{ !inputs.plugins-only && (!cancelled() && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_elixir == 'true' && (needs.check-elixir-release.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
       matrix:
@@ -2944,9 +2944,12 @@ jobs:
         nif: ["2.16"]
         include:
           - os: ubuntu-latest
+            timeout: 90
             arch: x86_64
             target: x86_64-unknown-linux-musl
           - os: ubuntu-24.04-arm
+            # The native v1.4.0 ARM build was still compiling at the 90-minute cap. ~keep
+            timeout: 240
             arch: aarch64
             target: aarch64-unknown-linux-musl
     steps:
@@ -2974,17 +2977,6 @@ jobs:
             --build-arg XBERG_BUILD_ID=${{ steps.build_id.outputs.value }} \
             --output type=local,dest=./build-output .
 
-      # Nothing before this point has ever loaded libxberg_nif.so into a BEAM
-      # VM. This loads the freshly built .so directly (bypassing
-      # RustlerPrecompiled's release-download / force_build paths -- see
-      # scripts/ci/smoke_test_elixir_nif.exs for why) inside a genuine Alpine
-      # (musl libc) container and runs a real extraction against a known
-      # fixture, asserting the exact expected text comes back. No
-      # continue-on-error: a broken NIF must fail this job, not merely warn.
-      - name: Smoke-test musl Elixir NIF (real extraction, not just load)
-        run: |
-          bash scripts/ci/smoke-test-musl-elixir-nif.sh build-output
-
       - name: Package NIF as RustlerPrecompiled tarball
         env:
           TARGET: ${{ matrix.target }}
@@ -2999,12 +2991,31 @@ jobs:
           # The manylinux job below already renames; this one did not, so a musl artifact
           # would have failed to load had musl ever been added to `nif_targets`. ~keep
           RENAMED="libxberg_nif-v${NIF_VERSION}-nif-${NIF_API}-${TARGET}.so"
-          cp build-output/libxberg_nif.so "staging/${RENAMED}"
+          cp -a build-output/*.so* staging/
+          mv staging/libxberg_nif.so "staging/${RENAMED}"
           python3 scripts/ci/package-notices.py stage staging
           TARBALL="${RENAMED}.tar.gz"
-          tar -czf "dist/elixir-natives/${TARBALL}" -C staging "${RENAMED}" LICENSE THIRD_PARTY_LICENSES.md
+          tar -czf "dist/elixir-natives/${TARBALL}" -C staging .
           python3 scripts/ci/package-notices.py verify "dist/elixir-natives/${TARBALL}" .
           ( cd dist/elixir-natives && sha256sum "${TARBALL}" >"${TARBALL}.sha256" )
+
+      - name: Smoke-test the extracted musl Elixir NIF archive
+        env:
+          TARGET: ${{ matrix.target }}
+          NIF_API: ${{ matrix.nif }}
+          NIF_VERSION: ${{ needs.prepare.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE_DIR=dist/elixir-natives
+          RENAMED="libxberg_nif-v${NIF_VERSION}-nif-${NIF_API}-${TARGET}.so"
+          (cd "$ARCHIVE_DIR" && sha256sum -c "${RENAMED}.tar.gz.sha256")
+          extracted="$(mktemp -d)"
+          trap 'rm -rf -- "$extracted"' EXIT
+          tar -xzf "$ARCHIVE_DIR/${RENAMED}.tar.gz" -C "$extracted"
+          # The tag smoke harness loads the bare NIF name directly. ~keep
+          ln -s "$RENAMED" "$extracted/libxberg_nif.so"
+          bash scripts/ci/smoke-test-musl-elixir-nif.sh "$extracted"
 
       - uses: actions/upload-artifact@v7
         with:
