@@ -502,20 +502,43 @@ def test_normal_php_retry_preserves_release_and_cancellation_guards() -> None:
         assert evaluate_condition(expression, context) is expected, (dry_run, available, crates_result)
 
 
+def live_lines(text: str) -> list[str]:
+    """Drop whole-line and trailing `#` comments so only text the shell or Docker runs remains."""
+    lines = (re.sub(r"(^|\s)#.*$", "", line).rstrip() for line in text.splitlines())
+    return [line for line in lines if line.strip()]
+
+
 def test_python_musl_arm64_builds_with_thin_lto() -> None:
-    block = job_block(WORKFLOW.read_text(), "python-wheels-musl")
-    arches = re.findall(r"arch: (\w+), target:", block)
+    lines = live_lines(job_block(WORKFLOW.read_text(), "python-wheels-musl"))
+    arches = re.findall(r"arch: (\w+), target:", "\n".join(lines))
     assert sorted(arches) == ["aarch64", "x86_64"]
-    [selector] = re.findall(r"--build-arg CARGO_PROFILE_RELEASE_LTO=\$\{\{ (.+) \}\}", block)
+    [start] = [i for i, line in enumerate(lines) if "docker build -f docker/Dockerfile.musl-python" in line]
+    command = [lines[start]]
+    while command[-1].endswith("\\"):
+        command.append(lines[start + len(command)])
+    selectors = [
+        match[1]
+        for line in command[1:]
+        if (match := re.fullmatch(r"\s*--build-arg CARGO_PROFILE_RELEASE_LTO=\$\{\{ (.+) \}\}\s*\\?", line))
+    ]
+    assert len(selectors) == 1, "docker build does not pass the LTO build arg as a live continuation line"
     for arch in arches:
-        resolved = evaluate_expression(selector, {"matrix": {"arch": arch}})
+        resolved = evaluate_expression(selectors[0], {"matrix": {"arch": arch}})
         assert resolved == ("thin" if arch == "aarch64" else "fat"), arch
 
-    dockerfile = (WORKFLOW.parents[2] / "docker" / "Dockerfile.musl-python").read_text()
-    build_step = dockerfile.index("maturin build --release")
+    dockerfile = "\n".join(live_lines((WORKFLOW.parents[2] / "docker" / "Dockerfile.musl-python").read_text()))
     declared = dockerfile.index("ARG CARGO_PROFILE_RELEASE_LTO")
-    exported = dockerfile.index('export CARGO_PROFILE_RELEASE_LTO="${CARGO_PROFILE_RELEASE_LTO')
-    assert declared < exported < build_step
+    runs = [
+        [step.strip() for step in run.replace("\\\n", " ").split("&&")]
+        for run in re.findall(r"(?m)^RUN ((?:.*\\\n)*.*)$", dockerfile)
+    ]
+    [steps] = [run for run in runs if any(step.startswith("maturin build --release") for step in run)]
+    export = re.compile(r'export CARGO_PROFILE_RELEASE_LTO="\$\{CARGO_PROFILE_RELEASE_LTO:\?\}"')
+    exported = [i for i, step in enumerate(steps) if export.fullmatch(step)]
+    built = [i for i, step in enumerate(steps) if step.startswith("maturin build --release")]
+    assert exported, "the maturin RUN does not export CARGO_PROFILE_RELEASE_LTO as a live command"
+    assert exported[0] < built[0]
+    assert declared < dockerfile.index("RUN", declared)
 
 
 def test_php_tagged_dry_run_cannot_upload_or_publish() -> None:
