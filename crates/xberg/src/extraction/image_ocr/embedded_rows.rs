@@ -92,7 +92,7 @@ pub(super) fn assemble(document: &ExtractedDocument) -> Option<String> {
         || !header
             .iter()
             .all(|word| word.text.chars().any(char::is_alphabetic) && !word.text.chars().any(char::is_numeric))
-        || !body.iter().all(|row| ledger_row(row, header))
+        || !has_disjoint_column_extents(header, body)
     {
         return None;
     }
@@ -103,6 +103,23 @@ pub(super) fn assemble(document: &ExtractedDocument) -> Option<String> {
             .collect::<Vec<_>>()
             .join("\n"),
     )
+}
+
+fn has_disjoint_column_extents(header: &[Word<'_>], body: &[Vec<Word<'_>>]) -> bool {
+    let mut extents: Vec<_> = header.iter().map(|word| word.left..word.right).collect();
+    for row in body {
+        if !ledger_row(row, header) {
+            return false;
+        }
+        let (label, values) = row.split_at(row.len() - (header.len() - 1));
+        let row_extents = std::iter::once(label[0].left..label[label.len() - 1].right)
+            .chain(values.iter().map(|word| word.left..word.right));
+        for (extent, bounds) in extents.iter_mut().zip(row_extents) {
+            extent.start = extent.start.min(bounds.start);
+            extent.end = extent.end.max(bounds.end);
+        }
+    }
+    extents.windows(2).all(|pair| pair[0].end <= pair[1].start)
 }
 
 fn ledger_row(row: &[Word<'_>], header: &[Word<'_>]) -> bool {
@@ -191,6 +208,14 @@ mod tests {
             assemble_words(ledger()).as_deref(),
             Some("Item Count Budget Change\nSnow ... 12 300 (4)\nField ... 12 300 (4)\nWater ... 12 300 (4)")
         );
+    }
+
+    #[test]
+    fn rejects_columns_that_overlap_across_body_rows() {
+        let mut words = ledger();
+        words[6] = word("12", 44, 10, 24);
+        words[12] = word("300", 60, 20, 22);
+        assert_eq!(assemble_words(words), None);
     }
 
     #[test]
