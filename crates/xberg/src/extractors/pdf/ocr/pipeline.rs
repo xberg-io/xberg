@@ -526,7 +526,8 @@ fn capture_ocr_completion<T, E>(
     result: Result<T, E>,
     token: Option<&crate::cancellation::CancellationToken>,
 ) -> (Result<T, E>, Option<crate::cancellation::CancellationToken>) {
-    let expired = token.filter(|token| result.is_err() && token.time_limit_reached());
+    // A stop can suppress the retry without making the completed backend error a timeout. ~keep
+    let expired = token.filter(|token| result.is_err() && token.deadline_elapsed());
     (result, expired.cloned())
 }
 
@@ -3240,7 +3241,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             .filter(|_| !probing_hidden_layer);
         for (page_idx, png) in retry_pages {
             let failure = failed_pages.remove(page_idx);
-            if config.cancel_token.as_ref().is_some_and(|token| token.stop_requested()) {
+            if let Some(token) = config.cancel_token.as_ref().filter(|token| token.stop_requested()) {
                 if let Some(error) = failure {
                     let native_recovered = mixed_native_page_has_content(native_text, boundaries, *page_idx);
                     push_mixed_ocr_page_failure_warning(
@@ -3250,7 +3251,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         &error,
                         native_recovered,
                     );
-                    failed_page_errors.insert(*page_idx, error);
+                    // Keep the original failure record and classify the skipped retry as a time cut. ~keep
+                    mark_pages_unread(
+                        Some(token),
+                        std::iter::once(*page_idx),
+                        &mut page_failures,
+                        &mut failed_page_errors,
+                        |_| native_recovered,
+                    );
                 }
                 continue;
             }

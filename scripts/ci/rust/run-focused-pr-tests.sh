@@ -118,6 +118,7 @@ run_pdf_cases() {
 run_retry_timeout_cases() {
   local module='extractors::pdf::ocr::tests::tests::retry_timeout_stop_tests'
   run_exact "$module::final_failed_page_keeps_its_warning_and_marks_the_run_cut_short" --lib
+  run_exact "$module::final_page_that_fails_at_the_deadline_is_reported_as_unread" --lib
   run_exact "$module::a_stop_that_skips_the_only_failed_pages_retry_returns_timeout" --lib
   run_exact "$module::a_stop_accounts_for_every_pending_failure_in_the_batch" --lib
 }
@@ -396,7 +397,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=110
+  expected=111
   check_mixed_decision_layer_handoffs
   run_pdf_cases
   run_retained_read_cases
