@@ -203,18 +203,18 @@ fn build_pending_ocr_tasks(
 /// Spawn one OCR task onto `join_set`, resolving the backend from the registry at spawn time.
 #[cfg(all(feature = "ocr", feature = "tokio-runtime"))]
 fn spawn_ocr_task(join_set: &mut tokio::task::JoinSet<OcrTaskResult>, task: PendingOcrTask, repair_rows: bool) {
-    let (idx, image_data, mut ocr_config_clone) = task;
+    let (idx, image_data, ocr_config) = task;
     let worker = async move {
-        let (backend, repair_rows) = {
+        let (backend, row_backend) = {
             let registry = crate::plugins::registry::get_ocr_backend_registry();
             let registry = registry.read();
-            let backend = match registry.get(&ocr_config_clone.backend) {
+            let backend = match registry.get(&ocr_config.backend) {
                 Ok(b) => b.clone(),
                 Err(e) => {
                     return (
                         idx,
                         Err(crate::XbergError::Ocr {
-                            message: format!("OCR backend '{}' not found: {}", ocr_config_clone.backend, e),
+                            message: format!("OCR backend '{}' not found: {}", ocr_config.backend, e),
                             source: None,
                         }),
                         false,
@@ -222,26 +222,33 @@ fn spawn_ocr_task(join_set: &mut tokio::task::JoinSet<OcrTaskResult>, task: Pend
                 }
             };
             #[cfg(not(target_arch = "wasm32"))]
-            let repair_rows = repair_rows && registry.builtin_tesseract_for(&backend).is_some();
+            let row_backend = repair_rows.then(|| registry.builtin_tesseract_for(&backend)).flatten();
             #[cfg(target_arch = "wasm32")]
-            let repair_rows = {
+            let row_backend: Option<()> = {
                 let _ = repair_rows;
-                false
+                None
             };
-            (backend, repair_rows)
+            (backend, row_backend)
         };
 
-        if repair_rows {
-            let elements = ocr_config_clone.element_config.get_or_insert_with(Default::default);
-            elements.include_elements = true;
-            elements.min_level = crate::types::OcrElementLevel::Word;
-            elements.min_confidence = 0.0;
-        }
-        let mut ocr_result = backend.process_image(&image_data, &ocr_config_clone).await;
-        let assembled = if repair_rows
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut ocr_result = match &row_backend {
+            Some(tesseract) => {
+                tesseract
+                    .process_embedded_image_for_publication(&image_data, &ocr_config)
+                    .await
+            }
+            None => backend.process_image(&image_data, &ocr_config).await,
+        };
+        #[cfg(target_arch = "wasm32")]
+        let mut ocr_result = backend.process_image(&image_data, &ocr_config).await;
+        let assembled = if row_backend.is_some()
             && let Ok(result) = &mut ocr_result
-            && let Some(rows) = embedded_rows::assemble(result)
-        {
+            && let Some(rows) = if ocr_config.output_format == Some(crate::core::config::OutputFormat::Plain) {
+                embedded_rows::assemble_plain(result)
+            } else {
+                embedded_rows::assemble(result)
+            } {
             result.content = rows;
             true
         } else {

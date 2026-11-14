@@ -1,5 +1,7 @@
 use crate::types::{ExtractedDocument, OcrBoundingGeometry, OcrElement, OcrElementLevel};
 
+const MAX_PLAIN_TEXT_BYTES: usize = 4096;
+const MAX_PLAIN_WORDS: usize = 128;
 const MIN_BODY_ROWS: usize = 3;
 const MIN_NUMERIC_COLUMNS: usize = 3;
 
@@ -12,6 +14,10 @@ struct Word<'a> {
 }
 
 impl<'a> Word<'a> {
+    fn has_alphanumeric_text(&self) -> bool {
+        self.text.chars().any(char::is_alphanumeric)
+    }
+
     fn from_element(element: &'a OcrElement) -> Option<Self> {
         let OcrBoundingGeometry::Rectangle {
             left,
@@ -37,6 +43,13 @@ impl<'a> Word<'a> {
     }
 }
 
+pub(super) fn assemble_plain(document: &ExtractedDocument) -> Option<String> {
+    if !document.tables.is_empty() || document.content.len() > MAX_PLAIN_TEXT_BYTES {
+        return None;
+    }
+    assemble_words(document, MAX_PLAIN_WORDS)
+}
+
 pub(super) fn assemble(document: &ExtractedDocument) -> Option<String> {
     if !document.processing_warnings.is_empty() {
         return None;
@@ -50,13 +63,24 @@ pub(super) fn assemble(document: &ExtractedDocument) -> Option<String> {
     if !document.tables.is_empty() {
         return None;
     }
-    let mut words = document
+    assemble_words(document, usize::MAX)
+}
+
+fn assemble_words(document: &ExtractedDocument, max_words: usize) -> Option<String> {
+    if !document.processing_warnings.is_empty() {
+        return None;
+    }
+    let words = document
         .ocr_elements
         .as_ref()?
         .iter()
         .filter(|element| element.level == OcrElementLevel::Word)
+        .take(max_words.saturating_add(1))
         .map(Word::from_element)
         .collect::<Option<Vec<_>>>()?;
+    if words.len() > max_words {
+        return None;
+    }
     // Require every literal occurrence, including repeated values and leader marks. ~keep
     let mut expected: Vec<_> = document.content.split_whitespace().collect();
     let mut actual: Vec<_> = words.iter().map(|word| word.text).collect();
@@ -66,22 +90,26 @@ pub(super) fn assemble(document: &ExtractedDocument) -> Option<String> {
         return None;
     }
 
+    validate_and_render_bands(words)
+}
+
+fn validate_and_render_bands(mut words: Vec<Word<'_>>) -> Option<String> {
     words.sort_unstable_by_key(|word| (word.top, word.left));
     let mut bands: Vec<Vec<Word<'_>>> = Vec::new();
-    let mut common_bottom = 0;
+    let mut common_bottom = None;
     let mut bottom = 0;
     for word in words {
         if word.top >= bottom {
             bands.push(Vec::new());
-            common_bottom = word.bottom;
+            common_bottom = None;
             bottom = word.bottom;
         }
         // A vertical bridge between two rows cannot certify either row. ~keep
-        if word.text.chars().any(char::is_alphanumeric) {
-            if word.top >= common_bottom {
+        if word.has_alphanumeric_text() {
+            if common_bottom.is_some_and(|end| word.top >= end) {
                 return None;
             }
-            common_bottom = common_bottom.min(word.bottom);
+            common_bottom = Some(common_bottom.map_or(word.bottom, |end| end.min(word.bottom)));
         }
         bottom = bottom.max(word.bottom);
         bands.last_mut()?.push(word);
@@ -91,6 +119,9 @@ pub(super) fn assemble(document: &ExtractedDocument) -> Option<String> {
         return None;
     }
     for band in body.iter_mut().chain(std::iter::once(&mut *header)) {
+        if !punctuation_overlaps_text(band) {
+            return None;
+        }
         band.sort_unstable_by_key(|word| word.left);
         if band.windows(2).any(|pair| pair[0].right > pair[1].left) {
             return None;
@@ -112,6 +143,18 @@ pub(super) fn assemble(document: &ExtractedDocument) -> Option<String> {
             .collect::<Vec<_>>()
             .join("\n"),
     )
+}
+
+fn punctuation_overlaps_text(band: &[Word<'_>]) -> bool {
+    let mut text_words = band.iter().filter(|word| word.has_alphanumeric_text());
+    let Some(first) = text_words.next() else {
+        return false;
+    };
+    // The alphanumeric boxes already share a vertical intersection. Their combined span has no gaps. ~keep
+    let (top, bottom) = text_words.fold((first.top, first.bottom), |(top, bottom), word| {
+        (top.min(word.top), bottom.max(word.bottom))
+    });
+    band.iter().all(|word| word.top < bottom && top < word.bottom)
 }
 
 fn has_disjoint_column_extents(header: &[Word<'_>], body: &[Vec<Word<'_>>]) -> bool {
@@ -217,6 +260,32 @@ mod tests {
             assemble_words(ledger()).as_deref(),
             Some("Item Count Budget Change\nSnow ... 12 300 (4)\nField ... 12 300 (4)\nWater ... 12 300 (4)")
         );
+    }
+
+    #[test]
+    fn accepts_leader_above_text_when_it_overlaps_the_row() {
+        let mut words = ledger();
+        words[5] = word("...", 20, 8, 12);
+        words[6] = word("12", 44, 14, 9);
+        assert_eq!(
+            assemble_words(words).as_deref(),
+            Some("Item Count Budget Change\nSnow ... 12 300 (4)\nField ... 12 300 (4)\nWater ... 12 300 (4)")
+        );
+    }
+
+    #[test]
+    fn rejects_punctuation_connected_only_through_another_punctuation_box() {
+        let mut words = ledger();
+        words[5] = word("...", 20, 14, 8);
+        let mut detached = word("..", 30, 17, 8);
+        detached.geometry = OcrBoundingGeometry::Rectangle {
+            left: 30,
+            top: 17,
+            width: 8,
+            height: 2,
+        };
+        words.push(detached);
+        assert_eq!(assemble_words(words), None);
     }
 
     #[test]
