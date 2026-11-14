@@ -932,6 +932,9 @@ fn split_plan_for_seam(
     })
 }
 
+#[cfg(feature = "layout-detection")]
+type TatrCellWords = Vec<(usize, f32, f32)>;
+
 /// Build markdown table from TATR cell grid + PDF words.
 ///
 /// Cell bboxes are in crop-pixel space. Words are in PDF image-coord space
@@ -997,7 +1000,7 @@ fn build_tatr_grid_table(
         converted_cells.push(conv_row);
     }
 
-    let mut cell_words: Vec<Vec<Vec<(usize, f32, f32)>>> = (0..num_rows)
+    let mut cell_words: Vec<Vec<TatrCellWords>> = (0..num_rows)
         .map(|_| (0..num_cols).map(|_| Vec::new()).collect())
         .collect();
     let mut consumed_bottom: Option<u32> = None;
@@ -1070,7 +1073,7 @@ fn build_tatr_grid_table(
 
 #[cfg(feature = "layout-detection")]
 fn separate_tatr_header_and_first_record(
-    cells: &mut [Vec<Vec<(usize, f32, f32)>>],
+    cells: &mut [Vec<TatrCellWords>],
     bounds: &[Vec<(f32, f32, f32, f32)>],
     words: &[&crate::pdf::table_reconstruct::HocrWord],
     consumed: &mut [bool],
