@@ -96,20 +96,20 @@ fn assemble_words(document: &ExtractedDocument, max_words: usize) -> Option<Stri
 fn validate_and_render_bands(mut words: Vec<Word<'_>>) -> Option<String> {
     words.sort_unstable_by_key(|word| (word.top, word.left));
     let mut bands: Vec<Vec<Word<'_>>> = Vec::new();
-    let mut common_bottom = 0;
+    let mut common_bottom = None;
     let mut bottom = 0;
     for word in words {
         if word.top >= bottom {
             bands.push(Vec::new());
-            common_bottom = word.bottom;
+            common_bottom = None;
             bottom = word.bottom;
         }
         // A vertical bridge between two rows cannot certify either row. ~keep
         if word.has_alphanumeric_text() {
-            if word.top >= common_bottom {
+            if common_bottom.is_some_and(|end| word.top >= end) {
                 return None;
             }
-            common_bottom = common_bottom.min(word.bottom);
+            common_bottom = Some(common_bottom.map_or(word.bottom, |end| end.min(word.bottom)));
         }
         bottom = bottom.max(word.bottom);
         bands.last_mut()?.push(word);
@@ -258,6 +258,17 @@ mod tests {
     fn assembles_column_ordered_words_into_exact_rows() {
         assert_eq!(
             assemble_words(ledger()).as_deref(),
+            Some("Item Count Budget Change\nSnow ... 12 300 (4)\nField ... 12 300 (4)\nWater ... 12 300 (4)")
+        );
+    }
+
+    #[test]
+    fn accepts_leader_above_text_when_it_overlaps_the_row() {
+        let mut words = ledger();
+        words[5] = word("...", 20, 8, 12);
+        words[6] = word("12", 44, 14, 9);
+        assert_eq!(
+            assemble_words(words).as_deref(),
             Some("Item Count Budget Change\nSnow ... 12 300 (4)\nField ... 12 300 (4)\nWater ... 12 300 (4)")
         );
     }

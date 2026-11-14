@@ -44,13 +44,14 @@ async fn assert_ledger(models: &std::path::Path, psm: Option<u8>, elements: Opti
         "output_format": "plain",
         "ocr": {"enabled": true, "backend": "tesseract", "language": ["eng"], "tessdata_path": models},
         "pages": {"extract_pages": true},
+        "images": {"extract_images": true},
     });
     if let Some(psm) = psm {
         config["ocr"]["tesseract_config"] = serde_json::json!({"psm": psm});
     }
     if let Some(enabled) = elements {
         config["ocr"]["element_config"] = serde_json::json!({
-            "include_elements": enabled, "min_level": "word", "build_hierarchy": true
+            "include_elements": enabled, "min_level": "word", "min_confidence": 0.5, "build_hierarchy": true
         });
     }
     let config: ExtractionConfig = serde_json::from_value(config).unwrap();
@@ -61,6 +62,7 @@ async fn assert_ledger(models: &std::path::Path, psm: Option<u8>, elements: Opti
     let [result] = batch.results.as_slice() else {
         panic!("expected one document");
     };
+    assert_nested_ocr(result, psm, elements);
     let [page] = result.pages.as_deref().expect("requested pages") else {
         panic!("expected one page");
     };
@@ -72,4 +74,41 @@ async fn assert_ledger(models: &std::path::Path, psm: Option<u8>, elements: Opti
         let lines: Vec<_> = text.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
         assert_eq!(lines, expected, "{surface}, PSM {psm:?}, elements {elements:?}");
     }
+}
+
+fn assert_nested_ocr(result: &xberg::types::ExtractedDocument, psm: Option<u8>, elements: Option<bool>) {
+    use xberg::types::{FormatMetadata, OcrElementLevel};
+
+    let [image] = result.images.as_deref().expect("requested images") else {
+        panic!("expected one embedded image");
+    };
+    let nested = image.ocr_result.as_deref().expect("embedded OCR result");
+    if elements != Some(true) {
+        assert!(nested.ocr_elements.is_none(), "{elements:?}");
+        return;
+    }
+    let Some(FormatMetadata::Ocr(metadata)) = &nested.metadata.format else {
+        panic!("expected nested OCR metadata");
+    };
+    assert_eq!(metadata.language, "eng");
+    assert_eq!(metadata.psm, i32::from(psm.unwrap_or(3)));
+    let public = nested.ocr_elements.as_deref().expect("requested nested OCR elements");
+    assert!(public.iter().all(|element| element.confidence.recognition >= 0.5));
+    let words: Vec<_> = public
+        .iter()
+        .filter(|element| element.level == OcrElementLevel::Word)
+        .collect();
+    assert!(words.iter().any(|word| word.text == "594,898"));
+    assert!(words.iter().any(|word| {
+        word.parent_id.as_ref().is_some_and(|id| {
+            public.iter().any(|parent| {
+                parent.level != OcrElementLevel::Word
+                    && parent
+                        .backend_metadata
+                        .get("element_id")
+                        .and_then(serde_json::Value::as_str)
+                        == Some(id.as_str())
+            })
+        })
+    }));
 }
