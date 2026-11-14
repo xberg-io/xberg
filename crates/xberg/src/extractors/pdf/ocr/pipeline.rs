@@ -3670,24 +3670,16 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     .get(page)
                     .filter(|_| text == read)
                     .and_then(|evidence| evidence.reconcile(text));
-                let pcb_removed = if let Some(row) = pcb_row {
-                    super::symbol_noise_lines::texture::prune_pcb_row(
-                        row,
-                        text,
-                        ocr_results.get_mut(page),
-                        ocr_page_paragraphs.get_mut(page),
-                        structured_ocr_pages.get_mut(page),
-                    )
-                } else {
-                    0
-                };
-                let (removed, texture_removed) = super::symbol_noise_lines::texture::prune(
+                let (removed, texture_removed, pcb_removed) = super::symbol_noise_lines::texture::prune_mixed(
                     text,
                     ocr_results.get_mut(page),
                     ocr_page_paragraphs.get_mut(page),
                     structured_ocr_pages.get_mut(page),
-                    &candidates,
-                    retained,
+                    super::symbol_noise_lines::texture::MixedPruningEvidence {
+                        candidates: &candidates,
+                        retained,
+                        pcb_row,
+                    },
                 );
                 crate::core::diagnostics::push_warning_deduped(
                     &mut accumulated_warnings,

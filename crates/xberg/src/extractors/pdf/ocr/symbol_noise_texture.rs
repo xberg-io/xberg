@@ -405,6 +405,59 @@ impl Evidence {
     }
 }
 
+pub(in crate::extractors::pdf::ocr) struct MixedPruningEvidence<'a> {
+    pub candidates: &'a [&'a str],
+    pub retained: Option<&'a str>,
+    pub pcb_row: Option<&'a PcbRow>,
+}
+
+pub(in crate::extractors::pdf::ocr) fn prune_mixed(
+    text: &mut String,
+    mut read: Option<&mut String>,
+    mut paragraphs: Option<&mut Vec<PdfParagraph>>,
+    mut document: Option<&mut InternalDocument>,
+    evidence: MixedPruningEvidence<'_>,
+) -> (usize, usize, usize) {
+    let MixedPruningEvidence {
+        candidates,
+        retained,
+        pcb_row,
+    } = evidence;
+    let planned = candidates
+        .iter()
+        .copied()
+        .filter(|word| {
+            text_owns_token(
+                text,
+                read.as_ref().map(|read| read.as_str()),
+                paragraphs.as_ref().map(|paragraphs| paragraphs.as_slice()),
+                word,
+            ) && document.as_ref().is_none_or(|document| {
+                unique_document_owner(document, word).is_some_and(|element| element.annotations.is_empty())
+            })
+        })
+        .collect::<Vec<_>>();
+    let retained = retained.filter(|word| {
+        text_owns_token(
+            text,
+            read.as_ref().map(|read| read.as_str()),
+            paragraphs.as_ref().map(|paragraphs| paragraphs.as_slice()),
+            word,
+        )
+    });
+    let pcb_removed = pcb_row.map_or(0, |row| {
+        prune_pcb_row(
+            row,
+            text,
+            read.as_deref_mut(),
+            paragraphs.as_deref_mut(),
+            document.as_deref_mut(),
+        )
+    });
+    let (lines, texture) = prune(text, read, paragraphs, document, &planned, retained);
+    (lines, texture, pcb_removed)
+}
+
 pub(in crate::extractors::pdf::ocr) fn prune(
     text: &mut String,
     read: Option<&mut String>,
@@ -414,13 +467,12 @@ pub(in crate::extractors::pdf::ocr) fn prune(
     retained: Option<&str>,
 ) -> (usize, usize) {
     let owned_text = |candidate: &str| {
-        unique(text.split_whitespace(), candidate)
-            && read
-                .as_ref()
-                .is_none_or(|read| unique(read.split_whitespace(), candidate))
-            && paragraphs
-                .as_ref()
-                .is_none_or(|paragraphs| unique_paragraph_token(paragraphs, candidate))
+        text_owns_token(
+            text,
+            read.as_ref().map(|read| read.as_str()),
+            paragraphs.as_ref().map(|paragraphs| paragraphs.as_slice()),
+            candidate,
+        )
     };
     let retained = retained.filter(|word| {
         owned_text(word)
@@ -520,6 +572,12 @@ fn strip_matching_tokens(text: &str, mut matches: impl FnMut(&str) -> bool) -> (
 
 fn unique<'a>(tokens: impl Iterator<Item = &'a str>, candidate: &str) -> bool {
     tokens.filter(|&token| token == candidate).take(2).count() == 1
+}
+
+fn text_owns_token(text: &str, read: Option<&str>, paragraphs: Option<&[PdfParagraph]>, candidate: &str) -> bool {
+    unique(text.split_whitespace(), candidate)
+        && read.is_none_or(|read| unique(read.split_whitespace(), candidate))
+        && paragraphs.is_none_or(|paragraphs| unique_paragraph_token(paragraphs, candidate))
 }
 
 fn unique_paragraph_token(paragraphs: &[PdfParagraph], candidate: &str) -> bool {

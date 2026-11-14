@@ -145,6 +145,13 @@ async fn full_document_page_thirty_three_prunes_only_the_pcb_row() {
     assert_pcb_row_removed(Path::new(&path), 33, Some(33)).await;
 }
 
+#[tokio::test]
+#[ignore = "requires the original public PDF in XBERG_2943_ORIGINAL_PCB"]
+async fn default_full_document_preserves_pcb_survivors() {
+    let path = std::env::var_os("XBERG_2943_ORIGINAL_PCB").expect("set XBERG_2943_ORIGINAL_PCB");
+    assert_pcb_row_removed(Path::new(&path), 33, None).await;
+}
+
 async fn assert_pcb_row_removed(path: &Path, page: u32, selected_page: Option<u32>) {
     let row = "cece' cocece ceeces coecee wecece cceece ccccee cocece eeeece eeecce ececee";
     let expected: Vec<_> = row.split_whitespace().collect();
@@ -185,6 +192,11 @@ async fn assert_pcb_row_removed(path: &Path, page: u32, selected_page: Option<u3
             "{format:?}: printed page number"
         );
         assert!(count(&after, "33") > 0, "{format:?}: printed page number missing");
+        let survivors: Vec<_> = after
+            .split_whitespace()
+            .filter(|token| matches!(*token, "33" | "cocece"))
+            .collect();
+        assert_eq!(survivors, ["cocece", "33"], "{format:?}: exact ordered survivors");
         eprintln!("{format:?}: exercised all {} PCB occurrences", expected.len());
     }
     assert!(

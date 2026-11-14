@@ -45,8 +45,7 @@ fn pcb_rows<'a>(text: impl Iterator<Item = &'a str>) -> Vec<std::ops::Range<usiz
 
 pub(in crate::extractors::pdf::ocr) struct PcbRow {
     source: std::ops::Range<usize>,
-    ordinal: usize,
-    count: usize,
+    unique_source: bool,
 }
 
 impl PcbRow {
@@ -74,19 +73,18 @@ impl PcbRow {
                 valid
             })
         });
-        // Duplicate spellings are mapped in transcript order after the OCR boxes
-        // identify a single occurrence. A changed occurrence count makes the mapping ambiguous. ~keep
+        // OCR order identifies the occurrence in the unchanged transcript. Structured views
+        // can reorder matching rows and must resolve a unique match independently. ~keep
         let (ordinal, _) = certified.next()?;
         certified.next().is_none().then(|| Self {
             source: transcript_rows[ordinal].clone(),
-            ordinal,
-            count: transcript_rows.len(),
+            unique_source: transcript_rows.len() == 1,
         })
     }
 
     fn reconcile<'a>(&self, text: impl Iterator<Item = &'a str>) -> Option<std::ops::Range<usize>> {
         let rows = pcb_rows(text);
-        (rows.len() == self.count).then(|| rows[self.ordinal].clone())
+        (self.unique_source && rows.len() == 1).then(|| rows[0].clone())
     }
 }
 
@@ -181,27 +179,28 @@ mod tests {
     use super::*;
     use crate::types::OcrElementLevel;
 
+    fn lines_for(top: u32) -> impl Iterator<Item = OcrElement> {
+        PCB_ROW.into_iter().enumerate().map(move |(index, token)| {
+            let mut line = OcrElement::new(
+                token,
+                OcrBoundingGeometry::Rectangle {
+                    left: 423 + index as u32 * 110,
+                    top,
+                    width: 85,
+                    height: 8,
+                },
+                Default::default(),
+            );
+            line.level = OcrElementLevel::Line;
+            line
+        })
+    }
+
     #[test]
     fn pcb_certificate_removes_only_the_row_owned_by_boxes_inside_the_strip() {
         use crate::types::internal::{ElementKind, InternalElement};
         let row = PCB_ROW.join(" ");
         let original = format!("{row}\n33\n{row}\ncocece");
-        let lines_for = |top| {
-            PCB_ROW.into_iter().enumerate().map(move |(index, token)| {
-                let mut line = OcrElement::new(
-                    token,
-                    OcrBoundingGeometry::Rectangle {
-                        left: 423 + index as u32 * 110,
-                        top,
-                        width: 85,
-                        height: 8,
-                    },
-                    Default::default(),
-                );
-                line.level = OcrElementLevel::Line;
-                line
-            })
-        };
         let outside: Vec<_> = lines_for(700).collect();
         assert!(PcbRow::capture(&row, outside.iter()).is_none());
 
@@ -210,16 +209,50 @@ mod tests {
         let mut text = original.clone();
         let mut read = original.clone();
         let mut document = InternalDocument::new("pdf");
+        let reordered = format!("{row}\ncocece\n{row}\n33");
         document
             .elements
-            .push(InternalElement::text(ElementKind::Paragraph, &original, 0));
+            .push(InternalElement::text(ElementKind::Paragraph, &reordered, 0));
         assert_eq!(
             prune_pcb_row(&evidence, &mut text, Some(&mut read), None, Some(&mut document)),
-            11
+            0
         );
+        assert_eq!(text, original);
+        assert_eq!(read, original);
+        assert_eq!(document.elements[0].text, reordered);
+        assert_eq!(prune_pcb_row(&evidence, &mut text, Some(&mut read), None, None), 11);
         let survivor = format!("{row}\n33\ncocece");
         assert_eq!(text, survivor);
         assert_eq!(read, survivor);
-        assert_eq!(document.elements[0].text, survivor);
+    }
+    #[test]
+    fn mixed_pruning_preserves_a_duplicate_of_a_removed_row_token() {
+        use crate::types::internal::{ElementKind, InternalElement};
+        let row = PCB_ROW.join(" ");
+        let mut text = format!("{row}\n33\nceeces\ncocece\nlonger");
+        let lines: Vec<_> = lines_for(555).collect();
+        let evidence = PcbRow::capture(&text, lines.iter()).unwrap();
+        let mut read = text.clone();
+        let mut document = InternalDocument::new("pdf");
+        document
+            .elements
+            .push(InternalElement::text(ElementKind::Paragraph, &text, 0));
+        assert_eq!(
+            super::super::prune_mixed(
+                &mut text,
+                Some(&mut read),
+                None,
+                Some(&mut document),
+                super::super::MixedPruningEvidence {
+                    candidates: &["ceeces", "longer"],
+                    retained: None,
+                    pcb_row: Some(&evidence),
+                }
+            ),
+            (0, 1, 11)
+        );
+        assert_eq!(text, "33\nceeces\ncocece");
+        assert_eq!(read, text);
+        assert_eq!(document.elements[0].text, text);
     }
 }
