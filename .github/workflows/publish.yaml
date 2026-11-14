@@ -512,7 +512,11 @@ jobs:
     name: Build Python wheels (${{ matrix.os }})
     needs: [prepare, check-pypi]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_python == 'true' && (needs.check-pypi.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' &&
+          needs.prepare.outputs.release_python == 'true' &&
+          (needs.prepare.outputs.dry_run == 'true' ||
+           (needs.prepare.outputs.is_tag == 'true' && needs.check-pypi.result == 'success' &&
+            (needs.check-pypi.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -674,7 +678,11 @@ jobs:
     name: Build Python wheels (musl-${{ matrix.arch }})
     needs: [prepare, check-pypi]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_python == 'true' && (needs.check-pypi.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' &&
+          needs.prepare.outputs.release_python == 'true' &&
+          (needs.prepare.outputs.dry_run == 'true' ||
+           (needs.prepare.outputs.is_tag == 'true' && needs.check-pypi.result == 'success' &&
+            (needs.check-pypi.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')))) }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

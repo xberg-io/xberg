@@ -268,6 +268,53 @@ def test_npm_integrations_require_an_available_core_version() -> None:
     assert "check-npm" in re.search(r"(?m)^    needs: \[(.+)\]$", block)[1].split(", ")
 
 
+def test_python_wheels_build_from_sha_in_dry_run_only() -> None:
+    workflow = WORKFLOW.read_text()
+    for dry_run, tag, registry, exists, force, expected in (
+        ("true", "false", "skipped", "", "false", True),
+        ("true", "true", "success", "true", "false", True),
+        ("false", "false", "skipped", "", "false", False),
+        ("false", "true", "skipped", "", "false", False),
+        ("false", "true", "failure", "", "false", False),
+        ("false", "true", "success", "false", "false", True),
+        ("false", "true", "success", "true", "false", False),
+        ("false", "true", "success", "true", "true", True),
+    ):
+        context = {
+            "inputs": {"plugins_only": False},
+            "cancelled": False,
+            "needs": {
+                "prepare": {
+                    "result": "success",
+                    "outputs": {
+                        "dry_run": dry_run,
+                        "is_tag": tag,
+                        "release_python": "true",
+                        "force_republish": force,
+                    },
+                },
+                "check_pypi": {"result": registry, "outputs": {"exists": exists}},
+                "publish_crates": {"result": "success"},
+                "python_wheels": {"result": "success"},
+                "python_wheels_musl": {"result": "success"},
+                "python_sdist": {"result": "success"},
+            },
+        }
+        for job in ("python-wheels", "python-wheels-musl"):
+            expression = job_if_expression(job_block(workflow, job))
+            # Actions implicitly requires success of all needs unless a status function appears.
+            dependencies_ok = "cancelled()" in expression or registry == "success"
+            assert (dependencies_ok and evaluate_condition(expression, context)) is expected, (
+                job,
+                dry_run,
+                tag,
+                registry,
+            )
+        if tag == "false":
+            publish = job_if_expression(job_block(workflow, "publish-pypi"))
+            assert not evaluate_condition(publish, context)
+
+
 def test_normal_php_retry_preserves_release_and_cancellation_guards() -> None:
     expression = job_if_expression(job_block(WORKFLOW.read_text(), "php-extension"))
     for plugins_only, cancelled, dry_run, crates_result, expected in (
