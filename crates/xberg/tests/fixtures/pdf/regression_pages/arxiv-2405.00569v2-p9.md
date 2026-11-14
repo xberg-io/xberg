@@ -1,6 +1,6 @@
-Central compact schemes for third derivatives 9 2
+Central compact schemes for third derivatives 9
 
-W(ω) is [1 + 2α cos(ω) + 2β cos(2ω)] . In this work, we opt for r = 1 to establish the finite difference coefficients. (3.9) Z
+W(ω) is [1 + 2α cos(ω) + 2β cos(2ω)]<sup>2</sup>. In this work, we opt for r = 1 to establish the finite difference coefficients. (3.9) Z
 
 rπ ω 2b 3ω 2c 5ω 2
 

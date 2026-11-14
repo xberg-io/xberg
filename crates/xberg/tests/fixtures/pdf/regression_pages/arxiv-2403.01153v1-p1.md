@@ -2,13 +2,13 @@
 
 # Multi-Person Indoor Localization by CSI
 
-st nd rd th
+nd rd th
 
-1 Zhiyuan He, 2 Ke Deng, 3 Jiangchao Gong, 4<sup>th</sup> Yi Zhou, 5 Desheng Wang Wuhan National Laboratory for Optoelectronics Huazhong University of Science and Technology Wuhan, China
+1<sup>st</sup> Zhiyuan He, 2 Ke Deng, 3 Jiangchao Gong, 4<sup>th</sup> Yi Zhou, 5 Desheng Wang Wuhan National Laboratory for Optoelectronics Huazhong University of Science and Technology Wuhan, China
 
-st nd rd
+nd rd
 
-1 zedyuanhe@hust.edu.cn, 2 sheepsui@hust.edu.cn, 3 m202272478@hust.edu.cn
+1<sup>st</sup> zedyuanhe@hust.edu.cn, 2 sheepsui@hust.edu.cn, 3 m202272478@hust.edu.cn
 
 4<sup>th</sup> u202014002@hust.edu.cn, 5<sup>th</sup> dswang@hust.edu.cn
 

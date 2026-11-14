@@ -22,9 +22,9 @@ Show also that, if the interval [x, x + h] does not include x = 0, the formula h
 
 5. The formula f(x+h) = f(x)+hf (x+θh~1~ ) is not true if f(x) = 1/x and
 
-′ 2
+′
 
-x \< 0 \< x + h. [For f(x + h) − f(x) \> 0 and hf (x + θh~1~ ) = −h/(x + θh~1~ ) \< 0; it is evident that the conditions for the truth of the Mean Value Theorem are not satisfied.]
+x \< 0 \< x + h. [For f(x + h) − f(x) \> 0 and hf (x + θh~1~ ) = −h/(x + θh~1~ )<sup>2</sup> \< 0; it is evident that the conditions for the truth of the Mean Value Theorem are not satisfied.]
 
 1/3
 
