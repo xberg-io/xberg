@@ -5920,6 +5920,7 @@ fn process_heuristic_segments(segments: Vec<SegmentData>) -> Vec<PdfParagraph> {
             hint_validations: Vec::new(),
             #[cfg(feature = "layout-detection")]
             page_width_pts: None,
+            isolated_folio_page_height: None,
             needs_classify: false,
             paragraph_gap_ys: Vec::new(),
             include_headers: true,
@@ -5952,6 +5953,7 @@ fn empty_or_ineligible_layout_hints_use_legacy_page_processing() {
                 use_layout_reading_order: false,
                 hint_validations: Vec::new(),
                 page_width_pts: None,
+                isolated_folio_page_height: None,
                 needs_classify: false,
                 paragraph_gap_ys: paragraph_gap_ys.clone(),
                 include_headers: true,
@@ -6033,6 +6035,7 @@ fn page_width_reaches_layout_reading_order_graph() {
                 use_layout_reading_order: true,
                 hint_validations: Vec::new(),
                 page_width_pts,
+                isolated_folio_page_height: None,
                 needs_classify: false,
                 paragraph_gap_ys: Vec::new(),
                 include_headers: true,
@@ -6111,6 +6114,7 @@ fn stacked_layout_groups_preserve_native_paragraph_assembly() {
             use_layout_reading_order: false,
             hint_validations: Vec::new(),
             page_width_pts: Some(612.0),
+            isolated_folio_page_height: None,
             needs_classify: false,
             paragraph_gap_ys: Vec::new(),
             include_headers: true,
@@ -6149,6 +6153,7 @@ fn bboxless_emitted_table_page_preserves_native_semantics_and_layout_class() {
             use_layout_reading_order: true,
             hint_validations: Vec::new(),
             page_width_pts: Some(612.0),
+            isolated_folio_page_height: None,
             needs_classify: false,
             paragraph_gap_ys,
             include_headers: true,
@@ -6188,6 +6193,7 @@ fn emitted_table_page_annotates_caption_without_overriding_native_semantics() {
             use_layout_reading_order: true,
             hint_validations: Vec::new(),
             page_width_pts: Some(612.0),
+            isolated_folio_page_height: None,
             needs_classify: false,
             paragraph_gap_ys: Vec::new(),
             include_headers: true,
@@ -6280,6 +6286,7 @@ fn test_structure_tree_page_runs_text_repair_before_assembly() {
             hint_validations: Vec::new(),
             #[cfg(feature = "layout-detection")]
             page_width_pts: None,
+            isolated_folio_page_height: None,
             needs_classify: false,
             paragraph_gap_ys: Vec::new(),
             include_headers: true,
@@ -6328,6 +6335,7 @@ fn assigned_sal_heading_survives_merge_when_layout_confirms_it() {
             hint_validations: Vec::new(),
             #[cfg(feature = "layout-detection")]
             page_width_pts: Some(612.0),
+            isolated_folio_page_height: None,
             needs_classify: false,
             paragraph_gap_ys: Vec::new(),
             include_headers: true,
@@ -7910,6 +7918,7 @@ fn should_classify_untagged_bold_body_size_paragraphs_on_tagged_pages() {
             hint_validations: Vec::new(),
             #[cfg(feature = "layout-detection")]
             page_width_pts: None,
+            isolated_folio_page_height: None,
             needs_classify: true,
             paragraph_gap_ys: Vec::new(),
             include_headers: true,
@@ -8743,6 +8752,7 @@ fn test_heuristic_path_merges_font_split_continuation() {
             hint_validations: vec![],
             #[cfg(feature = "layout-detection")]
             page_width_pts: None,
+            isolated_folio_page_height: None,
             needs_classify: false,
             paragraph_gap_ys: vec![],
             include_headers: true,
@@ -8799,6 +8809,7 @@ fn test_heuristic_path_does_not_merge_terminated_sentences() {
             hint_validations: vec![],
             #[cfg(feature = "layout-detection")]
             page_width_pts: None,
+            isolated_folio_page_height: None,
             needs_classify: false,
             paragraph_gap_ys: vec![],
             include_headers: true,
@@ -9919,4 +9930,140 @@ fn should_keep_an_exponent_before_a_subscript_that_starts_after_it() {
     let (text, runs) = marked_script_runs(segments);
     assert!(text.replace(' ', "").starts_with("EnC"), "{text:?}");
     assert_eq!(runs, [("n".to_string(), Superscript), ("C".to_string(), Subscript)]);
+}
+
+#[test]
+fn isolated_folio_header_preserves_heading_and_adjacent_prose() {
+    let mut folio = seg_at("1116", 60.0, 691.0, 11.0, false);
+    folio.width = 23.0;
+    let mut title = seg_at("A. B. Author and C. D. Writer", 106.0, 691.0, 11.0, false);
+    title.is_italic = true;
+    let header = para(vec![line(vec![folio]), line(vec![title])]);
+    let body = positioned_para(
+        "ation. The previous section continues here and develops the same argument with more examples and observations.",
+        60.0,
+        660.0,
+    );
+    let mut heading = positioned_para("Discussion", 60.0, 600.0);
+    heading.heading_level = Some(2);
+    let mut page = vec![header, body, heading];
+
+    let mut title_page = page.clone();
+    title_page[0].heading_level = Some(1);
+    classify_isolated_folio_header(&mut title_page, 738.0);
+    assert_eq!(title_page[0].layout_class, None);
+    assert_eq!(title_page[0].heading_level, Some(1));
+
+    let mut ordinary_page = page.clone();
+    ordinary_page[0].lines[1].segments[0].is_italic = false;
+    classify_isolated_folio_header(&mut ordinary_page, 738.0);
+    assert_eq!(ordinary_page[0].layout_class, None);
+
+    let mut numbered_entry = page.clone();
+    numbered_entry[0].lines[1].segments[0].text = "The Nature of Dynamic Capabilities".into();
+    classify_isolated_folio_header(&mut numbered_entry, 738.0);
+    assert_eq!(numbered_entry[0].layout_class, None);
+    assert_eq!(numbered_entry[0].heading_level, None);
+    assert_eq!(numbered_entry[0].lines[0].segments[0].text, "1116");
+    assert_eq!(
+        numbered_entry[0].lines[1].segments[0].text,
+        "The Nature of Dynamic Capabilities"
+    );
+
+    let mut without_page_geometry = page.clone();
+    merge_native_continuations(&mut without_page_geometry, &[], None);
+    assert_eq!(without_page_geometry.len(), 2);
+    assert_eq!(without_page_geometry[0].lines.len(), 3);
+
+    merge_native_continuations(&mut page, &[], Some(738.0));
+    assert_eq!(page.len(), 3);
+    assert_eq!(page[0].layout_class, Some(LayoutHintClass::PageHeader));
+    assert_eq!(page[1].text, title_page[1].text);
+    assert_eq!(page[1].layout_class, None);
+    assert_eq!(page[2].heading_level, Some(2));
+}
+
+#[cfg(feature = "layout-detection")]
+#[test]
+fn isolated_folio_header_rendering_obeys_include_headers() {
+    let body = "ation. The previous section continues here and develops the same argument with more examples and observations.";
+    let title = "A. B. Author and C. D. Writer";
+    let mut folio = seg_at("1116", 60.0, 691.0, 11.0, false);
+    folio.width = 23.0;
+    let mut author = seg_at(title, 106.0, 691.0, 11.0, false);
+    author.width = 164.0;
+    author.is_italic = true;
+    let layout = [super::super::types::PageLayoutResult {
+        page_width_pts: 564.0,
+        page_height_pts: 738.0,
+    }];
+    for include_headers in [false, true] {
+        let document = extract_document_structure_from_segments(
+            vec![vec![
+                folio.clone(),
+                author.clone(),
+                seg_at(body, 60.0, 660.0, 10.0, false),
+            ]],
+            SegmentStructureConfig {
+                k_clusters: 1,
+                tables: &[],
+                outline_entries: &[],
+                strip_repeating_text: false,
+                include_headers,
+                include_footers: false,
+                include_footnotes: false,
+                include_watermarks: false,
+                used_structure_tree: false,
+                ocr_text: false,
+                image_positions: &[],
+                images: None,
+                inject_placeholders: false,
+                layout_hints: None,
+                allow_single_column: true,
+                cancel_token: None,
+                layout_images: None,
+                layout_results: Some(&layout),
+                table_model: crate::core::config::layout::TableModel::Disabled,
+                table_overlap_preference: crate::core::config::layout::TableOverlapPreference::Content,
+                acceleration: None,
+                session_thread_budget: 0,
+            },
+        )
+        .expect("native structure extraction succeeds");
+        let markdown = crate::rendering::render_markdown(&document);
+        assert_eq!(
+            markdown.matches(title).count(),
+            usize::from(include_headers),
+            "{markdown}"
+        );
+        assert_eq!(markdown.matches(body).count(), 1, "{markdown}");
+        assert!(
+            document
+                .elements
+                .iter()
+                .any(|element| { element.layer == crate::types::ContentLayer::Header && element.text.contains(title) })
+        );
+    }
+}
+
+#[cfg(feature = "layout-detection")]
+#[test]
+fn isolated_folio_header_does_not_exempt_model_classified_first_paragraph() {
+    let mut page = vec![positioned_para("An ordinary first paragraph.", 60.0, 690.0)];
+    let mut hint = LayoutHint {
+        class_name: LayoutHintClass::PageHeader,
+        confidence: 0.95,
+        left: 55.0,
+        bottom: 685.0,
+        right: 270.0,
+        top: 710.0,
+    };
+    super::super::layout_classify::annotate_layout_classes(&mut page, std::slice::from_ref(&hint), 0.5, 0.2);
+    assert_eq!(page[0].layout_class, Some(LayoutHintClass::PageHeader));
+
+    let accepted = merge_native_continuations(&mut page, &[], Some(738.0));
+    assert_eq!(accepted, None);
+    hint.class_name = LayoutHintClass::Text;
+    annotate_native_layout_classes(&mut page, &[hint], accepted);
+    assert_eq!(page[0].layout_class, Some(LayoutHintClass::Text));
 }

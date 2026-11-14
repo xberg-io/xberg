@@ -700,6 +700,7 @@ struct PageInput {
     page_width_pts: Option<f32>,
     /// Whether this page's structure-tree paragraphs need font-size classification.
     needs_classify: bool,
+    isolated_folio_page_height: Option<f32>,
     /// Y-coordinates of paragraph gaps detected from segment boundaries.
     paragraph_gap_ys: Vec<f32>,
     /// When true, paragraphs classified as `PageHeader` by the layout model are
@@ -718,11 +719,24 @@ struct PageInput {
 ///
 /// This function is intentionally free of any shared mutable state so it can be
 /// called from multiple threads via `rayon::par_iter`.
+type FolioBounds = (f32, f32, f32, f32);
+
+#[cfg(test)]
 fn process_single_page(
     input: PageInput,
     heading_map: &[(f32, Option<u8>)],
     doc_body_font_size: Option<f32>,
     witnesses: &TextRepairWitnesses,
+) -> Vec<PdfParagraph> {
+    process_single_page_with_folio(input, heading_map, doc_body_font_size, witnesses, &mut None)
+}
+
+fn process_single_page_with_folio(
+    input: PageInput,
+    heading_map: &[(f32, Option<u8>)],
+    doc_body_font_size: Option<f32>,
+    witnesses: &TextRepairWitnesses,
+    accepted_folio: &mut Option<FolioBounds>,
 ) -> Vec<PdfParagraph> {
     let PageInput {
         page_index: i,
@@ -737,6 +751,7 @@ fn process_single_page(
         #[cfg(feature = "layout-detection")]
         page_width_pts,
         needs_classify,
+        isolated_folio_page_height,
         paragraph_gap_ys,
         include_headers,
         include_footers,
@@ -817,10 +832,24 @@ fn process_single_page(
                 paragraphs
             }
         } else {
-            segments_to_paragraphs(page_segments, heading_map, &paragraph_gap_ys, witnesses)
+            segments_to_paragraphs_with_folio(
+                page_segments,
+                heading_map,
+                &paragraph_gap_ys,
+                witnesses,
+                isolated_folio_page_height,
+                accepted_folio,
+            )
         };
         #[cfg(not(feature = "layout-detection"))]
-        let mut paragraphs = segments_to_paragraphs(page_segments, heading_map, &paragraph_gap_ys, witnesses);
+        let mut paragraphs = segments_to_paragraphs_with_folio(
+            page_segments,
+            heading_map,
+            &paragraph_gap_ys,
+            witnesses,
+            isolated_folio_page_height,
+            accepted_folio,
+        );
         tracing::debug!(
             page = i,
             paragraphs = paragraphs.len(),
@@ -1020,13 +1049,40 @@ fn segments_to_paragraphs(
     paragraph_gap_ys: &[f32],
     witnesses: &TextRepairWitnesses,
 ) -> Vec<PdfParagraph> {
+    segments_to_paragraphs_with_folio(segments, heading_map, paragraph_gap_ys, witnesses, None, &mut None)
+}
+
+fn segments_to_paragraphs_with_folio(
+    segments: Vec<SegmentData>,
+    heading_map: &[(f32, Option<u8>)],
+    paragraph_gap_ys: &[f32],
+    witnesses: &TextRepairWitnesses,
+    isolated_folio_page_height: Option<f32>,
+    accepted_folio: &mut Option<FolioBounds>,
+) -> Vec<PdfParagraph> {
     let segments = place_script_stacks_after_bases(order_segments_in_reading_frames(segments));
     let mut paragraphs = blocks_to_paragraphs(segments, heading_map, paragraph_gap_ys);
     apply_text_repair_to_structure_tree_paragraphs(&mut paragraphs, true, witnesses);
     reattach_detached_list_markers(&mut paragraphs, DetachedMarkerFrame::Native);
-    merge_continuation_paragraphs_with_gaps(&mut paragraphs, paragraph_gap_ys);
+    *accepted_folio = merge_native_continuations(&mut paragraphs, paragraph_gap_ys, isolated_folio_page_height);
     synchronize_paragraph_text_metadata(&mut paragraphs);
     paragraphs
+}
+
+fn merge_native_continuations(
+    paragraphs: &mut Vec<PdfParagraph>,
+    paragraph_gaps: &[f32],
+    isolated_folio_page_height: Option<f32>,
+) -> Option<FolioBounds> {
+    let accepted = isolated_folio_page_height.and_then(|height| classify_isolated_folio_header(paragraphs, height));
+    if accepted.is_some() {
+        let mut body = paragraphs.split_off(1);
+        merge_continuation_paragraphs_with_gaps(&mut body, paragraph_gaps);
+        paragraphs.append(&mut body);
+    } else {
+        merge_continuation_paragraphs_with_gaps(paragraphs, paragraph_gaps);
+    }
+    accepted
 }
 
 /// Master switch for [`reattach_detached_list_markers`].
@@ -1658,6 +1714,21 @@ fn assign_native_paragraph_layout(
         }
         paragraph.layout_region_path = Some(path);
     }
+}
+
+#[cfg(feature = "layout-detection")]
+fn annotate_native_layout_classes(
+    page: &mut [PdfParagraph],
+    hints: &[LayoutHint],
+    accepted_folio: Option<FolioBounds>,
+) {
+    let start = usize::from(accepted_folio.is_some_and(|bounds| {
+        page.first().is_some_and(|paragraph| {
+            paragraph.layout_class == Some(LayoutHintClass::PageHeader)
+                && rendering_artifact_bbox(paragraph) == Some(bounds)
+        })
+    }));
+    super::layout_classify::annotate_layout_classes(&mut page[start..], hints, 0.5, 0.2);
 }
 
 fn reorder_pages_by_layout_region(pages: &mut [Vec<PdfParagraph>]) {
@@ -4283,6 +4354,13 @@ fn build_document_structure_with_native(
                 page_width_pts: layout_results
                     .and_then(|results| results.get(i))
                     .map(|result| result.page_width_pts),
+                #[cfg(feature = "layout-detection")]
+                isolated_folio_page_height: layout_results
+                    .filter(|_| page_count == 1 && !used_structure_tree)
+                    .and_then(|results| results.first())
+                    .map(|layout| layout.page_height_pts),
+                #[cfg(not(feature = "layout-detection"))]
+                isolated_folio_page_height: None,
                 needs_classify: false,
                 paragraph_gap_ys,
                 include_headers,
@@ -4298,16 +4376,20 @@ fn build_document_structure_with_native(
         ));
     }
 
+    let process_page = |input| {
+        let mut accepted_folio = None;
+        let paragraphs =
+            process_single_page_with_folio(input, &heading_map, doc_body_font_size, &witnesses, &mut accepted_folio);
+        (paragraphs, accepted_folio)
+    };
     #[cfg(not(target_arch = "wasm32"))]
-    let mut all_page_paragraphs: Vec<Vec<PdfParagraph>> = page_inputs
-        .into_par_iter()
-        .map(|input| process_single_page(input, &heading_map, doc_body_font_size, &witnesses))
-        .collect();
+    let (mut all_page_paragraphs, accepted_folios): (Vec<_>, Vec<_>) =
+        page_inputs.into_par_iter().map(process_page).unzip();
     #[cfg(target_arch = "wasm32")]
-    let mut all_page_paragraphs: Vec<Vec<PdfParagraph>> = page_inputs
-        .into_iter()
-        .map(|input| process_single_page(input, &heading_map, doc_body_font_size, &witnesses))
-        .collect();
+    let (mut all_page_paragraphs, accepted_folios): (Vec<_>, Vec<_>) =
+        page_inputs.into_iter().map(process_page).unzip();
+    #[cfg(not(feature = "layout-detection"))]
+    let _ = accepted_folios;
 
     if !used_structure_tree {
         for (page_index, paragraphs) in all_page_paragraphs.iter_mut().enumerate() {
@@ -4361,12 +4443,16 @@ fn build_document_structure_with_native(
     compact_final_heading_hierarchy(&mut all_page_paragraphs);
     promote_repeated_body_size_bold_headings(&mut all_page_paragraphs, doc_body_font_size);
     #[cfg(feature = "layout-detection")]
-    for (page, projection) in all_page_paragraphs.iter_mut().zip(native_layout_projections) {
+    for ((page, projection), accepted_folio) in all_page_paragraphs
+        .iter_mut()
+        .zip(native_layout_projections)
+        .zip(accepted_folios)
+    {
         let Some(projection) = projection else {
             continue;
         };
         assign_native_paragraph_layout(page, &projection.groups, &projection.group_bounds);
-        super::layout_classify::annotate_layout_classes(page, &projection.classification_hints, 0.5, 0.2);
+        annotate_native_layout_classes(page, &projection.classification_hints, accepted_folio);
     }
     // Spill cleanup runs after deferred annotation so layout-only captions,
     // footnotes, and furniture retain their semantic provenance.
@@ -7275,6 +7361,103 @@ fn has_deferred_layout_class(paragraph: &PdfParagraph, hints: Option<&[LayoutHin
         let _ = (paragraph, hints);
         false
     }
+}
+
+// An extracted interior page can retain a folio and running title without any
+// neighboring pages to establish repetition. Require a separate upright folio,
+// an italic title on its baseline, and substantial prose below the same margin. ~keep
+fn classify_isolated_folio_header(page: &mut [PdfParagraph], height: f32) -> Option<FolioBounds> {
+    let Some((header, rest)) = page.split_first_mut() else {
+        tracing::trace!(target: "xberg::pdf::structure::folio_header", reason = "empty_page", "rejected isolated folio header");
+        return None;
+    };
+    if header.heading_level.is_some()
+        || header.is_list_item
+        || header.is_formula
+        || header.is_code_block
+        || !matches!(header.layout_class, None | Some(LayoutHintClass::Text))
+        || !(3..=RUNNING_MARGIN_MAX_WORDS).contains(&header.word_count)
+    {
+        tracing::trace!(target: "xberg::pdf::structure::folio_header", reason = "paragraph_role_or_word_count", heading = ?header.heading_level, class = ?header.layout_class, words = header.word_count, list = header.is_list_item, formula = header.is_formula, code = header.is_code_block, "rejected isolated folio header");
+        return None;
+    }
+    let Some(bounds @ (left, bottom, _, _)) = rendering_artifact_bbox(header) else {
+        tracing::trace!(target: "xberg::pdf::structure::folio_header", reason = "invalid_paragraph_geometry", "rejected isolated folio header");
+        return None;
+    };
+    if !height.is_finite()
+        || height <= 0.0
+        || bottom < height * (1.0 - RUNNING_MARGIN_FRACTION)
+        || reads_vertically(header)
+    {
+        tracing::trace!(target: "xberg::pdf::structure::folio_header", reason = "margin_or_rotation", bottom, height, vertical = reads_vertically(header), "rejected isolated folio header");
+        return None;
+    }
+    let mut segments = header
+        .lines
+        .iter()
+        .flat_map(|line| &line.segments)
+        .filter(|segment| !segment.text.trim().is_empty())
+        .peekable();
+    let Some(folio) = segments.next() else {
+        tracing::trace!(target: "xberg::pdf::structure::folio_header", reason = "missing_folio", "rejected isolated folio header");
+        return None;
+    };
+    let digits = folio.text.trim();
+    if folio.is_italic
+        || !(3..=5).contains(&digits.len())
+        || !digits.bytes().all(|digit| digit.is_ascii_digit())
+        || segments
+            .peek()
+            .is_none_or(|first| first.x - (folio.x + folio.width) < folio.font_size)
+        || !segments.all(|segment| segment.is_italic && (segment.baseline_y - folio.baseline_y).abs() <= 1.0)
+    {
+        tracing::trace!(target: "xberg::pdf::structure::folio_header", reason = "folio_or_title_shape", "rejected isolated folio header");
+        return None;
+    }
+    let title = paragraph_text_whitespace_collapsed(header);
+    let Some((_, byline)) = title.split_once(' ') else {
+        return None;
+    };
+    if !byline
+        .split_once(" and ")
+        .is_some_and(|(left, right)| initialed_running_author(left) && initialed_running_author(right))
+    {
+        return None;
+    }
+    let has_body_below = rest.iter().any(|body| {
+        body.heading_level.is_none()
+            && paragraph_alphanum_len(body) >= RUNNING_MARGIN_BODY_CHARS
+            && rendering_artifact_bbox(body).is_some_and(|(body_left, _, _, body_top)| {
+                let gap = bottom - body_top;
+                (left - body_left).abs() <= folio.font_size && gap >= folio.font_size && gap <= 4.0 * folio.font_size
+            })
+    });
+    tracing::trace!(
+        target: "xberg::pdf::structure::folio_header",
+        has_body_below,
+        "isolated folio header body evidence"
+    );
+    if has_body_below {
+        header.layout_class = Some(LayoutHintClass::PageHeader);
+    }
+    has_body_below.then_some(bounds)
+}
+
+// An abbreviated author pair supplies evidence independent of the folio geometry:
+// a numbered entry with an arbitrary italic title can have the same positions. ~keep
+fn initialed_running_author(text: &str) -> bool {
+    let Some((initials, surname)) = text.rsplit_once(' ') else {
+        return false;
+    };
+    surname.starts_with(char::is_uppercase)
+        && surname.chars().count() >= 2
+        && surname.chars().all(|c| c.is_alphabetic() || matches!(c, '-' | '\''))
+        && (1..=3).contains(&initials.split_whitespace().count())
+        && initials.split_whitespace().all(|word| {
+            let bytes = word.as_bytes();
+            bytes.len() == 2 && bytes[0].is_ascii_uppercase() && bytes[1] == b'.'
+        })
 }
 
 fn running_page_keys(
