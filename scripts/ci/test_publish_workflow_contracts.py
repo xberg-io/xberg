@@ -425,23 +425,54 @@ def test_android_dry_run_stages_both_abis_and_executes_only_aar_verification() -
 
 def test_normal_php_retry_preserves_release_and_cancellation_guards() -> None:
     expression = job_if_expression(job_block(WORKFLOW.read_text(), "php-extension"))
-    for plugins_only, cancelled, dry_run, crates_result, expected in (
-        (False, False, "false", "skipped", True),
-        (True, False, "false", "skipped", False),
-        (False, True, "false", "skipped", False),
-        (False, False, "true", "skipped", False),
-        (False, False, "false", "failure", False),
+    for plugins_only, cancelled, dry_run, crates_result, available, expected in (
+        (False, False, "true", "skipped", "true", True),
+        (False, False, "true", "skipped", "false", False),
+        (False, False, "false", "skipped", "", True),
+        (True, False, "false", "skipped", "", False),
+        (False, True, "false", "skipped", "", False),
+        (False, False, "false", "failure", "", False),
     ):
         context = {
             "inputs": {"plugins_only": plugins_only},
             "cancelled": cancelled,
             "needs": {
-                "prepare": {"outputs": {"dry_run": dry_run, "release_php": "true", "force_republish": "true"}},
+                "prepare": {
+                    "result": "success",
+                    "outputs": {
+                        "dry_run": dry_run,
+                        "release_php": "true",
+                        "force_republish": "true",
+                        "php_registry_core_available": available,
+                    },
+                },
                 "publish_crates": {"result": crates_result},
                 "check_packagist": {"outputs": {"exists": "true"}},
             },
         }
-        assert evaluate_condition(expression, context) is expected
+        assert evaluate_condition(expression, context) is expected, (dry_run, available, crates_result)
+
+
+def test_php_tagged_dry_run_cannot_upload_or_publish() -> None:
+    workflow = WORKFLOW.read_text()
+    outputs = {"dry_run": "true", "is_tag": "true", "release_php": "true", "force_republish": "true"}
+    context = {
+        "inputs": {"plugins_only": False},
+        "cancelled": False,
+        "needs": {
+            "prepare": {"outputs": outputs},
+            "php_extension": {"result": "success"},
+            "upload_php_pie_release": {"result": "success"},
+            "publish_crates": {"result": "skipped"},
+            "check_packagist": {"outputs": {"exists": "true"}},
+        },
+    }
+    for job in ("upload-php-pie-release", "publish-packagist"):
+        expression = job_if_expression(job_block(workflow, job))
+        outputs["dry_run"] = "true"
+        assert not evaluate_condition(expression, context), job
+        outputs["dry_run"] = "false"
+        assert evaluate_condition(expression, context), job
 
 
 def test_partial_release_retries_skip_plugin_distribution_and_announcements() -> None:
