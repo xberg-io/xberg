@@ -554,10 +554,26 @@ fn recover_blank_quantity_from_source(
     })
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn native_ocr_stopped(token: &crate::cancellation::CancellationToken) -> bool {
+    token.is_cancelled() || token.time_limit_reached()
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[test]
+fn native_ocr_stop_check_observes_expired_deadline_without_stop_flag() {
+    let token = crate::cancellation::CancellationToken::new();
+    assert!(!native_ocr_stopped(&token));
+    token.set_deadline(std::time::Instant::now());
+    assert!(!token.stop_requested());
+    assert!(!token.is_cancelled());
+    assert!(native_ocr_stopped(&token));
+}
+
 pub(super) fn recognize_until_stop(api: &TesseractAPI) -> xberg_tesseract::Result<()> {
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(token) = crate::core::extractor::cacheability::ocr_stop_token() {
-        let stopped = || token.is_cancelled() || token.stop_requested();
+        let stopped = || native_ocr_stopped(&token);
         if stopped() {
             return Err(xberg_tesseract::TesseractError::OcrError);
         }

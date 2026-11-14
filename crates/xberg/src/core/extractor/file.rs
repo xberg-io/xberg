@@ -258,7 +258,13 @@ pub(crate) async fn extract_file(
         let started = std::time::Instant::now();
         let mut extraction_future = extraction_future;
         match tokio::time::timeout(std::time::Duration::from_secs(secs), &mut extraction_future).await {
-            Ok(inner) => inner,
+            Ok(inner) => {
+                if let Some(token) = config.cancel_token.as_ref().filter(|token| token.time_limit_reached()) {
+                    super::time_limit::finish_grace(Ok(inner), token, secs, started)
+                } else {
+                    inner
+                }
+            }
             Err(_elapsed) => match super::time_limit::begin_grace(config.cancel_token.as_ref(), secs, started) {
                 Ok(token) => {
                     let outcome =

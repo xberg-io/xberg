@@ -7,10 +7,20 @@ use crate::cache::blake3_hash_file;
 
 const MAX_PENDING_OCR_WRITES: usize = 64;
 
-#[derive(Default)]
+type PendingWrites = Vec<Box<dyn FnOnce() + Send>>;
+
 pub(super) struct RequestModels {
     digests: Mutex<HashMap<PathBuf, String>>,
-    writes: Mutex<Vec<Box<dyn FnOnce() + Send>>>,
+    writes: Mutex<Option<PendingWrites>>,
+}
+
+impl Default for RequestModels {
+    fn default() -> Self {
+        Self {
+            digests: Mutex::default(),
+            writes: Mutex::new(Some(Vec::new())),
+        }
+    }
 }
 
 pub(crate) fn request_model_digest(path: &Path) -> crate::Result<String> {
@@ -34,13 +44,20 @@ impl RequestModels {
 
     pub(super) fn defer(&self, write: impl FnOnce() + Send + 'static) {
         let mut writes = self.writes.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        if writes.len() < MAX_PENDING_OCR_WRITES {
+        if let Some(writes) = writes.as_mut().filter(|writes| writes.len() < MAX_PENDING_OCR_WRITES) {
             writes.push(Box::new(write));
         }
     }
 
     pub(super) fn finish(&self) {
-        let writes = std::mem::take(&mut *self.writes.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
+        let Some(writes) = self
+            .writes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        else {
+            return;
+        };
         if ocr_stop_requested() || !is_cacheable() {
             return;
         }
@@ -156,4 +173,26 @@ async fn timed_out_worker_cannot_publish_deferred_ocr_results() {
     worker.await.unwrap();
     assert!(!early.load(Ordering::Relaxed));
     assert!(!late.load(Ordering::Relaxed));
+}
+
+#[cfg(test)]
+#[tokio::test]
+async fn worker_cannot_enqueue_after_deferred_ocr_queue_is_drained() {
+    use std::sync::Arc;
+
+    let (drained, wait) = std::sync::mpsc::channel();
+    let value = Arc::new(());
+    let worker = super::with_ocr_cancellation(None, async {
+        super::defer_ocr_cache_write(move || drained.send(()).unwrap());
+        let value = Arc::clone(&value);
+        tokio::task::spawn_blocking(super::blocking(move || {
+            wait.recv().unwrap();
+            assert!(!super::ocr_stop_requested());
+            let queued_value = Arc::clone(&value);
+            super::defer_ocr_cache_write(move || drop(queued_value));
+            assert_eq!(Arc::strong_count(&value), 2);
+        }))
+    })
+    .await;
+    worker.await.unwrap();
 }

@@ -2056,8 +2056,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     })?;
                     pending_pages.remove(&page_idx);
                     if result.is_err()
-                        && let Some(token) = config.cancel_token.as_ref().filter(|token| token.stop_requested())
+                        && let Some(token) = config.cancel_token.as_ref().filter(|token| token.time_limit_reached())
                     {
+                        token.request_stop();
                         mark_pages_unread(
                             Some(token),
                             std::iter::once(page_idx),
@@ -2768,8 +2769,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 }
                 pending_pages.remove(&page_idx);
                 if result.is_err()
-                    && let Some(token) = config.cancel_token.as_ref().filter(|token| token.stop_requested())
+                    && let Some(token) = config.cancel_token.as_ref().filter(|token| token.time_limit_reached())
                 {
+                    token.request_stop();
                     mark_pages_unread(
                         Some(token),
                         std::iter::once(page_idx),

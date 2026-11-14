@@ -10036,9 +10036,14 @@ mod unread_page_blank_flag_tests {
             _config: &crate::core::config::OcrConfig,
         ) -> crate::Result<crate::types::ExtractedDocument> {
             if self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
-                self.token.request_stop();
+                if self.fail_after_stop {
+                    self.token.set_deadline(std::time::Instant::now());
+                } else {
+                    self.token.request_stop();
+                }
             } else if self.fail_after_stop {
-                assert!(self.token.stop_requested());
+                assert!(self.token.time_limit_reached());
+                assert!(!self.token.stop_requested());
                 return Err(crate::XbergError::Plugin {
                     message: "recognition stopped".to_string(),
                     plugin_name: "slow-after-stop-backend".to_string(),
@@ -10069,7 +10074,7 @@ mod unread_page_blank_flag_tests {
     #[cfg(feature = "ocr")]
     #[tokio::test]
     #[serial]
-    async fn a_page_whose_recognition_returns_an_error_after_stop_is_unread() {
+    async fn a_page_whose_recognition_fails_after_deadline_without_stop_flag_is_unread() {
         assert_page_unread_after_stop(true).await;
     }
 
