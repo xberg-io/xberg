@@ -123,9 +123,8 @@ async fn qualified_pcb_texture_is_pruned_without_losing_the_faint_word() {
 async fn original_pcb_hole_row_is_removed_in_both_formats() {
     let archive = std::env::var_os("XBERG_2943_ARCHIVE").expect("set XBERG_2943_ARCHIVE");
     let path = Path::new(&archive).join("historical-cli.2Fmdbd/poc-selected.pdf");
-    let sentinels = [
-        "ceeces", "coecee", "wecece", "cceece", "ccccee", "eeeece", "eeecce", "ececee",
-    ];
+    let row = "cece' cocece ceeces coecee wecece cceece ccccee cocece eeeece eeecce ececee";
+    let expected: Vec<_> = row.split_whitespace().collect();
     let mut failures = Vec::new();
     for format in [OutputFormat::Plain, OutputFormat::Markdown] {
         let before = read(&path, format.clone(), false, true).await;
@@ -135,18 +134,61 @@ async fn original_pcb_hole_row_is_removed_in_both_formats() {
             serde_json::to_value(&after.ocr_elements).unwrap(),
             "{format:?}: raw recognitions"
         );
-        for sentinel in sentinels {
-            assert!(
-                count(page_content(&before, 3), sentinel) > 0,
-                "{format:?}: missing control {sentinel}"
-            );
-            if count(page_content(&after, 3), sentinel) > 0 {
-                failures.push((format.clone(), sentinel));
+        let before = page_content(&before, 3).replace('’', "'");
+        let after = page_content(&after, 3).replace('’', "'");
+        let tokens: Vec<_> = before.split_whitespace().collect();
+        assert_eq!(
+            tokens
+                .windows(expected.len())
+                .filter(|window| *window == expected)
+                .count(),
+            1,
+            "{format:?}"
+        );
+        for (index, word) in expected.iter().enumerate() {
+            if expected[..index].contains(word) {
+                continue;
+            }
+            let row_count = expected.iter().filter(|item| *item == word).count();
+            let before_count = before.split_whitespace().filter(|item| item == word).count();
+            let after_count = after.split_whitespace().filter(|item| item == word).count();
+            if after_count != before_count - row_count {
+                failures.push((format.clone(), *word, before_count - row_count, after_count));
             }
         }
-        eprintln!("{format:?}: page 3 exercised all {} PCB controls", sentinels.len());
+        assert_eq!(
+            count(&before, "33"),
+            count(&after, "33"),
+            "{format:?}: printed page number"
+        );
+        assert!(count(&after, "33") > 0, "{format:?}: printed page number missing");
+        eprintln!("{format:?}: exercised all {} PCB occurrences", expected.len());
     }
-    assert!(failures.is_empty(), "PCB reads survived pruning: {failures:?}");
+    assert!(
+        failures.is_empty(),
+        "PCB occurrence counts (format, word, expected, actual): {failures:?}"
+    );
+}
+
+#[test]
+#[ignore = "requires XBERG_2943_ORIGINAL_PCB and the verified subset under XBERG_2943_ARCHIVE"]
+fn pcb_subset_page_three_matches_full_document_page_thirty_three() {
+    use xberg_native_pdf::{
+        PdfDocument,
+        rendering::{RenderOptions, render_page},
+    };
+    let archive = std::env::var_os("XBERG_2943_ARCHIVE").expect("set XBERG_2943_ARCHIVE");
+    let subset = Path::new(&archive).join("historical-cli.2Fmdbd/poc-selected.pdf");
+    let original = std::env::var_os("XBERG_2943_ORIGINAL_PCB").expect("set XBERG_2943_ORIGINAL_PCB");
+    let subset = PdfDocument::from_bytes(std::fs::read(subset).unwrap()).unwrap();
+    let original = PdfDocument::from_bytes(std::fs::read(original).unwrap()).unwrap();
+    let mut options = RenderOptions::default();
+    options.dpi = 300;
+    let subset_page = render_page(&subset, 2, &options).unwrap();
+    let original_page = render_page(&original, 32, &options).unwrap();
+    assert_eq!((subset_page.width, subset_page.height), (2550, 3300));
+    assert_eq!(subset_page.data, original_page.data);
+    assert_ne!(subset_page.data, render_page(&original, 31, &options).unwrap().data);
 }
 
 #[tokio::test]

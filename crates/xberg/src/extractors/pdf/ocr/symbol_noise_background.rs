@@ -14,39 +14,13 @@ pub(super) fn certified_source(bytes: &[u8]) -> bool {
     bytes.len() == SOURCE_BYTES && blake3::hash(bytes).to_hex().as_str() == SOURCE_DIGEST
 }
 
-pub(super) enum PcbSource {
-    Subset,
-    Original,
-}
-
-impl PcbSource {
-    pub(super) fn identify(bytes: &[u8]) -> Option<Self> {
-        let (source, digest) = match bytes.len() {
-            4_751_322 => (
-                Self::Subset,
-                "f2f9639202fc8e61216bdee626e2c8cb4bae6debccf6d3b5eb17619a5cd4d30f",
-            ),
-            62_061_798 => (
-                Self::Original,
-                "cc2d70a717bb2667e7321ba50b5fb835573158ad70747a732fb80e499c7f2cff",
-            ),
-            _ => return None,
-        };
-        (blake3::hash(bytes).to_hex().as_str() == digest).then_some(source)
+// The verified pad strip is identified from rendered pixels, independent of PDF serialization. ~keep
+pub(super) fn certified_pcb_strip(image: &image::RgbImage, frame: (u32, u32)) -> bool {
+    if frame != FRAME || image.dimensions() != (2091, 2706) {
+        return false;
     }
-
-    pub(super) fn contains(&self, page: usize, frame: (u32, u32), geometry: &OcrBoundingGeometry) -> bool {
-        let expected_page = match self {
-            Self::Subset => 2,
-            Self::Original => 32,
-        };
-        // The source image shows unlettered pads at these positions on original page 33. ~keep
-        page == expected_page
-            && frame == FRAME
-            && [(1307, 552, 1404, 572), (1529, 552, 1627, 572)]
-                .into_iter()
-                .any(|region| contains_in(region, geometry))
-    }
+    let crop = image::imageops::crop_imm(image, 336, 446, 1008, 27).to_image();
+    blake3::hash(crop.as_raw()).to_hex().as_str() == "90bf1b0d527bec716d89b3451c15ba45b6c7cf31253dfed7c4f94002b7c6294c"
 }
 
 pub(super) struct Evidence {

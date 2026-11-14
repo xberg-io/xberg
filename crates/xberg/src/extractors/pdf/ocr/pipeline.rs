@@ -1267,11 +1267,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // none. ~keep
     let ocr_output_thresholds = route_noise_thresholds(config);
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-    let certified_pcb = ocr_output_thresholds
-        .prune_symbol_noise_lines
-        .then(|| super::symbol_noise_background::PcbSource::identify(content))
-        .flatten();
-    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let number_layers = pages.native_layers.clone();
     let page_layers = match pages.native_layers {
         Some(layers) => Some(layers),
@@ -3044,17 +3039,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         background_noise_by_page.insert((page_idx + 1) as u32, evidence);
                     }
                     let planned = texture_work.probe_page(|work| {
-                        if let Some(candidates) = super::symbol_noise_lines::texture::capture(
-                            raster,
-                            &extraction_result,
-                            config,
-                            work,
-                            |frame, geometry| {
-                                certified_pcb
-                                    .as_ref()
-                                    .is_some_and(|source| source.contains(page_idx, frame, geometry))
-                            },
-                        ) {
+                        if let Some(candidates) =
+                            super::symbol_noise_lines::texture::capture(raster, &extraction_result, config, work)
+                        {
                             texture_noise_by_page.insert((page_idx + 1) as u32, candidates);
                         }
                         super::symbol_noise_lines::paint::plan(
@@ -3669,6 +3656,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     .get(page)
                     .filter(|_| text == read)
                     .and_then(|evidence| evidence.reconcile(text));
+                let pcb_strip = texture_noise_by_page
+                    .get(page)
+                    .is_some_and(|evidence| evidence.matches_pcb_strip(text, read));
                 let mut candidates = texture_noise_by_page
                     .get(page)
                     .map(|evidence| evidence.reconciled_tokens(text, read))
@@ -3680,6 +3670,16 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     .get(page)
                     .filter(|_| text == read)
                     .and_then(|evidence| evidence.reconcile(text));
+                let pcb_removed = if pcb_strip {
+                    super::symbol_noise_lines::texture::prune_pcb_row(
+                        text,
+                        ocr_results.get_mut(page),
+                        ocr_page_paragraphs.get_mut(page),
+                        structured_ocr_pages.get_mut(page),
+                    )
+                } else {
+                    0
+                };
                 let (removed, texture_removed) = super::symbol_noise_lines::texture::prune(
                     text,
                     ocr_results.get_mut(page),
@@ -3702,10 +3702,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         super::symbol_noise_background::warning(*page, background_removed),
                     );
                 }
-                if texture_removed > background_removed {
+                if texture_removed + pcb_removed > background_removed {
                     crate::core::diagnostics::push_warning_deduped(
                         &mut accumulated_warnings,
-                        super::symbol_noise_lines::texture::warning(*page, texture_removed - background_removed),
+                        super::symbol_noise_lines::texture::warning(
+                            *page,
+                            texture_removed + pcb_removed - background_removed,
+                        ),
                     );
                 }
                 continue;

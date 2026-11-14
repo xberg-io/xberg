@@ -244,6 +244,7 @@ mod public_replay;
 pub(in crate::extractors::pdf::ocr) struct Evidence {
     transcript: blake3::Hash,
     occurrences: Vec<Occurrence>,
+    pcb_strip: bool,
 }
 
 struct Occurrence {
@@ -271,7 +272,6 @@ pub(in crate::extractors::pdf::ocr) fn capture(
     read: &ExtractedDocument,
     config: &crate::core::config::ExtractionConfig,
     remaining_work: &mut usize,
-    certified_pad: impl Fn((u32, u32), &OcrBoundingGeometry) -> bool,
 ) -> Option<Evidence> {
     #[cfg(test)]
     if replay_disabled() {
@@ -315,13 +315,22 @@ pub(in crate::extractors::pdf::ocr) fn capture(
         return None;
     }
     let margins = crate::pdf::native::text::PageMarginFractions::from_extraction_config(Some(config));
-    let occurrences = find_repeated_lines(&image, &boxes, lines, |geometry| certified_pad(processed, geometry))
-        .into_iter()
-        .filter(|source| source.inside_margins(processed.1, margins))
-        .collect::<Vec<_>>();
-    (!occurrences.is_empty()).then(|| Evidence {
+    let pcb_strip = margins.top == 0.0
+        && margins.bottom == 0.0
+        && super::super::symbol_noise_background::certified_pcb_strip(&image, processed);
+    let occurrences = find_repeated_lines(&image, &boxes, lines, |geometry| {
+        pcb_strip
+            && matches!(geometry, OcrBoundingGeometry::Rectangle {left, top, width, height}
+            if *left >= 1307 && *top >= 552 && left.saturating_add(*width) <= 1627
+            && top.saturating_add(*height) <= 572)
+    })
+    .into_iter()
+    .filter(|source| source.inside_margins(processed.1, margins))
+    .collect::<Vec<_>>();
+    (!occurrences.is_empty() || pcb_strip).then(|| Evidence {
         transcript: blake3::hash(read.content.as_bytes()),
         occurrences,
+        pcb_strip,
     })
 }
 
@@ -379,6 +388,10 @@ impl Occurrence {
 }
 
 impl Evidence {
+    pub(in crate::extractors::pdf::ocr) fn matches_pcb_strip(&self, text: &str, read: &str) -> bool {
+        self.pcb_strip && text == read && blake3::hash(read.as_bytes()) == self.transcript
+    }
+
     pub(in crate::extractors::pdf::ocr) fn reconciled_tokens<'a>(&'a self, text: &str, read: &str) -> Vec<&'a str> {
         // Source geometry is checked before publication filters. If mixed assembly
         // changed the transcript, the original occurrence can no longer authorize removal.
@@ -460,7 +473,110 @@ pub(in crate::extractors::pdf::ocr) fn prune(
     (removed, texture_removed)
 }
 
+const PCB_ROW: [&str; 11] = [
+    "cece'", "cocece", "ceeces", "coecee", "wecece", "cceece", "ccccee", "cocece", "eeeece", "eeecce", "ececee",
+];
+
+fn pcb_row<'a>(text: impl Iterator<Item = &'a str>) -> Option<std::ops::Range<usize>> {
+    let tokens: Vec<_> = text.flat_map(str::split_whitespace).collect();
+    let mut rows = tokens
+        .windows(PCB_ROW.len())
+        .enumerate()
+        .filter(|(_, row)| matches!(row[0], "cece'" | "cece’") && row[1..] == PCB_ROW[1..]);
+    let (start, _) = rows.next()?;
+    rows.next().is_none().then_some(start..start + PCB_ROW.len())
+}
+
+fn strip_pcb_row(text: &str, start: &mut usize, row: &std::ops::Range<usize>) -> String {
+    strip_matching_tokens(text, |_| {
+        let remove = row.contains(start);
+        *start += 1;
+        remove
+    })
+    .0
+}
+
+pub(in crate::extractors::pdf::ocr) fn prune_pcb_row(
+    text: &mut String,
+    read: Option<&mut String>,
+    paragraphs: Option<&mut Vec<PdfParagraph>>,
+    document: Option<&mut InternalDocument>,
+) -> usize {
+    let Some(row) = pcb_row(std::iter::once(text.as_str())) else {
+        return 0;
+    };
+    let paragraph_rows = paragraphs.as_ref().map(|paragraphs| {
+        Some((
+            pcb_row(paragraphs.iter().map(|paragraph| paragraph.text.as_str()))?,
+            pcb_row(
+                paragraphs
+                    .iter()
+                    .flat_map(|paragraph| &paragraph.lines)
+                    .flat_map(|line| &line.segments)
+                    .map(|segment| segment.text.as_str()),
+            )?,
+        ))
+    });
+    let document_row = document
+        .as_ref()
+        .map(|document| pcb_row(document.elements.iter().map(|element| element.text.as_ref())));
+    if paragraph_rows == Some(None)
+        || document_row == Some(None)
+        || document.as_ref().is_some_and(|document| {
+            let Some(Some(row)) = document_row.as_ref() else {
+                return false;
+            };
+            let mut offset = 0;
+            document.elements.iter().any(|element| {
+                let start = offset;
+                offset += element.text.split_whitespace().count();
+                start < row.end
+                    && offset > row.start
+                    && (!is_prunable_element(element) || !element.annotations.is_empty())
+            })
+        })
+    {
+        return 0;
+    }
+    *text = strip_pcb_row(text, &mut 0, &row);
+    if let Some(read) = read {
+        *read = strip_pcb_row(read, &mut 0, &row);
+    }
+    if let (Some(paragraphs), Some(Some((texts, segments)))) = (paragraphs, paragraph_rows) {
+        let (mut text_index, mut segment_index) = (0, 0);
+        paragraphs.retain_mut(|paragraph| {
+            paragraph.text = strip_pcb_row(&paragraph.text, &mut text_index, &texts);
+            paragraph.lines.retain_mut(|line| {
+                line.segments.retain_mut(|segment| {
+                    segment.text = strip_pcb_row(&segment.text, &mut segment_index, &segments);
+                    !segment.text.is_empty()
+                });
+                !line.segments.is_empty()
+            });
+            paragraph.word_count = PdfParagraph::compute_word_count(&paragraph.text, &paragraph.lines);
+            paragraph.word_count != 0
+        });
+    }
+    if let (Some(document), Some(Some(row))) = (document, document_row) {
+        let mut index = 0;
+        document.elements.retain_mut(|element| {
+            let before = index;
+            let text = strip_pcb_row(&element.text, &mut index, &row);
+            let touched = before < row.end && index > row.start;
+            if touched {
+                element.text = text.into();
+            }
+            !touched || !element.text.is_empty()
+        });
+    }
+    PCB_ROW.len()
+}
+
 fn strip_tokens(text: &str, accepted: &[&str]) -> (String, usize) {
+    strip_matching_tokens(text, |token| accepted.contains(&token))
+}
+
+fn strip_matching_tokens(text: &str, mut matches: impl FnMut(&str) -> bool) -> (String, usize) {
     let mut kept = String::with_capacity(text.len());
     let mut removed = 0;
     for line in text.split_inclusive('\n') {
@@ -471,7 +587,7 @@ fn strip_tokens(text: &str, accepted: &[&str]) -> (String, usize) {
         for token in line.split_whitespace() {
             let offset = token.as_ptr() as usize - line.as_ptr() as usize;
             let end = offset + token.len();
-            let remove = accepted.contains(&token);
+            let remove = matches(token);
             if remove {
                 kept.push_str(&line[copy_from..previous_end]);
                 copy_from = end;
@@ -782,6 +898,7 @@ mod revision_tests {
         let evidence = Evidence {
             transcript: blake3::hash(text.as_bytes()),
             occurrences: vec![occurrence],
+            pcb_strip: false,
         };
         assert!(evidence.reconciled_tokens("genuine text ccccee", text).is_empty());
         assert!(evidence.reconciled_tokens("ccccee", "ccccee").is_empty());
