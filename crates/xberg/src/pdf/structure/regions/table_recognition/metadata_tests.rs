@@ -11,70 +11,94 @@ fn detection(class_name: TatrClass, bbox: [f32; 4]) -> TatrDetection {
 }
 
 fn recognized(header_rows: usize, span: Option<[f32; 4]>) -> RecognizedTatrTable {
+    recognize_rows(&[&["North", "Region"], &["A", "B"], &["C", "D"]], header_rows, span)
+}
+
+fn recognize_rows(rows: &[&[&str]], header_rows: usize, span: Option<[f32; 4]>) -> RecognizedTatrTable {
+    let cols = rows[0].len();
+    let width = (cols * 50) as u32;
+    let height = (rows.len() * 20) as u32;
+    let page_height = (height as f32).max(100.0);
     let result = TatrResult {
-        rows: (0..3)
-            .map(|row| detection(TatrClass::Row, [0.0, row as f32 * 20.0, 100.0, (row + 1) as f32 * 20.0]))
+        rows: (0..rows.len())
+            .map(|row| {
+                detection(
+                    TatrClass::Row,
+                    [0.0, row as f32 * 20.0, width as f32, (row + 1) as f32 * 20.0],
+                )
+            })
             .collect(),
-        columns: vec![
-            detection(TatrClass::Column, [0.0, 0.0, 50.0, 60.0]),
-            detection(TatrClass::Column, [50.0, 0.0, 100.0, 60.0]),
-        ],
+        columns: (0..cols)
+            .map(|col| {
+                detection(
+                    TatrClass::Column,
+                    [col as f32 * 50.0, 0.0, (col + 1) as f32 * 50.0, height as f32],
+                )
+            })
+            .collect(),
         headers: (header_rows > 0)
-            .then(|| detection(TatrClass::ColumnHeader, [0.0, 0.0, 100.0, header_rows as f32 * 20.0]))
+            .then(|| {
+                detection(
+                    TatrClass::ColumnHeader,
+                    [0.0, 0.0, width as f32, header_rows as f32 * 20.0],
+                )
+            })
             .into_iter()
             .collect(),
         spanning: span
             .map(|bbox| detection(TatrClass::SpanningCell, bbox))
             .into_iter()
             .collect(),
-        table_bbox: Some([0.0, 0.0, 100.0, 60.0]),
+        table_bbox: Some([0.0, 0.0, width as f32, height as f32]),
     };
     let (cells, structure) = build_cell_grid_with_structure(&result, result.table_bbox);
-    let words: Vec<_> = ["North", "Region", "A", "B", "C", "D"]
-        .into_iter()
+    let words: Vec<_> = rows
+        .iter()
+        .flat_map(|row| row.iter().copied())
         .enumerate()
+        .filter(|(_, text)| !text.is_empty())
         .map(|(index, text)| HocrWord {
             text: text.to_owned(),
-            left: 10 + (index as u32 % 2) * 50,
-            top: 5 + (index as u32 / 2) * 20,
+            left: 10 + (index as u32 % cols as u32) * 50,
+            top: 5 + (index as u32 / cols as u32) * 20,
             width: 20,
             height: 8,
             confidence: 99.0,
         })
         .collect();
-    let image = image::RgbImage::new(100, 60);
+    let image = image::RgbImage::new(width, height);
     let page_result = crate::pdf::structure::types::PageLayoutResult {
-        page_width_pts: 100.0,
-        page_height_pts: 100.0,
+        page_width_pts: width as f32,
+        page_height_pts: page_height,
     };
     let crop = TatrCrop {
         image: image.clone(),
         px_left: 0,
         px_top: 0,
-        width: 100,
-        height: 60,
+        width,
+        height,
         sx: 1.0,
         sy: 1.0,
-        extended_bottom_pt: 60.0,
+        extended_bottom_pt: height as f32,
     };
     let hint = LayoutHint {
         class_name: LayoutHintClass::Table,
         confidence: 0.99,
         left: 0.0,
-        bottom: 40.0,
-        right: 100.0,
-        top: 100.0,
+        bottom: page_height - height as f32,
+        right: width as f32,
+        top: page_height,
     };
     let context = TatrPageContext {
         image: &image,
         words: &words,
         page_result: &page_result,
-        page_height: 100.0,
+        page_height,
         page_index: 0,
         allow_single_column: false,
     };
     assemble_tatr_table(&TatrInference { cells, structure }, &crop, &hint, None, &context)
-        .expect("populated three-row TATR table")
+        .expect("populated TATR table")
 }
 
 fn recognized_document(result: &RecognizedTatrTable) -> crate::types::internal::InternalDocument {
@@ -106,6 +130,134 @@ fn derived_grid(result: &RecognizedTatrTable) -> crate::types::TableGrid {
             _ => None,
         })
         .expect("derived TATR table")
+}
+
+#[test]
+fn native_tatr_stops_year_headers_before_section_and_records() {
+    let rows: &[&[&str]] = &[
+        &["$ in millions", "2024", "2023", "2022"],
+        &["Preferred stock", "", "", ""],
+        &["Beginning balance", "$ 11,203", "$ 10,703", "$ 10,703"],
+        &["Issued", "4,250", "1,500", ""],
+        &["Redeemed", "(2,200)", "(1,000)", "–"],
+        &["Common stock", "", "", ""],
+        &["Beginning balance", "9", "9", ""],
+        &["Issued", "–", "–", ""],
+    ];
+    let result = recognize_rows(rows, 4, None);
+    assert_eq!(result.table.cells.len(), rows.len());
+    let grid = derived_grid(&result);
+    assert_eq!((grid.rows, grid.cols), (8, 4));
+    assert_eq!(grid.cells.len(), 32);
+    let doc = recognized_document(&result);
+    let html = crate::rendering::render_html(&doc);
+    assert_eq!(html.matches("<table>").count(), 1, "{html}");
+    for (index, (row, expected)) in grid.cells.chunks_exact(4).zip(rows).enumerate() {
+        let tag = if index == 0 { "th" } else { "td" };
+        let mut html_row = String::from("<tr>");
+        for (cell, text) in row.iter().zip(*expected) {
+            assert_eq!(cell.content, *text);
+            assert_eq!((cell.row_span, cell.col_span), (1, 1));
+            assert_eq!(cell.is_header, tag == "th", "{}", cell.content);
+            html_row.push_str(&format!("<{tag}>{text}</{tag}>"));
+        }
+        html_row.push_str("</tr>");
+        assert!(html.contains(&html_row), "{html}");
+    }
+}
+
+#[test]
+fn native_tatr_keeps_group_and_year_bands_before_section() {
+    let rows: &[&[&str]] = &[
+        &["", "Year Ended December", "", ""],
+        &["$ in millions", "2024", "2023", "2022"],
+        &["Preferred stock", "", "", ""],
+        &["Beginning balance", "$ 11,203", "$ 10,703", "$ 10,703"],
+        &["Issued", "4,250", "1,500", ""],
+        &["Common stock", "", "", ""],
+        &["Beginning balance", "9", "9", ""],
+        &["Issued", "–", "–", ""],
+    ];
+    let result = recognize_rows(rows, 5, Some([50.0, 0.0, 200.0, 20.0]));
+    let grid = derived_grid(&result);
+    let group = grid
+        .cells
+        .iter()
+        .find(|cell| cell.content == "Year Ended December")
+        .unwrap();
+    assert_eq!((group.row, group.col, group.col_span), (0, 1, 3));
+    assert!(grid.cells.iter().all(|cell| cell.is_header == (cell.row < 2)));
+}
+
+#[test]
+fn native_tatr_preserves_numeric_subheaders_without_a_repeated_section() {
+    let rows: &[&[&str]] = &[
+        &["Fiscal year", "2024", "2023", "2022"],
+        &["Reporting period", "", "", ""],
+        &["Quarter", "4", "4", "4"],
+        &["Revenue", "$ 11,203", "$ 10,703", "$ 10,703"],
+    ];
+    let result = recognize_rows(rows, 3, None);
+    let grid = derived_grid(&result);
+    let headers: Vec<_> = grid
+        .cells
+        .iter()
+        .filter(|cell| cell.is_header)
+        .map(|cell| cell.content.as_str())
+        .collect();
+    assert_eq!(
+        headers,
+        [
+            "Fiscal year",
+            "2024",
+            "2023",
+            "2022",
+            "Reporting period",
+            "",
+            "",
+            "",
+            "Quarter",
+            "4",
+            "4",
+            "4"
+        ]
+    );
+    let html = crate::rendering::render_html(&recognized_document(&result));
+    assert!(
+        html.contains("<tr><th>Quarter</th><th>4</th><th>4</th><th>4</th></tr>"),
+        "{html}"
+    );
+    assert!(
+        html.contains("<tr><td>Revenue</td><td>$ 11,203</td><td>$ 10,703</td><td>$ 10,703</td></tr>"),
+        "{html}"
+    );
+}
+
+#[test]
+fn native_tatr_preserves_numeric_subheaders_when_body_repeats_one_label() {
+    let rows: &[&[&str]] = &[
+        &["Fiscal year", "2024", "2023", "2022"],
+        &["Reporting period", "", "", ""],
+        &["Quarter", "4", "4", "4"],
+        &["Revenue", "$ 11,203", "$ 10,703", "$ 10,703"],
+        &["Actuals", "", "", ""],
+        &["Quarter", "4", "4", "4"],
+        &["Expenses", "2", "3", "4"],
+    ];
+    let result = recognize_rows(rows, 3, None);
+    let grid = derived_grid(&result);
+    assert_eq!((grid.rows, grid.cols), (7, 4));
+    assert_eq!(grid.cells.len(), 28);
+    assert!(grid.cells.iter().all(|cell| cell.is_header == (cell.row < 3)));
+    let html = crate::rendering::render_html(&recognized_document(&result));
+    assert!(
+        html.contains("<tr><th>Quarter</th><th>4</th><th>4</th><th>4</th></tr>"),
+        "{html}"
+    );
+    assert!(
+        html.contains("<tr><td>Quarter</td><td>4</td><td>4</td><td>4</td></tr>"),
+        "{html}"
+    );
 }
 
 #[test]
