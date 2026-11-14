@@ -523,7 +523,7 @@ fn ordinary_table_claims_conflict_with_redistribution_only_across_owners() {
     redistributing.members.clear();
     redistributing.redistributed.push(group.clone());
     let projected = project(
-        &[segments.clone()],
+        std::slice::from_ref(&segments),
         &[&redistributing, &ordinary],
         &[competing, table.clone()],
     );

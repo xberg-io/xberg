@@ -349,6 +349,32 @@ fn execute_probe_operator(
     Some(shows_text && !hide)
 }
 
+fn append_probe_stream(
+    output: &mut Vec<u8>,
+    dict: &HashMap<String, Object>,
+    data: &[u8],
+    remaining: usize,
+) -> Option<()> {
+    let start = output.len();
+    match dict.get("Filter") {
+        None if data.len() <= remaining => output.extend_from_slice(data),
+        Some(filter) if filter.as_name() == Some("FlateDecode") && !dict.contains_key("DecodeParms") => {
+            let mut decoder = flate2::Decompress::new(true);
+            let limit = remaining.checked_add(1)?;
+            output.resize(start + limit, 0);
+            let status = decoder
+                .decompress(data, &mut output[start..], flate2::FlushDecompress::Finish)
+                .ok()?;
+            output.truncate(start + usize::try_from(decoder.total_out()).ok()?);
+            if status != flate2::Status::StreamEnd || decoder.total_in() != data.len() as u64 {
+                return None;
+            }
+        }
+        _ => return None,
+    }
+    (output.len() - start <= remaining).then_some(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -655,30 +681,4 @@ mod tests {
         assert_eq!(doc.mc_actualtext_mcids.lock_or_recover().get(&0), Some(&sentinel));
         assert!(doc.page_content_cache.lock_or_recover().get(&0).is_none());
     }
-}
-
-fn append_probe_stream(
-    output: &mut Vec<u8>,
-    dict: &HashMap<String, Object>,
-    data: &[u8],
-    remaining: usize,
-) -> Option<()> {
-    let start = output.len();
-    match dict.get("Filter") {
-        None if data.len() <= remaining => output.extend_from_slice(data),
-        Some(filter) if filter.as_name() == Some("FlateDecode") && !dict.contains_key("DecodeParms") => {
-            let mut decoder = flate2::Decompress::new(true);
-            let limit = remaining.checked_add(1)?;
-            output.resize(start + limit, 0);
-            let status = decoder
-                .decompress(data, &mut output[start..], flate2::FlushDecompress::Finish)
-                .ok()?;
-            output.truncate(start + usize::try_from(decoder.total_out()).ok()?);
-            if status != flate2::Status::StreamEnd || decoder.total_in() != data.len() as u64 {
-                return None;
-            }
-        }
-        _ => return None,
-    }
-    (output.len() - start <= remaining).then_some(())
 }
