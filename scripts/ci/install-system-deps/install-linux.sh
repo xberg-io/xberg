@@ -136,6 +136,10 @@ fi
 libheif_search_path() {
   local result="$1" entry
   local -a entries
+  if [ -z "$2" ]; then
+    printf '%s\n' "$result"
+    return
+  fi
   IFS=: read -r -a entries <<<"$2"
   for entry in "${entries[@]}"; do
     if [ -n "$entry" ]; then
