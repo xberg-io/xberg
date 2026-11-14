@@ -86,7 +86,7 @@ pub(in super::super) fn note_unrecovered(
     let reason = match why {
         Unrecovered::Config(reason) => reason,
         Unrecovered::TablesOrFormulas => "the downscaled read already contains tables or formulas",
-        Unrecovered::IndexedRgb => "8-bit Indexed RGB scan recovery is unsupported",
+        Unrecovered::IndexedRgb => "the general strip route declined the 8-bit Indexed RGB scan",
         Unrecovered::Uncertified => {
             "the page is not one scan image in a supported encoding and density within the memory limit, \
              or a strip did not read as its source lines"

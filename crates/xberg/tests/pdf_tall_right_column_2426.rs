@@ -313,7 +313,7 @@ async fn explicit_inner_ocr_cache_keeps_both_stock_projections() {
 }
 
 #[tokio::test]
-async fn indexed_rgb_guide_page_reports_unsupported_strip_encoding() {
+async fn indexed_rgb_guide_page_reports_general_strip_route_decline() {
     let tessdata = tempfile::tempdir().expect("private tessdata directory");
     write_english_model(tessdata.path());
     let config = pinned_config(false, false, tessdata.path());
@@ -323,6 +323,6 @@ async fn indexed_rgb_guide_page_reports_unsupported_strip_encoding() {
     assert!(read.processing_warnings.iter().any(|warning| {
         warning
             .message
-            .contains("8-bit Indexed RGB scan recovery is unsupported")
+            .contains("the general strip route declined the 8-bit Indexed RGB scan")
     }));
 }

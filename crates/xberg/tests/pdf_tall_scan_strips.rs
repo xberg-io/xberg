@@ -213,10 +213,9 @@ fn tall_gray_jpeg_keeps_the_existing_refusal_for_forced_or_very_low_budget_ocr()
     }
 }
 
-/// A single-page scan takes the whole-document route, which reads no embedded image after a render
-/// refusal: Djot output has no strip recovery, so it keeps the refusal as it is.
+/// Djot preserves the render refusal and reports the noisy embedded-image probe.
 #[test]
-fn tall_gray_jpeg_keeps_the_render_refusal_under_djot_output() {
+fn tall_gray_jpeg_djot_keeps_the_typed_refusal_and_reports_retry_noise() {
     let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
         "use_cache": false,
         "output_format": "djot",
@@ -249,6 +248,7 @@ fn tall_gray_jpeg_keeps_the_render_refusal_under_djot_output() {
         panic!("expected the typed render refusal, got {error:?}");
     };
     assert!(message.contains("image working budget"), "{message}");
+    assert!(message.contains("the retry read was rejected as noise"), "{message}");
     let native = source.downcast_ref::<xberg_native_pdf::Error>().or_else(|| {
         source
             .source()

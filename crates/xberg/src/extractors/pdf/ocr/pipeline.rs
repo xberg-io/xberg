@@ -1798,6 +1798,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                     thresholds: &ocr_output_thresholds,
                                     warn_when_kept: true,
                                 }),
+                                emit_progress: true,
                             },
                         )
                         .await?
@@ -3311,6 +3312,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             thresholds: &ocr_output_thresholds,
                             warn_when_kept: false,
                         }),
+                        emit_progress: true,
                     },
                 )
                 .await?
@@ -7235,6 +7237,7 @@ pub(super) async fn extract_with_ocr_for_page(
                             cancel_token: config.cancel_token.as_ref(),
                             use_proven_source_dpi: false,
                             proven_read: None,
+                            emit_progress: true,
                         },
                     )
                     .await?
@@ -9137,6 +9140,7 @@ pub(super) struct XObjectRecoveryContext<'a> {
     /// How each image read made at a proven resolution is judged for noise. `None` leaves every
     /// read to the page policy.
     pub(super) proven_read: Option<ProvenReadPolicy<'a>>,
+    pub(super) emit_progress: bool,
 }
 
 /// The recognition-noise thresholds every route judges a page read or an image retry read by.
@@ -9172,6 +9176,7 @@ impl<'a> XObjectRecoveryContext<'a> {
             cancel_token,
             use_proven_source_dpi: false,
             proven_read: None,
+            emit_progress: true,
         }
     }
 
@@ -9223,6 +9228,7 @@ pub(super) async fn collect_pipeline_xobject_pages(
         let mut page_context = XObjectRecoveryContext::with_budget(context.budget, context.cancel_token);
         page_context.stored_jpegs = Some(&mut stored_jpegs);
         page_context.use_proven_source_dpi = context.use_proven_source_dpi;
+        page_context.emit_progress = context.emit_progress;
         page_context.proven_read = context.proven_read;
         if matches!(projection, XObjectProjection::CompletePage)
             && !super::rendering::can_project_stored_jpeg_page(doc, page_idx, &limits, &mut page_context)?
@@ -9993,18 +9999,57 @@ async fn diagnose_djot_budget_refusal(
     {
         return Ok(error);
     }
-    let mut context = XObjectRecoveryContext::with_budget(budget, config.cancel_token.as_ref());
-    context.use_proven_source_dpi = true;
-    let Some(retry) = recover_page_text_from_image_xobjects(backend, doc, 0, 1, ocr, context).await? else {
-        return Ok(error);
-    };
-    let mut causes = retry.failure_causes;
-    if retry.used_proven_source_dpi
-        && proven_read_is_noise(&retry.text, &ocr.quality_thresholds.clone().unwrap_or_default())
-    {
-        causes.push(PROVEN_READ_NOISE_CAUSE.to_owned());
+    let thresholds = route_noise_thresholds(config);
+    let mut context =
+        XObjectRecoveryContext::with_budget(budget, config.cancel_token.as_ref()).with_proven_reads(&thresholds);
+    context.emit_progress = false;
+    let probe = recover_page_text_from_image_xobjects(backend, doc, 0, 1, ocr, context).await;
+    super::super::ensure_pdf_not_cancelled(config)?;
+    finish_djot_budget_probe(error, probe.map(|value| value.map(|read| read.failure_causes)))
+}
+
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+fn finish_djot_budget_probe(
+    error: crate::XbergError,
+    probe: crate::Result<Option<Vec<String>>>,
+) -> crate::Result<crate::XbergError> {
+    match probe {
+        Ok(Some(causes)) => Ok(with_retry_causes(error, &causes)),
+        Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
+        Ok(None) | Err(_) => Ok(error),
     }
-    Ok(with_retry_causes(error, &causes))
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[test]
+fn djot_budget_probe_preserves_refusal_except_on_cancellation() {
+    let refusal = || crate::XbergError::Parsing {
+        message: "render refused".to_owned(),
+        source: Some(Box::new(std::io::Error::other("typed source"))),
+    };
+    for (probe, expected) in [
+        (Ok(None), "render refused"),
+        (Ok(Some(Vec::new())), "render refused"),
+        (Err(crate::XbergError::validation("probe limit")), "render refused"),
+        (
+            Ok(Some(vec!["noisy image".to_owned()])),
+            "render refused; embedded-image retry recovered no text (noisy image)",
+        ),
+    ] {
+        let crate::XbergError::Parsing {
+            message,
+            source: Some(source),
+        } = finish_djot_budget_probe(refusal(), probe).unwrap()
+        else {
+            panic!("expected typed render refusal");
+        };
+        assert_eq!(message, expected);
+        assert!(source.is::<std::io::Error>());
+    }
+    assert!(matches!(
+        finish_djot_budget_probe(refusal(), Err(crate::XbergError::Cancelled)),
+        Err(crate::XbergError::Cancelled)
+    ));
 }
 
 /// Why a retry read made at a placement-proven resolution was not adopted.
