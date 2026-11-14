@@ -638,7 +638,7 @@ mod revision_tests {
 
     #[test]
     fn collar_filter_preserves_the_original_four_donor_ink_veto() {
-        let rect = |index| BoxInRaster {
+        let rect = |index: u32| BoxInRaster {
             x: 20 + 100 * index,
             y: 45,
             width: 72,
