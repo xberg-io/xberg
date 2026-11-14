@@ -118,14 +118,18 @@ PYTHON
 
 	cat >scripts/ci/smoke-test-musl-elixir-nif.sh <<'SH'
 set -euo pipefail
-test "$(readlink "$1/libxberg_nif.so")" = "libxberg_nif-v1.4.0-nif-2.16-fixture-target.so"
-test "$(cat "$1/libxberg_nif.so")" = native
-test "$(readlink "$1/libonnxruntime.so")" = libonnxruntime.so.1
-test "$(cat "$1/libonnxruntime.so")" = closure
-test "$(cat "$1/libheif.so.1")" = codec
+name=libxberg_nif-v1.4.0-nif-2.16-fixture-target.so.tar.gz
+test "$(basename "$1")" = "$name"
+test "$(cat "$2")" = "$(sha256sum "$1" | cut -d ' ' -f 1)  $name"
+tar -xzf "$1" -C "$XBERG_WORK/staged"
+test "$(cat "$XBERG_WORK/staged/${name%.tar.gz}")" = native
+test "$(readlink "$XBERG_WORK/staged/libonnxruntime.so")" = libonnxruntime.so.1
+test "$(cat "$XBERG_WORK/staged/libonnxruntime.so")" = closure
+test "$(cat "$XBERG_WORK/staged/libheif.so.1")" = codec
 echo "archive reached smoke"
 SH
-	extract_run elixir-natives-musl 'Smoke-test the extracted musl Elixir NIF archive'
+	mkdir staged
+	extract_run elixir-natives-musl 'Smoke-test the staged musl Elixir NIF archive'
 	run bash "$XBERG_WORK/step.sh"
 	xberg_assert_status 0
 	xberg_assert_output_contains 'archive reached smoke'
@@ -297,4 +301,24 @@ PYTHON
 	check_dart_release_prerequisites "$XBERG_WORK/no-checkout.yaml"
 	xberg_assert_status 1
 	xberg_assert_output_contains 'Dart upload needs one source checkout, found 0'
+}
+
+@test "Elixir release inventory should require every loader archive by its exact name" {
+	extract_run prepare 'List expected Elixir NIF assets'
+	bash "$XBERG_WORK/step.sh"
+	python3 - "$GITHUB_OUTPUT" "$REPOSITORY_ROOT/packages/elixir/lib/xberg/native.ex" <<'PYTHON'
+import re, sys
+from pathlib import Path
+csv, header, *names, end = Path(sys.argv[1]).read_text().splitlines()
+assert header == "multiline<<EOF" and end == "EOF"
+assert csv == "names=" + ",".join(names)
+source = Path(sys.argv[2]).read_text()
+targets = re.search(r"targets: \[(.*?)\]", source, re.S).group(1)
+expected = set()
+for target in re.findall(r'"([^"]+)"', targets):
+    prefix, ext = ("", "dll") if "windows" in target else ("lib", "so")
+    expected.add(f"{prefix}xberg_nif-v1.4.0-nif-2.16-{target}.{ext}.tar.gz")
+assert len(expected) == len(names) == 6
+assert set(names) == expected
+PYTHON
 }

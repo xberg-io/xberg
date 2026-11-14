@@ -17,6 +17,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from unittest import mock
 
+import elixir_nif_assets
 import windows_wheel_closure as closure
 from test_windows_wheel_closure import ROOT, expected_error, pe, windows_wheel_steps
 
@@ -92,7 +93,7 @@ class RawWrapperTests(unittest.TestCase):
             "php.zip": ("xberg.dll", ""),
             "cli.zip": ("xberg.exe", "xberg-cli-x86_64-pc-windows-msvc/"),
             "ffi.tar.gz": ("xberg_ffi.dll", "xberg-ffi-windows-x86_64/lib/"),
-            "elixir.tar.gz": ("libxberg_nif-v1.3.10-nif-2.16-x86_64-pc-windows-msvc.dll", ""),
+            "elixir.tar.gz": ("xberg_nif-v1.3.10-nif-2.16-x86_64-pc-windows-msvc.dll", ""),
         }
         for filename, (native, prefix) in layouts.items():
             with self.subTest(filename=filename):
@@ -181,11 +182,11 @@ class RawWrapperTests(unittest.TestCase):
         assert "notice does not match shipped DLLs" in result.stderr
 
     def test_ort_source_cannot_supply_crt_when_licensed_source_is_missing(self) -> None:
-        artifact = self.archive("elixir.tar.gz", {"libxberg_nif-test.dll": pe(["onnxruntime.dll"])})
+        artifact = self.archive("elixir.tar.gz", {"xberg_nif-test.dll": pe(["onnxruntime.dll"])})
         before = artifact.read_bytes()
         (self.crt / "msvcp140_1.dll").unlink()
         (self.ort / "msvcp140_1.dll").write_bytes(self.msvcp)
-        result = self.stage(artifact, "libxberg_nif-*.dll")
+        result = self.stage(artifact, "xberg_nif-*.dll")
         assert result.returncode != 0, result.stdout
         assert "msvcp140_1.dll" in result.stderr
         assert artifact.read_bytes() == before
@@ -357,12 +358,41 @@ def assert_raw_runners(source: str) -> None:
 class RawWorkflowTests(unittest.TestCase):
     source = (ROOT / ".github/workflows/publish.yaml").read_text(encoding="utf-8")
 
+    def test_elixir_release_names_match_archive_member_and_checksum_keys(self) -> None:
+        windows = "xberg_nif-v1.4.0-nif-2.16-x86_64-pc-windows-msvc.dll"
+        unix = "libxberg_nif-v1.4.0-nif-2.16-aarch64-unknown-linux-musl.so.tar.gz"
+        with tempfile.TemporaryDirectory() as scratch:
+            directory = Path(scratch)
+            original = directory / f"lib{windows}.tar.gz"
+            payload = pe(["onnxruntime.dll"])
+            with tarfile.open(original, "w:gz") as archive:
+                entry = tarfile.TarInfo(f"lib{windows}")
+                entry.size = len(payload)
+                archive.addfile(entry, io.BytesIO(payload))
+
+            elixir_nif_assets.normalize_windows(original, windows)
+
+            final = directory / f"{windows}.tar.gz"
+            assert not original.exists()
+            with tarfile.open(final) as archive:
+                assert archive.getnames() == [windows]
+                assert archive.extractfile(windows).read() == payload
+
+            unix_archive = directory / unix
+            unix_archive.write_bytes(b"musl archive")
+            checksum = directory / "checksum-Elixir.Xberg.Native.exs"
+            elixir_nif_assets.write_checksums(checksum, [final, unix_archive])
+            for archive in (final, unix_archive):
+                digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+                assert f'"{archive.name}" => "sha256:{digest}"' in checksum.read_text()
+            assert original.name not in checksum.read_text()
+
     def test_publish_checks_each_exact_final_windows_archive(self) -> None:
         cases = [
             ("php-extension", "xberg.dll", "-Artifact $archive.FullName"),
             ("cli-binaries", "xberg.exe", '-Artifact "${STAGE}.zip"'),
             ("c-ffi-libraries", "xberg_ffi.dll", '-Artifact "dist/c-ffi/xberg-ffi-${{ matrix.platform }}.tar.gz"'),
-            ("elixir-natives", "libxberg_nif-*.dll", "-Artifact $archive.FullName"),
+            ("elixir-natives", "xberg_nif-*.dll", "-Artifact $archive.FullName"),
         ]
         for job, root, artifact in cases:
             with self.subTest(job=job):

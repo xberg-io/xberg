@@ -19,7 +19,7 @@ LAYOUTS = {
     "php": ("xberg.dll", ""),
     "cli": ("xberg.exe", "xberg-cli-x86_64-pc-windows-msvc"),
     "ffi": ("xberg_ffi.dll", "xberg-ffi-windows-x86_64/lib"),
-    "nif": ("libxberg_nif-v1.3.10-nif-2.16-x86_64-pc-windows-msvc.dll", ""),
+    "nif": ("xberg_nif-v1.3.10-nif-2.16-x86_64-pc-windows-msvc.dll", ""),
 }
 
 
