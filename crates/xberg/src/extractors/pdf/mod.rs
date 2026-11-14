@@ -3088,6 +3088,7 @@ impl PdfExtractor {
             )
         })
         .await?;
+        #[cfg_attr(not(any(feature = "ocr", feature = "ocr-pipeline")), allow(unused_variables))]
         let content = borrowed_content.unwrap_or(&native_output.source);
         let bookmark_uris = native_output.bookmark_uris;
         let pdf_revisions = native_output.pdf_revisions;
