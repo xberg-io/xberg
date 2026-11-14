@@ -239,6 +239,35 @@ def test_plugin_only_dispatch_skips_every_core_release_job() -> None:
     assert evaluate_condition(prepare_expression, {"inputs": {"plugins_only": True}}) is False
 
 
+def test_npm_integrations_require_an_available_core_version() -> None:
+    block = job_block(WORKFLOW.read_text(), "publish-integrations-npm")
+    expression = job_if_expression(block)
+    for node_result, node_exists, dry_run, expected in (
+        ("skipped", "false", "false", False),
+        ("skipped", "true", "false", True),
+        ("success", "false", "false", True),
+        ("failure", "true", "false", False),
+        ("cancelled", "true", "false", False),
+        ("skipped", "false", "true", True),
+    ):
+        context = {
+            "inputs": {"plugins_only": False},
+            "cancelled": False,
+            "needs": {
+                "prepare": {
+                    "result": "success",
+                    "outputs": {"dry_run": dry_run, "release_node": "true", "is_tag": "true"},
+                },
+                "check_npm": {"result": "success", "outputs": {"node_exists": node_exists}},
+                "publish_node": {"result": node_result},
+                "publish_crates": {"result": "success"},
+            },
+        }
+        assert evaluate_condition(expression, context) is expected, (node_result, node_exists, dry_run)
+
+    assert "check-npm" in re.search(r"(?m)^    needs: \[(.+)\]$", block)[1].split(", ")
+
+
 def test_normal_php_retry_preserves_release_and_cancellation_guards() -> None:
     expression = job_if_expression(job_block(WORKFLOW.read_text(), "php-extension"))
     for plugins_only, cancelled, dry_run, crates_result, expected in (
