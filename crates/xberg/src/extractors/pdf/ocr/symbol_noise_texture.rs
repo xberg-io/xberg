@@ -147,10 +147,19 @@ fn best_peer(
             Some((window, pixels))
         })
         .min_by_key(|(_, pixels)| collar_difference(target, pixels))
-        .filter(|(_, pixels)| {
-            collar_difference(target, pixels) <= MAX_MEAN_DIFFERENCE * COLLAR_SAMPLES
-                && sample_difference(target, pixels) <= MAX_MEAN_DIFFERENCE * target.len() as u32
-        })
+        .filter(|(_, pixels)| sample_difference(target, pixels) <= MAX_MEAN_DIFFERENCE * target.len() as u32)
+}
+
+fn collar_agrees(target: &Sample, peer: &Sample) -> bool {
+    collar_difference(target, peer) <= MAX_MEAN_DIFFERENCE * COLLAR_SAMPLES
+}
+
+fn add_distinct_donor(donors: &mut Vec<(BoxInRaster, Sample)>, donor: BoxInRaster, pixels: Sample) -> bool {
+    if donors.len() == MIN_PEERS || donors.iter().any(|(previous, _)| donor.overlaps(*previous)) {
+        return false;
+    }
+    donors.push((donor, pixels));
+    donors.len() == MIN_PEERS
 }
 
 fn matching_peers(image: &image::RgbImage, target: BoxInRaster, peers: impl Iterator<Item = BoxInRaster>) -> bool {
@@ -166,16 +175,29 @@ fn matching_peers(image: &image::RgbImage, target: BoxInRaster, peers: impl Iter
     if high - low < MIN_CONTRAST {
         return false;
     }
-    let mut distinct = Vec::<(BoxInRaster, Sample)>::with_capacity(MIN_PEERS);
+    let mut whole_window_donors = Vec::with_capacity(MIN_PEERS);
+    let mut collar_donors = Vec::with_capacity(MIN_PEERS);
     for peer in peers {
-        if let Some((donor, pixels)) = best_peer(image, peer, target, &sampled)
-            && !donor.overlaps(window)
-            && distinct.iter().all(|(previous, _)| !donor.overlaps(*previous))
+        let Some((donor, pixels)) = best_peer(image, peer, target, &sampled) else {
+            continue;
+        };
+        if donor.overlaps(window) {
+            continue;
+        }
+        // Keep the original ink veto even when the collar check changes the donor set.
+        if add_distinct_donor(&mut whole_window_donors, donor, pixels)
+            && has_local_residual(&sampled, &whole_window_donors)
         {
-            distinct.push((donor, pixels));
-            if distinct.len() == MIN_PEERS {
-                return !has_local_residual(&sampled, &distinct);
-            }
+            return false;
+        }
+        if collar_agrees(&sampled, &pixels)
+            && add_distinct_donor(&mut collar_donors, donor, pixels)
+            && has_local_residual(&sampled, &collar_donors)
+        {
+            return false;
+        }
+        if whole_window_donors.len() == MIN_PEERS && collar_donors.len() == MIN_PEERS {
+            return true;
         }
     }
     false
@@ -610,7 +632,45 @@ mod revision_tests {
                 assert!(collar_difference(&target, &peer) > MAX_MEAN_DIFFERENCE * COLLAR_SAMPLES);
             }
         }
-        assert!(best_peer(&image, rect, rect, &target).is_none());
+        let (_, peer) = best_peer(&image, rect, rect, &target).expect("whole-window match");
+        assert!(!collar_agrees(&target, &peer));
+    }
+
+    #[test]
+    fn collar_filter_preserves_the_original_four_donor_ink_veto() {
+        let rect = |index| BoxInRaster {
+            x: 20 + 100 * index,
+            y: 45,
+            width: 72,
+            height: 8,
+        };
+        let target = rect(0);
+        let peers = [rect(1), rect(2), rect(3), rect(4), rect(5)];
+        let raster = image::RgbImage::from_fn(620, 100, |x, y| {
+            let region = x / 100;
+            let column = x % 100;
+            let background = if column < 55 { 100 } else { 170 };
+            let tone = if region == 1 && !(39..50).contains(&y) {
+                background + 32
+            } else if matches!(region, 0 | 5) && (25..42).contains(&column) && (40..50).contains(&y) {
+                140
+            } else {
+                background
+            };
+            image::Rgb([tone; 3])
+        });
+        let target_pixels = sample(&raster, target.window(0, 0).unwrap()).unwrap();
+        let donors = peers.map(|peer| best_peer(&raster, peer, target, &target_pixels).unwrap());
+        assert!(!collar_agrees(&target_pixels, &donors[0].1));
+        assert!(
+            donors[1..]
+                .iter()
+                .all(|(_, pixels)| collar_agrees(&target_pixels, pixels))
+        );
+        assert!(has_local_residual(&target_pixels, &donors[..4]));
+        assert!(!has_local_residual(&target_pixels, &donors[1..]));
+        assert!(matching_peers(&raster, target, peers[1..].iter().copied()));
+        assert!(!matching_peers(&raster, target, peers.into_iter()));
     }
 
     #[test]
