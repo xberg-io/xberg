@@ -526,6 +526,9 @@ fn capture_ocr_completion<T>(
     result: crate::Result<T>,
     token: Option<&crate::cancellation::CancellationToken>,
 ) -> (crate::Result<T>, Option<crate::cancellation::CancellationToken>) {
+    if token.is_some_and(|token| token.is_cancelled()) {
+        return (Err(crate::XbergError::Cancelled), None);
+    }
     // A stop can suppress the retry without making the completed backend error a timeout. ~keep
     let expired = token.filter(|token| {
         matches!(&result, Err(error) if !matches!(error, crate::XbergError::Cancelled)) && token.deadline_elapsed()
@@ -2078,7 +2081,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         plugin_name: "ocr".to_string(),
                     })?;
                     pending_pages.remove(&page_idx);
-                    if matches!(&result, Err(crate::XbergError::Cancelled)) {
+                    if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled())
+                        || matches!(&result, Err(crate::XbergError::Cancelled))
+                    {
                         return Err(crate::XbergError::Cancelled.into());
                     }
                     if let Some(token) = expired.as_ref() {
@@ -2801,7 +2806,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     raster_dpis.insert(page_idx, dpi);
                 }
                 pending_pages.remove(&page_idx);
-                if matches!(&result, Err(crate::XbergError::Cancelled)) {
+                if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled())
+                    || matches!(&result, Err(crate::XbergError::Cancelled))
+                {
                     return Err(crate::XbergError::Cancelled.into());
                 }
                 if let Some(token) = expired.as_ref() {

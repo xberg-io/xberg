@@ -16,6 +16,7 @@ enum StopTrigger {
     Request,
     Deadline,
     CancelAtDeadline,
+    CancelWithOcrErrorAtDeadline,
 }
 
 struct StopOnFailure {
@@ -67,9 +68,12 @@ impl crate::plugins::OcrBackend for StopOnFailure {
             );
             match self.trigger {
                 StopTrigger::Request => self.token.request_stop(),
-                StopTrigger::Deadline | StopTrigger::CancelAtDeadline => {
+                StopTrigger::Deadline | StopTrigger::CancelAtDeadline | StopTrigger::CancelWithOcrErrorAtDeadline => {
                     self.token.set_deadline(std::time::Instant::now());
                 }
+            }
+            if matches!(self.trigger, StopTrigger::CancelWithOcrErrorAtDeadline) {
+                self.token.cancel();
             }
             if matches!(self.trigger, StopTrigger::CancelAtDeadline) {
                 self.token.cancel();
@@ -145,8 +149,18 @@ async fn final_page_that_fails_at_the_deadline_is_reported_as_unread() {
 #[tokio::test]
 #[serial]
 async fn explicit_ocr_cancellation_wins_at_the_deadline() {
+    assert_cancellation_wins(StopTrigger::CancelAtDeadline).await;
+}
+
+#[tokio::test]
+#[serial]
+async fn cancelled_token_wins_over_backend_error_at_the_deadline() {
+    assert_cancellation_wins(StopTrigger::CancelWithOcrErrorAtDeadline).await;
+}
+
+async fn assert_cancellation_wins(trigger: StopTrigger) {
     for pipeline in [false, true] {
-        let (backend, mut config, _registration) = setup(vec![1], false, StopTrigger::CancelAtDeadline);
+        let (backend, mut config, _registration) = setup(vec![1], false, trigger);
         if pipeline {
             config.ocr.as_mut().unwrap().pipeline = Some(OcrPipelineConfig {
                 stages: vec![OcrPipelineStage {
@@ -226,7 +240,9 @@ async fn assert_final_failed_page(trigger: StopTrigger) {
             assert_eq!(failures[0].error, TIME_LIMIT_UNREAD_PAGE_ERROR);
             assert!(failure_warnings.is_empty(), "{warnings:?}");
         }
-        StopTrigger::CancelAtDeadline => unreachable!("covered by the cancellation test"),
+        StopTrigger::CancelAtDeadline | StopTrigger::CancelWithOcrErrorAtDeadline => {
+            unreachable!("covered by the cancellation test")
+        }
     }
     assert_eq!(backend.token.first_unread_page(), Some(3));
     assert!(backend.token.cut_short_by_time_limit());

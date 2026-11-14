@@ -120,6 +120,7 @@ run_retry_timeout_cases() {
   run_exact "$module::final_failed_page_keeps_its_warning_and_marks_the_run_cut_short" --lib
   run_exact "$module::final_page_that_fails_at_the_deadline_is_reported_as_unread" --lib
   run_exact "$module::explicit_ocr_cancellation_wins_at_the_deadline" --lib
+  run_exact "$module::cancelled_token_wins_over_backend_error_at_the_deadline" --lib
   run_exact 'extractors::pdf::ocr::pipeline::in_flight_page_tests::queued_ocr_error_keeps_pre_deadline_classification' --lib
   run_exact "$module::a_stop_that_skips_the_only_failed_pages_retry_returns_timeout" --lib
   run_exact "$module::a_stop_accounts_for_every_pending_failure_in_the_batch" --lib
@@ -399,7 +400,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=113
+  expected=114
   check_mixed_decision_layer_handoffs
   run_pdf_cases
   run_retained_read_cases
