@@ -12,6 +12,9 @@ const MIN_PEERS: usize = 4;
 const SAMPLE_WIDTH: usize = 32;
 const SAMPLE_HEIGHT: usize = 16;
 const MAX_MEAN_DIFFERENCE: u32 = 25;
+const TEXT_BAND_START: usize = 6;
+const TEXT_BAND_END: usize = 10;
+const COLLAR_SAMPLES: u32 = (SAMPLE_WIDTH * (SAMPLE_HEIGHT - (TEXT_BAND_END - TEXT_BAND_START))) as u32;
 const MIN_CONTRAST: u8 = 48;
 const MAX_SCALE_MISMATCH: f64 = 0.01;
 
@@ -120,7 +123,7 @@ fn collar_difference(target: &Sample, peer: &Sample) -> u32 {
         .iter()
         .zip(peer)
         .enumerate()
-        .filter(|(i, _)| !(6..10).contains(&(i / SAMPLE_WIDTH)))
+        .filter(|(i, _)| !(TEXT_BAND_START..TEXT_BAND_END).contains(&(i / SAMPLE_WIDTH)))
         .map(|(_, (&a, &b))| u32::from(a.abs_diff(b)))
         .sum()
 }
@@ -144,7 +147,10 @@ fn best_peer(
             Some((window, pixels))
         })
         .min_by_key(|(_, pixels)| collar_difference(target, pixels))
-        .filter(|(_, pixels)| sample_difference(target, pixels) <= MAX_MEAN_DIFFERENCE * target.len() as u32)
+        .filter(|(_, pixels)| {
+            collar_difference(target, pixels) <= MAX_MEAN_DIFFERENCE * COLLAR_SAMPLES
+                && sample_difference(target, pixels) <= MAX_MEAN_DIFFERENCE * target.len() as u32
+        })
 }
 
 fn matching_peers(image: &image::RgbImage, target: BoxInRaster, peers: impl Iterator<Item = BoxInRaster>) -> bool {
@@ -179,7 +185,7 @@ fn has_local_residual(target: &Sample, donors: &[(BoxInRaster, Sample)]) -> bool
     // A localized mark can survive a low whole-window average. Test the OCR box interior
     // against the full donor range so small registration differences do not become ink.
     let mut outside = [false; SAMPLE_WIDTH * SAMPLE_HEIGHT];
-    for y in 6..10 {
+    for y in TEXT_BAND_START..TEXT_BAND_END {
         for x in 3..SAMPLE_WIDTH - 3 {
             let i = y * SAMPLE_WIDTH + x;
             outside[i] = donors
@@ -578,6 +584,29 @@ pub(in crate::extractors::pdf::ocr) fn warning(page: u32, removed: usize) -> cra
 #[cfg(test)]
 mod revision_tests {
     use super::*;
+
+    #[test]
+    fn similar_glyph_band_does_not_compensate_for_a_different_collar() {
+        let target = [100; SAMPLE_WIDTH * SAMPLE_HEIGHT];
+        let rect = BoxInRaster {
+            x: 50,
+            y: 45,
+            width: 72,
+            height: 8,
+        };
+        let window = rect.window(0, 0).unwrap();
+        let image = image::RgbImage::from_fn(100, 100, |_, y| {
+            let tone = if (window.y + 15..window.y + 25).contains(&y) {
+                100
+            } else {
+                132
+            };
+            image::Rgb([tone; 3])
+        });
+        let peer = sample(&image, window).unwrap();
+        assert!(sample_difference(&target, &peer) <= MAX_MEAN_DIFFERENCE * target.len() as u32);
+        assert!(best_peer(&image, rect, rect, &target).is_none());
+    }
 
     #[test]
     fn localized_faint_ink_vetoes_same_pad_texture_match() {

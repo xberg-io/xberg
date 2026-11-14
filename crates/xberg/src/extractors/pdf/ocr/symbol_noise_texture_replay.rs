@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use crate::core::config::{OcrQualityThresholds, PageConfig};
+use crate::types::{OcrElementConfig, OcrElementLevel};
 use crate::{ExtractedDocument, ExtractionConfig, OcrConfig, OutputFormat};
 
 fn count(text: &str, target: &str) -> usize {
@@ -9,7 +10,7 @@ fn count(text: &str, target: &str) -> usize {
         .count()
 }
 
-async fn read(path: &Path, format: OutputFormat, prune: bool) -> ExtractedDocument {
+async fn read(path: &Path, format: OutputFormat, prune: bool, raw_elements: bool) -> ExtractedDocument {
     let config = ExtractionConfig {
         use_cache: false,
         output_format: format,
@@ -19,6 +20,11 @@ async fn read(path: &Path, format: OutputFormat, prune: bool) -> ExtractedDocume
         }),
         ocr: Some(OcrConfig {
             tessdata_path: std::env::var_os("XBERG_2943_TESSDATA").map(Into::into),
+            element_config: raw_elements.then(|| OcrElementConfig {
+                include_elements: true,
+                build_hierarchy: true,
+                ..Default::default()
+            }),
             quality_thresholds: Some(OcrQualityThresholds {
                 prune_symbol_noise_lines: prune,
                 ..Default::default()
@@ -48,10 +54,12 @@ async fn qualified_pcb_texture_is_pruned_without_losing_the_faint_word() {
     for (file, word) in variants {
         for format in [OutputFormat::Plain, OutputFormat::Markdown] {
             let path = Path::new(&directory).join(file);
-            let before = super::REPLAY.scope(None, read(&path, format.clone(), true)).await;
+            let before = super::REPLAY
+                .scope(None, read(&path, format.clone(), true, false))
+                .await;
             let (after, removals) = super::REPLAY
                 .scope(Some(Default::default()), async {
-                    let after = read(&path, format.clone(), true).await;
+                    let after = read(&path, format.clone(), true, false).await;
                     let removals = super::REPLAY.with(|replay| std::mem::take(&mut *replay.as_ref().unwrap().lock()));
                     (after, removals)
                 })
@@ -122,8 +130,10 @@ async fn original_photo_and_recognized_same_pad_print_controls() {
     ] {
         for format in [OutputFormat::Plain, OutputFormat::Markdown] {
             let path = Path::new(&directory).join(file);
-            let control = super::REPLAY.scope(None, read(&path, format.clone(), true)).await;
-            let actual = read(&path, format.clone(), true).await;
+            let control = super::REPLAY
+                .scope(None, read(&path, format.clone(), true, false))
+                .await;
+            let actual = read(&path, format.clone(), true, false).await;
             let page_text = |result: ExtractedDocument| {
                 result
                     .pages
@@ -144,4 +154,70 @@ async fn original_photo_and_recognized_same_pad_print_controls() {
             eprintln!("{file} {format:?}: {expected_word}=1 in control and candidate");
         }
     }
+}
+
+#[tokio::test]
+#[ignore = "requires the archived PDFs under XBERG_2943_ARCHIVE"]
+async fn document_pruning_preserves_raw_recognitions_and_isolated_print() {
+    let archive = std::env::var_os("XBERG_2943_ARCHIVE").expect("set XBERG_2943_ARCHIVE");
+    let archive = Path::new(&archive);
+    let name = concat!("Sa", "de");
+    let cases = [
+        ("same-page.kutOmz/sade-y665-a65.pdf", 3, name, Some("ccccee")),
+        ("same-page.kutOmz/nina-y665-a65.pdf", 3, "Nina", Some("ccccee")),
+        ("historical-cli.2Fmdbd/photo-title.pdf", 1, name, None),
+        (
+            "photo-available-reference.mRy9U1/native-baked-matched-96.pdf",
+            1,
+            name,
+            None,
+        ),
+        (
+            "photo-available-reference.mRy9U1/native-baked-qualified.pdf",
+            1,
+            name,
+            None,
+        ),
+    ];
+    for (file, page, retained, removed) in cases {
+        for format in [OutputFormat::Plain, OutputFormat::Markdown] {
+            let path = archive.join(file);
+            let before = super::REPLAY.scope(None, read(&path, format.clone(), true, true)).await;
+            let after = read(&path, format.clone(), true, true).await;
+            assert_eq!(
+                serde_json::to_value(&before.ocr_elements).unwrap(),
+                serde_json::to_value(&after.ocr_elements).unwrap(),
+                "{file} {format:?}"
+            );
+            let raw = after.ocr_elements.as_ref().expect("requested raw OCR elements");
+            let raw_count = |word| {
+                raw.iter()
+                    .filter(|e| e.level == OcrElementLevel::Line && e.page_number == page && e.text == word)
+                    .count()
+            };
+            assert_eq!(raw_count(retained), 1, "{file} {format:?}");
+            for result in [&before, &after] {
+                assert_eq!(count(page_content(result, page), retained), 1, "{file} {format:?}");
+            }
+            if let Some(word) = removed {
+                assert_eq!(raw_count(word), 1, "{file} {format:?}");
+                assert_eq!(count(page_content(&before, page), word), 1, "{file} {format:?}");
+                assert_eq!(count(page_content(&after, page), word), 0, "{file} {format:?}");
+            } else {
+                assert_eq!(after.content, before.content, "{file} {format:?}");
+                assert_eq!(after.content.matches("SECTION TITLE").count(), 1);
+            }
+        }
+    }
+}
+
+fn page_content(result: &ExtractedDocument, page: u32) -> &str {
+    &result
+        .pages
+        .as_ref()
+        .expect("requested pages")
+        .iter()
+        .find(|p| p.page_number == page)
+        .expect("expected page")
+        .content
 }
