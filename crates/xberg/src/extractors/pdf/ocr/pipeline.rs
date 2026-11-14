@@ -3506,9 +3506,17 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     || !native_text
                         .get(boundary.byte_start..boundary.byte_end)
                         .is_some_and(|native| {
-                            super::hidden_layer::adds_text_preserving_native(native, text)
-                                && (probing_hidden_layer
-                                    || super::hidden_layer::keeps_native_lines_in_order(native, text))
+                            let preserves = |candidate: &str| {
+                                super::hidden_layer::adds_text_preserving_native(native, candidate)
+                                    && (probing_hidden_layer
+                                        || super::hidden_layer::keeps_native_lines_in_order(native, candidate))
+                            };
+                            preserves(text)
+                                || (!probing_hidden_layer
+                                    && structured_ocr_pages.get(&page).is_some_and(|doc| {
+                                        super::hidden_layer::plain_table_transcript(text, &doc.tables)
+                                            .is_some_and(|plain| preserves(&plain))
+                                    }))
                         }))
                 // Every probed page passed the hidden-text audit: all of its native text is render
                 // mode 3. A confident read has a calibrated score that clears the default gate and

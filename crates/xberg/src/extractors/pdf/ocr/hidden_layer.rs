@@ -971,6 +971,29 @@ pub(super) fn adds_text_preserving_native(native: &str, candidate: &str) -> bool
         })
 }
 
+pub(super) fn plain_table_transcript(text: &str, tables: &[crate::types::Table]) -> Option<String> {
+    use crate::rendering::common::{render_table_markdown, render_table_plain};
+
+    // Only interpret separators from typed tables that account for the entire selected read. ~keep
+    let markdown = tables
+        .iter()
+        .map(|table| render_table_markdown(&table.cells))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    (!tables.is_empty()
+        && markdown
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .eq(text.lines().filter(|line| !line.trim().is_empty())))
+    .then(|| {
+        tables
+            .iter()
+            .map(|table| render_table_plain(&table.cells))
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    })
+}
+
 pub(super) fn keeps_native_lines_in_order(native: &str, candidate: &str) -> bool {
     let Some(words) = bounded_words(candidate) else {
         return false;
