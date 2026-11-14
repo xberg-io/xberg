@@ -6,9 +6,6 @@
 		"topic": "error",
 		"title": "Error when extracting with unsupported MIME type",
 		"description": "Error when extracting with unsupported MIME type",
-		"presentation": {
-			"files": [{ "field": "/bytes", "path": "text/plain.txt" }]
-		},
 		"side_effects": "safe"
 	},
 	"tags": ["error", "input", "mime"],
@@ -24,7 +21,8 @@
 	},
 	"assertions": [
 		{
-			"type": "error"
+			"type": "error",
+			"value": "Unsupported format:"
 		}
 	],
 	"config": {}
