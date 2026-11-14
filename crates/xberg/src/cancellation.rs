@@ -150,6 +150,12 @@ impl CancellationToken {
         self.cancelled.store(true, Ordering::Relaxed);
     }
 
+    /// Request cancellation for a hard timeout and report whether this request set the flag.
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    pub(crate) fn cancel_for_timeout(&self) -> bool {
+        !self.cancelled.swap(true, Ordering::Relaxed)
+    }
+
     /// Returns `true` if cancellation has been requested on any clone.
     ///
     /// This reports the token's request flag. It does not prove that a particular
@@ -185,12 +191,15 @@ impl CancellationToken {
     /// Whether the extraction time limit has been reached: a stop was requested or the deadline
     /// passed. Stages that run model calls ask this between batches and stop early when it holds.
     pub(crate) fn time_limit_reached(&self) -> bool {
-        self.stop_requested()
-            || self
-                .stop
-                .deadline
-                .get()
-                .is_some_and(|deadline| Instant::now() >= *deadline)
+        self.stop_requested() || self.deadline_elapsed()
+    }
+
+    /// Whether the recorded deadline has passed, independently of the cooperative stop flag.
+    pub(crate) fn deadline_elapsed(&self) -> bool {
+        self.stop
+            .deadline
+            .get()
+            .is_some_and(|deadline| Instant::now() >= *deadline)
     }
 
     /// Record that a post-processing stage gave up its output because the time limit was reached.
