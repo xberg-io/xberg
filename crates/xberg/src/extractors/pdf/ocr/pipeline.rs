@@ -516,6 +516,20 @@ async fn next_page_task<T: 'static>(
     }
 }
 
+#[cfg(all(
+    any(feature = "ocr", feature = "ocr-pipeline"),
+    feature = "pdf",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+fn capture_ocr_completion<T, E>(
+    result: Result<T, E>,
+    token: Option<&crate::cancellation::CancellationToken>,
+) -> (Result<T, E>, Option<crate::cancellation::CancellationToken>) {
+    let expired = token.filter(|token| result.is_err() && token.time_limit_reached());
+    (result, expired.cloned())
+}
+
 /// Record `pages` (0-based) as unread: the extraction time limit stopped the run before they were
 /// read. The first of them is reported on `token`; `recovered` says whether a page's native text
 /// still gives it content.
@@ -1989,7 +2003,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         && stored_scan_retry::eligible(config, (idx + 1) as u32);
                     let task = crate::engine::seams::inherit_progress(async move {
                         if config_clone.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-                            return (idx, Err(crate::XbergError::Cancelled.into()));
+                            return (idx, (Err(crate::XbergError::Cancelled.into()), None));
                         }
                         #[cfg(feature = "layout-detection")]
                         let page_detection_slice = page_detection.as_ref().map(std::slice::from_ref);
@@ -2026,7 +2040,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             allow_stored_retry,
                         )
                         .await;
-                        (idx, result)
+                        (idx, capture_ocr_completion(result, config_clone.cancel_token.as_ref()))
                     });
                     #[cfg(test)]
                     let task = crate::plugins::registry::inherit_test_ocr_backend(task);
@@ -2050,14 +2064,12 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                 break;
                             }
                         };
-                    let (page_idx, result) = join_result.map_err(|e| crate::XbergError::Plugin {
+                    let (page_idx, (result, expired)) = join_result.map_err(|e| crate::XbergError::Plugin {
                         message: format!("OCR pipeline task panicked: {}", e),
                         plugin_name: "ocr".to_string(),
                     })?;
                     pending_pages.remove(&page_idx);
-                    if result.is_err()
-                        && let Some(token) = config.cancel_token.as_ref().filter(|token| token.time_limit_reached())
-                    {
+                    if let Some(token) = expired.as_ref() {
                         token.request_stop();
                         mark_pages_unread(
                             Some(token),
@@ -2591,7 +2603,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             correction_degrees,
                             upright_width,
                             upright_height,
-                            Err(crate::XbergError::Cancelled),
+                            (Err(crate::XbergError::Cancelled), None),
                             false,
                             None,
                         );
@@ -2608,7 +2620,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                 correction_degrees,
                                 upright_width,
                                 upright_height,
-                                Err(error),
+                                capture_ocr_completion(Err(error), cancel_token.as_ref()),
                                 false,
                                 None,
                             );
@@ -2716,8 +2728,18 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         )
                         .await
                         {
-                            Ok((read, width, height, dpi)) => (idx, 0, width, height, Ok(read), false, Some(dpi)),
-                            Err(error) => (idx, 0, upright_width, upright_height, Err(error), false, None),
+                            Ok((read, width, height, dpi)) => {
+                                (idx, 0, width, height, (Ok(read), None), false, Some(dpi))
+                            }
+                            Err(error) => (
+                                idx,
+                                0,
+                                upright_width,
+                                upright_height,
+                                capture_ocr_completion(Err(error), cancel_token.as_ref()),
+                                false,
+                                None,
+                            ),
                         };
                     }
                     (
@@ -2725,7 +2747,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         correction_degrees,
                         upright_width,
                         upright_height,
-                        result,
+                        capture_ocr_completion(result, cancel_token.as_ref()),
                         scale_only,
                         None,
                     )
@@ -2757,7 +2779,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     correction_degrees,
                     upright_width,
                     upright_height,
-                    result,
+                    (result, expired),
                     observed_scale_only,
                     retry_dpi,
                 ) = join_result.map_err(|e| crate::XbergError::Plugin {
@@ -2768,9 +2790,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     raster_dpis.insert(page_idx, dpi);
                 }
                 pending_pages.remove(&page_idx);
-                if result.is_err()
-                    && let Some(token) = config.cancel_token.as_ref().filter(|token| token.time_limit_reached())
-                {
+                if let Some(token) = expired.as_ref() {
                     token.request_stop();
                     mark_pages_unread(
                         Some(token),
@@ -3220,7 +3240,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             .filter(|_| !probing_hidden_layer);
         for (page_idx, png) in retry_pages {
             let failure = failed_pages.remove(page_idx);
-            if let Some(token) = config.cancel_token.as_ref().filter(|token| token.stop_requested()) {
+            if config.cancel_token.as_ref().is_some_and(|token| token.stop_requested()) {
                 if let Some(error) = failure {
                     let native_recovered = mixed_native_page_has_content(native_text, boundaries, *page_idx);
                     push_mixed_ocr_page_failure_warning(
@@ -3230,13 +3250,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         &error,
                         native_recovered,
                     );
-                    mark_pages_unread(
-                        Some(token),
-                        std::iter::once(*page_idx),
-                        &mut page_failures,
-                        &mut failed_page_errors,
-                        |_| native_recovered,
-                    );
+                    failed_page_errors.insert(*page_idx, error);
                 }
                 continue;
             }
@@ -11198,6 +11212,26 @@ mod in_flight_page_tests {
     use crate::cancellation::CancellationToken;
     use std::time::Duration;
     use tokio::task::JoinSet;
+
+    #[tokio::test]
+    async fn queued_ocr_error_keeps_pre_deadline_classification() {
+        let token = CancellationToken::new();
+        let worker_token = token.clone();
+        let (completed, wait) = tokio::sync::oneshot::channel();
+        let mut join_set = JoinSet::new();
+        join_set.spawn(async move {
+            let completion = capture_ocr_completion(Err::<(), _>("original OCR error"), Some(&worker_token));
+            completed.send(()).unwrap();
+            completion
+        });
+        wait.await.unwrap();
+        token.set_deadline(std::time::Instant::now());
+        assert!(token.time_limit_reached());
+
+        let (result, expired) = join_set.join_next().await.unwrap().unwrap();
+        assert_eq!(result, Err("original OCR error"));
+        assert!(expired.is_none());
+    }
 
     /// A page task that takes `secs` of (paused, virtual) time.
     fn slow_pages(secs: &[u64]) -> JoinSet<usize> {
