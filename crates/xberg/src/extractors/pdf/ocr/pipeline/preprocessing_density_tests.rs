@@ -225,7 +225,9 @@ async fn replacement_tesseract_keeps_actual_source_render_at_150() {
     let ocr = config.ocr.as_mut().unwrap();
     ocr.tessdata_path = Some(models.path().to_path_buf());
     ocr.tesseract_config.as_mut().unwrap().use_cache = false;
-    let bytes = fixture::localized_pdf("gap-left");
+    let bytes = fixture::pdf(12, 0);
+    let document = xberg_native_pdf::PdfDocument::from_bytes(bytes.clone()).unwrap();
+    assert!(!document.has_small_painted_text_for_ocr());
     crate::plugins::clear_ocr_backends().unwrap();
     assert_eq!(read_public_dimensions(&config, &bytes).await, (1800, 900));
     assert_eq!(read_source_dimensions(&config, &bytes).await, (1800, 900));
