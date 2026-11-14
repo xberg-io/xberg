@@ -757,11 +757,15 @@ jobs:
           [ -n "$id" ] || { echo "::error::git rev-parse HEAD produced an empty build id"; exit 1; }
           echo "value=$id" >> "$GITHUB_OUTPUT"
 
+      # The v1.4.0 aarch64 leg died with exit 143 ("runner received a shutdown signal") after
+      # 1h38m in the fat-LTO compile, where v1.3.9 finished in 55 min. Thin LTO bounds the
+      # single-module memory peak, like the other ARM64 legs; x86_64 keeps fat LTO. ~keep
       - name: Build Python wheel via Alpine Docker
         run: |
           docker build -f docker/Dockerfile.musl-python \
             --build-arg XBERG_BUILD_ID=${{ steps.build_id.outputs.value }} \
             --build-arg TARGET=${{ matrix.target }} \
+            --build-arg CARGO_PROFILE_RELEASE_LTO=${{ matrix.arch == 'aarch64' && 'thin' || 'fat' }} \
             --output type=local,dest=./build-output .
 
       - name: Verify musl wheel produced
@@ -998,6 +1002,7 @@ jobs:
           docker build -f docker/Dockerfile.musl-node \
             --build-arg XBERG_BUILD_ID=${{ steps.build_id.outputs.value }} \
             --build-arg TARGET=${{ matrix.target }} \
+            --build-arg CARGO_PROFILE_RELEASE_LTO=${{ matrix.arch == 'aarch64' && 'thin' || 'fat' }} \
             --output type=local,dest=./build-output .
       - name: Stage .node into napi platform dir for npm
         run: |
@@ -1114,6 +1119,7 @@ jobs:
             --build-arg XBERG_BUILD_ID=${{ steps.build_id.outputs.value }} \
             --build-arg MANYLINUX_IMAGE=${{ matrix.image }} \
             --build-arg TARGET=${{ matrix.target }} \
+            --build-arg CARGO_PROFILE_RELEASE_LTO=${{ matrix.arch == 'aarch64' && 'thin' || 'fat' }} \
             --output type=local,dest=./build-output .
       - name: Stage .node into napi platform dir for npm
         run: |
@@ -1818,8 +1824,13 @@ jobs:
         with:
           ort-version: "1.24.2"
 
+      # The v1.4.0 aarch64-gnu leg died with exit 143 ("runner received a shutdown signal"). The log
+      # shows no output after the last `Compiling` line, then the runner kill. Thin LTO bounds the single-module memory peak, like the other
+      # ARM64 legs and the musl CLI profile; every other target keeps fat LTO. ~keep
       - uses: xberg-io/actions/build-rust-cli@v1
         id: build
+        env:
+          CARGO_PROFILE_RELEASE_LTO: ${{ matrix.target == 'aarch64-unknown-linux-gnu' && 'thin' || 'fat' }}
         with:
           package-name: xberg-cli
           binary-name: xberg

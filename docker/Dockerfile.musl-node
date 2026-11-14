@@ -66,9 +66,12 @@ ENV CXX_x86_64_unknown_linux_musl=g++
 # build.rs honours the override only when it is non-empty, so an empty value falls straight back
 # through its `!id.is_empty()` check and silently restores the collision. ~keep
 ARG XBERG_BUILD_ID
+# The publish workflow passes thin for aarch64, where fat LTO exhausts the runner's memory.
+ARG CARGO_PROFILE_RELEASE_LTO=fat
 
 RUN : "${XBERG_BUILD_ID:?must be passed: --build-arg XBERG_BUILD_ID=<commit sha>; see crates/xberg/build.rs}" && \
     export RUSTFLAGS='-C target-feature=-crt-static -C link-arg=-Wl,-rpath,$ORIGIN' && \
+    export CARGO_PROFILE_RELEASE_LTO="${CARGO_PROFILE_RELEASE_LTO:?}" && \
     rustup target add "${TARGET}" && \
     cd crates/xberg-node && \
     npx --yes -p @napi-rs/cli@3.10.9 napi build --platform --release --target "${TARGET}" && \

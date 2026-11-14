@@ -12,6 +12,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+import yaml
 from test_macos_deployment_target import macos_floor
 from zigbuild_release_contracts import assert_zigbuild_negative_controls, validate_zigbuild_workflow
 
@@ -500,6 +501,45 @@ def test_normal_php_retry_preserves_release_and_cancellation_guards() -> None:
             },
         }
         assert evaluate_condition(expression, context) is expected, (dry_run, available, crates_result)
+
+
+def live_lines(text: str) -> list[str]:
+    """Drop whole-line and trailing `#` comments so only text the shell or Docker runs remains."""
+    lines = (re.sub(r"(^|\s)#.*$", "", line).rstrip() for line in text.splitlines())
+    return [line for line in lines if line.strip()]
+
+
+def test_python_musl_arm64_builds_with_thin_lto() -> None:
+    lines = live_lines(job_block(WORKFLOW.read_text(), "python-wheels-musl"))
+    arches = re.findall(r"arch: (\w+), target:", "\n".join(lines))
+    assert sorted(arches) == ["aarch64", "x86_64"]
+    [start] = [i for i, line in enumerate(lines) if "docker build -f docker/Dockerfile.musl-python" in line]
+    command = [lines[start]]
+    while command[-1].endswith("\\"):
+        command.append(lines[start + len(command)])
+    selectors = [
+        match[1]
+        for line in command[1:]
+        if (match := re.fullmatch(r"\s*--build-arg CARGO_PROFILE_RELEASE_LTO=\$\{\{ (.+) \}\}\s*\\?", line))
+    ]
+    assert len(selectors) == 1, "docker build does not pass the LTO build arg as a live continuation line"
+    for arch in arches:
+        resolved = evaluate_expression(selectors[0], {"matrix": {"arch": arch}})
+        assert resolved == ("thin" if arch == "aarch64" else "fat"), arch
+
+    dockerfile = "\n".join(live_lines((WORKFLOW.parents[2] / "docker" / "Dockerfile.musl-python").read_text()))
+    declared = dockerfile.index("ARG CARGO_PROFILE_RELEASE_LTO")
+    runs = [
+        [step.strip() for step in run.replace("\\\n", " ").split("&&")]
+        for run in re.findall(r"(?m)^RUN ((?:.*\\\n)*.*)$", dockerfile)
+    ]
+    [steps] = [run for run in runs if any(step.startswith("maturin build --release") for step in run)]
+    export = re.compile(r'export CARGO_PROFILE_RELEASE_LTO="\$\{CARGO_PROFILE_RELEASE_LTO:\?\}"')
+    exported = [i for i, step in enumerate(steps) if export.fullmatch(step)]
+    built = [i for i, step in enumerate(steps) if step.startswith("maturin build --release")]
+    assert exported, "the maturin RUN does not export CARGO_PROFILE_RELEASE_LTO as a live command"
+    assert exported[0] < built[0]
+    assert declared < dockerfile.index("RUN", declared)
 
 
 def test_php_tagged_dry_run_cannot_upload_or_publish() -> None:
@@ -1507,3 +1547,92 @@ def test_linux_cli_archives_pass_clean_installer_smoke_before_upload() -> None:
             assert "if: endsWith(matrix.target, '-unknown-linux-gnu')" in gate
         else:
             assert "if:" not in gate
+
+
+DOCKER_DIR = Path(__file__).parents[2] / "docker"
+LTO_ENV = "CARGO_PROFILE_RELEASE_LTO"
+
+
+def workflow_job(workflow: Path, job: str) -> dict:
+    return yaml.safe_load(workflow.read_text())["jobs"][job]
+
+
+def matrix_entries(job: dict) -> list[dict]:
+    matrix = job["strategy"]["matrix"]
+    entries = matrix.get("include", [])
+    if "platform" in matrix:
+        entries = [{**entry, "platform": platform} for entry in entries for platform in matrix["platform"]]
+    return entries
+
+
+def lto_selector(text: str) -> str:
+    """Return the one `${{ ... }}` expression that fills CARGO_PROFILE_RELEASE_LTO in live text."""
+    selectors = re.findall(rf"{LTO_ENV}=\$\{{\{{ (.+?) \}}\}}", "\n".join(live_lines(text)))
+    assert len(selectors) == 1, f"expected one live {LTO_ENV} selector, found {selectors}"
+    return selectors[0]
+
+
+def assert_thin_only_on_arm64(selector: str, contexts: list[tuple[dict, bool]]) -> None:
+    for context, arm64 in contexts:
+        resolved = evaluate_expression(selector, context)
+        assert resolved == ("thin" if arm64 else "fat"), context
+
+
+def assert_dockerfile_exports_lto_before(dockerfile: str, build_command: str) -> None:
+    text = "\n".join(live_lines((DOCKER_DIR / dockerfile).read_text()))
+    assert re.search(rf"(?m)^ARG {LTO_ENV}=fat$", text), f"{dockerfile} does not declare ARG {LTO_ENV}=fat"
+    runs = [
+        [step.strip() for step in run.replace("\\\n", " ").split("&&")]
+        for run in re.findall(r"(?m)^RUN ((?:.*\\\n)*.*)$", text)
+    ]
+    [steps] = [run for run in runs if any(build_command in step for step in run)]
+    export = f'export {LTO_ENV}="${{{LTO_ENV}:?}}"'
+    exported = [i for i, step in enumerate(steps) if step == export]
+    built = [i for i, step in enumerate(steps) if build_command in step]
+    assert exported, f"{dockerfile} does not export {LTO_ENV} in the RUN that builds"
+    assert exported[0] < built[0]
+
+
+def docker_build_command(run: str, dockerfile: str) -> str:
+    joined = "\n".join(live_lines(run.replace("\\\n", " ")))
+    [command] = [line for line in joined.splitlines() if f"docker build -f {dockerfile}" in line]
+    return command
+
+
+def test_node_arm64_builds_with_thin_lto() -> None:
+    legs = [
+        ("node-bindings-musl", "Dockerfile.musl-node", "Build Node NAPI binding via Alpine Docker"),
+        ("node-bindings-manylinux", "Dockerfile.manylinux-node", "Build Node NAPI binding via manylinux Docker"),
+    ]
+    for job, dockerfile, step in legs:
+        block = workflow_job(WORKFLOW, job)
+        entries = matrix_entries(block)
+        assert sorted(entry["arch"] for entry in entries) == ["aarch64", "x86_64"], job
+        [run] = [s["run"] for s in block["steps"] if s.get("name") == step]
+        selector = lto_selector(docker_build_command(run, f"docker/{dockerfile}"))
+        assert_thin_only_on_arm64(selector, [({"matrix": entry}, entry["arch"] == "aarch64") for entry in entries])
+        assert_dockerfile_exports_lto_before(dockerfile, "napi build --platform --release")
+
+
+def test_cli_arm64_gnu_builds_with_thin_lto() -> None:
+    block = workflow_job(WORKFLOW, "cli-binaries")
+    [build] = [s for s in block["steps"] if str(s.get("uses", "")).startswith("xberg-io/actions/build-rust-cli@")]
+    assert LTO_ENV in build.get("env", {}), f"the CLI build step does not set {LTO_ENV} in its env"
+    selector = lto_selector(f"{LTO_ENV}={build['env'][LTO_ENV]}")
+    entries = matrix_entries(block)
+    arm = "aarch64-unknown-linux-gnu"
+    assert any(entry["target"] == arm for entry in entries)
+    assert_thin_only_on_arm64(selector, [({"matrix": entry}, entry["target"] == arm) for entry in entries])
+
+
+def test_docker_arm64_core_and_full_build_with_thin_lto() -> None:
+    block = workflow_job(DOCKER_WORKFLOW, "build-docker")
+    entries = matrix_entries(block)
+    assert {entry["platform"]["name"] for entry in entries} == {"amd64", "arm64"}
+    contexts = [({"matrix": entry}, entry["platform"]["name"] == "arm64") for entry in entries]
+    [test_run] = [s["run"] for s in block["steps"] if s.get("name") == "Build test image"]
+    assert_thin_only_on_arm64(lto_selector(test_run), contexts)
+    [push] = [s for s in block["steps"] if s.get("name") == "Build and push by digest"]
+    assert_thin_only_on_arm64(lto_selector(push["with"]["build-args"]), contexts)
+    for dockerfile in ("Dockerfile.core", "Dockerfile.full"):
+        assert_dockerfile_exports_lto_before(dockerfile, "cargo build --release --package xberg-cli")
