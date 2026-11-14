@@ -3219,13 +3219,13 @@ fn detect_intersections(
             "vertical": v_edges.iter().map(|edge| [edge.coord, edge.start, edge.end]).collect::<Vec<_>>(),
         })
     });
-    let stacked_row_cuts = merge_vertically_adjacent_tables(&mut tables, &h_edges, &v_edges);
+    let (stacked_row_cuts, restart_members) = merge_vertically_adjacent_tables(&mut tables, &h_edges, &v_edges);
     for table in &mut tables {
         source_headers::infer_complete_leading_header(table, lines);
     }
     #[cfg(test)]
     header_source_diagnostic::event("intersection_merged", || header_source_diagnostic::tables(&tables));
-    tables = split_tables_at_section_dividers(tables, stacked_row_cuts, &h_edges, &v_edges, config);
+    tables = split_tables_at_section_dividers(tables, stacked_row_cuts, &restart_members, &h_edges, &v_edges, config);
     #[cfg(test)]
     header_source_diagnostic::event("intersection_section_split", || {
         header_source_diagnostic::tables(&tables)
@@ -3816,15 +3816,19 @@ const SECTION_DIVIDER_WIDTH_RATIO: f32 = 0.80;
 fn split_tables_at_section_dividers(
     tables: Vec<Table>,
     stacked_row_cuts: Vec<Option<Vec<usize>>>,
+    restart_members: &[bool],
     h_edges: &[Edge],
     v_edges: &[Edge],
     config: &TableDetectionConfig,
 ) -> Vec<Table> {
     let mut result = Vec::new();
-    for (table, cuts) in tables.into_iter().zip(stacked_row_cuts) {
-        let mut parts = split_table_at_section_dividers(table, h_edges, v_edges, config);
-        // Divider matching uses the original fragment order. Only reorder a surviving whole merge. ~keep
-        if let (Some(cuts), [table]) = (cuts, parts.as_mut_slice()) {
+    for ((mut table, cuts), &restart_member) in tables.into_iter().zip(stacked_row_cuts).zip(restart_members) {
+        // Divider matching needs physically consecutive rows in a restart chain. ~keep
+        if restart_member && let Some(cuts) = &cuts {
+            order_stacked_fragments(&mut table.rows, cuts);
+        }
+        let mut parts = split_table_at_section_dividers(table, h_edges, v_edges, config, restart_member);
+        if !restart_member && let (Some(cuts), [table]) = (cuts, parts.as_mut_slice()) {
             order_stacked_fragments(&mut table.rows, &cuts);
         }
         result.extend(parts);
@@ -3854,6 +3858,7 @@ fn split_table_at_section_dividers(
     h_edges: &[Edge],
     v_edges: &[Edge],
     config: &TableDetectionConfig,
+    descending_rows: bool,
 ) -> Vec<Table> {
     let Some(bbox) = table.bbox else {
         return vec![table];
@@ -3946,6 +3951,12 @@ fn split_table_at_section_dividers(
     let mut split_after: Vec<usize> = Vec::new();
     let tol = SNAP_TOL + 2.0; // generous tolerance for matching divider to row boundary ~keep
     for &dy in &divider_ys {
+        if descending_rows {
+            if let Some(index) = nearest_descending_section_cut(&row_bounds, dy, tol) {
+                split_after.push(index);
+            }
+            continue;
+        }
         let mut best_idx: Option<usize> = None;
         let mut best_dist = f32::INFINITY;
         for (i, bounds) in row_bounds.iter().enumerate() {
@@ -4000,6 +4011,19 @@ fn split_table_at_section_dividers(
     build_table_sections(&table, &exact, config.min_table_cells)
         .filter(|sections| sections.iter().all(passes_section_admission))
         .unwrap_or(legacy_sections)
+}
+
+fn nearest_descending_section_cut(rows: &[Option<(f32, f32)>], divider: f32, tolerance: f32) -> Option<usize> {
+    rows.windows(2)
+        .enumerate()
+        .filter_map(|(index, pair)| {
+            let distance = pair[0]
+                .map_or(f32::INFINITY, |(low, _)| (divider - low).abs())
+                .min(pair[1].map_or(f32::INFINITY, |(_, high)| (divider - high).abs()));
+            (distance <= tolerance).then_some((index, distance))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(index, _)| index)
 }
 
 fn exact_section_cuts(row_bounds: &[Option<(f32, f32)>], divider_ys: &[f32], legacy: &[usize]) -> Option<Vec<usize>> {
@@ -4168,9 +4192,9 @@ fn merge_vertically_adjacent_tables(
     tables: &mut Vec<Table>,
     h_edges: &[Edge],
     v_edges: &[Edge],
-) -> Vec<Option<Vec<usize>>> {
+) -> (Vec<Option<Vec<usize>>>, Vec<bool>) {
     if tables.len() < 2 {
-        return vec![None; tables.len()];
+        return (vec![None; tables.len()], vec![false; tables.len()]);
     }
 
     // Keep the divider pass's input order, lowest PDF Y first. ~keep
@@ -4182,7 +4206,11 @@ fn merge_vertically_adjacent_tables(
 
     let mut merged: Vec<Table> = Vec::new();
     let mut stacked_row_cuts = Vec::new();
+    let mut restart_chain = None;
+    let mut fragment_cuts = Vec::new();
+    let mut restart_members = Vec::new();
     for table in tables.drain(..) {
+        let mut separated_restart = false;
         let should_merge = merged.last().is_some_and(|prev: &Table| {
             let col_diff = (prev.col_count as isize - table.col_count as isize).unsigned_abs();
             if col_diff > MERGE_COL_DIFF_TOLERANCE {
@@ -4191,15 +4219,35 @@ fn merge_vertically_adjacent_tables(
             match (prev.bbox, table.bbox) {
                 (Some(pb), Some(tb)) => {
                     let gap = (tb.top() - pb.bottom()).abs().min((pb.top() - tb.bottom()).abs());
-                    gap <= ADJACENT_TABLE_MERGE_GAP
+                    if gap > ADJACENT_TABLE_MERGE_GAP {
+                        return false;
+                    }
+                    if has_closed_restart_seam(pb, tb, h_edges, v_edges) && aligned_table_restarts(prev, &table) {
+                        separated_restart = true;
+                        return false;
+                    }
+                    true
                 }
                 _ => false,
             }
         });
 
+        if separated_restart {
+            restart_chain.get_or_insert(merged.len() - 1);
+        } else if !should_merge && let Some(start) = restart_chain.take() {
+            finish_restart_chain(
+                start,
+                &mut merged,
+                &mut stacked_row_cuts,
+                &mut fragment_cuts,
+                &mut restart_members,
+            );
+        }
+
         if should_merge {
             let prev = merged.last_mut().unwrap();
             record_stacked_join(stacked_row_cuts.last_mut().unwrap(), prev, &table, h_edges, v_edges);
+            fragment_cuts.last_mut().unwrap().push(prev.rows.len());
             let target_cols = prev.col_count.max(table.col_count);
 
             if prev.col_count < target_cols {
@@ -4250,11 +4298,103 @@ fn merge_vertically_adjacent_tables(
         } else {
             stacked_row_cuts.push(table_has_ruled_outline(&table, h_edges, v_edges).then(Vec::new));
             merged.push(table);
+            fragment_cuts.push(Vec::new());
+            restart_members.push(false);
         }
     }
 
+    if let Some(start) = restart_chain {
+        finish_restart_chain(
+            start,
+            &mut merged,
+            &mut stacked_row_cuts,
+            &mut fragment_cuts,
+            &mut restart_members,
+        );
+    }
     *tables = merged;
-    stacked_row_cuts
+    (stacked_row_cuts, restart_members)
+}
+
+fn finish_restart_chain(
+    start: usize,
+    tables: &mut [Table],
+    stacked_row_cuts: &mut [Option<Vec<usize>>],
+    fragment_cuts: &mut [Vec<usize>],
+    restart_members: &mut [bool],
+) {
+    // Keep the original row order through divider matching. A surviving
+    // aggregate in this chain still needs its original fragment boundaries. ~keep
+    for (cuts, fragments) in stacked_row_cuts[start..].iter_mut().zip(&mut fragment_cuts[start..]) {
+        if cuts.is_none() && !fragments.is_empty() {
+            *cuts = Some(std::mem::take(fragments));
+        }
+    }
+    restart_members[start..].fill(true);
+    tables[start..].reverse();
+    stacked_row_cuts[start..].reverse();
+    fragment_cuts[start..].reverse();
+}
+
+// Require a painted closing rule and opening rule, with no vertical ruling
+// connecting the two grids across the gap. ~keep
+fn has_closed_restart_seam(lower: Rect, upper: Rect, horizontal: &[Edge], vertical: &[Edge]) -> bool {
+    let lower_end = lower.bottom();
+    let upper_start = upper.top();
+    let tol = BAND_RULE_SPAN_TOL;
+    let closed = |y: f32, bounds: Rect| {
+        horizontal.iter().any(|edge| {
+            (edge.coord - y).abs() <= tol && edge.start <= bounds.left() + tol && edge.end >= bounds.right() - tol
+        })
+    };
+    upper_start - lower_end > 2.0 * tol
+        && (lower.left() - upper.left()).abs() <= tol
+        && (lower.right() - upper.right()).abs() <= tol
+        && closed(lower_end, lower)
+        && closed(upper_start, upper)
+        && !vertical.iter().any(|edge| {
+            edge.coord >= lower.left() - tol
+                && edge.coord <= lower.right() + tol
+                && edge.start <= lower_end + tol
+                && edge.end >= upper_start - tol
+        })
+}
+
+// A separated grid that restarts the same two-band schema after populated
+// records owns its own rows, even when its columns align with the preceding grid. ~keep
+fn aligned_table_restarts(lower: &Table, upper: &Table) -> bool {
+    if lower.col_count != upper.col_count || lower.rows.len() < 4 || upper.rows.len() < 4 {
+        return false;
+    }
+    let populated_record = |row: &TableRow| {
+        row.cells
+            .first()
+            .is_some_and(|cell| cell.text.chars().any(char::is_alphabetic))
+            && row
+                .cells
+                .iter()
+                .skip(1)
+                .filter(|cell| {
+                    let value = cell.text.trim().replace([',', '$'], "");
+                    is_numeric_cell(&value)
+                })
+                .count()
+                >= 3
+    };
+    lower.rows[..2].iter().zip(&upper.rows[..2]).all(|(a, b)| {
+        a.cells.len() == b.cells.len()
+            && a.cells
+                .iter()
+                .filter(|cell| cell.text.chars().any(char::is_alphabetic))
+                .count()
+                >= 3
+            && a.cells
+                .iter()
+                .zip(&b.cells)
+                .all(|(a, b)| a.text.trim() == b.text.trim())
+    }) && populated_record(&lower.rows[2])
+        && populated_record(&upper.rows[2])
+        && populated_record(upper.rows.last().unwrap())
 }
 
 fn record_stacked_join(
@@ -9315,6 +9455,206 @@ mod tests {
         );
     }
 
+    fn restart_grid(y: f32, values: [&str; 2]) -> Table {
+        let rows = [
+            ["", "", "Q/Q", "Q/Q %", "Y/Y"],
+            ["", "1Q 2019", "Change", "Change", "Change"],
+            ["Interest rate", values[0], "123", "12.2%", "10"],
+            ["Gross fair value", values[1], "29", "1.7%", "47"],
+        ];
+        Table {
+            rows: rows
+                .into_iter()
+                .map(|cells| TableRow {
+                    cells: cells
+                        .into_iter()
+                        .map(|text| TableCell {
+                            text: text.into(),
+                            spans: Vec::new(),
+                            colspan: 1,
+                            rowspan: 1,
+                            mcids: Vec::new(),
+                            bbox: None,
+                            is_header: false,
+                        })
+                        .collect(),
+                    is_header: false,
+                })
+                .collect(),
+            has_header: false,
+            col_count: 5,
+            bbox: Some(Rect::new(0.0, y, 300.0, 50.0)),
+        }
+    }
+
+    fn restart_rule(coord: f32) -> Edge {
+        Edge {
+            coord,
+            start: 0.0,
+            end: 300.0,
+        }
+    }
+
+    #[test]
+    fn intersection_merge_keeps_separated_schema_restarts_in_source_order() {
+        let mut tables = vec![
+            restart_grid(100.0, ["$1,076", "$1,706"]),
+            restart_grid(164.0, ["$1,130", "$1,767"]),
+            restart_grid(260.0, ["10", "20"]),
+            restart_grid(315.0, ["30", "40"]),
+        ];
+        let horizontal = [150.0, 164.0, 260.0, 310.0, 315.0, 365.0].map(restart_rule);
+        let vertical = [0.0, 300.0].map(|coord| Edge {
+            coord,
+            start: 260.0,
+            end: 365.0,
+        });
+        let (cuts, _) = merge_vertically_adjacent_tables(&mut tables, &horizontal, &vertical);
+        assert_eq!(tables.len(), 3);
+        assert_eq!(tables[0].rows[2].cells[1].text, "$1,130");
+        assert_eq!(tables[1].rows[2].cells[1].text, "$1,076");
+        assert_eq!(tables[0].rows[3].cells[1].text, "$1,767");
+        assert_eq!(tables[1].rows[3].cells[1].text, "$1,706");
+        assert_eq!(tables[2].rows.len(), 8);
+        assert_eq!(cuts, [None, None, Some(vec![4])]);
+    }
+
+    #[test]
+    fn intersection_merge_still_joins_repeated_header_with_continuous_ruling() {
+        let horizontal = [150.0, 164.0].map(restart_rule);
+        let bridge = Edge {
+            coord: 0.0,
+            start: 100.0,
+            end: 214.0,
+        };
+        let lower = restart_grid(100.0, ["$1,076", "$1,706"]);
+        let upper = restart_grid(164.0, ["$1,130", "$1,767"]);
+        for (horizontal, vertical) in [
+            (horizontal.as_slice(), std::slice::from_ref(&bridge)),
+            (&horizontal[..1], &[][..]),
+        ] {
+            let mut tables = vec![lower.clone(), upper.clone()];
+            merge_vertically_adjacent_tables(&mut tables, horizontal, vertical);
+            assert_eq!(tables.len(), 1);
+            assert_eq!(tables[0].rows.len(), 8);
+        }
+    }
+
+    #[test]
+    fn intersection_merge_orders_mixed_restart_continuations_after_dividers() {
+        let lower = restart_grid(100.0, ["$1,076", "$1,706"]);
+        let upper = restart_grid(164.0, ["$1,130", "$1,767"]);
+        let mut continuation = restart_grid(219.0, ["$2,130", "$2,767"]);
+        continuation.rows.drain(..2);
+        let vertical = [0.0, 300.0].map(|coord| Edge {
+            coord,
+            start: 164.0,
+            end: 269.0,
+        });
+        for ruled in [false, true] {
+            let mut horizontal = vec![restart_rule(150.0), restart_rule(164.0)];
+            if ruled {
+                horizontal.extend([214.0, 219.0, 269.0].map(restart_rule));
+            }
+            let vertical = if ruled { vertical.as_slice() } else { &[] };
+            let mut tables = vec![lower.clone(), upper.clone(), continuation.clone()];
+            let (cuts, restart_members) = merge_vertically_adjacent_tables(&mut tables, &horizontal, vertical);
+            assert_eq!(cuts[0], Some(vec![4]));
+            let tables = split_tables_at_section_dividers(
+                tables,
+                cuts,
+                &restart_members,
+                &[],
+                vertical,
+                &TableDetectionConfig::default(),
+            );
+            assert_eq!(tables.len(), 2);
+            let values: Vec<_> = tables[0].rows.iter().map(|row| row.cells[1].text.as_str()).collect();
+            assert_eq!(values, ["$2,130", "$2,767", "", "1Q 2019", "$1,130", "$1,767"]);
+            assert_eq!(tables[1].rows[2].cells[1].text, "$1,076");
+        }
+    }
+
+    #[test]
+    fn intersection_merge_descending_cut_uses_last_leading_edge_but_excludes_outer_edges() {
+        let rows = [Some((40.0, 50.0)), Some((25.0, 35.0)), Some((10.0, 20.0))];
+        assert_eq!(nearest_descending_section_cut(&rows, 20.0, 2.0), Some(1));
+        assert_eq!(nearest_descending_section_cut(&rows, 10.0, 2.0), None);
+        assert_eq!(nearest_descending_section_cut(&rows, 50.0, 2.0), None);
+    }
+
+    #[test]
+    fn intersection_merge_orders_positioned_parts_after_real_divider_split() {
+        let position = |mut table: Table| {
+            let bbox = table.bbox.unwrap();
+            let height = bbox.height / table.rows.len() as f32;
+            for (row_index, row) in table.rows.iter_mut().enumerate() {
+                let y = bbox.bottom() - (row_index + 1) as f32 * height;
+                for (column, cell) in row.cells.iter_mut().enumerate() {
+                    cell.bbox = Some(Rect::new(column as f32 * 60.0, y, 60.0, height));
+                }
+            }
+            table
+        };
+        let lower = position(restart_grid(100.0, ["$1,076", "$1,706"]));
+        let mut upper = position(restart_grid(164.0, ["$1,130", "$1,767"]));
+        for cell in &mut upper.rows[0].cells {
+            cell.bbox.as_mut().unwrap().height -= 1.0;
+        }
+        for cell in &mut upper.rows[2].cells {
+            let bounds = cell.bbox.as_mut().unwrap();
+            bounds.y += 1.0;
+            bounds.height -= 1.0;
+        }
+        let mut continuation = restart_grid(214.0, ["$2,130", "$2,767"]);
+        continuation.rows.drain(..2);
+        let mut continuation = position(continuation);
+        // Ink bounds sit just above each row's lower rule. The divider
+        // matches the next row's high edge without tying the preceding edge. ~keep
+        for row in &mut continuation.rows {
+            for cell in &mut row.cells {
+                let bbox = cell.bbox.unwrap();
+                cell.bbox = Some(Rect::new(bbox.x, bbox.y + 1.0, bbox.width, bbox.height - 1.0));
+            }
+        }
+        for ruled in [false, true] {
+            let mut horizontal = vec![
+                restart_rule(150.0),
+                restart_rule(164.0),
+                restart_rule(189.0),
+                restart_rule(214.0),
+            ];
+            let sides = |start, end| [0.0, 300.0].map(|coord| Edge { coord, start, end });
+            let mut vertical = sides(164.0, 214.0).to_vec();
+            if ruled {
+                horizontal.push(restart_rule(264.0));
+                vertical.extend(sides(214.0, 264.0));
+            }
+            let mut tables = vec![lower.clone(), upper.clone(), continuation.clone()];
+            let (cuts, restart_members) = merge_vertically_adjacent_tables(&mut tables, &horizontal, &vertical);
+            assert_eq!(tables.iter().map(|table| table.rows.len()).collect::<Vec<_>>(), [6, 4]);
+            assert_eq!(restart_members, [true, true]);
+            for (divider, counts) in [(215.0, [2, 4, 4]), (240.0, [1, 5, 4]), (176.5, [5, 1, 4])] {
+                let parts = split_tables_at_section_dividers(
+                    tables.clone(),
+                    cuts.clone(),
+                    &restart_members,
+                    &[restart_rule(divider)],
+                    &[],
+                    &TableDetectionConfig::default(),
+                );
+                assert_eq!(parts.iter().map(|table| table.rows.len()).collect::<Vec<_>>(), counts);
+                let values: Vec<_> = parts[..2]
+                    .iter()
+                    .flat_map(|part| &part.rows)
+                    .map(|row| row.cells[1].text.as_str())
+                    .collect();
+                assert_eq!(values, ["$2,130", "$2,767", "", "1Q 2019", "$1,130", "$1,767"]);
+                assert_eq!(parts[2].rows[2].cells[1].text, "$1,076");
+            }
+        }
+    }
+
     #[test]
     fn test_merge_vertically_adjacent_tables() {
         // Two tables with 3 columns each, bboxes separated by 5pt (< ADJACENT_TABLE_MERGE_GAP).
@@ -9395,7 +9735,7 @@ mod tests {
         };
 
         let mut tables = vec![table1, table2];
-        let cuts = merge_vertically_adjacent_tables(&mut tables, &[], &[]);
+        let (cuts, _) = merge_vertically_adjacent_tables(&mut tables, &[], &[]);
         assert_eq!(
             cuts,
             vec![None],
@@ -9976,7 +10316,8 @@ mod tests {
                     .map(move |coord| Edge { coord, start, end })
             })
             .collect();
-        let parts = split_table_at_section_dividers(table, &horizontal, &vertical, &TableDetectionConfig::default());
+        let parts =
+            split_table_at_section_dividers(table, &horizontal, &vertical, &TableDetectionConfig::default(), false);
         let lengths: Vec<_> = parts.iter().map(|part| part.rows.len()).collect();
         assert_eq!(lengths, [3, 4], "the small section must not veto both valid sections");
         let retained: Vec<_> = parts.into_iter().flat_map(|part| part.rows).collect();
