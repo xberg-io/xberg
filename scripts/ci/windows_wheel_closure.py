@@ -349,9 +349,7 @@ def _raw_artifact_files(artifact: Path, selected: set[str] | None = None) -> dic
 
 
 def _php_query(host: Path) -> dict[str, int]:
-    code = (
-        'echo json_encode(["version_id"=>PHP_VERSION_ID,"zts"=>PHP_ZTS,"debug"=>PHP_DEBUG,"int_size"=>PHP_INT_SIZE]);'
-    )
+    code = 'echo json_encode(["version_id"=>PHP_VERSION_ID,"zts"=> (int) PHP_ZTS,"debug"=> (int) PHP_DEBUG,"int_size"=>PHP_INT_SIZE]);'
     try:
         result = subprocess.run(
             [str(host), "-n", "-r", code],
