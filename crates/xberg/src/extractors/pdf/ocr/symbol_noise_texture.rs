@@ -1,6 +1,6 @@
 //! Positive raster evidence for word-shaped OCR noise on repeating backgrounds.
 
-use super::{is_prunable_element, page_is_dominated_by_noise_lines, prune_document_elements, prune_text};
+use super::{is_prunable_element, page_is_dominated_by_noise_lines};
 use crate::pdf::structure::types::PdfParagraph;
 use crate::types::internal::InternalDocument;
 use crate::types::{ExtractedDocument, OcrBoundingGeometry, OcrElement, OcrElementLevel};
@@ -230,6 +230,11 @@ tokio::task_local! {
 }
 
 #[cfg(test)]
+pub(in crate::extractors::pdf::ocr) fn replay_disabled() -> bool {
+    REPLAY.try_with(Option::is_none).unwrap_or(false)
+}
+
+#[cfg(test)]
 type ReplayTokens = std::sync::Arc<parking_lot::Mutex<Vec<String>>>;
 
 #[cfg(test)]
@@ -266,9 +271,10 @@ pub(in crate::extractors::pdf::ocr) fn capture(
     read: &ExtractedDocument,
     config: &crate::core::config::ExtractionConfig,
     remaining_work: &mut usize,
+    certified_pad: impl Fn((u32, u32), &OcrBoundingGeometry) -> bool,
 ) -> Option<Evidence> {
     #[cfg(test)]
-    if REPLAY.try_with(Option::is_none).unwrap_or(false) {
+    if replay_disabled() {
         return None;
     }
     let render = (raster.2, raster.3);
@@ -309,7 +315,7 @@ pub(in crate::extractors::pdf::ocr) fn capture(
         return None;
     }
     let margins = crate::pdf::native::text::PageMarginFractions::from_extraction_config(Some(config));
-    let occurrences = find_repeated_lines(&image, &boxes, lines)
+    let occurrences = find_repeated_lines(&image, &boxes, lines, |geometry| certified_pad(processed, geometry))
         .into_iter()
         .filter(|source| source.inside_margins(processed.1, margins))
         .collect::<Vec<_>>();
@@ -323,6 +329,7 @@ fn find_repeated_lines<'a>(
     image: &image::RgbImage,
     boxes: &[(&OcrElement, BoxInRaster)],
     lines: impl Iterator<Item = &'a OcrElement> + Clone,
+    certified_pad: impl Fn(&OcrBoundingGeometry) -> bool,
 ) -> Vec<Occurrence> {
     boxes
         .iter()
@@ -330,13 +337,14 @@ fn find_repeated_lines<'a>(
             let text = line.text.trim();
             let unique = lines.clone().filter(|line| line.text.trim() == text).take(2).count() == 1;
             let matched = unique
-                && matching_peers(
-                    image,
-                    target,
-                    boxes
-                        .iter()
-                        .filter_map(|&(other, peer)| (text != other.text.trim() && target.peer(peer)).then_some(peer)),
-                );
+                && (certified_pad(&line.geometry)
+                    || matching_peers(
+                        image,
+                        target,
+                        boxes.iter().filter_map(|&(other, peer)| {
+                            (text != other.text.trim() && target.peer(peer)).then_some(peer)
+                        }),
+                    ));
             #[cfg(test)]
             if REPLAY.try_with(Option::is_some).unwrap_or(false) && matches!(text, "ceeces" | "ccccee") {
                 eprintln!("raster {text}: box={target:?} unique={unique} matched={matched}");
@@ -387,12 +395,13 @@ pub(in crate::extractors::pdf::ocr) fn prune(
     paragraphs: Option<&mut Vec<PdfParagraph>>,
     document: Option<&mut InternalDocument>,
     candidates: &[&str],
+    retained: Option<&str>,
 ) -> (usize, usize) {
     let owned = |candidate: &str| {
         unique(text.split_whitespace(), candidate)
             && read
                 .as_ref()
-                .is_some_and(|read| unique(read.split_whitespace(), candidate))
+                .is_none_or(|read| unique(read.split_whitespace(), candidate))
             && paragraphs
                 .as_ref()
                 .is_none_or(|paragraphs| unique_paragraph_token(paragraphs, candidate))
@@ -406,7 +415,22 @@ pub(in crate::extractors::pdf::ocr) fn prune(
         .copied()
         .filter(|text| owned(text))
         .collect::<Vec<_>>();
-    let (pruned, removed) = prune_text(text);
+    let retained = retained.filter(|word| {
+        owned(word)
+            && text.lines().any(|line| line.trim() == *word)
+            && paragraphs.as_ref().is_none_or(|paragraphs| {
+                paragraphs
+                    .iter()
+                    .any(|paragraph| paragraph.text.lines().any(|line| line.trim() == *word))
+            })
+            && document.as_ref().is_none_or(|document| {
+                document
+                    .elements
+                    .iter()
+                    .any(|element| element.text.lines().any(|line| line.trim() == *word))
+            })
+    });
+    let (pruned, removed) = super::prune_text_with_retention(text, retained);
     let (pruned, texture_removed) = strip_tokens(&pruned, &accepted);
     #[cfg(test)]
     let _ = REPLAY.try_with(|replay| {
@@ -416,14 +440,14 @@ pub(in crate::extractors::pdf::ocr) fn prune(
     });
     *text = pruned;
     if let Some(read) = read {
-        *read = strip_tokens(&prune_text(read).0, &accepted).0;
+        *read = strip_tokens(&super::prune_text_with_retention(read, retained).0, &accepted).0;
     }
     if let Some(paragraphs) = paragraphs {
-        super::prune_paragraphs(paragraphs);
+        super::prune_paragraphs_with_retention(paragraphs, retained);
         strip_paragraph_tokens(paragraphs, &accepted);
     }
     if let Some(document) = document {
-        prune_document_elements(document);
+        super::prune_document_elements_with_retention(document, retained);
         document.elements.retain_mut(|element| {
             if !is_prunable_element(element) || !element.annotations.is_empty() {
                 return true;
@@ -572,7 +596,10 @@ mod tests {
     fn unique_noise_token_is_removed_from_a_joined_read() {
         let mut output = format!("{FAINT_WORD} ccccee Nina");
         let mut read = format!("{FAINT_WORD}\nccccee\nNina");
-        assert_eq!(prune(&mut output, Some(&mut read), None, None, &["ccccee"]), (0, 1));
+        assert_eq!(
+            prune(&mut output, Some(&mut read), None, None, &["ccccee"], None),
+            (0, 1)
+        );
         assert_eq!(output, format!("{FAINT_WORD} Nina"));
         assert_eq!(read, format!("{FAINT_WORD}\nNina"));
     }
@@ -585,7 +612,10 @@ mod tests {
         ] {
             let mut output = input.to_owned();
             let mut read = format!("{FAINT_WORD}\nccccee\nNina");
-            assert_eq!(prune(&mut output, Some(&mut read), None, None, &["ccccee"]), (0, 0));
+            assert_eq!(
+                prune(&mut output, Some(&mut read), None, None, &["ccccee"], None),
+                (0, 0)
+            );
             assert_eq!(output, input);
             assert_eq!(read, format!("{FAINT_WORD}\nccccee\nNina"));
         }

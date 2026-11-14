@@ -48,6 +48,7 @@ fn handle(doc: &crate::PdfDocument, inline: bool) -> PdfImageHandle<'_> {
         filter_chain: vec![PdfFilter::JPXDecode],
         is_inline: inline,
         paint_order: 0,
+        referenced_mask: false,
         bbox: crate::geometry::Rect::new(0.0, 0.0, 1.0, 1.0),
         rotation_degrees: 0.0,
         ctm: crate::content::Matrix::identity(),

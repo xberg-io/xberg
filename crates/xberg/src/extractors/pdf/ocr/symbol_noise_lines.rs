@@ -20,6 +20,10 @@ use crate::pdf::structure::types::PdfParagraph;
 #[path = "symbol_noise_texture.rs"]
 pub(super) mod texture;
 
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[path = "symbol_noise_paint.rs"]
+pub(super) mod paint;
+
 /// Fewest non-blank lines a page needs before its line mix says anything.
 const MIN_LINES: usize = 8;
 /// A Latin token with at least this many letters is word-shaped.
@@ -249,7 +253,7 @@ fn is_equation(line: &str) -> bool {
 /// (`x = y`) and its tokens are not plausible text, or when it has a digit and every digit
 /// token is a digit with a stray quotation or section mark and no other token is plausible
 /// text. Any other line with a digit is kept.
-fn is_symbol_noise_line(line: &str) -> bool {
+pub(super) fn is_symbol_noise_line(line: &str) -> bool {
     let tokens: Vec<&str> = line.split_whitespace().collect();
     if tokens.is_empty() || line.chars().any(is_unspaced_script) {
         return false;
@@ -307,10 +311,18 @@ fn collapse_blank_runs(text: &str) -> String {
 /// The text without its symbol-noise lines and the number of lines removed. Does not decide
 /// whether the page qualifies.
 pub(super) fn prune_text(text: &str) -> (String, usize) {
-    let removed = text.lines().filter(|line| is_symbol_noise_line(line)).count();
+    prune_text_with_retention(text, None)
+}
+
+fn prunable_line(line: &str, retained: Option<&str>) -> bool {
+    Some(line.trim()) != retained && is_symbol_noise_line(line)
+}
+
+pub(super) fn prune_text_with_retention(text: &str, retained: Option<&str>) -> (String, usize) {
+    let removed = text.lines().filter(|line| prunable_line(line, retained)).count();
     let kept = text
         .lines()
-        .filter(|line| !is_symbol_noise_line(line))
+        .filter(|line| !prunable_line(line, retained))
         .collect::<Vec<_>>()
         .join("\n");
     (collapse_blank_runs(&kept), removed)
@@ -328,9 +340,13 @@ fn segment_line_text(line: &crate::pdf::structure::types::PdfLine) -> String {
 /// qualifies. A paragraph holding its text keeps the lines of that text; otherwise its own
 /// `lines` are filtered one for one.
 pub(super) fn prune_paragraphs(paragraphs: &mut Vec<PdfParagraph>) {
+    prune_paragraphs_with_retention(paragraphs, None);
+}
+
+pub(super) fn prune_paragraphs_with_retention(paragraphs: &mut Vec<PdfParagraph>, retained: Option<&str>) {
     paragraphs.retain_mut(|paragraph| {
         if !paragraph.text.is_empty() {
-            let (text, removed) = prune_text(&paragraph.text);
+            let (text, removed) = prune_text_with_retention(&paragraph.text, retained);
             if removed == 0 {
                 return true;
             }
@@ -341,7 +357,7 @@ pub(super) fn prune_paragraphs(paragraphs: &mut Vec<PdfParagraph>) {
         let before = paragraph.lines.len();
         paragraph
             .lines
-            .retain(|line| !is_symbol_noise_line(&segment_line_text(line)));
+            .retain(|line| !prunable_line(&segment_line_text(line), retained));
         before == paragraph.lines.len() || !paragraph.lines.is_empty()
     });
 }
@@ -351,13 +367,22 @@ pub(super) fn prune_paragraphs(paragraphs: &mut Vec<PdfParagraph>) {
 /// boundary is dropped, even between two surviving lines: its byte range has no single new
 /// offset once the lines between or around it are gone.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+#[cfg(test)]
 fn prune_element_text(element: &mut crate::types::internal::InternalElement) -> bool {
+    prune_element_text_with_retention(element, None)
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn prune_element_text_with_retention(
+    element: &mut crate::types::internal::InternalElement,
+    retained: Option<&str>,
+) -> bool {
     let mut kept = String::with_capacity(element.text.len());
     let mut spans: Vec<(usize, usize, usize)> = Vec::new();
     let (mut offset, mut removed) = (0usize, false);
     for line in element.text.split('\n') {
         let end = offset + line.len();
-        if is_symbol_noise_line(line) {
+        if prunable_line(line, retained) {
             removed = true;
         } else {
             if !kept.is_empty() {
@@ -425,12 +450,20 @@ pub(super) fn elements_are_prunable(document: &crate::types::internal::InternalD
 /// Prunes the text elements of a document, unless [`elements_are_prunable`] is false.
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn prune_document_elements(document: &mut crate::types::internal::InternalDocument) {
+    prune_document_elements_with_retention(document, None);
+}
+
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+fn prune_document_elements_with_retention(
+    document: &mut crate::types::internal::InternalDocument,
+    retained: Option<&str>,
+) {
     if !elements_are_prunable(document) {
         return;
     }
     document
         .elements
-        .retain_mut(|element| !is_prunable_element(element) || prune_element_text(element));
+        .retain_mut(|element| !is_prunable_element(element) || prune_element_text_with_retention(element, retained));
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]

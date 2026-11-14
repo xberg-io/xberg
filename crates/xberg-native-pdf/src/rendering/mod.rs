@@ -538,6 +538,44 @@ fn render_luminance(
     if !images {
         renderer = renderer.without_images();
     }
+    luminance_from_renderer(doc, page_num, renderer, budget)
+}
+
+/// Render the page, render only the selected image, or omit that image.
+/// Annotations are excluded from all three views.
+/// The caller reconciles the image's paint placement before using either view.
+#[doc(hidden)]
+pub fn render_image_paint_luminance(
+    doc: &crate::document::PdfDocument,
+    page: usize,
+    dpi: u32,
+    max_working_bytes: usize,
+    image: crate::object::ObjectRef,
+    include: Option<bool>,
+) -> Result<(u32, u32, Vec<u8>)> {
+    let budget = page_renderer::PngRenderBudget {
+        max_working_bytes,
+        minimum_dpi: dpi,
+    };
+    let _scope = crate::extractors::recovery_tally::RecoveryScope::enter(doc.recovery_counts());
+    let mut options = RenderOptions::with_dpi(dpi).as_raw();
+    options.render_annotations = false;
+    let mut renderer = PageRenderer::new(options);
+    if include == Some(true) {
+        renderer = renderer.without_text_ink();
+    }
+    if let Some(include) = include {
+        renderer = renderer.select_image(image, include);
+    }
+    luminance_from_renderer(doc, page, renderer, budget)
+}
+
+fn luminance_from_renderer(
+    doc: &crate::document::PdfDocument,
+    page_num: usize,
+    mut renderer: PageRenderer,
+    budget: page_renderer::PngRenderBudget,
+) -> Result<(u32, u32, Vec<u8>)> {
     let (image, _) = renderer.render_page_with_budget(page_num, doc, Some(budget))?;
     let luminance = image
         .data

@@ -4128,6 +4128,7 @@ pub struct PdfImageHandle<'doc> {
     /// Zero-based index of this image among all images painted on the page,
     /// in content-stream paint order.
     pub paint_order: usize,
+    pub(crate) referenced_mask: bool,
     /// Axis-aligned bounding box of this image in PDF user space, computed
     /// during Phase 1 by applying the current transformation matrix to the
     /// unit rectangle `[0,0,1,1]`.
@@ -4151,6 +4152,18 @@ pub struct PdfImageHandle<'doc> {
 }
 
 impl<'doc> PdfImageHandle<'doc> {
+    /// Identity of an image XObject in this document.
+    #[doc(hidden)]
+    pub fn painted_object_reference(&self) -> Option<ObjectRef> {
+        if self.referenced_mask {
+            return None;
+        }
+        match self.source {
+            PdfImageSource::XObject(reference) => Some(reference),
+            PdfImageSource::Inline { .. } => None,
+        }
+    }
+
     /// Width and height, in points, the image is painted at, when its placement is exactly known.
     ///
     /// Known means the transformation matrix is an unsheared quarter-turn multiple (the image
@@ -4609,6 +4622,7 @@ pub(crate) fn image_handle_from_xobject<'doc>(
         filter_chain,
         is_inline: false,
         paint_order,
+        referenced_mask: false,
         bbox,
         rotation_degrees,
         ctm,
@@ -4714,6 +4728,7 @@ pub(crate) fn image_handle_from_inline<'doc>(
         filter_chain,
         is_inline: true,
         paint_order,
+        referenced_mask: false,
         bbox,
         rotation_degrees,
         ctm,
