@@ -248,12 +248,16 @@ impl ExtractInput {
     }
 
     /// Reconstruct an extraction input from metadata and out-of-band bytes for native bindings.
-    pub fn from_json_with_bytes(bytes: Vec<u8>, metadata_json: String) -> crate::Result<Self> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the metadata is invalid or includes an inline byte payload.
+    pub fn from_json_with_bytes(bytes: impl Into<Vec<u8>>, metadata_json: String) -> crate::Result<Self> {
         let mut input: Self = serde_json::from_str(&metadata_json)?;
         if input.bytes.is_some() {
             return Err(crate::XbergError::validation("extract input metadata must omit bytes"));
         }
-        input.bytes = Some(bytes);
+        input.bytes = Some(bytes.into());
         Ok(input)
     }
 
