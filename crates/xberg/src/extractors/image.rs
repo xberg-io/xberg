@@ -3287,9 +3287,12 @@ impl ImageExtractor {
         let include_words = false;
         enable_image_ocr_elements(&mut ocr_config_with_format, include_words);
         #[cfg(not(target_arch = "wasm32"))]
-        if is_implicit_horizontal_tesseract(ocr_config)
-            || (config.output_format == crate::core::config::OutputFormat::Markdown && psm6_tesseract.is_some())
-        {
+        let include_tesseract_elements = is_implicit_horizontal_tesseract(ocr_config);
+        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+        let include_tesseract_elements = include_tesseract_elements
+            || (config.output_format == crate::core::config::OutputFormat::Markdown && psm6_tesseract.is_some());
+        #[cfg(not(target_arch = "wasm32"))]
+        if include_tesseract_elements {
             enable_image_ocr_elements(&mut ocr_config_with_format, true);
         }
 
@@ -3509,7 +3512,7 @@ impl ImageExtractor {
 
             doc.prebuilt_ocr_elements = ocr_elements;
 
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             if config.output_format == crate::core::config::OutputFormat::Markdown
                 && psm6_tesseract.is_some()
                 && !has_public_ocr_structure
