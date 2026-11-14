@@ -15,8 +15,11 @@ pub(super) fn consolidate(table: &mut Table, words: &[HocrWord], paths: &[PathCo
         .iter()
         .filter(|path| path.has_stroke() && path.is_horizontal_line(0.5))
         .map(PathContent::rendered_bbox)
-        .filter(|rule| f64::from(rule.x) <= bounds.x0 + 1.0 && f64::from(rule.right()) >= bounds.x1 - 1.0)
-        .map(|rule| page_height - rule.center().y)
+        .filter(|rule| f64::from(rule.x) < bounds.x1 && f64::from(rule.right()) > bounds.x0)
+        .map(|rule| {
+            let full_width = f64::from(rule.x) <= bounds.x0 + 1.0 && f64::from(rule.right()) >= bounds.x1 - 1.0;
+            (page_height - rule.center().y, full_width)
+        })
         .collect();
     let mut matches = table.cells.windows(2).enumerate().filter(|(_, pair)| {
         let [first, second] = pair else { return false };
@@ -69,7 +72,7 @@ fn row_matches(words: &[&HocrWord], cells: &[String]) -> bool {
         .eq(cells.iter().flat_map(|cell| cell.split_whitespace()))
 }
 
-fn has_enclosing_rules(upper: &[&HocrWord], lower: &[&HocrWord], rules: &[f32], height: u32) -> bool {
+fn has_enclosing_rules(upper: &[&HocrWord], lower: &[&HocrWord], rules: &[(f32, bool)], height: u32) -> bool {
     let upper_top = upper.iter().map(|word| word.top).min().unwrap_or(0) as f32;
     let lower_bottom = lower
         .iter()
@@ -77,11 +80,13 @@ fn has_enclosing_rules(upper: &[&HocrWord], lower: &[&HocrWord], rules: &[f32], 
         .max()
         .unwrap_or(0) as f32;
     let tolerance = height as f32;
-    rules.iter().any(|&y| (upper_top - tolerance..=upper_top).contains(&y))
+    rules
+        .iter()
+        .any(|&(y, full_width)| full_width && (upper_top - tolerance..=upper_top).contains(&y))
         && rules
             .iter()
-            .any(|&y| (lower_bottom..=lower_bottom + tolerance).contains(&y))
-        && !rules.iter().any(|&y| y > upper_top && y < lower_bottom)
+            .any(|&(y, full_width)| full_width && (lower_bottom..=lower_bottom + tolerance).contains(&y))
+        && !rules.iter().any(|&(y, _)| y > upper_top && y < lower_bottom)
 }
 
 #[cfg(test)]
@@ -98,8 +103,74 @@ mod tests {
             width: 10,
             confidence: 100.0,
         };
-        assert!(has_enclosing_rules(&[&word(12)], &[&word(24)], &[10.0, 34.0], 8));
-        assert!(!has_enclosing_rules(&[&word(12)], &[&word(24)], &[10.0, 22.0, 34.0], 8));
-        assert!(!has_enclosing_rules(&[&word(12)], &[&word(24)], &[10.0], 8));
+        assert!(has_enclosing_rules(
+            &[&word(12)],
+            &[&word(24)],
+            &[(10.0, true), (34.0, true)],
+            8
+        ));
+        assert!(!has_enclosing_rules(
+            &[&word(12)],
+            &[&word(24)],
+            &[(10.0, true), (22.0, true), (34.0, true)],
+            8
+        ));
+        assert!(!has_enclosing_rules(&[&word(12)], &[&word(24)], &[(10.0, true)], 8));
+    }
+    #[test]
+    fn consolidation_respects_a_label_only_divider() {
+        use xberg_native_pdf::elements::PathOperation;
+        let word = |text: &str, left, top| HocrWord {
+            text: text.into(),
+            left,
+            top,
+            width: 10,
+            height: 8,
+            confidence: 100.0,
+        };
+        let words = [
+            word("Operating", 10, 12),
+            word("income", 22, 12),
+            word("before", 34, 12),
+            word("tax", 18, 24),
+            word("100", 75, 24),
+            word("200", 100, 24),
+        ];
+        let rows = vec![
+            vec!["Operating income before".into(), String::new(), String::new()],
+            vec!["tax".into(), "100".into(), "200".into()],
+        ];
+        let table = || Table {
+            cells: rows.clone(),
+            bounding_box: Some(crate::types::BoundingBox {
+                x0: 10.0,
+                x1: 110.0,
+                y0: 68.0,
+                y1: 88.0,
+            }),
+            ..Table::default()
+        };
+        let rule = |left, right, top| {
+            let y = 100.0_f32 - top;
+            PathContent::from_operations(vec![PathOperation::MoveTo(left, y), PathOperation::LineTo(right, y)])
+        };
+        let mut rules = vec![rule(8.0, 112.0, 10.0), rule(8.0, 112.0, 34.0)];
+        let mut united = table();
+        consolidate(&mut united, &words, &rules, 100.0);
+        assert_eq!(united.cells.len(), 1);
+        assert_eq!(united.cells[0][0], "Operating income before tax");
+        rules.push(rule(8.0, 50.0, 22.0));
+        let mut divided = table();
+        consolidate(&mut divided, &words, &rules, 100.0);
+        assert_eq!(divided.cells, rows, "label-only interior divider");
+
+        let mut partial_boundary = table();
+        consolidate(
+            &mut partial_boundary,
+            &words,
+            &[rule(8.0, 50.0, 10.0), rule(8.0, 112.0, 34.0)],
+            100.0,
+        );
+        assert_eq!(partial_boundary.cells, rows, "partial outer rule");
     }
 }
