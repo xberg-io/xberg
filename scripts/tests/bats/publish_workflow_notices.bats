@@ -118,14 +118,18 @@ PYTHON
 
 	cat >scripts/ci/smoke-test-musl-elixir-nif.sh <<'SH'
 set -euo pipefail
-test "$(readlink "$1/libxberg_nif.so")" = "libxberg_nif-v1.4.0-nif-2.16-fixture-target.so"
-test "$(cat "$1/libxberg_nif.so")" = native
-test "$(readlink "$1/libonnxruntime.so")" = libonnxruntime.so.1
-test "$(cat "$1/libonnxruntime.so")" = closure
-test "$(cat "$1/libheif.so.1")" = codec
+name=libxberg_nif-v1.4.0-nif-2.16-fixture-target.so.tar.gz
+test "$(basename "$1")" = "$name"
+test "$(cat "$2")" = "$(sha256sum "$1" | cut -d ' ' -f 1)  $name"
+tar -xzf "$1" -C "$XBERG_WORK/staged"
+test "$(cat "$XBERG_WORK/staged/${name%.tar.gz}")" = native
+test "$(readlink "$XBERG_WORK/staged/libonnxruntime.so")" = libonnxruntime.so.1
+test "$(cat "$XBERG_WORK/staged/libonnxruntime.so")" = closure
+test "$(cat "$XBERG_WORK/staged/libheif.so.1")" = codec
 echo "archive reached smoke"
 SH
-	extract_run elixir-natives-musl 'Smoke-test the extracted musl Elixir NIF archive'
+	mkdir staged
+	extract_run elixir-natives-musl 'Smoke-test the staged musl Elixir NIF archive'
 	run bash "$XBERG_WORK/step.sh"
 	xberg_assert_status 0
 	xberg_assert_output_contains 'archive reached smoke'
@@ -135,6 +139,50 @@ SH
 	xberg_assert_status 1
 	xberg_assert_output_contains 'FAILED'
 	[[ "$output" != *'archive reached smoke'* ]]
+}
+
+@test "musl Elixir dry run should resolve the source package version" {
+	mkdir -p packages/elixir
+	printf '      version: "4.5.6",\n' >packages/elixir/mix.exs
+	export RELEASE_VERSION=0.0.0-dryrun-abcdef DRY_RUN=true
+	extract_run elixir-natives-musl 'Resolve Elixir NIF version'
+	run bash "$XBERG_WORK/step.sh"
+	xberg_assert_status 0
+	grep -Fxq 'version=4.5.6' "$GITHUB_OUTPUT"
+	: >"$GITHUB_OUTPUT"
+	export DRY_RUN=false RELEASE_VERSION=9.8.7
+	run bash "$XBERG_WORK/step.sh"
+	xberg_assert_status 0
+	grep -Fxq 'version=9.8.7' "$GITHUB_OUTPUT"
+}
+
+@test "Elixir rebuild upload should reject failed legs and a missing current-run archive" {
+	extract_run prepare 'List expected Elixir NIF assets'
+	bash "$XBERG_WORK/step.sh"
+	export NIF_ASSETS
+	NIF_ASSETS="$(sed -n 's/^names=//p' "$GITHUB_OUTPUT")"
+	extract_run upload-elixir-release 'Require successful Elixir builds'
+	export BUILD_RESULTS='success failure success'
+	run bash "$XBERG_WORK/step.sh"
+	xberg_assert_status 1
+	xberg_assert_output_contains 'All Elixir NIF build jobs must succeed'
+	export BUILD_RESULTS='success success success'
+	run bash "$XBERG_WORK/step.sh"
+	xberg_assert_status 0
+
+	extract_run upload-elixir-release 'Verify current-run Elixir archives'
+	mkdir -p dist/elixir
+	local -a names
+	IFS=, read -ra names <<<"$NIF_ASSETS"
+	for name in "${names[@]}"; do
+		printf archive >"dist/elixir/$name"
+	done
+	run bash "$XBERG_WORK/step.sh"
+	xberg_assert_status 0
+	rm "dist/elixir/${names[5]}"
+	run bash "$XBERG_WORK/step.sh"
+	xberg_assert_status 1
+	xberg_assert_output_contains "${names[5]}"
 }
 
 @test "Dart desktop workflow should retain canonical bytes in the final checksummed download" {
@@ -297,4 +345,24 @@ PYTHON
 	check_dart_release_prerequisites "$XBERG_WORK/no-checkout.yaml"
 	xberg_assert_status 1
 	xberg_assert_output_contains 'Dart upload needs one source checkout, found 0'
+}
+
+@test "Elixir release inventory should require every loader archive by its exact name" {
+	extract_run prepare 'List expected Elixir NIF assets'
+	bash "$XBERG_WORK/step.sh"
+	python3 - "$GITHUB_OUTPUT" "$REPOSITORY_ROOT/packages/elixir/lib/xberg/native.ex" <<'PYTHON'
+import re, sys
+from pathlib import Path
+csv, header, *names, end = Path(sys.argv[1]).read_text().splitlines()
+assert header == "multiline<<EOF" and end == "EOF"
+assert csv == "names=" + ",".join(names)
+source = Path(sys.argv[2]).read_text()
+targets = re.search(r"targets: \[(.*?)\]", source, re.S).group(1)
+expected = set()
+for target in re.findall(r'"([^"]+)"', targets):
+    prefix, ext = ("", "dll") if "windows" in target else ("lib", "so")
+    expected.add(f"{prefix}xberg_nif-v1.4.0-nif-2.16-{target}.{ext}.tar.gz")
+assert len(expected) == len(names) == 6
+assert set(names) == expected
+PYTHON
 }

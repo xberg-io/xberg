@@ -240,6 +240,27 @@ fn an_actual_text_run_in_a_tj_array_has_the_width_of_its_glyphs() {
     assert_eq!(array, tj);
 }
 
+#[test]
+fn whitespace_actual_text_preserves_pen_advance_without_claiming_ink_width() {
+    for (operators, next_x) in [
+        ("(xx) Tj", 12.0),
+        ("[(x) -250 (x)] TJ", 15.0),
+        ("(x) Tj [(x) -250] TJ", 15.0),
+        ("[(x) -250] TJ (x) Tj", 15.0),
+        ("(x) Tj (x) Tj", 12.0),
+    ] {
+        let stream = format!("BT /F1 12 Tf 0 0 Td /Span <</ActualText (  )>> BDC {operators} EMC (x) Tj ET");
+        let mut extractor = TextExtractor::new();
+        extractor.add_font("F1".to_string(), create_test_font());
+        let spans = extractor.extract_text_spans(stream.as_bytes()).unwrap();
+        let geometry: Vec<_> = spans
+            .iter()
+            .map(|s| (s.text.as_str(), s.bbox.x, s.bbox.width))
+            .collect();
+        assert_eq!(geometry, [("  ", 0.0, 0.0), ("x", next_x, 6.0)], "{operators}");
+    }
+}
+
 /// A second TJ array inside the same `/ActualText` scope draws more of the replaced glyphs. Their
 /// width lands on the open replacement run, as it does when one Tj draws every glyph.
 #[test]

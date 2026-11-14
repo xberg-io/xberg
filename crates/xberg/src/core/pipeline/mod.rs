@@ -638,7 +638,10 @@ async fn run_pipeline_impl(
             let mut repaired_rows = Vec::new();
             let repair_rows = cfg!(not(target_arch = "wasm32"))
                 && doc.source_format == "pdf"
-                && config.output_format == crate::core::config::OutputFormat::Markdown;
+                && matches!(
+                    config.output_format,
+                    crate::core::config::OutputFormat::Markdown | crate::core::config::OutputFormat::Plain
+                );
             match crate::extraction::image_ocr::process_images_with_ocr(
                 images_to_process,
                 config,
@@ -648,7 +651,9 @@ async fn run_pipeline_impl(
             .await
             {
                 Ok(processed) => {
-                    mark_embedded_image_rows(&mut doc, &image_positions, &repaired_rows);
+                    if config.output_format == crate::core::config::OutputFormat::Markdown {
+                        mark_embedded_image_rows(&mut doc, &image_positions, &repaired_rows);
+                    }
                     for (position, image) in image_positions.into_iter().zip(processed) {
                         doc.images[position] = image;
                     }

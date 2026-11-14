@@ -1420,6 +1420,30 @@ fn sparse_table_page_text(
     render_covered_table_page_text(raw, &table.cells, &before, &after)
 }
 
+#[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+fn paddle_table_page_text(
+    raw: &str,
+    doc: &InternalDocument,
+    output_format: &crate::core::config::OutputFormat,
+    mime_type: &str,
+) -> Option<String> {
+    use crate::types::internal::ElementKind;
+
+    let ([image, element], [table]) = (doc.elements.as_slice(), doc.tables.as_slice()) else {
+        return None;
+    };
+    if *output_format != crate::core::config::OutputFormat::Plain
+        || mime_type.to_lowercase().contains("tiff")
+        || !matches!(image.kind, ElementKind::Image { image_index: 0 })
+        || !image.text.is_empty()
+        || !doc.images.is_empty()
+        || !matches!(element.kind, ElementKind::Table { table_index: 0 })
+    {
+        return None;
+    }
+    render_covered_table_page_text(raw, &table.cells, &[], &[])
+}
+
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
 fn sparse_table_surrounding_text<'a>(
     source: &'a InternalDocument,
@@ -3225,11 +3249,17 @@ impl ImageExtractor {
 
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
         let (standalone_tesseract, psm6_tesseract);
+        #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+        let builtin_paddle;
         let backend = {
             crate::plugins::ensure_ocr_backends_initialized();
             let registry = get_ocr_backend_registry();
             let registry = registry.read();
             let backend = registry.get(&ocr_config.backend)?;
+            #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
+            {
+                builtin_paddle = backend.name() == "paddle-ocr" && registry.has_builtin_paddle();
+            }
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             {
                 let explicit_psm6 = ocr_config
@@ -3549,6 +3579,12 @@ impl ImageExtractor {
                     .as_ref()
                     .filter(|_| standalone_tesseract.is_some() && !has_public_ocr_structure)
                     .and_then(|source| sparse_table_page_text(raw, &doc, source, &config.output_format, mime_type));
+                #[cfg(all(paddle_ocr, feature = "pdf", not(target_arch = "wasm32")))]
+                let table_text = if builtin_paddle && !has_public_ocr_structure {
+                    table_text.or_else(|| paddle_table_page_text(raw, &doc, &config.output_format, mime_type))
+                } else {
+                    table_text
+                };
                 #[cfg(target_arch = "wasm32")]
                 let table_text: Option<String> = None;
                 if !raw.is_empty() {

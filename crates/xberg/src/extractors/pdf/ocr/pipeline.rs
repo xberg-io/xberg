@@ -481,12 +481,14 @@ enum NextPageTask<T> {
     Finished(Result<T, tokio::task::JoinError>),
     /// The in-flight grace passed after the stop request: the tasks still running were aborted.
     Abandoned,
+    Cancelled,
     Drained,
 }
 
 /// Await the next finished page task. Once `token` has a stop requested, the tasks still running
 /// get [`IN_FLIGHT_PAGE_GRACE`] from the moment the request was first seen, then they are aborted
-/// and the caller records their pages as unread.
+/// and the caller records their pages as unread. Explicit cancellation aborts the wait at the
+/// next poll.
 #[cfg(all(
     any(feature = "ocr", feature = "ocr-pipeline"),
     feature = "pdf",
@@ -499,7 +501,12 @@ async fn next_page_task<T: 'static>(
     abandon_at: &mut Option<tokio::time::Instant>,
 ) -> NextPageTask<T> {
     loop {
-        match tokio::time::timeout(STOP_POLL_INTERVAL, join_set.join_next()).await {
+        let joined = tokio::time::timeout(STOP_POLL_INTERVAL, join_set.join_next()).await;
+        if token.is_some_and(crate::cancellation::CancellationToken::is_cancelled) {
+            join_set.abort_all();
+            return NextPageTask::Cancelled;
+        }
+        match joined {
             Ok(Some(joined)) => return NextPageTask::Finished(joined),
             Ok(None) => return NextPageTask::Drained,
             Err(_elapsed) => {
@@ -522,11 +529,17 @@ async fn next_page_task<T: 'static>(
     feature = "tokio-runtime",
     not(target_arch = "wasm32")
 ))]
-fn capture_ocr_completion<T, E>(
-    result: Result<T, E>,
+fn capture_ocr_completion<T>(
+    result: crate::Result<T>,
     token: Option<&crate::cancellation::CancellationToken>,
-) -> (Result<T, E>, Option<crate::cancellation::CancellationToken>) {
-    let expired = token.filter(|token| result.is_err() && token.time_limit_reached());
+) -> (crate::Result<T>, Option<crate::cancellation::CancellationToken>) {
+    if token.is_some_and(|token| token.is_cancelled()) {
+        return (Err(crate::XbergError::Cancelled), None);
+    }
+    // A stop can suppress the retry without making the completed backend error a timeout. ~keep
+    let expired = token.filter(|token| {
+        matches!(&result, Err(error) if !matches!(error, crate::XbergError::Cancelled)) && token.deadline_elapsed()
+    });
     (result, expired.cloned())
 }
 
@@ -1252,6 +1265,12 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     let mut texture_noise_by_page = ahash::AHashMap::<u32, super::symbol_noise_lines::texture::Evidence>::new();
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     let mut texture_work = super::hidden_layer::PreviewWorkBudget::new(config);
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut paint_retention_by_page = ahash::AHashMap::new();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut background_noise_by_page = ahash::AHashMap::<u32, super::symbol_noise_background::Evidence>::new();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let certified_background = super::symbol_noise_background::certified_source(content);
     // Pages whose calibrated mean confidence fell below `min_ocr_mean_confidence`.
     let mut low_confidence_pages: std::collections::HashSet<u32> = std::collections::HashSet::new();
     // Pages whose dictionary-invalid word ratio crossed its threshold.
@@ -1792,6 +1811,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                     thresholds: &ocr_output_thresholds,
                                     warn_when_kept: true,
                                 }),
+                                emit_progress: true,
                             },
                         )
                         .await?
@@ -2003,7 +2023,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         && stored_scan_retry::eligible(config, (idx + 1) as u32);
                     let task = crate::engine::seams::inherit_progress(async move {
                         if config_clone.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-                            return (idx, (Err(crate::XbergError::Cancelled.into()), None));
+                            return (idx, (Err(crate::XbergError::Cancelled), None));
                         }
                         #[cfg(feature = "layout-detection")]
                         let page_detection_slice = page_detection.as_ref().map(std::slice::from_ref);
@@ -2040,7 +2060,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             allow_stored_retry,
                         )
                         .await;
-                        (idx, capture_ocr_completion(result, config_clone.cancel_token.as_ref()))
+                        (
+                            idx,
+                            capture_ocr_completion(
+                                result.map_err(crate::XbergError::from),
+                                config_clone.cancel_token.as_ref(),
+                            ),
+                        )
                     });
                     #[cfg(test)]
                     let task = crate::plugins::registry::inherit_test_ocr_backend(task);
@@ -2053,6 +2079,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         match next_page_task(&mut join_set, config.cancel_token.as_ref(), &mut abandon_at).await {
                             NextPageTask::Finished(join_result) => join_result,
                             NextPageTask::Drained => break,
+                            NextPageTask::Cancelled => return Err(crate::XbergError::Cancelled.into()),
                             NextPageTask::Abandoned => {
                                 mark_pages_unread(
                                     config.cancel_token.as_ref(),
@@ -2069,6 +2096,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         plugin_name: "ocr".to_string(),
                     })?;
                     pending_pages.remove(&page_idx);
+                    if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled())
+                        || matches!(&result, Err(crate::XbergError::Cancelled))
+                    {
+                        return Err(crate::XbergError::Cancelled.into());
+                    }
                     if let Some(token) = expired.as_ref() {
                         token.request_stop();
                         mark_pages_unread(
@@ -2080,9 +2112,8 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         );
                         continue;
                     }
-                    let result = match result.map_err(crate::XbergError::from) {
+                    let result = match result {
                         Ok(result) => result,
-                        Err(error @ crate::XbergError::Cancelled) => return Err(error.into()),
                         Err(error) => {
                             let recovered = mixed_native_page_has_content(native_text, boundaries, page_idx);
                             push_mixed_ocr_page_failure_warning(
@@ -2761,6 +2792,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     match next_page_task(&mut join_set, config.cancel_token.as_ref(), &mut abandon_at).await {
                         NextPageTask::Finished(join_result) => join_result,
                         NextPageTask::Drained => break,
+                        NextPageTask::Cancelled => return Err(crate::XbergError::Cancelled.into()),
                         NextPageTask::Abandoned => {
                             let abandoned: Vec<usize> = pending_pages.drain().collect();
                             mark_pages_unread(
@@ -2790,6 +2822,11 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     raster_dpis.insert(page_idx, dpi);
                 }
                 pending_pages.remove(&page_idx);
+                if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled())
+                    || matches!(&result, Err(crate::XbergError::Cancelled))
+                {
+                    return Err(crate::XbergError::Cancelled.into());
+                }
                 if let Some(token) = expired.as_ref() {
                     token.request_stop();
                     mark_pages_unread(
@@ -2843,7 +2880,6 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 crate::engine::seams::emit_ocr_page(page_idx + 1, page_rotations.len(), backend.name());
                 let mut extraction_result = match result {
                     Ok(extraction_result) => extraction_result,
-                    Err(error @ crate::XbergError::Cancelled) => return Err(error.into()),
                     Err(error) => {
                         failed_pages.insert(page_idx, error);
                         continue;
@@ -3025,11 +3061,35 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         .and_then(serde_json::Value::as_bool)
                         .unwrap_or(false)
                     && let Some(raster) = encoded.iter().find(|(index, ..)| *index == page_idx)
-                    && let Some(candidates) = texture_work.probe_page(|work| {
-                        super::symbol_noise_lines::texture::capture(raster, &extraction_result, config, work)
-                    })
                 {
-                    texture_noise_by_page.insert((page_idx + 1) as u32, candidates);
+                    if certified_background
+                        && let Some(evidence) =
+                            super::symbol_noise_background::Evidence::capture(&extraction_result, page_idx)
+                    {
+                        background_noise_by_page.insert((page_idx + 1) as u32, evidence);
+                    }
+                    let planned = texture_work.probe_page(|work| {
+                        if let Some(candidates) =
+                            super::symbol_noise_lines::texture::capture(raster, &extraction_result, config, work)
+                        {
+                            texture_noise_by_page.insert((page_idx + 1) as u32, candidates);
+                        }
+                        super::symbol_noise_lines::paint::plan(
+                            &render_doc,
+                            page_idx,
+                            &extraction_result,
+                            config,
+                            &ocr_config_resolved,
+                            work,
+                        )
+                    });
+                    if let Some(planned) = planned
+                        && let Some(retained) = planned
+                            .verify(Arc::clone(&render_doc), config, &ocr_config_resolved)
+                            .await
+                    {
+                        paint_retention_by_page.insert((page_idx + 1) as u32, retained);
+                    }
                 }
                 let (width, height) = retry_dpi.map(|_| (upright_width, upright_height)).unwrap_or_else(|| {
                     encoded
@@ -3240,7 +3300,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             .filter(|_| !probing_hidden_layer);
         for (page_idx, png) in retry_pages {
             let failure = failed_pages.remove(page_idx);
-            if config.cancel_token.as_ref().is_some_and(|token| token.stop_requested()) {
+            if let Some(token) = config.cancel_token.as_ref().filter(|token| token.stop_requested()) {
                 if let Some(error) = failure {
                     let native_recovered = mixed_native_page_has_content(native_text, boundaries, *page_idx);
                     push_mixed_ocr_page_failure_warning(
@@ -3250,7 +3310,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         &error,
                         native_recovered,
                     );
-                    failed_page_errors.insert(*page_idx, error);
+                    // Keep the original failure record and classify the skipped retry as a time cut. ~keep
+                    mark_pages_unread(
+                        Some(token),
+                        std::iter::once(*page_idx),
+                        &mut page_failures,
+                        &mut failed_page_errors,
+                        |_| native_recovered,
+                    );
                 }
                 continue;
             }
@@ -3281,6 +3348,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             thresholds: &ocr_output_thresholds,
                             warn_when_kept: false,
                         }),
+                        emit_progress: true,
                     },
                 )
                 .await?
@@ -3615,27 +3683,63 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 continue;
             }
             #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
-            if let Some(evidence) = texture_noise_by_page.remove(page)
-                && !alternative_raster_pages.contains(page)
+            if !alternative_raster_pages.contains(page)
                 && !config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled())
                 && let Some(read) = ocr_results.get(page)
+                && (texture_noise_by_page.contains_key(page)
+                    || paint_retention_by_page.contains_key(page)
+                    || background_noise_by_page.contains_key(page))
             {
-                let candidates = evidence.reconciled_tokens(text, read);
-                let (removed, texture_removed) = super::symbol_noise_lines::texture::prune(
+                let background = background_noise_by_page
+                    .get(page)
+                    .filter(|_| text == read)
+                    .and_then(|evidence| evidence.reconcile(text));
+                let pcb_row = texture_noise_by_page
+                    .get(page)
+                    .and_then(|evidence| evidence.reconciled_pcb_row(text, read));
+                let mut candidates = texture_noise_by_page
+                    .get(page)
+                    .map(|evidence| evidence.reconciled_tokens(text, read))
+                    .unwrap_or_default();
+                if let Some(word) = background.filter(|word| !candidates.contains(word)) {
+                    candidates.push(word);
+                }
+                let retained = paint_retention_by_page
+                    .get(page)
+                    .filter(|_| text == read)
+                    .and_then(|evidence| evidence.reconcile(text));
+                let (removed, texture_removed, pcb_removed) = super::symbol_noise_lines::texture::prune_mixed(
                     text,
                     ocr_results.get_mut(page),
                     ocr_page_paragraphs.get_mut(page),
                     structured_ocr_pages.get_mut(page),
-                    &candidates,
+                    super::symbol_noise_lines::texture::MixedPruningEvidence {
+                        candidates: &candidates,
+                        retained,
+                        pcb_row,
+                    },
                 );
                 crate::core::diagnostics::push_warning_deduped(
                     &mut accumulated_warnings,
                     super::symbol_noise_lines::pruned_lines_warning(*page as usize, removed),
                 );
-                if texture_removed != 0 {
+                let background_removed = usize::from(
+                    texture_removed != 0
+                        && background.is_some_and(|word| !text.split_whitespace().any(|token| token == word)),
+                );
+                if background_removed != 0 {
                     crate::core::diagnostics::push_warning_deduped(
                         &mut accumulated_warnings,
-                        super::symbol_noise_lines::texture::warning(*page, texture_removed),
+                        super::symbol_noise_background::warning(*page, background_removed),
+                    );
+                }
+                if texture_removed + pcb_removed > background_removed {
+                    crate::core::diagnostics::push_warning_deduped(
+                        &mut accumulated_warnings,
+                        super::symbol_noise_lines::texture::warning(
+                            *page,
+                            texture_removed + pcb_removed - background_removed,
+                        ),
                     );
                 }
                 continue;
@@ -5041,6 +5145,10 @@ struct PageRead<OrderedProof, CaptionProof> {
     detached_frame_read: bool,
     captured_caption: Option<CaptionProof>,
     number_frame: bool,
+    #[cfg(feature = "ocr")]
+    paint_frame: bool,
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    background: Option<super::symbol_noise_background::Evidence>,
 }
 
 #[cfg(all(
@@ -5060,6 +5168,10 @@ impl<OrderedProof, CaptionProof> PageRead<OrderedProof, CaptionProof> {
             detached_frame_read: false,
             captured_caption: None,
             number_frame: false,
+            #[cfg(feature = "ocr")]
+            paint_frame: false,
+            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            background: None,
         }
     }
 }
@@ -5560,6 +5672,16 @@ pub(super) async fn extract_with_ocr_for_page(
     ))]
     let mut leading_khmer_rows = ahash::AHashMap::new();
     let mut page_texts = vec![String::new(); total_pages];
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut paint_retention = ahash::AHashMap::new();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut background_noise = ahash::AHashMap::<usize, super::symbol_noise_background::Evidence>::new();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let certified_background = content.is_some_and(super::symbol_noise_background::certified_source);
+    #[cfg(all(test, feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let certified_background = certified_background && !super::symbol_noise_lines::texture::replay_disabled();
+    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    let mut paint_work = super::hidden_layer::PreviewWorkBudget::new(config);
     // Which pages the quality gate rejected. Kept separately from `page_texts` because an
     // empty string is ambiguous -- a blank page produces one too -- and the structured
     // paragraphs of a rejected page must be dropped along with its text.
@@ -5881,7 +6003,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         })?;
                 let default_security_limits = crate::extractors::security::SecurityLimits::default();
                 let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-                let ((pages, batch_raster_dpis), warnings) = crate::pdf::render::capture_render_warnings(|| {
+                let rendered = crate::pdf::render::capture_render_warnings(|| {
                     render_full_pdf_ocr_batch_with_dpi(
                         doc,
                         page_rotations,
@@ -5890,7 +6012,23 @@ pub(super) async fn extract_with_ocr_for_page(
                         config.images.as_ref(),
                         preprocessing_render_dpi,
                     )
-                })?;
+                });
+                let ((pages, batch_raster_dpis), warnings) = match rendered {
+                    Ok(rendered) => rendered,
+                    Err(error) => {
+                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                        let error = diagnose_djot_budget_refusal(
+                            error,
+                            doc,
+                            config,
+                            &backend,
+                            &ocr_config_owned,
+                            &mut xobject_recovery_budget,
+                        )
+                        .await?;
+                        return Err(error.into());
+                    }
+                };
                 crate::core::diagnostics::dedup_extend_warnings(&mut render_warnings, warnings);
                 raster_dpis.extend(batch_raster_dpis);
                 pages
@@ -5930,6 +6068,8 @@ pub(super) async fn extract_with_ocr_for_page(
             not(target_arch = "wasm32")
         ))]
         let mut number_frame_reads = vec![false; batch_count];
+        #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        let mut paint_frames = vec![false; batch_count];
 
         // See the sibling JoinSet block above: `Send` futures aren't available on wasm32. ~keep
         #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
@@ -6044,6 +6184,21 @@ pub(super) async fn extract_with_ocr_for_page(
                     } else {
                         (config_clone, false)
                     };
+                #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+                let config_clone = if ocr_output_thresholds.prune_symbol_noise_lines
+                    && lazy_pdf_render_state.is_some()
+                    && !has_layout_detections
+                    && !has_stored_scan
+                    && get_ocr_backend_registry().read().is_builtin_tesseract(&backend)
+                {
+                    let mut config = ensure_elements_enabled(&config_clone);
+                    if let Some(elements) = config.element_config.as_mut() {
+                        elements.min_confidence = 0.0;
+                    }
+                    config
+                } else {
+                    config_clone
+                };
                 let original_config = ocr_config_owned.clone();
                 // No PDF `/Rotate` is ever known without the `pdf` feature (`page_rotation_degrees`
                 // is always `0` above in that build), so there is nothing to correct upright.
@@ -6125,6 +6280,13 @@ pub(super) async fn extract_with_ocr_for_page(
                     && base_ocr_config.auto_rotate.is_none()
                     && base_ocr_config.tesseract_config.is_none()
                     && base_ocr_config.effective_tesseract_language().as_slice() == ["eng"];
+                #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+                let observe_paint_frame = ocr_output_thresholds.prune_symbol_noise_lines
+                    && lazy_pdf_render_state.is_some()
+                    && !has_layout_detections
+                    && !has_stored_scan
+                    && correction_degrees == 0
+                    && get_ocr_backend_registry().read().is_builtin_tesseract(&backend);
                 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                 let probe_reads = page_ocr_hints.as_ref().and_then(|hints| hints.probe_reads.clone());
                 let task = crate::engine::seams::inherit_progress(async move {
@@ -6215,12 +6377,29 @@ pub(super) async fn extract_with_ocr_for_page(
                     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                     let (result, scale_only, inventory) = if caption_raster.is_some() {
                         crate::ocr::preprocessing::geometry_evidence::observe_with_word_inventory(primary).await
-                    } else if ordered_raster.is_some() || observe_detached_frame || observe_number_frame {
+                    } else if ordered_raster.is_some()
+                        || observe_detached_frame
+                        || observe_number_frame
+                        || observe_paint_frame
+                    {
                         let (result, scale_only) = crate::ocr::preprocessing::geometry_evidence::observe(primary).await;
                         (result, scale_only, None)
                     } else {
                         (primary.await, false, None)
                     };
+                    #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+                    let paint_read = (observe_paint_frame && scale_only)
+                        .then(|| result.as_ref().ok().map(|read| blake3::hash(read.content.as_bytes())))
+                        .flatten();
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    let background = (certified_background && scale_only && observe_paint_frame)
+                        .then(|| {
+                            super::symbol_noise_background::Evidence::capture(
+                                result.as_ref().ok()?,
+                                page_index_offset + idx,
+                            )
+                        })
+                        .flatten();
                     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                     let number_proof = observe_number_frame
                         .then(|| {
@@ -6304,6 +6483,12 @@ pub(super) async fn extract_with_ocr_for_page(
                     #[cfg(feature = "ocr")]
                     let captured_caption = captured_caption
                         .filter(|proof| result.as_ref().is_ok_and(|selected| proof.matches_selected(selected)));
+                    #[cfg(feature = "ocr")]
+                    let paint_frame = paint_read.is_some_and(|hash| {
+                        result
+                            .as_ref()
+                            .is_ok_and(|read| hash == blake3::hash(read.content.as_bytes()))
+                    });
                     PageRead {
                         page_idx: idx,
                         correction_degrees,
@@ -6314,6 +6499,10 @@ pub(super) async fn extract_with_ocr_for_page(
                         detached_frame_read,
                         captured_caption,
                         number_frame,
+                        #[cfg(feature = "ocr")]
+                        paint_frame,
+                        #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                        background,
                     }
                 });
                 join_set.spawn(crate::core::extractor::cacheability::inherit(task));
@@ -6329,6 +6518,10 @@ pub(super) async fn extract_with_ocr_for_page(
                     detached_frame_read,
                     captured_caption,
                     number_frame,
+                    #[cfg(feature = "ocr")]
+                    paint_frame,
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    background,
                 } = join_result.map_err(|e| crate::XbergError::Plugin {
                     message: format!("OCR task panicked: {}", e),
                     plugin_name: "ocr".to_string(),
@@ -6339,6 +6532,11 @@ pub(super) async fn extract_with_ocr_for_page(
                 {
                     detached_frame_reads[page_idx - batch_start] = detached_frame_read;
                     number_frame_reads[page_idx - batch_start] = number_frame;
+                    paint_frames[page_idx - batch_start] = paint_frame;
+                    #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                    if let Some(evidence) = background {
+                        background_noise.insert(page_idx, evidence);
+                    }
                 }
                 #[cfg(all(
                     feature = "ocr",
@@ -6949,6 +7147,38 @@ pub(super) async fn extract_with_ocr_for_page(
             }
             collected_tables.append(&mut backend_tables);
 
+            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            if page_rotation_override != 0
+                || !paint_frames[offset]
+                || tall_source_used
+                || pages_with_recovered_xobject_payload[page_idx]
+                || forced_khmer_supplements.contains_key(&page_idx)
+            {
+                background_noise.remove(&page_idx);
+            }
+
+            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            if paint_frames[offset]
+                && !tall_source_used
+                && !pages_with_recovered_xobject_payload[page_idx]
+                && !forced_khmer_supplements.contains_key(&page_idx)
+                && ocr_result.tables.is_empty()
+                && let Some((pdf, _, _)) = lazy_pdf_render_state.as_ref()
+                && let Some(planned) = paint_work.probe_page(|work| {
+                    super::symbol_noise_lines::paint::plan(
+                        pdf,
+                        document_page_idx,
+                        &ocr_result,
+                        config,
+                        &ocr_config_owned,
+                        work,
+                    )
+                })
+                && let Some(retained) = planned.verify(Arc::clone(pdf), config, &ocr_config_owned).await
+            {
+                paint_retention.insert(page_idx, retained);
+            }
+
             if let Some(ref mut elems) = ocr_result.ocr_elements {
                 #[cfg(feature = "pdf")]
                 let public_elements = {
@@ -7044,6 +7274,7 @@ pub(super) async fn extract_with_ocr_for_page(
                             cancel_token: config.cancel_token.as_ref(),
                             use_proven_source_dpi: false,
                             proven_read: None,
+                            emit_progress: true,
                         },
                     )
                     .await?
@@ -7699,10 +7930,50 @@ pub(super) async fn extract_with_ocr_for_page(
         if ocr_output_thresholds.prune_symbol_noise_lines
             && super::symbol_noise_lines::page_is_dominated_by_noise_lines(page_texts[page_idx].lines())
         {
-            let (pruned, removed) = super::symbol_noise_lines::prune_text(&page_texts[page_idx]);
+            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            let retained = paint_retention.get(&page_idx).and_then(|evidence| {
+                evidence.reconcile(&page_texts[page_idx]).filter(|word| {
+                    all_page_paragraphs[page_idx].as_ref().is_none_or(|paragraphs| {
+                        super::symbol_noise_lines::paint::paragraphs_own_line(paragraphs, word)
+                    })
+                })
+            });
+            #[cfg(not(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32"))))]
+            let retained = None;
+            #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+            if !config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled())
+                && public_ocr_pages
+                    .get(&page_number)
+                    .is_none_or(|doc| doc.tables.is_empty() && super::symbol_noise_lines::elements_are_prunable(doc))
+                && let Some(word) = background_noise
+                    .get(&page_idx)
+                    .and_then(|evidence| evidence.reconcile(&page_texts[page_idx]))
+            {
+                let original = page_texts[page_idx].clone();
+                let (removed, background_removed) = super::symbol_noise_lines::texture::prune(
+                    &mut page_texts[page_idx],
+                    None,
+                    all_page_paragraphs[page_idx].as_mut(),
+                    public_ocr_pages.get_mut(&page_number),
+                    &[word],
+                    retained,
+                );
+                unpruned_page_texts.push((page_idx, original));
+                recognition_noise_warnings.push(super::symbol_noise_lines::pruned_lines_warning(
+                    verdict.page_index + 1,
+                    removed,
+                ));
+                if background_removed != 0 {
+                    recognition_noise_warnings
+                        .push(super::symbol_noise_background::warning(page_number, background_removed));
+                }
+                continue;
+            }
+            let (pruned, removed) =
+                super::symbol_noise_lines::prune_text_with_retention(&page_texts[page_idx], retained);
             unpruned_page_texts.push((page_idx, std::mem::replace(&mut page_texts[page_idx], pruned)));
             if let Some(paragraphs) = all_page_paragraphs[page_idx].as_mut() {
-                super::symbol_noise_lines::prune_paragraphs(paragraphs);
+                super::symbol_noise_lines::prune_paragraphs_with_retention(paragraphs, retained);
             }
             recognition_noise_warnings.push(super::symbol_noise_lines::pruned_lines_warning(
                 verdict.page_index + 1,
@@ -8906,6 +9177,7 @@ pub(super) struct XObjectRecoveryContext<'a> {
     /// How each image read made at a proven resolution is judged for noise. `None` leaves every
     /// read to the page policy.
     pub(super) proven_read: Option<ProvenReadPolicy<'a>>,
+    pub(super) emit_progress: bool,
 }
 
 /// The recognition-noise thresholds every route judges a page read or an image retry read by.
@@ -8941,6 +9213,7 @@ impl<'a> XObjectRecoveryContext<'a> {
             cancel_token,
             use_proven_source_dpi: false,
             proven_read: None,
+            emit_progress: true,
         }
     }
 
@@ -8992,6 +9265,7 @@ pub(super) async fn collect_pipeline_xobject_pages(
         let mut page_context = XObjectRecoveryContext::with_budget(context.budget, context.cancel_token);
         page_context.stored_jpegs = Some(&mut stored_jpegs);
         page_context.use_proven_source_dpi = context.use_proven_source_dpi;
+        page_context.emit_progress = context.emit_progress;
         page_context.proven_read = context.proven_read;
         if matches!(projection, XObjectProjection::CompletePage)
             && !super::rendering::can_project_stored_jpeg_page(doc, page_idx, &limits, &mut page_context)?
@@ -9745,6 +10019,82 @@ fn pre_page_ocr_config(config: &ExtractionConfig) -> Cow<'_, crate::core::config
     }
     resolved
 }
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+async fn diagnose_djot_budget_refusal(
+    error: crate::XbergError,
+    doc: &xberg_native_pdf::PdfDocument,
+    config: &ExtractionConfig,
+    backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
+    ocr: &crate::core::config::OcrConfig,
+    budget: &mut crate::extractors::security::SecurityBudget,
+) -> crate::Result<crate::XbergError> {
+    use crate::core::config::{OcrStrategy, OutputFormat};
+    if config.output_format != OutputFormat::Djot
+        || config.ocr_strategy != OcrStrategy::Auto
+        || doc.page_count().ok() != Some(1)
+        || !render_refused_by_source_image_budget(&error)
+    {
+        return Ok(error);
+    }
+    if !crate::plugins::registry::get_ocr_backend_registry()
+        .read()
+        .is_builtin_tesseract(backend)
+    {
+        return Ok(error);
+    }
+    let thresholds = route_noise_thresholds(config);
+    let mut context =
+        XObjectRecoveryContext::with_budget(budget, config.cancel_token.as_ref()).with_proven_reads(&thresholds);
+    context.emit_progress = false;
+    let probe = recover_page_text_from_image_xobjects(backend, doc, 0, 1, ocr, context).await;
+    super::super::ensure_pdf_not_cancelled(config)?;
+    finish_djot_budget_probe(error, probe.map(|value| value.map(|read| read.failure_causes)))
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+fn finish_djot_budget_probe(
+    error: crate::XbergError,
+    probe: crate::Result<Option<Vec<String>>>,
+) -> crate::Result<crate::XbergError> {
+    match probe {
+        Ok(Some(causes)) => Ok(with_retry_causes(error, &causes)),
+        Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
+        Ok(None) | Err(_) => Ok(error),
+    }
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+fn djot_budget_probe_preserves_refusal_except_on_cancellation() {
+    let refusal = || crate::XbergError::Parsing {
+        message: "render refused".to_owned(),
+        source: Some(Box::new(std::io::Error::other("typed source"))),
+    };
+    for (probe, expected) in [
+        (Ok(None), "render refused"),
+        (Ok(Some(Vec::new())), "render refused"),
+        (Err(crate::XbergError::validation("probe limit")), "render refused"),
+        (
+            Ok(Some(vec!["noisy image".to_owned()])),
+            "render refused; embedded-image retry recovered no text (noisy image)",
+        ),
+    ] {
+        let crate::XbergError::Parsing {
+            message,
+            source: Some(source),
+        } = finish_djot_budget_probe(refusal(), probe).unwrap()
+        else {
+            panic!("expected typed render refusal");
+        };
+        assert_eq!(message, expected);
+        assert!(source.is::<std::io::Error>());
+    }
+    assert!(matches!(
+        finish_djot_budget_probe(refusal(), Err(crate::XbergError::Cancelled)),
+        Err(crate::XbergError::Cancelled)
+    ));
+}
+
 /// Why a retry read made at a placement-proven resolution was not adopted.
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 const PROVEN_READ_NOISE_CAUSE: &str = "the retry read was rejected as noise";
@@ -10164,7 +10514,9 @@ async fn run_ocr_pipeline_stages(
                 }
             }
             Err(failed_stage) => {
-                if crate::extraction::derive::is_invalid_public_ocr_document(&failed_stage.error) {
+                if matches!(failed_stage.error, crate::XbergError::Cancelled)
+                    || crate::extraction::derive::is_invalid_public_ocr_document(&failed_stage.error)
+                {
                     return Err(failed_stage);
                 }
                 #[cfg(feature = "pdf")]
@@ -11074,7 +11426,7 @@ mod native_script_kept_tests;
 #[path = "pipeline/second_site_clean_admission_tests.rs"]
 mod second_site_clean_admission_tests;
 
-#[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
+#[cfg(all(test, feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 #[path = "pipeline/budget_refusal_tests.rs"]
 mod budget_refusal_tests;
 
@@ -11220,7 +11572,13 @@ mod in_flight_page_tests {
         let (completed, wait) = tokio::sync::oneshot::channel();
         let mut join_set = JoinSet::new();
         join_set.spawn(async move {
-            let completion = capture_ocr_completion(Err::<(), _>("original OCR error"), Some(&worker_token));
+            let completion = capture_ocr_completion(
+                Err::<(), _>(crate::XbergError::Ocr {
+                    message: "original OCR error".to_string(),
+                    source: None,
+                }),
+                Some(&worker_token),
+            );
             completed.send(()).unwrap();
             completion
         });
@@ -11229,7 +11587,7 @@ mod in_flight_page_tests {
         assert!(token.time_limit_reached());
 
         let (result, expired) = join_set.join_next().await.unwrap().unwrap();
-        assert_eq!(result, Err("original OCR error"));
+        assert!(matches!(result, Err(crate::XbergError::Ocr { message, .. }) if message == "original OCR error"));
         assert!(expired.is_none());
     }
 
@@ -11246,6 +11604,31 @@ mod in_flight_page_tests {
     }
 
     #[tokio::test(start_paused = true)]
+    async fn cancellation_interrupts_the_wait_for_a_stuck_page_during_soft_stop() {
+        let token = CancellationToken::new();
+        token.request_stop();
+        let mut join_set = JoinSet::new();
+        join_set.spawn(std::future::pending::<()>());
+        let started = tokio::time::Instant::now();
+        let mut abandon_at = None;
+        let caller = token.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(STOP_POLL_INTERVAL * 2).await;
+            caller.cancel();
+        });
+
+        let outcome = next_page_task(&mut join_set, Some(&token), &mut abandon_at).await;
+
+        assert!(token.is_cancelled());
+        assert!(
+            started.elapsed() <= STOP_POLL_INTERVAL * 3,
+            "cancellation did not interrupt the page wait"
+        );
+        assert!(matches!(outcome, NextPageTask::Cancelled));
+        assert!(join_set.join_next().await.unwrap().unwrap_err().is_cancelled());
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn a_batch_without_a_stop_is_awaited_to_its_end() {
         let token = CancellationToken::new();
         let mut join_set = slow_pages(&[1, 60]);
@@ -11256,6 +11639,7 @@ mod in_flight_page_tests {
             match next_page_task(&mut join_set, Some(&token), &mut abandon_at).await {
                 NextPageTask::Finished(page) => finished.push(page.unwrap()),
                 NextPageTask::Drained => break,
+                NextPageTask::Cancelled => panic!("no cancellation was requested"),
                 NextPageTask::Abandoned => panic!("no stop was requested"),
             }
         }

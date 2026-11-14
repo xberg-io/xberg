@@ -115,6 +115,8 @@ jobs:
       release_wasm: ${{ steps.meta.outputs.release_wasm }}
       release_php: ${{ steps.meta.outputs.release_php }}
       release_elixir: ${{ steps.meta.outputs.release_elixir }}
+      elixir_assets: ${{ steps.elixir-assets.outputs.names }}
+      elixir_assets_multiline: ${{ steps.elixir-assets.outputs.multiline }}
       release_c_ffi: ${{ steps.meta.outputs.release_c_ffi }}
       release_dart: ${{ steps.meta.outputs.release_dart }}
       release_swift: ${{ steps.meta.outputs.release_swift }}
@@ -156,6 +158,26 @@ jobs:
       - name: Resolve release metadata
         id: meta
         uses: xberg-io/actions/prepare-release-metadata@v1
+
+      - name: List expected Elixir NIF assets
+        id: elixir-assets
+        if: steps.meta.outputs.release_elixir == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Keep these targets in sync with alef.toml and the three Elixir NIF build matrices. ~keep
+          suffix="-v${VERSION}-nif-2.16"
+          names=()
+          for target in aarch64-apple-darwin {aarch64,x86_64}-unknown-linux-{gnu,musl}; do
+            names+=("libxberg_nif${suffix}-${target}.so.tar.gz")
+          done
+          names+=("xberg_nif${suffix}-x86_64-pc-windows-msvc.dll.tar.gz")
+          {
+            (IFS=,; echo "names=${names[*]}")
+            printf 'multiline<<EOF\n%s\nEOF\n' "$(printf '%s\n' "${names[@]}")"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Resolve PHP source commit
         id: php-source
@@ -532,7 +554,7 @@ jobs:
           version: ${{ needs.prepare.outputs.version }}
           repo: xberg-io/xberg
           tag: ${{ needs.prepare.outputs.tag }}
-          asset-prefix: libxberg_nif-
+          assets: ${{ needs.prepare.outputs.elixir_assets }}
 
   python-wheels:
     name: Build Python wheels (${{ matrix.os }})
@@ -2836,6 +2858,7 @@ jobs:
           dest-dir: crates/xberg-ffi
 
       - uses: xberg-io/actions/build-elixir-natives@v1
+        id: build-nif
         with:
           target: ${{ matrix.target }}
           nif-crate-name: xberg_nif
@@ -2897,6 +2920,7 @@ jobs:
             scripts/ci/vendor-windows-native-closure.ps1
             scripts/ci/windows_wheel_closure.py
             scripts/ci/windows_raw_staging.py
+            scripts/ci/elixir_nif_assets.py
             mise.toml
             mise.lock
 
@@ -2912,7 +2936,17 @@ jobs:
         shell: pwsh
         env:
           DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
+          BUILDER_ARCHIVE: ${{ steps.build-nif.outputs.archive-path }}
+          NIF_VERSION: ${{ needs.prepare.outputs.version }}
+          NIF_API: ${{ matrix.nif }}
+          TARGET: ${{ matrix.target }}
         run: |
+          $closureTools = Join-Path $env:GITHUB_WORKSPACE ".release-tools/scripts/ci"
+          if ($env:DRY_RUN -ne 'true') {
+            $name = "xberg_nif-v${env:NIF_VERSION}-nif-${env:NIF_API}-${env:TARGET}.dll"
+            python (Join-Path $closureTools "elixir_nif_assets.py") normalize-windows $env:BUILDER_ARCHIVE $name
+            if ($LASTEXITCODE -ne 0) { throw "Windows NIF archive normalization failed" }
+          }
           $tarballs = @(Get-ChildItem -Path dist/elixir-natives -Filter "*.tar.gz" -File -ErrorAction SilentlyContinue)
           if ($tarballs.Count -eq 0) {
             if ($env:DRY_RUN -eq 'true') {
@@ -2921,12 +2955,11 @@ jobs:
             }
             throw "No Windows NIF archive to audit"
           }
-          $closureTools = Join-Path $env:GITHUB_WORKSPACE ".release-tools/scripts/ci"
           $ortRuntime = Get-Item -LiteralPath $env:ORT_DYLIB_PATH -ErrorAction Stop
           foreach ($archive in $tarballs) {
-            & (Join-Path $closureTools "vendor-windows-native-closure.ps1") -Archive $archive.FullName -DllSourceDir $ortRuntime.DirectoryName -NativeGlob "libxberg_nif-*.dll"
+            & (Join-Path $closureTools "vendor-windows-native-closure.ps1") -Archive $archive.FullName -DllSourceDir $ortRuntime.DirectoryName -NativeGlob "xberg_nif-*.dll"
             if ($LASTEXITCODE -ne 0) { throw "Windows NIF closure staging failed for $($archive.FullName)" }
-            & (Join-Path $closureTools "verify-windows-dll-closure.ps1") -Artifact $archive.FullName -NativeGlob "libxberg_nif-*.dll" -ArtifactKind raw -RequireCrtNotices
+            & (Join-Path $closureTools "verify-windows-dll-closure.ps1") -Artifact $archive.FullName -NativeGlob "xberg_nif-*.dll" -ArtifactKind raw -RequireCrtNotices
             if ($LASTEXITCODE -ne 0) { throw "Windows NIF closure audit failed for $($archive.FullName)" }
           }
 
@@ -2949,7 +2982,7 @@ jobs:
     name: Build Elixir NIF (linux-musl-${{ matrix.arch }} nif-${{ matrix.nif }})
     needs: [prepare, check-elixir-release, publish-crates]
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_elixir == 'true' && (needs.check-elixir-release.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.publish-crates.result != 'failure' && needs.prepare.outputs.release_elixir == 'true' && (needs.prepare.outputs.dry_run == 'true' || needs.check-elixir-release.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.timeout }}
     strategy:
@@ -2974,6 +3007,21 @@ jobs:
           fetch-depth: 0
 
           submodules: false
+      - name: Resolve Elixir NIF version
+        id: nif-version
+        shell: bash
+        env:
+          DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          version="$RELEASE_VERSION"
+          if [[ "$DRY_RUN" == 'true' ]]; then
+            version="$(sed -n 's/^ *version: "\([^"]*\)",$/\1/p' packages/elixir/mix.exs)"
+          fi
+          [[ -n "$version" && "$version" != *$'\n'* ]]
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
       # `.dockerignore` excludes `**/.git/`, so build.rs cannot derive XBERG_BUILD_ID inside the
       # container and falls back to `""`, collapsing every artifact built at one crate version into
       # a single OCR cache key space (#1845). Asserted non-empty here because an empty
@@ -2996,15 +3044,12 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
           NIF_API: ${{ matrix.nif }}
-          NIF_VERSION: ${{ needs.prepare.outputs.version }}
+          NIF_VERSION: ${{ steps.nif-version.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist/elixir-natives staging
-          # RustlerPrecompiled's `lib_name/4` expects the extracted file to carry the full
-          # versioned name, not the bare crate name -- the tarball name alone is not enough.
-          # The manylinux job below already renames; this one did not, so a musl artifact
-          # would have failed to load had musl ever been added to `nif_targets`. ~keep
+          # RustlerPrecompiled loads the versioned .so by name after extracting the archive. ~keep
           RENAMED="libxberg_nif-v${NIF_VERSION}-nif-${NIF_API}-${TARGET}.so"
           cp -a build-output/*.so* staging/
           mv staging/libxberg_nif.so "staging/${RENAMED}"
@@ -3014,23 +3059,19 @@ jobs:
           python3 scripts/ci/package-notices.py verify "dist/elixir-natives/${TARBALL}" .
           ( cd dist/elixir-natives && sha256sum "${TARBALL}" >"${TARBALL}.sha256" )
 
-      - name: Smoke-test the extracted musl Elixir NIF archive
+      - name: Smoke-test the staged musl Elixir NIF archive
         env:
           TARGET: ${{ matrix.target }}
           NIF_API: ${{ matrix.nif }}
-          NIF_VERSION: ${{ needs.prepare.outputs.version }}
+          NIF_VERSION: ${{ steps.nif-version.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
           ARCHIVE_DIR=dist/elixir-natives
           RENAMED="libxberg_nif-v${NIF_VERSION}-nif-${NIF_API}-${TARGET}.so"
           (cd "$ARCHIVE_DIR" && sha256sum -c "${RENAMED}.tar.gz.sha256")
-          extracted="$(mktemp -d)"
-          trap 'rm -rf -- "$extracted"' EXIT
-          tar -xzf "$ARCHIVE_DIR/${RENAMED}.tar.gz" -C "$extracted"
-          # The tag smoke harness loads the bare NIF name directly. ~keep
-          ln -s "$RENAMED" "$extracted/libxberg_nif.so"
-          bash scripts/ci/smoke-test-musl-elixir-nif.sh "$extracted"
+          archive="$ARCHIVE_DIR/${RENAMED}.tar.gz"
+          bash scripts/ci/smoke-test-musl-elixir-nif.sh "$archive" "$archive.sha256"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -3100,9 +3141,8 @@ jobs:
 
       # Reproduces xberg-io/actions/build-elixir-natives@v1's naming contract
       # (scripts/build.py: lib{crate}-v{version}-nif-{api}-{target}.so[.tar.gz])
-      # by hand, since this leg bypasses that action. Unlike
-      # elixir-natives-musl's tarball (which ships libxberg_nif.so alone), the
-      # FULL vendored closure built inside the container ships beside the
+      # by hand, since this leg bypasses that action. The full vendored native
+      # dependency closure built inside the container ships beside the
       # renamed .so -- verify-glibc-floor.sh below walks every .so in the
       # tarball, and that vendored closure is exactly what was failing the
       # floor check before this fix. ~keep
@@ -3994,16 +4034,24 @@ jobs:
 
   upload-elixir-release:
     name: Upload Elixir NIF archives to GitHub Release
-    needs: [prepare, elixir-natives, elixir-natives-musl, elixir-natives-manylinux]
-    # `is_tag` alone does NOT exclude a dry run -- prepare synthesizes
-    # `v<version>-dryrun-<sha>`, so `is_tag` is true there too. Without the
-    # dry_run test this job would start uploading release assets as soon as the
-    # native builds stopped failing, and its download-artifact would find
-    # nothing because the dry-run upload above is skipped. ~keep
+    needs: [prepare, check-elixir-release, elixir-natives, elixir-natives-musl, elixir-natives-manylinux]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.elixir-natives.result == 'success' || needs.elixir-natives-musl.result == 'success' || needs.elixir-natives-manylinux.result == 'success')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.dry_run != 'true' &&
+          needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_elixir == 'true' &&
+          (needs.check-elixir-release.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     steps:
+      - name: Require successful Elixir builds
+        shell: bash
+        env:
+          BUILD_RESULTS: ${{ needs.elixir-natives.result }} ${{ needs.elixir-natives-musl.result }} ${{ needs.elixir-natives-manylinux.result }}
+        run: |
+          set -euo pipefail
+          if [[ "$BUILD_RESULTS" != "success success success" ]]; then
+            echo "::error::All Elixir NIF build jobs must succeed (got $BUILD_RESULTS)"
+            exit 1
+          fi
+
       - uses: actions/create-github-app-token@v3
         id: app-token
         with:
@@ -4017,13 +4065,31 @@ jobs:
           path: dist/elixir
           merge-multiple: true
 
+      - name: Verify current-run Elixir archives
+        shell: bash
+        env:
+          NIF_ASSETS: ${{ needs.prepare.outputs.elixir_assets }}
+        run: |
+          set -euo pipefail
+          IFS=, read -ra names <<< "$NIF_ASSETS"
+          if [[ "${#names[@]}" != 6 ]]; then
+            echo "::error::Expected six Elixir NIF asset names"
+            exit 1
+          fi
+          for name in "${names[@]}"; do
+            if [[ ! -s "dist/elixir/$name" ]]; then
+              echo "::error::Missing current-run Elixir NIF archive: $name"
+              exit 1
+            fi
+          done
+
       - uses: xberg-io/actions/upload-release-assets@v1
         with:
           tag: ${{ needs.prepare.outputs.tag }}
           working-directory: dist/elixir
           dry-run: ${{ needs.prepare.outputs.dry_run }}
           token: ${{ steps.app-token.outputs.token }}
-          assets: libxberg_nif-*.tar.gz
+          assets: ${{ needs.prepare.outputs.elixir_assets }}
 
   upload-php-pie-release:
     name: Upload PHP PIE archives to GitHub Release
@@ -4124,21 +4190,41 @@ jobs:
           owner: xberg-io
 
       - uses: xberg-io/actions/verify-release-assets@v1
-        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        name: Verify CLI release assets
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.release_cli == 'true' }}
         with:
           tag: ${{ needs.prepare.outputs.tag }}
           token: ${{ steps.app-token.outputs.token }}
           expected-assets: |
-            # CLI
             xberg-cli-*.tar.gz
             xberg-cli-*.zip
-            # Go FFI
+
+      - uses: xberg-io/actions/verify-release-assets@v1
+        name: Verify Go FFI release assets
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.release_go == 'true' }}
+        with:
+          tag: ${{ needs.prepare.outputs.tag }}
+          token: ${{ steps.app-token.outputs.token }}
+          expected-assets: |
             xberg-go-*.tar.gz
-            # C FFI
+
+      - uses: xberg-io/actions/verify-release-assets@v1
+        name: Verify C FFI release assets
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.release_c_ffi == 'true' }}
+        with:
+          tag: ${{ needs.prepare.outputs.tag }}
+          token: ${{ steps.app-token.outputs.token }}
+          expected-assets: |
             xberg-ffi-*.tar.gz
-            # Elixir NIF
-            libxberg_nif-*.tar.gz
-            # PHP PIE (a missing Linux leg shipped silently from 1.3.7 to 1.3.10, #2113)
+
+      - uses: xberg-io/actions/verify-release-assets@v1
+        name: Verify PHP PIE release assets
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.release_php == 'true' }}
+        with:
+          tag: ${{ needs.prepare.outputs.tag }}
+          token: ${{ steps.app-token.outputs.token }}
+          expected-assets: |
+            # Require every supported PHP version and platform (#2113).
             php_xberg-*_php8.3-x86_64-linux-glibc-nts.tgz
             php_xberg-*_php8.3-arm64-linux-glibc-nts.tgz
             php_xberg-*_php8.3-arm64-darwin-bsdlibc-nts.tgz
@@ -4151,6 +4237,13 @@ jobs:
             php_xberg-*_php8.5-arm64-linux-glibc-nts.tgz
             php_xberg-*_php8.5-arm64-darwin-bsdlibc-nts.tgz
             php_xberg-*-8.5-nts-vs17-x86_64.zip
+
+      - uses: xberg-io/actions/verify-release-assets@v1
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.release_elixir == 'true' }}
+        with:
+          tag: ${{ needs.prepare.outputs.tag }}
+          token: ${{ steps.app-token.outputs.token }}
+          expected-assets: ${{ needs.prepare.outputs.elixir_assets_multiline }}
 
       - uses: actions/download-artifact@v8
         if: ${{ needs.prepare.outputs.dry_run == 'true' && needs.prepare.outputs.release_cli == 'true' }}
@@ -5021,21 +5114,41 @@ jobs:
           elixir-version: "1.17"
           otp-version: "27"
 
-      - name: Generate NIF checksum file
-        uses: xberg-io/actions/generate-elixir-checksums@v1
+      - name: Checkout Elixir release tools
+        uses: actions/checkout@v7
         with:
-          github-repo: xberg-io/xberg
-          tag: ${{ needs.prepare.outputs.tag }}
-          version: ${{ needs.prepare.outputs.version }}
-          lib-name: xberg_nif
-          # Must match the NIF versions actually built (elixir-natives matrix) and
-          # declared in packages/elixir/lib/xberg/native.ex (`nif_versions: ["2.16"]`).
-          # NIF 2.16 loads fine on OTP 27 (NIF minor versions are backward compatible),
-          # so a single 2.16 artifact covers every supported runtime. Requesting 2.17
-          # here made the checksum step hunt for assets that were never built. ~keep
-          nif-versions: "2.16"
-          targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,aarch64-apple-darwin,x86_64-pc-windows-msvc
-          output-path: packages/elixir/checksum-Elixir.Xberg.Native.exs
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: scripts/ci/elixir_nif_assets.py
+
+      - name: Generate NIF checksum file
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          NIF_ASSETS: ${{ needs.prepare.outputs.elixir_assets }}
+        run: |
+          set -euo pipefail
+          IFS=, read -ra names <<< "$NIF_ASSETS"
+          test "${#names[@]}" -gt 0
+          archives="$(mktemp -d)"
+          trap 'rm -rf -- "$archives"' EXIT
+          patterns=()
+          for name in "${names[@]}"; do
+            patterns+=(--pattern "$name")
+          done
+          for attempt in 1 2 3; do
+            if gh release download "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" \
+              "${patterns[@]}" --dir "$archives" --clobber; then
+              break
+            fi
+            test "$attempt" -lt 3
+            sleep 5
+          done
+          python3 .release-tools/scripts/ci/elixir_nif_assets.py checksums \
+            packages/elixir/checksum-Elixir.Xberg.Native.exs "${names[@]/#/$archives/}"
 
       - name: Build Elixir Hex tarball with dependency rewrite
         id: build-hex

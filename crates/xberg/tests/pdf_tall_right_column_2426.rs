@@ -48,7 +48,7 @@ fn assert_projection(content: &str, stock: &str) {
     }
 }
 
-fn pinned_page() -> Vec<u8> {
+fn pinned_guide_page(page: u32) -> Vec<u8> {
     let path = helpers::get_test_documents_dir().join("pdf/sharable_web_guide.pdf");
     let bytes = std::fs::read(&path).unwrap_or_else(|error| panic!("required source {}: {error}", path.display()));
     assert_eq!(
@@ -57,12 +57,17 @@ fn pinned_page() -> Vec<u8> {
     );
     let mut document = lopdf::Document::load_mem(&bytes).expect("read pinned corpus PDF");
     let pages = document.get_pages();
-    let fourth = pages[&4];
-    document.delete_pages(&pages.into_keys().filter(|page| *page != 4).collect::<Vec<_>>());
-    assert_eq!(document.get_pages().into_values().collect::<Vec<_>>(), [fourth]);
+    let selected = pages[&page];
+    document.delete_pages(&pages.into_keys().filter(|number| *number != page).collect::<Vec<_>>());
+    assert_eq!(document.get_pages().into_values().collect::<Vec<_>>(), [selected]);
     document.prune_objects();
     let mut isolated = Vec::new();
     document.save_to(&mut isolated).expect("serialize isolated source page");
+    isolated
+}
+
+fn pinned_page() -> Vec<u8> {
+    let isolated = pinned_guide_page(4);
     assert_source_image(&isolated);
     isolated
 }
@@ -305,4 +310,19 @@ async fn explicit_inner_ocr_cache_keeps_both_stock_projections() {
     assert!(!page.content.contains(FIRST), "the inner OCR cache skips the recovery");
     assert_eq!(doc.tables.len(), 1);
     assert_eq!(page.tables.len(), 1);
+}
+
+#[tokio::test]
+async fn indexed_rgb_guide_page_reports_general_strip_route_decline() {
+    let tessdata = tempfile::tempdir().expect("private tessdata directory");
+    write_english_model(tessdata.path());
+    let config = pinned_config(false, false, tessdata.path());
+    let read = read_pinned(&xberg::engine::Engine::new_default(), &pinned_guide_page(8), &config).await;
+    assert!(read.tables.is_empty());
+    assert!(!read.content.trim().is_empty());
+    assert!(read.processing_warnings.iter().any(|warning| {
+        warning
+            .message
+            .contains("the general strip route declined the 8-bit Indexed RGB scan")
+    }));
 }

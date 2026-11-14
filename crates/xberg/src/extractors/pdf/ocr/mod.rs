@@ -71,6 +71,8 @@ mod rendering;
 mod scoring;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) mod stage_model_inputs;
+#[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+mod symbol_noise_background;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(crate) mod symbol_noise_lines;
 #[cfg(all(

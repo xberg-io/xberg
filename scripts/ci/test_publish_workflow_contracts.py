@@ -1431,6 +1431,44 @@ def test_standalone_sceptre_ort_ci_checks_its_independent_feature_closure() -> N
     assert re.findall(r"(?m)^          dest-dir: ([^\n]+)$", setup[0]) == ["crates/xberg-ffi"]
 
 
+def test_live_release_assets_verify_only_selected_groups() -> None:
+    job = job_block(WORKFLOW.read_text(), "verify-assets")
+    steps = re.split(r"(?m)^(?=      - )", job)
+    verifiers = [step for step in steps if step.startswith("      - uses: xberg-io/actions/verify-release-assets@")]
+    elixir = "\n".join(f"elixir-nif-{index}.tar.gz" for index in range(6))
+    php = {
+        f"php_xberg-*_php{version}-{platform}.tgz"
+        for version in ("8.3", "8.4", "8.5")
+        for platform in ("x86_64-linux-glibc-nts", "arm64-linux-glibc-nts", "arm64-darwin-bsdlibc-nts")
+    } | {f"php_xberg-*-{version}-nts-vs17-x86_64.zip" for version in ("8.3", "8.4", "8.5")}
+    groups = {
+        "release_cli": {"xberg-cli-*.tar.gz", "xberg-cli-*.zip"},
+        "release_go": {"xberg-go-*.tar.gz"},
+        "release_c_ffi": {"xberg-ffi-*.tar.gz"},
+        "release_php": php,
+        "release_elixir": set(elixir.splitlines()),
+    }
+    for selected, dry_run in (
+        ({"release_elixir"}, "false"),
+        (set(groups), "false"),
+        (set(groups), "true"),
+    ):
+        outputs = {group: str(group in selected).lower() for group in groups}
+        outputs.update(dry_run=dry_run, elixir_assets_multiline=elixir)
+        context = {"needs": {"prepare": {"outputs": outputs}}}
+        required = []
+        for step in verifiers:
+            [condition] = re.findall(r"(?m)^        if: \$\{\{ (.+) \}\}$", step)
+            if evaluate_condition(condition, context):
+                if "expected-assets: |" in step:
+                    required.extend(re.findall(r"(?m)^            ([^#\s]\S*)$", step))
+                else:
+                    [expression] = re.findall(r"(?m)^          expected-assets: \$\{\{ (.+) \}\}$", step)
+                    required.extend(str(evaluate_expression(expression, context)).splitlines())
+        expected = set().union(*(groups[group] for group in selected)) if dry_run == "false" else set()
+        assert sorted(required) == sorted(expected), (selected, dry_run, required)
+
+
 def test_dry_release_assets_verify_only_selected_groups() -> None:
     job = job_block(WORKFLOW.read_text(), "verify-assets")
     steps = re.split(r"(?m)^(?=      - )", job)

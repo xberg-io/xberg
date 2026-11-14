@@ -566,7 +566,7 @@ impl TesseractBackend {
         } else {
             ImageOcrPolicy::Default
         };
-        self.process_image_with_policy(image_bytes, config, policy).await
+        self.process_image_with_policy(image_bytes, config, policy, false).await
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -575,7 +575,7 @@ impl TesseractBackend {
         image_bytes: Arc<Vec<u8>>,
         config: &OcrConfig,
     ) -> Result<ExtractedDocument> {
-        self.process_image_with_policy(image_bytes, config, ImageOcrPolicy::StandaloneDotLeaderRows)
+        self.process_image_with_policy(image_bytes, config, ImageOcrPolicy::StandaloneDotLeaderRows, false)
             .await
     }
 
@@ -585,7 +585,17 @@ impl TesseractBackend {
         image_bytes: Arc<Vec<u8>>,
         config: &OcrConfig,
     ) -> Result<ExtractedDocument> {
-        self.process_image_with_policy(image_bytes, config, ImageOcrPolicy::StandaloneSparseRows)
+        self.process_image_with_policy(image_bytes, config, ImageOcrPolicy::StandaloneSparseRows, false)
+            .await
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) async fn process_embedded_image_for_publication(
+        &self,
+        image_bytes: &[u8],
+        config: &OcrConfig,
+    ) -> Result<ExtractedDocument> {
+        self.process_image_with_policy(Arc::new(image_bytes.to_vec()), config, ImageOcrPolicy::Default, true)
             .await
     }
 
@@ -594,6 +604,7 @@ impl TesseractBackend {
         image_bytes: Arc<Vec<u8>>,
         config: &OcrConfig,
         policy: ImageOcrPolicy,
+        defer_element_selection: bool,
     ) -> Result<ExtractedDocument> {
         #[cfg(all(test, feature = "pdf", feature = "tokio-runtime", feature = "bundle-tessdata-eng"))]
         read_counter::record(config);
@@ -676,7 +687,11 @@ impl TesseractBackend {
         let image_preprocessing = extract_image_preprocessing_metadata(&mut ocr_result.metadata);
 
         let processing_warnings = warnings_from_ocr_metadata(&ocr_result.metadata);
-        let ocr_elements = select_byte_read_elements(&mut ocr_result, config);
+        let ocr_elements = if defer_element_selection {
+            ocr_result.ocr_elements.take()
+        } else {
+            select_byte_read_elements(&mut ocr_result, config)
+        };
         let page_down = take_recognition_page_down(&mut ocr_result.metadata);
         strip_ocr_scratch_metadata_keys(&mut ocr_result.metadata);
 

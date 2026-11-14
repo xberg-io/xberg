@@ -1770,12 +1770,14 @@ app_name = "xberg"
 # {:win32, _} and then rejects any triple absent from this list, so declaring the gnu triple
 # made every Windows Hex install fail with "precompiled NIF is not available for this target"
 # -- while CI built, checksummed and uploaded the msvc artifact nobody could reach. This list
-# must stay equal to the elixir-natives matrix and the generate-elixir-checksums `targets`
-# input in .github/workflows/publish.yaml. ~keep
+# must stay equal to the combined Elixir NIF build matrices and the generate-elixir-checksums
+# `targets` input in .github/workflows/publish.yaml. ~keep
 nif_targets = [
   "aarch64-apple-darwin",
   "aarch64-unknown-linux-gnu",
+  "aarch64-unknown-linux-musl",
   "x86_64-unknown-linux-gnu",
+  "x86_64-unknown-linux-musl",
   "x86_64-pc-windows-msvc",
 ]
 exclude_functions = [

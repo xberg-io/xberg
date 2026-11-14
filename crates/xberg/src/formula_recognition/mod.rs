@@ -63,8 +63,7 @@ const BOS_TOKEN: i64 = 1;
 const EOS_TOKEN: i64 = 2;
 const FIRST_CONTENT_TOKEN: i64 = 4;
 const MAX_SEQ_LEN: usize = 512;
-/// Break the decode when this many consecutive identical tokens appear:
-/// the model has degenerated and further steps only repeat.
+/// Reject the decode after this many consecutive identical tokens.
 const REPETITION_CUTOFF: usize = 8;
 
 /// Grayscale normalization from the upstream preprocessing, applied after
@@ -388,7 +387,7 @@ impl FormulaRecognizer {
     /// Recognize the LaTeX for one formula region crop.
     ///
     /// Returns `Ok(None)` when the crop carries no ink or the model produces
-    /// no tokens.
+    /// no complete formula.
     pub(crate) fn recognize(&mut self, crop: &RgbImage) -> Result<Option<String>, LayoutError> {
         let Some(gray) = preprocess_gray(crop) else {
             return Ok(None);
@@ -451,11 +450,7 @@ impl FormulaRecognizer {
     /// Greedy decode without KV cache: each step feeds the full prefix. The
     /// encoder context is passed as a zero-copy view each step.
     fn greedy_decode(&mut self, context: &ndarray::Array3<f32>) -> Result<Vec<i64>, LayoutError> {
-        let mut out: Vec<i64> = vec![BOS_TOKEN];
-        let mut repeats = 1usize;
-
-        for _ in 0..MAX_SEQ_LEN {
-            let window = &out[out.len().saturating_sub(MAX_SEQ_LEN)..];
+        decode_tokens(|window| {
             let len = window.len();
             let x = Array2::from_shape_vec((1, len), window.to_vec())
                 .map_err(|e| LayoutError::InvalidOutput(format!("decoder input build failed: {e}")))?;
@@ -469,22 +464,31 @@ impl FormulaRecognizer {
                 .run(inputs!["x" => x_t, "mask" => mask_t, "context" => ctx_t])
                 .map_err(LayoutError::Ort)?;
             let (shape, data) = outputs[0].try_extract_tensor::<f32>().map_err(LayoutError::Ort)?;
-            let next = argmax_last_row(shape, data)? as i64;
-            if next == EOS_TOKEN {
-                break;
-            }
-            repeats = if Some(&next) == out.last() { repeats + 1 } else { 1 };
-            out.push(next);
-            if repeats >= REPETITION_CUTOFF {
-                // Degenerated output: drop the repeated tail and stop.
-                let keep = out.len() - repeats;
-                out.truncate(keep);
-                break;
-            }
-        }
-
-        Ok(out.into_iter().skip(1).filter(|&t| t >= FIRST_CONTENT_TOKEN).collect())
+            Ok(argmax_last_row(shape, data)? as i64)
+        })
     }
+}
+
+fn decode_tokens(mut next_token: impl FnMut(&[i64]) -> Result<i64, LayoutError>) -> Result<Vec<i64>, LayoutError> {
+    let mut out = vec![BOS_TOKEN];
+    let mut repeats = 1;
+
+    for _ in 0..MAX_SEQ_LEN {
+        let window = &out[out.len().saturating_sub(MAX_SEQ_LEN)..];
+        let next = next_token(window)?;
+        if next == EOS_TOKEN {
+            return Ok(out.into_iter().skip(1).filter(|&t| t >= FIRST_CONTENT_TOKEN).collect());
+        }
+        repeats = if Some(&next) == out.last() { repeats + 1 } else { 1 };
+        if repeats >= REPETITION_CUTOFF {
+            tracing::debug!("formula decoder hit repetition cutoff; discarding unfinished prediction");
+            return Ok(Vec::new());
+        }
+        out.push(next);
+    }
+
+    tracing::debug!("formula decoder hit token limit; discarding unfinished prediction");
+    Ok(Vec::new())
 }
 
 /// A contrast-normalized, polarity-corrected, ink-cropped grayscale copy of
@@ -717,6 +721,44 @@ mod tests {
     fn argmax_on_empty_output_errors_instead_of_panicking() {
         assert!(argmax_last_row(&[0], &[]).is_err());
         assert!(argmax_last_row(&[1, 4], &[0.0]).is_err());
+    }
+
+    #[test]
+    fn formula_decode_rejects_prefix_at_token_limit() {
+        let mut calls = 0;
+        let tokens = decode_tokens(|_| {
+            calls += 1;
+            Ok(FIRST_CONTENT_TOKEN + (calls % 2) as i64)
+        })
+        .unwrap();
+        assert_eq!(calls, MAX_SEQ_LEN);
+        assert!(
+            tokens.is_empty(),
+            "an unfinished equation must not replace extracted text"
+        );
+    }
+
+    #[test]
+    fn formula_decode_rejects_prefix_before_runaway_repetition() {
+        let mut calls = 0;
+        let tokens = decode_tokens(|_| {
+            calls += 1;
+            Ok(FIRST_CONTENT_TOKEN + i64::from(calls > 1))
+        })
+        .unwrap();
+        assert_eq!(calls, 1 + REPETITION_CUTOFF);
+        assert!(
+            tokens.is_empty(),
+            "a degenerate equation must not replace extracted text"
+        );
+    }
+
+    #[test]
+    fn formula_decode_keeps_completed_equation() {
+        let expected = [FIRST_CONTENT_TOKEN, FIRST_CONTENT_TOKEN + 1];
+        let mut next = expected.into_iter().chain([EOS_TOKEN]);
+        let tokens = decode_tokens(|_| Ok(next.next().expect("decode must stop at EOS"))).unwrap();
+        assert_eq!(tokens, expected);
     }
 
     #[test]
