@@ -82,13 +82,14 @@ fn source_note_cutoff(mut rows: Vec<Vec<&HocrWord>>) -> Option<u32> {
         if !crate::table_core::text_is_value(&end.text) {
             continue;
         }
-        if numeric_ends
-            .iter()
-            .any(|&edge| end.left.abs_diff(edge) <= SOURCE_ALIGNMENT_TOLERANCE)
-        {
+        let right = end.left.checked_add(end.width)?;
+        if numeric_ends.iter().any(|&(prior_left, prior_right)| {
+            end.left.abs_diff(prior_left) <= SOURCE_ALIGNMENT_TOLERANCE
+                || right.abs_diff(prior_right) <= SOURCE_ALIGNMENT_TOLERANCE
+        }) {
             return None;
         }
-        numeric_ends.push(end.left);
+        numeric_ends.push((end.left, right));
     }
     for ([opening, continuation], marker) in suffix.as_chunks::<2>().0.iter().zip(NOTE_MARKERS) {
         let opening_bottom = opening.iter().map(|word| word.top.saturating_add(word.height)).max()?;
@@ -251,5 +252,27 @@ mod tests {
                 "{value} on line {first_line}"
             );
         }
+        let mut right_aligned = rows.clone();
+        let values = ["3.00", "30.00", "300.00"];
+        for ((row, text), width) in right_aligned.iter_mut().skip(2).step_by(2).zip(values).zip([6, 9, 12]) {
+            let left = 102 - width;
+            let label_end = row.last_mut().unwrap();
+            label_end.width = left - label_end.left - 4;
+            row.push(HocrWord {
+                width,
+                ..word(text, left, row[0].top)
+            });
+        }
+        let words = flatten(&right_aligned);
+        let (grid, _) = crate::table_core::reconstruct_table_with_columns(&words, 20, 0.5);
+        assert_eq!(grid.len(), cells.len());
+        for (row, value) in grid.iter().skip(2).step_by(2).zip(values) {
+            assert!(row[0].ends_with(value));
+        }
+        assert_eq!(note_start(&grid), Some(1));
+        assert!(
+            certified_prefix(&words, &grid).is_none(),
+            "right-aligned continuation values"
+        );
     }
 }
