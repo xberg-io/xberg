@@ -396,10 +396,7 @@ fn assemble_tatr_table(
     let mut grid_output = build_tatr_grid_table(
         &inference.cells,
         &table_words,
-        crop.px_left as f32,
-        crop.px_top as f32,
-        crop.sx,
-        crop.sy,
+        crop,
         allowed_word_ids.map(|_| (hint.left, hint.right)),
     );
     if !tatr_grid_is_credible(&grid_output, context.page_index, context.allow_single_column) {
@@ -960,12 +957,11 @@ struct TatrGridOutput {
 fn build_tatr_grid_table(
     cell_grid: &[Vec<crate::layout::models::tatr::CellBBox>],
     words: &[&crate::pdf::table_reconstruct::HocrWord],
-    crop_offset_px_x: f32,
-    crop_offset_px_y: f32,
-    sx: f32,
-    sy: f32,
+    crop: &TatrCrop,
     split_outer_edges: Option<(f32, f32)>,
 ) -> TatrGridOutput {
+    let (crop_offset_px_x, crop_offset_px_y) = (crop.px_left as f32, crop.px_top as f32);
+    let (sx, sy) = (crop.sx, crop.sy);
     if cell_grid.is_empty() {
         return TatrGridOutput {
             grid: Vec::new(),
@@ -1033,6 +1029,8 @@ fn build_tatr_grid_table(
         }
     }
 
+    separate_tatr_header_and_first_record(&mut cell_words, &converted_cells, words, &mut word_consumed, crop);
+
     let mut grid: Vec<Vec<String>> = Vec::with_capacity(num_rows);
     for row_cells in &cell_words {
         let mut grid_row = vec![String::new(); num_cols];
@@ -1068,6 +1066,212 @@ fn build_tatr_grid_table(
         consumed_word_indices,
         model_grid_cell_count: num_rows * num_cols,
     }
+}
+
+#[cfg(feature = "layout-detection")]
+fn separate_tatr_header_and_first_record(
+    cells: &mut [Vec<Vec<(usize, f32, f32)>>],
+    bounds: &[Vec<(f32, f32, f32, f32)>],
+    words: &[&crate::pdf::table_reconstruct::HocrWord],
+    consumed: &mut [bool],
+    crop: &TatrCrop,
+) {
+    let [header, record, ..] = cells else { return };
+    if header.len() < 3 || record.iter().any(|cell| !cell.is_empty()) {
+        return;
+    }
+    let is_decimal = |text: &str| {
+        text.trim().split_once('.').is_some_and(|(left, right)| {
+            !left.is_empty() && !right.is_empty() && left.bytes().chain(right.bytes()).all(|b| b.is_ascii_digit())
+        })
+    };
+    let Some(first_row) = header
+        .iter()
+        .enumerate()
+        .map(|(column, cell)| {
+            let last = *cell.iter().max_by(|a, b| a.2.total_cmp(&b.2))?;
+            let text = words[last.0].text.trim();
+            let numeric = if column == 0 {
+                !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit())
+            } else {
+                is_decimal(text)
+            };
+            numeric.then_some(last)
+        })
+        .collect::<Option<Vec<_>>>()
+    else {
+        return;
+    };
+    let body_y = first_row[0].2;
+    if first_row.iter().any(|entry| (entry.2 - body_y).abs() > 2.0) {
+        return;
+    }
+    let Some(destination) = bounds.get(1).filter(|row| row.len() == first_row.len()) else {
+        return;
+    };
+    // Model boundaries can bisect glyphs. Require actual overlap with each empty destination cell. ~keep
+    if first_row
+        .iter()
+        .zip(destination)
+        .any(|(entry, &(left, top, right, bottom))| word_hint_iow(words[entry.0], left, top, right, bottom) < 0.2)
+    {
+        return;
+    }
+    let Some(anchor) = header[0]
+        .iter()
+        .filter(|entry| entry.2 < body_y - 4.0)
+        .max_by(|a, b| a.2.total_cmp(&b.2))
+    else {
+        return;
+    };
+    let header_y = anchor.2;
+    let anchor_word = words[anchor.0];
+    let label_top = anchor_word.top as f32;
+    let label_bottom = label_top + anchor_word.height as f32;
+    let (Some(first), Some(last)) = (bounds[0].first(), bounds[0].last()) else {
+        return;
+    };
+    if !has_tatr_source_separator(crop, first.0, last.2, header_y, body_y) {
+        return;
+    }
+    let mut labels = vec![Vec::new(); header.len()];
+    for (column, (cell, &last)) in header.iter().zip(&first_row).enumerate() {
+        if cell
+            .iter()
+            .any(|entry| entry.0 != last.0 && (entry.2 - header_y).abs() > 2.0)
+        {
+            return;
+        }
+        labels[column].extend(cell.iter().filter(|entry| entry.0 != last.0).copied());
+    }
+    for (index, word) in words.iter().enumerate().filter(|(index, _)| !consumed[*index]) {
+        let y = word.top as f32 + word.height as f32 / 2.0;
+        if (y - header_y).abs() > 2.0 {
+            continue;
+        }
+        let x = word.left as f32 + word.width as f32 / 2.0;
+        let mut columns = bounds[0].iter().enumerate().filter(|&(column, &(left, _, right, _))| {
+            let padded_left = if column == 0 {
+                left - TATR_OUTER_EDGE_PADDING_MAX_PTS
+            } else {
+                left
+            };
+            // Use the assigned label's source band when the predicted header top clips text. ~keep
+            x >= padded_left
+                && x <= right
+                && word_hint_iow(word, padded_left, label_top, right, label_bottom) >= 0.5
+                && (x >= left || continues_tatr_header_label(word, left, &header[column], first_row[column].0, words))
+        });
+        if let Some((column, _)) = columns.next()
+            && columns.next().is_none()
+        {
+            labels[column].push((index, x, header_y));
+        }
+    }
+    if labels.iter().any(|cell| {
+        !cell
+            .iter()
+            .any(|entry| words[entry.0].text.chars().any(char::is_alphabetic))
+    }) {
+        return;
+    }
+    for ((header_cell, body_cell), (label, entry)) in
+        header.iter_mut().zip(record).zip(labels.into_iter().zip(first_row))
+    {
+        for word in &label {
+            consumed[word.0] = true;
+        }
+        *header_cell = label;
+        body_cell.push(entry);
+    }
+}
+
+#[cfg(feature = "layout-detection")]
+fn continues_tatr_header_label(
+    word: &crate::pdf::table_reconstruct::HocrWord,
+    cell_left: f32,
+    assigned_labels: &[(usize, f32, f32)],
+    record_index: usize,
+    words: &[&crate::pdf::table_reconstruct::HocrWord],
+) -> bool {
+    let word_right = word.left as f32 + word.width as f32;
+    if word_right <= cell_left {
+        return false;
+    }
+    assigned_labels
+        .iter()
+        .filter(|entry| entry.0 != record_index)
+        .any(|&(index, _, _)| {
+            let label = words[index];
+            let gap = label.left as f32 - word_right;
+            let half_height = word.height.min(label.height) as f32 / 2.0;
+            let shared_height = (word.top + word.height)
+                .min(label.top + label.height)
+                .saturating_sub(word.top.max(label.top));
+            gap.abs() <= half_height && shared_height as f32 >= half_height
+        })
+}
+
+#[cfg(feature = "layout-detection")]
+fn has_tatr_source_separator(crop: &TatrCrop, left: f32, right: f32, header_y: f32, body_y: f32) -> bool {
+    let x = |value: f32| {
+        (value * crop.sx - crop.px_left as f32)
+            .round()
+            .clamp(0.0, crop.width as f32) as u32
+    };
+    let y = |value: f32| {
+        (value * crop.sy - crop.px_top as f32)
+            .ceil()
+            .clamp(0.0, crop.height as f32) as u32
+    };
+    let (left, right) = (x(left), x(right));
+    let width = right.saturating_sub(left);
+    if width == 0 {
+        return false;
+    }
+    let crosses_tracks = |matches: &dyn Fn(u32) -> bool| {
+        let mut run = 0;
+        (left..right).any(|column| {
+            run = if matches(column) { run + 1 } else { 0 };
+            run * 10 >= width * 9
+        })
+    };
+    let is_rule_row =
+        |row| crosses_tracks(&|column| crop.image.get_pixel(column, row).0.iter().all(|&channel| channel < 220));
+    const MIN_SHOULDER_CONTRAST: u8 = 16;
+    let contrasts = |column, ink, shoulder| {
+        crop.image
+            .get_pixel(column, ink)
+            .0
+            .iter()
+            .zip(crop.image.get_pixel(column, shoulder).0)
+            .all(|(&dark, light)| light.saturating_sub(dark) >= MIN_SHOULDER_CONTRAST)
+    };
+    let max_rule_height = (crop.sy * 2.0).ceil() as u32;
+    let start = y(header_y + 2.0).max(1);
+    let end = y(body_y - 2.0).min(crop.height.saturating_sub(1));
+    if start >= end {
+        return false;
+    }
+    let mut run_height = 0;
+    for row in start.saturating_sub(1)..=end {
+        if is_rule_row(row) {
+            run_height += 1;
+        } else {
+            if row > start && run_height > 0 && run_height <= max_rule_height && row - run_height >= start {
+                let first = row - run_height;
+                // Vertical grid lines interrupt the shoulders while leaving the separator continuous. ~keep
+                let contrasted = (left..right)
+                    .filter(|&column| contrasts(column, first, first - 1) && contrasts(column, row - 1, row))
+                    .count() as u32;
+                if contrasted * 10 >= width * 9 {
+                    return true;
+                }
+            }
+            run_height = 0;
+        }
+    }
+    false
 }
 
 #[cfg(feature = "layout-detection")]
@@ -1914,6 +2118,133 @@ mod tests {
             height,
             confidence: 95.0,
         }
+    }
+
+    #[test]
+    fn separates_an_aligned_first_record_from_the_header_into_the_empty_model_row() {
+        let words = [
+            make_word("Zip", 4, 10, 8, 6),
+            make_word("Code", 11, 10, 12, 6),
+            make_word("Peril 1", 35, 10, 15, 6),
+            make_word("Peril 2", 65, 10, 15, 6),
+            make_word("84001", 10, 20, 15, 6),
+            make_word("1.155", 35, 20, 15, 6),
+            make_word("0.709", 65, 20, 15, 6),
+            make_word("Neighbor", 7, 10, 4, 6),
+            make_word("Tall neighbor", 0, 0, 14, 26),
+        ];
+        let refs = words.iter().collect::<Vec<_>>();
+        let header_bounds = vec![
+            (11.0, 12.0, 28.0, 26.0),
+            (30.0, 12.0, 60.0, 26.0),
+            (60.0, 12.0, 90.0, 26.0),
+        ];
+        let bounds = vec![
+            header_bounds.clone(),
+            header_bounds
+                .iter()
+                .map(|&(left, _, right, _)| (left, 24.0, right, 34.0))
+                .collect(),
+        ];
+        let original = vec![
+            vec![
+                vec![(1, 17.0, 13.0), (4, 17.5, 23.0)],
+                vec![(2, 42.5, 13.0), (5, 42.5, 23.0)],
+                vec![(3, 72.5, 13.0), (6, 72.5, 23.0)],
+            ],
+            vec![vec![]; 3],
+        ];
+        let mut crop = super::TatrCrop {
+            image: image::RgbImage::from_pixel(100, 50, image::Rgb([255; 3])),
+            px_left: 0,
+            px_top: 0,
+            width: 100,
+            height: 50,
+            sx: 1.0,
+            sy: 1.0,
+            extended_bottom_pt: 50.0,
+        };
+        let mut partial_overlap_header = original.clone();
+        let mut untouched = [false, true, true, true, true, true, true, false, false];
+        super::separate_tatr_header_and_first_record(
+            &mut partial_overlap_header,
+            &bounds,
+            &refs,
+            &mut untouched,
+            &crop,
+        );
+        assert_eq!(partial_overlap_header, original);
+        assert!(!untouched[0]);
+        for y in 16..=20 {
+            for x in 11..90 {
+                crop.image.put_pixel(x, y, image::Rgb([180; 3]));
+            }
+        }
+        super::separate_tatr_header_and_first_record(
+            &mut partial_overlap_header,
+            &bounds,
+            &refs,
+            &mut untouched,
+            &crop,
+        );
+        assert_eq!(partial_overlap_header, original);
+        assert_eq!(untouched, [false, true, true, true, true, true, true, false, false]);
+        for (above, below) in [(220, 220), (255, 220), (220, 255)] {
+            for x in 11..90 {
+                for (y, shade) in [(16, above), (17, 219), (18, 219), (19, below), (20, 255)] {
+                    crop.image.put_pixel(x, y, image::Rgb([shade; 3]));
+                }
+            }
+            assert!(!super::has_tatr_source_separator(&crop, 11.0, 90.0, 13.0, 23.0));
+        }
+        for y in 16..=20 {
+            for x in 11..90 {
+                let shade = if y == 18 || matches!(x, 30 | 60) { 0 } else { 255 };
+                crop.image.put_pixel(x, y, image::Rgb([shade; 3]));
+            }
+        }
+        let mut cells = original.clone();
+        let mut consumed = [false, true, true, true, true, true, true, false, false];
+        super::separate_tatr_header_and_first_record(&mut cells, &bounds, &refs, &mut consumed, &crop);
+        assert_eq!(
+            cells[1],
+            [vec![(4, 17.5, 23.0)], vec![(5, 42.5, 23.0)], vec![(6, 72.5, 23.0)]]
+        );
+        assert_eq!(
+            cells[0],
+            [
+                vec![(1, 17.0, 13.0), (0, 8.0, 13.0)],
+                vec![(2, 42.5, 13.0)],
+                vec![(3, 72.5, 13.0)]
+            ]
+        );
+        assert_eq!(consumed, [true, true, true, true, true, true, true, false, false]);
+
+        let numeric_header_bounds = vec![
+            bounds[0].clone(),
+            bounds[1]
+                .iter()
+                .map(|&(left, _, right, _)| (left, 28.0, right, 38.0))
+                .collect(),
+        ];
+        let mut numeric_header = original.clone();
+        let original_consumed = [false, true, true, true, true, true, true, false, false];
+        let mut header_consumed = original_consumed;
+        super::separate_tatr_header_and_first_record(
+            &mut numeric_header,
+            &numeric_header_bounds,
+            &refs,
+            &mut header_consumed,
+            &crop,
+        );
+        assert_eq!(numeric_header, original);
+        assert_eq!(header_consumed, original_consumed);
+
+        let mut misaligned = original;
+        misaligned[0][2][1].2 += 4.0;
+        let expected = misaligned.clone();
+        super::separate_tatr_header_and_first_record(&mut misaligned, &bounds, &refs, &mut consumed, &crop);
+        assert_eq!(misaligned, expected);
     }
 
     fn table_hint() -> LayoutHint {
