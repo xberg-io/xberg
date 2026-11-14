@@ -113,59 +113,93 @@ fn palette(source: &PdfDocument, resources: &Object, color: &Object, available: 
     }
 }
 
+pub(super) fn is_indexed_rgb_scan(attempt: &super::Attempt<'_>) -> bool {
+    indexed_image(attempt).is_some()
+}
+
+struct IndexedImage {
+    frame: Rect,
+    painted: (f64, f64),
+    raster_w: u32,
+    available: usize,
+    dict: std::collections::HashMap<String, Object>,
+    data: bytes::Bytes,
+    palette: [u8; PALETTE_BYTES],
+}
+
+fn indexed_image(attempt: &super::Attempt<'_>) -> Option<IndexedImage> {
+    let (raster_w, raster_h, raster_png) = attempt.raster?;
+    let raster = (raster_w as usize)
+        .checked_mul(raster_h as usize)?
+        .checked_mul(4)?
+        .checked_add(raster_png)?;
+    let available = attempt.byte_limit.checked_sub(raster)?.checked_sub(FIXED_WORK_BYTES)?;
+    let (frame, contents) = page_frame_and_contents(attempt.document, attempt.page)?;
+    let Object::Stream { dict, data } = contents else {
+        return None;
+    };
+    if dict.contains_key("DecodeParms") {
+        return None;
+    }
+    let paint = decode_probe_stream(&data, stream_filters(dict.get("Filter"))?, 4096, available)?;
+    let (name, painted_w, painted_height) = image_placement(&paint, frame)?;
+    let resources = attempt.document.get_page_resources(attempt.page).ok()?;
+    let xobjects = attempt
+        .document
+        .resolve_object(resources.as_dict()?.get("XObject")?)
+        .ok()?;
+    let Object::Stream { dict, data } = attempt.document.resolve_object(xobjects.as_dict()?.get(&name)?).ok()? else {
+        return None;
+    };
+    if dict.get("Subtype")?.as_name()? != "Image"
+        || dict.get("BitsPerComponent")?.as_integer()? != 8
+        || !matches!(stream_filters(dict.get("Filter")), Some(StreamFilters::Flate))
+        || [
+            "Mask",
+            "SMask",
+            "SMaskInData",
+            "Decode",
+            "DecodeParms",
+            "ImageMask",
+            "Alternates",
+            "OC",
+        ]
+        .iter()
+        .any(|key| dict.contains_key(*key))
+    {
+        return None;
+    }
+    let palette = palette(attempt.document, &resources, dict.get("ColorSpace")?, available)?;
+    Some(IndexedImage {
+        frame,
+        painted: (painted_w, painted_height),
+        raster_w,
+        available,
+        dict,
+        data,
+        palette,
+    })
+}
+
 impl IndexedSource {
     pub(super) fn load(attempt: &super::Attempt<'_>) -> Option<Self> {
-        let (raster_w, raster_h, raster_png) = attempt.raster?;
-        let raster = (raster_w as usize)
-            .checked_mul(raster_h as usize)?
-            .checked_mul(4)?
-            .checked_add(raster_png)?;
-        let available = attempt.byte_limit.checked_sub(raster)?.checked_sub(FIXED_WORK_BYTES)?;
-        let (frame, contents) = page_frame_and_contents(attempt.document, attempt.page)?;
-        let Object::Stream { dict, data } = contents else {
-            return None;
-        };
-        if dict.contains_key("DecodeParms") {
-            return None;
-        }
-        let paint = decode_probe_stream(&data, stream_filters(dict.get("Filter"))?, 4096, available)?;
-        let (name, painted_w, painted_height) = image_placement(&paint, frame)?;
-        let resources = attempt.document.get_page_resources(attempt.page).ok()?;
-        let xobjects = attempt
-            .document
-            .resolve_object(resources.as_dict()?.get("XObject")?)
-            .ok()?;
-        let Object::Stream { dict, data } = attempt.document.resolve_object(xobjects.as_dict()?.get(&name)?).ok()?
-        else {
-            return None;
-        };
-        if dict.get("Subtype")?.as_name()? != "Image"
-            || dict.get("BitsPerComponent")?.as_integer()? != 8
-            || !matches!(stream_filters(dict.get("Filter")), Some(StreamFilters::Flate))
-            || [
-                "Mask",
-                "SMask",
-                "SMaskInData",
-                "Decode",
-                "DecodeParms",
-                "ImageMask",
-                "Alternates",
-                "OC",
-            ]
-            .iter()
-            .any(|key| dict.contains_key(*key))
-        {
-            return None;
-        }
+        let IndexedImage {
+            frame,
+            painted,
+            raster_w,
+            available,
+            dict,
+            data,
+            palette,
+        } = indexed_image(attempt)?;
         let width = u32::try_from(dict.get("Width")?.as_integer()?).ok()?;
         let height = u32::try_from(dict.get("Height")?.as_integer()?).ok()?;
         let pixels = (width as usize).checked_mul(height as usize)?;
         if width > MAX_TILE_SIDE || height <= MAX_TILE_SIDE || pixels > MAX_SOURCE_PIXELS || width <= raster_w {
             return None;
         }
-        let dpi = placement_fits(frame, (width, height), (painted_w, painted_height))?;
+        let dpi = placement_fits(frame, (width, height), painted)?;
         let available = available.checked_sub(data.len())?.checked_sub(pixels.checked_add(1)?)?;
-        let palette = palette(attempt.document, &resources, dict.get("ColorSpace")?, available)?;
         let indices = decode_exact_flate(&data, pixels)?;
         let available = available.checked_sub(indices.capacity().saturating_sub(pixels + 1))?;
         let source = Self {
@@ -173,7 +207,7 @@ impl IndexedSource {
             height,
             dpi,
             frame,
-            painted_height,
+            painted_height: painted.1,
             indices,
             palette,
             available,

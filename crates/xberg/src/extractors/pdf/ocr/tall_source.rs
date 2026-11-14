@@ -69,6 +69,7 @@ struct StripPlan {
     ink_rows: Vec<Range<u32>>,
 }
 
+#[derive(Clone, Copy)]
 struct Attempt<'a> {
     document: &'a PdfDocument,
     page: usize,
@@ -142,6 +143,7 @@ pub(super) async fn try_replace(
             return Ok(true);
         }
         Some(_) => Unrecovered::Rejected,
+        None if indexed::is_indexed_rgb_scan(&attempt) => Unrecovered::IndexedRgb,
         None => Unrecovered::Uncertified,
     };
     note_unrecovered(original, ocr, source, *height, why);

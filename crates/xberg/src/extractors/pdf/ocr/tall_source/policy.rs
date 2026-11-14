@@ -65,6 +65,7 @@ pub(in super::super) enum Unrecovered {
     Config(&'static str),
     TablesOrFormulas,
     Uncertified,
+    IndexedRgb,
     Rejected,
 }
 
@@ -85,6 +86,7 @@ pub(in super::super) fn note_unrecovered(
     let reason = match why {
         Unrecovered::Config(reason) => reason,
         Unrecovered::TablesOrFormulas => "the downscaled read already contains tables or formulas",
+        Unrecovered::IndexedRgb => "8-bit Indexed RGB scan recovery is unsupported",
         Unrecovered::Uncertified => {
             "the page is not one scan image in a supported encoding and density within the memory limit, \
              or a strip did not read as its source lines"
@@ -93,7 +95,7 @@ pub(in super::super) fn note_unrecovered(
     };
     if matches!(
         why,
-        Unrecovered::Config(_) | Unrecovered::Uncertified | Unrecovered::Rejected
+        Unrecovered::Config(_) | Unrecovered::Uncertified | Unrecovered::IndexedRgb | Unrecovered::Rejected
     ) {
         let thresholds = ocr.quality_thresholds.clone().unwrap_or_default();
         let noise = super::super::scoring::ocr_recognition_noise_decision(

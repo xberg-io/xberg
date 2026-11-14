@@ -5965,7 +5965,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         })?;
                 let default_security_limits = crate::extractors::security::SecurityLimits::default();
                 let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-                let ((pages, batch_raster_dpis), warnings) = crate::pdf::render::capture_render_warnings(|| {
+                let rendered = crate::pdf::render::capture_render_warnings(|| {
                     render_full_pdf_ocr_batch_with_dpi(
                         doc,
                         page_rotations,
@@ -5974,7 +5974,22 @@ pub(super) async fn extract_with_ocr_for_page(
                         config.images.as_ref(),
                         preprocessing_render_dpi,
                     )
-                })?;
+                });
+                let ((pages, batch_raster_dpis), warnings) = match rendered {
+                    Ok(rendered) => rendered,
+                    Err(error) => {
+                        let error = diagnose_djot_budget_refusal(
+                            error,
+                            doc,
+                            config,
+                            &backend,
+                            &ocr_config_owned,
+                            &mut xobject_recovery_budget,
+                        )
+                        .await?;
+                        return Err(error.into());
+                    }
+                };
                 crate::core::diagnostics::dedup_extend_warnings(&mut render_warnings, warnings);
                 raster_dpis.extend(batch_raster_dpis);
                 pages
@@ -9961,6 +9976,37 @@ fn pre_page_ocr_config(config: &ExtractionConfig) -> Cow<'_, crate::core::config
     }
     resolved
 }
+#[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
+async fn diagnose_djot_budget_refusal(
+    error: crate::XbergError,
+    doc: &xberg_native_pdf::PdfDocument,
+    config: &ExtractionConfig,
+    backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
+    ocr: &crate::core::config::OcrConfig,
+    budget: &mut crate::extractors::security::SecurityBudget,
+) -> crate::Result<crate::XbergError> {
+    use crate::core::config::{OcrStrategy, OutputFormat};
+    if config.output_format != OutputFormat::Djot
+        || config.ocr_strategy != OcrStrategy::Auto
+        || doc.page_count().ok() != Some(1)
+        || !render_refused_by_source_image_budget(&error)
+    {
+        return Ok(error);
+    }
+    let mut context = XObjectRecoveryContext::with_budget(budget, config.cancel_token.as_ref());
+    context.use_proven_source_dpi = true;
+    let Some(retry) = recover_page_text_from_image_xobjects(backend, doc, 0, 1, ocr, context).await? else {
+        return Ok(error);
+    };
+    let mut causes = retry.failure_causes;
+    if retry.used_proven_source_dpi
+        && proven_read_is_noise(&retry.text, &ocr.quality_thresholds.clone().unwrap_or_default())
+    {
+        causes.push(PROVEN_READ_NOISE_CAUSE.to_owned());
+    }
+    Ok(with_retry_causes(error, &causes))
+}
+
 /// Why a retry read made at a placement-proven resolution was not adopted.
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 const PROVEN_READ_NOISE_CAUSE: &str = "the retry read was rejected as noise";
