@@ -239,6 +239,55 @@ def test_plugin_only_dispatch_skips_every_core_release_job() -> None:
     assert evaluate_condition(prepare_expression, {"inputs": {"plugins_only": True}}) is False
 
 
+def test_node_sha_dry_run_builds_and_packs_without_publishing() -> None:
+    workflow = WORKFLOW.read_text()
+    matrices = ("node-bindings", "node-bindings-musl", "node-bindings-manylinux")
+    jobs = {name: job_block(workflow, name) for name in (*matrices, "publish-node")}
+    outputs = {"dry_run": "true", "is_tag": "false", "release_node": "true", "force_republish": "false"}
+    context = {
+        "inputs": {"plugins_only": False},
+        "cancelled": False,
+        "needs": {
+            "prepare": {"result": "success", "outputs": outputs},
+            "check_npm": {"result": "skipped", "outputs": {"node_exists": ""}},
+            "publish_crates": {"result": "skipped"},
+            **{name.replace("-", "_"): {"result": "success"} for name in matrices},
+        },
+    }
+    for name, block in jobs.items():
+        condition = job_if_expression(block)
+        assert "cancelled()" in condition and evaluate_condition(condition, context), name
+    stage = context["needs"]["node_bindings_musl"]
+    stage["result"] = "failure"
+    assert not evaluate_condition(job_if_expression(jobs["publish-node"]), context)
+    stage["result"] = "success"
+    publish = jobs["publish-node"]
+    steps = re.findall(r"(?m)^      - name: (.+)\n        if: \$\{\{ (.+) \}\}$", publish)
+    publish_steps = {name: expression for name, expression in steps if name.startswith("Publish ")}
+    assert set(publish_steps) == {"Publish platform sub-packages", "Publish main @xberg-io/xberg package"}
+    assert publish.count("uses: xberg-io/actions/publish-npm@v1") == len(publish_steps)
+    assert all(not evaluate_condition(expression, context) for expression in publish_steps.values())
+    assert evaluate_condition(dict(steps)["Verify and archive local npm packages"], context)
+    outputs["dry_run"] = "false"
+    assert all(not evaluate_condition(job_if_expression(block), context) for block in jobs.values())
+    outputs["is_tag"] = "true"
+    context["needs"]["check_npm"]["result"] = "success"
+    context["needs"]["publish_crates"]["result"] = "success"
+    assert all(evaluate_condition(job_if_expression(block), context) for block in jobs.values())
+    publish_condition = job_if_expression(publish)
+    for result, expected in (("skipped", True), ("failure", False), ("cancelled", False)):
+        context["needs"]["publish_crates"]["result"] = result
+        assert evaluate_condition(publish_condition, context) is expected, result
+    context["needs"]["publish_crates"]["result"] = "skipped"
+    tools = publish.split("- name: Checkout Node dry-run verification tools", 1)[1].split("- name:", 1)[0]
+    assert "ref: ${{ github.sha }}" in tools
+    assert "path: .release-tools" in tools
+    assert ".github/workflows/publish.yaml" in tools
+    assert "python3 .release-tools/scripts/ci/verify-node-dry-run.py" in publish
+    context["needs"]["check_npm"]["outputs"]["node_exists"] = "true"
+    assert all(not evaluate_condition(job_if_expression(block), context) for block in jobs.values())
+
+
 def test_npm_integrations_require_an_available_core_version() -> None:
     block = job_block(WORKFLOW.read_text(), "publish-integrations-npm")
     expression = job_if_expression(block)
