@@ -263,7 +263,7 @@ jobs:
 
       - name: Build test image
         if: ${{ steps.gate.outputs.go == 'true' }}
-        run: docker build -f ${{ matrix.dockerfile }} --platform ${{ matrix.platform.docker }} --build-arg ONNXRUNTIME_VERSION=${{ env.ORT_VERSION }} --build-arg XBERG_BUILD_ID=${{ steps.build_id.outputs.value }} -t xberg-publish:${{ matrix.variant }}-test .
+        run: docker build -f ${{ matrix.dockerfile }} --platform ${{ matrix.platform.docker }} --build-arg ONNXRUNTIME_VERSION=${{ env.ORT_VERSION }} --build-arg XBERG_BUILD_ID=${{ steps.build_id.outputs.value }} --build-arg CARGO_PROFILE_RELEASE_LTO=${{ matrix.platform.name == 'arm64' && 'thin' || 'fat' }} -t xberg-publish:${{ matrix.variant }}-test .
 
       - name: Run Docker tests
         if: ${{ steps.gate.outputs.go == 'true' }}
@@ -288,6 +288,7 @@ jobs:
           build-args: |
             ONNXRUNTIME_VERSION=${{ env.ORT_VERSION }}
             XBERG_BUILD_ID=${{ steps.build_id.outputs.value }}
+            CARGO_PROFILE_RELEASE_LTO=${{ matrix.platform.name == 'arm64' && 'thin' || 'fat' }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.description=Xberg document intelligence - ${{ matrix.variant }} variant
