@@ -730,6 +730,51 @@ def test_go_release_matrix_covers_every_generated_setup_platform() -> None:
     assert 'return base + "-musl", nil' in setup
 
 
+def test_go_preflight_requires_every_archive_and_checksum() -> None:
+    workflow = WORKFLOW.read_text()
+    check = job_block(workflow, "check-go")
+    build = job_block(workflow, "go-ffi-libraries")
+    assert "asset-prefix:" not in check, "Go preflight must use exact asset names"
+    [assets] = re.findall(r"(?m)^            (xberg-go-.+)$", check)
+    version = "1.4.0"
+    required = assets.replace("${{ needs.prepare.outputs.version }}", version).split(",")
+    platforms = re.findall(r"platform: ([^, }]+), target:", build)
+    assert len(platforms) == 7 and len(required) == 14
+    archives = {f"xberg-go-v{version}-{platform}.tar.gz" for platform in platforms}
+    expected = archives | {f"{archive}.sha256" for archive in archives}
+    assert set(required) == expected
+
+    outputs = {"release_go": "true", "is_tag": "true", "dry_run": "false", "force_republish": "false"}
+    registry = {"exists": "true"}
+    context = {
+        "inputs": {"plugins_only": False},
+        "needs": {"prepare": {"outputs": outputs}, "check_go": {"outputs": registry}},
+    }
+    check_if = job_if_expression(check)
+    build_if = job_if_expression(build)
+    [lookup_if] = re.findall(r"(?m)^        if: (.+)$", check)
+    assert evaluate_condition(check_if, context)
+    assert evaluate_condition(lookup_if, context)
+    assert not evaluate_condition(build_if, context)
+    for missing in required:
+        available = (expected - {missing}) | {f"{missing}.bak"}
+        registry["exists"] = str(set(required) <= available).lower()
+        assert evaluate_condition(build_if, context), missing
+
+    registry["exists"] = "true"
+    outputs["force_republish"] = "true"
+    assert evaluate_condition(build_if, context)
+    outputs["force_republish"] = "false"
+    outputs["dry_run"] = "true"
+    outputs["is_tag"] = "false"
+    assert evaluate_condition(check_if, context)
+    assert not evaluate_condition(lookup_if, context)
+    assert evaluate_condition(build_if, context)
+    outputs["release_go"] = "false"
+    assert not evaluate_condition(check_if, context)
+    assert not evaluate_condition(build_if, context)
+
+
 def test_go_release_packaging_matches_static_and_musl_setup_contracts() -> None:
     block = job_block(WORKFLOW.read_text(), "go-ffi-libraries")
     assert 'mise run go:publish:package "${{ matrix.target }}"' in block

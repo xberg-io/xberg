@@ -479,12 +479,13 @@ jobs:
     name: Check GitHub Release for Go FFI assets
     needs: prepare
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_go == 'true') }}
+      ${{ !inputs.plugins-only && ((needs.prepare.outputs.is_tag == 'true' || needs.prepare.outputs.dry_run == 'true') && needs.prepare.outputs.release_go == 'true') }}
     runs-on: ubuntu-latest
     outputs:
       exists: ${{ steps.check.outputs.exists }}
     steps:
       - id: check
+        if: needs.prepare.outputs.dry_run != 'true'
         uses: xberg-io/actions/check-registry@v1
         with:
           registry: github-release
@@ -492,7 +493,8 @@ jobs:
           version: ${{ needs.prepare.outputs.version }}
           repo: xberg-io/xberg
           tag: ${{ needs.prepare.outputs.tag }}
-          asset-prefix: xberg-go-
+          assets: >-
+            xberg-go-v${{ needs.prepare.outputs.version }}-linux-x86_64.tar.gz,xberg-go-v${{ needs.prepare.outputs.version }}-linux-x86_64.tar.gz.sha256,xberg-go-v${{ needs.prepare.outputs.version }}-linux-aarch64.tar.gz,xberg-go-v${{ needs.prepare.outputs.version }}-linux-aarch64.tar.gz.sha256,xberg-go-v${{ needs.prepare.outputs.version }}-macos-arm64.tar.gz,xberg-go-v${{ needs.prepare.outputs.version }}-macos-arm64.tar.gz.sha256,xberg-go-v${{ needs.prepare.outputs.version }}-macos-x86_64.tar.gz,xberg-go-v${{ needs.prepare.outputs.version }}-macos-x86_64.tar.gz.sha256,xberg-go-v${{ needs.prepare.outputs.version }}-windows-x86_64.tar.gz,xberg-go-v${{ needs.prepare.outputs.version }}-windows-x86_64.tar.gz.sha256,xberg-go-v${{ needs.prepare.outputs.version }}-linux-x86_64-musl.tar.gz,xberg-go-v${{ needs.prepare.outputs.version }}-linux-x86_64-musl.tar.gz.sha256,xberg-go-v${{ needs.prepare.outputs.version }}-linux-aarch64-musl.tar.gz,xberg-go-v${{ needs.prepare.outputs.version }}-linux-aarch64-musl.tar.gz.sha256
 
   check-c-ffi:
     name: Check GitHub Release for C FFI assets
@@ -2118,7 +2120,9 @@ jobs:
     name: Build Go FFI library (${{ matrix.platform }})
     needs: [prepare, check-go]
     if: >-
-      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_go == 'true' && (needs.check-go.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (needs.prepare.outputs.release_go == 'true' &&
+          (needs.prepare.outputs.dry_run == 'true' || needs.check-go.outputs.exists != 'true' ||
+           needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
