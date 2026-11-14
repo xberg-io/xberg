@@ -2488,6 +2488,8 @@ jobs:
         uses: ./.github/actions/install-system-deps
 
       - uses: xberg-io/actions/build-android-natives@v1
+        env:
+          CARGO_PROFILE_RELEASE_LTO: ${{ matrix.abi == 'arm64-v8a' && 'thin' || 'fat' }}
         with:
           # xberg-jni has no [features] table of its own; it pulls in
           # xberg's android-target feature automatically via
