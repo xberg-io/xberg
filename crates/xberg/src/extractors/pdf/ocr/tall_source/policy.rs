@@ -1,7 +1,7 @@
 //! Which configurations may use source-image strips, and the warning for a tall page that did not.
 
 use super::MIN_STANDARD_SOURCE_DPI;
-use crate::core::config::{ExtractionConfig, OcrConfig, OutputFormat};
+use crate::core::config::{ExtractionConfig, OcrConfig, OutputFormat, PdfBackend, PdfConfig};
 use crate::types::{ExtractedDocument, ProcessingWarning};
 use std::borrow::Cow;
 use xberg_native_pdf::PdfDocument;
@@ -19,7 +19,13 @@ pub(in super::super) fn unsupported_reason(config: &ExtractionConfig, ocr: &OcrC
     if config.result_format != crate::types::ResultFormat::Unified || config.include_document_structure {
         return Some("per-element results or document structure were requested");
     }
-    if config.images.is_some() || config.pdf_options.is_some() || config.content_filter.is_some() {
+    if config.images.is_some()
+        || config
+            .pdf_options
+            .as_ref()
+            .is_some_and(|pdf| !annotation_only_options(pdf))
+        || config.content_filter.is_some()
+    {
         return Some("image, PDF or content-filter options are set");
     }
     if ocr
@@ -44,6 +50,29 @@ pub(in super::super) fn unsupported_reason(config: &ExtractionConfig, ocr: &OcrC
         return Some("custom OCR backend options are set");
     }
     None
+}
+
+// Annotation extraction is a separate projection. The source certificate still rejects
+// actual page annotations, since their appearance may overlap the scan. ~keep
+fn annotation_only_options(pdf: &PdfConfig) -> bool {
+    matches!(
+        pdf,
+        PdfConfig {
+            extract_annotations: true,
+            extract_images: false,
+            extract_tables: true,
+            passwords: None,
+            extract_metadata: true,
+            hierarchy: None,
+            top_margin_fraction: None,
+            bottom_margin_fraction: None,
+            allow_single_column_tables: false,
+            ocr_inline_images: false,
+            extract_form_fields: true,
+            reading_order: false,
+            backend: PdfBackend::Native,
+        }
+    )
 }
 
 /// Strips are joined as plain paragraphs, so a Markdown caller must be told no structure was rebuilt.
