@@ -156,7 +156,6 @@ make_cli_archive() {
 	xberg_assert_file "$XBERG_INSTALL/xberg" 'existing executable'
 }
 
-
 @test "CLI installer should fall back when the GNU executable cannot start" {
 	export CLI_ARCH=amd64 CLI_TARGET=x86_64-unknown-linux-musl
 	xberg_stub ldd 'printf "GNU libc 2.36\n"'
