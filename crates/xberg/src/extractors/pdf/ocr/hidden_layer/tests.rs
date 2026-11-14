@@ -942,3 +942,56 @@ fn should_decode_scalar_and_singleton_flate_streams_to_the_same_bytes() {
 }
 
 mod predictor;
+
+#[test]
+fn typed_table_read_requires_complete_ordered_native_heading_and_exact_transcript() {
+    use super::table_read_preserves_native;
+    use crate::rendering::common::render_table_markdown;
+    use crate::types::Table;
+
+    let native = "Water Department\nAnnual summary";
+    for (headings, extra, expected) in [
+        (vec![vec!["Water", "Department"], vec!["Annual", "summary"]], "", true),
+        (vec![vec!["Water", "Department"]], "", false),
+        (
+            vec![
+                vec!["Water", "Department"],
+                vec!["Annual", "summary"],
+                vec!["Water", "Department"],
+            ],
+            "",
+            false,
+        ),
+        (vec![vec!["Annual", "summary"], vec!["Water", "Department"]], "", false),
+        (
+            vec![vec!["Water", "Department"], vec!["Annual", "summary"]],
+            "\nUnowned prose",
+            false,
+        ),
+    ] {
+        let tables = [
+            Table {
+                cells: headings
+                    .into_iter()
+                    .map(|row| row.into_iter().map(str::to_owned).collect())
+                    .collect(),
+                ..Default::default()
+            },
+            Table {
+                cells: vec![vec!["Revenue".into(), "245,000".into()]],
+                ..Default::default()
+            },
+        ];
+        let transcript = tables
+            .iter()
+            .map(|table| render_table_markdown(&table.cells))
+            .collect::<Vec<_>>()
+            .join("\n\n")
+            + extra;
+        assert_eq!(
+            table_read_preserves_native(native, &transcript, &tables),
+            expected,
+            "{transcript}"
+        );
+    }
+}

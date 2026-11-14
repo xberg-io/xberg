@@ -7,7 +7,7 @@
 
 use sha2::{Digest, Sha256};
 use xberg::types::ExtractionMethod;
-use xberg::{ExtractInput, ExtractionConfig, OcrConfig, OcrStrategy, OutputFormat, TesseractConfig};
+use xberg::{ExtractInput, ExtractionConfig, OcrConfig, OcrStrategy, OutputFormat, PageConfig, TesseractConfig};
 
 const TABLE: &[u8] = include_bytes!("fixtures/pdf_outlined_table_2973/table.pdf");
 const SHORT: &[u8] = include_bytes!("fixtures/pdf_outlined_table_2973/short-heading.pdf");
@@ -53,6 +53,10 @@ async fn read(pdf: &[u8], output_format: OutputFormat, force_ocr: bool, disable_
             disable_ocr,
             ocr_strategy: OcrStrategy::Auto,
             use_cache: false,
+            pages: Some(PageConfig {
+                extract_pages: true,
+                ..Default::default()
+            }),
             ocr: Some(OcrConfig {
                 backend: "tesseract".into(),
                 language: vec!["eng".into()],
@@ -80,6 +84,36 @@ async fn auto_recovers_outlined_table_behind_native_heading() {
         let document = read(TABLE, format.clone(), false, false).await;
         assert_eq!(tokens(&document.content), tokens(&expected), "{format:?}");
         assert_eq!(document.extraction_method, Some(ExtractionMethod::Mixed), "{format:?}");
+        let [page] = document.pages.as_deref().expect("page output requested") else {
+            panic!("expected one page");
+        };
+        assert_eq!(tokens(&page.content), tokens(&expected), "{format:?} page");
+        let expected_cells = [
+            ["Revenues", "2025", "2026", "2027"],
+            ["Water sales", "296,345", "200,000", "245,000"],
+            ["Connection fees", "34,051", "20,000", "20,000"],
+            ["Total revenues", "330,396", "220,000", "265,000"],
+            ["Personnel", "97,311", "102,515", "109,251"],
+            ["Supplies", "28,659", "35,000", "31,000"],
+            ["Total expenditures", "168,030", "237,623", "264,485"],
+        ];
+        for tables in [
+            document.tables.iter().collect::<Vec<_>>(),
+            page.tables.iter().map(|table| &**table).collect(),
+        ] {
+            let matches: Vec<_> = tables
+                .into_iter()
+                .filter(|t| {
+                    t.cells.len() == expected_cells.len()
+                        && t.cells
+                            .iter()
+                            .zip(expected_cells)
+                            .all(|(row, expected)| row.iter().map(String::as_str).eq(expected))
+                })
+                .collect();
+            assert_eq!(matches.len(), 1, "{format:?} table ownership");
+            assert_eq!(matches[0].page_number, page.page_number, "{format:?}");
+        }
     }
 }
 

@@ -3514,8 +3514,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             preserves(text)
                                 || (!probing_hidden_layer
                                     && structured_ocr_pages.get(&page).is_some_and(|doc| {
-                                        super::hidden_layer::plain_table_transcript(text, &doc.tables)
-                                            .is_some_and(|plain| preserves(&plain))
+                                        super::hidden_layer::table_read_preserves_native(native, text, &doc.tables)
                                     }))
                         }))
                 // Every probed page passed the hidden-text audit: all of its native text is render

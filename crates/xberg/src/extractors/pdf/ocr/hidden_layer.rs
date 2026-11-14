@@ -971,7 +971,12 @@ pub(super) fn adds_text_preserving_native(native: &str, candidate: &str) -> bool
         })
 }
 
-pub(super) fn plain_table_transcript(text: &str, tables: &[crate::types::Table]) -> Option<String> {
+pub(super) fn table_read_preserves_native(native: &str, text: &str, tables: &[crate::types::Table]) -> bool {
+    plain_table_transcript(text, tables)
+        .is_some_and(|plain| adds_text_preserving_native(native, &plain) && keeps_native_lines_in_order(native, &plain))
+}
+
+fn plain_table_transcript(text: &str, tables: &[crate::types::Table]) -> Option<String> {
     use crate::rendering::common::{render_table_markdown, render_table_plain};
 
     // Only interpret separators from typed tables that account for the entire selected read. ~keep
