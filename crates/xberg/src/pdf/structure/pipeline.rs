@@ -1043,6 +1043,7 @@ fn regular_layout_hints(hints: &[LayoutHint]) -> Vec<LayoutHint> {
         .collect()
 }
 
+#[cfg(feature = "layout-detection")]
 fn segments_to_paragraphs(
     segments: Vec<SegmentData>,
     heading_map: &[(f32, Option<u8>)],
