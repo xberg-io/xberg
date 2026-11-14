@@ -1811,6 +1811,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                                     thresholds: &ocr_output_thresholds,
                                     warn_when_kept: true,
                                 }),
+                                emit_progress: true,
                             },
                         )
                         .await?
@@ -3347,6 +3348,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                             thresholds: &ocr_output_thresholds,
                             warn_when_kept: false,
                         }),
+                        emit_progress: true,
                     },
                 )
                 .await?
@@ -6001,7 +6003,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         })?;
                 let default_security_limits = crate::extractors::security::SecurityLimits::default();
                 let security_limits = config.security_limits.as_ref().unwrap_or(&default_security_limits);
-                let ((pages, batch_raster_dpis), warnings) = crate::pdf::render::capture_render_warnings(|| {
+                let rendered = crate::pdf::render::capture_render_warnings(|| {
                     render_full_pdf_ocr_batch_with_dpi(
                         doc,
                         page_rotations,
@@ -6010,7 +6012,23 @@ pub(super) async fn extract_with_ocr_for_page(
                         config.images.as_ref(),
                         preprocessing_render_dpi,
                     )
-                })?;
+                });
+                let ((pages, batch_raster_dpis), warnings) = match rendered {
+                    Ok(rendered) => rendered,
+                    Err(error) => {
+                        #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+                        let error = diagnose_djot_budget_refusal(
+                            error,
+                            doc,
+                            config,
+                            &backend,
+                            &ocr_config_owned,
+                            &mut xobject_recovery_budget,
+                        )
+                        .await?;
+                        return Err(error.into());
+                    }
+                };
                 crate::core::diagnostics::dedup_extend_warnings(&mut render_warnings, warnings);
                 raster_dpis.extend(batch_raster_dpis);
                 pages
@@ -7256,6 +7274,7 @@ pub(super) async fn extract_with_ocr_for_page(
                             cancel_token: config.cancel_token.as_ref(),
                             use_proven_source_dpi: false,
                             proven_read: None,
+                            emit_progress: true,
                         },
                     )
                     .await?
@@ -9158,6 +9177,7 @@ pub(super) struct XObjectRecoveryContext<'a> {
     /// How each image read made at a proven resolution is judged for noise. `None` leaves every
     /// read to the page policy.
     pub(super) proven_read: Option<ProvenReadPolicy<'a>>,
+    pub(super) emit_progress: bool,
 }
 
 /// The recognition-noise thresholds every route judges a page read or an image retry read by.
@@ -9193,6 +9213,7 @@ impl<'a> XObjectRecoveryContext<'a> {
             cancel_token,
             use_proven_source_dpi: false,
             proven_read: None,
+            emit_progress: true,
         }
     }
 
@@ -9244,6 +9265,7 @@ pub(super) async fn collect_pipeline_xobject_pages(
         let mut page_context = XObjectRecoveryContext::with_budget(context.budget, context.cancel_token);
         page_context.stored_jpegs = Some(&mut stored_jpegs);
         page_context.use_proven_source_dpi = context.use_proven_source_dpi;
+        page_context.emit_progress = context.emit_progress;
         page_context.proven_read = context.proven_read;
         if matches!(projection, XObjectProjection::CompletePage)
             && !super::rendering::can_project_stored_jpeg_page(doc, page_idx, &limits, &mut page_context)?
@@ -9997,6 +10019,82 @@ fn pre_page_ocr_config(config: &ExtractionConfig) -> Cow<'_, crate::core::config
     }
     resolved
 }
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+async fn diagnose_djot_budget_refusal(
+    error: crate::XbergError,
+    doc: &xberg_native_pdf::PdfDocument,
+    config: &ExtractionConfig,
+    backend: &std::sync::Arc<dyn crate::plugins::OcrBackend>,
+    ocr: &crate::core::config::OcrConfig,
+    budget: &mut crate::extractors::security::SecurityBudget,
+) -> crate::Result<crate::XbergError> {
+    use crate::core::config::{OcrStrategy, OutputFormat};
+    if config.output_format != OutputFormat::Djot
+        || config.ocr_strategy != OcrStrategy::Auto
+        || doc.page_count().ok() != Some(1)
+        || !render_refused_by_source_image_budget(&error)
+    {
+        return Ok(error);
+    }
+    if !crate::plugins::registry::get_ocr_backend_registry()
+        .read()
+        .is_builtin_tesseract(backend)
+    {
+        return Ok(error);
+    }
+    let thresholds = route_noise_thresholds(config);
+    let mut context =
+        XObjectRecoveryContext::with_budget(budget, config.cancel_token.as_ref()).with_proven_reads(&thresholds);
+    context.emit_progress = false;
+    let probe = recover_page_text_from_image_xobjects(backend, doc, 0, 1, ocr, context).await;
+    super::super::ensure_pdf_not_cancelled(config)?;
+    finish_djot_budget_probe(error, probe.map(|value| value.map(|read| read.failure_causes)))
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+fn finish_djot_budget_probe(
+    error: crate::XbergError,
+    probe: crate::Result<Option<Vec<String>>>,
+) -> crate::Result<crate::XbergError> {
+    match probe {
+        Ok(Some(causes)) => Ok(with_retry_causes(error, &causes)),
+        Err(crate::XbergError::Cancelled) => Err(crate::XbergError::Cancelled),
+        Ok(None) | Err(_) => Ok(error),
+    }
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
+#[test]
+fn djot_budget_probe_preserves_refusal_except_on_cancellation() {
+    let refusal = || crate::XbergError::Parsing {
+        message: "render refused".to_owned(),
+        source: Some(Box::new(std::io::Error::other("typed source"))),
+    };
+    for (probe, expected) in [
+        (Ok(None), "render refused"),
+        (Ok(Some(Vec::new())), "render refused"),
+        (Err(crate::XbergError::validation("probe limit")), "render refused"),
+        (
+            Ok(Some(vec!["noisy image".to_owned()])),
+            "render refused; embedded-image retry recovered no text (noisy image)",
+        ),
+    ] {
+        let crate::XbergError::Parsing {
+            message,
+            source: Some(source),
+        } = finish_djot_budget_probe(refusal(), probe).unwrap()
+        else {
+            panic!("expected typed render refusal");
+        };
+        assert_eq!(message, expected);
+        assert!(source.is::<std::io::Error>());
+    }
+    assert!(matches!(
+        finish_djot_budget_probe(refusal(), Err(crate::XbergError::Cancelled)),
+        Err(crate::XbergError::Cancelled)
+    ));
+}
+
 /// Why a retry read made at a placement-proven resolution was not adopted.
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 const PROVEN_READ_NOISE_CAUSE: &str = "the retry read was rejected as noise";
@@ -11328,7 +11426,7 @@ mod native_script_kept_tests;
 #[path = "pipeline/second_site_clean_admission_tests.rs"]
 mod second_site_clean_admission_tests;
 
-#[cfg(all(test, feature = "pdf", feature = "layout-detection", feature = "ocr"))]
+#[cfg(all(test, feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
 #[path = "pipeline/budget_refusal_tests.rs"]
 mod budget_refusal_tests;
 

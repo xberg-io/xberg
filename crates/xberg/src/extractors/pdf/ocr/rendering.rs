@@ -433,7 +433,9 @@ pub(super) async fn recover_image_xobjects(
         context.budget.step()?;
         let recovery =
             collect_xobject_recovery_result(backend, fallback, page_idx, ocr_config, &mut context, &mut outcome).await;
-        crate::engine::seams::emit_ocr_page(page_idx + 1, total_pages, backend.name());
+        if context.emit_progress {
+            crate::engine::seams::emit_ocr_page(page_idx + 1, total_pages, backend.name());
+        }
         context.check_cancelled()?;
         if let Some(read) = recovery? {
             account_xobject_preprocessing(read.image_preprocessing.as_ref(), &mut candidate_preprocessing)?;
@@ -620,6 +622,7 @@ async fn collect_xobject_recovery_result(
     let used_proven_source_dpi = matches!(ocr_config, std::borrow::Cow::Owned(_));
     let mut result = match backend.process_image(&fallback.bytes, &ocr_config).await {
         Ok(result) => result,
+        Err(crate::XbergError::Cancelled) => return Err(crate::XbergError::Cancelled),
         Err(error) => {
             tracing::debug!(
                 page = page_idx,
