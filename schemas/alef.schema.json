@@ -8099,6 +8099,11 @@
           },
           "type": "array"
         },
+        "omit_getrandom_02": {
+          "default": false,
+          "description": "Omit the legacy getrandom 0.2 JS feature shim when the WASM graph no longer uses it.",
+          "type": "boolean"
+        },
         "package_name": {
           "default": null,
           "description": "npm package name for the WASM package. Defaults to the Node package\nname with a trailing `-node` removed, plus `-wasm`.",
@@ -8728,7 +8733,7 @@
       "type": "object"
     }
   },
-  "$id": "https://github.com/xberg-io/alef/releases/download/v0.129.1/alef.schema.json",
+  "$id": "https://github.com/xberg-io/alef/releases/download/v0.129.5/alef.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "JSON Schema for the JSON representation of alef.toml.",
@@ -8860,6 +8865,6 @@
   ],
   "title": "Alef configuration",
   "type": "object",
-  "version": "0.129.1",
-  "x-alef-version": "0.129.1"
+  "version": "0.129.5",
+  "x-alef-version": "0.129.5"
 }

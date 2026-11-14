@@ -7838,6 +7838,9 @@ class ExtractedDocument {
   /// This field preserves all metadata that would otherwise be lost when
   /// converting to plain text or markdown output formats.
   ///
+  /// PDF OCR elements report backend recognitions, including occurrences that
+  /// document text pruning can omit from rendered content.
+  ///
   /// Only populated when `OcrElementConfig.include_elements` is true.
   final List<OcrElement>? ocrElements;
 
