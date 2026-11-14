@@ -19,7 +19,7 @@
 use nom::{
     IResult, Parser,
     branch::alt,
-    bytes::complete::{tag, take_till, take_while},
+    bytes::complete::{take_till, take_while},
     character::complete::{char, digit1, one_of},
     combinator::{map, opt, value},
     sequence::{delimited, preceded},
@@ -419,47 +419,26 @@ fn parse_name(input: &[u8]) -> IResult<&[u8], Token<'_>> {
 /// - Object markers: obj, endobj, stream, endstream
 /// - Delimiters: [, ], <<, >>
 /// - Reference marker: R
-///
-/// Note: Order matters! Check multi-character keywords before single characters.
-/// Also check << before < and >> before >.
 fn parse_keyword(input: &[u8]) -> IResult<&[u8], Token<'_>> {
-    alt((
-        value(Token::False, tag(&b"false"[..])),
-        value(Token::True, tag(&b"true"[..])),
-        value(Token::Null, tag(&b"null"[..])),
-        value(Token::ObjStart, tag(&b"obj"[..])),
-        value(Token::ObjEnd, tag(&b"endobj"[..])),
-        value(Token::StreamEnd, tag(&b"endstream"[..])),
-        value(Token::StreamStart, tag(&b"stream"[..])),
-        value(Token::DictStart, tag(&b"<<"[..])),
-        value(Token::DictEnd, tag(&b">>"[..])),
-        value(Token::ArrayStart, tag(&b"["[..])),
-        value(Token::ArrayEnd, tag(&b"]"[..])),
-        // Reference marker: must not be followed by alphabetic chars (to avoid matching RG, Re, etc.)
-        // ~keep
-        parse_r_token,
-    ))
-    .parse(input)
-}
-
-/// Parse the `R` reference marker token.
-///
-/// Matches a single `R` only when NOT followed by an alphabetic character,
-/// preventing false matches on operator names like `RG`, `Re`, `RI`.
-fn parse_r_token(input: &[u8]) -> IResult<&[u8], Token<'_>> {
-    if input.first() != Some(&b'R') {
-        return Err(nom::Err::Error(nom::error::Error::new(
+    match input {
+        [b'f', b'a', b'l', b's', b'e', rest @ ..] => Ok((rest, Token::False)),
+        [b't', b'r', b'u', b'e', rest @ ..] => Ok((rest, Token::True)),
+        [b'n', b'u', b'l', b'l', rest @ ..] => Ok((rest, Token::Null)),
+        [b'o', b'b', b'j', rest @ ..] => Ok((rest, Token::ObjStart)),
+        [b'e', b'n', b'd', b'o', b'b', b'j', rest @ ..] => Ok((rest, Token::ObjEnd)),
+        [b'e', b'n', b'd', b's', b't', b'r', b'e', b'a', b'm', rest @ ..] => Ok((rest, Token::StreamEnd)),
+        [b's', b't', b'r', b'e', b'a', b'm', rest @ ..] => Ok((rest, Token::StreamStart)),
+        [b'<', b'<', rest @ ..] => Ok((rest, Token::DictStart)),
+        [b'>', b'>', rest @ ..] => Ok((rest, Token::DictEnd)),
+        [b'[', rest @ ..] => Ok((rest, Token::ArrayStart)),
+        [b']', rest @ ..] => Ok((rest, Token::ArrayEnd)),
+        // Alphabetic continuations are operators such as RG, Re, and RI. ~keep
+        [b'R', rest @ ..] if !rest.first().is_some_and(u8::is_ascii_alphabetic) => Ok((rest, Token::R)),
+        _ => Err(nom::Err::Error(nom::error::Error::new(
             input,
             nom::error::ErrorKind::Tag,
-        )));
+        ))),
     }
-    if input.len() > 1 && input[1].is_ascii_alphabetic() {
-        return Err(nom::Err::Error(nom::error::Error::new(
-            input,
-            nom::error::ErrorKind::Tag,
-        )));
-    }
-    Ok((&input[1..], Token::R))
 }
 
 /// Parse a bare identifier as a lenient fallback.
@@ -827,6 +806,38 @@ mod tests {
     fn test_parse_reference_marker() {
         let result = token(b"R");
         assert_eq!(result, Ok((&b""[..], Token::R)));
+    }
+
+    #[test]
+    fn keyword_prefixes_preserve_adjacent_input() {
+        for (input, rest, expected) in [
+            (&b"falsehood"[..], &b"hood"[..], Token::False),
+            (b"true/Name", b"/Name", Token::True),
+            (b"null]", b"]", Token::Null),
+            (b"obj<<", b"<<", Token::ObjStart),
+            (b"endobj%", b"%", Token::ObjEnd),
+            (b"stream\r\n", b"\r\n", Token::StreamStart),
+            (b"endstreamendobj", b"endobj", Token::StreamEnd),
+            (b"<< /Type", b" /Type", Token::DictStart),
+            (b">>endobj", b"endobj", Token::DictEnd),
+            (b"[1", b"1", Token::ArrayStart),
+            (b"]>>", b">>", Token::ArrayEnd),
+            (b"R2", b"2", Token::R),
+        ] {
+            assert_eq!(token(input), Ok((rest, expected.clone())));
+            assert_eq!(token_lenient(input), Ok((rest, expected)));
+        }
+    }
+
+    #[test]
+    fn incomplete_keywords_and_operator_names_keep_lenient_fallback() {
+        for input in [b"RG".as_slice(), b"RI", b"Re", b"endstr", b"fal", b"n"] {
+            assert!(token(input).is_err(), "{input:?}");
+            assert_eq!(
+                token_lenient(input),
+                Ok((&b""[..], Token::Name(std::str::from_utf8(input).unwrap().to_owned())))
+            );
+        }
     }
 
     #[test]

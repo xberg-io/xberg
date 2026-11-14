@@ -292,7 +292,7 @@ fn skip_whitespace(data: &[u8]) -> &[u8] {
 ///
 /// Reads consecutive digit characters (with optional leading sign).
 /// Returns the remaining input and the integer string.
-fn read_integer_string(data: &[u8]) -> Option<(&[u8], String)> {
+fn read_integer_string(data: &[u8]) -> Option<(&[u8], &str)> {
     if data.is_empty() {
         return None;
     }
@@ -312,7 +312,7 @@ fn read_integer_string(data: &[u8]) -> Option<(&[u8], String)> {
         return None;
     }
 
-    let int_str = String::from_utf8_lossy(&data[..i]).to_string();
+    let int_str = std::str::from_utf8(&data[..i]).ok()?;
     Some((&data[i..], int_str))
 }
 
@@ -385,17 +385,22 @@ mod tests {
 
     #[test]
     fn test_read_integer_string() {
-        assert_eq!(
-            read_integer_string(b"123 rest"),
-            Some((&b" rest"[..], "123".to_string()))
-        );
-        assert_eq!(
-            read_integer_string(b"-456 rest"),
-            Some((&b" rest"[..], "-456".to_string()))
-        );
-        assert_eq!(read_integer_string(b"+789"), Some((&b""[..], "+789".to_string())));
+        assert_eq!(read_integer_string(b"123 rest"), Some((&b" rest"[..], "123")));
+        assert_eq!(read_integer_string(b"-456 rest"), Some((&b" rest"[..], "-456")));
+        assert_eq!(read_integer_string(b"+789"), Some((&b""[..], "+789")));
         assert_eq!(read_integer_string(b"notanumber"), None);
         assert_eq!(read_integer_string(b""), None);
+    }
+
+    #[test]
+    fn object_stream_header_preserves_signed_tokens_and_pdf_whitespace() {
+        assert_eq!(
+            parse_object_number_pairs(b"+17\x00+42\t0023\x0c000", 2).unwrap(),
+            [(17, 42), (23, 0)]
+        );
+        for data in [b"-17 42".as_slice(), b"17 -42", b"4294967296 0", b"17 +"] {
+            assert!(parse_object_number_pairs(data, 1).is_err());
+        }
     }
 
     #[test]

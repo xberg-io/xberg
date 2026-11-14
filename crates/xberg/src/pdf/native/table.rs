@@ -18,6 +18,8 @@ use crate::pdf::error::{PdfError, Result};
 use crate::pdf::table_reconstruct::table_to_markdown;
 use crate::types::{BoundingBox, ProcessingWarning, Table};
 use std::collections::{HashMap, HashSet};
+use std::mem::size_of;
+use xberg_native_pdf::elements::{PathContent, PathOperation};
 
 pub(crate) mod scripts;
 mod source_columns;
@@ -123,6 +125,46 @@ enum HeuristicTableRejection {
     EmptyMarkdown,
 }
 
+// Bound retained path geometry across the document-wide ruled and heuristic passes. ~keep
+const MAX_RETAINED_TABLE_PATH_BYTES: usize = 8 * 1024 * 1024;
+
+#[derive(Default)]
+pub(crate) struct TablePagePaths {
+    pages: HashMap<usize, Vec<PathContent>>,
+    retained_bytes: usize,
+}
+
+impl TablePagePaths {
+    fn retain(&mut self, page: usize, paths: Vec<PathContent>) {
+        let bytes = size_of::<(usize, Vec<PathContent>)>()
+            .saturating_add(paths.capacity().saturating_mul(size_of::<PathContent>()));
+        let bytes = paths.iter().fold(bytes, |bytes, path| {
+            bytes
+                .saturating_add(path.operations.capacity().saturating_mul(size_of::<PathOperation>()))
+                .saturating_add(
+                    path.dash_pattern
+                        .as_ref()
+                        .map_or(0, |(dash, _)| dash.capacity().saturating_mul(size_of::<f32>())),
+                )
+                .saturating_add(path.layer.as_ref().map_or(0, String::capacity))
+        });
+        if bytes <= MAX_RETAINED_TABLE_PATH_BYTES - self.retained_bytes {
+            self.retained_bytes += bytes;
+            self.pages.insert(page, paths);
+        }
+    }
+
+    fn take(&mut self, doc: &NativeDocument, page: usize) -> Vec<PathContent> {
+        self.pages.remove(&page).unwrap_or_else(|| {
+            super::guard_native_panic(
+                || doc.doc.extract_paths(page).map_err(|error| error.to_string()),
+                |message| message,
+            )
+            .unwrap_or_default()
+        })
+    }
+}
+
 pub(crate) struct RuledTableExtraction {
     pub(crate) tables: Vec<NativeTable>,
     pub(crate) warnings: Vec<ProcessingWarning>,
@@ -165,19 +207,11 @@ fn empty_or_certified_new_ruled_table(
     }
 }
 
-/// Run both ruled detectors on each page, then keep strict detections first
-/// and append bordered detections outside their regions.
-pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<RuledTableExtraction> {
+fn bordered_table_config() -> xberg_native_pdf::structure::spatial_table_detector::TableDetectionConfig {
     use xberg_native_pdf::structure::spatial_table_detector::{
         DEFAULT_MAX_TABLE_COLUMNS, TableDetectionConfig, TableStrategy,
     };
-
-    let page_count = doc
-        .doc
-        .page_count()
-        .map_err(|e| PdfError::MetadataExtractionFailed(format!("xberg_native_pdf: failed to get page count: {e}")))?;
-    let strict_config = TableDetectionConfig::strict();
-    let bordered_config = TableDetectionConfig {
+    TableDetectionConfig {
         enabled: true,
         horizontal_strategy: TableStrategy::Lines,
         vertical_strategy: TableStrategy::Lines,
@@ -190,7 +224,23 @@ pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<RuledTableExt
         column_merge_threshold: 12.0,
         v_split_gap: 4.0,
         text_fallback: false,
-    };
+    }
+}
+
+/// Run both ruled detectors on each page, then keep strict detections first
+/// and append bordered detections outside their regions.
+pub(crate) fn extract_ruled_tables(
+    doc: &NativeDocument,
+    page_paths: &mut TablePagePaths,
+) -> Result<RuledTableExtraction> {
+    use xberg_native_pdf::structure::spatial_table_detector::TableDetectionConfig;
+
+    let page_count = doc
+        .doc
+        .page_count()
+        .map_err(|e| PdfError::MetadataExtractionFailed(format!("xberg_native_pdf: failed to get page count: {e}")))?;
+    let strict_config = TableDetectionConfig::strict();
+    let bordered_config = bordered_table_config();
 
     let mut strict = Vec::new();
     let mut bordered = Vec::new();
@@ -199,21 +249,22 @@ pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<RuledTableExt
     let mut bordered_warnings = Vec::new();
     for page_idx in 0..page_count {
         let page_number = (page_idx + 1) as u32;
-        match doc
+        let extracted = doc
             .doc
-            .extract_tables_with_wide_source_recovery(page_idx, [&strict_config, &bordered_config])
-        {
-            Ok([(strict_tables, strict_ownership), (bordered_tables, bordered_ownership)]) => {
+            .extract_tables_with_wide_source_recovery_and_paths(page_idx, [&strict_config, &bordered_config]);
+        let strict_start = strict.len();
+        let bordered_start = bordered.len();
+        match extracted {
+            Ok((paths, [(strict_tables, strict_ownership), (bordered_tables, bordered_ownership)])) => {
                 let recovered_from_empty =
                     empty_or_certified_new_ruled_table(&strict_tables, strict_ownership.as_ref())
                         && empty_or_certified_new_ruled_table(&bordered_tables, bordered_ownership.as_ref());
-                let strict_start = strict.len();
-                let bordered_start = bordered.len();
                 append_page_tables(
                     doc,
                     page_idx,
                     strict_tables,
                     strict_ownership.as_ref(),
+                    &paths,
                     &mut strict,
                     &mut strict_warnings,
                 );
@@ -222,6 +273,7 @@ pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<RuledTableExt
                     page_idx,
                     bordered_tables,
                     bordered_ownership.as_ref(),
+                    &paths,
                     &mut bordered,
                     &mut bordered_warnings,
                 );
@@ -234,6 +286,11 @@ pub(crate) fn extract_ruled_tables(doc: &NativeDocument) -> Result<RuledTableExt
                     {
                         recovered_only.insert(page_number, bounds);
                     }
+                }
+                let covered = (strict.len() > strict_start || bordered.len() > bordered_start)
+                    && !recovered_only.contains_key(&page_number);
+                if !covered {
+                    page_paths.retain(page_idx, paths);
                 }
             }
             Err(error) => {
@@ -261,6 +318,7 @@ fn append_page_tables(
     page_idx: usize,
     extracted: Vec<xberg_native_pdf::structure::table_extractor::Table>,
     ownership: Option<&xberg_native_pdf::structure::spatial_table_detector::PaintedCellOwnership>,
+    source_paths: &[PathContent],
     tables: &mut Vec<NativeTable>,
     warnings: &mut Vec<ProcessingWarning>,
 ) {
@@ -270,7 +328,6 @@ fn append_page_tables(
     let source_spans = scripts::page_spans(doc, page_idx, warnings);
     let capture_members = extracted.len() <= source_members::MAX_CAPTURE_TABLES;
     let source_chars = std::cell::OnceCell::new();
-    let source_paths = std::cell::OnceCell::new();
     for mut extracted_table in extracted {
         if extracted_table.rows.is_empty() || extracted_table.col_count == 0 {
             continue;
@@ -280,9 +337,7 @@ fn append_page_tables(
                 source_chars
                     .get_or_init(|| doc.doc.extract_chars(page_idx).unwrap_or_default())
                     .as_slice(),
-                source_paths
-                    .get_or_init(|| doc.doc.extract_paths(page_idx).unwrap_or_default())
-                    .as_slice(),
+                source_paths,
             )
         });
         let recovered_sources = restore_open_year_columns(&mut extracted_table, &source_spans.spans, || {
@@ -290,9 +345,7 @@ fn append_page_tables(
                 source_chars
                     .get_or_init(|| doc.doc.extract_chars(page_idx).unwrap_or_default())
                     .as_slice(),
-                source_paths
-                    .get_or_init(|| doc.doc.extract_paths(page_idx).unwrap_or_default())
-                    .as_slice(),
+                source_paths,
             )
         });
         let (cells, markdown, grid) = convert_extracted_table(&extracted_table);
@@ -802,6 +855,7 @@ pub(crate) fn extract_tables_heuristic(
     allow_single_column: bool,
     skip_pages: &HashSet<u32>,
     artifacts: crate::pdf::native::hierarchy::ArtifactRetention,
+    page_paths: &mut TablePagePaths,
 ) -> Result<HeuristicTableExtraction> {
     let (per_page_segments, used_structure_tree) =
         crate::pdf::native::hierarchy::extract_all_segments_for_tables(doc, artifacts).map_err(|e| {
@@ -858,18 +912,8 @@ pub(crate) fn extract_tables_heuristic(
             regions.truncate(MAX_REGIONS_PER_PAGE);
         }
 
-        // Signal 1 of the #1399 admission test: a page whose producer drew
-        // ruling lines is one where a table candidate is credible on its face.
-        // One `extract_paths` call per page, reusing the layout gate's own rule
-        // counter. A page whose paths cannot be read counts as unruled, which
-        // is the conservative direction (the geometric gate still applies).
         let lifted_frame = crate::pdf::table_reconstruct::page_has_lifted_rotation_frame(segments, page_height);
-        let paths = super::guard_native_panic(
-            || doc.doc.extract_paths(page_idx).map_err(|error| error.to_string()),
-            |message| message,
-        )
-        .ok()
-        .unwrap_or_default();
+        let paths = page_paths.take(doc, page_idx);
         let horizontal_rules = crate::pdf::rules::count_rules(&paths).0;
         let column_rules =
             source_columns::PageRules::new(&paths, source_frame).with_source_words(segments, &words, &sources);
@@ -3892,8 +3936,14 @@ mod tests {
         let bytes = std::fs::read(&path).expect("read tiny.pdf");
         let mut doc = NativeDocument::open_bytes(&bytes).expect("open tiny.pdf");
         let skip = HashSet::new();
-        let extraction = extract_tables_heuristic(&mut doc, false, &skip, Default::default())
-            .expect("heuristic must not error on minimal PDF");
+        let extraction = extract_tables_heuristic(
+            &mut doc,
+            false,
+            &skip,
+            Default::default(),
+            &mut TablePagePaths::default(),
+        )
+        .expect("heuristic must not error on minimal PDF");
         assert!(
             extraction.tables.is_empty(),
             "expected no tables on minimal PDF, got: {:?}",
@@ -3915,8 +3965,14 @@ mod tests {
 
         let skip = HashSet::new();
         let page_count = doc.doc.page_count().expect("table fixture page count");
-        let extraction =
-            extract_tables_heuristic(&mut doc, false, &skip, Default::default()).expect("heuristic must not error");
+        let extraction = extract_tables_heuristic(
+            &mut doc,
+            false,
+            &skip,
+            Default::default(),
+            &mut TablePagePaths::default(),
+        )
+        .expect("heuristic must not error");
         assert_eq!(
             extraction.hierarchy_segments.pages.len(),
             page_count,
@@ -3962,9 +4018,15 @@ mod tests {
         let bytes = std::fs::read(&path).expect("read embedded table fixture");
         let mut doc = NativeDocument::open_bytes(&bytes).expect("open embedded table fixture");
 
-        let tables = extract_tables_heuristic(&mut doc, false, &HashSet::new(), Default::default())
-            .expect("heuristic extraction")
-            .tables;
+        let tables = extract_tables_heuristic(
+            &mut doc,
+            false,
+            &HashSet::new(),
+            Default::default(),
+            &mut TablePagePaths::default(),
+        )
+        .expect("heuristic extraction")
+        .tables;
         let table = tables
             .iter()
             .find(|table| table.cells[0].iter().any(|cell| cell.contains("Inhibitor")))
@@ -4005,9 +4067,15 @@ mod tests {
         let bytes = std::fs::read(&path).expect("read ACN financial table fixture");
         let mut doc = NativeDocument::open_bytes(&bytes).expect("open ACN financial table fixture");
 
-        let tables = extract_tables_heuristic(&mut doc, false, &HashSet::new(), Default::default())
-            .expect("heuristic extraction")
-            .tables;
+        let tables = extract_tables_heuristic(
+            &mut doc,
+            false,
+            &HashSet::new(),
+            Default::default(),
+            &mut TablePagePaths::default(),
+        )
+        .expect("heuristic extraction")
+        .tables;
 
         assert_eq!(
             tables.len(),
@@ -4071,18 +4139,30 @@ mod tests {
         let bytes = std::fs::read(&path).expect("read table_document.pdf");
         let mut doc = NativeDocument::open_bytes(&bytes).expect("open table_document.pdf");
 
-        let baseline = extract_tables_heuristic(&mut doc, false, &HashSet::new(), Default::default())
-            .expect("baseline heuristic")
-            .tables;
+        let baseline = extract_tables_heuristic(
+            &mut doc,
+            false,
+            &HashSet::new(),
+            Default::default(),
+            &mut TablePagePaths::default(),
+        )
+        .expect("baseline heuristic")
+        .tables;
         if baseline.is_empty() {
             return;
         }
         let pages_baseline_touched: HashSet<u32> = baseline.iter().map(|t| t.page_number).collect();
 
         let skip = pages_baseline_touched.clone();
-        let suppressed = extract_tables_heuristic(&mut doc, false, &skip, Default::default())
-            .expect("skip-pages heuristic")
-            .tables;
+        let suppressed = extract_tables_heuristic(
+            &mut doc,
+            false,
+            &skip,
+            Default::default(),
+            &mut TablePagePaths::default(),
+        )
+        .expect("skip-pages heuristic")
+        .tables;
 
         for t in &suppressed {
             assert!(
@@ -4925,6 +5005,10 @@ mod tests {
         }
         content.push_str("ET\n");
 
+        build_table_test_pdf(&content)
+    }
+
+    fn build_table_test_pdf(content: &str) -> Vec<u8> {
         let mut pdf = b"%PDF-1.4\n".to_vec();
         let mut offsets = vec![0usize];
 
@@ -4970,10 +5054,78 @@ mod tests {
     }
 
     #[test]
+    fn heuristic_path_cache_preserves_sparse_and_background_reads_on_budget_fallback() {
+        for (content, count) in [("BT /Helvetica 10 Tf (Sparse) Tj ET", 0), ("0 0 595 842 re f", 1)] {
+            let bytes = build_table_test_pdf(content);
+            let doc = NativeDocument::open_bytes(&bytes).expect("open synthetic PDF");
+            let mut cached = TablePagePaths::default();
+            let mut fallback = TablePagePaths {
+                retained_bytes: MAX_RETAINED_TABLE_PATH_BYTES,
+                ..Default::default()
+            };
+
+            for cache in [&mut cached, &mut fallback] {
+                let ruled = extract_ruled_tables(&doc, cache).expect("extract ruled tables");
+                assert!(ruled.tables.is_empty());
+                assert!(ruled.warnings.is_empty());
+            }
+            assert!(cached.pages.contains_key(&0));
+            assert!(fallback.pages.is_empty());
+            let cached = cached.take(&doc, 0);
+            let reread = fallback.take(&doc, 0);
+            assert_eq!(reread.len(), count);
+            if let [background] = reread.as_slice() {
+                assert!(background.is_table_primitive());
+                assert!(background.is_page_frame_rectangle((0., 0., 595., 842.)));
+            }
+            assert_eq!(
+                serde_json::to_value(cached).unwrap(),
+                serde_json::to_value(reread).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn ruled_path_gate_preserves_bordered_tables() {
+        let bytes = build_two_column_bordered_table_pdf();
+        let doc = NativeDocument::open_bytes(&bytes).expect("open synthetic PDF");
+        let config = xberg_native_pdf::structure::spatial_table_detector::TableDetectionConfig::strict();
+        let bordered = bordered_table_config();
+        let (paths, [_, (tables, _)]) = doc
+            .doc
+            .extract_tables_with_wide_source_recovery_and_paths(0, [&config, &bordered])
+            .expect("detect using shared paths");
+        assert!(!paths.is_empty());
+        assert_eq!(tables.len(), 1);
+        assert_eq!(tables[0].rows[0].cells[0].text, "Item");
+    }
+
+    #[test]
+    fn ruled_path_gate_preserves_page_errors_without_rulings() {
+        let bytes = build_table_test_pdf("");
+        let doc = NativeDocument::open_bytes(&bytes).expect("open synthetic PDF");
+        let config = xberg_native_pdf::structure::spatial_table_detector::TableDetectionConfig::strict();
+        let bordered = bordered_table_config();
+        let configs = [&config, &bordered];
+        let page = doc.doc.page_count().expect("page count");
+        let Err(expected) = doc.doc.extract_tables_with_wide_source_recovery(page, configs) else {
+            panic!("the page after the last page must fail");
+        };
+        let Err(actual) = doc
+            .doc
+            .extract_tables_with_wide_source_recovery_from_paths(page, configs, &[])
+        else {
+            panic!("empty supplied paths must preserve the page error");
+        };
+        assert_eq!(actual.to_string(), expected.to_string());
+    }
+
+    #[test]
     fn ruled_detectors_keep_the_two_column_bordered_table() {
         let bytes = build_two_column_bordered_table_pdf();
         let doc = NativeDocument::open_bytes(&bytes).expect("open synthetic PDF");
-        let RuledTableExtraction { tables, warnings, .. } = extract_ruled_tables(&doc).expect("extract ruled tables");
+        let RuledTableExtraction { tables, warnings, .. } =
+            extract_ruled_tables(&doc, &mut TablePagePaths::default()).expect("extract ruled tables");
         assert_eq!(tables.len(), 1);
         let table = &tables[0].table;
         assert_eq!(

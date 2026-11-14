@@ -321,7 +321,9 @@ fn reference_projection() -> (Vec<SegmentData>, AHashSet<SegmentKey>) {
         "1508aa9a0e12e8aad8bbc594a99ded16ce7517518e2689fc6002e59263c3c005"
     );
     let mut doc = crate::pdf::native::NativeDocument::open_bytes(&bytes).unwrap();
-    let tables = crate::pdf::native::table::extract_ruled_tables(&doc).unwrap().tables;
+    let tables = crate::pdf::native::table::extract_ruled_tables(&doc, &mut Default::default())
+        .unwrap()
+        .tables;
     assert_eq!(
         tables.len(),
         1,

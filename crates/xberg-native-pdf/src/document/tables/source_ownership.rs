@@ -8,6 +8,7 @@ use crate::structure::table_extractor::Table;
 
 mod visible_paint;
 
+type TablePaths = Vec<crate::elements::PathContent>;
 type RuledSourceTables = (Vec<Table>, Option<PaintedCellOwnership>);
 
 impl PdfDocument {
@@ -48,27 +49,63 @@ impl PdfDocument {
         configs: [&TableDetectionConfig; N],
         recover_wide: bool,
     ) -> Result<[RuledSourceTables; N]> {
-        // Word spans let the detector assign strings across separate columns. ~keep
+        self.extract_ruled_source_tables_and_paths(page_index, configs, recover_wide)
+            .map(|(_, tables)| tables)
+    }
+
+    /// Run native table detection and return the original paths for later passes.
+    #[doc(hidden)]
+    pub fn extract_tables_with_wide_source_recovery_and_paths(
+        &self,
+        page_index: usize,
+        configs: [&TableDetectionConfig; 2],
+    ) -> Result<(TablePaths, [RuledSourceTables; 2])> {
+        self.extract_ruled_source_tables_and_paths(page_index, configs, true)
+    }
+
+    fn extract_ruled_source_tables_and_paths<const N: usize>(
+        &self,
+        page_index: usize,
+        configs: [&TableDetectionConfig; N],
+        recover_wide: bool,
+    ) -> Result<(TablePaths, [RuledSourceTables; N])> {
         let spans = self.extract_table_word_spans(page_index)?;
         #[cfg(test)]
-        crate::structure::spatial_table_detector::header_source_diagnostic::event("table_word_spans", || {
-            serde_json::json!(
-                spans
-                    .iter()
-                    .enumerate()
-                    .map(|(id, span)| serde_json::json!({"id": id, "span": span}))
-                    .collect::<Vec<_>>()
-            )
-        });
+        record_table_word_spans(&spans);
+        let paths = self.extract_paths(page_index)?;
+        let lines = self.table_ruling_paths(page_index, &paths);
+        let tables = self.detect_ruled_source_tables(page_index, configs, recover_wide, &spans, &lines);
+        Ok((paths, tables))
+    }
+
+    /// Run native table detection with paths already extracted from this page.
+    #[doc(hidden)]
+    pub fn extract_tables_with_wide_source_recovery_from_paths(
+        &self,
+        page_index: usize,
+        configs: [&TableDetectionConfig; 2],
+        paths: &[crate::elements::PathContent],
+    ) -> Result<[RuledSourceTables; 2]> {
+        let spans = self.extract_table_word_spans(page_index)?;
+        #[cfg(test)]
+        record_table_word_spans(&spans);
+        let lines = self.table_ruling_paths(page_index, paths);
+        Ok(self.detect_ruled_source_tables(page_index, configs, true, &spans, &lines))
+    }
+
+    fn table_ruling_paths(
+        &self,
+        page_index: usize,
+        paths: &[crate::elements::PathContent],
+    ) -> Vec<crate::elements::PathContent> {
         // GH#1656: a page-sized background rectangle passes is_table_primitive
         // (its <1000pt bound doesn't exclude A4/Letter) and then unions every
         // other primitive on the page into one cluster. Drop it here, where the
         // real MediaBox is available; a failed MediaBox lookup leaves every
         // primitive alone rather than filtering on garbage. ~keep
         let media_box = self.get_page_media_box(page_index).ok();
-        let lines: Vec<_> = self
-            .extract_paths(page_index)?
-            .into_iter()
+        paths
+            .iter()
             .filter(|p| {
                 #[cfg(test)]
                 crate::structure::spatial_table_detector::header_source_diagnostic::event("raw_path", || {
@@ -80,12 +117,27 @@ impl PdfDocument {
                 Some(mb) => !p.is_page_frame_rectangle(mb),
                 None => true,
             })
-            .collect();
+            .cloned()
+            .collect()
+    }
 
+    fn detect_ruled_source_tables<const N: usize>(
+        &self,
+        page_index: usize,
+        configs: [&TableDetectionConfig; N],
+        recover_wide: bool,
+        spans: &[crate::layout::TextSpan],
+        lines: &[crate::elements::PathContent],
+    ) -> [RuledSourceTables; N] {
         #[cfg(test)]
         crate::structure::spatial_table_detector::header_source_diagnostic::event("filtered_paths", || {
             serde_json::json!(lines)
         });
+
+        // Lines/Lines routes, including wide recovery, require ruling paths. ~keep
+        if recover_wide && lines.is_empty() && configs.iter().all(|config| is_line_only(config)) {
+            return std::array::from_fn(|_| (Vec::new(), None));
+        }
 
         // Same prose-rejection filter `extract_page_tables` applies to the
         // extract_text/to_markdown/to_html path — this public API called
@@ -95,11 +147,11 @@ impl PdfDocument {
         let visible_bounds = std::cell::OnceCell::new();
         let page_bounds = || *visible_bounds.get_or_init(|| visible_paint::plain_page_bounds(self, page_index));
         let mut results = configs.map(|config| {
-            let (mut tables, ownership) = detect_tables_with_line_ownership(&spans, &lines, config);
+            let (mut tables, ownership) = detect_tables_with_line_ownership(spans, lines, config);
             let mut wide_ownership = None;
             tables.retain(|table| {
                 is_public_ruled_table(table) || {
-                    let certified = wide_ruled_ownership(table, config, &spans, &lines, page_bounds);
+                    let certified = wide_ruled_ownership(table, config, spans, lines, page_bounds);
                     let admitted = certified.is_some();
                     wide_ownership = certified.or(wide_ownership.take());
                     admitted
@@ -108,12 +160,25 @@ impl PdfDocument {
             let ownership = wide_ownership.or(ownership).filter(|_| tables.len() == 1);
             (tables, ownership)
         });
-        certify_empty_legacy_routes(&mut results, configs, &spans, &lines);
+        certify_empty_legacy_routes(&mut results, configs, spans, lines);
         if recover_wide {
-            recover_empty_ruled_routes(self, page_index, configs, &mut results, (&spans, &lines), page_bounds);
+            recover_empty_ruled_routes(self, page_index, configs, &mut results, (spans, lines), page_bounds);
         }
-        Ok(results)
+        results
     }
+}
+
+#[cfg(test)]
+fn record_table_word_spans(spans: &[crate::layout::TextSpan]) {
+    crate::structure::spatial_table_detector::header_source_diagnostic::event("table_word_spans", || {
+        serde_json::json!(
+            spans
+                .iter()
+                .enumerate()
+                .map(|(id, span)| serde_json::json!({"id": id, "span": span}))
+                .collect::<Vec<_>>()
+        )
+    });
 }
 
 fn replace_collapsed_grids<const N: usize>(

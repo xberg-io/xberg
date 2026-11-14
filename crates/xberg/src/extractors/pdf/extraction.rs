@@ -758,23 +758,26 @@ pub(crate) fn extract_all_from_native_document(
     let (mut tables, native_table_grids, mut extracted_hierarchy_segments, table_warnings) = if extract_tables_flag {
         crate::pdf::native::guard_native_panic(
             || -> Result<TableExtractionResult> {
-                let ruled = crate::pdf::native::table::extract_ruled_tables(doc).unwrap_or_else(|error| {
-                    tracing::warn!("xberg_native_pdf ruled table extraction failed: {error}");
-                    crate::pdf::native::table::RuledTableExtraction {
-                        tables: Vec::new(),
-                        warnings: vec![
-                            table_stage_failure_warning("native", &error),
-                            table_stage_failure_warning("bordered", &error),
-                        ],
-                        recovered_only: Default::default(),
-                    }
-                });
+                let mut page_paths = crate::pdf::native::table::TablePagePaths::default();
+                let ruled =
+                    crate::pdf::native::table::extract_ruled_tables(doc, &mut page_paths).unwrap_or_else(|error| {
+                        tracing::warn!("xberg_native_pdf ruled table extraction failed: {error}");
+                        crate::pdf::native::table::RuledTableExtraction {
+                            tables: Vec::new(),
+                            warnings: vec![
+                                table_stage_failure_warning("native", &error),
+                                table_stage_failure_warning("bordered", &error),
+                            ],
+                            recovered_only: Default::default(),
+                        }
+                    });
                 let covered_pages = ruled.covered_pages();
                 let hierarchy_segments = crate::pdf::native::table::extract_tables_heuristic(
                     doc,
                     allow_single_column,
                     &covered_pages,
                     artifacts,
+                    &mut page_paths,
                 );
                 let hierarchy_segments = hierarchy_segments.map(|mut extraction| {
                     extraction.tables.retain(|table| ruled.allows_heuristic_table(table));
