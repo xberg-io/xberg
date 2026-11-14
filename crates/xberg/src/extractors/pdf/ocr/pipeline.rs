@@ -481,12 +481,14 @@ enum NextPageTask<T> {
     Finished(Result<T, tokio::task::JoinError>),
     /// The in-flight grace passed after the stop request: the tasks still running were aborted.
     Abandoned,
+    Cancelled,
     Drained,
 }
 
 /// Await the next finished page task. Once `token` has a stop requested, the tasks still running
 /// get [`IN_FLIGHT_PAGE_GRACE`] from the moment the request was first seen, then they are aborted
-/// and the caller records their pages as unread.
+/// and the caller records their pages as unread. Explicit cancellation aborts the wait at the
+/// next poll.
 #[cfg(all(
     any(feature = "ocr", feature = "ocr-pipeline"),
     feature = "pdf",
@@ -499,7 +501,12 @@ async fn next_page_task<T: 'static>(
     abandon_at: &mut Option<tokio::time::Instant>,
 ) -> NextPageTask<T> {
     loop {
-        match tokio::time::timeout(STOP_POLL_INTERVAL, join_set.join_next()).await {
+        let joined = tokio::time::timeout(STOP_POLL_INTERVAL, join_set.join_next()).await;
+        if token.is_some_and(crate::cancellation::CancellationToken::is_cancelled) {
+            join_set.abort_all();
+            return NextPageTask::Cancelled;
+        }
+        match joined {
             Ok(Some(joined)) => return NextPageTask::Finished(joined),
             Ok(None) => return NextPageTask::Drained,
             Err(_elapsed) => {
@@ -2065,6 +2072,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         match next_page_task(&mut join_set, config.cancel_token.as_ref(), &mut abandon_at).await {
                             NextPageTask::Finished(join_result) => join_result,
                             NextPageTask::Drained => break,
+                            NextPageTask::Cancelled => return Err(crate::XbergError::Cancelled.into()),
                             NextPageTask::Abandoned => {
                                 mark_pages_unread(
                                     config.cancel_token.as_ref(),
@@ -2777,6 +2785,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     match next_page_task(&mut join_set, config.cancel_token.as_ref(), &mut abandon_at).await {
                         NextPageTask::Finished(join_result) => join_result,
                         NextPageTask::Drained => break,
+                        NextPageTask::Cancelled => return Err(crate::XbergError::Cancelled.into()),
                         NextPageTask::Abandoned => {
                             let abandoned: Vec<usize> = pending_pages.drain().collect();
                             mark_pages_unread(
@@ -11281,6 +11290,31 @@ mod in_flight_page_tests {
     }
 
     #[tokio::test(start_paused = true)]
+    async fn cancellation_interrupts_the_wait_for_a_stuck_page_during_soft_stop() {
+        let token = CancellationToken::new();
+        token.request_stop();
+        let mut join_set = JoinSet::new();
+        join_set.spawn(std::future::pending::<()>());
+        let started = tokio::time::Instant::now();
+        let mut abandon_at = None;
+        let caller = token.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(STOP_POLL_INTERVAL * 2).await;
+            caller.cancel();
+        });
+
+        let outcome = next_page_task(&mut join_set, Some(&token), &mut abandon_at).await;
+
+        assert!(token.is_cancelled());
+        assert!(
+            started.elapsed() <= STOP_POLL_INTERVAL * 3,
+            "cancellation did not interrupt the page wait"
+        );
+        assert!(matches!(outcome, NextPageTask::Cancelled));
+        assert!(join_set.join_next().await.unwrap().unwrap_err().is_cancelled());
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn a_batch_without_a_stop_is_awaited_to_its_end() {
         let token = CancellationToken::new();
         let mut join_set = slow_pages(&[1, 60]);
@@ -11291,6 +11325,7 @@ mod in_flight_page_tests {
             match next_page_task(&mut join_set, Some(&token), &mut abandon_at).await {
                 NextPageTask::Finished(page) => finished.push(page.unwrap()),
                 NextPageTask::Drained => break,
+                NextPageTask::Cancelled => panic!("no cancellation was requested"),
                 NextPageTask::Abandoned => panic!("no stop was requested"),
             }
         }

@@ -150,6 +150,12 @@ impl CancellationToken {
         self.cancelled.store(true, Ordering::Relaxed);
     }
 
+    /// Request cancellation for a hard timeout and report whether this request set the flag.
+    #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
+    pub(crate) fn cancel_for_timeout(&self) -> bool {
+        !self.cancelled.swap(true, Ordering::Relaxed)
+    }
+
     /// Returns `true` if cancellation has been requested on any clone.
     ///
     /// This reports the token's request flag. It does not prove that a particular
