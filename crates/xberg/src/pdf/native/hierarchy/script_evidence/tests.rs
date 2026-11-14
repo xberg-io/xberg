@@ -34,7 +34,7 @@ fn should_attach_a_numeric_suffix_with_only_glyph_edge_overhang() {
     script.sequence = 32;
     script.mcid_scope = Some(xberg_native_pdf::structure::McidScope::Page(1));
     assert_eq!(page(vec![base.clone(), script.clone()]).owners.len(), 0);
-    script.mcid_scope = base.mcid_scope;
+    script.mcid_scope = base.mcid_scope.clone();
 
     script.sequence = 31;
     script.bbox.x = 119.9;
