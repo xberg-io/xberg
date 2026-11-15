@@ -138,8 +138,11 @@ impl UnifiedExtractRequest {
         &mut self,
         operator: &crate::core::config::ExtractionConfig,
     ) -> Result<crate::core::config::ExtractionConfig, ApiError> {
-        crate::core::config::request_security::resolve_caller_extraction_config(operator, self.config.take().as_ref())
-            .map_err(ApiError::caller_config)
+        crate::core::config::request_security::resolve_remote_caller_extraction_config(
+            operator,
+            self.config.take().as_ref(),
+        )
+        .map_err(ApiError::caller_config)
     }
 
     fn resolve_input_configs(

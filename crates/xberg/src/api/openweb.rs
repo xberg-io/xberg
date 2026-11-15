@@ -24,7 +24,7 @@ fn openweb_config(
         .map(serde_json::from_str::<serde_json::Value>)
         .transpose()
         .map_err(|error| validation_error(format!("Failed to parse override JSON: {error}")))?;
-    crate::core::config::request_security::resolve_caller_extraction_config(operator, caller.as_ref())
+    crate::core::config::request_security::resolve_remote_caller_extraction_config(operator, caller.as_ref())
         .map_err(ApiError::caller_config)
 }
 
@@ -280,6 +280,23 @@ mod tests {
         .expect_err("caller transport settings must be rejected");
         assert_eq!(error.status, StatusCode::BAD_REQUEST);
         assert!(error.body.message.contains("ner.llm.load_env"), "{:?}", error.body);
+    }
+
+    #[test]
+    fn openweb_config_rejects_caller_llm_stage_on_server_env_credentials() {
+        let error = openweb_config(
+            &crate::ExtractionConfig::default(),
+            Some(r#"{"ocr":{"vlm_config":{"model":"openai/gpt-4o-mini"}}}"#),
+        )
+        .expect_err("a caller LLM stage needs the operator's opt-in");
+
+        assert_eq!(error.status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            error.body.message,
+            "Validation error: Caller extraction config may not use the server's \
+             LLM credentials for ocr.vlm_config; the server operator must set \
+             XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1 to allow it"
+        );
     }
 
     #[test]

@@ -158,10 +158,10 @@ export XBERG_API_ALLOW_LOCAL_URI_INPUTS=1
 **Type**: `Boolean` (`1`, `true`, or `yes` to enable; case-insensitive)
 **Default**: Disabled (unset)
 
-Allow an API or MCP request config to add or change an LLM stage (for example `structured_extraction.llm` or `ocr.vlm_config`) that authenticates with the server's environment credentials: provider API-key variables such as `OPENAI_API_KEY`, the AWS credential chain, or Vertex AI application default credentials. When unset, such a request is rejected with a validation error. A request may still adjust an LLM stage the server config already defines with the same model and no `api_key`, `base_url`, `headers`, `providers`, `bedrock`, `credential_provider` or `load_env: false` of its own. Library and CLI use are not affected.
+Allow a REST API or MCP-over-HTTP request config to add or change an LLM stage (for example `structured_extraction.llm` or `ocr.vlm_config`) that authenticates with the server's environment credentials: provider API-key variables such as `OPENAI_API_KEY`, the AWS credential chain, or Vertex AI application default credentials. When unset, such a request is rejected with a validation error. A request may still adjust an LLM stage the server config already defines with the same model and no `api_key`, `base_url`, `headers`, `providers`, `bedrock`, `credential_provider` or `load_env: false` of its own. MCP over stdio runs as the operator and is not affected, nor are the library and CLI.
 
 ```bash title="Allow Caller LLM Stages"
-# Let API and MCP callers run LLM stages billed to the server's credentials
+# Let REST and MCP HTTP callers run LLM stages billed to the server's credentials
 export XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1
 ```
 

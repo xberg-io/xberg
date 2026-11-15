@@ -110,6 +110,9 @@ pub struct XbergMcp {
     /// SEP-2663 task store for tools in [`TASK_ELIGIBLE_TOOLS`]. Cheaply
     /// cloneable; all clones of an `XbergMcp` share the same task state.
     tasks: TaskManager,
+    /// Whether the server answers over HTTP, where callers are remote, rather than over stdio,
+    /// where the caller is the operator's own process.
+    http_transport: bool,
     /// Whether tools may read server-local paths and `file://` URIs: always on stdio, on the
     /// HTTP transport only when the operator sets `XBERG_MCP_ALLOW_LOCAL_URI_INPUTS`.
     allow_local_paths: bool,
@@ -128,6 +131,7 @@ impl Clone for XbergMcp {
             default_config: self.default_config.clone(),
             extraction_service: std::sync::Mutex::new(svc),
             tasks: self.tasks.clone(),
+            http_transport: self.http_transport,
             allow_local_paths: self.allow_local_paths,
         }
     }
@@ -177,15 +181,50 @@ impl XbergMcp {
             default_config: std::sync::Arc::new(config),
             extraction_service: std::sync::Mutex::new(extraction_service),
             tasks: TaskManager::new(),
+            http_transport: false,
             allow_local_paths: true,
         }
     }
 
-    /// Set whether tools may read server-local paths and `file://` URIs.
+    /// Configure the server for the HTTP transport, where a caller's LLM stages need the
+    /// operator's opt-in and local paths are readable only when `allow_local_paths` is set.
     #[cfg_attr(not(any(test, feature = "mcp-http")), allow(dead_code))]
-    pub(crate) fn with_local_paths(mut self, allow_local_paths: bool) -> Self {
+    pub(crate) fn for_http(mut self, allow_local_paths: bool) -> Self {
+        self.http_transport = true;
         self.allow_local_paths = allow_local_paths;
         self
+    }
+
+    /// Merge the caller's request config over the server config.
+    fn request_config(&self, caller: Option<serde_json::Value>) -> Result<ExtractionConfig, rmcp::ErrorData> {
+        let config = if self.http_transport {
+            crate::core::config::request_security::resolve_remote_caller_extraction_config(
+                &self.default_config,
+                caller.as_ref(),
+            )
+        } else {
+            build_config(&self.default_config, caller)
+        };
+        config.map_err(|e| rmcp::ErrorData::invalid_params(e, None))
+    }
+
+    /// On HTTP, reject a per-input LLM stage that would run on the server's environment
+    /// credentials. Forbidden-field errors keep precedence, as in [`parse_extract_input`].
+    fn reject_remote_input_llm_stage(
+        &self,
+        input: &serde_json::Value,
+        effective: &ExtractionConfig,
+    ) -> Result<(), rmcp::ErrorData> {
+        use crate::core::config::request_security::{
+            reject_caller_llm_env_credentials, validate_caller_extraction_config,
+        };
+
+        if let Some(config) = input.get("config").filter(|_| self.http_transport) {
+            validate_caller_extraction_config(config)
+                .and_then(|()| reject_caller_llm_env_credentials(effective, config))
+                .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
+        }
+        Ok(())
     }
 
     /// Without local access, disable local URLs for the request and its per-input overrides.
@@ -222,10 +261,10 @@ impl XbergMcp {
             .as_deref()
             .is_some_and(|f| f.eq_ignore_ascii_case("toon"));
 
-        let mut config =
-            build_config(&self.default_config, params.config).map_err(|e| rmcp::ErrorData::invalid_params(e, None))?;
+        let mut config = self.request_config(params.config)?;
         apply_pdf_password(&mut config, params.pdf_password)?;
         self.apply_local_path_policy(&mut config);
+        self.reject_remote_input_llm_stage(&params.input, &config)?;
         let input = parse_extract_input(params.input, &config)?;
         self.reject_local_input(&input)?;
 
@@ -253,14 +292,16 @@ impl XbergMcp {
             .as_deref()
             .is_some_and(|f| f.eq_ignore_ascii_case("toon"));
 
-        let mut config =
-            build_config(&self.default_config, params.config).map_err(|e| rmcp::ErrorData::invalid_params(e, None))?;
+        let mut config = self.request_config(params.config)?;
         apply_pdf_password(&mut config, params.pdf_password)?;
         self.apply_local_path_policy(&mut config);
         let inputs = params
             .inputs
             .into_iter()
-            .map(|input| parse_batch_extract_input(input, &config))
+            .map(|input| {
+                self.reject_remote_input_llm_stage(&input, &config)?;
+                parse_batch_extract_input(input, &config)
+            })
             .collect::<Result<Vec<_>, _>>()?;
         for options in &inputs {
             self.reject_local_input(&options.input)?;
@@ -841,8 +882,6 @@ fn parse_extract_input(
     if let Some(config) = value.get_mut("config") {
         crate::core::config::request_security::validate_caller_extraction_config(config)
             .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
-        crate::core::config::request_security::reject_caller_llm_env_credentials(operator, config)
-            .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
         crate::core::config::request_security::merge_html_override(operator, config)
             .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
     }
@@ -1278,7 +1317,7 @@ pub async fn start_mcp_server_http(
     let http_service = StreamableHttpService::new(
         move || {
             XbergMcp::new()
-                .map(|server| server.with_local_paths(allow_local_paths))
+                .map(|server| server.for_http(allow_local_paths))
                 .map_err(|e| std::io::Error::other(e.to_string()))
         },
         LocalSessionManager::default().into(),
@@ -1343,7 +1382,7 @@ pub async fn start_mcp_server_http_with_config(
 
     let allow_local_paths = mcp_http_allows_local_paths();
     let http_service = StreamableHttpService::new(
-        move || Ok(XbergMcp::with_config(config.clone()).with_local_paths(allow_local_paths)),
+        move || Ok(XbergMcp::with_config(config.clone()).for_http(allow_local_paths)),
         LocalSessionManager::default().into(),
         build_streamable_http_config(extra_allowed_hosts),
     );
@@ -1433,23 +1472,57 @@ mod tests {
         );
     }
 
-    #[test]
-    fn should_reject_mcp_per_input_llm_stage_that_would_use_server_env_credentials() {
-        let value = serde_json::json!({
+    fn vlm_stage_input() -> serde_json::Value {
+        serde_json::json!({
             "kind": "bytes",
             "data": [115, 97, 102, 101],
             "mime_type": "text/plain",
-            "config": {"summarization": {"llm": {"model": "openai/gpt-4o-mini"}}}
-        });
+            "config": {"ocr": {"vlm_config": {"model": "openai/gpt-4o-mini"}}}
+        })
+    }
 
-        let error = parse_extract_input(value, &ExtractionConfig::default())
+    const VLM_ENV_CREDENTIALS_REJECTION: &str = "Caller extraction config may not use the server's \
+         LLM credentials for ocr.vlm_config; the server operator must set \
+         XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1 to allow it";
+
+    #[test]
+    fn should_reject_mcp_http_llm_stage_that_would_use_server_env_credentials() {
+        let server = XbergMcp::with_config(ExtractionConfig::default()).for_http(false);
+        let request_config = vlm_stage_input()["config"].clone();
+
+        let error = server
+            .request_config(Some(request_config))
             .expect_err("a caller LLM stage needs the operator's opt-in");
+        assert_eq!(error.code, rmcp::model::ErrorCode::INVALID_PARAMS);
+        assert_eq!(error.message, VLM_ENV_CREDENTIALS_REJECTION);
 
+        let error = server
+            .reject_remote_input_llm_stage(&vlm_stage_input(), &ExtractionConfig::default())
+            .expect_err("a per-input LLM stage needs the operator's opt-in");
+        assert_eq!(error.message, VLM_ENV_CREDENTIALS_REJECTION);
+    }
+
+    #[test]
+    fn should_accept_caller_llm_stage_on_mcp_stdio() {
+        let server = XbergMcp::with_config(ExtractionConfig::default());
+        let request_config = vlm_stage_input()["config"].clone();
+
+        let config = server
+            .request_config(Some(request_config))
+            .expect("the stdio caller is the operator");
         assert_eq!(
-            error.message,
-            "Caller extraction config may not use the server's LLM credentials for summarization.llm; \
-             the server operator must set XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1 to allow it"
+            config.ocr.and_then(|ocr| ocr.vlm_config).map(|llm| llm.model),
+            Some("openai/gpt-4o-mini".to_string())
         );
+
+        assert!(
+            server
+                .reject_remote_input_llm_stage(&vlm_stage_input(), &ExtractionConfig::default())
+                .is_ok()
+        );
+        let input =
+            parse_extract_input(vlm_stage_input(), &ExtractionConfig::default()).expect("per-input stage parses");
+        assert!(input.config.and_then(|config| config.ocr).is_some());
     }
 
     #[test]
@@ -1970,7 +2043,7 @@ mod tests {
     }
 
     fn http_server_without_local_paths() -> XbergMcp {
-        XbergMcp::with_config(ExtractionConfig::default()).with_local_paths(false)
+        XbergMcp::with_config(ExtractionConfig::default()).for_http(false)
     }
 
     #[tokio::test]
@@ -2036,7 +2109,12 @@ mod tests {
         );
         let stdio = XbergMcp::with_config(ExtractionConfig::default());
         assert!(stdio.reject_local_input(&local).is_ok());
-        assert!(stdio.with_local_paths(true).reject_local_input(&local).is_ok());
+        assert!(
+            XbergMcp::with_config(ExtractionConfig::default())
+                .for_http(true)
+                .reject_local_input(&local)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -2052,7 +2130,10 @@ mod tests {
             "config": {"url": {"allow_local_file_inputs": true, "allow_file_uris": true}}
         });
         let input = parse_extract_input(value, &config).expect("remote input parses");
-        let url = input.config.and_then(|config| config.url).expect("per-input url config");
+        let url = input
+            .config
+            .and_then(|config| config.url)
+            .expect("per-input url config");
         assert!(!url.allow_local_file_inputs);
         assert!(!url.allow_file_uris);
 

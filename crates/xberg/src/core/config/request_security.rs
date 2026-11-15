@@ -123,7 +123,6 @@ pub(crate) fn resolve_caller_extraction_config(
 ) -> Result<super::ExtractionConfig, String> {
     if let Some(caller) = caller {
         validate_caller_extraction_config(caller)?;
-        reject_caller_llm_env_credentials(operator, caller)?;
     }
     let caller_json = caller
         .map(|caller| {
@@ -135,6 +134,20 @@ pub(crate) fn resolve_caller_extraction_config(
     let mut config = super::merge::build_config_from_json(operator, caller_json.as_deref())?;
     adopt_operator_policy(&mut config, operator);
     Ok(config)
+}
+
+/// [`resolve_caller_extraction_config`] for a caller that reaches the server over the network
+/// (the REST API and MCP over HTTP), whose LLM stages also need the operator's opt-in; see
+/// [`reject_caller_llm_env_credentials`]. MCP over stdio runs as the operator and skips it.
+pub(crate) fn resolve_remote_caller_extraction_config(
+    operator: &super::ExtractionConfig,
+    caller: Option<&Value>,
+) -> Result<super::ExtractionConfig, String> {
+    if let Some(caller) = caller {
+        validate_caller_extraction_config(caller)?;
+        reject_caller_llm_env_credentials(operator, caller)?;
+    }
+    resolve_caller_extraction_config(operator, caller)
 }
 
 pub(crate) fn merge_html_override(operator: &super::ExtractionConfig, caller: &mut Value) -> Result<(), String> {
@@ -672,12 +685,18 @@ mod tests {
     }
 
     #[test]
-    fn should_reject_caller_llm_stage_when_resolving_request_config() {
-        let caller = serde_json::json!({"summarization": {"llm": {"model": "openai/gpt-4o"}}});
+    fn should_gate_caller_llm_stage_only_when_resolving_a_remote_request_config() {
+        let operator = super::super::ExtractionConfig::default();
+        let caller = serde_json::json!({"ocr": {"vlm_config": {"model": "openai/gpt-4o"}}});
 
         assert_eq!(
-            resolve_caller_extraction_config(&super::super::ExtractionConfig::default(), Some(&caller)).map(drop),
-            Err(env_credentials_error("summarization.llm"))
+            resolve_remote_caller_extraction_config(&operator, Some(&caller)).map(drop),
+            Err(env_credentials_error("ocr.vlm_config"))
+        );
+        let local = resolve_caller_extraction_config(&operator, Some(&caller)).expect("local caller is the operator");
+        assert_eq!(
+            local.ocr.and_then(|ocr| ocr.vlm_config).map(|llm| llm.model),
+            Some("openai/gpt-4o".to_string())
         );
     }
 
