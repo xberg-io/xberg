@@ -331,3 +331,62 @@ fn explicit_auto_mode_publishes_existing_table_rows_in_plain_page_text() {
         "published table rows on the page"
     );
 }
+
+#[test]
+fn explicit_sparse_plain_stops_without_publishing_rows() {
+    use std::future::{Future, poll_fn};
+    use std::task::Poll;
+    use std::time::Duration;
+    use xberg::{XbergError, cancellation::CancellationToken};
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .max_blocking_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        for cancel in [false, true] {
+            let (entered, ready) = tokio::sync::oneshot::channel();
+            let (release, wait) = tokio::sync::oneshot::channel::<()>();
+            let blocker = tokio::task::spawn_blocking(move || {
+                entered.send(()).unwrap();
+                let _ = wait.blocking_recv();
+            });
+            ready.await.unwrap();
+
+            let token = CancellationToken::new();
+            let mut config = config(OutputFormat::Plain);
+            config.cancel_token = Some(token.clone());
+            config.extraction_timeout_secs = Some(1);
+            let ocr = config.ocr.as_mut().unwrap();
+            ocr.element_config = None;
+            ocr.tesseract_config.get_or_insert_default().psm = Some(11);
+            let mut extraction = std::pin::pin!(xberg::extract(
+                ExtractInput::from_bytes(IMAGE.to_vec(), "image/png", None),
+                &config,
+            ));
+            poll_fn(|cx| {
+                assert!(extraction.as_mut().poll(cx).is_pending());
+                Poll::Ready(())
+            })
+            .await;
+
+            if cancel {
+                token.cancel();
+            }
+            let result = tokio::time::timeout(Duration::from_secs(10), extraction)
+                .await
+                .expect("the extraction deadline must release the caller before the worker");
+            release.send(()).unwrap();
+            blocker.await.unwrap();
+            if cancel {
+                assert!(matches!(result, Err(XbergError::Cancelled)), "{result:?}");
+            } else {
+                assert!(
+                    matches!(result, Err(XbergError::Timeout { limit_ms: 1000, .. })),
+                    "{result:?}"
+                );
+            }
+        }
+    });
+}

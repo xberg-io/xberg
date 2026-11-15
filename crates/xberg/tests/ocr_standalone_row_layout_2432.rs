@@ -117,7 +117,7 @@ fn accepted_tinted_table_keeps_the_header_and_first_record_separate() {
 }
 
 #[test]
-fn explicit_sparse_mode_and_disabled_tables_keep_standalone_rows_unassociated() {
+fn explicit_sparse_mode_keeps_non_plain_routes_and_respects_disabled_tables() {
     for (format, mode) in FORMATS
         .into_iter()
         .flat_map(|format| [(format.clone(), Some(11)), (format, None)])
@@ -131,7 +131,17 @@ fn explicit_sparse_mode_and_disabled_tables_keep_standalone_rows_unassociated() 
         let result = helpers::extract_bytes_document_blocking(IMAGE, "image/png", &config).unwrap();
         assert!(result.metadata.ocr_used, "{format:?} {mode:?}");
         assert!(result.content.contains("(1.463)"), "{format:?} {mode:?}");
-        assert!(result.tables.is_empty(), "{format:?} {mode:?}");
+        if format == OutputFormat::Plain && mode == Some(11) {
+            assert_eq!(result.tables.len(), 1);
+            let expected = expected_rows()
+                .iter()
+                .map(|row| row.join(" "))
+                .collect::<Vec<_>>()
+                .join("\n");
+            assert_eq!(result.pages.unwrap()[0].content.trim(), expected);
+        } else {
+            assert!(result.tables.is_empty(), "{format:?} {mode:?}");
+        }
     }
 }
 
