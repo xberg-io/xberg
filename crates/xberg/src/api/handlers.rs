@@ -837,9 +837,11 @@ async fn extract_unified_inputs(
         .into_iter()
         .map(ResolvedApiExtractInput::into_core_input)
         .collect();
-    crate::extract_batch_with_input_options(inputs, &config)
+    let mut result = crate::extract_batch_with_input_options(inputs, &config)
         .await
-        .map_err(ApiError::from)
+        .map_err(ApiError::from)?;
+    super::error::redact_error_items(&mut result.errors);
+    Ok(result)
 }
 
 fn enforce_and_apply_api_uri_policy(

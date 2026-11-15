@@ -242,7 +242,7 @@ curl http://localhost:8000/jobs/550e8400-e29b-41d4-a716-446655440000
 | 422    | `ParsingError`, `OcrError` | Processing failed |
 | 500    | Internal errors            | Server errors     |
 
-The server replaces filesystem paths in `message` with `<path>` and logs the full error; `5xx` errors are always logged.
+The server replaces filesystem paths in `message`, and in the per-input `errors` of a batch result, with `<path>` and logs the full error; `5xx` errors are always logged.
 
 <Tabs syncKey="lang">
 <TabItem label="Python">
