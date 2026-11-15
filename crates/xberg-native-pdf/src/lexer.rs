@@ -17,12 +17,12 @@
 //! Whitespace (space, \t, \r, \n, \0, \f) and comments (% to EOL) are skipped.
 
 use nom::{
-    IResult, Parser,
     branch::alt,
     bytes::complete::{take_till, take_while},
     character::complete::{char, digit1, one_of},
     combinator::{map, opt, value},
     sequence::{delimited, preceded},
+    IResult, Parser,
 };
 
 /// Token types recognized by the PDF lexer.
@@ -332,8 +332,11 @@ fn parse_hex_string(input: &[u8]) -> IResult<&[u8], Token<'_>> {
 /// assert_eq!(decode_name_escapes("A#"), "A#"); // Invalid sequence preserved
 /// ```
 pub fn decode_name_escapes(name: &str) -> String {
+    if !name.contains('#') {
+        return name.to_owned();
+    }
     let mut result = String::with_capacity(name.len());
-    let mut chars = name.chars().peekable();
+    let mut chars = name.chars();
 
     while let Some(ch) = chars.next() {
         if ch == '#' {
@@ -341,8 +344,7 @@ pub fn decode_name_escapes(name: &str) -> String {
             let hex2 = chars.next();
 
             if let (Some(h1), Some(h2)) = (hex1, hex2) {
-                let hex_str = format!("{}{}", h1, h2);
-                if let Ok(byte) = u8::from_str_radix(&hex_str, 16) {
+                if let Some(byte) = hex_escape_byte(h1, h2) {
                     result.push(byte as char);
                     continue;
                 }
@@ -361,6 +363,15 @@ pub fn decode_name_escapes(name: &str) -> String {
     }
 
     result
+}
+
+/// The byte a `#XX` name escape encodes. Matches `u8::from_str_radix(XX, 16)`,
+/// which this replaces, including its acceptance of a leading `+` (`#+F` is
+/// 0x0F). ~keep
+fn hex_escape_byte(h1: char, h2: char) -> Option<u8> {
+    let low = h2.to_digit(16)?;
+    let high = if h1 == '+' { 0 } else { h1.to_digit(16)? };
+    u8::try_from(high * 16 + low).ok()
 }
 
 /// Parse a name starting with /.
@@ -734,6 +745,10 @@ mod tests {
         assert_eq!(decode_name_escapes("A#"), "A#");
         assert_eq!(decode_name_escapes("A#2"), "A#2");
         assert_eq!(decode_name_escapes("A#ZZ"), "A#ZZ");
+        assert_eq!(decode_name_escapes("A#ff#Fa"), "A\u{ff}\u{fa}");
+        assert_eq!(decode_name_escapes("A#+F"), "A\u{f}");
+        assert_eq!(decode_name_escapes("A#F+"), "A#F+");
+        assert_eq!(decode_name_escapes("A#é1"), "A#é1");
     }
 
     #[test]
