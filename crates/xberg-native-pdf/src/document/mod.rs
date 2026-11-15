@@ -286,7 +286,9 @@ impl CachedFormSpans {
 
 /// Size-bounded object cache with FIFO eviction.
 ///
-/// Wraps a `HashMap<ObjectRef, Object>` with byte-size tracking. When an
+/// Wraps a `HashMap<ObjectRef, Arc<Object>>` with byte-size tracking. Entries
+/// are shared so a reader takes an `Arc` under the lock and deep-copies after
+/// releasing it. When an
 /// insertion would push total estimated size past `max_bytes`, the oldest
 /// entries are evicted first (FIFO order via a `VecDeque` of keys).
 ///
@@ -294,7 +296,7 @@ impl CachedFormSpans {
 /// insert-once-read-once — higher-level caches (font caches, xobject stream
 /// cache) serve repeated lookups, so recency is not a useful signal here.
 struct BoundedObjectCache {
-    map: HashMap<ObjectRef, Object>,
+    map: HashMap<ObjectRef, Arc<Object>>,
     insertion_order: std::collections::VecDeque<ObjectRef>,
     current_bytes: usize,
     max_bytes: usize,
@@ -438,7 +440,11 @@ impl BoundedObjectCache {
     }
 
     fn get(&self, key: &ObjectRef) -> Option<&Object> {
-        self.map.get(key)
+        self.map.get(key).map(|value| &**value)
+    }
+
+    fn get_shared(&self, key: &ObjectRef) -> Option<Arc<Object>> {
+        self.map.get(key).map(Arc::clone)
     }
 
     fn insert(&mut self, key: ObjectRef, value: Object) {
@@ -477,7 +483,7 @@ impl BoundedObjectCache {
             }
         }
 
-        if self.map.insert(key, value).is_none() {
+        if self.map.insert(key, Arc::new(value)).is_none() {
             self.insertion_order.push_back(key);
         }
         self.current_bytes += entry_size;
@@ -814,7 +820,7 @@ pub struct PdfDocument {
     /// Page object cache keyed by page index to avoid re-traversing the page tree.
     /// The page tree structure is static (§7.7.3.2), so pages can be safely cached.
     /// Mutex provides interior mutability for `&self` read-path methods.
-    page_cache: Mutex<HashMap<usize, Object>>,
+    page_cache: Mutex<HashMap<usize, Arc<Object>>>,
     /// Whether the bulk page tree walk has been attempted (successful or not).
     /// Prevents re-walking the tree on every cache miss for malformed PDFs.
     page_cache_populated: AtomicBool,

@@ -667,9 +667,9 @@ impl PdfDocument {
         }
 
         // Check cache first (warm path: fully parallel, no serialization). ~keep
-        let cached_opt = self.object_cache.lock_or_recover().get(&obj_ref).cloned();
+        let cached_opt = self.object_cache.lock_or_recover().get_shared(&obj_ref);
         if let Some(cached) = cached_opt {
-            return Ok(cached);
+            return Ok(Object::clone(&cached));
         }
 
         let entry = match self.xref.get(obj_ref.id) {
@@ -815,11 +815,12 @@ impl PdfDocument {
             // mis-flag every compressed object's xref slot as free, so
             // sweep the object streams once and recheck the cache. ~keep
             self.recover_from_object_streams();
-            if let Some(obj) = self.object_cache.lock_or_recover().get(&obj_ref).cloned()
-                && !matches!(obj, Object::Null)
+            let recovered = self.object_cache.lock_or_recover().get_shared(&obj_ref);
+            if let Some(obj) = recovered
+                && !matches!(*obj, Object::Null)
             {
                 tracing::warn!(target: LOG_TARGET, "Object {} recovered from object-stream sweep", obj_ref.id);
-                return Ok(obj);
+                return Ok(Object::clone(&obj));
             }
 
             // PDF Spec §7.3.10: free object treated as null ~keep
@@ -979,7 +980,7 @@ impl PdfDocument {
             }
         }
 
-        let cached_opt = self.object_cache.lock_or_recover().get(&obj_ref).cloned();
+        let cached_opt = self.object_cache.lock_or_recover().get_shared(&obj_ref);
         if let Some(cached) = cached_opt {
             let is_form = cached
                 .as_dict()

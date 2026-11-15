@@ -438,8 +438,9 @@ impl PdfDocument {
     /// tree structure is invalid.
     pub fn get_page(&self, page_index: usize) -> Result<Object> {
         // Check page cache first — page tree is static per §7.7.3.2 ~keep
-        if let Some(cached) = self.page_cache.lock_or_recover().get(&page_index).cloned() {
-            return Ok(cached);
+        let cached = self.page_cache.lock_or_recover().get(&page_index).cloned();
+        if let Some(cached) = cached {
+            return Ok(Object::clone(&cached));
         }
 
         // Defer bulk page tree walk until enough pages are accessed. ~keep
@@ -451,8 +452,9 @@ impl PdfDocument {
             if let Err(e) = self.populate_page_cache() {
                 trace_recoverable_pdf_error("populate_page_cache", &e);
             }
-            if let Some(cached) = self.page_cache.lock_or_recover().get(&page_index).cloned() {
-                return Ok(cached);
+            let cached = self.page_cache.lock_or_recover().get(&page_index).cloned();
+            if let Some(cached) = cached {
+                return Ok(Object::clone(&cached));
             }
         }
 
@@ -499,7 +501,9 @@ impl PdfDocument {
             }
         }?;
 
-        self.page_cache.lock_or_recover().insert(page_index, page.clone());
+        self.page_cache
+            .lock_or_recover()
+            .insert(page_index, Arc::new(page.clone()));
         Ok(page)
     }
 
@@ -531,7 +535,7 @@ impl PdfDocument {
     #[allow(dead_code)]
     fn prefetch_xobject_subtypes(&self) {
         let mut xobj_refs: Vec<ObjectRef> = Vec::new();
-        let page_dicts: Vec<Object> = self.page_cache.lock_or_recover().values().cloned().collect();
+        let page_dicts: Vec<Arc<Object>> = self.page_cache.lock_or_recover().values().cloned().collect();
 
         for page_obj in &page_dicts {
             let page_dict = match page_obj.as_dict() {
@@ -643,7 +647,7 @@ impl PdfDocument {
                 }
                 self.page_cache
                     .lock_or_recover()
-                    .insert(*page_index, Object::Dictionary(page_dict));
+                    .insert(*page_index, Arc::new(Object::Dictionary(page_dict)));
                 *page_index += 1;
             }
             "Pages" => {
