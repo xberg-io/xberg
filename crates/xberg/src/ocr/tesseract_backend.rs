@@ -247,9 +247,16 @@ impl TesseractBackend {
         internal.tessdata_path = config.tessdata_path.clone();
         internal.source_dpi = Self::source_dpi_from_backend_options(config);
         internal.known_full_page_scan = Self::known_full_page_scan_from_backend_options(config);
+        internal.capture_region_hocr = config.backend_options.as_ref().is_some_and(|options| {
+            ["source_region_reconciliation", "source_region_recovery"]
+                .into_iter()
+                .any(|key| options.get(key).and_then(serde_json::Value::as_bool) == Some(true))
+        });
         if let Some(use_cache) = Self::use_cache_from_backend_options(config) {
             internal.use_cache = use_cache;
         }
+        // Word ownership receipts are transient and are absent from persisted OCR results. ~keep
+        internal.use_cache &= !internal.capture_region_hocr;
         internal
     }
 
@@ -732,6 +739,7 @@ impl TesseractBackend {
             ocr_elements,
             ocr_internal_document: ocr_result.internal_document,
             raw_ocr_source_frame: ocr_result.raw_ocr_source_frame,
+            retained_hocr_read: ocr_result.retained_hocr_read,
             processing_warnings,
             ..Default::default()
         })
@@ -852,6 +860,7 @@ impl OcrBackend for TesseractBackend {
             ocr_elements,
             ocr_internal_document: ocr_result.internal_document,
             raw_ocr_source_frame: ocr_result.raw_ocr_source_frame,
+            retained_hocr_read: ocr_result.retained_hocr_read,
             processing_warnings,
             ..Default::default()
         })

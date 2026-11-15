@@ -648,6 +648,7 @@ mod tests {
             ocr_elements: None,
             internal_document: None,
             raw_ocr_source_frame: None,
+            retained_hocr_read: None,
         };
         let lookup = |context: &ModelContext| {
             cache
@@ -714,6 +715,7 @@ mod tests {
             ocr_elements: None,
             internal_document: None,
             raw_ocr_source_frame: None,
+            retained_hocr_read: None,
         };
         cache
             .set_cached_result("page", "tesseract", &before.result_key(&config), None, &result)
@@ -757,6 +759,7 @@ mod tests {
             ocr_elements: None,
             internal_document: None,
             raw_ocr_source_frame: None,
+            retained_hocr_read: None,
         };
         std::fs::write(&osd, b"revision two").unwrap();
         let published = before

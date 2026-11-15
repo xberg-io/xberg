@@ -30,6 +30,10 @@ mod indexed;
 mod neutral_rgb_tests;
 mod ordered;
 mod read_geometry;
+mod region_probe;
+mod region_reconciliation;
+#[cfg(test)]
+pub(super) mod region_replay;
 mod samples;
 #[cfg(test)]
 #[path = "tall_source/strip_certificate_tests.rs"]
@@ -148,6 +152,130 @@ pub(super) async fn try_replace(
     };
     note_unrecovered(original, ocr, source, *height, why);
     Ok(false)
+}
+
+pub(in crate::extractors::pdf) fn with_document_region_ocr_budget(
+    config: &ExtractionConfig,
+) -> Cow<'_, ExtractionConfig> {
+    let Some(ocr) = config.ocr.as_ref() else {
+        return Cow::Borrowed(config);
+    };
+    let enabled = |options: Option<&serde_json::Value>| {
+        options
+            .and_then(|options| options.get("source_region_recovery"))
+            .and_then(serde_json::Value::as_bool)
+            == Some(true)
+    };
+    let stage_enabled = ocr.pipeline.as_ref().is_some_and(|pipeline| {
+        pipeline
+            .stages
+            .iter()
+            .any(|stage| enabled(stage.backend_options.as_ref()))
+    });
+    if !enabled(ocr.backend_options.as_ref()) && !stage_enabled {
+        return Cow::Borrowed(config);
+    }
+    let requested = ocr
+        .backend_options
+        .as_ref()
+        .and_then(|options| options.get("source_region_max_calls"))
+        .map_or(MAX_STRIPS, |value| {
+            value
+                .as_u64()
+                .and_then(|limit| usize::try_from(limit).ok())
+                .unwrap_or(0)
+        });
+    let limit = requested
+        .min(MAX_STRIPS)
+        .min(
+            config
+                .security_limits
+                .as_ref()
+                .map_or(MAX_STRIPS, |limits| limits.max_iterations),
+        )
+        .min(
+            ocr.security_limits
+                .as_ref()
+                .map_or(MAX_STRIPS, |limits| limits.max_iterations),
+        );
+    let mut scoped = config.clone();
+    scoped.pdf_region_ocr_calls = Some(Arc::new(std::sync::atomic::AtomicUsize::new(limit)));
+    Cow::Owned(scoped)
+}
+
+pub(super) async fn probe_anchored_occurrences(
+    selected: &mut ExtractedDocument,
+    backend: &Arc<dyn OcrBackend>,
+    config: &ExtractionConfig,
+    ocr: &OcrConfig,
+    (pdf, page): (&PdfDocument, usize),
+    (_, png, width, height): &super::rendering::EncodedPage,
+) -> crate::Result<()> {
+    if ocr
+        .backend_options
+        .as_ref()
+        .and_then(|options| options.get("source_region_recovery"))
+        .and_then(serde_json::Value::as_bool)
+        != Some(true)
+    {
+        return Ok(());
+    }
+    let Some(budget) = config.pdf_region_ocr_calls.as_deref() else {
+        return Ok(());
+    };
+    let Some(read) = selected.retained_hocr_read.as_ref() else {
+        return Ok(());
+    };
+    if selected.raw_ocr_source_frame.is_some()
+        || config.output_format != crate::core::config::OutputFormat::Plain
+        || !crate::plugins::registry::get_ocr_backend_registry()
+            .read()
+            .is_builtin_tesseract(backend)
+        || !ocr
+            .tesseract_config
+            .as_ref()
+            .and_then(|tess| tess.preprocessing.as_ref())
+            .is_some_and(|p| !p.deskew)
+        || super::document::resolved_ocr_correction_degrees(&selected.metadata).is_some_and(|angle| angle != 0)
+        || !read_geometry::scale_only(
+            (*width, *height),
+            read.dimensions,
+            selected.metadata.image_preprocessing.as_ref(),
+        )
+    {
+        tracing::trace!("anchored OCR discovery declined selected raster geometry");
+        return Ok(());
+    }
+    let attempt = Attempt::new(pdf, page, Some((*width, *height, png.len())), config, ocr);
+    let Some(source) = indexed::IndexedSource::load(&attempt) else {
+        return Ok(());
+    };
+    if let Some(edits) =
+        region_probe::scan_selected_inventory(&attempt, &source, backend, ocr, selected, (read, budget)).await?
+        && let Some(doc) = selected.ocr_internal_document.as_mut()
+    {
+        if edits.iter().all(|(id, _, _)| {
+            doc.elements
+                .iter()
+                .flat_map(|element| &element.ocr_source_spans)
+                .filter(|span| span.occurrence == *id)
+                .count()
+                == 1
+        }) {
+            let edit_count = edits.len();
+            for (id, expected, replacement) in edits {
+                if let Some(owner) = doc
+                    .elements
+                    .iter_mut()
+                    .flat_map(|element| &mut element.ocr_source_spans)
+                    .find(|span| span.occurrence == id)
+                {
+                    owner.replacement = Some((expected, replacement, edit_count));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

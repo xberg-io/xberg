@@ -540,6 +540,11 @@ pub struct ExtractionConfig {
     #[cfg_attr(alef, alef(skip))]
     pub cancel_token: Option<crate::cancellation::CancellationToken>,
 
+    #[doc(hidden)]
+    #[serde(skip)]
+    #[cfg_attr(alef, alef(skip))]
+    pub pdf_region_ocr_calls: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
+
     /// Transient source-filename hint for extension-based language detection.
     ///
     /// Set internally during extraction (from `ExtractInput::filename` or a
@@ -661,6 +666,7 @@ impl Default for ExtractionConfig {
             captioning: None,
             qr_codes: None,
             cancel_token: None,
+            pdf_region_ocr_calls: None,
             source_name: None,
         }
     }

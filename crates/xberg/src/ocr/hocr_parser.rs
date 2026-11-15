@@ -198,8 +198,46 @@ pub(crate) fn parse_hocr_to_internal_document_with_page_offset_and_stats(
             protected_words: None,
             table_rows: None,
             claimed_words: None,
+            occurrences: None,
         },
     )
+}
+
+/// Selected bytes of one hOCR word within its serialized paragraph. The ID is
+/// the opening tag byte offset in the exact hOCR input to this read. ~keep
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct HocrWordOccurrence {
+    pub(crate) id: usize,
+    pub(crate) element: u32,
+    pub(crate) bytes: std::ops::Range<usize>,
+    pub(crate) bounds: [u32; 4],
+}
+
+#[derive(Default)]
+struct HocrOccurrenceCapture {
+    words: Vec<HocrWordOccurrence>,
+    exhausted: bool,
+    serialized_bytes: usize,
+}
+
+pub(crate) fn parse_hocr_with_occurrences(
+    hocr_html: &str,
+    dictionary_filter: Option<&DictionaryLineFilter<'_>>,
+    page_offset: u32,
+) -> (HocrParseResult, Option<Vec<HocrWordOccurrence>>) {
+    let mut capture = HocrOccurrenceCapture::default();
+    let result = parse_hocr_document(
+        hocr_html,
+        page_offset,
+        HocrLinePolicy {
+            dictionary_filter,
+            protected_words: None,
+            table_rows: None,
+            claimed_words: None,
+            occurrences: Some(&mut capture),
+        },
+    );
+    (result, (!capture.exhausted).then_some(capture.words))
 }
 
 type PositionedWord = ([u32; 4], String);
@@ -209,6 +247,7 @@ struct HocrLinePolicy<'a> {
     protected_words: Option<&'a HashSet<PositionedWord>>,
     table_rows: Option<(&'a BoundingBox, ExactTableRows)>,
     claimed_words: Option<HashSet<PositionedWord>>,
+    occurrences: Option<&'a mut HocrOccurrenceCapture>,
 }
 
 pub(crate) fn parse_hocr_preserving_rejected_table_words(
@@ -240,6 +279,7 @@ pub(crate) fn parse_hocr_preserving_rejected_table_words(
             protected_words: Some(&protected_words),
             table_rows: None,
             claimed_words: None,
+            occurrences: None,
         },
     )
 }
@@ -266,6 +306,7 @@ pub(crate) fn parse_hocr_without_claimed_table_rows(
             protected_words: None,
             table_rows: Some((bbox, rows)),
             claimed_words: None,
+            occurrences: None,
         },
     )
     .document
@@ -309,6 +350,7 @@ fn proved_fragment_policy(words: Vec<&HocrWord>) -> HocrLinePolicy<'static> {
         protected_words: None,
         table_rows: None,
         claimed_words: Some(claimed_words),
+        occurrences: None,
     }
 }
 
@@ -556,6 +598,7 @@ fn parse_quoted_value(part: &str) -> Option<String> {
 
 /// A word extracted from hOCR with its metadata.
 struct HocrWordInfo {
+    input_offset: usize,
     text: String,
     x0: u32,
     y0: u32,
@@ -906,6 +949,7 @@ fn parse_paragraph(
             if !trimmed.is_empty() {
                 let (x0, y0, x1, y1) = props.bbox.unwrap_or((0, 0, 0, 0));
                 current_line.words.push(HocrWordInfo {
+                    input_offset: tag_start,
                     text: trimmed.to_string(),
                     x0,
                     y0,
@@ -973,11 +1017,7 @@ fn parse_paragraph(
 
     let style = aggregate_word_style(&all_words);
 
-    let text: String = lines
-        .iter()
-        .map(|line| line.words.iter().map(|w| w.text.as_str()).collect::<Vec<_>>().join(" "))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let text = serialize_selected_hocr_lines(&lines, element_index, line_policy.occurrences.as_deref_mut());
 
     let mut min_x0 = u32::MAX;
     let mut min_y0 = u32::MAX;
@@ -1179,6 +1219,52 @@ fn parse_paragraph(
     }
 
     (Some(elem), pos, (flagged_line_count, kept_numeral_line_count))
+}
+
+fn serialize_selected_hocr_lines(
+    lines: &[HocrLineInfo],
+    element: u32,
+    mut capture: Option<&mut HocrOccurrenceCapture>,
+) -> String {
+    let mut text = String::new();
+    for (line_index, line) in lines.iter().enumerate() {
+        if line_index != 0 {
+            text.push('\n');
+        }
+        for (word_index, word) in line.words.iter().enumerate() {
+            if word_index != 0 {
+                text.push(' ');
+            }
+            let start = text.len();
+            text.push_str(&word.text);
+            if let Some(capture) = capture.as_mut() {
+                capture.record(element, start..text.len(), word);
+            }
+        }
+    }
+    text
+}
+
+impl HocrOccurrenceCapture {
+    fn record(&mut self, element: u32, bytes: std::ops::Range<usize>, word: &HocrWordInfo) {
+        const MAX_TRACKED_WORDS: usize = 1024;
+        const MAX_TRACKED_TEXT_BYTES: usize = 16 * 1024;
+        if self.exhausted {
+            return;
+        }
+        self.serialized_bytes = self.serialized_bytes.saturating_add(word.text.len());
+        if self.words.len() == MAX_TRACKED_WORDS || self.serialized_bytes > MAX_TRACKED_TEXT_BYTES {
+            self.words.clear();
+            self.exhausted = true;
+            return;
+        }
+        self.words.push(HocrWordOccurrence {
+            id: word.input_offset,
+            element,
+            bytes,
+            bounds: [word.x0, word.y0, word.x1, word.y1],
+        });
+    }
 }
 
 fn claim_proved_table_fragment(line: &HocrLineInfo, words: &mut HashSet<PositionedWord>) -> bool {

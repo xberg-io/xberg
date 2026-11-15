@@ -378,7 +378,12 @@ async fn extract_file_scoped(path: &Path, mime_type: &str, config: &ExtractionCo
                 let namespace = namespace.map(str::to_owned);
                 let ttl = config.cache_ttl_secs;
                 publish_file_cache_when_validated(move || {
-                    let _ = cache.set(&cache_key, data, source.as_deref(), namespace.as_deref(), ttl);
+                    if cache
+                        .set(&cache_key, data, source.as_deref(), namespace.as_deref(), ttl)
+                        .is_ok()
+                    {
+                        tracing::debug!(cache_key = %cache_key, "Extraction cache write");
+                    }
                 });
             }
             Err(error) => {

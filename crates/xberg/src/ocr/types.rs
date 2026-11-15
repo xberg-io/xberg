@@ -184,6 +184,9 @@ pub struct TesseractConfig {
     #[serde(default)]
     pub known_full_page_scan: bool,
 
+    #[serde(skip)]
+    pub(crate) capture_region_hocr: bool,
+
     /// The true, 1-indexed page number of the source document that `image_bytes` came
     /// from, when the caller knows it.
     ///
@@ -286,6 +289,7 @@ impl Default for TesseractConfig {
             tessdata_path: None,
             source_dpi: None,
             known_full_page_scan: false,
+            capture_region_hocr: false,
             page_number: default_page_number(),
             security_limits: None,
         }
@@ -351,6 +355,7 @@ impl From<&crate::types::TesseractConfig> for TesseractConfig {
             // Same rationale as `source_dpi`: a document-wide public config cannot know whether
             // any one image is a whole-page scan; only the per-call `backend_options` hint can.
             known_full_page_scan: false,
+            capture_region_hocr: false,
             // Same rationale as `source_dpi`: the public config has no notion of which page
             // of a document this one call is for. Unlike `source_dpi`, no caller currently
             // threads a per-call value in through `backend_options`, so this always resolves
@@ -586,6 +591,7 @@ mod tests {
             ocr_elements: None,
             internal_document: None,
             raw_ocr_source_frame: None,
+            retained_hocr_read: None,
         };
 
         let batch_result = BatchItemResult {

@@ -33,6 +33,8 @@ pub(crate) use api_pool::tesseract_api_capacity;
 pub(crate) use execution::render_inline_ocr_table_content;
 #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
 pub(crate) use execution::{light_page_foreground_mode, lower_mode_mask_has_text_structure};
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) use execution::{render_inline_ocr_table_content_with_occurrences, serialize_hocr_occurrences};
 
 use crate::ocr::cache::OcrCache;
 use crate::ocr::error::OcrError;
@@ -307,6 +309,7 @@ mod tests {
                 ocr_elements: None,
                 internal_document: None,
                 raw_ocr_source_frame: None,
+                retained_hocr_read: None,
             }),
             error: None,
         };

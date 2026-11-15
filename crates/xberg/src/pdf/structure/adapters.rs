@@ -472,6 +472,13 @@ fn hocr_block_id(element: &crate::types::internal::InternalElement) -> Option<&s
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 fn merge_ocr_block_paragraph(current: &mut types::PdfParagraph, next: types::PdfParagraph) {
     current.text.push('\n');
+    let offset = current.text.len();
+    current
+        .ocr_source_spans
+        .extend(next.ocr_source_spans.into_iter().map(|mut span| {
+            span.destination += offset;
+            span
+        }));
     current.text.push_str(&next.text);
     current.lines.extend(next.lines);
     current.block_bbox = match (current.block_bbox, next.block_bbox) {
@@ -871,7 +878,9 @@ fn make_ocr_block_paragraphs(
         let text_line_count = element.text.split('\n').count().max(1);
         let font_size =
             resolve_ocr_font_size_pt(element, block_bbox, text_line_count, font_size_scale, block_median_pt);
-        return vec![make_ocr_paragraph(element.text.clone(), lines, block_bbox, font_size)];
+        let mut paragraph = make_ocr_paragraph(element.text.clone(), lines, block_bbox, font_size);
+        paragraph.ocr_source_spans.clone_from(&element.ocr_source_spans);
+        return vec![paragraph];
     }
 
     split_body_group_at_list_markers(line_paragraphs)
@@ -903,11 +912,23 @@ fn make_ocr_line_paragraphs(
     // are block-level averages, resolved once and applied uniformly to every line.
     let (is_bold, is_italic) = resolve_ocr_style_flags(element);
 
+    let mut offset = 0;
     text_lines
         .into_iter()
         .enumerate()
         .map(|(line_index, text)| {
-            make_ocr_line_paragraph(text, line_index, line_count, block_bbox, font_size, is_bold, is_italic)
+            let mut paragraph =
+                make_ocr_line_paragraph(text, line_index, line_count, block_bbox, font_size, is_bold, is_italic);
+            let line_end = offset + text.len();
+            for span in &element.ocr_source_spans {
+                if span.destination >= offset && span.destination + span.source.len() <= line_end {
+                    let mut span = span.clone();
+                    span.destination -= offset;
+                    paragraph.ocr_source_spans.push(span);
+                }
+            }
+            offset = line_end + 1;
+            paragraph
         })
         .collect()
 }
@@ -1308,8 +1329,23 @@ fn build_body_paragraph(lines: Vec<types::PdfParagraph>) -> Option<types::PdfPar
     } else {
         DEFAULT_OCR_FONT_SIZE_PT
     };
+    let mut spans = Vec::new();
+    if !lines
+        .first()
+        .is_some_and(|line| super::pipeline::looks_like_list_item(&line.text))
+    {
+        let mut offset = 0;
+        for line in &lines {
+            spans.extend(line.ocr_source_spans.iter().cloned().map(|mut span| {
+                span.destination += offset;
+                span
+            }));
+            offset += line.text.len() + 1;
+        }
+    }
     let pdf_lines = lines.into_iter().flat_map(|line| line.lines).collect();
     let mut paragraph = make_ocr_paragraph(text, pdf_lines, bbox, font_size);
+    paragraph.ocr_source_spans = spans;
     paragraph.layout_class = layout_class;
     Some(paragraph)
 }
@@ -1781,6 +1817,7 @@ fn make_ocr_paragraph(
         is_page_furniture: false,
         layout_class: None,
         layout_region_path: None,
+        ocr_source_spans: Vec::new(),
         caption_for: None,
         block_bbox,
     }
@@ -3919,4 +3956,72 @@ mod tests {
         );
         assert_eq!(result[1].text, "2. Second item");
     }
+}
+
+#[cfg(all(test, feature = "ocr"))]
+mod occurrence_provenance_tests {
+    use super::project_ocr_adapter_occurrence;
+
+    #[test]
+    fn adapter_splits_repeated_words_and_shifts_merged_provenance() {
+        use super::{OcrFontSizeScale, make_ocr_line_paragraphs, merge_ocr_block_paragraph};
+        use crate::types::internal::{ElementKind, InternalElement, OcrSourceSpan};
+        let mut owner = InternalElement::text(ElementKind::Paragraph, "wi\nwi", 0).with_index(7);
+        owner.ocr_source_spans.push(OcrSourceSpan {
+            owner: owner.id.clone(),
+            occurrence: 42,
+            replacement: None,
+            source: 3..5,
+            destination: 3,
+        });
+        let mut lines = make_ocr_line_paragraphs(&owner, 100.0, OcrFontSizeScale::uniform(1.0), None);
+        assert!(lines[0].ocr_source_spans.is_empty());
+        let second = lines.pop().unwrap();
+        assert_eq!(second.ocr_source_spans[0].destination, 0);
+        merge_ocr_block_paragraph(&mut lines[0], second);
+        assert_eq!(lines[0].text, "wi\nwi");
+        assert_eq!(lines[0].ocr_source_spans, owner.ocr_source_spans);
+    }
+
+    #[test]
+    fn repeated_text_maps_only_the_emitted_owner_across_split_and_merge() {
+        let owner = "wi\nwi";
+        let paragraphs = ["wi", "prefix\nwi"];
+        let emitted = [(0..2, 0, 0..2), (3..5, 1, 7..9)];
+        assert_eq!(
+            project_ocr_adapter_occurrence(owner, 3..5, &paragraphs, &emitted),
+            Some((1, 7..9))
+        );
+        assert!(project_ocr_adapter_occurrence(owner, 3..5, &paragraphs, &emitted[..1]).is_none());
+        let duplicate = [(3..5, 0, 0..2), (3..5, 1, 7..9)];
+        assert!(project_ocr_adapter_occurrence(owner, 3..5, &paragraphs, &duplicate).is_none());
+        assert!(project_ocr_adapter_occurrence(owner, 1..4, &paragraphs, &emitted).is_none());
+    }
+}
+
+#[cfg(feature = "ocr")]
+pub(crate) fn project_ocr_adapter_occurrence(
+    owner: &str,
+    occurrence: std::ops::Range<usize>,
+    paragraphs: &[&str],
+    emitted: &[(std::ops::Range<usize>, usize, std::ops::Range<usize>)],
+) -> Option<(usize, std::ops::Range<usize>)> {
+    if occurrence.is_empty() {
+        return None;
+    }
+    let mut candidates = emitted
+        .iter()
+        .filter(|(source, _, _)| occurrence.start < source.end && source.start < occurrence.end);
+    let (source, paragraph, destination) = candidates.next()?;
+    if candidates.next().is_some()
+        || occurrence.start < source.start
+        || occurrence.end > source.end
+        || owner.get(source.clone())? != paragraphs.get(*paragraph)?.get(destination.clone())?
+    {
+        return None;
+    }
+    let start = destination.start.checked_add(occurrence.start - source.start)?;
+    let end = start.checked_add(occurrence.len())?;
+    paragraphs.get(*paragraph)?.get(start..end)?;
+    Some((*paragraph, start..end))
 }

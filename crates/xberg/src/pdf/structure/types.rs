@@ -46,6 +46,7 @@ pub(crate) struct PdfParagraph {
     /// path is carried through document-level classification and consumed only
     /// during final assembly, where it becomes invisible `Group` containers.
     pub layout_region_path: Option<LayoutRegionPath>,
+    pub ocr_source_spans: Vec<crate::types::internal::OcrSourceSpan>,
     /// Index of the parent element this caption is associated with (tables/pictures).
     pub caption_for: Option<usize>,
     /// Block-level bounding box from structure tree extraction.

@@ -312,6 +312,74 @@ pub(crate) struct RawOcrSourceFrame {
     pub(crate) dimensions: (u32, u32),
 }
 
+/// Private receipt for one fresh hOCR realization. It never crosses a cache or public wire.
+#[derive(Debug, Clone)]
+#[cfg_attr(alef, alef(skip))]
+pub(crate) struct RetainedHocrRead {
+    pub(crate) transcript: String,
+    pub(crate) dimensions: (u32, u32),
+    pub(crate) occurrences: Vec<RetainedHocrOccurrence>,
+    pub(crate) inline_page: Option<RetainedHocrProjection>,
+    pub(crate) plain_document: Option<RetainedHocrProjection>,
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(alef, alef(skip))]
+pub(crate) struct RetainedHocrProjection {
+    pub(crate) text: String,
+    pub(crate) ranges: Vec<(usize, std::ops::Range<usize>)>,
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(alef, alef(skip))]
+pub(crate) struct RetainedHocrOccurrence {
+    pub(crate) id: usize,
+    pub(crate) element: super::internal::InternalElementId,
+    pub(crate) element_bytes: std::ops::Range<usize>,
+    pub(crate) owner_bytes: std::ops::Range<usize>,
+    pub(crate) owner_bounds: Option<super::extraction::BoundingBox>,
+    pub(crate) transcript_bytes: std::ops::Range<usize>,
+    pub(crate) bounds: [u32; 4],
+}
+
+impl RetainedHocrRead {
+    pub(crate) fn matches(
+        &self,
+        transcript: &str,
+        dimensions: (u32, u32),
+        document: &super::internal::InternalDocument,
+    ) -> bool {
+        if self.transcript != transcript
+            || dimensions != self.dimensions
+            || self.occurrences.is_empty()
+            || document.elements.len() > 1024
+        {
+            return false;
+        }
+        let mut ids = std::collections::HashSet::new();
+        self.occurrences.iter().all(|receipt| {
+            let [left, top, right, bottom] = receipt.bounds;
+            let Some(text) = transcript.get(receipt.transcript_bytes.clone()) else {
+                return false;
+            };
+            if text.is_empty()
+                || left >= right
+                || top >= bottom
+                || right > dimensions.0
+                || bottom > dimensions.1
+                || !ids.insert(receipt.id)
+            {
+                return false;
+            }
+            let mut owners = document.elements.iter().filter(|element| element.id == receipt.element);
+            owners
+                .next()
+                .is_some_and(|element| element.text.get(receipt.element_bytes.clone()) == Some(text))
+                && owners.next().is_none()
+        })
+    }
+}
+
 /// OCR extraction result.
 ///
 /// Result of performing OCR on an image or scanned document,
@@ -341,6 +409,9 @@ pub struct OcrExtractionResult {
     #[cfg_attr(not(feature = "ocr"), allow(dead_code))]
     #[cfg_attr(alef, alef(skip))]
     pub(crate) raw_ocr_source_frame: Option<RawOcrSourceFrame>,
+    #[serde(skip)]
+    #[cfg_attr(alef, alef(skip))]
+    pub(crate) retained_hocr_read: Option<RetainedHocrRead>,
 }
 
 impl OcrExtractionResult {
@@ -361,6 +432,7 @@ impl OcrExtractionResult {
             ocr_elements,
             internal_document: None,
             raw_ocr_source_frame: None,
+            retained_hocr_read: None,
         }
     }
 }

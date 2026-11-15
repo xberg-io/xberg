@@ -3037,6 +3037,11 @@ impl PdfExtractor {
     ) -> Result<InternalDocument> {
         let _ = (&path, &layout_pages);
 
+        #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        let scoped_region_config = ocr::with_document_region_ocr_budget(config);
+        #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+        let config = scoped_region_config.as_ref();
+
         enforce_page_limit(&content, config)?;
 
         #[cfg(all(feature = "pdf", feature = "layout-detection"))]

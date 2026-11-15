@@ -3378,6 +3378,7 @@ fn finalize_paragraph(
             is_page_furniture: false,
             layout_class: None,
             layout_region_path: None,
+            ocr_source_spans: Vec::new(),
             caption_for: None,
             block_bbox: None,
             word_count,
@@ -3513,6 +3514,7 @@ fn finalize_paragraph(
         is_page_furniture: false,
         layout_class: None,
         layout_region_path: None,
+        ocr_source_spans: Vec::new(),
         caption_for: None,
         block_bbox: Some({
             let left = lines.iter().map(|l| l.x).fold(f32::MAX, f32::min);

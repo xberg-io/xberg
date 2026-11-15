@@ -758,17 +758,121 @@ fn build_content_with_inline_tables(tsv_data: &str, tables: &[OcrTable], min_con
     render_inline_ocr_table_content(&words, tables, None)
 }
 
+fn inline_hocr_receipt(
+    tsv: &str,
+    tables: &[OcrTable],
+    min_confidence: f64,
+    read: &crate::types::formats::RetainedHocrRead,
+) -> Option<crate::types::formats::RetainedHocrProjection> {
+    let words = extract_words_from_tsv(tsv, min_confidence).ok()?;
+    if words.len() > 1024 {
+        return None;
+    }
+    let mut emitted = Vec::new();
+    let text = render_inline_ocr_table_content_impl(
+        &words,
+        tables,
+        None,
+        Some(&mut |id, range| {
+            emitted.push((id, range));
+        }),
+    );
+    if text.len() > 16 * 1024 {
+        return None;
+    }
+    let key = |word: &HocrWord| {
+        Some([
+            word.left,
+            word.top,
+            word.left.checked_add(word.width)?,
+            word.top.checked_add(word.height)?,
+        ])
+    };
+    let mut ranges = Vec::new();
+    for occurrence in &read.occurrences {
+        let Some(token) = read.transcript.get(occurrence.transcript_bytes.clone()) else {
+            continue;
+        };
+        let matches = |word: &HocrWord| word.text == token && key(word) == Some(occurrence.bounds);
+        let mut candidates = words.iter().enumerate().filter(|(_, word)| matches(word));
+        let Some((id, _)) = candidates.next() else { continue };
+        if candidates.next().is_some()
+            || read.occurrences.iter().any(|other| {
+                other.id != occurrence.id
+                    && other.bounds == occurrence.bounds
+                    && read.transcript.get(other.transcript_bytes.clone()) == Some(token)
+            })
+        {
+            continue;
+        }
+        let mut projections = emitted.iter().filter(|(word, _)| *word == id);
+        if let Some((_, range)) = projections.next()
+            && projections.next().is_none()
+            && text.get(range.clone()) == Some(token)
+        {
+            ranges.push((occurrence.id, range.clone()));
+        }
+    }
+    (!ranges.is_empty()).then_some(crate::types::formats::RetainedHocrProjection { text, ranges })
+}
+
 type InlineOcrOwner<'a> = &'a mut dyn FnMut(std::ops::Range<usize>, Option<(u32, u32)>);
 
 pub(crate) fn render_inline_ocr_table_content(
     words: &[HocrWord],
     tables: &[OcrTable],
+    observe: Option<InlineOcrOwner<'_>>,
+) -> String {
+    render_inline_ocr_table_content_impl(words, tables, observe, None)
+}
+
+type InlineOcrOccurrence<'a> = &'a mut dyn FnMut(usize, std::ops::Range<usize>);
+
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) fn render_inline_ocr_table_content_with_occurrences(
+    words: &[HocrWord],
+    tables: &[OcrTable],
+    observe: InlineOcrOccurrence<'_>,
+) -> String {
+    render_inline_ocr_table_content_impl(words, tables, None, Some(observe))
+}
+
+fn observe_inline_word_occurrences<'a>(
+    mut offset: usize,
+    lines: impl Iterator<Item = &'a [&'a HocrWord]>,
+    ids: &std::collections::HashMap<*const HocrWord, usize>,
+    observer: &mut dyn FnMut(usize, std::ops::Range<usize>),
+) {
+    for (line_index, words) in lines.enumerate() {
+        offset += usize::from(line_index != 0);
+        for (word_index, &word) in words.iter().enumerate() {
+            offset += usize::from(word_index != 0);
+            let end = offset + word.text.len();
+            if let Some(&id) = ids.get(&std::ptr::from_ref(word)) {
+                observer(id, offset..end);
+            }
+            offset = end;
+        }
+    }
+}
+
+fn render_inline_ocr_table_content_impl(
+    words: &[HocrWord],
+    tables: &[OcrTable],
     mut observe: Option<InlineOcrOwner<'_>>,
+    mut observe_occurrence: Option<InlineOcrOccurrence<'_>>,
 ) -> String {
     if words.is_empty() {
         return String::new();
     }
 
+    let occurrence_ids = observe_occurrence.as_ref().map(|_| {
+        words
+            .iter()
+            .enumerate()
+            .map(|(id, word)| (std::ptr::from_ref(word), id))
+            .collect::<std::collections::HashMap<_, _>>()
+    });
     let table_bboxes: Vec<_> = tables.iter().filter_map(|t| t.bounding_box.as_ref()).collect();
 
     let mut non_table_words = Vec::new();
@@ -830,10 +934,11 @@ pub(crate) fn render_inline_ocr_table_content(
     struct Paragraph {
         y_start: u32,
         text: String,
+        source_lines: std::ops::Range<usize>,
     }
 
     let mut paragraphs: Vec<Paragraph> = Vec::new();
-    for line in &lines {
+    for (source_index, line) in lines.iter().enumerate() {
         if let Some(last_para) = paragraphs.last_mut() {
             let last_y = last_para.y_start;
             if line.y_center.saturating_sub(last_y) <= paragraph_gap {
@@ -847,11 +952,13 @@ pub(crate) fn render_inline_ocr_table_content(
                         .join(" "),
                 );
                 last_para.y_start = line.y_center;
+                last_para.source_lines.end = source_index + 1;
                 continue;
             }
         }
         paragraphs.push(Paragraph {
             y_start: line.y_center,
+            source_lines: source_index..source_index + 1,
             text: line
                 .words
                 .iter()
@@ -866,6 +973,7 @@ pub(crate) fn render_inline_ocr_table_content(
             y: u32,
             text: String,
             lines: std::ops::Range<usize>,
+            source_lines: std::ops::Range<usize>,
         },
         Table {
             y: u32,
@@ -890,6 +998,7 @@ pub(crate) fn render_inline_ocr_table_content(
                 y: first_y,
                 text: para.text.clone(),
                 lines: line_idx..line_idx + line_count,
+                source_lines: para.source_lines.clone(),
             });
             line_idx += line_count;
             para_idx += 1;
@@ -933,6 +1042,22 @@ pub(crate) fn render_inline_ocr_table_content(
         }
         let start = output.len();
         output.push_str(trimmed);
+        if let (Some(observer), Some(ids), ContentElement::Paragraph { source_lines, .. }) =
+            (observe_occurrence.as_mut(), &occurrence_ids, elem)
+            && let Some(source) = lines.get(source_lines.clone())
+            && trimmed == text
+            && source
+                .iter()
+                .flat_map(|line| &line.words)
+                .all(|word| !word.text.is_empty() && !word.text.chars().any(char::is_whitespace))
+        {
+            observe_inline_word_occurrences(
+                start,
+                source.iter().map(|line| line.words.as_slice()),
+                ids,
+                &mut **observer,
+            );
+        }
         if let Some(observer) = observe.as_mut() {
             let band = match elem {
                 ContentElement::Paragraph { lines: owned, .. } => lines.get(owned.clone()).and_then(|owned_lines| {
@@ -972,13 +1097,173 @@ pub(crate) fn render_inline_ocr_table_content(
 /// `extractors/image.rs`, expressed as real `Heading` elements rather than
 /// pre-escaped markdown text.
 fn flatten_hocr_elements_to_text(elements: &[crate::types::internal::InternalElement]) -> String {
-    elements
-        .iter()
-        .filter(|e| !matches!(e.kind, ElementKind::PageBreak) && !e.text.is_empty())
-        .map(|e| e.text.as_str())
-        .collect::<Vec<_>>()
-        .join("\n\n")
+    serialize_hocr_elements(elements, |_, _| {})
 }
+
+fn serialize_hocr_elements(
+    elements: &[crate::types::internal::InternalElement],
+    mut observe: impl FnMut(usize, usize),
+) -> String {
+    let mut output = String::new();
+    for (index, element) in elements.iter().enumerate() {
+        if matches!(element.kind, ElementKind::PageBreak) || element.text.is_empty() {
+            continue;
+        }
+        if !output.is_empty() {
+            output.push_str("\n\n");
+        }
+        observe(index, output.len());
+        output.push_str(&element.text);
+    }
+    output
+}
+
+fn capture_retained_hocr_read(
+    elements: &[crate::types::internal::InternalElement],
+    occurrences: Vec<crate::ocr::hocr_parser::HocrWordOccurrence>,
+    dimensions: (u32, u32),
+) -> Option<crate::types::formats::RetainedHocrRead> {
+    use crate::types::formats::{RetainedHocrOccurrence, RetainedHocrRead};
+    if occurrences.is_empty() || dimensions.0 == 0 || dimensions.1 == 0 {
+        return None;
+    }
+    let mut starts = vec![None; elements.len()];
+    let transcript = serialize_hocr_elements(elements, |index, start| starts[index] = Some(start));
+    if transcript.len() > 16 * 1024 {
+        return None;
+    }
+    let occurrences = occurrences
+        .into_iter()
+        .map(|word| {
+            let index = usize::try_from(word.element).ok()?;
+            let start = starts.get(index).copied().flatten()?;
+            let element = elements.get(index)?;
+            let transcript_bytes = start.checked_add(word.bytes.start)?..start.checked_add(word.bytes.end)?;
+            let [left, top, right, bottom] = word.bounds;
+            if left >= right
+                || top >= bottom
+                || right > dimensions.0
+                || bottom > dimensions.1
+                || transcript.get(transcript_bytes.clone())? != element.text.get(word.bytes.clone())?
+            {
+                return None;
+            }
+            Some(RetainedHocrOccurrence {
+                id: word.id,
+                element: element.id.clone(),
+                element_bytes: word.bytes,
+                owner_bytes: start..start.checked_add(element.text.len())?,
+                owner_bounds: element.bbox.clone(),
+                transcript_bytes,
+                bounds: word.bounds,
+            })
+        })
+        .collect::<Option<_>>()?;
+    Some(RetainedHocrRead {
+        transcript,
+        dimensions,
+        occurrences,
+        inline_page: None,
+        plain_document: None,
+    })
+}
+
+fn document_hocr_receipt(
+    read: &crate::types::formats::RetainedHocrRead,
+    doc: &mut InternalDocument,
+) -> Option<crate::types::formats::RetainedHocrProjection> {
+    let page = read.inline_page.as_ref();
+    let rendering = crate::rendering::render_plain_with_spans(doc);
+    if rendering.text.len() > 16 * 1024 || doc.elements.len() > 1024 {
+        return None;
+    }
+    let mut ranges = Vec::new();
+    for occurrence in &read.occurrences {
+        if page.is_some_and(|page| !page.ranges.iter().any(|(id, _)| *id == occurrence.id)) {
+            continue;
+        }
+        let Some(bounds) = occurrence.owner_bounds.as_ref() else {
+            continue;
+        };
+        let owner = read.transcript.get(occurrence.owner_bytes.clone())?;
+        let matches = |index: usize| {
+            let element = &doc.elements[index];
+            element.bbox.as_ref().is_some_and(|actual| {
+                (actual.x0, actual.y0, actual.x1, actual.y1) == (bounds.x0, bounds.y0, bounds.x1, bounds.y1)
+            }) && element.text == owner
+        };
+        let mut owners = (0..doc.elements.len()).filter(|&index| matches(index));
+        let Some(index) = owners.next() else { continue };
+        if owners.next().is_some()
+            || read.occurrences.iter().any(|other| {
+                other.owner_bytes != occurrence.owner_bytes
+                    && read.transcript.get(other.owner_bytes.clone()) == Some(owner)
+                    && other.owner_bounds.as_ref().is_some_and(|other| {
+                        (other.x0, other.y0, other.x1, other.y1) == (bounds.x0, bounds.y0, bounds.x1, bounds.y1)
+                    })
+            })
+        {
+            continue;
+        }
+        let Some((start, end)) = rendering.spans.by_element[index] else {
+            continue;
+        };
+        let end = end.min(rendering.spans.body_end);
+        if rendering.text.get(start..end).map(str::trim_end) != Some(owner) {
+            continue;
+        }
+        let range =
+            start.checked_add(occurrence.element_bytes.start)?..start.checked_add(occurrence.element_bytes.end)?;
+        if range.end <= end && rendering.text.get(range.clone()) == owner.get(occurrence.element_bytes.clone()) {
+            ranges.push((occurrence.id, range));
+            doc.elements[index]
+                .ocr_source_spans
+                .push(crate::types::internal::OcrSourceSpan {
+                    owner: occurrence.element.clone(),
+                    occurrence: occurrence.id,
+                    replacement: None,
+                    source: occurrence.element_bytes.clone(),
+                    destination: occurrence.element_bytes.start,
+                });
+        }
+    }
+    (!ranges.is_empty()).then_some(crate::types::formats::RetainedHocrProjection {
+        text: rendering.text,
+        ranges,
+    })
+}
+
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+pub(crate) fn serialize_hocr_occurrences(
+    hocr: &str,
+    dictionary_filter: Option<&DictionaryLineFilter<'_>>,
+    page_offset: u32,
+    expected: &str,
+) -> Option<Vec<crate::ocr::hocr_parser::HocrWordOccurrence>> {
+    let (parsed, receipts) = crate::ocr::hocr_parser::parse_hocr_with_occurrences(hocr, dictionary_filter, page_offset);
+    let mut starts = vec![None; parsed.document.elements.len()];
+    let replay = serialize_hocr_elements(&parsed.document.elements, |index, start| starts[index] = Some(start));
+    if replay != expected {
+        return None;
+    }
+    let mut receipts = receipts?;
+    for receipt in &mut receipts {
+        let index = usize::try_from(receipt.element).ok()?;
+        let offset = starts.get(index).copied().flatten()?;
+        let element = parsed.document.elements.get(index)?;
+        let local = element.text.get(receipt.bytes.clone())?;
+        let bytes = offset.checked_add(receipt.bytes.start)?..offset.checked_add(receipt.bytes.end)?;
+        if replay.get(bytes.clone())? != local {
+            return None;
+        }
+        receipt.bytes = bytes;
+    }
+    Some(receipts)
+}
+
+#[cfg(all(test, feature = "pdf", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+#[path = "execution/hocr_occurrence_tests.rs"]
+mod hocr_occurrence_tests;
 
 /// Tesseract's call into [`drop_document_elements_claimed_by_tables`] (#1571). `hocr_document` is parsed from the raw
 /// hOCR before table detection runs, and `build_content_with_inline_tables` repairs only the `content`
@@ -2553,6 +2838,13 @@ pub(super) fn perform_ocr(
     let mut dictionary_kept_numeral_line_count = 0usize;
     let mut retained_hocr_confidence_stats = None;
 
+    let capture_region_hocr = !config.use_cache && config.capture_region_hocr;
+    if config.capture_region_hocr {
+        tracing::trace!(capture_region_hocr, format = %config.output_format, merged = merged_read.is_some(),
+            "hOCR region capture requested");
+    }
+    let mut retained_hocr_read = None;
+
     let dictionary_filter = DictionaryLineFilter {
         is_valid_word: &|text| dictionary.is_valid_word(text),
         max_invalid_ratio: crate::ocr::hocr_parser::DEFAULT_DICT_INVALID_LINE_RATIO,
@@ -2569,11 +2861,33 @@ pub(super) fn perform_ocr(
                 .get_hocr_text(0)
                 .map_err(|e| OcrError::ProcessingFailed(format!("Failed to extract hOCR: {}", e)))?;
 
-            let parse_result = parse_hocr_to_internal_document_with_page_offset_and_stats(
-                &hocr,
-                Some(&dictionary_filter),
-                config.page_number,
-            );
+            let (parse_result, occurrences) = if capture_region_hocr && merged_read.is_none() {
+                crate::ocr::hocr_parser::parse_hocr_with_occurrences(
+                    &hocr,
+                    Some(&dictionary_filter),
+                    config.page_number,
+                )
+            } else {
+                (
+                    parse_hocr_to_internal_document_with_page_offset_and_stats(
+                        &hocr,
+                        Some(&dictionary_filter),
+                        config.page_number,
+                    ),
+                    None,
+                )
+            };
+            if capture_region_hocr {
+                tracing::trace!(parsed_occurrences = ?occurrences.as_ref().map(Vec::len),
+                    elements = parse_result.document.elements.len(), "parsed selected hOCR occurrences");
+            }
+            retained_hocr_read = occurrences.and_then(|words| {
+                capture_retained_hocr_read(
+                    &parse_result.document.elements,
+                    words,
+                    (ocr_image_width, ocr_image_height),
+                )
+            });
             dictionary_filtered_line_count = parse_result.dictionary_filtered_line_count;
             dictionary_kept_numeral_line_count = parse_result.dictionary_kept_numeral_line_count;
             if config.enable_table_detection
@@ -3113,6 +3427,14 @@ pub(super) fn perform_ocr(
         let rebuilt = build_content_with_inline_tables(tsv_data, &tables, config.table_min_confidence);
         if !rebuilt.is_empty() {
             if should_adopt_table_rebuild(&content, &rebuilt) {
+                if let Some(read) = retained_hocr_read.as_mut() {
+                    read.inline_page = inline_hocr_receipt(tsv_data, &tables, config.table_min_confidence, read)
+                        .filter(|projection| projection.text == rebuilt);
+                    tracing::trace!(
+                        matched = read.inline_page.as_ref().map_or(0, |page| page.ranges.len()),
+                        "verified inline OCR occurrence ranges"
+                    );
+                }
                 content = rebuilt;
                 metadata.insert(
                     "pre_formatted".to_string(),
@@ -3129,6 +3451,49 @@ pub(super) fn perform_ocr(
         }
     }
 
+    if let Some(read) = retained_hocr_read.as_mut()
+        && let Some(doc) = hocr_document.as_mut()
+    {
+        read.plain_document = document_hocr_receipt(read, doc);
+        if let (Some(page), Some(document)) = (&read.inline_page, &read.plain_document) {
+            tracing::trace!(
+                page_ranges = ?page.ranges, document_ranges = ?document.ranges,
+                document_bytes = document.text.len(),
+                "verified post-table plain OCR occurrence ranges"
+            );
+        }
+    }
+    if let Some(read) = retained_hocr_read.as_ref() {
+        tracing::trace!(
+            count = read.occurrences.len(),
+            transcript_matches = read.transcript == content,
+            owners_match =
+                hocr_document
+                    .as_ref()
+                    .is_some_and(|doc| read.matches(&read.transcript, read.dimensions, doc)),
+            "checking OCR worker hOCR receipt"
+        );
+    }
+    let captured_occurrences = retained_hocr_read.as_ref().map(|read| read.occurrences.len());
+    let retained_hocr_read = retained_hocr_read.filter(|read| {
+        read.inline_page
+            .as_ref()
+            .is_some_and(|projection| projection.text == content)
+            || read.transcript == content
+                && hocr_document.as_ref().is_some_and(|doc| {
+                    flatten_hocr_elements_to_text(&doc.elements) == read.transcript
+                        && read.matches(&content, (ocr_image_width, ocr_image_height), doc)
+                })
+    });
+
+    if capture_region_hocr {
+        tracing::trace!(
+            ?captured_occurrences,
+            retained = retained_hocr_read.is_some(),
+            "hOCR region capture result"
+        );
+    }
+
     drop(api);
 
     Ok(OcrExtractionResult {
@@ -3139,6 +3504,7 @@ pub(super) fn perform_ocr(
         ocr_elements,
         internal_document: hocr_document,
         raw_ocr_source_frame,
+        retained_hocr_read,
     })
 }
 
@@ -5552,6 +5918,7 @@ mod tests {
                 ocr_elements: None,
                 internal_document: None,
                 raw_ocr_source_frame: None,
+                retained_hocr_read: None,
             };
             cache
                 .set_cached_result(
@@ -5966,6 +6333,7 @@ mod tests {
             ocr_elements: None,
             internal_document: None,
             raw_ocr_source_frame: None,
+            retained_hocr_read: None,
         };
         cache
             .set_cached_result(&image_hash, "tesseract", &config_str, None, &marker)

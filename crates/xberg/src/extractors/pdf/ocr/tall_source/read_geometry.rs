@@ -228,3 +228,25 @@ mod frame_tests {
         }
     }
 }
+
+pub(super) fn scale_only(
+    original: (u32, u32),
+    processed: (u32, u32),
+    resize: Option<&crate::types::ImagePreprocessingMetadata>,
+) -> bool {
+    if original == processed {
+        return true;
+    }
+    let Some(resize) = resize else { return false };
+    let Some(size) = resize.new_dimensions.as_ref() else {
+        return false;
+    };
+    let (width, height) = (original.0 as usize, original.1 as usize);
+    resize.resize_error.is_none()
+        && (resize.original_dimensions.width, resize.original_dimensions.height) == (width, height)
+        && (size.width, size.height) == (processed.0 as usize, processed.1 as usize)
+        && resize.scale_factor.is_finite()
+        && resize.scale_factor > 0.0
+        && (width as f64 * resize.scale_factor - size.width as f64).abs() <= 1.0
+        && (height as f64 * resize.scale_factor - size.height as f64).abs() <= 1.0
+}
