@@ -8,7 +8,9 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use bytes::Bytes;
 
 use crate::cache;
-use crate::core::config::{ExtractInput, ExtractInputKind, ExtractInputWithOptions, ExtractionResult};
+use crate::core::config::{
+    ExtractInput, ExtractInputKind, ExtractInputWithOptions, ExtractionResult, FileExtractionConfig,
+};
 
 use std::sync::Arc;
 
@@ -66,32 +68,48 @@ enum ApiExtractInput {
 }
 
 impl ApiExtractInput {
-    fn into_core_input(self, effective: &crate::ExtractionConfig) -> Result<ExtractInputWithOptions, ApiError> {
-        let (input, use_layout_for_markdown) = match self {
-            Self::Bytes {
+    fn resolve_config(mut self, effective: &crate::ExtractionConfig) -> Result<ResolvedApiExtractInput, ApiError> {
+        let config = match &mut self {
+            Self::Bytes { config, .. } | Self::Uri { config, .. } => config.take(),
+        };
+        let config = resolve_input_config(config, effective)?;
+        Ok(ResolvedApiExtractInput { input: self, config })
+    }
+}
+
+struct ResolvedApiExtractInput {
+    input: ApiExtractInput,
+    config: Option<FileExtractionConfig>,
+}
+
+impl ResolvedApiExtractInput {
+    fn into_core_input(self) -> ExtractInputWithOptions {
+        let Self { input, config } = self;
+        let (input, use_layout_for_markdown) = match input {
+            ApiExtractInput::Bytes {
                 data,
                 mime_type,
                 file_name,
-                config,
                 use_layout_for_markdown,
+                ..
             } => (
                 ExtractInput {
-                    config: resolve_input_config(config, effective)?,
+                    config,
                     ..ExtractInput::from_bytes(data.to_vec(), mime_type, file_name)
                 },
                 use_layout_for_markdown,
             ),
-            Self::Uri {
+            ApiExtractInput::Uri {
                 uri,
                 mime_type,
-                config,
                 use_layout_for_markdown,
+                ..
             } => (
                 ExtractInput {
                     kind: ExtractInputKind::Uri,
                     uri: Some(uri),
                     mime_type,
-                    config: resolve_input_config(config, effective)?,
+                    config,
                     ..Default::default()
                 },
                 use_layout_for_markdown,
@@ -99,7 +117,7 @@ impl ApiExtractInput {
         };
         let mut options = ExtractInputWithOptions::new(input);
         options.use_layout_for_markdown = use_layout_for_markdown;
-        Ok(options)
+        options
     }
 }
 
@@ -124,13 +142,13 @@ impl UnifiedExtractRequest {
             .map_err(|message| ApiError::validation(crate::error::XbergError::validation(message)))
     }
 
-    fn resolve_inputs(
+    fn resolve_input_configs(
         inputs: Vec<ApiExtractInput>,
         effective: &crate::ExtractionConfig,
-    ) -> Result<Vec<ExtractInputWithOptions>, ApiError> {
+    ) -> Result<Vec<ResolvedApiExtractInput>, ApiError> {
         inputs
             .into_iter()
-            .map(|input| input.into_core_input(effective))
+            .map(|input| input.resolve_config(effective))
             .collect()
     }
 }
@@ -138,7 +156,7 @@ impl UnifiedExtractRequest {
 fn resolve_input_config(
     config: Option<serde_json::Value>,
     effective: &crate::ExtractionConfig,
-) -> Result<Option<crate::core::config::FileExtractionConfig>, ApiError> {
+) -> Result<Option<FileExtractionConfig>, ApiError> {
     use crate::core::config::request_security::{adopt_file_operator_policy, merge_html_override};
 
     let Some(mut config) = config else {
@@ -779,7 +797,7 @@ pub(crate) async fn extract_handler(
     let mut final_config = request.resolve_config(&state.default_config)?;
     enforce_and_apply_api_uri_policy(&request.inputs, &mut final_config, api_allows_local_uri_inputs())?;
     apply_multipart_config_fields(&mut final_config, request.output_format, request.pdf_passwords);
-    let inputs = UnifiedExtractRequest::resolve_inputs(request.inputs, &final_config)?;
+    let inputs = UnifiedExtractRequest::resolve_input_configs(request.inputs, &final_config)?;
     let results = extract_unified_inputs(inputs, final_config).await?;
 
     if !request.include_image_data {
@@ -802,7 +820,7 @@ pub(crate) async fn extract_handler(
 }
 
 async fn extract_unified_inputs(
-    inputs: Vec<ExtractInputWithOptions>,
+    inputs: Vec<ResolvedApiExtractInput>,
     config: crate::core::config::ExtractionConfig,
 ) -> Result<ExtractionResult, ApiError> {
     if inputs.is_empty() {
@@ -811,6 +829,10 @@ async fn extract_unified_inputs(
         )));
     }
 
+    let inputs = inputs
+        .into_iter()
+        .map(ResolvedApiExtractInput::into_core_input)
+        .collect();
     crate::extract_batch_with_input_options(inputs, &config)
         .await
         .map_err(ApiError::from)
@@ -1370,7 +1392,7 @@ pub(crate) async fn extract_async_handler(
     let allow_local = disallow_local.is_none() && api_allows_local_uri_inputs();
     enforce_and_apply_api_uri_policy(&request.inputs, &mut effective_config, allow_local)?;
     apply_multipart_config_fields(&mut effective_config, request.output_format, request.pdf_passwords);
-    let inputs = UnifiedExtractRequest::resolve_inputs(request.inputs, &effective_config)?;
+    let inputs = UnifiedExtractRequest::resolve_input_configs(request.inputs, &effective_config)?;
     // Created after the last fallible step: a rejected submission must not hold a slot. ~keep
     let Some(job_id) = state.job_store.create_job() else {
         return Err(ApiError::new(
@@ -1406,7 +1428,7 @@ pub(crate) async fn extract_async_handler(
 #[cfg(feature = "api")]
 async fn run_extraction_job(
     guard: JobAbortGuard,
-    inputs: Vec<ExtractInputWithOptions>,
+    inputs: Vec<ResolvedApiExtractInput>,
     effective_config: crate::core::config::ExtractionConfig,
     include_image_data: bool,
     job_timeout_secs: u64,
@@ -1679,7 +1701,7 @@ mod tests {
         let config = parsed
             .resolve_config(&crate::ExtractionConfig::default())
             .expect("multipart config must resolve");
-        let inputs = UnifiedExtractRequest::resolve_inputs(parsed.inputs, &config).unwrap();
+        let inputs = UnifiedExtractRequest::resolve_input_configs(parsed.inputs, &config).unwrap();
         let result = extract_unified_inputs(inputs, config)
             .await
             .expect("multipart input must extract");
@@ -1839,8 +1861,12 @@ mod tests {
             .await
             .expect("per-input config must parse");
 
-        let core_inputs =
-            UnifiedExtractRequest::resolve_inputs(parsed.inputs, &crate::ExtractionConfig::default()).unwrap();
+        let core_inputs: Vec<_> =
+            UnifiedExtractRequest::resolve_input_configs(parsed.inputs, &crate::ExtractionConfig::default())
+                .unwrap()
+                .into_iter()
+                .map(ResolvedApiExtractInput::into_core_input)
+                .collect();
 
         assert_eq!(core_inputs.len(), 2, "both inputs must survive parsing");
         assert_eq!(
@@ -1854,9 +1880,9 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "html")]
     #[tokio::test]
-    #[cfg(all(feature = "html", feature = "mcp"))]
-    async fn rest_and_mcp_preserve_omitted_per_input_html_settings() {
+    async fn rest_preserves_omitted_per_input_html_settings() {
         use crate::core::config::{HtmlOutputConfig, HtmlTheme};
 
         let operator = crate::ExtractionConfig {
@@ -1867,11 +1893,9 @@ mod tests {
             }),
             ..Default::default()
         };
-        let request_config = serde_json::json!({"html_output": {"class_prefix": "request-"}});
-        let override_config = serde_json::json!({"html_output": {"embed_css": false}});
         let body = serde_json::json!({
-            "config": request_config,
-            "inputs": [{"kind": "text", "text": "Example", "config": override_config}]
+            "config": {"html_output": {"class_prefix": "request-"}},
+            "inputs": [{"kind": "text", "text": "Example", "config": {"html_output": {"embed_css": false}}}]
         });
         let request = Request::builder()
             .method("POST")
@@ -1881,19 +1905,11 @@ mod tests {
             .unwrap();
         let mut rest = UnifiedExtractRequest::from_request(request, &()).await.unwrap();
         let effective = rest.resolve_config(&operator).unwrap();
-        let rest = UnifiedExtractRequest::resolve_inputs(rest.inputs, &effective).unwrap();
-        let mcp = crate::mcp::parse_extract_input(
-            serde_json::json!({"kind": "bytes", "data": [65], "config": override_config}),
-            &effective,
-        )
-        .unwrap();
-
-        for input in [&rest[0].input, &mcp] {
-            let html = input.config.as_ref().unwrap().html_output.as_ref().unwrap();
-            assert_eq!(html.theme, HtmlTheme::Dark);
-            assert_eq!(html.class_prefix, "request-");
-            assert!(!html.embed_css);
-        }
+        let inputs = UnifiedExtractRequest::resolve_input_configs(rest.inputs, &effective).unwrap();
+        let html = inputs[0].config.as_ref().unwrap().html_output.as_ref().unwrap();
+        assert_eq!(html.theme, HtmlTheme::Dark);
+        assert_eq!(html.class_prefix, "request-");
+        assert!(!html.embed_css);
     }
 
     #[tokio::test]
@@ -2099,8 +2115,8 @@ mod tests {
         operator.url.crawl.warc_output = Some("/operator/archive.warc".into());
 
         let request_config = parsed.resolve_config(&operator).expect("request config resolves");
-        let inputs = UnifiedExtractRequest::resolve_inputs(parsed.inputs, &request_config).unwrap();
-        let input_config = inputs[0].input.config.as_ref().expect("per-input config is present");
+        let inputs = UnifiedExtractRequest::resolve_input_configs(parsed.inputs, &request_config).unwrap();
+        let input_config = inputs[0].config.as_ref().expect("per-input config is present");
 
         let request_crawl = &request_config.url.crawl;
         assert_operator_crawl_egress(request_crawl, &operator.url.crawl);
@@ -2543,7 +2559,7 @@ mod tests {
             job_store.create_job().expect("slot available");
         }
         let app = test_router_with_store(std::sync::Arc::clone(&job_store));
-        let body = serde_json::json!({"inputs": [{"uri": "https://example.com/doc.pdf"}]});
+        let body = serde_json::json!({"inputs": [{"kind": "text", "text": "Example", "config": {"force_ocr": false}}]});
 
         let response = app
             .oneshot(
@@ -2559,6 +2575,45 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
         assert_eq!(job_store.active_count(), crate::api::jobs::MAX_ACTIVE_JOBS);
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn test_extract_async_rejects_invalid_per_input_config_before_admission() {
+        use crate::api::jobs::{JobStore, MAX_ACTIVE_JOBS};
+
+        for active_count in [0, MAX_ACTIVE_JOBS] {
+            let job_store = Arc::new(JobStore::new());
+            for _ in 0..active_count {
+                job_store.create_job().expect("slot available");
+            }
+            let app = test_router_with_store(Arc::clone(&job_store));
+            let body = serde_json::json!({
+                "inputs": [{"kind": "text", "text": "Example", "config": {"force_ocr": "invalid"}}]
+            });
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/extract-async")
+                        .header("content-type", "application/json")
+                        .body(Body::from(body.to_string()))
+                        .expect("valid request"),
+                )
+                .await
+                .expect("handler responded");
+
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let error: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert!(
+                error["message"]
+                    .as_str()
+                    .expect("error message")
+                    .contains("Invalid per-input configuration")
+            );
+            assert_eq!(job_store.active_count(), active_count);
+        }
     }
 
     #[cfg(feature = "api")]

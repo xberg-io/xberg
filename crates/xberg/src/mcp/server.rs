@@ -777,7 +777,7 @@ fn resolve_cache_base() -> std::path::PathBuf {
     crate::cache_dir::resolve_cache_base()
 }
 
-pub(crate) fn parse_extract_input(
+fn parse_extract_input(
     mut value: serde_json::Value,
     operator: &ExtractionConfig,
 ) -> Result<crate::ExtractInput, rmcp::ErrorData> {
@@ -1408,6 +1408,36 @@ mod tests {
             crawl.custom_headers.get("x-caller-input").map(String::as_str),
             Some("input-value")
         );
+    }
+
+    #[test]
+    #[cfg(feature = "html")]
+    fn mcp_preserves_omitted_per_input_html_settings() {
+        use crate::core::config::{HtmlOutputConfig, HtmlTheme};
+
+        let operator = ExtractionConfig {
+            html_output: Some(HtmlOutputConfig {
+                theme: HtmlTheme::Dark,
+                class_prefix: "operator-".into(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let effective = build_config(
+            &operator,
+            Some(serde_json::json!({"html_output": {"class_prefix": "request-"}})),
+        )
+        .unwrap();
+        let input = parse_extract_input(
+            serde_json::json!({"kind": "bytes", "data": [65], "config": {"html_output": {"embed_css": false}}}),
+            &effective,
+        )
+        .unwrap();
+
+        let html = input.config.unwrap().html_output.unwrap();
+        assert_eq!(html.theme, HtmlTheme::Dark);
+        assert_eq!(html.class_prefix, "request-");
+        assert!(!html.embed_css);
     }
 
     #[test]
