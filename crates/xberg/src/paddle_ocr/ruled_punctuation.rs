@@ -172,7 +172,6 @@ fn clip_without_foreign_ink(
         return None;
     }
     let mut has_owned_ink = false;
-    let mut has_neighbor_ink = false;
     let numeric_cell = row != 0 && col != 0;
     for yy in y..bottom {
         for xx in x..right {
@@ -185,10 +184,10 @@ fn clip_without_foreign_ink(
                 return None;
             }
             has_owned_ink |= inside_band;
-            has_neighbor_ink |= !inside_band;
         }
     }
-    (!has_neighbor_ink || has_owned_ink).then_some((clipped, has_owned_ink))
+    let row_contained = band.start <= y && bottom <= band.end;
+    (has_owned_ink || row_contained).then_some((clipped, has_owned_ink))
 }
 
 fn is_nonrule_ink(gray: &GrayImage, grid: &Grid, x: u32, y: u32) -> bool {
@@ -589,6 +588,51 @@ mod tests {
         );
         assert_eq!(edits, None);
         assert_eq!(reads, 0);
+    }
+
+    #[test]
+    fn faint_label_with_dim_neighbor_abstains_before_any_crop_read() {
+        let RuledControl {
+            mut image,
+            table,
+            mut blocks,
+        } = ruled_control();
+        for block in [&blocks[3], &blocks[6]] {
+            let (x, y, right, bottom) = bounds(block).unwrap();
+            for yy in y..bottom {
+                for xx in x..right {
+                    if image[(xx, yy)] == image::Rgb([0; 3]) {
+                        image.put_pixel(xx, yy, image::Rgb([192; 3]));
+                    }
+                }
+            }
+        }
+
+        let read = |_: &RgbImage| Some("1,2".to_owned());
+        assert_eq!(corrections(&image, &table, &blocks, || false, read).unwrap().len(), 4);
+
+        let crossed = (10, 12, 17, 26);
+        blocks[3] = block("1.2", crossed);
+        let gray = image::imageops::grayscale(&image);
+        let layout = grid(&gray, &table).unwrap();
+        assert!(layout.rows[1].contains(&midpoint(crossed.1, crossed.3)));
+        assert!(layout.columns[0].contains(&midpoint(crossed.0, crossed.2)));
+        assert!(!layout.rows[1].contains(&(crossed.3 - 1)));
+        assert_eq!(gray[(11, 24)][0], 192);
+        assert!((12..26).all(|y| (10..17).all(|x| !is_nonrule_ink(&gray, &layout, x, y))));
+
+        let mut reads = 0;
+        let edits = corrections(
+            &image,
+            &table,
+            &blocks,
+            || false,
+            |_| {
+                reads += 1;
+                Some("1,2".to_owned())
+            },
+        );
+        assert_eq!((edits, reads), (None, 0));
     }
 
     #[test]
