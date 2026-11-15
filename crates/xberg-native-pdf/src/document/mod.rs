@@ -1903,6 +1903,7 @@ mod classify;
 mod columns;
 mod extract_api;
 mod fonts;
+mod image_placements;
 mod images;
 mod key_value_rows;
 mod objects;

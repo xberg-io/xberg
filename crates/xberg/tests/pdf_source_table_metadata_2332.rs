@@ -469,3 +469,54 @@ fn insurance_comparison_with_a_shared_rule_keeps_one_table() {
     assert_eq!(table.cells[1][..4], ["3400", "9.97", "1000", "2"]);
     assert_eq!(result.content.matches("<table").count(), 1);
 }
+
+#[test]
+#[ignore = "requires the pinned public ParseBench PDF outside Git"]
+fn insurance_image_rule_only_joins_tables_when_it_crosses_a_gutter() {
+    use lopdf::dictionary;
+
+    for (width, in_form, table_count) in [(10, false, 3), (522, false, 1), (522, true, 1)] {
+        let mut pdf = lopdf::Document::load_mem(&insurance_source()).unwrap();
+        let page = pdf.get_pages()[&1];
+        let image = pdf.add_object(lopdf::Stream::new(
+            dictionary! {
+                "Type" => "XObject", "Subtype" => "Image", "Width" => 1, "Height" => 1,
+                "ColorSpace" => "DeviceGray", "BitsPerComponent" => 8,
+            },
+            vec![0],
+        ));
+        let rule = if in_form {
+            pdf.add_object(lopdf::Stream::new(
+                dictionary! {
+                    "Type" => "XObject", "Subtype" => "Form", "BBox" => lopdf::Object::Array(vec![0.into(), 0.into(), 1.into(), 1.into()]),
+                    "Resources" => dictionary! { "XObject" => dictionary! { "Image" => image } },
+                },
+                b"/Image Do".to_vec(),
+            ))
+        } else {
+            image
+        };
+        pdf.add_xobject(page, "GutterRule", rule).unwrap();
+        let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).unwrap();
+        let mut content = pdf.get_page_content(page);
+        content.extend_from_slice(format!("\nq {width} 0 0 1 43 650 cm /GutterRule Do Q\n").as_bytes());
+        pdf.get_object_mut(stream)
+            .unwrap()
+            .as_stream_mut()
+            .unwrap()
+            .set_plain_content(content);
+        let mut bytes = Vec::new();
+        pdf.save_to(&mut bytes).unwrap();
+
+        let result = extract_bytes_document_blocking(&bytes, "application/pdf", &parsebench_html_config()).unwrap();
+        assert_eq!(result.tables.len(), table_count, "image width {width}, Form {in_form}");
+        if table_count == 3 {
+            assert_insurance_tables(&result);
+        } else {
+            let table = &result.tables[0];
+            assert_eq!(table.cells.len(), 41);
+            assert!(table.cells.iter().all(|row| row.len() == 12));
+            assert_eq!(result.content.matches("<table").count(), 1);
+        }
+    }
+}

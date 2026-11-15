@@ -87,7 +87,7 @@ impl PdfDocument {
         self.extract_paths(page_index)
     }
 
-    fn is_image_xobject(&self, resources: &crate::object::Object, name: &str) -> bool {
+    pub(super) fn is_image_xobject(&self, resources: &crate::object::Object, name: &str) -> bool {
         let xobject = resources
             .as_dict()
             .and_then(|resources| resources.get("XObject"))
@@ -536,7 +536,7 @@ impl PdfDocument {
     /// Dereference one level of indirection, loading the target object;
     /// pass direct objects through unchanged. `None` if a reference fails to
     /// load — callers treat that as "unresolvable, leave unlabelled".
-    fn deref_object(&self, obj: &crate::object::Object) -> Option<crate::object::Object> {
+    pub(super) fn deref_object(&self, obj: &crate::object::Object) -> Option<crate::object::Object> {
         match obj.as_reference() {
             Some(r) => self.load_object(r).ok(),
             None => Some(obj.clone()),

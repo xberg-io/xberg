@@ -3,6 +3,7 @@
 use crate::types::{BoundingBox, Table};
 use xberg_native_pdf::document::{PageRotation, PdfDocument};
 use xberg_native_pdf::elements::PathContent;
+use xberg_native_pdf::geometry::Rect;
 use xberg_native_pdf::layout::{Color, TextSpan};
 
 const MIN_SCHEMA_COPIES: usize = 3;
@@ -29,14 +30,14 @@ pub(crate) fn verify(doc: &PdfDocument, native_tables: &[Table], ruled_count: us
     candidates.sort_by_key(|(table, _, _)| table.page_number);
     let mut verified = Vec::new();
     let mut page_spans = None;
-    let mut page_paths = None;
+    let mut page_paint = None;
     for (table, width, can_split) in candidates {
         let Some(page) = table.page_number.checked_sub(1).map(|page| page as usize) else {
             continue;
         };
         if page_spans.as_ref().is_none_or(|(last, _)| *last != page) {
             page_spans = Some((page, painting_spans(doc, page)));
-            page_paths = None;
+            page_paint = None;
         }
         let Some(spans) = page_spans.as_ref().and_then(|(_, spans)| spans.as_deref()) else {
             continue;
@@ -45,10 +46,13 @@ pub(crate) fn verify(doc: &PdfDocument, native_tables: &[Table], ruled_count: us
             continue;
         };
         let children = if can_split {
-            page_paths
-                .get_or_insert_with(|| doc.extract_paths(page).ok())
-                .as_deref()
-                .and_then(|paths| split_painted_records(table, width, spans, &edges, paths))
+            page_paint
+                .get_or_insert_with(|| {
+                    let images = doc.bounded_page_image_placements(page)?;
+                    Some((doc.extract_paths(page).ok()?, images))
+                })
+                .as_ref()
+                .and_then(|(paths, images)| split_painted_records(table, width, spans, &edges, paths, images))
                 .unwrap_or_default()
         } else {
             Vec::new()
@@ -451,6 +455,7 @@ fn split_painted_records(
     spans: &[TextSpan],
     edges: &[f32],
     paths: &[PathContent],
+    images: &[Rect],
 ) -> Option<Vec<Table>> {
     if !table.cell_styles.is_empty() {
         return None;
@@ -481,7 +486,7 @@ fn split_painted_records(
         }
     }
     let columns: Vec<_> = bounds.into_iter().collect::<Option<_>>()?;
-    if !certified_gutters(&columns, width, paths) {
+    if !certified_gutters(&columns, width, paths, images) {
         return None;
     }
     let bounds = columns.chunks_exact(width).map(|group| {
@@ -514,7 +519,7 @@ fn split_painted_records(
 }
 
 // ~keep A gutter must stay empty over both adjacent schemas and exceed their ordinary column gaps.
-fn certified_gutters(columns: &[BoundingBox], width: usize, paths: &[PathContent]) -> bool {
+fn certified_gutters(columns: &[BoundingBox], width: usize, paths: &[PathContent], images: &[Rect]) -> bool {
     if paths.len() > MAX_GUTTER_PATHS {
         return false;
     }
@@ -541,15 +546,14 @@ fn certified_gutters(columns: &[BoundingBox], width: usize, paths: &[PathContent
             .map(|pair| pair[1].x0 - pair[0].x1)
             .fold(0.0, f64::max);
         gutter.x1 - gutter.x0 > widest_column_gap + MIN_GUTTER_ADVANTAGE_PTS
-            && !paths.iter().any(|path| touches_gutter(path, gutter))
+            && !paths
+                .iter()
+                .any(|path| (path.has_stroke() || path.has_fill()) && touches_gutter(path.rendered_bbox(), gutter))
+            && !images.iter().any(|image| touches_gutter(*image, gutter))
     })
 }
 
-fn touches_gutter(path: &PathContent, gutter: BoundingBox) -> bool {
-    if !path.has_stroke() && !path.has_fill() {
-        return false;
-    }
-    let paint = path.rendered_bbox();
+fn touches_gutter(paint: Rect, gutter: BoundingBox) -> bool {
     let (x0, x1, y0, y1) = (paint.left(), paint.right(), paint.top(), paint.bottom());
     ![x0, x1, y0, y1].into_iter().all(f32::is_finite)
         || (f64::from(x0) < gutter.x1
@@ -841,11 +845,11 @@ mod tests {
             y1: 100.0,
         })
         .collect();
-        assert!(certified_gutters(&columns, 3, &[]));
+        assert!(certified_gutters(&columns, 3, &[], &[]));
         for column in &mut columns[6..] {
             column.x0 -= 4.0;
             column.x1 -= 4.0;
         }
-        assert!(!certified_gutters(&columns, 3, &[]));
+        assert!(!certified_gutters(&columns, 3, &[], &[]));
     }
 }
