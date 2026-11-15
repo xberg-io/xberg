@@ -2446,4 +2446,143 @@ mod time_limit_vector_tests {
         );
         assert!(!token.result_is_partial());
     }
+
+    #[cfg(all(feature = "chunking", feature = "sparse-embeddings"))]
+    fn sparse_vector_config(token: &CancellationToken) -> ExtractionConfig {
+        let mut config = config_with(token, false);
+        if let Some(chunking) = config.chunking.as_mut() {
+            chunking.sparse_embedding = Some(crate::core::config::SparseEmbeddingConfig {
+                model: crate::core::config::SparseEmbeddingModelType::Preset {
+                    name: "no-such-sparse-preset".to_string(),
+                },
+                ..Default::default()
+            });
+        }
+        config
+    }
+
+    #[cfg(all(feature = "chunking", feature = "late-interaction"))]
+    fn late_interaction_vector_config(token: &CancellationToken) -> ExtractionConfig {
+        let mut config = config_with(token, false);
+        if let Some(chunking) = config.chunking.as_mut() {
+            chunking.late_interaction = Some(crate::core::config::LateInteractionConfig {
+                model: crate::core::config::LateInteractionModelType::Preset {
+                    name: "no-such-late-interaction-preset".to_string(),
+                },
+                ..Default::default()
+            });
+        }
+        config
+    }
+
+    #[cfg(all(
+        feature = "chunking",
+        any(feature = "sparse-embeddings", feature = "late-interaction")
+    ))]
+    fn chunked_result(config: &ExtractionConfig) -> ExtractedDocument {
+        let mut result = ExtractedDocument {
+            content: "A paragraph that is chunked.".to_string(),
+            mime_type: std::borrow::Cow::Borrowed("text/plain"),
+            ..Default::default()
+        };
+        features::execute_chunking(&mut result, config, None).expect("chunking must succeed");
+        assert!(!result.chunks.as_ref().expect("the chunks are kept").is_empty());
+        result
+    }
+
+    #[cfg(all(
+        feature = "chunking",
+        any(feature = "sparse-embeddings", feature = "late-interaction")
+    ))]
+    fn assert_stage_cut_by_the_limit(result: &ExtractedDocument, token: &CancellationToken, stage: &str) {
+        let warning = result
+            .processing_warnings
+            .iter()
+            .find(|warning| warning.source == "time_limit")
+            .expect("the dropped stage must be reported");
+        assert!(warning.message.contains(stage), "{}", warning.message);
+        assert!(
+            result
+                .processing_warnings
+                .iter()
+                .all(|warning| warning.source != "sparse_embedding" && warning.source != "late_interaction"),
+            "the model must not be reached after the stop: {:?}",
+            result.processing_warnings
+        );
+        assert!(token.result_is_partial());
+    }
+
+    #[cfg(all(feature = "chunking", feature = "sparse-embeddings"))]
+    #[test]
+    fn a_stop_during_post_processing_drops_the_sparse_vectors_and_keeps_the_chunks() {
+        let token = CancellationToken::new();
+        token.request_stop();
+
+        let result = chunked_result(&sparse_vector_config(&token));
+
+        assert!(
+            result
+                .chunks
+                .as_ref()
+                .unwrap()
+                .iter()
+                .all(|chunk| chunk.sparse_embedding.is_none())
+        );
+        assert_stage_cut_by_the_limit(&result, &token, "sparse chunk embeddings");
+    }
+
+    #[cfg(all(feature = "chunking", feature = "sparse-embeddings"))]
+    #[test]
+    fn without_a_stop_the_sparse_vector_stage_runs() {
+        let token = CancellationToken::new();
+
+        let result = chunked_result(&sparse_vector_config(&token));
+
+        let warning = result
+            .processing_warnings
+            .iter()
+            .find(|warning| warning.source == "sparse_embedding")
+            .expect("the stage must reach the model and report the unknown preset");
+        assert!(warning.message.contains("no-such-sparse-preset"), "{}", warning.message);
+        assert!(!token.result_is_partial());
+    }
+
+    #[cfg(all(feature = "chunking", feature = "late-interaction"))]
+    #[test]
+    fn a_stop_during_post_processing_drops_the_late_interaction_vectors_and_keeps_the_chunks() {
+        let token = CancellationToken::new();
+        token.request_stop();
+
+        let result = chunked_result(&late_interaction_vector_config(&token));
+
+        assert!(
+            result
+                .chunks
+                .as_ref()
+                .unwrap()
+                .iter()
+                .all(|chunk| chunk.late_interaction.is_none())
+        );
+        assert_stage_cut_by_the_limit(&result, &token, "late-interaction chunk vectors");
+    }
+
+    #[cfg(all(feature = "chunking", feature = "late-interaction"))]
+    #[test]
+    fn without_a_stop_the_late_interaction_vector_stage_runs() {
+        let token = CancellationToken::new();
+
+        let result = chunked_result(&late_interaction_vector_config(&token));
+
+        let warning = result
+            .processing_warnings
+            .iter()
+            .find(|warning| warning.source == "late_interaction")
+            .expect("the stage must reach the model and report the unknown preset");
+        assert!(
+            warning.message.contains("no-such-late-interaction-preset"),
+            "{}",
+            warning.message
+        );
+        assert!(!token.result_is_partial());
+    }
 }

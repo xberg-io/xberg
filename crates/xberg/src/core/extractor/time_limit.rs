@@ -193,6 +193,32 @@ mod tests {
         assert!(!token.is_cancelled());
     }
 
+    #[tokio::test]
+    async fn finish_grace_keeps_the_operation_caches_off_when_only_a_stage_was_cut() {
+        let token = CancellationToken::new();
+        token.note_stage_cut();
+        assert!(token.first_unread_page().is_none());
+
+        super::super::cacheability::scope(async {
+            finish_grace(Ok(Ok(ExtractedDocument::default())), &token, 3, Instant::now())
+                .expect("a stage cut still returns its document");
+            assert!(!super::super::cacheability::is_cacheable());
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn finish_grace_leaves_the_operation_caches_on_when_nothing_was_cut() {
+        let token = CancellationToken::new();
+
+        super::super::cacheability::scope(async {
+            finish_grace(Ok(Ok(ExtractedDocument::default())), &token, 3, Instant::now())
+                .expect("a finished run is returned as it is");
+            assert!(super::super::cacheability::is_cacheable());
+        })
+        .await;
+    }
+
     #[test]
     fn finish_grace_adds_no_warning_when_the_run_read_every_page() {
         let token = CancellationToken::new();

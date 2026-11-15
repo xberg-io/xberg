@@ -1796,11 +1796,19 @@ mod issue_217_fallback_tests {
         const MIME: &str = "application/x-xberg-time-limit-cache-test";
         const NAME: &str = "time-limit-cache-test-extractor";
 
+        /// How a stopped run leaves its document.
+        #[derive(Clone, Copy)]
+        enum Cut {
+            Nothing,
+            PageUnread,
+            StageDropped,
+        }
+
         /// Stands in for a page loop: on every run it asks for the time-limit stop on the
-        /// extraction's token, and when `leaves_page_unread` it also reports a page it never read.
+        /// extraction's token, and `cut` says what the stop took from the document.
         struct Stopping {
             calls: Arc<AtomicUsize>,
-            leaves_page_unread: bool,
+            cut: Cut,
         }
 
         impl Plugin for Stopping {
@@ -1815,8 +1823,10 @@ mod issue_217_fallback_tests {
                 self.calls.fetch_add(1, Ordering::SeqCst);
                 let token = config.cancel_token.as_ref().expect("the test supplies a token");
                 token.request_stop();
-                if self.leaves_page_unread {
-                    token.note_unread_page(2);
+                match self.cut {
+                    Cut::Nothing => {}
+                    Cut::PageUnread => token.note_unread_page(2),
+                    Cut::StageDropped => token.note_stage_cut(),
                 }
                 Ok(ExtractedDocument {
                     content: "pages read".to_string(),
@@ -1837,12 +1847,12 @@ mod issue_217_fallback_tests {
         struct Registered;
 
         impl Registered {
-            fn new(calls: &Arc<AtomicUsize>, leaves_page_unread: bool) -> Self {
+            fn new(calls: &Arc<AtomicUsize>, cut: Cut) -> Self {
                 crate::plugins::registry::get_document_extractor_registry()
                     .write()
                     .register(Arc::new(Stopping {
                         calls: Arc::clone(calls),
-                        leaves_page_unread,
+                        cut,
                     }))
                     .unwrap();
                 Self
@@ -1859,9 +1869,9 @@ mod issue_217_fallback_tests {
 
         /// Extract the same file twice, each time on a fresh token, and return how often the
         /// extractor ran: once means the second call was served from the file cache.
-        async fn extractor_runs_for_two_calls(leaves_page_unread: bool, unique: &str) -> usize {
+        async fn extractor_runs_for_two_calls(cut: Cut, unique: &str) -> usize {
             let calls = Arc::new(AtomicUsize::new(0));
-            let _registered = Registered::new(&calls, leaves_page_unread);
+            let _registered = Registered::new(&calls, cut);
             let directory = tempdir().unwrap();
             let path = directory.path().join("input.bin");
             // The cache outlives the test process, so each run needs content no earlier run cached.
@@ -1895,7 +1905,7 @@ mod issue_217_fallback_tests {
         #[serial]
         async fn a_result_cut_short_by_the_time_limit_is_not_written_to_the_file_cache() {
             assert_eq!(
-                extractor_runs_for_two_calls(true, "unread").await,
+                extractor_runs_for_two_calls(Cut::PageUnread, "unread").await,
                 2,
                 "a partial document must be extracted again, not served from the cache"
             );
@@ -1903,9 +1913,19 @@ mod issue_217_fallback_tests {
 
         #[tokio::test]
         #[serial]
+        async fn a_result_whose_post_processing_stage_was_dropped_is_not_written_to_the_file_cache() {
+            assert_eq!(
+                extractor_runs_for_two_calls(Cut::StageDropped, "stage-dropped").await,
+                2,
+                "a document missing a stage's output must be extracted again, not served from the cache"
+            );
+        }
+
+        #[tokio::test]
+        #[serial]
         async fn a_stop_that_left_no_page_unread_still_writes_the_file_cache() {
             assert_eq!(
-                extractor_runs_for_two_calls(false, "complete").await,
+                extractor_runs_for_two_calls(Cut::Nothing, "complete").await,
                 1,
                 "a stop that cut nothing short leaves a complete document, which is cached"
             );
