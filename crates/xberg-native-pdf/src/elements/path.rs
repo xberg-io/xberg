@@ -271,32 +271,24 @@ impl PathContent {
     /// A path is a rectangle if it has exactly 1 operation: Rectangle,
     /// or if it has 5 operations: MoveTo, 3x LineTo, ClosePath that form a rectangle.
     pub fn is_rectangle(&self) -> bool {
-        if self.operations.len() == 1 && matches!(self.operations[0], PathOperation::Rectangle(_, _, _, _)) {
+        if matches!(
+            self.operations.as_slice(),
+            [PathOperation::Rectangle(..)] | [PathOperation::Rectangle(..), PathOperation::ClosePath]
+        ) {
             return true;
         }
 
-        // Case 2: MoveTo + 3x LineTo + (Optional ClosePath)
-        // Must be axis-aligned. We check that consecutive points share X or Y. ~keep
-        if ((self.operations.len() == 5 && matches!(self.operations[4], PathOperation::ClosePath))
-            || (self.operations.len() == 4))
-            && let (
-                PathOperation::MoveTo(x0, y0),
-                PathOperation::LineTo(x1, y1),
-                PathOperation::LineTo(x2, y2),
-                PathOperation::LineTo(x3, y3),
-            ) = (
-                &self.operations[0],
-                &self.operations[1],
-                &self.operations[2],
-                &self.operations[3],
-            )
+        if let [
+            PathOperation::MoveTo(x0, y0),
+            PathOperation::LineTo(x1, y1),
+            PathOperation::LineTo(x2, y2),
+            PathOperation::LineTo(x3, y3),
+            tail @ ..,
+        ] = self.operations.as_slice()
+            && matches!(tail, [] | [PathOperation::ClosePath])
         {
-            let tol = 0.1;
-            let side1 = ((x0 - x1).abs() < tol) || ((y0 - y1).abs() < tol);
-            let side2 = ((x1 - x2).abs() < tol) || ((y1 - y2).abs() < tol);
-            let side3 = ((x2 - x3).abs() < tol) || ((y2 - y3).abs() < tol);
-
-            return side1 && side2 && side3;
+            return (y0 == y1 && x1 == x2 && y2 == y3 && x3 == x0 && x0 != x1 && y1 != y2)
+                || (x0 == x1 && y1 == y2 && x2 == x3 && y3 == y0 && y0 != y1 && x1 != x2);
         }
 
         false

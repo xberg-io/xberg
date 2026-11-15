@@ -84,6 +84,31 @@ fn test_resolve_oc_name_unresolvable_is_none() {
     assert_eq!(doc.resolve_oc_layer_name(None, &name_ref), None);
 }
 
+#[test]
+fn form_path_dedup_preserves_inherited_fill_opacity_in_both_orders() {
+    let page = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R \
+                /Resources << /XObject << /Bar 5 0 R >> \
+                /ExtGState << /Clear << /ca 0 >> /Opaque << /ca 1 >> >> >> >>";
+    let bar = "10 20 42 0.4 re f";
+    let form = format!(
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 100 100] /Length {} >>\nstream\n{bar}\nendstream",
+        bar.len()
+    );
+    let mut included = Vec::new();
+    for (first, second) in [("Clear", "Opaque"), ("Opaque", "Clear")] {
+        let content = format!("q /{first} gs /Bar Do /Bar Do Q q /{second} gs /Bar Do /Bar Do Q");
+        let stream = format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len());
+        let pdf = build_catalog_test_pdf(
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            &[(3, page.as_bytes()), (4, stream.as_bytes()), (5, form.as_bytes())],
+        );
+        let paths = PdfDocument::from_bytes(pdf).unwrap().extract_paths(0).unwrap();
+        included.push(paths.iter().map(|path| path.has_fill()).collect::<Vec<_>>());
+    }
+    assert_eq!(included, [[false, true], [true, false]]);
+}
+
 /// One page that draws a curve and paints the XObject `/X1` (object 5, `x1` is its dictionary and stream).
 fn page_with_xobject(paint: &str, x1: &str) -> PdfDocument {
     let content = format!("q 20 0 0 20 300 300 cm {paint} Q 100 100 m 150 200 200 200 250 100 c S");
