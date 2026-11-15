@@ -1177,12 +1177,14 @@ fn resolve_image_dimensions(
     let width = dict
         .get("Width")
         .and_then(resolve_int)
-        .ok_or_else(|| Error::Image("Image missing /Width".to_string()))? as u32;
+        .ok_or_else(|| Error::Image("Image missing /Width".to_string()))
+        .and_then(|n| u32::try_from(n).map_err(|_| Error::Image(format!("Image /Width {n} is out of range"))))?;
 
     let height = dict
         .get("Height")
         .and_then(resolve_int)
-        .ok_or_else(|| Error::Image("Image missing /Height".to_string()))? as u32;
+        .ok_or_else(|| Error::Image("Image missing /Height".to_string()))
+        .and_then(|n| u32::try_from(n).map_err(|_| Error::Image(format!("Image /Height {n} is out of range"))))?;
 
     let is_image_mask = dict
         .get("ImageMask")
@@ -4567,12 +4569,12 @@ pub(crate) fn image_handle_from_xobject<'doc>(
         .get("Width")
         .and_then(resolve_int)
         .filter(|&n| n > 0)
-        .map(|n| n as u32)?;
+        .and_then(|n| u32::try_from(n).ok())?;
     let h = xobject_dict
         .get("Height")
         .and_then(resolve_int)
         .filter(|&n| n > 0)
-        .map(|n| n as u32)?;
+        .and_then(|n| u32::try_from(n).ok())?;
     // /BitsPerComponent and /Length are likewise permitted to be indirect
     // (§7.3.10); /Length in particular is routinely indirect in the wild
     // (issue #1444's fixture has `/Length 9 0 R`). ~keep
@@ -4644,12 +4646,12 @@ fn inline_image_dimensions(
         .get("Width")
         .and_then(|o| o.as_integer())
         .filter(|&n| n > 0)
-        .map(|n| n as u32)?;
+        .and_then(|n| u32::try_from(n).ok())?;
     let h = expanded
         .get("Height")
         .and_then(|o| o.as_integer())
         .filter(|&n| n > 0)
-        .map(|n| n as u32)?;
+        .and_then(|n| u32::try_from(n).ok())?;
     let bpc = expanded
         .get("BitsPerComponent")
         .and_then(|o| o.as_integer())
@@ -5625,5 +5627,43 @@ mod palette_expansion_tests {
             image.samples_are_raw(),
             "the decoded samples are the image's own samples, so a colour-key /Mask still applies"
         );
+    }
+}
+
+#[cfg(test)]
+mod dimension_range_tests {
+    use super::*;
+    use crate::object::Object;
+
+    fn dict(width: i64, height: i64) -> std::collections::HashMap<String, Object> {
+        let mut d = std::collections::HashMap::new();
+        d.insert("Width".to_string(), Object::Integer(width));
+        d.insert("Height".to_string(), Object::Integer(height));
+        d
+    }
+
+    #[test]
+    fn negative_width_or_height_is_an_error_not_a_giant_dimension() {
+        assert!(resolve_image_dimensions(None, &dict(-1, 10)).is_err());
+        assert!(resolve_image_dimensions(None, &dict(10, -1)).is_err());
+    }
+
+    #[test]
+    fn width_above_u32_is_an_error_not_truncated() {
+        assert!(resolve_image_dimensions(None, &dict(i64::from(u32::MAX) + 1 + 7, 10)).is_err());
+    }
+
+    #[test]
+    fn in_range_dimensions_resolve() {
+        let dims = resolve_image_dimensions(None, &dict(12, 34)).unwrap();
+        assert_eq!((dims.width, dims.height), (12, 34));
+    }
+
+    #[test]
+    fn inline_dimensions_above_u32_are_rejected() {
+        let mut d = std::collections::HashMap::new();
+        d.insert("Width".to_string(), Object::Integer(i64::from(u32::MAX) + 1 + 4));
+        d.insert("Height".to_string(), Object::Integer(4));
+        assert!(inline_image_dimensions(&d).is_none());
     }
 }
