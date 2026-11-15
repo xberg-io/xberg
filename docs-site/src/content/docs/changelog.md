@@ -241,6 +241,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Add opt-in recovery for PaddleOCR ruled JPEG table cells.** The English PP-OCRv6 Small ONNX Runtime
+  path can repair corroborated comma or period reads and restore adjacent numeric cells from source-owned
+  detections. All recovery options default to off. (#2503)
+
 - **(pdf): Report native text recovery after forced OCR fails.** The page failure record and warning now agree when readable native text is restored. (#3148)
 
 - **(ocr): Reuse Tesseract engines for automatic script retries.** Repeated low-confidence reads can reuse an initialized engine, reducing model loading. OCR caches also refresh when the installed model changes. (#3153)
