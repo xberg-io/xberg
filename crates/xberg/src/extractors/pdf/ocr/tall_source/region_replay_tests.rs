@@ -142,6 +142,26 @@ fn archived_page_13_tight_word_clips_ink_but_complete_line_owns_it() {
         bottom: 5474,
     };
     assert!(source.certify_line_ink(tight, column).is_none());
+    let heading = super::super::region_probe::heading_column;
+    let left = RegionBox {
+        left: 320,
+        top: 5455,
+        right: 364,
+        bottom: 5469,
+    };
+    let right = RegionBox {
+        left: 369,
+        top: 5455,
+        right: 439,
+        bottom: 5474,
+    };
+    assert!(heading(&source, [left, right]).is_some());
+    let across = RegionBox {
+        left: 1790,
+        right: 1800,
+        ..right
+    };
+    assert!(heading(&source, [left, across]).is_none());
     assert!(source.source_line_column(line).is_some());
     assert!(source.source_line_column(RegionBox { right: 1800, ..line }).is_none());
     assert!(source.certify_line_ink(line, column).is_some());
@@ -390,6 +410,27 @@ the blog",
     );
     stock_config.include_document_structure = false;
     enabled.include_document_structure = false;
+    let elements = crate::types::OcrElementConfig {
+        include_elements: true,
+        min_level: crate::types::OcrElementLevel::Word,
+        ..Default::default()
+    };
+    stock_config.ocr.as_mut().unwrap().element_config = Some(elements.clone());
+    enabled.ocr.as_mut().unwrap().element_config = Some(elements);
+    let stock_elements = extract(&bytes, &stock_config).await;
+    let live_elements = extract(&bytes, &enabled).await;
+    assert!(
+        stock_elements
+            .ocr_elements
+            .as_ref()
+            .is_some_and(|elements| !elements.is_empty())
+    );
+    assert_eq!(
+        serde_json::to_value(stock_elements).unwrap(),
+        serde_json::to_value(live_elements).unwrap(),
+    );
+    stock_config.ocr.as_mut().unwrap().element_config = None;
+    enabled.ocr.as_mut().unwrap().element_config = None;
     let mut two_pages = lopdf::Document::load_mem(&bytes).unwrap();
     let page_id = two_pages.get_pages()[&1];
     let root_id = two_pages

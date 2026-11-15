@@ -248,30 +248,35 @@ fn anchored_region(source: &IndexedSource, run: &[RegionBox], protected: &[Regio
 
 type SourceEdit = (usize, String, String);
 
+pub(super) fn heading_column(source: &IndexedSource, words: [RegionBox; 2]) -> Option<(RegionBox, RegionBox)> {
+    let [a, b] = words;
+    let bounds = RegionBox {
+        left: a.left,
+        top: a.top.min(b.top),
+        right: b.right,
+        bottom: a.bottom.max(b.bottom),
+    };
+    let column = source.source_line_column(bounds)?;
+    if !column.contains(a) || !column.contains(b) {
+        return None;
+    }
+    Crop::new(bounds, column)?;
+    source.certify_line_ink(bounds, column)?;
+    Some((bounds, column))
+}
+
 fn discover_isolated_headings(
     source: &IndexedSource,
     words: &[RegionBox],
     call_limit: usize,
 ) -> Option<Vec<(std::ops::Range<usize>, RegionBox)>> {
-    let frame = RegionBox {
-        left: 0,
-        top: 0,
-        right: source.width,
-        bottom: source.height,
-    };
     let mut index = 0;
     let mut regions = Vec::new();
     for run in words.chunk_by(|a, b| same_line(*a, *b)) {
         let start = index;
         index += run.len();
         let [a, b] = run else { continue };
-        let bounds = RegionBox {
-            left: a.left,
-            top: a.top.min(b.top),
-            right: b.right,
-            bottom: a.bottom.max(b.bottom),
-        };
-        if Crop::new(bounds, frame).is_some() && source.certify_line_ink(bounds, frame).is_some() {
+        if let Some((bounds, _)) = heading_column(source, [*a, *b]) {
             regions.push((start..index, bounds));
             if regions.len().checked_mul(2)? > call_limit {
                 return None;
@@ -366,11 +371,7 @@ pub(super) async fn scan_selected_inventory(
             tracing::trace!(?stock, "anchored OCR discovery declined candidate perimeter");
             continue;
         };
-        let column = if heading {
-            Some(frame)
-        } else {
-            source.source_line_column(region)
-        };
+        let column = source.source_line_column(region);
         let Some(column) = column else {
             tracing::trace!(?stock, "anchored OCR discovery declined source column");
             continue;

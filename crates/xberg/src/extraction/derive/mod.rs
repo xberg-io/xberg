@@ -976,15 +976,17 @@ fn derive(
     {
         pages::trace_final_ocr_occurrences(&doc, (&content, spans), pages);
     }
+    let ocr_elements = doc.prebuilt_ocr_elements.take().or_else(|| build_ocr_elements(&doc));
     #[cfg(all(feature = "pdf", feature = "ocr"))]
     if let (Some(spans), Some(pages)) = (spans.as_ref(), pages.as_deref_mut())
         && content_is_plain
         && !include_document_structure
+        && !observer.captures_pages()
+        && ocr_elements.as_ref().is_none_or(Vec::is_empty)
         && output_format == crate::core::config::OutputFormat::Plain
     {
         let _ = pages::adopt_final_ocr_replacement(&mut doc, &mut content, spans, pages);
     }
-    let ocr_elements = doc.prebuilt_ocr_elements.take().or_else(|| build_ocr_elements(&doc));
 
     let formulas = derive_formulas(&mut doc);
 
