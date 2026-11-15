@@ -82,6 +82,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **(ocr): Warn when resizing a standalone tall image may leave text incomplete.** (#2502)
+
 - **(math): explicit text annotations preserve LaTeX in Markdown, HTML, and Djot.**
   Rust callers can use `AnnotationKind::math(display)` and `math_display()`; other bindings can use the existing
   `Custom` representation with name `xberg.math` and value `inline` or `display`. Annotation byte ranges include
@@ -241,10 +243,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Improve paragraph reading order in scanned multi-column PDFs.** (#2331)
+
+- **(pdf): Keep adjacent tables separate when their columns align.** A rule or image spanning the gap keeps the table together. (#2332)
+
 - **(ocr): Remove false short words and repeated texture reads from noisy scanned PDFs in Plain and Markdown output.** Legitimate text and raw OCR elements are preserved. (#2943)
 - **(ocr): Recover verified panel dimensions between adjacent lines in Plain output for tall scanned PDFs.** (#2502)
 - **(ocr): Recover verified headings from tall PDF scans in Markdown, HTML, Djot, and DocTags.** (#2502)
 - **(ocr): Keep multiline headings together in Plain output when neighboring panels interrupt reading order in tall scanned PDFs.** (#2502)
+- **(ocr): Recover split words in tall 120 DPI neutral RGB PDF scans when source ink and two OCR layouts agree.** (#2502)
 - **(tables): Recover tables on forced-OCR PDF pages that need a rotation retry.** (#2332)
 - **(tables): Preserve verified column headers above repeated groups of numeric data in PDF tables.** (#2332)
 - **(ocr): Avoid duplicate table rows in Plain and HTML for standalone images read with Tesseract PSM 3, while preserving detected dot leaders.** (#2503)
