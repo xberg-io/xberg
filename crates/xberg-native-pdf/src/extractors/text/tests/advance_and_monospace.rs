@@ -728,7 +728,7 @@ fn test_decode_pdf_text_string_invalid_utf16() {
     // UTF-16BE BOM followed by invalid pair ~keep
     let bytes = vec![0xFE, 0xFF, 0xD8, 0x00]; // invalid surrogate half ~keep
     let result = TextExtractor::decode_pdf_text_string(&bytes);
-    assert!(!result.is_empty() || result.is_empty()); // Just don't panic ~keep
+    assert_eq!(result, "\u{FFFD}\u{FFFD}\u{FFFD}\0");
 }
 
 #[test]
@@ -736,7 +736,7 @@ fn test_decode_pdf_text_string_utf16le_invalid() {
     // UTF-16LE BOM followed by odd byte count ~keep
     let bytes = vec![0xFF, 0xFE, 0x41]; // odd after BOM ~keep
     let result = TextExtractor::decode_pdf_text_string(&bytes);
-    // Should handle gracefully ~keep
+    assert_eq!(result, "");
 }
 
 // ========================================================================

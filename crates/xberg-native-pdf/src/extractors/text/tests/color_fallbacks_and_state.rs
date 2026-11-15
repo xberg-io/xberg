@@ -409,8 +409,8 @@ fn test_line_break_different_column() {
         12.0,
         false,
     );
-    // Different column - should not trigger same_column line break path
-    // The default no space path should apply ~keep
+    assert!(!decision.insert_space);
+    assert_eq!(decision.source, SpaceSource::NoSpace);
 }
 
 #[test]
@@ -436,6 +436,8 @@ fn test_line_break_not_triggered_small_vertical_gap() {
         12.0,
         false,
     );
+    assert!(!decision.insert_space);
+    assert_eq!(decision.source, SpaceSource::NoSpace);
 }
 
 #[test]
@@ -463,7 +465,8 @@ fn test_should_insert_space_tiebreaker_with_bboxes() {
         12.0,
         false,
     );
-    // Result depends on WordBoundaryDetector ~keep
+    assert!(decision.insert_space);
+    assert_eq!(decision.source, SpaceSource::WordBoundaryAnalysis);
 }
 
 #[test]
@@ -490,7 +493,7 @@ fn test_should_insert_space_geometric_only_conflict() {
         12.0,
         false,
     );
-    // Geometric alone - should go through tiebreaker path ~keep
+    assert!(decision.insert_space);
 }
 
 #[test]
@@ -503,7 +506,8 @@ fn test_should_insert_space_font_aware() {
     let decision = should_insert_space(
         "word", "next", 0.5, 12.0, "F1", &fonts, false, &config, None, None, 12.0, 12.0, false,
     );
-    // The result depends on font-specific threshold ~keep
+    assert!(!decision.insert_space);
+    assert_eq!(decision.source, SpaceSource::IntraWordKerning);
 }
 
 // ── Spec-aligned gap correction (§9.4.4): the fallback-width
@@ -742,26 +746,6 @@ fn test_decode_text_simple_font_with_control_chars() {
     );
     // Should filter control chars but keep tab ~keep
     assert!(result.contains('\t') || result.contains('A'));
-}
-
-#[test]
-fn test_decode_text_single_byte_only() {
-    // Test with bytes that hit the TwoByte < 2 fallback ~keep
-    let mut font = create_test_font();
-    font.subtype = "Type0".to_string();
-    font.encoding = crate::fonts::Encoding::Identity;
-    let bytes = vec![0x41]; // Single byte for Type0 identity ~keep
-    let result = decode_text_to_unicode(
-        &bytes,
-        Some(&font),
-        DecodePolicy {
-            preserve_unmapped: preserve_unmapped_glyphs(),
-            decompose_ligatures: false,
-            question_mark_for_invalid: true,
-        },
-        None,
-    );
-    // Should hit trailing byte path ~keep
 }
 
 #[test]

@@ -12,8 +12,6 @@
 #![allow(clippy::manual_find)]
 #![allow(clippy::match_like_matches_macro)]
 #![allow(clippy::collapsible_match)]
-#![cfg_attr(test, allow(dead_code))]
-#![cfg_attr(test, allow(unused_variables))]
 
 //! # xberg-native-pdf
 //!
