@@ -720,7 +720,7 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "benchmark-harness"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "ahash",
  "async-trait",
@@ -4528,9 +4528,9 @@ checksum = "3bd1574e617a9a6c1f8f8181bd7e841e1f20e4277607ef28945765188d6284d4"
 
 [[package]]
 name = "jiff"
-version = "0.2.42"
+version = "0.2.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fefca06093eeaed707a905795e68206da0edca4edef23d2a3997a3ddbee462aa"
+checksum = "26699905cc795a23e3949585cc7ba3ee8ade090872a27e4316304a777297894a"
 dependencies = [
  "jiff-core",
  "jiff-static",
@@ -4544,18 +4544,18 @@ dependencies = [
 
 [[package]]
 name = "jiff-core"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77a24020db0ee88d1c681d677681bd31f9f4ea189a455425223d52ce4f1508aa"
+checksum = "ffe6854081f5ac0a3046a9b223729ccd7a20b1e0e8277e44dc0660eedf67dfe2"
 dependencies = [
  "log",
 ]
 
 [[package]]
 name = "jiff-static"
-version = "0.2.42"
+version = "0.2.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41d3213549742662eea1a18e6c5af9be5dfbabeb7611ab71356a54928ec398f0"
+checksum = "4b4ff49b2887190c760b86207b55cdcaabbdecaf7a0660d68aa2ed6f652abf0a"
 dependencies = [
  "jiff-core",
  "proc-macro2",
@@ -6675,9 +6675,9 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.14.5"
+version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9f016da56b311cff4659f5e7335c4d5fda5ca86cae4f48b8ce1cf3335246a7d"
+checksum = "3ef0b569d1d907ab3a28596aee62cf1f61dacb0529a4bedcd8e7460e2d5228b4"
 dependencies = [
  "bytes",
  "prost-derive",
@@ -6685,9 +6685,9 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-version = "0.14.5"
+version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9a367f131d93b3395fc6207c11e67098493ab040def4ce3085adbf186687f7e"
+checksum = "1ad9c5423459fa2f729b8d9235fab810aa29628b171467744fc86d21460ad70d"
 dependencies = [
  "anyhow",
  "itertools 0.15.0",
@@ -11116,7 +11116,7 @@ dependencies = [
 
 [[package]]
 name = "xberg"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "aes-gcm",
  "ahash",
@@ -11272,7 +11272,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-candle-ocr"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "base64 0.23.1",
  "candle-core",
@@ -11292,7 +11292,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-cli"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "anstyle",
  "anyhow",
@@ -11315,7 +11315,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-dart"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "async-trait",
  "crawlberg",
@@ -11329,7 +11329,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-ffi"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "async-trait",
  "cbindgen",
@@ -11345,7 +11345,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-gliner"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "candle-core",
  "candle-nn",
@@ -11368,7 +11368,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-jni"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -11382,7 +11382,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-libheif"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "cfg-if",
  "enumn",
@@ -11394,7 +11394,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-libwpd"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "cc",
  "flate2",
@@ -11407,7 +11407,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-native-pdf"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "aes",
  "base64 0.23.1",
@@ -11456,7 +11456,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-node"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "async-trait",
  "crawlberg",
@@ -11473,7 +11473,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-paddle-ocr"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "geo-clipper",
  "geo-types",
@@ -11489,7 +11489,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-pdfium-render"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "bindgen",
  "bitflags 2.13.2",
@@ -11507,7 +11507,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-php"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "async-trait",
  "crawlberg",
@@ -11522,7 +11522,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-py"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "async-trait",
  "crawlberg",
@@ -11538,7 +11538,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-swift"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "async-trait",
  "crawlberg",
@@ -11555,7 +11555,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-tesseract"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "cc",
  "cmake",
@@ -11573,7 +11573,7 @@ dependencies = [
 
 [[package]]
 name = "xberg-wasm"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "async-trait",
  "crawlberg",

@@ -431,7 +431,7 @@ packages:
       path: "../../packages/dart"
       relative: true
     source: path
-    version: "1.4.0"
+    version: "1.4.1"
   yaml:
     dependency: transitive
     description:
