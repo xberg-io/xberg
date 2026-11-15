@@ -660,6 +660,12 @@ fn cached_engine_bytes_recover_case() {
     );
     assert_source_table(&after);
     assert_route("after", &after, Route::Osd);
+
+    let mut unrotated = config.clone();
+    unrotated.ocr.as_mut().unwrap().auto_rotate = Some(false);
+    let original = read(&unrotated);
+    assert_original_read(&original);
+    assert_route("explicitly unrotated", &original, Route::Original);
 }
 
 #[test]

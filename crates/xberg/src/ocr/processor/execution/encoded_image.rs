@@ -625,7 +625,11 @@ mod tests {
         }
     }
 
-    fn prepare_png(bytes: &[u8], policy: &ImagePreprocessingConfig, budget: usize) -> crate::Result<PreparedOcrImage> {
+    fn prepare_fixture(
+        bytes: &[u8],
+        policy: &ImagePreprocessingConfig,
+        budget: usize,
+    ) -> crate::Result<PreparedOcrImage> {
         prepare_encoded_ocr_image(
             bytes,
             &SecurityLimits {
@@ -652,7 +656,7 @@ mod tests {
             ("target_at_peak", target_peak, ExpectedImage::Upscaled),
             ("target_below_peak", target_peak - 1, ExpectedImage::ClampedUpscale),
         ] {
-            let result = prepare_png(bytes, policy, budget);
+            let result = prepare_fixture(bytes, policy, budget);
             let (dimensions, scale, skipped) = match expected {
                 ExpectedImage::Original => ((200, 100, 100), 1.0, true),
                 ExpectedImage::Upscaled => ((600, 300, 300), 3.0, false),
@@ -664,18 +668,16 @@ mod tests {
                     let error = result
                         .err()
                         .unwrap_or_else(|| panic!("{name}: expected a workspace refusal"));
-                    // Pin the error kind, then match the stable message prefix like
-                    // unknown_dpi_memory_tests::caller_selected_policy_keeps_its_requested_densityless_png_upscale
-                    // so a rewording past the prefix does not break the test.
-                    assert!(
-                        matches!(&error, crate::XbergError::Validation { .. }),
-                        "{name}: {error}"
-                    );
-                    let message = error.to_string();
-                    assert!(
-                        message.contains("OCR native image workspace exceeds")
-                            && message.contains(&format!("({budget} bytes)")),
-                        "{name}: {message}"
+                    let crate::XbergError::Validation { message, .. } = error else {
+                        panic!("{name}: expected a validation error, got {error}");
+                    };
+                    assert_eq!(
+                        message,
+                        format!(
+                            "OCR native image workspace exceeds security_limits.max_content_size ({budget} bytes). \
+                             Raise security_limits.max_content_size"
+                        ),
+                        "{name}"
                     );
                     continue;
                 }
@@ -738,6 +740,67 @@ mod tests {
             .unwrap() as usize;
         let margin = target_peak - 1 - clamped_peak;
         assert!(margin > 1, "target_below_peak margin is only {margin} bytes");
+    }
+
+    #[test]
+    fn tiff_upscale_clamps_one_byte_below_the_target_workspace() {
+        let mut tiff = std::io::Cursor::new(Vec::new());
+        image::RgbImage::from_pixel(200, 100, image::Rgb([80, 150, 220]))
+            .write_to(&mut tiff, image::ImageFormat::Tiff)
+            .unwrap();
+        assert_target_workspace_boundary(tiff.get_ref(), &contrast_policy());
+    }
+
+    #[test]
+    fn binarized_png_upscale_clamps_one_byte_below_the_target_workspace() {
+        let bytes = png_fixture([245; 3], true);
+        let policy = ImagePreprocessingConfig {
+            deskew: false,
+            ..Default::default()
+        };
+        assert_target_workspace_boundary(&bytes, &policy);
+    }
+
+    #[test]
+    fn jpeg_refuses_the_requested_upscale_one_byte_below_the_target_workspace() {
+        let mut jpeg = std::io::Cursor::new(Vec::new());
+        image::RgbImage::from_pixel(200, 100, image::Rgb([80, 150, 220]))
+            .write_to(&mut jpeg, image::ImageFormat::Jpeg)
+            .unwrap();
+        let bytes = jpeg.get_ref();
+        let policy = contrast_policy();
+        let peak = native_image_budget::known_phase_peak(600, 300, bytes.len(), Some(&policy))
+            .unwrap()
+            .unwrap() as usize;
+        let prepared = prepare_fixture(bytes, &policy, peak).unwrap();
+        assert_eq!((prepared.width, prepared.height, prepared.source_dpi), (600, 300, 300));
+
+        let budget = peak - 1;
+        let error = prepare_fixture(bytes, &policy, budget)
+            .err()
+            .expect("the requested JPEG upscale exceeds the budget");
+        let crate::XbergError::Validation { message, .. } = error else {
+            panic!("expected a validation error, got {error}");
+        };
+        assert_eq!(
+            message,
+            format!(
+                "The image exceeds security_limits.max_content_size ({budget} bytes) at its source resolution, and a \
+                 reduced-size image cannot be resized to target_dpi 300 within that limit. Raise \
+                 security_limits.max_content_size, or set target_dpi to 50"
+            )
+        );
+    }
+
+    fn assert_target_workspace_boundary(bytes: &[u8], policy: &ImagePreprocessingConfig) {
+        let peak = native_image_budget::known_phase_peak(600, 300, bytes.len(), Some(policy))
+            .unwrap()
+            .unwrap() as usize;
+        for (budget, expected) in [(peak, (600, 300, 300)), (peak - 1, (598, 299, 299))] {
+            let prepared = prepare_fixture(bytes, policy, budget).unwrap();
+            assert_eq!((prepared.width, prepared.height, prepared.source_dpi), expected);
+            assert_eq!(prepared.image_preprocessing.unwrap().target_dpi, 300);
+        }
     }
 
     fn gray_switch_png(pixel: [u8; 3]) -> Vec<u8> {

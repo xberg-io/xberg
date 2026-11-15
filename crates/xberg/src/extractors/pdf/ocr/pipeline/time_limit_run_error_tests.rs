@@ -35,3 +35,45 @@ fn a_run_without_unread_pages_fails_with_its_first_failed_page() {
 
     assert!(error.to_string().contains("page one failed"), "{error}");
 }
+
+#[test]
+fn discarded_retry_warning_claims_native_recovery_only_when_ocr_text_is_blank() {
+    let native_text = "Readable native text";
+    let boundaries = [crate::types::PageBoundary {
+        page_number: 1,
+        byte_start: 0,
+        byte_end: native_text.len(),
+    }];
+    for (page_text, expected) in [
+        (
+            "Retained OCR",
+            "OCR of page 1 failed (render failed); its embedded-image retry was discarded.",
+        ),
+        (
+            " \t",
+            "OCR of page 1 failed (render failed); its embedded-image retry was discarded \
+             and the page's native text was kept.",
+        ),
+    ] {
+        let failure = crate::types::OcrPageFailure {
+            page: 1,
+            error: "render failed".into(),
+            recovered: false,
+        };
+        let discarded = discarded_xobject_retry_warning(&failure, false);
+        let mut returned = crate::types::internal::InternalDocument {
+            ocr_page_failures: vec![failure],
+            processing_warnings: vec![discarded],
+            ..Default::default()
+        };
+        let mut failures = Vec::new();
+
+        merge_returned_page_failures(&mut failures, &mut returned, page_text, native_text, &boundaries);
+
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].page, 1);
+        assert!(failures[0].recovered);
+        assert_eq!(returned.processing_warnings.len(), 1);
+        assert_eq!(returned.processing_warnings[0].message, expected);
+    }
+}

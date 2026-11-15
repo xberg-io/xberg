@@ -101,6 +101,26 @@ async fn run(
     prune: bool,
     result_format: ResultFormat,
 ) -> ExtractedDocument {
+    run_with_quality(
+        name,
+        content,
+        tables,
+        OcrQualityThresholds {
+            prune_symbol_noise_lines: prune,
+            ..Default::default()
+        },
+        result_format,
+    )
+    .await
+}
+
+async fn run_with_quality(
+    name: &'static str,
+    content: String,
+    tables: Vec<Table>,
+    quality: OcrQualityThresholds,
+    result_format: ResultFormat,
+) -> ExtractedDocument {
     register_ocr_backend(Arc::new(ScriptedBackend { name, content, tables })).unwrap();
     let _guard = Unregister(name);
     let config = ExtractionConfig {
@@ -114,10 +134,7 @@ async fn run(
         }),
         ocr: Some(OcrConfig {
             backend: name.to_string(),
-            quality_thresholds: Some(OcrQualityThresholds {
-                prune_symbol_noise_lines: prune,
-                ..OcrQualityThresholds::default()
-            }),
+            quality_thresholds: Some(quality),
             ..OcrConfig::default()
         }),
         ..ExtractionConfig::default()
@@ -218,4 +235,48 @@ async fn the_flag_off_keeps_every_line_on_the_direct_route() {
         NOISE_LINES + 1
     );
     assert!(prune_warnings(&document).is_empty());
+}
+
+#[tokio::test]
+async fn a_flagged_direct_read_keeps_isolated_noise_when_prose_dominates() {
+    let original = format!("{}\nq", real_page());
+    let document = run_with_quality(
+        "direct-route-prose-dominates-2921",
+        original.clone(),
+        Vec::new(),
+        OcrQualityThresholds {
+            min_words_for_ocr_output_check: 1,
+            max_ocr_output_fragmented_word_ratio: 0.0,
+            ..Default::default()
+        },
+        ResultFormat::Unified,
+    )
+    .await;
+
+    let noise_warnings = document
+        .processing_warnings
+        .iter()
+        .filter(|warning| warning.message.contains("suspected OCR recognition noise"))
+        .count();
+    assert_eq!(noise_warnings, 1);
+    assert_eq!(prune_warnings(&document), Vec::<String>::new());
+    assert_eq!(document.content.trim(), original);
+}
+
+#[tokio::test]
+async fn a_symbol_heavy_direct_read_keeps_its_lines_without_a_noise_verdict() {
+    let document = run_with_quality(
+        "direct-route-no-verdict-symbols-2921",
+        noisy_page(),
+        Vec::new(),
+        OcrQualityThresholds {
+            min_words_for_ocr_output_check: 1000,
+            ..Default::default()
+        },
+        ResultFormat::Unified,
+    )
+    .await;
+
+    assert_eq!(prune_warnings(&document), Vec::<String>::new());
+    assert_eq!(document.content.trim(), noisy_page());
 }

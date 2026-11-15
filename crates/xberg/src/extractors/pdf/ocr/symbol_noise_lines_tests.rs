@@ -28,6 +28,12 @@ fn assert_kept_exactly(real: &[&str]) {
 }
 
 #[test]
+fn a_word_with_initials_needs_two_thirds_plausible_tokens() {
+    assert!(is_symbol_noise_line("Report X q z"));
+    assert!(!is_symbol_noise_line("Report X q"));
+}
+
+#[test]
 fn keeps_word_shaped_lines_numbers_and_titles() {
     for line in [
         "SECTION TITLE",

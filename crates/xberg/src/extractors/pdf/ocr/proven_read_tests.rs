@@ -378,6 +378,19 @@ mod collected_reads {
         assert_eq!(outcome.failure_causes, [CAUSE]);
     }
 
+    #[tokio::test]
+    async fn a_noisy_unshrunk_read_survives_the_per_image_verdict_when_noise_is_kept() {
+        let original = fragmented_text();
+        let reads = vec![read(original.clone(), None, true)];
+        let outcome = recover(reads, false, Some(300.0), true).await;
+        assert_eq!(outcome.text, original);
+        assert_eq!(outcome.tables.len(), 1);
+        assert_eq!(outcome.tables[0].cells, [vec!["kept"]]);
+        assert_eq!(outcome.formulas.len(), 1);
+        assert_eq!(outcome.formulas[0].latex, "x");
+        assert_eq!(outcome.failure_causes.len(), 0);
+    }
+
     /// Pins the pooled judgment's `possibly_illegible` argument: the pool's members are suspect
     /// below the floor, so their pooled garbage is judged as such and rejected, not kept by the
     /// page policy.
