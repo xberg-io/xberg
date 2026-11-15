@@ -825,15 +825,19 @@ fn aggregate_word_style(words: &[&HocrWordInfo]) -> WordStyleAggregate {
     let bold_count = words.iter().filter(|w| w.is_bold).count() as f64;
     let italic_count = words.iter().filter(|w| w.is_italic).count() as f64;
 
-    let mut font_name_counts: std::collections::HashMap<&str, u32> = std::collections::HashMap::new();
+    let mut font_name_counts: std::collections::BTreeMap<&str, u32> = std::collections::BTreeMap::new();
     for word in words {
         if let Some(ref name) = word.font_name {
             *font_name_counts.entry(name.as_str()).or_insert(0) += 1;
         }
     }
+    // Ascending name order with a strict comparison: ties go to the lexically smallest name.
     let dominant_font_name = font_name_counts
         .into_iter()
-        .max_by_key(|(_, count)| *count)
+        .fold(None, |best: Option<(&str, u32)>, (name, count)| match best {
+            Some((_, best_count)) if best_count >= count => best,
+            _ => Some((name, count)),
+        })
         .map(|(name, _)| name.to_string());
 
     WordStyleAggregate {
@@ -1723,6 +1727,24 @@ mod tests {
         // lookup returns None and the assert_eq fails against `Some("0.5")`.
         assert_eq!(attrs.get(HOCR_BOLD_FRACTION_ATTRIBUTE), Some(&"0.5".to_string()));
         assert_eq!(attrs.get(HOCR_ITALIC_FRACTION_ATTRIBUTE), Some(&"0.25".to_string()));
+        assert_eq!(attrs.get(HOCR_FONT_NAME_ATTRIBUTE), Some(&"Arial".to_string()));
+    }
+
+    #[test]
+    fn test_dominant_font_name_tie_resolves_to_lexically_smallest_name() {
+        let hocr = r#"<div class='ocr_page' title='ppageno 0'>
+            <p class='ocr_par'>
+                <span class='ocr_line'>
+                    <span class='ocrx_word' title='bbox 10 10 50 30; x_wconf 90; x_font "Times"'>one</span>
+                    <span class='ocrx_word' title='bbox 60 10 100 30; x_wconf 90; x_font "Arial"'>two</span>
+                    <span class='ocrx_word' title='bbox 110 10 150 30; x_wconf 90; x_font "Times"'>three</span>
+                    <span class='ocrx_word' title='bbox 160 10 200 30; x_wconf 90; x_font "Arial"'>four</span>
+                </span>
+            </p>
+        </div>"#;
+
+        let doc = parse_hocr_to_internal_document(hocr);
+        let attrs = doc.elements[0].attributes.as_ref().expect("attributes present");
         assert_eq!(attrs.get(HOCR_FONT_NAME_ATTRIBUTE), Some(&"Arial".to_string()));
     }
 

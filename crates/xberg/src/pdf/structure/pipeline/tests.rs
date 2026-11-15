@@ -10343,3 +10343,25 @@ fn isolated_folio_header_does_not_exempt_model_classified_first_paragraph() {
     annotate_native_layout_classes(&mut page, &[hint], accepted);
     assert_eq!(page[0].layout_class, Some(LayoutHintClass::Text));
 }
+
+/// An exact 50/50 split between two heading levels at one font size must resolve to the lower
+/// level; the tally used to iterate a randomly seeded `HashMap`, so the winner changed per process.
+#[test]
+fn heading_map_breaks_a_level_tie_toward_the_lower_level() {
+    let pages = vec![vec![
+        role_seg("A", 18.0, true, Some(2)),
+        role_seg("B", 18.0, true, Some(1)),
+        role_seg("C", 18.0, true, Some(2)),
+        role_seg("D", 18.0, true, Some(1)),
+    ]];
+    let map = build_heading_map_from_assigned_roles(&pages);
+    assert_eq!(map, vec![(18.0, Some(1))]);
+}
+
+#[test]
+fn most_frequent_level_prefers_the_higher_count_then_the_lower_level() {
+    assert_eq!(most_frequent_level([3, 2, 3, 2]), Some((2, 2)));
+    assert_eq!(most_frequent_level([1, 4, 4, 1, 3, 3]), Some((1, 2)));
+    assert_eq!(most_frequent_level([2, 5, 5]), Some((5, 2)));
+    assert_eq!(most_frequent_level([]), None);
+}

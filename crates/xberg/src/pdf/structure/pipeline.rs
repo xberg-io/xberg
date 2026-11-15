@@ -467,17 +467,8 @@ fn build_heading_map_from_assigned_roles(all_page_segments: &[Vec<SegmentData>])
         .map(|(quantized_size, roles)| {
             let font_size = quantized_size as f32 / 10.0;
             let total = roles.len();
-            let mut level_counts: HashMap<u8, usize> = HashMap::new();
-            let mut none_count = 0usize;
-            for role in &roles {
-                match role {
-                    Some(level) => *level_counts.entry(*level).or_default() += 1,
-                    None => none_count += 1,
-                }
-            }
-            let dominant_level = level_counts
-                .into_iter()
-                .max_by_key(|(_, count)| *count)
+            let none_count = roles.iter().filter(|role| role.is_none()).count();
+            let dominant_level = most_frequent_level(roles.iter().copied().flatten())
                 .and_then(|(level, count)| if count * 2 >= total { Some(level) } else { None });
 
             if none_count > total / 2 && dominant_level.is_none() {
@@ -488,9 +479,22 @@ fn build_heading_map_from_assigned_roles(all_page_segments: &[Vec<SegmentData>])
         })
         .collect();
 
-    heading_map.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    heading_map.sort_by(|a, b| b.0.total_cmp(&a.0));
 
     heading_map
+}
+
+/// Most frequent heading level with its count. Ties go to the lowest level
+/// (the most prominent heading) so the result does not depend on iteration order.
+fn most_frequent_level(levels: impl IntoIterator<Item = u8>) -> Option<(u8, usize)> {
+    let mut counts: std::collections::BTreeMap<u8, usize> = std::collections::BTreeMap::new();
+    for level in levels {
+        *counts.entry(level).or_default() += 1;
+    }
+    counts.into_iter().fold(None, |best, (level, count)| match best {
+        Some((_, best_count)) if best_count >= count => best,
+        _ => Some((level, count)),
+    })
 }
 
 /// Font-size tolerance (points) for merging consecutive raw segments into one
@@ -1926,11 +1930,7 @@ fn compute_paragraph_gap_ys_in_shared_frame(segments: &[SegmentData]) -> Vec<f32
     }
 
     let mut order: Vec<usize> = (0..segments.len()).collect();
-    order.sort_by(|&a, &b| {
-        paragraph_gap_axis(&segments[b])
-            .partial_cmp(&paragraph_gap_axis(&segments[a]))
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    order.sort_by(|&a, &b| paragraph_gap_axis(&segments[b]).total_cmp(&paragraph_gap_axis(&segments[a])));
 
     let mut lines: Vec<LineBand> = Vec::new();
     for &i in &order {
@@ -1963,7 +1963,7 @@ fn compute_paragraph_gap_ys_in_shared_frame(segments: &[SegmentData]) -> Vec<f32
     }
 
     let mut heights: Vec<f32> = lines.iter().map(|l| l.height).collect();
-    heights.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    heights.sort_by(|a, b| a.total_cmp(b));
     let median_height = heights[heights.len() / 2];
     let gap_threshold = median_height * PARAGRAPH_GAP_HEIGHT_FACTOR;
     let advance_threshold = body_leading(&lines, median_height) * PARAGRAPH_BREAK_LEADING_MULTIPLE;
@@ -3345,20 +3345,7 @@ fn finalize_paragraph(
     });
     let is_list_candidate = looks_like_list_item(trimmed) || starts_with_split_list_marker;
 
-    let structure_tree_role = {
-        let role_counts: std::collections::HashMap<u8, usize> =
-            lines
-                .iter()
-                .filter_map(|l| l.assigned_role)
-                .fold(std::collections::HashMap::new(), |mut acc, level| {
-                    *acc.entry(level).or_default() += 1;
-                    acc
-                });
-        role_counts
-            .into_iter()
-            .max_by_key(|(_, count)| *count)
-            .map(|(level, _)| level)
-    };
+    let structure_tree_role = most_frequent_level(lines.iter().filter_map(|l| l.assigned_role)).map(|(level, _)| level);
     if let Some(level) = structure_tree_role {
         let para_text = trimmed.to_string();
         let word_count = PdfParagraph::compute_word_count(&para_text, &reconstructed_lines);

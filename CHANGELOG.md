@@ -241,6 +241,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Output is now stable between runs.** Heading levels, list indentation, OCR font names and `metadata.additional` key order no longer depend on hash iteration order; ties resolve to the lower heading level, the smaller indent and the lexically first font name, and `additional` serializes with sorted keys.
+
 - **(pdf): Improve paragraph reading order in scanned multi-column PDFs.** (#2331)
 
 - **(pdf): Keep adjacent tables separate when their columns align.** A rule or image spanning the gap keeps the table together. (#2332)

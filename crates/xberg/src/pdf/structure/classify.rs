@@ -336,6 +336,23 @@ pub(super) fn classify_paragraphs(paragraphs: &mut [PdfParagraph], heading_map: 
 /// 1. Computing the modal left X across all paragraphs on each page
 /// 2. Finding paragraphs indented >= 12 points right of the modal
 /// 3. Requiring they follow or precede another short paragraph at the same indent
+/// Most common left edge, bucketed to 0.1pt. Ties go to the smallest x so the
+/// result does not depend on hash iteration order.
+fn modal_left_position(left_positions: &[f32]) -> f32 {
+    let mut freq_map: std::collections::BTreeMap<i32, usize> = std::collections::BTreeMap::new();
+    for &pos in left_positions {
+        *freq_map.entry((pos * 10.0) as i32).or_default() += 1;
+    }
+    let bucket = freq_map
+        .into_iter()
+        .fold(None, |best: Option<(i32, usize)>, (bucket, count)| match best {
+            Some((_, best_count)) if best_count >= count => best,
+            _ => Some((bucket, count)),
+        })
+        .map_or(0, |(bucket, _)| bucket);
+    bucket as f32 / 10.0
+}
+
 fn detect_indentation_based_lists(paragraphs: &mut [PdfParagraph]) {
     if paragraphs.len() < 2 {
         return;
@@ -353,15 +370,7 @@ fn detect_indentation_based_lists(paragraphs: &mut [PdfParagraph]) {
     }
 
     left_positions.sort_by(|a, b| a.total_cmp(b));
-    let modal_left = {
-        let mut freq_map: std::collections::HashMap<i32, usize> = std::collections::HashMap::new();
-        for &pos in &left_positions {
-            let bucket = (pos * 10.0) as i32;
-            *freq_map.entry(bucket).or_default() += 1;
-        }
-        let (bucket, _) = freq_map.into_iter().max_by_key(|(_, count)| *count).unwrap_or((0, 0));
-        bucket as f32 / 10.0
-    };
+    let modal_left = modal_left_position(&left_positions);
 
     for i in 0..paragraphs.len() {
         let para = &paragraphs[i];
@@ -4655,5 +4664,20 @@ mod numbered_section_heading_tests {
         assert!(!ends_with_sentence_period("Impaired Glucose Tolerance ..."));
         assert!(!ends_with_sentence_period("Thermal Comfort As Related To …"));
         assert!(!ends_with_sentence_period("No period at all"));
+    }
+}
+
+#[cfg(test)]
+mod modal_left_tests {
+    use super::modal_left_position;
+
+    #[test]
+    fn should_pick_the_smallest_x_when_two_left_edges_tie() {
+        assert_eq!(modal_left_position(&[90.0, 72.0, 90.0, 72.0]), 72.0);
+    }
+
+    #[test]
+    fn should_pick_the_most_frequent_left_edge() {
+        assert_eq!(modal_left_position(&[72.0, 90.0, 90.0]), 90.0);
     }
 }
