@@ -167,24 +167,25 @@ mod tests {
     use super::*;
     use sevenz_rust2::{ArchiveEntry as SevenzEntry, ArchiveWriter};
 
-    /// Covers per-member rejection and error naming for an oversized 7z member's text
-    /// content -- NOT memory-boundedness. `extract_7z_text_content` takes `bytes: &[u8]` and
-    /// `for_each_entries` hands the closure a concrete sevenz-rust2 block reader; there is no
-    /// seam here to substitute a counting/instrumented `Read` for it, so the actual property
-    /// the `.take()` exists for (the reader is never asked for more than `cap + 1` bytes)
-    /// cannot be observed from this test. It is covered by inspection only. What this test does
-    /// prove: a member whose decoded content dwarfs `max_content_size` is rejected by a
-    /// *member-scoped* error that names the member, rather than surfacing only from the
-    /// aggregate `total_content_size` check (which, once several members have been summed, can
-    /// no longer report which one was responsible).
-    ///
-    /// Neutralisation that must break this test: replace `.take(cap.saturating_add(1))` with
-    /// `.take(u64::MAX)` in `extract_7z_text_content`. That neutralisation does NOT break this test on its
-    /// own -- the post-read `content.len() as u64 > cap` check a few lines below still fires
-    /// and still names "huge.txt", so the assertion still passes. Only removing that length
-    /// check too (or renaming the error's member field) would fail it, which is exactly the
-    /// point: this test cannot distinguish a bounded reader from an unbounded one.
-    /// `--features archives`.
+    #[test]
+    fn test_read_error_classifies_max_mem_limited_as_validation_with_context() {
+        for context in ["archive", "entries"] {
+            let error = sevenz_rust2::Error::MaxMemLimited {
+                max_kb: 1024,
+                actaul_kb: 2048,
+            };
+            let expected = format!("Failed to read 7z {context}: {error}");
+
+            let XbergError::Validation { message, .. } = read_error(context, error) else {
+                panic!("expected a validation error for 7z {context}");
+            };
+            assert_eq!(message, expected);
+        }
+    }
+
+    /// Verifies that the per-member content limit reports the offending filename.
+    /// The budget enforces the cap in `DecompressedBudget::read_member`; this
+    /// test does not measure how many bytes the decoder reads.
     #[test]
     fn test_7z_text_content_names_offending_member_when_it_exceeds_content_cap() {
         let cursor = {
