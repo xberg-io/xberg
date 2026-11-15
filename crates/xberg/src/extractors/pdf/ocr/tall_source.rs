@@ -162,11 +162,16 @@ pub(super) async fn probe_anchored_occurrences(
     (pdf, page): (&PdfDocument, usize),
     (_, png, width, height): &super::rendering::EncodedPage,
 ) -> crate::Result<()> {
-    let Some(read) = selected
-        .retained_hocr_read
+    if ocr
+        .backend_options
         .as_ref()
-        .filter(|read| read.inline_page.is_some())
-    else {
+        .and_then(|options| options.get("source_region_recovery"))
+        .and_then(serde_json::Value::as_bool)
+        != Some(true)
+    {
+        return Ok(());
+    }
+    let Some(read) = selected.retained_hocr_read.as_ref() else {
         return Ok(());
     };
     if selected.raw_ocr_source_frame.is_some()
@@ -193,19 +198,28 @@ pub(super) async fn probe_anchored_occurrences(
     let Some(source) = indexed::IndexedSource::load(&attempt) else {
         return Ok(());
     };
-    if let Some((id, expected, replacement)) =
-        region_probe::scan_selected_inventory(&attempt, &source, backend, ocr, selected, read).await?
+    if let Some(edits) = region_probe::scan_selected_inventory(&attempt, &source, backend, ocr, selected, read).await?
         && let Some(doc) = selected.ocr_internal_document.as_mut()
     {
-        let mut owners = doc
-            .elements
-            .iter_mut()
-            .flat_map(|element| &mut element.ocr_source_spans)
-            .filter(|span| span.occurrence == id);
-        if let Some(owner) = owners.next()
-            && owners.next().is_none()
-        {
-            owner.replacement = Some((expected, replacement));
+        if edits.iter().all(|(id, _, _)| {
+            doc.elements
+                .iter()
+                .flat_map(|element| &element.ocr_source_spans)
+                .filter(|span| span.occurrence == *id)
+                .count()
+                == 1
+        }) {
+            let edit_count = edits.len();
+            for (id, expected, replacement) in edits {
+                if let Some(owner) = doc
+                    .elements
+                    .iter_mut()
+                    .flat_map(|element| &mut element.ocr_source_spans)
+                    .find(|span| span.occurrence == id)
+                {
+                    owner.replacement = Some((expected, replacement, edit_count));
+                }
+            }
         }
     }
     Ok(())

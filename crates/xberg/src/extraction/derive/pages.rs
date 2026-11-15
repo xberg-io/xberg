@@ -179,7 +179,7 @@ pub(super) fn adopt_final_ocr_replacement(
     pages: &mut [PageContent],
 ) -> Option<()> {
     let [page] = pages else { return None };
-    let mut pending = doc
+    let pending: Vec<_> = doc
         .elements
         .iter()
         .filter(|element| element.page == Some(page.page_number))
@@ -189,25 +189,39 @@ pub(super) fn adopt_final_ocr_replacement(
                 .iter()
                 .filter(|span| span.replacement.is_some())
                 .map(move |span| (element, span))
-        });
-    let (element, span) = pending.next()?;
-    if pending.next().is_some()
-        || doc
-            .elements
-            .iter()
-            .filter(|other| other.page == element.page)
-            .flat_map(|other| &other.ocr_source_spans)
-            .filter(|other| other.occurrence == span.occurrence && other.owner == span.owner)
-            .count()
-            != 1
-    {
+        })
+        .collect();
+    if !(1..=2).contains(&pending.len()) {
         return None;
     }
-    let (expected, replacement) = span.replacement.as_ref()?;
-    let end = span.destination.checked_add(span.source.len())?;
-    let [document_bytes, page_bytes] =
-        project_final_ocr_occurrence(doc, (text, spans), page, &element.id, span.destination..end)?;
-    if text.get(document_bytes.clone())? != expected || page.content.get(page_bytes.clone())? != expected {
+    let mut edits = Vec::new();
+    for (element, span) in &pending {
+        let (expected, replacement, count) = span.replacement.as_ref()?;
+        if *count != pending.len()
+            || doc
+                .elements
+                .iter()
+                .filter(|other| other.page == element.page)
+                .flat_map(|other| &other.ocr_source_spans)
+                .filter(|other| other.occurrence == span.occurrence && other.owner == span.owner)
+                .count()
+                != 1
+        {
+            return None;
+        }
+        let end = span.destination.checked_add(span.source.len())?;
+        let [document_bytes, page_bytes] =
+            project_final_ocr_occurrence(doc, (text, spans), page, &element.id, span.destination..end)?;
+        if text.get(document_bytes.clone())? != expected || page.content.get(page_bytes.clone())? != expected {
+            return None;
+        }
+        edits.push((document_bytes, page_bytes, expected, replacement));
+    }
+    edits.sort_by_key(|(bytes, _, _, _)| bytes.start);
+    if edits
+        .windows(2)
+        .any(|pair| pair[0].0.end > pair[1].0.start || pair[0].1.end > pair[1].1.start)
+    {
         return None;
     }
     if let Some(boundaries) = doc.metadata.pages.as_mut().and_then(|pages| pages.boundaries.as_mut()) {
@@ -215,19 +229,22 @@ pub(super) fn adopt_final_ocr_replacement(
             return None;
         };
         if boundary.page_number != page.page_number
-            || boundary.byte_start > document_bytes.start
-            || boundary.byte_end < document_bytes.end
+            || boundary.byte_start > edits.first()?.0.start
+            || boundary.byte_end < edits.last()?.0.end
             || boundary.byte_end > text.len()
         {
             return None;
         }
-        boundary.byte_end = boundary
-            .byte_end
-            .checked_sub(expected.len())?
-            .checked_add(replacement.len())?;
+        boundary.byte_end = edits
+            .iter()
+            .try_fold(boundary.byte_end, |end, (_, _, expected, replacement)| {
+                end.checked_sub(expected.len())?.checked_add(replacement.len())
+            })?;
     }
-    text.replace_range(document_bytes, replacement);
-    page.content.replace_range(page_bytes, replacement);
+    for (document_bytes, page_bytes, _, replacement) in edits.into_iter().rev() {
+        text.replace_range(document_bytes, replacement);
+        page.content.replace_range(page_bytes, replacement);
+    }
     Some(())
 }
 

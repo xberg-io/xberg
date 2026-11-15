@@ -247,12 +247,11 @@ impl TesseractBackend {
         internal.tessdata_path = config.tessdata_path.clone();
         internal.source_dpi = Self::source_dpi_from_backend_options(config);
         internal.known_full_page_scan = Self::known_full_page_scan_from_backend_options(config);
-        internal.capture_region_hocr = config
-            .backend_options
-            .as_ref()
-            .and_then(|options| options.get("source_region_reconciliation"))
-            .and_then(serde_json::Value::as_bool)
-            == Some(true);
+        internal.capture_region_hocr = config.backend_options.as_ref().is_some_and(|options| {
+            ["source_region_reconciliation", "source_region_recovery"]
+                .into_iter()
+                .any(|key| options.get(key).and_then(serde_json::Value::as_bool) == Some(true))
+        });
         if let Some(use_cache) = Self::use_cache_from_backend_options(config) {
             internal.use_cache = use_cache;
         }

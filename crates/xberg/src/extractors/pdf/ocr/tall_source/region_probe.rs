@@ -97,6 +97,7 @@ fn probe_config(config: &OcrConfig, dpi: f64, limit: usize) -> OcrConfig {
         })
         .unwrap_or_default();
     options.remove("source_region_reconciliation");
+    options.remove("source_region_recovery");
     options.insert("use_cache".into(), serde_json::Value::Bool(false));
     probe.backend_options = Some(serde_json::Value::Object(options));
     probe.security_limits.get_or_insert_default().max_content_size = limit;
@@ -138,6 +139,12 @@ pub(super) fn anchored_ink_edge(words: &[RegionBox], components: &[std::ops::Ran
         })
 }
 
+fn same_line(a: RegionBox, b: RegionBox) -> bool {
+    let height = (a.bottom - a.top).min(b.bottom - b.top);
+    let shared = a.bottom.min(b.bottom).saturating_sub(a.top.max(b.top));
+    height > 0 && shared >= height.div_ceil(2) && b.left >= a.right && b.left - a.right <= height.saturating_mul(3)
+}
+
 pub(super) fn discover_anchored_regions(
     source: &IndexedSource,
     words: &[RegionBox],
@@ -147,11 +154,6 @@ pub(super) fn discover_anchored_regions(
     if words.len() > 1024 || protected.len() > 1024 {
         return None;
     }
-    let same_line = |a: RegionBox, b: RegionBox| {
-        let height = (a.bottom - a.top).min(b.bottom - b.top);
-        let shared = a.bottom.min(b.bottom).saturating_sub(a.top.max(b.top));
-        height > 0 && shared >= height.div_ceil(2) && b.left >= a.right && b.left - a.right <= height.saturating_mul(3)
-    };
     if words.iter().any(|word| {
         word.left >= word.right || word.top >= word.bottom || word.right > source.width || word.bottom > source.height
     }) {
@@ -244,6 +246,41 @@ fn anchored_region(source: &IndexedSource, run: &[RegionBox], protected: &[Regio
     Some(Some(crop))
 }
 
+type SourceEdit = (usize, String, String);
+
+fn discover_isolated_headings(
+    source: &IndexedSource,
+    words: &[RegionBox],
+    call_limit: usize,
+) -> Option<Vec<(std::ops::Range<usize>, RegionBox)>> {
+    let frame = RegionBox {
+        left: 0,
+        top: 0,
+        right: source.width,
+        bottom: source.height,
+    };
+    let mut index = 0;
+    let mut regions = Vec::new();
+    for run in words.chunk_by(|a, b| same_line(*a, *b)) {
+        let start = index;
+        index += run.len();
+        let [a, b] = run else { continue };
+        let bounds = RegionBox {
+            left: a.left,
+            top: a.top.min(b.top),
+            right: b.right,
+            bottom: a.bottom.max(b.bottom),
+        };
+        if Crop::new(bounds, frame).is_some() && source.certify_line_ink(bounds, frame).is_some() {
+            regions.push((start..index, bounds));
+            if regions.len().checked_mul(2)? > call_limit {
+                return None;
+            }
+        }
+    }
+    Some(regions)
+}
+
 pub(super) async fn scan_selected_inventory(
     attempt: &Attempt<'_>,
     source: &IndexedSource,
@@ -251,7 +288,7 @@ pub(super) async fn scan_selected_inventory(
     ocr: &OcrConfig,
     selected: &crate::types::ExtractedDocument,
     read: &crate::types::formats::RetainedHocrRead,
-) -> crate::Result<Option<(usize, String, String)>> {
+) -> crate::Result<Option<Vec<SourceEdit>>> {
     let native = |bounds| source.native_bounds(read.dimensions, bounds);
     let Some(words) = read
         .occurrences
@@ -281,7 +318,13 @@ pub(super) async fn scan_selected_inventory(
         tracing::trace!("anchored OCR discovery declined an unmappable table");
         return Ok(None);
     };
-    let Some(regions) = discover_anchored_regions(source, &words, &tables, attempt.max_strips) else {
+    let heading = tables.is_empty() && read.inline_page.is_none();
+    let discovered = if heading {
+        discover_isolated_headings(source, &words, attempt.max_strips)
+    } else {
+        discover_anchored_regions(source, &words, &tables, attempt.max_strips)
+    };
+    let Some(regions) = discovered else {
         tracing::trace!(
             words = words.len(),
             "anchored OCR discovery could not enumerate within budget"
@@ -366,24 +409,32 @@ pub(super) async fn scan_selected_inventory(
         ) else {
             continue;
         };
-        let [edit] = edits.as_slice() else { continue };
-        if edit.selection_index != 0 && edit.selection_index + 1 != stock.len() {
-            continue;
+        if heading {
+            if edits.len() != 2 {
+                continue;
+            }
+        } else {
+            let [edit] = edits.as_slice() else { continue };
+            if edit.selection_index != 0 && edit.selection_index + 1 != stock.len() {
+                continue;
+            }
         }
-        let id = read.occurrences[stock.start + edit.selection_index].id;
-        if ![read.inline_page.as_ref(), read.plain_document.as_ref()]
+        let edits: Vec<_> = edits
             .into_iter()
-            .all(|projection| {
-                projection
-                    .is_some_and(|projection| projection.ranges.iter().filter(|(owner, _)| *owner == id).count() == 1)
+            .map(|edit| {
+                let id = read.occurrences[stock.start + edit.selection_index].id;
+                (id, edit.expected.to_owned(), edit.replacement.to_owned())
             })
-        {
+            .collect();
+        if !edits.iter().all(|(id, _, _)| {
+            let owns = |projection: &crate::types::formats::RetainedHocrProjection| {
+                projection.ranges.iter().filter(|(owner, _)| owner == id).count() == 1
+            };
+            read.plain_document.as_ref().is_some_and(owns) && (heading || read.inline_page.as_ref().is_some_and(owns))
+        }) {
             continue;
         }
-        if replacement
-            .replace((id, edit.expected.to_owned(), edit.replacement.to_owned()))
-            .is_some()
-        {
+        if replacement.replace(edits).is_some() {
             ambiguous = true;
         }
     }

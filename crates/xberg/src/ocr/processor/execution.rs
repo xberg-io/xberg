@@ -1172,14 +1172,14 @@ fn document_hocr_receipt(
     read: &crate::types::formats::RetainedHocrRead,
     doc: &mut InternalDocument,
 ) -> Option<crate::types::formats::RetainedHocrProjection> {
-    let page = read.inline_page.as_ref()?;
+    let page = read.inline_page.as_ref();
     let rendering = crate::rendering::render_plain_with_spans(doc);
     if rendering.text.len() > 16 * 1024 || doc.elements.len() > 1024 {
         return None;
     }
     let mut ranges = Vec::new();
     for occurrence in &read.occurrences {
-        if !page.ranges.iter().any(|(id, _)| *id == occurrence.id) {
+        if page.is_some_and(|page| !page.ranges.iter().any(|(id, _)| *id == occurrence.id)) {
             continue;
         }
         let Some(bounds) = occurrence.owner_bounds.as_ref() else {

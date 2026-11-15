@@ -556,7 +556,7 @@ impl InternalDocument {
 pub(crate) struct OcrSourceSpan {
     pub(crate) owner: InternalElementId,
     pub(crate) occurrence: usize,
-    pub(crate) replacement: Option<(String, String)>,
+    pub(crate) replacement: Option<(String, String, usize)>,
     pub(crate) source: std::ops::Range<usize>,
     pub(crate) destination: usize,
 }
