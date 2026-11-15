@@ -247,6 +247,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Keep multiline headings together in Plain output when neighboring panels interrupt reading order in tall scanned PDFs.** (#2502)
 - **(tables): Recover tables on forced-OCR PDF pages that need a rotation retry.** (#2332)
 - **(tables): Preserve verified column headers above repeated groups of numeric data in PDF tables.** (#2332)
+- **(ocr): Avoid duplicate table rows in Plain and HTML for standalone images read with Tesseract PSM 3, while preserving detected dot leaders.** (#2503)
 
 - **(ocr): Add opt-in recovery for PaddleOCR ruled JPEG table cells.** The English PP-OCRv6 Small ONNX Runtime
   path can repair corroborated comma or period reads and restore adjacent numeric cells from source-owned
