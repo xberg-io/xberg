@@ -37,9 +37,6 @@ tract = ["dep:tract-onnx"]
 # ort loading libonnxruntime at runtime via ORT_DYLIB_PATH; implies the `ort` backend. ~keep
 load-dynamic = ["ort", "ort/load-dynamic"]
 
-[lints]
-workspace = true
-
 [dependencies]
 geo-clipper = "0.9"
 geo-types = "0.7"
@@ -55,3 +52,6 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tract-onnx = { workspace = true, optional = true }
+
+[lints]
+workspace = true

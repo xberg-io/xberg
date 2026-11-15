@@ -53,9 +53,6 @@ dynamic-linking = ["build-tesseract", "dep:pkg-config", "dep:vcpkg"]
 # gives `dynamic-linking` precedence, so the vendored source build remains disabled. ~keep
 system-linking = ["dynamic-linking"]
 
-[lints]
-workspace = true
-
 [dependencies]
 thiserror = { workspace = true }
 
@@ -95,3 +92,6 @@ required-features = ["build-tesseract", "bundle-tessdata-eng"]
 [[test]]
 name = "exit_cleanup_race"
 required-features = ["build-tesseract", "bundle-tessdata-eng"]
+
+[lints]
+workspace = true

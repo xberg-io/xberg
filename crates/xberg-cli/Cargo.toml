@@ -226,9 +226,6 @@ all = [
     "pdf-pdfium-surface",
 ]
 
-[lints]
-workspace = true
-
 [dependencies]
 
 anstyle = "1"
@@ -252,3 +249,6 @@ xberg = { workspace = true, features = ["tokio-runtime", "simd-utf8"] }
 bytes = { workspace = true }
 tempfile = { workspace = true }
 ureq = { version = "3.5", features = ["json"] }
+
+[lints]
+workspace = true
