@@ -13,7 +13,7 @@ files = sorted((root / "docker").glob("Dockerfile*"))
 assert len(files) == 11, len(files)
 expected = {
     "alpine:": "alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a",
-    "rust:": "rust:1.99.1-trixie@sha256:09027f873d45b8ecd1dc86f1fa13b7a62b875c961f017a0e331267b350430137",
+    "rust:": "rust:1.100.0-trixie@sha256:e19840879045c951c905d0eaa9887f3439c62000e429963371b376bac8d38c31",
     "debian:": "debian:trixie-20261027-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4",
     "quay.io/": "quay.io/pypa/manylinux_2_28_x86_64:2026.10.31-1@sha256:43f7ce12d79ed98b6dbfa3291d5afe389efd40a7e76de089959ffe99501b6edf",
 }
@@ -43,7 +43,7 @@ import sys
 import tomllib
 root = Path(sys.argv[1])
 version = tomllib.loads((root / "rust-toolchain.toml").read_text())["toolchain"]["channel"]
-assert version == "1.99.1", version
+assert version == "1.100.0", version
 count = 0
 for path in (root / "docker").glob("Dockerfile*"):
     for line in path.read_text().splitlines():

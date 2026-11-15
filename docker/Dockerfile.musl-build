@@ -3,7 +3,7 @@ FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c
 
 ARG CARGO_BUILD_JOBS=1
 
-ARG RUST_TOOLCHAIN=1.99.1
+ARG RUST_TOOLCHAIN=1.100.0
 # Must equal the binding set compiled into xberg-pdfium-render
 # (`src/lib.rs` includes `bindgen/pdfium_7678.rs`, the only one in the tree). The engine
 # dlopen()s this library at run time, so a mismatch is not a build error: a missing symbol

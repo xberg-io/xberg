@@ -1,0 +1,11 @@
+No material findings in the final staged patch for #2918. The prior warning issue is resolved.
+
+- A partially rejected pool reports the actual number of dropped reads. The regression fixture reports **2 of 3**. Fully rejected pools retain their existing diagnostics, and keep-policy warning behavior still follows `warn_when_kept`. Clamped pools emit no new warning. Rejection causes are added only when at least one member is dropped, and warning and cause deduplication are preserved.
+- The existing `scoring_input` helper is unchanged and preserves the prior normalization and fallback behavior. Preprocessing comes from the first retained read with a record, and Tesseract mode comes from the sole attempted read when retained. Candidate metadata remains bounded, and only published preprocessing is charged to the output budget.
+- #2918 does not touch `pipeline.rs`. I inspected #2908’s staged pipeline hunks and found no overlap with #2918’s pooled diagnostics.
+
+The supplied red log fails on the old full-discard warning. The final green log shows **36 unit tests and 4 integration tests passed**, including all 10 retained-read tests. I ran no builds or tests. The Basemind coordination broker was inaccessible from the sandbox.
+
+The patch matches the implementation worktree’s staged diff byte for byte against base `99b74b1bfe`. SHA-256:
+
+`0f069f42d4b321cbc6fa0819c70c38fba5404798b4856f20f9d909de5546a1d6`

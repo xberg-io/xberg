@@ -1,0 +1,53 @@
+{
+  "head": "521a56aed99428edf7917fd0cbb49b6acc848def",
+  "review_base": "a844bdc89ccb78e5ed13af68cec4c852c056b536",
+  "pr": {
+    "baseRefOid": "a844bdc89ccb78e5ed13af68cec4c852c056b536",
+    "headRefOid": "521a56aed99428edf7917fd0cbb49b6acc848def",
+    "url": "https://github.com/xberg-io/xberg/pull/2886"
+  },
+  "changed_file_count": 12,
+  "paths": [
+    "crates/xberg/src/extractors/pdf/ink_probe.rs",
+    "crates/xberg/src/extractors/pdf/mod.rs",
+    "crates/xberg/src/extractors/pdf/ocr/mod.rs",
+    "crates/xberg/src/extractors/pdf/ocr/pipeline.rs",
+    "crates/xberg/src/extractors/pdf/ocr/pipeline/budget_refusal_tests.rs",
+    "crates/xberg/src/extractors/pdf/ocr/pipeline/raster_budget_tests.rs",
+    "crates/xberg/src/extractors/pdf/ocr/read_reuse.rs",
+    "crates/xberg/src/extractors/pdf/ocr/read_reuse_tests.rs",
+    "crates/xberg/src/extractors/pdf/ocr/stock_tests.rs",
+    "crates/xberg/src/ocr/tesseract_backend.rs",
+    "crates/xberg/tests/pdf_ink_probe_reuse_2862.rs",
+    "scripts/ci/rust/run-focused-pr-tests.sh"
+  ],
+  "checks": [
+    {
+      "name": "Focused pdf-ocr",
+      "head_sha": "521a56aed99428edf7917fd0cbb49b6acc848def",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/xberg-io/xberg/actions/runs/42903381353/job/130134959554"
+    },
+    {
+      "name": "Focused api-jobs",
+      "head_sha": "521a56aed99428edf7917fd0cbb49b6acc848def",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/xberg-io/xberg/actions/runs/42903381353/job/130134959510"
+    },
+    {
+      "name": "Focused nli",
+      "head_sha": "521a56aed99428edf7917fd0cbb49b6acc848def",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/xberg-io/xberg/actions/runs/42903381353/job/130134959197"
+    }
+  ],
+  "pdf_log_list_count": 41,
+  "pdf_log_pass_count": 41,
+  "new_cases": 31,
+  "legacy_cases": 10,
+  "count_negative_control_rejected": true,
+  "local_builds_or_tests_run": false
+}

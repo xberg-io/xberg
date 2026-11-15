@@ -1,4 +1,4 @@
-baseline = "v1.13.0"
+baseline = "v1.18.0"
 task_sets = [
   "alef-bindings",
   "alef-version",
@@ -18,5 +18,5 @@ task_sets = [
 "plugin:verify" = "Check plugin source and root served-skill locks before Xberg artifact verification"
 
 [overrides."github:xberg-io/alef"]
-version = "0.129.8"
+version = "0.129.9"
 reason = "Match alef.toml and CI so local verification understands the current Python host alias configuration"
