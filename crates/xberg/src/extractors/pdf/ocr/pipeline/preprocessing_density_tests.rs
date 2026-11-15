@@ -269,7 +269,12 @@ async fn replacement_tesseract_keeps_actual_source_render_at_150() {
 fn prepared_layout_inputs(pdf: &[u8]) -> PreparedLayoutInputs {
     let limits = crate::extractors::security::SecurityLimits::default();
     let document = xberg_native_pdf::PdfDocument::from_bytes(pdf.to_vec()).unwrap();
-    let (rendered, _) = crate::pdf::render::render_pdf_ocr_page_with_dpi(&document, 0, None, &limits).unwrap();
+    let images = crate::core::config::ImageExtractionConfig {
+        target_dpi: crate::image::dpi::DEFAULT_PDF_RENDER_DPI,
+        auto_adjust_dpi: false,
+        ..Default::default()
+    };
+    let (rendered, _) = crate::pdf::render::render_pdf_ocr_page_with_dpi(&document, 0, Some(&images), &limits).unwrap();
     let image =
         crate::extraction::image_decode::decode_standard_image_with_security_limits(&rendered.data, &limits).unwrap();
     (

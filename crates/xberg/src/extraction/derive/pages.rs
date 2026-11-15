@@ -62,7 +62,8 @@ pub(super) fn derive_pages(
     if !reconciled
         && has_page_boundaries(&doc.metadata)
         && let Some((rerendered, unlocated)) = rerender_pages_plain(pages.as_deref(), doc, content)
-        && let Some(omitted) = reconcile_located_page_boundaries(&mut doc.metadata, content, &rerendered, &unlocated)
+        && let Some(omitted) =
+            reconcile_located_page_boundaries(&mut doc.metadata, content, &rerendered, &unlocated, adopted_ocr)
     {
         pages = Some(rerendered);
         reconciled = true;
@@ -1396,6 +1397,7 @@ fn reconcile_located_page_boundaries(
     content: &str,
     pages: &[PageContent],
     unlocated: &[u32],
+    adopted_ocr: bool,
 ) -> Option<Vec<u32>> {
     let structure = metadata.pages.as_mut()?;
     let original = structure.boundaries.take()?;
@@ -1445,7 +1447,7 @@ fn reconcile_located_page_boundaries(
     });
     let reconciled_count = if reconciled { boundaries.len() } else { 0 };
     for (index, boundary) in remaining {
-        if usable_unlocated_boundary(content, &boundary, &pages[index].content) {
+        if !adopted_ocr && usable_unlocated_boundary(content, &boundary, &pages[index].content) {
             boundaries.push(boundary);
         } else {
             omitted.push(boundary.page_number);

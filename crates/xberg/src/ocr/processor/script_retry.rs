@@ -1453,13 +1453,7 @@ mod tests {
 
     #[test]
     fn han_plausibility_requires_script_evidence() {
-        let read = |words: &[(&str, f64, i64, i64)]| {
-            plausible_han(
-                line(words, 1, 0)
-                    .iter()
-                    .map(|word| (&*word.text, word.conf, word.width, word.height)),
-            )
-        };
+        let read = |words: &[(&str, f64, i64, i64)]| plausible_han(words.iter().copied());
         assert!(!read(&[]));
         assert!(!read(&[
             ("2026", 10.0, 160, 40),

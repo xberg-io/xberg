@@ -538,7 +538,11 @@ fn direct_decoder_calls(source: &str) -> Vec<DecoderCall> {
 
 #[test]
 fn direct_image_decode_api_calls_are_audited() {
-    let test_only_sources = ["paddle_ocr/tract_parity.rs"];
+    let test_only_sources = [
+        "extraction/doc/test_images.rs",
+        "paddle_ocr/ruled_punctuation/interior_span_replay.rs",
+        "paddle_ocr/tract_parity.rs",
+    ];
     let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut files = Vec::new();
     rust_sources(&source_root, &mut files);
