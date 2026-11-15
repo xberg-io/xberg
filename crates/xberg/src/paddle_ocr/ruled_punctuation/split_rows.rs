@@ -77,6 +77,14 @@ fn terminal_periods_owned(gray: &GrayImage, layout: &Grid, row: usize, label: Bo
         return true;
     }
 
+    // Blank padding and proven ruling pixels may cross the band. Other ink could belong to a neighboring label. ~keep
+    if (top..bottom)
+        .filter(|y| !band.contains(y))
+        .any(|y| (left..right).any(|x| is_nonrule_ink(gray, layout, x, y)))
+    {
+        return false;
+    }
+
     let components = spans(right - left, |offset| {
         (top..bottom).any(|y| is_nonrule_ink(gray, layout, left + offset, y))
     });

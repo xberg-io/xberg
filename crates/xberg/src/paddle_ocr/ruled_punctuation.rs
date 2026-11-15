@@ -663,6 +663,19 @@ mod tests {
         assert!(is_nonrule_ink(&gray, &layout, 11, 13));
         assert!(is_nonrule_ink(&gray, &layout, 20, 24));
         assert!(owned_ink(&gray, &layout, 1, 0, label).is_some());
+        assert!(split_rows::recover(&image, table.clone(), &blocks, false).is_none());
+
+        image.put_pixel(22, 24, image::Rgb([255; 3]));
+        image.put_pixel(18, 24, image::Rgb([0; 3]));
+        for x in [22, 24] {
+            image.put_pixel(x, 18, image::Rgb([0; 3]));
+        }
+        let gray = image::imageops::grayscale(&image);
+        let layout = grid(&gray, &table).unwrap();
+        assert!(owned_ink(&gray, &layout, 1, 0, label).is_some());
+        for (x, y) in [(18, 24), (20, 24), (22, 18), (24, 18)] {
+            assert!(is_nonrule_ink(&gray, &layout, x, y));
+        }
         assert!(split_rows::recover(&image, table, &blocks, false).is_none());
     }
 
