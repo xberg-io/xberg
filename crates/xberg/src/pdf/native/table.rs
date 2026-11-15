@@ -3926,7 +3926,7 @@ mod tests {
         );
         let mut doc = NativeDocument::open_bytes(&bytes).expect("open pinned PDF");
         let mut page_paths = TablePagePaths::default();
-        let ruled = extract_ruled_tables(&mut doc, &mut page_paths).expect("ruled extraction");
+        let ruled = extract_ruled_tables(&doc, &mut page_paths).expect("ruled extraction");
         let covered = ruled.covered_pages();
         let heuristic = extract_tables_heuristic(&mut doc, false, &covered, Default::default(), &mut page_paths)
             .expect("heuristic extraction");

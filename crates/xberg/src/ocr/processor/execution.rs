@@ -1153,7 +1153,7 @@ fn capture_retained_hocr_read(
                 element: element.id.clone(),
                 element_bytes: word.bytes,
                 owner_bytes: start..start.checked_add(element.text.len())?,
-                owner_bounds: element.bbox.clone(),
+                owner_bounds: element.bbox,
                 transcript_bytes,
                 bounds: word.bounds,
             })

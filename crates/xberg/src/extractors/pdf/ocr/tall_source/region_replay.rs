@@ -1,7 +1,11 @@
-use std::{ops::Range, sync::Arc};
+#[cfg(feature = "bundle-tessdata-eng")]
+use std::ops::Range;
+use std::sync::Arc;
 
+use super::OcrConfig;
+#[cfg(feature = "bundle-tessdata-eng")]
 use super::{
-    Attempt, OcrConfig,
+    Attempt,
     indexed::IndexedSource,
     region_probe::read_pair,
     region_reconciliation::{RegionBox, SourceWord, StockWord, plan_line_edits},
@@ -74,6 +78,7 @@ pub(in crate::extractors::pdf::ocr) fn record_selected(read: &RetainedHocrRead, 
     }
 }
 
+#[cfg(feature = "bundle-tessdata-eng")]
 fn tokens(text: &str) -> Vec<(&str, Range<usize>)> {
     let base = text.as_ptr() as usize;
     text.split_whitespace()
@@ -84,6 +89,7 @@ fn tokens(text: &str) -> Vec<(&str, Range<usize>)> {
         .collect()
 }
 
+#[cfg(feature = "bundle-tessdata-eng")]
 fn project<'a>(stock: &str, view: &'a str, words: &[StockWord<'_>]) -> Option<Vec<StockWord<'a>>> {
     if stock.len().max(view.len()) > 16 * 1024 {
         return None;
@@ -109,12 +115,14 @@ fn project<'a>(stock: &str, view: &'a str, words: &[StockWord<'_>]) -> Option<Ve
         .collect()
 }
 
+#[cfg(feature = "bundle-tessdata-eng")]
 struct Selection<'a> {
     words: Vec<StockWord<'a>>,
     protected: Vec<RegionBox>,
     region: RegionBox,
 }
 
+#[cfg(feature = "bundle-tessdata-eng")]
 fn select<'a>(read: &'a RetainedHocrRead, source: &IndexedSource, witness: RegionBox) -> Option<Selection<'a>> {
     let mut words = Vec::new();
     let mut protected = Vec::new();
@@ -155,6 +163,7 @@ fn select<'a>(read: &'a RetainedHocrRead, source: &IndexedSource, witness: Regio
     })
 }
 
+#[cfg(feature = "bundle-tessdata-eng")]
 fn revise(
     view: &str,
     stock: &str,
@@ -171,6 +180,7 @@ fn revise(
     Some(revised)
 }
 
+#[cfg(feature = "bundle-tessdata-eng")]
 async fn recover(
     attempt: &Attempt<'_>,
     backend: &Arc<dyn crate::plugins::OcrBackend>,
@@ -216,6 +226,7 @@ async fn recover(
     Ok(revise_view(document).zip(revise_view(page)))
 }
 
+#[cfg(feature = "bundle-tessdata-eng")]
 fn publish_verified_pair(
     (document, page): (&mut String, &mut String),
     (document_bytes, page_bytes): (Range<usize>, Range<usize>),

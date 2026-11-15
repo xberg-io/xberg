@@ -30,7 +30,14 @@ pub(crate) use formulas::strip_math_delimiters;
 pub(crate) use ocr_document::adopt_public_ocr_document;
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(crate) use ocr_document::is_invalid_public_ocr_document;
-#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[cfg(all(
+    test,
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    feature = "bundle-tessdata-eng",
+    not(target_arch = "wasm32")
+))]
 pub(crate) use pages::FINAL_OCR_REPLAY;
 pub(crate) use pages::build_ocr_elements;
 #[cfg(test)]

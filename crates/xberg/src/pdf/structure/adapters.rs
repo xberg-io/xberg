@@ -4000,8 +4000,8 @@ mod occurrence_provenance_tests {
     }
 }
 
-#[cfg(feature = "ocr")]
-pub(crate) fn project_ocr_adapter_occurrence(
+#[cfg(all(test, feature = "ocr"))]
+fn project_ocr_adapter_occurrence(
     owner: &str,
     occurrence: std::ops::Range<usize>,
     paragraphs: &[&str],

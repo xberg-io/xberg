@@ -271,25 +271,24 @@ pub(super) async fn probe_anchored_occurrences(
     }
     if let Some(edits) = edits
         && let Some(doc) = selected.ocr_internal_document.as_mut()
-    {
-        if edits.iter().all(|(id, _, _)| {
+        && edits.iter().all(|(id, _, _)| {
             doc.elements
                 .iter()
                 .flat_map(|element| &element.ocr_source_spans)
                 .filter(|span| span.occurrence == *id)
                 .count()
                 == 1
-        }) {
-            let edit_count = edits.len();
-            for (id, expected, replacement) in edits {
-                if let Some(owner) = doc
-                    .elements
-                    .iter_mut()
-                    .flat_map(|element| &mut element.ocr_source_spans)
-                    .find(|span| span.occurrence == id)
-                {
-                    owner.replacement = Some((expected, replacement, edit_count));
-                }
+        })
+    {
+        let edit_count = edits.len();
+        for (id, expected, replacement) in edits {
+            if let Some(owner) = doc
+                .elements
+                .iter_mut()
+                .flat_map(|element| &mut element.ocr_source_spans)
+                .find(|span| span.occurrence == id)
+            {
+                owner.replacement = Some((expected, replacement, edit_count));
             }
         }
     }

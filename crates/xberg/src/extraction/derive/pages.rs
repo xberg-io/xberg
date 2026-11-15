@@ -396,9 +396,10 @@ pub(super) fn adopt_final_ocr_replacement(
 }
 
 #[cfg(all(test, feature = "pdf", feature = "ocr"))]
-pub(crate) static FINAL_OCR_REPLAY: parking_lot::Mutex<
-    Option<Vec<(u32, usize, std::ops::Range<usize>, std::ops::Range<usize>)>>,
-> = parking_lot::Mutex::new(None);
+type FinalOcrOccurrence = (u32, usize, std::ops::Range<usize>, std::ops::Range<usize>);
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+pub(crate) static FINAL_OCR_REPLAY: parking_lot::Mutex<Option<Vec<FinalOcrOccurrence>>> = parking_lot::Mutex::new(None);
 
 #[cfg(all(feature = "pdf", feature = "ocr"))]
 pub(super) fn trace_final_ocr_occurrences(

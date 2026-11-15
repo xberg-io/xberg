@@ -70,9 +70,10 @@ fn is_axis_aligned_rectangle(operations: &[PathOperation]) -> bool {
             PathOperation::LineTo(x2, y2),
             PathOperation::LineTo(x3, y3),
             tail @ ..,
-        ] if matches!(tail, [] | [PathOperation::ClosePath]) => {
-            (y0 == y1 && x1 == x2 && y2 == y3 && x3 == x0 && x0 != x1 && y1 != y2)
-                || (x0 == x1 && y1 == y2 && x2 == x3 && y3 == y0 && y0 != y1 && x1 != x2)
+        ] => {
+            matches!(tail, [] | [PathOperation::ClosePath])
+                && ((y0 == y1 && x1 == x2 && y2 == y3 && x3 == x0 && x0 != x1 && y1 != y2)
+                    || (x0 == x1 && y1 == y2 && x2 == x3 && y3 == y0 && y0 != y1 && x1 != x2))
         }
         _ => false,
     }

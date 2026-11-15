@@ -1,5 +1,7 @@
 //! Bind stock occurrences to the byte ranges produced during transcript serialization.
 
+#![cfg(test)]
+
 use super::{MAX_LINE_WORDS, MAX_TRANSCRIPT_BYTES, OccurrenceEdit, RegionBox, SourceWord, StockWord, plan_line_edits};
 use std::ops::Range;
 
