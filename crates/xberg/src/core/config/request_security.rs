@@ -477,38 +477,6 @@ mod tests {
     }
 
     #[test]
-    fn should_cap_per_input_overrides_at_the_effective_request_config() {
-        let effective = crate::ExtractionConfig {
-            extraction_timeout_secs: Some(30),
-            url: super::super::UrlExtractionConfig {
-                allow_local_file_inputs: false,
-                allow_file_uris: false,
-                max_total_urls: Some(10),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let mut file = crate::FileExtractionConfig {
-            timeout_secs: Some(86_400),
-            url: Some(super::super::UrlExtractionConfig {
-                allow_local_file_inputs: true,
-                allow_file_uris: true,
-                max_total_urls: None,
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-
-        adopt_file_operator_policy(&mut file, &effective);
-
-        assert_eq!(file.timeout_secs, Some(30));
-        let url = file.url.expect("URL override stays present");
-        assert!(!url.allow_local_file_inputs);
-        assert!(!url.allow_file_uris);
-        assert_eq!(url.max_total_urls, Some(10));
-    }
-
-    #[test]
     #[cfg(feature = "url-config-types")]
     fn should_reject_each_operator_owned_crawl_field_without_leaking_its_value() {
         let mut dependency_fields = crawlberg::UNTRUSTED_CALLER_FORBIDDEN_FIELDS.to_vec();

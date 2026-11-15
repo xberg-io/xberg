@@ -1455,6 +1455,35 @@ mod tests {
     }
 
     #[test]
+    fn should_keep_request_url_restrictions_in_mcp_per_input_override() {
+        let mut request = ExtractionConfig::default();
+        request.url.allow_local_file_inputs = false;
+        request.url.allow_file_uris = false;
+        request.url.max_total_urls = Some(10);
+        let value = serde_json::json!({
+            "kind": "bytes",
+            "data": [115, 97, 102, 101],
+            "mime_type": "text/plain",
+            "config": {"url": {
+                "allow_local_file_inputs": true,
+                "allow_file_uris": true,
+                "max_total_urls": null
+            }}
+        });
+
+        let input = parse_extract_input(value, &request).expect("URL override parses");
+        let url = input
+            .config
+            .expect("per-input config is present")
+            .url
+            .expect("URL override is present");
+
+        assert!(!url.allow_local_file_inputs);
+        assert!(!url.allow_file_uris);
+        assert_eq!(url.max_total_urls, Some(10));
+    }
+
+    #[test]
     fn test_new_creates_server_with_default_config() {
         let server = XbergMcp::new();
         assert!(server.is_ok());
