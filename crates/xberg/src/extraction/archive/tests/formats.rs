@@ -833,3 +833,73 @@ fn test_extract_7z_corrupted_data() {
         assert!(matches!(e, XbergError::Parsing { .. }));
     }
 }
+
+#[test]
+fn zip_text_budget_includes_filtered_members() {
+    let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+    let options = FileOptions::<'_, '_, ()>::default();
+    zip.start_file("note.txt", options).unwrap();
+    zip.write_all(b"hello").unwrap();
+    zip.start_file("data.bin", options).unwrap();
+    zip.write_all(b"data").unwrap();
+    let bytes = zip.finish().unwrap().into_inner();
+
+    let mut limits = default_limits();
+    limits.max_archive_size = 9;
+    let contents = extract_zip_text_content(&bytes, &limits).unwrap();
+    assert_eq!(contents.len(), 1);
+    assert_eq!(contents["note.txt"], "hello");
+
+    limits.max_archive_size = 8;
+    let error = extract_zip_text_content(&bytes, &limits).unwrap_err();
+    assert!(error.to_string().contains("data.bin"));
+}
+
+#[test]
+fn tar_budget_includes_replaced_and_filtered_members() {
+    let mut tar = TarBuilder::new(Vec::new());
+    for (path, data) in [("note.txt", b"old"), ("note.txt", b"new"), ("data.bin", b"bin")] {
+        let mut header = ::tar::Header::new_gnu();
+        header.set_size(data.len() as u64);
+        tar.append_data(&mut header, path, data.as_slice()).unwrap();
+    }
+    let bytes = tar.into_inner().unwrap();
+
+    let mut limits = default_limits();
+    limits.max_archive_size = 9;
+    let contents = extract_tar_text_content(&bytes, &limits).unwrap();
+    assert_eq!(contents.len(), 1);
+    assert_eq!(contents["note.txt"], "new");
+
+    limits.max_archive_size = 8;
+    let error = extract_tar_text_content(&bytes, &limits).unwrap_err();
+    assert!(error.to_string().contains("data.bin"));
+
+    limits.max_archive_size = 5;
+    let error = extract_tar_file_bytes(&bytes, &limits).unwrap_err();
+    assert!(error.to_string().contains("note.txt"));
+}
+
+#[test]
+fn sevenz_text_budget_includes_filtered_members() {
+    use sevenz_rust2::{ArchiveEntry as SevenzEntry, ArchiveWriter};
+
+    let mut archive = ArchiveWriter::new(Cursor::new(Vec::new())).unwrap();
+    archive
+        .push_archive_entry(SevenzEntry::new_file("note.txt"), Some(Cursor::new(b"hello")))
+        .unwrap();
+    archive
+        .push_archive_entry(SevenzEntry::new_file("data.bin"), Some(Cursor::new(b"data")))
+        .unwrap();
+    let bytes = archive.finish().unwrap().into_inner();
+
+    let mut limits = default_limits();
+    limits.max_archive_size = 9;
+    let contents = extract_7z_text_content(&bytes, &limits).unwrap();
+    assert_eq!(contents.len(), 1);
+    assert_eq!(contents["note.txt"], "hello");
+
+    limits.max_archive_size = 8;
+    let error = extract_7z_text_content(&bytes, &limits).unwrap_err();
+    assert!(error.to_string().contains("data.bin"));
+}

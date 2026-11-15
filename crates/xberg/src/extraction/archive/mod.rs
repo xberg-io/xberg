@@ -9,6 +9,8 @@
 //!
 //! Each format has its own submodule with specialized extraction logic.
 
+use std::io::{self, Read, Write};
+
 mod gzip;
 mod sevenz;
 mod tar;
@@ -115,13 +117,47 @@ fn has_drive_or_unc_prefix(path: &str) -> bool {
     path.starts_with("//") || (bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':')
 }
 
-/// Add an entry's declared size to an archive's running total.
-///
-/// Declared sizes come from attacker-controlled headers, so the sum saturates rather than
-/// wrapping to a small value (or panicking with overflow checks on) and still trips the
-/// `max_archive_size` comparison that follows it.
-pub(crate) fn add_declared_size(total: u64, size: u64) -> u64 {
-    total.saturating_add(size)
+fn add_declared_size(total: u64, size: u64) -> crate::error::Result<u64> {
+    total.checked_add(size).ok_or_else(|| {
+        crate::error::XbergError::validation("Archive declared uncompressed size overflows u64".to_string())
+    })
+}
+
+struct DecompressedBudget {
+    remaining: u64,
+}
+
+impl DecompressedBudget {
+    fn new(limit: u64) -> Self {
+        Self { remaining: limit }
+    }
+
+    fn read_member(
+        &mut self,
+        reader: impl Read,
+        output: &mut impl Write,
+        content_limit: Option<u64>,
+        member: &str,
+    ) -> crate::error::Result<io::Result<()>> {
+        let cap = content_limit.unwrap_or(u64::MAX).min(self.remaining);
+        let probe_limit = cap.saturating_add(1);
+        let mut limited = reader.take(probe_limit);
+        let result = io::copy(&mut limited, output);
+        // Take tracks successful reads even if a subsequent read fails integrity validation. ~keep
+        let consumed = probe_limit - limited.limit();
+        if consumed > cap {
+            let limit_name = if content_limit.is_some_and(|limit| limit <= self.remaining) {
+                "max_content_size"
+            } else {
+                "max_archive_size"
+            };
+            return Err(crate::error::XbergError::validation(format!(
+                "Archive member '{member}' exceeds {limit_name} while reading ({cap} bytes available)"
+            )));
+        }
+        self.remaining -= consumed;
+        Ok(result.map(|_| ()))
+    }
 }
 
 /// Common text file extensions that should be extracted from archives.

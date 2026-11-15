@@ -2,12 +2,12 @@
 //!
 //! Provides functions for extracting metadata and text content from 7Z archives.
 
-use super::{ArchiveEntry, ArchiveMetadata, TEXT_EXTENSIONS};
+use super::{ArchiveEntry, ArchiveMetadata, DecompressedBudget, TEXT_EXTENSIONS};
 use crate::error::{Result, XbergError};
 use crate::extractors::security::SecurityLimits;
 use ahash::AHashMap;
-use sevenz_rust2::{ArchiveReader, Password};
-use std::io::{Cursor, Read};
+use sevenz_rust2::{ArchiveReader, EntryDecision, Password};
+use std::io::{self, Cursor};
 
 /// Extract metadata from a 7z archive.
 ///
@@ -51,7 +51,7 @@ pub(crate) fn extract_7z_metadata(bytes: &[u8], limits: &SecurityLimits) -> Resu
         let is_dir = entry.is_directory();
 
         if !is_dir {
-            total_size = super::add_declared_size(total_size, size);
+            total_size = super::add_declared_size(total_size, size)?;
         }
 
         if total_size > limits.max_archive_size as u64 {
@@ -104,57 +104,40 @@ pub(crate) fn extract_7z_text_content(bytes: &[u8], limits: &SecurityLimits) -> 
     }
 
     let mut contents = AHashMap::new();
-    let max_content_size = limits.max_content_size;
-    let mut total_content_size = 0usize;
+    let mut total_content_size = 0u64;
+    let mut budget = DecompressedBudget::new(limits.max_archive_size as u64);
 
     archive
-        .for_each_entries(|entry, reader| {
-            let path = entry.name().to_string();
-
-            if !entry.is_directory() && TEXT_EXTENSIONS.iter().any(|ext| path.to_lowercase().ends_with(ext)) {
-                // sevenz-rust2 wraps only the COMPRESSED side of this stream in a bounded
-                // reader (`BoundedReader::new(.., pack_size)`); the one cap it does apply on
-                // the decompressed side (`file.size`) is the archive's own declared value --
-                // a number the attacker who built the archive chose. `read_to_end` was
-                // therefore bounded by nothing we control. Cap the read ourselves at
-                // `max_content_size`, the budget this member's decoded text is checked
-                // against a few lines down, using the gzip.rs/zip.rs/tar.rs `take(cap + 1)`
-                // shape so "exactly at the limit" stays distinguishable from "over".
-                let cap = max_content_size as u64;
-                let mut content = Vec::new();
-                let mut limited = reader.take(cap.saturating_add(1));
-                if limited.read_to_end(&mut content).is_ok() {
-                    if content.len() as u64 > cap {
-                        // Hard-reject from inside the closure instead of returning `Ok(false)`:
-                        // a soft stop here would fall through to the post-loop aggregate check
-                        // below, which by that point can no longer name the offending member
-                        // (other members may already have contributed to the running total).
-                        // Returning `Err` surfaces the member identity immediately, matching
-                        // the ZIP/TAR per-member rejection shape.
-                        return Err(sevenz_rust2::Error::Other(
-                            format!(
-                                "7z archive member '{}' exceeds max_content_size while reading (limit: {} bytes)",
-                                path, max_content_size
-                            )
-                            .into(),
-                        ));
-                    }
-                    let text = super::decode_archive_text(&content, &path);
-                    total_content_size = total_content_size.saturating_add(text.len());
-                    if total_content_size > max_content_size {
-                        return Ok(false);
-                    }
-                    contents.insert(path, text);
-                }
+        .for_each_entries_with_decision_allowing_surplus(|entry, reader| {
+            let path = entry.name();
+            if entry.is_directory() || !TEXT_EXTENSIONS.iter().any(|ext| path.to_lowercase().ends_with(ext)) {
+                budget
+                    .read_member(reader, &mut io::sink(), None, path)
+                    .map_err(entry_error)??;
+                return Ok(EntryDecision::Continue);
             }
-            Ok(true)
-        })
-        .map_err(|e| XbergError::parsing(format!("Failed to read 7z entries: {}", e)))?;
 
-    if total_content_size > max_content_size {
+            let mut content = Vec::new();
+            let cap = limits.max_content_size as u64;
+            budget
+                .read_member(reader, &mut content, Some(cap), path)
+                .map_err(entry_error)??;
+            let text = super::decode_archive_text(&content, path);
+            total_content_size = total_content_size
+                .checked_add(text.len() as u64)
+                .ok_or_else(|| sevenz_rust2::Error::Other("Archive decoded text size overflows u64".into()))?;
+            if total_content_size > cap {
+                return Ok(EntryDecision::Stop);
+            }
+            contents.insert(path.to_owned(), text);
+            Ok(EntryDecision::Continue)
+        })
+        .map_err(|e| XbergError::parsing(format!("Failed to read 7z entries: {e}")))?;
+
+    if total_content_size > limits.max_content_size as u64 {
         return Err(XbergError::validation(format!(
             "7z archive text content exceeds limit: {} bytes (max: {} bytes)",
-            total_content_size, max_content_size
+            total_content_size, limits.max_content_size
         )));
     }
 
@@ -188,52 +171,31 @@ pub(crate) fn extract_7z_file_bytes(bytes: &[u8], limits: &SecurityLimits) -> Re
     }
 
     let mut file_bytes = AHashMap::new();
-    let max_size = limits.max_archive_size;
-    let mut total_size = 0usize;
+    let mut budget = DecompressedBudget::new(limits.max_archive_size as u64);
 
     archive
-        .for_each_entries(|entry, reader| {
-            let path = entry.name().to_string();
-
-            if !entry.is_directory() {
-                // See the comment in `extract_7z_text_content`: sevenz-rust2 does not bound
-                // this read by anything we control. Cap it ourselves at `max_archive_size`,
-                // the budget `total_size` is checked against below.
-                let cap = max_size as u64;
+        .for_each_entries_with_decision_allowing_surplus(|entry, reader| {
+            let path = entry.name();
+            if entry.is_directory() {
+                budget
+                    .read_member(reader, &mut io::sink(), None, path)
+                    .map_err(entry_error)??;
+            } else {
                 let mut content = Vec::new();
-                let mut limited = reader.take(cap.saturating_add(1));
-                if limited.read_to_end(&mut content).is_ok() {
-                    if content.len() as u64 > cap {
-                        // See `extract_7z_text_content`: reject immediately so the error
-                        // names the offending member, instead of a soft `Ok(false)` that
-                        // defers to the aggregate check below.
-                        return Err(sevenz_rust2::Error::Other(
-                            format!(
-                                "7z archive member '{}' exceeds max_archive_size while reading (limit: {} bytes)",
-                                path, max_size
-                            )
-                            .into(),
-                        ));
-                    }
-                    total_size = total_size.saturating_add(content.len());
-                    if total_size > max_size {
-                        return Ok(false);
-                    }
-                    file_bytes.insert(path, content);
-                }
+                budget
+                    .read_member(reader, &mut content, None, path)
+                    .map_err(entry_error)??;
+                file_bytes.insert(path.to_owned(), content);
             }
-            Ok(true)
+            Ok(EntryDecision::Continue)
         })
-        .map_err(|e| XbergError::parsing(format!("Failed to read 7z entries: {}", e)))?;
-
-    if total_size > max_size {
-        return Err(XbergError::validation(format!(
-            "7z archive total extracted size exceeds limit: {} bytes (max: {} bytes)",
-            total_size, max_size
-        )));
-    }
+        .map_err(|e| XbergError::parsing(format!("Failed to read 7z entries: {e}")))?;
 
     Ok(file_bytes)
+}
+
+fn entry_error(error: XbergError) -> sevenz_rust2::Error {
+    sevenz_rust2::Error::Other(error.to_string().into())
 }
 
 #[cfg(test)]

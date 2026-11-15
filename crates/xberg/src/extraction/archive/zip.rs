@@ -2,11 +2,11 @@
 //!
 //! Provides functions for extracting metadata and text content from ZIP archives.
 
-use super::{ArchiveEntry, ArchiveMetadata, TEXT_EXTENSIONS};
+use super::{ArchiveEntry, ArchiveMetadata, DecompressedBudget, TEXT_EXTENSIONS};
 use crate::error::{Result, XbergError};
 use crate::extractors::security::SecurityLimits;
 use ahash::AHashMap;
-use std::io::{Cursor, Read};
+use std::io::Cursor;
 use zip::ZipArchive;
 
 /// Extract metadata from a ZIP archive.
@@ -59,7 +59,7 @@ pub(crate) fn extract_zip_metadata(bytes: &[u8], limits: &SecurityLimits) -> Res
         let is_dir = file.is_dir();
 
         if !is_dir {
-            total_size = super::add_declared_size(total_size, size);
+            total_size = super::add_declared_size(total_size, size)?;
         }
 
         if total_size > limits.max_archive_size as u64 {
@@ -111,7 +111,8 @@ pub(crate) fn extract_zip_text_content(bytes: &[u8], limits: &SecurityLimits) ->
 
     let estimated_text_files = archive.len().saturating_mul(3).saturating_div(10).max(2);
     let mut contents = AHashMap::with_capacity(estimated_text_files);
-    let mut total_content_size = 0usize;
+    let mut total_content_size = 0u64;
+    let mut budget = DecompressedBudget::new(limits.max_archive_size as u64);
 
     for i in 0..archive.len() {
         // A member that cannot be opened (encrypted, or compressed with a method this build
@@ -130,42 +131,29 @@ pub(crate) fn extract_zip_text_content(bytes: &[u8], limits: &SecurityLimits) ->
             .map_err(|error| XbergError::parsing(format!("Invalid ZIP entry name: {error}")))?
             .into_owned();
 
-        if !file.is_dir() && TEXT_EXTENSIONS.iter().any(|ext| path.to_lowercase().ends_with(ext)) {
-            // `zip` 2.4.2 builds the entry's `Read` impl as `Crc32Reader::new(Decompressor::new(..))`
-            // with no `Take` on the decompressed side (only the *compressed* side is bounded) --
-            // the declared `size()` header field is not enforced by the reader at all, so a member
-            // can expand arbitrarily regardless of what it claims. Bound the read ourselves at
-            // `max_content_size`: that is the aggregate budget this member's decoded text is about
-            // to be checked against a few lines down, so no single member can legitimately need
-            // more than the whole document's text budget. `+1` lets us tell "exactly at the limit"
-            // apart from "over the limit" instead of silently truncating a hostile member's content.
-            let cap = limits.max_content_size as u64;
-            let mut raw = Vec::new();
-            let mut limited = (&mut file).take(cap.saturating_add(1));
-            if let Err(e) = limited.read_to_end(&mut raw) {
+        if file.is_dir() || !TEXT_EXTENSIONS.iter().any(|ext| path.to_lowercase().ends_with(ext)) {
+            if let Err(e) = budget.read_member(&mut file, &mut std::io::sink(), None, &path)? {
                 tracing::warn!(member = %path, error = %e, "skipping ZIP member: read failed");
-                continue;
             }
-            if raw.len() as u64 > cap {
-                // Reject rather than silently truncate or skip: the pre-existing code already
-                // surfaced a hard error once the *decoded* total crossed `max_content_size`
-                // (below), so capping the read must not become a quieter failure mode than the
-                // one it replaces.
-                return Err(XbergError::validation(format!(
-                    "ZIP archive member '{}' exceeds max_content_size while decompressing (limit: {} bytes)",
-                    path, limits.max_content_size
-                )));
-            }
-            let content = super::decode_archive_text(&raw, &path);
-            total_content_size = total_content_size.saturating_add(content.len());
-            if total_content_size > limits.max_content_size {
-                return Err(XbergError::validation(format!(
-                    "ZIP archive text content exceeds limit: {} bytes (max: {} bytes)",
-                    total_content_size, limits.max_content_size
-                )));
-            }
-            contents.insert(path, content);
+            continue;
         }
+
+        let mut raw = Vec::new();
+        if let Err(e) = budget.read_member(&mut file, &mut raw, Some(limits.max_content_size as u64), &path)? {
+            tracing::warn!(member = %path, error = %e, "skipping ZIP member: read failed");
+            continue;
+        }
+        let content = super::decode_archive_text(&raw, &path);
+        total_content_size = total_content_size
+            .checked_add(content.len() as u64)
+            .ok_or_else(|| XbergError::validation("Archive decoded text size overflows u64".to_string()))?;
+        if total_content_size > limits.max_content_size as u64 {
+            return Err(XbergError::validation(format!(
+                "ZIP archive text content exceeds limit: {} bytes (max: {} bytes)",
+                total_content_size, limits.max_content_size
+            )));
+        }
+        contents.insert(path, content);
     }
 
     Ok(contents)
@@ -198,7 +186,7 @@ pub(crate) fn extract_zip_file_bytes(bytes: &[u8], limits: &SecurityLimits) -> R
     }
 
     let mut file_bytes = AHashMap::with_capacity(archive.len());
-    let mut total_size = 0usize;
+    let mut budget = DecompressedBudget::new(limits.max_archive_size as u64);
 
     for i in 0..archive.len() {
         // Skipped like an unreadable member; see `extract_zip_text_content`. ~keep
@@ -210,40 +198,19 @@ pub(crate) fn extract_zip_file_bytes(bytes: &[u8], limits: &SecurityLimits) -> R
             }
         };
 
-        if file.is_dir() {
-            continue;
-        }
-
         let path = file
             .name()
             .map_err(|error| XbergError::parsing(format!("Invalid ZIP entry name: {error}")))?
             .into_owned();
-        // See the comment in `extract_zip_text_content`: the underlying `zip` reader has no
-        // `Take` on the decompressed side, so `size()` (the declared header value) bounds
-        // nothing about this read. Cap it ourselves at `max_archive_size` -- the same budget
-        // `total_size` is checked against below, so no single member can legitimately need
-        // more than the whole archive's budget. The `+1` distinguishes "exactly at the limit"
-        // from "over" instead of silently truncating a hostile member's bytes.
-        let cap = limits.max_archive_size as u64;
+        if file.is_dir() {
+            if let Err(e) = budget.read_member(&mut file, &mut std::io::sink(), None, &path)? {
+                tracing::warn!(member = %path, error = %e, "skipping ZIP member: read failed");
+            }
+            continue;
+        }
+
         let mut content = Vec::new();
-        let mut limited = (&mut file).take(cap.saturating_add(1));
-        if limited.read_to_end(&mut content).is_ok() {
-            if content.len() as u64 > cap {
-                // Reject rather than silently truncate: the pre-existing code already surfaced
-                // a hard error once the running `total_size` crossed `max_archive_size` (below),
-                // so capping the read must not become a quieter failure mode than that.
-                return Err(XbergError::validation(format!(
-                    "ZIP archive member '{}' exceeds max_archive_size while decompressing (limit: {} bytes)",
-                    path, limits.max_archive_size
-                )));
-            }
-            total_size = total_size.saturating_add(content.len());
-            if total_size > limits.max_archive_size {
-                return Err(XbergError::validation(format!(
-                    "ZIP archive total extracted size exceeds limit: {} bytes (max: {} bytes)",
-                    total_size, limits.max_archive_size
-                )));
-            }
+        if budget.read_member(&mut file, &mut content, None, &path)?.is_ok() {
             file_bytes.insert(path, content);
         }
     }
