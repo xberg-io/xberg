@@ -529,9 +529,7 @@ async fn scan_full_line(
         };
         let count = primary.len();
         let alphabetic = primary.iter().all(|word| word.text.chars().all(char::is_alphabetic));
-        let covers_stock = [&primary, &confirmation]
-            .into_iter()
-            .all(|source| full_line_read_covers_stock(&words[indices.clone()], source));
+        let covers_stock = full_line_pair_covers_stock(&words[indices.clone()], [&primary, &confirmation]);
         if count <= group.len() || !alphabetic || !covers_stock {
             tracing::trace!(
                 ?owners,
@@ -569,10 +567,18 @@ async fn scan_full_line(
     Ok((!selected.is_empty()).then_some(selected))
 }
 
-fn has_common_line_band(source: &[RegionWord]) -> bool {
-    let Some(first) = source.first().map(|word| word.bounds) else {
+fn full_line_pair_covers_stock(stock: &[RegionBox], [primary, confirmation]: [&[RegionWord]; 2]) -> bool {
+    let Some(primary_band) = stock_owned_line_band(stock, primary) else {
         return false;
     };
+    let Some(confirmation_band) = stock_owned_line_band(stock, confirmation) else {
+        return false;
+    };
+    meaningful_vertical_overlap(primary_band, confirmation_band)
+}
+
+fn common_line_band(source: &[RegionWord]) -> Option<std::ops::Range<u32>> {
+    let first = source.first()?.bounds;
     let (top, bottom, shortest) = source[1..].iter().fold(
         (first.top, first.bottom, first.bottom - first.top),
         |(top, bottom, shortest), word| {
@@ -584,39 +590,41 @@ fn has_common_line_band(source: &[RegionWord]) -> bool {
             )
         },
     );
-    bottom.saturating_sub(top) >= shortest.div_ceil(2).max(2)
+    (bottom.saturating_sub(top) >= shortest.div_ceil(2).max(2)).then_some(top..bottom)
 }
 
-fn full_line_read_covers_stock(stock: &[RegionBox], source: &[RegionWord]) -> bool {
+fn meaningful_vertical_overlap(a: std::ops::Range<u32>, b: std::ops::Range<u32>) -> bool {
+    let shorter = (a.end - a.start).min(b.end - b.start);
+    let shared = a.end.min(b.end).saturating_sub(a.start.max(b.start));
+    shared >= shorter.div_ceil(2).max(2)
+}
+
+fn stock_owned_line_band(stock: &[RegionBox], source: &[RegionWord]) -> Option<std::ops::Range<u32>> {
+    let band = common_line_band(source)?;
     if stock.is_empty()
-        || !has_common_line_band(source)
         || stock.windows(2).any(|pair| pair[0].right > pair[1].left)
         || !source.windows(2).all(|pair| same_line(pair[0].bounds, pair[1].bounds))
     {
-        return false;
+        return None;
     }
     // A stock box can be much taller than its source word. Normalize vertical
     // overlap by the shorter box before counting horizontal split/join coverage. ~keep
-    stock.iter().all(|word| {
-        let covered: u32 = source
-            .iter()
-            .map(|candidate| candidate.bounds)
-            .filter(|candidate| {
-                let shorter = (word.bottom - word.top).min(candidate.bottom - candidate.top);
-                let shared = word
-                    .bottom
-                    .min(candidate.bottom)
-                    .saturating_sub(word.top.max(candidate.top));
-                shared >= shorter.div_ceil(2).max(2)
-            })
-            .map(|candidate| {
-                word.right
-                    .min(candidate.right)
-                    .saturating_sub(word.left.max(candidate.left))
-            })
-            .sum();
-        covered >= (word.right - word.left).div_ceil(2)
-    })
+    stock
+        .iter()
+        .all(|word| {
+            let covered: u32 = source
+                .iter()
+                .map(|candidate| candidate.bounds)
+                .filter(|candidate| meaningful_vertical_overlap(word.top..word.bottom, candidate.top..candidate.bottom))
+                .map(|candidate| {
+                    word.right
+                        .min(candidate.right)
+                        .saturating_sub(word.left.max(candidate.left))
+                })
+                .sum();
+            covered >= (word.right - word.left).div_ceil(2)
+        })
+        .then_some(band)
 }
 
 fn full_line_candidate(
@@ -747,6 +755,35 @@ mod tests {
     use super::*;
 
     #[test]
+    fn full_line_pair_declines_vertically_displaced_aligned_reads() {
+        let stock = [0, 12, 24].map(|left| RegionBox {
+            left,
+            right: left + 10,
+            top: 10,
+            bottom: 29,
+        });
+        let read = |top| {
+            stock.map(|bounds| RegionWord {
+                bounds: RegionBox {
+                    top,
+                    bottom: top + 10,
+                    ..bounds
+                },
+                text: "word".to_owned(),
+                confidence: 99.0,
+            })
+        };
+        let primary = read(10);
+        let aligned = read(15);
+        let displaced = read(19);
+        assert!(agree(&primary, &displaced));
+        assert!(stock_owned_line_band(&stock, &primary).is_some());
+        assert!(stock_owned_line_band(&stock, &displaced).is_some());
+        assert!(full_line_pair_covers_stock(&stock, [&primary, &aligned]));
+        assert!(!full_line_pair_covers_stock(&stock, [&primary, &displaced]));
+    }
+
+    #[test]
     fn full_line_read_declines_adjacent_overlap_without_common_band() {
         let stock = std::array::from_fn::<_, 3, _>(|i| RegionBox {
             left: i as u32 * 12,
@@ -760,7 +797,7 @@ mod tests {
             confidence: 99.0,
         });
         assert!(stock.windows(2).all(|pair| same_line(pair[0], pair[1])));
-        assert!(!full_line_read_covers_stock(&stock, &read));
+        assert!(stock_owned_line_band(&stock, &read).is_none());
     }
 
     #[test]
@@ -782,8 +819,8 @@ mod tests {
                 confidence: 99.0,
             }]
         };
-        assert!(full_line_read_covers_stock(&stock, &read(26, 36)));
-        assert!(!full_line_read_covers_stock(&stock, &read(39, 49)));
+        assert!(stock_owned_line_band(&stock, &read(26, 36)).is_some());
+        assert!(stock_owned_line_band(&stock, &read(39, 49)).is_none());
     }
 
     #[test]
@@ -807,9 +844,9 @@ mod tests {
         };
         let complete = words(&[(0, 8), (9, 16), (17, 36), (40, 52)]);
         let missing_end = words(&[(0, 8), (9, 16), (17, 26), (27, 36)]);
-        assert!(full_line_read_covers_stock(&stock, &complete));
+        assert!(stock_owned_line_band(&stock, &complete).is_some());
         assert!(missing_end.len() > stock.len());
-        assert!(!full_line_read_covers_stock(&stock, &missing_end));
+        assert!(stock_owned_line_band(&stock, &missing_end).is_none());
     }
 
     #[test]
