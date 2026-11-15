@@ -64,6 +64,7 @@ struct FormattingScope {
     font_id_stack: Vec<Option<u16>>,
     default_font_id: Option<u16>,
     group_has_text: Vec<bool>,
+    deleted_stack: Vec<bool>,
     pending_boundary_space: bool,
     expect_destination: bool,
     ignorable_pending: bool,
@@ -158,6 +159,7 @@ impl FormattingParser {
                 font_charsets: parse_font_charset_table(content),
                 ansi_codepage_stack: vec![1252],
                 font_id_stack: vec![None],
+                deleted_stack: vec![false],
                 ..Default::default()
             },
             ..Default::default()
@@ -191,6 +193,8 @@ impl FormattingParser {
         self.scope.ansi_codepage_stack.push(codepage);
         let font = self.scope.font_id_stack.last().copied().flatten();
         self.scope.font_id_stack.push(font);
+        let deleted = self.scope.deleted_stack.last().copied().unwrap_or(false);
+        self.scope.deleted_stack.push(deleted);
     }
 
     fn close_group(&mut self) {
@@ -202,6 +206,9 @@ impl FormattingParser {
         }
         if self.scope.font_id_stack.len() > 1 {
             self.scope.font_id_stack.pop();
+        }
+        if self.scope.deleted_stack.len() > 1 {
+            self.scope.deleted_stack.pop();
         }
         self.formatting.restore();
         if self.scope.skip_depth > 0 && self.scope.group_depth < self.scope.skip_depth {
@@ -221,11 +228,19 @@ impl FormattingParser {
         }
     }
 
+    fn is_deleted(&self) -> bool {
+        self.scope.deleted_stack.last().copied().unwrap_or(false)
+    }
+
+    fn text_suppressed(&self) -> bool {
+        self.scope.skip_depth > 0 || self.is_deleted()
+    }
+
     fn handle_whitespace(&mut self) {
         if self.fields.in_fldinst {
             self.fields.fldinst_content.push(' ');
         }
-        if self.scope.skip_depth > 0 {
+        if self.text_suppressed() {
             return;
         }
         if self.formatting.text_offset > 0 {
@@ -241,7 +256,7 @@ impl FormattingParser {
             self.fields.fldinst_content.push(character);
             return;
         }
-        if self.scope.skip_depth > 0 {
+        if self.text_suppressed() {
             return;
         }
         self.add_boundary_space();
@@ -286,7 +301,7 @@ impl FormattingParser {
         if self.fields.in_fldinst {
             self.fields.fldinst_content.push(next_ch);
         }
-        if self.scope.skip_depth > 0 {
+        if self.text_suppressed() {
             return;
         }
         self.add_boundary_space();
@@ -306,7 +321,7 @@ impl FormattingParser {
         chars.next();
         self.scope.expect_destination = false;
         let bytes = parse_hex_escape_bytes(chars);
-        if self.scope.skip_depth > 0 {
+        if self.text_suppressed() {
             return;
         }
         let Some(bytes) = bytes.as_deref() else {
@@ -409,6 +424,11 @@ impl FormattingParser {
                     self.scope.default_font_id = Some(value.max(0) as u16);
                 }
             }
+            "deleted" => {
+                if let Some(deleted) = self.scope.deleted_stack.last_mut() {
+                    *deleted = param.unwrap_or(1) != 0;
+                }
+            }
             _ => {}
         }
     }
@@ -433,6 +453,20 @@ impl FormattingParser {
     }
 
     fn emit_control_word(&mut self, word: &str, param: Option<i32>, chars: &mut Peekable<Chars<'_>>) {
+        if self.is_deleted() {
+            match word {
+                "u" => {
+                    if chars.peek().is_some_and(|next| !matches!(next, '\\' | '{' | '}')) {
+                        chars.next();
+                    }
+                    return;
+                }
+                "tab" | "line" | "bullet" | "lquote" | "rquote" | "ldblquote" | "rdblquote" | "endash" | "emdash" => {
+                    return;
+                }
+                _ => {}
+            }
+        }
         match word {
             "header" | "headerl" | "headerr" | "headerf" => {
                 self.header.active = true;

@@ -117,3 +117,11 @@ fn should_clip_annotations_and_preserve_attribute_and_link_order() {
     );
     assert_eq!(spans_to_annotations(4, 8, &formatting).len(), 0);
 }
+
+#[test]
+fn should_not_count_deleted_text_in_span_offsets() {
+    assert_eq!(
+        spans(r"{\rtf1 A{\deleted XX}{\b B}}"),
+        vec![(1, 2, true, false, false, false, 0)]
+    );
+}
