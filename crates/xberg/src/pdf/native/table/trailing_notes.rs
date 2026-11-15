@@ -54,6 +54,50 @@ pub(super) fn certified_prefix(region: &[HocrWord], cells: &[Vec<String>]) -> Op
     Some((start, prefix))
 }
 
+pub(super) fn certified_legend_prefix(prefix: &[HocrWord], cells: &[Vec<String>]) -> Option<Vec<HocrWord>> {
+    let (legend, rows) = cells.split_last()?;
+    if !rows
+        .last()?
+        .iter()
+        .skip(1)
+        .any(|cell| crate::table_core::text_is_value(cell))
+    {
+        return None;
+    }
+    let mut source_rows = super::numeric_rows(prefix, (super::median_region_word_height(prefix) / 2).max(3));
+    let (last, preceding) = source_rows.split_last_mut()?;
+    last.sort_by_key(|word| word.left);
+    let label = legend.first()?;
+    if !last
+        .iter()
+        .flat_map(|word| word.text.split_whitespace())
+        .eq(label.split_whitespace())
+    {
+        return None;
+    }
+    let cutoff = last.iter().map(|word| word.top).min()?;
+    let legend_height = last.iter().map(|word| word.height).max()?;
+    let body = preceding.last()?;
+    if legend_height == 0
+        || !body
+            .iter()
+            .filter(|word| crate::table_core::text_is_value(&word.text))
+            .all(|word| word.height > legend_height)
+        || !body.iter().any(|word| crate::table_core::text_is_value(&word.text))
+    {
+        return None;
+    }
+    let body_bottom = body.iter().map(|word| word.top.saturating_add(word.height)).max()?;
+    if cutoff.checked_sub(body_bottom)? < legend_height.div_ceil(2) {
+        return None;
+    }
+    prefix
+        .iter()
+        .filter(|word| word.top < cutoff)
+        .map(|word| (word.top.checked_add(word.height)? <= cutoff).then(|| word.clone()))
+        .collect()
+}
+
 fn source_note_cutoff(mut rows: Vec<Vec<&HocrWord>>) -> Option<u32> {
     for row in &mut rows {
         row.sort_by_key(|word| word.left);
@@ -274,5 +318,31 @@ mod tests {
             certified_prefix(&words, &grid).is_none(),
             "right-aligned continuation values"
         );
+    }
+    #[test]
+    fn legend_requires_a_separate_smaller_source_line() {
+        let word = |text: &str, left, top, height| HocrWord {
+            text: text.into(),
+            left,
+            top,
+            width: 20,
+            height,
+            confidence: 100.0,
+        };
+        let mut words = vec![
+            word("Revenue", 10, 0, 10),
+            word("123", 80, 0, 10),
+            word("N.M. = not meaningful", 10, 16, 7),
+        ];
+        let grid = vec![
+            vec!["Revenue".into(), "123".into()],
+            vec!["N.M. = not meaningful".into(), String::new()],
+        ];
+        assert_eq!(certified_legend_prefix(&words, &grid).unwrap().len(), 2);
+        words[2].height = 10;
+        assert!(certified_legend_prefix(&words, &grid).is_none());
+        words[2].height = 7;
+        words[2].top = 12;
+        assert!(certified_legend_prefix(&words, &grid).is_none());
     }
 }
