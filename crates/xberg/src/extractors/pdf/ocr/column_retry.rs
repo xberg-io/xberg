@@ -27,11 +27,24 @@ pub(super) async fn retry(
     config: &OcrConfig,
     cancel: Option<&CancellationToken>,
 ) -> crate::Result<(ExtractedDocument, Option<LineOrder>)> {
-    let mut baseline = baseline;
+    retry_order_read(baseline, backend.name(), cancel, || async {
+        let mut config = config.clone();
+        config.tesseract_config.get_or_insert_default().psm = Some(3);
+        backend.process_image_owned(raster, &config).await
+    })
+    .await
+}
+
+async fn retry_order_read(
+    mut baseline: ExtractedDocument,
+    backend: &str,
+    cancel: Option<&CancellationToken>,
+    read: impl AsyncFnOnce() -> crate::Result<ExtractedDocument>,
+) -> crate::Result<(ExtractedDocument, Option<LineOrder>)> {
     if explicitly_cancelled(cancel) {
         return Err(crate::XbergError::Cancelled);
     }
-    let frame = eligible_frame(&baseline, backend.name());
+    let frame = eligible_frame(&baseline, backend);
     if explicitly_cancelled(cancel) {
         return Err(crate::XbergError::Cancelled);
     }
@@ -39,12 +52,10 @@ pub(super) async fn retry(
         return Ok((baseline, None));
     };
     let read = retry_until_stop(cancel, async {
-        let mut config = config.clone();
-        config.tesseract_config.get_or_insert_default().psm = Some(3);
-        let candidate = backend.process_image_owned(raster, &config).await?;
+        let candidate = read().await?;
         Ok::<_, crate::XbergError>(
             (!stop_retry(cancel))
-                .then(|| ordering::plan(&baseline, &candidate, backend.name(), frame, cancel))
+                .then(|| ordering::plan(&baseline, &candidate, backend, frame, cancel))
                 .flatten(),
         )
     })
@@ -52,8 +63,10 @@ pub(super) async fn retry(
     if explicitly_cancelled(cancel) || matches!(read, Some(Err(crate::XbergError::Cancelled))) {
         return Err(crate::XbergError::Cancelled);
     }
-    if let Some(Ok(Some(order))) = read {
-        return Ok((baseline, Some(order)));
+    match read {
+        Some(Ok(Some(order))) => return Ok((baseline, Some(order))),
+        Some(Err(_)) => crate::core::extractor::cacheability::invalidate_current(),
+        _ => {}
     }
     note_deadline(&mut baseline.processing_warnings, cancel);
     Ok((baseline, None))

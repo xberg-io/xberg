@@ -79,7 +79,7 @@ fn deleting_real_source_words_cannot_count_as_improved_order() {
     assert!(source_order_improves(&old, &reordered, frame));
 }
 
-const FRAME: (u32, u32) = (1000, 500);
+pub(super) const FRAME: (u32, u32) = (1000, 500);
 
 fn source_page() -> Vec<Word<'static>> {
     let passage = [
@@ -99,7 +99,7 @@ fn source_page() -> Vec<Word<'static>> {
     words
 }
 
-fn page_read(psm: i32, content: &str, words: &[Word<'_>]) -> crate::types::ExtractedDocument {
+pub(super) fn page_read(psm: i32, content: &str, words: &[Word<'_>]) -> crate::types::ExtractedDocument {
     use crate::ocr_metadata_keys::{OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY};
     use crate::types::{ExtractedDocument, FormatMetadata, OcrConfidence, OcrElement, OcrElementLevel, OcrMetadata};
     let mut read = ExtractedDocument {
@@ -153,9 +153,9 @@ async fn an_eligible_deadline_cut_hands_off_primary_and_blocks_cache_publication
                 }
                 let words = source_page();
                 let primary = page_read(11, "completed primary", &words);
-                let read = tokio::time::timeout(
+                let (read, witness) = tokio::time::timeout(
                     Duration::from_secs(1),
-                    super::retry_read(primary, "tesseract", Some(&token), || async {
+                    super::retry_order_read(primary, "tesseract", Some(&token), || async {
                         assert!(!stopped_before, "a stopped operation started an optional OCR read");
                         stop();
                         pending().await
@@ -164,6 +164,7 @@ async fn an_eligible_deadline_cut_hands_off_primary_and_blocks_cache_publication
                 .await
                 .expect("stalled optional read must release the completed page")
                 .expect("soft deadline keeps the successful primary");
+                assert!(witness.is_none());
                 assert_eq!(read.content, "completed primary");
                 assert_eq!(read.ocr_elements.as_ref().unwrap().len(), words.len());
                 assert_eq!(read.processing_warnings.len(), 1);
@@ -467,4 +468,38 @@ async fn assert_whole_line_retry_keeps_primary(
     assert_eq!(result.content, expected_content);
     assert_eq!(serde_json::to_value(&result.ocr_elements).unwrap(), expected_elements);
     assert!(result.processing_warnings.is_empty());
+}
+
+#[tokio::test]
+async fn transient_order_retry_error_keeps_primary_and_invalidates_cache() {
+    use crate::core::extractor::cacheability;
+    let words = source_page();
+    let primary = page_read(11, "completed primary", &words);
+    cacheability::scope(async {
+        assert!(cacheability::can_publish_outer_result());
+        let (result, witness) = super::retry_order_read(primary.clone(), "tesseract", None, || async {
+            Err(crate::XbergError::Plugin {
+                message: "temporary backend failure".into(),
+                plugin_name: "tesseract".into(),
+            })
+        })
+        .await
+        .unwrap();
+        assert_eq!(result.content, primary.content);
+        assert!(result.processing_warnings.is_empty());
+        assert!(witness.is_none());
+        assert!(!cacheability::can_publish_outer_result());
+    })
+    .await;
+    cacheability::scope(async {
+        let (result, witness) = super::retry_order_read(primary.clone(), "tesseract", None, || async {
+            Ok(page_read(3, "ordinary no-op", &words))
+        })
+        .await
+        .unwrap();
+        assert_eq!(result.content, primary.content);
+        assert!(witness.is_none());
+        assert!(cacheability::can_publish_outer_result());
+    })
+    .await;
 }

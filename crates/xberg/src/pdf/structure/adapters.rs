@@ -536,6 +536,30 @@ pub(crate) fn ocr_doc_to_layout_paragraphs(
     min_containment: f32,
     font_size_scale: OcrFontSizeScale,
 ) -> Vec<types::PdfParagraph> {
+    ocr_doc_to_layout_paragraphs_ordered(
+        doc,
+        page_height_px,
+        hints,
+        min_confidence,
+        min_containment,
+        font_size_scale,
+        None,
+    )
+}
+
+#[cfg(all(feature = "ocr", feature = "layout-detection"))]
+pub(crate) type LayoutLineOrder<'a> = dyn FnMut(&[types::PdfParagraph]) -> Option<Vec<usize>> + 'a;
+
+#[cfg(all(feature = "ocr", feature = "layout-detection"))]
+pub(crate) fn ocr_doc_to_layout_paragraphs_ordered(
+    doc: &crate::types::internal::InternalDocument,
+    page_height_px: u32,
+    hints: &[types::LayoutHint],
+    min_confidence: f32,
+    min_containment: f32,
+    font_size_scale: OcrFontSizeScale,
+    order_lines: Option<&mut LayoutLineOrder<'_>>,
+) -> Vec<types::PdfParagraph> {
     use crate::types::internal::ElementKind;
     let page_height = page_height_px as f32;
     let mut all_lines = Vec::new();
@@ -581,9 +605,31 @@ pub(crate) fn ocr_doc_to_layout_paragraphs(
         all_hint_indices.extend(hint_indices);
     }
 
+    if let Some(order) = order_lines.and_then(|rank| rank(&all_lines)) {
+        let mut seen = vec![false; all_lines.len()];
+        let valid = order.len() == all_lines.len()
+            && order
+                .iter()
+                .all(|&index| seen.get_mut(index).is_some_and(|slot| !std::mem::replace(slot, true)));
+        if valid {
+            all_lines = permute_ocr_lines(all_lines, &order);
+            all_hint_indices = permute_ocr_lines(all_hint_indices, &order);
+            element_indices = permute_ocr_lines(element_indices, &order);
+            block_ids = permute_ocr_lines(block_ids, &order);
+        }
+    }
     let result = regroup_layout_lines_by_element(all_lines, all_hint_indices, element_indices, block_ids);
     trace_conversion("ocr_doc_to_layout_paragraphs", doc, &result);
     result
+}
+
+#[cfg(all(feature = "ocr", feature = "layout-detection"))]
+fn permute_ocr_lines<T>(items: Vec<T>, order: &[usize]) -> Vec<T> {
+    let mut slots: Vec<_> = items.into_iter().map(Some).collect();
+    order
+        .iter()
+        .map(|&index| slots[index].take().expect("validated permutation"))
+        .collect()
 }
 
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "layout-detection"))]

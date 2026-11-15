@@ -112,24 +112,21 @@ fn rank_lines(
             *votes.entry(a).or_default().entry(b).or_default() += 1;
         }
     }
-    let unique: Vec<_> = votes
-        .into_iter()
-        .filter_map(|(index, ranks)| {
-            let (&rank, &count) = ranks.iter().next()?;
-            (ranks.len() == 1 && count >= 2).then_some((index, rank))
-        })
-        .collect();
     let mut incoming = HashMap::<usize, usize>::new();
-    for &(_, rank) in &unique {
+    for &rank in votes.values().flat_map(|claims| claims.keys()) {
         *incoming.entry(rank).or_default() += 1;
     }
     Some(
-        unique
+        votes
             .into_iter()
-            .filter_map(|(i, rank)| {
+            .filter_map(|(i, claims)| {
+                let (&rank, &count) = claims.iter().next()?;
+                if claims.len() != 1 || count < 2 || incoming[&rank] != 1 {
+                    return None;
+                }
                 let element = &elements[i];
                 let bounds = bounds(element)?;
-                (incoming[&rank] == 1 && element.level == OcrElementLevel::Line).then(|| RankedLine {
+                (element.level == OcrElementLevel::Line).then(|| RankedLine {
                     literal: element.text.clone(),
                     bounds,
                     rank,
@@ -140,6 +137,24 @@ fn rank_lines(
 }
 
 impl LineOrder {
+    pub(in crate::extractors::pdf::ocr) fn before_grouping(
+        &self,
+        lines: &[PdfParagraph],
+        metadata: &crate::types::Metadata,
+        frame: (u32, u32),
+    ) -> Option<Vec<usize>> {
+        if self.frame != frame || pipeline::effective_tesseract_psm(metadata, "tesseract") != Some(11) {
+            return None;
+        }
+        let keys: Vec<_> = lines.iter().map(|line| self.paragraph_rank(line)).collect();
+        let order = paragraph_order(&keys)?;
+        tracing::debug!(
+            moved = order.iter().enumerate().filter(|(i, j)| *i != **j).count(),
+            "Reordered primary OCR paragraphs using column order before grouping"
+        );
+        Some(order)
+    }
+
     pub(in crate::extractors::pdf::ocr) fn reorder(
         &self,
         paragraphs: &[PdfParagraph],
@@ -226,7 +241,183 @@ fn paragraph_order(keys: &[Option<usize>]) -> Option<Vec<usize>> {
 
 #[cfg(test)]
 mod tests {
-    use super::paragraph_order;
+    use super::{LineOrder, RankedLine, Word, paragraph_order, rank_lines};
+
+    #[test]
+    fn a_one_vote_source_still_conflicts_with_a_two_vote_merged_retry_line() {
+        use crate::types::{ExtractedDocument, OcrConfidence, OcrElement, OcrElementLevel};
+
+        let words: Vec<_> = ["one", "two", "three", "separate", "line"]
+            .into_iter()
+            .enumerate()
+            .map(|(i, text)| {
+                let left = (i % 3) as u32 * 20;
+                let top = (i / 3) as u32 * 30;
+                Word {
+                    text,
+                    bounds: [left, top, left + 12, top + 10],
+                    confidence: 1.0,
+                }
+            })
+            .collect();
+        let read = |ranges: &[std::ops::Range<usize>]| {
+            let mut elements = Vec::new();
+            for range in ranges {
+                let first = words[range.start].bounds;
+                let last = words[range.end - 1].bounds;
+                let text = words[range.clone()]
+                    .iter()
+                    .map(|word| word.text)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                elements.push(
+                    OcrElement::new(
+                        text,
+                        super::super::rectangle([first[0], first[1], last[2], last[3]]),
+                        OcrConfidence::from_tesseract(100.0),
+                    )
+                    .with_level(OcrElementLevel::Line),
+                );
+            }
+            ExtractedDocument {
+                ocr_elements: Some(elements),
+                ..Default::default()
+            }
+        };
+        let primary = read(&[0..2, 2..3, 3..5]);
+        let merged = read(&[0..3, 3..5]);
+        let unchanged = rank_lines(&primary, &primary, &words, &words).unwrap();
+        assert_eq!(unchanged.len(), 2);
+        let actual = rank_lines(&primary, &merged, &words, &words).unwrap();
+        assert_eq!(
+            actual.iter().map(|line| line.literal.as_str()).collect::<Vec<_>>(),
+            ["separate line"]
+        );
+    }
+
+    #[test]
+    fn binds_primary_lines_before_grouping_and_leaves_the_header_in_place() {
+        use crate::pdf::structure::{
+            adapters::{OcrFontSizeScale, ocr_doc_to_layout_paragraphs_ordered},
+            types::{LayoutHint, LayoutHintClass},
+        };
+        use crate::types::{
+            OcrElementLevel,
+            internal::{ElementKind, InternalDocument, InternalElement},
+        };
+        let rows = [
+            ("First left", [10, 60, 110, 80]),
+            ("First right", [230, 60, 330, 80]),
+            ("Second left", [10, 80, 110, 100]),
+            ("Header", [10, 20, 330, 40]),
+            ("Second right", [230, 80, 330, 100]),
+            ("Third right", [230, 100, 330, 120]),
+        ];
+        let mut doc = InternalDocument::new("test");
+        for &(text, bounds) in &rows {
+            let mut element = InternalElement::text(
+                ElementKind::OcrText {
+                    level: OcrElementLevel::Line,
+                },
+                text,
+                0,
+            );
+            element.bbox = Some(super::super::bbox(bounds));
+            doc.push_element(element);
+        }
+        let ranks = [0, 2, 1, 3, 5, 4];
+        let order = LineOrder {
+            frame: super::super::tests::FRAME,
+            lines: rows
+                .iter()
+                .zip(ranks)
+                .map(|(&(text, bounds), rank)| RankedLine {
+                    literal: text.into(),
+                    bounds,
+                    rank,
+                })
+                .collect(),
+        };
+        let read = super::super::tests::page_read(11, "", &[]);
+        let mut rank = |lines: &[crate::pdf::structure::types::PdfParagraph]| {
+            order.before_grouping(lines, &read.metadata, super::super::tests::FRAME)
+        };
+        let result = ocr_doc_to_layout_paragraphs_ordered(
+            &doc,
+            500,
+            &[LayoutHint {
+                class_name: LayoutHintClass::PageHeader,
+                confidence: 1.0,
+                left: 10.0,
+                bottom: 460.0,
+                right: 330.0,
+                top: 480.0,
+            }],
+            0.5,
+            0.2,
+            OcrFontSizeScale::uniform(1.0),
+            Some(&mut rank),
+        );
+        let text: Vec<_> = result.iter().flat_map(|para| para.text.lines()).collect();
+        assert_eq!(
+            text,
+            [
+                "First left",
+                "Second left",
+                "First right",
+                "Header",
+                "Third right",
+                "Second right"
+            ]
+        );
+        assert_ordered_layout_retains_furniture(result);
+    }
+
+    fn assert_ordered_layout_retains_furniture(paragraphs: Vec<crate::pdf::structure::types::PdfParagraph>) {
+        use crate::types::{BoundingBox, ContentLayer};
+
+        let mut original = paragraphs.clone();
+        let config = crate::core::config::ExtractionConfig::default();
+        assert!(!super::super::pipeline::original_ocr_layout_blocks_reconstruction(
+            &mut original,
+            &config
+        ));
+        original
+            .iter_mut()
+            .find(|p| p.text.contains("First left"))
+            .unwrap()
+            .is_list_item = true;
+        let blocked = super::super::pipeline::original_ocr_layout_blocks_reconstruction(&mut original, &config);
+        assert!(blocked);
+        assert!(super::super::pipeline::ocr_heuristic_input(&paragraphs, blocked).is_empty());
+        assert_eq!(
+            super::super::pipeline::ocr_heuristic_input(&paragraphs, false).len(),
+            paragraphs.len()
+        );
+        let doc =
+            crate::pdf::structure::assemble_internal_document(vec![paragraphs], &[], None, &[], &Default::default());
+        let doc = super::super::document::build_pipeline_ocr_page_document(
+            Some(doc),
+            Vec::new(),
+            Vec::new(),
+            "",
+            1,
+            (1000, 500),
+            (500.0, 250.0),
+        )
+        .unwrap();
+        let header = doc.elements.iter().find(|el| el.text == "Header").unwrap();
+        assert_eq!(header.layer, ContentLayer::Header);
+        assert_eq!(
+            header.bbox,
+            Some(BoundingBox {
+                x0: 5.0,
+                y0: 230.0,
+                x1: 165.0,
+                y1: 240.0
+            })
+        );
+    }
 
     #[test]
     fn reorders_only_between_structure_barriers() {

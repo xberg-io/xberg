@@ -78,6 +78,7 @@ fn source_pages(bytes: &[u8]) -> Vec<RunPageParagraphs> {
                 is_monospace: false,
             };
             RunPageParagraphs {
+                preserve_ordered_layout: false,
                 paragraphs: vec![PdfParagraph {
                     text: String::new(),
                     lines: vec![line],

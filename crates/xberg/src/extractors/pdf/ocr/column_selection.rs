@@ -1,7 +1,9 @@
 //! Source-coordinate selection for a sparse/automatic page segmentation pair.
 
+#[cfg(test)]
 use std::ops::Range;
 
+#[cfg(test)]
 const MAX_WORDS: usize = 6_000;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -11,6 +13,7 @@ pub(super) struct Word<'a> {
     pub(super) confidence: f64,
 }
 
+#[cfg(test)]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct Selection {
     pub(super) substitutions: Vec<(usize, usize)>,
@@ -19,6 +22,7 @@ pub(super) struct Selection {
 
 /// Plan changes by source occurrence. Line ranges must describe complete baseline
 /// lines; a consumer must still verify ownership and line boundaries in the output.
+#[cfg(test)]
 pub(super) fn plan(baseline: &[Word<'_>], candidate: &[Word<'_>], lines: &[Range<usize>]) -> Selection {
     let mut selection = Selection {
         substitutions: Vec::new(),
@@ -95,6 +99,7 @@ fn majority_overlap(a: [u32; 4], b: [u32; 4]) -> bool {
     overlap > area(a).min(area(b)) / 2
 }
 
+#[cfg(test)]
 pub(super) fn same_line(left: Word<'_>, right: Word<'_>, height: f64) -> bool {
     let a = left.bounds;
     let b = right.bounds;
@@ -103,6 +108,7 @@ pub(super) fn same_line(left: Word<'_>, right: Word<'_>, height: f64) -> bool {
         && overlap > (a[3] - a[1]).min(b[3] - b[1]) / 2
 }
 
+#[cfg(test)]
 fn prefer_baseline(old: Word<'_>, new: Word<'_>) -> bool {
     if old.text == new.text {
         return false;
@@ -120,6 +126,7 @@ fn prefer_baseline(old: Word<'_>, new: Word<'_>) -> bool {
     }
 }
 
+#[cfg(test)]
 fn detached_line(
     line: Range<usize>,
     baseline: &[Word<'_>],

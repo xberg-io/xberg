@@ -4007,6 +4007,7 @@ pub(super) fn assemble_ocr_page_paragraphs(
     // frame instead of the raw raster one (#760) -- see
     // `pdf::structure::pipeline::DetachedMarkerFrame`.
     page_rotation_degrees: u32,
+    #[cfg(feature = "ocr")] order_lines: Option<&mut crate::pdf::structure::adapters::LayoutLineOrder<'_>>,
 ) -> Vec<crate::pdf::structure::types::PdfParagraph> {
     // `doc`'s bbox AND ocr_geometry are still both raw OCR raster pixels at this point in
     // the pure-OCR route (the pixel -> point rescale runs later, in
@@ -4018,14 +4019,25 @@ pub(super) fn assemble_ocr_page_paragraphs(
     #[cfg(feature = "ocr")]
     if let Some(detection) = detection {
         let hints = super::super::layout_hints::detection_to_layout_hints_pixel_space(detection, page_height as f32);
-        let mut paragraphs = crate::pdf::structure::adapters::ocr_doc_to_layout_paragraphs(
-            doc,
-            page_height,
-            &hints,
-            0.5,
-            0.2,
-            font_size_scale,
-        );
+        let mut paragraphs = match order_lines {
+            Some(order) => crate::pdf::structure::adapters::ocr_doc_to_layout_paragraphs_ordered(
+                doc,
+                page_height,
+                &hints,
+                0.5,
+                0.2,
+                font_size_scale,
+                Some(order),
+            ),
+            None => crate::pdf::structure::adapters::ocr_doc_to_layout_paragraphs(
+                doc,
+                page_height,
+                &hints,
+                0.5,
+                0.2,
+                font_size_scale,
+            ),
+        };
         apply_ocr_text_list_fallback(&mut paragraphs);
         // #729: a bare marker no ML hint ever classified (`is_list_item` still
         // `false`) is invisible to `reattach_ocr_layout_list_markers` below, whose
@@ -4337,6 +4349,13 @@ pub(super) fn fill_unstructured_ocr_pages(
         }
     }
 }
+
+pub(super) fn ocr_paragraphs_already_structured(paragraphs: &[crate::pdf::structure::types::PdfParagraph]) -> bool {
+    paragraphs
+        .iter()
+        .any(|paragraph| paragraph.heading_level.is_some() || paragraph.is_list_item)
+}
+
 /// Run the document-global heading/list heuristic
 /// (`pdf::structure::extract_document_structure_from_segments`, the same font-clustering
 /// pass the native xberg_native_pdf path uses) over already-built OCR paragraphs.
@@ -4373,11 +4392,7 @@ pub(super) fn heuristically_restructured_ocr_pages(
         .content_filter
         .as_ref()
         .is_some_and(|filter| filter.strip_repeating_text);
-    let already_structured = pages
-        .iter()
-        .flatten()
-        .any(|paragraph| paragraph.heading_level.is_some() || paragraph.is_list_item);
-    if already_structured {
+    if pages.iter().any(|page| ocr_paragraphs_already_structured(page)) {
         if !strip_repeating_text {
             return None;
         }

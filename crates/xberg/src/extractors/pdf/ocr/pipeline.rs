@@ -1684,6 +1684,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // comment on `skip_document_global_heuristic`).
     let mut ocr_page_paragraphs: ahash::AHashMap<u32, Vec<crate::pdf::structure::types::PdfParagraph>> =
         ahash::AHashMap::with_capacity(total);
+    let mut preserve_ordered_layout = ahash::AHashSet::<u32>::new();
     // Pipeline paragraphs without an explicit point mapping retain the legacy raster scale
     // for layer matching. Single-backend and already placed detached paragraphs use points. ~keep
     let mut ocr_raster_by_page: ahash::AHashMap<u32, (u32, u32)> = ahash::AHashMap::with_capacity(total);
@@ -2191,6 +2192,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         paragraphs_in_page_points.insert(page_number);
                     }
                     if !paragraph_page.paragraphs.is_empty() {
+                        if paragraph_page.preserve_ordered_layout {
+                            preserve_ordered_layout.insert(page_number);
+                        }
                         ocr_page_paragraphs.insert(page_number, paragraph_page.paragraphs);
                     }
                     let page_dims = dimensions.get(&page_idx).copied();
@@ -2389,6 +2393,9 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         paragraphs_in_page_points.insert(page_number);
                     }
                     if !paragraph_page.paragraphs.is_empty() {
+                        if paragraph_page.preserve_ordered_layout {
+                            preserve_ordered_layout.insert(page_number);
+                        }
                         ocr_page_paragraphs.insert(page_number, paragraph_page.paragraphs);
                     }
                     for mut formula in formulas {
@@ -3950,7 +3957,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
             if structured_ocr_pages.contains_key(&page_number)
                 && let Some(slot) = pages_for_heuristic.get_mut((page_number - 1) as usize)
             {
-                *slot = paragraphs.clone();
+                slot.extend_from_slice(ocr_heuristic_input(
+                    paragraphs,
+                    preserve_ordered_layout.contains(&page_number),
+                ));
             }
         }
         let tables_for_heuristic: Vec<crate::types::Table> = structured_ocr_pages
@@ -4013,10 +4023,7 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                 // cannot regress heading detection the way pre-classifying before the
                 // heuristic call would.
                 None => {
-                    let mut paragraphs = pages_for_heuristic
-                        .get((*page_number - 1) as usize)
-                        .cloned()
-                        .unwrap_or_default();
+                    let mut paragraphs = ocr_page_paragraphs.get(page_number).cloned().unwrap_or_default();
                     apply_ocr_text_list_fallback(&mut paragraphs);
                     // #729: recover a bare marker no ML hint ever classified, e.g. a
                     // marker paragraph whose body landed several paragraphs away --
@@ -5770,6 +5777,13 @@ pub(super) async fn extract_with_ocr_for_page(
     // paragraphs of a rejected page must be dropped along with its text.
     let mut rejected_pages = vec![false; total_pages];
     let mut all_page_paragraphs: Vec<Option<Vec<crate::pdf::structure::types::PdfParagraph>>> = vec![None; total_pages];
+    #[cfg(all(
+        feature = "ocr",
+        feature = "layout-detection",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let mut ordered_layout_pages = vec![false; total_pages];
     // The factor from each page's OCR raster to points, recorded beside its paragraphs for the
     // layer merge. ~keep
     #[cfg_attr(
@@ -7823,13 +7837,97 @@ pub(super) async fn extract_with_ocr_for_page(
                     };
                     #[cfg(not(feature = "pdf"))]
                     let page_rotation_degrees: u32 = 0;
+                    #[cfg(all(
+                        feature = "ocr",
+                        feature = "layout-detection",
+                        feature = "tokio-runtime",
+                        not(target_arch = "wasm32")
+                    ))]
+                    let mut column_order = batch_column_orders[offset].take();
+                    #[cfg(all(
+                        feature = "ocr",
+                        feature = "layout-detection",
+                        feature = "tokio-runtime",
+                        not(target_arch = "wasm32")
+                    ))]
+                    let mut ordered_early = false;
+                    #[cfg(all(
+                        feature = "ocr",
+                        feature = "layout-detection",
+                        feature = "tokio-runtime",
+                        not(target_arch = "wasm32")
+                    ))]
+                    let mut order_lines = |lines: &[crate::pdf::structure::types::PdfParagraph]| {
+                        let cancel = config.cancel_token.as_ref();
+                        if page_rotation_degrees != 0
+                            || page_margins.top != 0.0
+                            || page_margins.bottom != 0.0
+                            || !recognized_tables.unrecognized_table_text.is_empty()
+                            || config
+                                .content_filter
+                                .as_ref()
+                                .is_some_and(|filter| filter.strip_repeating_text)
+                            || cancel.is_some_and(|token| token.is_cancelled() || token.time_limit_reached())
+                        {
+                            return None;
+                        }
+                        let order = column_order.as_ref()?.before_grouping(
+                            lines,
+                            &ocr_result.metadata,
+                            (ocr_layout_width, ocr_layout_height),
+                        )?;
+                        ordered_early = true;
+                        Some(order)
+                    };
                     let mut paragraphs = assemble_ocr_page_paragraphs(
                         ocr_doc,
                         ocr_layout_height,
                         ocr_scaled_detection.as_ref(),
                         points_per_pixel,
                         page_rotation_degrees,
+                        #[cfg(all(
+                            feature = "ocr",
+                            feature = "layout-detection",
+                            feature = "tokio-runtime",
+                            not(target_arch = "wasm32")
+                        ))]
+                        Some(&mut order_lines),
+                        #[cfg(all(feature = "ocr", any(not(feature = "tokio-runtime"), target_arch = "wasm32")))]
+                        None,
                     );
+                    #[cfg(all(
+                        feature = "ocr",
+                        feature = "layout-detection",
+                        feature = "tokio-runtime",
+                        not(target_arch = "wasm32")
+                    ))]
+                    if ordered_early {
+                        let cancel = config.cancel_token.as_ref();
+                        if cancel.is_some_and(|token| token.is_cancelled()) {
+                            return Err(crate::XbergError::Cancelled.into());
+                        }
+                        // Reordering can change list detection, which is a gate for the
+                        // document-global pass that rebuilds paragraphs without layout hints.
+                        let mut original = assemble_ocr_page_paragraphs(
+                            ocr_doc,
+                            ocr_layout_height,
+                            ocr_scaled_detection.as_ref(),
+                            points_per_pixel,
+                            page_rotation_degrees,
+                            None,
+                        );
+                        if cancel.is_some_and(|token| token.is_cancelled()) {
+                            return Err(crate::XbergError::Cancelled.into());
+                        }
+                        if cancel.is_some_and(|token| token.time_limit_reached()) {
+                            paragraphs = original;
+                            super::column_retry::note_deadline(&mut backend_page_warnings, cancel);
+                        } else {
+                            ordered_layout_pages[page_idx] =
+                                original_ocr_layout_blocks_reconstruction(&mut original, config);
+                        }
+                        column_order = None;
+                    }
                     append_unrecognized_table_fallback_paragraphs(
                         &mut paragraphs,
                         &recognized_tables.unrecognized_table_text,
@@ -7866,7 +7964,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         feature = "tokio-runtime",
                         not(target_arch = "wasm32")
                     ))]
-                    if let Some(order) = batch_column_orders[offset].take()
+                    if let Some(order) = column_order
                         && recognized_tables.unrecognized_table_text.is_empty()
                     {
                         let cancel = config.cancel_token.as_ref();
@@ -8430,7 +8528,26 @@ pub(super) async fn extract_with_ocr_for_page(
             let detached_table_document: Option<crate::types::internal::InternalDocument> = None;
             let doc = if detached_table_document.is_some() {
                 detached_table_document
-            } else if skip_document_global_heuristic {
+            } else if skip_document_global_heuristic || {
+                #[cfg(all(
+                    feature = "ocr",
+                    feature = "layout-detection",
+                    feature = "tokio-runtime",
+                    not(target_arch = "wasm32")
+                ))]
+                {
+                    ordered_layout_pages.iter().any(|&ordered| ordered)
+                }
+                #[cfg(not(all(
+                    feature = "ocr",
+                    feature = "layout-detection",
+                    feature = "tokio-runtime",
+                    not(target_arch = "wasm32")
+                )))]
+                {
+                    false
+                }
+            } {
                 Some(crate::pdf::structure::assemble_internal_document(
                     pages.clone(),
                     &collected_tables,
@@ -8504,6 +8621,26 @@ pub(super) async fn extract_with_ocr_for_page(
                             not(target_arch = "wasm32")
                         ))]
                         leading_khmer_rows: leading_khmer_rows.remove(&_page_index),
+                        preserve_ordered_layout: {
+                            #[cfg(all(
+                                feature = "ocr",
+                                feature = "layout-detection",
+                                feature = "tokio-runtime",
+                                not(target_arch = "wasm32")
+                            ))]
+                            {
+                                ordered_layout_pages[_page_index]
+                            }
+                            #[cfg(not(all(
+                                feature = "ocr",
+                                feature = "layout-detection",
+                                feature = "tokio-runtime",
+                                not(target_arch = "wasm32")
+                            )))]
+                            {
+                                false
+                            }
+                        },
                         paragraphs,
                         ocr_scale,
                         detached_ocr_scale,
@@ -10110,6 +10247,30 @@ struct RunLayerSources<'a> {
     raw_page_paragraphs: &'a [RunPageParagraphs],
 }
 
+#[cfg(all(
+    feature = "ocr",
+    feature = "layout-detection",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(super) fn original_ocr_layout_blocks_reconstruction(
+    paragraphs: &mut Vec<crate::pdf::structure::types::PdfParagraph>,
+    config: &ExtractionConfig,
+) -> bool {
+    apply_ocr_layout_content_filter(paragraphs, config);
+    crate::pdf::structure::adapters::promote_anchored_ordered_list_sequences(std::slice::from_mut(paragraphs));
+    super::document::ocr_paragraphs_already_structured(paragraphs)
+}
+
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+pub(super) fn ocr_heuristic_input(
+    paragraphs: &[crate::pdf::structure::types::PdfParagraph],
+    preserve_ordered_layout: bool,
+) -> &[crate::pdf::structure::types::PdfParagraph] {
+    // Rebuilding from segments loses classified furniture and line order.
+    if preserve_ordered_layout { &[] } else { paragraphs }
+}
+
 /// The OCR paragraphs of one page and their per-axis conversion to MediaBox points.
 /// Certified layout pages already use points and have an identity conversion.
 /// A missing conversion means the page cannot authorize removal during the layer merge. ~keep
@@ -10117,6 +10278,7 @@ struct RunLayerSources<'a> {
 #[derive(Debug, Default)]
 pub(super) struct RunPageParagraphs {
     pub(super) paragraphs: Vec<crate::pdf::structure::types::PdfParagraph>,
+    pub(super) preserve_ordered_layout: bool,
     pub(super) ocr_scale: Option<(f32, f32)>,
     pub(super) detached_ocr_scale: Option<(f32, f32)>,
     /// Raster dimensions used to assemble paragraphs, after undoing any backend rotation.
