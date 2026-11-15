@@ -277,6 +277,12 @@ async fn a_symbol_heavy_direct_read_keeps_its_lines_without_a_noise_verdict() {
     )
     .await;
 
+    let noise_warnings = document
+        .processing_warnings
+        .iter()
+        .filter(|warning| warning.message.contains("suspected OCR recognition noise"))
+        .count();
+    assert_eq!(noise_warnings, 0);
     assert_eq!(prune_warnings(&document), Vec::<String>::new());
     assert_eq!(document.content.trim(), noisy_page());
 }
