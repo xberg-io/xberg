@@ -100,20 +100,23 @@ fn complete_line_owners(read: &ExtractedDocument, words: &[Word<'_>]) -> Option<
 }
 
 #[derive(Clone, Default)]
-struct LineClaims([Option<usize>; 3]);
+struct LineClaims {
+    owners: [Option<usize>; 3],
+    unresolved: bool,
+}
 
 impl LineClaims {
     fn record(&mut self, line: usize) {
-        if !self.0.contains(&Some(line))
-            && let Some(slot) = self.0.iter_mut().find(|slot| slot.is_none())
+        if !self.owners.contains(&Some(line))
+            && let Some(slot) = self.owners.iter_mut().find(|slot| slot.is_none())
         {
             *slot = Some(line);
         }
     }
 
     fn unique(&self) -> Option<usize> {
-        match self.0 {
-            [Some(line), None, None] => Some(line),
+        match (self.unresolved, self.owners) {
+            (false, [Some(line), None, None]) => Some(line),
             _ => None,
         }
     }
@@ -135,12 +138,16 @@ impl<'a, 'text> OrderEvidence<'a, 'text> {
         // Three distinct claims suffice to reject a rank and keep the witness bounded.
         let mut outgoing = vec![LineClaims::default(); source.spans.len()];
         let mut incoming = vec![LineClaims::default(); destination.spans.len()];
-        let partners = column_selection::geometric_partners(old, new, |i, j| {
-            if let (Some(a), Some(b)) = (source.by_word[i], destination.by_word[j]) {
-                outgoing[a].record(b);
-                incoming[b].record(a);
-            }
-        });
+        let partners =
+            column_selection::geometric_partners(old, new, |i, j| match (source.by_word[i], destination.by_word[j]) {
+                (Some(a), Some(b)) => {
+                    outgoing[a].record(b);
+                    incoming[b].record(a);
+                }
+                (Some(a), None) => outgoing[a].unresolved = true,
+                (None, Some(b)) => incoming[b].unresolved = true,
+                (None, None) => {}
+            });
         let mut votes = vec![0; source.spans.len()];
         for (i, &partner) in partners.iter().enumerate() {
             let Some(j) = partner else { continue };
@@ -200,10 +207,11 @@ impl<'a, 'text> OrderEvidence<'a, 'text> {
     fn rank(&self, line: usize) -> Option<usize> {
         let rank = self.outgoing[line].unique()?;
         let votes = self.votes[line];
-        if votes < 2 {
+        let incoming = &self.incoming[rank];
+        if votes < 2 || incoming.unresolved {
             return None;
         }
-        match self.incoming[rank].0 {
+        match incoming.owners {
             [Some(_), None, None] => Some(rank),
             [Some(a), Some(b), None] => {
                 let prefix = if a == line { b } else { a };
@@ -366,6 +374,33 @@ mod tests {
     #[test]
     fn split_retry_words_still_veto_a_merged_retry_line() {
         assert_competing_line_blocks_merged_retry_line(&["th", "ree"]);
+    }
+
+    #[test]
+    fn a_word_crossing_its_line_box_vetoes_a_rank_on_either_read() {
+        let words = [
+            ("one", [0, 0, 12, 10]),
+            ("two", [20, 0, 32, 10]),
+            ("three", [40, 0, 52, 10]),
+            ("separate", [0, 30, 12, 40]),
+            ("line", [20, 30, 32, 40]),
+        ]
+        .map(|(text, bounds)| Word {
+            text,
+            bounds,
+            confidence: 1.0,
+        });
+        let intact = line_read(&words, &[0..3, 3..5]);
+        let mut clipped = line_read(&words, &[0..2, 2..3, 3..5]);
+        clipped.ocr_elements.as_mut().unwrap()[1].geometry = super::super::rectangle([41, 0, 52, 10]);
+
+        for (primary, retry) in [(&clipped, &intact), (&intact, &clipped)] {
+            let ranked = rank_lines(primary, retry, &words, &words).unwrap();
+            assert_eq!(
+                ranked.iter().map(|line| line.literal.as_str()).collect::<Vec<_>>(),
+                ["separate line"]
+            );
+        }
     }
 
     fn assert_competing_line_blocks_merged_retry_line(competing_retry_literals: &[&str]) {
