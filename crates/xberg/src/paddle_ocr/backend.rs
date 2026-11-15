@@ -357,7 +357,27 @@ struct PaddleRasterOcr {
     blocks: Vec<xberg_paddle_ocr::DetailedTextBlock>,
     width: u32,
     height: u32,
-    row_recovery: Option<ruled_punctuation::split_rows::RowRecovery>,
+    repair: PaddleRuledRepair,
+}
+
+#[derive(Default)]
+struct PaddleRuledRepair {
+    blocks: Option<Vec<xberg_paddle_ocr::DetailedTextBlock>>,
+    rows: Option<ruled_punctuation::split_rows::RowRecovery>,
+}
+
+impl PaddleRasterOcr {
+    fn adopt_ruled_repair(
+        self,
+    ) -> (
+        Vec<xberg_paddle_ocr::DetailedTextBlock>,
+        Option<ruled_punctuation::split_rows::RowRecovery>,
+    ) {
+        if crate::core::extractor::cacheability::ocr_stop_requested() {
+            return (self.blocks, None);
+        }
+        (self.repair.blocks.unwrap_or(self.blocks), self.repair.rows)
+    }
 }
 
 struct PaddlePageOcr {
@@ -1044,17 +1064,15 @@ impl PaddleOcrBackend {
                 plugin_name: "paddle-ocr".to_string(),
             })?
         });
-        let PaddleRasterOcr {
-            blocks: mut text_blocks,
-            width: processed_width,
-            height: processed_height,
-            row_recovery,
-        } = tokio::task::spawn_blocking(worker)
+        let raster = tokio::task::spawn_blocking(worker)
             .await
             .map_err(|e| crate::XbergError::Plugin {
                 message: format!("PaddleOCR task panicked: {}", e),
                 plugin_name: "paddle-ocr".to_string(),
             })??;
+
+        let (processed_width, processed_height) = (raster.width, raster.height);
+        let (mut text_blocks, row_recovery) = raster.adopt_ruled_repair();
 
         Self::reorder_blocks_for_page_rotation(
             &mut text_blocks,
@@ -1373,7 +1391,7 @@ impl PaddleOcrBackend {
         let mut discarded = DropScoreDiscardStats::default();
         let mut kept_box_scores = BoxScoreSummary::default();
         let mut discarded_box_scores = BoxScoreSummary::default();
-        let mut text_blocks: Vec<_> = result
+        let text_blocks: Vec<_> = result
             .text_blocks
             .into_iter()
             .filter(|block| {
@@ -1426,32 +1444,41 @@ impl PaddleOcrBackend {
 
         tracing::debug!(text_block_count = text_blocks.len(), "PaddleOCR detection completed");
 
+        let mut repair = PaddleRuledRepair::default();
         if ruled_repairs.punctuation && ruled_punctuation::eligible(&img, text_blocks.len()) {
             let candidate = catch_unwind(std::panic::AssertUnwindSafe(|| {
                 Self::repair_ruled_table(&img, &text_blocks, ocr_engine)
             }));
-            if let Ok(Some(corrected)) = candidate
-                && !crate::core::extractor::cacheability::ocr_stop_requested()
-            {
-                text_blocks = corrected;
+            if let Ok(corrected) = candidate {
+                repair.blocks = corrected;
             }
         }
 
-        let row_recovery = if ruled_repairs.split_rows
-            && ruled_punctuation::eligible(&img, text_blocks.len())
+        let candidate_blocks = repair.blocks.as_deref().unwrap_or(&text_blocks);
+        if ruled_repairs.split_rows
+            && ruled_punctuation::eligible(&img, candidate_blocks.len())
             && !crate::core::extractor::cacheability::ocr_stop_requested()
         {
-            Self::table_for_blocks(&text_blocks).and_then(|table| {
-                ruled_punctuation::split_rows::recover(&img, table, &text_blocks, ruled_repairs.fused_words)
-            })
-        } else {
-            None
-        };
+            repair.rows = Self::table_for_blocks(candidate_blocks).and_then(|table| {
+                ruled_punctuation::split_rows::recover(&img, table, candidate_blocks, ruled_repairs.fused_words)
+            });
+        }
+        if ruled_repairs.punctuation
+            && let Some(recovery) = &repair.rows
+        {
+            let candidate = catch_unwind(std::panic::AssertUnwindSafe(|| {
+                Self::repair_ruled_rows(&img, candidate_blocks, recovery, ocr_engine)
+            }));
+            if let Ok(Some((corrected, revised))) = candidate {
+                repair.blocks = Some(corrected);
+                repair.rows = Some(revised);
+            }
+        }
         Ok(PaddleRasterOcr {
             blocks: text_blocks,
             width: processed_width,
             height: processed_height,
-            row_recovery,
+            repair,
         })
     }
 
@@ -1497,6 +1524,38 @@ impl PaddleOcrBackend {
         }
         let verified = Self::table_for_blocks(&corrected)?.cells == expected;
         (verified && !stopped()).then_some(corrected)
+    }
+
+    fn repair_ruled_rows(
+        image: &image::RgbImage,
+        blocks: &[xberg_paddle_ocr::DetailedTextBlock],
+        recovery: &ruled_punctuation::split_rows::RowRecovery,
+        engine: &PaddleOcrEngine,
+    ) -> Option<(
+        Vec<xberg_paddle_ocr::DetailedTextBlock>,
+        ruled_punctuation::split_rows::RowRecovery,
+    )> {
+        let stopped = crate::core::extractor::cacheability::ocr_stop_requested;
+        if stopped() {
+            return None;
+        }
+        let edits = recovery.punctuation_edits(image, blocks, stopped, |crop| {
+            engine
+                .recognize_source_crop(crop)
+                .ok()
+                .map(|text| text.trim().to_owned())
+        })?;
+        if edits.is_empty() {
+            return None;
+        }
+        let mut corrected = blocks.to_vec();
+        for (index, _, _, text) in &edits {
+            corrected[*index].block.text.clone_from(text);
+            corrected[*index].words[0].word.text.clone_from(text);
+        }
+        let stock = Self::table_for_blocks(&corrected)?;
+        let revised = ruled_punctuation::split_rows::recover(image, stock, &corrected, true)?;
+        (recovery.matches_with_edits(&revised, &edits) && !stopped()).then_some((corrected, revised))
     }
 
     /// Clusters `words` into table-candidate regions, reconstructs a grid for each, validates
@@ -1831,9 +1890,7 @@ impl OcrBackend for PaddleOcrBackend {
             let words = elements_to_hocr_words(&table_elements, 0.3);
             let built = Self::build_ocr_tables_from_words(&words);
             tables = built.tables;
-            if let Some(recovery) = row_recovery
-                && !crate::core::extractor::cacheability::ocr_stop_requested()
-            {
+            if let Some(recovery) = row_recovery {
                 recovery.apply(&mut tables);
             }
             table_count = built.table_count;

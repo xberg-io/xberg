@@ -26,6 +26,8 @@ struct Grid {
 }
 
 type Bounds = (u32, u32, u32, u32);
+type Site = (usize, usize, usize, Bounds);
+type Edit = (usize, usize, usize, String);
 
 pub(super) fn eligible(image: &RgbImage, block_count: usize) -> bool {
     (1..=MAX_SIDE).contains(&image.width())
@@ -324,8 +326,8 @@ pub(super) fn corrections(
     table: &Table,
     blocks: &[DetailedTextBlock],
     stopped: impl Fn() -> bool,
-    mut read: impl FnMut(&RgbImage) -> Option<String>,
-) -> Option<Vec<(usize, usize, usize, String)>> {
+    read: impl FnMut(&RgbImage) -> Option<String>,
+) -> Option<Vec<Edit>> {
     if stopped() || !eligible(image, blocks.len()) {
         return None;
     }
@@ -333,6 +335,22 @@ pub(super) fn corrections(
     let grid = grid(&gray, table)?;
     let owners = owners(&gray, &grid, table, blocks)?;
     let cols = grid.columns.len();
+    let sites = owners
+        .into_iter()
+        .enumerate()
+        .map(|(offset, (index, detected))| (index, offset / cols, offset % cols, detected));
+    read_sites(image, (&grid, &table.cells), blocks, sites, stopped, read)
+}
+
+fn read_sites(
+    image: &RgbImage,
+    source: (&Grid, &[Vec<String>]),
+    blocks: &[DetailedTextBlock],
+    sites: impl IntoIterator<Item = Site>,
+    stopped: impl Fn() -> bool,
+    mut read: impl FnMut(&RgbImage) -> Option<String>,
+) -> Option<Vec<Edit>> {
+    let (grid, cells) = source;
     let mut remaining = MAX_REREAD_CELLS * 3;
     let mut read_bounded = |crop: &RgbImage| {
         if stopped() || crop.width() > crop.height() * MAX_CROP_ASPECT {
@@ -342,12 +360,11 @@ pub(super) fn corrections(
         read(crop).filter(|_| !stopped())
     };
     let mut edits = Vec::new();
-    for (offset, (index, detected)) in owners.into_iter().enumerate() {
+    for (index, row, col, detected) in sites {
         if stopped() {
             return None;
         }
-        let (row, col) = (offset / cols, offset % cols);
-        let stock = &table.cells[row][col];
+        let stock = &cells[row][col];
         if row == 0 || col == 0 || !stock.bytes().any(|b| matches!(b, b'.' | b',')) {
             continue;
         }
@@ -395,10 +412,14 @@ mod tests {
     }
 
     fn ruled_control() -> RuledControl {
-        let mut image = RgbImage::from_pixel(90, 33, image::Rgb([255; 3]));
+        ruled_control_with_rows(3)
+    }
+
+    fn ruled_control_with_rows(rows: u32) -> RuledControl {
+        let mut image = RgbImage::from_pixel(90, rows * 11, image::Rgb([255; 3]));
         let ink = image::Rgb([0; 3]);
         let mut blocks = Vec::new();
-        for row in 0..3 {
+        for row in 0..rows {
             let top = row * 11;
             for x in 0..90 {
                 image.put_pixel(x, top + 10, ink);
@@ -416,10 +437,77 @@ mod tests {
             }
         }
         let table = Table {
-            cells: vec![vec!["1.2".to_owned(); 3]; 3],
+            cells: vec![vec!["1.2".to_owned(); 3]; rows as usize],
             ..Default::default()
         };
         RuledControl { image, table, blocks }
+    }
+
+    #[tokio::test]
+    async fn stop_after_worker_handoff_discards_commas_and_fused_row_plan_together() {
+        use super::super::{PaddleRasterOcr, PaddleRuledRepair};
+        use crate::cancellation::CancellationToken;
+        use crate::core::extractor::cacheability::{blocking, ocr_stop_requested, with_ocr_cancellation};
+
+        for stop in [false, true] {
+            let token = CancellationToken::new();
+            with_ocr_cancellation(Some(&token), async {
+                let worker = blocking(|| {
+                    let RuledControl {
+                        image,
+                        mut table,
+                        mut blocks,
+                    } = ruled_control_with_rows(4);
+                    let mut fused = block("1.2 1.2", (40, 12, 77, 20));
+                    fused.words = blocks[4..6]
+                        .iter()
+                        .map(|owner| {
+                            let mut word = owner.words[0].clone();
+                            word.box_points = owner.block.box_points.clone();
+                            word
+                        })
+                        .collect();
+                    drop(blocks.splice(4..6, [fused]));
+                    table.cells[1][1] = "1.2 1.2".to_owned();
+                    table.cells[1][2].clear();
+
+                    let mut corrected = blocks.clone();
+                    corrected[6].block.text = "1,2".to_owned();
+                    corrected[6].words[0].word.text = "1,2".to_owned();
+                    table.cells[2][1] = "1,2".to_owned();
+                    let plan = split_rows::recover(&image, table.clone(), &corrected, true)
+                        .expect("the worker produced a source-owned fused-row plan");
+                    let raster = PaddleRasterOcr {
+                        blocks,
+                        width: image.width(),
+                        height: image.height(),
+                        repair: PaddleRuledRepair {
+                            blocks: Some(corrected),
+                            rows: Some(plan),
+                        },
+                    };
+                    assert!(!ocr_stop_requested());
+                    (raster, table)
+                });
+                let (raster, mut table) = tokio::task::spawn_blocking(worker).await.unwrap();
+
+                if stop {
+                    token.cancel();
+                    table.cells[2][1] = "1.2".to_owned();
+                }
+                let (blocks, plan) = raster.adopt_ruled_repair();
+                assert_eq!(plan.is_some(), !stop);
+                if let Some(plan) = plan {
+                    plan.apply(std::slice::from_mut(&mut table));
+                }
+                let expected = if stop { "1.2" } else { "1,2" };
+                assert_eq!(blocks[6].block.text, expected);
+                assert_eq!(blocks[6].words[0].word.text, expected);
+                assert_eq!(table.cells[2][1], expected);
+                assert_eq!(table.cells[1][1..], if stop { ["1.2 1.2", ""] } else { ["1.2", "1.2"] });
+            })
+            .await;
+        }
     }
 
     #[test]
