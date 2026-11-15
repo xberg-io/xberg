@@ -115,7 +115,7 @@ fn palette(source: &PdfDocument, resources: &Object, color: &Object, available: 
 }
 
 pub(super) fn is_indexed_rgb_scan(attempt: &super::Attempt<'_>) -> bool {
-    indexed_image(attempt)
+    indexed_image(attempt, None)
         .and_then(|image| image.admit_palette(attempt.document))
         .is_some()
 }
@@ -134,7 +134,7 @@ struct IndexedImage {
     dpi: f64,
 }
 
-fn indexed_image(attempt: &super::Attempt<'_>) -> Option<IndexedImage> {
+fn indexed_image(attempt: &super::Attempt<'_>, selected_width: Option<u32>) -> Option<IndexedImage> {
     let (raster_w, raster_h, raster_png) = attempt.raster?;
     let raster = (raster_w as usize)
         .checked_mul(raster_h as usize)?
@@ -179,7 +179,11 @@ fn indexed_image(attempt: &super::Attempt<'_>) -> Option<IndexedImage> {
     let width = u32::try_from(dict.get("Width")?.as_integer()?).ok()?;
     let height = u32::try_from(dict.get("Height")?.as_integer()?).ok()?;
     let pixels = (width as usize).checked_mul(height as usize)?;
-    if width > MAX_TILE_SIDE || height <= MAX_TILE_SIDE || pixels > MAX_SOURCE_PIXELS || width <= raster_w {
+    if width > MAX_TILE_SIDE
+        || height <= MAX_TILE_SIDE
+        || pixels > MAX_SOURCE_PIXELS
+        || width <= selected_width.unwrap_or(raster_w)
+    {
         return None;
     }
     let dpi = placement_fits(frame, (width, height), (painted_w, painted_height))?;
@@ -207,7 +211,11 @@ impl IndexedImage {
 
 impl IndexedSource {
     pub(super) fn load(attempt: &super::Attempt<'_>) -> Option<Self> {
-        let image = indexed_image(attempt)?;
+        Self::load_with_selected_width(attempt, None)
+    }
+
+    pub(super) fn load_with_selected_width(attempt: &super::Attempt<'_>, selected_width: Option<u32>) -> Option<Self> {
+        let image = indexed_image(attempt, selected_width)?;
         let palette = image.admit_palette(attempt.document)?;
         let IndexedImage {
             frame,
@@ -992,11 +1000,11 @@ mod tests {
             max_strips: 4,
             cancel: None,
         };
-        let image = indexed_image(&attempt).expect("single supported indexed frame");
+        let image = indexed_image(&attempt, None).expect("single supported indexed frame");
         assert!(IndexedSource::load(&attempt).is_some());
         assert!(is_indexed_rgb_scan(&attempt));
         attempt.byte_limit -= image.available;
-        assert_eq!(indexed_image(&attempt).unwrap().available, 0);
+        assert_eq!(indexed_image(&attempt, None).unwrap().available, 0);
         assert!(IndexedSource::load(&attempt).is_none());
         assert!(!is_indexed_rgb_scan(&attempt));
     }

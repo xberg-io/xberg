@@ -135,6 +135,10 @@ async fn public_original_multipage_recovery() {
                     1,
                 )
         }
+        5 => {
+            assert!(text.starts_with("=\n\ncorey\n\n=\n\n"));
+            text.replacen('=', "01. PRODUCTS", 1)
+        }
         8 => {
             assert_eq!(text.matches("POP WAcES:").count(), 1);
             let interleaved = "Simplified.\n\nAutomated.\n\nFPO\n\nAdaptive.\n\n974x744";
@@ -157,15 +161,26 @@ async fn public_original_multipage_recovery() {
         }
         _ => text.to_owned(),
     };
-    let expected_document = expected(&expected(&expected(&expected(&stock.content, 4), 8), 11), 13);
+    let page_five = &stock.pages.as_ref().unwrap()[4].content;
+    assert_eq!(stock.content.matches(page_five).count(), 1);
+    let expected_document = stock.content.replacen(page_five, &expected(page_five, 5), 1);
+    let expected_document = expected(&expected(&expected(&expected(&expected_document, 4), 8), 11), 13);
     assert!(
         live.content == expected_document,
         "guide document content differs; line selection: {:?}",
         full.lines()
             .filter(|line| line.contains("full line OCR")
                 || line.contains("owned gap OCR")
+                || line.contains("undersampled line")
                 || line.contains("optional region OCR"))
             .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        full.lines()
+            .filter(|line| line.contains("optional region OCR backend call") && line.contains(" page=5 "))
+            .count(),
+        2,
+        "page five must use exactly one source-read pair"
     );
     let (old_pages, new_pages) = (stock.pages.as_ref().unwrap(), live.pages.as_ref().unwrap());
     assert_eq!((old_pages.len(), new_pages.len()), (13, 13));
@@ -256,4 +271,61 @@ async fn public_page_eight_heading_keeps_structured_output_exact() {
             config.output_format
         );
     }
+}
+
+#[tokio::test]
+#[ignore = "requires the exact archived page five"]
+async fn public_page_five_undersampled_line_keeps_competing_owner() {
+    let path = std::path::PathBuf::from(std::env::var_os("XBERG_2502_PAGE5_ARCHIVE").unwrap());
+    assert_eq!(
+        hex::encode(Sha256::digest(std::fs::read(&path).unwrap())),
+        "58c1d40e39ba494a4f7f4c301bccde1bb2ccc1b7a9d3050b9fe28b31c1a2ac9c"
+    );
+    let model = tempfile::tempdir().unwrap();
+    std::fs::write(
+        model.path().join("eng.traineddata"),
+        xberg_tesseract::bundled_eng_traineddata().unwrap(),
+    )
+    .unwrap();
+    tracing_subscriber::fmt()
+        .with_env_filter("xberg::extractors::pdf::ocr::tall_source=trace,xberg::extraction::derive::pages=trace")
+        .with_ansi(false)
+        .try_init()
+        .unwrap();
+    let mut config = ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig {
+            tessdata_path: Some(model.path().to_path_buf()),
+            tesseract_config: Some(xberg::TesseractConfig {
+                preprocessing: Some(xberg::ImagePreprocessingConfig {
+                    deskew: false,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        pages: Some(serde_json::from_value(serde_json::json!({"extract_pages": true})).unwrap()),
+        ..Default::default()
+    };
+    let stock = xberg::extract(ExtractInput::from_uri(path.to_str().unwrap()), &config)
+        .await
+        .unwrap();
+    config.ocr.as_mut().unwrap().backend_options = Some(serde_json::json!({
+        "source_region_recovery": true, "source_region_max_calls": 2
+    }));
+    let live = xberg::extract(ExtractInput::from_uri(path.to_str().unwrap()), &config)
+        .await
+        .unwrap();
+    assert!(stock.errors.is_empty() && live.errors.is_empty());
+    let [stock] = stock.results.try_into().ok().unwrap();
+    let [live] = live.results.try_into().ok().unwrap();
+    assert!(stock.content.starts_with("=\n\ncorey\n\n=\n\n"));
+    assert_eq!(live.content, stock.content.replacen('=', "01. PRODUCTS", 1));
+    assert_eq!(
+        live.pages.as_ref().unwrap()[0].content,
+        stock.pages.as_ref().unwrap()[0]
+            .content
+            .replacen('=', "01. PRODUCTS", 1)
+    );
 }

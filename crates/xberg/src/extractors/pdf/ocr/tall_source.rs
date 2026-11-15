@@ -254,12 +254,26 @@ pub(super) async fn probe_anchored_occurrences(
         return Ok(());
     }
     let attempt = Attempt::new(pdf, page, Some((*width, *height, png.len())), config, ocr);
-    let Some(source) = indexed::IndexedSource::load(&attempt) else {
-        return Ok(());
+    let (source, collapsed_only) = if let Some(source) = indexed::IndexedSource::load(&attempt) {
+        (source, false)
+    } else {
+        if heading_only || !selected.tables.is_empty() || !selected.formulas.is_empty() || read.dimensions.0 >= *width {
+            return Ok(());
+        }
+        // The checked scale-only hOCR frame determines lost detail. The render still owns its allocation. ~keep
+        let Some(source) = indexed::IndexedSource::load_with_selected_width(&attempt, Some(read.dimensions.0)) else {
+            return Ok(());
+        };
+        (source, true)
     };
-    let edits =
+    let edits = if collapsed_only {
+        region_probe::scan_collapsed_line(&attempt, &source, (backend, ocr), read, budget)
+            .await?
+            .map(|edit| vec![edit])
+    } else {
         region_probe::scan_selected_inventory(&attempt, &source, backend, ocr, selected, (read, budget), heading_only)
-            .await?;
+            .await?
+    };
     if heading_only {
         tracing::trace!(
             edits = edits.as_ref().map_or(0, Vec::len),
@@ -268,7 +282,8 @@ pub(super) async fn probe_anchored_occurrences(
             "structured OCR selected heading receipt"
         );
     }
-    if !heading_only
+    if !collapsed_only
+        && !heading_only
         && edits.is_none()
         && let Some(insertion) =
             region_probe::scan_owned_gap(&attempt, &source, backend, ocr, selected, read, budget).await?

@@ -25,6 +25,7 @@ struct Crop {
     region: RegionBox,
     dimensions: (u32, u32),
     pad: u32,
+    preserve_samples: bool,
 }
 
 impl Crop {
@@ -42,6 +43,7 @@ impl Crop {
             region,
             dimensions: (width, height),
             pad,
+            preserve_samples: false,
         })
     }
 
@@ -315,6 +317,155 @@ impl Drop for PairReservation<'_> {
     fn drop(&mut self) {
         self.budget.fetch_add(self.unused, Ordering::Relaxed);
     }
+}
+
+fn owns_exact_projection(
+    projection: &crate::types::formats::RetainedHocrProjection,
+    id: usize,
+    expected: &str,
+) -> bool {
+    let mut ranges = projection.ranges.iter().filter(|(owner, _)| *owner == id);
+    ranges
+        .next()
+        .is_some_and(|(_, bytes)| projection.text.get(bytes.clone()) == Some(expected))
+        && ranges.next().is_none()
+}
+
+fn discover_collapsed_line(
+    source: &IndexedSource,
+    read: &crate::types::formats::RetainedHocrRead,
+    words: &[RegionBox],
+) -> Option<(usize, RegionBox)> {
+    let document = read.plain_document.as_ref()?;
+    // Table-free pages obtain their byte range from the final Plain renderer. ~keep
+    let inline_page = read.inline_page.as_ref();
+    if words.len() > 1024 {
+        return None;
+    }
+    let frame = RegionBox {
+        left: 0,
+        top: 0,
+        right: source.width,
+        bottom: source.height,
+    };
+    let mut candidate = None;
+    for (index, (word, &region)) in read.occurrences.iter().zip(words).enumerate() {
+        let [left, top, right, bottom] = word.bounds;
+        let height = bottom - top;
+        if height > 4 || right - left < 3 * height {
+            continue;
+        }
+        let expected = read.transcript.get(word.transcript_bytes.clone())?;
+        if expected.is_empty() || !expected.bytes().all(|byte| byte.is_ascii_punctuation()) {
+            continue;
+        }
+        if words
+            .iter()
+            .enumerate()
+            .any(|(other, &bounds)| other != index && region.top < bounds.bottom && bounds.top < region.bottom)
+        {
+            continue;
+        }
+        let perimeter = source.certify_line_ink(region, frame).is_some();
+        let document_owner = owns_exact_projection(document, word.id, expected);
+        let page_owner = inline_page.is_none_or(|page| owns_exact_projection(page, word.id, expected));
+        tracing::trace!(
+            index,
+            region = ?[region.left, region.top, region.right, region.bottom],
+            perimeter,
+            document_owner,
+            page_owner,
+            "undersampled line candidate"
+        );
+        if !perimeter || !document_owner || !page_owner {
+            continue;
+        }
+        let Some(column) = source.source_line_column(region) else {
+            continue;
+        };
+        if candidate.replace((index, column)).is_some() {
+            return None;
+        }
+    }
+    candidate
+}
+
+pub(super) async fn scan_collapsed_line(
+    attempt: &Attempt<'_>,
+    source: &IndexedSource,
+    (backend, config): (&Arc<dyn OcrBackend>, &OcrConfig),
+    read: &crate::types::formats::RetainedHocrRead,
+    budget: &AtomicUsize,
+) -> crate::Result<Option<SourceEdit>> {
+    let Some(words) = read
+        .occurrences
+        .iter()
+        .map(|word| source.native_bounds(read.dimensions, word.bounds))
+        .collect::<Option<Vec<_>>>()
+    else {
+        tracing::trace!("undersampled line declined unmappable selected word");
+        return Ok(None);
+    };
+    let Some((index, column)) = discover_collapsed_line(source, read, &words) else {
+        return Ok(None);
+    };
+    let region = words[index];
+    let Some(ink) = source.line_ink_components(region) else {
+        return Ok(None);
+    };
+    let Some(mut reservation) = PairReservation::reserve(budget) else {
+        return Ok(None);
+    };
+    tracing::trace!(
+        page = attempt.page + 1,
+        index,
+        "optional OCR selected isolated undersampled line"
+    );
+    let Some(mut crop) = Crop::new(region, column) else {
+        return Ok(None);
+    };
+    crop.preserve_samples = true;
+    let Some([primary, check]) = read_crop_pair(attempt, source, backend, config, crop, Some(&mut reservation)).await?
+    else {
+        tracing::trace!(page = attempt.page + 1, "undersampled line declined crop agreement");
+        return Ok(None);
+    };
+    let complete = |words: &[RegionWord]| {
+        words.len() >= 2
+            && words.windows(2).all(|pair| same_line(pair[0].bounds, pair[1].bounds))
+            && ink.iter().all(|run| {
+                words
+                    .iter()
+                    .any(|word| word.bounds.left < run.end && run.start < word.bounds.right)
+            })
+    };
+    let primary_complete = complete(&primary);
+    let check_complete = complete(&check);
+    tracing::trace!(primary_complete, check_complete, counts = ?[primary.len(), check.len()],
+        "undersampled line crop coverage");
+    if !primary_complete
+        || !check_complete
+        || !primary
+            .iter()
+            .any(|word| word.text.bytes().any(|byte| byte.is_ascii_alphabetic()))
+    {
+        return Ok(None);
+    }
+    let owner = &read.occurrences[index];
+    let Some(expected) = read.transcript.get(owner.transcript_bytes.clone()) else {
+        return Ok(None);
+    };
+    let replacement = primary
+        .iter()
+        .map(|word| word.text.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    tracing::trace!(
+        page = attempt.page + 1,
+        owner = owner.id,
+        "undersampled line qualified source edit"
+    );
+    Ok(Some((owner.id, expected.to_owned(), replacement)))
 }
 
 pub(super) async fn scan_selected_inventory(
@@ -1039,6 +1190,14 @@ async fn read_crop_pair(
     let dpi = source.dpi;
     let png = Arc::new(png);
     let mut probe = probe_config(config, dpi, limit);
+    if crop.preserve_samples
+        && let Some(preprocessing) = probe
+            .tesseract_config
+            .as_mut()
+            .and_then(|config| config.preprocessing.as_mut())
+    {
+        preprocessing.binarization_method = "none".to_owned();
+    }
 
     let mut reads = [Vec::new(), Vec::new()];
     for (psm, slot) in [3, 11].into_iter().zip(&mut reads) {
@@ -1063,11 +1222,23 @@ async fn read_crop_pair(
             return Err(crate::XbergError::Cancelled);
         }
         let Some(words) = read_words(&read, &crop, psm) else {
+            if crop.preserve_samples {
+                tracing::trace!(psm, "undersampled line crop declined OCR word receipts");
+            }
             return Ok(None);
         };
         *slot = words;
     }
-    Ok(agree(&reads[0], &reads[1]).then_some(reads))
+    let agrees = agree(&reads[0], &reads[1]);
+    if crop.preserve_samples && !agrees {
+        tracing::trace!(
+            counts = ?[reads[0].len(), reads[1].len()],
+            same_text = reads[0].iter().map(|word| &word.text).eq(reads[1].iter().map(|word| &word.text)),
+            confidence = ?reads.each_ref().map(|words| words.iter().map(|word| word.confidence).collect::<Vec<_>>()),
+            "undersampled line reads disagree"
+        );
+    }
+    Ok(agrees.then_some(reads))
 }
 
 #[cfg(test)]
