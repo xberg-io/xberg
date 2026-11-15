@@ -24,27 +24,33 @@ pub(super) struct RegionWord {
 struct Crop {
     region: RegionBox,
     dimensions: (u32, u32),
+    pad: u32,
 }
 
 impl Crop {
     fn new(region: RegionBox, column: RegionBox) -> Option<Self> {
+        Self::with_padding(region, column, PAD)
+    }
+
+    fn with_padding(region: RegionBox, column: RegionBox, pad: u32) -> Option<Self> {
         if !column.contains(region) {
             return None;
         }
-        let width = (region.right - region.left).checked_add(PAD * 2)?;
-        let height = (region.bottom - region.top).checked_add(PAD * 2)?;
+        let width = (region.right - region.left).checked_add(pad * 2)?;
+        let height = (region.bottom - region.top).checked_add(pad * 2)?;
         (width.checked_mul(height)?.checked_mul(2)? <= MAX_PAIR_PIXELS).then_some(Self {
             region,
             dimensions: (width, height),
+            pad,
         })
     }
 
     fn project(&self, bounds: BoxPx) -> Option<RegionBox> {
         let region = RegionBox {
-            left: self.region.left.checked_add(bounds.x0.checked_sub(PAD)?)?,
-            top: self.region.top.checked_add(bounds.y0.checked_sub(PAD)?)?,
-            right: self.region.left.checked_add(bounds.x1.checked_sub(PAD)?)?,
-            bottom: self.region.top.checked_add(bounds.y1.checked_sub(PAD)?)?,
+            left: self.region.left.checked_add(bounds.x0.checked_sub(self.pad)?)?,
+            top: self.region.top.checked_add(bounds.y0.checked_sub(self.pad)?)?,
+            right: self.region.left.checked_add(bounds.x1.checked_sub(self.pad)?)?,
+            bottom: self.region.top.checked_add(bounds.y1.checked_sub(self.pad)?)?,
         };
         self.region.contains(region).then_some(region)
     }
@@ -683,6 +689,191 @@ fn full_line_candidate(
     Some((crop, source.source_line_column(crop)?))
 }
 
+pub(super) async fn scan_owned_gap(
+    attempt: &Attempt<'_>,
+    source: &IndexedSource,
+    backend: &Arc<dyn OcrBackend>,
+    ocr: &OcrConfig,
+    selected: &crate::types::ExtractedDocument,
+    read: &crate::types::formats::RetainedHocrRead,
+    budget: &AtomicUsize,
+) -> crate::Result<Option<crate::types::internal::OcrGapInsertion>> {
+    if !selected.tables.is_empty() || !selected.formulas.is_empty() || read.occurrences.len() > 1024 {
+        return Ok(None);
+    }
+    let Some(mapped) = read
+        .occurrences
+        .iter()
+        .map(|word| source.native_bounds(read.dimensions, word.bounds))
+        .collect::<Option<Vec<_>>>()
+    else {
+        return Ok(None);
+    };
+    let mut start = 0;
+    let groups: Vec<_> = read
+        .occurrences
+        .chunk_by(|a, b| a.element == b.element)
+        .map(|group| {
+            let range = start..start + group.len();
+            start = range.end;
+            range
+        })
+        .collect();
+    let mut candidate = None;
+    let mut scanned = 0;
+    for pair in groups.windows(2) {
+        if attempt.cancel.is_some_and(|token| token.is_cancelled()) {
+            return Err(crate::XbergError::Cancelled);
+        }
+        let [Some((before, left, left_text)), Some((after, right, right_text))] = [
+            gap_anchor(read, &mapped, pair[0].clone()),
+            gap_anchor(read, &mapped, pair[1].clone()),
+        ] else {
+            continue;
+        };
+        if right.top.saturating_sub(left.bottom) < 64
+            || mapped
+                .iter()
+                .any(|word| word.top < right.top && left.bottom < word.bottom)
+        {
+            continue;
+        }
+        let Some(pixels) = source.width.checked_mul(right.top - left.bottom) else {
+            return Ok(None);
+        };
+        scanned += u64::from(pixels);
+        if scanned > 6 * 1024 * 1024 {
+            return Ok(None);
+        }
+        if let Some(gap) = owned_gap_crop(source, left.bottom..right.top, [left_text, right_text])
+            && candidate.replace((gap, [before, after])).is_some()
+        {
+            return Ok(None);
+        }
+    }
+    let Some((gap, anchors)) = candidate else {
+        return Ok(None);
+    };
+    let OwnedGapCrop { label, panel, crop } = gap;
+    tracing::trace!(page = attempt.page + 1, ?anchors, crop = ?[label.left, label.top, label.right, label.bottom], "owned gap OCR candidate");
+    let Some(mut reservation) = PairReservation::reserve(budget) else {
+        return Ok(None);
+    };
+    let Some(reads) = read_crop_pair(attempt, source, backend, ocr, crop, Some(&mut reservation)).await? else {
+        return Ok(None);
+    };
+    let [first, second] = reads.each_ref().map(Vec::as_slice);
+    let ([first], [second]) = (first, second) else {
+        return Ok(None);
+    };
+    if ![first, second]
+        .into_iter()
+        .all(|word| panel_owns_label(word, label, panel))
+    {
+        return Ok(None);
+    }
+    Ok(Some(crate::types::internal::OcrGapInsertion {
+        anchors,
+        text: format!("{}\n\n", first.text),
+    }))
+}
+
+fn panel_owns_label(word: &RegionWord, label: RegionBox, panel: RegionBox) -> bool {
+    let Some((width, height)) = word.text.split_once(['x', 'X']) else {
+        return false;
+    };
+    // An inset label can be outside the anchor lane. Its independently measured
+    // panel dimensions tie it to the same rectangular source object. ~keep
+    !width.is_empty()
+        && !height.is_empty()
+        && width.bytes().chain(height.bytes()).all(|digit| digit.is_ascii_digit())
+        && width.parse::<u32>() == Ok(panel.right - panel.left)
+        && height.parse::<u32>() == Ok(panel.bottom - panel.top)
+        && word
+            .bounds
+            .right
+            .min(label.right)
+            .saturating_sub(word.bounds.left.max(label.left))
+            >= (label.right - label.left).div_ceil(2)
+        && meaningful_vertical_overlap(word.bounds.top..word.bounds.bottom, label.top..label.bottom)
+}
+
+pub(super) struct OwnedGapCrop {
+    label: RegionBox,
+    panel: RegionBox,
+    crop: Crop,
+}
+
+pub(super) fn owned_gap_crop(
+    source: &IndexedSource,
+    rows: std::ops::Range<u32>,
+    [before, after]: [RegionBox; 2],
+) -> Option<OwnedGapCrop> {
+    let (label, panel) = source.panel_gap_label(rows)?;
+    let shared = before
+        .right
+        .min(after.right)
+        .saturating_sub(before.left.max(after.left));
+    let shorter = (before.right - before.left).min(after.right - after.left);
+    if shared < shorter.div_ceil(2)
+        || [before, after]
+            .iter()
+            .any(|anchor| anchor.left < panel.left || anchor.right > panel.right)
+    {
+        return None;
+    }
+    Some(OwnedGapCrop {
+        label,
+        panel,
+        crop: panel_label_crop(label, panel)?,
+    })
+}
+
+fn panel_label_crop(label: RegionBox, panel: RegionBox) -> Option<Crop> {
+    // White padding makes the dark panel a single ink block. Keep the real panel surround. ~keep
+    let region = RegionBox {
+        left: label.left.checked_sub(PAD)?,
+        top: label.top.checked_sub(PAD)?,
+        right: label.right.checked_add(PAD)?,
+        bottom: label.bottom.checked_add(PAD)?,
+    };
+    Crop::with_padding(region, panel, 0)
+}
+
+fn gap_anchor(
+    read: &crate::types::formats::RetainedHocrRead,
+    mapped: &[RegionBox],
+    range: std::ops::Range<usize>,
+) -> Option<([usize; 2], RegionBox, RegionBox)> {
+    let [first, last] = &read.occurrences[range.clone()] else {
+        return None;
+    };
+    let [a, b] = &mapped[range] else { return None };
+    let projection = read.plain_document.as_ref()?;
+    if first.transcript_bytes.start != first.owner_bytes.start
+        || last.transcript_bytes.end != first.owner_bytes.end
+        || read
+            .transcript
+            .get(first.transcript_bytes.end..last.transcript_bytes.start)?
+            != " "
+        || ![first.id, last.id]
+            .into_iter()
+            .all(|id| projection.ranges.iter().filter(|(owner, _)| *owner == id).count() == 1)
+    {
+        return None;
+    }
+    Some((
+        [first.id, last.id],
+        RegionBox {
+            left: a.left.min(b.left),
+            right: a.right.max(b.right),
+            top: a.top.min(b.top),
+            bottom: a.bottom.max(b.bottom),
+        },
+        *b,
+    ))
+}
+
 pub(super) async fn read_pair(
     attempt: &Attempt<'_>,
     source: &IndexedSource,
@@ -690,6 +881,20 @@ pub(super) async fn read_pair(
     config: &OcrConfig,
     region: RegionBox,
     column: RegionBox,
+    reservation: Option<&mut PairReservation<'_>>,
+) -> crate::Result<Option<[Vec<RegionWord>; 2]>> {
+    let Some(crop) = Crop::new(region, column) else {
+        return Ok(None);
+    };
+    read_crop_pair(attempt, source, backend, config, crop, reservation).await
+}
+
+async fn read_crop_pair(
+    attempt: &Attempt<'_>,
+    source: &IndexedSource,
+    backend: &Arc<dyn OcrBackend>,
+    config: &OcrConfig,
+    crop: Crop,
     mut reservation: Option<&mut PairReservation<'_>>,
 ) -> crate::Result<Option<[Vec<RegionWord>; 2]>> {
     if attempt.max_strips < 2
@@ -699,9 +904,6 @@ pub(super) async fn read_pair(
     {
         return Ok(None);
     }
-    let Some(crop) = Crop::new(region, column) else {
-        return Ok(None);
-    };
     let cancel = || attempt.cancel.is_some_and(|token| token.is_cancelled());
     let _permit = tokio::select! {
         permit = STRIP_OCR.acquire() => permit.expect("strip semaphore never closes"),
@@ -710,7 +912,7 @@ pub(super) async fn read_pair(
     if cancel() {
         return Err(crate::XbergError::Cancelled);
     }
-    let Some(png) = source.encode_region(region, PAD) else {
+    let Some(png) = source.encode_region(crop.region, crop.pad) else {
         return Ok(None);
     };
     let Some(limit) = source.backend_limit(png.capacity()) else {
@@ -753,6 +955,30 @@ pub(super) async fn read_pair(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn owned_gap_rejects_an_unrelated_right_lane_label_inside_the_same_panel() {
+        let panel = RegionBox {
+            left: 204,
+            top: 360,
+            right: 2124,
+            bottom: 1200,
+        };
+        let label = RegionBox {
+            left: 1817,
+            top: 1122,
+            right: 2096,
+            bottom: 1160,
+        };
+        assert!(panel.contains(label));
+        let word = |text: &str| RegionWord {
+            text: text.to_owned(),
+            bounds: label,
+            confidence: 99.0,
+        };
+        assert!(panel_owns_label(&word("1920x840"), label, panel));
+        assert!(!panel_owns_label(&word("640x480"), label, panel));
+    }
 
     #[test]
     fn full_line_pair_declines_vertically_displaced_aligned_reads() {

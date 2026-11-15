@@ -139,6 +139,11 @@ async fn public_original_multipage_recovery() {
             assert_eq!(text.matches("POP WAcES:").count(), 1);
             text.replacen("POP WAcES:", "PDP IMAGES", 1)
         }
+        11 => {
+            let before = "@ Hero\n\n@ Intro";
+            assert_eq!(text.matches(before).count(), 1);
+            text.replacen(before, "@ Hero\n\n1920x840\n\n@ Intro", 1)
+        }
         13 => {
             let before = "\n\nwi\n\nthe blog";
             assert_eq!(text.matches(before).count(), 1);
@@ -146,12 +151,14 @@ async fn public_original_multipage_recovery() {
         }
         _ => text.to_owned(),
     };
-    let expected_document = expected(&expected(&expected(&stock.content, 4), 8), 13);
+    let expected_document = expected(&expected(&expected(&expected(&stock.content, 4), 8), 11), 13);
     assert!(
         live.content == expected_document,
         "guide document content differs; line selection: {:?}",
         full.lines()
-            .filter(|line| line.contains("full line OCR") || line.contains("optional region OCR"))
+            .filter(|line| line.contains("full line OCR")
+                || line.contains("owned gap OCR")
+                || line.contains("optional region OCR"))
             .collect::<Vec<_>>()
     );
     let (old_pages, new_pages) = (stock.pages.as_ref().unwrap(), live.pages.as_ref().unwrap());

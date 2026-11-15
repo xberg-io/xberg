@@ -1222,6 +1222,7 @@ fn document_hocr_receipt(
                     owner: occurrence.element.clone(),
                     occurrence: occurrence.id,
                     replacement: None,
+                    insertion: None,
                     source: occurrence.element_bytes.clone(),
                     destination: occurrence.element_bytes.start,
                 });

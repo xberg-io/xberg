@@ -276,6 +276,58 @@ fn join_final_line<'a>(
 }
 
 #[cfg(all(feature = "pdf", feature = "ocr"))]
+fn plan_page_ocr_insertion<'a>(
+    doc: &'a InternalDocument,
+    text: &str,
+    spans: &crate::rendering::ElementSpans,
+    page: &PageContent,
+) -> Option<FinalOcrEdit<'a>> {
+    let owners = || {
+        doc.elements
+            .iter()
+            .filter(|element| element.page == Some(page.page_number))
+            .flat_map(|element| element.ocr_source_spans.iter().map(move |span| (element, span)))
+    };
+    let mut pending = owners().filter_map(|(_, span)| span.insertion.as_ref());
+    let insertion = pending.next()?;
+    if pending.next().is_some() || owners().any(|(_, span)| span.replacement.is_some()) {
+        return None;
+    }
+    let anchor = |[first, last]: [usize; 2]| {
+        let lookup = |id| {
+            let mut matching = owners().filter(|(_, span)| span.occurrence == id);
+            let owner = matching.next()?;
+            matching.next().is_none().then_some(owner)
+        };
+        let (element, first) = lookup(first)?;
+        let (last_element, last) = lookup(last)?;
+        if first.owner != last.owner || element.id != last_element.id || first.destination != 0 {
+            return None;
+        }
+        let first_end = first.source.len();
+        let end = last.destination.checked_add(last.source.len())?;
+        if end != element.text.len() || element.text.get(first_end..last.destination)? != " " {
+            return None;
+        }
+        project_final_ocr_occurrence(doc, (text, spans), page, &element.id, 0..end)
+    };
+    let [before, after] = insertion.anchors;
+    let [left_doc, left_page] = anchor(before)?;
+    let [right_doc, right_page] = anchor(after)?;
+    if text.get(left_doc.end..right_doc.start)? != "\n\n"
+        || page.content.get(left_page.end..right_page.start)? != "\n\n"
+    {
+        return None;
+    }
+    Some((
+        right_doc.start..right_doc.start,
+        right_page.start..right_page.start,
+        0,
+        &insertion.text,
+    ))
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
 pub(super) fn adopt_final_ocr_replacement(
     doc: &mut InternalDocument,
     text: &mut String,
@@ -283,20 +335,27 @@ pub(super) fn adopt_final_ocr_replacement(
     pages: &mut [PageContent],
 ) -> Option<()> {
     if doc.source_format != "pdf"
-        || !doc
-            .elements
-            .iter()
-            .any(|element| element.ocr_source_spans.iter().any(|span| span.replacement.is_some()))
+        || !doc.elements.iter().any(|element| {
+            element
+                .ocr_source_spans
+                .iter()
+                .any(|span| span.replacement.is_some() || span.insertion.is_some())
+        })
     {
         return None;
     }
     let mut all = Vec::new();
     for (page_index, page) in pages.iter().enumerate() {
-        if let Some(edits) = plan_page_ocr_replacement(doc, text, spans, page) {
-            all.extend(edits.into_iter().map(|(document, page, expected, replacement)| {
-                (document, page_index, page, expected, replacement.to_owned())
-            }));
-        }
+        let edits = plan_page_ocr_replacement(doc, text, spans, page).unwrap_or_default();
+        let insertion = plan_page_ocr_insertion(doc, text, spans, page);
+        all.extend(
+            edits
+                .into_iter()
+                .chain(insertion)
+                .map(|(document, page, expected, replacement)| {
+                    (document, page_index, page, expected, replacement.to_owned())
+                }),
+        );
     }
     if all.is_empty() {
         return None;
@@ -428,6 +487,7 @@ fn ocr_edit_on_nonfinal_page_shifts_later_document_boundaries() {
         occurrence: 7,
         source: 0..2,
         destination: 0,
+        insertion: None,
         replacement: Some(("wi".to_owned(), "View".to_owned(), 1)),
     });
     let mut second = InternalElement::text(ElementKind::Paragraph, "keep", 0).with_index(1);
@@ -472,6 +532,7 @@ fn full_ocr_line_groups_publish_together_or_keep_both_originals() {
                     owner: element.id.clone(),
                     occurrence: index * 3 + word,
                     destination: range.start,
+                    insertion: None,
                     replacement: Some((
                         line[range.clone()].to_owned(),
                         if word == 0 {
@@ -516,6 +577,63 @@ fn full_ocr_line_groups_publish_together_or_keep_both_originals() {
 
     doc.elements[2].ocr_source_spans.clear();
     assert_publication(doc, false);
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[test]
+fn ocr_gap_insertion_requires_complete_unique_anchors_in_both_views() {
+    use crate::types::internal::{OcrGapInsertion, OcrSourceSpan};
+    let mut doc = InternalDocument::new("pdf");
+    for (index, line) in ["@ Hero", "@ Intro"].into_iter().enumerate() {
+        let mut element = InternalElement::text(ElementKind::Paragraph, line, 0).with_index(index as u32);
+        element.page = Some(1);
+        for (word, bytes) in [0..1, 2..line.len()].into_iter().enumerate() {
+            element.ocr_source_spans.push(OcrSourceSpan {
+                owner: element.id.clone(),
+                occurrence: index * 2 + word,
+                destination: bytes.start,
+                source: bytes,
+                insertion: None,
+                replacement: None,
+            });
+        }
+        doc.elements.push(element);
+    }
+    doc.elements[1].ocr_source_spans[0].insertion = Some(OcrGapInsertion {
+        anchors: [[0, 1], [2, 3]],
+        text: "1920x840\n\n".to_owned(),
+    });
+    let verify = |mut doc: InternalDocument, page_override: Option<&str>, expected: bool| {
+        let mut rendered = crate::rendering::render_plain_with_spans(&doc);
+        let original = rendered.text.clone();
+        let original_page = page_override.unwrap_or(&original);
+        let mut pages: Vec<PageContent> = serde_json::from_value(serde_json::json!([
+            {"page_number": 1, "content": original_page}
+        ]))
+        .unwrap();
+        let applied = adopt_final_ocr_replacement(&mut doc, &mut rendered.text, &rendered.spans, &mut pages);
+        assert_eq!(applied.is_some(), expected);
+        if expected {
+            assert_eq!(rendered.text, "@ Hero\n\n1920x840\n\n@ Intro");
+            assert_eq!(pages[0].content, rendered.text);
+        } else {
+            assert_eq!(rendered.text, original);
+            assert_eq!(pages[0].content, original_page);
+        }
+    };
+    verify(doc.clone(), None, true);
+    verify(doc.clone(), Some("@ Hero\n\ncompeting\n\n@ Intro"), false);
+    let mut competing = doc.clone();
+    let mut element = InternalElement::text(ElementKind::Paragraph, "competing", 0).with_index(2);
+    element.page = Some(1);
+    competing.elements.insert(1, element);
+    verify(competing, None, false);
+    let mut duplicate = doc.clone();
+    let span = duplicate.elements[0].ocr_source_spans[1].clone();
+    duplicate.elements[0].ocr_source_spans.push(span);
+    verify(duplicate, None, false);
+    doc.elements[0].ocr_source_spans.pop();
+    verify(doc, None, false);
 }
 
 /// Give each page that has elements its part of the plain `content`. A page with no

@@ -525,6 +525,95 @@ impl IndexedSource {
             .any(|&channel| channel < INK_THRESHOLD)
     }
 
+    pub(super) fn panel_gap_label(
+        &self,
+        rows: Range<u32>,
+    ) -> Option<(
+        super::region_reconciliation::RegionBox,
+        super::region_reconciliation::RegionBox,
+    )> {
+        use super::region_reconciliation::RegionBox;
+        const MAX_GAP_PIXELS: u32 = 3 * 1024 * 1024;
+        const CONTRAST: u8 = 8;
+        if rows.end > self.height || self.width.checked_mul(rows.end.checked_sub(rows.start)?)? > MAX_GAP_PIXELS {
+            return None;
+        }
+        let tone = |sample: u8| {
+            let offset = usize::from(sample) * 3;
+            *self.palette[offset..offset + 3].iter().max().unwrap()
+        };
+        let mut panel: Option<RegionBox> = None;
+        for (offset, row) in self.rows(rows.clone()).enumerate() {
+            let y = rows.start + offset as u32;
+            let Some(left) = row.iter().position(|&sample| self.sample_has_ink(sample)) else {
+                continue;
+            };
+            let right = row.iter().rposition(|&sample| self.sample_has_ink(sample))? + 1;
+            if left == 0
+                || right == row.len()
+                || y == rows.start
+                || y + 1 == rows.end
+                || !row[left..right].iter().all(|&sample| tone(sample) <= 128)
+            {
+                return None;
+            }
+            if let Some(panel) = &mut panel {
+                if (panel.left, panel.right, panel.bottom) != (left as u32, right as u32, y) {
+                    return None;
+                }
+                panel.bottom += 1;
+            } else {
+                panel = Some(RegionBox {
+                    left: left as u32,
+                    right: right as u32,
+                    top: y,
+                    bottom: y + 1,
+                });
+            }
+        }
+        let panel = panel?;
+        let panel_rows = self.rows(panel.top..panel.bottom);
+        let mut background = u8::MAX;
+        let slice = panel.left as usize..panel.right as usize;
+        for (i, row) in panel_rows.enumerate() {
+            let row = &row[slice.clone()];
+            let border = if i == 0 || i + 1 == (panel.bottom - panel.top) as usize {
+                row.iter().copied().map(tone).min()?
+            } else {
+                tone(row[0]).min(tone(*row.last()?))
+            };
+            background = background.min(border);
+        }
+        let threshold = background.checked_sub(CONTRAST)?;
+        let mut label: Option<RegionBox> = None;
+        for (i, row) in self.rows(panel.top..panel.bottom).enumerate() {
+            let y = panel.top + i as u32;
+            let row = &row[slice.clone()];
+            let mut ink = row.iter().enumerate().filter(|&(_, sample)| tone(*sample) <= threshold);
+            let Some((left, _)) = ink.next() else { continue };
+            let right = ink.next_back().map_or(left, |(right, _)| right) + 1;
+            let (left, right) = (panel.left + left as u32, panel.left + right as u32);
+            label = Some(match label {
+                Some(prior) if y == prior.bottom => RegionBox {
+                    left: prior.left.min(left),
+                    right: prior.right.max(right),
+                    bottom: y + 1,
+                    ..prior
+                },
+                Some(_) => return None,
+                None => RegionBox {
+                    left,
+                    right,
+                    top: y,
+                    bottom: y + 1,
+                },
+            });
+        }
+        let label = label?;
+        (label.left > panel.left && label.right < panel.right && label.top > panel.top && label.bottom < panel.bottom)
+            .then_some((label, panel))
+    }
+
     pub(super) fn select_full_line_crop(
         &self,
         stock: super::region_reconciliation::RegionBox,
@@ -658,6 +747,62 @@ fn ink_bands<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn owned_gap_scan_rejects_same_height_sidebar_panel() {
+        use super::super::{region_probe::owned_gap_crop, region_reconciliation::RegionBox};
+        let width = 240;
+        let height = 160;
+        let anchors = [
+            RegionBox {
+                left: 36,
+                right: 68,
+                top: 12,
+                bottom: 24,
+            },
+            RegionBox {
+                left: 37,
+                right: 69,
+                top: 126,
+                bottom: 138,
+            },
+        ];
+        let make_source = |panel_left: u32| {
+            let mut palette = [255; PALETTE_BYTES];
+            palette[3..6].fill(64);
+            palette[6..9].fill(0);
+            let mut indices = vec![0; (width * height) as usize];
+            for y in 32..120 {
+                let row = (y * width + panel_left) as usize;
+                indices[row..row + 96].fill(1);
+            }
+            for y in 62..70 {
+                let row = (y * width + panel_left + 30) as usize;
+                indices[row..row + 24].fill(2);
+            }
+            IndexedSource {
+                width,
+                height,
+                dpi: 72.0,
+                frame: Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: width as _,
+                    height: height as _,
+                },
+                painted_height: f64::from(height),
+                painted_width: f64::from(width),
+                indices,
+                palette,
+                available: 4 * 1024 * 1024,
+            }
+        };
+        let sidebar = make_source(124);
+        assert!(sidebar.panel_gap_label(24..126).is_some());
+        assert!(owned_gap_crop(&sidebar, 24..126, anchors).is_none());
+        let aligned = make_source(28);
+        assert!(owned_gap_crop(&aligned, 24..126, anchors).is_some());
+    }
 
     const SCAN_WIDTH: usize = 4;
     const SCAN_HEIGHT: usize = 4100;

@@ -557,8 +557,15 @@ pub(crate) struct OcrSourceSpan {
     pub(crate) owner: InternalElementId,
     pub(crate) occurrence: usize,
     pub(crate) replacement: Option<(String, String, usize)>,
+    pub(crate) insertion: Option<OcrGapInsertion>,
     pub(crate) source: std::ops::Range<usize>,
     pub(crate) destination: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct OcrGapInsertion {
+    pub(crate) anchors: [[usize; 2]; 2],
+    pub(crate) text: String,
 }
 
 /// A single element in the internal flat document.

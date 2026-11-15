@@ -250,8 +250,26 @@ pub(super) async fn probe_anchored_occurrences(
     let Some(source) = indexed::IndexedSource::load(&attempt) else {
         return Ok(());
     };
-    if let Some(edits) =
-        region_probe::scan_selected_inventory(&attempt, &source, backend, ocr, selected, (read, budget)).await?
+    let edits =
+        region_probe::scan_selected_inventory(&attempt, &source, backend, ocr, selected, (read, budget)).await?;
+    if edits.is_none()
+        && let Some(insertion) =
+            region_probe::scan_owned_gap(&attempt, &source, backend, ocr, selected, read, budget).await?
+        && let Some(doc) = selected.ocr_internal_document.as_mut()
+    {
+        let id = insertion.anchors[1][0];
+        let mut matches = doc
+            .elements
+            .iter_mut()
+            .flat_map(|element| &mut element.ocr_source_spans)
+            .filter(|span| span.occurrence == id);
+        if let Some(owner) = matches.next()
+            && matches.next().is_none()
+        {
+            owner.insertion = Some(insertion);
+        }
+    }
+    if let Some(edits) = edits
         && let Some(doc) = selected.ocr_internal_document.as_mut()
     {
         if edits.iter().all(|(id, _, _)| {
