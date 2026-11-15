@@ -6,6 +6,7 @@
 use crate::Result;
 use crate::core::config::ExtractionConfig;
 use crate::core::diagnostics::push_warning;
+use crate::extraction::hwp::error::HwpError;
 use crate::extraction::hwp::model::{CharShape, HwpDocument, HwpImage, Paragraph, SummaryInfo};
 use crate::plugins::{InternalDocumentExtractor, Plugin};
 use crate::types::ExtractedImage;
@@ -63,9 +64,12 @@ impl Plugin for HwpExtractor {
     }
 }
 
-fn extract_hwp_content(content: &[u8]) -> Result<HwpDocument> {
-    crate::extraction::hwp::extract_hwp_document(content)
-        .map_err(|e| crate::XbergError::parsing(format!("Failed to read HWP file: {e}")))
+fn extract_hwp_content(content: &[u8], config: &ExtractionConfig) -> Result<HwpDocument> {
+    let limits = config.security_limits.clone().unwrap_or_default();
+    crate::extraction::hwp::extract_hwp_document(content, &limits).map_err(|e| match e {
+        HwpError::Security(security) => crate::XbergError::from(security),
+        e => crate::XbergError::parsing(format!("Failed to read HWP file: {e}")),
+    })
 }
 
 /// The LaTeX of a paragraph that holds one equation and nothing else.
@@ -263,9 +267,9 @@ impl InternalDocumentExtractor for HwpExtractor {
         &self,
         content: &[u8],
         mime_type: &str,
-        _config: &ExtractionConfig,
+        config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
-        let hwp_doc = extract_hwp_content(content)?;
+        let hwp_doc = extract_hwp_content(content, config)?;
         if hwp_doc.sections.is_empty() {
             return Err(crate::XbergError::parsing(
                 "no BodyText sections found in HWP document".to_string(),

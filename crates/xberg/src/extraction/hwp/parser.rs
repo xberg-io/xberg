@@ -209,13 +209,25 @@ fn parse_eqedit_script(data: &[u8]) -> Option<String> {
 /// behavior). Any record the byte stream fails to decode stops parsing and appends a
 /// human-readable entry to `warnings` naming how much was abandoned, rather than
 /// failing silently (#236).
+///
+/// A compressed section may inflate to at most `section_limit` bytes and at most
+/// `*decompressed_budget` (the bytes still allowed across all sections); the budget is
+/// reduced by what this section inflated to.
 pub(crate) fn parse_body_text(
     data: Vec<u8>,
     is_compressed: bool,
     stream_name: &str,
     warnings: &mut Vec<String>,
+    section_limit: usize,
+    decompressed_budget: &mut usize,
 ) -> Result<Vec<Section>> {
-    let data = if is_compressed { decompress_stream(&data)? } else { data };
+    let data = if is_compressed {
+        let out = decompress_stream(&data, section_limit.min(*decompressed_budget))?;
+        *decompressed_budget -= out.len();
+        out
+    } else {
+        data
+    };
 
     let mut reader = StreamReader::new(data);
     let mut records: Vec<Record> = Vec::new();
