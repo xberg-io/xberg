@@ -5264,10 +5264,11 @@ fn prepare_emitted_tables(
         .iter()
         .filter(|table| !table.markdown.trim().is_empty())
         .count();
-    deduplicate_overlapping_tables(&mut emitted_tables, native_count, overlap_preference, page_segments);
+    let protected =
+        deduplicate_overlapping_tables(&mut emitted_tables, native_count, overlap_preference, page_segments);
     normalize_sparse_currency_affix_columns(&mut emitted_tables);
     normalize_wrapped_financial_rows(&mut emitted_tables);
-    deduplicate_identical_tables(&mut emitted_tables);
+    deduplicate_identical_tables(&mut emitted_tables, &protected);
     assign_deterministic_table_ids(&mut emitted_tables);
     emitted_tables
 }
@@ -5526,7 +5527,7 @@ fn merge_currency_affix_column(rows: &mut [Vec<String>], source: usize) {
 
 /// Collapse same-page identical Markdown for coincident or unpositioned copies.
 /// The overlap pass already decided whether other positioned copies carry independent text.
-fn deduplicate_identical_tables(tables: &mut Vec<crate::types::Table>) {
+fn deduplicate_identical_tables(tables: &mut Vec<crate::types::Table>, protected: &[bool]) {
     use crate::pdf::native::table::finite_table_bounds;
 
     if tables.len() < 2 {
@@ -5542,8 +5543,16 @@ fn deduplicate_identical_tables(tables: &mut Vec<crate::types::Table>) {
     });
     for (index, table, bounds) in positioned {
         let retained = seen.entry((table.page_number, table.markdown.as_str())).or_default();
-        if retained.iter().all(|other| !boxes_near_coincident(&bounds, other)) {
-            retained.push(bounds);
+        let is_protected = protected.get(index).copied().unwrap_or(false);
+        let duplicate = retained.iter().any(|(other, other_protected)| {
+            if is_protected && *other_protected {
+                protected_layout_boxes_duplicate(&bounds, other)
+            } else {
+                boxes_near_coincident(&bounds, other)
+            }
+        });
+        if !duplicate {
+            retained.push((bounds, is_protected));
             keep[index] = true;
         }
     }
@@ -6092,11 +6101,11 @@ fn deduplicate_overlapping_tables(
     native_count: usize,
     preference: crate::core::config::layout::TableOverlapPreference,
     page_segments: &[Vec<SegmentData>],
-) {
+) -> Vec<bool> {
     use crate::core::config::layout::TableOverlapPreference;
 
     if tables.len() < 2 {
-        return;
+        return vec![false; tables.len()];
     }
 
     let mut to_remove = ahash::AHashSet::new();
@@ -6149,23 +6158,22 @@ fn deduplicate_overlapping_tables(
         set_aside.extend(orphaned);
     }
 
-    let surviving_protected: Vec<_> = protected_layout_children
+    let affected_rows = protected_layout_children
         .iter()
-        .copied()
         .filter(|index| !to_remove.contains(index))
-        .collect();
-    let affected_rows: Vec<_> = surviving_protected
-        .iter()
         .filter_map(|&index| tables[index].bounding_box.map(|bbox| (tables[index].page_number, bbox)))
         .collect();
-
-    let mut idx = 0;
-    tables.retain(|_| {
-        let keep = !to_remove.contains(&idx);
-        idx += 1;
-        keep
-    });
-    canonicalize_affected_table_rows(tables, affected_rows);
+    let positioned = std::mem::take(tables)
+        .into_iter()
+        .enumerate()
+        .filter(|(index, _)| !to_remove.contains(index))
+        .map(|(index, table)| (table, protected_layout_children.contains(&index)))
+        .collect();
+    let (survivors, protected) = canonicalize_affected_table_rows(positioned, affected_rows)
+        .into_iter()
+        .unzip();
+    *tables = survivors;
+    protected
 }
 
 /// Which overlapping pairs of a page a pass decides.
@@ -6260,7 +6268,7 @@ fn overlap_loser(
         (true, false) => Some(j),
         (false, true) => Some(i),
         (true, true) => {
-            let duplicate = shares.0 >= LAYOUT_CHILD_DUPLICATE_OVERLAP && shares.1 >= LAYOUT_CHILD_DUPLICATE_OVERLAP;
+            let duplicate = protected_layout_shares_duplicate(shares);
             duplicate.then(|| lower_content_table(tables, i, j))
         }
         (false, false) => Some(match (preference, native_first) {
@@ -6707,6 +6715,14 @@ const SIDE_BY_SIDE_PARENT_AREA_COVERAGE: f64 = 0.65;
 /// the same layout table rather than distinct parts of a split table.
 const LAYOUT_CHILD_DUPLICATE_OVERLAP: f64 = 0.9;
 
+fn protected_layout_shares_duplicate(shares: (f64, f64)) -> bool {
+    shares.0 >= LAYOUT_CHILD_DUPLICATE_OVERLAP && shares.1 >= LAYOUT_CHILD_DUPLICATE_OVERLAP
+}
+
+fn protected_layout_boxes_duplicate(a: &crate::types::BoundingBox, b: &crate::types::BoundingBox) -> bool {
+    protected_layout_shares_duplicate((bbox_overlap_fraction(a, b), bbox_overlap_fraction(b, a)))
+}
+
 fn side_by_side_layout_replacements(
     tables: &[crate::types::Table],
     native_count: usize,
@@ -6975,23 +6991,26 @@ fn table_left(tables: &[crate::types::Table], index: usize) -> f64 {
 }
 
 fn canonicalize_affected_table_rows(
-    tables: &mut Vec<crate::types::Table>,
+    tables: Vec<(crate::types::Table, bool)>,
     affected_rows: Vec<(u32, crate::types::BoundingBox)>,
-) {
+) -> Vec<(crate::types::Table, bool)> {
     let cohorts = affected_row_cohorts(affected_rows);
     if cohorts.is_empty() {
-        return;
+        return tables;
     }
-    let assignments: Vec<_> = tables.iter().map(|table| table_row_cohort(table, &cohorts)).collect();
+    let assignments: Vec<_> = tables
+        .iter()
+        .map(|(table, _)| table_row_cohort(table, &cohorts))
+        .collect();
     let mut cohort_tables: Vec<Vec<_>> = (0..cohorts.len()).map(|_| Vec::new()).collect();
-    let mut source: Vec<Option<_>> = std::mem::take(tables).into_iter().map(Some).collect();
+    let mut source: Vec<Option<_>> = tables.into_iter().map(Some).collect();
     for (index, cohort) in assignments.iter().enumerate() {
         if let Some(cohort) = cohort {
             cohort_tables[*cohort].push(source[index].take().expect("assigned table is present"));
         }
     }
     for cohort in &mut cohort_tables {
-        cohort.sort_by(canonical_table_order);
+        cohort.sort_by(|(left, _), (right, _)| canonical_table_order(left, right));
         cohort.reverse();
     }
     for (index, cohort) in assignments.iter().enumerate() {
@@ -7003,7 +7022,7 @@ fn canonicalize_affected_table_rows(
             );
         }
     }
-    tables.extend(source.into_iter().flatten());
+    source.into_iter().flatten().collect()
 }
 
 fn affected_row_cohorts(mut rows: Vec<(u32, crate::types::BoundingBox)>) -> Vec<(u32, Vec<crate::types::BoundingBox>)> {

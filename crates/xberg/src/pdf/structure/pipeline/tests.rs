@@ -614,7 +614,7 @@ fn identical_tables_keep_disjoint_footprints_and_collapse_same_footprint() {
     let left = ov_table(1, (0.0, 0.0, 10.0, 10.0), "same");
     let right = ov_table(1, (20.0, 0.0, 30.0, 10.0), "same");
     let mut tables = vec![left.clone(), left, right.clone(), right];
-    deduplicate_identical_tables(&mut tables);
+    deduplicate_identical_tables(&mut tables, &[]);
     assert_eq!(tables.len(), 2);
     assert_eq!(tables[0].bounding_box.unwrap().x0, 0.0);
     assert_eq!(tables[1].bounding_box.unwrap().x0, 20.0);
@@ -634,13 +634,13 @@ fn missing_or_invalid_bounds_cannot_hide_disjoint_identical_tables() {
         ov_table(1, (10.0, 0.0, 0.0, 10.0), "same"),
     ] {
         let mut tables = vec![unpositioned.clone(), left.clone(), right.clone(), unpositioned.clone()];
-        deduplicate_identical_tables(&mut tables);
+        deduplicate_identical_tables(&mut tables, &[]);
         assert_eq!(tables.len(), 2);
         assert_eq!(tables[0].bounding_box.unwrap().x0, 0.0);
         assert_eq!(tables[1].bounding_box.unwrap().x0, 20.0);
 
         let mut tables = vec![unpositioned.clone(), unpositioned];
-        deduplicate_identical_tables(&mut tables);
+        deduplicate_identical_tables(&mut tables, &[]);
         assert_eq!(tables.len(), 1);
     }
 }
@@ -2750,6 +2750,37 @@ fn weak_shared_overlap_keeps_both_protected_layout_cohorts_atomic() {
         })
         .collect::<Vec<_>>();
     assert_eq!(footprints, [(0.0, 0.0), (105.0, 0.0), (0.0, 60.0), (105.0, 60.0)]);
+}
+
+#[test]
+fn protected_layout_cohorts_keep_their_duplicate_threshold_through_final_dedup() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    for (offset, parent_height, expected) in [
+        (15.0, 82.0, vec![(0.0, 0.0), (105.0, 0.0), (0.0, 15.0), (105.0, 15.0)]),
+        (9.0, 80.0, vec![(0.0, 0.0), (105.0, 9.0)]),
+    ] {
+        let bottom = offset + 100.0;
+        let native = [
+            ov_table(1, (0.0, 0.0, 200.0, parent_height), "first parent"),
+            ov_table(1, (0.0, bottom - parent_height, 200.0, bottom), "second parent"),
+        ];
+        let layout = vec![
+            ov_table(1, (0.0, 0.0, 95.0, 100.0), "identical left"),
+            ov_table(1, (105.0, 0.0, 200.0, 100.0), "first right"),
+            ov_table(1, (0.0, offset, 95.0, bottom), "identical left"),
+            ov_table(1, (105.0, offset, 200.0, bottom), "second right"),
+        ];
+        let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
+        let footprints = emitted
+            .iter()
+            .map(|table| {
+                let bounds = table.bounding_box.unwrap();
+                (bounds.x0, bounds.y0)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(footprints, expected, "layout child offset {offset}");
+    }
 }
 
 #[test]
