@@ -172,6 +172,94 @@ pub(crate) fn project_final_ocr_occurrence(
 }
 
 #[cfg(all(feature = "pdf", feature = "ocr"))]
+pub(super) fn adopt_canonical_ocr_headings(doc: &mut InternalDocument) {
+    tracing::trace!(
+        source_format = %doc.source_format,
+        preformatted = doc.pre_rendered_content.is_some(),
+        prebuilt_ocr = doc.prebuilt_ocr_elements.as_ref().map_or(0, Vec::len),
+        pending = doc.elements.iter().flat_map(|element| &element.ocr_source_spans)
+            .filter(|span| span.replacement.is_some()).count(),
+        "canonical OCR heading admission"
+    );
+    if doc.source_format != "pdf" || doc.pre_rendered_content.is_some() || doc.prebuilt_ocr_elements.is_some() {
+        return;
+    }
+    for index in 0..doc.elements.len() {
+        let pending = doc.elements[index]
+            .ocr_source_spans
+            .iter()
+            .filter(|span| span.replacement.is_some())
+            .count();
+        if pending > 0 {
+            tracing::trace!(pending, spans = doc.elements[index].ocr_source_spans.len(),
+                kind = ?doc.elements[index].kind, anchor = doc.elements[index].anchor.is_some(),
+                inline_annotations = doc.elements[index].annotations.len(), "canonical OCR heading owner");
+        }
+        let Some(replacement) = canonical_heading_text(doc, index) else {
+            continue;
+        };
+        let element = &mut doc.elements[index];
+        element.text = replacement;
+        element.ocr_source_spans.clear();
+    }
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn canonical_heading_text(doc: &InternalDocument, index: usize) -> Option<String> {
+    let element = &doc.elements[index];
+    if !matches!(element.kind, ElementKind::Paragraph | ElementKind::Heading { .. })
+        || !element.annotations.is_empty()
+        || element.anchor.is_some()
+        || element.page.is_none()
+    {
+        return None;
+    }
+    let [first, last] = element.ocr_source_spans.as_slice() else {
+        return None;
+    };
+    let (first_expected, first_new, 2) = first.replacement.as_ref()? else {
+        return None;
+    };
+    let (last_expected, last_new, 2) = last.replacement.as_ref()? else {
+        return None;
+    };
+    if first.owner != last.owner
+        || first.destination.checked_add(first_expected.len())?.checked_add(1)? != last.destination
+        || element.text.get(first.destination..last.destination - 1)? != first_expected
+        || element.text.get(last.destination - 1..last.destination)? != " "
+        || element
+            .text
+            .get(last.destination..last.destination.checked_add(last_expected.len())?)?
+            != last_expected
+        || doc
+            .elements
+            .iter()
+            .filter(|other| other.page == element.page)
+            .flat_map(|other| &other.ocr_source_spans)
+            .filter(|span| span.replacement.is_some())
+            .count()
+            != 2
+        || [first, last].into_iter().any(|target| {
+            doc.elements
+                .iter()
+                .filter(|other| other.page == element.page)
+                .flat_map(|other| &other.ocr_source_spans)
+                .filter(|span| span.occurrence == target.occurrence && span.owner == target.owner)
+                .count()
+                != 1
+        })
+    {
+        return None;
+    }
+    let mut text = element.text.clone();
+    text.replace_range(
+        first.destination..last.destination + last_expected.len(),
+        &format!("{first_new} {last_new}"),
+    );
+    Some(text)
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
 type FinalOcrEdit<'a> = (std::ops::Range<usize>, std::ops::Range<usize>, usize, &'a str);
 
 #[cfg(all(feature = "pdf", feature = "ocr"))]

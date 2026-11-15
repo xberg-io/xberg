@@ -226,8 +226,13 @@ pub(super) async fn probe_anchored_occurrences(
     let Some(read) = selected.retained_hocr_read.as_ref() else {
         return Ok(());
     };
+    use crate::core::config::OutputFormat;
+    let heading_only = match config.output_format {
+        OutputFormat::Plain => false,
+        OutputFormat::Markdown | OutputFormat::Html | OutputFormat::Djot | OutputFormat::DocTags => true,
+        _ => return Ok(()),
+    };
     if selected.raw_ocr_source_frame.is_some()
-        || config.output_format != crate::core::config::OutputFormat::Plain
         || !crate::plugins::registry::get_ocr_backend_registry()
             .read()
             .is_builtin_tesseract(backend)
@@ -251,8 +256,18 @@ pub(super) async fn probe_anchored_occurrences(
         return Ok(());
     };
     let edits =
-        region_probe::scan_selected_inventory(&attempt, &source, backend, ocr, selected, (read, budget)).await?;
-    if edits.is_none()
+        region_probe::scan_selected_inventory(&attempt, &source, backend, ocr, selected, (read, budget), heading_only)
+            .await?;
+    if heading_only {
+        tracing::trace!(
+            edits = edits.as_ref().map_or(0, Vec::len),
+            public_structure = selected.document.is_some(),
+            private_structure = selected.ocr_internal_document.is_some(),
+            "structured OCR selected heading receipt"
+        );
+    }
+    if !heading_only
+        && edits.is_none()
         && let Some(insertion) =
             region_probe::scan_owned_gap(&attempt, &source, backend, ocr, selected, read, budget).await?
         && let Some(doc) = selected.ocr_internal_document.as_mut()

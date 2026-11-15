@@ -958,6 +958,17 @@ fn derive(
         include_document_structure,
         "derivation pipeline starting"
     );
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    if matches!(
+        output_format,
+        crate::core::config::OutputFormat::Markdown
+            | crate::core::config::OutputFormat::Html
+            | crate::core::config::OutputFormat::Djot
+            | crate::core::config::OutputFormat::DocTags
+    ) && !observer.captures_pages()
+    {
+        pages::adopt_canonical_ocr_headings(&mut doc);
+    }
     resolve_relationships(&mut doc);
 
     let (mut content, mime_type, spans) = derive_content_and_mime_type(&mut doc, &output_format, observer);

@@ -179,3 +179,75 @@ async fn public_original_multipage_recovery() {
     assert_eq!(old.get("tables"), new.get("tables"));
     assert_eq!(old.get("annotations"), new.get("annotations"));
 }
+
+#[tokio::test]
+#[ignore = "requires the exact archived page eight"]
+async fn public_page_eight_heading_keeps_structured_output_exact() {
+    use xberg::OutputFormat;
+
+    let guide = std::path::PathBuf::from(std::env::var_os("XBERG_2502_PAGE8_ARCHIVE").unwrap());
+    assert_eq!(
+        hex::encode(Sha256::digest(std::fs::read(&guide).unwrap())),
+        "638d8968486a686e9a2e418c6dc7b538abe1bff779c74789786d0a050424c68f"
+    );
+    let d = tempfile::tempdir().unwrap();
+    let model = xberg_tesseract::bundled_eng_traineddata().unwrap();
+    std::fs::write(d.path().join("eng.traineddata"), model).unwrap();
+    let active = std::sync::Arc::new(std::sync::Mutex::new(TraceBuffer::default()));
+    let writer = active.clone();
+    tracing_subscriber::fmt()
+        .with_env_filter("xberg::extractors::pdf::ocr::tall_source::region_probe=trace")
+        .with_ansi(false)
+        .with_writer(move || writer.lock().unwrap().clone())
+        .try_init()
+        .unwrap();
+    for output_format in [
+        OutputFormat::Markdown,
+        OutputFormat::Html,
+        OutputFormat::Djot,
+        OutputFormat::DocTags,
+    ] {
+        let mut config = ExtractionConfig {
+            use_cache: false,
+            output_format,
+            ocr: Some(OcrConfig {
+                tessdata_path: Some(d.path().to_path_buf()),
+                tesseract_config: Some(xberg::TesseractConfig {
+                    preprocessing: Some(xberg::ImagePreprocessingConfig {
+                        deskew: false,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+                backend_options: Some(serde_json::json!({})),
+                ..Default::default()
+            }),
+            pages: Some(serde_json::from_value(serde_json::json!({"extract_pages": true})).unwrap()),
+            ..Default::default()
+        };
+        let (mut stock, trace) = extract_arm(&guide, &config, &active).await;
+        assert!(!trace.contains("optional region OCR backend call"));
+        config.ocr.as_mut().unwrap().backend_options = Some(serde_json::json!({"source_region_recovery": true}));
+        let (live, trace) = extract_arm(&guide, &config, &active).await;
+        assert_eq!(trace.matches("optional region OCR backend call").count(), 2);
+        let corrected = |text: &str| {
+            assert_eq!(text.matches("POP WAcES:").count(), 1);
+            text.replacen("POP WAcES:", "PDP IMAGES", 1)
+        };
+        stock.content = corrected(&stock.content);
+        let [page] = stock.pages.as_mut().unwrap().as_mut_slice() else {
+            panic!("exactly one page")
+        };
+        page.content = corrected(&page.content);
+        assert_eq!(
+            serde_json::to_value(stock).unwrap(),
+            serde_json::to_value(live).unwrap(),
+            "{}",
+            config.output_format
+        );
+        println!(
+            "{} exact output and page projection, two crop calls",
+            config.output_format
+        );
+    }
+}

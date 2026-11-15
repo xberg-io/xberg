@@ -324,6 +324,7 @@ pub(super) async fn scan_selected_inventory(
     ocr: &OcrConfig,
     selected: &crate::types::ExtractedDocument,
     (read, budget): (&crate::types::formats::RetainedHocrRead, &AtomicUsize),
+    heading_only: bool,
 ) -> crate::Result<Option<Vec<SourceEdit>>> {
     let native = |bounds| source.native_bounds(read.dimensions, bounds);
     let Some(words) = read
@@ -355,6 +356,9 @@ pub(super) async fn scan_selected_inventory(
         return Ok(None);
     };
     let heading = tables.is_empty() && read.inline_page.is_none();
+    if heading_only && !heading {
+        return Ok(None);
+    }
     let discovered = if heading {
         discover_isolated_headings(source, &words, attempt.max_strips)
     } else {
