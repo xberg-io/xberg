@@ -478,7 +478,209 @@ pub(super) async fn scan_selected_inventory(
             ambiguous = true;
         }
     }
-    Ok(if ambiguous { None } else { replacement })
+    if ambiguous || replacement.is_some() || tables.is_empty() || read.inline_page.is_none() {
+        return Ok(if ambiguous { None } else { replacement });
+    }
+    scan_full_line(attempt, source, backend, ocr, read, &words, &tables, budget).await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn scan_full_line(
+    attempt: &Attempt<'_>,
+    source: &IndexedSource,
+    backend: &Arc<dyn OcrBackend>,
+    ocr: &OcrConfig,
+    read: &crate::types::formats::RetainedHocrRead,
+    words: &[RegionBox],
+    tables: &[RegionBox],
+    budget: &AtomicUsize,
+) -> crate::Result<Option<Vec<SourceEdit>>> {
+    let mut start = 0;
+    let mut candidates = Vec::new();
+    for group in read.occurrences.chunk_by(|a, b| a.element == b.element) {
+        let indices = start..start + group.len();
+        start = indices.end;
+        if let Some((crop, column)) = full_line_candidate(source, read, words, tables, indices.clone()) {
+            candidates.push((indices, crop, column));
+            if candidates.len() * 2 > attempt.max_strips {
+                return Ok(None);
+            }
+        }
+    }
+    tracing::trace!(
+        page = attempt.page + 1,
+        candidates = candidates.len(),
+        "full line OCR candidates"
+    );
+    let mut selected = Vec::new();
+    let mut selected_crops = Vec::<RegionBox>::new();
+    for (indices, crop, column) in candidates {
+        let group = &read.occurrences[indices.clone()];
+        let owners: Vec<_> = group.iter().map(|word| word.id).collect();
+        tracing::trace!(page = attempt.page + 1, ?indices, ?owners, crop = ?[crop.left, crop.top, crop.right, crop.bottom], "full line OCR enrolled owners");
+        let Some(mut reservation) = PairReservation::reserve(budget) else {
+            return Ok(None);
+        };
+        let Some([primary, confirmation]) =
+            read_pair(attempt, source, backend, ocr, crop, column, Some(&mut reservation)).await?
+        else {
+            tracing::trace!(?owners, "full line OCR read pair declined");
+            continue;
+        };
+        let count = primary.len();
+        let alphabetic = primary.iter().all(|word| word.text.chars().all(char::is_alphabetic));
+        let covers_stock = full_line_pair_covers_stock(&words[indices.clone()], [&primary, &confirmation]);
+        if count <= group.len() || !alphabetic || !covers_stock {
+            tracing::trace!(
+                ?owners,
+                count,
+                alphabetic,
+                covers_stock,
+                "full line OCR source ownership declined"
+            );
+            continue;
+        }
+        let mut replacement = primary
+            .iter()
+            .map(|word| word.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let edits = group
+            .iter()
+            .map(|word| {
+                Some((
+                    word.id,
+                    read.transcript.get(word.transcript_bytes.clone())?.to_owned(),
+                    std::mem::take(&mut replacement),
+                ))
+            })
+            .collect::<Option<Vec<_>>>();
+        if let Some(edits) = edits {
+            tracing::trace!(?owners, "full line OCR qualified");
+            if selected_crops.iter().any(|other| crop.intersects(*other)) || selected.len() + edits.len() > 64 {
+                return Ok(None);
+            }
+            selected_crops.push(crop);
+            selected.extend(edits);
+        }
+    }
+    Ok((!selected.is_empty()).then_some(selected))
+}
+
+fn full_line_pair_covers_stock(stock: &[RegionBox], [primary, confirmation]: [&[RegionWord]; 2]) -> bool {
+    let Some(primary_band) = stock_owned_line_band(stock, primary) else {
+        return false;
+    };
+    let Some(confirmation_band) = stock_owned_line_band(stock, confirmation) else {
+        return false;
+    };
+    meaningful_vertical_overlap(primary_band, confirmation_band)
+}
+
+fn common_line_band(source: &[RegionWord]) -> Option<std::ops::Range<u32>> {
+    let first = source.first()?.bounds;
+    let (top, bottom, shortest) = source[1..].iter().fold(
+        (first.top, first.bottom, first.bottom - first.top),
+        |(top, bottom, shortest), word| {
+            let bounds = word.bounds;
+            (
+                top.max(bounds.top),
+                bottom.min(bounds.bottom),
+                shortest.min(bounds.bottom - bounds.top),
+            )
+        },
+    );
+    (bottom.saturating_sub(top) >= shortest.div_ceil(2).max(2)).then_some(top..bottom)
+}
+
+fn meaningful_vertical_overlap(a: std::ops::Range<u32>, b: std::ops::Range<u32>) -> bool {
+    let shorter = (a.end - a.start).min(b.end - b.start);
+    let shared = a.end.min(b.end).saturating_sub(a.start.max(b.start));
+    shared >= shorter.div_ceil(2).max(2)
+}
+
+fn stock_owned_line_band(stock: &[RegionBox], source: &[RegionWord]) -> Option<std::ops::Range<u32>> {
+    let band = common_line_band(source)?;
+    if stock.is_empty()
+        || stock.windows(2).any(|pair| pair[0].right > pair[1].left)
+        || !source.windows(2).all(|pair| same_line(pair[0].bounds, pair[1].bounds))
+    {
+        return None;
+    }
+    // A stock box can be much taller than its source word. Normalize vertical
+    // overlap by the shorter box before counting horizontal split/join coverage. ~keep
+    stock
+        .iter()
+        .all(|word| {
+            let covered: u32 = source
+                .iter()
+                .map(|candidate| candidate.bounds)
+                .filter(|candidate| meaningful_vertical_overlap(word.top..word.bottom, candidate.top..candidate.bottom))
+                .map(|candidate| {
+                    word.right
+                        .min(candidate.right)
+                        .saturating_sub(word.left.max(candidate.left))
+                })
+                .sum();
+            covered >= (word.right - word.left).div_ceil(2)
+        })
+        .then_some(band)
+}
+
+fn full_line_candidate(
+    source: &IndexedSource,
+    read: &crate::types::formats::RetainedHocrRead,
+    words: &[RegionBox],
+    tables: &[RegionBox],
+    indices: std::ops::Range<usize>,
+) -> Option<(RegionBox, RegionBox)> {
+    let group = &read.occurrences[indices.clone()];
+    let first = group.first()?;
+    let last = group.last()?;
+    if !(3..=64).contains(&group.len())
+        || first.transcript_bytes.start != first.owner_bytes.start
+        || last.transcript_bytes.end != first.owner_bytes.end
+        || !group.windows(2).all(|pair| {
+            read.transcript
+                .get(pair[0].transcript_bytes.end..pair[1].transcript_bytes.start)
+                == Some(" ")
+        })
+        || !group.iter().all(|word| {
+            [read.plain_document.as_ref(), read.inline_page.as_ref()]
+                .into_iter()
+                .all(|projection| {
+                    projection.is_some_and(|projection| {
+                        projection.ranges.iter().filter(|(id, _)| *id == word.id).count() == 1
+                    })
+                })
+        })
+    {
+        return None;
+    }
+    let line = &words[indices.clone()];
+    let hull = line.iter().copied().reduce(|a, b| RegionBox {
+        left: a.left.min(b.left),
+        right: a.right.max(b.right),
+        top: a.top.min(b.top),
+        bottom: a.bottom.max(b.bottom),
+    })?;
+    let min_height = line.iter().map(|word| word.bottom - word.top).min()?;
+    if hull.bottom - hull.top < min_height.checked_mul(3)? {
+        return None;
+    }
+    let protected: Vec<_> = words
+        .iter()
+        .enumerate()
+        .filter_map(|(index, &word)| (!indices.contains(&index)).then_some(word))
+        .chain(tables.iter().copied())
+        .collect();
+    let crop = source.select_full_line_crop(hull, &protected)?;
+    if (crop.bottom - crop.top).checked_mul(2)? > hull.bottom - hull.top
+        || !line.iter().all(|word| crop.intersects(*word))
+    {
+        return None;
+    }
+    Some((crop, source.source_line_column(crop)?))
 }
 
 pub(super) async fn read_pair(
@@ -551,6 +753,101 @@ pub(super) async fn read_pair(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn full_line_pair_declines_vertically_displaced_aligned_reads() {
+        let stock = [0, 12, 24].map(|left| RegionBox {
+            left,
+            right: left + 10,
+            top: 10,
+            bottom: 29,
+        });
+        let read = |top| {
+            stock.map(|bounds| RegionWord {
+                bounds: RegionBox {
+                    top,
+                    bottom: top + 10,
+                    ..bounds
+                },
+                text: "word".to_owned(),
+                confidence: 99.0,
+            })
+        };
+        let primary = read(10);
+        let aligned = read(15);
+        let displaced = read(19);
+        assert!(agree(&primary, &displaced));
+        assert!(stock_owned_line_band(&stock, &primary).is_some());
+        assert!(stock_owned_line_band(&stock, &displaced).is_some());
+        assert!(full_line_pair_covers_stock(&stock, [&primary, &aligned]));
+        assert!(!full_line_pair_covers_stock(&stock, [&primary, &displaced]));
+    }
+
+    #[test]
+    fn full_line_read_declines_adjacent_overlap_without_common_band() {
+        let stock = std::array::from_fn::<_, 3, _>(|i| RegionBox {
+            left: i as u32 * 12,
+            right: i as u32 * 12 + 10,
+            top: i as u32 * 5,
+            bottom: i as u32 * 5 + 10,
+        });
+        let read = stock.map(|bounds| RegionWord {
+            bounds,
+            text: "word".to_owned(),
+            confidence: 99.0,
+        });
+        assert!(stock.windows(2).all(|pair| same_line(pair[0], pair[1])));
+        assert!(stock_owned_line_band(&stock, &read).is_none());
+    }
+
+    #[test]
+    fn full_line_read_declines_one_pixel_vertical_overlap() {
+        let stock = [RegionBox {
+            left: 10,
+            right: 30,
+            top: 20,
+            bottom: 40,
+        }];
+        let read = |top, bottom| {
+            [RegionWord {
+                bounds: RegionBox {
+                    top,
+                    bottom,
+                    ..stock[0]
+                },
+                text: "word".to_owned(),
+                confidence: 99.0,
+            }]
+        };
+        assert!(stock_owned_line_band(&stock, &read(26, 36)).is_some());
+        assert!(stock_owned_line_band(&stock, &read(39, 49)).is_none());
+    }
+
+    #[test]
+    fn larger_line_read_must_cover_the_last_stock_owner() {
+        let bounds = |left, right| RegionBox {
+            left,
+            right,
+            top: 10,
+            bottom: 20,
+        };
+        let stock = [bounds(0, 20), bounds(24, 36), bounds(40, 52)];
+        let words = |ranges: &[(u32, u32)]| {
+            ranges
+                .iter()
+                .map(|&(left, right)| RegionWord {
+                    bounds: bounds(left, right),
+                    text: "word".to_owned(),
+                    confidence: 99.0,
+                })
+                .collect::<Vec<_>>()
+        };
+        let complete = words(&[(0, 8), (9, 16), (17, 36), (40, 52)]);
+        let missing_end = words(&[(0, 8), (9, 16), (17, 26), (27, 36)]);
+        assert!(stock_owned_line_band(&stock, &complete).is_some());
+        assert!(missing_end.len() > stock.len());
+        assert!(stock_owned_line_band(&stock, &missing_end).is_none());
+    }
 
     #[test]
     fn anchored_edge_ink_refuses_a_component_shared_by_two_stock_words() {

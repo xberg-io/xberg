@@ -85,7 +85,8 @@ async fn public_original_multipage_recovery() {
     tracing_subscriber::fmt()
         .with_env_filter(concat!(
             "xberg::extractors::pdf::ocr::tall_source::region_probe=trace,",
-            "xberg::ocr::processor::execution=trace,xberg::core::extractor::file=debug",
+            "xberg::ocr::processor::execution=trace,xberg::core::extractor::file=debug,",
+            "xberg::extraction::derive::pages=trace",
         ))
         .with_ansi(false)
         .with_writer(move || writer.lock().unwrap().clone())
@@ -123,6 +124,17 @@ async fn public_original_multipage_recovery() {
         "file cache fresh writes and warm hits verified; optional backend calls: cold {full_calls}, warm 0, low-budget cold {low_calls}, low-budget warm 0"
     );
     let expected = |text: &str, page| match page {
+        4 => {
+            assert_eq!(text.matches("nag rh yer oteamci er").count(), 1);
+            assert_eq!(text.matches("Managing the cyber risks of remote work").count(), 1);
+            assert_eq!(text.matches("Managing he cyber ets oframote wot").count(), 1);
+            text.replacen("nag rh yer oteamci er", "Managing the cyber risks of remote work", 1)
+                .replacen(
+                    "Managing he cyber ets oframote wot",
+                    "Managing the cyber risks of remote work",
+                    1,
+                )
+        }
         8 => {
             assert_eq!(text.matches("POP WAcES:").count(), 1);
             text.replacen("POP WAcES:", "PDP IMAGES", 1)
@@ -134,7 +146,14 @@ async fn public_original_multipage_recovery() {
         }
         _ => text.to_owned(),
     };
-    assert_eq!(live.content, expected(&expected(&stock.content, 8), 13));
+    let expected_document = expected(&expected(&expected(&stock.content, 4), 8), 13);
+    assert!(
+        live.content == expected_document,
+        "guide document content differs; line selection: {:?}",
+        full.lines()
+            .filter(|line| line.contains("full line OCR") || line.contains("optional region OCR"))
+            .collect::<Vec<_>>()
+    );
     let (old_pages, new_pages) = (stock.pages.as_ref().unwrap(), live.pages.as_ref().unwrap());
     assert_eq!((old_pages.len(), new_pages.len()), (13, 13));
     assert_eq!(stock.tables.len(), 10);
