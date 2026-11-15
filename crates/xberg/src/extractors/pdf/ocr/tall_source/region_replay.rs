@@ -198,7 +198,7 @@ async fn recover(
         return Ok(None);
     }
     tracing::trace!(bounds = ?(selection.region.left, selection.region.top, selection.region.right, selection.region.bottom), "archived replay probing selected source crop");
-    let Some(reads) = read_pair(attempt, &source, backend, ocr, selection.region, witness).await? else {
+    let Some(reads) = read_pair(attempt, &source, backend, ocr, selection.region, witness, None).await? else {
         tracing::trace!("archived replay declined bounded source read pair");
         return Ok(None);
     };

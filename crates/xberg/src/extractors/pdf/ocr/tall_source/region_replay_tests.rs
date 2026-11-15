@@ -243,7 +243,7 @@ async fn archived_page_13_bounded_read_and_final_receipts() {
         .read()
         .get("tesseract")
         .unwrap();
-    let [first, second] = read_pair(&attempt, &source, &backend, &ocr, line, column)
+    let [first, second] = read_pair(&attempt, &source, &backend, &ocr, line, column, None)
         .await
         .unwrap()
         .unwrap();
@@ -263,7 +263,7 @@ async fn archived_page_13_bounded_read_and_final_receipts() {
         ..attempt
     };
     assert!(matches!(
-        read_pair(&cancelled, &source, &backend, &ocr, line, column).await,
+        read_pair(&cancelled, &source, &backend, &ocr, line, column, None).await,
         Err(crate::XbergError::Cancelled)
     ));
     assert_eq!((&document.content, &page.content), (before, before_page));

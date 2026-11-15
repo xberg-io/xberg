@@ -6,7 +6,10 @@ use super::{
 use crate::core::config::OcrConfig;
 use crate::plugins::OcrBackend;
 use crate::types::OcrElementLevel;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 
 const PAD: u32 = 16;
 const MAX_PAIR_PIXELS: u32 = 256 * 1024;
@@ -286,13 +289,35 @@ pub(super) fn discover_isolated_headings(
     Some(regions)
 }
 
+pub(super) struct PairReservation<'a> {
+    budget: &'a AtomicUsize,
+    unused: usize,
+}
+
+impl<'a> PairReservation<'a> {
+    fn reserve(budget: &'a AtomicUsize) -> Option<Self> {
+        budget
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |remaining| {
+                remaining.checked_sub(2)
+            })
+            .ok()?;
+        Some(Self { budget, unused: 2 })
+    }
+}
+
+impl Drop for PairReservation<'_> {
+    fn drop(&mut self) {
+        self.budget.fetch_add(self.unused, Ordering::Relaxed);
+    }
+}
+
 pub(super) async fn scan_selected_inventory(
     attempt: &Attempt<'_>,
     source: &IndexedSource,
     backend: &Arc<dyn OcrBackend>,
     ocr: &OcrConfig,
     selected: &crate::types::ExtractedDocument,
-    read: &crate::types::formats::RetainedHocrRead,
+    (read, budget): (&crate::types::formats::RetainedHocrRead, &AtomicUsize),
 ) -> crate::Result<Option<Vec<SourceEdit>>> {
     let native = |bounds| source.native_bounds(read.dimensions, bounds);
     let Some(words) = read
@@ -376,7 +401,12 @@ pub(super) async fn scan_selected_inventory(
             tracing::trace!(?stock, "anchored OCR discovery declined source column");
             continue;
         };
-        let Some(reads) = read_pair(attempt, source, backend, ocr, region, column).await? else {
+        let Some(mut reservation) = PairReservation::reserve(budget) else {
+            tracing::trace!(page = attempt.page + 1, "optional region OCR document budget exhausted");
+            return Ok(None);
+        };
+        let Some(reads) = read_pair(attempt, source, backend, ocr, region, column, Some(&mut reservation)).await?
+        else {
             continue;
         };
         let originals: Vec<_> = read.occurrences[stock.clone()]
@@ -458,6 +488,7 @@ pub(super) async fn read_pair(
     config: &OcrConfig,
     region: RegionBox,
     column: RegionBox,
+    mut reservation: Option<&mut PairReservation<'_>>,
 ) -> crate::Result<Option<[Vec<RegionWord>; 2]>> {
     if attempt.max_strips < 2
         || !crate::plugins::registry::get_ocr_backend_registry()
@@ -493,6 +524,10 @@ pub(super) async fn read_pair(
             return Err(crate::XbergError::Cancelled);
         }
         probe.tesseract_config.as_mut().expect("configured above").psm = Some(psm);
+        if let Some(reservation) = reservation.as_deref_mut() {
+            reservation.unused -= 1;
+            tracing::trace!(page = attempt.page + 1, psm, "optional region OCR backend call");
+        }
         let read = match backend.process_image_owned(Arc::clone(&png), &probe).await {
             Ok(read) => read,
             Err(error @ crate::XbergError::Cancelled) => return Err(error),

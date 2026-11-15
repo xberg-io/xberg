@@ -7,6 +7,20 @@
 
 use sha2::{Digest, Sha256};
 use xberg::{ExtractInput, ExtractionConfig, OcrConfig};
+#[derive(Clone, Default)]
+struct TraceBuffer(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for TraceBuffer {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 #[tokio::test]
 #[ignore = "requires the pinned public guide"]
 async fn public_original_multipage_recovery() {
@@ -40,6 +54,14 @@ async fn public_original_multipage_recovery() {
         pages: Some(serde_json::from_value(serde_json::json!({"extract_pages": true})).unwrap()),
         ..Default::default()
     };
+    let traces = TraceBuffer::default();
+    let writer = traces.clone();
+    tracing_subscriber::fmt()
+        .with_env_filter("xberg::extractors::pdf::ocr::tall_source::region_probe=trace")
+        .with_ansi(false)
+        .with_writer(move || writer.clone())
+        .try_init()
+        .unwrap();
     let mut results = Vec::new();
     for enabled in [false, true] {
         config.ocr.as_mut().unwrap().backend_options.as_mut().unwrap()["source_region_recovery"] = enabled.into();
@@ -53,6 +75,20 @@ async fn public_original_multipage_recovery() {
         let [document] = output.results.try_into().ok().unwrap();
         results.push(document);
     }
+    let full = String::from_utf8(traces.0.lock().unwrap().clone()).unwrap();
+    let full_calls = full.matches("optional region OCR backend call").count();
+    assert!((4..=16).contains(&full_calls), "{full_calls} document crop reads");
+    traces.0.lock().unwrap().clear();
+    config.ocr.as_mut().unwrap().backend_options.as_mut().unwrap()["source_region_max_calls"] = 2.into();
+    let low_budget = xberg::extract(ExtractInput::from_bytes(bytes, "application/pdf", None), &config)
+        .await
+        .unwrap();
+    assert!(low_budget.errors.is_empty());
+    let low = String::from_utf8(traces.0.lock().unwrap().clone()).unwrap();
+    let low_calls = low.matches("optional region OCR backend call").count();
+    assert_eq!(low_calls, 2);
+    assert!(low.contains("optional region OCR document budget exhausted"));
+    println!("actual optional backend calls: default {full_calls}, low budget {low_calls}");
     let [stock, live]: [xberg::ExtractedDocument; 2] = results.try_into().ok().unwrap();
     let expected = |text: &str, page| match page {
         8 => {
@@ -79,6 +115,8 @@ async fn public_original_multipage_recovery() {
             serde_json::to_value(after).unwrap()
         );
     }
+    let low = &low_budget.results[0];
+    assert_eq!(low.pages.as_ref().unwrap()[12].content, old_pages[12].content);
     let old = serde_json::to_value(&stock).unwrap();
     let new = serde_json::to_value(&live).unwrap();
     assert_eq!(old.get("tables"), new.get("tables"));

@@ -370,6 +370,48 @@ fn final_occurrence_projection_rejects_missing_and_ambiguous_owners() {
     assert!(project(&doc).is_none());
 }
 
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[test]
+fn ocr_edit_on_nonfinal_page_shifts_later_document_boundaries() {
+    use crate::types::internal::OcrSourceSpan;
+    let mut doc = InternalDocument::new("pdf");
+    let mut first = InternalElement::text(ElementKind::Paragraph, "wi", 0).with_index(0);
+    first.page = Some(1);
+    first.ocr_source_spans.push(OcrSourceSpan {
+        owner: first.id.clone(),
+        occurrence: 7,
+        source: 0..2,
+        destination: 0,
+        replacement: Some(("wi".to_owned(), "View".to_owned(), 1)),
+    });
+    let mut second = InternalElement::text(ElementKind::Paragraph, "keep", 0).with_index(1);
+    second.page = Some(2);
+    doc.elements.extend([first, second]);
+    doc.metadata.pages = Some(
+        serde_json::from_value(serde_json::json!({
+            "total_count": 2, "unit_type": "page",
+            "boundaries": [
+                {"page_number": 1,"byte_start": 0,"byte_end": 2},
+                {"page_number": 2,"byte_start": 4,"byte_end": 8}
+            ]
+        }))
+        .unwrap(),
+    );
+    let mut pages: Vec<PageContent> = serde_json::from_value(serde_json::json!([
+        {"page_number": 1, "content": "wi"},
+        {"page_number": 2, "content": "keep"}
+    ]))
+    .unwrap();
+    let mut rendered = crate::rendering::render_plain_with_spans(&doc);
+    assert_eq!(rendered.text, "wi\n\nkeep");
+    adopt_final_ocr_replacement(&mut doc, &mut rendered.text, &rendered.spans, &mut pages).unwrap();
+    assert_eq!(rendered.text, "View\n\nkeep");
+    assert_eq!((&*pages[0].content, &*pages[1].content), ("View", "keep"));
+    let boundaries = doc.metadata.pages.unwrap().boundaries.unwrap();
+    assert_eq!((boundaries[0].byte_start, boundaries[0].byte_end), (0, 4));
+    assert_eq!((boundaries[1].byte_start, boundaries[1].byte_end), (6, 10));
+}
+
 /// Give each page that has elements its part of the plain `content`. A page with no
 /// elements keeps its text, and every other field of a page stays.
 fn with_plain_page_text(mut pages: Vec<PageContent>, content: &str, ranges: &PlainPageRanges) -> Vec<PageContent> {

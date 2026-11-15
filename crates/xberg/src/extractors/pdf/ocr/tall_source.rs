@@ -154,6 +154,55 @@ pub(super) async fn try_replace(
     Ok(false)
 }
 
+pub(in crate::extractors::pdf) fn with_document_region_ocr_budget(
+    config: &ExtractionConfig,
+) -> Cow<'_, ExtractionConfig> {
+    let Some(ocr) = config.ocr.as_ref() else {
+        return Cow::Borrowed(config);
+    };
+    let enabled = |options: Option<&serde_json::Value>| {
+        options
+            .and_then(|options| options.get("source_region_recovery"))
+            .and_then(serde_json::Value::as_bool)
+            == Some(true)
+    };
+    let stage_enabled = ocr.pipeline.as_ref().is_some_and(|pipeline| {
+        pipeline
+            .stages
+            .iter()
+            .any(|stage| enabled(stage.backend_options.as_ref()))
+    });
+    if !enabled(ocr.backend_options.as_ref()) && !stage_enabled {
+        return Cow::Borrowed(config);
+    }
+    let requested = ocr
+        .backend_options
+        .as_ref()
+        .and_then(|options| options.get("source_region_max_calls"))
+        .map_or(MAX_STRIPS, |value| {
+            value
+                .as_u64()
+                .and_then(|limit| usize::try_from(limit).ok())
+                .unwrap_or(0)
+        });
+    let limit = requested
+        .min(MAX_STRIPS)
+        .min(
+            config
+                .security_limits
+                .as_ref()
+                .map_or(MAX_STRIPS, |limits| limits.max_iterations),
+        )
+        .min(
+            ocr.security_limits
+                .as_ref()
+                .map_or(MAX_STRIPS, |limits| limits.max_iterations),
+        );
+    let mut scoped = config.clone();
+    scoped.pdf_region_ocr_calls = Some(Arc::new(std::sync::atomic::AtomicUsize::new(limit)));
+    Cow::Owned(scoped)
+}
+
 pub(super) async fn probe_anchored_occurrences(
     selected: &mut ExtractedDocument,
     backend: &Arc<dyn OcrBackend>,
@@ -171,6 +220,9 @@ pub(super) async fn probe_anchored_occurrences(
     {
         return Ok(());
     }
+    let Some(budget) = config.pdf_region_ocr_calls.as_deref() else {
+        return Ok(());
+    };
     let Some(read) = selected.retained_hocr_read.as_ref() else {
         return Ok(());
     };
@@ -198,7 +250,8 @@ pub(super) async fn probe_anchored_occurrences(
     let Some(source) = indexed::IndexedSource::load(&attempt) else {
         return Ok(());
     };
-    if let Some(edits) = region_probe::scan_selected_inventory(&attempt, &source, backend, ocr, selected, read).await?
+    if let Some(edits) =
+        region_probe::scan_selected_inventory(&attempt, &source, backend, ocr, selected, (read, budget)).await?
         && let Some(doc) = selected.ocr_internal_document.as_mut()
     {
         if edits.iter().all(|(id, _, _)| {
