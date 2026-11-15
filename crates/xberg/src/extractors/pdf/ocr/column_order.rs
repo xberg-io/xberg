@@ -10,16 +10,18 @@ use crate::{
 use std::{collections::HashMap, ops::Range};
 
 #[derive(Debug)]
-struct RankedLine {
+pub(super) struct RankedLine {
     literal: String,
-    bounds: [u32; 4],
-    rank: usize,
+    pub(super) bounds: [u32; 4],
+    pub(super) rank: usize,
 }
 
 #[derive(Debug)]
 pub(in crate::extractors::pdf::ocr) struct LineOrder {
     frame: (u32, u32),
     lines: Vec<RankedLine>,
+    #[cfg(feature = "layout-detection")]
+    pub(in crate::extractors::pdf::ocr) lanes: Option<super::ColumnLanes>,
 }
 
 pub(super) fn plan(
@@ -43,8 +45,18 @@ pub(super) fn plan(
     if !retained_order_improves(&old.words, &new.words, frame) || stop_retry(cancel) {
         return None;
     }
-    let lines = rank_lines(primary, retry, &old.words, &new.words)?;
-    (lines.len() >= 2 && !stop_retry(cancel)).then_some(LineOrder { frame, lines })
+    let ranks = evaluate_ranks(primary, retry, &old.words, &new.words)?;
+    if ranks.lines.len() < 2 || stop_retry(cancel) {
+        return None;
+    }
+    #[cfg(feature = "layout-detection")]
+    let lanes = super::ColumnLanes::from_read(frame, primary.ocr_elements.as_deref()?, &ranks);
+    (!stop_retry(cancel)).then_some(LineOrder {
+        frame,
+        lines: ranks.lines,
+        #[cfg(feature = "layout-detection")]
+        lanes,
+    })
 }
 
 fn retained_order_improves(old: &[Word<'_>], new: &[Word<'_>], frame: (u32, u32)) -> bool {
@@ -204,21 +216,27 @@ impl<'a, 'text> OrderEvidence<'a, 'text> {
             .then_some(())
     }
 
-    fn rank(&self, line: usize) -> Option<usize> {
-        let rank = self.outgoing[line].unique()?;
+    fn rank(&self, line: usize) -> RankDecision {
+        let onward = &self.outgoing[line];
+        let rank = match (onward.unresolved, onward.owners) {
+            (false, [None, None, None]) => return RankDecision::Unranked,
+            (false, [Some(rank), None, None]) => rank,
+            _ => return RankDecision::Vetoed,
+        };
         let votes = self.votes[line];
         let incoming = &self.incoming[rank];
-        if votes < 2 || incoming.unresolved {
-            return None;
-        }
-        match incoming.owners {
-            [Some(_), None, None] => Some(rank),
-            [Some(a), Some(b), None] => {
+        match (incoming.unresolved, incoming.owners) {
+            (false, [Some(_), None, None]) if votes >= 2 => RankDecision::Ranked(rank),
+            (false, [Some(_), None, None]) => RankDecision::Unranked,
+            (false, [Some(a), Some(b), None]) if votes >= 2 => {
                 let prefix = if a == line { b } else { a };
-                self.exact_suffix(line, rank, prefix, votes)?;
-                Some(rank)
+                if self.exact_suffix(line, rank, prefix, votes).is_some() {
+                    RankDecision::Ranked(rank)
+                } else {
+                    RankDecision::Vetoed
+                }
             }
-            _ => None,
+            _ => RankDecision::Vetoed,
         }
     }
 }
@@ -228,30 +246,62 @@ fn strong_overlap(old: Word<'_>, new: Word<'_>) -> bool {
     area > before.max(after) / 2
 }
 
+enum RankDecision {
+    Ranked(usize),
+    Unranked,
+    Vetoed,
+}
+
+pub(super) struct LineRanks {
+    pub(super) lines: Vec<RankedLine>,
+    #[cfg(feature = "layout-detection")]
+    pub(super) complete: Vec<bool>,
+    #[cfg(feature = "layout-detection")]
+    pub(super) vetoes: Vec<bool>,
+}
+
+fn evaluate_ranks(
+    primary: &ExtractedDocument,
+    retry: &ExtractedDocument,
+    old: &[Word<'_>],
+    new: &[Word<'_>],
+) -> Option<LineRanks> {
+    let source = complete_line_owners(primary, old)?;
+    let destination = complete_line_owners(retry, new)?;
+    let evidence = OrderEvidence::new(old, new, source, destination);
+    let elements = primary.ocr_elements.as_ref()?;
+    let mut lines = Vec::new();
+    #[cfg(feature = "layout-detection")]
+    let mut vetoes = vec![false; elements.len()];
+    for (i, element) in elements.iter().enumerate() {
+        match evidence.rank(i) {
+            RankDecision::Ranked(rank) => lines.push(RankedLine {
+                literal: element.text.clone(),
+                bounds: bounds(element)?,
+                rank,
+            }),
+            #[cfg(feature = "layout-detection")]
+            RankDecision::Vetoed => vetoes[i] = true,
+            _ => {}
+        }
+    }
+    Some(LineRanks {
+        lines,
+        #[cfg(feature = "layout-detection")]
+        complete: evidence.source.spans.iter().map(Option::is_some).collect(),
+        #[cfg(feature = "layout-detection")]
+        vetoes,
+    })
+}
+
+#[cfg(test)]
 fn rank_lines(
     primary: &ExtractedDocument,
     retry: &ExtractedDocument,
     old: &[Word<'_>],
     new: &[Word<'_>],
 ) -> Option<Vec<RankedLine>> {
-    let source = complete_line_owners(primary, old)?;
-    let destination = complete_line_owners(retry, new)?;
-    let evidence = OrderEvidence::new(old, new, source, destination);
-    let elements = primary.ocr_elements.as_ref()?;
-    Some(
-        (0..elements.len())
-            .filter_map(|line| {
-                let rank = evidence.rank(line)?;
-                let element = &elements[line];
-                let bounds = bounds(element)?;
-                Some(RankedLine {
-                    literal: element.text.clone(),
-                    bounds,
-                    rank,
-                })
-            })
-            .collect(),
-    )
+    Some(evaluate_ranks(primary, retry, old, new)?.lines)
 }
 
 impl LineOrder {
@@ -501,6 +551,72 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn a_rank_veto_stays_fixed_but_an_unranked_owned_line_can_move() {
+        use crate::types::{
+            BoundingBox,
+            internal::{ElementKind, InternalDocument, InternalElement},
+        };
+
+        let labels: Vec<_> = (0..10).map(|row| format!("row{row}")).collect();
+        let words: Vec<_> = [("Left", 0), ("Right", 100)]
+            .into_iter()
+            .flat_map(|(text, left)| {
+                labels.iter().enumerate().flat_map(move |(row, label)| {
+                    let top = row as u32 * 12;
+                    [
+                        Word {
+                            text,
+                            bounds: [left, top, left + 15, top + 8],
+                            confidence: 1.0,
+                        },
+                        Word {
+                            text: label,
+                            bounds: [left + 42, top, left + 60, top + 8],
+                            confidence: 1.0,
+                        },
+                    ]
+                })
+            })
+            .collect();
+        let ranges: Vec<_> = (0..40).step_by(2).map(|i| i..i + 2).collect();
+        let primary = line_read(&words, &ranges);
+        let elements = primary.ocr_elements.as_deref().unwrap();
+        let doc = InternalDocument {
+            elements: [0, 10, 1, 11]
+                .into_iter()
+                .map(|idx| {
+                    let line = &elements[idx];
+                    let [left, top, right, bottom] = super::bounds(line).unwrap();
+                    let mut dst = InternalElement::text(ElementKind::Paragraph, &line.text, 0);
+                    dst.bbox = Some(BoundingBox {
+                        x0: f64::from(left),
+                        y0: f64::from(120 - bottom),
+                        x1: f64::from(right),
+                        y1: f64::from(120 - top),
+                    });
+                    dst
+                })
+                .collect(),
+            ..Default::default()
+        };
+        let mut retry_words = words.clone();
+        retry_words[20].text = "Other";
+        retry_words[21].text = "reading";
+        let unranked = line_read(&retry_words, &ranges);
+        let mut rejected = unranked.clone();
+        rejected.ocr_elements.as_mut().unwrap()[10].geometry = super::super::rectangle([101, 0, 160, 8]);
+
+        for (retry, expected) in [(&unranked, Some(vec![0, 2, 1, 3])), (&rejected, None)] {
+            let ranks = super::evaluate_ranks(&primary, retry, &words, &retry_words).unwrap();
+            assert!(!ranks.lines.iter().any(|line| line.literal == elements[10].text));
+            assert_eq!(ranks.vetoes[10], expected.is_none());
+            let lanes = super::super::ColumnLanes::from_read((160, 120), elements, &ranks).unwrap();
+            assert_eq!(lanes.plan(&doc, (1.0, 1.0)), expected);
+        }
+    }
+
     #[test]
     fn binds_primary_lines_before_grouping_and_leaves_the_header_in_place() {
         use crate::pdf::structure::{
@@ -533,6 +649,8 @@ mod tests {
         }
         let ranks = [0, 2, 1, 3, 5, 4];
         let order = LineOrder {
+            #[cfg(feature = "layout-detection")]
+            lanes: None,
             frame: super::super::tests::FRAME,
             lines: rows
                 .iter()

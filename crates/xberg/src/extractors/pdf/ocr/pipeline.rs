@@ -1684,6 +1684,13 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     // comment on `skip_document_global_heuristic`).
     let mut ocr_page_paragraphs: ahash::AHashMap<u32, Vec<crate::pdf::structure::types::PdfParagraph>> =
         ahash::AHashMap::with_capacity(total);
+    #[cfg(all(
+        feature = "ocr",
+        feature = "layout-detection",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let mut column_lanes_by_page = ahash::AHashMap::new();
     let mut preserve_ordered_layout = ahash::AHashSet::<u32>::new();
     // Pipeline paragraphs without an explicit point mapping retain the legacy raster scale
     // for layer matching. Single-backend and already placed detached paragraphs use points. ~keep
@@ -2191,6 +2198,15 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     if paragraphs_in_points {
                         paragraphs_in_page_points.insert(page_number);
                     }
+                    #[cfg(all(
+                        feature = "ocr",
+                        feature = "layout-detection",
+                        feature = "tokio-runtime",
+                        not(target_arch = "wasm32")
+                    ))]
+                    if let Some(lanes) = paragraph_page.column_lanes.take() {
+                        column_lanes_by_page.insert(page_number, lanes);
+                    }
                     if !paragraph_page.paragraphs.is_empty() {
                         if paragraph_page.preserve_ordered_layout {
                             preserve_ordered_layout.insert(page_number);
@@ -2391,6 +2407,15 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
                     if paragraphs_in_points {
                         paragraphs_in_page_points.insert(page_number);
+                    }
+                    #[cfg(all(
+                        feature = "ocr",
+                        feature = "layout-detection",
+                        feature = "tokio-runtime",
+                        not(target_arch = "wasm32")
+                    ))]
+                    if let Some(lanes) = paragraph_page.column_lanes.take() {
+                        column_lanes_by_page.insert(page_number, lanes);
                     }
                     if !paragraph_page.paragraphs.is_empty() {
                         if paragraph_page.preserve_ordered_layout {
@@ -4060,6 +4085,16 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         &Default::default(),
                     );
                     carry_page_ocr_payload_forward(existing, &mut new_page_doc);
+                    #[cfg(all(
+                        feature = "ocr",
+                        feature = "layout-detection",
+                        feature = "tokio-runtime",
+                        not(target_arch = "wasm32")
+                    ))]
+                    if let Some(lanes) = column_lanes_by_page.remove(page_number) {
+                        let page_size = page_dimensions_pt(&render_doc, page_number.saturating_sub(1) as usize);
+                        apply_owned_column_order(&mut new_page_doc, lanes, page_size, config.cancel_token.as_ref())?;
+                    }
                     new_page_doc
                 }
             };
@@ -5777,6 +5812,13 @@ pub(super) async fn extract_with_ocr_for_page(
     // paragraphs of a rejected page must be dropped along with its text.
     let mut rejected_pages = vec![false; total_pages];
     let mut all_page_paragraphs: Vec<Option<Vec<crate::pdf::structure::types::PdfParagraph>>> = vec![None; total_pages];
+    #[cfg(all(
+        feature = "ocr",
+        feature = "layout-detection",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let mut column_lanes_by_page = (0..total_pages).map(|_| None).collect::<Vec<_>>();
     #[cfg(all(
         feature = "ocr",
         feature = "layout-detection",
@@ -7925,6 +7967,7 @@ pub(super) async fn extract_with_ocr_for_page(
                         } else {
                             ordered_layout_pages[page_idx] =
                                 original_ocr_layout_blocks_reconstruction(&mut original, config);
+                            column_lanes_by_page[page_idx] = column_order.as_mut().and_then(|order| order.lanes.take());
                         }
                         column_order = None;
                     }
@@ -8621,6 +8664,13 @@ pub(super) async fn extract_with_ocr_for_page(
                             not(target_arch = "wasm32")
                         ))]
                         leading_khmer_rows: leading_khmer_rows.remove(&_page_index),
+                        #[cfg(all(
+                            feature = "ocr",
+                            feature = "layout-detection",
+                            feature = "tokio-runtime",
+                            not(target_arch = "wasm32")
+                        ))]
+                        column_lanes: column_lanes_by_page[_page_index].take(),
                         preserve_ordered_layout: {
                             #[cfg(all(
                                 feature = "ocr",
@@ -10271,6 +10321,43 @@ pub(super) fn ocr_heuristic_input(
     if preserve_ordered_layout { &[] } else { paragraphs }
 }
 
+#[cfg(all(
+    feature = "ocr",
+    feature = "layout-detection",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+fn apply_owned_column_order(
+    doc: &mut crate::types::internal::InternalDocument,
+    lanes: super::column_retry::ColumnLanes,
+    page_size: (f32, f32),
+    cancel: Option<&crate::cancellation::CancellationToken>,
+) -> crate::Result<()> {
+    if cancel.is_some_and(|token| token.is_cancelled()) {
+        return Err(crate::XbergError::Cancelled);
+    }
+    let (w, h) = lanes.frame();
+    if cancel.is_some_and(|token| token.time_limit_reached()) {
+        super::column_retry::note_deadline(&mut doc.processing_warnings, cancel);
+        return Ok(());
+    }
+    let order = lanes.plan(doc, (page_size.0 / w as f32, page_size.1 / h as f32));
+    if cancel.is_some_and(|token| token.is_cancelled()) {
+        return Err(crate::XbergError::Cancelled);
+    }
+    if cancel.is_some_and(|token| token.time_limit_reached()) {
+        super::column_retry::note_deadline(&mut doc.processing_warnings, cancel);
+    } else if let Some(order) = order {
+        let mut slots: Vec<_> = std::mem::take(&mut doc.elements).into_iter().map(Some).collect();
+        doc.elements = order
+            .into_iter()
+            .map(|index| slots[index].take().expect("column order is a permutation"))
+            .collect();
+        tracing::debug!("Reordered source-owned body paragraphs by column");
+    }
+    Ok(())
+}
+
 /// The OCR paragraphs of one page and their per-axis conversion to MediaBox points.
 /// Certified layout pages already use points and have an identity conversion.
 /// A missing conversion means the page cannot authorize removal during the layer merge. ~keep
@@ -10278,6 +10365,13 @@ pub(super) fn ocr_heuristic_input(
 #[derive(Debug, Default)]
 pub(super) struct RunPageParagraphs {
     pub(super) paragraphs: Vec<crate::pdf::structure::types::PdfParagraph>,
+    #[cfg(all(
+        feature = "ocr",
+        feature = "layout-detection",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    pub(super) column_lanes: Option<super::column_retry::ColumnLanes>,
     pub(super) preserve_ordered_layout: bool,
     pub(super) ocr_scale: Option<(f32, f32)>,
     pub(super) detached_ocr_scale: Option<(f32, f32)>,

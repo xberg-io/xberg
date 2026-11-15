@@ -11,8 +11,13 @@ use std::{future::Future, ops::Range, sync::Arc, time::Duration};
 #[path = "column_restore.rs"]
 mod restoration;
 
+#[cfg(feature = "layout-detection")]
+#[path = "column_lanes.rs"]
+mod lanes;
 #[path = "column_order.rs"]
 mod ordering;
+#[cfg(feature = "layout-detection")]
+pub(super) use lanes::ColumnLanes;
 pub(super) use ordering::LineOrder;
 
 const MIN_WORDS: usize = 160;
