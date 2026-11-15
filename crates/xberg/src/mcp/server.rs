@@ -784,6 +784,8 @@ fn parse_extract_input(
     if let Some(config) = value.get_mut("config") {
         crate::core::config::request_security::validate_caller_extraction_config(config)
             .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
+        crate::core::config::request_security::reject_caller_llm_env_credentials(operator, config)
+            .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
         crate::core::config::request_security::merge_html_override(operator, config)
             .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
     }
@@ -1365,6 +1367,25 @@ mod tests {
         assert!(
             !error.message.contains("must-not-leak"),
             "rejection must not include caller-controlled values"
+        );
+    }
+
+    #[test]
+    fn should_reject_mcp_per_input_llm_stage_that_would_use_server_env_credentials() {
+        let value = serde_json::json!({
+            "kind": "bytes",
+            "data": [115, 97, 102, 101],
+            "mime_type": "text/plain",
+            "config": {"summarization": {"llm": {"model": "openai/gpt-4o-mini"}}}
+        });
+
+        let error = parse_extract_input(value, &ExtractionConfig::default())
+            .expect_err("a caller LLM stage needs the operator's opt-in");
+
+        assert_eq!(
+            error.message,
+            "Caller extraction config may not use the server's LLM credentials for summarization.llm; \
+             the server operator must set XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1 to allow it"
         );
     }
 

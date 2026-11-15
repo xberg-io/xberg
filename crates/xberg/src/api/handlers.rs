@@ -157,11 +157,15 @@ fn resolve_input_config(
     config: Option<serde_json::Value>,
     effective: &crate::ExtractionConfig,
 ) -> Result<Option<FileExtractionConfig>, ApiError> {
-    use crate::core::config::request_security::{adopt_file_operator_policy, merge_html_override};
+    use crate::core::config::request_security::{
+        adopt_file_operator_policy, merge_html_override, reject_caller_llm_env_credentials,
+    };
 
     let Some(mut config) = config else {
         return Ok(None);
     };
+    reject_caller_llm_env_credentials(effective, &config)
+        .map_err(|message| ApiError::validation(crate::error::XbergError::validation(message)))?;
     merge_html_override(effective, &mut config)
         .map_err(|message| ApiError::validation(crate::error::XbergError::validation(message)))?;
     let mut config = serde_json::from_value(config).map_err(|error| {
@@ -2219,6 +2223,51 @@ mod tests {
         assert_eq!(
             error.body.message,
             "Validation error: Caller extraction config may not set captioning.llm.load_env"
+        );
+    }
+
+    #[test]
+    fn should_reject_per_input_llm_stage_that_would_use_server_env_credentials() {
+        let config = serde_json::json!({"captioning": {"llm": {"model": "openai/gpt-4o-mini"}}});
+
+        let error = resolve_input_config(Some(config), &crate::ExtractionConfig::default())
+            .expect_err("a caller LLM stage needs the operator's opt-in");
+
+        assert_eq!(error.status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            error.body.message,
+            "Validation error: Caller extraction config may not use the server's \
+             LLM credentials for captioning.llm; the server operator must set \
+             XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1 to allow it"
+        );
+    }
+
+    #[tokio::test]
+    async fn should_reject_request_level_llm_stage_that_would_use_server_env_credentials() {
+        let body = serde_json::json!({
+            "inputs": [{"text": "safe input"}],
+            "config": {"ocr": {"vlm_config": {"model": "openai/gpt-4o-mini"}}}
+        });
+        let request = Request::builder()
+            .method("POST")
+            .uri("/extract")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&body).expect("request body serializes")))
+            .expect("valid request");
+        let mut parsed = UnifiedExtractRequest::from_request(request, &())
+            .await
+            .expect("request parses");
+
+        let error = parsed
+            .resolve_config(&crate::ExtractionConfig::default())
+            .expect_err("a caller LLM stage needs the operator's opt-in");
+
+        assert_eq!(error.status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            error.body.message,
+            "Validation error: Caller extraction config may not use the server's \
+             LLM credentials for ocr.vlm_config; the server operator must set \
+             XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1 to allow it"
         );
     }
 

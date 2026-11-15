@@ -199,6 +199,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(api): Async jobs now share the request concurrency limit.** A `/extract-async` job stays `pending` until one of the `XBERG_MAX_CONCURRENT_REQUESTS` slots that also bound synchronous extraction is free, so queued jobs can no longer run up to 100 extractions at once.
 
+- **(api, mcp): A request can no longer run an LLM stage on the server's environment credentials.** A REST or MCP config that adds an LLM stage, or changes the model of the server's own, is rejected unless the operator sets `XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1`; library and CLI behavior is unchanged.
+
 - **(hwp): Cap the decompressed size of compressed HWP body-text sections.**
   Sections are now inflated under `security_limits.max_content_size` each and `max_archive_size` in total, so a small crafted `.hwp` can no longer expand without bound. Both limits are configurable; a legitimate document whose sections exceed them is now rejected with a security error until the limits are raised.
 

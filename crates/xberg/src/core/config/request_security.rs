@@ -24,6 +24,10 @@ const LLM_LOCATIONS: &[(&str, &str)] = &[
     ("/captioning/llm", "captioning.llm"),
 ];
 
+/// Server environment variable that lets a caller's LLM stage authenticate with the server's
+/// environment credentials (provider API-key variables, the AWS credential chain, Vertex ADC).
+pub(crate) const ALLOW_CALLER_LLM_ENV_CREDENTIALS_ENV: &str = "XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS";
+
 /// Server filesystem paths, model sources and process-global settings, as JSON pointers
 /// into an `ExtractionConfig` or `FileExtractionConfig`.
 const OPERATOR_OWNED_FIELDS: &[&str] = &[
@@ -119,6 +123,7 @@ pub(crate) fn resolve_caller_extraction_config(
 ) -> Result<super::ExtractionConfig, String> {
     if let Some(caller) = caller {
         validate_caller_extraction_config(caller)?;
+        reject_caller_llm_env_credentials(operator, caller)?;
     }
     let caller_json = caller
         .map(|caller| {
@@ -258,6 +263,88 @@ fn tighten_transcription_limits(
     transcription.timeout_ms = stricter_cap(transcription.timeout_ms, operator.timeout_ms);
     transcription.allow_network &= operator.allow_network;
     transcription.verify_hash |= operator.verify_hash;
+}
+
+/// Whether the operator set [`ALLOW_CALLER_LLM_ENV_CREDENTIALS_ENV`].
+pub(crate) fn caller_llm_env_credentials_allowed() -> bool {
+    std::env::var(ALLOW_CALLER_LLM_ENV_CREDENTIALS_ENV)
+        .is_ok_and(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+}
+
+/// Reject a caller LLM stage that would authenticate with the server's environment credentials,
+/// unless the operator set [`ALLOW_CALLER_LLM_ENV_CREDENTIALS_ENV`].
+///
+/// `base` is the config the caller JSON applies to: the operator config for a request config, the
+/// request's effective config for a per-input override.
+pub(crate) fn reject_caller_llm_env_credentials(base: &super::ExtractionConfig, caller: &Value) -> Result<(), String> {
+    check_caller_llm_env_credentials(base, caller, caller_llm_env_credentials_allowed())
+}
+
+/// A caller cannot send credentials or transport settings, and its section replaces the one in
+/// `base`, so every caller LLM stage authenticates from the server environment. That is the
+/// operator's own choice only when `base` configures the same model at the same place with no
+/// credential or transport settings of its own; any other stage needs the opt-in.
+fn check_caller_llm_env_credentials(
+    base: &super::ExtractionConfig,
+    caller: &Value,
+    allow_env_credentials: bool,
+) -> Result<(), String> {
+    if allow_env_credentials {
+        return Ok(());
+    }
+    let stages = caller_llm_stages(caller);
+    if stages.is_empty() {
+        return Ok(());
+    }
+    let base = serde_json::to_value(base).map_err(|e| format!("Failed to serialize server config: {e}"))?;
+    for (pointer, path) in stages {
+        let Some(llm) = caller.pointer(&pointer) else {
+            continue;
+        };
+        if !is_operator_llm_stage(base.pointer(&pointer), llm) {
+            return Err(format!(
+                "Caller extraction config may not use the server's LLM credentials for {path}; \
+                 the server operator must set {ALLOW_CALLER_LLM_ENV_CREDENTIALS_ENV}=1 to allow it"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// JSON pointer and dotted path of every non-null LLM config in `config`.
+fn caller_llm_stages(config: &Value) -> Vec<(String, String)> {
+    let mut stages: Vec<(String, String)> = LLM_LOCATIONS
+        .iter()
+        .filter(|(pointer, _)| config.pointer(pointer).is_some_and(|llm| !llm.is_null()))
+        .map(|(pointer, path)| ((*pointer).to_string(), (*path).to_string()))
+        .collect();
+    if let Some(pipeline) = config.pointer("/ocr/pipeline/stages").and_then(Value::as_array) {
+        for (index, stage) in pipeline.iter().enumerate() {
+            if stage.get("vlm_config").is_some_and(|llm| !llm.is_null()) {
+                stages.push((
+                    format!("/ocr/pipeline/stages/{index}/vlm_config"),
+                    format!("ocr.pipeline.stages[{index}].vlm_config"),
+                ));
+            }
+        }
+    }
+    stages
+}
+
+fn is_operator_llm_stage(base: Option<&Value>, caller: &Value) -> bool {
+    let Some(base) = base.filter(|base| base.is_object()) else {
+        return false;
+    };
+    let operator_transport = FORBIDDEN_LLM_FIELDS.iter().any(|field| match base.get(field) {
+        None | Some(Value::Null) => false,
+        // liter-llm's default, which the caller's stage gets too. ~keep
+        Some(Value::Bool(true)) => *field != "load_env",
+        Some(_) => true,
+    });
+    !operator_transport
+        && base
+            .get("model")
+            .is_some_and(|model| Some(model) == caller.get("model"))
 }
 
 fn validate_llm_fields(llm: &Value, path: &str) -> Result<(), String> {
@@ -477,6 +564,121 @@ mod tests {
         });
 
         assert_eq!(validate_caller_extraction_config(&config), Ok(()));
+    }
+
+    fn operator_with_vlm(llm: super::super::LlmConfig) -> super::super::ExtractionConfig {
+        super::super::ExtractionConfig {
+            ocr: Some(super::super::OcrConfig {
+                vlm_config: Some(llm),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    fn vlm_llm(model: &str) -> super::super::LlmConfig {
+        super::super::LlmConfig {
+            model: model.to_string(),
+            ..Default::default()
+        }
+    }
+
+    fn env_credentials_error(path: &str) -> String {
+        format!(
+            "Caller extraction config may not use the server's LLM credentials for {path}; \
+             the server operator must set XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1 to allow it"
+        )
+    }
+
+    #[test]
+    fn should_reject_caller_llm_stage_at_every_path_without_operator_opt_in() {
+        let operator = super::super::ExtractionConfig::default();
+        for path in LLM_PATHS {
+            let caller = nested_config(path, "model", serde_json::json!("openai/gpt-4o-mini"));
+
+            assert_eq!(
+                check_caller_llm_env_credentials(&operator, &caller, false),
+                Err(env_credentials_error(&path.join(".")))
+            );
+            assert_eq!(check_caller_llm_env_credentials(&operator, &caller, true), Ok(()));
+        }
+    }
+
+    #[test]
+    fn should_reject_caller_vlm_in_ocr_pipeline_stage_without_operator_opt_in() {
+        let caller = serde_json::json!({
+            "ocr": {"pipeline": {"stages": [{"backend": "tesseract"}, {"vlm_config": {"model": "openai/gpt-4o"}}]}}
+        });
+
+        assert_eq!(
+            check_caller_llm_env_credentials(&super::super::ExtractionConfig::default(), &caller, false),
+            Err(env_credentials_error("ocr.pipeline.stages[1].vlm_config"))
+        );
+    }
+
+    #[test]
+    fn should_let_caller_tune_operator_stage_that_already_uses_environment_credentials() {
+        let caller = serde_json::json!({"ocr": {"vlm_config": {"model": "openai/gpt-4o-mini", "temperature": 0.1}}});
+
+        for operator in [
+            vlm_llm("openai/gpt-4o-mini"),
+            super::super::LlmConfig {
+                load_env: Some(true),
+                ..vlm_llm("openai/gpt-4o-mini")
+            },
+        ] {
+            assert_eq!(
+                check_caller_llm_env_credentials(&operator_with_vlm(operator), &caller, false),
+                Ok(())
+            );
+        }
+    }
+
+    #[test]
+    fn should_reject_caller_stage_that_changes_model_or_drops_operator_credentials() {
+        let same_model = serde_json::json!({"ocr": {"vlm_config": {"model": "openai/gpt-4o-mini"}}});
+        let other_model = serde_json::json!({"ocr": {"vlm_config": {"model": "anthropic/claude-sonnet-4-5"}}});
+        let cases = [
+            (vlm_llm("openai/gpt-4o-mini"), &other_model),
+            (
+                super::super::LlmConfig {
+                    api_key: Some("operator-key".to_string()),
+                    ..vlm_llm("openai/gpt-4o-mini")
+                },
+                &same_model,
+            ),
+            (
+                super::super::LlmConfig {
+                    load_env: Some(false),
+                    ..vlm_llm("openai/gpt-4o-mini")
+                },
+                &same_model,
+            ),
+            (
+                super::super::LlmConfig {
+                    base_url: Some("https://gateway.internal".to_string()),
+                    ..vlm_llm("openai/gpt-4o-mini")
+                },
+                &same_model,
+            ),
+        ];
+
+        for (operator, caller) in cases {
+            let error = check_caller_llm_env_credentials(&operator_with_vlm(operator), caller, false)
+                .expect_err("the caller stage would authenticate from the server environment");
+            assert_eq!(error, env_credentials_error("ocr.vlm_config"));
+            assert!(!error.contains("operator-key"));
+        }
+    }
+
+    #[test]
+    fn should_reject_caller_llm_stage_when_resolving_request_config() {
+        let caller = serde_json::json!({"summarization": {"llm": {"model": "openai/gpt-4o"}}});
+
+        assert_eq!(
+            resolve_caller_extraction_config(&super::super::ExtractionConfig::default(), Some(&caller)).map(drop),
+            Err(env_credentials_error("summarization.llm"))
+        );
     }
 
     #[test]
