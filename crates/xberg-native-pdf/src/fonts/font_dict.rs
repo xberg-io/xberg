@@ -4355,21 +4355,31 @@ impl FontInfo {
     /// Latin ligature presentation form (U+FB00–FB06) yields its letters, so a
     /// ligature takes the same path as a ToUnicode map to letter pairs.
     pub fn char_to_unicode(&self, char_code: u32) -> Option<String> {
+        self.with_char_to_unicode(char_code, |mapped| mapped.map(str::to_owned))
+    }
+
+    /// [`Self::char_to_unicode`] handed to `f` as a borrow, so a caller that
+    /// appends the mapping to its own buffer does not allocate per glyph.
+    ///
+    /// On a memo hit `f` runs while the memo lock is held, so `f` must not
+    /// decode through this font again (the lock is not reentrant). ~keep
+    pub(crate) fn with_char_to_unicode<R>(&self, char_code: u32, f: impl FnOnce(Option<&str>) -> R) -> R {
         // Serve from the per-font memo. Read and write are separate lock scopes
         // so the decode in between never holds the lock. ~keep
         if let Ok(memo) = self.type0_unicode_memo.lock()
             && let Some(cached) = memo.get(&char_code)
         {
-            return cached.clone();
+            return f(cached.as_deref());
         }
         let result = self
             .char_to_unicode_uncached(char_code)
             .map(|s| expand_ligature_forms(&normalize_cjk_radical_forms(&s)))
             .map(|s| s.replace(crate::LOST_SYMBOL_GLYPH_MARKER, "\u{FFFD}"));
+        let output = f(result.as_deref());
         if let Ok(mut memo) = self.type0_unicode_memo.lock() {
-            memo.insert(char_code, result.clone());
+            memo.insert(char_code, result);
         }
-        result
+        output
     }
 
     /// Uncached decode cascade behind [`Self::char_to_unicode`].
