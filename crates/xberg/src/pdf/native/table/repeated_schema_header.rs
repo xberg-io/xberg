@@ -210,8 +210,13 @@ fn painted_label_bands(spans: &[&TextSpan], first: &RecordBand, pitch: f32, cell
         .copied()
         .filter(|span| span.bbox.y > first.y + BASELINE_TOLERANCE)
         .collect();
+    // ~keep The word projector estimates positions inside multiword spans. Those
+    // estimates cannot establish which cell owns a painted label fragment.
     if labels.iter().any(|label| {
-        !label.font_weight.is_bold() || label.color == first.color || !label.text.chars().any(char::is_alphabetic)
+        !label.font_weight.is_bold()
+            || label.color == first.color
+            || !label.text.chars().any(char::is_alphabetic)
+            || label.text.split_whitespace().nth(1).is_some()
     }) {
         return false;
     }
@@ -270,9 +275,7 @@ fn repeated_label_band(labels: &[&TextSpan], keys: &[f32]) -> bool {
 mod tests {
     use super::*;
 
-    #[test]
-    #[ignore = "requires the pinned ParseBench insurance PDF"]
-    fn painted_header_rejects_labels_reassigned_to_neighbor_cells() {
+    fn insurance_table_and_spans() -> (Table, Vec<TextSpan>) {
         use super::super::{TablePagePaths, extract_tables_heuristic};
         use crate::pdf::native::NativeDocument;
         use sha2::{Digest, Sha256};
@@ -294,8 +297,15 @@ mod tests {
         .unwrap()
         .tables;
         assert_eq!(tables.len(), 1);
-        let mut table = tables.pop().unwrap();
+        let table = tables.pop().unwrap();
         let spans = painting_spans(&doc.doc, 0).unwrap();
+        (table, spans)
+    }
+
+    #[test]
+    #[ignore = "requires the pinned ParseBench insurance PDF"]
+    fn painted_header_rejects_labels_reassigned_to_neighbor_cells() {
+        let (mut table, spans) = insurance_table_and_spans();
         let width = repeated_numeric_schema(&table).unwrap();
         assert!(has_painted_header(&table, width, &spans));
 
@@ -312,6 +322,80 @@ mod tests {
             labels[3] = "HAZ CODE".into();
         }
         assert_eq!(repeated_numeric_schema(&table), Some(width));
+        assert!(!has_painted_header(&table, width, &spans));
+    }
+
+    #[test]
+    #[ignore = "requires the pinned ParseBench insurance PDF"]
+    fn painted_header_rejects_crossing_span_even_when_reconstructed_cells_match() {
+        let (table, mut spans) = insurance_table_and_spans();
+        let width = repeated_numeric_schema(&table).unwrap();
+        assert!(has_painted_header(&table, width, &spans));
+
+        let lane_indices: Vec<_> = spans
+            .iter()
+            .enumerate()
+            .filter_map(|(index, span)| (span.text.trim() == "L/C").then_some(index))
+            .collect();
+        assert_eq!(lane_indices.len(), 3);
+        for lane in lane_indices {
+            let left = &spans[lane];
+            let code = spans
+                .iter()
+                .enumerate()
+                .filter(|(_, span)| {
+                    span.text.trim() == "CODE"
+                        && span.bbox.x >= left.bbox.right()
+                        && (span.bbox.y - left.bbox.y).abs() <= BASELINE_TOLERANCE
+                })
+                .min_by(|(_, a), (_, b)| a.bbox.x.total_cmp(&b.bbox.x))
+                .unwrap()
+                .0;
+            let right = &spans[code];
+            let premium_edge = spans
+                .iter()
+                .filter(|span| {
+                    span.text.trim() == "PREM."
+                        && span.bbox.right() < left.bbox.x
+                        && (span.bbox.y - left.bbox.y).abs() <= BASELINE_TOLERANCE
+                })
+                .map(|span| span.bbox.right())
+                .max_by(f32::total_cmp)
+                .unwrap();
+            let left_glyphs = left.to_chars();
+            let right_glyphs = right.to_chars();
+            let mut merged = left.clone();
+            merged.text = "   L/C CODE".into();
+            merged.bbox.x = left.bbox.x - 3.0 * (right.bbox.x - left.bbox.x) / 4.0;
+            merged.bbox.width = right.bbox.right() - merged.bbox.x;
+
+            let shift = left.bbox.x - merged.bbox.x - 1.0;
+            assert!(left_glyphs[0].origin_x - shift < premium_edge);
+            assert!(left_glyphs.last().unwrap().bbox.right() - shift > premium_edge);
+            let space_x = left_glyphs.last().unwrap().bbox.right() - shift;
+            merged.char_x_offsets = std::iter::repeat_n(merged.bbox.x, 3)
+                .chain(left_glyphs.iter().map(|glyph| glyph.origin_x - shift))
+                .chain(std::iter::once(space_x))
+                .chain(right_glyphs.iter().map(|glyph| glyph.origin_x))
+                .collect();
+            merged.char_widths = std::iter::repeat_n(0.0, 3)
+                .chain(left_glyphs.iter().map(|glyph| glyph.bbox.width))
+                .chain(std::iter::once(0.0))
+                .chain(right_glyphs.iter().map(|glyph| glyph.bbox.width))
+                .collect();
+            let painted_glyphs = merged.to_chars();
+            assert_eq!(painted_glyphs[3].origin_x, left_glyphs[0].origin_x - shift);
+            assert!(painted_glyphs[3].bbox.x < premium_edge);
+            assert!(painted_glyphs[5].bbox.right() > premium_edge);
+            spans[lane] = merged;
+            spans[code].text.clear();
+        }
+        let bounds = table.bounding_box.unwrap();
+        let local: Vec<_> = spans.iter().filter(|span| inside_table(span, bounds)).collect();
+        assert!(
+            painted_cells_match(&table, &local),
+            "reconstruction must still return identical cells"
+        );
         assert!(!has_painted_header(&table, width, &spans));
     }
 }
