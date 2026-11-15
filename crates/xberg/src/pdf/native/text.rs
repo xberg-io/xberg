@@ -10,7 +10,9 @@ use crate::pdf::error::{PdfError, Result};
 use crate::pdf::metadata::PdfExtractionMetadata;
 use crate::pdf::structure::constants::{COALESCE_THRESHOLD, MAX_GLYPH_JITTER_PT, MIN_DISORDER_COUNT};
 use crate::pdf::structure::lines::is_cjk_char;
-use crate::pdf::text::{contains_html_markup, fix_pdf_control_chars};
+#[cfg(feature = "html")]
+use crate::pdf::text::contains_html_markup;
+use crate::pdf::text::fix_pdf_control_chars;
 use crate::types::{PageBoundary, PageContent};
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
@@ -3291,9 +3293,6 @@ fn apply_text_cleanup(text: &str) -> Cow<'_, str> {
     if contains_html_markup(&cleaned) {
         return Cow::Owned(crate::pdf::text::convert_html_page_text(&cleaned));
     }
-
-    #[cfg(not(feature = "html"))]
-    let _ = contains_html_markup(&cleaned);
 
     cleaned
 }
