@@ -128,7 +128,10 @@ fn has_painted_header(table: &Table, width: usize, spans: &[TextSpan]) -> bool {
     {
         return false;
     }
-    painted_label_bands(&local, first, pitch, &table.cells[0]) && painted_cells_match(table, &local)
+    let Some(edges) = body_cell_edges(&bands, width, bounds) else {
+        return false;
+    };
+    painted_label_bands(&local, first, pitch, &table.cells[0], &edges) && painted_cells_match(table, &local)
 }
 
 // ~keep Reconstruct from the same painting spans that supplied the two label bands.
@@ -147,6 +150,8 @@ struct RecordBand {
     y: f32,
     color: Color,
     keys: Vec<f32>,
+    cells: Vec<(f32, f32)>,
+    height: f32,
 }
 
 fn painted_record(spans: &[&TextSpan], row: &[String], width: usize) -> Option<RecordBand> {
@@ -170,6 +175,8 @@ fn painted_record(spans: &[&TextSpan], row: &[String], width: usize) -> Option<R
     {
         return None;
     }
+    let mut cells = Vec::with_capacity(row.len());
+    let mut height = f32::INFINITY;
     for (index, (key, group)) in keys.iter().zip(row.chunks_exact(width)).enumerate() {
         let next_key = keys.get(index + 1).map_or(f32::INFINITY, |span| span.bbox.x);
         let values = spans.iter().copied().filter(|span| {
@@ -186,12 +193,62 @@ fn painted_record(spans: &[&TextSpan], row: &[String], width: usize) -> Option<R
         {
             return None;
         }
+        for span in std::iter::once(*key).chain(values) {
+            if !span.bbox.x.is_finite()
+                || !span.bbox.right().is_finite()
+                || span.bbox.width <= 0.0
+                || !span.bbox.height.is_finite()
+                || span.bbox.height <= 0.0
+            {
+                return None;
+            }
+            cells.push((span.bbox.x, span.bbox.right()));
+            height = height.min(span.bbox.height);
+        }
     }
     Some(RecordBand {
         y: first.bbox.y,
         color: first.color,
         keys: keys.iter().map(|span| span.bbox.x).collect(),
+        cells,
+        height,
     })
+}
+
+// ~keep Derive boundaries from matched numeric body records before consulting any labels.
+fn body_cell_edges(bands: &[RecordBand], width: usize, bounds: BoundingBox) -> Option<Vec<f32>> {
+    let mut columns = bands[0].cells.clone();
+    for band in &bands[1..] {
+        if band.cells.len() != columns.len() {
+            return None;
+        }
+        for ((left, right), &(x0, x1)) in columns.iter_mut().zip(&band.cells) {
+            *left = left.min(x0);
+            *right = right.max(x1);
+        }
+    }
+    let height = bands.iter().map(|band| band.height).min_by(f32::total_cmp)?;
+    let overhang = height * crate::table_core::CELL_MERGE_GAP_HEIGHT_RATIO as f32;
+    let mut edges = Vec::with_capacity(columns.len() + 1);
+    edges.push(bounds.x0 as f32 - BASELINE_TOLERANCE);
+    for (index, pair) in columns.windows(2).enumerate() {
+        let right = pair[0].1;
+        let gap = pair[1].0 - right;
+        if gap <= BASELINE_TOLERANCE {
+            return None;
+        }
+        // Key tracks delimit each repeated schema. For interior values, limit the
+        // trailing allowance to one cell-token gap even when values are far apart. ~keep
+        let adjacent_to_key = index % width == 0 || (index + 1) % width == 0;
+        let allowance = if adjacent_to_key {
+            gap * 0.5
+        } else {
+            (gap * 0.5).min(overhang)
+        };
+        edges.push(right + allowance);
+    }
+    edges.push(bounds.x1 as f32 + BASELINE_TOLERANCE);
+    edges.windows(2).all(|pair| pair[0] < pair[1]).then_some(edges)
 }
 
 fn inside_table(span: &TextSpan, bounds: BoundingBox) -> bool {
@@ -204,7 +261,7 @@ fn inside_table(span: &TextSpan, bounds: BoundingBox) -> bool {
         && f64::from(span.bbox.y) <= bounds.y1
 }
 
-fn painted_label_bands(spans: &[&TextSpan], first: &RecordBand, pitch: f32, cells: &[String]) -> bool {
+fn painted_label_bands(spans: &[&TextSpan], first: &RecordBand, pitch: f32, cells: &[String], edges: &[f32]) -> bool {
     let mut labels: Vec<_> = spans
         .iter()
         .copied()
@@ -243,6 +300,62 @@ fn painted_label_bands(spans: &[&TextSpan], first: &RecordBand, pitch: f32, cell
             .all(|span| (span.bbox.y - lower).abs() <= BASELINE_TOLERANCE)
         && repeated_label_band(upper_labels, &first.keys)
         && repeated_label_band(lower_labels, &first.keys)
+        && labels_fit_cells([upper_labels, lower_labels], edges, cells)
+}
+
+fn labels_fit_cells(bands: [&[&TextSpan]; 2], edges: &[f32], cells: &[String]) -> bool {
+    let mut assigned = vec![Vec::new(); cells.len()];
+    for band in bands {
+        let mut ordered = band.to_vec();
+        ordered.sort_by(|a, b| a.bbox.x.total_cmp(&b.bbox.x));
+        for span in ordered {
+            let Some((left, right)) = painted_extent(span) else {
+                return false;
+            };
+            let Some(column) = edges.windows(2).position(|edge| left >= edge[0] && right <= edge[1]) else {
+                return false;
+            };
+            assigned[column].push(span.text.trim());
+        }
+    }
+    assigned
+        .iter()
+        .zip(cells)
+        .all(|(words, cell)| words.iter().copied().eq(cell.split_whitespace()))
+}
+
+fn painted_extent(span: &TextSpan) -> Option<(f32, f32)> {
+    let mut left = span.bbox.x;
+    let mut right = span.bbox.right();
+    if !left.is_finite() || !right.is_finite() || left >= right {
+        return None;
+    }
+    if !span.char_x_offsets.is_empty() {
+        if span.char_x_offsets.len() != span.text.chars().count()
+            || !span
+                .char_x_offsets
+                .iter()
+                .all(|&x| x.is_finite() && x >= left - BASELINE_TOLERANCE && x <= right + BASELINE_TOLERANCE)
+            || !span
+                .char_x_offsets
+                .windows(2)
+                .all(|pair| pair[0] <= pair[1] + f32::EPSILON * pair[0].abs())
+        {
+            return None;
+        }
+        // Only measured positions can exclude leading whitespace from the painted extent. ~keep
+        if span.text.starts_with(char::is_whitespace) {
+            left = f32::INFINITY;
+        }
+        for glyph in span.to_chars().into_iter().filter(|glyph| !glyph.char.is_whitespace()) {
+            if !glyph.bbox.x.is_finite() || !glyph.bbox.right().is_finite() || glyph.bbox.width < 0.0 {
+                return None;
+            }
+            left = left.min(glyph.bbox.x);
+            right = right.max(glyph.bbox.right());
+        }
+    }
+    (left < right).then_some((left, right))
 }
 
 fn repeated_label_band(labels: &[&TextSpan], keys: &[f32]) -> bool {
@@ -390,6 +503,43 @@ mod tests {
             spans[lane] = merged;
             spans[code].text.clear();
         }
+        let bounds = table.bounding_box.unwrap();
+        let local: Vec<_> = spans.iter().filter(|span| inside_table(span, bounds)).collect();
+        assert!(
+            painted_cells_match(&table, &local),
+            "reconstruction must still return identical cells"
+        );
+        assert!(!has_painted_header(&table, width, &spans));
+    }
+
+    #[test]
+    #[ignore = "requires the pinned ParseBench insurance PDF"]
+    fn painted_header_rejects_single_word_crossing_its_right_cell_edge() {
+        let (table, mut spans) = insurance_table_and_spans();
+        let width = repeated_numeric_schema(&table).unwrap();
+        assert!(has_painted_header(&table, width, &spans));
+
+        let record_y = spans.iter().find(|span| span.text.trim() == "3400").unwrap().bbox.y;
+        let first_record = |text: &str| {
+            spans
+                .iter()
+                .filter(|span| span.text.trim() == text && span.bbox.y == record_y)
+                .min_by(|a, b| a.bbox.x.total_cmp(&b.bbox.x))
+                .unwrap()
+        };
+        let edge = (first_record("2").bbox.right() + first_record("4112").bbox.x) * 0.5;
+        let span = spans
+            .iter_mut()
+            .filter(|span| span.text.trim() == "HAZ")
+            .min_by(|a, b| a.bbox.x.total_cmp(&b.bbox.x))
+            .unwrap();
+        assert!(span.bbox.x < span.bbox.right() && span.bbox.right() < edge);
+        span.bbox.width = edge + 2.0 - span.bbox.x;
+        let last_glyph_x = *span.char_x_offsets.last().unwrap();
+        span.char_widths = vec![5.0; span.text.chars().count()];
+        *span.char_widths.last_mut().unwrap() = span.bbox.right() - last_glyph_x;
+        assert!(span.to_chars().last().unwrap().bbox.right() > edge);
+
         let bounds = table.bounding_box.unwrap();
         let local: Vec<_> = spans.iter().filter(|span| inside_table(span, bounds)).collect();
         assert!(
