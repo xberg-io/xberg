@@ -48,7 +48,6 @@ const OPERATOR_OWNED_FIELDS: &[&str] = &[
 const OPERATOR_OWNED_OCR_ENGINE_FIELDS: &[&str] = &[
     "/tesseract_config/tessdata_path",
     "/paddle_ocr_settings/cache_dir",
-    "/paddle_ocr_config/cache_dir",
     "/backend_options/cache_dir",
     "/backend_options/cache-dir",
     "/backend_options/model_path",
@@ -78,7 +77,7 @@ pub(crate) fn validate_caller_extraction_config(config: &Value) -> Result<(), St
 
     reject_operator_owned_fields(config, "", OPERATOR_OWNED_FIELDS)?;
     if let Some(ocr) = config.get("ocr") {
-        reject_operator_owned_fields(ocr, "ocr.", OPERATOR_OWNED_OCR_ENGINE_FIELDS)?;
+        validate_ocr_engine_fields(ocr, "ocr.")?;
     }
 
     if let Some(stages) = config.pointer("/ocr/pipeline/stages").and_then(Value::as_array) {
@@ -86,14 +85,19 @@ pub(crate) fn validate_caller_extraction_config(config: &Value) -> Result<(), St
             if let Some(llm) = stage.get("vlm_config") {
                 validate_llm_fields(llm, &format!("ocr.pipeline.stages[{index}].vlm_config"))?;
             }
-            reject_operator_owned_fields(
-                stage,
-                &format!("ocr.pipeline.stages[{index}]."),
-                OPERATOR_OWNED_OCR_ENGINE_FIELDS,
-            )?;
+            validate_ocr_engine_fields(stage, &format!("ocr.pipeline.stages[{index}]."))?;
         }
     }
 
+    Ok(())
+}
+
+fn validate_ocr_engine_fields(engine: &Value, prefix: &str) -> Result<(), String> {
+    reject_operator_owned_fields(engine, prefix, OPERATOR_OWNED_OCR_ENGINE_FIELDS)?;
+    if let Some(legacy) = engine.get("paddle_ocr_config") {
+        let canonical = crate::paddle_ocr::PaddleOcrConfig::canonicalize_legacy_fields(legacy);
+        reject_operator_owned_fields(&canonical, &format!("{prefix}paddle_ocr_config."), &["/cache_dir"])?;
+    }
     Ok(())
 }
 
@@ -116,16 +120,40 @@ pub(crate) fn resolve_caller_extraction_config(
     if let Some(caller) = caller {
         validate_caller_extraction_config(caller)?;
     }
-    let caller_json = caller.map(Value::to_string);
+    let caller_json = caller
+        .map(|caller| request_override_json(operator, caller))
+        .transpose()?;
     let mut config = super::merge::build_config_from_json(operator, caller_json.as_deref())?;
     adopt_operator_policy(&mut config, operator);
     Ok(config)
+}
+
+fn request_override_json(operator: &super::ExtractionConfig, caller: &Value) -> Result<String, String> {
+    #[cfg(feature = "html")]
+    if let (Some(base), Some(overrides)) = (
+        operator.html_output.as_ref(),
+        caller.get("html_output").and_then(Value::as_object),
+    ) {
+        let mut html = serde_json::to_value(base).map_err(|e| format!("Failed to serialize HTML config: {e}"))?;
+        if let Some(fields) = html.as_object_mut() {
+            fields.extend(overrides.clone());
+        }
+        let mut caller = caller.clone();
+        caller["html_output"] = html;
+        return Ok(caller.to_string());
+    }
+    #[cfg(not(feature = "html"))]
+    let _ = operator;
+    Ok(caller.to_string())
 }
 
 /// Re-apply operator policy to a request config already merged over `operator`: crawl
 /// egress comes from the operator, and resource limits can only tighten.
 pub(crate) fn adopt_operator_policy(config: &mut super::ExtractionConfig, operator: &super::ExtractionConfig) {
     adopt_operator_crawl_egress(config, operator);
+    config.concurrency = operator.concurrency.clone();
+    #[cfg(feature = "html")]
+    preserve_operator_css_file(config.html_output.as_mut(), operator.html_output.as_ref());
     tighten_security_limits(&mut config.security_limits, operator.security_limits.as_ref());
     config.max_archive_depth = config.max_archive_depth.min(operator.max_archive_depth);
     config.extraction_timeout_secs = stricter_cap(config.extraction_timeout_secs, operator.extraction_timeout_secs);
@@ -144,6 +172,8 @@ pub(crate) fn adopt_file_operator_policy(
     effective: &super::ExtractionConfig,
 ) {
     adopt_file_operator_crawl_egress(config, effective);
+    #[cfg(feature = "html")]
+    preserve_operator_css_file(config.html_output.as_mut(), effective.html_output.as_ref());
     if let Some(timeout) = config.timeout_secs {
         config.timeout_secs = stricter_cap(Some(timeout), effective.extraction_timeout_secs);
     }
@@ -153,6 +183,16 @@ pub(crate) fn adopt_file_operator_policy(
     #[cfg(feature = "transcription-types")]
     if let Some(transcription) = config.transcription.as_mut() {
         tighten_transcription_limits(transcription, effective.transcription.as_ref());
+    }
+}
+
+#[cfg(feature = "html")]
+fn preserve_operator_css_file(
+    html: Option<&mut super::html_output::HtmlOutputConfig>,
+    operator: Option<&super::html_output::HtmlOutputConfig>,
+) {
+    if let Some(html) = html {
+        html.css_file = operator.and_then(|html| html.css_file.clone());
     }
 }
 
@@ -249,6 +289,55 @@ pub(crate) fn adopt_file_operator_crawl_egress(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn should_keep_operator_concurrency_when_request_uses_defaults() {
+        let operator = super::super::ExtractionConfig {
+            concurrency: Some(super::super::ConcurrencyConfig {
+                max_threads: Some(2),
+                max_concurrent_ocr: Some(1),
+            }),
+            ..Default::default()
+        };
+
+        let caller = serde_json::json!({"concurrency": {}});
+        let resolved = resolve_caller_extraction_config(&operator, Some(&caller)).unwrap();
+        let concurrency = resolved.concurrency.unwrap();
+        assert_eq!(concurrency.max_threads, Some(2));
+        assert_eq!(concurrency.max_concurrent_ocr, Some(1));
+    }
+
+    #[test]
+    #[cfg(feature = "html")]
+    fn should_preserve_omitted_operator_html_settings() {
+        use super::super::html_output::{HtmlOutputConfig, HtmlTheme};
+
+        let operator = super::super::ExtractionConfig {
+            html_output: Some(HtmlOutputConfig {
+                css_file: Some("operator.css".into()),
+                theme: HtmlTheme::Dark,
+                class_prefix: "operator-".into(),
+                embed_css: false,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let caller = serde_json::json!({"html_output": {"css": "body { color: red; }", "embed_css": true}});
+        let resolved = resolve_caller_extraction_config(&operator, Some(&caller)).unwrap();
+        let html = resolved.html_output.as_ref().unwrap();
+        assert_eq!(html.css_file.as_deref(), Some(std::path::Path::new("operator.css")));
+        assert_eq!(html.theme, HtmlTheme::Dark);
+        assert_eq!(html.class_prefix, "operator-");
+        assert_eq!(html.css.as_deref(), Some("body { color: red; }"));
+        assert!(html.embed_css);
+
+        let mut file = super::super::FileExtractionConfig {
+            html_output: Some(HtmlOutputConfig::default()),
+            ..Default::default()
+        };
+        adopt_file_operator_policy(&mut file, &resolved);
+        assert_eq!(file.html_output.unwrap().css_file, html.css_file);
+    }
 
     const LLM_PATHS: &[&[&str]] = &[
         &["structured_extraction", "llm"],
@@ -434,7 +523,11 @@ mod tests {
 
     #[test]
     fn should_reject_operator_owned_ocr_engine_fields_in_ocr_and_each_pipeline_stage() {
-        for pointer in OPERATOR_OWNED_OCR_ENGINE_FIELDS {
+        for pointer in OPERATOR_OWNED_OCR_ENGINE_FIELDS
+            .iter()
+            .copied()
+            .chain(["/paddle_ocr_config/cache_dir"])
+        {
             let path = pointer.trim_start_matches('/').replace('/', ".");
             let engine = value_with_pointer(pointer, serde_json::json!("/srv/models"));
 
@@ -462,7 +555,11 @@ mod tests {
                 Ok(())
             );
         }
-        for pointer in OPERATOR_OWNED_OCR_ENGINE_FIELDS {
+        for pointer in OPERATOR_OWNED_OCR_ENGINE_FIELDS
+            .iter()
+            .copied()
+            .chain(["/paddle_ocr_config/cache_dir"])
+        {
             let config = serde_json::json!({"ocr": value_with_pointer(pointer, Value::Null)});
             assert_eq!(validate_caller_extraction_config(&config), Ok(()));
         }

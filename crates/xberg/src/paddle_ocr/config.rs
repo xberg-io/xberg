@@ -190,18 +190,23 @@ impl PaddleOcrConfig {
     /// Deserialize the deprecated raw JSON field while preserving its unknown-key tolerance and
     /// the camelCase keys accepted by the former hand-written Node binding. ~keep
     pub(crate) fn from_legacy_value(value: &serde_json::Value) -> serde_json::Result<Self> {
-        let mut value = value.clone();
-        if let serde_json::Value::Object(fields) = &mut value {
-            for &(alias, canonical) in LEGACY_CAMEL_CASE_FIELD_ALIASES {
-                if fields.contains_key(canonical) {
-                    fields.remove(alias);
-                } else if let Some(value) = fields.remove(alias) {
-                    fields.insert(canonical.to_string(), value);
-                }
-            }
+        let mut value = Self::canonicalize_legacy_fields(value);
+        if let Some(fields) = value.as_object_mut() {
             fields.retain(|name, _| PADDLE_OCR_CONFIG_FIELD_NAMES.contains(&name.as_str()));
         }
         serde_json::from_value(value)
+    }
+
+    pub(crate) fn canonicalize_legacy_fields(value: &serde_json::Value) -> serde_json::Value {
+        let mut value = value.clone();
+        if let Some(fields) = value.as_object_mut() {
+            for &(alias, canonical) in LEGACY_CAMEL_CASE_FIELD_ALIASES {
+                if let Some(value) = fields.remove(alias) {
+                    fields.entry(canonical.to_string()).or_insert(value);
+                }
+            }
+        }
+        value
     }
 
     /// Creates a new PaddleOCR configuration with specified language.
@@ -656,6 +661,26 @@ mod tests {
         let resolved = PaddleOcrConfig::from_legacy_value(&legacy).unwrap();
 
         assert_eq!(resolved, expected);
+    }
+
+    #[test]
+    fn should_canonicalize_legacy_fields_without_overwriting_canonical_values() {
+        let legacy = serde_json::json!({
+            "cacheDir": null,
+            "modelTier": "server",
+            "model_tier": "mobile",
+            "recBatchNum": 8,
+            "vendor_extension": true
+        });
+        assert_eq!(
+            PaddleOcrConfig::canonicalize_legacy_fields(&legacy),
+            serde_json::json!({
+                "cache_dir": null,
+                "model_tier": "mobile",
+                "rec_batch_num": 8,
+                "vendor_extension": true
+            })
+        );
     }
 
     #[test]
