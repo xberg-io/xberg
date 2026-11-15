@@ -325,7 +325,7 @@ fn archived_page_13_discovers_five_anchored_regions_from_all_stock_words() {
 
 #[tokio::test]
 #[ignore = "requires the exact archived page 13 PDF"]
-async fn public_region_recovery_preserves_other_surfaces_and_abstains_on_multipage() {
+async fn public_region_recovery_preserves_structured_and_ocr_element_surfaces() {
     let root = std::path::PathBuf::from(std::env::var_os("XBERG_2502_ARCHIVED_PAGES").unwrap());
     let bytes = std::fs::read(root.join("page-13.pdf")).unwrap();
     assert_eq!(
@@ -454,6 +454,8 @@ the blog",
     );
     let mut multi = Vec::new();
     two_pages.save_to(&mut multi).unwrap();
+    stock_config.include_document_structure = true;
+    enabled.include_document_structure = true;
     let multi_stock = extract(&multi, &stock_config).await;
     let multi_enabled = extract(&multi, &enabled).await;
     assert_eq!(multi_stock.pages.as_ref().unwrap().len(), 2);

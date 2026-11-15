@@ -2901,6 +2901,26 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         continue;
                     }
                 };
+                #[cfg(all(
+                    feature = "pdf",
+                    feature = "ocr",
+                    feature = "tokio-runtime",
+                    not(target_arch = "wasm32")
+                ))]
+                if correction_degrees == 0
+                    && !alternative_raster_pages.contains(&((page_idx + 1) as u32))
+                    && let Some(raster) = encoded.iter().find(|(index, ..)| *index == page_idx)
+                {
+                    super::tall_source::probe_anchored_occurrences(
+                        &mut extraction_result,
+                        backend,
+                        config,
+                        &ocr_config_resolved,
+                        (&render_doc, page_idx),
+                        raster,
+                    )
+                    .await?;
+                }
                 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
                 if let Some(serde_json::Value::String(text)) = extraction_result
                     .metadata
@@ -6825,8 +6845,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 feature = "tokio-runtime",
                 not(target_arch = "wasm32")
             ))]
-            if total_pages == 1
-                && !has_stored_scan
+            if !has_stored_scan
                 && !tall_source_used
                 && batch_upright_correction[offset].0 == 0
                 && let Some(source) = detached_page

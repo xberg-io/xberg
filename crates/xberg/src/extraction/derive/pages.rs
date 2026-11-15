@@ -172,13 +172,15 @@ pub(crate) fn project_final_ocr_occurrence(
 }
 
 #[cfg(all(feature = "pdf", feature = "ocr"))]
-pub(super) fn adopt_final_ocr_replacement(
-    doc: &mut InternalDocument,
-    text: &mut String,
+type FinalOcrEdit<'a> = (std::ops::Range<usize>, std::ops::Range<usize>, &'a str, &'a str);
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn plan_page_ocr_replacement<'a>(
+    doc: &'a InternalDocument,
+    text: &str,
     spans: &crate::rendering::ElementSpans,
-    pages: &mut [PageContent],
-) -> Option<()> {
-    let [page] = pages else { return None };
+    page: &PageContent,
+) -> Option<Vec<FinalOcrEdit<'a>>> {
     let pending: Vec<_> = doc
         .elements
         .iter()
@@ -215,7 +217,7 @@ pub(super) fn adopt_final_ocr_replacement(
         if text.get(document_bytes.clone())? != expected || page.content.get(page_bytes.clone())? != expected {
             return None;
         }
-        edits.push((document_bytes, page_bytes, expected, replacement));
+        edits.push((document_bytes, page_bytes, expected.as_str(), replacement.as_str()));
     }
     edits.sort_by_key(|(bytes, _, _, _)| bytes.start);
     if edits
@@ -224,26 +226,66 @@ pub(super) fn adopt_final_ocr_replacement(
     {
         return None;
     }
-    if let Some(boundaries) = doc.metadata.pages.as_mut().and_then(|pages| pages.boundaries.as_mut()) {
-        let [boundary] = boundaries.as_mut_slice() else {
-            return None;
-        };
-        if boundary.page_number != page.page_number
-            || boundary.byte_start > edits.first()?.0.start
-            || boundary.byte_end < edits.last()?.0.end
-            || boundary.byte_end > text.len()
-        {
-            return None;
-        }
-        boundary.byte_end = edits
+    Some(edits)
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+pub(super) fn adopt_final_ocr_replacement(
+    doc: &mut InternalDocument,
+    text: &mut String,
+    spans: &crate::rendering::ElementSpans,
+    pages: &mut [PageContent],
+) -> Option<()> {
+    if doc.source_format != "pdf"
+        || !doc
+            .elements
             .iter()
-            .try_fold(boundary.byte_end, |end, (_, _, expected, replacement)| {
-                end.checked_sub(expected.len())?.checked_add(replacement.len())
-            })?;
+            .any(|element| element.ocr_source_spans.iter().any(|span| span.replacement.is_some()))
+    {
+        return None;
     }
-    for (document_bytes, page_bytes, _, replacement) in edits.into_iter().rev() {
-        text.replace_range(document_bytes, replacement);
-        page.content.replace_range(page_bytes, replacement);
+    let mut all = Vec::new();
+    for (page_index, page) in pages.iter().enumerate() {
+        if let Some(edits) = plan_page_ocr_replacement(doc, text, spans, page) {
+            all.extend(edits.into_iter().map(|(document, page, expected, replacement)| {
+                (document, page_index, page, expected.len(), replacement.to_owned())
+            }));
+        }
+    }
+    if all.is_empty() {
+        return None;
+    }
+    all.sort_by_key(|(bytes, ..)| bytes.start);
+    if all.windows(2).any(|pair| pair[0].0.end > pair[1].0.start) {
+        return None;
+    }
+    if let Some(boundaries) = doc.metadata.pages.as_mut().and_then(|pages| pages.boundaries.as_mut()) {
+        let mut adjusted = boundaries.clone();
+        for (original, new) in boundaries.iter().zip(&mut adjusted) {
+            if original.byte_start >= original.byte_end || original.byte_end > text.len() {
+                return None;
+            }
+            for (range, page_index, _, expected, replacement) in &all {
+                let shift = |offset: usize| offset.checked_sub(*expected)?.checked_add(replacement.len());
+                if range.end <= original.byte_start {
+                    new.byte_start = shift(new.byte_start)?;
+                    new.byte_end = shift(new.byte_end)?;
+                } else if range.start < original.byte_end {
+                    if range.start < original.byte_start
+                        || range.end > original.byte_end
+                        || pages[*page_index].page_number != original.page_number
+                    {
+                        return None;
+                    }
+                    new.byte_end = shift(new.byte_end)?;
+                }
+            }
+        }
+        *boundaries = adjusted;
+    }
+    for (document_bytes, page_index, page_bytes, _, replacement) in all.into_iter().rev() {
+        text.replace_range(document_bytes, &replacement);
+        pages[page_index].content.replace_range(page_bytes, &replacement);
     }
     Some(())
 }

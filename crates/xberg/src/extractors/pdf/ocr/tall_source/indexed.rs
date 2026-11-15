@@ -892,6 +892,46 @@ mod tests {
         assert!(placement_fits(frame, (100, 1000), (100.01, 998.9)).is_none());
     }
     #[test]
+    fn heading_planner_rejects_native_gutter_after_same_line_admission() {
+        use super::super::{
+            region_probe::{discover_isolated_headings, same_line},
+            region_reconciliation::RegionBox,
+        };
+        let word = |left| RegionBox {
+            left,
+            right: left + 10,
+            top: 10,
+            bottom: 20,
+        };
+        let plan = |second| {
+            let words = [word(20), word(second)];
+            assert!(same_line(words[0], words[1]));
+            let mut palette = [255; PALETTE_BYTES];
+            palette[..3].fill(0);
+            let mut indices = vec![1; 100 * 30];
+            for y in 10..20 {
+                for word in words {
+                    indices[y * 100 + word.left as usize..y * 100 + word.right as usize].fill(0);
+                }
+            }
+            let source = IndexedSource {
+                width: 100,
+                height: 30,
+                dpi: 72.0,
+                frame: Rect::new(0.0, 0.0, 100.0, 30.0),
+                painted_height: 30.0,
+                painted_width: 100.0,
+                indices,
+                palette,
+                available: FIXED_WORK_BYTES,
+            };
+            discover_isolated_headings(&source, &words, 2).unwrap()
+        };
+        assert_eq!(plan(36).len(), 1);
+        assert!(plan(54).is_empty());
+    }
+
+    #[test]
     fn clipped_edge_must_be_white_even_if_placement_is_subpixel() {
         let mut palette = [255; PALETTE_BYTES];
         palette[..3].fill(0);

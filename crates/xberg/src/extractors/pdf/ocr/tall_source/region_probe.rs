@@ -139,7 +139,7 @@ pub(super) fn anchored_ink_edge(words: &[RegionBox], components: &[std::ops::Ran
         })
 }
 
-fn same_line(a: RegionBox, b: RegionBox) -> bool {
+pub(super) fn same_line(a: RegionBox, b: RegionBox) -> bool {
     let height = (a.bottom - a.top).min(b.bottom - b.top);
     let shared = a.bottom.min(b.bottom).saturating_sub(a.top.max(b.top));
     height > 0 && shared >= height.div_ceil(2) && b.left >= a.right && b.left - a.right <= height.saturating_mul(3)
@@ -265,7 +265,7 @@ pub(super) fn heading_column(source: &IndexedSource, words: [RegionBox; 2]) -> O
     Some((bounds, column))
 }
 
-fn discover_isolated_headings(
+pub(super) fn discover_isolated_headings(
     source: &IndexedSource,
     words: &[RegionBox],
     call_limit: usize,
