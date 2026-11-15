@@ -7023,7 +7023,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 .await?;
             }
 
-            #[cfg(all(test, feature = "pdf"))]
+            #[cfg(all(test, feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
             if let Some(read) = ocr_result.retained_hocr_read.as_ref() {
                 tracing::trace!(total_pages, has_stored_scan, tall_source_used,
                     raw_frame = ocr_result.raw_ocr_source_frame.is_some(),

@@ -4350,6 +4350,7 @@ pub(super) fn fill_unstructured_ocr_pages(
     }
 }
 
+#[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) fn ocr_paragraphs_already_structured(paragraphs: &[crate::pdf::structure::types::PdfParagraph]) -> bool {
     paragraphs
         .iter()
