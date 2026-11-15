@@ -121,3 +121,44 @@ async fn embedded_markdown_keeps_recognized_96_dpi_table_rows() {
         }
     }
 }
+
+#[tokio::test]
+#[ignore = "requires XBERG_2503_EMBEDDED_PDF and pinned English tessdata"]
+async fn embedded_html_preserves_stock_rows_and_native_heading() {
+    let bytes = std::fs::read(std::env::var_os("XBERG_2503_EMBEDDED_PDF").unwrap()).unwrap();
+    for psm in [None, Some(6)] {
+        let mut config = serde_json::json!({
+            "use_cache": false,
+            "output_format": "html",
+            "ocr": {"backend": "tesseract", "language": ["eng"]},
+            "pages": {"extract_pages": true}
+        });
+        if let Some(psm) = psm {
+            config["ocr"]["tesseract_config"] = serde_json::json!({"psm": psm});
+        }
+        let config: ExtractionConfig = serde_json::from_value(config).unwrap();
+        let batch = xberg::extract(
+            ExtractInput::from_bytes(bytes.clone(), "application/pdf", None),
+            &config,
+        )
+        .await
+        .unwrap();
+        assert!(batch.errors.is_empty(), "{:?}", batch.errors);
+        let [result] = batch.results.as_slice() else {
+            panic!("expected one extraction")
+        };
+        let [page] = result.pages.as_deref().unwrap() else {
+            panic!("expected one page")
+        };
+        let mut rows = TABLE;
+        if psm == Some(6) {
+            rows[4] = "Water service......... 26 61,656 (3,409)";
+        }
+        let expected: String = std::iter::once(HEADING)
+            .chain(rows)
+            .map(|row| format!("<p>{row}</p>\n"))
+            .collect();
+        assert_eq!(result.content.trim(), expected.trim(), "document, PSM {psm:?}");
+        assert_eq!(page.content.trim(), expected.trim(), "page, PSM {psm:?}");
+    }
+}

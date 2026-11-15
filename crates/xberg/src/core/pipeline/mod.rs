@@ -640,7 +640,9 @@ async fn run_pipeline_impl(
                 && doc.source_format == "pdf"
                 && matches!(
                     config.output_format,
-                    crate::core::config::OutputFormat::Markdown | crate::core::config::OutputFormat::Plain
+                    crate::core::config::OutputFormat::Markdown
+                        | crate::core::config::OutputFormat::Plain
+                        | crate::core::config::OutputFormat::Html
                 );
             match crate::extraction::image_ocr::process_images_with_ocr(
                 images_to_process,
@@ -651,7 +653,7 @@ async fn run_pipeline_impl(
             .await
             {
                 Ok(processed) => {
-                    if config.output_format == crate::core::config::OutputFormat::Markdown {
+                    if config.output_format != crate::core::config::OutputFormat::Plain {
                         mark_embedded_image_rows(&mut doc, &image_positions, &repaired_rows);
                     }
                     for (position, image) in image_positions.into_iter().zip(processed) {
