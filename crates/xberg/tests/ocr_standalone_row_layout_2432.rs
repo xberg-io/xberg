@@ -174,6 +174,7 @@ fn standalone_row_claim_keeps_the_public_ocr_elements() {
     let selected = helpers::extract_bytes_document_blocking(IMAGE, "image/png", &config).unwrap();
     config.ocr.as_mut().unwrap().tesseract_config = Some(TesseractConfig {
         psm: Some(11),
+        enable_table_detection: false,
         ..Default::default()
     });
     let ordinary = helpers::extract_bytes_document_blocking(IMAGE, "image/png", &config).unwrap();
