@@ -225,6 +225,37 @@ impl FlateDecoder {
     }
 }
 
+impl FlateDecoder {
+    pub(super) fn decode_complete(&self, input: &[u8], max_output_bytes: usize) -> Result<Vec<u8>> {
+        use flate2::{Decompress, FlushDecompress, Status};
+
+        let limit = self
+            .max_decompressed_bytes
+            .min((max_output_bytes as u64).saturating_add(1));
+        let mut decoder = Decompress::new(true);
+        let mut output = Vec::new();
+        let mut chunk = [0; 8192];
+        loop {
+            let offset = decoder.total_in() as usize;
+            let chunk_len = (chunk.len() as u64).min(limit - output.len() as u64) as usize;
+            let status = decoder
+                .decompress(&input[offset..], &mut chunk[..chunk_len], FlushDecompress::None)
+                .map_err(|error| Error::Decode(format!("FlateDecode: {error}")))?;
+            let count = decoder.total_out() as usize - output.len();
+            output.extend_from_slice(&chunk[..count]);
+            check_limit(&output, limit)?;
+            if status == Status::StreamEnd && decoder.total_in() as usize == input.len() {
+                return Ok(output);
+            }
+            if status == Status::StreamEnd || (count == 0 && decoder.total_in() as usize == offset) {
+                return Err(Error::Decode(
+                    "FlateDecode: incomplete zlib stream or trailing data".into(),
+                ));
+            }
+        }
+    }
+}
+
 impl StreamDecoder for FlateDecoder {
     fn decode(&self, input: &[u8], max_output_bytes: usize) -> Result<Vec<u8>> {
         let limit = if max_output_bytes == 0 {

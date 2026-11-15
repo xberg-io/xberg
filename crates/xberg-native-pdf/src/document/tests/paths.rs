@@ -226,6 +226,31 @@ fn form_extraction_reports_incomplete_decode_and_parse() {
     );
 }
 
+#[test]
+fn form_path_budget_allows_trailing_text_at_exact_fit() {
+    use super::super::paths::FormPathBudget;
+    let content = "0 0 10 10 re f BT /F1 12 Tf (Caption) Tj ET";
+    let form = format!(
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 10 10] /Length {} >>\nstream\n{content}\nendstream",
+        content.len()
+    );
+    let doc = page_with_xobject("/X1 Do", &form);
+    let paths = doc
+        .extract_paths_with_form_budget(0, FormPathBudget::new(1, content.len(), 2))
+        .unwrap();
+    assert_eq!(paths.len(), 2);
+}
+
+#[test]
+fn form_paint_reads_source_even_with_a_tolerant_cache_entry() {
+    let doc = page_with_xobject("/X1 Do", FORM_X1);
+    doc.xobject_stream_cache
+        .lock()
+        .unwrap()
+        .insert(ObjectRef::new(5, 0), std::sync::Arc::new(b"".to_vec()));
+    assert_eq!(doc.extract_paths(0).unwrap().len(), 2);
+}
+
 /// One page that draws a curve and paints the XObject `/X1` (object 5, `x1` is its dictionary and stream).
 fn page_with_xobject(paint: &str, x1: &str) -> PdfDocument {
     let content = format!("q 20 0 0 20 300 300 cm {paint} Q 100 100 m 150 200 200 200 250 100 c S");

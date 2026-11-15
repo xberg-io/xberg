@@ -21,7 +21,7 @@ pub struct LzwDecoder;
 
 impl StreamDecoder for LzwDecoder {
     fn decode(&self, input: &[u8], max_output_bytes: usize) -> Result<Vec<u8>> {
-        match decode_lzw_weezl(input, max_output_bytes) {
+        match decode_lzw_weezl(input, max_output_bytes, false) {
             WeezlAttempt::Recovered(data) => Ok(data),
             // A cap violation is not a "this decoder can't handle it" failure the custom
             // fallback might succeed at differently — it is a real property of the stream's
@@ -34,6 +34,14 @@ impl StreamDecoder for LzwDecoder {
 
     fn name(&self) -> &str {
         "LZWDecode"
+    }
+}
+
+pub(super) fn decode_complete(input: &[u8], limit: usize) -> Result<Vec<u8>> {
+    match decode_lzw_weezl(input, limit, true) {
+        WeezlAttempt::Recovered(data) => Ok(data),
+        WeezlAttempt::CapExceeded(error) => Err(error),
+        WeezlAttempt::Failed => Err(Error::Decode("LZWDecode: incomplete code stream".into())),
     }
 }
 
@@ -56,17 +64,26 @@ enum WeezlAttempt {
 /// chunks via `decode_bytes` rather than `Decoder::decode`'s single unbounded call so a
 /// dense LZW stream aborts mid-decode instead of materialising its full expansion before
 /// anything checks it (GH#1764).
-fn decode_lzw_weezl(input: &[u8], max_output_bytes: usize) -> WeezlAttempt {
+fn decode_lzw_weezl(input: &[u8], max_output_bytes: usize, complete: bool) -> WeezlAttempt {
     use weezl::{BitOrder, LzwStatus, decode::Decoder as WeezlDecoder};
 
     // PDF uses MSB bit order, 8-bit minimum code size ~keep
-    let mut decoder = WeezlDecoder::new(BitOrder::Msb, 8);
+    let mut decoder = if complete {
+        WeezlDecoder::with_tiff_size_switch(BitOrder::Msb, 8)
+    } else {
+        WeezlDecoder::new(BitOrder::Msb, 8)
+    };
     let mut output = Vec::new();
     let mut chunk = vec![0u8; WEEZL_CHUNK_BYTES];
     let mut remaining = input;
 
     loop {
-        let result = decoder.decode_bytes(remaining, &mut chunk);
+        let chunk_len = if complete {
+            chunk.len().min((max_output_bytes - output.len()).saturating_add(1))
+        } else {
+            chunk.len()
+        };
+        let result = decoder.decode_bytes(remaining, &mut chunk[..chunk_len]);
         output.extend_from_slice(&chunk[..result.consumed_out]);
         remaining = &remaining[result.consumed_in..];
 
@@ -75,8 +92,10 @@ fn decode_lzw_weezl(input: &[u8], max_output_bytes: usize) -> WeezlAttempt {
         }
 
         match result.status {
-            Ok(LzwStatus::Done) => return WeezlAttempt::Recovered(output),
+            Ok(LzwStatus::Done) if !complete || remaining.is_empty() => return WeezlAttempt::Recovered(output),
+            Ok(LzwStatus::Done) => return WeezlAttempt::Failed,
             Ok(LzwStatus::Ok) => continue,
+            Ok(LzwStatus::NoProgress) | Err(_) if complete => return WeezlAttempt::Failed,
             Ok(LzwStatus::NoProgress) => {
                 tracing::warn!(
                     filter = "LZWDecode",

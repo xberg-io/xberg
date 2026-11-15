@@ -245,7 +245,11 @@ impl Object {
 
                 // Step 2: Apply filters (decompression)
                 // PDF Spec: ISO 32000-1:2008, Section 7.3.8.2 - Stream Objects ~keep
-                let filters = dict.get("Filter").map(extract_filter_names).unwrap_or_default();
+                let filter = dict.get("Filter");
+                if byte_limit.is_some() && !valid_form_filter_entry(filter) {
+                    return Err(Error::Decode("invalid Form filter entry".into()));
+                }
+                let filters = filter.map(extract_filter_names).unwrap_or_default();
 
                 if filters.is_empty() {
                     if let Some(limit) = byte_limit
@@ -281,7 +285,7 @@ impl Object {
                     }
                 }
             }
-            Object::Dictionary(dict) => {
+            Object::Dictionary(dict) if byte_limit.is_none() => {
                 // Per ISO 32000, every stream is a dictionary. Some PDFs (e.g.,
                 // SafeDocs Dialect-StreamIsDict.pdf) store objects as plain
                 // dictionaries where a stream is expected. Treat as empty stream. ~keep
@@ -302,24 +306,31 @@ impl Object {
     }
 }
 
+fn valid_form_filter_entry(filter: Option<&Object>) -> bool {
+    match filter {
+        None | Some(Object::Null | Object::Name(_)) => true,
+        Some(Object::Array(filters)) => filters.iter().all(|filter| filter.as_name().is_some()),
+        _ => false,
+    }
+}
+
 fn decode_stream_filters(
     data: &[u8],
     filters: &[String],
     params: Option<&crate::decoders::DecodeParams>,
     byte_limit: Option<usize>,
 ) -> Result<Vec<u8>> {
-    let options = byte_limit.map(|limit| {
-        let defaults = ParserOptions::default();
-        ParserOptions {
-            // The decoder API reserves zero for an unlimited cap.
-            max_decompressed_size: defaults.max_decompressed_size.min(limit.max(1)),
-            ..defaults
-        }
-    });
-    let decoded = crate::decoders::decode_stream_with_options(data, filters, params, options.as_ref())?;
-    if let Some(limit) = byte_limit
-        && decoded.len() > limit
-    {
+    let Some(limit) = byte_limit else {
+        return crate::decoders::decode_stream_with_params(data, filters, params);
+    };
+    let defaults = ParserOptions::default();
+    let options = ParserOptions {
+        // The decoder API reserves zero for an unlimited cap.
+        max_decompressed_size: defaults.max_decompressed_size.min(limit.max(1)),
+        ..defaults
+    };
+    let decoded = crate::decoders::decode_complete_form_stream(data, filters, params, &options)?;
+    if decoded.len() > limit {
         return Err(Error::Decode(format!("filtered stream exceeds {limit} bytes")));
     }
     Ok(decoded)

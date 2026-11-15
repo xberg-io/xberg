@@ -264,7 +264,52 @@ pub fn decode_stream_with_options(
     params: Option<&DecodeParams>,
     options: Option<&ParserOptions>,
 ) -> Result<Vec<u8>> {
-    decode_stream_with_options_and_expected_size(data, filters, PredictorPlacement::AfterFilters(params), options, None)
+    decode_stream_with_options_and_expected_size(
+        data,
+        filters,
+        PredictorPlacement::AfterFilters(params),
+        options,
+        None,
+        false,
+    )
+}
+
+pub(crate) fn decode_complete_form_stream(
+    data: &[u8],
+    filters: &[String],
+    params: Option<&DecodeParams>,
+    options: &ParserOptions,
+) -> Result<Vec<u8>> {
+    decode_stream_with_options_and_expected_size(
+        data,
+        filters,
+        PredictorPlacement::AfterFilters(params),
+        Some(options),
+        None,
+        true,
+    )
+}
+
+fn decode_complete_form_filter(filter: &str, input: &[u8], limit: usize) -> Result<Vec<u8>> {
+    let canonical = normalize_filter_name(filter)?;
+    match canonical {
+        "FlateDecode" => FlateDecoder::default().decode_complete(input, limit),
+        "LZWDecode" => lzw::decode_complete(input, limit),
+        "RunLengthDecode" => runlength::decode(input, limit, true),
+        "ASCIIHexDecode" | "ASCII85Decode" => {
+            let end: &[u8] = if canonical == "ASCIIHexDecode" { b">" } else { b"~>" };
+            let payload = input
+                .trim_ascii_end()
+                .strip_suffix(end)
+                .ok_or_else(|| Error::Decode(format!("{canonical}: missing end-of-data marker")))?;
+            if payload.contains(&end[0]) {
+                return Err(Error::Decode(format!("{canonical}: data after end-of-data marker")));
+            }
+            create_decoder(canonical)?.decode(payload, limit)
+        }
+        "BrotliDecode" => brotli::decode(input, limit, true),
+        _ => Err(Error::UnsupportedFilter(format!("{canonical} in Form content"))),
+    }
 }
 
 enum PredictorPlacement<'a> {
@@ -282,6 +327,7 @@ fn decode_stream_with_options_and_expected_size(
     predictors: PredictorPlacement<'_>,
     options: Option<&ParserOptions>,
     expected_filter_output_size: Option<usize>,
+    complete_form: bool,
 ) -> Result<Vec<u8>> {
     let max_ratio = options
         .map(|o| o.max_decompression_ratio)
@@ -294,9 +340,11 @@ fn decode_stream_with_options_and_expected_size(
     let mut current = data.to_vec();
 
     for (filter_index, filter_name) in filters.iter().enumerate() {
-        let decoder = create_decoder(filter_name)?;
-
-        current = decoder.decode(&current, max_size)?;
+        current = if complete_form {
+            decode_complete_form_filter(filter_name, &current, max_size)?
+        } else {
+            create_decoder(filter_name)?.decode(&current, max_size)?
+        };
 
         // SECURITY: Check decompression ratio after each filter. Image callers may
         // provide the exact byte count implied by Width x Height x components x bpc
@@ -388,6 +436,7 @@ pub(crate) fn decode_stream_with_params_and_expected_size(
         PredictorPlacement::AfterFilters(params),
         None,
         Some(expected_filter_output_size),
+        false,
     )
 }
 
@@ -403,6 +452,7 @@ pub(crate) fn decode_stream_with_filter_predictors(
         PredictorPlacement::PerFilter(predictors),
         None,
         expected_filter_output_size,
+        false,
     )
 }
 
@@ -412,6 +462,42 @@ mod tests {
     use flate2::Compression;
     use flate2::write::ZlibEncoder;
     use std::io::Write;
+
+    #[test]
+    fn form_decoder_propagates_zlib_checksum_and_completion_errors() {
+        let content = b"0 0 10 10 re f";
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(content).unwrap();
+        let compressed = encoder.finish().unwrap();
+        let filters = ["FlateDecode".to_string()];
+        let options = ParserOptions {
+            max_decompressed_size: content.len(),
+            ..ParserOptions::default()
+        };
+        let strict = |data| decode_complete_form_stream(data, &filters, None, &options);
+        assert_eq!(strict(&compressed).unwrap(), content);
+
+        let mut bad_checksum = compressed.clone();
+        *bad_checksum.last_mut().unwrap() ^= 1;
+        assert_eq!(decode_stream(&bad_checksum, &filters).unwrap(), content);
+        for incomplete in [&bad_checksum[..], &compressed[..compressed.len() - 1]] {
+            let error = strict(incomplete).unwrap_err();
+            assert!(matches!(error, Error::Decode(message) if message.starts_with("FlateDecode:")));
+        }
+    }
+
+    #[test]
+    fn form_decoder_requires_filter_end_markers() {
+        let lzw = weezl::encode::Encoder::with_tiff_size_switch(weezl::BitOrder::Msb, 8)
+            .encode(b"q Q")
+            .unwrap();
+        assert_eq!(decode_complete_form_filter("LZW", &lzw, 3).unwrap(), b"q Q");
+        assert!(decode_complete_form_filter("LZW", &lzw[..lzw.len() - 1], 3).is_err());
+        assert_eq!(decode_complete_form_filter("RL", b"\x02q Q\x80", 3).unwrap(), b"q Q");
+        assert!(decode_complete_form_filter("RL", b"\x02q Q", 3).is_err());
+        assert_eq!(decode_complete_form_filter("AHx", b"712051>", 3).unwrap(), b"q Q");
+        assert!(decode_complete_form_filter("AHx", b"712051", 3).is_err());
+    }
 
     #[test]
     fn test_decode_stream_no_filters() {

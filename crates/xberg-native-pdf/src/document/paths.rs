@@ -16,6 +16,8 @@ pub(super) struct FormPathBudget {
     decoded_bytes: usize,
     operators: usize,
     incomplete: bool,
+    complete_streams: HashMap<ObjectRef, std::sync::Arc<Vec<u8>>>,
+    complete_stream_bytes: usize,
 }
 
 impl FormPathBudget {
@@ -25,6 +27,8 @@ impl FormPathBudget {
             decoded_bytes,
             operators,
             incomplete: false,
+            complete_streams: HashMap::new(),
+            complete_stream_bytes: 0,
         }
     }
 
@@ -629,30 +633,26 @@ impl PdfDocument {
         }
 
         form_budget.charge(1, 0, 0)?;
-        // Decode stream — reuse document-level cache shared with text extraction. ~keep
-        let cached_stream = { self.xobject_stream_cache.lock_or_recover().get(&xobject_ref).cloned() };
-        let stream_data = if let Some(cached) = cached_stream {
-            cached
+        // Only successful strict decodes enter this page-local cache. The shared
+        // text/image cache can contain recovered prefixes. ~keep
+        let stream_data = if let Some(cached) = form_budget.complete_streams.get(&xobject_ref) {
+            std::sync::Arc::clone(cached)
         } else {
-            match self.decode_form_stream_with_limit(&xobject, xobject_ref, form_budget.decoded_bytes) {
-                Ok(data) => {
-                    let data = std::sync::Arc::new(data);
-                    const MAX_STREAM_CACHE_BYTES: usize = 50 * 1024 * 1024;
-                    let current = self.xobject_stream_cache_bytes.load(Ordering::Relaxed);
-                    if current + data.len() <= MAX_STREAM_CACHE_BYTES {
-                        self.xobject_stream_cache_bytes
-                            .store(current + data.len(), Ordering::Relaxed);
-                        self.xobject_stream_cache
-                            .lock_or_recover()
-                            .insert(xobject_ref, std::sync::Arc::clone(&data));
-                    }
-                    data
-                }
-                Err(e) => {
+            let data = match self.decode_form_stream_with_limit(&xobject, xobject_ref, form_budget.decoded_bytes) {
+                Ok(data) => std::sync::Arc::new(data),
+                Err(error) => {
                     extractor.pop_xobject_failed();
-                    return Err(form_budget.incomplete(format!("incomplete Form path decode: {e}")));
+                    return Err(form_budget.incomplete(format!("incomplete Form path decode: {error}")));
                 }
+            };
+            const MAX_STREAM_CACHE_BYTES: usize = 50 * 1024 * 1024;
+            if data.len() <= MAX_STREAM_CACHE_BYTES - form_budget.complete_stream_bytes {
+                form_budget.complete_stream_bytes += data.len();
+                form_budget
+                    .complete_streams
+                    .insert(xobject_ref, std::sync::Arc::clone(&data));
             }
+            data
         };
 
         // Cached Forms consume the same traversal work on each painted occurrence. ~keep

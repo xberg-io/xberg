@@ -248,7 +248,7 @@ fn scan_path_operators(data: &[u8], operator_limit: Option<usize>) -> (Vec<Opera
             }
             continue;
         }
-        if operators.len() >= max_operators {
+        if operator_limit.is_none() && operators.len() >= max_operators {
             if max_operators == effective_max_operators() {
                 push_operator_cap_warning();
             }
@@ -327,6 +327,9 @@ fn scan_path_operators(data: &[u8], operator_limit: Option<usize>) -> (Vec<Opera
                         }
                         _ => None,
                     };
+                    if op.is_some() && operators.len() >= max_operators {
+                        return (operators, false);
+                    }
                     if let Some(op) = op {
                         operators.push(op);
                         i += 1;
@@ -406,6 +409,9 @@ fn scan_path_operators(data: &[u8], operator_limit: Option<usize>) -> (Vec<Opera
                     _ => None,
                 };
 
+                if operators.len() >= max_operators {
+                    return (operators, false);
+                }
                 if let Some(op) = fast_op {
                     operators.push(op);
                     operand_start = i;
