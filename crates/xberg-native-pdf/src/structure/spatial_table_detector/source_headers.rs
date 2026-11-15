@@ -159,7 +159,7 @@ fn visible_area_at_least(
 type RuleStyle = ([u32; 3], u32);
 
 /// Accept either visible group/leaf rules or a repeated schema with independent first-body shading.
-/// Regular decimal leaves under matching rules require a painted header background. ~keep
+/// Regular decimal leaves require a shared background or matching bold labels above a contrasting rule. ~keep
 pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathContent], columns: usize) {
     let [groups, leaves, first_body, ..] = rows else {
         return;
@@ -177,15 +177,22 @@ pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathCon
         return;
     }
     let repeating_rules = body_repeats_the_header_rule(leaves, first_body, &nearby);
-    let proven = if repeating_rules {
-        centered_decimal_leaf_band(groups, leaves, first_body, &nearby, columns)
-            && rows_bounds([groups, leaves])
-                .is_some_and(|bounds| has_painted_header_background(bounds, nearby.iter().copied()))
-    } else {
-        complete_source_band(leaves, columns, true)
+    let proven =
+        (!repeating_rules
+            && complete_source_band(leaves, columns, true)
             && (grouped_header_rules(groups, leaves, &nearby)
-                || repeated_schema_over_shaded_body(groups, leaves, first_body, &nearby))
-    };
+                || repeated_schema_over_shaded_body(groups, leaves, first_body, &nearby)))
+            || (centered_decimal_leaf_band(groups, leaves, first_body, &nearby, columns)
+                && rows_bounds([groups, leaves]).is_some_and(|bounds| {
+                    if repeating_rules {
+                        has_painted_header_background(bounds, nearby.iter().copied())
+                    } else {
+                        super::matching_bold_decimal_stub(groups, leaves, first_body)
+                            && first_body.cells.first().and_then(|cell| cell.bbox).is_some_and(|body| {
+                                has_contrasting_decimal_rule(bounds, body.y, nearby.iter().copied())
+                            })
+                    }
+                }));
     if !proven {
         return;
     }
@@ -204,7 +211,11 @@ fn centered_decimal_leaf_band(
     paths: &[&PathContent],
     columns: usize,
 ) -> bool {
-    complete_source_band(leaves, columns, false)
+    leaves.cells.len() == columns
+        && leaves.cells.iter().all(|cell| {
+            let bold = cell.spans.first().is_some_and(|span| span.font_weight.is_bold());
+            cell.colspan == 1 && source_label(cell, bold)
+        })
         && super::continues_decimal_records(leaves, first_body)
         && super::group_covers_decimal_leaves(groups, leaves, |group, covered| {
             let (Some(group_bounds), Some(first), Some(last)) = (
@@ -415,6 +426,31 @@ pub(super) fn has_painted_header_background<'a>(
                 && visible_area_at_least(overlap, &nearby[index + 1..], path.fill_color, required)
         })
     })
+}
+
+pub(super) fn has_contrasting_decimal_rule<'a>(
+    header: Rect,
+    body_bottom: f32,
+    paths: impl IntoIterator<Item = &'a PathContent>,
+) -> bool {
+    const MIN_WEIGHT_CONTRAST: f32 = 0.5;
+    let region = Rect::new(header.x, body_bottom, header.width, header.y - body_bottom);
+    let nearby: Vec<_> = paths
+        .into_iter()
+        .filter(|path| near_header(path, region))
+        .take(MAX_GROUPED_HEADER_PATHS + 1)
+        .collect();
+    if nearby.len() > MAX_GROUPED_HEADER_PATHS {
+        return false;
+    }
+    let header_rule = visible_rule_styles(&nearby, header.left(), header.right(), header.y);
+    let body_rule = visible_rule_styles(&nearby, header.left(), header.right(), body_bottom);
+    matches!(
+        (header_rule.as_deref(), body_rule.as_deref()),
+        (Some([(header_color, header_width)]), Some([(body_color, body_width)]))
+            if header_color == body_color
+                && f32::from_bits(*header_width) - f32::from_bits(*body_width) >= MIN_WEIGHT_CONTRAST
+    )
 }
 
 fn near_header(path: &PathContent, bounds: Rect) -> bool {

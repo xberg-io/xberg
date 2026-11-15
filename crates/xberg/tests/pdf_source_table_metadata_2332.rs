@@ -529,22 +529,38 @@ fn insurance_image_rule_only_joins_tables_when_it_crosses_a_gutter() {
     }
 }
 
-fn uniform_rule_decimal_table(
+#[derive(Clone, Copy)]
+enum DecimalHeaderPaint {
+    Plain,
+    Shaded,
+    ContrastingRule,
+    ContrastingRuleAndBoldLabels,
+}
+
+fn ruled_decimal_table(
     first_band: [&str; 5],
     centered_band: bool,
     body_rows: usize,
-    shaded_header: bool,
+    header: DecimalHeaderPaint,
 ) -> Vec<u8> {
     use lopdf::{Document, Object, Stream, dictionary};
     use std::fmt::Write as _;
 
     let mut paint = String::from("0 G 1 w\n");
-    if shaded_header {
+    if matches!(header, DecimalHeaderPaint::Shaded) {
         paint.push_str("0.8 g 30 120 250 40 re f 0 g\n");
     }
     let bottom = 120 - 20 * body_rows;
     for y in (bottom..=160).step_by(20) {
-        writeln!(paint, "30 {y} m 280 {y} l S").unwrap();
+        let contrasting = matches!(
+            header,
+            DecimalHeaderPaint::ContrastingRule | DecimalHeaderPaint::ContrastingRuleAndBoldLabels
+        );
+        if y == 120 && contrasting {
+            writeln!(paint, "q 2 w 30 {y} m 280 {y} l S Q").unwrap();
+        } else {
+            writeln!(paint, "30 {y} m 280 {y} l S").unwrap();
+        }
     }
     for column in 0..=5 {
         let x = 30 + column * 50;
@@ -573,17 +589,24 @@ fn uniform_rule_decimal_table(
                 28.0
             };
             let x = 30.0 + 50.0 * column as f32 + offset;
-            writeln!(paint, "1 0 0 1 {x} {y} Tm ({text}) Tj").unwrap();
+            let font = if row <= 1 && column == 1 && matches!(header, DecimalHeaderPaint::ContrastingRuleAndBoldLabels)
+            {
+                "F2"
+            } else {
+                "F1"
+            };
+            writeln!(paint, "/{font} 8 Tf 1 0 0 1 {x} {y} Tm ({text}) Tj").unwrap();
         }
     }
     paint.push_str("ET\n");
     let mut pdf = Document::with_version("1.4");
     let pages = pdf.new_object_id();
     let font = pdf.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica" });
+    let bold = pdf.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica-Bold" });
     let stream = pdf.add_object(Stream::new(dictionary! {}, paint.into_bytes()));
     let page = pdf.add_object(dictionary! {
         "Type" => "Page", "Parent" => pages, "MediaBox" => Object::Array(vec![0.into(), 0.into(), 310.into(), 200.into()]),
-        "Contents" => stream, "Resources" => dictionary! { "Font" => dictionary! { "F1" => font } },
+        "Contents" => stream, "Resources" => dictionary! { "Font" => dictionary! { "F1" => font, "F2" => bold } },
     });
     pdf.objects.insert(
         pages,
@@ -609,7 +632,16 @@ fn centered_decimal_leaf_labels_are_headers_under_uniform_rules() {
             ["Latency", "p50", "0.910", "0.850", "0.970"]
         };
         let result = extract_bytes_document_blocking(
-            &uniform_rule_decimal_table(first_band, centered, 3, centered),
+            &ruled_decimal_table(
+                first_band,
+                centered,
+                3,
+                if centered {
+                    DecimalHeaderPaint::Shaded
+                } else {
+                    DecimalHeaderPaint::Plain
+                },
+            ),
             "application/pdf",
             &config,
         )
@@ -629,7 +661,7 @@ fn centered_decimal_leaf_labels_are_headers_under_uniform_rules() {
 #[test]
 fn centered_decimal_record_remains_body_under_uniform_rules() {
     let first_band = ["Latency", "p50", "0.9", "0.8", "0.9"];
-    let pdf = uniform_rule_decimal_table(first_band, true, 3, false);
+    let pdf = ruled_decimal_table(first_band, true, 3, DecimalHeaderPaint::Plain);
     let result = extract_bytes_document_blocking(&pdf, "application/pdf", &parsebench_html_config()).unwrap();
     assert_eq!(result.tables.len(), 1);
     assert_eq!(result.tables[0].cells[1], first_band);
@@ -647,7 +679,7 @@ fn centered_decimal_record_remains_body_under_uniform_rules() {
 #[test]
 fn decimal_header_evidence_rejects_centered_median_record() {
     let first_band = ["Latency", "Median", "0.9", "0.8", "0.9"];
-    let pdf = uniform_rule_decimal_table(first_band, true, 3, false);
+    let pdf = ruled_decimal_table(first_band, true, 3, DecimalHeaderPaint::Plain);
     let result = extract_bytes_document_blocking(&pdf, "application/pdf", &parsebench_html_config()).unwrap();
     assert_eq!(result.tables.len(), 1);
     assert_eq!(result.tables[0].cells[1], first_band);
@@ -665,12 +697,12 @@ fn decimal_header_evidence_accepts_painted_header_above_one_body_row() {
     let labels = ["Version", "Build", "1.0", "1.1", "2.0"];
     let config = parsebench_html_config();
     let plain = extract_bytes_document_blocking(
-        &uniform_rule_decimal_table(labels, true, 1, false),
+        &ruled_decimal_table(labels, true, 1, DecimalHeaderPaint::Plain),
         "application/pdf",
         &config,
     )
     .unwrap();
-    let painted = uniform_rule_decimal_table(labels, true, 1, true);
+    let painted = ruled_decimal_table(labels, true, 1, DecimalHeaderPaint::Shaded);
     let result = extract_bytes_document_blocking(&painted, "application/pdf", &config).unwrap();
     assert_eq!(result.tables.len(), 1);
     assert_eq!(result.tables[0].cells.len(), 3);
@@ -687,4 +719,30 @@ fn decimal_header_evidence_accepts_painted_header_above_one_body_row() {
     assert_eq!(plain.tables.len(), 1);
     assert_eq!(plain.tables[0].cells, result.tables[0].cells);
     assert!(plain.content.contains("<td>1.0</td>"), "{}", plain.content);
+}
+
+#[test]
+fn decimal_header_evidence_accepts_unshaded_typography_with_contrasting_rule() {
+    let labels = ["Version", "Build", "1.0", "1.1", "2.0"];
+    let median = ["Latency", "Median", "0.9", "0.8", "0.9"];
+    let config = parsebench_html_config();
+    for (first_band, decoration, decimal, role) in [
+        (median, DecimalHeaderPaint::ContrastingRule, "0.9", "td"),
+        (labels, DecimalHeaderPaint::ContrastingRule, "1.0", "td"),
+        (labels, DecimalHeaderPaint::ContrastingRuleAndBoldLabels, "1.0", "th"),
+    ] {
+        for body_rows in [1, 3] {
+            let bytes = ruled_decimal_table(first_band, true, body_rows, decoration);
+            let result = extract_bytes_document_blocking(&bytes, "application/pdf", &config).unwrap();
+            assert_eq!(result.tables.len(), 1);
+            assert_eq!(result.tables[0].cells.len(), 2 + body_rows);
+            assert_eq!(result.tables[0].cells[1], first_band);
+            assert!(
+                result.content.contains(&format!("<{role}>{decimal}</{role}>")),
+                "{}",
+                result.content
+            );
+            assert!(result.content.contains("<td>0.924</td>"), "{}", result.content);
+        }
+    }
 }
