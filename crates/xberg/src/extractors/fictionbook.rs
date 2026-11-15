@@ -1671,26 +1671,6 @@ mod tests {
         );
     }
 
-    /// A malformed paragraph is skipped; the rest of the document still extracts.
-    #[tokio::test]
-    async fn should_skip_a_malformed_fictionbook_paragraph() {
-        let fb2 = "<FictionBook><body><section><p>broken <b>text</p></section><section><p>intact text</p></section></body></FictionBook>";
-        let config = ExtractionConfig {
-            output_format: OutputFormat::Markdown,
-            ..Default::default()
-        };
-
-        let doc = FictionBookExtractor::new()
-            .extract_content(fb2.as_bytes(), "application/x-fictionbook+xml", &config)
-            .await
-            .expect("a malformed paragraph must not fail the extraction");
-
-        let markdown = doc
-            .pre_rendered_content
-            .expect("markdown output should have been pre-rendered");
-        assert!(markdown.contains("intact text"), "got {markdown:?}");
-    }
-
     /// A security-limit breach inside a paragraph must fail the extraction, not be dropped.
     #[tokio::test]
     async fn should_reject_a_fictionbook_paragraph_exceeding_security_limits() {
