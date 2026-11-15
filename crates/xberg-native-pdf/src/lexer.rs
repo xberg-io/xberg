@@ -313,64 +313,62 @@ fn parse_hex_string(input: &[u8]) -> IResult<&[u8], Token<'_>> {
 /// Name objects can contain any characters encoded as #XX where XX is a
 /// two-digit hexadecimal code. For example, /A#20B becomes "A B".
 ///
-/// # Arguments
+/// `raw` is the bytes of the name token after the `/`. A malformed escape is
+/// preserved: `A#` and `A#ZZ` decode unchanged.
 ///
-/// * `name` - The raw name string with potential #XX sequences
-///
-/// # Returns
-///
-/// The decoded name string
-///
-/// # Examples
-///
-/// ```ignore
-/// # // `lexer` is a crate-internal module (see `src/lib.rs`), so this
-/// # // example is illustrative only and does not compile as a doctest.
-/// # use xberg_native_pdf::lexer::decode_name_escapes;
-/// assert_eq!(decode_name_escapes("A#20B#23C"), "A B#C");
-/// assert_eq!(decode_name_escapes("Type"), "Type");
-/// assert_eq!(decode_name_escapes("A#"), "A#"); // Invalid sequence preserved
-/// ```
-pub fn decode_name_escapes(name: &str) -> String {
-    if !name.contains('#') {
-        return name.to_owned();
+/// ISO 32000-1 §7.3.5: a name is a byte sequence and `#XX` stands for the byte XX, so `/A#42`
+/// and `/AB` are the same name. Escapes are resolved to bytes first, then the bytes become UTF-8
+/// text when valid UTF-8 and one char per byte (U+0000–U+00FF) otherwise, so the raw and the
+/// escaped spelling of a name decode alike and distinct byte names stay distinct. ~keep
+pub fn decode_name_escapes(raw: &[u8]) -> String {
+    let unescaped;
+    let bytes = if memchr::memchr(b'#', raw).is_none() {
+        raw
+    } else {
+        unescaped = unescape_name(raw);
+        unescaped.as_slice()
+    };
+    match std::str::from_utf8(bytes) {
+        Ok(name) => name.to_owned(),
+        Err(_) => bytes.iter().map(|&byte| char::from(byte)).collect(),
     }
-    let mut result = String::with_capacity(name.len());
-    let mut chars = name.chars();
+}
 
-    while let Some(ch) = chars.next() {
-        if ch == '#' {
-            let hex1 = chars.next();
-            let hex2 = chars.next();
-
-            if let (Some(h1), Some(h2)) = (hex1, hex2) {
-                if let Some(byte) = hex_escape_byte(h1, h2) {
-                    result.push(byte as char);
-                    continue;
+/// Resolve `#XX` escapes to their bytes; a malformed escape is kept verbatim.
+fn unescape_name(raw: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(raw.len());
+    let mut i = 0;
+    while i < raw.len() {
+        let byte = raw[i];
+        i += 1;
+        if byte != b'#' {
+            out.push(byte);
+            continue;
+        }
+        match (raw.get(i).copied(), raw.get(i + 1).copied()) {
+            (Some(h1), Some(h2)) => {
+                i += 2;
+                match hex_escape_byte(h1, h2) {
+                    Some(value) => out.push(value),
+                    None => out.extend_from_slice(&[b'#', h1, h2]),
                 }
-                result.push('#');
-                result.push(h1);
-                result.push(h2);
-            } else if let Some(h1) = hex1 {
-                result.push('#');
-                result.push(h1);
-            } else {
-                result.push('#');
             }
-        } else {
-            result.push(ch);
+            (Some(h1), None) => {
+                i += 1;
+                out.extend_from_slice(&[b'#', h1]);
+            }
+            _ => out.push(b'#'),
         }
     }
-
-    result
+    out
 }
 
 /// The byte a `#XX` name escape encodes. Matches `u8::from_str_radix(XX, 16)`,
 /// which this replaces, including its acceptance of a leading `+` (`#+F` is
 /// 0x0F). ~keep
-fn hex_escape_byte(h1: char, h2: char) -> Option<u8> {
-    let low = h2.to_digit(16)?;
-    let high = if h1 == '+' { 0 } else { h1.to_digit(16)? };
+fn hex_escape_byte(h1: u8, h2: u8) -> Option<u8> {
+    let low = char::from(h2).to_digit(16)?;
+    let high = if h1 == b'+' { 0 } else { char::from(h1).to_digit(16)? };
     u8::try_from(high * 16 + low).ok()
 }
 
@@ -408,14 +406,12 @@ fn parse_name(input: &[u8]) -> IResult<&[u8], Token<'_>> {
                 )
             }),
             |bytes| {
-                let name_str = std::str::from_utf8(bytes).unwrap_or("");
-
                 // SPEC COMPLIANCE: PDF Spec ISO 32000-1:2008, Section 7.3.5
                 // requires decoding #XX escape sequences in names.
                 //
                 // Empty names (e.g., "/ ") are technically invalid per spec but
                 // we allow them in lenient mode for compatibility with malformed PDFs. ~keep
-                Token::Name(decode_name_escapes(name_str))
+                Token::Name(decode_name_escapes(bytes))
             },
         ),
     )
@@ -739,16 +735,37 @@ mod tests {
 
     #[test]
     fn test_decode_name_escapes_directly() {
-        assert_eq!(decode_name_escapes("Type"), "Type");
-        assert_eq!(decode_name_escapes("A#20B"), "A B");
-        assert_eq!(decode_name_escapes("A#20B#23C"), "A B#C");
-        assert_eq!(decode_name_escapes("A#"), "A#");
-        assert_eq!(decode_name_escapes("A#2"), "A#2");
-        assert_eq!(decode_name_escapes("A#ZZ"), "A#ZZ");
-        assert_eq!(decode_name_escapes("A#ff#Fa"), "A\u{ff}\u{fa}");
-        assert_eq!(decode_name_escapes("A#+F"), "A\u{f}");
-        assert_eq!(decode_name_escapes("A#F+"), "A#F+");
-        assert_eq!(decode_name_escapes("A#é1"), "A#é1");
+        assert_eq!(decode_name_escapes("Type".as_bytes()), "Type");
+        assert_eq!(decode_name_escapes("A#20B".as_bytes()), "A B");
+        assert_eq!(decode_name_escapes("A#20B#23C".as_bytes()), "A B#C");
+        assert_eq!(decode_name_escapes("A#".as_bytes()), "A#");
+        assert_eq!(decode_name_escapes("A#2".as_bytes()), "A#2");
+        assert_eq!(decode_name_escapes("A#ZZ".as_bytes()), "A#ZZ");
+        assert_eq!(decode_name_escapes("A#ff#Fa".as_bytes()), "A\u{ff}\u{fa}");
+        assert_eq!(decode_name_escapes("A#+F".as_bytes()), "A\u{f}");
+        assert_eq!(decode_name_escapes("A#F+".as_bytes()), "A#F+");
+        assert_eq!(decode_name_escapes("A#é1".as_bytes()), "A#é1");
+    }
+
+    #[test]
+    fn escaped_and_raw_utf8_name_bytes_are_the_same_name() {
+        let escaped = token(b"/F#C3#A9");
+        let raw = token("/Fé".as_bytes());
+        assert_eq!(escaped, Ok((&b""[..], Token::Name("Fé".to_string()))));
+        assert_eq!(raw, escaped);
+    }
+
+    #[test]
+    fn escaped_and_raw_non_utf8_name_bytes_are_the_same_name() {
+        let escaped = token(b"/A#E9#82");
+        let raw = token(b"/A\xE9\x82");
+        assert_eq!(escaped, Ok((&b""[..], Token::Name("A\u{e9}\u{82}".to_string()))));
+        assert_eq!(raw, escaped);
+    }
+
+    #[test]
+    fn distinct_non_utf8_names_stay_distinct() {
+        assert_ne!(token(b"/\xE9"), token(b"/\xE8"));
     }
 
     #[test]
