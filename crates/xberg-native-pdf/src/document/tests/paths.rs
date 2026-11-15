@@ -127,6 +127,63 @@ fn form_path_dedup_preserves_dark_white_dark_repaint_order() {
     assert_eq!(fills, [shade(0.0), shade(1.0), shade(0.0)]);
 }
 
+#[test]
+fn shared_child_forms_charge_one_page_budget_in_paint_order() {
+    use super::super::paths::FormPathBudget;
+
+    let content = "0 g /First Do 1 g /Second Do";
+    let parent = "/Child Do";
+    let child = "10 20 42 0.4 re f";
+    let page = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R \
+                /Resources << /XObject << /First 5 0 R /Second 6 0 R >> >> >>";
+    let stream = format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len());
+    let wrapper = format!(
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 100 100] \
+         /Resources << /XObject << /Child 7 0 R >> >> /Length {} >>\nstream\n{parent}\nendstream",
+        parent.len()
+    );
+    let bar = format!(
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 100 100] /Length {} >>\nstream\n{child}\nendstream",
+        child.len()
+    );
+    let pdf = build_catalog_test_pdf(
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        &[
+            (3, page.as_bytes()),
+            (4, stream.as_bytes()),
+            (5, wrapper.as_bytes()),
+            (6, wrapper.as_bytes()),
+            (7, bar.as_bytes()),
+        ],
+    );
+    let doc = PdfDocument::from_bytes(pdf).unwrap();
+    let assert_paint = |paths: Vec<crate::elements::PathContent>| {
+        let colors: Vec<_> = paths.into_iter().map(|path| path.fill_color.unwrap().r).collect();
+        assert_eq!(colors, [0.0, 1.0]);
+    };
+    assert_paint(doc.extract_paths(0).unwrap());
+
+    let bytes = 2 * (parent.len() + child.len());
+    assert_paint(
+        doc.extract_paths_with_form_budget(0, FormPathBudget::new(4, bytes, 6))
+            .unwrap(),
+    );
+    for budget in [
+        FormPathBudget::new(3, bytes, 6),
+        FormPathBudget::new(4, bytes - 1, 6),
+        FormPathBudget::new(4, bytes, 5),
+    ] {
+        let error = doc.extract_paths_with_form_budget(0, budget).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Form path extraction exceeded the page work budget")
+        );
+    }
+    assert_paint(doc.extract_paths(0).unwrap());
+}
+
 /// One page that draws a curve and paints the XObject `/X1` (object 5, `x1` is its dictionary and stream).
 fn page_with_xobject(paint: &str, x1: &str) -> PdfDocument {
     let content = format!("q 20 0 0 20 300 300 cm {paint} Q 100 100 m 150 200 200 200 250 100 c S");
