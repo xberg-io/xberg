@@ -13,7 +13,8 @@ fn lines(result: &ExtractedDocument) -> impl Iterator<Item = &str> {
 struct SplitRow<'a> {
     index: usize,
     band: &'a Range<u32>,
-    columns: (u32, u32),
+    columns: Range<u32>,
+    inserted_letters: usize,
 }
 
 fn split_row<'a>(
@@ -46,27 +47,32 @@ fn split_row<'a>(
         .filter(|band| strip.start <= band.start && band.end <= strip.end)
         .enumerate()
     {
-        let (left, right) = owned_box(boxes.next()?, text.next()?, strip, band, source.width)?;
+        let first = owned_box(boxes.next()?, text.next()?, strip, band, source.width)?;
         if !boxes.peek().is_some_and(|element| {
             matches!(element.geometry, OcrBoundingGeometry::Rectangle { top, .. } if top < band.end - strip.start)
         }) {
             continue;
         }
         let other_text = text.next()?;
-        let (other_left, other_right) = owned_box(boxes.next()?, other_text, strip, band, source.width)?;
-        if selected.is_some()
-            || other_text.split_whitespace().count() != 1
-            || !connected_ink(source, band, left..right, other_left..other_right)
-        {
+        let second = owned_box(boxes.next()?, other_text, strip, band, source.width)?;
+        if selected.is_some() || !other_text.bytes().all(|byte| byte.is_ascii_alphabetic()) {
             return None;
         }
+        let common_rows = first.rows.start.max(second.rows.start)..first.rows.end.min(second.rows.end);
+        let inserted_letters = join_ink(source, band, &common_rows, first.columns.end, second.columns.start)?;
         selected = Some(SplitRow {
             index,
             band,
-            columns: (left, other_right),
+            columns: first.columns.start..second.columns.end,
+            inserted_letters,
         });
     }
     (boxes.next().is_none() && text.next().is_none()).then_some(selected)?
+}
+
+struct LineBox {
+    columns: Range<u32>,
+    rows: Range<u32>,
 }
 
 fn owned_box(
@@ -75,7 +81,7 @@ fn owned_box(
     strip: &Range<u32>,
     band: &Range<u32>,
     source_width: u32,
-) -> Option<(u32, u32)> {
+) -> Option<LineBox> {
     let OcrBoundingGeometry::Rectangle {
         left,
         top,
@@ -94,31 +100,59 @@ fn owned_box(
         && top >= band.start
         && bottom <= band.end
         && element.text.split_whitespace().eq(text.split_whitespace()))
-    .then_some((left, right))
+    .then_some(LineBox {
+        columns: left..right,
+        rows: top..bottom,
+    })
 }
 
-fn connected_ink(source: &Source, band: &Range<u32>, first: Range<u32>, second: Range<u32>) -> bool {
-    const MAX_GLYPH_GAP: usize = 2;
-    if first.end > second.start || second.start - first.end > band.end - band.start {
-        return false;
+fn join_ink(
+    source: &Source,
+    band: &Range<u32>,
+    common_rows: &Range<u32>,
+    first_end: u32,
+    second_start: u32,
+) -> Option<usize> {
+    const MAX_GLYPH_GAP: u32 = 2;
+    let left_anchor = first_end.checked_sub(1)?;
+    if first_end > second_start || second_start - first_end > band.end - band.start {
+        return None;
     }
-    let width = source.width as usize;
-    let has_ink = |x: u32| {
-        band.clone()
-            .any(|y| source.samples[y as usize * width + x as usize] < MIN_LIGHT_SAMPLE)
-    };
-    let mut gap = 0;
-    for x in first.end - 1..=second.start {
-        if has_ink(x) {
-            gap = 0;
-        } else {
-            gap += 1;
-            if gap > MAX_GLYPH_GAP {
-                return false;
+    let ink = |x: u32, y: u32| source.samples[y as usize * source.width as usize + x as usize] < MIN_LIGHT_SAMPLE;
+    let mut runs: Vec<Range<u32>> = Vec::new();
+    for x in (left_anchor..=second_start).filter(|&x| band.clone().any(|y| ink(x, y))) {
+        if let Some(last) = runs.last_mut() {
+            if last.end == x {
+                last.end += 1;
+                continue;
+            }
+            if x - last.end > MAX_GLYPH_GAP {
+                return None;
             }
         }
+        runs.push(x..x + 1);
     }
-    has_ink(first.end - 1) && has_ink(second.start)
+    let [first, internal @ .., last] = runs.as_slice() else {
+        return None;
+    };
+    if internal.is_empty() || first.start != left_anchor || last.end != second_start + 1 {
+        return None;
+    }
+    // Each inserted letter needs its own previously uncovered run. The runs and both
+    // fragment edges must carry ink on a shared vertical interval to exclude staggered text. ~keep
+    let required_rows = (band.end - band.start).div_ceil(3);
+    let mut consecutive = 0;
+    for y in common_rows.clone() {
+        if ink(left_anchor, y) && ink(second_start, y) && internal.iter().all(|run| run.clone().any(|x| ink(x, y))) {
+            consecutive += 1;
+            if consecutive >= required_rows {
+                return Some(internal.len());
+            }
+        } else {
+            consecutive = 0;
+        }
+    }
+    None
 }
 
 pub(super) async fn reread(
@@ -129,7 +163,13 @@ pub(super) async fn reread(
     (backend, config): (&Arc<dyn OcrBackend>, &OcrConfig),
     cancelled: impl Fn() -> bool,
 ) -> crate::Result<Option<[ExtractedDocument; 3]>> {
-    let Some(SplitRow { index, band, columns }) = split_row(source, strip, ink, result) else {
+    let Some(SplitRow {
+        index,
+        band,
+        columns,
+        inserted_letters,
+    }) = split_row(source, strip, ink, result)
+    else {
         return Ok(None);
     };
     let previous = ink.iter().rev().find(|row| row.end <= band.start);
@@ -168,10 +208,15 @@ pub(super) async fn reread(
             return Ok(None);
         }
         if index < 2
-            && read.ocr_elements.as_ref().and_then(|elements| {
-                let line = elements.iter().find(|element| element.level == OcrElementLevel::Line)?;
-                owned_box(line, read.content.trim(), &rows, band, source.width)
-            }) != Some(columns)
+            && read
+                .ocr_elements
+                .as_ref()
+                .and_then(|elements| {
+                    let line = elements.iter().find(|element| element.level == OcrElementLevel::Line)?;
+                    owned_box(line, read.content.trim(), &rows, band, source.width).map(|line| line.columns)
+                })
+                .as_ref()
+                != Some(&columns)
         {
             return Ok(None);
         }
@@ -194,7 +239,7 @@ pub(super) async fn reread(
             .trim()
             .split("\n\n")
             .ne(original_parts[index + 2..].iter().copied())
-        || !joined_line(first, second, line.content.trim())
+        || !joined_line(first, second, line.content.trim(), inserted_letters)
         || line.content.trim() != check.content.trim()
     {
         return Ok(None);
@@ -202,7 +247,7 @@ pub(super) async fn reread(
     Ok(Some([before, line, after]))
 }
 
-fn joined_line(first: &str, second: &str, combined: &str) -> bool {
+fn joined_line(first: &str, second: &str, combined: &str, inserted_letters: usize) -> bool {
     let Some((prefix, tail)) = first.rsplit_once(char::is_whitespace) else {
         return false;
     };
@@ -210,9 +255,12 @@ fn joined_line(first: &str, second: &str, combined: &str) -> bool {
         return false;
     };
     prefix == new_prefix
-        && new_tail.starts_with(tail)
-        && new_tail.ends_with(second)
-        && new_tail.len() > tail.len() + second.len()
+        && new_tail
+            .strip_prefix(tail)
+            .and_then(|rest| rest.strip_suffix(second))
+            .is_some_and(|middle| {
+                middle.len() == inserted_letters && middle.bytes().all(|byte| byte.is_ascii_alphabetic())
+            })
 }
 
 #[cfg(test)]
@@ -221,15 +269,43 @@ mod tests {
 
     #[test]
     fn agreed_reread_cannot_rewrite_an_unchanged_prefix_or_drop_the_fragment() {
-        assert!(joined_line("leave this ra", "in", "leave this raisin"));
-        assert!(!joined_line("leave this ra", "in", "leave that raisin"));
-        assert!(!joined_line("leave this ra", "in", "leave this raise"));
-        assert!(!joined_line("leave this ra", "in", "leave this rain"));
+        assert!(joined_line("leave this ra", "in", "leave this raisin", 2));
+        assert!(!joined_line("leave this ra", "in", "leave that raisin", 2));
+        assert!(!joined_line("leave this ra", "in", "leave this raise", 2));
+        assert!(!joined_line("leave this ra", "in", "leave this rain", 2));
     }
 
     #[test]
-    fn same_band_fragment_requires_ink_between_both_recognized_edges() {
-        let mut source = Source {
+    fn agreeing_reads_cannot_insert_two_letters_with_only_one_ink_run() {
+        let mut source = blank_source();
+        for y in 3..9 {
+            for x in [10, 12, 13, 14, 16] {
+                source.samples[y * 32 + x] = 0;
+            }
+        }
+        let letters = join_ink(&source, &(2..10), &(2..10), 11, 16).unwrap();
+        assert_eq!(letters, 1);
+        assert!(!joined_line("keep the ra", "ing", "keep the railing", letters));
+    }
+
+    #[test]
+    fn staggered_ink_in_one_band_does_not_link_fragments() {
+        let mut source = blank_source();
+        for y in 2..5 {
+            for x in [9, 10, 12, 13] {
+                source.samples[y * 32 + x] = 0;
+            }
+        }
+        for y in 7..10 {
+            for x in [15, 16, 18, 19] {
+                source.samples[y * 32 + x] = 0;
+            }
+        }
+        assert_eq!(join_ink(&source, &(2..10), &(2..10), 11, 18), None);
+    }
+
+    fn blank_source() -> Source {
+        Source {
             width: 32,
             height: 12,
             dpi: 120.0,
@@ -237,17 +313,22 @@ mod tests {
             retained_bytes: 32 * 12,
             certify_rows: true,
             reread_split_row: true,
-        };
+        }
+    }
+
+    #[test]
+    fn same_band_fragment_requires_ink_between_both_recognized_edges() {
+        let mut source = blank_source();
         for y in 3..9 {
             for x in [9, 10, 13, 14, 17, 18, 19] {
                 source.samples[y * 32 + x] = 0;
             }
         }
-        assert!(connected_ink(&source, &(2..10), 8..11, 17..20));
+        assert_eq!(join_ink(&source, &(2..10), &(2..10), 11, 17), Some(1));
         for y in 3..9 {
             source.samples[y * 32 + 13..y * 32 + 15].fill(255);
         }
-        assert!(!connected_ink(&source, &(2..10), 8..11, 17..20));
-        assert!(!connected_ink(&source, &(2..10), 8..11, 22..25));
+        assert_eq!(join_ink(&source, &(2..10), &(2..10), 11, 17), None);
+        assert_eq!(join_ink(&source, &(2..10), &(2..10), 11, 22), None);
     }
 }
