@@ -5,7 +5,7 @@ use crate::core::config::ExtractionConfig;
 use crate::extraction::archive::{
     ArchiveMetadata as ExtractedMetadata, DecompressedBudget, extract_7z_file_bytes, extract_7z_metadata,
     extract_7z_text_content, extract_gzip_with_bytes, extract_tar_file_bytes, extract_tar_metadata,
-    extract_tar_text_content, extract_zip_file_bytes, extract_zip_metadata, extract_zip_text_content,
+    extract_tar_text_content, extract_zip_file_bytes, extract_zip_metadata, extract_zip_text_content, open_7z,
 };
 use crate::extractors::security::{ArchiveBudget, SecurityLimits, ZipBombValidator};
 use crate::plugins::{InternalDocumentExtractor, Plugin};
@@ -552,10 +552,12 @@ impl InternalDocumentExtractor for SevenZExtractor {
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
         let (limits, budget) = budgeted_limits(config);
-        let extraction_metadata = extract_7z_metadata(content, &limits)?;
+        let mut archive = open_7z(content, &limits)?;
+        let extraction_metadata = extract_7z_metadata(&archive, &limits)?;
         let mut decoder_budget = DecompressedBudget::shared(&budget);
-        let file_bytes = extract_7z_file_bytes(content, &limits, &mut decoder_budget)?;
-        let text_contents = extract_7z_text_content(content, &limits, &mut decoder_budget)?;
+        let file_bytes = extract_7z_file_bytes(&mut archive, &mut decoder_budget)?;
+        let text_contents = extract_7z_text_content(&mut archive, &limits, &mut decoder_budget)?;
+        drop(archive);
         Ok(build_archive_doc(
             ArchiveContents {
                 extraction_metadata,

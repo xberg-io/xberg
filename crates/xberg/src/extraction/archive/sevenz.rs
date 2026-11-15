@@ -9,41 +9,36 @@ use ahash::AHashMap;
 use sevenz_rust2::{ArchiveReader, EntryDecision, Password};
 use std::io::{self, Cursor};
 
-/// Extract metadata from a 7z archive.
-///
-/// # Arguments
-///
-/// * `bytes` - The 7z archive bytes
-/// * `limits` - Security limits for archive extraction
-///
-/// # Returns
-///
-/// Returns `ArchiveMetadata` containing:
-/// - Format: "7Z"
-/// - File list with paths, sizes, and directory flags
-/// - Total file count
-/// - Total uncompressed size
-///
-/// # Errors
-///
-/// Returns an error if the 7z archive cannot be read or parsed,
-/// or if security limits are exceeded.
-pub(crate) fn extract_7z_metadata(bytes: &[u8], limits: &SecurityLimits) -> Result<ArchiveMetadata> {
-    let cursor = Cursor::new(bytes);
-    let archive = ArchiveReader::new(cursor, Password::empty())
-        .map_err(|e| XbergError::parsing(format!("Failed to read 7z archive: {}", e)))?;
+const SEVENZ_MEMORY_LIMIT_KIB: usize = 512 * 1024;
 
-    let mut file_list = Vec::new();
-    let mut total_size = 0u64;
+pub(crate) type SevenzReader<'a> = ArchiveReader<Cursor<&'a [u8]>>;
 
-    let files = &archive.archive().files;
-    if files.len() > limits.max_files_in_archive {
+pub(crate) fn open_7z<'a>(bytes: &'a [u8], limits: &SecurityLimits) -> Result<SevenzReader<'a>> {
+    let archive = ArchiveReader::new_with_memory_limit(Cursor::new(bytes), Password::empty(), SEVENZ_MEMORY_LIMIT_KIB)
+        .map_err(|error| read_error("archive", error))?;
+    let file_count = archive.archive().files.len();
+    if file_count > limits.max_files_in_archive {
         return Err(XbergError::validation(format!(
             "7z archive has too many files: {} (max: {})",
-            files.len(),
-            limits.max_files_in_archive
+            file_count, limits.max_files_in_archive
         )));
     }
+    Ok(archive)
+}
+
+fn read_error(context: &str, error: sevenz_rust2::Error) -> XbergError {
+    let message = format!("Failed to read 7z {context}: {error}");
+    match error {
+        sevenz_rust2::Error::MaxMemLimited { .. } => XbergError::validation(message),
+        _ => XbergError::parsing(message),
+    }
+}
+
+/// Extract the file list and validate the total declared uncompressed size.
+pub(crate) fn extract_7z_metadata(archive: &SevenzReader<'_>, limits: &SecurityLimits) -> Result<ArchiveMetadata> {
+    let files = &archive.archive().files;
+    let mut file_list = Vec::new();
+    let mut total_size = 0u64;
 
     for entry in files {
         let path = entry.name().to_string();
@@ -77,36 +72,11 @@ pub(crate) fn extract_7z_metadata(bytes: &[u8], limits: &SecurityLimits) -> Resu
 /// Extract text content from files within a 7z archive.
 ///
 /// Only extracts files with common text extensions: .txt, .md, .json, .xml, .html, .csv, .log, .yaml, .toml
-///
-/// # Arguments
-///
-/// * `bytes` - The 7z archive bytes
-///
-/// # Returns
-///
-/// Returns a `HashMap` mapping file paths to their text content.
-/// Binary files and files with non-text extensions are excluded.
-///
-/// # Errors
-///
-/// Returns an error if the 7z archive cannot be read or parsed.
 pub(crate) fn extract_7z_text_content(
-    bytes: &[u8],
+    archive: &mut SevenzReader<'_>,
     limits: &SecurityLimits,
     budget: &mut DecompressedBudget<'_>,
 ) -> Result<AHashMap<String, String>> {
-    let cursor = Cursor::new(bytes);
-    let mut archive = ArchiveReader::new(cursor, Password::empty())
-        .map_err(|e| XbergError::parsing(format!("Failed to read 7z archive: {}", e)))?;
-
-    let file_count = archive.archive().files.len();
-    if file_count > limits.max_files_in_archive {
-        return Err(XbergError::validation(format!(
-            "7z archive has too many files: {} (max: {})",
-            file_count, limits.max_files_in_archive
-        )));
-    }
-
     let mut contents = AHashMap::new();
     let mut total_content_size = 0u64;
 
@@ -132,7 +102,7 @@ pub(crate) fn extract_7z_text_content(
     if let Some(error) = member_error {
         return Err(error);
     }
-    entries.map_err(|e| XbergError::parsing(format!("Failed to read 7z entries: {e}")))?;
+    entries.map_err(|error| read_error("entries", error))?;
 
     if total_content_size > limits.max_content_size as u64 {
         return Err(XbergError::validation(format!(
@@ -145,35 +115,10 @@ pub(crate) fn extract_7z_text_content(
 }
 
 /// Extract raw file bytes for all non-directory entries in a 7z archive.
-///
-/// Returns a `HashMap` mapping file paths to their raw byte content.
-/// Respects security limits for file count and total archive size.
-///
-/// # Arguments
-///
-/// * `bytes` - The 7z archive bytes
-/// * `limits` - Security limits for archive extraction
-///
-/// # Errors
-///
-/// Returns an error if the 7z archive cannot be read or if security limits are exceeded.
 pub(crate) fn extract_7z_file_bytes(
-    bytes: &[u8],
-    limits: &SecurityLimits,
+    archive: &mut SevenzReader<'_>,
     budget: &mut DecompressedBudget<'_>,
 ) -> Result<AHashMap<String, Vec<u8>>> {
-    let cursor = Cursor::new(bytes);
-    let mut archive = ArchiveReader::new(cursor, Password::empty())
-        .map_err(|e| XbergError::parsing(format!("Failed to read 7z archive: {}", e)))?;
-
-    let file_count = archive.archive().files.len();
-    if file_count > limits.max_files_in_archive {
-        return Err(XbergError::validation(format!(
-            "7z archive has too many files: {} (max: {})",
-            file_count, limits.max_files_in_archive
-        )));
-    }
-
     let mut file_bytes = AHashMap::new();
 
     let mut member_error = None;
@@ -191,7 +136,7 @@ pub(crate) fn extract_7z_file_bytes(
     if let Some(error) = member_error {
         return Err(error);
     }
-    entries.map_err(|e| XbergError::parsing(format!("Failed to read 7z entries: {e}")))?;
+    entries.map_err(|error| read_error("entries", error))?;
 
     Ok(file_bytes)
 }
@@ -259,7 +204,7 @@ mod tests {
         };
 
         let result = extract_7z_text_content(
-            &bytes,
+            &mut open_7z(&bytes, &limits).unwrap(),
             &limits,
             &mut DecompressedBudget::new(limits.max_archive_size as u64),
         );
@@ -301,8 +246,7 @@ mod tests {
         };
 
         let result = extract_7z_file_bytes(
-            &bytes,
-            &limits,
+            &mut open_7z(&bytes, &limits).unwrap(),
             &mut DecompressedBudget::new(limits.max_archive_size as u64),
         );
 

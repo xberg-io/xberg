@@ -278,16 +278,17 @@ for the full list of overridable fields.
 
 ## Archive and XML Bomb Protections
 
-Every archive-bearing format (`.zip`, `.docx`, `.pptx`, `.xlsx`, `.odt`, `.ods`,
-`.odp`, `.epub`, `.hwpx`, and the iWork formats `.pages`/`.key`/`.numbers`) and
-every XML-bearing format is checked against `SecurityLimits` before or during
+Every archive-bearing format (including `.zip`, `.tar`, `.7z`, `.gz`, `.tar.gz`,
+`.docx`, `.pptx`, `.xlsx`, `.odt`, `.ods`, `.odp`, `.epub`, `.hwpx`,
+and the iWork formats `.pages`/`.key`/`.numbers`) and every XML-bearing
+format is checked against `SecurityLimits` before or during
 parsing. These checks exist to stop a hostile input from exhausting memory or
 CPU rather than to validate document correctness — a legitimate large document
 should never come close to the defaults below.
 
 | Limit                    | Defends against                                                              | Default        |
 | ------------------------ | ----------------------------------------------------------------------------| -------------- |
-| `max_archive_size`       | ZIP bombs — declared uncompressed size accumulated across entries           | 500 MiB        |
+| `max_archive_size`       | Excessive declared uncompressed size or cumulative archive member reads    | 500 MiB        |
 | `max_compression_ratio`  | ZIP bombs — a single entry or the archive total expanding beyond a sane ratio | 100:1          |
 | `max_files_in_archive`   | Archives with an unreasonable number of member files                        | 10,000         |
 | `max_nesting_depth`      | Deeply nested containers (nested archives, iWork protobuf messages)         | 1,024 levels   |
@@ -301,10 +302,19 @@ should never come close to the defaults below.
 When both `max_nesting_depth` and `max_xml_depth` apply to the same parse, the
 tighter of the two wins — lowering either one alone is enough to clamp nesting.
 
-Archive-specific checks (`max_archive_size`, `max_compression_ratio`,
-`max_files_in_archive`) are enforced by `ZipBombValidator` against the ZIP
-central directory before any entry is decompressed, so an oversized or
-over-compressed archive is rejected without ever running the decompressor.
+For ZIP, `ZipBombValidator` checks declared uncompressed size, compression
+ratio, and member count against the central directory before decoding any
+entries.
+
+The ZIP, TAR, 7z, and GZIP extractors also share one `max_archive_size` byte
+budget across member reads and recursive archive extraction. Each pass charges
+the member bytes it reads, even when another pass already read the same member.
+For `.tar.gz`, this includes the expanded gzip stream (the full TAR) and the
+TAR member bytes read by both the text and raw-byte passes.
+
+The 7z reader applies a separate 512 MiB limit to each header buffer and to
+supported decoder dictionaries and models. It checks member count and declared
+size after parsing the header. Total process memory can exceed either limit.
 
 ### Configuring limits
 

@@ -379,7 +379,7 @@ fn test_extract_7z_metadata_with_files() {
     };
 
     let bytes = cursor.into_inner();
-    let metadata = extract_7z_metadata(&bytes, &default_limits()).unwrap();
+    let metadata = extract_7z_metadata(&open_7z(&bytes, &default_limits()).unwrap(), &default_limits()).unwrap();
 
     assert_eq!(metadata.format, "7Z");
     assert_eq!(metadata.file_count, 2);
@@ -782,7 +782,7 @@ fn test_extract_7z_text_content() {
 
     let bytes = cursor.into_inner();
     let contents = extract_7z_text_content(
-        &bytes,
+        &mut open_7z(&bytes, &default_limits()).unwrap(),
         &default_limits(),
         &mut DecompressedBudget::new(default_limits().max_archive_size as u64),
     )
@@ -804,7 +804,7 @@ fn test_extract_7z_empty_archive() {
     };
 
     let bytes = cursor.into_inner();
-    let metadata = extract_7z_metadata(&bytes, &default_limits()).unwrap();
+    let metadata = extract_7z_metadata(&open_7z(&bytes, &default_limits()).unwrap(), &default_limits()).unwrap();
 
     assert_eq!(metadata.format, "7Z");
     assert_eq!(metadata.file_count, 0);
@@ -886,7 +886,7 @@ fn test_extract_7z_corrupted_data() {
 
     let invalid_7z_data = vec![0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C, 0x00];
 
-    let result = extract_7z_metadata(&invalid_7z_data, &default_limits());
+    let result = open_7z(&invalid_7z_data, &default_limits());
     assert!(result.is_err());
 
     if let Err(e) = result {
@@ -981,7 +981,7 @@ fn sevenz_text_budget_includes_filtered_members() {
     let mut limits = default_limits();
     limits.max_archive_size = 9;
     let contents = extract_7z_text_content(
-        &bytes,
+        &mut open_7z(&bytes, &limits).unwrap(),
         &limits,
         &mut DecompressedBudget::new(limits.max_archive_size as u64),
     )
@@ -991,7 +991,7 @@ fn sevenz_text_budget_includes_filtered_members() {
 
     limits.max_archive_size = 8;
     let error = extract_7z_text_content(
-        &bytes,
+        &mut open_7z(&bytes, &limits).unwrap(),
         &limits,
         &mut DecompressedBudget::new(limits.max_archive_size as u64),
     )

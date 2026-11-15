@@ -385,6 +385,51 @@ async fn test_gzip_extractor_valid_data() {
 }
 
 #[tokio::test]
+async fn tar_gz_budget_counts_the_gzip_stream_and_both_tar_member_reads() {
+    let bytes = include_bytes!("fixtures/one-member.tar.gz");
+    let payload = "Hello from tar.gz!";
+    let member_size = payload.len() + 1;
+    let tar_size = 10 * 1024;
+    let combined_charge = tar_size + 2 * member_size;
+    let config_for_limit = |limit| ExtractionConfig {
+        max_archive_depth: 0,
+        ..config_with_limits(SecurityLimits {
+            max_archive_size: limit,
+            ..Default::default()
+        })
+    };
+    let extractor = GzipExtractor::new();
+
+    let error = extractor
+        .extract_content(bytes, "application/gzip", &config_for_limit(combined_charge - 1))
+        .await
+        .expect_err("the combined charge exceeds the archive budget by one byte");
+    let crate::XbergError::Validation { message, .. } = error else {
+        panic!("expected a validation error, got {error}");
+    };
+    assert_eq!(
+        message,
+        format!(
+            "Archive member 'note.txt' exceeds max_archive_size while reading ({} bytes available)",
+            member_size - 1
+        )
+    );
+
+    let result = extractor
+        .extract_content(bytes, "application/gzip", &config_for_limit(combined_charge))
+        .await
+        .expect("the combined charge fits the archive budget exactly");
+    let Some(crate::types::FormatMetadata::Archive(metadata)) = &result.metadata.format else {
+        panic!("expected archive metadata");
+    };
+    assert_eq!(metadata.file_list, ["note.txt"]);
+    assert_eq!(metadata.total_size, member_size as u64);
+    let extracted =
+        crate::extraction::derive::derive_extraction_result(result, true, crate::core::config::OutputFormat::Plain);
+    assert!(extracted.content.contains(payload));
+}
+
+#[tokio::test]
 async fn test_gzip_extractor_invalid_data() {
     let extractor = GzipExtractor::new();
     let config = ExtractionConfig::default();

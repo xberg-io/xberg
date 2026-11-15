@@ -19,7 +19,7 @@ mod zip;
 pub(crate) use gzip::extract_gzip_with_bytes;
 #[cfg(test)]
 pub(crate) use gzip::{decompress_gzip, extract_gzip, extract_gzip_metadata, extract_gzip_text_content};
-pub(crate) use sevenz::{extract_7z_file_bytes, extract_7z_metadata, extract_7z_text_content};
+pub(crate) use sevenz::{extract_7z_file_bytes, extract_7z_metadata, extract_7z_text_content, open_7z};
 pub(crate) use tar::{extract_tar_file_bytes, extract_tar_metadata, extract_tar_text_content};
 pub(crate) use zip::{extract_zip_file_bytes, extract_zip_metadata, extract_zip_text_content};
 
