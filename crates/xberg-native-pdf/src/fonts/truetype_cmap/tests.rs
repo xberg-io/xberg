@@ -710,7 +710,7 @@ fn test_format12_glyph_id_overflow_wraps_like_release() {
 /// Issue #3034: a crafted format-12 group spanning the whole u32 space
 /// (`0..=0xFFFFFFFF`) must not walk billions of code points. The walk is
 /// clamped to Unicode's maximum (U+10FFFF), so the group's charged width is
-/// 1,114,112 — still far beyond the 65,536-code-point iteration budget —
+/// 1,114,112 — above the 1,048,576-code-point iteration budget —
 /// and the subtable is rejected instead of being parsed with a truncated
 /// table.
 #[test]
@@ -725,6 +725,28 @@ fn test_format12_unbounded_group_rejected_by_budget() {
         started.elapsed()
     );
     assert!(err.contains("iteration budget"), "unexpected error: {err}");
+}
+
+#[test]
+fn format12_should_accept_the_exact_total_budget_and_reject_one_more_code_point() {
+    let mut groups: Vec<_> = (0..16)
+        .map(|index| {
+            let start = 0xE000 + index * 0x1_0000;
+            (start, start + 0xFFFF, 0)
+        })
+        .collect();
+    let cmap = TrueTypeCMap::from_font_data(&build_truetype_with_cmap_format12(&groups))
+        .expect("sixteen disjoint groups fit the budget");
+    assert_eq!(cmap.get_unicode(0), Some('\u{fe000}'));
+    assert_eq!(cmap.get_unicode(u16::MAX), Some('\u{10dfff}'));
+
+    groups.push((0x10_E000, 0x10_E000, 0));
+    let error = TrueTypeCMap::from_font_data(&build_truetype_with_cmap_format12(&groups))
+        .expect_err("one more code point exceeds the budget");
+    assert_eq!(
+        error,
+        "cmap format 12 group of 1 code points exceeds the remaining iteration budget (0)"
+    );
 }
 
 /// Issue #3034: a group whose startCharCode lies beyond Unicode's maximum
@@ -779,15 +801,12 @@ fn test_format12_budget_exhausted_by_next_group_rejected() {
     assert!(err.contains("iteration budget"), "unexpected error: {err}");
 }
 
-/// Issue #3034: a group that consumes the iteration budget exactly is not
-/// an off-by-one rejection — U+E000..=U+1DFFF is 65,536 valid code points
-/// (no surrogate hole) mapped onto the full u16 gid space, and must parse
-/// in full.
+/// U+E000..=U+1DFFF is 65,536 valid code points mapped onto the full u16 gid space.
 #[test]
 fn test_format12_full_gid_space_group_maps_exactly() {
     let data = build_truetype_with_cmap_format12(&[(0xE000, 0x1_DFFF, 0)]);
     let started = std::time::Instant::now();
-    let cmap = TrueTypeCMap::from_font_data(&data).expect("a group exactly filling the budget must parse");
+    let cmap = TrueTypeCMap::from_font_data(&data).expect("a group covering the full glyph ID space must parse");
     assert!(
         started.elapsed() < std::time::Duration::from_secs(10),
         "a budget-sized group must parse without walking past it: took {:?}",

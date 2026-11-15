@@ -405,18 +405,8 @@ fn qa_text_multi_font_run_paints_red() {
 // Text rendering mode probes — Tr=0..7.
 // ============================================================================
 //
-// `pipeline_resolve_text_gs` short-circuits Tr=3 to None, resolves fill for
-// 0/2/4/6 and stroke for 1/2/5/6. Tr=4-7 add to the current clipping path
-// in the spec; the current text rasteriser does NOT implement clip-add for
-// text, so these modes draw like 0-2 and don't accumulate clip state. Modes
-// 1, 2, 5 and 6 stroke the glyph outline in the stroke colour (stroke after
-// fill, ISO 32000-1 9.3.6 Table 106). These tests pin that the pipeline
-// drives those modes into the rasteriser without colour or geometry
-// corruption.
-//
-// If the implementation later adds clip-from-text support, these tests
-// will still hold, just with additional clip-state assertions layered
-// on top. ~keep
+// Modes 1, 2, 5 and 6 stroke glyph outlines. Modes 4 through 7 add the glyph
+// silhouettes to the text clip that takes effect at ET (ISO 32000-1 9.3.6). ~keep
 
 /// Page with a 90 pt `M` under text render mode `tr`: red fill, blue stroke, 4 pt line width, so the
 /// stem is wide enough to hold a fill interior between two stroke bands.
@@ -533,14 +523,7 @@ fn qa_text_tr3_invisible_paints_zero_pixels() {
     );
 }
 
-/// Probe 5e — Tr=4 (fill + add to clip path). Pipeline resolves the fill
-/// side. The rasteriser today doesn't implement clip-from-text, so the
-/// painted output is the same as Tr=0; the fill colour paints.
-///
-/// This pins the CURRENT behaviour. When clip-from-text lands, this test's
-/// fill-paints assertion still holds — what would change is the assertion on
-/// where ink appears (clip would suppress subsequent paints outside the
-/// glyph silhouette).
+/// Probe 5e — Tr=4 paints the fill and contributes the glyph silhouette to the text clip.
 #[test]
 fn qa_text_tr4_fill_plus_clip_paints_fill_side() {
     let content = "BT 1 0 0 rg /F1 40 Tf 4 Tr 10 30 Td (M) Tj ET\n";
@@ -563,23 +546,53 @@ fn qa_text_tr6_fills_strokes_and_adds_to_the_clip() {
     assert_fill_then_stroke(6);
 }
 
-/// Probe 5h — Tr=7 (add to clip path only). Per the spec Tr=7 is a
-/// clip-only mode that paints nothing. The pipeline helper's `matches!`
-/// rules don't include 7 for either fills or strokes — so the helper
-/// returns None and no GS clone happens. The page must render as a
-/// full pixmap without panicking.
+/// Probe 5h — Tr=7 contributes to the text clip without painting the glyph.
 #[test]
-fn qa_text_tr7_clip_only_renders_without_panic() {
-    // Tr=7 (add-to-clip-only) — the pipeline helper returns None for
-    // both fill and stroke sides. The rasteriser today paints the
-    // glyph outline as a side effect of the dispatch; clip-from-text
-    // is a documented capability gap. Pin the no-panic / full pixmap
-    // invariant. ~keep
-    let content = "BT 1 0 0 rg /F1 40 Tf 7 Tr 10 30 Td (M) Tj ET\n";
-    let bytes = build_pdf_text(content, "");
-    let doc = PdfDocument::from_bytes(bytes).expect("PDF parses");
-    let on = render_with_pipeline(&doc, true);
-    assert_eq!(on.len(), 100 * 100 * 4, "Tr=7 must produce a full pixmap");
+fn qa_text_tr7_clip_only_leaves_the_page_unpainted() {
+    let content = "BT 1 0 0 rg 0 0 1 RG /F1 40 Tf 7 Tr 10 30 Td (M) Tj ET\n";
+    let doc = PdfDocument::from_bytes(build_pdf_text(content, "")).expect("PDF parses");
+    let pixels = render_with_pipeline(&doc, true);
+    assert_eq!(count_ink_pixels(&pixels, 0, 0, 100, 100), 0);
+}
+
+#[test]
+fn clipping_text_modes_should_clip_the_next_fill_for_every_show_operator() {
+    let green = [0, 255, 0, 255];
+    let white = [255, 255, 255, 255];
+    for operator in ["(M) Tj", "[(M)] TJ", "(M) '", "0 0 (M) \""] {
+        for mode in [0, 4, 5, 6, 7] {
+            let content = format!(
+                "BT 1 0 0 rg 0 0 1 RG /F1 40 Tf {mode} Tr 0 TL 10 30 Td {operator} ET\n\
+                 0 1 0 rg 0 0 100 100 re f"
+            );
+            let doc = PdfDocument::from_bytes(build_pdf_text(&content, "")).expect("PDF parses");
+            let pixels = render_with_pipeline(&doc, true);
+            let expected_corner = if mode == 0 { green } else { white };
+            assert_eq!(&pixels[..4], &expected_corner, "Tr={mode}, {operator}, page corner");
+            assert!(
+                pixels.chunks_exact(4).any(|pixel| pixel == green),
+                "Tr={mode}, {operator}, the fill must be visible inside the glyph"
+            );
+        }
+    }
+}
+
+#[test]
+fn text_stroke_should_use_user_space_under_scaled_page_and_text_matrices() {
+    let content = "2 0 0 2 0 0 cm BT 0 0 1 RG 2 w /F1 22.5 Tf 1 Tr 2 0 0 2 4 10 Tm (M) Tj ET";
+    let doc = PdfDocument::from_bytes(build_pdf_text(content, "")).expect("PDF parses");
+    let reference = solid_runs(&tr_stroke_page(1), 40);
+    assert_eq!(reference.first().map(|run| run.0), Some('B'));
+    assert_eq!(solid_runs(&render_with_pipeline(&doc, true), 40), reference);
+}
+
+#[test]
+fn text_array_should_preserve_stroke_only_render_mode() {
+    let content = "BT 1 0 0 rg 0 0 1 RG 4 w /F1 90 Tf 1 Tr 8 20 Td [(M)] TJ ET";
+    let doc = PdfDocument::from_bytes(build_pdf_text(content, "")).expect("PDF parses");
+    let expected = tr_stroke_page(1);
+    assert_eq!(solid_runs(&expected, 40).first().map(|run| run.0), Some('B'));
+    assert_eq!(render_with_pipeline(&doc, true), expected);
 }
 
 /// Probe 6 — Tr changes mid-stream. Sequence: Tr=0 Tj, `Tr 2`, Tr=2 Tj.

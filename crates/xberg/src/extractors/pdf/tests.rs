@@ -7582,6 +7582,58 @@ fn a_blank_whole_document_read_restores_every_page_and_complete_reads_restore_no
     assert_eq!(text, "read 1\n\nread 2\n\nread 3", "an accepted read is never replaced");
 }
 
+#[cfg(feature = "ocr")]
+#[test]
+fn ordered_ocr_page_spans_should_return_none_for_all_empty_bodies() {
+    let pages = [String::new(), String::new()];
+    assert_eq!(ordered_ocr_page_spans("\n\n", &pages), None);
+}
+
+#[cfg(feature = "ocr")]
+#[test]
+fn discarded_page_restore_should_return_none_when_native_page_count_differs() {
+    let reads = ["accepted".to_string(), String::new()];
+    let natives = ["native one", "native two", "native three"].map(str::to_string);
+    let mut text = "accepted\n\n".to_string();
+
+    assert_eq!(
+        restore_discarded_page_reads(&mut text, &mut None, &reads, &natives, &ExtractionConfig::default()),
+        None
+    );
+    assert_eq!(text, "accepted\n\n");
+}
+
+#[cfg(feature = "ocr")]
+#[test]
+fn discarded_page_restore_should_keep_two_newlines_between_pages() {
+    let reads = ["accepted", "", "third"].map(str::to_string);
+    let natives = ["native one", "restored", "native three"].map(str::to_string);
+    let mut text = "accepted\n\n\n\nthird".to_string();
+
+    assert_eq!(
+        restore_discarded_page_reads(&mut text, &mut None, &reads, &natives, &ExtractionConfig::default()),
+        Some((["accepted", "restored", "third"].map(str::to_string).to_vec(), vec![]))
+    );
+    assert_eq!(text, "accepted\n\nrestored\n\nthird");
+}
+
+#[cfg(feature = "ocr")]
+#[test]
+fn ocr_page_marks_should_include_only_pages_with_a_nonblank_read() {
+    for (reads, expected) in [
+        (&["whole document"][..], vec![1]),
+        (&["", "second page"][..], vec![2]),
+        (&["first page", " \t", "third page"][..], vec![1, 3]),
+    ] {
+        let mut pages = [1, 2, 3].map(|number| text_layer_page(number, "native text"));
+        let reads: Vec<_> = reads.iter().map(|read| (*read).to_string()).collect();
+        assert_eq!(
+            replace_pages_with_ocr_page_texts(&mut pages, &reads, None, false),
+            expected
+        );
+    }
+}
+
 /// Regression for #1095: when OCR texts are written into existing PageContent entries,
 /// is_blank must be recalculated from the new content, not left stale from native extraction.
 ///
@@ -9721,6 +9773,27 @@ mod native_text_stop_tests {
             None,
             "the check must not run on a stopped text loop"
         );
+    }
+
+    #[cfg(all(feature = "ocr", feature = "bundle-tessdata-eng"))]
+    #[tokio::test]
+    async fn a_stopped_text_loop_should_skip_automatic_ocr() {
+        use crate::core::config::OcrConfig;
+
+        let token = CancellationToken::new();
+        token.request_stop();
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: "tesseract".to_string(),
+                language: vec!["eng".to_string()],
+                ..Default::default()
+            }),
+            ..config_with(&token)
+        };
+
+        let stopped = extract_whole(&config).await;
+        assert!(token.cut_short_by_time_limit());
+        assert_eq!(extraction_method(&stopped), Some(ExtractionMethod::Native));
     }
 
     /// #3030: forced OCR on a stopped text loop would read none of the unread pages and fail the

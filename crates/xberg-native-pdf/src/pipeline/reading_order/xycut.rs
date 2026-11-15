@@ -2963,6 +2963,22 @@ mod tests {
     }
 
     #[test]
+    fn should_bridge_a_script_at_either_exact_gap_edge() {
+        assert!(bridged_script(158.0, 7.0, 7.0), "1 pt left of the gap");
+        assert!(bridged_script(166.0, 7.0, 7.0), "1 pt right of the gap");
+        assert!(!bridged_script(157.875, 7.0, 7.0), "more than 1 pt left");
+        assert!(!bridged_script(166.125, 7.0, 7.0), "more than 1 pt right");
+    }
+
+    #[test]
+    fn should_bridge_a_subscript_only_within_one_em_of_the_baseline() {
+        for (y, expected) in [(90.0, true), (89.875, false)] {
+            let script = make_span_text(162.0, y, 7.0, 7.0, "i", 7.0);
+            assert_eq!(script_fills_gap(&[script], &[0], (159.0, 172.0), 100.0, 10.0), expected);
+        }
+    }
+
+    #[test]
     fn a_zero_size_span_in_the_gap_does_not_bridge_it_gh2925() {
         assert!(bridged_script(162.0, 7.0, 7.0));
         assert!(!bridged_script(162.0, 7.0, 0.0));
@@ -2980,6 +2996,32 @@ mod tests {
         assert_eq!(strategy.straddling_line_count(&spans, &indices, 165.0), 1);
         let without_script = [0, 2];
         assert_eq!(strategy.straddling_line_count(&spans, &without_script, 165.0), 0);
+    }
+
+    #[test]
+    fn column_split_should_decline_when_two_prose_lines_cross_the_gutter() {
+        let strategy = XYCutStrategy::new();
+        let mut spans: Vec<_> = [300.0, 280.0, 260.0]
+            .into_iter()
+            .flat_map(|y| {
+                [
+                    make_span_text(40.0, y, 100.0, 10.0, "left column body text", 10.0),
+                    make_span_text(200.0, y, 100.0, 10.0, "right column body text", 10.0),
+                ]
+            })
+            .collect();
+        for y in [240.0, 220.0] {
+            spans.push(make_span_text(40.0, y, 230.0, 10.0, "A note across both columns", 10.0));
+        }
+
+        assert_eq!(
+            strategy.find_horizontal_split_indexed(&spans, &[0, 1, 2, 3, 4, 5, 6]),
+            Some((vec![0, 2, 4, 6], vec![1, 3, 5]))
+        );
+        assert_eq!(
+            strategy.find_horizontal_split_indexed(&spans, &[0, 1, 2, 3, 4, 5, 6, 7]),
+            None
+        );
     }
 
     #[test]
@@ -5496,8 +5538,8 @@ mod tests {
     /// the same leading across the seam so no row gap separates them, is read first: the sides share
     /// no rows, as for the main column gate. The blocks' 8 pt gap is the vertical leading gap (one
     /// 20 pt leading step minus the 12 pt line height), the same gap as between the blocks' own
-    /// lines, and stays under `min_valley_width`, so the Y-band peel cannot fire; the column gap is
-    /// 30 pt. The `None` split pins the decline conjunct (right side wholly above left) as the only
+    /// lines. The default Y-band peel declines this layout. The column gap is 30 pt.
+    /// The `None` split pins the decline conjunct (right side wholly above left) as the only
     /// signal keeping the left-first cut away, the top-down fallback reading the right block first.
     #[test]
     fn two_column_prose_branch_reads_a_right_block_above_the_left_block_first() {
@@ -5591,6 +5633,42 @@ mod tests {
             }
         }
         assert_eq!(reading_order(&spans), expected);
+    }
+
+    #[test]
+    fn prose_corridors_should_require_at_least_six_points_of_whitespace() {
+        let strategy = XYCutStrategy::new();
+        for (gap, kind, gutter) in [(5.5, RegionKind::Mixed, None), (6.0, RegionKind::Prose, Some(153.0))] {
+            let spans: Vec<_> = (0..12)
+                .flat_map(|row| {
+                    let y = 700.0 - row as f32 * 16.0;
+                    [
+                        make_span_text(40.0, y, 110.0, 10.0, "short line", 10.0),
+                        make_span_text(150.0 + gap, y, 110.0, 10.0, "short verse", 10.0),
+                    ]
+                })
+                .collect();
+            let indices: Vec<_> = (0..spans.len()).collect();
+            assert_eq!(strategy.classify_region_kind(&spans, &indices), kind, "gap {gap} pt");
+            assert_eq!(
+                strategy.detect_narrow_gutter_prose(&spans, &indices, RegionKind::Prose),
+                gutter,
+                "gap {gap} pt"
+            );
+        }
+    }
+
+    #[test]
+    fn row_split_should_require_the_minimum_valley_width() {
+        let spans = [0.0, 10.0, 28.0, 38.0].map(|y| make_span(40.0, y, 110.0, 10.0));
+        let indices = [0, 1, 2, 3];
+        assert_eq!(XYCutStrategy::new().find_vertical_split_indexed(&spans, &indices), None);
+        assert_eq!(
+            XYCutStrategy::new()
+                .with_min_valley_width(8.0)
+                .find_vertical_split_indexed(&spans, &indices),
+            Some((vec![2, 3], vec![0, 1]))
+        );
     }
 
     /// A left block above a right block (GH#1763 shape, a caption beside the body that starts
