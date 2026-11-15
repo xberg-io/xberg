@@ -176,6 +176,7 @@ fn test_analyze_tj_distribution_zero_mean() {
     let (is_justified, cv) = extractor.analyze_tj_distribution();
     // Mean ~0, so CV should be 0 (avoid division by zero) ~keep
     assert_eq!(cv, 0.0);
+    assert!(!is_justified);
 }
 
 #[test]

@@ -629,8 +629,7 @@ mod tests {
 
         let key1 = generate_random_key(16).unwrap();
         let key2 = generate_random_key(16).unwrap();
-        // Note: In practice these could be the same if generated too quickly
-        // but with the time-based entropy they should differ ~keep
+        assert_ne!(key1, key2);
     }
 
     #[test]
