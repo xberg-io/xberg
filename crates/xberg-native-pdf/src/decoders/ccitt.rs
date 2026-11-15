@@ -57,7 +57,7 @@ pub struct CcittDecoded {
 /// undecodable) — the caller may then fall back.
 /// `BlackIs1` is NOT applied here; the caller owns that inversion.
 pub fn decode(data: &[u8], params: &CcittParams) -> Result<CcittDecoded> {
-    let width = params.columns as u16;
+    let width = column_width(params)?;
     if width == 0 {
         return Err(Error::Decode("CCITT decode requires /Columns".to_string()));
     }
@@ -139,7 +139,7 @@ pub fn decode(data: &[u8], params: &CcittParams) -> Result<CcittDecoded> {
 /// return-to-control terminator. Shares the run tables, reference-line walk and
 /// recovery contract with the Group 4 path. `BlackIs1` is the caller's to apply.
 fn decode_g3(data: &[u8], params: &CcittParams) -> Result<CcittDecoded> {
-    let width = params.columns as u16;
+    let width = column_width(params)?;
     let two_dimensional = params.k > 0;
     let bytes_per_row = (width as usize).div_ceil(8);
     let mut reader = BitReader::new(data);
@@ -214,6 +214,16 @@ fn decode_g3(data: &[u8], params: &CcittParams) -> Result<CcittDecoded> {
     })
 }
 
+fn column_width(params: &CcittParams) -> Result<u16> {
+    u16::try_from(params.columns).map_err(|_| {
+        Error::Decode(format!(
+            "CCITT /Columns {} exceeds the supported maximum of {}",
+            params.columns,
+            u16::MAX
+        ))
+    })
+}
+
 fn packed_output_buffer(bytes_per_row: usize, rows: Option<u32>) -> Result<Vec<u8>> {
     let Some(rows) = rows else {
         return Ok(Vec::new());
@@ -223,6 +233,8 @@ fn packed_output_buffer(bytes_per_row: usize, rows: Option<u32>) -> Result<Vec<u
     let capacity = bytes_per_row
         .checked_mul(rows)
         .ok_or_else(|| Error::Decode("CCITT packed output size overflow".to_string()))?;
+    let cap = usize::try_from(super::flate::DEFAULT_MAX_DECOMPRESSED_BYTES).unwrap_or(usize::MAX);
+    super::check_output_cap("CCITTFaxDecode", capacity, cap)?;
     let mut output = Vec::new();
     output
         .try_reserve_exact(capacity)
@@ -969,5 +981,46 @@ mod tests {
     fn packed_output_buffer_rejects_size_overflow() {
         let result = packed_output_buffer(usize::MAX, Some(2));
         assert!(matches!(result, Err(Error::Decode(message)) if message.contains("size overflow")));
+    }
+
+    #[test]
+    fn huge_declared_rows_are_rejected_before_allocating() {
+        let params = CcittParams {
+            k: -1,
+            columns: 65535,
+            rows: Some(2_000_000),
+            ..Default::default()
+        };
+        let result = p(params, "1");
+        assert!(matches!(result, Err(Error::Decode(message)) if message.contains("safety limit")));
+    }
+
+    #[test]
+    fn huge_declared_rows_are_rejected_for_group3() {
+        let params = CcittParams {
+            k: 0,
+            columns: 65535,
+            rows: Some(2_000_000),
+            ..Default::default()
+        };
+        let result = p(params, "1");
+        assert!(matches!(result, Err(Error::Decode(message)) if message.contains("safety limit")));
+    }
+
+    #[test]
+    fn columns_wider_than_u16_are_rejected_not_truncated() {
+        // 65536 would truncate to 0 and 65544 to 8, decoding at the wrong width.
+        for columns in [65_536u32, 65_544] {
+            for k in [-1, 0] {
+                let params = CcittParams {
+                    k,
+                    columns,
+                    rows: Some(1),
+                    ..Default::default()
+                };
+                let result = p(params, "1");
+                assert!(matches!(&result, Err(Error::Decode(message)) if message.contains("/Columns")));
+            }
+        }
     }
 }
