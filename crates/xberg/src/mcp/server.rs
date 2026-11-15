@@ -39,6 +39,7 @@ const CACHE_WARM_TASK_TTL_MS: u64 = 30 * 60 * 1000;
 
 /// Server environment variable that lets the MCP HTTP transport read local paths and `file://`
 /// URIs. The stdio transport always may.
+#[cfg(feature = "mcp-http")]
 const MCP_ALLOW_LOCAL_URI_INPUTS_ENV: &str = "XBERG_MCP_ALLOW_LOCAL_URI_INPUTS";
 
 const LOCAL_URI_INPUTS_DISABLED: &str = "Local path and file:// URI inputs are disabled on the MCP HTTP transport. \
@@ -110,7 +111,7 @@ pub struct XbergMcp {
     /// cloneable; all clones of an `XbergMcp` share the same task state.
     tasks: TaskManager,
     /// Whether tools may read server-local paths and `file://` URIs: always on stdio, on the
-    /// HTTP transport only when the operator sets [`MCP_ALLOW_LOCAL_URI_INPUTS_ENV`].
+    /// HTTP transport only when the operator sets `XBERG_MCP_ALLOW_LOCAL_URI_INPUTS`.
     allow_local_paths: bool,
 }
 
