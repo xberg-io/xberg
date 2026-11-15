@@ -492,7 +492,7 @@ pub struct ExtractedDocument {
     #[serde(skip)]
     #[cfg_attr(alef, alef(skip))]
     #[cfg_attr(
-        not(any(feature = "ocr", all(feature = "pdf", feature = "ocr-pipeline"))),
+        not(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline"))),
         allow(dead_code)
     )]
     pub(crate) retained_hocr_read: Option<super::formats::RetainedHocrRead>,

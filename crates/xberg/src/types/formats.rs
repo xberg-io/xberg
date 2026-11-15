@@ -323,16 +323,15 @@ pub(crate) struct RetainedHocrRead {
     pub(crate) transcript: String,
     pub(crate) dimensions: (u32, u32),
     pub(crate) occurrences: Vec<RetainedHocrOccurrence>,
+    #[cfg_attr(not(feature = "ocr"), allow(dead_code))]
     pub(crate) inline_page: Option<RetainedHocrProjection>,
+    #[cfg_attr(not(feature = "ocr"), allow(dead_code))]
     pub(crate) plain_document: Option<RetainedHocrProjection>,
 }
 
 #[derive(Debug, Clone)]
 #[cfg_attr(alef, alef(skip))]
-#[cfg_attr(
-    not(any(feature = "ocr", all(feature = "pdf", feature = "ocr-pipeline"))),
-    allow(dead_code)
-)]
+#[cfg_attr(not(feature = "ocr"), allow(dead_code))]
 pub(crate) struct RetainedHocrProjection {
     pub(crate) text: String,
     pub(crate) ranges: Vec<(usize, std::ops::Range<usize>)>,
@@ -348,7 +347,9 @@ pub(crate) struct RetainedHocrOccurrence {
     pub(crate) id: usize,
     pub(crate) element: super::internal::InternalElementId,
     pub(crate) element_bytes: std::ops::Range<usize>,
+    #[cfg_attr(not(feature = "ocr"), allow(dead_code))]
     pub(crate) owner_bytes: std::ops::Range<usize>,
+    #[cfg_attr(not(feature = "ocr"), allow(dead_code))]
     pub(crate) owner_bounds: Option<super::extraction::BoundingBox>,
     pub(crate) transcript_bytes: std::ops::Range<usize>,
     pub(crate) bounds: [u32; 4],
@@ -424,10 +425,7 @@ pub struct OcrExtractionResult {
     pub(crate) raw_ocr_source_frame: Option<RawOcrSourceFrame>,
     #[serde(skip)]
     #[cfg_attr(alef, alef(skip))]
-    #[cfg_attr(
-        not(any(feature = "ocr", all(feature = "pdf", feature = "ocr-pipeline"))),
-        allow(dead_code)
-    )]
+    #[cfg_attr(not(feature = "ocr"), allow(dead_code))]
     pub(crate) retained_hocr_read: Option<RetainedHocrRead>,
 }
 
