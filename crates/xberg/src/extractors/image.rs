@@ -3311,7 +3311,10 @@ impl ImageExtractor {
             {
                 let table_mode = standalone_table_psm(ocr_config, &config.output_format);
                 let sparse_retry = is_implicit_horizontal_tesseract(ocr_config);
-                let builtin = (table_mode.is_some() || sparse_retry)
+                let explicit_sparse_rows = !has_vertical_tesseract_language(ocr_config)
+                    && ocr_config.tesseract_config.as_ref().and_then(|ocr| ocr.psm) == Some(WHOLE_IMAGE_TESSERACT_PSM)
+                    && matches!(config.output_format, crate::core::config::OutputFormat::Plain);
+                let builtin = (table_mode.is_some() || sparse_retry || explicit_sparse_rows)
                     .then(|| registry.builtin_tesseract_for(&backend))
                     .flatten();
                 psm6_tesseract = matches!(

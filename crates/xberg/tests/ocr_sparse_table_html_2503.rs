@@ -272,3 +272,43 @@ fn html_modes_escape_literal_table_cells() {
         }
     }
 }
+
+#[test]
+fn explicit_sparse_mode_publishes_stock_rows_in_plain_page_text() {
+    use sha2::{Digest, Sha256};
+
+    const CLEAN: &[u8] = include_bytes!("fixtures/ocr_explicit_sparse_pages_2503/img_20_plain_nolead.png");
+    const ROWS: &str = include_str!("fixtures/ocr_explicit_sparse_pages_2503/rows.tsv");
+    let models = tempfile::tempdir().unwrap();
+    let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English");
+    assert_eq!(
+        hex::encode(Sha256::digest(english)),
+        "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+    );
+    std::fs::write(models.path().join("eng.traineddata"), english).unwrap();
+    let cases = [
+        (CLEAN, ROWS.lines().map(|line| line.split('\t').collect()).collect()),
+        (IMAGE, expected_rows(false)),
+    ];
+    for (bytes, rows) in cases {
+        let mut config = config(OutputFormat::Plain);
+        let ocr = config.ocr.as_mut().unwrap();
+        ocr.tessdata_path = Some(models.path().to_path_buf());
+        ocr.tesseract_config.get_or_insert_default().psm = Some(11);
+
+        let with_words = extract(bytes, &config);
+        assert_spatial_rows(&with_words, &rows);
+        config.ocr.as_mut().unwrap().element_config = None;
+        let doc = extract(bytes, &config);
+        assert!(doc.ocr_elements.is_none());
+        assert_eq!(doc.metadata.additional["psm"], "11");
+        let expected = rows.iter().map(|row| row.join(" ")).collect::<Vec<_>>().join("\n");
+        assert_eq!(doc.tables.len(), 1);
+        assert_eq!(doc.tables[0].cells, rows);
+        assert_eq!(doc.content.trim(), expected);
+        let pages = doc.pages.unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].content.trim(), expected, "complete stock rows on the page");
+        assert_eq!(with_words.pages.unwrap()[0].content, pages[0].content);
+    }
+}
