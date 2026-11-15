@@ -525,6 +525,23 @@ impl IndexedSource {
             .any(|&channel| channel < INK_THRESHOLD)
     }
 
+    pub(super) fn select_full_line_crop(
+        &self,
+        stock: super::region_reconciliation::RegionBox,
+        protected: &[super::region_reconciliation::RegionBox],
+    ) -> Option<super::region_reconciliation::RegionBox> {
+        use super::region_reconciliation::{RegionBox, select_full_line_crop};
+        let frame = RegionBox {
+            left: 0,
+            top: 0,
+            right: self.width,
+            bottom: self.height,
+        };
+        select_full_line_crop(frame, stock, protected, |x, y| {
+            self.sample_has_ink(self.indices[y as usize * self.width as usize + x as usize])
+        })
+    }
+
     pub(super) fn certify_line_ink(
         &self,
         hull: super::region_reconciliation::RegionBox,

@@ -478,7 +478,148 @@ pub(super) async fn scan_selected_inventory(
             ambiguous = true;
         }
     }
-    Ok(if ambiguous { None } else { replacement })
+    if ambiguous || replacement.is_some() || tables.is_empty() || read.inline_page.is_none() {
+        return Ok(if ambiguous { None } else { replacement });
+    }
+    scan_full_line(attempt, source, backend, ocr, read, &words, &tables, budget).await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn scan_full_line(
+    attempt: &Attempt<'_>,
+    source: &IndexedSource,
+    backend: &Arc<dyn OcrBackend>,
+    ocr: &OcrConfig,
+    read: &crate::types::formats::RetainedHocrRead,
+    words: &[RegionBox],
+    tables: &[RegionBox],
+    budget: &AtomicUsize,
+) -> crate::Result<Option<Vec<SourceEdit>>> {
+    let mut start = 0;
+    let mut candidates = Vec::new();
+    for group in read.occurrences.chunk_by(|a, b| a.element == b.element) {
+        let indices = start..start + group.len();
+        start = indices.end;
+        if let Some((crop, column)) = full_line_candidate(source, read, words, tables, indices.clone()) {
+            candidates.push((indices, crop, column));
+            if candidates.len() * 2 > attempt.max_strips {
+                return Ok(None);
+            }
+        }
+    }
+    tracing::trace!(
+        page = attempt.page + 1,
+        candidates = candidates.len(),
+        "full line OCR candidates"
+    );
+    let mut selected = Vec::new();
+    let mut selected_crops = Vec::<RegionBox>::new();
+    for (indices, crop, column) in candidates {
+        let group = &read.occurrences[indices.clone()];
+        let owners: Vec<_> = group.iter().map(|word| word.id).collect();
+        tracing::trace!(page = attempt.page + 1, ?indices, ?owners, crop = ?[crop.left, crop.top, crop.right, crop.bottom], "full line OCR enrolled owners");
+        let Some(mut reservation) = PairReservation::reserve(budget) else {
+            return Ok(None);
+        };
+        let Some([words, _]) = read_pair(attempt, source, backend, ocr, crop, column, Some(&mut reservation)).await?
+        else {
+            tracing::trace!(?owners, "full line OCR read pair declined");
+            continue;
+        };
+        let count = words.len();
+        let alphabetic = words.iter().all(|word| word.text.chars().all(char::is_alphabetic));
+        let same_band = words.windows(2).all(|pair| same_line(pair[0].bounds, pair[1].bounds));
+        if count <= group.len() || !alphabetic || !same_band {
+            tracing::trace!(
+                ?owners,
+                count,
+                alphabetic,
+                same_band,
+                "full line OCR source ownership declined"
+            );
+            continue;
+        }
+        let mut replacement = words
+            .iter()
+            .map(|word| word.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let edits = group
+            .iter()
+            .map(|word| {
+                Some((
+                    word.id,
+                    read.transcript.get(word.transcript_bytes.clone())?.to_owned(),
+                    std::mem::take(&mut replacement),
+                ))
+            })
+            .collect::<Option<Vec<_>>>();
+        if let Some(edits) = edits {
+            tracing::trace!(?owners, "full line OCR qualified");
+            if selected_crops.iter().any(|other| crop.intersects(*other)) || selected.len() + edits.len() > 64 {
+                return Ok(None);
+            }
+            selected_crops.push(crop);
+            selected.extend(edits);
+        }
+    }
+    Ok((!selected.is_empty()).then_some(selected))
+}
+
+fn full_line_candidate(
+    source: &IndexedSource,
+    read: &crate::types::formats::RetainedHocrRead,
+    words: &[RegionBox],
+    tables: &[RegionBox],
+    indices: std::ops::Range<usize>,
+) -> Option<(RegionBox, RegionBox)> {
+    let group = &read.occurrences[indices.clone()];
+    let first = group.first()?;
+    let last = group.last()?;
+    if !(3..=64).contains(&group.len())
+        || first.transcript_bytes.start != first.owner_bytes.start
+        || last.transcript_bytes.end != first.owner_bytes.end
+        || !group.windows(2).all(|pair| {
+            read.transcript
+                .get(pair[0].transcript_bytes.end..pair[1].transcript_bytes.start)
+                == Some(" ")
+        })
+        || !group.iter().all(|word| {
+            [read.plain_document.as_ref(), read.inline_page.as_ref()]
+                .into_iter()
+                .all(|projection| {
+                    projection.is_some_and(|projection| {
+                        projection.ranges.iter().filter(|(id, _)| *id == word.id).count() == 1
+                    })
+                })
+        })
+    {
+        return None;
+    }
+    let line = &words[indices.clone()];
+    let hull = line.iter().copied().reduce(|a, b| RegionBox {
+        left: a.left.min(b.left),
+        right: a.right.max(b.right),
+        top: a.top.min(b.top),
+        bottom: a.bottom.max(b.bottom),
+    })?;
+    let min_height = line.iter().map(|word| word.bottom - word.top).min()?;
+    if hull.bottom - hull.top < min_height.checked_mul(3)? {
+        return None;
+    }
+    let protected: Vec<_> = words
+        .iter()
+        .enumerate()
+        .filter_map(|(index, &word)| (!indices.contains(&index)).then_some(word))
+        .chain(tables.iter().copied())
+        .collect();
+    let crop = source.select_full_line_crop(hull, &protected)?;
+    if (crop.bottom - crop.top).checked_mul(2)? > hull.bottom - hull.top
+        || !line.iter().all(|word| crop.intersects(*word))
+    {
+        return None;
+    }
+    Some((crop, source.source_line_column(crop)?))
 }
 
 pub(super) async fn read_pair(

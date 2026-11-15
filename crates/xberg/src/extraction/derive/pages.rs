@@ -172,7 +172,7 @@ pub(crate) fn project_final_ocr_occurrence(
 }
 
 #[cfg(all(feature = "pdf", feature = "ocr"))]
-type FinalOcrEdit<'a> = (std::ops::Range<usize>, std::ops::Range<usize>, &'a str, &'a str);
+type FinalOcrEdit<'a> = (std::ops::Range<usize>, std::ops::Range<usize>, usize, &'a str);
 
 #[cfg(all(feature = "pdf", feature = "ocr"))]
 fn plan_page_ocr_replacement<'a>(
@@ -193,7 +193,7 @@ fn plan_page_ocr_replacement<'a>(
                 .map(move |span| (element, span))
         })
         .collect();
-    if !(1..=2).contains(&pending.len()) {
+    if !(1..=64).contains(&pending.len()) {
         return None;
     }
     let mut edits = Vec::new();
@@ -217,16 +217,62 @@ fn plan_page_ocr_replacement<'a>(
         if text.get(document_bytes.clone())? != expected || page.content.get(page_bytes.clone())? != expected {
             return None;
         }
-        edits.push((document_bytes, page_bytes, expected.as_str(), replacement.as_str()));
+        edits.push((
+            &span.owner,
+            (document_bytes, page_bytes, expected.len(), replacement.as_str()),
+        ));
     }
-    edits.sort_by_key(|(bytes, _, _, _)| bytes.start);
+    edits.sort_by_key(|(_, (bytes, _, _, _))| bytes.start);
     if edits
         .windows(2)
-        .any(|pair| pair[0].0.end > pair[1].0.start || pair[0].1.end > pair[1].1.start)
+        .any(|pair| pair[0].1.0.end > pair[1].1.0.start || pair[0].1.1.end > pair[1].1.1.start)
     {
         return None;
     }
-    Some(edits)
+    if edits.len() <= 2 {
+        return Some(edits.into_iter().map(|(_, edit)| edit).collect());
+    }
+    let mut groups = Vec::new();
+    let mut seen = Vec::new();
+    for group in edits.chunk_by(|a, b| a.0 == b.0) {
+        let owner = group.first()?.0;
+        if seen.contains(&owner) {
+            return None;
+        }
+        seen.push(owner);
+        groups.push(join_final_line(group, text, &page.content)?);
+    }
+    tracing::trace!(
+        page = page.page_number,
+        groups = groups.len(),
+        owners = edits.len(),
+        "full line OCR projected final owners"
+    );
+    Some(groups)
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+fn join_final_line<'a>(
+    group: &[(&crate::types::internal::InternalElementId, FinalOcrEdit<'a>)],
+    document: &str,
+    page: &str,
+) -> Option<FinalOcrEdit<'a>> {
+    let (_, (first_document, first_page, _, replacement)) = group.first()?;
+    let (_, (last_document, last_page, ..)) = group.last()?;
+    if group.len() < 3
+        || replacement.is_empty()
+        || group[1..].iter().any(|(_, edit)| !edit.3.is_empty())
+        || group.windows(2).any(|pair| {
+            document.get(pair[0].1.0.end..pair[1].1.0.start) != Some(" ")
+                || page.get(pair[0].1.1.end..pair[1].1.1.start) != Some(" ")
+        })
+    {
+        return None;
+    }
+    let document = first_document.start..last_document.end;
+    let page = first_page.start..last_page.end;
+    let length = document.len();
+    Some((document, page, length, *replacement))
 }
 
 #[cfg(all(feature = "pdf", feature = "ocr"))]
@@ -248,7 +294,7 @@ pub(super) fn adopt_final_ocr_replacement(
     for (page_index, page) in pages.iter().enumerate() {
         if let Some(edits) = plan_page_ocr_replacement(doc, text, spans, page) {
             all.extend(edits.into_iter().map(|(document, page, expected, replacement)| {
-                (document, page_index, page, expected.len(), replacement.to_owned())
+                (document, page_index, page, expected, replacement.to_owned())
             }));
         }
     }
@@ -410,6 +456,66 @@ fn ocr_edit_on_nonfinal_page_shifts_later_document_boundaries() {
     let boundaries = doc.metadata.pages.unwrap().boundaries.unwrap();
     assert_eq!((boundaries[0].byte_start, boundaries[0].byte_end), (0, 4));
     assert_eq!((boundaries[1].byte_start, boundaries[1].byte_end), (6, 10));
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[test]
+fn full_ocr_line_groups_publish_together_or_keep_both_originals() {
+    use crate::types::internal::OcrSourceSpan;
+    let mut doc = InternalDocument::new("pdf");
+    for (index, line) in ["clean phrase", "bad bad line", "bad bad line"].into_iter().enumerate() {
+        let mut element = InternalElement::text(ElementKind::Paragraph, line, 0).with_index(index as u32);
+        element.page = Some(1);
+        if index > 0 {
+            for (word, range) in [0..3, 4..7, 8..12].into_iter().enumerate() {
+                element.ocr_source_spans.push(OcrSourceSpan {
+                    owner: element.id.clone(),
+                    occurrence: index * 3 + word,
+                    destination: range.start,
+                    replacement: Some((
+                        line[range.clone()].to_owned(),
+                        if word == 0 {
+                            "clean phrase".to_owned()
+                        } else {
+                            String::new()
+                        },
+                        6,
+                    )),
+                    source: range,
+                });
+            }
+        }
+        doc.elements.push(element);
+    }
+    let assert_publication = |mut doc: InternalDocument, accepted| {
+        let mut rendered = crate::rendering::render_plain_with_spans(&doc);
+        let before = rendered.text.clone();
+        let mut pages: Vec<PageContent> = serde_json::from_value(serde_json::json!([
+            {"page_number": 1, "content": before}
+        ]))
+        .unwrap();
+        let adopted = adopt_final_ocr_replacement(&mut doc, &mut rendered.text, &rendered.spans, &mut pages);
+        assert_eq!(adopted.is_some(), accepted);
+        let expected = if accepted {
+            "clean phrase\n\nclean phrase\n\nclean phrase"
+        } else {
+            &before
+        };
+        assert_eq!(rendered.text, expected);
+        assert_eq!(pages[0].content, expected);
+    };
+    assert_publication(doc.clone(), true);
+
+    let mut overlap = doc.clone();
+    overlap.elements[2].ocr_source_spans[1].destination = 0;
+    assert_publication(overlap, false);
+
+    let mut mismatch = doc.clone();
+    mismatch.elements[2].ocr_source_spans[1].owner = doc.elements[1].id.clone();
+    assert_publication(mismatch, false);
+
+    doc.elements[2].ocr_source_spans.clear();
+    assert_publication(doc, false);
 }
 
 /// Give each page that has elements its part of the plain `content`. A page with no
