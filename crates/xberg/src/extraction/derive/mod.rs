@@ -30,6 +30,8 @@ pub(crate) use formulas::strip_math_delimiters;
 pub(crate) use ocr_document::adopt_public_ocr_document;
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
 pub(crate) use ocr_document::is_invalid_public_ocr_document;
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+pub(crate) use pages::FINAL_OCR_REPLAY;
 pub(crate) use pages::build_ocr_elements;
 #[cfg(test)]
 use pages::build_pages;
@@ -951,7 +953,7 @@ fn derive(
     );
     resolve_relationships(&mut doc);
 
-    let (content, mime_type, spans) = derive_content_and_mime_type(&mut doc, &output_format, observer);
+    let (mut content, mime_type, spans) = derive_content_and_mime_type(&mut doc, &output_format, observer);
     let plain_from_ir = spans.is_some();
     let formatted_content =
         compute_formatted_content_observed(&mut doc, &output_format, observer, plain_from_ir, &content);
@@ -960,7 +962,7 @@ fn derive(
     // gets this document and `formatted_content` is `None`: plain output, or a custom format
     // name with no renderer. The document for a registered renderer is not the caller's. ~keep
     let content_is_plain = is_result && formatted_content.is_none();
-    let pages = derive_pages(
+    let mut pages = derive_pages(
         &mut doc,
         &content,
         &output_format,
@@ -968,6 +970,19 @@ fn derive(
         spans.as_ref(),
         observer,
     );
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    if let (Some(spans), Some(pages)) = (spans.as_ref(), pages.as_deref())
+        && content_is_plain
+    {
+        pages::trace_final_ocr_occurrences(&doc, (&content, spans), pages);
+    }
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    if let (Some(spans), Some(pages)) = (spans.as_ref(), pages.as_deref_mut())
+        && content_is_plain
+        && output_format == crate::core::config::OutputFormat::Plain
+    {
+        let _ = pages::adopt_final_ocr_replacement(&mut doc, &mut content, spans, pages);
+    }
     let ocr_elements = doc.prebuilt_ocr_elements.take().or_else(|| build_ocr_elements(&doc));
 
     let formulas = derive_formulas(&mut doc);

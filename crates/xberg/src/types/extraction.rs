@@ -489,6 +489,9 @@ pub struct ExtractedDocument {
     #[allow(dead_code)]
     #[cfg_attr(alef, alef(skip))]
     pub(crate) raw_ocr_source_frame: Option<super::formats::RawOcrSourceFrame>,
+    #[serde(skip)]
+    #[cfg_attr(alef, alef(skip))]
+    pub(crate) retained_hocr_read: Option<super::formats::RetainedHocrRead>,
 
     /// The original `InternalDocument` from the extractor, preserved before derivation.
     ///

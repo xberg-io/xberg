@@ -113,6 +113,7 @@ fn frozen_page_thirteen_corrects_one_token_and_preserves_tables_and_annotation_t
     assert_eq!(
         edits,
         [OccurrenceEdit {
+            selection_index: 0,
             bytes: prefix.len()..prefix.len() + 2,
             expected: "wi",
             replacement: "View",

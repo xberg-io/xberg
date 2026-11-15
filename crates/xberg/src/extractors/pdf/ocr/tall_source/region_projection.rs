@@ -3,27 +3,27 @@
 use super::{MAX_LINE_WORDS, MAX_TRANSCRIPT_BYTES, OccurrenceEdit, RegionBox, SourceWord, StockWord, plan_line_edits};
 use std::ops::Range;
 
-const MAX_STOCK_OCCURRENCES: usize = 1024;
+pub(super) const MAX_STOCK_OCCURRENCES: usize = 1024;
 
 pub(in super::super) struct RawStockWord<'a> {
     pub(in super::super) text: &'a str,
     pub(in super::super) bounds: RegionBox,
 }
 
-pub(in super::super) struct ProjectionWriter<'a> {
-    words: &'a [RawStockWord<'a>],
+pub(in super::super) struct ProjectionWriter<'stock, 'a> {
+    words: &'stock [RawStockWord<'a>],
     ranges: Vec<Option<Range<usize>>>,
     transcript: String,
 }
 
-pub(in super::super) struct VerifiedProjection<'a> {
-    words: &'a [RawStockWord<'a>],
+pub(in super::super) struct VerifiedProjection<'stock, 'a> {
+    words: &'stock [RawStockWord<'a>],
     ranges: Vec<Option<Range<usize>>>,
     transcript: &'a str,
 }
 
-impl<'a> ProjectionWriter<'a> {
-    pub(in super::super) fn new(words: &'a [RawStockWord<'a>]) -> Option<Self> {
+impl<'stock, 'a> ProjectionWriter<'stock, 'a> {
+    pub(in super::super) fn new(words: &'stock [RawStockWord<'a>]) -> Option<Self> {
         if words.len() > MAX_STOCK_OCCURRENCES {
             return None;
         }
@@ -57,7 +57,7 @@ impl<'a> ProjectionWriter<'a> {
         Some(())
     }
 
-    pub(in super::super) fn verify(self, transcript: &'a str) -> Option<VerifiedProjection<'a>> {
+    pub(in super::super) fn verify(self, transcript: &'a str) -> Option<VerifiedProjection<'stock, 'a>> {
         (self.transcript == transcript).then_some(VerifiedProjection {
             words: self.words,
             ranges: self.ranges,
@@ -66,7 +66,7 @@ impl<'a> ProjectionWriter<'a> {
     }
 }
 
-impl<'a> VerifiedProjection<'a> {
+impl<'a> VerifiedProjection<'_, 'a> {
     pub(in super::super) fn plan(
         &self,
         region: RegionBox,

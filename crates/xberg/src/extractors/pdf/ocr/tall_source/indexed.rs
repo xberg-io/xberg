@@ -21,6 +21,7 @@ pub(super) struct IndexedSource {
     pub(super) dpi: f64,
     pub(super) frame: Rect,
     pub(super) painted_height: f64,
+    pub(super) painted_width: f64,
     indices: Vec<u8>,
     palette: [u8; PALETTE_BYTES],
     available: usize,
@@ -122,6 +123,7 @@ pub(super) fn is_indexed_rgb_scan(attempt: &super::Attempt<'_>) -> bool {
 struct IndexedImage {
     frame: Rect,
     painted_height: f64,
+    painted_width: f64,
     available: usize,
     dict: std::collections::HashMap<String, Object>,
     data: bytes::Bytes,
@@ -185,6 +187,7 @@ fn indexed_image(attempt: &super::Attempt<'_>) -> Option<IndexedImage> {
     Some(IndexedImage {
         frame,
         painted_height,
+        painted_width: painted_w,
         available,
         dict,
         data,
@@ -209,6 +212,7 @@ impl IndexedSource {
         let IndexedImage {
             frame,
             painted_height,
+            painted_width,
             available,
             data,
             pixels,
@@ -225,6 +229,7 @@ impl IndexedSource {
             dpi,
             frame,
             painted_height,
+            painted_width,
             indices,
             palette,
             available,
@@ -399,6 +404,155 @@ impl IndexedSource {
             x1: x1 as u32,
             y1,
         })
+    }
+
+    pub(super) fn native_bounds(
+        &self,
+        raster: (u32, u32),
+        bbox: [u32; 4],
+    ) -> Option<super::region_reconciliation::RegionBox> {
+        let [left, top, right, bottom] = bbox;
+        if left >= right || top >= bottom || right > raster.0 || bottom > raster.1 {
+            return None;
+        }
+        let x = |value| {
+            f64::from(value) / f64::from(raster.0) * f64::from(self.frame.width) / self.painted_width
+                * f64::from(self.width)
+        };
+        let coordinates = [
+            x(left).floor(),
+            self.source_y(top, raster.1)?.floor(),
+            x(right).ceil(),
+            self.source_y(bottom, raster.1)?.ceil(),
+        ];
+        if coordinates.iter().any(|value| !value.is_finite() || *value < 0.0)
+            || coordinates[2] > f64::from(self.width)
+            || coordinates[3] > f64::from(self.height)
+        {
+            return None;
+        }
+        let [left, top, right, bottom] = coordinates.map(|value| value as u32);
+        Some(super::region_reconciliation::RegionBox {
+            left,
+            top,
+            right,
+            bottom,
+        })
+    }
+
+    pub(super) fn line_ink_components(
+        &self,
+        bounds: super::region_reconciliation::RegionBox,
+    ) -> Option<Vec<Range<u32>>> {
+        const MAX_SCAN_PIXELS: u32 = 64 * 1024;
+        const BRIDGE: u32 = 2;
+        let width = bounds.right.checked_sub(bounds.left)?;
+        let height = bounds.bottom.checked_sub(bounds.top)?;
+        if width == 0
+            || height == 0
+            || bounds.right > self.width
+            || bounds.bottom > self.height
+            || width.checked_mul(height)? > MAX_SCAN_PIXELS
+        {
+            return None;
+        }
+
+        let mut components: Vec<Range<u32>> = Vec::new();
+        for x in bounds.left..bounds.right {
+            if !self
+                .rows(bounds.top..bounds.bottom)
+                .any(|row| self.sample_has_ink(row[x as usize]))
+            {
+                continue;
+            }
+            if let Some(last) = components.last_mut()
+                && x - last.end <= BRIDGE
+            {
+                last.end = x + 1;
+            } else {
+                components.push(x..x + 1);
+            }
+        }
+        Some(components)
+    }
+
+    fn sample_has_ink(&self, sample: u8) -> bool {
+        const INK_THRESHOLD: u8 = 224;
+        let offset = usize::from(sample) * 3;
+        self.palette[offset..offset + 3]
+            .iter()
+            .any(|&channel| channel < INK_THRESHOLD)
+    }
+
+    pub(super) fn certify_line_ink(
+        &self,
+        hull: super::region_reconciliation::RegionBox,
+        column: super::region_reconciliation::RegionBox,
+    ) -> Option<super::region_reconciliation::RegionBox> {
+        const COLLAR: u32 = 4;
+        let frame = super::region_reconciliation::RegionBox {
+            left: 0,
+            top: 0,
+            right: self.width,
+            bottom: self.height,
+        };
+        if !column.contains(hull)
+            || !frame.contains(column)
+            || (hull.right - hull.left).checked_mul(hull.bottom - hull.top)? > 64 * 1024
+        {
+            return None;
+        }
+        let mut found_ink = false;
+        for y in hull.top.checked_sub(COLLAR)?..hull.bottom.checked_add(COLLAR)? {
+            let left = hull.left.checked_sub(COLLAR)?;
+            let right = hull.right.checked_add(COLLAR)?;
+            if y >= self.height || right > self.width {
+                return None;
+            }
+            let row_start = y as usize * self.width as usize;
+            for x in left..right {
+                if self.sample_has_ink(self.indices[row_start + x as usize]) {
+                    if x < hull.left || x >= hull.right || y < hull.top || y >= hull.bottom {
+                        return None;
+                    }
+                    found_ink = true;
+                }
+            }
+        }
+        found_ink.then_some(hull)
+    }
+
+    pub(super) fn encode_region(&self, region: super::region_reconciliation::RegionBox, pad: u32) -> Option<Vec<u8>> {
+        let width = region.right.checked_sub(region.left)?;
+        let height = region.bottom.checked_sub(region.top)?;
+        if width == 0 || height == 0 || region.right > self.width || region.bottom > self.height {
+            return None;
+        }
+        let margin = pad.checked_mul(2)?;
+        let padded_width = width.checked_add(margin)?;
+        let padded_height = height.checked_add(margin)?;
+        let pixels = (padded_width as usize).checked_mul(padded_height as usize)?;
+        let working = pixels.checked_mul(TILE_BYTES_PER_PIXEL)?;
+        if padded_width > MAX_TILE_SIDE || padded_height > MAX_TILE_SIDE || working > self.available {
+            return None;
+        }
+        let mut rgb = Vec::new();
+        let rgb_len = pixels.checked_mul(3)?;
+        rgb.try_reserve_exact(rgb_len).ok()?;
+        rgb.resize(rgb_len, 255);
+        for (y, row) in self.rows(region.top..region.bottom).enumerate() {
+            let start = ((y + pad as usize) * padded_width as usize + pad as usize) * 3;
+            for (x, &sample) in row[region.left as usize..region.right as usize].iter().enumerate() {
+                let palette_offset = usize::from(sample) * 3;
+                let dest = start + x * 3;
+                rgb[dest..dest + 3].copy_from_slice(&self.palette[palette_offset..palette_offset + 3]);
+            }
+        }
+        let mut png = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut png)
+            .write_image(&rgb, padded_width, padded_height, image::ExtendedColorType::Rgb8)
+            .ok()?;
+        (working.checked_add(png.capacity())? <= self.available).then_some(png)
     }
 
     pub(super) fn encode(&self, rows: Range<u32>) -> Option<Vec<u8>> {
@@ -706,6 +860,7 @@ mod tests {
             dpi: 72.0,
             frame: Rect::new(0.0, 0.0, 3.0, 3.0),
             painted_height: 3.0,
+            painted_width: 3.0,
             indices: vec![1, 1, 1, 1, 0, 1, 1, 1, 1],
             palette,
             available: FIXED_WORK_BYTES,
@@ -722,6 +877,7 @@ mod tests {
             dpi: 72.0,
             frame: Rect::new(0.0, 0.0, 3.0, 3.0),
             painted_height: 3.0,
+            painted_width: 3.0,
             indices: vec![0; 9],
             palette: [255; PALETTE_BYTES],
             available: 8 * TILE_BYTES_PER_PIXEL,

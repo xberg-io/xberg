@@ -132,6 +132,185 @@ fn plain_page_ranges(doc: &InternalDocument, content: &str, spans: &crate::rende
     ranges
 }
 
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+pub(crate) fn project_final_ocr_occurrence(
+    doc: &InternalDocument,
+    (text, spans): (&str, &crate::rendering::ElementSpans),
+    page: &PageContent,
+    owner: &crate::types::internal::InternalElementId,
+    local: std::ops::Range<usize>,
+) -> Option<[std::ops::Range<usize>; 2]> {
+    let membership = compute_page_membership(doc);
+    let mut owners = membership
+        .get(&page.page_number)?
+        .iter()
+        .copied()
+        .filter(|&index| doc.elements[index].id == *owner);
+    let index = owners.next()?;
+    if owners.next().is_some() || local.is_empty() {
+        return None;
+    }
+    let (start, end) = spans.by_element.get(index).copied().flatten()?;
+    let body_end = end.min(spans.body_end);
+    let element = &doc.elements[index].text;
+    if text.get(start..body_end)?.trim_end() != element {
+        return None;
+    }
+    let document_range = start.checked_add(local.start)?..start.checked_add(local.end)?;
+    let token = element.get(local)?;
+    let ranges = plain_page_ranges(doc, text, spans);
+    let (page_start, page_end) = ranges.get(&page.page_number).copied().flatten()?;
+    if text.get(page_start..page_end)? != page.content
+        || document_range.start < page_start
+        || document_range.end > page_end
+    {
+        return None;
+    }
+    let page_range = document_range.start - page_start..document_range.end - page_start;
+    (text.get(document_range.clone())? == token && page.content.get(page_range.clone())? == token)
+        .then_some([document_range, page_range])
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+pub(super) fn adopt_final_ocr_replacement(
+    doc: &mut InternalDocument,
+    text: &mut String,
+    spans: &crate::rendering::ElementSpans,
+    pages: &mut [PageContent],
+) -> Option<()> {
+    let [page] = pages else { return None };
+    let mut pending = doc
+        .elements
+        .iter()
+        .filter(|element| element.page == Some(page.page_number))
+        .flat_map(|element| {
+            element
+                .ocr_source_spans
+                .iter()
+                .filter(|span| span.replacement.is_some())
+                .map(move |span| (element, span))
+        });
+    let (element, span) = pending.next()?;
+    if pending.next().is_some()
+        || doc
+            .elements
+            .iter()
+            .filter(|other| other.page == element.page)
+            .flat_map(|other| &other.ocr_source_spans)
+            .filter(|other| other.occurrence == span.occurrence && other.owner == span.owner)
+            .count()
+            != 1
+    {
+        return None;
+    }
+    let (expected, replacement) = span.replacement.as_ref()?;
+    let end = span.destination.checked_add(span.source.len())?;
+    let [document_bytes, page_bytes] =
+        project_final_ocr_occurrence(doc, (text, spans), page, &element.id, span.destination..end)?;
+    if text.get(document_bytes.clone())? != expected || page.content.get(page_bytes.clone())? != expected {
+        return None;
+    }
+    if let Some(boundaries) = doc.metadata.pages.as_mut().and_then(|pages| pages.boundaries.as_mut()) {
+        let [boundary] = boundaries.as_mut_slice() else {
+            return None;
+        };
+        if boundary.page_number != page.page_number
+            || boundary.byte_start > document_bytes.start
+            || boundary.byte_end < document_bytes.end
+            || boundary.byte_end > text.len()
+        {
+            return None;
+        }
+        boundary.byte_end = boundary
+            .byte_end
+            .checked_sub(expected.len())?
+            .checked_add(replacement.len())?;
+    }
+    text.replace_range(document_bytes, replacement);
+    page.content.replace_range(page_bytes, replacement);
+    Some(())
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+pub(crate) static FINAL_OCR_REPLAY: parking_lot::Mutex<
+    Option<Vec<(u32, usize, std::ops::Range<usize>, std::ops::Range<usize>)>>,
+> = parking_lot::Mutex::new(None);
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
+pub(super) fn trace_final_ocr_occurrences(
+    doc: &InternalDocument,
+    rendered: (&str, &crate::rendering::ElementSpans),
+    pages: &[PageContent],
+) {
+    #[cfg(test)]
+    let replay_enabled = FINAL_OCR_REPLAY.lock().is_some();
+    #[cfg(not(test))]
+    let replay_enabled = false;
+    if !replay_enabled && !tracing::enabled!(tracing::Level::TRACE) {
+        return;
+    }
+    let mut projected = Vec::new();
+    for element in &doc.elements {
+        let Some(page) = pages.iter().find(|page| element.page == Some(page.page_number)) else {
+            continue;
+        };
+        for span in &element.ocr_source_spans {
+            let Some(end) = span.destination.checked_add(span.source.len()) else {
+                continue;
+            };
+            let owners = doc
+                .elements
+                .iter()
+                .filter(|other| other.page == element.page)
+                .flat_map(|other| &other.ocr_source_spans)
+                .filter(|other| other.occurrence == span.occurrence && other.owner == span.owner)
+                .count();
+            if owners == 1
+                && let Some([document, page_bytes]) =
+                    project_final_ocr_occurrence(doc, rendered, page, &element.id, span.destination..end)
+            {
+                projected.push((page.page_number, span.occurrence, document, page_bytes));
+            }
+        }
+    }
+    #[cfg(test)]
+    if let Some(replay) = FINAL_OCR_REPLAY.lock().as_mut() {
+        replay.extend(projected.iter().cloned());
+    }
+    if !projected.is_empty() {
+        tracing::trace!(?projected, "final PDF OCR occurrence ranges");
+    }
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[test]
+fn final_occurrence_projection_rejects_missing_and_ambiguous_owners() {
+    let mut doc = InternalDocument::new("pdf");
+    let paragraph = |text: &str, index| {
+        let mut element = InternalElement::text(ElementKind::Paragraph, text, 0).with_index(index);
+        element.page = Some(1);
+        element
+    };
+    let first = paragraph("wi", 0);
+    let target = paragraph("wi", 1);
+    let owner = target.id.clone();
+    doc.elements.extend([first, target]);
+    let project = |doc: &InternalDocument| {
+        let rendered = crate::rendering::render_plain_with_spans(doc);
+        let page = serde_json::from_value(serde_json::json!({
+            "page_number": 1, "content": rendered.text
+        }))
+        .unwrap();
+        project_final_ocr_occurrence(doc, (&rendered.text, &rendered.spans), &page, &owner, 0..2)
+    };
+    assert_eq!(project(&doc), Some([4..6, 4..6]));
+    doc.elements[1].id = doc.elements[0].id.clone();
+    assert!(project(&doc).is_none());
+    doc.elements[0].id = owner.clone();
+    doc.elements[1].id = owner.clone();
+    assert!(project(&doc).is_none());
+}
+
 /// Give each page that has elements its part of the plain `content`. A page with no
 /// elements keeps its text, and every other field of a page stays.
 fn with_plain_page_text(mut pages: Vec<PageContent>, content: &str, ranges: &PlainPageRanges) -> Vec<PageContent> {

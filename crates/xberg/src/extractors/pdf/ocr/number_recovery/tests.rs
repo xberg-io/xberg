@@ -40,6 +40,7 @@ fn paragraph(authoritative: &str, located: &str) -> PdfParagraph {
         is_page_furniture: false,
         layout_class: None,
         layout_region_path: None,
+        ocr_source_spans: Vec::new(),
         caption_for: None,
         block_bbox: None,
     }

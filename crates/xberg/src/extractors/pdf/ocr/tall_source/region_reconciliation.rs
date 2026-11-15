@@ -23,7 +23,7 @@ impl RegionBox {
         self.left < self.right && self.top < self.bottom
     }
 
-    fn contains(self, inner: Self) -> bool {
+    pub(super) fn contains(self, inner: Self) -> bool {
         inner.valid()
             && self.left <= inner.left
             && self.top <= inner.top
@@ -38,7 +38,7 @@ impl RegionBox {
         )
     }
 
-    fn intersects(self, other: Self) -> bool {
+    pub(super) fn intersects(self, other: Self) -> bool {
         let (width, height) = self.overlap(other);
         width > 0 && height > 0
     }
@@ -63,6 +63,7 @@ pub(super) struct SourceWord<'a> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct OccurrenceEdit<'a> {
+    pub(super) selection_index: usize,
     pub(super) bytes: Range<usize>,
     pub(super) expected: &'a str,
     pub(super) replacement: &'a str,
@@ -112,7 +113,7 @@ fn read_owns_stock(region: RegionBox, stock: &[StockWord<'_>], source: &[SourceW
 /// overlap the region. Stock byte ranges must come from the caller's verified occurrence-to-
 /// transcript projection for this exact transcript. Missing ranges cannot be inferred from text.
 /// The column bounds must exclude gutters and other columns. ~keep
-fn plan_line_edits<'a>(
+pub(super) fn plan_line_edits<'a>(
     transcript: &str,
     region: RegionBox,
     column: RegionBox,
@@ -136,7 +137,7 @@ fn plan_line_edits<'a>(
     let mut previous_end = None;
     let mut line_breaks = 0;
     let mut edits = Vec::new();
-    for ((original, candidate), confirm) in stock.iter().zip(source).zip(confirmation) {
+    for (selection_index, ((original, candidate), confirm)) in stock.iter().zip(source).zip(confirmation).enumerate() {
         if candidate.text != confirm.text || !candidate.bounds.intersects(confirm.bounds) {
             return None;
         }
@@ -154,6 +155,7 @@ fn plan_line_edits<'a>(
         previous_end = Some(bytes.end);
         if original.text != candidate.text {
             edits.push(OccurrenceEdit {
+                selection_index,
                 bytes,
                 expected: original.text,
                 replacement: candidate.text,
@@ -166,3 +168,13 @@ fn plan_line_edits<'a>(
 #[cfg(test)]
 #[path = "region_reconciliation_tests.rs"]
 mod tests;
+
+#[cfg(all(
+    test,
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+#[path = "region_serializer.rs"]
+mod serializer;

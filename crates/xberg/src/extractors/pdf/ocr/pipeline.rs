@@ -2142,6 +2142,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         noise_verdicts,
                         read_evidence,
                     ) = result;
+                    #[cfg(all(
+                        test,
+                        feature = "pdf",
+                        feature = "ocr",
+                        feature = "tokio-runtime",
+                        not(target_arch = "wasm32")
+                    ))]
+                    record_region_replay(&read_evidence);
                     accumulated_llm_usage.extend(usage);
                     ocr_confidence_by_page.extend(page_ocr_confidences);
                     let page_number = (page_idx + 1) as u32;
@@ -2336,6 +2344,14 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
                         noise_verdicts,
                         read_evidence,
                     ) = result;
+                    #[cfg(all(
+                        test,
+                        feature = "pdf",
+                        feature = "ocr",
+                        feature = "tokio-runtime",
+                        not(target_arch = "wasm32")
+                    ))]
+                    record_region_replay(&read_evidence);
                     accumulated_llm_usage.extend(usage);
                     ocr_confidence_by_page.extend(page_ocr_confidences);
                     let page_number = (*page_idx + 1) as u32;
@@ -4821,6 +4837,14 @@ async fn extract_with_ocr_with_unpruned_text(
         recognition_noise_verdicts,
         read_evidence,
     ) = run?;
+    #[cfg(all(
+        test,
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    record_region_replay(&read_evidence);
     let (text, page_texts, doc) = with_run_layers_first(
         run_layers,
         RunLayerSources {
@@ -5096,6 +5120,16 @@ pub(super) struct OcrReadEvidence {
     matched_layer_occurrences: Option<super::document::MatchedLayerOccurrences>,
     #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
     number_primary_text: Option<String>,
+    // A fresh selected read, kept separate from aggregate or rerendered text. ~keep
+    retained_hocr_read: Option<crate::types::formats::RetainedHocrRead>,
+    #[cfg(all(
+        test,
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    region_replay_raster: Option<(u32, u32, usize)>,
     original_tesseract_raster: bool,
     discarded_visible_native_page: bool,
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
@@ -5105,6 +5139,21 @@ pub(super) struct OcrReadEvidence {
     /// The read words shown at a native word's own place (see `read_words_at_native_place`).
     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
     native_placed_words: std::collections::HashSet<String>,
+}
+
+#[cfg(all(
+    test,
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+fn record_region_replay(evidence: &OcrReadEvidence) {
+    tracing::trace!(receipt = evidence.retained_hocr_read.is_some(), raster = ?evidence.region_replay_raster,
+        "final selected OCR replay receipt");
+    if let (Some(read), Some(raster)) = (&evidence.retained_hocr_read, evidence.region_replay_raster) {
+        super::tall_source::region_replay::record_selected(read, raster);
+    }
 }
 
 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
@@ -5855,6 +5904,16 @@ pub(super) async fn extract_with_ocr_for_page(
         not(target_arch = "wasm32")
     ))]
     let mut number_primary_text = None;
+    #[cfg(feature = "pdf")]
+    let mut retained_hocr_read = None;
+    #[cfg(all(
+        test,
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    let mut region_replay_raster = None;
     #[cfg(all(
         feature = "pdf",
         feature = "ocr",
@@ -6759,6 +6818,69 @@ pub(super) async fn extract_with_ocr_for_page(
             let document_page_idx = page_index_offset + page_idx;
             let document_page_number = (document_page_idx + 1) as u32;
             let mut ocr_result = batch_ocr_results[offset].take().expect("OCR result missing for page");
+
+            #[cfg(all(
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            if total_pages == 1
+                && !has_stored_scan
+                && !tall_source_used
+                && batch_upright_correction[offset].0 == 0
+                && let Some(source) = detached_page
+                    .map(|page| (page.document, document_page_idx))
+                    .or_else(|| {
+                        lazy_pdf_render_state
+                            .as_ref()
+                            .map(|(pdf, _, _)| (pdf.as_ref(), page_idx))
+                    })
+            {
+                super::tall_source::probe_anchored_occurrences(
+                    &mut ocr_result,
+                    &backend,
+                    config,
+                    base_ocr_config,
+                    source,
+                    &encoded_batch[offset],
+                )
+                .await?;
+            }
+
+            #[cfg(all(test, feature = "pdf"))]
+            if let Some(read) = ocr_result.retained_hocr_read.as_ref() {
+                tracing::trace!(total_pages, has_stored_scan, tall_source_used,
+                    raw_frame = ocr_result.raw_ocr_source_frame.is_some(),
+                    frame = ?super::document::processed_ocr_layout_dimensions(&ocr_result.metadata),
+                    read_frame = ?read.dimensions,
+                    owners = ocr_result.ocr_internal_document.as_ref()
+                        .is_some_and(|doc| read.matches(&read.transcript, read.dimensions, doc)),
+                    "selected OCR batch receipt gates");
+            }
+
+            #[cfg(feature = "pdf")]
+            if total_pages == 1
+                && ocr_result.raw_ocr_source_frame.is_none()
+                && let Some(read) = ocr_result.retained_hocr_read.take()
+                && let Some(frame) = super::document::processed_ocr_layout_dimensions(&ocr_result.metadata)
+                && let Some(doc) = ocr_result.ocr_internal_document.as_ref()
+                && read.matches(&read.transcript, frame, doc)
+            {
+                #[cfg(all(test, feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
+                if !has_stored_scan && !tall_source_used {
+                    region_replay_raster = super::tall_source::region_replay::certified_raster(
+                        &read,
+                        &ocr_result,
+                        &encoded_batch[offset],
+                        config,
+                        (base_ocr_config, &backend),
+                        batch_upright_correction[offset].0,
+                    );
+                }
+                retained_hocr_read = Some(read);
+            }
+
             #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
             if force_khmer_retry
                 && let Some(serde_json::Value::String(text)) = ocr_result
@@ -8520,6 +8642,18 @@ pub(super) async fn extract_with_ocr_for_page(
                 .filter(|_| !tall_source_used && pages_with_recovered_xobject_payload == [false]),
             #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
             number_primary_text,
+            #[cfg(feature = "pdf")]
+            retained_hocr_read,
+            #[cfg(all(
+                test,
+                feature = "pdf",
+                feature = "ocr",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            region_replay_raster,
+            #[cfg(not(feature = "pdf"))]
+            retained_hocr_read: None,
             original_tesseract_raster: {
                 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                 {
@@ -9560,6 +9694,14 @@ pub(crate) async fn run_ocr_pipeline(
         None,
     ))
     .await?;
+    #[cfg(all(
+        test,
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    record_region_replay(&_read_evidence);
     Ok((
         text,
         tables,
@@ -10433,6 +10575,15 @@ async fn run_ocr_pipeline_stages(
                         matched_layer_occurrences: read_evidence.matched_layer_occurrences,
                         #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
                         number_primary_text: read_evidence.number_primary_text,
+                        retained_hocr_read: read_evidence.retained_hocr_read,
+                        #[cfg(all(
+                            test,
+                            feature = "pdf",
+                            feature = "ocr",
+                            feature = "tokio-runtime",
+                            not(target_arch = "wasm32")
+                        ))]
+                        region_replay_raster: read_evidence.region_replay_raster,
                         ..Default::default()
                     }
                 };
@@ -10451,6 +10602,14 @@ async fn run_ocr_pipeline_stages(
                         config,
                     );
                     super::super::ensure_pdf_not_cancelled(config)?;
+                    if let Some(read) = selected_read_evidence.retained_hocr_read.as_ref() {
+                        tracing::trace!(
+                            occurrences = read.occurrences.len(),
+                            page_matches = matches!(stage_page_texts.as_slice(), [page] if page == &read.transcript),
+                            document_matches = text == read.transcript,
+                            "selected hOCR region proof carried to rendering"
+                        );
+                    }
                     // ~keep Attach prior-stage diagnostics before this accepted-stage early
                     // return; otherwise successful fallback silently erases why it ran.
                     let stage_doc =
@@ -10883,6 +11042,7 @@ pub(super) fn append_unrecognized_table_fallback_paragraphs(
             is_page_furniture: false,
             layout_class: None,
             layout_region_path: None,
+            ocr_source_spans: Vec::new(),
             caption_for: None,
             block_bbox: None,
             word_count: crate::pdf::structure::types::PdfParagraph::compute_word_count(trimmed, &[]),

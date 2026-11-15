@@ -1098,6 +1098,7 @@ fn push_paragraph_element(
 ) -> u32 {
     let element_index = push_paragraph_element_by_kind(builder, para, page, hyphen_witnesses);
     builder.set_measured_font_size(element_index, para.dominant_font_size);
+    builder.retain_ocr_source_spans(element_index, &para.text, &para.ocr_source_spans);
     element_index
 }
 
@@ -2205,6 +2206,7 @@ mod tests {
             is_page_furniture: false,
             layout_class: None,
             layout_region_path: None,
+            ocr_source_spans: Vec::new(),
             caption_for: None,
             block_bbox: None,
             word_count,
@@ -3453,6 +3455,7 @@ mod tests {
             is_page_furniture: false,
             layout_class: None,
             layout_region_path: None,
+            ocr_source_spans: Vec::new(),
             caption_for: None,
             block_bbox: None,
             word_count,
@@ -3564,6 +3567,7 @@ mod tests {
             is_page_furniture: false,
             layout_class: None,
             layout_region_path: None,
+            ocr_source_spans: Vec::new(),
             caption_for: None,
             block_bbox: None,
             word_count,
@@ -3652,6 +3656,7 @@ mod tests {
             is_page_furniture: false,
             layout_class: None,
             layout_region_path: None,
+            ocr_source_spans: Vec::new(),
             caption_for: None,
             block_bbox: None,
             word_count,
@@ -3729,6 +3734,7 @@ mod tests {
             is_page_furniture: false,
             layout_class: None,
             layout_region_path: None,
+            ocr_source_spans: Vec::new(),
             caption_for: None,
             block_bbox: None,
             word_count,

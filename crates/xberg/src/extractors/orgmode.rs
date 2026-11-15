@@ -726,6 +726,7 @@ impl OrgModeExtractor {
                         attributes: None,
                         anchor: None,
                         ocr_geometry: None,
+                        ocr_source_spans: Vec::new(),
                         ocr_confidence: None,
                         ocr_rotation: None,
                     });

@@ -271,7 +271,7 @@ fn source_tiles(
     Some(candidates)
 }
 
-fn tile_config(config: &OcrConfig, dpi: f64) -> OcrConfig {
+pub(super) fn tile_config(config: &OcrConfig, dpi: f64) -> OcrConfig {
     let mut config = super::ocr_config_with_page_rotation_hint(config, 0, Some(dpi), true, false, false).into_owned();
     config.element_config = Some(crate::types::OcrElementConfig {
         include_elements: true,
