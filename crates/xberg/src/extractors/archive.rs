@@ -3,9 +3,9 @@
 use crate::Result;
 use crate::core::config::ExtractionConfig;
 use crate::extraction::archive::{
-    ArchiveMetadata as ExtractedMetadata, DecompressedBudget, extract_7z_file_bytes, extract_7z_metadata,
-    extract_7z_text_content, extract_gzip_with_bytes, extract_tar_file_bytes, extract_tar_metadata,
-    extract_tar_text_content, extract_zip_file_bytes, extract_zip_metadata, extract_zip_text_content, open_7z,
+    ArchiveMetadata as ExtractedMetadata, DecompressedBudget, extract_7z_members, extract_7z_metadata,
+    extract_gzip_with_bytes, extract_tar_members, extract_tar_metadata, extract_zip_members, extract_zip_metadata,
+    open_7z,
 };
 use crate::extractors::security::{ArchiveBudget, SecurityLimits, ZipBombValidator};
 use crate::plugins::{InternalDocumentExtractor, Plugin};
@@ -146,8 +146,7 @@ fn is_archive_metadata_path(path: &str) -> bool {
 /// `security_limits` when this is the outermost archive. `max_archive_size` is lowered to
 /// what that budget has left, so a nested container's reads stop where the whole
 /// extraction's budget ends instead of getting the full limit again.
-/// Raw and text scans both spend this budget when they read member bytes again.
-/// Metadata scans and text decoded directly from an existing buffer do not spend it.
+/// Member reads spend this budget. Text conversion reuses the member buffers.
 fn budgeted_limits(config: &ExtractionConfig) -> (SecurityLimits, Arc<ArchiveBudget>) {
     let mut limits = config.security_limits.clone().unwrap_or_default();
     let budget = config
@@ -163,6 +162,7 @@ struct ArchiveContents {
     extraction_metadata: ExtractedMetadata,
     text_contents: AHashMap<String, String>,
     file_bytes: AHashMap<String, Vec<u8>>,
+    skipped_paths: Vec<String>,
 }
 
 /// Async version with recursive extraction of archive children.
@@ -181,6 +181,7 @@ async fn build_archive_doc(
         extraction_metadata,
         text_contents,
         file_bytes,
+        skipped_paths,
     } = contents;
     let mut children = Vec::new();
     let mut processing_warnings = Vec::new();
@@ -202,6 +203,14 @@ async fn build_archive_doc(
             unreadable_entries.len(),
             if unreadable_entries.len() == 1 { "y" } else { "ies" },
             crate::core::diagnostics::format_entry_list(&unreadable_entries)
+        );
+        crate::core::diagnostics::push_warning(&mut processing_warnings, ARCHIVE_WARNING_SOURCE, message);
+    }
+
+    if !skipped_paths.is_empty() {
+        let message = format!(
+            "Skipped the rest of each affected 7z solid block after a read failure in: {}",
+            crate::core::diagnostics::format_entry_list(&skipped_paths)
         );
         crate::core::diagnostics::push_warning(&mut processing_warnings, ARCHIVE_WARNING_SOURCE, message);
     }
@@ -383,13 +392,18 @@ impl InternalDocumentExtractor for ZipExtractor {
 
         let extraction_metadata = extract_zip_metadata(content, &limits)?;
         let mut decoder_budget = DecompressedBudget::shared(&budget);
-        let file_bytes = extract_zip_file_bytes(content, &limits, &mut decoder_budget)?;
-        let text_contents = extract_zip_text_content(content, &limits, &mut decoder_budget)?;
+        let members = extract_zip_members(
+            content,
+            &limits,
+            &mut decoder_budget,
+            Some(limits.max_content_size as u64),
+        )?;
         Ok(build_archive_doc(
             ArchiveContents {
                 extraction_metadata,
-                text_contents,
-                file_bytes,
+                text_contents: members.text,
+                file_bytes: members.bytes,
+                skipped_paths: members.skipped_paths,
             },
             "ZIP",
             mime_type,
@@ -466,13 +480,19 @@ impl InternalDocumentExtractor for TarExtractor {
         let (limits, budget) = budgeted_limits(config);
         let extraction_metadata = extract_tar_metadata(content, &limits)?;
         let mut decoder_budget = DecompressedBudget::shared(&budget);
-        let file_bytes = extract_tar_file_bytes(content, &limits, &mut decoder_budget)?;
-        let text_contents = extract_tar_text_content(content, &limits, &mut decoder_budget)?;
+        let members = extract_tar_members(
+            content,
+            &limits,
+            &mut decoder_budget,
+            None,
+            Some(limits.max_content_size as u64),
+        )?;
         Ok(build_archive_doc(
             ArchiveContents {
                 extraction_metadata,
-                text_contents,
-                file_bytes,
+                text_contents: members.text,
+                file_bytes: members.bytes,
+                skipped_paths: members.skipped_paths,
             },
             "TAR",
             mime_type,
@@ -555,14 +575,14 @@ impl InternalDocumentExtractor for SevenZExtractor {
         let mut archive = open_7z(content, &limits)?;
         let extraction_metadata = extract_7z_metadata(&archive, &limits)?;
         let mut decoder_budget = DecompressedBudget::shared(&budget);
-        let file_bytes = extract_7z_file_bytes(&mut archive, &mut decoder_budget)?;
-        let text_contents = extract_7z_text_content(&mut archive, &limits, &mut decoder_budget)?;
+        let members = extract_7z_members(&mut archive, &mut decoder_budget, Some(limits.max_content_size as u64))?;
         drop(archive);
         Ok(build_archive_doc(
             ArchiveContents {
                 extraction_metadata,
-                text_contents,
-                file_bytes,
+                text_contents: members.text,
+                file_bytes: members.bytes,
+                skipped_paths: members.skipped_paths,
             },
             "7Z",
             mime_type,
@@ -645,6 +665,7 @@ impl InternalDocumentExtractor for GzipExtractor {
                 extraction_metadata,
                 text_contents,
                 file_bytes,
+                skipped_paths: Vec::new(),
             },
             "GZIP",
             mime_type,

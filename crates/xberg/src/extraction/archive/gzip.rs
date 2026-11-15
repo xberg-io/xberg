@@ -163,9 +163,16 @@ pub(crate) fn extract_gzip_with_bytes(
     if is_tar_archive(&decompressed) {
         let mut metadata = super::tar::extract_tar_metadata(&decompressed, limits)?;
         metadata.format = "GZIP+TAR".to_string();
-        let contents = super::tar::extract_tar_text_content(&decompressed, limits, budget)?;
-        let file_bytes = super::tar::extract_tar_file_bytes(&decompressed, limits, budget)?;
-        return Ok((metadata, contents, file_bytes));
+        // The inflated TAR already covers stored bytes. Charge only sparse expansion to the shared budget. ~keep
+        let mut member_budget = DecompressedBudget::new(limits.max_archive_size as u64);
+        let members = super::tar::extract_tar_members(
+            &decompressed,
+            limits,
+            &mut member_budget,
+            Some(budget),
+            Some(limits.max_content_size as u64),
+        )?;
+        return Ok((metadata, members.text, members.bytes));
     }
 
     let size = decompressed.len() as u64;
