@@ -269,23 +269,36 @@ fn form_lzw_early_change_round_trips_across_code_widths() {
     assert!(late.len().min(early.len()) > 256 * 9 / 8);
     assert_ne!(late, early);
 
-    for (encoded, decode_parms) in [
-        (&early, ""),
-        (&early, "/DecodeParms [null << /EarlyChange 1 >>]"),
-        (&late, "/DecodeParms [null << /EarlyChange 0 >>]"),
+    let params: &[(u32, &[u8])] = &[(6, b"<< /EarlyChange 0 >>"), (7, b"[null 6 0 R]")];
+    for (encoded, decode_parms, chained) in [
+        (&early, "", true),
+        (&early, "/DecodeParms [null << /EarlyChange 1 >>]", true),
+        (&late, "/DecodeParms [null << /EarlyChange 0 >>]", true),
+        (&late, "/DecodeParms 6 0 R", false),
+        (&late, "/DecodeParms [null 6 0 R]", true),
+        (&late, "/DecodeParms 7 0 R", true),
     ] {
-        let hex: String = encoded.iter().map(|byte| format!("{byte:02x}")).collect();
-        let form = format!(
-            "<< /Type /XObject /Subtype /Form /BBox [0 0 10 10] /Filter [/ASCIIHexDecode /LZWDecode] \
-             {decode_parms} /Length {} >>\nstream\n{hex}>\nendstream",
-            hex.len() + 1
-        );
-        let doc = page_with_xobject("/X1 Do", &form);
+        let (filters, data) = if chained {
+            let mut hex: String = encoded.iter().map(|byte| format!("{byte:02x}")).collect();
+            hex.push('>');
+            ("[/ASCIIHexDecode /LZWDecode]", hex.into_bytes())
+        } else {
+            ("/LZWDecode", encoded.clone())
+        };
+        let mut form = format!(
+            "<< /Type /XObject /Subtype /Form /BBox [0 0 10 10] /Filter {filters} \
+             {decode_parms} /Length {} >>\nstream\n",
+            data.len()
+        )
+        .into_bytes();
+        form.extend_from_slice(&data);
+        form.extend_from_slice(b"\nendstream");
+        let doc = page_with_xobject_objects("/X1 Do", &form, params);
         let form_ref = ObjectRef::new(5, 0);
         let stream = doc.load_object(form_ref).unwrap();
         let decoded = doc
             .decode_form_stream_with_limit(&stream, form_ref, content.len())
-            .unwrap();
+            .unwrap_or_else(|error| panic!("{decode_parms}: {error}"));
         assert_eq!(decoded, content.as_bytes(), "{decode_parms}");
         assert_eq!(
             doc.extract_paths_with_form_budget(0, FormPathBudget::new(1, content.len(), 2))
@@ -298,14 +311,20 @@ fn form_lzw_early_change_round_trips_across_code_widths() {
 
 /// One page that draws a curve and paints the XObject `/X1` (object 5, `x1` is its dictionary and stream).
 fn page_with_xobject(paint: &str, x1: &str) -> PdfDocument {
+    page_with_xobject_objects(paint, x1.as_bytes(), &[])
+}
+
+fn page_with_xobject_objects(paint: &str, x1: &[u8], extra: &[(u32, &[u8])]) -> PdfDocument {
     let content = format!("q 20 0 0 20 300 300 cm {paint} Q 100 100 m 150 200 200 200 250 100 c S");
     let page = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R \
                 /Resources << /XObject << /X1 5 0 R >> >> >>";
     let stream = format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len());
+    let mut objects = vec![(3, page.as_bytes()), (4, stream.as_bytes()), (5, x1)];
+    objects.extend_from_slice(extra);
     let pdf = build_catalog_test_pdf(
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        &[(3, page.as_bytes()), (4, stream.as_bytes()), (5, x1.as_bytes())],
+        &objects,
     );
     PdfDocument::from_bytes(pdf).unwrap()
 }

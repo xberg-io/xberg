@@ -477,7 +477,58 @@ impl PdfDocument {
         obj_ref: ObjectRef,
         byte_limit: usize,
     ) -> Result<Vec<u8>> {
-        self.decode_stream_with_encryption_and_expected_size(stream_obj, obj_ref, None, false, Some(byte_limit))
+        let resolved_stream = match stream_obj {
+            Object::Stream { dict, data } => {
+                if let Some(params) = dict.get("DecodeParms")
+                    && let Some(params) = self.resolve_form_decode_parms(params)?
+                {
+                    let mut dict = dict.clone();
+                    dict.insert("DecodeParms".into(), params);
+                    Some(Object::Stream {
+                        dict,
+                        data: data.clone(),
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        self.decode_stream_with_encryption_and_expected_size(
+            resolved_stream.as_ref().unwrap_or(stream_obj),
+            obj_ref,
+            None,
+            false,
+            Some(byte_limit),
+        )
+    }
+
+    fn resolve_form_decode_parms(&self, params: &Object) -> Result<Option<Object>> {
+        let has_references = match params {
+            Object::Reference(_) => true,
+            Object::Array(stages) => stages.iter().any(|stage| stage.as_reference().is_some()),
+            _ => false,
+        };
+        if !has_references {
+            return Ok(None);
+        }
+
+        let mut resolved = self.resolve_object(params)?;
+        match &mut resolved {
+            Object::Array(stages) => {
+                for stage in stages {
+                    if stage.as_reference().is_some() {
+                        *stage = self.resolve_object(stage)?;
+                    }
+                    if !matches!(stage, Object::Dictionary(_) | Object::Null) {
+                        return Err(Error::Decode("invalid Form filter-stage DecodeParms".into()));
+                    }
+                }
+            }
+            Object::Dictionary(_) | Object::Null => {}
+            _ => return Err(Error::Decode("invalid indirect Form DecodeParms".into())),
+        }
+        Ok(Some(resolved))
     }
 
     fn decode_stream_with_encryption_and_expected_size(
