@@ -1,4 +1,6 @@
-use super::{Bounds, Grid, bounds, eligible, grid, is_nonrule_ink, midpoint, owned_ink, point_bounds, spans};
+use super::{
+    Bounds, Edit, Grid, Site, bounds, eligible, grid, is_nonrule_ink, midpoint, owned_ink, point_bounds, spans,
+};
 use crate::types::Table;
 use image::{GrayImage, RgbImage};
 use xberg_paddle_ocr::DetailedTextBlock;
@@ -6,9 +8,36 @@ use xberg_paddle_ocr::DetailedTextBlock;
 pub(in crate::paddle_ocr::backend) struct RowRecovery {
     stock: Vec<Vec<String>>,
     recovered: Vec<Vec<String>>,
+    reread: Option<(Grid, Vec<Site>)>,
 }
 
 impl RowRecovery {
+    pub(in crate::paddle_ocr::backend) fn punctuation_edits(
+        &self,
+        image: &RgbImage,
+        blocks: &[DetailedTextBlock],
+        stopped: impl Fn() -> bool,
+        read: impl FnMut(&RgbImage) -> Option<String>,
+    ) -> Option<Vec<Edit>> {
+        let (grid, sites) = self.reread.as_ref()?;
+        super::read_sites(
+            image,
+            (grid, &self.recovered),
+            blocks,
+            sites.iter().copied(),
+            stopped,
+            read,
+        )
+    }
+
+    pub(in crate::paddle_ocr::backend) fn matches_with_edits(&self, revised: &Self, edits: &[Edit]) -> bool {
+        let mut expected = self.recovered.clone();
+        for (_, row, column, text) in edits {
+            expected[*row][*column].clone_from(text);
+        }
+        revised.recovered == expected
+    }
+
     pub(in crate::paddle_ocr::backend) fn apply(self, tables: &mut [Table]) {
         if let [table] = tables
             && table.cells == self.stock
@@ -164,17 +193,40 @@ fn fused_word_pair<'a>(
     covered.then_some([(left_col, words[0]), (right_col, words[1])])
 }
 
+fn locate(layout: &Grid, (x, y, right, bottom): Bounds) -> Option<(usize, usize)> {
+    let row = layout
+        .rows
+        .iter()
+        .position(|band| band.contains(&midpoint(y, bottom)))?;
+    let col = layout
+        .columns
+        .iter()
+        .position(|column| column.contains(&midpoint(x, right)))?;
+    Some((row, col))
+}
+
+fn needs_recovery(row: &[String]) -> bool {
+    row.first().is_some_and(|label| trailing_periods(label).1 >= 2) || row.iter().any(String::is_empty)
+}
+
+fn independent_sites<'a>(
+    lines: &'a [Option<Site>],
+    stock: &[String],
+    source: &[&str],
+) -> impl Iterator<Item = Site> + 'a {
+    let exact = lines.iter().all(Option::is_some)
+        && without_whitespace(&stock[0]).eq(without_whitespace(source[0]))
+        && stock[1..].iter().map(String::as_str).eq(source[1..].iter().copied());
+    lines[1..].iter().copied().flatten().filter(move |_| exact)
+}
+
 pub(in crate::paddle_ocr::backend) fn recover(
     image: &RgbImage,
     table: Table,
     blocks: &[DetailedTextBlock],
     fused_words: bool,
 ) -> Option<RowRecovery> {
-    let has_candidate =
-        table.cells.iter().skip(1).any(|row| {
-            row.first().is_some_and(|label| trailing_periods(label).1 >= 2) || row.iter().any(String::is_empty)
-        });
-    if !eligible(image, blocks.len()) || !has_candidate {
+    if !eligible(image, blocks.len()) || !table.cells.iter().skip(1).any(|row| needs_recovery(row)) {
         return None;
     }
     let gray = image::imageops::grayscale(image);
@@ -183,19 +235,16 @@ pub(in crate::paddle_ocr::backend) fn recover(
     let mut owned = vec![vec![None; cols]; layout.rows.len()];
     let mut unsafe_rows = vec![false; layout.rows.len()];
     let mut label_bounds = vec![None; layout.rows.len()];
-    for block in blocks {
-        let (x, y, right, bottom) = bounds(block)?;
-        let row = layout
-            .rows
-            .iter()
-            .position(|band| band.contains(&midpoint(y, bottom)))?;
-        let col = layout
-            .columns
-            .iter()
-            .position(|gutter| gutter.contains(&midpoint(x, right)))?;
-        let parent = (x, y, right, bottom);
+    let incomplete = fused_words && blocks.len() < layout.rows.len() * cols;
+    let mut lines = incomplete.then(|| vec![vec![None; cols]; layout.rows.len()]);
+    for (index, block) in blocks.iter().enumerate() {
+        let parent = bounds(block)?;
+        let (row, col) = locate(&layout, parent)?;
         let slots = &mut owned[row];
-        if owned_ink(&gray, &layout, row, col, parent).is_some() {
+        if let Some(clipped) = owned_ink(&gray, &layout, row, col, parent) {
+            if let Some(lines) = &mut lines {
+                lines[row][col] = Some((index, row, col, clipped));
+            }
             unsafe_rows[row] |= slots[col].replace(block.block.text.trim()).is_some();
             if col == 0 {
                 label_bounds[row] = Some(parent);
@@ -214,6 +263,8 @@ pub(in crate::paddle_ocr::backend) fn recover(
 
     let stock = table.cells;
     let mut recovered = stock.clone();
+    let mut sites = Vec::new();
+    let mut recovered_fused_row = false;
     for (row, cells) in recovered.iter_mut().enumerate().skip(1) {
         if unsafe_rows[row] {
             continue;
@@ -222,8 +273,14 @@ pub(in crate::paddle_ocr::backend) fn recover(
             continue;
         };
         if let Some(left) = split_column(cells, &source) {
+            recovered_fused_row |= lines
+                .as_ref()
+                .is_some_and(|lines| lines[row][left..=left + 1].iter().all(Option::is_none));
             cells[left] = source[left].to_owned();
             cells[left + 1] = source[left + 1].to_owned();
+        }
+        if let Some(lines) = &lines {
+            sites.extend(independent_sites(&lines[row], cells, &source));
         }
         if source_label_periods(cells, &source)
             && let Some(label) = label_bounds[row]
@@ -232,7 +289,11 @@ pub(in crate::paddle_ocr::backend) fn recover(
             cells[0] = source[0].to_owned();
         }
     }
-    (stock != recovered && same_tokens(&recovered, blocks)).then_some(RowRecovery { stock, recovered })
+    (stock != recovered && same_tokens(&recovered, blocks)).then(|| RowRecovery {
+        stock,
+        recovered,
+        reread: recovered_fused_row.then_some((layout, sites)),
+    })
 }
 
 fn same_tokens(cells: &[Vec<String>], blocks: &[DetailedTextBlock]) -> bool {
@@ -253,6 +314,22 @@ fn same_tokens(cells: &[Vec<String>], blocks: &[DetailedTextBlock]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn punctuation_sites_require_independent_lines_and_exact_numeric_stock() {
+        let sites = [0, 1, 2].map(|col| Some((col, 1, col, (0, 0, 1, 1))));
+        let stock = ["Label", "1.250", "3.75"].map(str::to_owned);
+        let matching = ["Label", "1.250", "3.75"];
+        assert_eq!(
+            independent_sites(&sites, &stock, &matching).collect::<Vec<_>>(),
+            sites[1..].iter().copied().flatten().collect::<Vec<_>>()
+        );
+        assert_eq!(independent_sites(&[sites[0], None, None], &stock, &matching).count(), 0);
+        assert_eq!(
+            independent_sites(&sites, &stock, &["Label", "1.250", "3.76"]).count(),
+            0
+        );
+    }
 
     fn word(text: &str, (x, y, right, bottom): Bounds) -> xberg_paddle_ocr::WordBlock {
         xberg_paddle_ocr::WordBlock {

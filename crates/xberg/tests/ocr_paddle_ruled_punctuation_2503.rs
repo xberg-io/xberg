@@ -232,6 +232,40 @@ async fn paddle_recovers_exact_words_from_fused_9px_detections() {
 }
 
 #[tokio::test]
+#[ignore = "requires offline PP-OCRv6 Small models and XBERG_2503_RULED_FIXTURES"]
+async fn paddle_repairs_independently_detected_commas_alongside_fused_rows() {
+    let bytes = fixture(
+        "fresh_2_9px.jpg",
+        "ed9f44ffa7a2393abef04ef3ba8a7bb15c3e82998d1e16c00bf3dcf36ad94089",
+    );
+    let stock = extract_with_word_recovery(&bytes, "image/jpeg", false, true, true).await;
+    let candidate = extract_with_word_recovery(&bytes, "image/jpeg", true, true, true).await;
+    let mut expected = stock.tables[0].cells.clone();
+    for (row, column, before, after) in [
+        (3, 2, "99.901", "99,901"),
+        (5, 2, "940.501", "940,501"),
+        (8, 3, "-780.090", "-780,090"),
+    ] {
+        assert_eq!(expected[row][column], before);
+        expected[row][column] = after.to_owned();
+    }
+    assert_eq!(expected[9][2], "59.118");
+    assert_eq!(expected[11][2..], ["811,070", "[811.070]"]);
+    assert_eq!(expected[12][2..], ["303.909", "(303,909)"]);
+    let [table] = candidate.tables.as_slice() else {
+        panic!("one table expected");
+    };
+    assert_eq!(table.cells, expected);
+    let [page] = candidate.pages.as_deref().unwrap() else {
+        panic!("one standalone page expected");
+    };
+    assert_eq!(page.tables[0].cells, expected);
+    let rows = expected.iter().map(|row| row.join(" ")).collect::<Vec<_>>().join("\n");
+    assert_eq!(candidate.content.trim(), rows);
+    assert_eq!(page.content.trim(), rows);
+}
+
+#[tokio::test]
 #[ignore = "requires offline PP-OCRv6 Small and XBERG_2503_ORIGINAL_RULED_FIXTURES"]
 async fn paddle_plain_page_retains_rows_after_source_proven_label_token_recovery() {
     let directory = std::env::var_os("XBERG_2503_ORIGINAL_RULED_FIXTURES").expect("original ruled fixture directory");
