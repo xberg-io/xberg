@@ -186,7 +186,23 @@ pub(super) async fn reread(
     if read_rows * u64::from(source.width) > MAX_SOURCE_PIXELS as u64 {
         return Ok(None);
     }
-    let mut parts = Vec::with_capacity(EXTRA_CALLS);
+    let mut verification = config.clone();
+    let Some(tesseract) = verification.tesseract_config.as_mut() else {
+        return Ok(None);
+    };
+    let Some(primary_psm) = tesseract.psm else {
+        return Ok(None);
+    };
+    // A second layout constrains the same row without repeating the strip's segmentation. ~keep
+    const SINGLE_LINE: i32 = 7;
+    const RAW_LINE: i32 = 13;
+    let verification_psm = if primary_psm == SINGLE_LINE {
+        RAW_LINE
+    } else {
+        SINGLE_LINE
+    };
+    tesseract.psm = Some(verification_psm);
+    let mut parts: Vec<ExtractedDocument> = Vec::with_capacity(EXTRA_CALLS);
     for (index, rows) in [narrow, wide.clone(), strip.start..wide.start, wide.end..strip.end]
         .into_iter()
         .enumerate()
@@ -197,7 +213,8 @@ pub(super) async fn reread(
         let Some(png) = source.encode_rows(rows.clone()) else {
             return Ok(None);
         };
-        let read = backend.process_image_owned(Arc::new(png), config).await;
+        let read_config = if index == 1 { &verification } else { config };
+        let read = backend.process_image_owned(Arc::new(png), read_config).await;
         if cancelled() || matches!(read, Err(crate::XbergError::Cancelled)) {
             return Err(crate::XbergError::Cancelled);
         }
@@ -220,9 +237,19 @@ pub(super) async fn reread(
         {
             return Ok(None);
         }
+        if index < 2 {
+            let expected_psm = if index == 1 { verification_psm } else { primary_psm };
+            if !matches!(&read.metadata.format, Some(crate::types::FormatMetadata::Ocr(metadata)) if metadata.psm == expected_psm)
+                || parts
+                    .first()
+                    .is_some_and(|first| first.content.trim() != read.content.trim())
+            {
+                return Ok(None);
+            }
+        }
         parts.push(read);
     }
-    let Ok([line, check, before, after]) = <[_; EXTRA_CALLS]>::try_from(parts) else {
+    let Ok([line, _, before, after]) = <[_; EXTRA_CALLS]>::try_from(parts) else {
         return Ok(None);
     };
     let original_parts: Vec<_> = result.content.trim().split("\n\n").collect();
@@ -240,7 +267,6 @@ pub(super) async fn reread(
             .split("\n\n")
             .ne(original_parts[index + 2..].iter().copied())
         || !joined_line(first, second, line.content.trim(), inserted_letters)
-        || line.content.trim() != check.content.trim()
     {
         return Ok(None);
     }
@@ -266,6 +292,139 @@ fn joined_line(first: &str, second: &str, combined: &str, inserted_letters: usiz
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct LayoutBackend(Arc<std::sync::Mutex<Vec<i32>>>);
+
+    impl crate::plugins::Plugin for LayoutBackend {
+        fn name(&self) -> &str {
+            "split-row-layout-control"
+        }
+        fn version(&self) -> String {
+            "1".into()
+        }
+        fn initialize(&self) -> crate::Result<()> {
+            Ok(())
+        }
+        fn shutdown(&self) -> crate::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl OcrBackend for LayoutBackend {
+        fn backend_type(&self) -> crate::plugins::OcrBackendType {
+            crate::plugins::OcrBackendType::Custom
+        }
+        fn supports_language(&self, _: &str) -> bool {
+            true
+        }
+        async fn process_image(&self, png: &[u8], config: &OcrConfig) -> crate::Result<ExtractedDocument> {
+            let height = image::load_from_memory(png).unwrap().height();
+            let psm = config.tesseract_config.as_ref().unwrap().psm.unwrap();
+            self.0.lock().unwrap().push(psm);
+            let line = match height {
+                22 => ("keep the railing", 1, 20, 8),
+                38 if psm == 7 => ("keep the raiding", 1, 20, 16),
+                38 => ("keep the railing", 1, 20, 16),
+                16 => ("before", 1, 20, 4),
+                36 => ("after", 1, 20, 11),
+                _ => panic!("unexpected crop height {height}"),
+            };
+            let mut result = report(height, &[line]);
+            result.metadata.format = Some(crate::types::FormatMetadata::Ocr(crate::types::OcrMetadata {
+                language: "eng".into(),
+                psm,
+                output_format: "text".into(),
+                table_count: 0,
+                table_rows: None,
+                table_cols: None,
+            }));
+            Ok(result)
+        }
+    }
+
+    fn report(height: u32, lines: &[(&str, u32, u32, u32)]) -> ExtractedDocument {
+        use crate::ocr_metadata_keys::{
+            OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY, OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY,
+        };
+        let mut result = ExtractedDocument {
+            content: lines.iter().map(|line| line.0).collect::<Vec<_>>().join("\n\n"),
+            ocr_elements: Some(
+                lines
+                    .iter()
+                    .map(|&(text, left, right, top)| {
+                        crate::types::OcrElement::new(
+                            text,
+                            OcrBoundingGeometry::Rectangle {
+                                left,
+                                top,
+                                width: right - left,
+                                height: 6,
+                            },
+                            crate::types::OcrConfidence {
+                                detection: None,
+                                recognition: 0.99,
+                            },
+                        )
+                    })
+                    .collect(),
+            ),
+            ..Default::default()
+        };
+        result
+            .metadata
+            .additional
+            .insert(OCR_PROCESSED_IMAGE_WIDTH_METADATA_KEY.into(), 32.into());
+        result
+            .metadata
+            .additional
+            .insert(OCR_PROCESSED_IMAGE_HEIGHT_METADATA_KEY.into(), height.into());
+        result
+    }
+
+    #[tokio::test]
+    async fn split_row_adoption_refuses_same_count_spelling_disagreement_from_single_line_layout() {
+        let mut source = blank_source();
+        source.height = 90;
+        source.samples.resize(32 * 90, 255);
+        for y in 32..38 {
+            for x in [10, 12, 13, 15, 17] {
+                source.samples[y * 32 + x] = 0;
+            }
+        }
+        let result = report(
+            90,
+            &[
+                ("before", 1, 20, 4),
+                ("keep the ra", 1, 11, 32),
+                ("ing", 17, 20, 32),
+                ("after", 1, 20, 65),
+            ],
+        );
+        let modes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let backend: Arc<dyn OcrBackend> = Arc::new(LayoutBackend(Arc::clone(&modes)));
+        let config = OcrConfig {
+            tesseract_config: Some(crate::types::TesseractConfig {
+                psm: Some(11),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(
+            reread(
+                &source,
+                &(0..90),
+                &[4..10, 32..38, 65..71],
+                &result,
+                (&backend, &config),
+                || false
+            )
+            .await
+            .unwrap()
+            .is_none()
+        );
+        assert_eq!(*modes.lock().unwrap(), [11, 7]);
+    }
 
     #[test]
     fn agreed_reread_cannot_rewrite_an_unchanged_prefix_or_drop_the_fragment() {
