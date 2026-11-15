@@ -1,4 +1,4 @@
-use super::{Bounds, Grid, bounds, eligible, grid, is_nonrule_ink, midpoint, owned_ink, point_bounds};
+use super::{Bounds, Grid, bounds, eligible, grid, is_nonrule_ink, midpoint, owned_ink, point_bounds, spans};
 use crate::types::Table;
 use image::{GrayImage, RgbImage};
 use xberg_paddle_ocr::DetailedTextBlock;
@@ -68,6 +68,34 @@ fn source_label_periods(stock: &[String], owned: &[&str]) -> bool {
         && (prefix, count) == trailing_periods(owned[0])
         && stock[0].split_whitespace().ne(owned[0].split_whitespace())
         && stock[1..].iter().map(String::as_str).eq(owned[1..].iter().copied())
+}
+
+fn terminal_periods_owned(gray: &GrayImage, layout: &Grid, row: usize, label: Bounds, count: usize) -> bool {
+    let (left, top, right, bottom) = label;
+    let band = &layout.rows[row];
+    if band.start <= top && bottom <= band.end {
+        return true;
+    }
+
+    let components = spans(right - left, |offset| {
+        (top..bottom).any(|y| is_nonrule_ink(gray, layout, left + offset, y))
+    });
+    // The detector may include blank padding across a rule. Require actual terminal dot spans in its row. ~keep
+    components.len() > count
+        && components.iter().rev().take(count).all(|span| {
+            if span.len() > super::MAX_PUNCTUATION_WIDTH as usize {
+                return false;
+            }
+            let mut ink_rows = (top..bottom).filter(|&y| {
+                span.clone()
+                    .any(|offset| is_nonrule_ink(gray, layout, left + offset, y))
+            });
+            let Some(first) = ink_rows.next() else {
+                return false;
+            };
+            let last = ink_rows.next_back().unwrap_or(first);
+            band.contains(&first) && band.contains(&last) && last - first < 2
+        })
 }
 
 fn contains(outer: Bounds, inner: Bounds) -> bool {
@@ -146,6 +174,7 @@ pub(in crate::paddle_ocr::backend) fn recover(
     let cols = layout.columns.len();
     let mut owned = vec![vec![None; cols]; layout.rows.len()];
     let mut unsafe_rows = vec![false; layout.rows.len()];
+    let mut label_bounds = vec![None; layout.rows.len()];
     for block in blocks {
         let (x, y, right, bottom) = bounds(block)?;
         let row = layout
@@ -160,6 +189,9 @@ pub(in crate::paddle_ocr::backend) fn recover(
         let slots = &mut owned[row];
         if owned_ink(&gray, &layout, row, col, parent).is_some() {
             unsafe_rows[row] |= slots[col].replace(block.block.text.trim()).is_some();
+            if col == 0 {
+                label_bounds[row] = Some(parent);
+            }
         } else if fused_words
             && let Some(pair) = fused_word_pair(&gray, &layout, row, block, parent)
             && pair.iter().all(|(column, _)| slots[*column].is_none())
@@ -185,7 +217,10 @@ pub(in crate::paddle_ocr::backend) fn recover(
             cells[left] = source[left].to_owned();
             cells[left + 1] = source[left + 1].to_owned();
         }
-        if source_label_periods(cells, &source) {
+        if source_label_periods(cells, &source)
+            && let Some(label) = label_bounds[row]
+            && terminal_periods_owned(&gray, &layout, row, label, trailing_periods(source[0]).1)
+        {
             cells[0] = source[0].to_owned();
         }
     }

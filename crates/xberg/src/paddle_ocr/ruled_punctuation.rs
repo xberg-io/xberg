@@ -636,6 +636,37 @@ mod tests {
     }
 
     #[test]
+    fn crossed_label_requires_its_terminal_periods_in_the_assigned_row() {
+        let RuledControl {
+            mut image,
+            mut table,
+            mut blocks,
+        } = ruled_control();
+        let label = (10, 12, 26, 26);
+        blocks[3] = block("Label..", label);
+        table.cells[1][0] = "Label. .".to_owned();
+        for x in [20, 22] {
+            image.put_pixel(x, 18, image::Rgb([0; 3]));
+        }
+        let recovered = split_rows::recover(&image, table.clone(), &blocks, false).unwrap();
+        let mut result = [table.clone()];
+        recovered.apply(&mut result);
+        assert_eq!(result[0].cells[1][0], "Label..");
+
+        for x in [20, 22] {
+            image.put_pixel(x, 18, image::Rgb([255; 3]));
+            image.put_pixel(x, 24, image::Rgb([0; 3]));
+        }
+        let gray = image::imageops::grayscale(&image);
+        let layout = grid(&gray, &table).unwrap();
+        assert!(layout.rows[1].contains(&midpoint(label.1, label.3)));
+        assert!(is_nonrule_ink(&gray, &layout, 11, 13));
+        assert!(is_nonrule_ink(&gray, &layout, 20, 24));
+        assert!(owned_ink(&gray, &layout, 1, 0, label).is_some());
+        assert!(split_rows::recover(&image, table, &blocks, false).is_none());
+    }
+
+    #[test]
     fn wider_crop_agreement_cannot_use_mark_or_digit_ink_outside_the_detection() {
         let RuledControl { image, table, blocks } = ruled_control();
         let gray = image::imageops::grayscale(&image);
