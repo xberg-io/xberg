@@ -119,11 +119,11 @@ fn fragmented_empty_bounds_keep_boxes_and_exact_bounds_update_every_table() {
 #[test]
 fn fragmented_source_rejects_malformed_bbox_tokens() {
     let valid = r#"span class="ocrx_word" title="bbox 10 20 30 40">Item</span>"#;
-    let mut budget = usize::MAX;
+    let mut budget = FragmentWork(Some(usize::MAX));
     let end = valid.find('>').unwrap();
     assert!(fragmented_hocr_word(valid, end, "span", &mut budget).is_some());
     for malformed in ["NaN", "inf", "-1", "1.5", "4294967296"] {
-        let mut budget = usize::MAX;
+        let mut budget = FragmentWork(Some(usize::MAX));
         let source = valid.replace("bbox 10", &format!("bbox {malformed} 10"));
         assert!(
             fragmented_hocr_word(&source, source.find('>').unwrap(), "span", &mut budget).is_none(),
@@ -134,7 +134,7 @@ fn fragmented_source_rejects_malformed_bbox_tokens() {
 
 #[test]
 fn fragmented_source_rejects_duplicate_bbox_fields() {
-    let mut budget = usize::MAX;
+    let mut budget = FragmentWork(Some(usize::MAX));
     let source = r#"span class="ocrx_word" title="bbox 10 20 30 40; bbox 10 20 30 40">Item</span>"#;
     assert!(fragmented_hocr_word(source, source.find('>').unwrap(), "span", &mut budget).is_none());
 }
@@ -730,11 +730,11 @@ fn fragmented_source_matching_leaves_the_table_proof_one_work_unit_short() {
             max_iterations: iterations,
             ..Default::default()
         };
-        let mut budget = fragmented_hocr_budget(&hocr, &tsv, &limits)?;
+        let mut budget = FragmentWork(Some(fragmented_hocr_budget(&hocr, &tsv, &limits)?));
         let boxes = fragmented_table_boxes(tables, 1, &limits, &mut budget)?;
         let source = fragmented_tsv_source(&tsv)?;
         fragmented_hocr_source_matches(&hocr, &source, &mut budget)?;
-        let mut fresh = fragmented_hocr_budget(&hocr, &tsv, &limits)?;
+        let mut fresh = FragmentWork(Some(fragmented_hocr_budget(&hocr, &tsv, &limits)?));
         prove_all_fragmented_tables(&source, tables, boxes, &Default::default(), &mut fresh, false)
     };
     let minimum = |mut low: usize, mut high: usize, probe: &dyn Fn(usize) -> bool| {
@@ -930,3 +930,6 @@ fn psm3_publication_preserves_both_rows_when_dotted_and_exact_matches_compete() 
         assert!(tables[0].markdown.is_empty());
     }
 }
+
+#[path = "budget_tests.rs"]
+mod budget_tests;

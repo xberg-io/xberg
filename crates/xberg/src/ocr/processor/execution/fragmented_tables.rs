@@ -30,12 +30,21 @@ pub(super) fn fragmented_hocr_budget(hocr: &str, tsv: &str, limits: &SecurityLim
     limits.max_iterations.checked_sub(bytes.saturating_mul(4))
 }
 
+struct FragmentWork(Option<usize>);
+
+impl FragmentWork {
+    fn spend(&mut self, units: usize) -> Option<()> {
+        self.0 = self.0?.checked_sub(units);
+        self.0.map(|_| ())
+    }
+}
+
 fn prepare_fragmented_table_rows<'a>(
     words: &'a mut Vec<HocrWord>,
     bbox: BoundingBox,
     cells: &[Vec<String>],
     row_threshold: f64,
-    budget: &mut usize,
+    budget: &mut FragmentWork,
 ) -> Option<(Vec<Vec<&'a HocrWord>>, usize)> {
     if cells.is_empty() || words.len() > MAX_FRAGMENTED_HOCR_WORDS {
         return None;
@@ -50,7 +59,7 @@ fn prepare_fragmented_table_rows<'a>(
     });
     // Both row detection and nearest-row assignment can scan every word for
     // each row. The word cap makes the multiplication safe.
-    *budget = budget.checked_sub(2 * words.len() * words.len())?;
+    budget.spend(2 * words.len() * words.len())?;
     let row_positions = detect_rows(words, row_threshold);
     let alignments = row_positions.len().checked_sub(cells.len())? + 1;
     if alignments > MAX_FRAGMENTED_HOCR_ALIGNMENTS {
@@ -62,9 +71,7 @@ fn prepare_fragmented_table_rows<'a>(
         .chain(cells.iter().flatten().map(|cell| cell.len() + 1))
         .fold(0usize, usize::saturating_add);
     let comparison_work = comparison_bytes.saturating_mul(alignments);
-    if comparison_work > *budget {
-        return None;
-    }
+    budget.spend(comparison_work)?;
     let mut rows = vec![Vec::new(); row_positions.len()];
     for word in words.iter() {
         rows[find_row_index(&row_positions, word)?].push(word);
@@ -80,16 +87,15 @@ fn prove_fragmented_table_rows_budgeted<'a>(
     bbox: BoundingBox,
     cells: &[Vec<String>],
     row_threshold: f64,
-    budget: &mut usize,
+    budget: &mut FragmentWork,
     allow_dot_leader: bool,
 ) -> Option<Vec<&'a HocrWord>> {
     let (rows, comparison_work) = prepare_fragmented_table_rows(words, bbox, cells, row_threshold, budget)?;
-    *budget = budget.checked_sub(comparison_work)?;
     let matched = unique_table_row_window(&rows, cells, false).or_else(|| {
         if !allow_dot_leader {
             return None;
         }
-        *budget = budget.checked_sub(comparison_work)?;
+        budget.spend(comparison_work)?;
         unique_table_row_window(&rows, cells, true)
     })?;
     Some(matched.iter().flatten().copied().collect())
@@ -101,10 +107,17 @@ fn prove_fragmented_table_rows<'a>(
     bbox: BoundingBox,
     cells: &[Vec<String>],
     row_threshold: f64,
-    mut budget: usize,
+    budget: usize,
     allow_dot_leader: bool,
 ) -> Option<Vec<&'a HocrWord>> {
-    prove_fragmented_table_rows_budgeted(words, bbox, cells, row_threshold, &mut budget, allow_dot_leader)
+    prove_fragmented_table_rows_budgeted(
+        words,
+        bbox,
+        cells,
+        row_threshold,
+        &mut FragmentWork(Some(budget)),
+        allow_dot_leader,
+    )
 }
 
 // ~keep A matching window can omit a caption, but ambiguous matches cannot claim any words.
@@ -185,12 +198,12 @@ fn fragmented_table_boxes(
     tables: &[OcrTable],
     page: u32,
     limits: &SecurityLimits,
-    budget: &mut usize,
+    budget: &mut FragmentWork,
 ) -> Option<Vec<BoundingBox>> {
     if tables.is_empty() || tables.len() > MAX_FRAGMENTED_HOCR_WORDS {
         return None;
     }
-    *budget = budget.checked_sub(tables.len().saturating_mul(tables.len()))?;
+    budget.spend(tables.len().saturating_mul(tables.len()))?;
     let mut cells = 0usize;
     let mut boxes: Vec<BoundingBox> = Vec::with_capacity(tables.len());
     for table in tables {
@@ -207,7 +220,7 @@ fn fragmented_table_boxes(
             .flatten()
             .map(|cell| cell.len() + 1)
             .fold(0usize, usize::saturating_add);
-        *budget = budget.checked_sub(cell_bytes)?;
+        budget.spend(cell_bytes)?;
         let bbox = ocr_table_bbox(table)?;
         if table.page_number != page
             || cells > limits.max_table_cells
@@ -253,13 +266,13 @@ fn fragmented_hocr_word(
     remaining: &str,
     end: usize,
     name: &str,
-    budget: &mut usize,
+    budget: &mut FragmentWork,
 ) -> Option<(FragmentedWordKey, usize)> {
     let source_bounds = fragmented_source_bounds(&remaining[..end])?;
     let closing = format!("</{name}>");
     let word_end = remaining[end + 1..].find(&closing)? + end + 1 + closing.len();
     let fragment = format!("<p class=\"ocr_par\"><{}</p>", &remaining[..word_end]);
-    *budget = budget.checked_sub(fragment.len().saturating_mul(4))?;
+    budget.spend(fragment.len().saturating_mul(4))?;
     let parsed = parse_hocr_to_internal_document_with_page_offset_and_stats(&fragment, None, 1).document;
     let [word] = parsed.elements.as_slice() else {
         return None;
@@ -311,7 +324,7 @@ struct FragmentedHocrSource<'a> {
 }
 
 impl<'a> FragmentedHocrSource<'a> {
-    fn opening_word_end(&mut self, remaining: &'a str, end: usize, budget: &mut usize) -> Option<usize> {
+    fn opening_word_end(&mut self, remaining: &'a str, end: usize, budget: &mut FragmentWork) -> Option<usize> {
         let tag = &remaining[..end];
         let name = tag.split_whitespace().next()?;
         let class = fragmented_hocr_attribute(tag, "class=").unwrap_or("");
@@ -344,7 +357,7 @@ impl<'a> FragmentedHocrSource<'a> {
 
 // ~keep Parse each source word through the removal parser itself, so text normalization and
 // geometry agree. Count occurrences before its set-based removal can hide duplicates.
-fn fragmented_hocr_source_matches(hocr: &str, source: &[HocrWord], budget: &mut usize) -> Option<()> {
+fn fragmented_hocr_source_matches(hocr: &str, source: &[HocrWord], budget: &mut FragmentWork) -> Option<()> {
     let mut remaining = hocr;
     let mut state = FragmentedHocrSource {
         page_seen: false,
@@ -400,7 +413,7 @@ pub(super) fn reconcile_fragmented_hocr_table_rows(
         config,
         allow_dot_leader,
     } = policy;
-    let mut budget = fragmented_hocr_budget(hocr, tsv, limits)?;
+    let mut budget = FragmentWork(Some(fragmented_hocr_budget(hocr, tsv, limits)?));
     let boxes = fragmented_table_boxes(tables, config.page_number, limits, &mut budget)?;
     let source = fragmented_tsv_source(tsv)?;
     fragmented_hocr_source_matches(hocr, &source, &mut budget)?;
@@ -410,6 +423,7 @@ pub(super) fn reconcile_fragmented_hocr_table_rows(
 
 pub(super) enum RetainedTableLeaders {
     Ambiguous,
+    BudgetExhausted,
     Reconciled(InternalDocument),
 }
 
@@ -422,28 +436,43 @@ pub(super) fn reconcile_retained_table_leaders(
     config: &TesseractConfig,
     limits: &SecurityLimits,
 ) -> Option<RetainedTableLeaders> {
-    let mut budget = fragmented_hocr_budget(hocr, tsv, limits)?;
-    let boxes = fragmented_table_boxes(tables, config.page_number, limits, &mut budget)?;
-    let ([table], [bounds]) = (tables, boxes.as_slice()) else {
+    let [table] = tables else {
+        return None;
+    };
+    let mut budget = FragmentWork(fragmented_hocr_budget(hocr, tsv, limits));
+    let result = try_reconcile_retained_table_leaders((hocr, tsv), document, table, config, limits, &mut budget);
+    result.or_else(|| budget.0.is_none().then_some(RetainedTableLeaders::BudgetExhausted))
+}
+
+fn try_reconcile_retained_table_leaders(
+    (hocr, tsv): (&str, &str),
+    document: &InternalDocument,
+    table: &mut OcrTable,
+    config: &TesseractConfig,
+    limits: &SecurityLimits,
+    budget: &mut FragmentWork,
+) -> Option<RetainedTableLeaders> {
+    let boxes = fragmented_table_boxes(std::slice::from_ref(table), config.page_number, limits, budget)?;
+    let [bounds] = boxes.as_slice() else {
         return None;
     };
     let mut source = fragmented_tsv_source(tsv)?;
-    fragmented_hocr_source_matches(hocr, &source, &mut budget)?;
+    fragmented_hocr_source_matches(hocr, &source, budget)?;
     let (rows, comparison_work) = prepare_fragmented_table_rows(
         &mut source,
         *bounds,
         &table.cells,
         config.table_row_threshold_ratio,
-        &mut budget,
+        budget,
     )?;
-    // Charge matching, then collecting the labels and claimed words.
-    budget.checked_sub(comparison_work.saturating_mul(2))?;
     let matched = match unique_matching_table_row_window(&rows, &table.cells, |row, cells| {
         retained_leader_cell(row, cells).is_some()
     }) {
         Ok(matched) => matched?,
         Err(AmbiguousTableRows) => return Some(RetainedTableLeaders::Ambiguous),
     };
+    // The first comparison resolves ambiguity. Only a unique match needs a second pass to collect edits.
+    budget.spend(comparison_work)?;
     let dots: Vec<_> = matched
         .iter()
         .zip(&table.cells)
@@ -504,12 +533,12 @@ fn prove_all_fragmented_tables(
     tables: &[OcrTable],
     boxes: Vec<BoundingBox>,
     config: &TesseractConfig,
-    budget: &mut usize,
+    budget: &mut FragmentWork,
     allow_dot_leader: bool,
 ) -> Option<Vec<Vec<HocrWord>>> {
     let mut table_words = Vec::with_capacity(tables.len());
     for (table, bbox) in tables.iter().zip(boxes) {
-        *budget = budget.checked_sub(source.iter().map(|word| word.text.len() + 1).sum::<usize>())?;
+        budget.spend(source.iter().map(|word| word.text.len() + 1).sum::<usize>())?;
         let mut words = source.to_vec();
         let proved = prove_fragmented_table_rows_budgeted(
             &mut words,
