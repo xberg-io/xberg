@@ -6,7 +6,7 @@ use crate::ocr::hocr_parser::{
     parse_hocr_to_internal_document_with_page_offset_and_stats, parse_hocr_without_proved_table_fragments,
 };
 use crate::ocr::types::TesseractConfig;
-use crate::table_core::{HocrWord, detect_rows, find_row_index};
+use crate::table_core::{HocrWord, detect_rows, find_row_index, table_to_markdown};
 use crate::types::extraction::BoundingBox;
 use crate::types::internal::InternalDocument;
 use crate::types::{OcrTable, OcrTableBoundingBox};
@@ -113,6 +113,16 @@ fn unique_table_row_window<'a, 'word>(
     cells: &[Vec<String>],
     allow_dot_leader: bool,
 ) -> Option<&'a [Vec<&'word HocrWord>]> {
+    unique_matching_table_row_window(rows, cells, |row, cells| {
+        allow_dot_leader && row_has_only_extra_dot_leader(row, cells)
+    })
+}
+
+fn unique_matching_table_row_window<'a, 'word>(
+    rows: &'a [Vec<&'word HocrWord>],
+    cells: &[Vec<String>],
+    matches_extra: impl Fn(&[&HocrWord], &[String]) -> bool,
+) -> Option<&'a [Vec<&'word HocrWord>]> {
     let mut matches = rows.windows(cells.len()).filter(|window| {
         window.iter().zip(cells).all(|(row, cells)| {
             !row.is_empty()
@@ -121,7 +131,7 @@ fn unique_table_row_window<'a, 'word>(
                     .iter()
                     .flat_map(|word| word.text.split_whitespace())
                     .eq(cells.iter().flat_map(|cell| cell.split_whitespace()))
-                    || allow_dot_leader && row_has_only_extra_dot_leader(row, cells))
+                    || matches_extra(row, cells))
         })
     });
     let matched = matches.next()?;
@@ -145,9 +155,10 @@ fn row_has_only_extra_dot_leader(row: &[&HocrWord], cells: &[String]) -> bool {
     {
         return false;
     }
-    let [left, dots, right] = &row[split - 1..=split + 1] else {
-        return false;
-    };
+    isolated_dot_leader(row[split - 1], row[split], row[split + 1])
+}
+
+fn isolated_dot_leader(left: &HocrWord, dots: &HocrWord, right: &HocrWord) -> bool {
     const MIN_DOT_LEADER_LENGTH: usize = 3;
     dots.text.len() >= MIN_DOT_LEADER_LENGTH
         && dots.text.bytes().all(|byte| byte == b'.')
@@ -388,6 +399,78 @@ pub(super) fn reconcile_fragmented_hocr_table_rows(
     fragmented_hocr_source_matches(hocr, &source, &mut budget)?;
     let table_words = prove_all_fragmented_tables(&source, tables, boxes, config, &mut budget, allow_dot_leader)?;
     reconcile_proved_fragments(hocr, document, &table_words, config.page_number)
+}
+
+// Transfer proven leader tokens and remove the same source occurrences in one operation.
+pub(super) fn reconcile_retained_table_leaders(
+    hocr: &str,
+    document: &InternalDocument,
+    tables: &mut [OcrTable],
+    tsv: &str,
+    config: &TesseractConfig,
+    limits: &SecurityLimits,
+) -> Option<InternalDocument> {
+    let mut budget = fragmented_hocr_budget(hocr, tsv, limits)?;
+    let boxes = fragmented_table_boxes(tables, config.page_number, limits, &mut budget)?;
+    let ([table], [bounds]) = (tables, boxes.as_slice()) else {
+        return None;
+    };
+    let mut source = fragmented_tsv_source(tsv)?;
+    fragmented_hocr_source_matches(hocr, &source, &mut budget)?;
+    let (rows, comparison_work) = prepare_fragmented_table_rows(
+        &mut source,
+        *bounds,
+        &table.cells,
+        config.table_row_threshold_ratio,
+        &mut budget,
+    )?;
+    // Charge matching, then collecting the labels and claimed words.
+    budget.checked_sub(comparison_work.saturating_mul(2))?;
+    let matched = unique_matching_table_row_window(&rows, &table.cells, |row, cells| {
+        retained_leader_cell(row, cells).is_some()
+    })?;
+    let dots: Vec<_> = matched
+        .iter()
+        .zip(&table.cells)
+        .map(|(row, cells)| retained_leader_cell(row, cells))
+        .collect();
+    if dots.iter().all(Option::is_none) {
+        return None;
+    }
+    let words = matched.iter().flatten().map(|word| (*word).clone()).collect();
+    let (reconciled, _) = reconcile_proved_fragments(hocr, document, &[words], config.page_number)?;
+    for (row, leader) in table.cells.iter_mut().zip(dots) {
+        if let Some((column, leader)) = leader {
+            row[column].push(' ');
+            row[column].push_str(leader);
+        }
+    }
+    table.markdown = table_to_markdown(&table.cells);
+    Some(reconciled)
+}
+
+// The leader must be between cells. A label can occupy several cells if the
+// stock column reconstruction split it; append to the cell owning its last word.
+fn retained_leader_cell<'a>(row: &[&'a HocrWord], cells: &[String]) -> Option<(usize, &'a str)> {
+    let dot_index = row
+        .windows(3)
+        .position(|words| isolated_dot_leader(words[0], words[1], words[2]))?
+        + 1;
+    let mut label_words = 0;
+    let mut remaining = cells.iter().enumerate().filter(|(_, cell)| !cell.trim().is_empty());
+    let (column, _) = remaining.find(|(_, cell)| {
+        label_words += cell.split_whitespace().count();
+        label_words >= dot_index
+    })?;
+    if label_words != dot_index || remaining.take(2).count() < 2 {
+        return None;
+    }
+    row[..dot_index]
+        .iter()
+        .chain(&row[dot_index + 1..])
+        .map(|word| word.text.as_str())
+        .eq(cells.iter().flat_map(|cell| cell.split_whitespace()))
+        .then_some((column, row[dot_index].text.as_str()))
 }
 
 fn fragmented_tsv_source(tsv: &str) -> Option<Vec<HocrWord>> {

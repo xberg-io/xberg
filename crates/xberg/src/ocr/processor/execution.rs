@@ -8,7 +8,7 @@ mod fragmented_tables;
 
 use fragmented_tables::{
     FragmentedTablePolicy, apply_fragmented_reconciliation, fragmented_hocr_budget,
-    reconcile_fragmented_hocr_table_rows,
+    reconcile_fragmented_hocr_table_rows, reconcile_retained_table_leaders,
 };
 
 #[cfg(feature = "pdf")]
@@ -3382,6 +3382,21 @@ pub(super) fn perform_ocr(
     if let Some(document) = hocr_document.as_mut().filter(|_| fully_claimed) {
         document.elements.clear();
         document.ocr_text_claimed_by_tables = true;
+    } else if let Some(reconciled) = hocr_document
+        .as_ref()
+        .filter(|_| policy == ImageOcrPolicy::StandaloneAutoTableRows && dictionary_filtered_line_count == 0)
+        .and_then(|document| {
+            reconcile_retained_table_leaders(
+                hocr_for_tables.as_deref()?,
+                document,
+                &mut tables,
+                tsv_data_for_tables.as_deref()?,
+                config,
+                &security_limits,
+            )
+        })
+    {
+        hocr_document = Some(reconciled);
     } else if let Some(document) = hocr_document.as_mut() {
         // Reparse raw hOCR only if the initial dictionary pass kept every line. ~keep
         let reconciled = hocr_for_tables
@@ -3673,6 +3688,7 @@ fn process_image_resolved(
         ImageOcrPolicy::ProvisionedModelsOnly => ":provisioned-models-only",
         ImageOcrPolicy::BoundedInferredUpscale => ":bounded-inferred-upscale",
         ImageOcrPolicy::StandaloneDotLeaderRows => ":standalone-dot-leader-rows",
+        ImageOcrPolicy::StandaloneAutoTableRows => ":standalone-auto-table-rows",
         #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
         ImageOcrPolicy::StandaloneSparseRows => ":standalone-sparse-rows",
     });

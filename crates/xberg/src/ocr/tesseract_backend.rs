@@ -580,13 +580,19 @@ impl TesseractBackend {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) async fn process_standalone_psm6_image(
+    pub(crate) async fn process_standalone_table_image(
         &self,
         image_bytes: Arc<Vec<u8>>,
         config: &OcrConfig,
     ) -> Result<ExtractedDocument> {
-        self.process_image_with_policy(image_bytes, config, ImageOcrPolicy::StandaloneDotLeaderRows, false)
-            .await
+        let policy = if config.tesseract_config.as_ref().and_then(|config| config.psm)
+            == Some(crate::ocr::types::PSMMode::Auto as i32)
+        {
+            ImageOcrPolicy::StandaloneAutoTableRows
+        } else {
+            ImageOcrPolicy::StandaloneDotLeaderRows
+        };
+        self.process_image_with_policy(image_bytes, config, policy, false).await
     }
 
     #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]

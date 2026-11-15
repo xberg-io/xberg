@@ -814,3 +814,80 @@ fn fragmented_claims_refuse_when_the_removed_words_do_not_match_the_claimed_word
         "the line keeps its unclaimed word, so the removal cannot account for the claim"
     );
 }
+fn repeated_leader_publication_case(
+    table_rows: usize,
+    table_bottom: u32,
+) -> (String, String, InternalDocument, OcrTable) {
+    let (hocr, tsv) =
+        super::super::tests::word_table_markup([30, 55, 80].into_iter().enumerate().flat_map(|(index, top)| {
+            positioned_dot_leader_row()
+                .into_iter()
+                .zip(["Signal", "timing", "........", "-64", "143.92"])
+                .map(move |(word, text)| (text, word.left, word.top + top - 30, word.width, word.height, index + 1))
+        }));
+    let document = crate::ocr::hocr_parser::parse_hocr_to_internal_document(&hocr);
+    let table = OcrTable {
+        cells: vec![["Signal timing", "-64", "143.92"].map(str::to_owned).to_vec(); table_rows],
+        markdown: String::new(),
+        page_number: 1,
+        bounding_box: Some(OcrTableBoundingBox {
+            left: 10,
+            top: 30,
+            right: 160,
+            bottom: table_bottom,
+        }),
+    };
+    (hocr, tsv, document, table)
+}
+
+#[test]
+fn retained_leader_reconciliation_rejects_ambiguous_equal_rows_in_the_table_bounds() {
+    let (hocr, tsv, document, table) = repeated_leader_publication_case(1, 65);
+    let mut tables = [table];
+    assert!(
+        reconcile_retained_table_leaders(
+            &hocr,
+            &document,
+            &mut tables,
+            &tsv,
+            &TesseractConfig::default(),
+            &SecurityLimits::default(),
+        )
+        .is_none()
+    );
+    assert_eq!(tables[0].cells[0][0], "Signal timing");
+    assert!(tables[0].markdown.is_empty());
+    assert_eq!(document.elements.len(), 15);
+}
+
+#[test]
+fn retained_leader_reconciliation_preserves_equal_rows_at_distinct_positions() {
+    let (hocr, tsv, document, table) = repeated_leader_publication_case(2, 65);
+    let mut tables = [table];
+    let remaining = reconcile_retained_table_leaders(
+        &hocr,
+        &document,
+        &mut tables,
+        &tsv,
+        &TesseractConfig::default(),
+        &SecurityLimits::default(),
+    )
+    .expect("both table rows have unique source positions");
+    assert_eq!(tables[0].cells.len(), 2);
+    assert!(tables[0].cells.iter().all(|row| row[0] == "Signal timing ........"));
+    assert_eq!(tables[0].markdown.matches("........").count(), 2);
+    assert!(
+        remaining
+            .elements
+            .iter()
+            .all(|element| element.bbox.as_ref().unwrap().y0 >= 80.0)
+    );
+    assert_eq!(
+        remaining
+            .elements
+            .iter()
+            .map(|element| element.text.as_str())
+            .collect::<Vec<_>>(),
+        ["Signal", "timing", "........", "-64", "143.92"]
+    );
+}

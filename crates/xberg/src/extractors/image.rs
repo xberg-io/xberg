@@ -2597,9 +2597,26 @@ pub(crate) struct SparseRetryPolicy {
 #[derive(Default)]
 struct StandaloneTesseract<'a> {
     sparse_retry: Option<&'a crate::ocr::tesseract_backend::TesseractBackend>,
-    dot_leader_rows: Option<&'a crate::ocr::tesseract_backend::TesseractBackend>,
+    table_rows: Option<&'a crate::ocr::tesseract_backend::TesseractBackend>,
     #[cfg(feature = "pdf")]
     sparse_rows: bool,
+}
+
+#[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
+fn standalone_table_psm(
+    ocr: &crate::core::config::OcrConfig,
+    output: &crate::core::config::OutputFormat,
+) -> Option<crate::ocr::types::PSMMode> {
+    use crate::core::config::OutputFormat;
+    use crate::ocr::types::PSMMode;
+
+    match ocr.tesseract_config.as_ref()?.psm? {
+        mode if mode == PSMMode::SingleBlock as i32 => Some(PSMMode::SingleBlock),
+        mode if mode == PSMMode::Auto as i32 && matches!(output, OutputFormat::Plain | OutputFormat::Html) => {
+            Some(PSMMode::Auto)
+        }
+        _ => None,
+    }
 }
 
 #[cfg(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
@@ -2677,9 +2694,9 @@ async fn process_whole_image_ocr(
     };
     let primary_bytes = std::sync::Arc::clone(&image_bytes);
     #[cfg(feature = "ocr")]
-    let primary = match standalone.dot_leader_rows {
+    let primary = match standalone.table_rows {
         Some(tesseract) => {
-            Box::pin(tesseract.process_standalone_psm6_image(primary_bytes, effective_config.as_ref())).await?
+            Box::pin(tesseract.process_standalone_table_image(primary_bytes, effective_config.as_ref())).await?
         }
         #[cfg(feature = "pdf")]
         None if standalone.sparse_rows
@@ -3248,7 +3265,7 @@ impl ImageExtractor {
         }
 
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-        let (standalone_tesseract, psm6_tesseract);
+        let (standalone_tesseract, table_tesseract, psm6_tesseract);
         #[cfg(all(paddle_ocr, feature = "ocr", feature = "pdf", not(target_arch = "wasm32")))]
         let builtin_paddle;
         let backend = {
@@ -3262,15 +3279,16 @@ impl ImageExtractor {
             }
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             {
-                let explicit_psm6 = ocr_config
-                    .tesseract_config
-                    .as_ref()
-                    .is_some_and(|config| config.psm == Some(crate::ocr::types::PSMMode::SingleBlock as i32));
+                let table_mode = standalone_table_psm(ocr_config, &config.output_format);
                 let sparse_retry = is_implicit_horizontal_tesseract(ocr_config);
-                let builtin = (explicit_psm6 || sparse_retry)
+                let builtin = (table_mode.is_some() || sparse_retry)
                     .then(|| registry.builtin_tesseract_for(&backend))
                     .flatten();
-                (standalone_tesseract, psm6_tesseract) = if explicit_psm6 {
+                psm6_tesseract = matches!(
+                    (&builtin, table_mode),
+                    (Some(_), Some(crate::ocr::types::PSMMode::SingleBlock))
+                );
+                (standalone_tesseract, table_tesseract) = if table_mode.is_some() {
                     (None, builtin)
                 } else {
                     (builtin, None)
@@ -3320,7 +3338,7 @@ impl ImageExtractor {
         let include_tesseract_elements = is_implicit_horizontal_tesseract(ocr_config);
         #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
         let include_tesseract_elements = include_tesseract_elements
-            || (config.output_format == crate::core::config::OutputFormat::Markdown && psm6_tesseract.is_some());
+            || (config.output_format == crate::core::config::OutputFormat::Markdown && psm6_tesseract);
         #[cfg(not(target_arch = "wasm32"))]
         if include_tesseract_elements {
             enable_image_ocr_elements(&mut ocr_config_with_format, true);
@@ -3373,7 +3391,7 @@ impl ImageExtractor {
                         .as_ref()
                         .is_none_or(|config| config.preprocessing.is_none())
                 }),
-                dot_leader_rows: psm6_tesseract.as_deref(),
+                table_rows: table_tesseract.as_deref(),
                 #[cfg(feature = "pdf")]
                 sparse_rows: allows_standalone_sparse_rows(config, ocr_config, mime_type),
             },
@@ -3544,7 +3562,7 @@ impl ImageExtractor {
 
             #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
             if config.output_format == crate::core::config::OutputFormat::Markdown
-                && psm6_tesseract.is_some()
+                && psm6_tesseract
                 && !has_public_ocr_structure
                 && ocr_tables.is_empty()
                 && ocr_extraction_result.page_contents.is_none()

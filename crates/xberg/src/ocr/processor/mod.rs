@@ -63,6 +63,7 @@ pub(crate) enum ImageOcrPolicy {
     ProvisionedModelsOnly,
     BoundedInferredUpscale,
     StandaloneDotLeaderRows,
+    StandaloneAutoTableRows,
     #[cfg(all(feature = "pdf", not(target_arch = "wasm32")))]
     StandaloneSparseRows,
 }
