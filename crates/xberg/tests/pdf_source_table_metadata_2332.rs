@@ -351,3 +351,51 @@ fn forced_ocr_tatr_owns_words_without_exposing_ocr_elements() {
     assert_eq!(table.cells[5][0], "2012 Total");
     assert_eq!(result.content.matches("<table").count(), 1);
 }
+
+#[test]
+#[ignore = "requires the pinned public ParseBench PDF outside Git"]
+fn insurance_wrapped_labels_render_as_headers_over_numeric_records() {
+    let directory =
+        std::env::var_os("XBERG_2332_PARSEBENCH_INPUTS").expect("set the pinned ParseBench input directory");
+    let path = std::path::Path::new(&directory).join("f48db8574acac2e2744d.pdf");
+    let bytes = std::fs::read(path).unwrap();
+    assert_eq!(
+        hex::encode(Sha256::digest(&bytes)),
+        "0085e250b078694c7a6887245e52108e511401b90db99052fe1ee2b4c0d099a3"
+    );
+    let config = parsebench_html_config();
+    let result = extract_bytes_document_blocking(&bytes, "application/pdf", &config).unwrap();
+    let [table] = result.tables.as_slice() else {
+        panic!("expected one native grid, got {}", result.tables.len());
+    };
+    assert_eq!(table.cells.len(), 41);
+    assert!(table.cells.iter().all(|row| row.len() == 12));
+    assert_eq!(
+        table.cells[0][..4],
+        ["CLASS CODE", "RATE", "MIN. PREM.", "HAZ L/C CODE"]
+    );
+    assert_eq!(table.cells[1][..4], ["3400", "9.97", "1000", "2"]);
+    assert_eq!(result.content.matches("<th>").count(), 12);
+    assert_eq!(result.content.matches("<td>").count(), 40 * 12);
+
+    let mut pdf = lopdf::Document::load_mem(&bytes).unwrap();
+    let page = pdf.get_pages()[&1];
+    let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).unwrap();
+    let source = String::from_utf8(pdf.get_page_content(page)).unwrap();
+    let key_paint = "0 0.5 0 rg\n";
+    assert_eq!(source.matches(key_paint).count(), 120);
+    pdf.get_object_mut(stream)
+        .unwrap()
+        .as_stream_mut()
+        .unwrap()
+        .set_plain_content(source.replace(key_paint, "0 g\n").into_bytes());
+    let mut neutral = Vec::new();
+    pdf.save_to(&mut neutral).unwrap();
+    let control = extract_bytes_document_blocking(&neutral, "application/pdf", &config).unwrap();
+    let [neutral_table] = control.tables.as_slice() else {
+        panic!("expected one native grid after recoloring keys");
+    };
+    assert_eq!(neutral_table.cells, table.cells);
+    assert_eq!(control.content.matches("<th>").count(), 0);
+    assert_eq!(control.content.matches("<td>").count(), 41 * 12);
+}

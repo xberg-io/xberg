@@ -21,6 +21,7 @@ use std::collections::{HashMap, HashSet};
 use std::mem::size_of;
 use xberg_native_pdf::elements::{PathContent, PathOperation};
 
+pub(crate) mod repeated_schema_header;
 pub(crate) mod scripts;
 mod source_columns;
 pub(crate) mod source_members;

@@ -1137,6 +1137,13 @@ pub(crate) fn extract_all_from_native_document(
     for (table, metadata) in tables.iter_mut().zip(&native_table_grids) {
         metadata.retain_column_labels(table);
     }
+    crate::pdf::native::table::repeated_schema_header::retain(
+        &doc.doc,
+        &mut tables,
+        pre_rendered_doc
+            .as_mut()
+            .map_or(&mut [], |document| &mut document.tables),
+    );
     if let Some(document) = &mut pre_rendered_doc {
         attach_native_table_grids(document, &tables, &native_table_grids)?;
     }
