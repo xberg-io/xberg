@@ -938,7 +938,7 @@ impl PdfDocument {
             };
 
             let mut text = String::with_capacity(spans.len() * 20);
-            let mut prev_span: Option<TextSpan> = None;
+            let mut prev_span: Option<&TextSpan> = None;
 
             for span in &spans {
                 // Flush any tables that sit above this span in PDF
@@ -958,7 +958,7 @@ impl PdfDocument {
                     }
                 }
 
-                if let Some(prev) = &prev_span {
+                if let Some(prev) = prev_span {
                     let prev_end_x = prev.bbox.x + prev.bbox.width;
                     let span_end_x = span.bbox.x + span.bbox.width;
                     // Containment check: skip a span only if it is geometrically
@@ -1158,7 +1158,7 @@ impl PdfDocument {
                 }
 
                 Self::push_span_text(&mut text, span);
-                prev_span = Some(span.clone());
+                prev_span = Some(span);
             }
 
             // Drain any tables that sit below all flow spans (or the
