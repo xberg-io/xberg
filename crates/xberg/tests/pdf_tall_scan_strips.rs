@@ -483,12 +483,23 @@ fn indexed_scan_rendered_at_120_dpi_recovers_every_source_word() {
 }
 
 #[test]
-fn bilevel_rgb_and_jpeg_scans_rendered_at_120_dpi_keep_the_standard_floor_and_say_so() {
-    for source in [
-        fixture_120!("bilevel-120.pdf"),
-        fixture_120!("neutral-rgb-120.pdf"),
-        fixture_120!("jpeg-120.pdf"),
-    ] {
+fn neutral_rgb_scan_rendered_at_120_dpi_recovers_every_source_word() {
+    assert_exact_tall_source_text(fixture_120!("neutral-rgb-120.pdf"));
+}
+
+#[test]
+fn neutral_rgb_120_dpi_keeps_stock_when_four_reread_calls_cannot_be_reserved() {
+    let mut config = extraction_config();
+    config.ocr.as_mut().unwrap().security_limits =
+        Some(serde_json::from_value(serde_json::json!({ "max_iterations": 7 })).unwrap());
+    let document = extract(fixture_120!("neutral-rgb-120.pdf"), &config);
+    assert!(!strip_warning(&document));
+    assert!(!document.content.split_whitespace().eq(ORACLE.split_whitespace()));
+}
+
+#[test]
+fn bilevel_and_jpeg_scans_rendered_at_120_dpi_keep_the_standard_floor_and_say_so() {
+    for source in [fixture_120!("bilevel-120.pdf"), fixture_120!("jpeg-120.pdf")] {
         let document = extract(source, &extraction_config());
         assert!(!strip_warning(&document));
         assert!(

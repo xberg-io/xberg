@@ -146,11 +146,10 @@ pub(super) fn source_density_allowed(dpi: f64, packing: Option<GrayPacking>) -> 
     const MIN_LOW_DENSITY_SOURCE_DPI: f64 = 120.0;
     const MAX_SOURCE_DPI: f64 = 300.0;
 
-    // Rendered at 120 DPI, bilevel, neutral RGB and JPEG text did not read back as its source
-    // words, so those keep the standard floor. ~keep
+    // Lower density is admitted only for encodings with exact source-row certification. ~keep
     let minimum = if matches!(
         packing,
-        Some(GrayPacking::Byte | GrayPacking::PngPredictor(_) | GrayPacking::Indexed(_))
+        Some(GrayPacking::Byte | GrayPacking::NeutralRgb | GrayPacking::PngPredictor(_) | GrayPacking::Indexed(_))
     ) {
         MIN_LOW_DENSITY_SOURCE_DPI
     } else {
@@ -178,7 +177,7 @@ mod tests {
             (None, false),
             (Some(GrayPacking::Byte), true),
             (Some(GrayPacking::Bilevel), false),
-            (Some(GrayPacking::NeutralRgb), false),
+            (Some(GrayPacking::NeutralRgb), true),
             (Some(GrayPacking::Indexed([0, 255])), true),
             (Some(GrayPacking::PngPredictor(12)), true),
         ];

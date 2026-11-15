@@ -34,6 +34,7 @@ mod region_probe;
 mod region_reconciliation;
 #[cfg(test)]
 pub(super) mod region_replay;
+mod row_reread;
 mod samples;
 #[cfg(test)]
 #[path = "tall_source/strip_certificate_tests.rs"]
@@ -65,6 +66,7 @@ struct Source {
     samples: Vec<u8>,
     retained_bytes: usize,
     certify_rows: bool,
+    reread_split_row: bool,
 }
 
 struct StripPlan {
@@ -446,10 +448,15 @@ async fn recover(
         ..Default::default()
     });
     if let Some(tesseract) = config.tesseract_config.as_mut() {
-        tesseract.preprocessing = Some(crate::types::ImagePreprocessingConfig {
+        let mut preprocessing = crate::types::ImagePreprocessingConfig {
             target_dpi: source.dpi.round() as i32,
             ..Default::default()
-        });
+        };
+        if source.reread_split_row {
+            preprocessing.deskew = false;
+            preprocessing.binarization_method = "none".to_owned();
+        }
+        tesseract.preprocessing = Some(preprocessing);
     }
     if let Some(options) = config.backend_options.as_mut() {
         options["use_cache"] = serde_json::Value::Bool(false);
@@ -460,6 +467,7 @@ async fn recover(
         ..Default::default()
     };
     let strip_count = rows.len();
+    let mut may_reread = source.reread_split_row && strip_count + row_reread::EXTRA_CALLS <= attempt.max_strips;
     for rows in rows {
         if cancelled() {
             return Err(crate::XbergError::Cancelled);
@@ -476,7 +484,18 @@ async fn recover(
         };
         let certified = certified_strip_lines(&result, source.width, &rows, &ink_rows);
         if source.dpi < MIN_STANDARD_SOURCE_DPI && !certified {
-            return Ok(None);
+            if !std::mem::take(&mut may_reread) {
+                return Ok(None);
+            }
+            let Some(replacement) =
+                row_reread::reread(&source, &rows, &ink_rows, &result, (backend, &config), cancelled).await?
+            else {
+                return Ok(None);
+            };
+            if !replacement.into_iter().all(|part| output.add(part)) {
+                return Ok(None);
+            }
+            continue;
         }
         output.complete_source_rows &= certified;
         if !output.add(result) {
@@ -680,6 +699,7 @@ fn certify(doc: &PdfDocument, page: usize, rendered_width: Option<u32>, byte_lim
         samples,
         retained_bytes,
         certify_rows: dpi < MIN_STANDARD_SOURCE_DPI || packing.is_none_or(GrayPacking::requires_line_certificate),
+        reread_split_row: dpi < MIN_STANDARD_SOURCE_DPI && packing == Some(GrayPacking::NeutralRgb),
     })
 }
 
