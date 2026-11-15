@@ -62,7 +62,10 @@ fn identical_ruled_tables_with_disjoint_source_bounds_reach_public_html() {
     };
     let first_box = first.bounding_box.expect("Proposed table bounds");
     let second_box = second.bounding_box.expect("Current table bounds");
-    assert!(first_box.x1 < second_box.x0 || second_box.x1 < first_box.x0);
+    assert!(
+        first_box.x1 < second_box.x0,
+        "Proposed is left of Current in the source"
+    );
     for table in [first, second] {
         assert_eq!(table.cells.len(), 51);
         assert!(table.cells.iter().all(|row| row.len() == 8));
