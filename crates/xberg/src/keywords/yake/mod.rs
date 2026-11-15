@@ -129,7 +129,7 @@ impl<'a> Yake<'a> {
         self.candidate_weighting(&features, &context, &mut ngrams);
 
         let mut results: Vec<ResultItem> = ngrams.into_values().map(Into::into).collect();
-        results.sort_by(|a, b| a.score.total_cmp(&b.score));
+        results.sort_by(|a, b| crate::utils::cmp_asc_nan_last(a.score, b.score));
 
         if self.config.remove_duplicates {
             remove_duplicates(self.config.deduplication_threshold, results, n)

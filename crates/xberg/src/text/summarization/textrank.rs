@@ -243,7 +243,7 @@ fn cosine_similarity(a: &AHashMap<&str, f32>, b: &AHashMap<&str, f32>, norm_a: f
 /// budget, then re-sort them by original index.
 fn select_top_sentences<'a>(sentences: &'a [&'a str], scores: &[f32], budget_tokens: usize) -> Vec<&'a str> {
     let mut ranked: Vec<(usize, f32)> = scores.iter().copied().enumerate().collect();
-    ranked.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
+    ranked.sort_by(|a, b| crate::utils::cmp_desc_nan_last(a.1, b.1).then(a.0.cmp(&b.0)));
 
     let mut chosen_indices: Vec<usize> = Vec::new();
     let mut accumulated = 0usize;
@@ -263,7 +263,11 @@ fn select_top_sentences<'a>(sentences: &'a [&'a str], scores: &[f32], budget_tok
     }
 
     if chosen_indices.is_empty()
-        && let Some((idx, _)) = scores.iter().copied().enumerate().max_by(|a, b| a.1.total_cmp(&b.1))
+        && let Some((idx, _)) = scores
+            .iter()
+            .copied()
+            .enumerate()
+            .max_by(|a, b| crate::utils::cmp_nan_lowest(a.1, b.1))
     {
         chosen_indices.push(idx);
     }

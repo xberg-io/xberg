@@ -169,7 +169,7 @@ fn finalize_document_labels(
         let best = aggregated.into_iter().max_by(|a, b| {
             let a_score = a.confidence.unwrap_or(0.0);
             let b_score = b.confidence.unwrap_or(0.0);
-            a_score.total_cmp(&b_score)
+            crate::utils::cmp_nan_lowest(a_score, b_score)
         });
         best.into_iter().collect()
     }
