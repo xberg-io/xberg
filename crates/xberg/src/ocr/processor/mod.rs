@@ -45,6 +45,10 @@ use crate::types::OcrExtractionResult;
 #[cfg(feature = "otel")]
 use std::time::Instant;
 
+tokio::task_local! {
+    pub(super) static CAPTURE_REGION_HOCR: bool;
+}
+
 /// Tesseract-backed OCR processor with persistent result caching.
 #[cfg_attr(alef, alef(skip))]
 pub struct OcrProcessor {

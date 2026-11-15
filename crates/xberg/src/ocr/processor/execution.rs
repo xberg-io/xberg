@@ -2839,8 +2839,11 @@ pub(super) fn perform_ocr(
     let mut dictionary_kept_numeral_line_count = 0usize;
     let mut retained_hocr_confidence_stats = None;
 
-    let capture_region_hocr = !config.use_cache && config.capture_region_hocr;
-    if config.capture_region_hocr {
+    let capture_requested = super::CAPTURE_REGION_HOCR
+        .try_with(|&requested| requested)
+        .unwrap_or(false);
+    let capture_region_hocr = !config.use_cache && capture_requested;
+    if capture_requested {
         tracing::trace!(capture_region_hocr, format = %config.output_format, merged = merged_read.is_some(),
             "hOCR region capture requested");
     }

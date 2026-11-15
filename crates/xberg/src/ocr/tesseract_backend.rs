@@ -247,17 +247,20 @@ impl TesseractBackend {
         internal.tessdata_path = config.tessdata_path.clone();
         internal.source_dpi = Self::source_dpi_from_backend_options(config);
         internal.known_full_page_scan = Self::known_full_page_scan_from_backend_options(config);
-        internal.capture_region_hocr = config.backend_options.as_ref().is_some_and(|options| {
-            ["source_region_reconciliation", "source_region_recovery"]
-                .into_iter()
-                .any(|key| options.get(key).and_then(serde_json::Value::as_bool) == Some(true))
-        });
         if let Some(use_cache) = Self::use_cache_from_backend_options(config) {
             internal.use_cache = use_cache;
         }
         // Word ownership receipts are transient and are absent from persisted OCR results. ~keep
-        internal.use_cache &= !internal.capture_region_hocr;
+        internal.use_cache &= !Self::capture_region_hocr_requested(config);
         internal
+    }
+
+    fn capture_region_hocr_requested(config: &OcrConfig) -> bool {
+        config.backend_options.as_ref().is_some_and(|options| {
+            ["source_region_reconciliation", "source_region_recovery"]
+                .into_iter()
+                .any(|key| options.get(key).and_then(serde_json::Value::as_bool) == Some(true))
+        })
     }
 
     fn script_retry_threshold(config: &OcrConfig) -> Option<f64> {
@@ -616,6 +619,7 @@ impl TesseractBackend {
         #[cfg(all(test, feature = "pdf", feature = "tokio-runtime", feature = "bundle-tessdata-eng"))]
         read_counter::record(config);
         let retry_threshold = Self::script_retry_threshold(config);
+        let capture_region_hocr = Self::capture_region_hocr_requested(config);
         let tess_config = self.config_to_tesseract(config);
         let tess_config_clone = tess_config.clone();
         let output_format = config.output_format.clone();
@@ -645,13 +649,15 @@ impl TesseractBackend {
             let run = || {
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     MIXED_PDF_KHMER_RETRY.sync_scope(khmer_retry, || {
-                        processor.process_image_with_retry(
-                            image_bytes.as_slice(),
-                            &tess_config_clone,
-                            output_format,
-                            policy,
-                            retry_threshold,
-                        )
+                        super::processor::CAPTURE_REGION_HOCR.sync_scope(capture_region_hocr, || {
+                            processor.process_image_with_retry(
+                                image_bytes.as_slice(),
+                                &tess_config_clone,
+                                output_format,
+                                policy,
+                                retry_threshold,
+                            )
+                        })
                     })
                 }))
                 .unwrap_or_else(|_| {
@@ -759,6 +765,7 @@ impl OcrBackend for TesseractBackend {
 
     async fn process_image_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractedDocument> {
         let retry_threshold = Self::script_retry_threshold(config);
+        let capture_region_hocr = Self::capture_region_hocr_requested(config);
         let tess_config = self.config_to_tesseract(config);
         let tess_config_clone = tess_config.clone();
         let output_format = config.output_format.clone();
@@ -783,7 +790,9 @@ impl OcrBackend for TesseractBackend {
                 return Err(crate::ocr::error::OcrError::ProcessingFailed(error.to_string()));
             }
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                processor.process_image_file(&path_str, &tess_config_clone, output_format, retry_threshold)
+                super::processor::CAPTURE_REGION_HOCR.sync_scope(capture_region_hocr, || {
+                    processor.process_image_file(&path_str, &tess_config_clone, output_format, retry_threshold)
+                })
             }))
             .unwrap_or_else(|_| {
                 Err(crate::ocr::error::OcrError::ProcessingFailed(
