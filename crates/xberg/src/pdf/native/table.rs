@@ -36,7 +36,7 @@ pub(crate) struct NativeTable {
     pub source_members: Option<source_members::TableSources>,
 }
 
-fn finite_table_bounds(bounds: BoundingBox) -> bool {
+pub(crate) fn finite_table_bounds(bounds: BoundingBox) -> bool {
     [bounds.x0, bounds.y0, bounds.x1, bounds.y1]
         .into_iter()
         .all(f64::is_finite)
@@ -3911,6 +3911,92 @@ mod tests {
             &source_columns::PageRules::new(&[], true),
         );
         assert_eq!(tables.len(), 2, "ordinary table headers must remain distinct");
+    }
+
+    #[test]
+    #[ignore = "requires the pinned public ParseBench PDF via XBERG_2332_SIDE_TABLE_PDF"]
+    fn parsebench_proposed_and_current_tables_have_independent_native_ownership() {
+        use sha2::{Digest, Sha256};
+
+        let path = std::env::var_os("XBERG_2332_SIDE_TABLE_PDF").expect("set the pinned PDF path");
+        let bytes = std::fs::read(path).expect("read public ParseBench fixture 7bc0fc8c64c67829dc21");
+        assert_eq!(
+            hex::encode(Sha256::digest(&bytes)),
+            "bd5f64d7f3e329e55f6a000495169306b53e73cd99cf73476efb41e36471ef11"
+        );
+        let mut doc = NativeDocument::open_bytes(&bytes).expect("open pinned PDF");
+        let mut page_paths = TablePagePaths::default();
+        let ruled = extract_ruled_tables(&mut doc, &mut page_paths).expect("ruled extraction");
+        let covered = ruled.covered_pages();
+        let heuristic = extract_tables_heuristic(&mut doc, false, &covered, Default::default(), &mut page_paths)
+            .expect("heuristic extraction");
+        let (tables, segments) = (heuristic.tables, heuristic.hierarchy_segments.pages);
+        let [segments] = segments.as_slice() else {
+            panic!("expected one page of native segments");
+        };
+        let page_height = segments.iter().map(|s| s.y + s.height).fold(792.0_f32, f32::max);
+        let words = crate::pdf::table_reconstruct::project_segment_words(segments, page_height, None);
+        let regions = cluster_words_into_vertical_regions(&words);
+        let paths = page_paths.take(&doc, 0);
+        let rule_count = crate::pdf::rules::count_rules(&paths).0;
+
+        eprintln!("ruled count={} covered={covered:?}", ruled.tables.len());
+        if let [left, right] = ruled.tables.as_slice() {
+            eprintln!(
+                "ruled bounds={:?} / {:?}; equal markdown={}",
+                left.table.bounding_box,
+                right.table.bounding_box,
+                left.table.markdown == right.table.markdown
+            );
+        }
+        eprintln!(
+            "projected words={} bounds={:?}",
+            words.len(),
+            region_horizontal_bounds(&words)
+        );
+        for (index, region) in regions.iter().enumerate() {
+            let parent = reconstruct_region_table_with_reason(region, page_height, 1, false, rule_count);
+            let split = split_side_by_side_region(region).map(|(left, right)| {
+                [&left[..], &right[..]].map(|child| {
+                    let bounds = region_horizontal_bounds(child);
+                    let shape = reconstruct_side_by_side_child(child, page_height, 1, false, rule_count)
+                        .map(|table| (table.cells.len(), table.cells[0].len()));
+                    (bounds, child.len(), shape)
+                })
+            });
+            eprintln!(
+                "region {index}: bounds={:?} words={} parent={:?} split={split:?}",
+                region_horizontal_bounds(region),
+                region.len(),
+                parent.as_ref().map(|table| (table.cells.len(), table.cells[0].len()))
+            );
+        }
+
+        let mut tables: Vec<_> = tables
+            .iter()
+            .filter(|table| ruled.allows_heuristic_table(table))
+            .collect();
+        tables.extend(ruled.tables.iter().map(|entry| &entry.table));
+        tables.sort_by(|left, right| {
+            let x = |table: &Table| table.bounding_box.expect("native table bounds").x0;
+            x(left).total_cmp(&x(right))
+        });
+        let [left, right] = tables.as_slice() else {
+            panic!("expected Proposed and Current tables, got {}", tables.len());
+        };
+        assert!(left.bounding_box.unwrap().x1 < right.bounding_box.unwrap().x0);
+        for table in [left, right] {
+            assert_eq!(table.cells.len(), 51);
+            assert!(table.cells.iter().all(|row| row.len() == 8));
+            assert_eq!(
+                table.cells[0],
+                ["Model Year", "Symbol Code", "BI", "PD", "UMBI", "MP", "COMP", "COLL"]
+            );
+            assert_eq!(
+                table.cells[1],
+                ["1998", "BUPAXX", "0.924", "0.863", "0.921", "0.985", "0.728", "0.961"]
+            );
+        }
     }
 
     #[test]

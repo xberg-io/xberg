@@ -610,6 +610,42 @@ fn identical_markdown_tables_collapse_despite_missing_bbox() {
 }
 
 #[test]
+fn identical_tables_keep_disjoint_footprints_and_collapse_same_footprint() {
+    let left = ov_table(1, (0.0, 0.0, 10.0, 10.0), "same");
+    let right = ov_table(1, (20.0, 0.0, 30.0, 10.0), "same");
+    let mut tables = vec![left.clone(), left, right.clone(), right];
+    deduplicate_identical_tables(&mut tables);
+    assert_eq!(tables.len(), 2);
+    assert_eq!(tables[0].bounding_box.unwrap().x0, 0.0);
+    assert_eq!(tables[1].bounding_box.unwrap().x0, 20.0);
+}
+
+#[test]
+fn missing_or_invalid_bounds_cannot_hide_disjoint_identical_tables() {
+    let left = ov_table(1, (0.0, 0.0, 10.0, 10.0), "same");
+    let right = ov_table(1, (20.0, 0.0, 30.0, 10.0), "same");
+    let mut missing = left.clone();
+    missing.bounding_box = None;
+    for unpositioned in [
+        missing,
+        ov_table(1, (f64::NAN, 0.0, 10.0, 10.0), "same"),
+        ov_table(1, (0.0, 0.0, f64::INFINITY, 10.0), "same"),
+        ov_table(1, (0.0, 0.0, 0.0, 10.0), "same"),
+        ov_table(1, (10.0, 0.0, 0.0, 10.0), "same"),
+    ] {
+        let mut tables = vec![unpositioned.clone(), left.clone(), right.clone(), unpositioned.clone()];
+        deduplicate_identical_tables(&mut tables);
+        assert_eq!(tables.len(), 2);
+        assert_eq!(tables[0].bounding_box.unwrap().x0, 0.0);
+        assert_eq!(tables[1].bounding_box.unwrap().x0, 20.0);
+
+        let mut tables = vec![unpositioned.clone(), unpositioned];
+        deduplicate_identical_tables(&mut tables);
+        assert_eq!(tables.len(), 1);
+    }
+}
+
+#[test]
 fn sparse_currency_affix_columns_merge_into_financial_values() {
     use crate::core::config::layout::TableOverlapPreference;
 

@@ -5519,28 +5519,37 @@ fn merge_currency_affix_column(rows: &mut [Vec<String>], source: usize) {
     }
 }
 
-/// Collapse byte-identical table duplicates on the same page.
-///
-/// [`deduplicate_overlapping_tables`] only merges a pair when both tables carry
-/// a `bounding_box`; a native/layout pair that detects the same physical table
-/// but disagrees on bbox presence (e.g. native reconstruction leaves
-/// `bounding_box: None` for some heuristic grids) can otherwise escape that
-/// pass entirely. This pass is origin- and bbox-agnostic: any two tables on the
-/// same page with byte-identical markdown are the same table by definition, so
-/// the second (and any further) occurrence is dropped regardless of bbox state.
-///
-/// Runs in `O(n)` over the page's table count using a hash set keyed on
-/// `(page_number, markdown)`.
+/// Collapse same-page identical Markdown unless valid bounds prove separate occurrences.
 fn deduplicate_identical_tables(tables: &mut Vec<crate::types::Table>) {
+    use crate::pdf::native::table::{disjoint_table_bounds, finite_table_bounds};
+
     if tables.len() < 2 {
         return;
     }
 
-    let mut seen: ahash::AHashSet<(u32, &str)> = ahash::AHashSet::with_capacity(tables.len());
-    let mut keep = vec![true; tables.len()];
+    let mut seen: ahash::AHashMap<_, Vec<_>> = ahash::AHashMap::new();
+    let mut keep = vec![false; tables.len()];
+    // Process positioned tables first so an unpositioned copy cannot hide independent grids. ~keep
+    for (index, table) in tables
+        .iter()
+        .enumerate()
+        .filter(|(_, table)| table.bounding_box.is_some_and(finite_table_bounds))
+    {
+        let retained = seen.entry((table.page_number, table.markdown.as_str())).or_default();
+        if retained
+            .iter()
+            .all(|&other| disjoint_table_bounds(table.bounding_box, other))
+        {
+            retained.push(table.bounding_box);
+            keep[index] = true;
+        }
+    }
     for (index, table) in tables.iter().enumerate() {
-        if !seen.insert((table.page_number, table.markdown.as_str())) {
-            keep[index] = false;
+        if let std::collections::hash_map::Entry::Vacant(entry) =
+            seen.entry((table.page_number, table.markdown.as_str()))
+        {
+            entry.insert(Vec::new());
+            keep[index] = true;
         }
     }
 
