@@ -17,6 +17,7 @@ runs:
       with:
         path: |
           target/*/build/*/out/pdfium/
+          target/*/build/*/*/out/pdfium/
         key: pdfium-v2-${{ runner.os }}-${{ runner.arch }}-${{ inputs.pdfium-version }}
         restore-keys: |
           pdfium-v2-${{ runner.os }}-${{ runner.arch }}-

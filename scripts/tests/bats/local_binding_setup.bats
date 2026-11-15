@@ -50,11 +50,21 @@ extension=libxberg_php.so'
 }
 
 make_swift_output() {
-	mkdir -p target/release/build/xberg-swift-fixture/out/xberg-swift
-	printf 'core header\n' >target/release/build/xberg-swift-fixture/out/SwiftBridgeCore.h
-	printf 'bridge header\n' >target/release/build/xberg-swift-fixture/out/xberg-swift/xberg-swift.h
-	printf '    var ptr: UnsafeMutableRawPointer\n    var isOwned: Bool = true\n' >target/release/build/xberg-swift-fixture/out/SwiftBridgeCore.swift
-	printf 'binding source\n' >target/release/build/xberg-swift-fixture/out/xberg-swift/xberg-swift.swift
+	local out="${1:-target/release/build/xberg-swift-fixture/out}"
+	mkdir -p "$out/xberg-swift"
+	printf 'core header\n' >"$out/SwiftBridgeCore.h"
+	printf 'bridge header\n' >"$out/xberg-swift/xberg-swift.h"
+	printf '    var ptr: UnsafeMutableRawPointer\n    var isOwned: Bool = true\n' >"$out/SwiftBridgeCore.swift"
+	printf 'binding source\n' >"$out/xberg-swift/xberg-swift.swift"
+}
+
+@test "Swift bridge setup should read the per-package build directory layout of cargo 1.100" {
+	make_swift_output target/release/build/xberg-swift/0123456789abcdef/out
+	run bash "$REPOSITORY_ROOT/scripts/setup-swift-bridge.sh"
+	xberg_assert_status 0
+	xberg_assert_output_contains 'target/release/build/xberg-swift/0123456789abcdef/out'
+	xberg_assert_file packages/swift/Sources/RustBridgeC/RustBridgeC.h 'core header
+bridge header'
 }
 
 @test "Swift bridge setup should concatenate headers and make bridge ownership fields public" {

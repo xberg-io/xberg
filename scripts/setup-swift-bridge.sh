@@ -2,8 +2,10 @@
 
 set -e
 
+# Cargo 1.100 writes build-script output to build/<package>/<hash>/out; earlier releases used
+# build/<package>-<hash>/out. ~keep
 # shellcheck disable=SC2012
-OUT=$(ls -1td target/release/build/xberg-swift-*/out 2>/dev/null | head -1)
+OUT=$(ls -1td target/release/build/xberg-swift/*/out target/release/build/xberg-swift-*/out 2>/dev/null | head -1)
 if [ -z "$OUT" ] || [ ! -d "$OUT" ]; then
   echo "ERROR: Could not find swift-bridge build output in target/release/build/"
   exit 1
