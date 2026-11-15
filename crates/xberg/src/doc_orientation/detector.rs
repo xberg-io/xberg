@@ -482,7 +482,7 @@ fn orientation_from_probabilities(probabilities: &[f32]) -> Result<OrientationRe
     let (best_idx, &best_probability) = probabilities
         .iter()
         .enumerate()
-        .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+        .max_by(|(_, a), (_, b)| a.total_cmp(b))
         .unwrap_or((0, &0.0));
 
     Ok(OrientationResult {

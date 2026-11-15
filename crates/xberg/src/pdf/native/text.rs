@@ -485,7 +485,7 @@ fn collect_widget_field_values(doc: &xberg_native_pdf::PdfDocument, page_index: 
         })
         .collect();
 
-    widgets.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    widgets.sort_by(|a, b| b.0.total_cmp(&a.0));
     widgets
 }
 
@@ -586,7 +586,7 @@ fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpa
 
     let notes = numeric_notes(spans);
     let mut sorted: Vec<&xberg_native_pdf::layout::TextSpan> = spans.iter().collect();
-    sorted.sort_by(|a, b| b.bbox.y.partial_cmp(&a.bbox.y).unwrap_or(std::cmp::Ordering::Equal));
+    sorted.sort_by(|a, b| b.bbox.y.total_cmp(&a.bbox.y));
 
     let mut groups: Vec<Vec<&xberg_native_pdf::layout::TextSpan>> = Vec::new();
     for span in sorted {
@@ -603,7 +603,7 @@ fn rebuild_text_from_fragmented_spans(spans: &[xberg_native_pdf::layout::TextSpa
 
     let mut result = String::new();
     for (gi, group) in groups.iter_mut().enumerate() {
-        group.sort_by(|a, b| a.bbox.x.partial_cmp(&b.bbox.x).unwrap_or(std::cmp::Ordering::Equal));
+        group.sort_by(|a, b| a.bbox.x.total_cmp(&b.bbox.x));
         if gi > 0 {
             result.push('\n');
         }
@@ -847,9 +847,7 @@ fn find_inline_fragment_anchor(
             let tolerance = candidate.font_size.max(span.font_size) * INLINE_FRAGMENT_GAP_RATIO;
             (gap >= -tolerance && gap <= tolerance).then_some((candidate_index, gap.abs()))
         })
-        .min_by(|(_, first_gap), (_, second_gap)| {
-            first_gap.partial_cmp(second_gap).unwrap_or(std::cmp::Ordering::Equal)
-        })
+        .min_by(|(_, first_gap), (_, second_gap)| first_gap.total_cmp(second_gap))
         .map(|(candidate_index, _)| candidate_index)
 }
 
@@ -879,9 +877,7 @@ fn order_spans_with_inline_fragments<'a>(
             // re-inserted in reading order rather than page-x order.
             let (first_start, _) = upright_advance_extent(&spans[*first]);
             let (second_start, _) = upright_advance_extent(&spans[*second]);
-            first_start
-                .partial_cmp(&second_start)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            first_start.total_cmp(&second_start)
         });
     }
 
@@ -1046,7 +1042,7 @@ fn assemble_ordered_page_text<'a>(
     mut observe: impl FnMut(usize, usize),
 ) -> String {
     let mut heights: Vec<f32> = spans.iter().map(|span| span.bbox.height).collect();
-    heights.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    heights.sort_by(|a, b| a.total_cmp(b));
     let median_height = if heights.is_empty() {
         1.0
     } else {

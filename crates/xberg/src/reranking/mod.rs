@@ -677,7 +677,7 @@ fn build_results_for_head(
 /// sorts only that k-slice (`O(k log k)`), instead of fully sorting all `n`
 /// results (`O(n log n)`) before truncating. The returned order is identical
 /// to a full sort followed by `truncate(k)` — same descending-by-score
-/// ordering, same tie-breaking (`partial_cmp` with `Equal` fallback) applied
+/// ordering, same tie-breaking (`f32::total_cmp`, which orders NaN) applied
 /// consistently by both the partition and the final sort.
 #[cfg(any(feature = "reranker", test))]
 fn build_results_from_scores(
@@ -697,8 +697,7 @@ fn build_results_from_scores(
         })
         .collect();
 
-    let cmp_desc =
-        |a: &RerankedDocument, b: &RerankedDocument| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal);
+    let cmp_desc = |a: &RerankedDocument, b: &RerankedDocument| b.score.total_cmp(&a.score);
 
     match top_k {
         Some(k) if k < results.len() => {
@@ -1150,6 +1149,22 @@ mod tests {
 
         assert_eq!(results.len(), 2, "top_k=2 should truncate to 2 results");
         assert!(results[0].score >= results[1].score);
+    }
+
+    #[test]
+    fn nan_scores_sort_without_panicking() {
+        let documents: Vec<String> = ["a", "b", "c", "d", "e"].iter().map(|s| s.to_string()).collect();
+        let logits = vec![1.0_f32, f32::NAN, 3.0_f32, 0.5_f32, 2.0_f32];
+
+        for top_k in [None, Some(3)] {
+            let results = build_results(&documents, logits.clone(), top_k);
+            let finite: Vec<f32> = results.iter().map(|r| r.score).filter(|s| !s.is_nan()).collect();
+            assert!(
+                finite.windows(2).all(|w| w[0] >= w[1]),
+                "finite scores must stay descending: {finite:?}"
+            );
+            assert_eq!(results.len(), top_k.unwrap_or(documents.len()));
+        }
     }
 
     #[test]

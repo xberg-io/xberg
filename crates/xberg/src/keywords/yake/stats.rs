@@ -60,16 +60,12 @@ pub(crate) fn median(iter: impl Iterator<Item = f64>) -> Option<f64> {
     }
     let len = values.len();
     let mid = len / 2;
-    values.select_nth_unstable_by(mid, |a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    values.select_nth_unstable_by(mid, |a, b| a.total_cmp(b));
     if len % 2 == 1 {
         Some(values[mid])
     } else {
         let right = values[mid];
-        let left = values[..mid]
-            .iter()
-            .copied()
-            .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-            .unwrap();
+        let left = values[..mid].iter().copied().max_by(|a, b| a.total_cmp(b)).unwrap();
         Some((left + right) / 2.0)
     }
 }

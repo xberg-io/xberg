@@ -169,7 +169,7 @@ fn finalize_document_labels(
         let best = aggregated.into_iter().max_by(|a, b| {
             let a_score = a.confidence.unwrap_or(0.0);
             let b_score = b.confidence.unwrap_or(0.0);
-            a_score.partial_cmp(&b_score).unwrap_or(std::cmp::Ordering::Equal)
+            a_score.total_cmp(&b_score)
         });
         best.into_iter().collect()
     }

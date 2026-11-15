@@ -279,7 +279,7 @@ pub fn max_sim_rank(query: &MultiVectorEmbedding, docs: &[MultiVectorEmbedding])
         })
         .collect();
 
-    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    results.sort_by(|a, b| b.score.total_cmp(&a.score));
     results
 }
 

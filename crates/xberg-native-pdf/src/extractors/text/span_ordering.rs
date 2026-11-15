@@ -691,7 +691,7 @@ impl<'doc> TextExtractor<'doc> {
             return None;
         }
         let mut sorted = gaps.to_vec();
-        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        sorted.sort_by(|a, b| a.total_cmp(b));
         // Return the LOWEST cluster border, not the widest jump: walking the
         // sorted gaps from the bottom, the first jump that leaves the intra-word
         // cluster for a real word gap. A qualifying border needs
