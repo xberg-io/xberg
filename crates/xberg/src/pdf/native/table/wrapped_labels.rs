@@ -1,6 +1,6 @@
 use crate::pdf::table_reconstruct::HocrWord;
 use crate::types::Table;
-use xberg_native_pdf::elements::PathContent;
+use xberg_native_pdf::elements::{PathContent, PathOperation};
 
 pub(super) fn consolidate(table: &mut Table, words: &[HocrWord], paths: &[PathContent], page_height: f32) {
     let Some(bounds) = table.bounding_box.as_ref() else {
@@ -52,13 +52,30 @@ pub(super) fn consolidate(table: &mut Table, words: &[HocrWord], paths: &[PathCo
 // ~keep A filled sliver can veto joining two rows. It supplies no enclosing stroke.
 fn has_divider_fill(path: &PathContent) -> bool {
     path.matrix.is_none()
-        && path.is_rectangle()
+        && is_axis_aligned_rectangle(&path.operations)
         && path.bbox.height > 0.0
         && path.fill_color.is_some_and(|color| {
             let channels = [color.r, color.g, color.b];
             channels.iter().all(|channel| (0.0..=1.0).contains(channel))
                 && channels.iter().any(|channel| *channel < 0.9)
         })
+}
+
+fn is_axis_aligned_rectangle(operations: &[PathOperation]) -> bool {
+    match operations {
+        [PathOperation::Rectangle(..)] | [PathOperation::Rectangle(..), PathOperation::ClosePath] => true,
+        [
+            PathOperation::MoveTo(x0, y0),
+            PathOperation::LineTo(x1, y1),
+            PathOperation::LineTo(x2, y2),
+            PathOperation::LineTo(x3, y3),
+            tail @ ..,
+        ] if matches!(tail, [] | [PathOperation::ClosePath]) => {
+            (y0 == y1 && x1 == x2 && y2 == y3 && x3 == x0 && x0 != x1 && y1 != y2)
+                || (x0 == x1 && y1 == y2 && x2 == x3 && y3 == y0 && y0 != y1 && x1 != x2)
+        }
+        _ => false,
+    }
 }
 
 fn is_wrapped_label(first: &[String], second: &[String]) -> bool {
@@ -107,6 +124,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_legacy_near_rectangle_is_not_exact_filled_divider_evidence() {
+        let mut path = PathContent::from_operations(vec![
+            PathOperation::MoveTo(0.0, 0.0),
+            PathOperation::LineTo(42.0, 0.05),
+            PathOperation::LineTo(42.0, 0.45),
+            PathOperation::LineTo(0.0, 0.4),
+            PathOperation::ClosePath,
+        ]);
+        path.stroke_color = None;
+        path.fill_color = Some(xberg_native_pdf::layout::Color::new(0.0, 0.0, 0.0));
+        assert!(path.is_horizontal_line(0.5));
+        assert!(!has_divider_fill(&path));
+    }
+
+    #[test]
     fn wrapped_label_requires_enclosing_rules_and_rejects_a_separator() {
         let word = |top| HocrWord {
             top,
@@ -132,7 +164,6 @@ mod tests {
     }
     #[test]
     fn consolidation_respects_a_label_only_divider() {
-        use xberg_native_pdf::elements::PathOperation;
         let word = |text: &str, left, top| HocrWord {
             text: text.into(),
             left,

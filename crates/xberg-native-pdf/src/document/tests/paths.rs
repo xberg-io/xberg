@@ -109,6 +109,24 @@ fn form_path_dedup_preserves_inherited_fill_opacity_in_both_orders() {
     assert_eq!(included, [[false, true], [true, false]]);
 }
 
+#[test]
+fn form_path_dedup_preserves_dark_white_dark_repaint_order() {
+    let bar = "10 20 42 0.4 re f";
+    let form = format!(
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 100 100] /Length {} >>\nstream\n{bar}\nendstream",
+        bar.len()
+    );
+    let doc = page_with_xobject("0 g /X1 Do 1 g /X1 Do 0 g /X1 Do", &form);
+    let fills: Vec<_> = doc
+        .extract_paths(0)
+        .unwrap()
+        .into_iter()
+        .filter_map(|path| path.fill_color)
+        .collect();
+    let shade = |gray| crate::layout::Color::new(gray, gray, gray);
+    assert_eq!(fills, [shade(0.0), shade(1.0), shade(0.0)]);
+}
+
 /// One page that draws a curve and paints the XObject `/X1` (object 5, `x1` is its dictionary and stream).
 fn page_with_xobject(paint: &str, x1: &str) -> PdfDocument {
     let content = format!("q 20 0 0 20 300 300 cm {paint} Q 100 100 m 150 200 200 200 250 100 c S");

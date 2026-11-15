@@ -222,11 +222,9 @@ pub struct PathExtractor {
     resources: Option<crate::object::Object>,
     /// Stack of XObjects being processed to detect cycles
     xobject_processing_stack: Vec<FormPathKey>,
-    /// Set of XObjects already fully processed. Prevents combinatorial
-    /// explosion when multiple parent XObjects reference the same children
-    /// (e.g., chart/plot pages where 9 top-level Form XObjects each contain
-    /// 25-42 nested `Do` operators pointing to the same shared XObjects).
-    processed_xobjects: std::collections::HashSet<FormPathKey>,
+    /// Last extracted path count after processing each Form. Repeating it without an intervening
+    /// path is redundant; after intervening paint it may cover a different color. ~keep
+    processed_xobjects: std::collections::HashMap<FormPathKey, usize>,
     /// Maximum XObject nesting depth (prevent stack overflow)
     max_xobject_depth: usize,
     /// Cached XObject name → ObjectRef mapping, built on first lookup.
@@ -274,7 +272,7 @@ impl PathExtractor {
             ctm: Matrix::identity(),
             resources: None,
             xobject_processing_stack: Vec::new(),
-            processed_xobjects: std::collections::HashSet::new(),
+            processed_xobjects: std::collections::HashMap::new(),
             max_xobject_depth: 100,
             cached_xobject_dict: None,
             extgstate_cache: PathExtGStateCache::default(),
@@ -562,7 +560,7 @@ impl PathExtractor {
                 .xobject_processing_stack
                 .iter()
                 .any(|key| key.object == xobject_ref)
-            && !self.processed_xobjects.contains(&self.form_path_key(xobject_ref))
+            && self.processed_xobjects.get(&self.form_path_key(xobject_ref)) != Some(&self.paths.len())
     }
 
     /// Push an XObject and its inherited paint state before entering the Form.
@@ -570,10 +568,10 @@ impl PathExtractor {
         self.xobject_processing_stack.push(self.form_path_key(xobject_ref));
     }
 
-    /// Deduplicate successful reads of the same Form at the same placement and paint state.
+    /// Remember where this Form last painted in the extracted sequence.
     pub(crate) fn pop_xobject(&mut self) {
         if let Some(key) = self.xobject_processing_stack.pop() {
-            self.processed_xobjects.insert(key);
+            self.processed_xobjects.insert(key, self.paths.len());
         }
     }
 
