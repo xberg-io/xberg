@@ -1132,6 +1132,7 @@ fn project_final_span(
         baseline_y: pdf_baseline_y,
         rotation_degrees: span.rotation_degrees,
         assigned_role,
+        ocr_heading_spans: None,
     }
 }
 
@@ -2560,6 +2561,7 @@ mod tests {
             baseline_y: y,
             rotation_degrees: 0.0,
             assigned_role: None,
+            ocr_heading_spans: None,
         }
     }
 

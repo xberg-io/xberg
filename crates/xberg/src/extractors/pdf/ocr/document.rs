@@ -4448,10 +4448,7 @@ pub(super) fn heuristically_restructured_ocr_pages(
     );
 
     match result {
-        Ok(mut doc)
-            if !doc.elements.is_empty() && restructured_document_retains_prose(pages, collected_tables, &doc) =>
-        {
-            retain_restructured_heading_receipts(pages, &mut doc);
+        Ok(doc) if !doc.elements.is_empty() && restructured_document_retains_prose(pages, collected_tables, &doc) => {
             Some(doc)
         }
         Ok(_) => None,
@@ -4461,58 +4458,6 @@ pub(super) fn heuristically_restructured_ocr_pages(
                 "OCR document-level heading/list heuristic failed; falling back to unstructured OCR paragraphs"
             );
             None
-        }
-    }
-}
-
-fn retain_restructured_heading_receipts(
-    pages: &[Vec<crate::pdf::structure::types::PdfParagraph>],
-    doc: &mut crate::types::internal::InternalDocument,
-) {
-    const GEOMETRY_TOLERANCE: f64 = 0.001;
-    for (index, paragraphs) in pages.iter().enumerate() {
-        if !paragraphs
-            .iter()
-            .any(|paragraph| paragraph.ocr_source_spans.iter().any(|span| span.replacement.is_some()))
-        {
-            continue;
-        }
-        let page = Some(index as u32 + 1);
-        for element in doc.elements.iter_mut().filter(|element| element.page == page) {
-            let Some(bounds) = element.bbox else { continue };
-            let mut text = String::new();
-            let mut pending = Vec::new();
-            for paragraph in paragraphs {
-                let Some((left, bottom, right, top)) = paragraph.block_bbox else {
-                    continue;
-                };
-                if f64::from(left) < bounds.x0 - GEOMETRY_TOLERANCE
-                    || f64::from(bottom) < bounds.y0 - GEOMETRY_TOLERANCE
-                    || f64::from(right) > bounds.x1 + GEOMETRY_TOLERANCE
-                    || f64::from(top) > bounds.y1 + GEOMETRY_TOLERANCE
-                {
-                    continue;
-                }
-                if !text.is_empty() {
-                    text.push(' ');
-                }
-                let offset = text.len();
-                text.push_str(&paragraph.text);
-                pending.extend(
-                    paragraph
-                        .ocr_source_spans
-                        .iter()
-                        .filter(|span| span.replacement.is_some())
-                        .cloned()
-                        .map(|mut span| {
-                            span.destination += offset;
-                            span
-                        }),
-                );
-            }
-            if pending.len() == 2 && text == element.text {
-                element.ocr_source_spans.extend(pending);
-            }
         }
     }
 }
@@ -5133,6 +5078,7 @@ mod tests {
             baseline_y: 0.0,
             rotation_degrees: 0.0,
             assigned_role: None,
+            ocr_heading_spans: None,
         };
         let line = crate::pdf::structure::types::PdfLine {
             native_scripts: Vec::new(),

@@ -4401,6 +4401,7 @@ mod tests {
                 baseline_y: y,
                 rotation_degrees: 90.0,
                 assigned_role: None,
+                ocr_heading_spans: None,
             }
         }
 
@@ -4453,6 +4454,7 @@ mod tests {
             baseline_y: y,
             rotation_degrees,
             assigned_role: None,
+            ocr_heading_spans: None,
         }
     }
 

@@ -886,6 +886,7 @@ fn numeric_segment(number: Number, bbox: Rect, scale: f32, font_size: f32) -> cr
         is_monospace: false,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 

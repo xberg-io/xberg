@@ -2424,6 +2424,7 @@ mod tests {
                 baseline_y: 700.0,
                 rotation_degrees: 0.0,
                 assigned_role: None,
+                ocr_heading_spans: None,
             })
             .collect();
 
@@ -3059,6 +3060,7 @@ mod tests {
                 baseline_y: 700.0,
                 rotation_degrees: 0.0,
                 assigned_role: None,
+                ocr_heading_spans: None,
             })
             .collect();
 
@@ -3555,6 +3557,7 @@ mod tests {
             baseline_y: 700.0,
             rotation_degrees: 0.0,
             assigned_role: None,
+            ocr_heading_spans: None,
         }];
         let lines = vec![super::super::types::PdfLine {
             native_scripts: Vec::new(),
@@ -4396,6 +4399,7 @@ mod tests {
                     baseline_y: 700.0 - i as f32 * 12.0,
                     rotation_degrees: 0.0,
                     assigned_role: None,
+                    ocr_heading_spans: None,
                 }],
                 baseline_y: 700.0 - i as f32 * 12.0,
                 dominant_font_size: 10.0,

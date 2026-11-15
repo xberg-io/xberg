@@ -444,8 +444,30 @@ pub(crate) fn segments_from_ocr_pages(
         .map(|paragraphs| {
             paragraphs
                 .iter()
-                .flat_map(|paragraph| paragraph.lines.iter())
-                .flat_map(|line| line.segments.iter().cloned())
+                .flat_map(|paragraph| {
+                    let mut segments = paragraph.lines.iter().flat_map(|line| &line.segments).peekable();
+                    let first = segments.next();
+                    let pending = first
+                        .filter(|segment| segments.peek().is_none() && segment.text == paragraph.text)
+                        .and_then(|_| <&[_; 2]>::try_from(paragraph.ocr_source_spans.as_slice()).ok())
+                        .filter(|spans| {
+                            spans
+                                .iter()
+                                .all(|span| span.replacement.as_ref().is_some_and(|(_, _, n)| *n == 2))
+                        })
+                        .map(|spans| Box::new(spans.clone()));
+                    first
+                        .into_iter()
+                        .chain(segments)
+                        .enumerate()
+                        .map(move |(index, segment)| {
+                            let mut segment = segment.clone();
+                            if index == 0 {
+                                segment.ocr_heading_spans = pending.clone();
+                            }
+                            segment
+                        })
+                })
                 .filter(|segment| !segment.text.trim().is_empty())
                 .collect()
         })
@@ -1848,6 +1870,7 @@ fn make_ocr_pdf_line(
         baseline_y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     };
     types::PdfLine {
         native_scripts: Vec::new(),

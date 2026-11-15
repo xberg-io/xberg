@@ -2986,6 +2986,7 @@ mod tests {
             baseline_y: y,
             rotation_degrees: 0.0,
             assigned_role: None,
+            ocr_heading_spans: None,
         }
     }
 

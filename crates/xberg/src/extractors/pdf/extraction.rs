@@ -1542,6 +1542,7 @@ mod tests {
             baseline_y,
             rotation_degrees: 0.0,
             assigned_role: None,
+            ocr_heading_spans: None,
         };
         let mut segments = vec![
             segment("header", 1000.01),

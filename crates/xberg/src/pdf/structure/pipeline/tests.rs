@@ -3079,6 +3079,7 @@ fn role_seg(text: &str, font_size: f32, is_bold: bool, assigned_role: Option<u8>
         baseline_y: 700.0,
         rotation_degrees: 0.0,
         assigned_role,
+        ocr_heading_spans: None,
     }
 }
 
@@ -3302,6 +3303,7 @@ fn body_line_seg(text: &str, baseline_y: f32) -> SegmentData {
         baseline_y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 
@@ -4584,6 +4586,7 @@ fn column_seg(text: &str, x: f32, width: f32, baseline_y: f32) -> SegmentData {
         baseline_y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 
@@ -4762,6 +4765,7 @@ fn ocr_raster_seg(text: &str, x: f32, y: f32, width: f32, height: f32, font_size
         baseline_y: y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 
@@ -4888,6 +4892,7 @@ fn a_list_item_wraps_onto_later_lines_though_its_bullet_is_set_larger() {
         baseline_y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     };
     let segments = vec![
         line("\u{2022}", 60.0, 4.0, 12.0, 722.36),
@@ -4932,6 +4937,7 @@ fn a_bare_label_carries_a_script_run_but_a_bullet_glyph_does_not() {
         baseline_y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     };
     let label = run("(0)", 100.0, 14.0, 12.0, 500.0);
     let bullet = run("\u{2022}", 100.0, 14.0, 12.0, 500.0);
@@ -4958,6 +4964,7 @@ fn a_bullet_drawn_after_its_body_still_leads_that_item() {
         baseline_y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     };
     let segments = vec![
         line(
@@ -4992,6 +4999,7 @@ fn seg(text: &str, x: f32, width: f32) -> SegmentData {
         baseline_y: 0.0,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 
@@ -7759,6 +7767,7 @@ fn seg_with_font(text: &str, font_size: f32) -> SegmentData {
         baseline_y: 700.0,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 
@@ -7776,6 +7785,7 @@ fn seg_at(text: &str, x: f32, y: f32, height: f32, monospace: bool) -> SegmentDa
         baseline_y: y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 
@@ -8992,6 +9002,7 @@ fn seg_heuristic(text: &str, font_size: f32, baseline_y: f32) -> SegmentData {
         baseline_y,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 
@@ -9867,6 +9878,7 @@ fn stack_seg(text: &str, x: f32, width: f32, font_size: f32, baseline: f32) -> S
         baseline_y: baseline,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 

@@ -15,6 +15,7 @@ fn segment(text: &str) -> SegmentData {
         baseline_y: 0.0,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }
 }
 

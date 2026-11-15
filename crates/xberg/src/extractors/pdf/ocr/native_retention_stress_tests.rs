@@ -796,6 +796,7 @@ fn spanning_row_boxes(native: &[String], read: &[(String, usize)]) -> super::sup
         baseline_y: row as f32 * 12.0,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     };
     let segment = |text: &str, row: usize, x: f32, width: f32| tall_segment(text, row, x, width, 1);
     let native: Vec<SegmentData> = native

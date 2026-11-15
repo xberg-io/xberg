@@ -625,6 +625,7 @@ fn text_to_paragraph(text: &str, font_size: f32, is_bold: bool, is_list_item: bo
         baseline_y: 0.0,
         rotation_degrees: 0.0,
         assigned_role: None,
+        ocr_heading_spans: None,
     }];
 
     let line = super::types::PdfLine {
@@ -679,6 +680,7 @@ mod tests {
             baseline_y: 700.0,
             rotation_degrees: 0.0,
             assigned_role: None,
+            ocr_heading_spans: None,
         }];
 
         let lines = vec![super::super::types::PdfLine {
@@ -1170,6 +1172,7 @@ mod tests {
             baseline_y,
             rotation_degrees: 0.0,
             assigned_role: None,
+            ocr_heading_spans: None,
         }];
         let lines = vec![super::super::types::PdfLine {
             native_scripts: Vec::new(),

@@ -334,6 +334,7 @@ fn redistributed_key(span: &TextSpan) -> SegmentKey {
         baseline_y: span.bbox.y,
         rotation_degrees: span.rotation_degrees,
         assigned_role: None,
+        ocr_heading_spans: None,
     })
 }
 

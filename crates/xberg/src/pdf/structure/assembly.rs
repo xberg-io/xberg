@@ -1082,6 +1082,36 @@ fn push_table_element(builder: &mut InternalDocumentBuilder, table: &crate::type
     builder.push_table(table.clone(), page, bbox)
 }
 
+fn segment_owned_heading_spans(
+    paragraph: &PdfParagraph,
+) -> Option<(String, Vec<crate::types::internal::OcrSourceSpan>)> {
+    let segments = || paragraph.lines.iter().flat_map(|line| &line.segments);
+    if !segments().any(|segment| segment.ocr_heading_spans.is_some()) {
+        return None;
+    }
+    let mut text = String::new();
+    let mut receipts = Vec::new();
+    for segment in segments() {
+        if !text.is_empty() {
+            text.push(' ');
+        }
+        if let Some(pair) = &segment.ocr_heading_spans {
+            for span in pair.iter() {
+                let (expected, _, _) = span.replacement.as_ref()?;
+                let end = span.destination.checked_add(span.source.len())?;
+                if segment.text.get(span.destination..end)? != expected {
+                    return None;
+                }
+                let mut span = span.clone();
+                span.destination = span.destination.checked_add(text.len())?;
+                receipts.push(span);
+            }
+        }
+        text.push_str(&segment.text);
+    }
+    Some((text, receipts))
+}
+
 /// Convert a single PdfParagraph to the appropriate InternalElement and push it,
 /// then stamp the element with `para`'s measured dominant font size.
 ///
@@ -1099,6 +1129,9 @@ fn push_paragraph_element(
     let element_index = push_paragraph_element_by_kind(builder, para, page, hyphen_witnesses);
     builder.set_measured_font_size(element_index, para.dominant_font_size);
     builder.retain_ocr_source_spans(element_index, &para.text, &para.ocr_source_spans);
+    if let Some((text, receipts)) = segment_owned_heading_spans(para) {
+        builder.retain_ocr_source_spans(element_index, &text, &receipts);
+    }
     element_index
 }
 
@@ -2117,7 +2150,50 @@ mod tests {
             baseline_y: 700.0,
             rotation_degrees: 0.0,
             assigned_role: None,
+            ocr_heading_spans: None,
         }
+    }
+
+    #[test]
+    fn discarded_ocr_heading_cannot_pass_receipts_to_an_enclosing_equal_text_node() {
+        use crate::types::internal::{InternalElement, OcrSourceSpan};
+        let owner = InternalElement::text(ElementKind::Paragraph, "POP WAcES:", 0);
+        let spans = std::array::from_fn(|index| {
+            let (range, expected, replacement) = if index == 0 {
+                (0..3, "POP", "PDP")
+            } else {
+                (4..10, "WAcES:", "IMAGES")
+            };
+            OcrSourceSpan {
+                owner: owner.id.clone(),
+                occurrence: index,
+                replacement: Some((expected.to_owned(), replacement.to_owned(), 2)),
+                insertion: None,
+                source: range.clone(),
+                destination: range.start,
+            }
+        });
+        let mut retained = make_paragraph_in_box("— POP WAcES:", 700., 0., 100.);
+        let mut actual = plain_segment("POP WAcES:");
+        actual.x = 45.0;
+        actual.width = 40.0;
+        actual.ocr_heading_spans = Some(Box::new(spans));
+        let dash = SegmentData {
+            width: 10.0,
+            ..plain_segment("—")
+        };
+        retained.lines[0].segments = vec![dash, actual];
+        let enclosing_lookalike = make_paragraph_in_box("— POP WAcES:", 700., 0., 100.);
+
+        let assemble =
+            |paragraph| assemble_internal_document(vec![vec![paragraph]], &[], None, &[], &Default::default());
+        let positive = assemble(retained);
+        let negative = assemble(enclosing_lookalike);
+        assert_eq!(positive.elements[0].text, negative.elements[0].text);
+        assert_eq!(positive.elements[0].bbox, negative.elements[0].bbox);
+        assert_eq!(positive.elements[0].ocr_source_spans.len(), 2);
+        assert_eq!(positive.elements[0].ocr_source_spans[0].destination, "— ".len());
+        assert!(negative.elements[0].ocr_source_spans.is_empty());
     }
 
     #[test]
@@ -3714,6 +3790,7 @@ mod tests {
                     baseline_y: 700.0,
                     rotation_degrees: 0.0,
                     assigned_role: None,
+                    ocr_heading_spans: None,
                 }],
                 baseline_y: 700.0,
                 dominant_font_size: 24.0,
