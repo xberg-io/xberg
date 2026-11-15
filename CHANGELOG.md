@@ -242,6 +242,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ocr): Remove false short words and repeated texture reads from noisy scanned PDFs in Plain and Markdown output.** Legitimate text and raw OCR elements are preserved. (#2943)
 - **(ocr): Recover verified panel dimensions between adjacent lines in Plain output for tall scanned PDFs.** (#2502)
 - **(tables): Recover tables on forced-OCR PDF pages that need a rotation retry.** (#2332)
+- **(tables): Preserve verified column headers above repeated groups of numeric data in PDF tables.** (#2332)
 
 - **(ocr): Add opt-in recovery for PaddleOCR ruled JPEG table cells.** The English PP-OCRv6 Small ONNX Runtime
   path can repair corroborated comma or period reads and restore adjacent numeric cells from source-owned
