@@ -198,7 +198,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   limits, archive depth, timeouts and URL caps, never raise or remove them.
 
 - **(hwp): Cap the decompressed size of compressed HWP body-text sections.**
-  Sections are now inflated under `security_limits.max_content_size` each and `max_archive_size` in total, so a small crafted `.hwp` can no longer expand without bound.
+  Sections are now inflated under `security_limits.max_content_size` each and `max_archive_size` in total, so a small crafted `.hwp` can no longer expand without bound. Both limits are configurable; a legitimate document whose sections exceed them is now rejected with a security error until the limits are raised.
 
 - **(archive): Bound nested-archive extraction by one budget instead of the full limits at every level.**
   `max_archive_size` now caps decompressed bytes across all nesting levels of one archive, and `max_content_size`

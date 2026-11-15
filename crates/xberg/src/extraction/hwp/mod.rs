@@ -175,6 +175,10 @@ mod tests {
     }
 
     fn synthetic_compressed_hwp(uncompressed_len: usize) -> Vec<u8> {
+        synthetic_compressed_hwp_sections(&[uncompressed_len])
+    }
+
+    fn synthetic_compressed_hwp_sections(uncompressed_lens: &[usize]) -> Vec<u8> {
         use flate2::Compression;
         use flate2::write::DeflateEncoder;
         use std::io::Write;
@@ -183,20 +187,21 @@ mod tests {
         header[..17].copy_from_slice(b"HWP Document File");
         header[36..40].copy_from_slice(&1u32.to_le_bytes());
 
-        let mut enc = DeflateEncoder::new(Vec::new(), Compression::best());
-        enc.write_all(&vec![0u8; uncompressed_len]).expect("write zeros");
-        let section = enc.finish().expect("finish deflate");
-
         let mut cfb = cfb::CompoundFile::create(std::io::Cursor::new(Vec::new())).expect("create cfb");
         cfb.create_stream("FileHeader")
             .expect("FileHeader stream")
             .write_all(&header)
             .expect("write header");
         cfb.create_storage("BodyText").expect("BodyText storage");
-        cfb.create_stream("BodyText/Section0")
-            .expect("section stream")
-            .write_all(&section)
-            .expect("write section");
+        for (index, &uncompressed_len) in uncompressed_lens.iter().enumerate() {
+            let mut enc = DeflateEncoder::new(Vec::new(), Compression::best());
+            enc.write_all(&vec![0u8; uncompressed_len]).expect("write zeros");
+            let section = enc.finish().expect("finish deflate");
+            cfb.create_stream(format!("BodyText/Section{index}"))
+                .expect("section stream")
+                .write_all(&section)
+                .expect("write section");
+        }
         cfb.into_inner().into_inner()
     }
 
@@ -220,6 +225,28 @@ mod tests {
         };
         let err = extract_hwp_document(&bytes, &limits).expect_err("total budget must be enforced");
         assert!(matches!(err, HwpError::Security(_)), "got {err:?}");
+    }
+
+    #[test]
+    fn test_earlier_sections_are_debited_from_the_total_budget() {
+        const MIB: usize = 1024 * 1024;
+        let bytes = synthetic_compressed_hwp_sections(&[2 * MIB, 2 * MIB]);
+
+        let over = SecurityLimits {
+            max_content_size: 3 * MIB,
+            max_archive_size: 3 * MIB,
+            ..SecurityLimits::default()
+        };
+        let err = extract_hwp_document(&bytes, &over).expect_err("sum of sections exceeds the total budget");
+        assert!(matches!(err, HwpError::Security(_)), "got {err:?}");
+
+        let fits = SecurityLimits {
+            max_content_size: 3 * MIB,
+            max_archive_size: 5 * MIB,
+            ..SecurityLimits::default()
+        };
+        let doc = extract_hwp_document(&bytes, &fits).expect("sum of sections fits the total budget");
+        assert_eq!(doc.sections.len(), 2);
     }
 
     #[test]
