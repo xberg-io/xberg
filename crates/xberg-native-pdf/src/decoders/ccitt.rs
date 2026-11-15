@@ -26,10 +26,8 @@ pub use strict::decode_complete_group4;
 pub struct CcittFaxDecoder;
 
 impl StreamDecoder for CcittFaxDecoder {
-    // `max_output_bytes` (GH#1764) is ignored: this filter is a pass-through here, so
-    // output never exceeds input length. ~keep
-    fn decode(&self, input: &[u8], _max_output_bytes: usize) -> Result<Vec<u8>> {
-        tracing::debug!(filter = "CCITTFaxDecode", bytes = input.len(), "pass-through");
+    fn decode(&self, input: &[u8], max_output_bytes: usize) -> Result<Vec<u8>> {
+        super::check_output_cap(self.name(), input.len(), max_output_bytes)?;
         Ok(input.to_vec())
     }
 

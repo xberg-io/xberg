@@ -38,6 +38,40 @@ fn filled_path_uses_black_before_any_color_operator() {
 }
 
 #[test]
+fn skewed_filled_rectangle_retains_all_four_corners() {
+    let mut extractor = PathExtractor::new();
+    extractor.set_ctm(Matrix {
+        b: -0.05,
+        ..Matrix::identity()
+    });
+    extractor.rectangle(0.0, 0.0, 42.0, 2.4);
+    extractor.fill(FillRule::NonZero);
+    let paths = extractor.finish();
+    let [path] = paths.as_slice() else {
+        panic!("one filled path")
+    };
+    assert!(!path.is_horizontal_line(0.5), "skewed fill is not a thin divider");
+    assert!(!path.is_rectangle());
+    assert!((path.bbox.y + 2.1).abs() < 0.001);
+    assert!((path.bbox.height - 4.5).abs() < 0.001);
+}
+
+#[test]
+fn thin_filled_rectangle_accepts_a_redundant_close_operator() {
+    let mut extractor = PathExtractor::new();
+    extractor.rectangle(0.0, 0.0, 42.0, 0.4);
+    extractor.close_path();
+    extractor.fill(FillRule::NonZero);
+    let paths = extractor.finish();
+    let [path] = paths.as_slice() else {
+        panic!("one filled path")
+    };
+    assert!(path.has_fill());
+    assert!(path.is_rectangle());
+    assert!(path.is_horizontal_line(0.5));
+}
+
+#[test]
 fn test_rectangle_fill() {
     let mut extractor = PathExtractor::new();
     extractor.set_fill_color(Color::new(1.0, 0.0, 0.0));
@@ -397,6 +431,31 @@ fn cached_extgstate_keeps_the_stroke_opacity_inside_zero_to_one() {
         assert!(extractor.apply_cached_path_extgstate("GS", &mut state));
         assert_eq!(state.stroke_alpha, kept, "CA {written}");
     }
+}
+
+#[test]
+fn cached_extgstate_suppresses_a_transparent_fill_until_state_is_restored() {
+    let mut extractor = PathExtractor::new();
+    extractor.cache_path_extgstate(
+        "InvisibleFill",
+        crate::rendering::ext_gstate::ParsedExtGState {
+            fill_alpha: Some(0.0),
+            ..Default::default()
+        },
+    );
+    let original = PathGraphicsState::new();
+    let mut scoped = original.clone();
+    assert!(extractor.apply_cached_path_extgstate("InvisibleFill", &mut scoped));
+    extractor.rectangle(0.0, 0.0, 20.0, 0.4);
+    extractor.fill(FillRule::NonZero);
+    extractor.update_from_path_state(&original);
+    extractor.rectangle(0.0, 5.0, 20.0, 0.4);
+    extractor.fill(FillRule::NonZero);
+    let paths = extractor.finish();
+    assert_eq!(
+        paths.iter().map(PathContent::has_fill).collect::<Vec<_>>(),
+        [false, true]
+    );
 }
 
 #[test]

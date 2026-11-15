@@ -6,6 +6,48 @@
 
 use super::*;
 
+// Apply these totals only to Form work. Page streams retain their existing parser limits. ~keep
+const MAX_FORM_VISITS_PER_PAGE: usize = 16_384;
+const MAX_FORM_BYTES_PER_PAGE: usize = 256 * 1024 * 1024;
+const MAX_FORM_OPERATORS_PER_PAGE: usize = 1_000_000;
+
+pub(super) struct FormPathBudget {
+    visits: usize,
+    decoded_bytes: usize,
+    operators: usize,
+    incomplete: bool,
+    complete_streams: HashMap<ObjectRef, std::sync::Arc<Vec<u8>>>,
+    complete_stream_bytes: usize,
+}
+
+impl FormPathBudget {
+    pub(super) fn new(visits: usize, decoded_bytes: usize, operators: usize) -> Self {
+        Self {
+            visits,
+            decoded_bytes,
+            operators,
+            incomplete: false,
+            complete_streams: HashMap::new(),
+            complete_stream_bytes: 0,
+        }
+    }
+
+    fn incomplete(&mut self, message: String) -> Error {
+        self.incomplete = true;
+        Error::LayoutAnalysis(message)
+    }
+
+    fn charge(&mut self, visits: usize, decoded_bytes: usize, operators: usize) -> Result<()> {
+        if visits > self.visits || decoded_bytes > self.decoded_bytes || operators > self.operators {
+            return Err(self.incomplete("Form path extraction exceeded the page work budget".into()));
+        }
+        self.visits -= visits;
+        self.decoded_bytes -= decoded_bytes;
+        self.operators -= operators;
+        Ok(())
+    }
+}
+
 impl PdfDocument {
     /// Inspect only a bounded page-local stream before materializing its vector paths.
     #[doc(hidden)]
@@ -95,6 +137,21 @@ impl PdfDocument {
     /// # }
     /// ```
     pub fn extract_paths(&self, page_index: usize) -> Result<Vec<crate::elements::PathContent>> {
+        self.extract_paths_with_form_budget(
+            page_index,
+            FormPathBudget::new(
+                MAX_FORM_VISITS_PER_PAGE,
+                MAX_FORM_BYTES_PER_PAGE,
+                MAX_FORM_OPERATORS_PER_PAGE,
+            ),
+        )
+    }
+
+    pub(super) fn extract_paths_with_form_budget(
+        &self,
+        page_index: usize,
+        mut form_budget: FormPathBudget,
+    ) -> Result<Vec<crate::elements::PathContent>> {
         use crate::content::{Operator, parse_content_stream_paths_only};
         use crate::elements::{LineCap, LineJoin};
         use crate::extractors::paths::{FillRule, PathExtractor, PathGraphicsStateStack};
@@ -282,7 +339,13 @@ impl PdfDocument {
                 }
 
                 Operator::Do { name } => {
-                    if let Err(error) = self.process_form_xobject_paths(&name, &mut extractor, &mut state_stack) {
+                    if let Err(error) =
+                        self.process_form_xobject_paths(&name, &mut extractor, &mut state_stack, &mut form_budget)
+                    {
+                        // A truncated paint sequence cannot safely serve as source evidence. ~keep
+                        if form_budget.incomplete {
+                            return Err(error);
+                        }
                         tracing::warn!(target: LOG_TARGET,
                             error_code = error.telemetry_code(),
                             error_offset = ?error.telemetry_offset(),
@@ -516,8 +579,9 @@ impl PdfDocument {
         name: &str,
         extractor: &mut crate::extractors::paths::PathExtractor,
         state_stack: &mut crate::extractors::paths::PathGraphicsStateStack,
+        form_budget: &mut FormPathBudget,
     ) -> Result<()> {
-        use crate::content::{Matrix, Operator, parse_content_stream_paths_only};
+        use crate::content::{Matrix, Operator, parser::parse_complete_form_path_operators};
         use crate::elements::{LineCap, LineJoin};
         use crate::extractors::paths::FillRule;
         use crate::layout::Color;
@@ -568,39 +632,37 @@ impl PdfDocument {
             }
         }
 
-        // Decode stream — reuse document-level cache shared with text extraction. ~keep
-        let cached_stream = { self.xobject_stream_cache.lock_or_recover().get(&xobject_ref).cloned() };
-        let stream_data = if let Some(cached) = cached_stream {
-            cached.as_ref().clone()
+        form_budget.charge(1, 0, 0)?;
+        // Only successful strict decodes enter this page-local cache. The shared
+        // text/image cache can contain recovered prefixes. ~keep
+        let stream_data = if let Some(cached) = form_budget.complete_streams.get(&xobject_ref) {
+            std::sync::Arc::clone(cached)
         } else {
-            match self.decode_stream_with_encryption(&xobject, xobject_ref) {
-                Ok(data) => {
-                    const MAX_STREAM_CACHE_BYTES: usize = 50 * 1024 * 1024;
-                    let current = self.xobject_stream_cache_bytes.load(Ordering::Relaxed);
-                    if current + data.len() <= MAX_STREAM_CACHE_BYTES {
-                        self.xobject_stream_cache_bytes
-                            .store(current + data.len(), Ordering::Relaxed);
-                        self.xobject_stream_cache
-                            .lock_or_recover()
-                            .insert(xobject_ref, std::sync::Arc::new(data.clone()));
-                    }
-                    data
-                }
-                Err(e) => {
+            let data = match self.decode_form_stream_with_limit(&xobject, xobject_ref, form_budget.decoded_bytes) {
+                Ok(data) => std::sync::Arc::new(data),
+                Err(error) => {
                     extractor.pop_xobject_failed();
-                    return Err(e);
+                    return Err(form_budget.incomplete(format!("incomplete Form path decode: {error}")));
                 }
+            };
+            const MAX_STREAM_CACHE_BYTES: usize = 50 * 1024 * 1024;
+            if data.len() <= MAX_STREAM_CACHE_BYTES - form_budget.complete_stream_bytes {
+                form_budget.complete_stream_bytes += data.len();
+                form_budget
+                    .complete_streams
+                    .insert(xobject_ref, std::sync::Arc::clone(&data));
             }
+            data
         };
 
-        let operators = match parse_content_stream_paths_only(&stream_data) {
-            Ok(ops) => ops,
-            Err(e) => {
-                extractor.pop_xobject_failed();
-                return Err(e);
-            }
+        // Cached Forms consume the same traversal work on each painted occurrence. ~keep
+        form_budget.charge(0, stream_data.len(), 0)?;
+        let Some(operators) = parse_complete_form_path_operators(&stream_data, form_budget.operators) else {
+            extractor.pop_xobject_failed();
+            return Err(form_budget.incomplete("incomplete Form path parse".into()));
         };
 
+        form_budget.charge(0, 0, operators.len())?;
         let matrix = if let Some(matrix_obj) = xobject_dict.get("Matrix") {
             if let Some(array) = matrix_obj.as_array() {
                 if array.len() >= 6 {
@@ -781,7 +843,12 @@ impl PdfDocument {
                 Operator::ClipEvenOdd => extractor.clip_even_odd(),
 
                 Operator::Do { name: nested_name } => {
-                    if let Err(error) = self.process_form_xobject_paths(&nested_name, extractor, state_stack) {
+                    if let Err(error) =
+                        self.process_form_xobject_paths(&nested_name, extractor, state_stack, form_budget)
+                    {
+                        if form_budget.incomplete {
+                            return Err(error);
+                        }
                         tracing::warn!(target: LOG_TARGET,
                             error_code = error.telemetry_code(),
                             error_offset = ?error.telemetry_offset(),

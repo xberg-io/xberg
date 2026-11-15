@@ -17,9 +17,8 @@ use crate::error::{Error, Result};
 pub struct JpxDecoder;
 
 impl super::StreamDecoder for JpxDecoder {
-    // `max_output_bytes` (GH#1764) is ignored: this is a pass-through, so output
-    // never exceeds input length. ~keep
-    fn decode(&self, input: &[u8], _max_output_bytes: usize) -> Result<Vec<u8>> {
+    fn decode(&self, input: &[u8], max_output_bytes: usize) -> Result<Vec<u8>> {
+        super::check_output_cap(self.name(), input.len(), max_output_bytes)?;
         Ok(input.to_vec())
     }
 

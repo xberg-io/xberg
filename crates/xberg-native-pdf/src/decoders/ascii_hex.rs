@@ -3,7 +3,7 @@
 //! Decodes hexadecimal-encoded data (e.g., "48656C6C6F" -> "Hello").
 //! Whitespace is ignored, and odd-length input is padded with implicit '0'.
 
-use crate::decoders::StreamDecoder;
+use crate::decoders::{StreamDecoder, check_output_cap};
 use crate::error::{Error, Result};
 
 /// ASCIIHexDecode filter implementation.
@@ -12,9 +12,7 @@ use crate::error::{Error, Result};
 pub struct AsciiHexDecoder;
 
 impl StreamDecoder for AsciiHexDecoder {
-    // `max_output_bytes` (GH#1764) is ignored: ASCIIHex output is at most half of
-    // input length, so it can never exceed the cap that already bounded the input. ~keep
-    fn decode(&self, input: &[u8], _max_output_bytes: usize) -> Result<Vec<u8>> {
+    fn decode(&self, input: &[u8], max_output_bytes: usize) -> Result<Vec<u8>> {
         let mut output = Vec::new();
         let mut chars = input
             .iter()
@@ -31,6 +29,7 @@ impl StreamDecoder for AsciiHexDecoder {
                 .ok_or_else(|| Error::Decode(format!("ASCIIHexDecode: invalid hex digit '{}'", low as char)))?;
 
             let byte = (high_nibble << 4) | low_nibble;
+            check_output_cap(self.name(), output.len() + 1, max_output_bytes)?;
             output.push(byte);
         }
 

@@ -1,6 +1,8 @@
 //! PDF object types.
 
 use crate::error::{Error, Result};
+use crate::parser_config::ParserOptions;
+use std::borrow::Cow;
 
 /// PDF object representation.
 #[derive(Debug, Clone, PartialEq)]
@@ -200,7 +202,7 @@ impl Object {
     }
 
     pub(crate) fn decode_image_stream_data(&self, expected_filter_output_size: Option<usize>) -> Result<Vec<u8>> {
-        self.decode_stream_data_with_decryption_and_expected_size(None, 0, 0, expected_filter_output_size, true)
+        self.decode_stream_data_with_decryption_and_expected_size(None, 0, 0, expected_filter_output_size, true, None)
     }
 
     /// Decode stream data with optional decryption.
@@ -223,7 +225,7 @@ impl Object {
         obj_num: u32,
         gen_num: u32,
     ) -> Result<Vec<u8>> {
-        self.decode_stream_data_with_decryption_and_expected_size(decryption_fn, obj_num, gen_num, None, false)
+        self.decode_stream_data_with_decryption_and_expected_size(decryption_fn, obj_num, gen_num, None, false, None)
     }
 
     pub(crate) fn decode_stream_data_with_decryption_and_expected_size(
@@ -233,6 +235,7 @@ impl Object {
         gen_num: u32,
         expected_filter_output_size: Option<usize>,
         image_stream: bool,
+        byte_limit: Option<usize>,
     ) -> Result<Vec<u8>> {
         match self {
             Object::Stream { dict, data } => {
@@ -242,10 +245,19 @@ impl Object {
 
                 // Step 2: Apply filters (decompression)
                 // PDF Spec: ISO 32000-1:2008, Section 7.3.8.2 - Stream Objects ~keep
-                let filters = dict.get("Filter").map(extract_filter_names).unwrap_or_default();
+                let filter = dict.get("Filter");
+                if byte_limit.is_some() && !valid_form_filter_entry(filter) {
+                    return Err(Error::Decode("invalid Form filter entry".into()));
+                }
+                let filters = filter.map(extract_filter_names).unwrap_or_default();
 
                 if filters.is_empty() {
-                    Ok(decrypted_data)
+                    if let Some(limit) = byte_limit
+                        && decrypted_data.len() > limit
+                    {
+                        return Err(Error::Decode(format!("unfiltered stream exceeds {limit} bytes")));
+                    }
+                    Ok(decrypted_data.into_owned())
                 } else {
                     // Get decode parameters if present
                     // PDF Spec: ISO 32000-1:2008, Section 7.4.2 - DecodeParms ~keep
@@ -259,7 +271,11 @@ impl Object {
                             expected_filter_output_size,
                         );
                     }
-                    let decode_params = extract_decode_params(dict.get("DecodeParms"));
+                    let decode_parms = dict.get("DecodeParms");
+                    if let Some(limit) = byte_limit {
+                        return decode_bounded_form_filters(&decrypted_data, &filters, decode_parms, limit);
+                    }
+                    let decode_params = extract_decode_params(decode_parms);
 
                     if let Some(expected_size) = expected_filter_output_size {
                         crate::decoders::decode_stream_with_params_and_expected_size(
@@ -273,7 +289,7 @@ impl Object {
                     }
                 }
             }
-            Object::Dictionary(dict) => {
+            Object::Dictionary(dict) if byte_limit.is_none() => {
                 // Per ISO 32000, every stream is a dictionary. Some PDFs (e.g.,
                 // SafeDocs Dialect-StreamIsDict.pdf) store objects as plain
                 // dictionaries where a stream is expected. Treat as empty stream. ~keep
@@ -294,6 +310,58 @@ impl Object {
     }
 }
 
+fn valid_form_filter_entry(filter: Option<&Object>) -> bool {
+    match filter {
+        None | Some(Object::Null | Object::Name(_)) => true,
+        Some(Object::Array(filters)) => filters.iter().all(|filter| filter.as_name().is_some()),
+        _ => false,
+    }
+}
+
+fn decode_bounded_form_filters(
+    data: &[u8],
+    filters: &[String],
+    decode_parms: Option<&Object>,
+    limit: usize,
+) -> Result<Vec<u8>> {
+    let defaults = ParserOptions::default();
+    let options = ParserOptions {
+        // The decoder API reserves zero for an unlimited cap.
+        max_decompressed_size: defaults.max_decompressed_size.min(limit.max(1)),
+        ..defaults
+    };
+    let predictors = extract_decode_params(decode_parms);
+    let early_changes = form_lzw_early_changes(filters, decode_parms)?;
+    let decoded =
+        crate::decoders::decode_complete_form_stream(data, filters, predictors.as_ref(), &options, &early_changes)?;
+    if decoded.len() > limit {
+        return Err(Error::Decode(format!("filtered stream exceeds {limit} bytes")));
+    }
+    Ok(decoded)
+}
+
+fn form_lzw_early_changes(filters: &[String], decode_parms: Option<&Object>) -> Result<Vec<bool>> {
+    filters
+        .iter()
+        .enumerate()
+        .map(|(index, filter)| {
+            if !crate::decoders::is_lzw_filter(filter) {
+                return Ok(true);
+            }
+            let parms = match decode_parms {
+                Some(Object::Array(stages)) => stages.get(index).and_then(Object::as_dict),
+                Some(Object::Dictionary(parms)) if index == 0 => Some(parms),
+                _ => None,
+            };
+            match parms.and_then(|parms| parms.get("EarlyChange")) {
+                None | Some(Object::Null | Object::Integer(1)) => Ok(true),
+                Some(Object::Integer(0)) => Ok(false),
+                _ => Err(Error::Decode("LZWDecode: EarlyChange must be 0 or 1".into())),
+            }
+        })
+        .collect()
+}
+
 /// Decrypts a stream's raw bytes before any filter is applied, or returns them unchanged
 /// when there is no decryption function (per ISO 32000-1:2008 §7.6.2, decryption happens
 /// before decompression).
@@ -308,14 +376,14 @@ impl Object {
 ///
 /// Split out of [`Object::decode_stream_data_with_decryption_and_expected_size`] purely
 /// to shorten that method.
-fn decrypt_stream_data(
-    data: &[u8],
+fn decrypt_stream_data<'a>(
+    data: &'a [u8],
     decryption_fn: Option<&dyn Fn(&[u8]) -> Result<Vec<u8>>>,
     obj_num: u32,
     gen_num: u32,
-) -> Result<Vec<u8>> {
+) -> Result<Cow<'a, [u8]>> {
     let Some(decrypt) = decryption_fn else {
-        return Ok(data.to_vec());
+        return Ok(Cow::Borrowed(data));
     };
 
     tracing::debug!(
@@ -327,7 +395,7 @@ fn decrypt_stream_data(
     match decrypt(data) {
         Ok(data) => {
             tracing::debug!(bytes = data.len(), "decryption successful");
-            Ok(data)
+            Ok(Cow::Owned(data))
         }
         Err(error) => {
             tracing::error!(

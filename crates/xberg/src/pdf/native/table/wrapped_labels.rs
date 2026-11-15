@@ -1,6 +1,6 @@
 use crate::pdf::table_reconstruct::HocrWord;
 use crate::types::Table;
-use xberg_native_pdf::elements::PathContent;
+use xberg_native_pdf::elements::{PathContent, PathOperation};
 
 pub(super) fn consolidate(table: &mut Table, words: &[HocrWord], paths: &[PathContent], page_height: f32) {
     let Some(bounds) = table.bounding_box.as_ref() else {
@@ -13,11 +13,12 @@ pub(super) fn consolidate(table: &mut Table, words: &[HocrWord], paths: &[PathCo
     }
     let rules: Vec<_> = paths
         .iter()
-        .filter(|path| path.has_stroke() && path.is_horizontal_line(0.5))
-        .map(PathContent::rendered_bbox)
-        .filter(|rule| f64::from(rule.x) < bounds.x1 && f64::from(rule.right()) > bounds.x0)
-        .map(|rule| {
-            let full_width = f64::from(rule.x) <= bounds.x0 + 1.0 && f64::from(rule.right()) >= bounds.x1 - 1.0;
+        .filter(|path| path.is_horizontal_line(0.5) && (path.has_stroke() || has_divider_fill(path)))
+        .map(|path| (path.rendered_bbox(), path.has_stroke()))
+        .filter(|(rule, _)| f64::from(rule.x) < bounds.x1 && f64::from(rule.right()) > bounds.x0)
+        .map(|(rule, stroked)| {
+            let full_width =
+                stroked && f64::from(rule.x) <= bounds.x0 + 1.0 && f64::from(rule.right()) >= bounds.x1 - 1.0;
             (page_height - rule.center().y, full_width)
         })
         .collect();
@@ -46,6 +47,35 @@ pub(super) fn consolidate(table: &mut Table, words: &[HocrWord], paths: &[PathCo
     let first = table.cells.remove(index);
     table.cells[index][0] = format!("{} {}", first[0], table.cells[index][0]);
     table.markdown = crate::pdf::table_reconstruct::table_to_markdown(&table.cells);
+}
+
+// ~keep A filled sliver can veto joining two rows. It supplies no enclosing stroke.
+fn has_divider_fill(path: &PathContent) -> bool {
+    path.matrix.is_none()
+        && is_axis_aligned_rectangle(&path.operations)
+        && path.bbox.height > 0.0
+        && path.fill_color.is_some_and(|color| {
+            let channels = [color.r, color.g, color.b];
+            channels.iter().all(|channel| (0.0..=1.0).contains(channel))
+                && channels.iter().any(|channel| *channel < 0.9)
+        })
+}
+
+fn is_axis_aligned_rectangle(operations: &[PathOperation]) -> bool {
+    match operations {
+        [PathOperation::Rectangle(..)] | [PathOperation::Rectangle(..), PathOperation::ClosePath] => true,
+        [
+            PathOperation::MoveTo(x0, y0),
+            PathOperation::LineTo(x1, y1),
+            PathOperation::LineTo(x2, y2),
+            PathOperation::LineTo(x3, y3),
+            tail @ ..,
+        ] if matches!(tail, [] | [PathOperation::ClosePath]) => {
+            (y0 == y1 && x1 == x2 && y2 == y3 && x3 == x0 && x0 != x1 && y1 != y2)
+                || (x0 == x1 && y1 == y2 && x2 == x3 && y3 == y0 && y0 != y1 && x1 != x2)
+        }
+        _ => false,
+    }
 }
 
 fn is_wrapped_label(first: &[String], second: &[String]) -> bool {
@@ -94,6 +124,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_legacy_near_rectangle_is_not_exact_filled_divider_evidence() {
+        let mut path = PathContent::from_operations(vec![
+            PathOperation::MoveTo(0.0, 0.0),
+            PathOperation::LineTo(42.0, 0.05),
+            PathOperation::LineTo(42.0, 0.45),
+            PathOperation::LineTo(0.0, 0.4),
+            PathOperation::ClosePath,
+        ]);
+        path.stroke_color = None;
+        path.fill_color = Some(xberg_native_pdf::layout::Color::new(0.0, 0.0, 0.0));
+        assert!(path.is_horizontal_line(0.5));
+        assert!(!has_divider_fill(&path));
+    }
+
+    #[test]
     fn wrapped_label_requires_enclosing_rules_and_rejects_a_separator() {
         let word = |top| HocrWord {
             top,
@@ -119,7 +164,6 @@ mod tests {
     }
     #[test]
     fn consolidation_respects_a_label_only_divider() {
-        use xberg_native_pdf::elements::PathOperation;
         let word = |text: &str, left, top| HocrWord {
             text: text.into(),
             left,
@@ -154,16 +198,40 @@ mod tests {
             let y = 100.0_f32 - top;
             PathContent::from_operations(vec![PathOperation::MoveTo(left, y), PathOperation::LineTo(right, y)])
         };
-        let mut rules = vec![rule(8.0, 112.0, 10.0), rule(8.0, 112.0, 34.0)];
+        let rules = vec![rule(8.0, 112.0, 10.0), rule(8.0, 112.0, 34.0)];
         let mut united = table();
         consolidate(&mut united, &words, &rules, 100.0);
         assert_eq!(united.cells.len(), 1);
         assert_eq!(united.cells[0][0], "Operating income before tax");
-        rules.push(rule(8.0, 50.0, 22.0));
         let mut divided = table();
-        consolidate(&mut divided, &words, &rules, 100.0);
-        assert_eq!(divided.cells, rows, "label-only interior divider");
+        let mut stroked = rules.clone();
+        stroked.push(rule(8.0, 50.0, 22.0));
+        consolidate(&mut divided, &words, &stroked, 100.0);
+        assert_eq!(divided.cells, rows, "stroked label-only interior divider");
 
+        let filled = |height, color| {
+            let mut path = PathContent::rect(8.0, 78.0 - height / 2.0, 42.0, height);
+            path.stroke_color = None;
+            path.fill_color = color;
+            path
+        };
+        let black = xberg_native_pdf::layout::Color::new(0.0, 0.0, 0.0);
+        let mut rule_fill = rules.clone();
+        rule_fill.push(filled(0.4, Some(black)));
+        let mut divided = table();
+        consolidate(&mut divided, &words, &rule_fill, 100.0);
+        assert_eq!(divided.cells, rows, "filled label-only interior divider");
+        let white = xberg_native_pdf::layout::Color::new(1.0, 1.0, 1.0);
+        for path in [filled(0.4, None), filled(0.4, Some(white)), filled(2.0, Some(black))] {
+            let mut paths = rules.clone();
+            paths.push(path);
+            let mut wrapped = table();
+            consolidate(&mut wrapped, &words, &paths, 100.0);
+            assert_eq!(
+                wrapped.cells, united.cells,
+                "paintless, white, and thick paths do not veto"
+            );
+        }
         let mut partial_boundary = table();
         consolidate(
             &mut partial_boundary,
