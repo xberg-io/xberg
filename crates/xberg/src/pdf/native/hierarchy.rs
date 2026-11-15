@@ -1099,6 +1099,10 @@ fn project_final_spans(
     dedupe_redrawn_segments(segments)
 }
 
+pub(super) fn project_flat_painted_span(span: &xberg_native_pdf::layout::TextSpan) -> SegmentData {
+    project_final_span(span.clone(), &HashMap::new(), ScriptGeometry::Flatten)
+}
+
 fn project_final_span(
     span: xberg_native_pdf::layout::TextSpan,
     mcid_roles: &HashMap<u32, Option<u8>>,

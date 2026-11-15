@@ -128,7 +128,19 @@ fn has_painted_header(table: &Table, width: usize, spans: &[TextSpan]) -> bool {
     {
         return false;
     }
-    painted_label_bands(&local, first, pitch)
+    painted_label_bands(&local, first, pitch, &table.cells[0]) && painted_cells_match(table, &local)
+}
+
+// ~keep Reconstruct from the same painting spans that supplied the two label bands.
+fn painted_cells_match(table: &Table, local: &[&TextSpan]) -> bool {
+    use crate::pdf::native::hierarchy::project_flat_painted_span;
+    use crate::pdf::table_reconstruct::project_segment_words;
+
+    let segments: Vec<_> = local.iter().map(|&span| project_flat_painted_span(span)).collect();
+    let page_height = segments.iter().map(|span| span.y + span.height).fold(792.0, f32::max);
+    let words = project_segment_words(&segments, page_height, None);
+    super::reconstruct_region_table(&words, page_height, table.page_number, false, 0)
+        .is_some_and(|painted| painted.cells == table.cells)
 }
 
 struct RecordBand {
@@ -188,11 +200,11 @@ fn inside_table(span: &TextSpan, bounds: BoundingBox) -> bool {
         && !span.text.trim().is_empty()
         && f64::from(span.bbox.x + span.bbox.width * 0.5) >= bounds.x0
         && f64::from(span.bbox.x + span.bbox.width * 0.5) <= bounds.x1
-        && f64::from(span.bbox.y) >= bounds.y0
+        && f64::from(span.bbox.y + BASELINE_TOLERANCE) >= bounds.y0
         && f64::from(span.bbox.y) <= bounds.y1
 }
 
-fn painted_label_bands(spans: &[&TextSpan], first: &RecordBand, pitch: f32) -> bool {
+fn painted_label_bands(spans: &[&TextSpan], first: &RecordBand, pitch: f32, cells: &[String]) -> bool {
     let mut labels: Vec<_> = spans
         .iter()
         .copied()
@@ -201,6 +213,13 @@ fn painted_label_bands(spans: &[&TextSpan], first: &RecordBand, pitch: f32) -> b
     if labels.iter().any(|label| {
         !label.font_weight.is_bold() || label.color == first.color || !label.text.chars().any(char::is_alphabetic)
     }) {
+        return false;
+    }
+    let mut painted_words: Vec<_> = labels.iter().flat_map(|label| label.text.split_whitespace()).collect();
+    let mut cell_words: Vec<_> = cells.iter().flat_map(|cell| cell.split_whitespace()).collect();
+    painted_words.sort_unstable();
+    cell_words.sort_unstable();
+    if painted_words != cell_words {
         return false;
     }
     labels.sort_by(|a, b| b.bbox.y.total_cmp(&a.bbox.y));
@@ -245,4 +264,54 @@ fn repeated_label_band(labels: &[&TextSpan], keys: &[f32]) -> bool {
             .map(|span| span.text.trim())
             .eq(groups[0].iter().map(|span| span.text.trim()))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "requires the pinned ParseBench insurance PDF"]
+    fn painted_header_rejects_labels_reassigned_to_neighbor_cells() {
+        use super::super::{TablePagePaths, extract_tables_heuristic};
+        use crate::pdf::native::NativeDocument;
+        use sha2::{Digest, Sha256};
+
+        let input = std::env::var_os("XBERG_2332_PARSEBENCH_INPUTS").expect("set the pinned PDF directory");
+        let bytes = std::fs::read(std::path::Path::new(&input).join("f48db8574acac2e2744d.pdf")).unwrap();
+        assert_eq!(
+            hex::encode(Sha256::digest(&bytes)),
+            "0085e250b078694c7a6887245e52108e511401b90db99052fe1ee2b4c0d099a3"
+        );
+        let mut doc = NativeDocument::open_bytes(&bytes).unwrap();
+        let mut tables = extract_tables_heuristic(
+            &mut doc,
+            false,
+            &Default::default(),
+            Default::default(),
+            &mut TablePagePaths::default(),
+        )
+        .unwrap()
+        .tables;
+        assert_eq!(tables.len(), 1);
+        let mut table = tables.pop().unwrap();
+        let spans = painting_spans(&doc.doc, 0).unwrap();
+        let width = repeated_numeric_schema(&table).unwrap();
+        assert!(has_painted_header(&table, width, &spans));
+
+        let mut mismatched = table.clone();
+        for labels in mismatched.cells[0].chunks_exact_mut(width) {
+            labels[1] = "PRICE".into();
+        }
+        assert_eq!(repeated_numeric_schema(&mismatched), Some(width));
+        assert!(!has_painted_header(&mismatched, width, &spans));
+
+        for labels in table.cells[0].chunks_exact_mut(width) {
+            assert_eq!(&labels[2..], ["MIN. PREM.", "HAZ L/C CODE"]);
+            labels[2] = "MIN. PREM. L/C".into();
+            labels[3] = "HAZ CODE".into();
+        }
+        assert_eq!(repeated_numeric_schema(&table), Some(width));
+        assert!(!has_painted_header(&table, width, &spans));
+    }
 }
