@@ -16,11 +16,21 @@ run = [{ task = "rust:build", args = ["dev"] }]
 
 ["rust:build:profiling"]
 description = "Build all Rust crates with profiling features (for flamegraph generation)"
-env = { ENABLE_PROFILING = "true", RUSTFLAGS = "-g" }
+env = { ENABLE_PROFILING = "true" }
 run = [
-  "cargo build --locked --workspace --release --features full,profiling,api,mcp,otel --exclude xberg-php --exclude xberg-node --exclude xberg-wasm",
-  "cargo build --locked --manifest-path tools/benchmark-harness/Cargo.toml --release --features profiling",
+  "cargo build --locked --workspace --profile profiling --features full,profiling,api,mcp,otel --exclude xberg-php --exclude xberg-node --exclude xberg-wasm",
+  "cargo build --locked --manifest-path tools/benchmark-harness/Cargo.toml --profile profiling --features profiling",
 ]
+
+["rust:bench"]
+description = "Run one criterion benchmark of a crate"
+usage = """
+arg "<bench>" help="Benchmark target name (the [[bench]] name)"
+flag "-p --package <package>" default="xberg-native-pdf" help="The crate that owns the benchmark"
+flag "--features <features>" help="Comma-separated features the benchmark requires"
+arg "[filter...]" help="Criterion benchmark ID filter, e.g. extract_text/type0_cjk"
+"""
+run = 'cargo bench --locked -p "$usage_package" --bench "$usage_bench" ${usage_features:+--features "$usage_features"} ${usage_filter:+-- $usage_filter}'
 
 ["rust:cli:build"]
 description = "Build CLI binary"
