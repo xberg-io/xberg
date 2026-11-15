@@ -37,8 +37,8 @@ struct ActiveJob {
 /// Server restarts clear all jobs.
 ///
 /// Admission (`MAX_ACTIVE_JOBS`) bounds how many jobs are queued; `execution_slots` bounds
-/// how many of them extract at once. The router passes the semaphore that also limits the
-/// synchronous extraction routes, so jobs and requests share one budget.
+/// how many of them extract at once. The router sizes it from the request limit but keeps it
+/// apart from the request limiter, so submissions never wait for running jobs.
 pub struct JobStore {
     active: Mutex<HashMap<String, ActiveJob>>,
     finished: Cache<String, JobStatus>,

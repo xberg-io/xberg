@@ -199,7 +199,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request config over the server config instead of replacing it, and a request can only lower the server's security
   limits, archive depth, timeouts and URL caps, never raise or remove them.
 
-- **(api): Async jobs now share the request concurrency limit.** A `/extract-async` job stays `pending` until one of the `XBERG_MAX_CONCURRENT_REQUESTS` slots that also bound synchronous extraction is free, so queued jobs can no longer run up to 100 extractions at once.
+- **(api): Async jobs now run under a concurrency limit.** At most `XBERG_MAX_CONCURRENT_REQUESTS` `/extract-async` jobs extract at once, in slots separate from synchronous requests; further jobs stay `pending` and submission still answers at once, so queued jobs can no longer run up to 100 extractions together.
 
 - **(api, mcp): A request can no longer run an LLM stage on the server's environment credentials.** A REST or MCP config that adds an LLM stage, or changes the model of the server's own, is rejected unless the operator sets `XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1`; library and CLI behavior is unchanged.
 

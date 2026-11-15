@@ -130,13 +130,10 @@ pub fn create_router_with_limits(config: ExtractionConfig, limits: ApiSizeLimits
 /// `server_config` into `ApiState` — in particular `job_timeout_secs` — is unit-testable
 /// without building a full router.
 ///
-/// `extraction_slots` is the semaphore that bounds the extraction routes; async jobs hold a
-/// permit of it while they extract.
-fn build_api_state(
-    config: ExtractionConfig,
-    server_config: &ServerConfig,
-    extraction_slots: Option<Arc<tokio::sync::Semaphore>>,
-) -> ApiState {
+/// Async jobs extract under their own limit of `max_concurrent_requests` slots (`0` leaves it
+/// unbounded, like the request limit). It is separate from the request limiter so a queued job
+/// never blocks a submission or a synchronous request.
+fn build_api_state(config: ExtractionConfig, server_config: &ServerConfig, max_concurrent_requests: usize) -> ApiState {
     // Fallback for embedders that only ever use this built-in router: install the
     // Prometheus-backed meter provider before the extraction service (and therefore the
     // `telemetry::metrics::get_metrics()` `OnceLock`) is built below. Callers who construct
@@ -158,7 +155,9 @@ fn build_api_state(
         default_config: Arc::new(config),
         extraction_service: Arc::new(std::sync::Mutex::new(extraction_service)),
         #[cfg(feature = "api")]
-        job_store: Arc::new(super::jobs::JobStore::with_execution_slots(extraction_slots)),
+        job_store: Arc::new(super::jobs::JobStore::with_execution_slots(
+            (max_concurrent_requests > 0).then(|| Arc::new(tokio::sync::Semaphore::new(max_concurrent_requests))),
+        )),
         #[cfg(feature = "api")]
         job_timeout_secs: server_config.job_timeout_secs,
         #[cfg(feature = "prometheus")]
@@ -205,16 +204,13 @@ fn build_cors_layer(server_config: &ServerConfig) -> CorsLayer {
 /// uploads applies backpressure instead of exhausting memory (#1368). Applied to the
 /// extraction routes only: `/health`, `/info` and `/version` must keep answering while
 /// every slot is busy, or orchestrator probes fail on a saturated but healthy pod. ~keep
-fn apply_concurrency_limit(
-    router: Router<ApiState>,
-    extraction_slots: Option<Arc<tokio::sync::Semaphore>>,
-) -> Router<ApiState> {
-    if let Some(slots) = extraction_slots {
+fn apply_concurrency_limit(router: Router<ApiState>, max_concurrent_requests: usize) -> Router<ApiState> {
+    if max_concurrent_requests > 0 {
         tracing::info!(
-            max_concurrent_requests = slots.available_permits(),
+            max_concurrent_requests,
             "API global concurrency limit active (set {MAX_CONCURRENT_REQUESTS_ENV}=0 to disable)"
         );
-        router.layer(GlobalConcurrencyLimitLayer::with_semaphore(slots))
+        router.layer(GlobalConcurrencyLimitLayer::new(max_concurrent_requests))
     } else {
         tracing::warn!(
             "API global concurrency limit DISABLED ({MAX_CONCURRENT_REQUESTS_ENV}=0); \
@@ -270,10 +266,7 @@ fn build_router(
     server_config: ServerConfig,
     max_concurrent_requests: usize,
 ) -> Router {
-    // One budget for synchronous extraction requests and running async jobs (#3167). ~keep
-    let extraction_slots =
-        (max_concurrent_requests > 0).then(|| Arc::new(tokio::sync::Semaphore::new(max_concurrent_requests)));
-    let state = build_api_state(config, &server_config, extraction_slots.clone());
+    let state = build_api_state(config, &server_config, max_concurrent_requests);
 
     let cors_layer = build_cors_layer(&server_config);
 
@@ -284,7 +277,7 @@ fn build_router(
             .route("/detect", post(detect_handler))
             .route("/process", put(openweb_external_handler))
             .route("/v1/convert/file", post(openweb_docling_handler)),
-        extraction_slots,
+        max_concurrent_requests,
     );
 
     let mut router = Router::new()
@@ -438,8 +431,27 @@ mod tests {
             job_timeout_secs: 42,
             ..ServerConfig::default()
         };
-        let state = build_api_state(ExtractionConfig::default(), &server_config, None);
+        let state = build_api_state(ExtractionConfig::default(), &server_config, 0);
         assert_eq!(state.job_timeout_secs, 42);
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn build_api_state_sizes_job_execution_slots_from_the_request_limit() {
+        use std::time::Duration;
+
+        let state = build_api_state(ExtractionConfig::default(), &ServerConfig::default(), 2);
+        let store = &state.job_store;
+        let job_ids: Vec<String> = (0..3).map(|_| store.create_job().expect("slot available")).collect();
+
+        let first = store.acquire_execution_slot(&job_ids[0]).await.expect("first slot");
+        let _second = store.acquire_execution_slot(&job_ids[1]).await.expect("second slot");
+        let third = tokio::time::timeout(Duration::from_millis(200), store.acquire_execution_slot(&job_ids[2])).await;
+        assert!(third.is_err(), "a third job must wait while two jobs run");
+
+        drop(first);
+        let third = tokio::time::timeout(Duration::from_secs(2), store.acquire_execution_slot(&job_ids[2])).await;
+        assert!(third.expect("the third job takes the freed slot").is_some());
     }
 
     #[test]

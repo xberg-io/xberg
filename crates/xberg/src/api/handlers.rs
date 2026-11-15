@@ -1437,8 +1437,8 @@ async fn run_extraction_job(
     let store = Arc::clone(&guard.store);
     let jid = guard.job_id.clone();
 
-    // The job stays `Pending` until it holds a slot of the limit that also bounds the
-    // synchronous extraction routes, and its timeout starts only once it runs. ~keep
+    // The job stays `Pending` until it holds one of the job execution slots, and its timeout
+    // starts only once it runs. ~keep
     let Some(_slot) = store.acquire_execution_slot(&jid).await else {
         return;
     };
@@ -3169,8 +3169,8 @@ mod tests {
         );
     }
 
-    /// A submitted job must not extract while every slot of the request limit is held: it
-    /// stays `Pending` until a slot frees, then completes.
+    /// Submission returns 202 at once while every job execution slot is held; the job stays
+    /// `Pending` until a slot frees, then completes.
     #[cfg(feature = "api")]
     #[tokio::test]
     async fn test_extract_async_job_waits_for_a_free_extraction_slot() {
@@ -3181,20 +3181,23 @@ mod tests {
             &slots,
         ))));
         let app = test_router_with_store(Arc::clone(&job_store));
-        let sync_request = Arc::clone(&slots).acquire_owned().await.expect("semaphore open");
+        let running_job = Arc::clone(&slots).acquire_owned().await.expect("semaphore open");
         let body = serde_json::json!({"inputs": [{"kind": "text", "text": "Example"}]});
 
-        let response = app
-            .oneshot(
+        let response = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            app.oneshot(
                 Request::builder()
                     .method("POST")
                     .uri("/extract-async")
                     .header("content-type", "application/json")
                     .body(Body::from(body.to_string()))
                     .expect("valid request"),
-            )
-            .await
-            .expect("handler responded");
+            ),
+        )
+        .await
+        .expect("submission must not wait for an execution slot")
+        .expect("handler responded");
         assert_eq!(response.status(), StatusCode::ACCEPTED);
         let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
@@ -3210,7 +3213,7 @@ mod tests {
             "the job must not run while the only slot is held"
         );
 
-        drop(sync_request);
+        drop(running_job);
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
             let state = job_store.get(&job_id).unwrap().state;
