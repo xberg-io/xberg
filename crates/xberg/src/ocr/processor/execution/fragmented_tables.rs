@@ -63,6 +63,8 @@ fn prepare_fragmented_table_rows<'a>(
     let row_positions = detect_rows(words, row_threshold);
     let alignments = row_positions.len().checked_sub(cells.len())? + 1;
     if alignments > MAX_FRAGMENTED_HOCR_ALIGNMENTS {
+        // The bounded search could not rule out competing source rows.
+        budget.0 = None;
         return None;
     }
     let comparison_bytes = words

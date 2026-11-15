@@ -85,3 +85,103 @@ fn retained_leader_work_exhaustion_cannot_publish_a_partial_table() {
     ));
     assert_eq!(tables[0].cells[0][0], "Signal timing ........");
 }
+
+fn leader_alignment_cap_case(rows: usize, grouped: bool) -> (String, String, InternalDocument, OcrTable) {
+    let (_, tsv, _, mut table) = repeated_leader_publication_case(1, 40, [true; 3]);
+    let mut tsv = format!("{}\n", tsv.lines().next().unwrap());
+    let mut hocr = String::from(r#"<div class="ocr_page" title="ppageno 0">"#);
+    if grouped {
+        hocr.push_str(r#"<p class="ocr_par">"#);
+    }
+    for index in 0..rows {
+        let (raw, row_tsv) = super::super::super::tests::word_table_markup(
+            positioned_dot_leader_row()
+                .into_iter()
+                .filter_map(|word| (index != 1 || word.text != "........").then_some(word))
+                .collect::<Vec<_>>()
+                .iter()
+                .map(|word| {
+                    (
+                        word.text.as_str(),
+                        word.left,
+                        word.top + index as u32 * 25,
+                        word.width,
+                        word.height,
+                        index + 1,
+                    )
+                }),
+        );
+        if !grouped {
+            hocr.push_str(r#"<p class="ocr_par">"#);
+        }
+        hocr.push_str(r#"<span class="ocr_line">"#);
+        for (start, _) in raw.match_indices(r#"<span class="ocrx_word""#) {
+            let end = start + raw[start..].find("</span>").unwrap() + "</span>".len();
+            hocr.push_str(&raw[start..end]);
+        }
+        hocr.push_str("</span>");
+        if !grouped {
+            hocr.push_str("</p>");
+        }
+        tsv.extend(row_tsv.lines().skip(1).flat_map(|line| line.chars().chain(['\n'])));
+    }
+    if grouped {
+        hocr.push_str("</p>");
+    }
+    hocr.push_str("</div>");
+    table.bounding_box.as_mut().unwrap().bottom = 40 + (rows as u32 - 1) * 25;
+    let document = crate::ocr::hocr_parser::parse_hocr_to_internal_document(&hocr);
+    (hocr, tsv, document, table)
+}
+
+#[test]
+fn psm3_publication_preserves_dotted_and_undotted_rows_at_the_alignment_cap() {
+    for windows in [MAX_FRAGMENTED_HOCR_ALIGNMENTS, MAX_FRAGMENTED_HOCR_ALIGNMENTS + 1] {
+        for grouped in [true, false] {
+            let (hocr, tsv, mut document, table) = leader_alignment_cap_case(windows, grouped);
+            let source = document.elements.clone();
+            let source_lines = source.iter().map(|element| element.text.lines().count()).sum::<usize>();
+            assert_eq!(source_lines, windows);
+            assert_eq!(
+                source
+                    .iter()
+                    .flat_map(|element| element.text.lines())
+                    .filter(|line| *line == "Signal timing -64 143.92")
+                    .count(),
+                1
+            );
+            let mut tables = [table];
+            let verdict = reconcile_retained_table_leaders(
+                &hocr,
+                &document,
+                &mut tables,
+                &tsv,
+                &TesseractConfig::default(),
+                &SecurityLimits::default(),
+            );
+            if windows == MAX_FRAGMENTED_HOCR_ALIGNMENTS {
+                assert!(matches!(verdict, Some(RetainedTableLeaders::Ambiguous)));
+            } else {
+                assert!(matches!(verdict, Some(RetainedTableLeaders::BudgetExhausted)));
+            }
+            publish_hocr_table_rows(
+                &mut document,
+                &mut tables,
+                Some(&hocr),
+                Some(&tsv),
+                &TesseractConfig::default(),
+                ImageOcrPolicy::StandaloneAutoTableRows,
+                &SecurityLimits::default(),
+            );
+            let remaining = document
+                .elements
+                .iter()
+                .map(|element| element.text.lines().count())
+                .sum::<usize>();
+            assert_eq!(remaining, windows, "grouped={grouped}, candidate windows={windows}");
+            assert_eq!(document.elements, source);
+            assert_eq!(tables[0].cells[0][0], "Signal timing");
+            assert!(tables[0].markdown.is_empty());
+        }
+    }
+}
