@@ -2,7 +2,16 @@
 //! enabled, downloads and builds vendored Leptonica and Tesseract via CMake, resolving
 //! a per-platform cache directory for the compiled artifacts.
 
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "build scripts report to cargo on stdout and stderr"
+)]
 #![allow(clippy::uninlined_format_args)]
+#![allow(
+    unsafe_code,
+    reason = "the build script clears MACOSX_DEPLOYMENT_TARGET before invoking CMake"
+)]
 
 #[cfg(any(
     feature = "build-tesseract-wasm",

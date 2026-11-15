@@ -249,6 +249,7 @@ impl SubprocessAdapter {
         cmd.process_group(0);
     }
     #[cfg(unix)]
+    #[allow(unsafe_code, reason = "libc::kill is the only way to signal a process group")]
     pub(super) fn kill_process_group(pid: Option<u32>) {
         if let Some(pid) = pid {
             // SAFETY: the child was placed in a process group whose id equals its ~keep

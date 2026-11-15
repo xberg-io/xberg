@@ -226,6 +226,9 @@ all = [
     "pdf-pdfium-surface",
 ]
 
+[lints]
+workspace = true
+
 [dependencies]
 
 anstyle = "1"

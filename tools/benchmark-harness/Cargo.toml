@@ -48,6 +48,9 @@ candle-paddleocr-vl-15-bench = ["xberg/candle-paddleocr-vl"]
 # `pdf-pdfium` feature and runtime `libpdfium` availability that matter, not this crate's.
 pdfium-bench = ["xberg/pdf-pdfium"]
 
+[lints]
+workspace = true
+
 [dependencies]
 
 ahash = { workspace = true }

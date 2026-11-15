@@ -53,6 +53,9 @@ dynamic-linking = ["build-tesseract", "dep:pkg-config", "dep:vcpkg"]
 # gives `dynamic-linking` precedence, so the vendored source build remains disabled. ~keep
 system-linking = ["dynamic-linking"]
 
+[lints]
+workspace = true
+
 [dependencies]
 thiserror = { workspace = true }
 

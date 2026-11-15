@@ -18,6 +18,11 @@
 //! librevenge uses), and `vendor/boost-subset.tar.gz` supplies exactly that
 //! subset. All three archives are decompressed into `OUT_DIR` on every build.
 
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "build scripts report to cargo on stdout and stderr"
+)]
 // Host-side gate: this `cfg` mirrors the `[target.'cfg(...)'.build-dependencies]`
 // block in Cargo.toml, which Cargo resolves against the host, so the module only
 // exists where `cc`/`flate2`/`tar`/`sha2` are available. Whether we *do*

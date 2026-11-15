@@ -41,6 +41,9 @@ ignored = ["libz-sys"]
 name = "xberg_libwpd"
 crate-type = ["lib"]
 
+[lints]
+workspace = true
+
 [dependencies]
 thiserror = { workspace = true }
 tracing = { workspace = true }

@@ -1,3 +1,8 @@
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "build scripts report to cargo on stdout and stderr"
+)]
 fn main() {
     println!("cargo::rustc-check-cfg=cfg(coverage)");
 

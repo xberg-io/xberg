@@ -22,6 +22,7 @@
 //! [`WpdError::UnsupportedPlatform`].
 
 #![deny(clippy::print_stdout, clippy::print_stderr)]
+#![allow(unsafe_code, reason = "libwpd is reached only through its C++ shim")]
 #![cfg_attr(test, allow(clippy::print_stdout, clippy::print_stderr))]
 
 mod dto;

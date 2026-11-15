@@ -122,6 +122,7 @@
 //! ```
 
 #![deny(clippy::print_stdout, clippy::print_stderr)]
+#![allow(unsafe_code, reason = "Tesseract and Leptonica are reached only through their C API")]
 #![cfg_attr(test, allow(clippy::print_stdout, clippy::print_stderr))]
 #![cfg_attr(
     not(any(feature = "build-tesseract", feature = "build-tesseract-wasm")),

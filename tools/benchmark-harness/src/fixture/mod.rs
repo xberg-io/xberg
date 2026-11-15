@@ -646,4 +646,5 @@ impl Default for FixtureManager {
 }
 
 #[cfg(test)]
+#[allow(unsafe_code, reason = "tests set process environment variables under ENV_LOCK")]
 mod tests;
