@@ -1,4 +1,5 @@
-//! Trust-boundary validation for caller-owned REST and MCP extraction config.
+//! Trust-boundary validation for caller-owned REST and MCP extraction config, and redaction of
+//! server filesystem paths from what remote callers see.
 
 use serde_json::Value;
 
@@ -386,6 +387,49 @@ pub(crate) fn adopt_file_operator_crawl_egress(
     }
     #[cfg(not(feature = "url-config-types"))]
     let _ = (config, operator);
+}
+
+/// Placeholder for a filesystem path removed from an error message sent to a client.
+pub(crate) const REDACTED_PATH: &str = "<path>";
+
+/// Characters that may wrap a path inside a message token, such as quotes or a trailing colon.
+const LEADING_PATH_DELIMITERS: &[char] = &['\'', '"', '`', '(', '[', '{', '<'];
+const TRAILING_PATH_DELIMITERS: &[char] = &['\'', '"', '`', ')', ']', '}', '>', ',', ';', ':', '.'];
+
+/// Replace every filesystem path in `message` with [`REDACTED_PATH`].
+///
+/// A path is a whitespace-separated token (or the value after `=` in one), stripped of wrapping
+/// quotes and brackets, that is absolute (`/srv/models`), home-relative (`~/models`), a Windows
+/// drive or UNC path, or a `file://` URI. URLs, MIME types and relative names are kept, so the
+/// message still says what failed.
+pub(crate) fn redact_paths(message: &str) -> String {
+    let mut redacted = String::with_capacity(message.len());
+    for piece in message.split_inclusive(char::is_whitespace) {
+        let token = piece.trim_end_matches(char::is_whitespace);
+        let value_start = token.find('=').map_or(0, |index| index + 1);
+        let (prefix, value) = token.split_at(value_start);
+        let start = value.len() - value.trim_start_matches(LEADING_PATH_DELIMITERS).len();
+        let end = value.trim_end_matches(TRAILING_PATH_DELIMITERS).len().max(start);
+        if is_filesystem_path(&value[start..end]) {
+            redacted.push_str(prefix);
+            redacted.push_str(&value[..start]);
+            redacted.push_str(REDACTED_PATH);
+            redacted.push_str(&value[end..]);
+        } else {
+            redacted.push_str(token);
+        }
+        redacted.push_str(&piece[token.len()..]);
+    }
+    redacted
+}
+
+fn is_filesystem_path(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    let unix_absolute = bytes.first() == Some(&b'/') && bytes.len() > 1 && bytes[1] != b'/';
+    let windows_drive =
+        bytes.len() > 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && matches!(bytes[2], b'\\' | b'/');
+    let file_uri = value.len() > "file://".len() && value.starts_with("file://");
+    unix_absolute || windows_drive || file_uri || value.starts_with("~/") || value.starts_with("\\\\")
 }
 
 #[cfg(test)]

@@ -195,6 +195,29 @@ impl XbergMcp {
         self
     }
 
+    /// Map an extraction error for the client. Over HTTP, server filesystem paths in the message
+    /// become `<path>` and the full error is logged.
+    fn xberg_error(&self, error: crate::XbergError) -> rmcp::ErrorData {
+        let mut mapped = super::errors::map_xberg_error_to_mcp(error);
+        if self.http_transport {
+            let message = crate::core::config::request_security::redact_paths(&mapped.message);
+            if message != mapped.message {
+                tracing::warn!(error = %mapped.message, "MCP tool call failed");
+                mapped.message = message.into();
+            }
+        }
+        mapped
+    }
+
+    /// The cache directory as shown to the client: hidden over HTTP.
+    fn client_cache_dir(&self, cache_dir: &std::path::Path) -> String {
+        if self.http_transport {
+            crate::core::config::request_security::REDACTED_PATH.to_string()
+        } else {
+            cache_dir.to_string_lossy().into_owned()
+        }
+    }
+
     /// Merge the caller's request config over the server config.
     fn request_config(&self, caller: Option<serde_json::Value>) -> Result<ExtractionConfig, rmcp::ErrorData> {
         let config = if self.http_transport {
@@ -254,8 +277,6 @@ impl XbergMcp {
         &self,
         Parameters(params): Parameters<super::params::ExtractParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
-        use super::errors::map_xberg_error_to_mcp;
-
         let use_toon = params
             .response_format
             .as_deref()
@@ -268,7 +289,9 @@ impl XbergMcp {
         let input = parse_extract_input(params.input, &config)?;
         self.reject_local_input(&input)?;
 
-        let output = crate::extract(input, &config).await.map_err(map_xberg_error_to_mcp)?;
+        let output = crate::extract(input, &config)
+            .await
+            .map_err(|error| self.xberg_error(error))?;
         let response = format_extraction_result_for_wire(&output, use_toon);
         let mut tool_result = CallToolResult::success(vec![ContentBlock::text(response)]);
         tool_result.structured_content = serde_json::to_value(&output).ok();
@@ -285,8 +308,6 @@ impl XbergMcp {
         &self,
         Parameters(params): Parameters<super::params::ExtractBatchParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
-        use super::errors::map_xberg_error_to_mcp;
-
         let use_toon = params
             .response_format
             .as_deref()
@@ -309,7 +330,7 @@ impl XbergMcp {
 
         let output = crate::extract_batch_with_input_options(inputs, &config)
             .await
-            .map_err(map_xberg_error_to_mcp)?;
+            .map_err(|error| self.xberg_error(error))?;
         let response = format_extraction_result_for_wire(&output, use_toon);
         let mut tool_result = CallToolResult::success(vec![ContentBlock::text(response)]);
         tool_result.structured_content = serde_json::to_value(&output).ok();
@@ -328,13 +349,13 @@ impl XbergMcp {
         &self,
         Parameters(params): Parameters<super::params::DetectMimeTypeParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
-        use super::errors::map_xberg_error_to_mcp;
         use crate::detect_mime_type;
 
         if !self.allow_local_paths {
             return Err(rmcp::ErrorData::invalid_params(LOCAL_URI_INPUTS_DISABLED, None));
         }
-        let mime_type = detect_mime_type(params.path.clone(), params.use_content).map_err(map_xberg_error_to_mcp)?;
+        let mime_type =
+            detect_mime_type(params.path.clone(), params.use_content).map_err(|error| self.xberg_error(error))?;
 
         let dto = super::schema::DetectMimeTypeOutput {
             mime_type: mime_type.clone(),
@@ -356,12 +377,12 @@ impl XbergMcp {
         &self,
         Parameters(_): Parameters<super::params::EmptyParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
-        use super::errors::map_xberg_error_to_mcp;
         use crate::cache;
 
         let cache_dir = crate::cache_dir::resolve_cache_base();
 
-        let stats = cache::get_cache_metadata(cache_dir.to_str().unwrap_or(".")).map_err(map_xberg_error_to_mcp)?;
+        let stats =
+            cache::get_cache_metadata(cache_dir.to_str().unwrap_or(".")).map_err(|error| self.xberg_error(error))?;
 
         let response = format!(
             "Cache Statistics\n\
@@ -372,7 +393,7 @@ impl XbergMcp {
              Available space: {:.2} MB\n\
              Oldest file age: {:.2} days\n\
              Newest file age: {:.2} days",
-            cache_dir.to_string_lossy(),
+            self.client_cache_dir(&cache_dir),
             stats.total_files,
             stats.total_size_mb,
             stats.available_space_mb,
@@ -381,7 +402,7 @@ impl XbergMcp {
         );
 
         let dto = super::schema::CacheStatsOutput {
-            directory: cache_dir.to_string_lossy().into_owned(),
+            directory: self.client_cache_dir(&cache_dir),
             total_files: stats.total_files as u64,
             total_size_mb: stats.total_size_mb,
             available_space_mb: stats.available_space_mb,
@@ -428,13 +449,12 @@ impl XbergMcp {
         &self,
         Parameters(_): Parameters<super::params::EmptyParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
-        use super::errors::map_xberg_error_to_mcp;
         use crate::cache;
 
         let cache_dir = crate::cache_dir::resolve_cache_base();
 
         let (removed_files, freed_mb) =
-            cache::clear_cache_directory(cache_dir.to_str().unwrap_or(".")).map_err(map_xberg_error_to_mcp)?;
+            cache::clear_cache_directory(cache_dir.to_str().unwrap_or(".")).map_err(|error| self.xberg_error(error))?;
 
         let response = format!(
             "Xberg-managed cache cleared successfully\n\
@@ -442,13 +462,13 @@ impl XbergMcp {
              Removed files: {}\n\
              Freed space: {:.2} MB\n\
              Shared Hugging Face cache cleared: no",
-            cache_dir.to_string_lossy(),
+            self.client_cache_dir(&cache_dir),
             removed_files,
             freed_mb
         );
 
         let dto = super::schema::CacheClearOutput {
-            directory: cache_dir.to_string_lossy().into_owned(),
+            directory: self.client_cache_dir(&cache_dir),
             removed_files: removed_files as u64,
             freed_mb,
         };
@@ -2073,6 +2093,43 @@ mod tests {
             let error = server.extract_batch(Parameters(params)).await.unwrap_err();
             assert_eq!(error.message, LOCAL_URI_INPUTS_DISABLED, "{uri}");
         }
+    }
+
+    #[test]
+    fn should_redact_server_paths_from_tool_errors_only_on_http_transport() {
+        let error = || crate::XbergError::parsing("cannot open /srv/xberg/models/layout.onnx: truncated");
+
+        let http = http_server_without_local_paths().xberg_error(error());
+        assert_eq!(http.code, rmcp::model::ErrorCode::PARSE_ERROR);
+        assert_eq!(http.message, "Parsing error: cannot open <path>: truncated");
+
+        let stdio = XbergMcp::with_config(ExtractionConfig::default()).xberg_error(error());
+        assert_eq!(
+            stdio.message,
+            "Parsing error: cannot open /srv/xberg/models/layout.onnx: truncated"
+        );
+    }
+
+    #[test]
+    fn should_hide_cache_directory_from_cache_stats_only_on_http_transport() {
+        let cache_dir = crate::cache_dir::resolve_cache_base().to_string_lossy().into_owned();
+
+        let http = http_server_without_local_paths()
+            .cache_stats(Parameters(crate::mcp::params::EmptyParams {}))
+            .expect("cache stats are readable");
+        let structured = http.structured_content.expect("structured output");
+        assert_eq!(structured["directory"], "<path>");
+        let text = serde_json::to_string(&http.content).expect("content serializes");
+        assert!(text.contains("Directory: <path>"), "{text}");
+        assert!(!text.contains(&cache_dir), "{text}");
+
+        let stdio = XbergMcp::with_config(ExtractionConfig::default())
+            .cache_stats(Parameters(crate::mcp::params::EmptyParams {}))
+            .expect("cache stats are readable");
+        assert_eq!(
+            stdio.structured_content.expect("structured output")["directory"],
+            serde_json::json!(cache_dir)
+        );
     }
 
     #[test]

@@ -9,16 +9,10 @@ use axum::{
 };
 use serde::de::DeserializeOwned;
 
+use crate::core::config::request_security::redact_paths;
 use crate::error::{ApiStatusCategory, XbergError};
 
 use super::types::ErrorResponse;
-
-/// Placeholder for a filesystem path removed from an error message sent to a client.
-const REDACTED_PATH: &str = "<path>";
-
-/// Characters that may wrap a path inside a message token, such as quotes or a trailing colon.
-const LEADING_PATH_DELIMITERS: &[char] = &['\'', '"', '`', '(', '[', '{', '<'];
-const TRAILING_PATH_DELIMITERS: &[char] = &['\'', '"', '`', ')', ']', '}', '>', ',', ';', ':', '.'];
 
 /// Custom JSON extractor that returns JSON error responses instead of plain text.
 ///
@@ -192,42 +186,6 @@ pub(crate) fn redact_error_items(errors: &mut [crate::ExtractionErrorItem]) {
             item.message = message;
         }
     }
-}
-
-/// Replace every filesystem path in `message` with [`REDACTED_PATH`].
-///
-/// A path is a whitespace-separated token (or the value after `=` in one), stripped of wrapping
-/// quotes and brackets, that is absolute (`/srv/models`), home-relative (`~/models`), a Windows
-/// drive or UNC path, or a `file://` URI. URLs, MIME types and relative names are kept, so the
-/// message still says what failed.
-fn redact_paths(message: &str) -> String {
-    let mut redacted = String::with_capacity(message.len());
-    for piece in message.split_inclusive(char::is_whitespace) {
-        let token = piece.trim_end_matches(char::is_whitespace);
-        let value_start = token.find('=').map_or(0, |index| index + 1);
-        let (prefix, value) = token.split_at(value_start);
-        let start = value.len() - value.trim_start_matches(LEADING_PATH_DELIMITERS).len();
-        let end = value.trim_end_matches(TRAILING_PATH_DELIMITERS).len().max(start);
-        if is_filesystem_path(&value[start..end]) {
-            redacted.push_str(prefix);
-            redacted.push_str(&value[..start]);
-            redacted.push_str(REDACTED_PATH);
-            redacted.push_str(&value[end..]);
-        } else {
-            redacted.push_str(token);
-        }
-        redacted.push_str(&piece[token.len()..]);
-    }
-    redacted
-}
-
-fn is_filesystem_path(value: &str) -> bool {
-    let bytes = value.as_bytes();
-    let unix_absolute = bytes.first() == Some(&b'/') && bytes.len() > 1 && bytes[1] != b'/';
-    let windows_drive =
-        bytes.len() > 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && matches!(bytes[2], b'\\' | b'/');
-    let file_uri = value.len() > "file://".len() && value.starts_with("file://");
-    unix_absolute || windows_drive || file_uri || value.starts_with("~/") || value.starts_with("\\\\")
 }
 
 impl IntoResponse for ApiError {
