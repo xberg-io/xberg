@@ -535,6 +535,7 @@ enum DecimalHeaderPaint {
     Shaded,
     ContrastingRule,
     ContrastingRuleAndBoldLabels,
+    Tagged,
 }
 
 fn ruled_decimal_table(
@@ -547,6 +548,7 @@ fn ruled_decimal_table(
     use std::fmt::Write as _;
 
     let mut paint = String::from("0 G 1 w\n");
+    let tagged = matches!(header, DecimalHeaderPaint::Tagged);
     if matches!(header, DecimalHeaderPaint::Shaded) {
         paint.push_str("0.8 g 30 120 250 40 re f 0 g\n");
     }
@@ -564,12 +566,12 @@ fn ruled_decimal_table(
     }
     for column in 0..=5 {
         let x = 30 + column * 50;
-        let top = if column == 3 { 140 } else { 160 };
+        let top = if column == 3 && !tagged { 140 } else { 160 };
         writeln!(paint, "{x} {bottom} m {x} {top} l S").unwrap();
     }
     paint.push_str("BT /F1 8 Tf\n");
     for (row, cells) in [
-        ["Group", "Code", "Rates", "", "West"],
+        ["Group", "Code", "Rates", if tagged { "East" } else { "" }, "West"],
         first_band,
         ["Latency", "p95", "0.924", "0.863", "0.985"],
         ["Throughput", "p99", "0.930", "0.888", "0.988"],
@@ -595,7 +597,14 @@ fn ruled_decimal_table(
             } else {
                 "F1"
             };
+            if tagged {
+                let mcid = row * 5 + column;
+                writeln!(paint, "/Span <</MCID {mcid}>> BDC").unwrap();
+            }
             writeln!(paint, "/{font} 8 Tf 1 0 0 1 {x} {y} Tm ({text}) Tj").unwrap();
+            if tagged {
+                paint.push_str("EMC\n");
+            }
         }
     }
     paint.push_str("ET\n");
@@ -616,10 +625,93 @@ fn ruled_decimal_table(
         .into(),
     );
     let catalog = pdf.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+    if tagged {
+        tag_decimal_fixture(&mut pdf, catalog, page, body_rows);
+    }
     pdf.trailer.set("Root", catalog);
     let mut bytes = Vec::new();
     pdf.save_to(&mut bytes).unwrap();
     bytes
+}
+
+fn tag_decimal_fixture(pdf: &mut lopdf::Document, catalog: lopdf::ObjectId, page: lopdf::ObjectId, body_rows: usize) {
+    use lopdf::{Object, dictionary};
+
+    let root = pdf.new_object_id();
+    let table = pdf.new_object_id();
+    let thead = pdf.new_object_id();
+    let tbody = pdf.new_object_id();
+    let (mut header, mut body) = (Vec::new(), Vec::new());
+    let mut parent_cells = Vec::new();
+    for row in 0..(2 + body_rows) {
+        let row_id = pdf.new_object_id();
+        let cells: Vec<_> = (0..5)
+            .map(|column| {
+                let cell = pdf.add_object(dictionary! {
+                    "Type" => "StructElem", "S" => if row < 2 { "TH" } else { "TD" },
+                    "P" => row_id, "Pg" => page, "K" => (row * 5 + column) as i64,
+                });
+                parent_cells.push(Object::from(cell));
+                Object::from(cell)
+            })
+            .collect();
+        pdf.objects.insert(
+            row_id,
+            dictionary! {
+                "Type" => "StructElem", "S" => "TR", "P" => if row < 2 { thead } else { tbody },
+                "Pg" => page, "K" => Object::Array(cells),
+            }
+            .into(),
+        );
+        let rows = if row < 2 { &mut header } else { &mut body };
+        rows.push(Object::from(row_id));
+    }
+    for (id, kind, rows) in [(thead, "THead", header), (tbody, "TBody", body)] {
+        pdf.objects.insert(
+            id,
+            dictionary! {
+                "Type" => "StructElem", "S" => kind, "P" => table, "Pg" => page, "K" => Object::Array(rows),
+            }
+            .into(),
+        );
+    }
+    pdf.objects.insert(
+        table,
+        dictionary! {
+            "Type" => "StructElem", "S" => "Table", "P" => root, "Pg" => page,
+            "K" => Object::Array(vec![thead.into(), tbody.into()]),
+        }
+        .into(),
+    );
+    let parent_tree = pdf.add_object(dictionary! {
+        "Nums" => Object::Array(vec![0.into(), Object::Array(parent_cells)]),
+    });
+    pdf.objects.insert(
+        root,
+        dictionary! {
+            "Type" => "StructTreeRoot", "K" => table, "ParentTree" => parent_tree, "ParentTreeNextKey" => 1,
+        }
+        .into(),
+    );
+    pdf.get_object_mut(page)
+        .unwrap()
+        .as_dict_mut()
+        .unwrap()
+        .set("StructParents", 0);
+    let catalog = pdf.get_object_mut(catalog).unwrap().as_dict_mut().unwrap();
+    catalog.set("StructTreeRoot", root);
+    catalog.set("MarkInfo", dictionary! { "Marked" => true });
+}
+
+#[test]
+fn tagged_unshaded_decimal_leaves_remain_headers_under_uniform_rules() {
+    let labels = ["Version", "Build", "1.0", "1.1", "2.0"];
+    let pdf = ruled_decimal_table(labels, true, 1, DecimalHeaderPaint::Tagged);
+    let result = extract_bytes_document_blocking(&pdf, "application/pdf", &parsebench_html_config()).unwrap();
+    assert_eq!(result.tables.len(), 1);
+    assert_eq!(result.tables[0].cells[1], labels);
+    assert!(result.content.contains("<th>1.0</th>"), "{}", result.content);
+    assert!(result.content.contains("<td>0.924</td>"), "{}", result.content);
 }
 
 #[test]
@@ -722,14 +814,14 @@ fn decimal_header_evidence_accepts_painted_header_above_one_body_row() {
 }
 
 #[test]
-fn decimal_header_evidence_accepts_unshaded_typography_with_contrasting_rule() {
+fn unshaded_decimal_roles_abstain_when_only_typography_and_rules_differ() {
     let labels = ["Version", "Build", "1.0", "1.1", "2.0"];
     let median = ["Latency", "Median", "0.9", "0.8", "0.9"];
     let config = parsebench_html_config();
     for (first_band, decoration, decimal, role) in [
         (median, DecimalHeaderPaint::ContrastingRule, "0.9", "td"),
         (labels, DecimalHeaderPaint::ContrastingRule, "1.0", "td"),
-        (labels, DecimalHeaderPaint::ContrastingRuleAndBoldLabels, "1.0", "th"),
+        (labels, DecimalHeaderPaint::ContrastingRuleAndBoldLabels, "1.0", "td"),
     ] {
         for body_rows in [1, 3] {
             let bytes = ruled_decimal_table(first_band, true, body_rows, decoration);
@@ -745,4 +837,96 @@ fn decimal_header_evidence_accepts_unshaded_typography_with_contrasting_rule() {
             assert!(result.content.contains("<td>0.924</td>"), "{}", result.content);
         }
     }
+}
+
+#[test]
+fn bold_centered_median_with_a_contrasting_divider_remains_body() {
+    let record = ["Latency", "Median", "0.9", "0.8", "0.9"];
+    for body_rows in [1, 3] {
+        let pdf = ruled_decimal_table(
+            record,
+            true,
+            body_rows,
+            DecimalHeaderPaint::ContrastingRuleAndBoldLabels,
+        );
+        let result = extract_bytes_document_blocking(&pdf, "application/pdf", &parsebench_html_config()).unwrap();
+        assert_eq!(result.tables.len(), 1);
+        assert_eq!(result.tables[0].cells[1], record);
+        assert!(
+            result
+                .content
+                .contains("<tr><td>Latency</td><td>Median</td><td>0.9</td><td>0.8</td><td>0.9</td></tr>"),
+            "{}",
+            result.content,
+        );
+    }
+}
+
+#[test]
+fn mixed_font_decimal_cells_are_not_repeated_as_prose() {
+    let labels = ["Version", "Build", "1.0", "1.1", "2.0"];
+    let pdf = ruled_decimal_table(labels, true, 1, DecimalHeaderPaint::ContrastingRuleAndBoldLabels);
+    let result = extract_bytes_document_blocking(&pdf, "application/pdf", &parsebench_html_config()).unwrap();
+    assert_eq!(result.tables.len(), 1);
+    assert_eq!(result.tables[0].cells[1], labels);
+    assert_eq!(
+        result.content.split_once("</table>").unwrap().1.trim(),
+        "",
+        "{}",
+        result.content
+    );
+}
+
+#[test]
+fn identical_decimal_prose_outside_table_remains() {
+    let labels = ["Version", "Build", "1.0", "1.1", "2.0"];
+    let mut pdf = lopdf::Document::load_mem(&ruled_decimal_table(
+        labels,
+        true,
+        1,
+        DecimalHeaderPaint::ContrastingRuleAndBoldLabels,
+    ))
+    .unwrap();
+    let page = pdf.get_pages()[&1];
+    let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).unwrap();
+    let mut content = pdf.get_page_content(page);
+    content.extend_from_slice(b"\nBT /F1 8 Tf 1 0 0 1 149.44 55 Tm (1.01.12.0) Tj ET\n");
+    pdf.get_object_mut(stream)
+        .unwrap()
+        .as_stream_mut()
+        .unwrap()
+        .set_plain_content(content);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    let result = extract_bytes_document_blocking(&bytes, "application/pdf", &parsebench_html_config()).unwrap();
+    assert_eq!(result.tables.len(), 1);
+    assert_eq!(
+        result.content.matches("<p>1.01.12.0</p>").count(),
+        1,
+        "{}",
+        result.content
+    );
+}
+
+#[test]
+fn decimal_header_tags_must_name_the_emitted_source_cells() {
+    let labels = ["Version", "Build", "1.0", "1.1", "2.0"];
+    let mut pdf = lopdf::Document::load_mem(&ruled_decimal_table(labels, true, 1, DecimalHeaderPaint::Tagged)).unwrap();
+    let mut changed = 0;
+    for object in pdf.objects.values_mut() {
+        if let Ok(dict) = object.as_dict_mut()
+            && dict.get(b"S").and_then(lopdf::Object::as_name).ok() == Some(b"TH")
+            && dict.get(b"K").and_then(lopdf::Object::as_i64).ok() == Some(7)
+        {
+            dict.set("K", 8);
+            changed += 1;
+        }
+    }
+    assert_eq!(changed, 1);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    let result = extract_bytes_document_blocking(&bytes, "application/pdf", &parsebench_html_config()).unwrap();
+    assert_eq!(result.tables.len(), 1);
+    assert_eq!(result.tables[0].cells[1], labels);
+    assert!(result.content.contains("<td>1.0</td>"), "{}", result.content);
 }

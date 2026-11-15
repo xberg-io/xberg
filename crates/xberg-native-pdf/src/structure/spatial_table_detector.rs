@@ -1834,10 +1834,10 @@ fn continues_decimal_records(row: &TableRow, next: &TableRow) -> bool {
             let same_regular_style = cell.spans.iter().chain(&following.spans).all(|span| {
                 !span.font_weight.is_bold() && span.font_name == style.font_name && span.font_size == style.font_size
             });
-            let bold_label_stub = !is_data_value(text)
+            let bold_stub = !is_data_value(text)
                 && cell.spans.iter().all(|span| span.font_weight.is_bold())
                 && following.spans.iter().all(|span| !span.font_weight.is_bold());
-            same_regular_style || bold_label_stub
+            same_regular_style || bold_stub
         })
     })
 }
@@ -1853,36 +1853,6 @@ fn decimal_point_x(cell: &TableCell) -> Option<f32> {
     let (index, _) = points.next()?;
     let x = span.char_x_offsets[index];
     (points.next().is_none() && (span.bbox.left()..=span.bbox.right()).contains(&x)).then_some(x)
-}
-
-fn matching_bold_decimal_stub(groups: &TableRow, leaves: &TableRow, body: &TableRow) -> bool {
-    let mut column = 0;
-    for group in &groups.cells {
-        if group.colspan == 1
-            && group.rowspan == 1
-            && let (Some(leaf), Some(value)) = (leaves.cells.get(column), body.cells.get(column))
-            && let ([upper], [label], [record]) =
-                (group.spans.as_slice(), leaf.spans.as_slice(), value.spans.as_slice())
-            && [upper, label, record]
-                .iter()
-                .all(|span| span.rotation_degrees == 0.0 && span.wmode == 0)
-            && upper.text.trim() == group.text.trim()
-            && label.text.trim() == leaf.text.trim()
-            && record.text.trim() == value.text.trim()
-            && group.text.chars().any(char::is_alphabetic)
-            && leaf.text.chars().any(char::is_alphabetic)
-            && !is_data_value(leaf.text.trim())
-            && upper.font_weight.is_bold()
-            && label.font_weight == upper.font_weight
-            && label.font_name == upper.font_name
-            && label.font_size == upper.font_size
-            && !record.font_weight.is_bold()
-        {
-            return true;
-        }
-        column += group.colspan as usize;
-    }
-    false
 }
 
 fn group_covers_decimal_leaves(
@@ -2120,23 +2090,17 @@ fn detect_tables_in_cluster(
                             && header_boundary
                             && centered_decimal_labels(&table.rows[r], &table.rows[r + 1], &grid.columns)
                             && let (Some(first), Some(last)) = (grid.columns.first(), grid.columns.last())
+                            && source_headers::has_painted_header_background(
+                                crate::geometry::Rect::new(
+                                    first.x_min,
+                                    row_bottom,
+                                    last.x_max - first.x_min,
+                                    grid.rows[0].y_max - row_bottom,
+                                ),
+                                all_lines.iter(),
+                            )
                         {
-                            let bounds = crate::geometry::Rect::new(
-                                first.x_min,
-                                row_bottom,
-                                last.x_max - first.x_min,
-                                grid.rows[0].y_max - row_bottom,
-                            );
-                            if source_headers::has_painted_header_background(bounds, all_lines.iter())
-                                || (matching_bold_decimal_stub(&table.rows[0], &table.rows[r], &table.rows[r + 1])
-                                    && source_headers::has_contrasting_decimal_rule(
-                                        bounds,
-                                        grid.rows[r + 1].y_min,
-                                        all_lines.iter(),
-                                    ))
-                            {
-                                header_rows_detected = r + 1;
-                            }
+                            header_rows_detected = r + 1;
                         }
                         break;
                     }
@@ -9159,25 +9123,6 @@ mod tests {
     }
 
     #[test]
-    fn unshaded_decimal_header_needs_matching_typography_and_rule_contrast() {
-        let rows = [
-            ["Group", "Code", "Rates", "", "West"],
-            ["Version", "Build", "1.0", "1.1", "2.0"],
-            ["Latency", "p95", "0.924", "0.863", "0.985"],
-        ];
-        for (style, rule, expected) in [
-            (HeaderPaint::BoldGroup, Some(1), [true, true, false]),
-            (HeaderPaint::BoldGroup, None, [true, false, false]),
-            (HeaderPaint::Grouped, Some(1), [true, false, false]),
-        ] {
-            assert_eq!(
-                ruled_record_header_roles(&rows, rule, style, CENTERED_LABEL_INK, true, None),
-                expected
-            );
-        }
-    }
-
-    #[test]
     fn centered_decimal_record_below_a_spanning_group_remains_body() {
         let mut rows = [
             ["Group", "Code", "Rates", "", "West"],
@@ -9193,6 +9138,13 @@ mod tests {
                     [true, false, false, false],
                     "{stub}, emphasized rule {rule:?}"
                 );
+                rows[1][1] = "Median";
+                assert_eq!(
+                    ruled_record_header_roles(&rows, rule, HeaderPaint::BoldGroup, CENTERED_LABEL_INK, true, None),
+                    [true, false, false, false],
+                    "bold Median, emphasized rule {rule:?}"
+                );
+                rows[1][1] = "p50";
             }
         }
     }

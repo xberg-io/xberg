@@ -212,6 +212,67 @@ fn cell_members(cell: &TableCell, text: &str) -> Option<Vec<Run>> {
         .collect()
 }
 
+fn exact_decimal_member(cell: &TableCell, text: &str) -> Option<Run> {
+    let [span] = cell.spans.as_slice() else { return None };
+    let (whole, fraction) = text.split_once('.')?;
+    if whole.is_empty()
+        || fraction.is_empty()
+        || !whole.bytes().chain(fraction.bytes()).all(|byte| byte.is_ascii_digit())
+        || span.text.trim() != text
+        || span.char_x_offsets.len() != text.len()
+        || !span.char_x_offsets.windows(2).all(|pair| pair[0] < pair[1])
+        || !span
+            .char_x_offsets
+            .iter()
+            .all(|x| (span.bbox.left()..span.bbox.right()).contains(x))
+    {
+        return None;
+    }
+    Run::capture(span)
+}
+
+// Match the whole prose span to exact glyph-bearing cells on one baseline. A
+// textual match against concatenated table cells alone can swallow short prose. ~keep
+fn joined_decimal_source_keys(members: &[(u32, u32, Run)], source: &[TextSpan]) -> Vec<Vec<SegmentKey>> {
+    if members.len() < 2 || source.len() > MAX_PAGE_SEGMENTS {
+        return Vec::new();
+    }
+    let groups = members.chunk_by(|(row_a, col_a, a), (row_b, col_b, b)| {
+        row_a == row_b
+            && *col_a + 1 == *col_b
+            && a.bounds.right < b.bounds.left
+            && a.bounds.bottom == b.bounds.bottom
+            && a.bounds.top == b.bounds.top
+            && a.font_size == b.font_size
+            && a.style == b.style
+    });
+    let mut sources = ahash::AHashMap::new();
+    for span in source.iter().filter(|span| span.mcid.is_none()) {
+        if let Some(bounds) = Edges::new(span.bbox.x, span.bbox.y, span.bbox.width, span.bbox.height) {
+            sources
+                .entry(bounds.values().map(f32::to_bits))
+                .and_modify(|entry| *entry = None)
+                .or_insert(Some(span));
+        }
+    }
+    groups
+        .filter_map(|group| {
+            let [(_, _, first), .., (_, _, last)] = group else {
+                return None;
+            };
+            let bounds = first.bounds.union(last.bounds).values().map(f32::to_bits);
+            let span = sources.get(&bounds)?.as_ref()?;
+            let text = group.iter().map(|(_, _, run)| run.text.as_str()).collect::<String>();
+            if text != span.text {
+                return None;
+            }
+            let painted = Run::capture(span)?;
+            (first.font_size == painted.font_size && first.style == painted.style)
+                .then(|| vec![redistributed_key(span)])
+        })
+        .collect()
+}
+
 fn normalized_spaces(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -355,7 +416,7 @@ pub(super) fn capture_with_redistributed_spans(
     source: &super::scripts::PageSpans,
     recovered: &[Vec<TextSpan>],
 ) -> Option<TableSources> {
-    let redistributed: Vec<_> = repaired
+    let mut redistributed: Vec<_> = repaired
         .iter()
         .filter_map(|span| redistributed_keys(span, &source.spans))
         .chain(recovered.iter().filter_map(|group| {
@@ -372,6 +433,7 @@ pub(super) fn capture_with_redistributed_spans(
     let bbox = table_bounds(table.bounding_box)?;
     let rows: Vec<Vec<_>> = native.rows.iter().map(|row| row.cells.iter().collect()).collect();
     let mut members = Vec::new();
+    let mut decimal_members = Vec::new();
     let mut paint_overhangs = Vec::new();
     let mut recovered_lines = Vec::new();
     let recovered = native
@@ -389,6 +451,9 @@ pub(super) fn capture_with_redistributed_spans(
                     recovered_lines.extend(lines);
                 }
             } else if let Some(runs) = cell_members(cell, text) {
+                if let Some(decimal) = exact_decimal_member(cell, text) {
+                    decimal_members.push((row, col, decimal));
+                }
                 members.push(runs);
             } else if let Some(run) =
                 ownership.and_then(|ownership| paint_overhang(cell, text, ownership, row as usize, col as usize))
@@ -397,6 +462,7 @@ pub(super) fn capture_with_redistributed_spans(
             }
         },
     );
+    redistributed.extend(joined_decimal_source_keys(&decimal_members, &source.spans));
     (!members.is_empty() || !paint_overhangs.is_empty() || !recovered_lines.is_empty() || !redistributed.is_empty())
         .then(|| TableSources {
             page: table.page_number,

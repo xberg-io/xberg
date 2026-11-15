@@ -6,6 +6,7 @@ use crate::structure::spatial_table_detector::{
 };
 use crate::structure::table_extractor::Table;
 
+mod tagged_decimal_roles;
 mod visible_paint;
 
 type TablePaths = Vec<crate::elements::PathContent>;
@@ -163,6 +164,9 @@ impl PdfDocument {
         certify_empty_legacy_routes(&mut results, configs, spans, lines);
         if recover_wide {
             recover_empty_ruled_routes(self, page_index, configs, &mut results, (spans, lines), page_bounds);
+        }
+        if spans.iter().any(|span| span.mcid.is_some()) {
+            self.retain_tagged_decimal_roles(page_index, &mut results);
         }
         results
     }
