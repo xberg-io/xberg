@@ -648,6 +648,19 @@ mod tests {
         for x in [20, 22] {
             image.put_pixel(x, 18, image::Rgb([0; 3]));
         }
+        assert!(split_rows::recover(&image, table.clone(), &blocks, false).is_none());
+
+        // Keep crossed vertical padding without putting the neighboring label under the detector. ~keep
+        let (x, y, right, bottom) = bounds(&blocks[6]).unwrap();
+        let offset = label.2 - x + 1;
+        for yy in y..bottom {
+            for xx in x..right {
+                let pixel = image[(xx, yy)];
+                image.put_pixel(xx + offset, yy, pixel);
+                image.put_pixel(xx, yy, image::Rgb([255; 3]));
+            }
+        }
+        blocks[6] = block("1.2", (x + offset, y, right + offset, bottom));
         let recovered = split_rows::recover(&image, table.clone(), &blocks, false).unwrap();
         let mut result = [table.clone()];
         recovered.apply(&mut result);
