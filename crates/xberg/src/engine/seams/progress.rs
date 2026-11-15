@@ -73,7 +73,10 @@ impl ProgressContext {
             tracing::warn!("progress completion counter lock was poisoned; ignoring event");
             return;
         };
-        completed_pages.insert(page);
+        // A page re-read by a fallback OCR stage or an image retry was already reported (#3174).
+        if !completed_pages.insert(page) {
+            return;
+        }
         self.sink
             .emit_ocr_page(page, total, completed_pages.len(), backend, self.input_index);
     }
@@ -183,7 +186,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn should_emit_numbered_ocr_page_progress_in_current_extraction_context() {
+    async fn should_emit_each_ocr_page_once_in_current_extraction_context() {
         let sink = Arc::new(RecordingSink::default());
 
         scope_progress(sink.clone(), Some(3), async {
@@ -206,13 +209,6 @@ mod tests {
                     total: 12,
                     completed: 1,
                     backend: "tesseract".to_string(),
-                    input_index: Some(3),
-                },
-                RecordedPage {
-                    page: 7,
-                    total: 12,
-                    completed: 1,
-                    backend: "paddleocr".to_string(),
                     input_index: Some(3),
                 },
                 RecordedPage {

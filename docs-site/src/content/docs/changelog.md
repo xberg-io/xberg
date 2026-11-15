@@ -258,6 +258,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(ocr): Report each page's OCR progress once, even when a fallback backend or an image retry reads it again.** (#3174)
+
 - **Output is now stable between runs.** Heading levels, list indentation, OCR font names and `metadata.additional` key order no longer depend on hash iteration order; ties resolve to the lower heading level, the smaller indent and the lexically first font name, and `additional` serializes with sorted keys.
 
 - **(rtf): Drop `\deleted` tracked-change text from extracted content.** `{\deleted 100}{\revised 200}` now extracts as `200` instead of `100200`. (#3164)

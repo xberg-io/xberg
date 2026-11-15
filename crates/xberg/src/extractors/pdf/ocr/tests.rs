@@ -10036,7 +10036,7 @@ Name: ___
 
     #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]
     #[tokio::test]
-    async fn xobject_recovery_reports_each_retry_without_advancing_distinct_page_count() {
+    async fn xobject_recovery_reports_a_page_once_across_its_image_retries() {
         #[derive(Default)]
         struct RetryProgressSink {
             events: std::sync::Mutex<Vec<(usize, usize, usize, String)>>,
@@ -10077,10 +10077,7 @@ Name: ___
 
         assert_eq!(
             *sink.events.lock().expect("event mutex poisoned"),
-            vec![
-                (7, 9, 1, "xobject-payload-test-backend".to_string()),
-                (7, 9, 1, "xobject-payload-test-backend".to_string()),
-            ]
+            vec![(7, 9, 1, "xobject-payload-test-backend".to_string())]
         );
     }
 

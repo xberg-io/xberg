@@ -381,3 +381,134 @@ fn should_preserve_caller_ancestry_and_progress_in_parallel_single_backend_pdf_o
         parallel_callers(false);
     }
 }
+
+const FALLBACK_BACKENDS: [&str; 2] = ["issue-3174-first", "issue-3174-fallback"];
+
+struct CountingBackend {
+    name: &'static str,
+    calls: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+impl Plugin for CountingBackend {
+    fn name(&self) -> &str {
+        self.name
+    }
+    fn version(&self) -> String {
+        "1.0.0".to_string()
+    }
+    fn initialize(&self) -> crate::Result<()> {
+        Ok(())
+    }
+    fn shutdown(&self) -> crate::Result<()> {
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl OcrBackend for CountingBackend {
+    fn backend_type(&self) -> OcrBackendType {
+        OcrBackendType::Custom
+    }
+    fn supports_language(&self, _: &str) -> bool {
+        true
+    }
+    fn supports_document_processing(&self) -> bool {
+        false
+    }
+
+    async fn process_image(&self, _: &[u8], _: &OcrConfig) -> crate::Result<crate::ExtractedDocument> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(crate::ExtractedDocument {
+            content: OCR_TEXT.to_string(),
+            ..Default::default()
+        })
+    }
+}
+
+fn rejecting_two_stage_config() -> ExtractionConfig {
+    let stage = |backend: &str, priority: u32| {
+        serde_json::from_value(serde_json::json!({"backend": backend, "priority": priority})).expect("stage config")
+    };
+    ExtractionConfig {
+        use_cache: false,
+        ocr: Some(OcrConfig {
+            backend: FALLBACK_BACKENDS[0].to_string(),
+            pipeline: Some(OcrPipelineConfig {
+                stages: vec![stage(FALLBACK_BACKENDS[0], 100), stage(FALLBACK_BACKENDS[1], 50)],
+                quality_thresholds: OcrQualityThresholds {
+                    pipeline_min_quality: 1.0,
+                    ..Default::default()
+                },
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn should_report_each_page_once_when_the_quality_check_sends_it_to_a_fallback_backend() {
+    if !in_registry_child("should_report_each_page_once_when_the_quality_check_sends_it_to_a_fallback_backend") {
+        return;
+    }
+    let calls = [
+        Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+        Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+    ];
+    for (name, calls) in FALLBACK_BACKENDS.into_iter().zip(&calls) {
+        register_ocr_backend(Arc::new(CountingBackend {
+            name,
+            calls: Arc::clone(calls),
+        }))
+        .expect("register test backend");
+    }
+    let sink = Arc::new(RecordingSink::default());
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("test runtime")
+        .block_on(scope_progress(sink.clone(), Some(0), async {
+            let native_text = "Native invoice";
+            let boundaries = [1, 2, 3].map(|page_number| crate::types::PageBoundary {
+                page_number,
+                byte_start: if page_number == 1 { 0 } else { native_text.len() },
+                byte_end: native_text.len(),
+            });
+            super::extract_mixed_ocr_native(
+                native_text,
+                &boundaries,
+                &[2, 3],
+                &mixed_pdf(),
+                &rejecting_two_stage_config(),
+                None,
+            )
+            .await
+            .expect("mixed OCR succeeds with the best-effort read");
+        }));
+    for name in FALLBACK_BACKENDS {
+        unregister_ocr_backend(name).expect("unregister test backend");
+    }
+
+    let reads = calls
+        .each_ref()
+        .map(|calls| calls.load(std::sync::atomic::Ordering::SeqCst));
+    assert_eq!(
+        reads,
+        [2, 2],
+        "both OCR pages must be read by the first and the fallback stage"
+    );
+    let pages = sink.0.lock().expect("progress lock");
+    let mut numbers = pages.iter().map(|p| p.page).collect::<Vec<_>>();
+    numbers.sort_unstable();
+    assert_eq!(
+        numbers,
+        vec![2, 3],
+        "each OCR page must be reported exactly once: {pages:?}"
+    );
+    assert_eq!(pages.iter().map(|p| p.completed).collect::<Vec<_>>(), vec![1, 2]);
+    for page in pages.iter() {
+        assert_eq!(page.total, 3);
+        assert_eq!(page.input_index, Some(0));
+        assert_eq!(page.backend, FALLBACK_BACKENDS[0]);
+    }
+}
