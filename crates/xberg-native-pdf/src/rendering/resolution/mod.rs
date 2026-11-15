@@ -129,6 +129,18 @@
 //! by feeding `GraphicsState` mocks. This is the payoff of the layering —
 //! capabilities become individually testable.
 
+// A handful of types and the `PaintBackend` trait surface are still
+// scaffolding for future backends (composite preflight, PDF/X-style
+// press preview) — they're plumbed through the module so the consumer
+// surface stays stable, but only the per-plate `SeparationBackend` and
+// the composite renderer paths exercise every variant today. The
+// narrowed allow covers exactly those scaffolded items; production
+// callers like `ResolutionPipeline`, `SeparationBackend`, and the
+// resolved-color variants are referenced unconditionally and no longer
+// need the blanket dead-code suppression that was here during the
+// migration. ~keep
+#![allow(dead_code)]
+
 pub(crate) mod backend;
 pub(crate) mod blend;
 pub(crate) mod clip;
