@@ -169,19 +169,61 @@ fn shared_child_forms_charge_one_page_budget_in_paint_order() {
         doc.extract_paths_with_form_budget(0, FormPathBudget::new(4, bytes, 6))
             .unwrap(),
     );
-    for budget in [
-        FormPathBudget::new(3, bytes, 6),
-        FormPathBudget::new(4, bytes - 1, 6),
-        FormPathBudget::new(4, bytes, 5),
+    for (budget, message) in [
+        (FormPathBudget::new(3, bytes, 6), "exceeded the page work budget"),
+        (FormPathBudget::new(4, bytes - 1, 6), "exceeded the page work budget"),
+        (FormPathBudget::new(4, bytes, 5), "incomplete Form path parse"),
     ] {
         let error = doc.extract_paths_with_form_budget(0, budget).unwrap_err();
-        assert!(
-            error
-                .to_string()
-                .contains("Form path extraction exceeded the page work budget")
-        );
+        assert!(error.to_string().contains(message), "{error}");
     }
     assert_paint(doc.extract_paths(0).unwrap());
+}
+
+#[test]
+fn form_extraction_reports_incomplete_decode_and_parse() {
+    use super::super::paths::FormPathBudget;
+    use std::io::Write;
+
+    let content = b"0 0 10 10 re f % Form rectangle: 0 0 10 10 re f, 0 0 10 10 re f";
+    let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(content).unwrap();
+    let encoded = encoder.finish().unwrap();
+    let hex: String = encoded.iter().map(|byte| format!("{byte:02x}")).collect();
+    let form = format!(
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 10 10] \
+         /Filter [/ASCIIHexDecode /FlateDecode] /Length {} >>\nstream\n{hex}>\nendstream",
+        hex.len() + 1
+    );
+    let fresh_page = || page_with_xobject("/X1 Do", &form);
+    assert!(encoded.len() < content.len() - 1);
+    for (bytes, filter) in [
+        (encoded.len() - 1, "ASCIIHexDecode"),
+        (content.len() - 1, "FlateDecode"),
+    ] {
+        let error = fresh_page()
+            .extract_paths_with_form_budget(0, FormPathBudget::new(1, bytes, 2))
+            .unwrap_err();
+        let message = error.to_string();
+        assert!(
+            message.contains("incomplete Form path decode") && message.contains(filter),
+            "{error}"
+        );
+    }
+    let doc = fresh_page();
+    assert_eq!(
+        doc.extract_paths_with_form_budget(0, FormPathBudget::new(1, content.len(), 2))
+            .unwrap()
+            .len(),
+        2
+    );
+    let parse_error = doc
+        .extract_paths_with_form_budget(0, FormPathBudget::new(1, content.len(), 1))
+        .unwrap_err();
+    assert!(
+        parse_error.to_string().contains("incomplete Form path parse"),
+        "{parse_error}"
+    );
 }
 
 /// One page that draws a curve and paints the XObject `/X1` (object 5, `x1` is its dictionary and stream).

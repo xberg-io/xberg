@@ -1,6 +1,8 @@
 //! PDF object types.
 
 use crate::error::{Error, Result};
+use crate::parser_config::ParserOptions;
+use std::borrow::Cow;
 
 /// PDF object representation.
 #[derive(Debug, Clone, PartialEq)]
@@ -200,7 +202,7 @@ impl Object {
     }
 
     pub(crate) fn decode_image_stream_data(&self, expected_filter_output_size: Option<usize>) -> Result<Vec<u8>> {
-        self.decode_stream_data_with_decryption_and_expected_size(None, 0, 0, expected_filter_output_size, true)
+        self.decode_stream_data_with_decryption_and_expected_size(None, 0, 0, expected_filter_output_size, true, None)
     }
 
     /// Decode stream data with optional decryption.
@@ -223,7 +225,7 @@ impl Object {
         obj_num: u32,
         gen_num: u32,
     ) -> Result<Vec<u8>> {
-        self.decode_stream_data_with_decryption_and_expected_size(decryption_fn, obj_num, gen_num, None, false)
+        self.decode_stream_data_with_decryption_and_expected_size(decryption_fn, obj_num, gen_num, None, false, None)
     }
 
     pub(crate) fn decode_stream_data_with_decryption_and_expected_size(
@@ -233,6 +235,7 @@ impl Object {
         gen_num: u32,
         expected_filter_output_size: Option<usize>,
         image_stream: bool,
+        byte_limit: Option<usize>,
     ) -> Result<Vec<u8>> {
         match self {
             Object::Stream { dict, data } => {
@@ -245,7 +248,12 @@ impl Object {
                 let filters = dict.get("Filter").map(extract_filter_names).unwrap_or_default();
 
                 if filters.is_empty() {
-                    Ok(decrypted_data)
+                    if let Some(limit) = byte_limit
+                        && decrypted_data.len() > limit
+                    {
+                        return Err(Error::Decode(format!("unfiltered stream exceeds {limit} bytes")));
+                    }
+                    Ok(decrypted_data.into_owned())
                 } else {
                     // Get decode parameters if present
                     // PDF Spec: ISO 32000-1:2008, Section 7.4.2 - DecodeParms ~keep
@@ -269,7 +277,7 @@ impl Object {
                             expected_size,
                         )
                     } else {
-                        crate::decoders::decode_stream_with_params(&decrypted_data, &filters, decode_params.as_ref())
+                        decode_stream_filters(&decrypted_data, &filters, decode_params.as_ref(), byte_limit)
                     }
                 }
             }
@@ -283,7 +291,7 @@ impl Object {
                     Ok(Vec::new())
                 } else {
                     let decode_params = extract_decode_params(dict.get("DecodeParms"));
-                    crate::decoders::decode_stream_with_params(&[], &filters, decode_params.as_ref())
+                    decode_stream_filters(&[], &filters, decode_params.as_ref(), byte_limit)
                 }
             }
             _ => Err(Error::InvalidObjectType {
@@ -292,6 +300,29 @@ impl Object {
             }),
         }
     }
+}
+
+fn decode_stream_filters(
+    data: &[u8],
+    filters: &[String],
+    params: Option<&crate::decoders::DecodeParams>,
+    byte_limit: Option<usize>,
+) -> Result<Vec<u8>> {
+    let options = byte_limit.map(|limit| {
+        let defaults = ParserOptions::default();
+        ParserOptions {
+            // The decoder API reserves zero for an unlimited cap.
+            max_decompressed_size: defaults.max_decompressed_size.min(limit.max(1)),
+            ..defaults
+        }
+    });
+    let decoded = crate::decoders::decode_stream_with_options(data, filters, params, options.as_ref())?;
+    if let Some(limit) = byte_limit
+        && decoded.len() > limit
+    {
+        return Err(Error::Decode(format!("filtered stream exceeds {limit} bytes")));
+    }
+    Ok(decoded)
 }
 
 /// Decrypts a stream's raw bytes before any filter is applied, or returns them unchanged
@@ -308,14 +339,14 @@ impl Object {
 ///
 /// Split out of [`Object::decode_stream_data_with_decryption_and_expected_size`] purely
 /// to shorten that method.
-fn decrypt_stream_data(
-    data: &[u8],
+fn decrypt_stream_data<'a>(
+    data: &'a [u8],
     decryption_fn: Option<&dyn Fn(&[u8]) -> Result<Vec<u8>>>,
     obj_num: u32,
     gen_num: u32,
-) -> Result<Vec<u8>> {
+) -> Result<Cow<'a, [u8]>> {
     let Some(decrypt) = decryption_fn else {
-        return Ok(data.to_vec());
+        return Ok(Cow::Borrowed(data));
     };
 
     tracing::debug!(
@@ -327,7 +358,7 @@ fn decrypt_stream_data(
     match decrypt(data) {
         Ok(data) => {
             tracing::debug!(bytes = data.len(), "decryption successful");
-            Ok(data)
+            Ok(Cow::Owned(data))
         }
         Err(error) => {
             tracing::error!(

@@ -453,7 +453,7 @@ impl PdfDocument {
     ///
     /// ISO 32000-1:2008, Section 7.6.2 - Streams must be decrypted BEFORE applying filters.
     pub(crate) fn decode_stream_with_encryption(&self, stream_obj: &Object, obj_ref: ObjectRef) -> Result<Vec<u8>> {
-        self.decode_stream_with_encryption_and_expected_size(stream_obj, obj_ref, None, false)
+        self.decode_stream_with_encryption_and_expected_size(stream_obj, obj_ref, None, false, None)
     }
 
     pub(crate) fn decode_image_stream_with_encryption(
@@ -462,7 +462,22 @@ impl PdfDocument {
         obj_ref: ObjectRef,
         expected_filter_output_size: Option<usize>,
     ) -> Result<Vec<u8>> {
-        self.decode_stream_with_encryption_and_expected_size(stream_obj, obj_ref, expected_filter_output_size, true)
+        self.decode_stream_with_encryption_and_expected_size(
+            stream_obj,
+            obj_ref,
+            expected_filter_output_size,
+            true,
+            None,
+        )
+    }
+
+    pub(super) fn decode_form_stream_with_limit(
+        &self,
+        stream_obj: &Object,
+        obj_ref: ObjectRef,
+        byte_limit: usize,
+    ) -> Result<Vec<u8>> {
+        self.decode_stream_with_encryption_and_expected_size(stream_obj, obj_ref, None, false, Some(byte_limit))
     }
 
     fn decode_stream_with_encryption_and_expected_size(
@@ -471,6 +486,7 @@ impl PdfDocument {
         obj_ref: ObjectRef,
         expected_filter_output_size: Option<usize>,
         image_stream: bool,
+        byte_limit: Option<usize>,
     ) -> Result<Vec<u8>> {
         if matches!(stream_obj, Object::Null) {
             return Ok(Vec::new());
@@ -502,13 +518,14 @@ impl PdfDocument {
                 obj_ref.generation as u32,
                 expected_filter_output_size,
                 image_stream,
+                byte_limit,
             );
         }
         drop(handler_ref);
         if image_stream {
             stream_obj.decode_image_stream_data(expected_filter_output_size)
         } else {
-            stream_obj.decode_stream_data()
+            stream_obj.decode_stream_data_with_decryption_and_expected_size(None, 0, 0, None, false, byte_limit)
         }
     }
 

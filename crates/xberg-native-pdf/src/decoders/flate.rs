@@ -111,9 +111,8 @@ fn looks_like_real_stream(output: &[u8]) -> bool {
 fn check_limit(output: &[u8], limit: u64) -> Result<()> {
     if output.len() as u64 >= limit {
         return Err(Error::Decode(format!(
-            "FlateDecode output reached the {} MB safety limit; \
-             stream may be a flate bomb or an unusually large image",
-            limit / (1024 * 1024)
+            "FlateDecode output reached the {limit} byte safety limit; \
+             stream may be a flate bomb or an unusually large image"
         )));
     }
     Ok(())
@@ -123,10 +122,10 @@ fn check_limit(output: &[u8], limit: u64) -> Result<()> {
 /// [`looks_like_real_stream`], after validating it against the decompression
 /// cap. Shared by every recovery strategy's "accept this partial output?" check.
 fn accept_as_partial(output: &[u8], limit: u64) -> Result<bool> {
+    check_limit(output, limit)?;
     if output.is_empty() || !looks_like_real_stream(output) {
         return Ok(false);
     }
-    check_limit(output, limit)?;
     Ok(true)
 }
 
@@ -227,11 +226,14 @@ impl FlateDecoder {
 }
 
 impl StreamDecoder for FlateDecoder {
-    // `max_output_bytes` (GH#1764) is ignored here: this decoder already enforces its own,
-    // independently configured `max_decompressed_bytes` mid-decode via `.take(limit)` in
-    // every strategy below, and predates the trait-level cap. ~keep
-    fn decode(&self, input: &[u8], _max_output_bytes: usize) -> Result<Vec<u8>> {
-        let limit = self.max_decompressed_bytes;
+    fn decode(&self, input: &[u8], max_output_bytes: usize) -> Result<Vec<u8>> {
+        let limit = if max_output_bytes == 0 {
+            self.max_decompressed_bytes
+        } else {
+            // Read one byte past the inclusive caller budget to distinguish exact fit from truncation.
+            self.max_decompressed_bytes
+                .min((max_output_bytes as u64).saturating_add(1))
+        };
 
         let zlib_err = match try_zlib_decode(input, limit)? {
             PrimaryAttempt::Recovered(output) => return Ok(output),

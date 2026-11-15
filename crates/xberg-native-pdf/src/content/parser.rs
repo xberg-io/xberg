@@ -218,8 +218,18 @@ fn visit_content_stream(
 /// `Object::Real` for each numeric operand. Common operators like `m`, `l`, `c`,
 /// `re`, `cm`, `rg` are parsed entirely from raw bytes.
 pub fn parse_content_stream_paths_only(data: &[u8]) -> Result<Vec<Operator>> {
+    Ok(scan_path_operators(data, None).0)
+}
+
+pub(crate) fn parse_complete_form_path_operators(data: &[u8], operator_limit: usize) -> Option<Vec<Operator>> {
+    let (operators, complete) = scan_path_operators(data, Some(operator_limit));
+    complete.then_some(operators)
+}
+
+fn scan_path_operators(data: &[u8], operator_limit: Option<usize>) -> (Vec<Operator>, bool) {
+    let max_operators = effective_max_operators().min(operator_limit.unwrap_or(usize::MAX));
     let estimated_capacity = data.len() / 20;
-    let mut operators = Vec::with_capacity(estimated_capacity.min(100_000));
+    let mut operators = Vec::with_capacity(estimated_capacity.min(100_000).min(max_operators));
     let len = data.len();
     let mut i: usize = 0;
     let mut operand_start: usize = 0;
@@ -232,9 +242,17 @@ pub fn parse_content_stream_paths_only(data: &[u8]) -> Result<Vec<Operator>> {
         if i >= len {
             break;
         }
-        if operators.len() >= effective_max_operators() {
-            push_operator_cap_warning();
-            break;
+        if operator_limit.is_some() && data[i] == b'%' {
+            while i < len && data[i] != b'\n' && data[i] != b'\r' {
+                i += 1;
+            }
+            continue;
+        }
+        if operators.len() >= max_operators {
+            if max_operators == effective_max_operators() {
+                push_operator_cap_warning();
+            }
+            return (operators, false);
         }
 
         match BYTE_CLASS[data[i] as usize] {
@@ -242,6 +260,13 @@ pub fn parse_content_stream_paths_only(data: &[u8]) -> Result<Vec<Operator>> {
                 let first_byte = data[i];
                 let second_is_non_alpha = i + 1 >= len || BYTE_CLASS[data[i + 1] as usize] != SCAN_ALPHA;
 
+                if second_is_non_alpha
+                    && first_byte == b's'
+                    && operator_limit.is_some()
+                    && max_operators - operators.len() < 2
+                {
+                    return (operators, false);
+                }
                 if second_is_non_alpha {
                     let operands = &data[operand_start..i];
                     let op = match first_byte {
@@ -333,7 +358,7 @@ pub fn parse_content_stream_paths_only(data: &[u8]) -> Result<Vec<Operator>> {
                             i = len - rest.len();
                             operand_start = i;
                         }
-                        None => break,
+                        None => return (operators, false),
                     }
                     continue;
                 }
@@ -446,13 +471,13 @@ pub fn parse_content_stream_paths_only(data: &[u8]) -> Result<Vec<Operator>> {
                         bytes = len - i,
                         "content stream had too many consecutive parse errors; bailing out"
                     );
-                    break;
+                    return (operators, false);
                 }
             }
         }
     }
 
-    Ok(operators)
+    (operators, true)
 }
 
 /// Skips a `[...]`-delimited array in the paths-only fast scanner, honoring

@@ -15,7 +15,7 @@ pub(super) struct FormPathBudget {
     visits: usize,
     decoded_bytes: usize,
     operators: usize,
-    exhausted: bool,
+    incomplete: bool,
 }
 
 impl FormPathBudget {
@@ -24,16 +24,18 @@ impl FormPathBudget {
             visits,
             decoded_bytes,
             operators,
-            exhausted: false,
+            incomplete: false,
         }
+    }
+
+    fn incomplete(&mut self, message: String) -> Error {
+        self.incomplete = true;
+        Error::LayoutAnalysis(message)
     }
 
     fn charge(&mut self, visits: usize, decoded_bytes: usize, operators: usize) -> Result<()> {
         if visits > self.visits || decoded_bytes > self.decoded_bytes || operators > self.operators {
-            self.exhausted = true;
-            return Err(Error::LayoutAnalysis(
-                "Form path extraction exceeded the page work budget".into(),
-            ));
+            return Err(self.incomplete("Form path extraction exceeded the page work budget".into()));
         }
         self.visits -= visits;
         self.decoded_bytes -= decoded_bytes;
@@ -337,7 +339,7 @@ impl PdfDocument {
                         self.process_form_xobject_paths(&name, &mut extractor, &mut state_stack, &mut form_budget)
                     {
                         // A truncated paint sequence cannot safely serve as source evidence. ~keep
-                        if form_budget.exhausted {
+                        if form_budget.incomplete {
                             return Err(error);
                         }
                         tracing::warn!(target: LOG_TARGET,
@@ -575,7 +577,7 @@ impl PdfDocument {
         state_stack: &mut crate::extractors::paths::PathGraphicsStateStack,
         form_budget: &mut FormPathBudget,
     ) -> Result<()> {
-        use crate::content::{Matrix, Operator, parse_content_stream_paths_only};
+        use crate::content::{Matrix, Operator, parser::parse_complete_form_path_operators};
         use crate::elements::{LineCap, LineJoin};
         use crate::extractors::paths::FillRule;
         use crate::layout::Color;
@@ -632,7 +634,7 @@ impl PdfDocument {
         let stream_data = if let Some(cached) = cached_stream {
             cached
         } else {
-            match self.decode_stream_with_encryption(&xobject, xobject_ref) {
+            match self.decode_form_stream_with_limit(&xobject, xobject_ref, form_budget.decoded_bytes) {
                 Ok(data) => {
                     let data = std::sync::Arc::new(data);
                     const MAX_STREAM_CACHE_BYTES: usize = 50 * 1024 * 1024;
@@ -648,19 +650,16 @@ impl PdfDocument {
                 }
                 Err(e) => {
                     extractor.pop_xobject_failed();
-                    return Err(e);
+                    return Err(form_budget.incomplete(format!("incomplete Form path decode: {e}")));
                 }
             }
         };
 
         // Cached Forms consume the same traversal work on each painted occurrence. ~keep
         form_budget.charge(0, stream_data.len(), 0)?;
-        let operators = match parse_content_stream_paths_only(&stream_data) {
-            Ok(ops) => ops,
-            Err(e) => {
-                extractor.pop_xobject_failed();
-                return Err(e);
-            }
+        let Some(operators) = parse_complete_form_path_operators(&stream_data, form_budget.operators) else {
+            extractor.pop_xobject_failed();
+            return Err(form_budget.incomplete("incomplete Form path parse".into()));
         };
 
         form_budget.charge(0, 0, operators.len())?;
@@ -847,7 +846,7 @@ impl PdfDocument {
                     if let Err(error) =
                         self.process_form_xobject_paths(&nested_name, extractor, state_stack, form_budget)
                     {
-                        if form_budget.exhausted {
+                        if form_budget.incomplete {
                             return Err(error);
                         }
                         tracing::warn!(target: LOG_TARGET,
