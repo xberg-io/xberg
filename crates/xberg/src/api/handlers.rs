@@ -1436,6 +1436,11 @@ async fn run_extraction_job(
     let store = Arc::clone(&guard.store);
     let jid = guard.job_id.clone();
 
+    // The job stays `Pending` until it holds a slot of the limit that also bounds the
+    // synchronous extraction routes, and its timeout starts only once it runs. ~keep
+    let Some(_slot) = store.acquire_execution_slot(&jid).await else {
+        return;
+    };
     store.set_running(&jid, super::jobs::now_rfc3339());
 
     let timeout_secs = resolve_job_timeout_secs(effective_config.extraction_timeout_secs, job_timeout_secs);
@@ -3090,6 +3095,64 @@ mod tests {
             final_status.result.is_some(),
             "completed job must carry an extraction result"
         );
+    }
+
+    /// A submitted job must not extract while every slot of the request limit is held: it
+    /// stays `Pending` until a slot frees, then completes.
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn test_extract_async_job_waits_for_a_free_extraction_slot() {
+        use crate::api::types::JobState;
+
+        let slots = Arc::new(tokio::sync::Semaphore::new(1));
+        let job_store = Arc::new(crate::api::jobs::JobStore::with_execution_slots(Some(Arc::clone(
+            &slots,
+        ))));
+        let app = test_router_with_store(Arc::clone(&job_store));
+        let sync_request = Arc::clone(&slots).acquire_owned().await.expect("semaphore open");
+        let body = serde_json::json!({"inputs": [{"kind": "text", "text": "Example"}]});
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/extract-async")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .expect("valid request"),
+            )
+            .await
+            .expect("handler responded");
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body bytes readable");
+        let job_id = serde_json::from_slice::<AsyncJobResponse>(&bytes)
+            .expect("response parses")
+            .job_id;
+
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        assert_eq!(
+            job_store.get(&job_id).unwrap().state,
+            JobState::Pending,
+            "the job must not run while the only slot is held"
+        );
+
+        drop(sync_request);
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let state = job_store.get(&job_id).unwrap().state;
+            // The task drops its slot just after it publishes `Completed`. ~keep
+            if state == JobState::Completed && slots.available_permits() == 1 {
+                break;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "job did not complete and release its slot: {state:?}, {} free",
+                slots.available_permits()
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
     }
 
     #[cfg(feature = "api")]

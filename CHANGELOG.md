@@ -197,6 +197,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request config over the server config instead of replacing it, and a request can only lower the server's security
   limits, archive depth, timeouts and URL caps, never raise or remove them.
 
+- **(api): Async jobs now share the request concurrency limit.** A `/extract-async` job stays `pending` until one of the `XBERG_MAX_CONCURRENT_REQUESTS` slots that also bound synchronous extraction is free, so queued jobs can no longer run up to 100 extractions at once.
+
 - **(hwp): Cap the decompressed size of compressed HWP body-text sections.**
   Sections are now inflated under `security_limits.max_content_size` each and `max_archive_size` in total, so a small crafted `.hwp` can no longer expand without bound. Both limits are configurable; a legitimate document whose sections exceed them is now rejected with a security error until the limits are raised.
 

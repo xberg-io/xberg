@@ -1,10 +1,12 @@
 //! In-memory job store for async extraction polling.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use moka::sync::Cache;
 use parking_lot::Mutex;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::api::types::{JobState, JobStatus};
 use crate::cancellation::CancellationToken;
@@ -18,6 +20,9 @@ const MAX_FINISHED_JOBS: u64 = 10_000;
 /// Maximum number of jobs in Pending or Running state at any one time.
 pub const MAX_ACTIVE_JOBS: usize = 100;
 
+/// How often a job waiting for an execution slot checks whether it was cancelled.
+const QUEUED_JOB_POLL_INTERVAL: Duration = Duration::from_millis(50);
+
 /// A pending or running job and the token that cancels its extraction.
 struct ActiveJob {
     status: JobStatus,
@@ -30,9 +35,19 @@ struct ActiveJob {
 /// A job moves to `finished` once, when it completes, fails or is cancelled; that
 /// [`moka::sync::Cache`] drops it after 5 minutes or under capacity pressure.
 /// Server restarts clear all jobs.
+///
+/// Admission (`MAX_ACTIVE_JOBS`) bounds how many jobs are queued; `execution_slots` bounds
+/// how many of them extract at once. The router passes the semaphore that also limits the
+/// synchronous extraction routes, so jobs and requests share one budget.
 pub struct JobStore {
     active: Mutex<HashMap<String, ActiveJob>>,
     finished: Cache<String, JobStatus>,
+    execution_slots: Option<Arc<Semaphore>>,
+}
+
+/// An execution slot held by a running job; dropping it frees the slot.
+pub struct ExecutionSlot {
+    _permit: Option<OwnedSemaphorePermit>,
 }
 
 impl Default for JobStore {
@@ -44,18 +59,55 @@ impl Default for JobStore {
 impl JobStore {
     /// Create a new empty job store with default TTL and capacity.
     pub fn new() -> Self {
-        Self::with_limits(JOB_TTL, MAX_FINISHED_JOBS)
+        Self::with_execution_slots(None)
+    }
+
+    /// Create a store whose jobs each hold a permit of `execution_slots` while they extract.
+    /// `None` leaves job execution unbounded.
+    pub fn with_execution_slots(execution_slots: Option<Arc<Semaphore>>) -> Self {
+        Self::with_limits(JOB_TTL, MAX_FINISHED_JOBS, execution_slots)
     }
 
     /// Create a store that keeps at most `finished_capacity` finished jobs for `ttl`.
-    fn with_limits(ttl: Duration, finished_capacity: u64) -> Self {
+    fn with_limits(ttl: Duration, finished_capacity: u64, execution_slots: Option<Arc<Semaphore>>) -> Self {
         Self {
             active: Mutex::new(HashMap::new()),
             finished: Cache::builder()
                 .max_capacity(finished_capacity)
                 .time_to_live(ttl)
                 .build(),
+            execution_slots,
         }
+    }
+
+    /// Wait until `job_id` may start extracting and return the slot it must hold while it runs.
+    ///
+    /// Returns `None` once the job is no longer pending or running (cancelled while queued),
+    /// so a cancelled job neither waits for nor takes a slot. The job keeps its queue position
+    /// while it waits: the semaphore is fair and the acquire future lives across the polls.
+    pub async fn acquire_execution_slot(&self, job_id: &str) -> Option<ExecutionSlot> {
+        let Some(slots) = self.execution_slots.as_ref() else {
+            return self.is_active(job_id).then_some(ExecutionSlot { _permit: None });
+        };
+        let acquire = Arc::clone(slots).acquire_owned();
+        tokio::pin!(acquire);
+        loop {
+            if !self.is_active(job_id) {
+                return None;
+            }
+            tokio::select! {
+                permit = &mut acquire => {
+                    // The router never closes the semaphore; a closed one means no limit applies.
+                    let permit = permit.ok();
+                    return self.is_active(job_id).then_some(ExecutionSlot { _permit: permit });
+                }
+                () = tokio::time::sleep(QUEUED_JOB_POLL_INTERVAL) => {}
+            }
+        }
+    }
+
+    fn is_active(&self, job_id: &str) -> bool {
+        self.active.lock().contains_key(job_id)
     }
 
     /// Return the number of jobs currently in Pending or Running state.
@@ -529,7 +581,7 @@ mod tests {
 
     #[test]
     fn test_job_ttl_counts_from_finish() {
-        let store = JobStore::with_limits(Duration::from_millis(50), MAX_FINISHED_JOBS);
+        let store = JobStore::with_limits(Duration::from_millis(50), MAX_FINISHED_JOBS, None);
         let job_id = store.create_job().expect("slot available");
         store.set_running(&job_id, "2026-05-01T12:00:01Z".to_string());
         std::thread::sleep(Duration::from_millis(150));
@@ -581,7 +633,7 @@ mod tests {
 
     #[test]
     fn test_finished_capacity_never_evicts_running_job() {
-        let store = JobStore::with_limits(JOB_TTL, 2);
+        let store = JobStore::with_limits(JOB_TTL, 2, None);
         let running = store.create_job().expect("slot available");
         store.set_running(&running, "2026-05-01T12:00:01Z".to_string());
         let token = store.cancellation_token(&running).unwrap();
@@ -600,6 +652,77 @@ mod tests {
             CancelOutcome::Cancelled(_)
         ));
         assert!(token.is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn test_job_waits_for_execution_slot_held_by_another_request() {
+        let slots = Arc::new(Semaphore::new(1));
+        let store = Arc::new(JobStore::with_execution_slots(Some(Arc::clone(&slots))));
+        let request = Arc::clone(&slots).acquire_owned().await.expect("semaphore open");
+        let job_id = store.create_job().expect("slot available");
+
+        let waiter = {
+            let store = Arc::clone(&store);
+            let job_id = job_id.clone();
+            tokio::spawn(async move { store.acquire_execution_slot(&job_id).await.is_some() })
+        };
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert!(!waiter.is_finished(), "a job must not run while every slot is held");
+        assert_eq!(store.get(&job_id).unwrap().state, JobState::Pending);
+
+        drop(request);
+        let acquired = tokio::time::timeout(Duration::from_secs(2), waiter)
+            .await
+            .expect("the job takes the freed slot")
+            .unwrap();
+        assert!(acquired);
+        assert_eq!(slots.available_permits(), 1, "the job's slot is released when it ends");
+    }
+
+    #[tokio::test]
+    async fn test_jobs_never_hold_more_slots_than_the_limit() {
+        let slots = Arc::new(Semaphore::new(2));
+        let store = Arc::new(JobStore::with_execution_slots(Some(Arc::clone(&slots))));
+        let job_ids: Vec<String> = (0..5).map(|_| store.create_job().expect("slot available")).collect();
+
+        let mut held = Vec::new();
+        for job_id in &job_ids[..2] {
+            held.push(store.acquire_execution_slot(job_id).await.expect("slot available"));
+        }
+        assert_eq!(slots.available_permits(), 0);
+
+        let third = tokio::time::timeout(Duration::from_millis(200), store.acquire_execution_slot(&job_ids[2])).await;
+        assert!(third.is_err(), "a third job must wait while two jobs hold both slots");
+
+        drop(held.pop());
+        let slot = tokio::time::timeout(Duration::from_secs(2), store.acquire_execution_slot(&job_ids[2]))
+            .await
+            .expect("the third job takes the freed slot");
+        assert!(slot.is_some());
+        assert_eq!(slots.available_permits(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_job_cancelled_while_queued_gives_up_without_a_slot() {
+        let slots = Arc::new(Semaphore::new(1));
+        let store = Arc::new(JobStore::with_execution_slots(Some(Arc::clone(&slots))));
+        let request = Arc::clone(&slots).acquire_owned().await.expect("semaphore open");
+        let job_id = store.create_job().expect("slot available");
+
+        let waiter = {
+            let store = Arc::clone(&store);
+            let job_id = job_id.clone();
+            tokio::spawn(async move { store.acquire_execution_slot(&job_id).await.is_some() })
+        };
+        store.cancel(&job_id, "2026-05-01T12:00:01Z".to_string());
+
+        let acquired = tokio::time::timeout(Duration::from_secs(2), waiter)
+            .await
+            .expect("a cancelled job stops waiting while every slot is still held")
+            .unwrap();
+        assert!(!acquired);
+        drop(request);
+        assert_eq!(slots.available_permits(), 1);
     }
 }
 
