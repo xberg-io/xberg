@@ -529,18 +529,27 @@ fn insurance_image_rule_only_joins_tables_when_it_crosses_a_gutter() {
     }
 }
 
-fn uniform_rule_decimal_table(first_band: [&str; 5], centered_band: bool) -> Vec<u8> {
+fn uniform_rule_decimal_table(
+    first_band: [&str; 5],
+    centered_band: bool,
+    body_rows: usize,
+    shaded_header: bool,
+) -> Vec<u8> {
     use lopdf::{Document, Object, Stream, dictionary};
     use std::fmt::Write as _;
 
     let mut paint = String::from("0 G 1 w\n");
-    for y in (60..=160).step_by(20) {
+    if shaded_header {
+        paint.push_str("0.8 g 30 120 250 40 re f 0 g\n");
+    }
+    let bottom = 120 - 20 * body_rows;
+    for y in (bottom..=160).step_by(20) {
         writeln!(paint, "30 {y} m 280 {y} l S").unwrap();
     }
     for column in 0..=5 {
         let x = 30 + column * 50;
         let top = if column == 3 { 140 } else { 160 };
-        writeln!(paint, "{x} 60 m {x} {top} l S").unwrap();
+        writeln!(paint, "{x} {bottom} m {x} {top} l S").unwrap();
     }
     paint.push_str("BT /F1 8 Tf\n");
     for (row, cells) in [
@@ -551,6 +560,7 @@ fn uniform_rule_decimal_table(first_band: [&str; 5], centered_band: bool) -> Vec
         ["Latency", "max", "0.937", "0.906", "1.001"],
     ]
     .iter()
+    .take(2 + body_rows)
     .enumerate()
     {
         let y = 145 - row * 20;
@@ -599,7 +609,7 @@ fn centered_decimal_leaf_labels_are_headers_under_uniform_rules() {
             ["Latency", "p50", "0.910", "0.850", "0.970"]
         };
         let result = extract_bytes_document_blocking(
-            &uniform_rule_decimal_table(first_band, centered),
+            &uniform_rule_decimal_table(first_band, centered, 3, centered),
             "application/pdf",
             &config,
         )
@@ -619,7 +629,7 @@ fn centered_decimal_leaf_labels_are_headers_under_uniform_rules() {
 #[test]
 fn centered_decimal_record_remains_body_under_uniform_rules() {
     let first_band = ["Latency", "p50", "0.9", "0.8", "0.9"];
-    let pdf = uniform_rule_decimal_table(first_band, true);
+    let pdf = uniform_rule_decimal_table(first_band, true, 3, false);
     let result = extract_bytes_document_blocking(&pdf, "application/pdf", &parsebench_html_config()).unwrap();
     assert_eq!(result.tables.len(), 1);
     assert_eq!(result.tables[0].cells[1], first_band);
@@ -632,4 +642,49 @@ fn centered_decimal_record_remains_body_under_uniform_rules() {
         result.content,
     );
     assert!(result.content.contains("<td>0.924</td>"));
+}
+
+#[test]
+fn decimal_header_evidence_rejects_centered_median_record() {
+    let first_band = ["Latency", "Median", "0.9", "0.8", "0.9"];
+    let pdf = uniform_rule_decimal_table(first_band, true, 3, false);
+    let result = extract_bytes_document_blocking(&pdf, "application/pdf", &parsebench_html_config()).unwrap();
+    assert_eq!(result.tables.len(), 1);
+    assert_eq!(result.tables[0].cells[1], first_band);
+    assert!(
+        result
+            .content
+            .contains("<tr><td>Latency</td><td>Median</td><td>0.9</td><td>0.8</td><td>0.9</td></tr>"),
+        "{}",
+        result.content,
+    );
+}
+
+#[test]
+fn decimal_header_evidence_accepts_painted_header_above_one_body_row() {
+    let labels = ["Version", "Build", "1.0", "1.1", "2.0"];
+    let config = parsebench_html_config();
+    let plain = extract_bytes_document_blocking(
+        &uniform_rule_decimal_table(labels, true, 1, false),
+        "application/pdf",
+        &config,
+    )
+    .unwrap();
+    let painted = uniform_rule_decimal_table(labels, true, 1, true);
+    let result = extract_bytes_document_blocking(&painted, "application/pdf", &config).unwrap();
+    assert_eq!(result.tables.len(), 1);
+    assert_eq!(result.tables[0].cells.len(), 3);
+    assert_eq!(result.tables[0].cells[1], labels);
+    assert!(result.content.contains(r#"<th colspan="2">Rates</th>"#));
+    assert!(
+        result
+            .content
+            .contains("<tr><th>Version</th><th>Build</th><th>1.0</th><th>1.1</th><th>2.0</th></tr>"),
+        "{}",
+        result.content,
+    );
+    assert!(result.content.contains("<td>0.924</td>"));
+    assert_eq!(plain.tables.len(), 1);
+    assert_eq!(plain.tables[0].cells, result.tables[0].cells);
+    assert!(plain.content.contains("<td>1.0</td>"), "{}", plain.content);
 }

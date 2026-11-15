@@ -159,12 +159,12 @@ fn visible_area_at_least(
 type RuleStyle = ([u32; 3], u32);
 
 /// Accept either visible group/leaf rules or a repeated schema with independent first-body shading.
-/// Regular decimal leaves under matching rules require independent group and alignment evidence. ~keep
+/// Regular decimal leaves under matching rules require a painted header background. ~keep
 pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathContent], columns: usize) {
-    let [groups, leaves, first_body, rest @ ..] = rows else {
+    let [groups, leaves, first_body, ..] = rows else {
         return;
     };
-    let Some(bounds) = header_bounds(groups, leaves, first_body) else {
+    let Some(bounds) = rows_bounds([groups, leaves, first_body]) else {
         return;
     };
     let nearby: Vec<&PathContent> = paths.iter().filter(|path| near_header(path, bounds)).collect();
@@ -178,9 +178,9 @@ pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathCon
     }
     let repeating_rules = body_repeats_the_header_rule(leaves, first_body, &nearby);
     let proven = if repeating_rules {
-        rest.first()
-            .is_some_and(|second| super::decimal_leaf_has_stub_contrast(leaves, first_body, second))
-            && centered_decimal_leaf_band(groups, leaves, first_body, &nearby, columns)
+        centered_decimal_leaf_band(groups, leaves, first_body, &nearby, columns)
+            && rows_bounds([groups, leaves])
+                .is_some_and(|bounds| has_painted_header_background(bounds, nearby.iter().copied()))
     } else {
         complete_source_band(leaves, columns, true)
             && (grouped_header_rules(groups, leaves, &nearby)
@@ -357,7 +357,7 @@ fn uncovered_shading(paths: &[&PathContent]) -> Vec<Rect> {
 }
 
 /// In a grid ruled alike on every row, a rule under the leaf band says nothing about the header.
-/// If the first body row repeats the rule, a retained header needs independent alignment evidence. ~keep
+/// If the first body row repeats the rule, a retained header needs independent painted evidence. ~keep
 fn body_repeats_the_header_rule(leaves: &TableRow, first_body: &TableRow, paths: &[&PathContent]) -> bool {
     let (Some(first), Some(last)) = (
         leaves.cells.first().and_then(|c| c.bbox),
@@ -373,14 +373,48 @@ fn body_repeats_the_header_rule(leaves: &TableRow, first_body: &TableRow, paths:
     matches!((header, below), (Some(header), Some(below)) if header == below)
 }
 
-fn header_bounds(groups: &TableRow, leaves: &TableRow, first_body: &TableRow) -> Option<Rect> {
-    groups
-        .cells
-        .iter()
-        .chain(&leaves.cells)
-        .chain(&first_body.cells)
+fn rows_bounds<const N: usize>(rows: [&TableRow; N]) -> Option<Rect> {
+    rows.into_iter()
+        .flat_map(|row| &row.cells)
         .filter_map(|cell| cell.bbox)
         .reduce(|all, bounds| all.union(&bounds))
+}
+
+/// A single visible fill covering both heading bands and ending at the body boundary
+/// distinguishes deliberate header styling from a centered but otherwise ordinary record. ~keep
+pub(super) fn has_painted_header_background<'a>(
+    bounds: Rect,
+    paths: impl IntoIterator<Item = &'a PathContent>,
+) -> bool {
+    let area = bounds.area();
+    if !area.is_finite() || area <= 0.0 {
+        return false;
+    }
+    let nearby: Vec<_> = paths
+        .into_iter()
+        .filter(|path| near_header(path, bounds))
+        .take(MAX_GROUPED_HEADER_PATHS + 1)
+        .collect();
+    if nearby.len() > MAX_GROUPED_HEADER_PATHS {
+        return false;
+    }
+    let required = area * MIN_SHADED_CELL_AREA_RATIO;
+    nearby.iter().enumerate().any(|(index, path)| {
+        let Some(fill) = shading_rectangles([*path]).into_iter().next() else {
+            return false;
+        };
+        if !same_rule_position(fill.left(), bounds.left())
+            || !same_rule_position(fill.right(), bounds.right())
+            || !same_rule_position(fill.y, bounds.y)
+            || !same_rule_position(fill.bottom(), bounds.bottom())
+        {
+            return false;
+        }
+        fill.intersection(&bounds).is_some_and(|overlap| {
+            overlap.area() >= required
+                && visible_area_at_least(overlap, &nearby[index + 1..], path.fill_color, required)
+        })
+    })
 }
 
 fn near_header(path: &PathContent, bounds: Rect) -> bool {

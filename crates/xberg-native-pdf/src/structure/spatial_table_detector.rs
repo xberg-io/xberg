@@ -1838,41 +1838,6 @@ fn continues_decimal_records(row: &TableRow, next: &TableRow) -> bool {
     })
 }
 
-// A centered value can be an atypically aligned record. Require a separate transition in
-// a stub column, from a spelled-out label to codes in two consecutive records. ~keep
-fn decimal_leaf_has_stub_contrast(leaves: &TableRow, first: &TableRow, second: &TableRow) -> bool {
-    if [first, second].iter().any(|row| {
-        row.cells.len() != leaves.cells.len() || row.cells.iter().any(|cell| cell.colspan != 1 || cell.rowspan != 1)
-    }) {
-        return false;
-    }
-    leaves
-        .cells
-        .iter()
-        .zip(&first.cells)
-        .zip(&second.cells)
-        .any(|((label, first), second)| {
-            let text = label.text.trim();
-            matches!(label.spans.as_slice(), [span] if span.text.trim() == text)
-                && text.chars().any(char::is_alphabetic)
-                && text.chars().all(|ch| ch.is_alphabetic() || ch.is_whitespace())
-                && source_record_code(first)
-                && source_record_code(second)
-        })
-}
-
-fn source_record_code(cell: &TableCell) -> bool {
-    let text = cell.text.trim();
-    if !matches!(cell.spans.as_slice(), [span] if span.text.trim() == text) {
-        return false;
-    }
-    let Some(index) = text.find(|ch: char| ch.is_ascii_digit()) else {
-        return false;
-    };
-    let (prefix, digits) = text.split_at(index);
-    !prefix.is_empty() && prefix.chars().all(char::is_alphabetic) && digits.bytes().all(|ch| ch.is_ascii_digit())
-}
-
 fn decimal_point_x(cell: &TableCell) -> Option<f32> {
     let [span] = cell.spans.as_slice() else {
         return None;
@@ -2117,15 +2082,23 @@ fn detect_tables_in_cluster(
                                         && header == body
                                         && group_covers_decimal_leaves(&table.rows[0], &table.rows[r], |_, _| true))
                             });
-                        let has_stub_contrast = table.rows.get(r + 2).is_some_and(|second| {
-                            decimal_leaf_has_stub_contrast(&table.rows[r], &table.rows[r + 1], second)
-                        });
-                        if !header_boundary
-                            || !has_stub_contrast
-                            || !centered_decimal_labels(&table.rows[r], &table.rows[r + 1], &grid.columns)
+                        if r == 1
+                            && header_boundary
+                            && centered_decimal_labels(&table.rows[r], &table.rows[r + 1], &grid.columns)
+                            && let (Some(first), Some(last)) = (grid.columns.first(), grid.columns.last())
+                            && source_headers::has_painted_header_background(
+                                crate::geometry::Rect::new(
+                                    first.x_min,
+                                    row_bottom,
+                                    last.x_max - first.x_min,
+                                    grid.rows[0].y_max - row_bottom,
+                                ),
+                                all_lines.iter(),
+                            )
                         {
-                            break;
+                            header_rows_detected = r + 1;
                         }
+                        break;
                     }
                     if has_separator {
                         header_rows_detected = r + 1;
@@ -8920,14 +8893,23 @@ mod tests {
     const RIGHT_ALIGNED_DECIMAL_INK: [(f32, f32); 2] = [(28.0, 20.0); 2];
     const CENTERED_LABEL_INK: [(f32, f32); 2] = [(15.0, 20.0), (28.0, 20.0)];
 
+    #[derive(Clone, Copy)]
+    enum HeaderPaint {
+        Plain,
+        Grouped,
+        Shaded,
+        ShadedGroup,
+    }
+
     fn ruled_record_header_roles(
         rows: &[[&str; 5]],
         emphasized_after: Option<usize>,
-        grouped: bool,
+        paint: HeaderPaint,
         decimal_ink: [(f32, f32); 2],
         glyph_widths: bool,
         shared_decimal_anchor: Option<f32>,
     ) -> Vec<bool> {
+        let grouped = matches!(paint, HeaderPaint::Grouped | HeaderPaint::ShadedGroup);
         let height = rows.len() as f32 * 20.0;
         let mut lines: Vec<_> = (0..=rows.len())
             .map(|row| make_h_line(100.0, 500.0 + row as f32 * 20.0, 250.0))
@@ -8939,6 +8921,12 @@ mod tests {
             let rule_height = if grouped && column == 3 { height - 21.0 } else { height };
             make_v_line(100.0 + column as f32 * 50.0, 500.0, rule_height)
         }));
+        if matches!(paint, HeaderPaint::Shaded | HeaderPaint::ShadedGroup) {
+            let mut fill = make_rect_path(100.0, 500.0 + height - 40.0, 250.0, 40.0);
+            fill.fill_color = Some(crate::layout::Color { r: 0.8, g: 0.8, b: 0.8 });
+            fill.stroke_color = None;
+            lines.insert(0, fill);
+        }
         let spans: Vec<_> = rows
             .iter()
             .enumerate()
@@ -9001,11 +8989,18 @@ mod tests {
             ["2000", "AB", "0.937", "0.906", "1.001"],
         ];
         assert_eq!(
-            ruled_record_header_roles(&rows, None, false, RIGHT_ALIGNED_DECIMAL_INK, true, None),
+            ruled_record_header_roles(&rows, None, HeaderPaint::Plain, RIGHT_ALIGNED_DECIMAL_INK, true, None),
             [true, false, false, false]
         );
         assert_eq!(
-            ruled_record_header_roles(&rows, Some(1), false, RIGHT_ALIGNED_DECIMAL_INK, true, None),
+            ruled_record_header_roles(
+                &rows,
+                Some(1),
+                HeaderPaint::Plain,
+                RIGHT_ALIGNED_DECIMAL_INK,
+                true,
+                None
+            ),
             [true, false, false, false]
         );
     }
@@ -9019,12 +9014,26 @@ mod tests {
             ["Latency", "max", "0.937", "0.906", "1.001"],
         ];
         assert_eq!(
-            ruled_record_header_roles(&rows, Some(1), false, RIGHT_ALIGNED_DECIMAL_INK, true, None),
+            ruled_record_header_roles(
+                &rows,
+                Some(1),
+                HeaderPaint::Plain,
+                RIGHT_ALIGNED_DECIMAL_INK,
+                true,
+                None
+            ),
             [true, false, false, false]
         );
         rows[1][0] = "Throughput";
         assert_eq!(
-            ruled_record_header_roles(&rows, Some(1), false, RIGHT_ALIGNED_DECIMAL_INK, true, None),
+            ruled_record_header_roles(
+                &rows,
+                Some(1),
+                HeaderPaint::Plain,
+                RIGHT_ALIGNED_DECIMAL_INK,
+                true,
+                None
+            ),
             [true, false, false, false]
         );
     }
@@ -9039,7 +9048,7 @@ mod tests {
             ["2000", "AB", "0.937", "0.906", "1.001"],
         ];
         assert_eq!(
-            ruled_record_header_roles(&rows, None, false, RIGHT_ALIGNED_DECIMAL_INK, true, None),
+            ruled_record_header_roles(&rows, None, HeaderPaint::Plain, RIGHT_ALIGNED_DECIMAL_INK, true, None),
             [true, true, false, false, false]
         );
     }
@@ -9054,30 +9063,50 @@ mod tests {
             ["Latency", "max", "0.937", "0.906", "1.001"],
         ];
         assert_eq!(
-            ruled_record_header_roles(&rows, Some(1), true, CENTERED_LABEL_INK, true, None),
+            ruled_record_header_roles(&rows, Some(1), HeaderPaint::ShadedGroup, CENTERED_LABEL_INK, true, None),
             [true, true, false, false, false]
         );
         assert_eq!(
-            ruled_record_header_roles(&rows, None, true, CENTERED_LABEL_INK, true, None),
+            ruled_record_header_roles(&rows, None, HeaderPaint::ShadedGroup, CENTERED_LABEL_INK, true, None),
             [true, true, false, false, false]
         );
         rows[3][0] = "Throughput";
         assert_eq!(
-            ruled_record_header_roles(&rows, Some(1), true, CENTERED_LABEL_INK, true, None),
+            ruled_record_header_roles(&rows, Some(1), HeaderPaint::ShadedGroup, CENTERED_LABEL_INK, true, None),
             [true, true, false, false, false]
         );
         rows[0] = ["Group", "Code", "North", "South", "West"];
         assert_eq!(
-            ruled_record_header_roles(&rows, None, false, CENTERED_LABEL_INK, true, None),
+            ruled_record_header_roles(&rows, None, HeaderPaint::Plain, CENTERED_LABEL_INK, true, None),
             [true, false, false, false, false]
         );
         assert_eq!(
-            ruled_record_header_roles(&rows, Some(1), false, CENTERED_LABEL_INK, true, None),
+            ruled_record_header_roles(&rows, Some(1), HeaderPaint::Shaded, CENTERED_LABEL_INK, true, None),
             [true, true, false, false, false]
         );
         assert_eq!(
-            ruled_record_header_roles(&rows, Some(1), false, RIGHT_ALIGNED_DECIMAL_INK, true, None),
+            ruled_record_header_roles(
+                &rows,
+                Some(1),
+                HeaderPaint::Shaded,
+                RIGHT_ALIGNED_DECIMAL_INK,
+                true,
+                None
+            ),
             [true, false, false, false, false]
+        );
+    }
+
+    #[test]
+    fn painted_centered_decimal_header_keeps_the_only_record_in_the_body() {
+        let rows = [
+            ["Group", "Code", "Rates", "", "West"],
+            ["Version", "Build", "1.0", "1.1", "2.0"],
+            ["Latency", "p95", "0.924", "0.863", "0.985"],
+        ];
+        assert_eq!(
+            ruled_record_header_roles(&rows, None, HeaderPaint::ShadedGroup, CENTERED_LABEL_INK, true, None),
+            [true, true, false]
         );
     }
 
@@ -9093,7 +9122,7 @@ mod tests {
             rows[1][0] = stub;
             for rule in [None, Some(1)] {
                 assert_eq!(
-                    ruled_record_header_roles(&rows, rule, true, CENTERED_LABEL_INK, true, None),
+                    ruled_record_header_roles(&rows, rule, HeaderPaint::Grouped, CENTERED_LABEL_INK, true, None),
                     [true, false, false, false],
                     "{stub}, emphasized rule {rule:?}"
                 );
@@ -9110,7 +9139,7 @@ mod tests {
             ["Latency", "max", "0.937", "0.906", "1.001"],
         ];
         assert_eq!(
-            ruled_record_header_roles(&rows, Some(1), true, decimal_ink, glyph_widths, None),
+            ruled_record_header_roles(&rows, Some(1), HeaderPaint::Grouped, decimal_ink, glyph_widths, None),
             [true, false, false, false, false]
         );
     }
@@ -9149,7 +9178,14 @@ mod tests {
             ["Latency", "p99", "1.34567", "1.34567", "1.34567"],
         ];
         assert_eq!(
-            ruled_record_header_roles(&rows, Some(1), false, [(13.0, 20.0), (21.0, 28.0)], true, Some(25.0)),
+            ruled_record_header_roles(
+                &rows,
+                Some(1),
+                HeaderPaint::Plain,
+                [(13.0, 20.0), (21.0, 28.0)],
+                true,
+                Some(25.0)
+            ),
             [true, false, false, false]
         );
     }
