@@ -3,6 +3,8 @@
 mod helpers;
 
 use helpers::extract_bytes_document_blocking;
+#[cfg(feature = "tokio-runtime")]
+use helpers::extract_uri_document_blocking;
 use sha2::{Digest, Sha256};
 use xberg::types::document_structure::NodeContent;
 use xberg::{ExtractedDocument, ExtractionConfig, OutputFormat, PdfConfig};
@@ -26,6 +28,53 @@ fn source_document(output_format: OutputFormat) -> ExtractedDocument {
         ..Default::default()
     };
     extract_bytes_document_blocking(bytes, "application/pdf", &config).unwrap()
+}
+
+#[test]
+#[ignore = "requires the pinned public ParseBench PDF via XBERG_2332_SIDE_TABLE_PDF"]
+fn identical_ruled_tables_with_disjoint_source_bounds_reach_public_html() {
+    let path = std::env::var_os("XBERG_2332_SIDE_TABLE_PDF").expect("set the pinned public PDF path");
+    let bytes = std::fs::read(&path).expect("read public ParseBench fixture 7bc0fc8c64c67829dc21");
+    assert_eq!(
+        hex::encode(Sha256::digest(&bytes)),
+        "bd5f64d7f3e329e55f6a000495169306b53e73cd99cf73476efb41e36471ef11"
+    );
+    let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
+        "output_format": "html",
+        "use_cache": false,
+        "force_ocr": false,
+        "disable_ocr": true,
+        "enable_quality_processing": false,
+        "ocr": {
+            "backend": "tesseract",
+            "language": ["eng"],
+            "tesseract_config": {"language": ["eng"], "use_cache": false}
+        },
+        "concurrency": {"max_threads": 1}
+    }))
+    .expect("frozen native HTML extraction config");
+    #[cfg(feature = "tokio-runtime")]
+    let result = extract_uri_document_blocking(path, None, &config).expect("native HTML extraction");
+    #[cfg(not(feature = "tokio-runtime"))]
+    let result = extract_bytes_document_blocking(&bytes, "application/pdf", &config).expect("native HTML extraction");
+    let [first, second] = result.tables.as_slice() else {
+        panic!("expected both Proposed and Current tables, got {}", result.tables.len());
+    };
+    let first_box = first.bounding_box.expect("Proposed table bounds");
+    let second_box = second.bounding_box.expect("Current table bounds");
+    assert!(
+        first_box.x1 < second_box.x0,
+        "Proposed is left of Current in the source"
+    );
+    for table in [first, second] {
+        assert_eq!(table.cells.len(), 51);
+        assert!(table.cells.iter().all(|row| row.len() == 8));
+        assert_eq!(
+            table.cells[0],
+            ["Model Year", "Symbol Code", "BI", "PD", "UMBI", "MP", "COMP", "COLL"]
+        );
+    }
+    assert_eq!(result.content.matches("<table").count(), 2);
 }
 
 #[test]

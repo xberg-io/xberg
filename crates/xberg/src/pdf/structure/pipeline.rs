@@ -5255,14 +5255,20 @@ fn prepare_emitted_tables(
 ) -> Vec<crate::types::Table> {
     let mut emitted_tables: Vec<crate::types::Table> = native_tables.iter().cloned().chain(layout_tables).collect();
     emitted_tables.retain(|table| !table.markdown.trim().is_empty());
+    for table in &mut emitted_tables {
+        table.bounding_box = table
+            .bounding_box
+            .filter(|&bounds| crate::pdf::native::table::finite_table_bounds(bounds));
+    }
     let native_count = native_tables
         .iter()
         .filter(|table| !table.markdown.trim().is_empty())
         .count();
-    deduplicate_overlapping_tables(&mut emitted_tables, native_count, overlap_preference, page_segments);
+    let protected =
+        deduplicate_overlapping_tables(&mut emitted_tables, native_count, overlap_preference, page_segments);
     normalize_sparse_currency_affix_columns(&mut emitted_tables);
     normalize_wrapped_financial_rows(&mut emitted_tables);
-    deduplicate_identical_tables(&mut emitted_tables);
+    deduplicate_identical_tables(&mut emitted_tables, &protected);
     assign_deterministic_table_ids(&mut emitted_tables);
     emitted_tables
 }
@@ -5519,28 +5525,43 @@ fn merge_currency_affix_column(rows: &mut [Vec<String>], source: usize) {
     }
 }
 
-/// Collapse byte-identical table duplicates on the same page.
-///
-/// [`deduplicate_overlapping_tables`] only merges a pair when both tables carry
-/// a `bounding_box`; a native/layout pair that detects the same physical table
-/// but disagrees on bbox presence (e.g. native reconstruction leaves
-/// `bounding_box: None` for some heuristic grids) can otherwise escape that
-/// pass entirely. This pass is origin- and bbox-agnostic: any two tables on the
-/// same page with byte-identical markdown are the same table by definition, so
-/// the second (and any further) occurrence is dropped regardless of bbox state.
-///
-/// Runs in `O(n)` over the page's table count using a hash set keyed on
-/// `(page_number, markdown)`.
-fn deduplicate_identical_tables(tables: &mut Vec<crate::types::Table>) {
+/// Collapse same-page identical Markdown for coincident or unpositioned copies.
+/// The overlap pass already decided whether other positioned copies carry independent text.
+fn deduplicate_identical_tables(tables: &mut Vec<crate::types::Table>, protected: &[bool]) {
+    use crate::pdf::native::table::finite_table_bounds;
+
     if tables.len() < 2 {
         return;
     }
 
-    let mut seen: ahash::AHashSet<(u32, &str)> = ahash::AHashSet::with_capacity(tables.len());
-    let mut keep = vec![true; tables.len()];
+    let mut seen: ahash::AHashMap<_, Vec<_>> = ahash::AHashMap::new();
+    let mut keep = vec![false; tables.len()];
+    // Process positioned tables first so an unpositioned copy cannot hide independent grids. ~keep
+    let positioned = tables.iter().enumerate().filter_map(|(index, table)| {
+        let bounds = table.bounding_box.filter(|&bounds| finite_table_bounds(bounds))?;
+        Some((index, table, bounds))
+    });
+    for (index, table, bounds) in positioned {
+        let retained = seen.entry((table.page_number, table.markdown.as_str())).or_default();
+        let is_protected = protected.get(index).copied().unwrap_or(false);
+        let duplicate = retained.iter().any(|(other, other_protected)| {
+            if is_protected && *other_protected {
+                protected_layout_boxes_duplicate(&bounds, other)
+            } else {
+                boxes_near_coincident(&bounds, other)
+            }
+        });
+        if !duplicate {
+            retained.push((bounds, is_protected));
+            keep[index] = true;
+        }
+    }
     for (index, table) in tables.iter().enumerate() {
-        if !seen.insert((table.page_number, table.markdown.as_str())) {
-            keep[index] = false;
+        if let std::collections::hash_map::Entry::Vacant(entry) =
+            seen.entry((table.page_number, table.markdown.as_str()))
+        {
+            entry.insert(Vec::new());
+            keep[index] = true;
         }
     }
 
@@ -6080,22 +6101,24 @@ fn deduplicate_overlapping_tables(
     native_count: usize,
     preference: crate::core::config::layout::TableOverlapPreference,
     page_segments: &[Vec<SegmentData>],
-) {
+) -> Vec<bool> {
     use crate::core::config::layout::TableOverlapPreference;
 
     if tables.len() < 2 {
-        return;
+        return vec![false; tables.len()];
     }
 
     let mut to_remove = ahash::AHashSet::new();
     let mut protected_layout_children = ahash::AHashSet::new();
     let mut evidence = OverlapEvidence::new(page_segments);
+    to_remove.extend(enclosing_native_duplicates(tables, native_count, &mut evidence));
 
     if preference != TableOverlapPreference::Native {
         // A complete split cohort is one structural alternative to its native source
         // cohort. Select it atomically for every non-Native preference: pairwise
         // content weighting could otherwise mix incompatible rows from both grids.
-        for (parents, children) in side_by_side_layout_replacements(tables, native_count) {
+        let replacements = side_by_side_layout_replacements(tables, native_count, &to_remove);
+        for (parents, children) in replacements {
             protected_layout_children.extend(children);
             to_remove.extend(parents);
         }
@@ -6135,23 +6158,22 @@ fn deduplicate_overlapping_tables(
         set_aside.extend(orphaned);
     }
 
-    let surviving_protected: Vec<_> = protected_layout_children
+    let affected_rows = protected_layout_children
         .iter()
-        .copied()
         .filter(|index| !to_remove.contains(index))
-        .collect();
-    let affected_rows: Vec<_> = surviving_protected
-        .iter()
         .filter_map(|&index| tables[index].bounding_box.map(|bbox| (tables[index].page_number, bbox)))
         .collect();
-
-    let mut idx = 0;
-    tables.retain(|_| {
-        let keep = !to_remove.contains(&idx);
-        idx += 1;
-        keep
-    });
-    canonicalize_affected_table_rows(tables, affected_rows);
+    let positioned = std::mem::take(tables)
+        .into_iter()
+        .enumerate()
+        .filter(|(index, _)| !to_remove.contains(index))
+        .map(|(index, table)| (table, protected_layout_children.contains(&index)))
+        .collect();
+    let (survivors, protected) = canonicalize_affected_table_rows(positioned, affected_rows)
+        .into_iter()
+        .unzip();
+    *tables = survivors;
+    protected
 }
 
 /// Which overlapping pairs of a page a pass decides.
@@ -6170,6 +6192,60 @@ struct OverlapRound<'a> {
     set_aside: &'a ahash::AHashSet<(usize, usize)>,
     /// The mixed pairs this pass decided, as `(loser, winner)`.
     mixed_losses: &'a mut Vec<(usize, usize)>,
+}
+
+// An identical outer box cannot stand for two disjoint grids it contains. ~keep
+fn enclosing_native_duplicates(
+    tables: &[crate::types::Table],
+    native_count: usize,
+    evidence: &mut OverlapEvidence<'_>,
+) -> Vec<usize> {
+    if native_count < 3 {
+        return Vec::new();
+    }
+    let mut groups: ahash::AHashMap<_, Vec<_>> = ahash::AHashMap::new();
+    for (index, table) in tables.iter().take(native_count).enumerate() {
+        if let Some(bounds) = table
+            .bounding_box
+            .filter(|&bounds| crate::pdf::native::table::finite_table_bounds(bounds))
+        {
+            groups
+                .entry((table.page_number, table.markdown.as_str()))
+                .or_default()
+                .push((index, bounds));
+        }
+    }
+
+    let removed = ahash::AHashSet::new();
+    groups
+        .values()
+        .filter(|group| group.len() >= 3)
+        .flat_map(|group| {
+            group.iter().filter_map(|&(index, parent)| {
+                let contained = group.iter().filter_map(|&(child_index, child)| {
+                    (index != child_index
+                        && parent.x0 <= child.x0
+                        && parent.y0 <= child.y0
+                        && parent.x1 >= child.x1
+                        && parent.y1 >= child.y1)
+                        .then_some(child)
+                });
+                let (max_left, max_bottom, min_right, min_top) = contained.fold(
+                    (f64::NEG_INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::INFINITY),
+                    |(max_left, max_bottom, min_right, min_top), child| {
+                        (
+                            max_left.max(child.x0),
+                            max_bottom.max(child.y0),
+                            min_right.min(child.x1),
+                            min_top.min(child.y1),
+                        )
+                    },
+                );
+                (min_right < max_left || min_top < max_bottom).then_some(index)
+            })
+        })
+        .filter(|&index| !evidence.holds_unprinted_words(tables, index, &removed).unwrap_or(false))
+        .collect()
 }
 
 /// The table of an overlapping pair that goes, or `None` when both stay. `native_first` is `None`
@@ -6192,7 +6268,7 @@ fn overlap_loser(
         (true, false) => Some(j),
         (false, true) => Some(i),
         (true, true) => {
-            let duplicate = shares.0 >= LAYOUT_CHILD_DUPLICATE_OVERLAP && shares.1 >= LAYOUT_CHILD_DUPLICATE_OVERLAP;
+            let duplicate = protected_layout_shares_duplicate(shares);
             duplicate.then(|| lower_content_table(tables, i, j))
         }
         (false, false) => Some(match (preference, native_first) {
@@ -6204,9 +6280,9 @@ fn overlap_loser(
 }
 
 /// One pass over the overlapping pairs of a page. The pass over the mixed native and layout pairs
-/// runs first: the preference decides them without the page text, so what they leave is the set of
-/// tables the output keeps. The pass over the same-origin pairs then counts words against that
-/// set, and a table that a later step removes never stands in for the words of another.
+/// runs first so the same-origin pass counts words against its surviving tables. Weak overlaps
+/// require identical Markdown and page-text evidence before either pass can remove a table.
+/// A table that a later step removes never stands in for the words of another.
 fn resolve_overlaps(
     tables: &[crate::types::Table],
     native_count: usize,
@@ -6235,50 +6311,59 @@ fn resolve_overlaps(
                 let area_b = (b.x1 - b.x0) * (b.y1 - b.y0);
                 let min_area = area_a.min(area_b);
 
-                if min_area > 0.0 && intersection / min_area > 0.5 {
-                    let i_is_native = i < native_count;
-                    let j_is_native = j < native_count;
-                    let mixed_origin = i_is_native != j_is_native;
-                    let pair_pass = if mixed_origin {
-                        OverlapPass::Mixed
-                    } else {
-                        OverlapPass::SameOrigin
-                    };
-                    if pair_pass != round.pass {
+                let overlap = intersection / min_area;
+                if min_area <= 0.0 || intersection <= 0.0 || !overlap.is_finite() {
+                    continue;
+                }
+                let weak_overlap = overlap <= 0.5;
+                if weak_overlap && tables[i].markdown != tables[j].markdown {
+                    continue;
+                }
+                let i_is_native = i < native_count;
+                let j_is_native = j < native_count;
+                let mixed_origin = i_is_native != j_is_native;
+                let pair_pass = if mixed_origin {
+                    OverlapPass::Mixed
+                } else {
+                    OverlapPass::SameOrigin
+                };
+                if pair_pass != round.pass {
+                    continue;
+                }
+                if !weak_overlap
+                    && i_is_native
+                    && j_is_native
+                    && !boxes_near_coincident(a, b)
+                    && keeps_overlapping_native_pair(evidence, tables, (i, j), to_remove)
+                {
+                    continue;
+                }
+                let shares = (intersection / area_a, intersection / area_b);
+                let native_first = mixed_origin.then_some(i_is_native);
+                let loser = overlap_loser(
+                    tables,
+                    preference,
+                    protected_layout_children,
+                    (i, j),
+                    native_first,
+                    shares,
+                );
+                let Some(remove) = loser else {
+                    continue;
+                };
+                if weak_overlap && evidence.holds_unprinted_words(tables, remove, to_remove) != Some(false) {
+                    continue;
+                }
+                if mixed_origin {
+                    let winner = if remove == i { j } else { i };
+                    if round.set_aside.contains(&(remove, winner)) {
                         continue;
                     }
-                    let near_coincident = boxes_near_coincident(a, b);
-                    if i < native_count
-                        && j < native_count
-                        && !near_coincident
-                        && keeps_overlapping_native_pair(evidence, tables, (i, j), to_remove)
-                    {
-                        continue;
-                    }
-                    let shares = (intersection / area_a, intersection / area_b);
-                    let native_first = mixed_origin.then_some(i_is_native);
-                    let loser = overlap_loser(
-                        tables,
-                        preference,
-                        protected_layout_children,
-                        (i, j),
-                        native_first,
-                        shares,
-                    );
-                    let Some(remove) = loser else {
-                        continue;
-                    };
-                    if mixed_origin {
-                        let winner = if remove == i { j } else { i };
-                        if round.set_aside.contains(&(remove, winner)) {
-                            continue;
-                        }
-                        round.mixed_losses.push((remove, winner));
-                    }
-                    to_remove.insert(remove);
-                    if remove == i {
-                        break;
-                    }
+                    round.mixed_losses.push((remove, winner));
+                }
+                to_remove.insert(remove);
+                if remove == i {
+                    break;
                 }
             }
         }
@@ -6630,12 +6715,21 @@ const SIDE_BY_SIDE_PARENT_AREA_COVERAGE: f64 = 0.65;
 /// the same layout table rather than distinct parts of a split table.
 const LAYOUT_CHILD_DUPLICATE_OVERLAP: f64 = 0.9;
 
+fn protected_layout_shares_duplicate(shares: (f64, f64)) -> bool {
+    shares.0 >= LAYOUT_CHILD_DUPLICATE_OVERLAP && shares.1 >= LAYOUT_CHILD_DUPLICATE_OVERLAP
+}
+
+fn protected_layout_boxes_duplicate(a: &crate::types::BoundingBox, b: &crate::types::BoundingBox) -> bool {
+    protected_layout_shares_duplicate((bbox_overlap_fraction(a, b), bbox_overlap_fraction(b, a)))
+}
+
 fn side_by_side_layout_replacements(
     tables: &[crate::types::Table],
     native_count: usize,
+    excluded: &ahash::AHashSet<usize>,
 ) -> Vec<(Vec<usize>, Vec<usize>)> {
     let native_count = native_count.min(tables.len());
-    let rows = native_candidate_rows(tables, native_count);
+    let rows = native_candidate_rows(tables, native_count, excluded);
     let mut used_native = ahash::AHashSet::new();
     let mut used_layout = ahash::AHashSet::new();
     let mut replacements = Vec::new();
@@ -6694,9 +6788,13 @@ fn side_by_side_native_cohort_replacements(
     replacements
 }
 
-fn native_candidate_rows(tables: &[crate::types::Table], native_count: usize) -> Vec<Vec<usize>> {
+fn native_candidate_rows(
+    tables: &[crate::types::Table],
+    native_count: usize,
+    excluded: &ahash::AHashSet<usize>,
+) -> Vec<Vec<usize>> {
     let mut candidates: Vec<_> = (0..native_count)
-        .filter(|&index| tables[index].bounding_box.is_some())
+        .filter(|&index| !excluded.contains(&index) && tables[index].bounding_box.is_some())
         .collect();
     candidates.sort_by(|&left, &right| {
         tables[left]
@@ -6893,23 +6991,26 @@ fn table_left(tables: &[crate::types::Table], index: usize) -> f64 {
 }
 
 fn canonicalize_affected_table_rows(
-    tables: &mut Vec<crate::types::Table>,
+    tables: Vec<(crate::types::Table, bool)>,
     affected_rows: Vec<(u32, crate::types::BoundingBox)>,
-) {
+) -> Vec<(crate::types::Table, bool)> {
     let cohorts = affected_row_cohorts(affected_rows);
     if cohorts.is_empty() {
-        return;
+        return tables;
     }
-    let assignments: Vec<_> = tables.iter().map(|table| table_row_cohort(table, &cohorts)).collect();
+    let assignments: Vec<_> = tables
+        .iter()
+        .map(|(table, _)| table_row_cohort(table, &cohorts))
+        .collect();
     let mut cohort_tables: Vec<Vec<_>> = (0..cohorts.len()).map(|_| Vec::new()).collect();
-    let mut source: Vec<Option<_>> = std::mem::take(tables).into_iter().map(Some).collect();
+    let mut source: Vec<Option<_>> = tables.into_iter().map(Some).collect();
     for (index, cohort) in assignments.iter().enumerate() {
         if let Some(cohort) = cohort {
             cohort_tables[*cohort].push(source[index].take().expect("assigned table is present"));
         }
     }
     for cohort in &mut cohort_tables {
-        cohort.sort_by(canonical_table_order);
+        cohort.sort_by(|(left, _), (right, _)| canonical_table_order(left, right));
         cohort.reverse();
     }
     for (index, cohort) in assignments.iter().enumerate() {
@@ -6921,7 +7022,7 @@ fn canonicalize_affected_table_rows(
             );
         }
     }
-    tables.extend(source.into_iter().flatten());
+    source.into_iter().flatten().collect()
 }
 
 fn affected_row_cohorts(mut rows: Vec<(u32, crate::types::BoundingBox)>) -> Vec<(u32, Vec<crate::types::BoundingBox>)> {

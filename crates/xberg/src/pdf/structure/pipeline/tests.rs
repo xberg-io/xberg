@@ -610,6 +610,204 @@ fn identical_markdown_tables_collapse_despite_missing_bbox() {
 }
 
 #[test]
+fn identical_tables_keep_disjoint_footprints_and_collapse_same_footprint() {
+    let left = ov_table(1, (0.0, 0.0, 10.0, 10.0), "same");
+    let right = ov_table(1, (20.0, 0.0, 30.0, 10.0), "same");
+    let mut tables = vec![left.clone(), left, right.clone(), right];
+    deduplicate_identical_tables(&mut tables, &[]);
+    assert_eq!(tables.len(), 2);
+    assert_eq!(tables[0].bounding_box.unwrap().x0, 0.0);
+    assert_eq!(tables[1].bounding_box.unwrap().x0, 20.0);
+}
+
+#[test]
+fn missing_or_invalid_bounds_cannot_hide_disjoint_identical_tables() {
+    let left = ov_table(1, (0.0, 0.0, 10.0, 10.0), "same");
+    let right = ov_table(1, (20.0, 0.0, 30.0, 10.0), "same");
+    let mut missing = left.clone();
+    missing.bounding_box = None;
+    for unpositioned in [
+        missing,
+        ov_table(1, (f64::NAN, 0.0, 10.0, 10.0), "same"),
+        ov_table(1, (0.0, 0.0, f64::INFINITY, 10.0), "same"),
+        ov_table(1, (0.0, 0.0, 0.0, 10.0), "same"),
+        ov_table(1, (10.0, 0.0, 0.0, 10.0), "same"),
+    ] {
+        let mut tables = vec![unpositioned.clone(), left.clone(), right.clone(), unpositioned.clone()];
+        deduplicate_identical_tables(&mut tables, &[]);
+        assert_eq!(tables.len(), 2);
+        assert_eq!(tables[0].bounding_box.unwrap().x0, 0.0);
+        assert_eq!(tables[1].bounding_box.unwrap().x0, 20.0);
+
+        let mut tables = vec![unpositioned.clone(), unpositioned];
+        deduplicate_identical_tables(&mut tables, &[]);
+        assert_eq!(tables.len(), 1);
+    }
+}
+
+#[test]
+fn exact_dedup_full_path_rejects_infinite_bounds_before_overlap() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let invalid = ov_table(1, (0.0, 0.0, f64::INFINITY, 100.0), "same");
+    let valid = ov_table(1, (0.0, 0.0, 100.0, 100.0), "same");
+    for input in [[invalid.clone(), valid.clone()], [valid.clone(), invalid.clone()]] {
+        let emitted = prepare_emitted_tables(&input, Vec::new(), TableOverlapPreference::Content, &[]);
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].bounding_box.unwrap().x1, 100.0);
+    }
+}
+
+#[test]
+fn exact_dedup_full_path_keeps_overlapping_native_occurrences_printed_twice() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let left = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let right = cell_table(1, (40.0, 0.0, 140.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let mut page = printed_cells(&[&left, &right]);
+    for segment in page[0].iter_mut().skip(4) {
+        segment.x += 65.0;
+    }
+    for input in [[left.clone(), right.clone()], [right.clone(), left.clone()]] {
+        assert_eq!(kept_after_dedup(input.to_vec(), &page), 2);
+        let emitted = prepare_emitted_tables(&input, Vec::new(), TableOverlapPreference::Content, &page);
+        assert_eq!(emitted.len(), 2);
+    }
+}
+
+#[test]
+fn exact_dedup_full_path_keeps_two_disjoint_copies_over_their_broad_duplicate() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let left = cell_table(1, (0.0, 0.0, 40.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let right = cell_table(1, (60.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let broad = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let page = printed_cells(&[&left, &right]);
+    for input in [
+        [broad.clone(), left.clone(), right.clone()],
+        [right.clone(), left.clone(), broad.clone()],
+    ] {
+        let emitted = prepare_emitted_tables(&input, Vec::new(), TableOverlapPreference::Content, &page);
+        assert_eq!(emitted.len(), 2);
+        assert!(emitted.iter().all(|table| {
+            let bbox = table.bounding_box.unwrap();
+            bbox.x1 - bbox.x0 == 40.0
+        }));
+    }
+}
+
+#[test]
+fn exact_dedup_second_review_counts_shared_weak_overlap_once() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let left = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let right = cell_table(1, (60.0, 0.0, 160.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let mut shared = printed_cells(&[&right]);
+    for segment in &mut shared[0] {
+        segment.x += 5.0;
+    }
+    let mut independent = printed_cells(&[&left, &right]);
+    for segment in independent[0].iter_mut().skip(4) {
+        segment.x += 50.0;
+    }
+    let weakly_overlapping = [left.clone(), right.clone()];
+    let disjoint_right = cell_table(1, (110.0, 0.0, 170.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    for input in [weakly_overlapping, [right, left]] {
+        let emitted = prepare_emitted_tables(&input, Vec::new(), TableOverlapPreference::Content, &shared);
+        assert_eq!(emitted.len(), 1, "one printed occurrence in the common strip");
+        let emitted = prepare_emitted_tables(&input, Vec::new(), TableOverlapPreference::Content, &independent);
+        assert_eq!(emitted.len(), 2, "two independently printed occurrences");
+        let disjoint = [
+            input
+                .iter()
+                .find(|table| table.bounding_box.unwrap().x0 == 0.0)
+                .unwrap()
+                .clone(),
+            disjoint_right.clone(),
+        ];
+        let emitted = prepare_emitted_tables(&disjoint, Vec::new(), TableOverlapPreference::Content, &independent);
+        assert_eq!(emitted.len(), 2, "disjoint occurrences remain independent");
+    }
+}
+
+#[test]
+fn exact_dedup_second_review_rejected_enclosing_parent_cannot_protect_layout_cohort() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let cells: &[&[&str]] = &[&["alpha", "1"], &["beta", "2"]];
+    let left = cell_table(1, (0.0, 0.0, 35.0, 100.0), cells);
+    let right = cell_table(1, (65.0, 0.0, 100.0, 100.0), cells);
+    let broad = cell_table(1, (0.0, 0.0, 100.0, 100.0), cells);
+    let layout = vec![
+        cell_table(1, (0.0, 0.0, 49.0, 100.0), &[&["L"]]),
+        cell_table(1, (51.0, 0.0, 100.0, 100.0), &[&["R"]]),
+    ];
+    let page = printed_cells(&[&left, &right]);
+    for input in [
+        [broad.clone(), left.clone(), right.clone()],
+        [right.clone(), left.clone(), broad.clone()],
+    ] {
+        let emitted = prepare_emitted_tables(&input, layout.clone(), TableOverlapPreference::Content, &page);
+        assert_eq!(emitted.len(), 2);
+        assert!(
+            emitted.iter().all(|table| table.cells == left.cells),
+            "keep the two native grids"
+        );
+    }
+}
+
+fn weak_overlap_origin_fixture() -> ([crate::types::Table; 2], Vec<Vec<SegmentData>>, Vec<Vec<SegmentData>>) {
+    let left = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let right = cell_table(1, (60.0, 0.0, 160.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let mut shared = printed_cells(&[&right]);
+    for segment in &mut shared[0] {
+        segment.x += 5.0;
+    }
+    let mut independent = printed_cells(&[&left, &right]);
+    for segment in independent[0].iter_mut().skip(4) {
+        segment.x += 50.0;
+    }
+    ([left, right], shared, independent)
+}
+
+#[test]
+fn exact_dedup_mixed_origin_weak_overlap_honors_preference() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let ([native, layout], shared, independent) = weak_overlap_origin_fixture();
+    for (preference, winner) in [
+        (TableOverlapPreference::Native, &native),
+        (TableOverlapPreference::Layout, &layout),
+        (TableOverlapPreference::Content, &native),
+    ] {
+        let emit = |page: &[Vec<SegmentData>]| {
+            prepare_emitted_tables(std::slice::from_ref(&native), vec![layout.clone()], preference, page)
+        };
+        assert_eq!(emit(&independent).len(), 2, "{preference:?}");
+        assert_eq!(emit(&[]).len(), 2, "{preference:?}: no source evidence");
+        let emitted = emit(&shared);
+        assert_eq!(emitted.len(), 1, "{preference:?}");
+        assert_eq!(emitted[0].bounding_box.unwrap().x0, winner.bounding_box.unwrap().x0);
+    }
+}
+
+#[test]
+fn exact_dedup_layout_origin_weak_overlap_counts_printed_occurrences() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let ([left, right], shared, independent) = weak_overlap_origin_fixture();
+    for layout in [vec![left.clone(), right.clone()], vec![right, left]] {
+        let emit = |page: &[Vec<SegmentData>]| {
+            prepare_emitted_tables(&[], layout.clone(), TableOverlapPreference::Content, page)
+        };
+        assert_eq!(emit(&independent).len(), 2);
+        let emitted = emit(&shared);
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].bounding_box.unwrap().x0, layout[0].bounding_box.unwrap().x0);
+    }
+}
+
+#[test]
 fn sparse_currency_affix_columns_merge_into_financial_values() {
     use crate::core::config::layout::TableOverlapPreference;
 
@@ -2345,7 +2543,7 @@ fn stacked_native_parents_do_not_form_side_by_side_replacement_cohort() {
         ov_table(1, (105.0, 0.0, 200.0, 100.0), "layout right"),
     ]);
 
-    assert!(side_by_side_layout_replacements(&tables, 2).is_empty());
+    assert!(side_by_side_layout_replacements(&tables, 2, &ahash::AHashSet::new()).is_empty());
 }
 
 #[test]
@@ -2359,7 +2557,7 @@ fn weakly_overlapping_layout_children_do_not_replace_two_native_parents() {
         ov_table(1, (120.0, 0.0, 270.0, 100.0), "layout right"),
     ]);
 
-    assert!(side_by_side_layout_replacements(&tables, 2).is_empty());
+    assert!(side_by_side_layout_replacements(&tables, 2, &ahash::AHashSet::new()).is_empty());
 }
 
 #[test]
@@ -2373,7 +2571,7 @@ fn layout_cohort_rejects_child_that_does_not_cover_corresponding_parent() {
         ov_table(1, (105.0, 0.0, 175.0, 100.0), "layout right"),
     ]);
 
-    assert!(side_by_side_layout_replacements(&tables, 2).is_empty());
+    assert!(side_by_side_layout_replacements(&tables, 2, &ahash::AHashSet::new()).is_empty());
 }
 
 #[test]
@@ -2387,7 +2585,10 @@ fn layout_cohort_accepts_reciprocal_crop_within_tolerance() {
         ov_table(1, (110.0, 0.0, 210.0, 100.0), "layout right"),
     ]);
 
-    assert_eq!(side_by_side_layout_replacements(&tables, 2), [(vec![0, 1], vec![2, 3])]);
+    assert_eq!(
+        side_by_side_layout_replacements(&tables, 2, &ahash::AHashSet::new()),
+        [(vec![0, 1], vec![2, 3])]
+    );
 }
 
 #[test]
@@ -2401,7 +2602,7 @@ fn layout_cohort_rejects_reciprocal_crop_below_tolerance() {
         ov_table(1, (110.0, 0.0, 210.0, 100.0), "layout right"),
     ]);
 
-    assert!(side_by_side_layout_replacements(&tables, 2).is_empty());
+    assert!(side_by_side_layout_replacements(&tables, 2, &ahash::AHashSet::new()).is_empty());
 }
 
 #[test]
@@ -2432,7 +2633,7 @@ fn three_native_candidates_select_one_disjoint_adjacent_cohort() {
     let mut candidates = native.clone();
     candidates.extend(layout.clone());
 
-    let replacements = side_by_side_layout_replacements(&candidates, native.len());
+    let replacements = side_by_side_layout_replacements(&candidates, native.len(), &ahash::AHashSet::new());
     assert_eq!(replacements, [(vec![2, 0], vec![4, 5])]);
 
     let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
@@ -2520,6 +2721,66 @@ fn overlapping_protected_replacement_groups_survive() {
         emitted.iter().map(|table| table.markdown.as_str()).collect::<Vec<_>>(),
         ["upper left", "upper right", "lower left", "lower right"]
     );
+}
+
+#[test]
+fn weak_shared_overlap_keeps_both_protected_layout_cohorts_atomic() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let native = [
+        ov_table(1, (0.0, 0.0, 200.0, 100.0), "first parent"),
+        ov_table(1, (0.0, 60.0, 200.0, 160.0), "second parent"),
+    ];
+    let cells: &[&[&str]] = &[&["alpha", "1"], &["beta", "2"]];
+    let first_left = cell_table(1, (0.0, 0.0, 95.0, 100.0), cells);
+    let second_left = cell_table(1, (0.0, 60.0, 95.0, 160.0), cells);
+    let page = printed_cells(&[&second_left]);
+    let layout = vec![
+        first_left,
+        ov_table(1, (105.0, 0.0, 200.0, 100.0), "first right"),
+        second_left,
+        ov_table(1, (105.0, 60.0, 200.0, 160.0), "second right"),
+    ];
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &page);
+    let footprints = emitted
+        .iter()
+        .map(|table| {
+            let bounds = table.bounding_box.unwrap();
+            (bounds.x0, bounds.y0)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(footprints, [(0.0, 0.0), (105.0, 0.0), (0.0, 60.0), (105.0, 60.0)]);
+}
+
+#[test]
+fn protected_layout_cohorts_keep_their_duplicate_threshold_through_final_dedup() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    for (offset, parent_height, expected) in [
+        (15.0, 82.0, vec![(0.0, 0.0), (105.0, 0.0), (0.0, 15.0), (105.0, 15.0)]),
+        (9.0, 80.0, vec![(0.0, 0.0), (105.0, 9.0)]),
+    ] {
+        let bottom = offset + 100.0;
+        let native = [
+            ov_table(1, (0.0, 0.0, 200.0, parent_height), "first parent"),
+            ov_table(1, (0.0, bottom - parent_height, 200.0, bottom), "second parent"),
+        ];
+        let layout = vec![
+            ov_table(1, (0.0, 0.0, 95.0, 100.0), "identical left"),
+            ov_table(1, (105.0, 0.0, 200.0, 100.0), "first right"),
+            ov_table(1, (0.0, offset, 95.0, bottom), "identical left"),
+            ov_table(1, (105.0, offset, 200.0, bottom), "second right"),
+        ];
+        let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &[]);
+        let footprints = emitted
+            .iter()
+            .map(|table| {
+                let bounds = table.bounding_box.unwrap();
+                (bounds.x0, bounds.y0)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(footprints, expected, "layout child offset {offset}");
+    }
 }
 
 #[test]
