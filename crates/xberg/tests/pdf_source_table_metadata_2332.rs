@@ -930,3 +930,54 @@ fn decimal_header_tags_must_name_the_emitted_source_cells() {
     assert_eq!(result.tables[0].cells[1], labels);
     assert!(result.content.contains("<td>1.0</td>"), "{}", result.content);
 }
+fn extend_tag_tree(bytes: &[u8], extra_nodes: usize) -> Vec<u8> {
+    use lopdf::{Document, Object, dictionary};
+    let mut pdf = Document::load_mem(bytes).unwrap();
+    let catalog = pdf.trailer.get(b"Root").unwrap().as_reference().unwrap();
+    let root = pdf
+        .get_dictionary(catalog)
+        .unwrap()
+        .get(b"StructTreeRoot")
+        .unwrap()
+        .as_reference()
+        .unwrap();
+    let table = pdf.get_dictionary(root).unwrap().get(b"K").unwrap().clone();
+    let section = pdf.new_object_id();
+    let children = (0..extra_nodes)
+        .map(|_| Object::from(pdf.add_object(dictionary! { "Type" => "StructElem", "S" => "P", "P" => section })))
+        .collect();
+    pdf.objects.insert(
+        section,
+        dictionary! {
+            "Type" => "StructElem", "S" => "Sect", "P" => root, "K" => Object::Array(children),
+        }
+        .into(),
+    );
+    pdf.get_object_mut(root)
+        .unwrap()
+        .as_dict_mut()
+        .unwrap()
+        .set("K", Object::Array(vec![table, section.into()]));
+    let mut result = Vec::new();
+    pdf.save_to(&mut result).unwrap();
+    result
+}
+
+#[test]
+fn tagged_header_lookup_abstains_when_unrelated_structure_exhausts_its_budget() {
+    let labels = ["Version", "Build", "1.0", "1.1", "2.0"];
+    let bare = ruled_decimal_table(labels, true, 1, DecimalHeaderPaint::Tagged);
+    let config = parsebench_html_config();
+    for (nodes, role) in [(8, "th"), (4096, "td")] {
+        let pdf = extend_tag_tree(&bare, nodes);
+        let result = extract_bytes_document_blocking(&pdf, "application/pdf", &config).unwrap();
+        assert_eq!(result.tables.len(), 1);
+        assert_eq!(result.tables[0].cells[1], labels);
+        assert!(
+            result.content.contains(&format!("<{role}>1.0</{role}>")),
+            "{nodes} nodes: {}",
+            result.content
+        );
+        assert!(result.content.contains("<td>0.924</td>"));
+    }
+}

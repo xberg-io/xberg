@@ -3,14 +3,18 @@
 use super::{PdfDocument, RuledSourceTables, Table};
 use crate::cache::MutexExt;
 use crate::document::ReadingOrder;
-use crate::structure::table_extractor::{TableCell, extract_table_from_spans, find_table_elements_all_pages};
+use crate::structure::table_extractor::{TableCell, extract_table_from_spans};
 use crate::structure::types::McidScope;
-use crate::structure::{StructChild, StructElem};
+use crate::structure::{StructChild, StructElem, StructTreeRoot, StructType};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use std::time::Duration;
 
 const MAX_TAGGED_TABLES: usize = 16;
 const MAX_TAGGED_SPANS: usize = 4096;
 const MAX_TAGGED_NODES: usize = 512;
+const MAX_PAGE_LOOKUP_NODES: usize = 4096;
+const TAGGED_PARSE_BUDGET: Duration = Duration::from_millis(250);
 
 impl PdfDocument {
     pub(super) fn retain_tagged_decimal_roles(&self, page: usize, results: &mut [RuledSourceTables]) {
@@ -21,20 +25,15 @@ impl PdfDocument {
         {
             return;
         }
-        let Some(tree) = self.struct_tree_trustworthy() else {
+        let Some(tree) = self.decimal_role_structure_tree() else {
             return;
         };
-        let elements = {
-            let mut cache = self.table_elements_cache.lock_or_recover();
-            let pages = cache.get_or_insert_with(|| find_table_elements_all_pages(&tree));
-            let Some(elements) = pages.get(&(page as u32)) else {
-                return;
-            };
-            if elements.len() > MAX_TAGGED_TABLES || !elements.iter().all(bounded_tag_tree) {
-                return;
-            }
-            elements.clone()
+        let Some(elements) = borrowed_page_tables(&tree.root_elements, page as u32) else {
+            return;
         };
+        if elements.is_empty() {
+            return;
+        }
         let Ok(source) = self.extract_page_text_with_script_geometry(page, ReadingOrder::TopToBottom) else {
             return;
         };
@@ -54,7 +53,7 @@ impl PdfDocument {
             }
         }
         let tagged: Vec<_> = elements
-            .iter()
+            .into_iter()
             .filter_map(|elem| extract_table_from_spans(elem, &source.spans).ok())
             .filter(has_decimal_leaf_candidate)
             .collect();
@@ -77,22 +76,70 @@ impl PdfDocument {
             }
         }
     }
+
+    fn decimal_role_structure_tree(&self) -> Option<Arc<StructTreeRoot>> {
+        if self.mark_info().is_ok_and(|mark| mark.suspects) {
+            return None;
+        }
+        if let Some(cached) = self.structure_tree_cache.lock_or_recover().as_ref() {
+            return cached.clone();
+        }
+        let parsed = Arc::new(self.structure_tree_with_budget(Some(TAGGED_PARSE_BUDGET)).ok()??);
+        // A budget miss is local to this optional proof; other readers may still need the tree. ~keep
+        self.structure_tree_cache
+            .lock_or_recover()
+            .get_or_insert_with(|| Some(parsed))
+            .clone()
+    }
 }
 
-fn bounded_tag_tree(root: &StructElem) -> bool {
-    let mut pending = vec![root];
-    let mut remaining = MAX_TAGGED_NODES;
+// Charge children before adding them to the stack. A partial traversal cannot prove
+// that a seemingly matching table is unique. Borrow elements from the cached tree. ~keep
+fn borrowed_page_tables(roots: &[StructElem], page: u32) -> Option<Vec<&StructElem>> {
+    let mut remaining = MAX_PAGE_LOOKUP_NODES.checked_sub(roots.len())?;
+    let mut pending: Vec<_> = roots.iter().collect();
+    let mut matches = Vec::new();
     while let Some(elem) = pending.pop() {
-        let Some(next) = remaining.checked_sub(elem.children.len()) else {
-            return false;
-        };
-        remaining = next;
-        pending.extend(elem.children.iter().filter_map(|child| match child {
-            StructChild::StructElem(elem) => Some(elem.as_ref()),
-            _ => None,
-        }));
+        if elem.struct_type == StructType::Table {
+            if table_is_on_page(elem, page, &mut remaining)? {
+                if matches.len() == MAX_TAGGED_TABLES {
+                    return None;
+                }
+                matches.push(elem);
+            }
+            continue;
+        }
+        remaining = remaining.checked_sub(elem.children.len())?;
+        pending.extend(child_elements(&elem.children));
     }
-    true
+    Some(matches)
+}
+
+fn table_is_on_page(table: &StructElem, page: u32, remaining: &mut usize) -> Option<bool> {
+    let mut on_page = false;
+    let mut size = 1;
+    let mut pending = vec![table];
+    while let Some(elem) = pending.pop() {
+        *remaining = remaining.checked_sub(elem.children.len())?;
+        size += elem.children.len();
+        on_page |= elem.page == Some(page)
+            || elem
+                .children
+                .iter()
+                .any(|child| matches!(child, StructChild::MarkedContentRef { page: actual, .. } if *actual == page));
+        if on_page && size > MAX_TAGGED_NODES {
+            return None;
+        }
+        pending.extend(child_elements(&elem.children));
+    }
+    Some(on_page)
+}
+
+fn child_elements(children: &[StructChild]) -> impl Iterator<Item = &StructElem> {
+    children.iter().filter_map(|child| match child {
+        StructChild::StructElem(elem) => Some(elem.as_ref()),
+        _ => None,
+    })
 }
 
 fn has_decimal_leaf_candidate(table: &Table) -> bool {
@@ -156,4 +203,35 @@ fn same_marked_cell(cell: &TableCell, tag: &TableCell) -> bool {
         ]
         .into_iter()
         .all(|delta| delta.abs() <= GLYPH_BOX_ROUNDING)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tagged_table(page: u32, children: usize) -> StructElem {
+        let mut table = StructElem::new(StructType::Table);
+        table.children = (0..children)
+            .map(|mcid| StructChild::MarkedContentRef {
+                mcid: mcid as u32,
+                page,
+                scope: McidScope::Page(page),
+            })
+            .collect();
+        table
+    }
+
+    #[test]
+    fn tagged_lookup_charges_off_page_work_without_claiming_off_page_tables() {
+        let roots = [tagged_table(1, MAX_TAGGED_NODES), tagged_table(0, 1)];
+        let page = borrowed_page_tables(&roots, 0).unwrap();
+        assert!(matches!(page.as_slice(), [table] if std::ptr::eq(*table, &roots[1])));
+        assert!(borrowed_page_tables(&roots, 1).is_none());
+    }
+
+    #[test]
+    fn tagged_lookup_discards_matches_on_global_exhaustion() {
+        let roots = [tagged_table(1, MAX_PAGE_LOOKUP_NODES), tagged_table(0, 1)];
+        assert!(borrowed_page_tables(&roots, 0).is_none());
+    }
 }
