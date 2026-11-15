@@ -366,8 +366,7 @@ pub(super) fn prune_paragraphs_with_retention(paragraphs: &mut Vec<PdfParagraph>
 /// inside one surviving line to that line's new offset. An annotation that crosses a line
 /// boundary is dropped, even between two surviving lines: its byte range has no single new
 /// offset once the lines between or around it are gone.
-#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
-#[cfg(test)]
+#[cfg(all(test, feature = "ocr", feature = "pdf"))]
 fn prune_element_text(element: &mut crate::types::internal::InternalElement) -> bool {
     prune_element_text_with_retention(element, None)
 }
