@@ -3140,6 +3140,34 @@ fn single_block_table_config(
     Some(second)
 }
 
+#[cfg(any(feature = "ocr", feature = "ocr-wasm", feature = "ocr-pipeline"))]
+fn note_tall_standalone_ocr_clamp(doc: &mut InternalDocument) {
+    const MIN_TALL_ASPECT: usize = 4;
+    let Some(preprocessing) = doc.metadata.image_preprocessing.as_ref() else {
+        return;
+    };
+    let source = &preprocessing.original_dimensions;
+    let Some(processed) = preprocessing.new_dimensions.as_ref() else {
+        return;
+    };
+    if preprocessing.dimension_clamped
+        && source.height >= source.width.saturating_mul(MIN_TALL_ASPECT)
+        && processed.height < source.height
+    {
+        crate::core::diagnostics::push_warning(
+            &mut doc.processing_warnings,
+            "ocr",
+            format!(
+                concat!(
+                    "Standalone image OCR reduced {} × {} pixels to {} × {} pixels. ",
+                    "Source-image strip recovery requires PDF input. The text may be incomplete.",
+                ),
+                source.width, source.height, processed.width, processed.height,
+            ),
+        );
+    }
+}
+
 #[cfg_attr(alef, alef(skip))]
 /// Image extractor for various image formats.
 ///
@@ -3180,7 +3208,9 @@ impl ImageExtractor {
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
         let first = self.extract_with_ocr_pass(content, mime_type, config).await?;
-        self.reread_standalone_table(content, mime_type, config, first).await
+        let mut result = self.reread_standalone_table(content, mime_type, config, first).await?;
+        note_tall_standalone_ocr_clamp(&mut result);
+        Ok(result)
     }
 
     #[cfg(not(all(feature = "ocr", not(target_arch = "wasm32"))))]

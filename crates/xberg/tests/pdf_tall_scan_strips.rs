@@ -29,13 +29,17 @@ fn extraction_config() -> ExtractionConfig {
 }
 
 fn extract(bytes: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
+    extract_mime(bytes, "application/pdf", config)
+}
+
+fn extract_mime(bytes: &[u8], mime: &str, config: &ExtractionConfig) -> ExtractedDocument {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .expect("integration runtime");
     let mut result = runtime
         .block_on(extract_public(
-            ExtractInput::from_bytes(bytes.to_vec(), "application/pdf", None),
+            ExtractInput::from_bytes(bytes.to_vec(), mime, None),
             config,
         ))
         .expect("extract with the real Tesseract backend");
@@ -76,6 +80,61 @@ fn assert_image_text(document: &ExtractedDocument, used_strips: bool) {
         assert_eq!(confidence.word_count, 440);
         assert_eq!(confidence.backend, "tesseract");
     }
+}
+
+fn standalone_gray_png(pdf: &[u8], height: u32) -> Vec<u8> {
+    use image::ImageEncoder;
+    let source = lopdf::Document::load_mem(pdf).unwrap();
+    let mut images = source
+        .objects
+        .values()
+        .filter_map(|object| object.as_stream().ok())
+        .filter(|stream| stream.dict.get(b"Subtype").and_then(lopdf::Object::as_name).ok() == Some(b"Image"));
+    let stream = images.next().unwrap();
+    assert!(images.next().is_none());
+    assert_eq!(
+        stream.dict.get(b"ColorSpace").and_then(lopdf::Object::as_name).unwrap(),
+        b"DeviceGray"
+    );
+    let width = stream.dict.get(b"Width").and_then(lopdf::Object::as_i64).unwrap() as u32;
+    let source_height = stream.dict.get(b"Height").and_then(lopdf::Object::as_i64).unwrap() as u32;
+    let mut pixels = stream.decompressed_content().unwrap();
+    assert_eq!(pixels.len(), (width * source_height) as usize);
+    assert!(height >= source_height);
+    pixels.resize((width * height) as usize, 255);
+    let mut png = Vec::new();
+    image::codecs::png::PngEncoder::new(&mut png)
+        .write_image(&pixels, width, height, image::ExtendedColorType::L8)
+        .unwrap();
+    png
+}
+
+#[test]
+fn clamped_standalone_tall_png_explains_source_strip_abstention() {
+    let config = extraction_config();
+    let tall = extract_mime(&standalone_gray_png(TALL, 12000), "image/png", &config);
+    assert!(tall.metadata.ocr_used);
+    let metadata = tall.metadata.image_preprocessing.as_ref().unwrap();
+    assert!(metadata.dimension_clamped);
+    assert_eq!(metadata.original_dimensions.height, 12000);
+    assert_eq!(metadata.new_dimensions.as_ref().unwrap().height, 4096);
+    let message = "Standalone image OCR reduced 1275 × 12000 pixels to 435 × 4096 pixels. Source-image strip recovery requires PDF input. The text may be incomplete.";
+    assert_eq!(
+        tall.processing_warnings
+            .iter()
+            .filter(|warning| warning.message == message)
+            .count(),
+        1,
+        "{:?}",
+        tall.processing_warnings
+    );
+    let short = extract_mime(&standalone_gray_png(SHORT, 3600), "image/png", &config);
+    assert!(short.metadata.ocr_used);
+    assert!(!short.processing_warnings.iter().any(|warning| {
+        warning
+            .message
+            .contains("Source-image strip recovery requires PDF input")
+    }));
 }
 
 #[test]
