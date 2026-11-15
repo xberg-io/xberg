@@ -101,23 +101,25 @@ fn rank_lines(
     let source = complete_line_owners(primary, old)?;
     let destination = complete_line_owners(retry, new)?;
     let elements = primary.ocr_elements.as_ref()?;
-    let mut votes = HashMap::<usize, HashMap<usize, usize>>::new();
+    let mut claims_by_source = HashMap::<usize, HashMap<usize, usize>>::new();
     for (i, counterpart) in column_selection::unique_partners(old, new).into_iter().enumerate() {
         let Some(j) = counterpart else { continue };
         let (Some(a), Some(b)) = (source[i], destination[j]) else {
             continue;
         };
+        // A unique geometric claim can veto a rank even when the retry misread the word.
+        let votes = claims_by_source.entry(a).or_default().entry(b).or_default();
         let (area, before, after) = overlap(old[i].bounds, new[j].bounds);
         if old[i].text == new[j].text && area > before.max(after) / 2 {
-            *votes.entry(a).or_default().entry(b).or_default() += 1;
+            *votes += 1;
         }
     }
     let mut incoming = HashMap::<usize, usize>::new();
-    for &rank in votes.values().flat_map(|claims| claims.keys()) {
+    for &rank in claims_by_source.values().flat_map(|claims| claims.keys()) {
         *incoming.entry(rank).or_default() += 1;
     }
     Some(
-        votes
+        claims_by_source
             .into_iter()
             .filter_map(|(i, claims)| {
                 let (&rank, &count) = claims.iter().next()?;
@@ -245,6 +247,15 @@ mod tests {
 
     #[test]
     fn a_one_vote_source_still_conflicts_with_a_two_vote_merged_retry_line() {
+        assert_competing_line_blocks_merged_retry_line("three");
+    }
+
+    #[test]
+    fn a_mismatched_competing_literal_still_conflicts_with_a_two_vote_merged_retry_line() {
+        assert_competing_line_blocks_merged_retry_line("tree");
+    }
+
+    fn assert_competing_line_blocks_merged_retry_line(competing_retry_literal: &str) {
         use crate::types::{ExtractedDocument, OcrConfidence, OcrElement, OcrElementLevel};
 
         let words: Vec<_> = ["one", "two", "three", "separate", "line"]
@@ -260,7 +271,7 @@ mod tests {
                 }
             })
             .collect();
-        let read = |ranges: &[std::ops::Range<usize>]| {
+        let read = |words: &[Word<'_>], ranges: &[std::ops::Range<usize>]| {
             let mut elements = Vec::new();
             for range in ranges {
                 let first = words[range.start].bounds;
@@ -284,11 +295,17 @@ mod tests {
                 ..Default::default()
             }
         };
-        let primary = read(&[0..2, 2..3, 3..5]);
-        let merged = read(&[0..3, 3..5]);
+        let primary = read(&words, &[0..2, 2..3, 3..5]);
+        let mut retry_words = words.clone();
+        retry_words[2].text = competing_retry_literal;
+        let merged = read(&retry_words, &[0..3, 3..5]);
         let unchanged = rank_lines(&primary, &primary, &words, &words).unwrap();
         assert_eq!(unchanged.len(), 2);
-        let actual = rank_lines(&primary, &merged, &words, &words).unwrap();
+        let mut split_words = words.clone();
+        split_words[0].text = "won";
+        let split = read(&split_words, &[0..2, 2..3, 3..5]);
+        assert_eq!(rank_lines(&primary, &split, &words, &split_words).unwrap().len(), 1);
+        let actual = rank_lines(&primary, &merged, &words, &retry_words).unwrap();
         assert_eq!(
             actual.iter().map(|line| line.literal.as_str()).collect::<Vec<_>>(),
             ["separate line"]
