@@ -2,6 +2,9 @@
 
 use std::ops::Range;
 
+#[path = "region_projection.rs"]
+pub(super) mod projection;
+
 const MAX_TRANSCRIPT_BYTES: usize = 16 * 1024;
 const MAX_LINE_WORDS: usize = 64;
 const MAX_PROTECTED_BOXES: usize = 1024;
@@ -109,7 +112,7 @@ fn read_owns_stock(region: RegionBox, stock: &[StockWord<'_>], source: &[SourceW
 /// overlap the region. Stock byte ranges must come from the caller's verified occurrence-to-
 /// transcript projection for this exact transcript. Missing ranges cannot be inferred from text.
 /// The column bounds must exclude gutters and other columns. ~keep
-pub(super) fn plan_line_edits<'a>(
+fn plan_line_edits<'a>(
     transcript: &str,
     region: RegionBox,
     column: RegionBox,

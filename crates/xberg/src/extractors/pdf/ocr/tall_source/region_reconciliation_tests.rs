@@ -295,3 +295,102 @@ fn refuses_a_region_crossing_the_column_gutter_even_when_all_words_fit() {
     assert!(plan_line_edits(transcript, allowed, column, &stock, [&read, &read], &[]).is_some());
     assert!(plan_line_edits(transcript, crossing, column, &stock, [&read, &read], &[]).is_none());
 }
+
+#[test]
+fn caller_projection_refuses_a_byte_valid_lookalike_when_the_target_was_omitted() {
+    use super::projection::{ProjectionWriter, RawStockWord};
+
+    let transcript = "POP WAcES:\n\n@ Hero";
+    let target = heading_stock(0);
+    let lookalike_bounds = [rect([205, 400, 251, 418]), rect([262, 400, 354, 418])];
+    let words = [
+        RawStockWord {
+            text: target[0].text,
+            bounds: target[0].bounds,
+        },
+        RawStockWord {
+            text: target[1].text,
+            bounds: target[1].bounds,
+        },
+        RawStockWord {
+            text: target[0].text,
+            bounds: lookalike_bounds[0],
+        },
+        RawStockWord {
+            text: target[1].text,
+            bounds: lookalike_bounds[1],
+        },
+    ];
+    let serialize = |ids: [usize; 2]| {
+        let mut writer = ProjectionWriter::new(&words).unwrap();
+        writer.append_stock(ids[0]).unwrap();
+        writer.append_unowned(" ").unwrap();
+        writer.append_stock(ids[1]).unwrap();
+        writer.append_unowned("\n\n@ Hero").unwrap();
+        writer
+    };
+    let read = heading_source();
+    let region = rect([203, 154, 355, 174]);
+    // A guessed range is valid text and would pass the lower-level planner.
+    assert!(plan_line_edits(transcript, region, region, &target, [&read, &read], &[]).is_some());
+
+    let projected = serialize([2, 3]).verify(transcript).unwrap();
+    assert!(projected.plan(region, region, &[0, 1], [&read, &read], &[]).is_none());
+    assert!(projected.plan(region, region, &[2, 3], [&read, &read], &[]).is_none());
+
+    let projected = serialize([0, 1]).verify(transcript).unwrap();
+    let edits = projected.plan(region, region, &[0, 1], [&read, &read], &[]).unwrap();
+    assert_eq!(materialize(transcript, &edits), "PDP IMAGES\n\n@ Hero");
+    assert!(projected.plan(region, region, &[0, 0], [&read, &read], &[]).is_none());
+    assert!(projected.plan(region, region, &[1, 0], [&read, &read], &[]).is_none());
+    assert!(serialize([0, 1]).verify("POP WAcES:\n\n@ Hero different").is_none());
+}
+
+#[test]
+fn caller_projection_records_split_blocks_without_claiming_table_or_annotation_bytes() {
+    use super::projection::{ProjectionWriter, RawStockWord};
+
+    let words = [
+        RawStockWord {
+            text: "wi",
+            bounds: rect([320, 5455, 337, 5469]),
+        },
+        RawStockWord {
+            text: "the",
+            bounds: rect([368, 5457, 387, 5469]),
+        },
+        RawStockWord {
+            text: "blog",
+            bounds: rect([402, 5457, 439, 5474]),
+        },
+    ];
+    let transcript = "table\n\nwi\n\nthe blog\n\nAnnotations:\nwi";
+    let mut writer = ProjectionWriter::new(&words).unwrap();
+    writer.append_unowned("table\n\n").unwrap();
+    writer.append_stock(0).unwrap();
+    assert!(writer.append_stock(0).is_none());
+    writer.append_unowned("\n\n").unwrap();
+    writer.append_stock(1).unwrap();
+    writer.append_unowned(" ").unwrap();
+    writer.append_stock(2).unwrap();
+    writer.append_unowned("\n\nAnnotations:\nwi").unwrap();
+    let projected = writer.verify(transcript).unwrap();
+    let read = [
+        source("View", [321, 5456, 364, 5469], 95.202385),
+        source("the", [369, 5457, 397, 5469], 95.202385),
+        source("blog", [402, 5457, 438, 5472], 94.816429),
+    ];
+    let edits = projected
+        .plan(
+            rect([319, 5454, 440, 5475]),
+            rect([0, 5287, 742, 5773]),
+            &[0, 1, 2],
+            [&read, &read],
+            &[],
+        )
+        .unwrap();
+    assert_eq!(
+        materialize(transcript, &edits),
+        "table\n\nView\n\nthe blog\n\nAnnotations:\nwi"
+    );
+}
