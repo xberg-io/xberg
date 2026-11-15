@@ -1291,7 +1291,12 @@ fn publish_hocr_table_rows(
 ) {
     if let Some(leaders) = hocr
         .zip(tsv)
-        .filter(|_| policy == ImageOcrPolicy::StandaloneAutoTableRows)
+        .filter(|_| {
+            matches!(
+                policy,
+                ImageOcrPolicy::StandaloneAutoTableRows | ImageOcrPolicy::StandaloneDotLeaderRows
+            ) || (config.known_full_page_scan && config.psm == TessPageSegMode::PSM_SINGLE_BLOCK as u8)
+        })
         .and_then(|(hocr, tsv)| reconcile_retained_table_leaders(hocr, document, tables, tsv, config, limits))
     {
         // An exact-only match cannot resolve which physical row owned the table slot.

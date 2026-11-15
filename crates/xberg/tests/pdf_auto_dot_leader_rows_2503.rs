@@ -51,6 +51,10 @@ fn numeric_fields(text: &str) -> impl Iterator<Item = &str> {
 }
 
 fn extract(bytes: &[u8]) -> ExtractedDocument {
+    extract_with_psm(bytes, None)
+}
+
+fn extract_with_psm(bytes: &[u8], psm: Option<i32>) -> ExtractedDocument {
     let models = tempfile::tempdir().unwrap();
     let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English");
     assert_eq!(
@@ -63,6 +67,10 @@ fn extract(bytes: &[u8]) -> ExtractedDocument {
         output_format: OutputFormat::Plain,
         ocr: Some(OcrConfig {
             tessdata_path: Some(models.path().to_path_buf()),
+            tesseract_config: psm.map(|psm| xberg::types::TesseractConfig {
+                psm: Some(psm),
+                ..Default::default()
+            }),
             ..Default::default()
         }),
         pages: Some(PageConfig {
@@ -143,4 +151,21 @@ fn regular_dashes_in_place_of_leader_dots_do_not_form_a_table() {
     let result = extract(bytes);
     assert!(result.metadata.ocr_used);
     assert!(result.tables.is_empty(), "found {} tables", result.tables.len());
+}
+
+#[test]
+fn explicit_psm6_scan_publishes_each_owned_leader_row_once() {
+    let result = extract_with_psm(&tinted_scan(), Some(6));
+    let [page] = result.pages.as_deref().unwrap() else {
+        panic!("one scan page");
+    };
+    for content in [&result.content, &page.content] {
+        for (label, literal) in [
+            ("Tree planting", "Tree planting .......... 97 623,093 (8,538)"),
+            ("Parks and trails", "Parks and trails ........ 83 994,034 67,217"),
+        ] {
+            let rows: Vec<_> = content.lines().filter(|line| line.starts_with(label)).collect();
+            assert_eq!(rows, [literal], "{content}");
+        }
+    }
 }
