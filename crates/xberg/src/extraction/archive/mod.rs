@@ -115,6 +115,15 @@ fn has_drive_or_unc_prefix(path: &str) -> bool {
     path.starts_with("//") || (bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':')
 }
 
+/// Add an entry's declared size to an archive's running total.
+///
+/// Declared sizes come from attacker-controlled headers, so the sum saturates rather than
+/// wrapping to a small value (or panicking with overflow checks on) and still trips the
+/// `max_archive_size` comparison that follows it.
+pub(crate) fn add_declared_size(total: u64, size: u64) -> u64 {
+    total.saturating_add(size)
+}
+
 /// Common text file extensions that should be extracted from archives.
 ///
 /// #113: the original list only covered a handful of formats, so real

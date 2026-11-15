@@ -51,7 +51,7 @@ pub(crate) fn extract_7z_metadata(bytes: &[u8], limits: &SecurityLimits) -> Resu
         let is_dir = entry.is_directory();
 
         if !is_dir {
-            total_size += size;
+            total_size = super::add_declared_size(total_size, size);
         }
 
         if total_size > limits.max_archive_size as u64 {

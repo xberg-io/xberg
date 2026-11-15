@@ -59,7 +59,7 @@ pub(crate) fn extract_zip_metadata(bytes: &[u8], limits: &SecurityLimits) -> Res
         let is_dir = file.is_dir();
 
         if !is_dir {
-            total_size += size;
+            total_size = super::add_declared_size(total_size, size);
         }
 
         if total_size > limits.max_archive_size as u64 {

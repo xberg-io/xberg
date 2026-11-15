@@ -55,7 +55,7 @@ pub(crate) fn extract_tar_metadata(bytes: &[u8], limits: &SecurityLimits) -> Res
         let is_dir = entry.header().entry_type().is_dir();
 
         if !is_dir {
-            total_size += size;
+            total_size = super::add_declared_size(total_size, size);
         }
 
         file_count += 1;
