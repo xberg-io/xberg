@@ -6340,7 +6340,7 @@ fn resolve_overlaps(
                     native_first,
                     shares,
                 );
-                let Some(remove) = loser.or_else(|| weak_overlap.then(|| lower_content_table(tables, i, j))) else {
+                let Some(remove) = loser else {
                     continue;
                 };
                 if weak_overlap && evidence.holds_unprinted_words(tables, remove, to_remove) != Some(false) {

@@ -2724,6 +2724,35 @@ fn overlapping_protected_replacement_groups_survive() {
 }
 
 #[test]
+fn weak_shared_overlap_keeps_both_protected_layout_cohorts_atomic() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let native = [
+        ov_table(1, (0.0, 0.0, 200.0, 100.0), "first parent"),
+        ov_table(1, (0.0, 60.0, 200.0, 160.0), "second parent"),
+    ];
+    let cells: &[&[&str]] = &[&["alpha", "1"], &["beta", "2"]];
+    let first_left = cell_table(1, (0.0, 0.0, 95.0, 100.0), cells);
+    let second_left = cell_table(1, (0.0, 60.0, 95.0, 160.0), cells);
+    let page = printed_cells(&[&second_left]);
+    let layout = vec![
+        first_left,
+        ov_table(1, (105.0, 0.0, 200.0, 100.0), "first right"),
+        second_left,
+        ov_table(1, (105.0, 60.0, 200.0, 160.0), "second right"),
+    ];
+    let emitted = prepare_emitted_tables(&native, layout, TableOverlapPreference::Content, &page);
+    let footprints = emitted
+        .iter()
+        .map(|table| {
+            let bounds = table.bounding_box.unwrap();
+            (bounds.x0, bounds.y0)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(footprints, [(0.0, 0.0), (105.0, 0.0), (0.0, 60.0), (105.0, 60.0)]);
+}
+
+#[test]
 fn partially_shared_replacement_groups_keep_canonical_table_order() {
     use crate::core::config::layout::TableOverlapPreference;
     let native = vec![
