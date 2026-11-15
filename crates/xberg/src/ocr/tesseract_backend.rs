@@ -255,6 +255,8 @@ impl TesseractBackend {
         if let Some(use_cache) = Self::use_cache_from_backend_options(config) {
             internal.use_cache = use_cache;
         }
+        // Word ownership receipts are transient and are absent from persisted OCR results. ~keep
+        internal.use_cache &= !internal.capture_region_hocr;
         internal
     }
 
