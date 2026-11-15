@@ -22,7 +22,7 @@ fn is_tar_archive(data: &[u8]) -> bool {
 }
 
 /// Decompress gzip bytes with a size limit to prevent decompression bombs.
-fn decompress_gzip_limited(bytes: &[u8], max_size: u64) -> Result<(Vec<u8>, String)> {
+fn decompress_gzip_limited(bytes: &[u8], budget: &mut DecompressedBudget<'_>) -> Result<(Vec<u8>, String)> {
     let mut decoder = GzDecoder::new(bytes);
     let filename = decoder
         .header()
@@ -31,7 +31,7 @@ fn decompress_gzip_limited(bytes: &[u8], max_size: u64) -> Result<(Vec<u8>, Stri
         .unwrap_or("compressed_content")
         .to_owned();
     let mut decompressed = Vec::new();
-    DecompressedBudget::new(max_size)
+    budget
         .read_member(&mut decoder, &mut decompressed, None, &filename)?
         .map_err(|e| XbergError::parsing(format!("Failed to decompress gzip: {e}")))?;
     Ok((decompressed, filename))
@@ -40,7 +40,7 @@ fn decompress_gzip_limited(bytes: &[u8], max_size: u64) -> Result<(Vec<u8>, Stri
 /// Decompress gzip bytes, returning the raw decompressed data.
 #[cfg(test)]
 pub(crate) fn decompress_gzip(bytes: &[u8], limits: &SecurityLimits) -> Result<Vec<u8>> {
-    decompress_gzip_limited(bytes, limits.max_archive_size as u64).map(|(data, _)| data)
+    decompress_gzip_limited(bytes, &mut DecompressedBudget::new(limits.max_archive_size as u64)).map(|(data, _)| data)
 }
 
 /// Extract both metadata and text content from gzip in a single decompression pass.
@@ -54,12 +54,17 @@ pub(crate) fn extract_gzip(
     bytes: &[u8],
     limits: &SecurityLimits,
 ) -> Result<(ArchiveMetadata, AHashMap<String, String>)> {
-    let (decompressed, filename) = decompress_gzip_limited(bytes, limits.max_archive_size as u64)?;
+    let (decompressed, filename) =
+        decompress_gzip_limited(bytes, &mut DecompressedBudget::new(limits.max_archive_size as u64))?;
 
     if is_tar_archive(&decompressed) {
         let mut metadata = super::tar::extract_tar_metadata(&decompressed, limits)?;
         metadata.format = "GZIP+TAR".to_string();
-        let contents = super::tar::extract_tar_text_content(&decompressed, limits)?;
+        let contents = super::tar::extract_tar_text_content(
+            &decompressed,
+            limits,
+            &mut DecompressedBudget::new(limits.max_archive_size as u64),
+        )?;
         return Ok((metadata, contents));
     }
 
@@ -92,7 +97,8 @@ pub(crate) fn extract_gzip(
 /// If the decompressed data is a TAR archive, delegates to TAR extraction.
 #[cfg(test)]
 pub(crate) fn extract_gzip_metadata(bytes: &[u8], limits: &SecurityLimits) -> Result<ArchiveMetadata> {
-    let (decompressed, filename) = decompress_gzip_limited(bytes, limits.max_archive_size as u64)?;
+    let (decompressed, filename) =
+        decompress_gzip_limited(bytes, &mut DecompressedBudget::new(limits.max_archive_size as u64))?;
 
     if is_tar_archive(&decompressed) {
         let mut metadata = super::tar::extract_tar_metadata(&decompressed, limits)?;
@@ -121,10 +127,15 @@ pub(crate) fn extract_gzip_metadata(bytes: &[u8], limits: &SecurityLimits) -> Re
 /// If the decompressed data is a TAR archive, delegates to TAR extraction.
 #[cfg(test)]
 pub(crate) fn extract_gzip_text_content(bytes: &[u8], limits: &SecurityLimits) -> Result<AHashMap<String, String>> {
-    let (decompressed, filename) = decompress_gzip_limited(bytes, limits.max_archive_size as u64)?;
+    let (decompressed, filename) =
+        decompress_gzip_limited(bytes, &mut DecompressedBudget::new(limits.max_archive_size as u64))?;
 
     if is_tar_archive(&decompressed) {
-        return super::tar::extract_tar_text_content(&decompressed, limits);
+        return super::tar::extract_tar_text_content(
+            &decompressed,
+            limits,
+            &mut DecompressedBudget::new(limits.max_archive_size as u64),
+        );
     }
 
     let mut contents = AHashMap::new();
@@ -142,14 +153,18 @@ type GzipWithBytesResult = (ArchiveMetadata, AHashMap<String, String>, AHashMap<
 ///
 /// Similar to `extract_gzip` but also returns the raw file bytes for recursive extraction.
 /// For TAR-within-GZIP, delegates to TAR file bytes extraction.
-pub(crate) fn extract_gzip_with_bytes(bytes: &[u8], limits: &SecurityLimits) -> Result<GzipWithBytesResult> {
-    let (decompressed, filename) = decompress_gzip_limited(bytes, limits.max_archive_size as u64)?;
+pub(crate) fn extract_gzip_with_bytes(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+    budget: &mut DecompressedBudget<'_>,
+) -> Result<GzipWithBytesResult> {
+    let (decompressed, filename) = decompress_gzip_limited(bytes, budget)?;
 
     if is_tar_archive(&decompressed) {
         let mut metadata = super::tar::extract_tar_metadata(&decompressed, limits)?;
         metadata.format = "GZIP+TAR".to_string();
-        let contents = super::tar::extract_tar_text_content(&decompressed, limits)?;
-        let file_bytes = super::tar::extract_tar_file_bytes(&decompressed, limits)?;
+        let contents = super::tar::extract_tar_text_content(&decompressed, limits, budget)?;
+        let file_bytes = super::tar::extract_tar_file_bytes(&decompressed, limits, budget)?;
         return Ok((metadata, contents, file_bytes));
     }
 

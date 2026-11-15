@@ -412,6 +412,7 @@ fn stored_zip(members: &[(&str, &[u8])]) -> Vec<u8> {
 
 fn config_with_limits(limits: crate::extractors::security::SecurityLimits) -> ExtractionConfig {
     ExtractionConfig {
+        use_cache: false,
         security_limits: Some(limits),
         ..ExtractionConfig::default()
     }
@@ -427,20 +428,20 @@ fn recursion_warnings(doc: &InternalDocument) -> Vec<&str> {
 
 /// Every nesting level used to get a fresh `max_archive_size`, so a chain of archives each
 /// under the limit did `depth` times the work the operator allowed. Each level here fits
-/// 4 KiB on its own; the two levels together do not.
+/// 8 KiB on its own; the two levels together do not.
 #[tokio::test]
 async fn nested_archive_levels_share_one_decompression_budget() {
     let inner_text = vec![b'x'; 3000];
     let level2 = stored_zip(&[("inner.txt", inner_text.as_slice())]);
     let level1 = stored_zip(&[("level2.zip", level2.as_slice())]);
     let root = stored_zip(&[("level1.zip", level1.as_slice())]);
-    let limit = 4096;
+    let limit = 8192;
     assert!(
-        level1.len() <= limit && level2.len() <= limit,
+        2 * level1.len() <= limit && 2 * level2.len() <= limit,
         "each level must fit the limit alone"
     );
     assert!(
-        level1.len() + level2.len() > limit,
+        2 * (level1.len() + level2.len()) > limit,
         "the levels together must exceed it"
     );
 
@@ -489,7 +490,7 @@ async fn sibling_nested_archives_share_one_decompression_budget() {
     let nested = stored_zip(&[("inner.txt", inner_text.as_slice())]);
     let root = stored_zip(&[("a.zip", nested.as_slice()), ("b.zip", nested.as_slice())]);
     let limits = crate::extractors::security::SecurityLimits {
-        max_archive_size: 10_000,
+        max_archive_size: 19_500,
         ..Default::default()
     };
 
@@ -549,4 +550,75 @@ async fn accumulated_child_output_is_capped_by_max_content_size() {
         "dropping children must be reported: {:?}",
         result.processing_warnings
     );
+}
+
+#[tokio::test]
+async fn nested_tar_budget_counts_both_duplicate_members_in_each_pass() {
+    let mut tar = TarBuilder::new(Vec::new());
+    for payload in [b"old", b"new"] {
+        let mut header = tar::Header::new_ustar();
+        header.set_mode(0o644);
+        header.set_size(payload.len() as u64);
+        tar.append_data(&mut header, "note.txt", &payload[..]).unwrap();
+    }
+    let nested = tar.into_inner().unwrap();
+    let root = stored_zip(&[("nested.tar", &nested)]);
+    let exact_limit = 2 * nested.len() + 2 * (b"old".len() + b"new".len());
+
+    for limit in [exact_limit - 1, exact_limit] {
+        let limits = SecurityLimits {
+            max_archive_size: limit,
+            ..Default::default()
+        };
+        let budget = Arc::new(ArchiveBudget::new(&limits));
+        let config = ExtractionConfig {
+            archive_budget: Some(Arc::clone(&budget)),
+            ..config_with_limits(limits)
+        };
+        let result = ZipExtractor::new()
+            .extract_content(&root, "application/zip", &config)
+            .await
+            .unwrap();
+        assert_eq!(budget.remaining_decompressed(), 0);
+        if limit == exact_limit {
+            assert_eq!(result.children.as_ref().unwrap()[0].path, "nested.tar");
+        } else {
+            assert!(result.children.is_none());
+            assert!(
+                recursion_warnings(&result)
+                    .iter()
+                    .any(|warning| { warning.contains("nested.tar") && warning.contains("max_archive_size") })
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn solid_7z_budget_counts_binary_and_text_members_in_both_passes() {
+    let bytes = include_bytes!("fixtures/two-members-solid.7z");
+    let member_bytes = b"opaque\n".len() + b"hello\n".len();
+    let limits = SecurityLimits {
+        max_archive_size: 2 * member_bytes,
+        ..Default::default()
+    };
+    let budget = Arc::new(ArchiveBudget::new(&limits));
+    let config = ExtractionConfig {
+        archive_budget: Some(Arc::clone(&budget)),
+        ..config_with_limits(limits)
+    };
+
+    let result = SevenZExtractor::new()
+        .extract_content(bytes, "application/x-7z-compressed", &config)
+        .await
+        .unwrap();
+
+    assert_eq!(budget.remaining_decompressed(), 0);
+    let Some(crate::types::FormatMetadata::Archive(metadata)) = &result.metadata.format else {
+        panic!("Expected archive metadata");
+    };
+    assert_eq!(metadata.file_count, 2);
+    assert_eq!(metadata.total_size, member_bytes as u64);
+    let extracted =
+        crate::extraction::derive::derive_extraction_result(result, true, crate::core::config::OutputFormat::Plain);
+    assert!(extracted.content.contains("hello"));
 }

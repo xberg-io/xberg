@@ -88,7 +88,12 @@ fn test_extract_zip_text_content_includes_widened_extensions() {
     }
 
     let bytes = cursor.into_inner();
-    let contents = extract_zip_text_content(&bytes, &default_limits()).unwrap();
+    let contents = extract_zip_text_content(
+        &bytes,
+        &default_limits(),
+        &mut DecompressedBudget::new(default_limits().max_archive_size as u64),
+    )
+    .unwrap();
 
     assert_eq!(
         contents.len(),
@@ -176,7 +181,12 @@ fn test_extract_zip_text_content() {
     }
 
     let bytes = cursor.into_inner();
-    let contents = extract_zip_text_content(&bytes, &default_limits()).unwrap();
+    let contents = extract_zip_text_content(
+        &bytes,
+        &default_limits(),
+        &mut DecompressedBudget::new(default_limits().max_archive_size as u64),
+    )
+    .unwrap();
 
     assert_eq!(contents.len(), 2);
     assert_eq!(contents.get("test.txt").unwrap(), "Hello, World!");
@@ -196,7 +206,12 @@ fn non_utf8_zip_member_is_recovered_not_dropped() {
         zip.finish().unwrap();
     }
     let bytes = cursor.into_inner();
-    let contents = extract_zip_text_content(&bytes, &default_limits()).unwrap();
+    let contents = extract_zip_text_content(
+        &bytes,
+        &default_limits(),
+        &mut DecompressedBudget::new(default_limits().max_archive_size as u64),
+    )
+    .unwrap();
     assert!(
         contents.contains_key("latin1.txt"),
         "non-UTF-8 member must not be dropped"
@@ -229,7 +244,12 @@ fn test_extract_tar_text_content() {
     }
 
     let bytes = cursor.into_inner();
-    let contents = extract_tar_text_content(&bytes, &default_limits()).unwrap();
+    let contents = extract_tar_text_content(
+        &bytes,
+        &default_limits(),
+        &mut DecompressedBudget::new(default_limits().max_archive_size as u64),
+    )
+    .unwrap();
 
     assert_eq!(contents.len(), 2);
     assert_eq!(contents.get("test.txt").unwrap(), "Hello, World!");
@@ -556,7 +576,12 @@ fn test_extract_zip_multiple_text_files() {
     }
 
     let bytes = cursor.into_inner();
-    let contents = extract_zip_text_content(&bytes, &default_limits()).unwrap();
+    let contents = extract_zip_text_content(
+        &bytes,
+        &default_limits(),
+        &mut DecompressedBudget::new(default_limits().max_archive_size as u64),
+    )
+    .unwrap();
 
     assert_eq!(contents.len(), 3);
     assert_eq!(contents.get("file1.txt").unwrap(), "Content 1");
@@ -590,7 +615,12 @@ fn test_extract_tar_multiple_text_files() {
     }
 
     let bytes = cursor.into_inner();
-    let contents = extract_tar_text_content(&bytes, &default_limits()).unwrap();
+    let contents = extract_tar_text_content(
+        &bytes,
+        &default_limits(),
+        &mut DecompressedBudget::new(default_limits().max_archive_size as u64),
+    )
+    .unwrap();
 
     assert_eq!(contents.len(), 4);
     assert_eq!(contents.get("file1.txt").unwrap(), "Content 1");
@@ -655,7 +685,12 @@ fn test_extract_zip_with_large_file() {
     assert_eq!(metadata.file_count, 1);
     assert_eq!(metadata.total_size, 10_000);
 
-    let contents = extract_zip_text_content(&bytes, &default_limits()).unwrap();
+    let contents = extract_zip_text_content(
+        &bytes,
+        &default_limits(),
+        &mut DecompressedBudget::new(default_limits().max_archive_size as u64),
+    )
+    .unwrap();
     assert_eq!(contents.get("large.txt").unwrap().len(), 10_000);
 }
 
@@ -683,7 +718,12 @@ fn test_extract_zip_with_many_files() {
     assert_eq!(metadata.file_count, 100);
     assert_eq!(metadata.file_list.len(), 100);
 
-    let contents = extract_zip_text_content(&bytes, &default_limits()).unwrap();
+    let contents = extract_zip_text_content(
+        &bytes,
+        &default_limits(),
+        &mut DecompressedBudget::new(default_limits().max_archive_size as u64),
+    )
+    .unwrap();
     assert_eq!(contents.len(), 100);
 }
 
@@ -708,7 +748,12 @@ fn test_extract_zip_with_long_paths() {
     assert_eq!(metadata.file_count, 1);
     assert!(metadata.file_list[0].path.len() > 200);
 
-    let contents = extract_zip_text_content(&bytes, &default_limits()).unwrap();
+    let contents = extract_zip_text_content(
+        &bytes,
+        &default_limits(),
+        &mut DecompressedBudget::new(default_limits().max_archive_size as u64),
+    )
+    .unwrap();
     assert_eq!(contents.len(), 1);
 }
 
@@ -736,7 +781,12 @@ fn test_extract_7z_text_content() {
     };
 
     let bytes = cursor.into_inner();
-    let contents = extract_7z_text_content(&bytes, &default_limits()).unwrap();
+    let contents = extract_7z_text_content(
+        &bytes,
+        &default_limits(),
+        &mut DecompressedBudget::new(default_limits().max_archive_size as u64),
+    )
+    .unwrap();
 
     assert_eq!(contents.len(), 2);
     assert_eq!(contents.get("test.txt").unwrap(), "Hello 7z text!");
@@ -784,7 +834,12 @@ fn test_extract_tar_with_large_file() {
     assert_eq!(metadata.file_count, 1);
     assert_eq!(metadata.total_size, 50_000);
 
-    let contents = extract_tar_text_content(&bytes, &default_limits()).unwrap();
+    let contents = extract_tar_text_content(
+        &bytes,
+        &default_limits(),
+        &mut DecompressedBudget::new(default_limits().max_archive_size as u64),
+    )
+    .unwrap();
     assert_eq!(contents.get("large.txt").unwrap().len(), 50_000);
 }
 
@@ -811,7 +866,12 @@ fn test_extract_zip_text_content_filters_non_text_extensions() {
     }
 
     let bytes = cursor.into_inner();
-    let contents = extract_zip_text_content(&bytes, &default_limits()).unwrap();
+    let contents = extract_zip_text_content(
+        &bytes,
+        &default_limits(),
+        &mut DecompressedBudget::new(default_limits().max_archive_size as u64),
+    )
+    .unwrap();
 
     assert_eq!(contents.len(), 2);
     assert!(contents.contains_key("document.txt"));
@@ -846,12 +906,22 @@ fn zip_text_budget_includes_filtered_members() {
 
     let mut limits = default_limits();
     limits.max_archive_size = 9;
-    let contents = extract_zip_text_content(&bytes, &limits).unwrap();
+    let contents = extract_zip_text_content(
+        &bytes,
+        &limits,
+        &mut DecompressedBudget::new(limits.max_archive_size as u64),
+    )
+    .unwrap();
     assert_eq!(contents.len(), 1);
     assert_eq!(contents["note.txt"], "hello");
 
     limits.max_archive_size = 8;
-    let error = extract_zip_text_content(&bytes, &limits).unwrap_err();
+    let error = extract_zip_text_content(
+        &bytes,
+        &limits,
+        &mut DecompressedBudget::new(limits.max_archive_size as u64),
+    )
+    .unwrap_err();
     assert!(error.to_string().contains("data.bin"));
 }
 
@@ -867,16 +937,31 @@ fn tar_budget_includes_replaced_and_filtered_members() {
 
     let mut limits = default_limits();
     limits.max_archive_size = 9;
-    let contents = extract_tar_text_content(&bytes, &limits).unwrap();
+    let contents = extract_tar_text_content(
+        &bytes,
+        &limits,
+        &mut DecompressedBudget::new(limits.max_archive_size as u64),
+    )
+    .unwrap();
     assert_eq!(contents.len(), 1);
     assert_eq!(contents["note.txt"], "new");
 
     limits.max_archive_size = 8;
-    let error = extract_tar_text_content(&bytes, &limits).unwrap_err();
+    let error = extract_tar_text_content(
+        &bytes,
+        &limits,
+        &mut DecompressedBudget::new(limits.max_archive_size as u64),
+    )
+    .unwrap_err();
     assert!(error.to_string().contains("data.bin"));
 
     limits.max_archive_size = 5;
-    let error = extract_tar_file_bytes(&bytes, &limits).unwrap_err();
+    let error = extract_tar_file_bytes(
+        &bytes,
+        &limits,
+        &mut DecompressedBudget::new(limits.max_archive_size as u64),
+    )
+    .unwrap_err();
     assert!(error.to_string().contains("note.txt"));
 }
 
@@ -895,11 +980,21 @@ fn sevenz_text_budget_includes_filtered_members() {
 
     let mut limits = default_limits();
     limits.max_archive_size = 9;
-    let contents = extract_7z_text_content(&bytes, &limits).unwrap();
+    let contents = extract_7z_text_content(
+        &bytes,
+        &limits,
+        &mut DecompressedBudget::new(limits.max_archive_size as u64),
+    )
+    .unwrap();
     assert_eq!(contents.len(), 1);
     assert_eq!(contents["note.txt"], "hello");
 
     limits.max_archive_size = 8;
-    let error = extract_7z_text_content(&bytes, &limits).unwrap_err();
+    let error = extract_7z_text_content(
+        &bytes,
+        &limits,
+        &mut DecompressedBudget::new(limits.max_archive_size as u64),
+    )
+    .unwrap_err();
     assert!(error.to_string().contains("data.bin"));
 }

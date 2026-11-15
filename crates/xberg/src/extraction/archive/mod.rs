@@ -123,13 +123,25 @@ fn add_declared_size(total: u64, size: u64) -> crate::error::Result<u64> {
     })
 }
 
-struct DecompressedBudget {
+pub(crate) struct DecompressedBudget<'a> {
     remaining: u64,
+    shared: Option<&'a crate::extractors::security::ArchiveBudget>,
 }
 
-impl DecompressedBudget {
+impl<'a> DecompressedBudget<'a> {
+    #[cfg(test)]
     fn new(limit: u64) -> Self {
-        Self { remaining: limit }
+        Self {
+            remaining: limit,
+            shared: None,
+        }
+    }
+
+    pub(crate) fn shared(budget: &'a crate::extractors::security::ArchiveBudget) -> Self {
+        Self {
+            remaining: budget.remaining_decompressed() as u64,
+            shared: Some(budget),
+        }
     }
 
     fn read_member(
@@ -145,8 +157,16 @@ impl DecompressedBudget {
         let result = io::copy(&mut limited, output);
         // Take tracks successful reads even if a subsequent read fails integrity validation. ~keep
         let consumed = probe_limit - limited.limit();
+        // A rejected overflow probe spends the remaining budget without exceeding it. ~keep
+        let charged = consumed.min(self.remaining);
+        self.remaining -= charged;
+        if let Some(shared) = self.shared {
+            shared
+                .charge_decompressed(charged as usize)
+                .map_err(|error| crate::error::XbergError::validation(error.to_string()))?;
+        }
         if consumed > cap {
-            let limit_name = if content_limit.is_some_and(|limit| limit <= self.remaining) {
+            let limit_name = if content_limit.is_some_and(|limit| limit <= cap) {
                 "max_content_size"
             } else {
                 "max_archive_size"
@@ -155,7 +175,6 @@ impl DecompressedBudget {
                 "Archive member '{member}' exceeds {limit_name} while reading ({cap} bytes available)"
             )));
         }
-        self.remaining -= consumed;
         Ok(result.map(|_| ()))
     }
 }

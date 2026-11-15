@@ -96,7 +96,11 @@ pub(crate) fn extract_zip_metadata(bytes: &[u8], limits: &SecurityLimits) -> Res
 /// # Errors
 ///
 /// Returns an error if the ZIP archive cannot be read or parsed.
-pub(crate) fn extract_zip_text_content(bytes: &[u8], limits: &SecurityLimits) -> Result<AHashMap<String, String>> {
+pub(crate) fn extract_zip_text_content(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+    budget: &mut DecompressedBudget<'_>,
+) -> Result<AHashMap<String, String>> {
     let cursor = Cursor::new(bytes);
     let mut archive =
         ZipArchive::new(cursor).map_err(|e| XbergError::parsing(format!("Failed to read ZIP archive: {}", e)))?;
@@ -112,7 +116,6 @@ pub(crate) fn extract_zip_text_content(bytes: &[u8], limits: &SecurityLimits) ->
     let estimated_text_files = archive.len().saturating_mul(3).saturating_div(10).max(2);
     let mut contents = AHashMap::with_capacity(estimated_text_files);
     let mut total_content_size = 0u64;
-    let mut budget = DecompressedBudget::new(limits.max_archive_size as u64);
 
     for i in 0..archive.len() {
         // A member that cannot be opened (encrypted, or compressed with a method this build
@@ -172,7 +175,11 @@ pub(crate) fn extract_zip_text_content(bytes: &[u8], limits: &SecurityLimits) ->
 /// # Errors
 ///
 /// Returns an error if the ZIP archive cannot be read or if security limits are exceeded.
-pub(crate) fn extract_zip_file_bytes(bytes: &[u8], limits: &SecurityLimits) -> Result<AHashMap<String, Vec<u8>>> {
+pub(crate) fn extract_zip_file_bytes(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+    budget: &mut DecompressedBudget<'_>,
+) -> Result<AHashMap<String, Vec<u8>>> {
     let cursor = Cursor::new(bytes);
     let mut archive =
         ZipArchive::new(cursor).map_err(|e| XbergError::parsing(format!("Failed to read ZIP archive: {}", e)))?;
@@ -186,7 +193,6 @@ pub(crate) fn extract_zip_file_bytes(bytes: &[u8], limits: &SecurityLimits) -> R
     }
 
     let mut file_bytes = AHashMap::with_capacity(archive.len());
-    let mut budget = DecompressedBudget::new(limits.max_archive_size as u64);
 
     for i in 0..archive.len() {
         // Skipped like an unreadable member; see `extract_zip_text_content`. ~keep
@@ -210,8 +216,11 @@ pub(crate) fn extract_zip_file_bytes(bytes: &[u8], limits: &SecurityLimits) -> R
         }
 
         let mut content = Vec::new();
-        if budget.read_member(&mut file, &mut content, None, &path)?.is_ok() {
-            file_bytes.insert(path, content);
+        match budget.read_member(&mut file, &mut content, None, &path)? {
+            Ok(()) => {
+                file_bytes.insert(path, content);
+            }
+            Err(error) => tracing::warn!(member = %path, %error, "skipping ZIP member: read failed"),
         }
     }
 

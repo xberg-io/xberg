@@ -90,7 +90,11 @@ pub(crate) fn extract_7z_metadata(bytes: &[u8], limits: &SecurityLimits) -> Resu
 /// # Errors
 ///
 /// Returns an error if the 7z archive cannot be read or parsed.
-pub(crate) fn extract_7z_text_content(bytes: &[u8], limits: &SecurityLimits) -> Result<AHashMap<String, String>> {
+pub(crate) fn extract_7z_text_content(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+    budget: &mut DecompressedBudget<'_>,
+) -> Result<AHashMap<String, String>> {
     let cursor = Cursor::new(bytes);
     let mut archive = ArchiveReader::new(cursor, Password::empty())
         .map_err(|e| XbergError::parsing(format!("Failed to read 7z archive: {}", e)))?;
@@ -105,34 +109,30 @@ pub(crate) fn extract_7z_text_content(bytes: &[u8], limits: &SecurityLimits) -> 
 
     let mut contents = AHashMap::new();
     let mut total_content_size = 0u64;
-    let mut budget = DecompressedBudget::new(limits.max_archive_size as u64);
 
-    archive
-        .for_each_entries_with_decision_allowing_surplus(|entry, reader| {
-            let path = entry.name();
-            if entry.is_directory() || !TEXT_EXTENSIONS.iter().any(|ext| path.to_lowercase().ends_with(ext)) {
-                budget
-                    .read_member(reader, &mut io::sink(), None, path)
-                    .map_err(entry_error)??;
-                return Ok(EntryDecision::Continue);
-            }
+    let mut member_error = None;
+    let entries = archive.for_each_entries_with_decision_allowing_surplus(|entry, reader| {
+        let path = entry.name();
+        if entry.is_directory() || !TEXT_EXTENSIONS.iter().any(|ext| path.to_lowercase().ends_with(ext)) {
+            read_member(budget, reader, &mut io::sink(), None, path, &mut member_error)?;
+            return Ok(EntryDecision::Continue);
+        }
 
-            let mut content = Vec::new();
-            let cap = limits.max_content_size as u64;
-            budget
-                .read_member(reader, &mut content, Some(cap), path)
-                .map_err(entry_error)??;
-            let text = super::decode_archive_text(&content, path);
-            total_content_size = total_content_size
-                .checked_add(text.len() as u64)
-                .ok_or_else(|| sevenz_rust2::Error::Other("Archive decoded text size overflows u64".into()))?;
-            if total_content_size > cap {
-                return Ok(EntryDecision::Stop);
-            }
-            contents.insert(path.to_owned(), text);
-            Ok(EntryDecision::Continue)
-        })
-        .map_err(|e| XbergError::parsing(format!("Failed to read 7z entries: {e}")))?;
+        let mut content = Vec::new();
+        let cap = limits.max_content_size as u64;
+        read_member(budget, reader, &mut content, Some(cap), path, &mut member_error)?;
+        let text = super::decode_archive_text(&content, path);
+        total_content_size = total_content_size.saturating_add(text.len() as u64);
+        if total_content_size > cap {
+            return Ok(EntryDecision::Stop);
+        }
+        contents.insert(path.to_owned(), text);
+        Ok(EntryDecision::Continue)
+    });
+    if let Some(error) = member_error {
+        return Err(error);
+    }
+    entries.map_err(|e| XbergError::parsing(format!("Failed to read 7z entries: {e}")))?;
 
     if total_content_size > limits.max_content_size as u64 {
         return Err(XbergError::validation(format!(
@@ -157,7 +157,11 @@ pub(crate) fn extract_7z_text_content(bytes: &[u8], limits: &SecurityLimits) -> 
 /// # Errors
 ///
 /// Returns an error if the 7z archive cannot be read or if security limits are exceeded.
-pub(crate) fn extract_7z_file_bytes(bytes: &[u8], limits: &SecurityLimits) -> Result<AHashMap<String, Vec<u8>>> {
+pub(crate) fn extract_7z_file_bytes(
+    bytes: &[u8],
+    limits: &SecurityLimits,
+    budget: &mut DecompressedBudget<'_>,
+) -> Result<AHashMap<String, Vec<u8>>> {
     let cursor = Cursor::new(bytes);
     let mut archive = ArchiveReader::new(cursor, Password::empty())
         .map_err(|e| XbergError::parsing(format!("Failed to read 7z archive: {}", e)))?;
@@ -171,31 +175,46 @@ pub(crate) fn extract_7z_file_bytes(bytes: &[u8], limits: &SecurityLimits) -> Re
     }
 
     let mut file_bytes = AHashMap::new();
-    let mut budget = DecompressedBudget::new(limits.max_archive_size as u64);
 
-    archive
-        .for_each_entries_with_decision_allowing_surplus(|entry, reader| {
-            let path = entry.name();
-            if entry.is_directory() {
-                budget
-                    .read_member(reader, &mut io::sink(), None, path)
-                    .map_err(entry_error)??;
-            } else {
-                let mut content = Vec::new();
-                budget
-                    .read_member(reader, &mut content, None, path)
-                    .map_err(entry_error)??;
-                file_bytes.insert(path.to_owned(), content);
-            }
-            Ok(EntryDecision::Continue)
-        })
-        .map_err(|e| XbergError::parsing(format!("Failed to read 7z entries: {e}")))?;
+    let mut member_error = None;
+    let entries = archive.for_each_entries_with_decision_allowing_surplus(|entry, reader| {
+        let path = entry.name();
+        if entry.is_directory() {
+            read_member(budget, reader, &mut io::sink(), None, path, &mut member_error)?;
+        } else {
+            let mut content = Vec::new();
+            read_member(budget, reader, &mut content, None, path, &mut member_error)?;
+            file_bytes.insert(path.to_owned(), content);
+        }
+        Ok(EntryDecision::Continue)
+    });
+    if let Some(error) = member_error {
+        return Err(error);
+    }
+    entries.map_err(|e| XbergError::parsing(format!("Failed to read 7z entries: {e}")))?;
 
     Ok(file_bytes)
 }
 
-fn entry_error(error: XbergError) -> sevenz_rust2::Error {
-    sevenz_rust2::Error::Other(error.to_string().into())
+fn read_member(
+    budget: &mut DecompressedBudget<'_>,
+    reader: impl io::Read,
+    output: &mut impl io::Write,
+    cap: Option<u64>,
+    path: &str,
+    member_error: &mut Option<XbergError>,
+) -> std::result::Result<(), sevenz_rust2::Error> {
+    let error = match budget.read_member(reader, output, cap, path) {
+        Ok(Ok(())) => return Ok(()),
+        Ok(Err(error)) => XbergError::Io(io::Error::new(
+            error.kind(),
+            format!("Failed to read 7z member '{path}': {error}"),
+        )),
+        Err(error) => error,
+    };
+    // The decoder callback has its own error type; return the original error after it aborts. ~keep
+    *member_error = Some(error);
+    Err(sevenz_rust2::Error::Other("7z member read failed".into()))
 }
 
 #[cfg(test)]
@@ -239,9 +258,14 @@ mod tests {
             ..SecurityLimits::default()
         };
 
-        let result = extract_7z_text_content(&bytes, &limits);
+        let result = extract_7z_text_content(
+            &bytes,
+            &limits,
+            &mut DecompressedBudget::new(limits.max_archive_size as u64),
+        );
 
         let error = result.expect_err("a member whose decoded size dwarfs max_content_size must be rejected");
+        assert!(matches!(error, XbergError::Validation { .. }));
         let message = error.to_string();
         assert!(
             message.contains("huge.txt"),
@@ -276,7 +300,11 @@ mod tests {
             ..SecurityLimits::default()
         };
 
-        let result = extract_7z_file_bytes(&bytes, &limits);
+        let result = extract_7z_file_bytes(
+            &bytes,
+            &limits,
+            &mut DecompressedBudget::new(limits.max_archive_size as u64),
+        );
 
         let error = result.expect_err("a member whose decoded size dwarfs max_archive_size must be rejected");
         let message = error.to_string();

@@ -3,9 +3,9 @@
 use crate::Result;
 use crate::core::config::ExtractionConfig;
 use crate::extraction::archive::{
-    ArchiveMetadata as ExtractedMetadata, extract_7z_file_bytes, extract_7z_metadata, extract_7z_text_content,
-    extract_gzip_with_bytes, extract_tar_file_bytes, extract_tar_metadata, extract_tar_text_content,
-    extract_zip_file_bytes, extract_zip_metadata, extract_zip_text_content,
+    ArchiveMetadata as ExtractedMetadata, DecompressedBudget, extract_7z_file_bytes, extract_7z_metadata,
+    extract_7z_text_content, extract_gzip_with_bytes, extract_tar_file_bytes, extract_tar_metadata,
+    extract_tar_text_content, extract_zip_file_bytes, extract_zip_metadata, extract_zip_text_content,
 };
 use crate::extractors::security::{ArchiveBudget, SecurityLimits, ZipBombValidator};
 use crate::plugins::{InternalDocumentExtractor, Plugin};
@@ -146,6 +146,8 @@ fn is_archive_metadata_path(path: &str) -> bool {
 /// `security_limits` when this is the outermost archive. `max_archive_size` is lowered to
 /// what that budget has left, so a nested container's reads stop where the whole
 /// extraction's budget ends instead of getting the full limit again.
+/// Raw and text scans both spend this budget when they read member bytes again.
+/// Metadata scans and text decoded directly from an existing buffer do not spend it.
 fn budgeted_limits(config: &ExtractionConfig) -> (SecurityLimits, Arc<ArchiveBudget>) {
     let mut limits = config.security_limits.clone().unwrap_or_default();
     let budget = config
@@ -154,16 +156,6 @@ fn budgeted_limits(config: &ExtractionConfig) -> (SecurityLimits, Arc<ArchiveBud
         .unwrap_or_else(|| Arc::new(ArchiveBudget::new(&limits)));
     limits.max_archive_size = limits.max_archive_size.min(budget.remaining_decompressed());
     (limits, budget)
-}
-
-/// Charge the bytes decompressed out of this container against the shared budget.
-fn charge_decompressed(budget: &ArchiveBudget, file_bytes: &AHashMap<String, Vec<u8>>) -> Result<()> {
-    let total = file_bytes
-        .values()
-        .fold(0usize, |total, bytes| total.saturating_add(bytes.len()));
-    budget
-        .charge_decompressed(total)
-        .map_err(|e| crate::error::XbergError::validation(e.to_string()))
 }
 
 /// What an archive reader pulled out of the container: entry index, decoded text and raw bytes.
@@ -390,9 +382,9 @@ impl InternalDocumentExtractor for ZipExtractor {
             .map_err(|e| crate::error::XbergError::validation(e.to_string()))?;
 
         let extraction_metadata = extract_zip_metadata(content, &limits)?;
-        let file_bytes = extract_zip_file_bytes(content, &limits)?;
-        charge_decompressed(&budget, &file_bytes)?;
-        let text_contents = extract_zip_text_content(content, &limits)?;
+        let mut decoder_budget = DecompressedBudget::shared(&budget);
+        let file_bytes = extract_zip_file_bytes(content, &limits, &mut decoder_budget)?;
+        let text_contents = extract_zip_text_content(content, &limits, &mut decoder_budget)?;
         Ok(build_archive_doc(
             ArchiveContents {
                 extraction_metadata,
@@ -473,9 +465,9 @@ impl InternalDocumentExtractor for TarExtractor {
     ) -> Result<InternalDocument> {
         let (limits, budget) = budgeted_limits(config);
         let extraction_metadata = extract_tar_metadata(content, &limits)?;
-        let file_bytes = extract_tar_file_bytes(content, &limits)?;
-        charge_decompressed(&budget, &file_bytes)?;
-        let text_contents = extract_tar_text_content(content, &limits)?;
+        let mut decoder_budget = DecompressedBudget::shared(&budget);
+        let file_bytes = extract_tar_file_bytes(content, &limits, &mut decoder_budget)?;
+        let text_contents = extract_tar_text_content(content, &limits, &mut decoder_budget)?;
         Ok(build_archive_doc(
             ArchiveContents {
                 extraction_metadata,
@@ -561,9 +553,9 @@ impl InternalDocumentExtractor for SevenZExtractor {
     ) -> Result<InternalDocument> {
         let (limits, budget) = budgeted_limits(config);
         let extraction_metadata = extract_7z_metadata(content, &limits)?;
-        let file_bytes = extract_7z_file_bytes(content, &limits)?;
-        charge_decompressed(&budget, &file_bytes)?;
-        let text_contents = extract_7z_text_content(content, &limits)?;
+        let mut decoder_budget = DecompressedBudget::shared(&budget);
+        let file_bytes = extract_7z_file_bytes(content, &limits, &mut decoder_budget)?;
+        let text_contents = extract_7z_text_content(content, &limits, &mut decoder_budget)?;
         Ok(build_archive_doc(
             ArchiveContents {
                 extraction_metadata,
@@ -643,8 +635,9 @@ impl InternalDocumentExtractor for GzipExtractor {
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
         let (limits, budget) = budgeted_limits(config);
-        let (extraction_metadata, text_contents, file_bytes) = extract_gzip_with_bytes(content, &limits)?;
-        charge_decompressed(&budget, &file_bytes)?;
+        let mut decoder_budget = DecompressedBudget::shared(&budget);
+        let (extraction_metadata, text_contents, file_bytes) =
+            extract_gzip_with_bytes(content, &limits, &mut decoder_budget)?;
         Ok(build_archive_doc(
             ArchiveContents {
                 extraction_metadata,
