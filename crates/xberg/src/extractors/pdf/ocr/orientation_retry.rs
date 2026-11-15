@@ -32,6 +32,8 @@ pub(crate) fn recognition_retry_eligible(config: &OcrConfig) -> bool {
 #[derive(Clone, Copy)]
 pub(crate) enum RecognitionRecovery {
     Table,
+    #[cfg(feature = "layout-detection")]
+    LayoutTable,
     TableOrProse,
     MixedPage {
         allow_prose: bool,
@@ -42,7 +44,12 @@ pub(crate) enum RecognitionRecovery {
 
 impl RecognitionRecovery {
     fn allows_prose(self) -> bool {
-        !matches!(self, Self::Table | Self::MixedPage { allow_prose: false })
+        match self {
+            #[cfg(feature = "layout-detection")]
+            Self::LayoutTable => false,
+            Self::Table | Self::MixedPage { allow_prose: false } => false,
+            _ => true,
+        }
     }
 
     fn prose_only(self) -> bool {
@@ -177,6 +184,14 @@ impl OrientationRetry {
                 .after_recognition(backend, raster, config, original, cancel, recovery)
                 .await?;
             check_cancelled(cancel)?;
+            // ~keep A following TATR pass owns the effective word capture. The PDF pipeline
+            // still applies the caller's public OCR-element policy when it emits the page.
+            #[cfg(feature = "layout-detection")]
+            let requested = if matches!(recovery, RecognitionRecovery::LayoutTable) {
+                config
+            } else {
+                requested
+            };
             return Ok(recognition::restore_elements(result, requested));
         }
         #[cfg(auto_rotate)]

@@ -6322,6 +6322,21 @@ pub(super) async fn extract_with_ocr_for_page(
                 {
                     recognition_recovery = super::orientation_retry::RecognitionRecovery::Table;
                 }
+                #[cfg(all(feature = "ocr", feature = "layout-detection", not(target_arch = "wasm32")))]
+                if matches!(
+                    recognition_recovery,
+                    super::orientation_retry::RecognitionRecovery::Table
+                ) && tatr_model.is_some()
+                    && layout_detections
+                        .and_then(|pages| pages.get(*page_idx))
+                        .is_some_and(|page| {
+                            page.detections
+                                .iter()
+                                .any(crate::ocr::layout_assembly::can_recognize_table_region)
+                        })
+                {
+                    recognition_recovery = super::orientation_retry::RecognitionRecovery::LayoutTable;
+                }
                 #[cfg(feature = "ocr")]
                 let caption_raster =
                     (capture_caption && retry.is_some() && page_rotation_degrees == 0 && correction_degrees == 0).then(

@@ -313,3 +313,41 @@ fn survey_html(content: &str) -> &str {
     assert_eq!(tables.len(), 2);
     tables[1].split_once("</table>").expect("complete survey HTML table").0
 }
+
+#[cfg(all(feature = "layout-detection", feature = "ocr", feature = "tokio-runtime"))]
+#[test]
+#[ignore = "requires the pinned public ParseBench PDF and provisioned RT-DETR, TATR, and Tesseract models"]
+fn forced_ocr_tatr_owns_words_without_exposing_ocr_elements() {
+    let directory =
+        std::env::var_os("XBERG_2332_PARSEBENCH_INPUTS").expect("set the pinned ParseBench input directory");
+    let path = std::path::Path::new(&directory).join("7d6a55d4b9bf0316f7eb.pdf");
+    assert_eq!(
+        hex::encode(Sha256::digest(std::fs::read(&path).unwrap())),
+        "d9b147dc465a8812de2600d707b67d36d3119e324949ed458d735afd8c33c722"
+    );
+    let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
+        "output_format": "html",
+        "use_cache": false,
+        "force_ocr": true,
+        "disable_ocr": false,
+        "enable_quality_processing": false,
+        "ocr": {
+            "backend": "tesseract",
+            "language": ["eng"],
+            "tesseract_config": {"language": ["eng"], "use_cache": false}
+        },
+        "concurrency": {"max_threads": 1},
+        "layout": {"strategy": "always", "table_model": "tatr", "acceleration": {"provider": "cpu"}}
+    }))
+    .unwrap();
+    let result = extract_uri_document_blocking(&path, None, &config).unwrap();
+    assert!(result.ocr_elements.as_ref().is_none_or(Vec::is_empty));
+    let [table] = result.tables.as_slice() else {
+        panic!("expected the forced OCR rate table, got {}", result.tables.len());
+    };
+    assert_eq!(table.cells.len(), 6);
+    assert!(table.cells.iter().all(|row| row.len() == 12));
+    assert_eq!(&table.cells[1][..4], &["2008", "$57,951", "1,022,724", "645,075"]);
+    assert_eq!(table.cells[5][0], "2012 Total");
+    assert_eq!(result.content.matches("<table").count(), 1);
+}
