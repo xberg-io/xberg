@@ -1686,6 +1686,21 @@ let output = extract(ExtractInput::from_uri("scanned.pdf"), &config).await?;
 </TabItem>
 </Tabs>
 
+### Opt-in recovery for ruled JPEG tables
+
+For eligible upright JPEGs, PaddleOCR can recover numeric punctuation and adjacent values that were joined during
+table reconstruction. This path requires English, PP-OCRv6 Small, ONNX Runtime, and PaddleOCR table detection.
+Disable automatic rotation and the angle classifier for this path.
+
+| `ocr.backend_options` key | Behavior |
+| --- | --- |
+| `paddle_ruled_punctuation` | Reread source-owned numeric crops and repair a comma or period when the image geometry and two reads agree. |
+| `paddle_ruled_row_recovery` | Split a joined table cell when two independently detected numeric values belong to adjacent source columns. |
+| `paddle_ruled_word_recovery` | With row recovery enabled, also use source-owned word boxes from a fused detector line. |
+
+All three switches default to `false`. Row and word recovery preserve recognized tokens. Punctuation recovery
+can change a recognized comma or period. These switches leave Tesseract, scan routing and Plain rendering defaults unchanged.
+
 ### PaddleOCR-VL 1.6 (candle backend)
 
 The `candle-paddleocr-vl` backend now defaults to PaddleOCR-VL 1.6 (SigLIP vision encoder + Ernie-4.5 text decoder), auto-downloading `xberg-io/paddleocr-vl-1.6` — a checksum-pinned mirror of `PaddlePaddle/PaddleOCR-VL-1.6` — on first use. It runs one of four tasks via `backend_options.task`: `ocr` (default), `table`, `formula`, or `chart`. See [Candle PaddleOCR-VL](#candle-paddleocr-vl) above for installation and usage.
