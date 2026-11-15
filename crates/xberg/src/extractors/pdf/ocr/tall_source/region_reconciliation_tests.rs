@@ -395,3 +395,31 @@ fn caller_projection_records_split_blocks_without_claiming_table_or_annotation_b
         "table\n\nView\n\nthe blog\n\nAnnotations:\nwi"
     );
 }
+
+fn frozen_page_four_crop(extra_ink: Option<RegionBox>, protected: &[RegionBox]) -> Option<RegionBox> {
+    let frame = rect([0, 0, 1856, 12303]);
+    let stock = rect([345, 1588, 787, 1674]);
+    let native_ink = rect([358, 1627, 789, 1648]);
+    select_full_line_crop(frame, stock, protected, |x, y| {
+        let pixel = rect([x, y, x + 1, y + 1]);
+        native_ink.contains(pixel) || extra_ink.is_some_and(|bounds| bounds.contains(pixel))
+    })
+}
+
+#[test]
+fn full_line_crop_derives_native_bounds_from_page_four_geometry() {
+    let crop = frozen_page_four_crop(None, &[rect([357, 1757, 1337, 1905])]).unwrap();
+    assert_eq!([crop.left, crop.top, crop.right, crop.bottom], [358, 1627, 789, 1648]);
+}
+
+#[test]
+fn full_line_crop_declines_competing_ink_line() {
+    assert!(frozen_page_four_crop(Some(rect([358, 1600, 755, 1612])), &[]).is_none());
+}
+
+#[test]
+fn full_line_crop_declines_competing_owner_or_table_overlap() {
+    for overlap in [rect([361, 1630, 459, 1647]), rect([357, 1640, 1337, 1905])] {
+        assert!(frozen_page_four_crop(None, &[overlap]).is_none());
+    }
+}

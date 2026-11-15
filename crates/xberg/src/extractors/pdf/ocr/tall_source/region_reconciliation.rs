@@ -49,6 +49,71 @@ impl RegionBox {
     }
 }
 
+/// Locate one complete ink band around the projected bounds of a selected stock line. ~keep
+pub(super) fn select_full_line_crop(
+    frame: RegionBox,
+    stock: RegionBox,
+    protected: &[RegionBox],
+    mut ink: impl FnMut(u32, u32) -> bool,
+) -> Option<RegionBox> {
+    const SEARCH_MARGIN: u32 = 16;
+    const MAX_SEARCH_PIXELS: u32 = 64 * 1024;
+    if !frame.contains(stock) || protected.len() > MAX_PROTECTED_BOXES {
+        return None;
+    }
+    let search = RegionBox {
+        left: stock.left.checked_sub(SEARCH_MARGIN)?,
+        top: stock.top.checked_sub(SEARCH_MARGIN)?,
+        right: stock.right.checked_add(SEARCH_MARGIN)?,
+        bottom: stock.bottom.checked_add(SEARCH_MARGIN)?,
+    };
+    if !frame.contains(search)
+        || (search.right - search.left).checked_mul(search.bottom - search.top)? > MAX_SEARCH_PIXELS
+    {
+        return None;
+    }
+    let mut band: Option<RegionBox> = None;
+    for y in search.top..search.bottom {
+        let row = (search.left..search.right).filter(|&x| ink(x, y));
+        let Some((left, right)) = ink_row_bounds(row) else {
+            continue;
+        };
+        if left == search.left || right == search.right || y == search.top || y + 1 == search.bottom {
+            return None;
+        }
+        band = Some(match band {
+            Some(previous) if previous.bottom == y => RegionBox {
+                left: previous.left.min(left),
+                right: previous.right.max(right),
+                bottom: y + 1,
+                ..previous
+            },
+            Some(_) => return None,
+            None => RegionBox {
+                left,
+                top: y,
+                right,
+                bottom: y + 1,
+            },
+        });
+    }
+    let band = band?;
+    let (overlap, _) = band.overlap(stock);
+    (stock.top <= band.top
+        && band.bottom <= stock.bottom
+        && overlap >= (stock.right - stock.left).div_ceil(2)
+        && overlap >= (band.right - band.left).div_ceil(2)
+        && protected
+            .iter()
+            .all(|&bounds| bounds.valid() && !band.intersects(bounds)))
+    .then_some(band)
+}
+
+fn ink_row_bounds(mut ink: impl DoubleEndedIterator<Item = u32>) -> Option<(u32, u32)> {
+    let left = ink.next()?;
+    Some((left, ink.next_back().unwrap_or(left) + 1))
+}
+
 pub(super) struct StockWord<'a> {
     pub(super) transcript_bytes: Option<Range<usize>>,
     pub(super) text: &'a str,
