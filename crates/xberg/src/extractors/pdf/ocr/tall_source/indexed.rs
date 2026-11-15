@@ -115,7 +115,7 @@ fn palette(source: &PdfDocument, resources: &Object, color: &Object, available: 
 }
 
 pub(super) fn is_indexed_rgb_scan(attempt: &super::Attempt<'_>) -> bool {
-    indexed_image(attempt)
+    indexed_image(attempt, None)
         .and_then(|image| image.admit_palette(attempt.document))
         .is_some()
 }
@@ -134,7 +134,7 @@ struct IndexedImage {
     dpi: f64,
 }
 
-fn indexed_image(attempt: &super::Attempt<'_>) -> Option<IndexedImage> {
+fn indexed_image(attempt: &super::Attempt<'_>, selected_width: Option<u32>) -> Option<IndexedImage> {
     let (raster_w, raster_h, raster_png) = attempt.raster?;
     let raster = (raster_w as usize)
         .checked_mul(raster_h as usize)?
@@ -179,7 +179,11 @@ fn indexed_image(attempt: &super::Attempt<'_>) -> Option<IndexedImage> {
     let width = u32::try_from(dict.get("Width")?.as_integer()?).ok()?;
     let height = u32::try_from(dict.get("Height")?.as_integer()?).ok()?;
     let pixels = (width as usize).checked_mul(height as usize)?;
-    if width > MAX_TILE_SIDE || height <= MAX_TILE_SIDE || pixels > MAX_SOURCE_PIXELS || width <= raster_w {
+    if width > MAX_TILE_SIDE
+        || height <= MAX_TILE_SIDE
+        || pixels > MAX_SOURCE_PIXELS
+        || width <= selected_width.unwrap_or(raster_w)
+    {
         return None;
     }
     let dpi = placement_fits(frame, (width, height), (painted_w, painted_height))?;
@@ -207,7 +211,11 @@ impl IndexedImage {
 
 impl IndexedSource {
     pub(super) fn load(attempt: &super::Attempt<'_>) -> Option<Self> {
-        let image = indexed_image(attempt)?;
+        Self::load_with_selected_width(attempt, None)
+    }
+
+    pub(super) fn load_with_selected_width(attempt: &super::Attempt<'_>, selected_width: Option<u32>) -> Option<Self> {
+        let image = indexed_image(attempt, selected_width)?;
         let palette = image.admit_palette(attempt.document)?;
         let IndexedImage {
             frame,
@@ -659,6 +667,41 @@ impl IndexedSource {
         })
     }
 
+    pub(super) fn line_ink_fully_covered(
+        &self,
+        region: super::region_reconciliation::RegionBox,
+        boxes: &[super::region_reconciliation::RegionBox],
+    ) -> bool {
+        const MAX_SCAN_PIXELS: u32 = 64 * 1024;
+        if region.left >= region.right
+            || region.top >= region.bottom
+            || region.right > self.width
+            || region.bottom > self.height
+            || (region.right - region.left)
+                .checked_mul(region.bottom - region.top)
+                .is_none_or(|pixels| pixels > MAX_SCAN_PIXELS)
+        {
+            return false;
+        }
+        let mut found = false;
+        for y in region.top..region.bottom {
+            let row_start = y as usize * self.width as usize;
+            for x in region.left..region.right {
+                if !self.sample_has_ink(self.indices[row_start + x as usize]) {
+                    continue;
+                }
+                if !boxes
+                    .iter()
+                    .any(|bounds| bounds.left <= x && x < bounds.right && bounds.top <= y && y < bounds.bottom)
+                {
+                    return false;
+                }
+                found = true;
+            }
+        }
+        found
+    }
+
     pub(super) fn certify_line_ink(
         &self,
         hull: super::region_reconciliation::RegionBox,
@@ -775,6 +818,68 @@ fn ink_bands<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn agreed_collapsed_reads_cannot_omit_source_ink_at_an_edge() {
+        use super::super::{
+            region_probe::{RegionWord, collapsed_read_covers_ink},
+            region_reconciliation::RegionBox,
+        };
+        let mut palette = [255; PALETTE_BYTES];
+        palette[..3].fill(0);
+        let mut indices = vec![1; 32 * 16];
+        for y in 5..11 {
+            indices[y * 32 + 4..y * 32 + 11].fill(0);
+            indices[y * 32 + 15..y * 32 + 24].fill(0);
+        }
+        let source = IndexedSource {
+            width: 32,
+            height: 16,
+            dpi: 72.0,
+            frame: Rect::new(0.0, 0.0, 32.0, 16.0),
+            painted_height: 16.0,
+            painted_width: 32.0,
+            indices,
+            palette,
+            available: FIXED_WORK_BYTES,
+        };
+        let region = RegionBox {
+            left: 3,
+            top: 4,
+            right: 25,
+            bottom: 12,
+        };
+        let read = |left, top| {
+            [
+                RegionWord {
+                    text: "First".into(),
+                    confidence: 99.0,
+                    bounds: RegionBox {
+                        left,
+                        top,
+                        right: 11,
+                        bottom: 11,
+                    },
+                },
+                RegionWord {
+                    text: "Second".into(),
+                    confidence: 99.0,
+                    bounds: RegionBox {
+                        left: 15,
+                        top: 5,
+                        right: 24,
+                        bottom: 11,
+                    },
+                },
+            ]
+        };
+        for words in [read(5, 6), read(5, 6)] {
+            assert!(collapsed_read_covers_ink(&source, region, &words));
+        }
+        for words in [read(10, 5), read(10, 5), read(4, 8)] {
+            assert!(!collapsed_read_covers_ink(&source, region, &words));
+        }
+    }
 
     #[test]
     fn owned_gap_scan_rejects_same_height_sidebar_panel() {
@@ -992,11 +1097,11 @@ mod tests {
             max_strips: 4,
             cancel: None,
         };
-        let image = indexed_image(&attempt).expect("single supported indexed frame");
+        let image = indexed_image(&attempt, None).expect("single supported indexed frame");
         assert!(IndexedSource::load(&attempt).is_some());
         assert!(is_indexed_rgb_scan(&attempt));
         attempt.byte_limit -= image.available;
-        assert_eq!(indexed_image(&attempt).unwrap().available, 0);
+        assert_eq!(indexed_image(&attempt, None).unwrap().available, 0);
         assert!(IndexedSource::load(&attempt).is_none());
         assert!(!is_indexed_rgb_scan(&attempt));
     }
