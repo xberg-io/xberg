@@ -70,13 +70,23 @@ pub(super) fn median_height(baseline: &[Word<'_>]) -> f64 {
     }
 }
 
+#[cfg(test)]
 pub(super) fn unique_partners(baseline: &[Word<'_>], candidate: &[Word<'_>]) -> Vec<Option<usize>> {
+    geometric_partners(baseline, candidate, |_, _| {})
+}
+
+pub(super) fn geometric_partners(
+    baseline: &[Word<'_>],
+    candidate: &[Word<'_>],
+    mut record_claim: impl FnMut(usize, usize),
+) -> Vec<Option<usize>> {
     let mut incoming = vec![0u8; candidate.len()];
     let mut outgoing = vec![None; baseline.len()];
     for (i, old) in baseline.iter().enumerate() {
         let mut count = 0u8;
         for (j, new) in candidate.iter().enumerate() {
             if majority_overlap(old.bounds, new.bounds) {
+                record_claim(i, j);
                 incoming[j] = incoming[j].saturating_add(1);
                 count = count.saturating_add(1);
                 outgoing[i] = Some(j);

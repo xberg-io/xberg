@@ -5,9 +5,9 @@ use super::{
 use crate::{
     cancellation::CancellationToken,
     pdf::structure::types::{LayoutHintClass, PdfLine, PdfParagraph},
-    types::{ExtractedDocument, OcrElementLevel},
+    types::ExtractedDocument,
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Range};
 
 #[derive(Debug)]
 struct RankedLine {
@@ -65,7 +65,12 @@ fn retained_order_improves(old: &[Word<'_>], new: &[Word<'_>], frame: (u32, u32)
     shared.len() * 100 >= old.len() * 92 && jumps >= MIN_GUTTER_JUMPS && interleaving(new, frame) * 100 <= jumps * 45
 }
 
-fn complete_line_owners(read: &ExtractedDocument, words: &[Word<'_>]) -> Option<Vec<Option<usize>>> {
+struct LineOwners {
+    by_word: Vec<Option<usize>>,
+    spans: Vec<Option<Range<usize>>>,
+}
+
+fn complete_line_owners(read: &ExtractedDocument, words: &[Word<'_>]) -> Option<LineOwners> {
     let elements = read.ocr_elements.as_ref()?;
     let slots = line_slots(read, words)?;
     let mut owners = vec![Vec::new(); elements.len()];
@@ -74,7 +79,8 @@ fn complete_line_owners(read: &ExtractedDocument, words: &[Word<'_>]) -> Option<
             owners[slot.element].push((word, slot.range.clone()));
         }
     }
-    let mut result = vec![None; words.len()];
+    let mut by_word = vec![None; words.len()];
+    let mut spans = vec![None; elements.len()];
     for (index, owned) in owners.iter().enumerate() {
         let text = &elements[index].text;
         if owned.is_empty()
@@ -85,11 +91,133 @@ fn complete_line_owners(read: &ExtractedDocument, words: &[Word<'_>]) -> Option<
         {
             continue;
         }
-        for &(word, _) in owned {
-            result[word] = Some(index);
+        let first = owned[0].0;
+        let span = first..first + owned.len();
+        by_word[span.clone()].fill(Some(index));
+        spans[index] = Some(span);
+    }
+    Some(LineOwners { by_word, spans })
+}
+
+#[derive(Clone, Default)]
+struct LineClaims([Option<usize>; 3]);
+
+impl LineClaims {
+    fn record(&mut self, line: usize) {
+        if !self.0.contains(&Some(line))
+            && let Some(slot) = self.0.iter_mut().find(|slot| slot.is_none())
+        {
+            *slot = Some(line);
         }
     }
-    Some(result)
+
+    fn unique(&self) -> Option<usize> {
+        match self.0 {
+            [Some(line), None, None] => Some(line),
+            _ => None,
+        }
+    }
+}
+
+struct OrderEvidence<'a, 'text> {
+    old: &'a [Word<'text>],
+    new: &'a [Word<'text>],
+    source: LineOwners,
+    destination: LineOwners,
+    partners: Vec<Option<usize>>,
+    outgoing: Vec<LineClaims>,
+    incoming: Vec<LineClaims>,
+    votes: Vec<usize>,
+}
+
+impl<'a, 'text> OrderEvidence<'a, 'text> {
+    fn new(old: &'a [Word<'text>], new: &'a [Word<'text>], source: LineOwners, destination: LineOwners) -> Self {
+        // Three distinct claims suffice to reject a rank and keep the witness bounded.
+        let mut outgoing = vec![LineClaims::default(); source.spans.len()];
+        let mut incoming = vec![LineClaims::default(); destination.spans.len()];
+        let partners = column_selection::geometric_partners(old, new, |i, j| {
+            if let (Some(a), Some(b)) = (source.by_word[i], destination.by_word[j]) {
+                outgoing[a].record(b);
+                incoming[b].record(a);
+            }
+        });
+        let mut votes = vec![0; source.spans.len()];
+        for (i, &partner) in partners.iter().enumerate() {
+            let Some(j) = partner else { continue };
+            if let (Some(a), Some(b)) = (source.by_word[i], destination.by_word[j])
+                && outgoing[a].unique() == Some(b)
+                && old[i].text == new[j].text
+                && strong_overlap(old[i], new[j])
+            {
+                votes[a] += 1;
+            }
+        }
+        Self {
+            old,
+            new,
+            source,
+            destination,
+            partners,
+            outgoing,
+            incoming,
+            votes,
+        }
+    }
+
+    fn exact_suffix(&self, line: usize, rank: usize, prefix: usize, votes: usize) -> Option<()> {
+        let suffix = self.source.spans[line].as_ref()?;
+        let first_word = self.source.spans[prefix].as_ref()?;
+        let target = self.destination.spans[rank].as_ref()?;
+        if votes != suffix.len()
+            || target.len() != suffix.len() + 1
+            || first_word.len() != 1
+            || first_word.end != suffix.start
+            || self.outgoing[prefix].unique() != Some(rank)
+            || self.partners[first_word.start] != Some(target.start)
+            || !self.partners[suffix.clone()]
+                .iter()
+                .copied()
+                .eq((target.start + 1..target.end).map(Some))
+        {
+            return None;
+        }
+        let primary_prefix = self.old[first_word.start];
+        let retry_prefix = self.new[target.start];
+        let suffix_first = self.old[suffix.start];
+        let extension = retry_prefix.text.strip_prefix(primary_prefix.text)?;
+        let [_, top, right, bottom] = primary_prefix.bounds;
+        let [left, suffix_top, _, suffix_bottom] = suffix_first.bounds;
+        let vertical_overlap = bottom.min(suffix_bottom).saturating_sub(top.max(suffix_top));
+        // The prefix retains its own primary rank barrier. Only the disjoint exact suffix supplies votes.
+        (extension.len() == 1
+            && extension.as_bytes()[0].is_ascii_punctuation()
+            && strong_overlap(primary_prefix, retry_prefix)
+            && right <= left
+            && vertical_overlap > (bottom - top).max(suffix_bottom - suffix_top) / 2)
+            .then_some(())
+    }
+
+    fn rank(&self, line: usize) -> Option<usize> {
+        let rank = self.outgoing[line].unique()?;
+        let votes = self.votes[line];
+        if votes < 2 {
+            return None;
+        }
+        match self.incoming[rank].0 {
+            [Some(_), None, None] => Some(rank),
+            [Some(a), Some(b), None] => {
+                let prefix = if a == line { b } else { a };
+                self.exact_suffix(line, rank, prefix, votes)?;
+                Some(rank)
+            }
+            _ => None,
+        }
+    }
+}
+
+fn strong_overlap(old: Word<'_>, new: Word<'_>) -> bool {
+    let (area, before, after) = overlap(old.bounds, new.bounds);
+    area > before.max(after) / 2
 }
 
 fn rank_lines(
@@ -100,35 +228,15 @@ fn rank_lines(
 ) -> Option<Vec<RankedLine>> {
     let source = complete_line_owners(primary, old)?;
     let destination = complete_line_owners(retry, new)?;
+    let evidence = OrderEvidence::new(old, new, source, destination);
     let elements = primary.ocr_elements.as_ref()?;
-    let mut claims_by_source = HashMap::<usize, HashMap<usize, usize>>::new();
-    for (i, counterpart) in column_selection::unique_partners(old, new).into_iter().enumerate() {
-        let Some(j) = counterpart else { continue };
-        let (Some(a), Some(b)) = (source[i], destination[j]) else {
-            continue;
-        };
-        // A unique geometric claim can veto a rank even when the retry misread the word.
-        let votes = claims_by_source.entry(a).or_default().entry(b).or_default();
-        let (area, before, after) = overlap(old[i].bounds, new[j].bounds);
-        if old[i].text == new[j].text && area > before.max(after) / 2 {
-            *votes += 1;
-        }
-    }
-    let mut incoming = HashMap::<usize, usize>::new();
-    for &rank in claims_by_source.values().flat_map(|claims| claims.keys()) {
-        *incoming.entry(rank).or_default() += 1;
-    }
     Some(
-        claims_by_source
-            .into_iter()
-            .filter_map(|(i, claims)| {
-                let (&rank, &count) = claims.iter().next()?;
-                if claims.len() != 1 || count < 2 || incoming[&rank] != 1 {
-                    return None;
-                }
-                let element = &elements[i];
+        (0..elements.len())
+            .filter_map(|line| {
+                let rank = evidence.rank(line)?;
+                let element = &elements[line];
                 let bounds = bounds(element)?;
-                (element.level == OcrElementLevel::Line).then(|| RankedLine {
+                Some(RankedLine {
                     literal: element.text.clone(),
                     bounds,
                     rank,
@@ -247,17 +355,20 @@ mod tests {
 
     #[test]
     fn a_one_vote_source_still_conflicts_with_a_two_vote_merged_retry_line() {
-        assert_competing_line_blocks_merged_retry_line("three");
+        assert_competing_line_blocks_merged_retry_line(&["three"]);
     }
 
     #[test]
     fn a_mismatched_competing_literal_still_conflicts_with_a_two_vote_merged_retry_line() {
-        assert_competing_line_blocks_merged_retry_line("tree");
+        assert_competing_line_blocks_merged_retry_line(&["tree"]);
     }
 
-    fn assert_competing_line_blocks_merged_retry_line(competing_retry_literal: &str) {
-        use crate::types::{ExtractedDocument, OcrConfidence, OcrElement, OcrElementLevel};
+    #[test]
+    fn split_retry_words_still_veto_a_merged_retry_line() {
+        assert_competing_line_blocks_merged_retry_line(&["th", "ree"]);
+    }
 
+    fn assert_competing_line_blocks_merged_retry_line(competing_retry_literals: &[&str]) {
         let words: Vec<_> = ["one", "two", "three", "separate", "line"]
             .into_iter()
             .enumerate()
@@ -271,44 +382,87 @@ mod tests {
                 }
             })
             .collect();
-        let read = |words: &[Word<'_>], ranges: &[std::ops::Range<usize>]| {
-            let mut elements = Vec::new();
-            for range in ranges {
-                let first = words[range.start].bounds;
-                let last = words[range.end - 1].bounds;
-                let text = words[range.clone()]
-                    .iter()
-                    .map(|word| word.text)
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                elements.push(
-                    OcrElement::new(
-                        text,
-                        super::super::rectangle([first[0], first[1], last[2], last[3]]),
-                        OcrConfidence::from_tesseract(100.0),
-                    )
-                    .with_level(OcrElementLevel::Line),
-                );
-            }
-            ExtractedDocument {
-                ocr_elements: Some(elements),
-                ..Default::default()
-            }
-        };
-        let primary = read(&words, &[0..2, 2..3, 3..5]);
-        let mut retry_words = words.clone();
-        retry_words[2].text = competing_retry_literal;
-        let merged = read(&retry_words, &[0..3, 3..5]);
+        let primary = line_read(&words, &[0..2, 2..3, 3..5]);
+        let mut retry_words = words[..2].to_vec();
+        let [left, top, right, bottom] = words[2].bounds;
+        let fragments = competing_retry_literals.len() as u32;
+        for (index, &text) in competing_retry_literals.iter().enumerate() {
+            let index = index as u32;
+            retry_words.push(Word {
+                text,
+                bounds: [
+                    left + (right - left) * index / fragments,
+                    top,
+                    left + (right - left) * (index + 1) / fragments,
+                    bottom,
+                ],
+                confidence: 1.0,
+            });
+        }
+        let end = retry_words.len();
+        retry_words.extend_from_slice(&words[3..]);
+        let merged = line_read(&retry_words, &[0..end, end..retry_words.len()]);
         let unchanged = rank_lines(&primary, &primary, &words, &words).unwrap();
         assert_eq!(unchanged.len(), 2);
         let mut split_words = words.clone();
         split_words[0].text = "won";
-        let split = read(&split_words, &[0..2, 2..3, 3..5]);
+        let split = line_read(&split_words, &[0..2, 2..3, 3..5]);
         assert_eq!(rank_lines(&primary, &split, &words, &split_words).unwrap().len(), 1);
         let actual = rank_lines(&primary, &merged, &words, &retry_words).unwrap();
         assert_eq!(
             actual.iter().map(|line| line.literal.as_str()).collect::<Vec<_>>(),
             ["separate line"]
+        );
+    }
+
+    fn line_read(words: &[Word<'_>], ranges: &[std::ops::Range<usize>]) -> crate::types::ExtractedDocument {
+        use crate::types::{ExtractedDocument, OcrConfidence, OcrElement, OcrElementLevel};
+        let mut elements = Vec::new();
+        for range in ranges {
+            let first = words[range.start].bounds;
+            let last = words[range.end - 1].bounds;
+            let text = words[range.clone()]
+                .iter()
+                .map(|word| word.text)
+                .collect::<Vec<_>>()
+                .join(" ");
+            elements.push(
+                OcrElement::new(
+                    text,
+                    super::super::rectangle([first[0], first[1], last[2], last[3]]),
+                    OcrConfidence::from_tesseract(100.0),
+                )
+                .with_level(OcrElementLevel::Line),
+            );
+        }
+        ExtractedDocument {
+            ocr_elements: Some(elements),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn ranks_an_exact_suffix_after_a_separately_owned_punctuation_prefix() {
+        let words: Vec<_> = ["one", "two", "three"]
+            .into_iter()
+            .enumerate()
+            .map(|(i, text)| {
+                let x = i as u32 * 20;
+                Word {
+                    text,
+                    bounds: [x, 0, x + 12, 10],
+                    confidence: 1.0,
+                }
+            })
+            .collect();
+        let primary = line_read(&words, &[0..1, 1..3]);
+        let mut retry = words.clone();
+        retry[0].text = "one.";
+        let merged = line_read(&retry, &[0..3]);
+        let actual = rank_lines(&primary, &merged, &words, &retry).unwrap();
+        assert_eq!(
+            actual.iter().map(|line| line.literal.as_str()).collect::<Vec<_>>(),
+            ["two three"]
         );
     }
 
