@@ -2,6 +2,7 @@
 
 use crate::types::{BoundingBox, Table};
 use xberg_native_pdf::document::{PageRotation, PdfDocument};
+use xberg_native_pdf::elements::PathContent;
 use xberg_native_pdf::layout::{Color, TextSpan};
 
 const MIN_SCHEMA_COPIES: usize = 3;
@@ -10,6 +11,8 @@ const BODY_WITNESS_ROWS: usize = 3;
 const BASELINE_TOLERANCE: f32 = 0.5;
 const MAX_SOURCE_SPANS: usize = 4096;
 const MAX_SCHEMA_COLUMNS: usize = 64;
+const MIN_GUTTER_ADVANTAGE_PTS: f64 = 0.5;
+const MAX_GUTTER_PATHS: usize = 4096;
 
 pub(crate) struct VerifiedSchema {
     source: Table,
@@ -26,12 +29,14 @@ pub(crate) fn verify(doc: &PdfDocument, native_tables: &[Table], ruled_count: us
     candidates.sort_by_key(|(table, _, _)| table.page_number);
     let mut verified = Vec::new();
     let mut page_spans = None;
+    let mut page_paths = None;
     for (table, width, can_split) in candidates {
         let Some(page) = table.page_number.checked_sub(1).map(|page| page as usize) else {
             continue;
         };
         if page_spans.as_ref().is_none_or(|(last, _)| *last != page) {
             page_spans = Some((page, painting_spans(doc, page)));
+            page_paths = None;
         }
         let Some(spans) = page_spans.as_ref().and_then(|(_, spans)| spans.as_deref()) else {
             continue;
@@ -40,7 +45,11 @@ pub(crate) fn verify(doc: &PdfDocument, native_tables: &[Table], ruled_count: us
             continue;
         };
         let children = if can_split {
-            split_painted_records(table, width, spans, &edges).unwrap_or_default()
+            page_paths
+                .get_or_insert_with(|| doc.extract_paths(page).ok())
+                .as_deref()
+                .and_then(|paths| split_painted_records(table, width, spans, &edges, paths))
+                .unwrap_or_default()
         } else {
             Vec::new()
         };
@@ -436,7 +445,13 @@ fn painted_extent(span: &TextSpan) -> Option<(f32, f32)> {
 }
 
 // ~keep Certify every record against physical baselines and disjoint cell bounds before splitting.
-fn split_painted_records(table: &Table, width: usize, spans: &[TextSpan], edges: &[f32]) -> Option<Vec<Table>> {
+fn split_painted_records(
+    table: &Table,
+    width: usize,
+    spans: &[TextSpan],
+    edges: &[f32],
+    paths: &[PathContent],
+) -> Option<Vec<Table>> {
     if !table.cell_styles.is_empty() {
         return None;
     }
@@ -446,12 +461,11 @@ fn split_painted_records(table: &Table, width: usize, spans: &[TextSpan], edges:
     if bands.len() != table.cells.len() + 1 {
         return None;
     }
-    let count = table.cells[0].len() / width;
-    let mut bounds = vec![None; count];
+    let mut bounds = vec![None; table.cells[0].len()];
     for band in &bands[..2] {
         for span in *band {
             let (column, extent) = span_cell(span, edges)?;
-            include_extent(&mut bounds[column / width], span, extent)?;
+            include_extent(&mut bounds[column], span, extent)?;
         }
     }
     for (band, row) in bands[2..].iter().zip(&table.cells[1..]) {
@@ -463,16 +477,22 @@ fn split_painted_records(table: &Table, width: usize, spans: &[TextSpan], edges:
             if column != expected_column || span.text.trim() != text || !is_numeric(text) {
                 return None;
             }
-            include_extent(&mut bounds[column / width], span, extent)?;
+            include_extent(&mut bounds[column], span, extent)?;
         }
     }
-    let bounds: Vec<_> = bounds.into_iter().collect::<Option<_>>()?;
-    if bounds.windows(2).any(|pair| pair[0].x1 >= pair[1].x0) {
+    let columns: Vec<_> = bounds.into_iter().collect::<Option<_>>()?;
+    if !certified_gutters(&columns, width, paths) {
         return None;
     }
+    let bounds = columns.chunks_exact(width).map(|group| {
+        group
+            .iter()
+            .copied()
+            .reduce(union_bounds)
+            .expect("each group has columns")
+    });
     Some(
         bounds
-            .into_iter()
             .enumerate()
             .map(|(index, bounding_box)| {
                 let cells: Vec<_> = table
@@ -491,6 +511,51 @@ fn split_painted_records(table: &Table, width: usize, spans: &[TextSpan], edges:
             })
             .collect(),
     )
+}
+
+// ~keep A gutter must stay empty over both adjacent schemas and exceed their ordinary column gaps.
+fn certified_gutters(columns: &[BoundingBox], width: usize, paths: &[PathContent]) -> bool {
+    if paths.len() > MAX_GUTTER_PATHS {
+        return false;
+    }
+    (width..columns.len()).step_by(width).all(|boundary| {
+        let left = &columns[boundary - width..boundary];
+        let right = &columns[boundary..boundary + width];
+        let gutter = BoundingBox {
+            x0: left[width - 1].x1,
+            x1: right[0].x0,
+            y0: left
+                .iter()
+                .chain(right)
+                .map(|column| column.y0)
+                .fold(f64::INFINITY, f64::min),
+            y1: left
+                .iter()
+                .chain(right)
+                .map(|column| column.y1)
+                .fold(f64::NEG_INFINITY, f64::max),
+        };
+        let widest_column_gap = left
+            .windows(2)
+            .chain(right.windows(2))
+            .map(|pair| pair[1].x0 - pair[0].x1)
+            .fold(0.0, f64::max);
+        gutter.x1 - gutter.x0 > widest_column_gap + MIN_GUTTER_ADVANTAGE_PTS
+            && !paths.iter().any(|path| touches_gutter(path, gutter))
+    })
+}
+
+fn touches_gutter(path: &PathContent, gutter: BoundingBox) -> bool {
+    if !path.has_stroke() && !path.has_fill() {
+        return false;
+    }
+    let paint = path.rendered_bbox();
+    let (x0, x1, y0, y1) = (paint.left(), paint.right(), paint.top(), paint.bottom());
+    ![x0, x1, y0, y1].into_iter().all(f32::is_finite)
+        || (f64::from(x0) < gutter.x1
+            && f64::from(x1) > gutter.x0
+            && f64::from(y0) <= gutter.y1
+            && f64::from(y1) >= gutter.y0)
 }
 
 fn painted_bands<'a, 'b>(spans: &'a mut [&'b TextSpan]) -> Vec<&'a [&'b TextSpan]> {
@@ -526,13 +591,17 @@ fn include_extent(bounds: &mut Option<BoundingBox>, span: &TextSpan, (left, righ
     if !super::finite_table_bounds(extent) {
         return None;
     }
-    *bounds = Some(bounds.map_or(extent, |bounds| BoundingBox {
-        x0: bounds.x0.min(extent.x0),
-        x1: bounds.x1.max(extent.x1),
-        y0: bounds.y0.min(extent.y0),
-        y1: bounds.y1.max(extent.y1),
-    }));
+    *bounds = Some(bounds.map_or(extent, |bounds| union_bounds(bounds, extent)));
     Some(())
+}
+
+fn union_bounds(left: BoundingBox, right: BoundingBox) -> BoundingBox {
+    BoundingBox {
+        x0: left.x0.min(right.x0),
+        x1: left.x1.max(right.x1),
+        y0: left.y0.min(right.y0),
+        y1: left.y1.max(right.y1),
+    }
 }
 
 fn painted_caption_bands(table: &Table, spans: &[TextSpan]) -> Vec<Vec<String>> {
@@ -749,5 +818,34 @@ mod tests {
             "reconstruction must still return identical cells"
         );
         assert!(!has_painted_header(&table, width, &spans));
+    }
+
+    #[test]
+    fn every_repeated_schema_seam_needs_more_space_than_ordinary_columns() {
+        let mut columns: Vec<_> = [
+            (0., 10.),
+            (17., 20.),
+            (26., 29.),
+            (40., 50.),
+            (57., 60.),
+            (66., 69.),
+            (80., 90.),
+            (97., 100.),
+            (106., 109.),
+        ]
+        .into_iter()
+        .map(|(x0, x1)| BoundingBox {
+            x0,
+            x1,
+            y0: 0.0,
+            y1: 100.0,
+        })
+        .collect();
+        assert!(certified_gutters(&columns, 3, &[]));
+        for column in &mut columns[6..] {
+            column.x0 -= 4.0;
+            column.x1 -= 4.0;
+        }
+        assert!(!certified_gutters(&columns, 3, &[]));
     }
 }

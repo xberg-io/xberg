@@ -440,3 +440,32 @@ fn insurance_layout_retains_caption_text_before_three_source_tables() {
         assert!(!tables.contains(token));
     }
 }
+
+#[test]
+#[ignore = "requires the pinned public ParseBench PDF outside Git"]
+fn insurance_comparison_with_a_shared_rule_keeps_one_table() {
+    let mut pdf = lopdf::Document::load_mem(&insurance_source()).unwrap();
+    let page = pdf.get_pages()[&1];
+    let [stream] = <[_; 1]>::try_from(pdf.get_page_contents(page)).unwrap();
+    let mut content = pdf.get_page_content(page);
+    content.extend_from_slice(b"\nq 0 G 0.8 w 43 650 m 565 650 l S Q\n");
+    pdf.get_object_mut(stream)
+        .unwrap()
+        .as_stream_mut()
+        .unwrap()
+        .set_plain_content(content);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+
+    let result = extract_bytes_document_blocking(&bytes, "application/pdf", &parsebench_html_config()).unwrap();
+    let [table] = result.tables.as_slice() else {
+        panic!(
+            "a shared rule joins the comparison table, got {} tables",
+            result.tables.len()
+        );
+    };
+    assert_eq!(table.cells.len(), 41);
+    assert!(table.cells.iter().all(|row| row.len() == 12));
+    assert_eq!(table.cells[1][..4], ["3400", "9.97", "1000", "2"]);
+    assert_eq!(result.content.matches("<table").count(), 1);
+}
