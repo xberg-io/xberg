@@ -726,7 +726,15 @@ impl FictionBookExtractor {
                             _ => {}
                         }
                     } else if (tag == "p" || tag == "v") && in_body && !is_notes_body {
-                        Self::extract_paragraph_with_annotations(&mut reader, budget, &mut builder, &mut note_markers)?;
+                        match Self::extract_paragraph_with_annotations(
+                            &mut reader,
+                            budget,
+                            &mut builder,
+                            &mut note_markers,
+                        ) {
+                            Err(error @ crate::error::XbergError::Security { .. }) => return Err(error),
+                            _ => {}
+                        }
                     } else if tag == "subtitle" && in_body && !is_notes_body {
                         match Self::extract_text_content(&mut reader, budget) {
                             Ok(text) if !text.is_empty() => {
@@ -1661,6 +1669,26 @@ mod tests {
             Some("Проверка"),
             "title must be decoded from windows-1251"
         );
+    }
+
+    /// A malformed paragraph is skipped; the rest of the document still extracts.
+    #[tokio::test]
+    async fn should_skip_a_malformed_fictionbook_paragraph() {
+        let fb2 = "<FictionBook><body><section><p>broken <b>text</p></section><section><p>intact text</p></section></body></FictionBook>";
+        let config = ExtractionConfig {
+            output_format: OutputFormat::Markdown,
+            ..Default::default()
+        };
+
+        let doc = FictionBookExtractor::new()
+            .extract_content(fb2.as_bytes(), "application/x-fictionbook+xml", &config)
+            .await
+            .expect("a malformed paragraph must not fail the extraction");
+
+        let markdown = doc
+            .pre_rendered_content
+            .expect("markdown output should have been pre-rendered");
+        assert!(markdown.contains("intact text"), "got {markdown:?}");
     }
 
     /// A security-limit breach inside a paragraph must fail the extraction, not be dropped.

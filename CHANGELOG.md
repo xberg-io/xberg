@@ -248,8 +248,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(rtf): Drop `\deleted` tracked-change text from extracted content.** `{\deleted 100}{\revised 200}` now extracts as `200` instead of `100200`. (#3164)
 
-- **(fictionbook): Fail extraction when a paragraph exceeds a security limit or cannot be parsed.**
-  These errors were discarded, so over-limit or malformed FictionBook paragraphs were silently accepted.
+- **(fictionbook): Report security-limit violations inside paragraphs.**
+  They were discarded, so an over-limit FictionBook paragraph was silently accepted.
 
 - **(pdf): Improve paragraph reading order in scanned multi-column PDFs.** (#2331)
 
