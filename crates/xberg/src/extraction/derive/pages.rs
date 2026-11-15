@@ -1695,6 +1695,15 @@ mod plain_page_rerender_tests {
             .unwrap_or_default()
     }
 
+    fn boundary_ranges(doc: &InternalDocument) -> Vec<(u32, usize, usize)> {
+        doc.metadata
+            .pages
+            .as_ref()
+            .and_then(|s| s.boundaries.as_ref())
+            .map(|b| b.iter().map(|b| (b.page_number, b.byte_start, b.byte_end)).collect())
+            .unwrap_or_default()
+    }
+
     fn derive(doc: &mut InternalDocument, content: &str) -> Vec<PageContent> {
         derive_pages(doc, content, &OutputFormat::Plain, true, None, &mut ()).expect("pages")
     }
@@ -2083,6 +2092,7 @@ mod plain_page_rerender_tests {
         assert_eq!(content, "one");
         assert_eq!(pages[1].content, "two\nnote");
         assert_eq!(boundary_pages(&doc), vec![1]);
+        assert_eq!(boundary_ranges(&doc), [(1, 0, 3)]);
         let warnings: Vec<&str> = doc
             .processing_warnings
             .iter()
@@ -2107,7 +2117,9 @@ mod plain_page_rerender_tests {
     #[test]
     fn a_native_document_takes_its_page_ranges_from_renderer_spans() {
         let mut doc = office_doc_with(vec![page(1, "one"), page(2, "two\nnote")], &[(1, "one")]);
-        derive_plain(&mut doc);
+        let (content, _) = derive_plain(&mut doc);
+        assert_eq!(content, "one");
+        assert_eq!(boundary_ranges(&doc), [(1, 0, 3)]);
         let warnings: Vec<&str> = doc
             .processing_warnings
             .iter()
