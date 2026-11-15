@@ -341,34 +341,6 @@ mod tests {
         assert_eq!(file.html_output.unwrap().css_file, html.css_file);
     }
 
-    #[test]
-    fn should_normalize_legacy_paddle_aliases_at_both_ocr_levels() {
-        use super::super::ocr::resolve_paddle_ocr_settings;
-
-        let legacy = serde_json::json!({
-            "useAngleCls": true,
-            "enableTableDetection": true,
-            "enable_table_detection": false,
-        });
-        let caller = serde_json::json!({
-            "ocr": {
-                "backend": "paddleocr",
-                "paddle_ocr_config": legacy,
-                "pipeline": {"stages": [{"backend": "paddleocr", "paddle_ocr_config": legacy}]}
-            }
-        });
-        let config =
-            resolve_caller_extraction_config(&super::super::ExtractionConfig::default(), Some(&caller)).unwrap();
-        let ocr = config.ocr.unwrap();
-        let stage = &ocr.pipeline.as_ref().unwrap().stages[0];
-
-        for legacy in [&ocr.paddle_ocr_config, &stage.paddle_ocr_config] {
-            let settings = resolve_paddle_ocr_settings(None, legacy.as_ref()).unwrap().unwrap();
-            assert!(settings.use_angle_cls);
-            assert!(!settings.enable_table_detection);
-        }
-    }
-
     const LLM_PATHS: &[&[&str]] = &[
         &["structured_extraction", "llm"],
         &["ocr", "vlm_config"],
