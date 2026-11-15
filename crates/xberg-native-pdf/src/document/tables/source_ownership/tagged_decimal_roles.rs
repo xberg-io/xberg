@@ -234,4 +234,113 @@ mod tests {
         let roots = [tagged_table(1, MAX_PAGE_LOOKUP_NODES), tagged_table(0, 1)];
         assert!(borrowed_page_tables(&roots, 0).is_none());
     }
+
+    fn tagged_cutoff_fixture(two_witnesses: bool, root_array: bool) -> Vec<u8> {
+        use crate::document::tests::pdf_fixtures::build_catalog_test_pdf;
+        use std::fmt::Write as _;
+
+        let mut content = String::from("0 G 1 w\n");
+        for y in [40, 60, 80, 100] {
+            writeln!(content, "20 {y} m 170 {y} l S").unwrap();
+        }
+        for x in [20, 70, 120, 170] {
+            writeln!(content, "{x} 40 m {x} 100 l S").unwrap();
+        }
+        let mut table = String::from("<< /S /Table /Pg 3 0 R /K [");
+        for (row, cells) in [
+            ["Group", "East", "West"],
+            ["Version", "1.0", "2.0"],
+            ["Body", "0.95", "0.85"],
+        ]
+        .iter()
+        .enumerate()
+        {
+            table.push_str("<< /S /TR /K [");
+            for (column, text) in cells.iter().enumerate() {
+                let id = row * 3 + column;
+                let role = if row < 2 { "TH" } else { "TD" };
+                let x = 24 + 50 * column;
+                let y = 85 - 20 * row;
+                write!(table, "<< /S /{role} /K {id} >>").unwrap();
+                writeln!(
+                    content,
+                    "/Span <</MCID {id}>> BDC BT /F1 8 Tf 1 0 0 1 {x} {y} Tm ({text}) Tj ET EMC"
+                )
+                .unwrap();
+            }
+            table.push_str("]>>");
+        }
+        table.push_str("]>>");
+        let later = if two_witnesses { table.as_str() } else { "" };
+        let root = format!("<< /S /Document /K [{table}{later}] >>");
+        let entry = if root_array {
+            format!("[<< /S /P >> {root}]")
+        } else {
+            root
+        };
+        let tree = format!("<< /Type /StructTreeRoot /K {entry} >>");
+        let stream = format!("<< /Length {} >>\nstream\n{content}endstream", content.len());
+        build_catalog_test_pdf(
+            b"<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 6 0 R /MarkInfo << /Marked true >> >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            &[
+                (3, b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 130] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>"),
+                (4, b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"),
+                (5, stream.as_bytes()),
+                (6, tree.as_bytes()),
+            ],
+        )
+    }
+
+    #[test]
+    fn tagged_cutoff_discards_partial_final_root_and_allows_full_cache_retry() {
+        use crate::structure::TableDetectionConfig;
+        use crate::structure::with_structure_parse_cutoff;
+
+        let config = TableDetectionConfig::strict();
+        for root_array in [false, true] {
+            let eligible = PdfDocument::from_bytes(tagged_cutoff_fixture(false, root_array)).unwrap();
+            let [tables] = eligible.extract_tables_with_configs(0, [&config]).unwrap();
+            assert_eq!(tables.len(), 1);
+            assert!(
+                tables[0].rows[1].cells[1].is_header,
+                "the first witness must be eligible"
+            );
+
+            let bytes = tagged_cutoff_fixture(true, root_array);
+            let complete = PdfDocument::from_bytes(bytes.clone()).unwrap();
+            let [tables] = complete.extract_tables_with_configs(0, [&config]).unwrap();
+            assert_eq!(tables.len(), 1);
+            assert_eq!(tables[0].rows[1].cells[1].text, "1.0");
+            assert!(
+                !tables[0].rows[1].cells[1].is_header,
+                "the second witness must conflict"
+            );
+            let mut ruled = [(tables, None)];
+            let cold = PdfDocument::from_bytes(bytes).unwrap();
+            assert!(cold.structure_tree_cache.lock_or_recover().is_none());
+
+            // Document + Table + three TRs + nine cells, plus the optional leading root. ~keep
+            with_structure_parse_cutoff(14 + usize::from(root_array), || {
+                cold.retain_tagged_decimal_roles(0, &mut ruled);
+                let bounded = cold.structure_tree_with_budget(Some(TAGGED_PARSE_BUDGET)).unwrap();
+                assert!(bounded.is_none(), "bounded parser returned an incomplete tree");
+            });
+            assert!(
+                !ruled[0].0[0].rows[1].cells[1].is_header,
+                "partial proof promoted a header"
+            );
+            assert!(
+                cold.structure_tree_cache.lock_or_recover().is_none(),
+                "partial tree entered the cache"
+            );
+
+            let full = cold
+                .struct_tree_trustworthy()
+                .expect("full parse succeeds after cutoff");
+            assert_eq!(borrowed_page_tables(&full.root_elements, 0).unwrap().len(), 2);
+            cold.retain_tagged_decimal_roles(0, &mut ruled);
+            assert!(!ruled[0].0[0].rows[1].cells[1].is_header);
+        }
+    }
 }

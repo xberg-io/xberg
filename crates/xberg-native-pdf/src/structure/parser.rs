@@ -49,6 +49,10 @@ impl ParseBudget {
     /// Always `false` for an unbounded guard.
     #[inline]
     fn exceeded(&self, element_count: usize) -> bool {
+        #[cfg(test)]
+        if self.max_elements.is_some() && TEST_PARSE_CUTOFF.get().is_some_and(|cutoff| element_count >= cutoff) {
+            return true;
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(deadline) = self.deadline
             && std::time::Instant::now() > deadline
@@ -57,6 +61,41 @@ impl ParseBudget {
         }
         self.max_elements.is_some_and(|max| element_count > max)
     }
+
+    fn check(&self, element_count: usize) -> Result<(), ParseFailure> {
+        if self.exceeded(element_count) {
+            return Err(ParseFailure::BudgetExceeded);
+        }
+        Ok(())
+    }
+}
+
+enum ParseFailure {
+    BudgetExceeded,
+    Pdf(Error),
+}
+
+impl From<Error> for ParseFailure {
+    fn from(error: Error) -> Self {
+        Self::Pdf(error)
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_PARSE_CUTOFF: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+}
+
+#[cfg(test)]
+pub(crate) fn with_structure_parse_cutoff<T>(after_elements: usize, run: impl FnOnce() -> T) -> T {
+    struct Restore(Option<usize>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            TEST_PARSE_CUTOFF.set(self.0);
+        }
+    }
+    let _restore = Restore(TEST_PARSE_CUTOFF.replace(Some(after_elements)));
+    run()
 }
 
 /// A timer for measuring elapsed time, WASM-safe.
@@ -223,7 +262,22 @@ pub fn parse_structure_tree_with_budget(
 }
 
 fn parse_structure_tree_inner(document: &PdfDocument, deadline: ParseBudget) -> Result<Option<StructTreeRoot>, Error> {
+    match parse_structure_tree_checked(document, deadline) {
+        Ok(tree) => Ok(tree),
+        Err(ParseFailure::Pdf(error)) => Err(error),
+        Err(ParseFailure::BudgetExceeded) => {
+            tracing::warn!("structure tree parse budget exceeded; falling back to content order");
+            Ok(None)
+        }
+    }
+}
+
+fn parse_structure_tree_checked(
+    document: &PdfDocument,
+    deadline: ParseBudget,
+) -> Result<Option<StructTreeRoot>, ParseFailure> {
     let parse_start = Timer::now();
+    deadline.check(0)?;
 
     let catalog = document.catalog()?;
 
@@ -280,10 +334,7 @@ fn parse_structure_tree_inner(document: &PdfDocument, deadline: ParseBudget) -> 
         match k_obj {
             Object::Array(arr) => {
                 for elem_obj in arr {
-                    if deadline.exceeded(element_count) {
-                        tracing::warn!("structure tree parse budget exceeded; falling back to content order");
-                        return Ok(None);
-                    }
+                    deadline.check(element_count)?;
                     // Record root element IDs before descending so that a back-reference
                     // from any descendant to this root is detectable as a cycle. ~keep
                     if let Object::Reference(obj_ref) = &elem_obj
@@ -324,6 +375,7 @@ fn parse_structure_tree_inner(document: &PdfDocument, deadline: ParseBudget) -> 
         }
     }
 
+    deadline.check(element_count)?;
     tracing::debug!(
         count = element_count,
         root_count = struct_tree.root_elements.len(),
@@ -335,9 +387,6 @@ fn parse_structure_tree_inner(document: &PdfDocument, deadline: ParseBudget) -> 
 }
 
 /// Parse a structure element (StructElem) from a PDF object.
-///
-/// Returns `Ok(None)` if the deadline is exceeded, causing the caller to
-/// abandon the tree and fall back to content-stream order.
 fn parse_struct_elem(
     document: &PdfDocument,
     obj: &Object,
@@ -346,10 +395,8 @@ fn parse_struct_elem(
     deadline: ParseBudget,
     element_count: &mut usize,
     visited: &mut HashSet<u32>,
-) -> Result<Option<StructElem>, Error> {
-    if deadline.exceeded(*element_count) {
-        return Ok(None);
-    }
+) -> Result<Option<StructElem>, ParseFailure> {
+    deadline.check(*element_count)?;
     *element_count += 1;
 
     let obj = resolve_object(document, obj)?;
@@ -510,7 +557,7 @@ fn parse_k_children(
     deadline: ParseBudget,
     element_count: &mut usize,
     visited: &mut HashSet<u32>,
-) -> Result<(), Error> {
+) -> Result<(), ParseFailure> {
     match k_obj {
         Object::Integer(mcid) => {
             // Single MCID — bare integer child references the page's
@@ -528,9 +575,7 @@ fn parse_k_children(
 
         Object::Array(arr) => {
             for child_obj in arr {
-                if deadline.exceeded(*element_count) {
-                    return Ok(());
-                }
+                deadline.check(*element_count)?;
 
                 // Guard against cycles before resolving: an indirect reference that has
                 // already been visited would resolve to a dictionary and slip through to

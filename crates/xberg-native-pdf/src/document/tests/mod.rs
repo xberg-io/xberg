@@ -8,7 +8,7 @@
 //! Shared fixtures and helpers used by more than one topic live in `common`. ~keep
 
 pub(super) mod common;
-mod pdf_fixtures;
+pub(super) mod pdf_fixtures;
 
 mod annotations;
 mod catalog;

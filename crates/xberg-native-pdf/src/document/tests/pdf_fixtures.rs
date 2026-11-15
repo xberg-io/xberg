@@ -123,7 +123,11 @@ pub(super) fn build_pdf_with_annotations(annot_objects: Vec<(usize, Vec<u8>)>) -
     pdf
 }
 
-pub(super) fn build_catalog_test_pdf(catalog: &[u8], pages: &[u8], extra_objects: &[(u32, &[u8])]) -> Vec<u8> {
+pub(in crate::document) fn build_catalog_test_pdf(
+    catalog: &[u8],
+    pages: &[u8],
+    extra_objects: &[(u32, &[u8])],
+) -> Vec<u8> {
     let mut pdf = b"%PDF-1.4\n".to_vec();
     let max_object_id = extra_objects.iter().map(|(id, _)| *id).max().unwrap_or(2).max(2);
     let mut offsets = vec![None; max_object_id as usize + 1];
