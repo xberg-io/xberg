@@ -482,7 +482,7 @@ fn orientation_from_probabilities(probabilities: &[f32]) -> Result<OrientationRe
     let (best_idx, &best_probability) = probabilities
         .iter()
         .enumerate()
-        .max_by(|(_, a), (_, b)| crate::utils::cmp_nan_lowest(*a, *b))
+        .max_by(|(_, a), (_, b)| crate::utils::cmp_nan_lowest(**a, **b))
         .unwrap_or((0, &0.0));
 
     Ok(OrientationResult {
