@@ -269,8 +269,8 @@ def run_cases(
             )
             row["ort_mapping"] = verify_worker_ort(row["modules"], *ort)
             for module in sorted(set(row["modules"]) - loaded):
-                # CoreCLR's executable JIT mapping has no file; keep it in the raw case receipt. ~keep
-                if linux and module == "/memfd:doublemapper (deleted)":
+                # Keep non-file-backed kernel and CoreCLR mappings in the raw case receipt. ~keep
+                if linux and module in ("[vdso]", "/memfd:doublemapper (deleted)"):
                     continue
                 path = Path(module)
                 require(path.is_absolute() and path.is_file(), f"Unresolved loaded module {module}")

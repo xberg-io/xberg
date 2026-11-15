@@ -67,12 +67,12 @@ def replay_module_inventory(tmp_path: Path, modules: list[str], system: str = "L
         return run_cases([], {"fixture.pdf": {}}, args, {}, (staged, digest(staged)))
 
 
-def test_linux_jit_mapping_stays_in_raw_receipt_without_a_file_digest(tmp_path: Path) -> None:
-    jit = "/memfd:doublemapper (deleted)"
+@pytest.mark.parametrize("pseudo", ["/memfd:doublemapper (deleted)", "[vdso]"], ids=["jit", "vdso"])
+def test_linux_pseudo_mapping_stays_in_raw_receipt_without_a_file_digest(tmp_path: Path, pseudo: str) -> None:
     native = tmp_path / "libxberg_ffi.so"
     native.write_bytes(b"ffi")
-    [row] = replay_module_inventory(tmp_path, [jit, str(native)])
-    assert jit in row["modules"]
+    [row] = replay_module_inventory(tmp_path, [pseudo, str(native)])
+    assert pseudo in row["modules"]
     assert row["ort_mapping"] == {
         "path": str(tmp_path / "libonnxruntime.so.1"),
         "sha256": digest(tmp_path / "libonnxruntime.so.1"),
@@ -90,6 +90,9 @@ def test_linux_jit_mapping_stays_in_raw_receipt_without_a_file_digest(tmp_path: 
         ("/memfd:other (deleted)", "Linux"),
         ("/memfd:doublemapper", "Linux"),
         ("/memfd:doublemapper (deleted)", "Windows"),
+        ("[vdso]", "Windows"),
+        ("[vvar]", "Linux"),
+        ("[vdso] (deleted)", "Linux"),
         ("/missing/libxberg_ffi.so", "Linux"),
         ("/missing/libxberg_ffi.so (deleted)", "Linux"),
     ],
