@@ -569,8 +569,27 @@ async fn scan_full_line(
     Ok((!selected.is_empty()).then_some(selected))
 }
 
+fn has_common_line_band(source: &[RegionWord]) -> bool {
+    let Some(first) = source.first().map(|word| word.bounds) else {
+        return false;
+    };
+    let (top, bottom, shortest) = source[1..].iter().fold(
+        (first.top, first.bottom, first.bottom - first.top),
+        |(top, bottom, shortest), word| {
+            let bounds = word.bounds;
+            (
+                top.max(bounds.top),
+                bottom.min(bounds.bottom),
+                shortest.min(bounds.bottom - bounds.top),
+            )
+        },
+    );
+    bottom.saturating_sub(top) >= shortest.div_ceil(2).max(2)
+}
+
 fn full_line_read_covers_stock(stock: &[RegionBox], source: &[RegionWord]) -> bool {
     if stock.is_empty()
+        || !has_common_line_band(source)
         || stock.windows(2).any(|pair| pair[0].right > pair[1].left)
         || !source.windows(2).all(|pair| same_line(pair[0].bounds, pair[1].bounds))
     {
@@ -726,6 +745,23 @@ pub(super) async fn read_pair(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn full_line_read_declines_adjacent_overlap_without_common_band() {
+        let stock = std::array::from_fn::<_, 3, _>(|i| RegionBox {
+            left: i as u32 * 12,
+            right: i as u32 * 12 + 10,
+            top: i as u32 * 5,
+            bottom: i as u32 * 5 + 10,
+        });
+        let read = stock.map(|bounds| RegionWord {
+            bounds,
+            text: "word".to_owned(),
+            confidence: 99.0,
+        });
+        assert!(stock.windows(2).all(|pair| same_line(pair[0], pair[1])));
+        assert!(!full_line_read_covers_stock(&stock, &read));
+    }
 
     #[test]
     fn full_line_read_declines_one_pixel_vertical_overlap() {
