@@ -181,10 +181,16 @@ fn row_has_only_extra_dot_leader(row: &[&HocrWord], cells: &[String]) -> bool {
 }
 
 fn isolated_dot_leader(left: &HocrWord, dots: &HocrWord, right: &HocrWord) -> bool {
+    is_dot_run(&dots.text) && isolated_leader_bounds(left, dots, right)
+}
+
+fn is_dot_run(text: &str) -> bool {
     const MIN_DOT_LEADER_LENGTH: usize = 3;
-    dots.text.len() >= MIN_DOT_LEADER_LENGTH
-        && dots.text.bytes().all(|byte| byte == b'.')
-        && dots.width > left.height.max(right.height)
+    text.len() >= MIN_DOT_LEADER_LENGTH && text.bytes().all(|byte| byte == b'.')
+}
+
+fn isolated_leader_bounds(left: &HocrWord, dots: &HocrWord, right: &HocrWord) -> bool {
+    dots.width > left.height.max(right.height)
         && dots.height.saturating_mul(2) <= left.height.min(right.height)
         && left.left.saturating_add(left.width) < dots.left
         && dots.left.saturating_add(dots.width) < right.left
@@ -467,8 +473,10 @@ fn try_reconcile_retained_table_leaders(
         config.table_row_threshold_ratio,
         budget,
     )?;
+    let allow_trailing_comma =
+        config.known_full_page_scan && config.psm == crate::ocr::types::PSMMode::SingleBlock as u8;
     let matched = match unique_matching_table_row_window(&rows, &table.cells, |row, cells| {
-        retained_leader_cell(row, cells).is_some()
+        retained_leader_cell(row, cells, allow_trailing_comma).is_some()
     }) {
         Ok(matched) => matched?,
         Err(AmbiguousTableRows) => return Some(RetainedTableLeaders::Ambiguous),
@@ -478,7 +486,7 @@ fn try_reconcile_retained_table_leaders(
     let dots: Vec<_> = matched
         .iter()
         .zip(&table.cells)
-        .map(|(row, cells)| retained_leader_cell(row, cells))
+        .map(|(row, cells)| retained_leader_cell(row, cells, allow_trailing_comma))
         .collect();
     if dots.iter().all(Option::is_none) {
         return None;
@@ -497,11 +505,16 @@ fn try_reconcile_retained_table_leaders(
 
 // The leader must be between cells. A label can occupy several cells if the
 // stock column reconstruction split it; append to the cell owning its last word.
-fn retained_leader_cell<'a>(row: &[&'a HocrWord], cells: &[String]) -> Option<(usize, &'a str)> {
-    let dot_index = row
-        .windows(3)
-        .position(|words| isolated_dot_leader(words[0], words[1], words[2]))?
-        + 1;
+fn retained_leader_cell<'a>(
+    row: &[&'a HocrWord],
+    cells: &[String],
+    allow_trailing_comma: bool,
+) -> Option<(usize, &'a str)> {
+    let dot_index = row.windows(3).position(|words| {
+        let text = &words[1].text;
+        let is_leader = is_dot_run(text) || (allow_trailing_comma && text.strip_suffix(',').is_some_and(is_dot_run));
+        is_leader && isolated_leader_bounds(words[0], words[1], words[2])
+    })? + 1;
     let mut label_words = 0;
     let mut remaining = cells.iter().enumerate().filter(|(_, cell)| !cell.trim().is_empty());
     let (column, _) = remaining.find(|(_, cell)| {

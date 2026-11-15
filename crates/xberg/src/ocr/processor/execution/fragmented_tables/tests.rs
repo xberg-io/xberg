@@ -851,6 +851,25 @@ fn repeated_leader_publication_case(
 }
 
 #[test]
+fn a_retained_dot_run_with_a_terminal_comma_still_requires_the_source_gap() {
+    let cells = ["Signal timing", "-64", "143.92"].map(str::to_owned);
+    let mut words = positioned_dot_leader_row();
+    words[2].text = "........,".into();
+    assert_eq!(
+        retained_leader_cell(&words.each_ref(), &cells, true),
+        Some((0, "........,"))
+    );
+    assert_eq!(retained_leader_cell(&words.each_ref(), &cells, false), None);
+    for mark in ["..,", "...,...", ".......1,", "........,,"] {
+        words[2].text = mark.into();
+        assert_eq!(retained_leader_cell(&words.each_ref(), &cells, true), None);
+    }
+    words[2].text = "........,".into();
+    words[2].left = words[3].left;
+    assert_eq!(retained_leader_cell(&words.each_ref(), &cells, true), None);
+}
+
+#[test]
 fn retained_leader_reconciliation_rejects_ambiguous_equal_rows_in_the_table_bounds() {
     let (hocr, tsv, document, table) = repeated_leader_publication_case(1, 65, [true; 3]);
     let mut tables = [table];

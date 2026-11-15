@@ -169,3 +169,35 @@ fn explicit_psm6_scan_publishes_each_owned_leader_row_once() {
         }
     }
 }
+
+#[test]
+#[ignore = "requires the pinned #2432 reporter PDF"]
+fn plain_200_dpi_psm6_keeps_source_leader_occurrences_in_order() {
+    let bytes = std::fs::read(std::env::var_os("XBERG_2503_PLAIN_200_PDF").unwrap()).unwrap();
+    assert_eq!(
+        hex::encode(Sha256::digest(&bytes)),
+        "362b728c7dd8e4eabc61f0070f29a006fd43540d70116453cba66f7396b263db"
+    );
+    let result = extract_with_psm(&bytes, Some(6));
+    let [page] = result.pages.as_deref().unwrap() else {
+        panic!("one scan page");
+    };
+    let [table] = result.tables.as_slice() else {
+        panic!("one accepted table");
+    };
+    assert_eq!(table.cells.len(), 13);
+    assert_eq!(page.tables[0].cells, table.cells);
+    let expected = table.cells.iter().map(|row| row.join(" ")).collect::<Vec<_>>();
+    for content in [&result.content, &page.content] {
+        let rows = content
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .collect::<Vec<_>>();
+        assert_eq!(rows, expected, "each accepted source row occurs once and in order");
+        assert_eq!(rows[1], "Transit passes ......... 80 344,768 (2,258)");
+        assert_eq!(rows[2], "Code review ........... 46 443,988 590.07");
+        assert_eq!(rows[3], "Tree planting .......... 77 774,883 95,023");
+        assert_eq!(rows[8], "Parks and trails ........ 56 86,301 600.09");
+        assert_eq!(rows[12], "Fleet fuel. ..........., 53 562,485 54,237");
+    }
+}
