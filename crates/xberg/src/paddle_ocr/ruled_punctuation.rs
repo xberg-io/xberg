@@ -782,12 +782,11 @@ mod tests {
 
     #[test]
     fn wider_crop_agreement_cannot_use_mark_or_digit_ink_outside_the_detection() {
-        let RuledControl { image, table, blocks } = ruled_control();
+        let RuledControl { image, table, .. } = ruled_control();
         let gray = image::imageops::grayscale(&image);
         let layout = grid(&gray, &table).unwrap();
         let band = &layout.rows[1];
         let column = &layout.columns[1];
-        let complete = bounds(&blocks[4]).unwrap();
         let stock = "1.2";
         let agreed = "1,2";
 
@@ -811,10 +810,20 @@ mod tests {
             assert_eq!(read_candidate(&image, band, column, incomplete, stock, &mut read), None);
             assert_eq!(calls, 0);
         }
+        let padded_detection = (38, 11, 49, 21);
         assert_eq!(
-            read_candidate(&image, band, column, complete, stock, &mut |_| Some(agreed.to_owned())).as_deref(),
-            Some(agreed)
+            owned_ink(&gray, &layout, 1, 1, padded_detection),
+            Some(padded_detection)
         );
+        let clipped = crop(&image, padded_detection).unwrap();
+        let mut votes = Vec::new();
+        let corrected = read_candidate(&image, band, column, padded_detection, stock, &mut |view| {
+            let vote = if *view == clipped { stock } else { agreed };
+            votes.push(vote);
+            Some(vote.to_owned())
+        });
+        assert_eq!(votes, [stock, agreed, agreed]);
+        assert_eq!(corrected.as_deref(), Some(agreed));
     }
 
     #[test]
