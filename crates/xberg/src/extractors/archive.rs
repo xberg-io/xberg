@@ -7,7 +7,7 @@ use crate::extraction::archive::{
     extract_gzip_with_bytes, extract_tar_file_bytes, extract_tar_metadata, extract_tar_text_content,
     extract_zip_file_bytes, extract_zip_metadata, extract_zip_text_content,
 };
-use crate::extractors::security::ZipBombValidator;
+use crate::extractors::security::{ArchiveBudget, SecurityLimits, ZipBombValidator};
 use crate::plugins::{InternalDocumentExtractor, Plugin};
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
 use crate::types::{ArchiveMetadata, Metadata, ProcessingWarning};
@@ -15,6 +15,7 @@ use ahash::AHashMap;
 use async_trait::async_trait;
 use std::borrow::Cow;
 use std::io::Cursor;
+use std::sync::Arc;
 
 /// `ProcessingWarning::source` used for every degradation reported by the archive extractors.
 const ARCHIVE_WARNING_SOURCE: &str = "archive";
@@ -139,6 +140,32 @@ fn is_archive_metadata_path(path: &str) -> bool {
     lower.ends_with(".pyc") || lower.ends_with(".pyo")
 }
 
+/// The limits this container is read under, and the budget it charges.
+///
+/// The budget is the one inherited from an enclosing archive, or a fresh one sized from
+/// `security_limits` when this is the outermost archive. `max_archive_size` is lowered to
+/// what that budget has left, so a nested container's reads stop where the whole
+/// extraction's budget ends instead of getting the full limit again.
+fn budgeted_limits(config: &ExtractionConfig) -> (SecurityLimits, Arc<ArchiveBudget>) {
+    let mut limits = config.security_limits.clone().unwrap_or_default();
+    let budget = config
+        .archive_budget
+        .clone()
+        .unwrap_or_else(|| Arc::new(ArchiveBudget::new(&limits)));
+    limits.max_archive_size = limits.max_archive_size.min(budget.remaining_decompressed());
+    (limits, budget)
+}
+
+/// Charge the bytes decompressed out of this container against the shared budget.
+fn charge_decompressed(budget: &ArchiveBudget, file_bytes: &AHashMap<String, Vec<u8>>) -> Result<()> {
+    let total = file_bytes
+        .values()
+        .fold(0usize, |total, bytes| total.saturating_add(bytes.len()));
+    budget
+        .charge_decompressed(total)
+        .map_err(|e| crate::error::XbergError::validation(e.to_string()))
+}
+
 /// What an archive reader pulled out of the container: entry index, decoded text and raw bytes.
 struct ArchiveContents {
     extraction_metadata: ExtractedMetadata,
@@ -155,6 +182,7 @@ async fn build_archive_doc(
     format_name: &'static str,
     mime_type: &str,
     config: &ExtractionConfig,
+    budget: &Arc<ArchiveBudget>,
     current_depth: usize,
 ) -> InternalDocument {
     let ArchiveContents {
@@ -187,7 +215,11 @@ async fn build_archive_doc(
     }
 
     if config.max_archive_depth > current_depth && !file_bytes.is_empty() {
-        for (path, bytes) in &file_bytes {
+        // Path order, not hash order: once the shared budget runs out, which entries were
+        // extracted must not change from run to run.
+        let mut entries: Vec<(&String, &Vec<u8>)> = file_bytes.iter().collect();
+        entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+        for (path, bytes) in entries {
             // A timed-out extraction cancels this token (see
             // `ExtractionConfig::ensure_cancel_token`); each entry launches its own
             // recursive extraction, so stop starting new ones once cancelled rather
@@ -231,6 +263,7 @@ async fn build_archive_doc(
 
             let mut child_config = config.clone();
             child_config.max_archive_depth = config.max_archive_depth.saturating_sub(current_depth + 1);
+            child_config.archive_budget = Some(Arc::clone(budget));
 
             // Boxed: this is the recursive arm (build_archive_doc -> extract_bytes ->
             // build_archive_doc), so an unboxed child future is stored inline in this
@@ -240,6 +273,19 @@ async fn build_archive_doc(
             // matching how every other recursive await in core::extractor is written.
             match Box::pin(crate::core::extractor::extract_bytes(bytes, &file_mime, &child_config)).await {
                 Ok(result) => {
+                    if let Err(error) = budget.charge_child_output(result.content.len()) {
+                        let message = format!(
+                            "Skipped '{}' and the remaining archive entries: extracted output across nested \
+                             archives exceeds the max_content_size budget ({})",
+                            path, error
+                        );
+                        crate::core::diagnostics::push_warning(
+                            &mut processing_warnings,
+                            ARCHIVE_WARNING_SOURCE,
+                            message,
+                        );
+                        break;
+                    }
                     children.push(crate::types::ArchiveEntry {
                         path: path.clone(),
                         mime_type: file_mime,
@@ -333,7 +379,7 @@ impl InternalDocumentExtractor for ZipExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
-        let limits = config.security_limits.clone().unwrap_or_default();
+        let (limits, budget) = budgeted_limits(config);
 
         let cursor = Cursor::new(content);
         let mut archive = zip::ZipArchive::new(cursor)
@@ -344,8 +390,9 @@ impl InternalDocumentExtractor for ZipExtractor {
             .map_err(|e| crate::error::XbergError::validation(e.to_string()))?;
 
         let extraction_metadata = extract_zip_metadata(content, &limits)?;
-        let text_contents = extract_zip_text_content(content, &limits)?;
         let file_bytes = extract_zip_file_bytes(content, &limits)?;
+        charge_decompressed(&budget, &file_bytes)?;
+        let text_contents = extract_zip_text_content(content, &limits)?;
         Ok(build_archive_doc(
             ArchiveContents {
                 extraction_metadata,
@@ -355,6 +402,7 @@ impl InternalDocumentExtractor for ZipExtractor {
             "ZIP",
             mime_type,
             config,
+            &budget,
             0,
         )
         .await)
@@ -423,10 +471,11 @@ impl InternalDocumentExtractor for TarExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
-        let limits = config.security_limits.clone().unwrap_or_default();
+        let (limits, budget) = budgeted_limits(config);
         let extraction_metadata = extract_tar_metadata(content, &limits)?;
-        let text_contents = extract_tar_text_content(content, &limits)?;
         let file_bytes = extract_tar_file_bytes(content, &limits)?;
+        charge_decompressed(&budget, &file_bytes)?;
+        let text_contents = extract_tar_text_content(content, &limits)?;
         Ok(build_archive_doc(
             ArchiveContents {
                 extraction_metadata,
@@ -436,6 +485,7 @@ impl InternalDocumentExtractor for TarExtractor {
             "TAR",
             mime_type,
             config,
+            &budget,
             0,
         )
         .await)
@@ -509,10 +559,11 @@ impl InternalDocumentExtractor for SevenZExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
-        let limits = config.security_limits.clone().unwrap_or_default();
+        let (limits, budget) = budgeted_limits(config);
         let extraction_metadata = extract_7z_metadata(content, &limits)?;
-        let text_contents = extract_7z_text_content(content, &limits)?;
         let file_bytes = extract_7z_file_bytes(content, &limits)?;
+        charge_decompressed(&budget, &file_bytes)?;
+        let text_contents = extract_7z_text_content(content, &limits)?;
         Ok(build_archive_doc(
             ArchiveContents {
                 extraction_metadata,
@@ -522,6 +573,7 @@ impl InternalDocumentExtractor for SevenZExtractor {
             "7Z",
             mime_type,
             config,
+            &budget,
             0,
         )
         .await)
@@ -590,8 +642,9 @@ impl InternalDocumentExtractor for GzipExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
-        let limits = config.security_limits.clone().unwrap_or_default();
+        let (limits, budget) = budgeted_limits(config);
         let (extraction_metadata, text_contents, file_bytes) = extract_gzip_with_bytes(content, &limits)?;
+        charge_decompressed(&budget, &file_bytes)?;
         Ok(build_archive_doc(
             ArchiveContents {
                 extraction_metadata,
@@ -601,6 +654,7 @@ impl InternalDocumentExtractor for GzipExtractor {
             "GZIP",
             mime_type,
             config,
+            &budget,
             0,
         )
         .await)

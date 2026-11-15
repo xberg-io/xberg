@@ -200,6 +200,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(hwp): Cap the decompressed size of compressed HWP body-text sections.**
   Sections are now inflated under `security_limits.max_content_size` each and `max_archive_size` in total, so a small crafted `.hwp` can no longer expand without bound.
 
+- **(archive): Bound nested-archive extraction by one budget instead of the full limits at every level.**
+  `max_archive_size` now caps decompressed bytes across all nesting levels of one archive, and `max_content_size`
+  caps the combined output of its extracted children. A nested archive that does not fit what is left is skipped
+  with a warning; children past the output cap are dropped with a warning.
+
 - **(deps): Upgrade `rmcp` to 3.9.0 to fix RUSTSEC-2026-0462.**
   Before 3.9.0 the Streamable HTTP clients read response bodies without a size limit; the `mcp` server feature, its lockfiles and the binding lockfiles now resolve the fixed release.
 

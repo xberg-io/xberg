@@ -393,3 +393,160 @@ async fn test_gzip_extractor_invalid_data() {
         .await;
     assert!(result.is_err());
 }
+
+/// A ZIP whose members are stored uncompressed, so each level's decompressed size is its
+/// members' byte length and stays far below `max_compression_ratio`.
+fn stored_zip(members: &[(&str, &[u8])]) -> Vec<u8> {
+    let mut cursor = Cursor::new(Vec::new());
+    {
+        let mut writer = ZipWriter::new(&mut cursor);
+        let options = FileOptions::<'_, '_, ()>::default().compression_method(zip::CompressionMethod::Stored);
+        for (name, body) in members {
+            writer.start_file(*name, options).unwrap();
+            writer.write_all(body).unwrap();
+        }
+        writer.finish().unwrap();
+    }
+    cursor.into_inner()
+}
+
+fn config_with_limits(limits: crate::extractors::security::SecurityLimits) -> ExtractionConfig {
+    ExtractionConfig {
+        security_limits: Some(limits),
+        ..ExtractionConfig::default()
+    }
+}
+
+fn recursion_warnings(doc: &InternalDocument) -> Vec<&str> {
+    doc.processing_warnings
+        .iter()
+        .filter(|warning| warning.source == "archive_recursive_extraction")
+        .map(|warning| warning.message.as_ref())
+        .collect()
+}
+
+/// Every nesting level used to get a fresh `max_archive_size`, so a chain of archives each
+/// under the limit did `depth` times the work the operator allowed. Each level here fits
+/// 4 KiB on its own; the two levels together do not.
+#[tokio::test]
+async fn nested_archive_levels_share_one_decompression_budget() {
+    let inner_text = vec![b'x'; 3000];
+    let level2 = stored_zip(&[("inner.txt", &inner_text)]);
+    let level1 = stored_zip(&[("level2.zip", &level2)]);
+    let root = stored_zip(&[("level1.zip", &level1)]);
+    let limit = 4096;
+    assert!(
+        level1.len() <= limit && level2.len() <= limit,
+        "each level must fit the limit alone"
+    );
+    assert!(
+        level1.len() + level2.len() > limit,
+        "the levels together must exceed it"
+    );
+
+    let unbounded = ZipExtractor::new()
+        .extract_content(&root, "application/zip", &ExtractionConfig::default())
+        .await
+        .unwrap();
+    let level1_doc = &unbounded.children.as_ref().expect("level1.zip extracted")[0];
+    assert_eq!(level1_doc.path, "level1.zip");
+    let level2_doc = &level1_doc.result.children.as_ref().expect("level2.zip extracted")[0];
+    assert_eq!(level2_doc.path, "level2.zip");
+    let inner_doc = &level2_doc.result.children.as_ref().expect("inner.txt extracted")[0];
+    assert_eq!(inner_doc.path, "inner.txt");
+
+    let limits = crate::extractors::security::SecurityLimits {
+        max_archive_size: limit,
+        ..Default::default()
+    };
+    let bounded = ZipExtractor::new()
+        .extract_content(&root, "application/zip", &config_with_limits(limits))
+        .await
+        .expect("the outermost archive fits the limit");
+
+    assert!(
+        bounded.children.is_none(),
+        "level1.zip must not be extracted once the root used most of the budget: {:?}",
+        bounded
+            .children
+            .as_ref()
+            .map(|c| c.iter().map(|e| &e.path).collect::<Vec<_>>())
+    );
+    let warnings = recursion_warnings(&bounded);
+    assert!(
+        warnings
+            .iter()
+            .any(|message| message.contains("level1.zip") && message.contains("Archive too large")),
+        "the skipped nested archive must be reported with the size limit: {warnings:?}"
+    );
+}
+
+/// Sibling archives draw from the same budget: two nested archives that each fit what the
+/// parent left over, but not both.
+#[tokio::test]
+async fn sibling_nested_archives_share_one_decompression_budget() {
+    let inner_text = vec![b'y'; 3000];
+    let nested = stored_zip(&[("inner.txt", &inner_text)]);
+    let root = stored_zip(&[("a.zip", &nested), ("b.zip", &nested)]);
+    let limits = crate::extractors::security::SecurityLimits {
+        max_archive_size: 10_000,
+        ..Default::default()
+    };
+
+    let result = ZipExtractor::new()
+        .extract_content(&root, "application/zip", &config_with_limits(limits))
+        .await
+        .expect("the outermost archive fits the limit");
+
+    let extracted = result.children.as_ref().map_or(0, Vec::len);
+    assert_eq!(extracted, 1, "only one sibling fits the remaining budget");
+    let warnings = recursion_warnings(&result);
+    assert_eq!(warnings.len(), 1, "the other sibling must be reported: {warnings:?}");
+    assert!(warnings[0].contains("Archive too large"), "{warnings:?}");
+}
+
+/// Child results used to accumulate without any overall cap. Each child here fits
+/// `max_content_size` alone; together they do not.
+#[tokio::test]
+async fn accumulated_child_output_is_capped_by_max_content_size() {
+    let note = vec![b'z'; 450];
+    let nested = stored_zip(&[("note.txt", &note)]);
+    let root = stored_zip(&[
+        ("one.zip", &nested),
+        ("two.zip", &nested),
+        ("three.zip", &nested),
+        ("four.zip", &nested),
+    ]);
+    let max_content_size = 1000;
+    let config = ExtractionConfig {
+        max_archive_depth: 1,
+        ..config_with_limits(crate::extractors::security::SecurityLimits {
+            max_content_size,
+            ..Default::default()
+        })
+    };
+
+    let result = ZipExtractor::new()
+        .extract_content(&root, "application/zip", &config)
+        .await
+        .expect("the outermost archive fits the limits");
+
+    let children = result.children.unwrap_or_default();
+    let retained: usize = children.iter().map(|child| child.result.content.len()).sum();
+    assert!(
+        children.len() < 4,
+        "the four children together exceed the budget, but all were kept"
+    );
+    assert!(
+        retained <= max_content_size,
+        "retained child output {retained} exceeds max_content_size {max_content_size}"
+    );
+    assert!(
+        result
+            .processing_warnings
+            .iter()
+            .any(|warning| warning.source == "archive" && warning.message.contains("max_content_size")),
+        "dropping children must be reported: {:?}",
+        result.processing_warnings
+    );
+}
