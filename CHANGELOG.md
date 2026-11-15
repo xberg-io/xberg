@@ -245,6 +245,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(pdf): Keep adjacent tables separate when their columns align.** A rule or image spanning the gap keeps the table together. (#2332)
 
+- **(pdf): Preserve verified decimal column headers and keep decimal records in table bodies in HTML.**
+  Decimal text already represented in table cells is no longer repeated as prose. (#2332)
+
 - **(ocr): Remove false short words and repeated texture reads from noisy scanned PDFs in Plain and Markdown output.** Legitimate text and raw OCR elements are preserved. (#2943)
 - **(ocr): Recover verified panel dimensions between adjacent lines in Plain output for tall scanned PDFs.** (#2502)
 - **(ocr): Recover verified headings from tall PDF scans in Markdown, HTML, Djot, and DocTags.** (#2502)
