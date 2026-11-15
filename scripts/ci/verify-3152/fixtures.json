@@ -1,0 +1,14 @@
+{
+  "pdf-40.pdf": {
+    "bytes": 41943733,
+    "sha256": "63c152637946ea82285bc3d46e07926d8f6eb88c15699fd45306824c8e705402"
+  },
+  "pdf-90.pdf": {
+    "bytes": 94372533,
+    "sha256": "1800efa75f2f3c08ff9541514c6c067e68b4ea642675979d5d5fd0b52d138b60"
+  },
+  "docx-90.docx": {
+    "bytes": 94373126,
+    "sha256": "ba535bca9e29fc10e59aad6fbc922be0b334606d2e27525dc555b90667bfc313"
+  }
+}

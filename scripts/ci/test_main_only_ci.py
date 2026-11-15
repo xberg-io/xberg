@@ -15,9 +15,9 @@ if TYPE_CHECKING:
 
 WORKFLOWS = Path(__file__).parents[2] / ".github" / "workflows"
 MAIN_GUARD = ast.dump(ast.parse("github.ref == 'refs/heads/main'", mode="eval").body)
-EXPECTED_WORKFLOWS = 18
-EXPECTED_JOBS = 78
-EXPECTED_CHECKOUTS = 78
+EXPECTED_WORKFLOWS = 19
+EXPECTED_JOBS = 79
+EXPECTED_CHECKOUTS = 79
 # The one sanctioned pull-request workflow: fixed regression tests, for same-repository branches only.
 FOCUSED_PR_WORKFLOW = "ci-focused-pr.yaml"
 FOCUSED_PR_GUARDS = (
