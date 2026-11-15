@@ -2158,7 +2158,7 @@ mod tests {
     fn discarded_ocr_heading_cannot_pass_receipts_to_an_enclosing_equal_text_node() {
         use crate::types::internal::{InternalElement, OcrSourceSpan};
         let owner = InternalElement::text(ElementKind::Paragraph, "POP WAcES:", 0);
-        let spans = std::array::from_fn(|index| {
+        let spans: [OcrSourceSpan; 2] = std::array::from_fn(|index| {
             let (range, expected, replacement) = if index == 0 {
                 (0..3, "POP", "PDP")
             } else {
