@@ -444,6 +444,9 @@ fn plan_page_ocr_insertion<'a>(
 }
 
 #[cfg(all(feature = "pdf", feature = "ocr"))]
+type PanelOrder = (std::ops::Range<usize>, usize, std::ops::Range<usize>, usize, String);
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
 fn plan_page_panel_order(
     doc: &InternalDocument,
     text: &str,
@@ -451,7 +454,7 @@ fn plan_page_panel_order(
     page: &PageContent,
     page_index: usize,
     verified_edits: &[FinalOcrEdit<'_>],
-) -> Option<(std::ops::Range<usize>, usize, std::ops::Range<usize>, usize, String)> {
+) -> Option<PanelOrder> {
     let owners = || {
         doc.elements
             .iter()

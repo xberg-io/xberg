@@ -321,6 +321,10 @@ struct Inventory<'a> {
     words: Vec<Word<'a>>,
 }
 
+#[cfg_attr(
+    not(test),
+    allow(clippy::unused_enumerate_index, reason = "test builds record the index")
+)]
 fn inventory(read: &ExtractedDocument) -> Option<Inventory<'_>> {
     #[cfg(test)]
     let mut indexes = Vec::new();
@@ -494,12 +498,10 @@ fn bbox(bounds: [u32; 4]) -> BoundingBox {
 fn document_slots(read: &ExtractedDocument, words: &[Word<'_>]) -> Option<Vec<Option<Slot>>> {
     let doc = read.ocr_internal_document.as_ref()?;
     Some(slots(
-        doc.elements.iter().enumerate().filter_map(|(i, element)| {
-            element
-                .bbox
-                .as_ref()
-                .map(|bounds| (i, element.text.as_str(), bounds.clone()))
-        }),
+        doc.elements
+            .iter()
+            .enumerate()
+            .filter_map(|(i, element)| element.bbox.as_ref().map(|bounds| (i, element.text.as_str(), *bounds))),
         words,
     ))
 }

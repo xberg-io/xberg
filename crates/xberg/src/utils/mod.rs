@@ -399,12 +399,12 @@ mod decode_provenance_tests {
     }
     #[test]
     fn nan_comparators_rank_every_nan_last() {
-        let mut desc = vec![1.0_f32, f32::NAN, 3.0, -f32::NAN, 2.0];
+        let mut desc = [1.0_f32, f32::NAN, 3.0, -f32::NAN, 2.0];
         desc.sort_by(|a, b| cmp_desc_nan_last(*a, *b));
         assert_eq!(&desc[..3], &[3.0, 2.0, 1.0]);
         assert!(desc[3].is_nan() && desc[4].is_nan());
 
-        let mut asc = vec![1.0_f64, f64::NAN, 3.0, -f64::NAN, 2.0];
+        let mut asc = [1.0_f64, f64::NAN, 3.0, -f64::NAN, 2.0];
         asc.sort_by(|a, b| cmp_asc_nan_last(*a, *b));
         assert_eq!(&asc[..3], &[1.0, 2.0, 3.0]);
         assert!(asc[3].is_nan() && asc[4].is_nan());

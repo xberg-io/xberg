@@ -1,5 +1,6 @@
 //! Regression test for issue #773.
 //! Validates that environment variable overrides are correctly applied during configuration loading.
+#![allow(unsafe_code, reason = "the tests set and remove process environment variables")]
 
 use xberg::{EmbeddingModelType, ExtractionConfig};
 

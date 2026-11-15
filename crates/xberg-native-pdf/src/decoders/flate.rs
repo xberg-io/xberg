@@ -123,10 +123,7 @@ fn check_limit(output: &[u8], limit: u64) -> Result<()> {
 /// cap. Shared by every recovery strategy's "accept this partial output?" check.
 fn accept_as_partial(output: &[u8], limit: u64) -> Result<bool> {
     check_limit(output, limit)?;
-    if output.is_empty() || !looks_like_real_stream(output) {
-        return Ok(false);
-    }
-    Ok(true)
+    Ok(!output.is_empty() && looks_like_real_stream(output))
 }
 
 /// Outcome of a primary (non-fallback) decode attempt: accepted output — a

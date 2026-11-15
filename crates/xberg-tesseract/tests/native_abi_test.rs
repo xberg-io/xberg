@@ -4,6 +4,10 @@
 //! resolved from `TESSDATA_PREFIX`.
 
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::dbg_macro)] // ~keep: test binaries print by design; org logging policy exempts tests
+#![allow(
+    unsafe_code,
+    reason = "the test calls a Tesseract C entry point the crate does not wrap"
+)]
 use std::ffi::c_void;
 use std::path::PathBuf;
 use xberg_tesseract::{

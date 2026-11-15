@@ -543,7 +543,7 @@ mod tests {
         let primary = line_read(&words, &[0..1, 1..3]);
         let mut retry = words.clone();
         retry[0].text = "one.";
-        let merged = line_read(&retry, &[0..3]);
+        let merged = line_read(&retry, std::slice::from_ref(&(0..3)));
         let actual = rank_lines(&primary, &merged, &words, &retry).unwrap();
         assert_eq!(
             actual.iter().map(|line| line.literal.as_str()).collect::<Vec<_>>(),

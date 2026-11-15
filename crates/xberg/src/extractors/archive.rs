@@ -218,7 +218,7 @@ async fn build_archive_doc(
         // Path order, not hash order: once the shared budget runs out, which entries were
         // extracted must not change from run to run.
         let mut entries: Vec<(&String, &Vec<u8>)> = file_bytes.iter().collect();
-        entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+        entries.sort_by_key(|(path, _)| *path);
         for (path, bytes) in entries {
             // A timed-out extraction cancels this token (see
             // `ExtractionConfig::ensure_cancel_token`); each entry launches its own

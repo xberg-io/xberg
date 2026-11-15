@@ -726,14 +726,15 @@ impl FictionBookExtractor {
                             _ => {}
                         }
                     } else if (tag == "p" || tag == "v") && in_body && !is_notes_body {
-                        match Self::extract_paragraph_with_annotations(
-                            &mut reader,
-                            budget,
-                            &mut builder,
-                            &mut note_markers,
-                        ) {
-                            Err(error @ crate::error::XbergError::Security { .. }) => return Err(error),
-                            _ => {}
+                        if let Err(error @ crate::error::XbergError::Security { .. }) =
+                            Self::extract_paragraph_with_annotations(
+                                &mut reader,
+                                budget,
+                                &mut builder,
+                                &mut note_markers,
+                            )
+                        {
+                            return Err(error);
                         }
                     } else if tag == "subtitle" && in_body && !is_notes_body {
                         match Self::extract_text_content(&mut reader, budget) {

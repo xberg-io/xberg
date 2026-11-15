@@ -1301,7 +1301,7 @@ fn publish_hocr_table_rows(
     {
         // An exact-only match cannot resolve which physical row owned the table slot.
         if let RetainedTableLeaders::Reconciled(reconciled) = leaders {
-            *document = reconciled;
+            *document = *reconciled;
         }
         return;
     }

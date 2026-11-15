@@ -46,6 +46,12 @@ homepage = "https://xberg.io"
 unsafe_code = "deny"
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(alef)', 'cfg(feature, values("alef-meta"))'] }
 
+[workspace.lints.cargo]
+# Cargo judges a dependency against one feature set, so it flags link-only crates (libz-sys)
+# and dependencies that only other features use, and `build.warnings = "deny"` turns that into
+# a failed narrow feature leg. Making those dependencies optional per feature is tracked separately. ~keep
+unused_dependencies = "allow"
+
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 # Diagnostics belong in `tracing` (stderr), not raw stdout/stderr writes. The CLI's

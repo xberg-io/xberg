@@ -1,3 +1,9 @@
+#![allow(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "the build script output module under test prints cargo directives"
+)]
+
 #[path = "../build_support/output.rs"]
 mod output;
 

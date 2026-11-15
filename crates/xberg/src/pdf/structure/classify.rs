@@ -329,13 +329,6 @@ pub(super) fn classify_paragraphs(paragraphs: &mut [PdfParagraph], heading_map: 
     detect_monospace_code_blocks(paragraphs);
 }
 
-/// W2.B: Detect indentation-based lists (unordered by indent level).
-///
-/// Paragraphs that are horizontally shifted right relative to surrounding paragraphs
-/// are often list items. This pass identifies them by:
-/// 1. Computing the modal left X across all paragraphs on each page
-/// 2. Finding paragraphs indented >= 12 points right of the modal
-/// 3. Requiring they follow or precede another short paragraph at the same indent
 /// Most common left edge, bucketed to 0.1pt. Ties go to the smallest x so the
 /// result does not depend on hash iteration order.
 fn modal_left_position(left_positions: &[f32]) -> f32 {
@@ -353,6 +346,13 @@ fn modal_left_position(left_positions: &[f32]) -> f32 {
     bucket as f32 / 10.0
 }
 
+/// W2.B: Detect indentation-based lists (unordered by indent level).
+///
+/// Paragraphs that are horizontally shifted right relative to surrounding paragraphs
+/// are often list items. This pass identifies them by:
+/// 1. Computing the modal left X across all paragraphs on each page
+/// 2. Finding paragraphs indented >= 12 points right of the modal
+/// 3. Requiring they follow or precede another short paragraph at the same indent
 fn detect_indentation_based_lists(paragraphs: &mut [PdfParagraph]) {
     if paragraphs.len() < 2 {
         return;

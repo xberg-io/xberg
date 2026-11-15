@@ -397,6 +397,10 @@ fn diagnostic_crnn_model_output() {
     eprintln!("White image output: min={:.6}, max={:.6}", white_min, white_max);
 }
 
+#[allow(
+    unsafe_code,
+    reason = "the diagnostic points ORT_DYLIB_PATH at a discovered library before ort loads it"
+)]
 fn discover_ort() {
     if let Ok(path) = std::env::var("ORT_DYLIB_PATH")
         && std::path::Path::new(&path).exists()

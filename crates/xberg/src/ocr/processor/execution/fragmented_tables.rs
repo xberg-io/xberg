@@ -432,7 +432,7 @@ pub(super) fn reconcile_fragmented_hocr_table_rows(
 pub(super) enum RetainedTableLeaders {
     Ambiguous,
     BudgetExhausted,
-    Reconciled(InternalDocument),
+    Reconciled(Box<InternalDocument>),
 }
 
 // Transfer proven leader tokens and remove the same source occurrences in one operation.
@@ -500,7 +500,7 @@ fn try_reconcile_retained_table_leaders(
         }
     }
     table.markdown = table_to_markdown(&table.cells);
-    Some(RetainedTableLeaders::Reconciled(reconciled))
+    Some(RetainedTableLeaders::Reconciled(Box::new(reconciled)))
 }
 
 // The leader must be between cells. A label can occupy several cells if the
