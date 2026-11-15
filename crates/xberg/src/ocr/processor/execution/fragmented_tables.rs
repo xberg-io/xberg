@@ -116,13 +116,17 @@ fn unique_table_row_window<'a, 'word>(
     unique_matching_table_row_window(rows, cells, |row, cells| {
         allow_dot_leader && row_has_only_extra_dot_leader(row, cells)
     })
+    .ok()
+    .flatten()
 }
+
+struct AmbiguousTableRows;
 
 fn unique_matching_table_row_window<'a, 'word>(
     rows: &'a [Vec<&'word HocrWord>],
     cells: &[Vec<String>],
     matches_extra: impl Fn(&[&HocrWord], &[String]) -> bool,
-) -> Option<&'a [Vec<&'word HocrWord>]> {
+) -> Result<Option<&'a [Vec<&'word HocrWord>]>, AmbiguousTableRows> {
     let mut matches = rows.windows(cells.len()).filter(|window| {
         window.iter().zip(cells).all(|(row, cells)| {
             !row.is_empty()
@@ -134,8 +138,11 @@ fn unique_matching_table_row_window<'a, 'word>(
                     || matches_extra(row, cells))
         })
     });
-    let matched = matches.next()?;
-    matches.next().is_none().then_some(matched)
+    let matched = matches.next();
+    if matches.next().is_some() {
+        return Err(AmbiguousTableRows);
+    }
+    Ok(matched)
 }
 
 fn row_has_only_extra_dot_leader(row: &[&HocrWord], cells: &[String]) -> bool {
@@ -401,6 +408,11 @@ pub(super) fn reconcile_fragmented_hocr_table_rows(
     reconcile_proved_fragments(hocr, document, &table_words, config.page_number)
 }
 
+pub(super) enum RetainedTableLeaders {
+    Ambiguous,
+    Reconciled(InternalDocument),
+}
+
 // Transfer proven leader tokens and remove the same source occurrences in one operation.
 pub(super) fn reconcile_retained_table_leaders(
     hocr: &str,
@@ -409,7 +421,7 @@ pub(super) fn reconcile_retained_table_leaders(
     tsv: &str,
     config: &TesseractConfig,
     limits: &SecurityLimits,
-) -> Option<InternalDocument> {
+) -> Option<RetainedTableLeaders> {
     let mut budget = fragmented_hocr_budget(hocr, tsv, limits)?;
     let boxes = fragmented_table_boxes(tables, config.page_number, limits, &mut budget)?;
     let ([table], [bounds]) = (tables, boxes.as_slice()) else {
@@ -426,9 +438,12 @@ pub(super) fn reconcile_retained_table_leaders(
     )?;
     // Charge matching, then collecting the labels and claimed words.
     budget.checked_sub(comparison_work.saturating_mul(2))?;
-    let matched = unique_matching_table_row_window(&rows, &table.cells, |row, cells| {
+    let matched = match unique_matching_table_row_window(&rows, &table.cells, |row, cells| {
         retained_leader_cell(row, cells).is_some()
-    })?;
+    }) {
+        Ok(matched) => matched?,
+        Err(AmbiguousTableRows) => return Some(RetainedTableLeaders::Ambiguous),
+    };
     let dots: Vec<_> = matched
         .iter()
         .zip(&table.cells)
@@ -446,7 +461,7 @@ pub(super) fn reconcile_retained_table_leaders(
         }
     }
     table.markdown = table_to_markdown(&table.cells);
-    Some(reconciled)
+    Some(RetainedTableLeaders::Reconciled(reconciled))
 }
 
 // The leader must be between cells. A label can occupy several cells if the

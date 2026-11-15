@@ -817,13 +817,23 @@ fn fragmented_claims_refuse_when_the_removed_words_do_not_match_the_claimed_word
 fn repeated_leader_publication_case(
     table_rows: usize,
     table_bottom: u32,
+    dotted: [bool; 3],
 ) -> (String, String, InternalDocument, OcrTable) {
     let (hocr, tsv) =
         super::super::tests::word_table_markup([30, 55, 80].into_iter().enumerate().flat_map(|(index, top)| {
             positioned_dot_leader_row()
                 .into_iter()
                 .zip(["Signal", "timing", "........", "-64", "143.92"])
-                .map(move |(word, text)| (text, word.left, word.top + top - 30, word.width, word.height, index + 1))
+                .filter_map(move |(word, text)| {
+                    (text != "........" || dotted[index]).then_some((
+                        text,
+                        word.left,
+                        word.top + top - 30,
+                        word.width,
+                        word.height,
+                        index + 1,
+                    ))
+                })
         }));
     let document = crate::ocr::hocr_parser::parse_hocr_to_internal_document(&hocr);
     let table = OcrTable {
@@ -842,9 +852,9 @@ fn repeated_leader_publication_case(
 
 #[test]
 fn retained_leader_reconciliation_rejects_ambiguous_equal_rows_in_the_table_bounds() {
-    let (hocr, tsv, document, table) = repeated_leader_publication_case(1, 65);
+    let (hocr, tsv, document, table) = repeated_leader_publication_case(1, 65, [true; 3]);
     let mut tables = [table];
-    assert!(
+    assert!(matches!(
         reconcile_retained_table_leaders(
             &hocr,
             &document,
@@ -852,9 +862,9 @@ fn retained_leader_reconciliation_rejects_ambiguous_equal_rows_in_the_table_boun
             &tsv,
             &TesseractConfig::default(),
             &SecurityLimits::default(),
-        )
-        .is_none()
-    );
+        ),
+        Some(RetainedTableLeaders::Ambiguous)
+    ));
     assert_eq!(tables[0].cells[0][0], "Signal timing");
     assert!(tables[0].markdown.is_empty());
     assert_eq!(document.elements.len(), 15);
@@ -862,9 +872,9 @@ fn retained_leader_reconciliation_rejects_ambiguous_equal_rows_in_the_table_boun
 
 #[test]
 fn retained_leader_reconciliation_preserves_equal_rows_at_distinct_positions() {
-    let (hocr, tsv, document, table) = repeated_leader_publication_case(2, 65);
+    let (hocr, tsv, document, table) = repeated_leader_publication_case(2, 65, [true; 3]);
     let mut tables = [table];
-    let remaining = reconcile_retained_table_leaders(
+    let RetainedTableLeaders::Reconciled(remaining) = reconcile_retained_table_leaders(
         &hocr,
         &document,
         &mut tables,
@@ -872,7 +882,9 @@ fn retained_leader_reconciliation_preserves_equal_rows_at_distinct_positions() {
         &TesseractConfig::default(),
         &SecurityLimits::default(),
     )
-    .expect("both table rows have unique source positions");
+    .expect("expected a row proof") else {
+        panic!("both table rows have unique source positions");
+    };
     assert_eq!(tables[0].cells.len(), 2);
     assert!(tables[0].cells.iter().all(|row| row[0] == "Signal timing ........"));
     assert_eq!(tables[0].markdown.matches("........").count(), 2);
@@ -890,4 +902,31 @@ fn retained_leader_reconciliation_preserves_equal_rows_at_distinct_positions() {
             .collect::<Vec<_>>(),
         ["Signal", "timing", "........", "-64", "143.92"]
     );
+}
+
+#[test]
+fn psm3_publication_preserves_both_rows_when_dotted_and_exact_matches_compete() {
+    for dotted in [[true, false, true], [false, true, true]] {
+        let (hocr, tsv, mut document, table) = repeated_leader_publication_case(1, 65, dotted);
+        let source = document.elements.clone();
+        let mut tables = [table];
+        super::super::publish_hocr_table_rows(
+            &mut document,
+            &mut tables,
+            Some(&hocr),
+            Some(&tsv),
+            &TesseractConfig::default(),
+            super::super::ImageOcrPolicy::StandaloneAutoTableRows,
+            &SecurityLimits::default(),
+        );
+        assert_eq!(
+            document.elements.len(),
+            14,
+            "either physical row can own the table slot"
+        );
+        assert_eq!(document.elements, source);
+        assert!(!document.ocr_text_claimed_by_tables);
+        assert_eq!(tables[0].cells[0][0], "Signal timing");
+        assert!(tables[0].markdown.is_empty());
+    }
 }

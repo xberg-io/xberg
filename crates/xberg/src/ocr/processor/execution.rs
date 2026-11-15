@@ -7,7 +7,7 @@
 mod fragmented_tables;
 
 use fragmented_tables::{
-    FragmentedTablePolicy, apply_fragmented_reconciliation, fragmented_hocr_budget,
+    FragmentedTablePolicy, RetainedTableLeaders, apply_fragmented_reconciliation, fragmented_hocr_budget,
     reconcile_fragmented_hocr_table_rows, reconcile_retained_table_leaders,
 };
 
@@ -1278,6 +1278,54 @@ fn filter_elements_covered_by_tables(document: &mut InternalDocument, tables: &[
             .iter()
             .filter_map(|table| Some((ocr_table_bbox(table)?, table.cells.as_slice()))),
     )
+}
+
+fn publish_hocr_table_rows(
+    document: &mut InternalDocument,
+    tables: &mut [OcrTable],
+    hocr: Option<&str>,
+    tsv: Option<&str>,
+    config: &TesseractConfig,
+    policy: ImageOcrPolicy,
+    limits: &SecurityLimits,
+) {
+    if let Some(leaders) = hocr
+        .zip(tsv)
+        .filter(|_| policy == ImageOcrPolicy::StandaloneAutoTableRows)
+        .and_then(|(hocr, tsv)| reconcile_retained_table_leaders(hocr, document, tables, tsv, config, limits))
+    {
+        // An exact-only match cannot resolve which physical row owned the table slot.
+        if let RetainedTableLeaders::Reconciled(reconciled) = leaders {
+            *document = reconciled;
+        }
+        return;
+    }
+
+    let allow_dot_leader = policy == ImageOcrPolicy::StandaloneDotLeaderRows;
+    let reconciled = hocr.and_then(|hocr| {
+        tsv.and_then(|tsv| {
+            reconcile_fragmented_hocr_table_rows(
+                hocr,
+                document,
+                tables,
+                tsv,
+                FragmentedTablePolicy {
+                    config,
+                    allow_dot_leader,
+                },
+                limits,
+            )
+        })
+        .or_else(|| {
+            reconcile_grouped_hocr_table_rows(hocr, document, tables, config.page_number, allow_dot_leader)
+                .map(|document| (document, Vec::new()))
+        })
+    });
+    if let Some((reconciled, bounds)) = reconciled {
+        apply_fragmented_reconciliation(document, tables, reconciled, bounds);
+    } else {
+        filter_elements_covered_by_tables(document, tables);
+    }
 }
 
 fn ocr_table_bbox(table: &OcrTable) -> Option<BoundingBox> {
@@ -3382,58 +3430,19 @@ pub(super) fn perform_ocr(
     if let Some(document) = hocr_document.as_mut().filter(|_| fully_claimed) {
         document.elements.clear();
         document.ocr_text_claimed_by_tables = true;
-    } else if let Some(reconciled) = hocr_document
-        .as_ref()
-        .filter(|_| policy == ImageOcrPolicy::StandaloneAutoTableRows && dictionary_filtered_line_count == 0)
-        .and_then(|document| {
-            reconcile_retained_table_leaders(
-                hocr_for_tables.as_deref()?,
-                document,
-                &mut tables,
-                tsv_data_for_tables.as_deref()?,
-                config,
-                &security_limits,
-            )
-        })
-    {
-        hocr_document = Some(reconciled);
     } else if let Some(document) = hocr_document.as_mut() {
         // Reparse raw hOCR only if the initial dictionary pass kept every line. ~keep
-        let reconciled = hocr_for_tables
-            .as_deref()
-            .filter(|_| dictionary_filtered_line_count == 0)
-            .and_then(|hocr| {
-                tsv_data_for_tables
-                    .as_deref()
-                    .and_then(|tsv| {
-                        reconcile_fragmented_hocr_table_rows(
-                            hocr,
-                            document,
-                            &tables,
-                            tsv,
-                            FragmentedTablePolicy {
-                                config,
-                                allow_dot_leader: policy == ImageOcrPolicy::StandaloneDotLeaderRows,
-                            },
-                            &security_limits,
-                        )
-                    })
-                    .or_else(|| {
-                        reconcile_grouped_hocr_table_rows(
-                            hocr,
-                            document,
-                            &tables,
-                            config.page_number,
-                            policy == ImageOcrPolicy::StandaloneDotLeaderRows,
-                        )
-                        .map(|document| (document, Vec::new()))
-                    })
-            });
-        if let Some((reconciled, bounds)) = reconciled {
-            apply_fragmented_reconciliation(document, &mut tables, reconciled, bounds);
-        } else {
-            filter_elements_covered_by_tables(document, &tables);
-        }
+        publish_hocr_table_rows(
+            document,
+            &mut tables,
+            hocr_for_tables
+                .as_deref()
+                .filter(|_| dictionary_filtered_line_count == 0),
+            tsv_data_for_tables.as_deref(),
+            config,
+            policy,
+            &security_limits,
+        );
     }
 
     let is_markdown_output = extraction_config

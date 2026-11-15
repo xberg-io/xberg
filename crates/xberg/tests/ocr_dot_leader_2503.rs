@@ -41,20 +41,26 @@ fn psm3_publishes_each_source_row_once_with_its_detected_leaders() {
     assert_eq!(EXPECTED.lines().count(), 12);
     assert_rows_once(&plain.content, EXPECTED, "document", false);
     assert_rows_once(&page.content, EXPECTED, "page", false);
-    for row in LEADER_ROWS {
-        let normalized = |line: &str| line.replace('|', " ").split_whitespace().collect::<Vec<_>>().join(" ");
-        assert_eq!(plain.content.lines().filter(|line| normalized(line) == row).count(), 1);
-        assert_eq!(page.content.lines().filter(|line| normalized(line) == row).count(), 1);
-    }
+    assert_leaders_once(&plain.content, &LEADER_ROWS);
+    assert_leaders_once(&page.content, &LEADER_ROWS);
 
     config.output_format = OutputFormat::Html;
     let html = helpers::extract_bytes_document_blocking(BYTES, "image/png", &config).unwrap();
     assert_eq!(html.content.matches("<tr>").count(), 13);
+    let [page] = html.pages.as_deref().expect("requested HTML page output") else {
+        panic!("expected one HTML page");
+    };
+    assert_rows_once(&page.content, EXPECTED, "HTML page", false);
+    assert_leaders_once(&page.content, &LEADER_ROWS);
+    let [table] = html.tables.as_slice() else {
+        panic!("expected one table");
+    };
+    let [page_table] = page.tables.as_slice() else {
+        panic!("expected one HTML page table");
+    };
+    assert_eq!(page_table.cells, table.cells);
     for (amount, leader) in [("389,542", ".........."), ("752,441", "............")] {
         assert_eq!(html.content.matches(amount).count(), 1, "HTML duplicated {amount}");
-        let [table] = html.tables.as_slice() else {
-            panic!("expected one table");
-        };
         assert!(
             table
                 .cells
@@ -62,6 +68,17 @@ fn psm3_publishes_each_source_row_once_with_its_detected_leaders() {
                 .any(|row| row.iter().any(|cell| cell == amount) && row.iter().any(|cell| cell.ends_with(leader))),
             "HTML table lost the detected leader for {amount}"
         );
+    }
+}
+
+fn assert_leaders_once(content: &str, rows: &[&str]) {
+    for row in rows {
+        let matching = content.lines().filter(|line| {
+            line.split(|c: char| c == '|' || c.is_whitespace())
+                .filter(|word| !word.is_empty())
+                .eq(row.split_whitespace())
+        });
+        assert_eq!(matching.count(), 1, "leader row {row:?}");
     }
 }
 
