@@ -355,28 +355,19 @@ fn forced_ocr_tatr_owns_words_without_exposing_ocr_elements() {
 #[test]
 #[ignore = "requires the pinned public ParseBench PDF outside Git"]
 fn insurance_wrapped_labels_render_as_headers_over_numeric_records() {
-    let directory =
-        std::env::var_os("XBERG_2332_PARSEBENCH_INPUTS").expect("set the pinned ParseBench input directory");
-    let path = std::path::Path::new(&directory).join("f48db8574acac2e2744d.pdf");
-    let bytes = std::fs::read(path).unwrap();
-    assert_eq!(
-        hex::encode(Sha256::digest(&bytes)),
-        "0085e250b078694c7a6887245e52108e511401b90db99052fe1ee2b4c0d099a3"
-    );
+    let bytes = insurance_source();
     let config = parsebench_html_config();
     let result = extract_bytes_document_blocking(&bytes, "application/pdf", &config).unwrap();
-    let [table] = result.tables.as_slice() else {
-        panic!("expected one native grid, got {}", result.tables.len());
-    };
-    assert_eq!(table.cells.len(), 41);
-    assert!(table.cells.iter().all(|row| row.len() == 12));
-    assert_eq!(
-        table.cells[0][..4],
-        ["CLASS CODE", "RATE", "MIN. PREM.", "HAZ L/C CODE"]
-    );
-    assert_eq!(table.cells[1][..4], ["3400", "9.97", "1000", "2"]);
-    assert_eq!(result.content.matches("<th>").count(), 12);
-    assert_eq!(result.content.matches("<td>").count(), 40 * 12);
+    assert_insurance_tables(&result);
+    let combined: Vec<Vec<String>> = (0..41)
+        .map(|index| {
+            result
+                .tables
+                .iter()
+                .flat_map(|table| table.cells[index].iter().cloned())
+                .collect()
+        })
+        .collect();
 
     let mut pdf = lopdf::Document::load_mem(&bytes).unwrap();
     let page = pdf.get_pages()[&1];
@@ -395,7 +386,57 @@ fn insurance_wrapped_labels_render_as_headers_over_numeric_records() {
     let [neutral_table] = control.tables.as_slice() else {
         panic!("expected one native grid after recoloring keys");
     };
-    assert_eq!(neutral_table.cells, table.cells);
+    assert_eq!(neutral_table.cells, combined);
     assert_eq!(control.content.matches("<th>").count(), 0);
     assert_eq!(control.content.matches("<td>").count(), 41 * 12);
+}
+
+fn insurance_source() -> Vec<u8> {
+    let directory =
+        std::env::var_os("XBERG_2332_PARSEBENCH_INPUTS").expect("set the pinned ParseBench input directory");
+    let path = std::path::Path::new(&directory).join("f48db8574acac2e2744d.pdf");
+    let bytes = std::fs::read(path).unwrap();
+    assert_eq!(
+        hex::encode(Sha256::digest(&bytes)),
+        "0085e250b078694c7a6887245e52108e511401b90db99052fe1ee2b4c0d099a3"
+    );
+    bytes
+}
+
+fn assert_insurance_tables(result: &ExtractedDocument) {
+    assert_eq!(result.tables.len(), 3, "source prints three independent groups");
+    for (table, code) in result.tables.iter().zip(["3400", "4112", "4635"]) {
+        assert_eq!(table.cells.len(), 41);
+        assert!(table.cells.iter().all(|row| row.len() == 4));
+        assert_eq!(table.cells[0], ["CLASS CODE", "RATE", "MIN. PREM.", "HAZ L/C CODE"]);
+        assert_eq!(table.cells[1][0], code);
+    }
+    assert!(
+        result
+            .tables
+            .windows(2)
+            .all(|pair| pair[0].bounding_box.unwrap().x1 < pair[1].bounding_box.unwrap().x0)
+    );
+    assert_eq!(result.content.matches("<table").count(), 3);
+    assert_eq!(result.content.matches("<th>").count(), 12);
+    assert_eq!(result.content.matches("<td>").count(), 40 * 12);
+}
+
+#[cfg(feature = "layout-detection")]
+#[test]
+#[ignore = "requires the pinned public PDF and layout models"]
+fn insurance_layout_retains_caption_text_before_three_source_tables() {
+    let config: ExtractionConfig = serde_json::from_value(serde_json::json!({
+        "output_format": "html", "use_cache": false, "disable_ocr": true,
+        "enable_quality_processing": false, "concurrency": {"max_threads": 1},
+        "layout": {"strategy": "always", "table_model": "tatr", "acceleration": {"provider": "cpu"}}
+    }))
+    .unwrap();
+    let result = extract_bytes_document_blocking(&insurance_source(), "application/pdf", &config).unwrap();
+    assert_insurance_tables(&result);
+    let (prose, tables) = result.content.split_once("<table").unwrap();
+    for token in ["WORKERS", "OBI NATIONAL", "STANDARD", "CALIFORNIA", "EFFECTIVE DATE"] {
+        assert_eq!(prose.matches(token).count(), 1, "{token}: {prose}");
+        assert!(!tables.contains(token));
+    }
 }

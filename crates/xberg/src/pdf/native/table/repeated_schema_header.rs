@@ -11,35 +11,111 @@ const BASELINE_TOLERANCE: f32 = 0.5;
 const MAX_SOURCE_SPANS: usize = 4096;
 const MAX_SCHEMA_COLUMNS: usize = 64;
 
-// ~keep Run after layout arbitration so the source proof changes only header roles.
-pub(crate) fn retain(doc: &PdfDocument, native_tables: &mut [Table], layout_tables: &mut [Table]) {
+pub(crate) struct VerifiedSchema {
+    source: Table,
+    children: Vec<Table>,
+    captions: Vec<Vec<String>>,
+}
+
+pub(crate) fn verify(doc: &PdfDocument, native_tables: &[Table], ruled_count: usize) -> Vec<VerifiedSchema> {
     let mut candidates: Vec<_> = native_tables
-        .iter_mut()
-        .filter_map(|table| repeated_numeric_schema(table).map(|width| (table, width)))
+        .iter()
+        .enumerate()
+        .filter_map(|(index, table)| repeated_numeric_schema(table).map(|width| (table, width, index >= ruled_count)))
         .collect();
-    candidates.sort_by_key(|(table, _)| table.page_number);
+    candidates.sort_by_key(|(table, _, _)| table.page_number);
+    let mut verified = Vec::new();
     let mut page_spans = None;
-    for (table, width) in candidates {
+    for (table, width, can_split) in candidates {
         let Some(page) = table.page_number.checked_sub(1).map(|page| page as usize) else {
             continue;
         };
         if page_spans.as_ref().is_none_or(|(last, _)| *last != page) {
             page_spans = Some((page, painting_spans(doc, page)));
         }
-        if page_spans
-            .as_ref()
-            .and_then(|(_, spans)| spans.as_deref())
-            .is_none_or(|spans| !has_painted_header(table, width, spans))
-        {
+        let Some(spans) = page_spans.as_ref().and_then(|(_, spans)| spans.as_deref()) else {
             continue;
-        }
-        table.columns = table.cells.first().cloned();
-        for layout_table in layout_tables.iter_mut() {
-            if same_records(table, layout_table) {
-                layout_table.columns.clone_from(&table.columns);
-            }
+        };
+        let Some(edges) = verified_header_edges(table, width, spans) else {
+            continue;
+        };
+        let children = if can_split {
+            split_painted_records(table, width, spans, &edges).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let captions = if children.is_empty() {
+            Vec::new()
+        } else {
+            painted_caption_bands(table, spans)
+        };
+        verified.push(VerifiedSchema {
+            source: table.clone(),
+            children,
+            captions,
+        });
+    }
+    verified
+}
+
+pub(crate) fn retain_labels(verified: &[VerifiedSchema], native: &mut [Table], layout: &mut [Table]) {
+    for proof in verified {
+        let labels = proof.source.cells.first();
+        let Some(table) = native
+            .iter_mut()
+            .find(|table| table.columns.is_none() && same_source(&proof.source, table))
+        else {
+            continue;
+        };
+        table.columns = labels.cloned();
+        for table in layout
+            .iter_mut()
+            .filter(|table| table.columns.is_none() && same_records(&proof.source, table))
+        {
+            table.columns = labels.cloned();
         }
     }
+}
+
+pub(crate) fn apply_splits(verified: &[VerifiedSchema], tables: &mut Vec<Table>, allow_layout: bool) -> bool {
+    let mut changed = false;
+    for proof in verified.iter().filter(|proof| !proof.children.is_empty()) {
+        let replacement = tables
+            .iter()
+            .enumerate()
+            .filter_map(|(index, table)| {
+                (same_source(&proof.source, table) || (allow_layout && proof.matches_layout(table))).then_some(index)
+            })
+            .collect::<Vec<_>>();
+        let [index] = replacement.as_slice() else {
+            continue;
+        };
+        tables.splice(*index..=*index, proof.children.iter().cloned());
+        changed = true;
+    }
+    changed
+}
+
+impl VerifiedSchema {
+    fn matches_layout(&self, table: &Table) -> bool {
+        if !table.cell_styles.is_empty() || !same_records(&self.source, table) {
+            return false;
+        }
+        let extra_rows = table.cells.len() - self.source.cells.len();
+        let captions: Vec<Vec<&str>> = table.cells[1..1 + extra_rows]
+            .iter()
+            .map(|row| row.iter().flat_map(|cell| cell.split_whitespace()).collect())
+            .collect();
+        self.captions
+            .get(self.captions.len().saturating_sub(extra_rows)..)
+            .is_some_and(|source| source.iter().eq(captions.iter()))
+    }
+}
+
+fn same_source(source: &Table, target: &Table) -> bool {
+    source.page_number == target.page_number
+        && source.bounding_box == target.bounding_box
+        && source.cells == target.cells
 }
 
 fn painting_spans(doc: &PdfDocument, page: usize) -> Option<Vec<TextSpan>> {
@@ -55,7 +131,10 @@ fn painting_spans(doc: &PdfDocument, page: usize) -> Option<Vec<TextSpan>> {
 
 fn same_records(source: &Table, layout: &Table) -> bool {
     source.page_number == layout.page_number
-        && layout.columns.is_none()
+        && layout
+            .columns
+            .as_ref()
+            .is_none_or(|labels| Some(labels) == source.cells.first())
         && source.cells.first() == layout.cells.first()
         && layout
             .cells
@@ -99,20 +178,22 @@ fn is_numeric(value: &str) -> bool {
             .all(|c| c.is_ascii_digit() || matches!(c, '.' | ',' | '-' | '+') || c.is_whitespace())
 }
 
+#[cfg(test)]
 fn has_painted_header(table: &Table, width: usize, spans: &[TextSpan]) -> bool {
-    let Some(bounds) = table.bounding_box.filter(|bounds| super::finite_table_bounds(*bounds)) else {
-        return false;
-    };
+    verified_header_edges(table, width, spans).is_some()
+}
+
+fn verified_header_edges(table: &Table, width: usize, spans: &[TextSpan]) -> Option<Vec<f32>> {
+    let bounds = table
+        .bounding_box
+        .filter(|bounds| super::finite_table_bounds(*bounds))?;
     let local: Vec<_> = spans.iter().filter(|span| inside_table(span, bounds)).collect();
     let mut bands = Vec::with_capacity(BODY_WITNESS_ROWS);
     for row in &table.cells[1..=BODY_WITNESS_ROWS] {
-        let Some(band) = painted_record(&local, row, width) else {
-            return false;
-        };
-        bands.push(band);
+        bands.push(painted_record(&local, row, width)?);
     }
     let [first, second, third] = bands.as_slice() else {
-        return false;
+        return None;
     };
     let pitch = first.y - second.y;
     if pitch <= 0.0
@@ -126,12 +207,11 @@ fn has_painted_header(table: &Table, width: usize, spans: &[TextSpan]) -> bool {
                 .all(|(a, b)| (a - b).abs() <= BASELINE_TOLERANCE)
         })
     {
-        return false;
+        return None;
     }
-    let Some(edges) = body_cell_edges(&bands, width, bounds) else {
-        return false;
-    };
-    painted_label_bands(&local, first, pitch, &table.cells[0], &edges) && painted_cells_match(table, &local)
+    let edges = body_cell_edges(&bands, width, bounds)?;
+    (painted_label_bands(&local, first, pitch, &table.cells[0], &edges) && painted_cells_match(table, &local))
+        .then_some(edges)
 }
 
 // ~keep Reconstruct from the same painting spans that supplied the two label bands.
@@ -309,10 +389,7 @@ fn labels_fit_cells(bands: [&[&TextSpan]; 2], edges: &[f32], cells: &[String]) -
         let mut ordered = band.to_vec();
         ordered.sort_by(|a, b| a.bbox.x.total_cmp(&b.bbox.x));
         for span in ordered {
-            let Some((left, right)) = painted_extent(span) else {
-                return false;
-            };
-            let Some(column) = edges.windows(2).position(|edge| left >= edge[0] && right <= edge[1]) else {
+            let Some((column, _)) = span_cell(span, edges) else {
                 return false;
             };
             assigned[column].push(span.text.trim());
@@ -356,6 +433,131 @@ fn painted_extent(span: &TextSpan) -> Option<(f32, f32)> {
         }
     }
     (left < right).then_some((left, right))
+}
+
+// ~keep Certify every record against physical baselines and disjoint cell bounds before splitting.
+fn split_painted_records(table: &Table, width: usize, spans: &[TextSpan], edges: &[f32]) -> Option<Vec<Table>> {
+    if !table.cell_styles.is_empty() {
+        return None;
+    }
+    let parent = table.bounding_box?;
+    let mut local: Vec<_> = spans.iter().filter(|span| inside_table(span, parent)).collect();
+    let bands = painted_bands(&mut local);
+    if bands.len() != table.cells.len() + 1 {
+        return None;
+    }
+    let count = table.cells[0].len() / width;
+    let mut bounds = vec![None; count];
+    for band in &bands[..2] {
+        for span in *band {
+            let (column, extent) = span_cell(span, edges)?;
+            include_extent(&mut bounds[column / width], span, extent)?;
+        }
+    }
+    for (band, row) in bands[2..].iter().zip(&table.cells[1..]) {
+        if band.len() != row.len() || row.len() != edges.len() - 1 {
+            return None;
+        }
+        for (expected_column, (span, text)) in band.iter().zip(row).enumerate() {
+            let (column, extent) = span_cell(span, edges)?;
+            if column != expected_column || span.text.trim() != text || !is_numeric(text) {
+                return None;
+            }
+            include_extent(&mut bounds[column / width], span, extent)?;
+        }
+    }
+    let bounds: Vec<_> = bounds.into_iter().collect::<Option<_>>()?;
+    if bounds.windows(2).any(|pair| pair[0].x1 >= pair[1].x0) {
+        return None;
+    }
+    Some(
+        bounds
+            .into_iter()
+            .enumerate()
+            .map(|(index, bounding_box)| {
+                let cells: Vec<_> = table
+                    .cells
+                    .iter()
+                    .map(|row| row[index * width..(index + 1) * width].to_vec())
+                    .collect();
+                Table {
+                    columns: cells.first().cloned(),
+                    markdown: crate::table_core::table_to_markdown(&cells),
+                    cells,
+                    page_number: table.page_number,
+                    bounding_box: Some(bounding_box),
+                    ..Default::default()
+                }
+            })
+            .collect(),
+    )
+}
+
+fn painted_bands<'a, 'b>(spans: &'a mut [&'b TextSpan]) -> Vec<&'a [&'b TextSpan]> {
+    spans.sort_by(|a, b| b.bbox.y.total_cmp(&a.bbox.y));
+    let mut remaining = spans;
+    let mut bands = Vec::new();
+    while let Some(first) = remaining.first() {
+        let y = first.bbox.y;
+        let count = remaining
+            .partition_point(|span| y - span.bbox.y <= BASELINE_TOLERANCE)
+            .max(1);
+        let (band, rest) = remaining.split_at_mut(count);
+        band.sort_by(|a, b| a.bbox.x.total_cmp(&b.bbox.x));
+        bands.push(&*band);
+        remaining = rest;
+    }
+    bands
+}
+
+fn span_cell(span: &TextSpan, edges: &[f32]) -> Option<(usize, (f32, f32))> {
+    let (left, right) = painted_extent(span)?;
+    let column = edges.windows(2).position(|edge| left >= edge[0] && right <= edge[1])?;
+    Some((column, (left, right)))
+}
+
+fn include_extent(bounds: &mut Option<BoundingBox>, span: &TextSpan, (left, right): (f32, f32)) -> Option<()> {
+    let extent = BoundingBox {
+        x0: f64::from(left),
+        x1: f64::from(right),
+        y0: f64::from(span.bbox.y),
+        y1: f64::from(span.bbox.y + span.bbox.height),
+    };
+    if !super::finite_table_bounds(extent) {
+        return None;
+    }
+    *bounds = Some(bounds.map_or(extent, |bounds| BoundingBox {
+        x0: bounds.x0.min(extent.x0),
+        x1: bounds.x1.max(extent.x1),
+        y0: bounds.y0.min(extent.y0),
+        y1: bounds.y1.max(extent.y1),
+    }));
+    Some(())
+}
+
+fn painted_caption_bands(table: &Table, spans: &[TextSpan]) -> Vec<Vec<String>> {
+    let Some(bounds) = table.bounding_box else {
+        return Vec::new();
+    };
+    let mut above: Vec<_> = spans
+        .iter()
+        .filter(|span| {
+            span.rotation_degrees == 0.0
+                && span.wmode == 0
+                && !span.text.trim().is_empty()
+                && f64::from(span.bbox.y) > bounds.y1
+                && f64::from(span.bbox.x) >= bounds.x0 - f64::from(BASELINE_TOLERANCE)
+                && f64::from(span.bbox.right()) <= bounds.x1 + f64::from(BASELINE_TOLERANCE)
+        })
+        .collect();
+    painted_bands(&mut above)
+        .into_iter()
+        .map(|band| {
+            band.iter()
+                .flat_map(|span| span.text.split_whitespace().map(str::to_owned))
+                .collect()
+        })
+        .collect()
 }
 
 fn repeated_label_band(labels: &[&TextSpan], keys: &[f32]) -> bool {

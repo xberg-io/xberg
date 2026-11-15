@@ -948,6 +948,9 @@ pub(crate) fn extract_all_from_native_document(
     // once `assign_hierarchy_to_pages` has run, since that happens after this function
     // returns and the `NativeDocument` this loop reads from is dropped. ~keep
     let mut pdf_page_coordinate_frames: Vec<crate::types::internal::PdfPageCoordinateFrame> = Vec::new();
+    use crate::pdf::native::table::repeated_schema_header;
+    let ruled_count = native_table_grids.iter().take_while(|metadata| metadata.ruled).count();
+    let verified_schemas = repeated_schema_header::verify(&doc.doc, &tables, ruled_count);
     let mut pre_rendered_doc = if needs_structured && !config.force_ocr {
         let k = hierarchy_cluster_count(config);
 
@@ -1057,7 +1060,8 @@ pub(crate) fn extract_all_from_native_document(
                 .iter()
                 .filter_map(|metadata| metadata.source_members.as_ref())
                 .collect::<Vec<_>>(),
-            native_table_grids.iter().take_while(|metadata| metadata.ruled).count(),
+            ruled_count,
+            &verified_schemas,
             crate::pdf::structure::SegmentStructureConfig {
                 k_clusters: k,
                 tables: &tables,
@@ -1137,8 +1141,8 @@ pub(crate) fn extract_all_from_native_document(
     for (table, metadata) in tables.iter_mut().zip(&native_table_grids) {
         metadata.retain_column_labels(table);
     }
-    crate::pdf::native::table::repeated_schema_header::retain(
-        &doc.doc,
+    repeated_schema_header::retain_labels(
+        &verified_schemas,
         &mut tables,
         pre_rendered_doc
             .as_mut()
@@ -1153,6 +1157,8 @@ pub(crate) fn extract_all_from_native_document(
         &financial_rows,
         pre_rendered_doc.as_mut(),
     );
+
+    repeated_schema_header::apply_splits(&verified_schemas, &mut tables, false);
 
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let outlined_ocr_pages = if cut_short {

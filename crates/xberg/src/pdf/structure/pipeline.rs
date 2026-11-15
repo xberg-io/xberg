@@ -3808,6 +3808,13 @@ pub(crate) fn extract_document_structure_from_segments(
     )
 }
 
+#[derive(Default)]
+struct NativeTableInputs<'a> {
+    sources: &'a [&'a crate::pdf::native::table::source_members::TableSources],
+    ruled_count: usize,
+    schemas: &'a [crate::pdf::native::table::repeated_schema_header::VerifiedSchema],
+}
+
 #[cfg(any(test, feature = "ocr", feature = "ocr-pipeline"))]
 fn build_document_structure(
     all_page_segments: Vec<Vec<SegmentData>>,
@@ -3817,8 +3824,7 @@ fn build_document_structure(
     build_document_structure_with_native(
         all_page_segments,
         None,
-        &[],
-        0,
+        NativeTableInputs::default(),
         config,
         #[cfg(feature = "layout-detection")]
         loaders,
@@ -3829,14 +3835,18 @@ pub(crate) fn extract_document_structure_from_native_pages(
     native_pages: Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>,
     table_sources: &[&crate::pdf::native::table::source_members::TableSources],
     ruled_table_count: usize,
+    schemas: &[crate::pdf::native::table::repeated_schema_header::VerifiedSchema],
     config: SegmentStructureConfig<'_>,
 ) -> Result<crate::types::internal::InternalDocument> {
     let segments = native_pages.iter().map(|page| page.segments.clone()).collect();
     build_document_structure_with_native(
         segments,
         Some(native_pages),
-        table_sources,
-        ruled_table_count,
+        NativeTableInputs {
+            sources: table_sources,
+            ruled_count: ruled_table_count,
+            schemas,
+        },
         config,
         #[cfg(feature = "layout-detection")]
         TABLE_MODEL_LOADERS,
@@ -3846,11 +3856,15 @@ pub(crate) fn extract_document_structure_from_native_pages(
 fn build_document_structure_with_native(
     mut all_page_segments: Vec<Vec<SegmentData>>,
     native_pages: Option<Vec<crate::pdf::native::hierarchy::script_evidence::NativePageSegments>>,
-    table_sources: &[&crate::pdf::native::table::source_members::TableSources],
-    ruled_table_count: usize,
+    native_tables: NativeTableInputs<'_>,
     config: SegmentStructureConfig<'_>,
     #[cfg(feature = "layout-detection")] loaders: TableModelLoaders,
 ) -> Result<crate::types::internal::InternalDocument> {
+    let NativeTableInputs {
+        sources: table_sources,
+        ruled_count: ruled_table_count,
+        schemas,
+    } = native_tables;
     let SegmentStructureConfig {
         k_clusters,
         tables,
@@ -4250,12 +4264,17 @@ fn build_document_structure_with_native(
     #[cfg(not(feature = "layout-detection"))]
     let overlap_preference = crate::core::config::layout::TableOverlapPreference::Content;
     let stitched_native_tables = stitch_fragmented_tables(tables.to_vec(), &all_page_segments, ruled_table_count);
-    let emitted_tables = prepare_emitted_tables(
+    let mut emitted_tables = prepare_emitted_tables(
         &stitched_native_tables,
         layout_tables,
         overlap_preference,
         &all_page_segments,
     );
+
+    // Source-owned children must replace the aggregate before table coverage suppresses prose. ~keep
+    if crate::pdf::native::table::repeated_schema_header::apply_splits(schemas, &mut emitted_tables, true) {
+        assign_deterministic_table_ids(&mut emitted_tables);
+    }
 
     let table_members =
         crate::pdf::native::table::source_members::project(&all_page_segments, table_sources, &emitted_tables);
