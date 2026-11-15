@@ -419,21 +419,22 @@ fn paragraph_is_covered_and_carried_by_table(
     table: &crate::types::Table,
     table_token_counts: &std::collections::HashMap<String, usize>,
 ) -> bool {
+    let text = paragraph_text.trim();
+    !text.is_empty()
+        && table
+            .bounding_box
+            .is_some_and(|bbox| paragraph_is_covered_by_box(paragraph, bbox))
+        && table_carries_every_token(text, table_token_counts)
+}
+
+fn paragraph_is_covered_by_box(paragraph: &PdfParagraph, bbox: BoundingBox) -> bool {
     let Some((left, bottom, right, top)) = paragraph.block_bbox else {
-        return false;
-    };
-    let Some(bbox) = table.bounding_box else {
         return false;
     };
     let para_area = (right - left) * (top - bottom);
     if !(para_area.is_finite() && para_area > 0.0) {
         return false;
     }
-    let text = paragraph_text.trim();
-    if text.is_empty() {
-        return false;
-    }
-
     let inter_left = left.max(bbox.x0 as f32);
     let inter_right = right.min(bbox.x1 as f32);
     let inter_bottom = bottom.max(bbox.y0 as f32);
@@ -443,7 +444,7 @@ fn paragraph_is_covered_and_carried_by_table(
     }
     let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
 
-    inter_area / para_area >= MIN_TABLE_COVERAGE_AREA_RATIO && table_carries_every_token(text, table_token_counts)
+    inter_area / para_area >= MIN_TABLE_COVERAGE_AREA_RATIO
 }
 
 pub(super) fn reconcile_certified_table_paragraphs(
@@ -485,8 +486,7 @@ pub(super) fn reconcile_certified_table_paragraphs(
         let singletons = single_residual_members(&seen, &runs.contained);
         for (index, paragraph) in page.iter_mut().enumerate() {
             if !captions.contains(&index)
-                && let Some(repaired) =
-                    recover_mixed_table_tick(paragraph, table, table_bbox, &counts, &singletons, hyphens)
+                && let Some(repaired) = recover_mixed_table_tick(paragraph, table_bbox, &counts, &singletons, hyphens)
             {
                 *paragraph = repaired;
             }
@@ -667,7 +667,6 @@ fn isolated_painted_orphan(
 
 fn recover_mixed_table_tick(
     paragraph: &PdfParagraph,
-    table: &crate::types::Table,
     table_bbox: BoundingBox,
     counts: &std::collections::HashMap<String, usize>,
     singletons: &ahash::AHashSet<&crate::pdf::native::hierarchy::script_evidence::SegmentKey>,
@@ -686,17 +685,18 @@ fn recover_mixed_table_tick(
         return None;
     }
     let (_, annotations) = extract_text_and_annotations(paragraph, hyphens);
-    let text = paragraph_effective_text(paragraph, hyphens);
-    if !annotations.is_empty() || !paragraph_is_covered_and_carried_by_table(paragraph, &text, table, counts) {
+    if !annotations.is_empty() || !paragraph_is_covered_by_box(paragraph, table_bbox) {
         return None;
     }
+    // The certified orphan can be a fragment of a whole table token, such as a decimal. ~keep
     let bounds = outside_tick_bounds(outside, table_bbox)?;
     let mut repaired = paragraph.clone();
     repaired.lines.pop();
     repaired.block_bbox = Some(bounds);
     let (text, annotations) = extract_text_and_annotations(&repaired, hyphens);
-    if text.is_empty()
+    if table_coverage_tokens(&text).is_empty()
         || !annotations.is_empty()
+        || !table_carries_every_token(&text, counts)
         || !outside
             .segments
             .iter()
@@ -2458,10 +2458,12 @@ mod tests {
 
     #[test]
     fn mixed_tick_recovers_literal_source_text_regardless_of_label_and_owned_glyph_shape() {
-        for (tick, owned, expected) in [
-            ("-0.5", "0", Some("-0.5")),
-            ("1,000", "X", Some("1,000")),
-            (" 1,000", "X", None),
+        for (tick, owned, cells, expected) in [
+            ("-0.5", "0", "-0.5 0.4", Some("-0.5")),
+            ("1,000", "X", "1,000 X.4", Some("1,000")),
+            (" 1,000", "X", "1,000 X.4", None),
+            ("%", "0", "0.4", None),
+            ("-0.5", "0", "0 5 0.4", None),
         ] {
             let mut paragraph = make_paragraph_at(tick, None, 20.0);
             paragraph.lines[0].segments[0].width = 10.0;
@@ -2474,11 +2476,10 @@ mod tests {
             paragraph.lines.push(residual);
             paragraph.block_bbox = Some((0.0, 10.0, 102.0, 32.0));
 
-            let table = make_table_in_box(&format!("| {tick} {owned}.4 |"), 12.0, 110.0, 40.0);
+            let table = make_table_in_box(&format!("| {cells} |"), 12.0, 110.0, 40.0);
             let hyphens = Default::default();
             let repaired = recover_mixed_table_tick(
                 &paragraph,
-                &table,
                 table.bounding_box.unwrap(),
                 &table_coverage_token_counts(&table),
                 &ahash::AHashSet::from_iter([&key]),
