@@ -1503,6 +1503,10 @@ async fn extract_mixed_ocr_native_with_layout_inputs(
     } else {
         None
     };
+    // The sparse glyph regression cases exercise the single-backend raster path. ~keep
+    #[cfg(all(test, feature = "ocr", feature = "bundle-tessdata-eng"))]
+    let effective_pipeline =
+        effective_pipeline.filter(|_| !sparse_glyph_read::test_uses_single_backend(&ocr_config_owned));
     #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
     let automatic_mixed_prose = cfg!(auto_rotate)
         && !probing_hidden_layer

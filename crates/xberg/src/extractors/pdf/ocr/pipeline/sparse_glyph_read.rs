@@ -273,10 +273,30 @@ const QUALITY_CASE: usize = 0x3150_5101;
 const MISSING_WORD_CASE: usize = 0x3150_5102;
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 const MARGIN_CASE: usize = 0x3150_5103;
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+const NORMAL_CONTROL_CASE: usize = 0x3150_5104;
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+pub(super) fn test_uses_single_backend(config: &OcrConfig) -> bool {
+    test_case(config).is_some()
+        || config
+            .security_limits
+            .as_ref()
+            .is_some_and(|limits| limits.max_archive_size == NORMAL_CONTROL_CASE)
+}
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 static ATTEMPTS: std::sync::Mutex<std::collections::BTreeMap<usize, Vec<Attempt>>> =
     std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+#[cfg(all(test, feature = "bundle-tessdata-eng"))]
+fn test_case(config: &OcrConfig) -> Option<usize> {
+    config
+        .security_limits
+        .as_ref()
+        .map(|limits| limits.max_archive_size)
+        .filter(|case| matches!(*case, QUALITY_CASE | MISSING_WORD_CASE | MARGIN_CASE))
+}
 
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 pub(super) fn test_attempt(
@@ -286,10 +306,8 @@ pub(super) fn test_attempt(
     height: u32,
     marked_words: Option<&MarkedWords>,
 ) -> crate::Result<ExtractedDocument> {
-    let case = config.security_limits.as_ref().map(|limits| limits.max_archive_size);
-    if let Some(case @ (QUALITY_CASE | MISSING_WORD_CASE | MARGIN_CASE)) = case
-        && let Ok(read) = &mut result
-    {
+    if let Some(case) = test_case(config) {
+        let read = result.as_mut().expect("sparse glyph test OCR read failed");
         let retry = marked_words.is_none() && case != MARGIN_CASE;
         if let Some(words) = marked_words {
             assert!(
@@ -308,7 +326,7 @@ pub(super) fn test_attempt(
             .map(|metadata| metadata.target_dpi);
         ATTEMPTS
             .lock()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .entry(case)
             .or_default()
             .push((retry, width, height, target));
@@ -417,9 +435,14 @@ async fn assert_sparse_glyph_attempts(case: usize) {
         .unwrap();
     let attempts = ATTEMPTS
         .lock()
-        .unwrap()
-        .remove(&case)
-        .expect("observed at least one OCR attempt");
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(&case);
+    let attempts = attempts.unwrap_or_else(|| {
+        panic!(
+            "expected an OCR attempt for case {case:#x}, got {:?} with warnings {:?}",
+            result.extraction_method, result.processing_warnings
+        )
+    });
     let normal = normal_density_control(pdf, &config).await;
     let normal_page = &normal.pages.as_ref().unwrap()[0];
     let normal_target = normal_page
@@ -456,7 +479,7 @@ async fn assert_sparse_glyph_attempts(case: usize) {
 #[cfg(all(test, feature = "bundle-tessdata-eng"))]
 async fn normal_density_control(pdf: &[u8], config: &ExtractionConfig) -> ExtractedDocument {
     let mut normal_config = config.clone();
-    normal_config.security_limits.as_mut().unwrap().max_archive_size = QUALITY_CASE + 16;
+    normal_config.security_limits.as_mut().unwrap().max_archive_size = NORMAL_CONTROL_CASE;
     normal_config.images = Some(ImageExtractionConfig {
         target_dpi: crate::image::dpi::DEFAULT_PDF_RENDER_DPI,
         auto_adjust_dpi: false,
