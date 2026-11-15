@@ -562,8 +562,8 @@ mod tests {
 
         let (_, metadata) = result.unwrap();
         assert!(
-            metadata.is_some() || metadata.is_none(),
-            "Should return either Some or None metadata"
+            metadata.is_some(),
+            "An unclosed <title> still yields title metadata from the recovered document"
         );
     }
 
