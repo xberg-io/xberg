@@ -400,6 +400,31 @@ fn cached_extgstate_keeps_the_stroke_opacity_inside_zero_to_one() {
 }
 
 #[test]
+fn cached_extgstate_suppresses_a_transparent_fill_until_state_is_restored() {
+    let mut extractor = PathExtractor::new();
+    extractor.cache_path_extgstate(
+        "InvisibleFill",
+        crate::rendering::ext_gstate::ParsedExtGState {
+            fill_alpha: Some(0.0),
+            ..Default::default()
+        },
+    );
+    let original = PathGraphicsState::new();
+    let mut scoped = original.clone();
+    assert!(extractor.apply_cached_path_extgstate("InvisibleFill", &mut scoped));
+    extractor.rectangle(0.0, 0.0, 20.0, 0.4);
+    extractor.fill(FillRule::NonZero);
+    extractor.update_from_path_state(&original);
+    extractor.rectangle(0.0, 5.0, 20.0, 0.4);
+    extractor.fill(FillRule::NonZero);
+    let paths = extractor.finish();
+    assert_eq!(
+        paths.iter().map(PathContent::has_fill).collect::<Vec<_>>(),
+        [false, true]
+    );
+}
+
+#[test]
 fn cached_extgstate_ignores_a_nan_stroke_opacity() {
     let mut extractor = PathExtractor::new();
     let parsed = crate::rendering::ext_gstate::ParsedExtGState {

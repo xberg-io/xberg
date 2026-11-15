@@ -53,6 +53,7 @@ pub(crate) struct PathGraphicsState {
     pub fill_color_rgb: (f32, f32, f32),
     pub line_width: f32,
     pub stroke_alpha: f32,
+    pub fill_alpha: f32,
     pub line_cap: u8,
     pub line_join: u8,
     /// `d` operand: on/off lengths in user space and phase; an empty array is solid.
@@ -67,6 +68,7 @@ impl PathGraphicsState {
             fill_color_rgb: (0.0, 0.0, 0.0),
             line_width: 1.0,
             stroke_alpha: 1.0,
+            fill_alpha: 1.0,
             line_cap: 0,
             line_join: 0,
             dash: (Vec::new(), 0.0),
@@ -194,6 +196,7 @@ pub struct PathExtractor {
     current_fill_color: Option<Color>,
     current_line_width: f32,
     current_stroke_alpha: f32,
+    current_fill_alpha: f32,
     current_line_cap: LineCap,
     current_line_join: LineJoin,
     current_dash: (Vec<f32>, f32),
@@ -248,6 +251,7 @@ impl PathExtractor {
             current_fill_color: Some(Color::black()),
             current_line_width: 1.0,
             current_stroke_alpha: 1.0,
+            current_fill_alpha: 1.0,
             current_line_cap: LineCap::Butt,
             current_line_join: LineJoin::Miter,
             current_dash: (Vec::new(), 0.0),
@@ -450,6 +454,7 @@ impl PathExtractor {
             .stroke_alpha
             .filter(|alpha| !alpha.is_nan())
             .map(|alpha| alpha.clamp(0.0, 1.0));
+        let fill_alpha = parsed.fill_alpha.filter(|alpha| !alpha.is_nan());
         if let Some((lengths, phase)) = &parsed.dash {
             state.dash.0.clone_from(lengths);
             state.dash.1 = *phase;
@@ -459,6 +464,10 @@ impl PathExtractor {
         if let Some(alpha) = alpha {
             state.stroke_alpha = alpha;
             self.set_stroke_alpha(alpha);
+        }
+        if let Some(alpha) = fill_alpha {
+            state.fill_alpha = alpha.clamp(0.0, 1.0);
+            self.current_fill_alpha = state.fill_alpha;
         }
         true
     }
@@ -558,6 +567,7 @@ impl PathExtractor {
         self.ctm = state.ctm;
         self.current_line_width = state.line_width;
         self.current_stroke_alpha = state.stroke_alpha;
+        self.current_fill_alpha = state.fill_alpha;
 
         // Convert line cap (0=butt, 1=round, 2=square) ~keep
         self.current_line_cap = match state.line_cap {
@@ -586,6 +596,7 @@ impl PathExtractor {
         self.ctm = state.ctm;
         self.current_line_width = state.line_width;
         self.current_stroke_alpha = state.stroke_alpha;
+        self.current_fill_alpha = state.fill_alpha;
         self.current_line_cap = match state.line_cap {
             1 => LineCap::Round,
             2 => LineCap::Square,
@@ -807,7 +818,7 @@ impl PathExtractor {
             path.stroke_color = None;
         }
 
-        if fill {
+        if fill && self.current_fill_alpha > 0.0 {
             path.fill_color = self.current_fill_color;
         } else {
             path.fill_color = None;
