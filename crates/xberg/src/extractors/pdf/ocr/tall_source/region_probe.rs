@@ -366,7 +366,16 @@ pub(super) async fn scan_selected_inventory(
             tracing::trace!(?stock, "anchored OCR discovery declined candidate perimeter");
             continue;
         };
-        let Some(reads) = read_pair(attempt, source, backend, ocr, region, frame).await? else {
+        let column = if heading {
+            Some(frame)
+        } else {
+            source.source_line_column(region)
+        };
+        let Some(column) = column else {
+            tracing::trace!(?stock, "anchored OCR discovery declined source column");
+            continue;
+        };
+        let Some(reads) = read_pair(attempt, source, backend, ocr, region, column).await? else {
             continue;
         };
         let originals: Vec<_> = read.occurrences[stock.clone()]
@@ -402,7 +411,7 @@ pub(super) async fn scan_selected_inventory(
         let Some(edits) = super::region_reconciliation::plan_line_edits(
             &read.transcript,
             region,
-            frame,
+            column,
             &originals,
             [&a, &b],
             &protected,

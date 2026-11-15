@@ -476,6 +476,47 @@ impl IndexedSource {
         Some(components)
     }
 
+    pub(super) fn source_line_column(
+        &self,
+        region: super::region_reconciliation::RegionBox,
+    ) -> Option<super::region_reconciliation::RegionBox> {
+        use super::region_reconciliation::RegionBox;
+        let gutter_width = region.bottom.checked_sub(region.top)?.checked_mul(2)?.max(12);
+        let scan = RegionBox {
+            left: 0,
+            right: self.width,
+            top: region.top,
+            bottom: region.bottom,
+        };
+        let components = self.line_ink_components(scan)?;
+        let mut left = 0;
+        let mut right = self.width;
+        let mut previous = 0;
+        for next in components
+            .iter()
+            .map(|ink| ink.start)
+            .chain(std::iter::once(self.width))
+            .zip(components.iter().map(|ink| ink.end).chain(std::iter::once(self.width)))
+        {
+            let (start, end) = next;
+            if start - previous >= gutter_width {
+                let center = previous + (start - previous) / 2;
+                if region.left < center && center < region.right {
+                    return None;
+                }
+                if center <= region.left {
+                    left = center;
+                }
+                if center >= region.right {
+                    right = right.min(center);
+                }
+            }
+            previous = end;
+        }
+        let column = RegionBox { left, right, ..scan };
+        (column.contains(region) && (left != 0 || right != self.width)).then_some(column)
+    }
+
     fn sample_has_ink(&self, sample: u8) -> bool {
         const INK_THRESHOLD: u8 = 224;
         let offset = usize::from(sample) * 3;

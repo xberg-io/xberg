@@ -979,6 +979,7 @@ fn derive(
     #[cfg(all(feature = "pdf", feature = "ocr"))]
     if let (Some(spans), Some(pages)) = (spans.as_ref(), pages.as_deref_mut())
         && content_is_plain
+        && !include_document_structure
         && output_format == crate::core::config::OutputFormat::Plain
     {
         let _ = pages::adopt_final_ocr_replacement(&mut doc, &mut content, spans, pages);
