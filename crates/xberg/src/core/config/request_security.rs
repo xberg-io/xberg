@@ -432,6 +432,22 @@ fn is_filesystem_path(value: &str) -> bool {
     unix_absolute || windows_drive || file_uri || value.starts_with("~/") || value.starts_with("\\\\")
 }
 
+/// Replace filesystem paths in the messages of per-input batch errors, logging each original.
+pub(crate) fn redact_error_items(errors: &mut [super::ExtractionErrorItem]) {
+    for item in errors {
+        let message = redact_paths(&item.message);
+        if message != item.message {
+            tracing::warn!(
+                index = item.index,
+                error_type = %item.error_type,
+                error = %item.message,
+                "Extraction input failed"
+            );
+            item.message = message;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -741,6 +757,32 @@ mod tests {
         assert_eq!(
             local.ocr.and_then(|ocr| ocr.vlm_config).map(|llm| llm.model),
             Some("openai/gpt-4o".to_string())
+        );
+    }
+
+    #[test]
+    fn should_redact_server_paths_in_per_input_batch_errors() {
+        let item = |index, message: &str| super::super::ExtractionErrorItem {
+            index,
+            code: 2,
+            error_type: "parsing".to_string(),
+            source: "report.pdf".to_string(),
+            message: message.to_string(),
+        };
+        let mut errors = vec![
+            item(0, "Parsing error: cannot open /srv/xberg/tmp/upload-7.pdf: truncated"),
+            item(1, "Unsupported format: application/x-unsupported-format"),
+        ];
+
+        redact_error_items(&mut errors);
+
+        assert_eq!(errors[0].message, "Parsing error: cannot open <path>: truncated");
+        assert_eq!(errors[0].index, 0);
+        assert_eq!(errors[0].error_type, "parsing");
+        assert_eq!(errors[0].source, "report.pdf");
+        assert_eq!(
+            errors[1].message,
+            "Unsupported format: application/x-unsupported-format"
         );
     }
 

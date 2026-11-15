@@ -199,14 +199,46 @@ impl XbergMcp {
     /// become `<path>` and the full error is logged.
     fn xberg_error(&self, error: crate::XbergError) -> rmcp::ErrorData {
         let mut mapped = super::errors::map_xberg_error_to_mcp(error);
-        if self.http_transport {
-            let message = crate::core::config::request_security::redact_paths(&mapped.message);
-            if message != mapped.message {
-                tracing::warn!(error = %mapped.message, "MCP tool call failed");
-                mapped.message = message.into();
-            }
-        }
+        mapped.message = self
+            .client_message(std::mem::take(&mut mapped.message).into_owned())
+            .into();
         mapped
+    }
+
+    /// An internal error whose message names a server failure, redacted like [`Self::xberg_error`].
+    #[cfg_attr(
+        not(any(
+            test,
+            paddle_ocr,
+            feature = "formula-recognition",
+            feature = "layout-detection",
+            feature = "embeddings",
+            feature = "ner-onnx"
+        )),
+        allow(dead_code)
+    )]
+    fn internal_error(&self, message: String) -> rmcp::ErrorData {
+        rmcp::ErrorData::internal_error(self.client_message(message), None)
+    }
+
+    /// `message` as shown to the client: over HTTP, server filesystem paths become `<path>` and
+    /// the full message is logged.
+    fn client_message(&self, message: String) -> String {
+        if !self.http_transport {
+            return message;
+        }
+        let redacted = crate::core::config::request_security::redact_paths(&message);
+        if redacted != message {
+            tracing::warn!(error = %message, "MCP tool call failed");
+        }
+        redacted
+    }
+
+    /// Over HTTP, redact server filesystem paths in the result's per-input error messages.
+    fn redact_result_errors(&self, output: &mut crate::ExtractionResult) {
+        if self.http_transport {
+            crate::core::config::request_security::redact_error_items(&mut output.errors);
+        }
     }
 
     /// The cache directory as shown to the client: hidden over HTTP.
@@ -289,9 +321,10 @@ impl XbergMcp {
         let input = parse_extract_input(params.input, &config)?;
         self.reject_local_input(&input)?;
 
-        let output = crate::extract(input, &config)
+        let mut output = crate::extract(input, &config)
             .await
             .map_err(|error| self.xberg_error(error))?;
+        self.redact_result_errors(&mut output);
         let response = format_extraction_result_for_wire(&output, use_toon);
         let mut tool_result = CallToolResult::success(vec![ContentBlock::text(response)]);
         tool_result.structured_content = serde_json::to_value(&output).ok();
@@ -328,9 +361,10 @@ impl XbergMcp {
             self.reject_local_input(&options.input)?;
         }
 
-        let output = crate::extract_batch_with_input_options(inputs, &config)
+        let mut output = crate::extract_batch_with_input_options(inputs, &config)
             .await
             .map_err(|error| self.xberg_error(error))?;
+        self.redact_result_errors(&mut output);
         let response = format_extraction_result_for_wire(&output, use_toon);
         let mut tool_result = CallToolResult::success(vec![ContentBlock::text(response)]);
         tool_result.structured_content = serde_json::to_value(&output).ok();
@@ -611,9 +645,9 @@ impl XbergMcp {
         {
             let paddle_dir = cache_base.join("paddle-ocr");
             let manager = crate::paddle_ocr::ModelManager::new(paddle_dir);
-            manager.ensure_all_models().map_err(|e| {
-                rmcp::ErrorData::internal_error(format!("Failed to download PaddleOCR models: {}", e), None)
-            })?;
+            manager
+                .ensure_all_models()
+                .map_err(|e| self.internal_error(format!("Failed to download PaddleOCR models: {}", e)))?;
             record_warmed_model(
                 &mut available,
                 &mut downloaded,
@@ -627,9 +661,8 @@ impl XbergMcp {
         {
             let formula_dir = cache_base.join("formula-recognition");
             let was_cached = crate::formula_recognition::models_cached_in(Some(&formula_dir));
-            crate::formula_recognition::ensure_models_in(Some(&formula_dir)).map_err(|e| {
-                rmcp::ErrorData::internal_error(format!("Failed to download formula recognition models: {e}"), None)
-            })?;
+            crate::formula_recognition::ensure_models_in(Some(&formula_dir))
+                .map_err(|e| self.internal_error(format!("Failed to download formula recognition models: {e}")))?;
             record_warmed_model(
                 &mut available,
                 &mut downloaded,
@@ -658,9 +691,9 @@ impl XbergMcp {
                     CacheWarmDisposition::AlreadyCached,
                 );
             } else {
-                manager.ensure_all_models().map_err(|e| {
-                    rmcp::ErrorData::internal_error(format!("Failed to download layout models: {}", e), None)
-                })?;
+                manager
+                    .ensure_all_models()
+                    .map_err(|e| self.internal_error(format!("Failed to download layout models: {}", e)))?;
                 let disposition = if !rtdetr_was_cached && !tatr_was_cached {
                     CacheWarmDisposition::Downloaded
                 } else {
@@ -709,10 +742,7 @@ impl XbergMcp {
                     Some(embeddings_dir.clone()),
                 )
                 .map_err(|e| {
-                    rmcp::ErrorData::internal_error(
-                        format!("Failed to download embedding model '{}': {}", preset.name, e),
-                        None,
-                    )
+                    self.internal_error(format!("Failed to download embedding model '{}': {}", preset.name, e))
                 })?;
                 record_warmed_model(
                     &mut available,
@@ -746,12 +776,8 @@ impl XbergMcp {
                 };
 
                 for model in &models_to_warm {
-                    let path = crate::text::ner::download_model(model, None).map_err(|e| {
-                        rmcp::ErrorData::internal_error(
-                            format!("Failed to download NER model '{}': {}", model, e),
-                            None,
-                        )
-                    })?;
+                    let path = crate::text::ner::download_model(model, None)
+                        .map_err(|e| self.internal_error(format!("Failed to download NER model '{}': {}", model, e)))?;
                     record_warmed_model(
                         &mut available,
                         &mut downloaded,
@@ -774,15 +800,15 @@ impl XbergMcp {
         }
 
         let dto = super::schema::CacheWarmOutput {
-            cache_dir: cache_base.to_string_lossy().into_owned(),
+            cache_dir: self.client_cache_dir(&cache_base),
             available,
             downloaded,
             already_cached,
         };
 
         let response = serde_json::json!({
-            "cache_dir": cache_base.to_string_lossy(),
-            "xberg_cache_dir": cache_base.to_string_lossy(),
+            "cache_dir": dto.cache_dir,
+            "xberg_cache_dir": dto.cache_dir,
             "hugging_face_cache": if params.ner || params.all_ner_models || params.ner_model.is_some() {
                 Some("HF_HUB_CACHE/HF_HOME/platform default")
             } else {
@@ -2108,6 +2134,45 @@ mod tests {
             stdio.message,
             "Parsing error: cannot open /srv/xberg/models/layout.onnx: truncated"
         );
+    }
+
+    #[test]
+    fn should_redact_per_input_batch_errors_only_on_http_transport() {
+        let result = || crate::ExtractionResult {
+            errors: vec![crate::ExtractionErrorItem {
+                index: 1,
+                code: 2,
+                error_type: "parsing".to_string(),
+                source: "report.pdf".to_string(),
+                message: "Parsing error: cannot open /srv/xberg/tmp/upload-7.pdf: truncated".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        let mut http = result();
+        http_server_without_local_paths().redact_result_errors(&mut http);
+        assert_eq!(http.errors[0].message, "Parsing error: cannot open <path>: truncated");
+        assert_eq!(http.errors[0].source, "report.pdf");
+
+        let mut stdio = result();
+        XbergMcp::with_config(ExtractionConfig::default()).redact_result_errors(&mut stdio);
+        assert_eq!(
+            stdio.errors[0].message,
+            "Parsing error: cannot open /srv/xberg/tmp/upload-7.pdf: truncated"
+        );
+    }
+
+    #[test]
+    fn should_redact_cache_warm_download_errors_only_on_http_transport() {
+        let message =
+            || "Failed to download layout models: cannot write /srv/xberg/cache/layout/rtdetr.onnx".to_string();
+
+        let http = http_server_without_local_paths().internal_error(message());
+        assert_eq!(http.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
+        assert_eq!(http.message, "Failed to download layout models: cannot write <path>");
+
+        let stdio = XbergMcp::with_config(ExtractionConfig::default()).internal_error(message());
+        assert_eq!(stdio.message, message());
     }
 
     #[test]

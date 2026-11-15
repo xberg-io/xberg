@@ -203,7 +203,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(mcp): The MCP HTTP transport no longer reads local files.** `extract` and `extract_batch` reject local paths and `file://` URIs and `detect_mime_type` is refused over HTTP unless the operator sets `XBERG_MCP_ALLOW_LOCAL_URI_INPUTS=1`; the stdio transport is unchanged.
 
-- **(mcp): The MCP HTTP transport no longer reveals server filesystem paths.** Over HTTP, tool error messages show `<path>` in place of any server path, with the full error logged server-side, and `cache_stats` and `cache_clear` report the cache `directory` as `<path>`; the stdio transport is unchanged.
+- **(mcp): The MCP HTTP transport no longer reveals server filesystem paths.** Over HTTP, tool error messages and per-input errors in extraction results show `<path>` in place of any server path, with the full error logged server-side, and `cache_stats`, `cache_clear` and `cache_warm` report the cache directory as `<path>`; the stdio transport is unchanged.
 
 - **(api): Error responses and cache endpoints no longer reveal server filesystem paths.** Error messages, including per-input errors in batch results, keep their `error_type` and text but show `<path>` in place of any server path, with the full error logged server-side, and `/cache/stats` and `/cache/clear` no longer return the cache `directory`.
 
