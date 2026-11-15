@@ -161,7 +161,7 @@ type RuleStyle = ([u32; 3], u32);
 /// Accept either visible group/leaf rules or a repeated schema with independent first-body shading.
 /// Regular decimal leaves under matching rules require independent group and alignment evidence. ~keep
 pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathContent], columns: usize) {
-    let [groups, leaves, first_body, ..] = rows else {
+    let [groups, leaves, first_body, rest @ ..] = rows else {
         return;
     };
     let Some(bounds) = header_bounds(groups, leaves, first_body) else {
@@ -178,7 +178,9 @@ pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathCon
     }
     let repeating_rules = body_repeats_the_header_rule(leaves, first_body, &nearby);
     let proven = if repeating_rules {
-        centered_decimal_leaf_band(groups, leaves, first_body, &nearby, columns)
+        rest.first()
+            .is_some_and(|second| super::decimal_leaf_has_stub_contrast(leaves, first_body, second))
+            && centered_decimal_leaf_band(groups, leaves, first_body, &nearby, columns)
     } else {
         complete_source_band(leaves, columns, true)
             && (grouped_header_rules(groups, leaves, &nearby)

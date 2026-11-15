@@ -529,7 +529,7 @@ fn insurance_image_rule_only_joins_tables_when_it_crosses_a_gutter() {
     }
 }
 
-fn uniform_rule_decimal_table(centered_labels: bool) -> Vec<u8> {
+fn uniform_rule_decimal_table(first_band: [&str; 5], centered_band: bool) -> Vec<u8> {
     use lopdf::{Document, Object, Stream, dictionary};
     use std::fmt::Write as _;
 
@@ -542,11 +542,6 @@ fn uniform_rule_decimal_table(centered_labels: bool) -> Vec<u8> {
         let top = if column == 3 { 140 } else { 160 };
         writeln!(paint, "{x} 60 m {x} {top} l S").unwrap();
     }
-    let first_band = if centered_labels {
-        ["Version", "Build", "1.0", "1.1", "2.0"]
-    } else {
-        ["Latency", "p50", "0.910", "0.850", "0.970"]
-    };
     paint.push_str("BT /F1 8 Tf\n");
     for (row, cells) in [
         ["Group", "Code", "Rates", "", "West"],
@@ -562,7 +557,7 @@ fn uniform_rule_decimal_table(centered_labels: bool) -> Vec<u8> {
         for (column, text) in cells.iter().enumerate().filter(|(_, text)| !text.is_empty()) {
             let offset = if column < 2 || row == 0 {
                 3.0
-            } else if row == 1 && centered_labels {
+            } else if row == 1 && centered_band {
                 19.44
             } else {
                 28.0
@@ -598,8 +593,17 @@ fn uniform_rule_decimal_table(centered_labels: bool) -> Vec<u8> {
 fn centered_decimal_leaf_labels_are_headers_under_uniform_rules() {
     let config = parsebench_html_config();
     for (centered, token, tag) in [(false, "0.910", "td"), (true, "1.0", "th")] {
-        let result =
-            extract_bytes_document_blocking(&uniform_rule_decimal_table(centered), "application/pdf", &config).unwrap();
+        let first_band = if centered {
+            ["Version", "Build", "1.0", "1.1", "2.0"]
+        } else {
+            ["Latency", "p50", "0.910", "0.850", "0.970"]
+        };
+        let result = extract_bytes_document_blocking(
+            &uniform_rule_decimal_table(first_band, centered),
+            "application/pdf",
+            &config,
+        )
+        .unwrap();
         assert_eq!(result.tables.len(), 1, "{}", result.content);
         assert_eq!(result.tables[0].cells.len(), 5);
         assert!(result.content.contains(r#"<th colspan="2">Rates</th>"#));
@@ -610,4 +614,22 @@ fn centered_decimal_leaf_labels_are_headers_under_uniform_rules() {
         );
         assert!(result.content.contains("<td>0.924</td>"), "{}", result.content);
     }
+}
+
+#[test]
+fn centered_decimal_record_remains_body_under_uniform_rules() {
+    let first_band = ["Latency", "p50", "0.9", "0.8", "0.9"];
+    let pdf = uniform_rule_decimal_table(first_band, true);
+    let result = extract_bytes_document_blocking(&pdf, "application/pdf", &parsebench_html_config()).unwrap();
+    assert_eq!(result.tables.len(), 1);
+    assert_eq!(result.tables[0].cells[1], first_band);
+    assert!(result.content.contains(r#"<th colspan="2">Rates</th>"#));
+    assert!(
+        result
+            .content
+            .contains("<tr><td>Latency</td><td>p50</td><td>0.9</td><td>0.8</td><td>0.9</td></tr>"),
+        "{}",
+        result.content,
+    );
+    assert!(result.content.contains("<td>0.924</td>"));
 }

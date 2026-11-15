@@ -1838,6 +1838,41 @@ fn continues_decimal_records(row: &TableRow, next: &TableRow) -> bool {
     })
 }
 
+// A centered value can be an atypically aligned record. Require a separate transition in
+// a stub column, from a spelled-out label to codes in two consecutive records. ~keep
+fn decimal_leaf_has_stub_contrast(leaves: &TableRow, first: &TableRow, second: &TableRow) -> bool {
+    if [first, second].iter().any(|row| {
+        row.cells.len() != leaves.cells.len() || row.cells.iter().any(|cell| cell.colspan != 1 || cell.rowspan != 1)
+    }) {
+        return false;
+    }
+    leaves
+        .cells
+        .iter()
+        .zip(&first.cells)
+        .zip(&second.cells)
+        .any(|((label, first), second)| {
+            let text = label.text.trim();
+            matches!(label.spans.as_slice(), [span] if span.text.trim() == text)
+                && text.chars().any(char::is_alphabetic)
+                && text.chars().all(|ch| ch.is_alphabetic() || ch.is_whitespace())
+                && source_record_code(first)
+                && source_record_code(second)
+        })
+}
+
+fn source_record_code(cell: &TableCell) -> bool {
+    let text = cell.text.trim();
+    if !matches!(cell.spans.as_slice(), [span] if span.text.trim() == text) {
+        return false;
+    }
+    let Some(index) = text.find(|ch: char| ch.is_ascii_digit()) else {
+        return false;
+    };
+    let (prefix, digits) = text.split_at(index);
+    !prefix.is_empty() && prefix.chars().all(char::is_alphabetic) && digits.bytes().all(|ch| ch.is_ascii_digit())
+}
+
 fn decimal_point_x(cell: &TableCell) -> Option<f32> {
     let [span] = cell.spans.as_slice() else {
         return None;
@@ -2082,7 +2117,11 @@ fn detect_tables_in_cluster(
                                         && header == body
                                         && group_covers_decimal_leaves(&table.rows[0], &table.rows[r], |_, _| true))
                             });
+                        let has_stub_contrast = table.rows.get(r + 2).is_some_and(|second| {
+                            decimal_leaf_has_stub_contrast(&table.rows[r], &table.rows[r + 1], second)
+                        });
                         if !header_boundary
+                            || !has_stub_contrast
                             || !centered_decimal_labels(&table.rows[r], &table.rows[r + 1], &grid.columns)
                         {
                             break;
@@ -9040,6 +9079,26 @@ mod tests {
             ruled_record_header_roles(&rows, Some(1), false, RIGHT_ALIGNED_DECIMAL_INK, true, None),
             [true, false, false, false, false]
         );
+    }
+
+    #[test]
+    fn centered_decimal_record_below_a_spanning_group_remains_body() {
+        let mut rows = [
+            ["Group", "Code", "Rates", "", "West"],
+            ["Latency", "p50", "0.9", "0.8", "0.9"],
+            ["Latency", "p95", "0.924", "0.863", "0.985"],
+            ["Latency", "p99", "0.930", "0.888", "0.988"],
+        ];
+        for stub in ["Latency", "Throughput"] {
+            rows[1][0] = stub;
+            for rule in [None, Some(1)] {
+                assert_eq!(
+                    ruled_record_header_roles(&rows, rule, true, CENTERED_LABEL_INK, true, None),
+                    [true, false, false, false],
+                    "{stub}, emphasized rule {rule:?}"
+                );
+            }
+        }
     }
 
     fn assert_grouped_rates_record_roles(decimal_ink: [(f32, f32); 2], glyph_widths: bool) {
