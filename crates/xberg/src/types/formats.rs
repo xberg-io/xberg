@@ -315,6 +315,10 @@ pub(crate) struct RawOcrSourceFrame {
 /// Private receipt for one fresh hOCR realization. It never crosses a cache or public wire.
 #[derive(Debug, Clone)]
 #[cfg_attr(alef, alef(skip))]
+#[cfg_attr(
+    not(any(feature = "ocr", all(feature = "pdf", feature = "ocr-pipeline"))),
+    allow(dead_code)
+)]
 pub(crate) struct RetainedHocrRead {
     pub(crate) transcript: String,
     pub(crate) dimensions: (u32, u32),
@@ -325,6 +329,10 @@ pub(crate) struct RetainedHocrRead {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(alef, alef(skip))]
+#[cfg_attr(
+    not(any(feature = "ocr", all(feature = "pdf", feature = "ocr-pipeline"))),
+    allow(dead_code)
+)]
 pub(crate) struct RetainedHocrProjection {
     pub(crate) text: String,
     pub(crate) ranges: Vec<(usize, std::ops::Range<usize>)>,
@@ -332,6 +340,10 @@ pub(crate) struct RetainedHocrProjection {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(alef, alef(skip))]
+#[cfg_attr(
+    not(any(feature = "ocr", all(feature = "pdf", feature = "ocr-pipeline"))),
+    allow(dead_code)
+)]
 pub(crate) struct RetainedHocrOccurrence {
     pub(crate) id: usize,
     pub(crate) element: super::internal::InternalElementId,
@@ -342,6 +354,7 @@ pub(crate) struct RetainedHocrOccurrence {
     pub(crate) bounds: [u32; 4],
 }
 
+#[cfg(any(feature = "ocr", all(feature = "pdf", feature = "ocr-pipeline")))]
 impl RetainedHocrRead {
     pub(crate) fn matches(
         &self,
@@ -411,6 +424,10 @@ pub struct OcrExtractionResult {
     pub(crate) raw_ocr_source_frame: Option<RawOcrSourceFrame>,
     #[serde(skip)]
     #[cfg_attr(alef, alef(skip))]
+    #[cfg_attr(
+        not(any(feature = "ocr", all(feature = "pdf", feature = "ocr-pipeline"))),
+        allow(dead_code)
+    )]
     pub(crate) retained_hocr_read: Option<RetainedHocrRead>,
 }
 

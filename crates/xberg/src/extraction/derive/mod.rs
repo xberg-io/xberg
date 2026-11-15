@@ -971,7 +971,7 @@ fn derive(
     }
     resolve_relationships(&mut doc);
 
-    let (mut content, mime_type, spans) = derive_content_and_mime_type(&mut doc, &output_format, observer);
+    let (content, mime_type, spans) = derive_content_and_mime_type(&mut doc, &output_format, observer);
     let plain_from_ir = spans.is_some();
     let formatted_content =
         compute_formatted_content_observed(&mut doc, &output_format, observer, plain_from_ir, &content);
@@ -980,7 +980,7 @@ fn derive(
     // gets this document and `formatted_content` is `None`: plain output, or a custom format
     // name with no renderer. The document for a registered renderer is not the caller's. ~keep
     let content_is_plain = is_result && formatted_content.is_none();
-    let mut pages = derive_pages(
+    let pages = derive_pages(
         &mut doc,
         &content,
         &output_format,
@@ -995,6 +995,8 @@ fn derive(
         pages::trace_final_ocr_occurrences(&doc, (&content, spans), pages);
     }
     let ocr_elements = doc.prebuilt_ocr_elements.take().or_else(|| build_ocr_elements(&doc));
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    let (mut content, mut pages) = (content, pages);
     #[cfg(all(feature = "pdf", feature = "ocr"))]
     if let (Some(spans), Some(pages)) = (spans.as_ref(), pages.as_deref_mut())
         && content_is_plain

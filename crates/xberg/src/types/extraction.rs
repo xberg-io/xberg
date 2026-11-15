@@ -491,6 +491,10 @@ pub struct ExtractedDocument {
     pub(crate) raw_ocr_source_frame: Option<super::formats::RawOcrSourceFrame>,
     #[serde(skip)]
     #[cfg_attr(alef, alef(skip))]
+    #[cfg_attr(
+        not(any(feature = "ocr", all(feature = "pdf", feature = "ocr-pipeline"))),
+        allow(dead_code)
+    )]
     pub(crate) retained_hocr_read: Option<super::formats::RetainedHocrRead>,
 
     /// The original `InternalDocument` from the extractor, preserved before derivation.
