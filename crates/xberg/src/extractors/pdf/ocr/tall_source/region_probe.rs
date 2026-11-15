@@ -576,13 +576,20 @@ fn full_line_read_covers_stock(stock: &[RegionBox], source: &[RegionWord]) -> bo
     {
         return false;
     }
-    // Stock height may include unrelated ink. Require a shared baseline band and
-    // majority horizontal coverage from disjoint word intervals, allowing splits and joins. ~keep
+    // A stock box can be much taller than its source word. Normalize vertical
+    // overlap by the shorter box before counting horizontal split/join coverage. ~keep
     stock.iter().all(|word| {
         let covered: u32 = source
             .iter()
             .map(|candidate| candidate.bounds)
-            .filter(|candidate| candidate.top < word.bottom && word.top < candidate.bottom)
+            .filter(|candidate| {
+                let shorter = (word.bottom - word.top).min(candidate.bottom - candidate.top);
+                let shared = word
+                    .bottom
+                    .min(candidate.bottom)
+                    .saturating_sub(word.top.max(candidate.top));
+                shared >= shorter.div_ceil(2).max(2)
+            })
             .map(|candidate| {
                 word.right
                     .min(candidate.right)
@@ -719,6 +726,29 @@ pub(super) async fn read_pair(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn full_line_read_declines_one_pixel_vertical_overlap() {
+        let stock = [RegionBox {
+            left: 10,
+            right: 30,
+            top: 20,
+            bottom: 40,
+        }];
+        let read = |top, bottom| {
+            [RegionWord {
+                bounds: RegionBox {
+                    top,
+                    bottom,
+                    ..stock[0]
+                },
+                text: "word".to_owned(),
+                confidence: 99.0,
+            }]
+        };
+        assert!(full_line_read_covers_stock(&stock, &read(26, 36)));
+        assert!(!full_line_read_covers_stock(&stock, &read(39, 49)));
+    }
 
     #[test]
     fn larger_line_read_must_cover_the_last_stock_owner() {
