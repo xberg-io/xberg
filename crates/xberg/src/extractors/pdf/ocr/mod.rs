@@ -23,6 +23,20 @@ mod caption_conversion;
 #[cfg(all(feature = "ocr", feature = "tokio-runtime", not(target_arch = "wasm32")))]
 #[path = "../../../ocr/caption_grid_proof.rs"]
 mod caption_grid_proof;
+#[cfg(all(
+    feature = "ocr",
+    feature = "layout-detection",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+mod column_retry;
+#[cfg(all(
+    feature = "ocr",
+    feature = "layout-detection",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+mod column_selection;
 mod document;
 #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
 pub(super) use document::join_run_pages;

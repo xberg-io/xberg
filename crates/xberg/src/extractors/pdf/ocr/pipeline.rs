@@ -5210,6 +5210,13 @@ struct PageRead<OrderedProof, CaptionProof> {
     upright_width: u32,
     upright_height: u32,
     result: crate::Result<crate::types::ExtractedDocument>,
+    #[cfg(all(
+        feature = "ocr",
+        feature = "layout-detection",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    column_order: Option<super::column_retry::LineOrder>,
     ordered_proof: Option<OrderedProof>,
     detached_frame_read: bool,
     captured_caption: Option<CaptionProof>,
@@ -5233,6 +5240,13 @@ impl<OrderedProof, CaptionProof> PageRead<OrderedProof, CaptionProof> {
             upright_width: dimensions.0,
             upright_height: dimensions.1,
             result: Err(error),
+            #[cfg(all(
+                feature = "ocr",
+                feature = "layout-detection",
+                feature = "tokio-runtime",
+                not(target_arch = "wasm32")
+            ))]
+            column_order: None,
             ordered_proof: None,
             detached_frame_read: false,
             captured_caption: None,
@@ -6124,6 +6138,14 @@ pub(super) async fn extract_with_ocr_for_page(
             encoded_batch
         };
         let batch_count = encoded_batch.len();
+        #[cfg(all(
+            feature = "ocr",
+            feature = "layout-detection",
+            feature = "tokio-runtime",
+            not(target_arch = "wasm32")
+        ))]
+        let mut batch_column_orders: Vec<Option<super::column_retry::LineOrder>> =
+            (0..batch_count).map(|_| None).collect();
         let mut batch_ocr_results: Vec<Option<crate::types::ExtractedDocument>> = vec![None; batch_count];
         // Backend error text for a page whose OCR call failed, if any (#1444). The page's
         // entry in `batch_ocr_results` is an empty document in that case, so the blank-page
@@ -6383,6 +6405,28 @@ pub(super) async fn extract_with_ocr_for_page(
                     && get_ocr_backend_registry().read().is_builtin_tesseract(&backend);
                 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                 let probe_reads = page_ocr_hints.as_ref().and_then(|hints| hints.probe_reads.clone());
+                #[cfg(all(
+                    feature = "pdf",
+                    feature = "ocr",
+                    feature = "layout-detection",
+                    not(target_arch = "wasm32")
+                ))]
+                let column_raster = (has_layout_detections
+                    && whole_page_raster
+                    && progress_total_pages == 1
+                    && !has_stored_scan
+                    && page_rotation_degrees == 0
+                    && correction_degrees == 0
+                    && config.ocr_strategy == crate::core::config::OcrStrategy::Auto
+                    && !config.force_ocr
+                    && config.force_ocr_pages.is_none()
+                    && base_ocr_config.auto_rotate.is_none()
+                    && base_ocr_config.pipeline.is_none()
+                    && base_ocr_config.tesseract_config.as_ref().and_then(|t| t.psm).is_none()
+                    && base_ocr_config.effective_tesseract_language().as_slice() == ["eng"]
+                    && get_ocr_backend_registry().read().is_builtin_tesseract(&backend)
+                    && xobject_document.is_none_or(|pdf| pdf.page_count().ok() == Some(1)))
+                .then(|| Arc::clone(&upright_data));
                 let task = crate::engine::seams::inherit_progress(async move {
                     if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                         return PageRead::failed(
@@ -6566,6 +6610,24 @@ pub(super) async fn extract_with_ocr_for_page(
                     } else {
                         result
                     };
+                    #[cfg(all(
+                        feature = "pdf",
+                        feature = "ocr",
+                        feature = "layout-detection",
+                        not(target_arch = "wasm32")
+                    ))]
+                    let (result, column_order) = match (column_raster, result) {
+                        (Some(raster), Ok(baseline)) if !detached_frame_read => super::column_retry::retry(
+                            baseline,
+                            &backend_clone,
+                            raster,
+                            &config_clone,
+                            cancel_token.as_ref(),
+                        )
+                        .await
+                        .map_or_else(|error| (Err(error), None), |(primary, order)| (Ok(primary), order)),
+                        (_, result) => (result, None),
+                    };
                     #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
                     let number_frame =
                         number_proof.is_some_and(|proof| result.as_ref().is_ok_and(|read| proof.matches(read)));
@@ -6588,6 +6650,13 @@ pub(super) async fn extract_with_ocr_for_page(
                         correction_degrees,
                         upright_width,
                         upright_height,
+                        #[cfg(all(
+                            feature = "ocr",
+                            feature = "layout-detection",
+                            feature = "tokio-runtime",
+                            not(target_arch = "wasm32")
+                        ))]
+                        column_order,
                         result,
                         ordered_proof,
                         detached_frame_read,
@@ -6607,6 +6676,13 @@ pub(super) async fn extract_with_ocr_for_page(
                     correction_degrees,
                     upright_width,
                     upright_height,
+                    #[cfg(all(
+                        feature = "ocr",
+                        feature = "layout-detection",
+                        feature = "tokio-runtime",
+                        not(target_arch = "wasm32")
+                    ))]
+                    column_order,
                     result: ocr_result,
                     ordered_proof,
                     detached_frame_read,
@@ -6690,6 +6766,15 @@ pub(super) async fn extract_with_ocr_for_page(
                 }
                 #[cfg(not(feature = "ocr"))]
                 let _ = captured_caption;
+                #[cfg(all(
+                    feature = "ocr",
+                    feature = "layout-detection",
+                    feature = "tokio-runtime",
+                    not(target_arch = "wasm32")
+                ))]
+                {
+                    batch_column_orders[page_idx - batch_start] = column_order;
+                }
                 match ocr_result {
                     Ok(document) => batch_ocr_results[page_idx - batch_start] = Some(document),
                     Err(error) => {
@@ -7772,6 +7857,34 @@ pub(super) async fn extract_with_ocr_for_page(
                         // still warns, below. ~keep
                         if outcome.removed {
                             margin_filtered_content = Some(ocr_paragraphs_plain_text(&paragraphs));
+                        }
+                    }
+
+                    #[cfg(all(
+                        feature = "ocr",
+                        feature = "layout-detection",
+                        feature = "tokio-runtime",
+                        not(target_arch = "wasm32")
+                    ))]
+                    if let Some(order) = batch_column_orders[offset].take()
+                        && recognized_tables.unrecognized_table_text.is_empty()
+                    {
+                        let cancel = config.cancel_token.as_ref();
+                        let reordered = cancel
+                            .is_none_or(|token| !token.is_cancelled() && !token.time_limit_reached())
+                            .then(|| {
+                                order.reorder(&paragraphs, &ocr_result.metadata, (ocr_layout_width, ocr_layout_height))
+                            })
+                            .flatten();
+                        if cancel.is_some_and(|token| token.is_cancelled()) {
+                            return Err(crate::XbergError::Cancelled.into());
+                        }
+                        if cancel.is_some_and(|token| token.time_limit_reached()) {
+                            let mut warnings = Vec::new();
+                            super::column_retry::note_deadline(&mut warnings, cancel);
+                            crate::core::diagnostics::dedup_extend_warnings(&mut backend_page_warnings, warnings);
+                        } else if let Some(reordered) = reordered {
+                            paragraphs = reordered;
                         }
                     }
 
