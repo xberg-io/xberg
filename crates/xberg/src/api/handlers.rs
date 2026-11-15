@@ -54,19 +54,19 @@ enum ApiExtractInput {
         data: Bytes,
         mime_type: String,
         file_name: Option<String>,
-        config: Option<crate::core::config::FileExtractionConfig>,
+        config: Option<serde_json::Value>,
         use_layout_for_markdown: Option<bool>,
     },
     Uri {
         uri: String,
         mime_type: Option<String>,
-        config: Option<crate::core::config::FileExtractionConfig>,
+        config: Option<serde_json::Value>,
         use_layout_for_markdown: Option<bool>,
     },
 }
 
 impl ApiExtractInput {
-    fn into_core_input(self) -> ExtractInputWithOptions {
+    fn into_core_input(self, effective: &crate::ExtractionConfig) -> Result<ExtractInputWithOptions, ApiError> {
         let (input, use_layout_for_markdown) = match self {
             Self::Bytes {
                 data,
@@ -76,7 +76,7 @@ impl ApiExtractInput {
                 use_layout_for_markdown,
             } => (
                 ExtractInput {
-                    config,
+                    config: resolve_input_config(config, effective)?,
                     ..ExtractInput::from_bytes(data.to_vec(), mime_type, file_name)
                 },
                 use_layout_for_markdown,
@@ -91,7 +91,7 @@ impl ApiExtractInput {
                     kind: ExtractInputKind::Uri,
                     uri: Some(uri),
                     mime_type,
-                    config,
+                    config: resolve_input_config(config, effective)?,
                     ..Default::default()
                 },
                 use_layout_for_markdown,
@@ -99,7 +99,7 @@ impl ApiExtractInput {
         };
         let mut options = ExtractInputWithOptions::new(input);
         options.use_layout_for_markdown = use_layout_for_markdown;
-        options
+        Ok(options)
     }
 }
 
@@ -124,17 +124,35 @@ impl UnifiedExtractRequest {
             .map_err(|message| ApiError::validation(crate::error::XbergError::validation(message)))
     }
 
-    /// Bound every per-input override by the request's effective config.
-    fn adopt_input_operator_policy(&mut self, effective: &crate::core::config::ExtractionConfig) {
-        for input in &mut self.inputs {
-            let config = match input {
-                ApiExtractInput::Bytes { config, .. } | ApiExtractInput::Uri { config, .. } => config,
-            };
-            if let Some(config) = config.as_mut() {
-                crate::core::config::request_security::adopt_file_operator_policy(config, effective);
-            }
-        }
+    fn resolve_inputs(
+        inputs: Vec<ApiExtractInput>,
+        effective: &crate::ExtractionConfig,
+    ) -> Result<Vec<ExtractInputWithOptions>, ApiError> {
+        inputs
+            .into_iter()
+            .map(|input| input.into_core_input(effective))
+            .collect()
     }
+}
+
+fn resolve_input_config(
+    config: Option<serde_json::Value>,
+    effective: &crate::ExtractionConfig,
+) -> Result<Option<crate::core::config::FileExtractionConfig>, ApiError> {
+    use crate::core::config::request_security::{adopt_file_operator_policy, merge_html_override};
+
+    let Some(mut config) = config else {
+        return Ok(None);
+    };
+    merge_html_override(effective, &mut config)
+        .map_err(|message| ApiError::validation(crate::error::XbergError::validation(message)))?;
+    let mut config = serde_json::from_value(config).map_err(|error| {
+        ApiError::validation(crate::error::XbergError::validation(format!(
+            "Invalid per-input configuration: {error}"
+        )))
+    })?;
+    adopt_file_operator_policy(&mut config, effective);
+    Ok(Some(config))
 }
 
 fn validate_caller_config_value(config: &serde_json::Value) -> Result<(), ApiError> {
@@ -217,7 +235,7 @@ struct JsonExtractInputObject {
     /// `ExtractionConfig::with_file_overrides`. Without this the HTTP API could
     /// only ever apply one config to every input in a batch (#247).
     #[serde(default)]
-    config: Option<crate::core::config::FileExtractionConfig>,
+    config: Option<serde_json::Value>,
     #[serde(default)]
     use_layout_for_markdown: Option<bool>,
 }
@@ -760,9 +778,9 @@ pub(crate) async fn extract_handler(
 
     let mut final_config = request.resolve_config(&state.default_config)?;
     enforce_and_apply_api_uri_policy(&request.inputs, &mut final_config, api_allows_local_uri_inputs())?;
-    request.adopt_input_operator_policy(&final_config);
     apply_multipart_config_fields(&mut final_config, request.output_format, request.pdf_passwords);
-    let results = extract_unified_inputs(request.inputs, final_config).await?;
+    let inputs = UnifiedExtractRequest::resolve_inputs(request.inputs, &final_config)?;
+    let results = extract_unified_inputs(inputs, final_config).await?;
 
     if !request.include_image_data {
         let value = super::response::serialize_results(results, false).map_err(|e| {
@@ -784,7 +802,7 @@ pub(crate) async fn extract_handler(
 }
 
 async fn extract_unified_inputs(
-    inputs: Vec<ApiExtractInput>,
+    inputs: Vec<ExtractInputWithOptions>,
     config: crate::core::config::ExtractionConfig,
 ) -> Result<ExtractionResult, ApiError> {
     if inputs.is_empty() {
@@ -793,7 +811,6 @@ async fn extract_unified_inputs(
         )));
     }
 
-    let inputs = inputs.into_iter().map(ApiExtractInput::into_core_input).collect();
     crate::extract_batch_with_input_options(inputs, &config)
         .await
         .map_err(ApiError::from)
@@ -1352,8 +1369,8 @@ pub(crate) async fn extract_async_handler(
     #[cfg(test)]
     let allow_local = disallow_local.is_none() && api_allows_local_uri_inputs();
     enforce_and_apply_api_uri_policy(&request.inputs, &mut effective_config, allow_local)?;
-    request.adopt_input_operator_policy(&effective_config);
     apply_multipart_config_fields(&mut effective_config, request.output_format, request.pdf_passwords);
+    let inputs = UnifiedExtractRequest::resolve_inputs(request.inputs, &effective_config)?;
     // Created after the last fallible step: a rejected submission must not hold a slot. ~keep
     let Some(job_id) = state.job_store.create_job() else {
         return Err(ApiError::new(
@@ -1371,7 +1388,7 @@ pub(crate) async fn extract_async_handler(
     };
     tokio::spawn(run_extraction_job(
         guard,
-        request.inputs,
+        inputs,
         effective_config,
         request.include_image_data,
         state.job_timeout_secs,
@@ -1389,7 +1406,7 @@ pub(crate) async fn extract_async_handler(
 #[cfg(feature = "api")]
 async fn run_extraction_job(
     guard: JobAbortGuard,
-    inputs: Vec<ApiExtractInput>,
+    inputs: Vec<ExtractInputWithOptions>,
     effective_config: crate::core::config::ExtractionConfig,
     include_image_data: bool,
     job_timeout_secs: u64,
@@ -1662,7 +1679,8 @@ mod tests {
         let config = parsed
             .resolve_config(&crate::ExtractionConfig::default())
             .expect("multipart config must resolve");
-        let result = extract_unified_inputs(parsed.inputs, config)
+        let inputs = UnifiedExtractRequest::resolve_inputs(parsed.inputs, &config).unwrap();
+        let result = extract_unified_inputs(inputs, config)
             .await
             .expect("multipart input must extract");
         assert_eq!(result.results.len(), 1);
@@ -1821,11 +1839,8 @@ mod tests {
             .await
             .expect("per-input config must parse");
 
-        let core_inputs: Vec<ExtractInputWithOptions> = parsed
-            .inputs
-            .into_iter()
-            .map(ApiExtractInput::into_core_input)
-            .collect();
+        let core_inputs =
+            UnifiedExtractRequest::resolve_inputs(parsed.inputs, &crate::ExtractionConfig::default()).unwrap();
 
         assert_eq!(core_inputs.len(), 2, "both inputs must survive parsing");
         assert_eq!(
@@ -1837,6 +1852,48 @@ mod tests {
             core_inputs[1].input.config.is_none(),
             "an input that declared no config must not inherit its sibling's override"
         );
+    }
+
+    #[tokio::test]
+    #[cfg(all(feature = "html", feature = "mcp"))]
+    async fn rest_and_mcp_preserve_omitted_per_input_html_settings() {
+        use crate::core::config::{HtmlOutputConfig, HtmlTheme};
+
+        let operator = crate::ExtractionConfig {
+            html_output: Some(HtmlOutputConfig {
+                theme: HtmlTheme::Dark,
+                class_prefix: "operator-".into(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let request_config = serde_json::json!({"html_output": {"class_prefix": "request-"}});
+        let override_config = serde_json::json!({"html_output": {"embed_css": false}});
+        let body = serde_json::json!({
+            "config": request_config,
+            "inputs": [{"kind": "text", "text": "Example", "config": override_config}]
+        });
+        let request = Request::builder()
+            .method("POST")
+            .uri("/extract")
+            .header("content-type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap();
+        let mut rest = UnifiedExtractRequest::from_request(request, &()).await.unwrap();
+        let effective = rest.resolve_config(&operator).unwrap();
+        let rest = UnifiedExtractRequest::resolve_inputs(rest.inputs, &effective).unwrap();
+        let mcp = crate::mcp::parse_extract_input(
+            serde_json::json!({"kind": "bytes", "data": [65], "config": override_config}),
+            &effective,
+        )
+        .unwrap();
+
+        for input in [&rest[0].input, &mcp] {
+            let html = input.config.as_ref().unwrap().html_output.as_ref().unwrap();
+            assert_eq!(html.theme, HtmlTheme::Dark);
+            assert_eq!(html.class_prefix, "request-");
+            assert!(!html.embed_css);
+        }
     }
 
     #[tokio::test]
@@ -2042,7 +2099,8 @@ mod tests {
         operator.url.crawl.warc_output = Some("/operator/archive.warc".into());
 
         let request_config = parsed.resolve_config(&operator).expect("request config resolves");
-        parsed.adopt_input_operator_policy(&request_config);
+        let inputs = UnifiedExtractRequest::resolve_inputs(parsed.inputs, &request_config).unwrap();
+        let input_config = inputs[0].input.config.as_ref().expect("per-input config is present");
 
         let request_crawl = &request_config.url.crawl;
         assert_operator_crawl_egress(request_crawl, &operator.url.crawl);
@@ -2052,17 +2110,7 @@ mod tests {
             Some("request-value")
         );
 
-        let input_crawl = match &parsed.inputs[0] {
-            ApiExtractInput::Bytes { config, .. } | ApiExtractInput::Uri { config, .. } => {
-                &config
-                    .as_ref()
-                    .expect("per-input config is present")
-                    .url
-                    .as_ref()
-                    .expect("URL config is present")
-                    .crawl
-            }
-        };
+        let input_crawl = &input_config.url.as_ref().expect("URL config is present").crawl;
         assert_operator_crawl_egress(input_crawl, &operator.url.crawl);
         assert_eq!(input_crawl.max_depth, Some(3));
         assert_eq!(
@@ -2070,11 +2118,6 @@ mod tests {
             Some("input-value")
         );
 
-        let input_config = match &parsed.inputs[0] {
-            ApiExtractInput::Bytes { config, .. } | ApiExtractInput::Uri { config, .. } => {
-                config.as_ref().expect("per-input config is present")
-            }
-        };
         let resolved = request_config.with_file_overrides(input_config);
         assert_operator_crawl_egress(&resolved.url.crawl, &operator.url.crawl);
         assert_eq!(resolved.url.crawl.max_depth, Some(3));

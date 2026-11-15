@@ -777,12 +777,14 @@ fn resolve_cache_base() -> std::path::PathBuf {
     crate::cache_dir::resolve_cache_base()
 }
 
-fn parse_extract_input(
-    value: serde_json::Value,
+pub(crate) fn parse_extract_input(
+    mut value: serde_json::Value,
     operator: &ExtractionConfig,
 ) -> Result<crate::ExtractInput, rmcp::ErrorData> {
-    if let Some(config) = value.get("config") {
+    if let Some(config) = value.get_mut("config") {
         crate::core::config::request_security::validate_caller_extraction_config(config)
+            .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
+        crate::core::config::request_security::merge_html_override(operator, config)
             .map_err(|message| rmcp::ErrorData::invalid_params(message, None))?;
     }
     let mut input = serde_json::from_value::<crate::ExtractInput>(value)

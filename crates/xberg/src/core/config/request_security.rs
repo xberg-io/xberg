@@ -121,14 +121,18 @@ pub(crate) fn resolve_caller_extraction_config(
         validate_caller_extraction_config(caller)?;
     }
     let caller_json = caller
-        .map(|caller| request_override_json(operator, caller))
+        .map(|caller| {
+            let mut caller = caller.clone();
+            merge_html_override(operator, &mut caller)?;
+            Ok::<_, String>(caller.to_string())
+        })
         .transpose()?;
     let mut config = super::merge::build_config_from_json(operator, caller_json.as_deref())?;
     adopt_operator_policy(&mut config, operator);
     Ok(config)
 }
 
-fn request_override_json(operator: &super::ExtractionConfig, caller: &Value) -> Result<String, String> {
+pub(crate) fn merge_html_override(operator: &super::ExtractionConfig, caller: &mut Value) -> Result<(), String> {
     #[cfg(feature = "html")]
     if let (Some(base), Some(overrides)) = (
         operator.html_output.as_ref(),
@@ -138,13 +142,11 @@ fn request_override_json(operator: &super::ExtractionConfig, caller: &Value) -> 
         if let Some(fields) = html.as_object_mut() {
             fields.extend(overrides.clone());
         }
-        let mut caller = caller.clone();
         caller["html_output"] = html;
-        return Ok(caller.to_string());
     }
     #[cfg(not(feature = "html"))]
-    let _ = operator;
-    Ok(caller.to_string())
+    let _ = (operator, caller);
+    Ok(())
 }
 
 /// Re-apply operator policy to a request config already merged over `operator`: crawl
@@ -337,6 +339,34 @@ mod tests {
         };
         adopt_file_operator_policy(&mut file, &resolved);
         assert_eq!(file.html_output.unwrap().css_file, html.css_file);
+    }
+
+    #[test]
+    fn should_normalize_legacy_paddle_aliases_at_both_ocr_levels() {
+        use super::super::ocr::resolve_paddle_ocr_settings;
+
+        let legacy = serde_json::json!({
+            "useAngleCls": true,
+            "enableTableDetection": true,
+            "enable_table_detection": false,
+        });
+        let caller = serde_json::json!({
+            "ocr": {
+                "backend": "paddleocr",
+                "paddle_ocr_config": legacy,
+                "pipeline": {"stages": [{"backend": "paddleocr", "paddle_ocr_config": legacy}]}
+            }
+        });
+        let config =
+            resolve_caller_extraction_config(&super::super::ExtractionConfig::default(), Some(&caller)).unwrap();
+        let ocr = config.ocr.unwrap();
+        let stage = &ocr.pipeline.as_ref().unwrap().stages[0];
+
+        for legacy in [&ocr.paddle_ocr_config, &stage.paddle_ocr_config] {
+            let settings = resolve_paddle_ocr_settings(None, legacy.as_ref()).unwrap().unwrap();
+            assert!(settings.use_angle_cls);
+            assert!(!settings.enable_table_detection);
+        }
     }
 
     const LLM_PATHS: &[&[&str]] = &[
