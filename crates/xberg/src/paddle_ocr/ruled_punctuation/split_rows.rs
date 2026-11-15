@@ -55,6 +55,21 @@ fn split_column(stock: &[String], owned: &[&str]) -> Option<usize> {
     matches_other_cells.then_some(left)
 }
 
+fn trailing_periods(text: &str) -> (&str, usize) {
+    let prefix = text.trim_end_matches(|ch: char| ch == '.' || ch.is_whitespace());
+    let count = text[prefix.len()..].bytes().filter(|&byte| byte == b'.').count();
+    (prefix, count)
+}
+
+fn source_label_periods(stock: &[String], owned: &[&str]) -> bool {
+    let (prefix, count) = trailing_periods(&stock[0]);
+    !prefix.is_empty()
+        && count >= 2
+        && (prefix, count) == trailing_periods(owned[0])
+        && stock[0].split_whitespace().ne(owned[0].split_whitespace())
+        && stock[1..].iter().map(String::as_str).eq(owned[1..].iter().copied())
+}
+
 fn contains(outer: Bounds, inner: Bounds) -> bool {
     outer.0 <= inner.0 && outer.1 <= inner.1 && inner.2 <= outer.2 && inner.3 <= outer.3
 }
@@ -119,7 +134,11 @@ pub(in crate::paddle_ocr::backend) fn recover(
     blocks: &[DetailedTextBlock],
     fused_words: bool,
 ) -> Option<RowRecovery> {
-    if !eligible(image, blocks.len()) || !table.cells.iter().flatten().any(|cell| cell.is_empty()) {
+    let has_candidate =
+        table.cells.iter().skip(1).any(|row| {
+            row.first().is_some_and(|label| trailing_periods(label).1 >= 2) || row.iter().any(String::is_empty)
+        });
+    if !eligible(image, blocks.len()) || !has_candidate {
         return None;
     }
     let gray = image::imageops::grayscale(image);
@@ -165,6 +184,9 @@ pub(in crate::paddle_ocr::backend) fn recover(
         if let Some(left) = split_column(cells, &source) {
             cells[left] = source[left].to_owned();
             cells[left + 1] = source[left + 1].to_owned();
+        }
+        if source_label_periods(cells, &source) {
+            cells[0] = source[0].to_owned();
         }
     }
     (stock != recovered && same_tokens(&recovered, blocks)).then_some(RowRecovery { stock, recovered })
@@ -235,6 +257,23 @@ mod tests {
         fused.words[1] = right;
         gray.put_pixel(20, 5, image::Luma([0]));
         assert!(fused_word_pair(&gray, &layout, 1, &fused, parent).is_none());
+    }
+
+    #[test]
+    fn label_recovery_only_resegments_the_owned_terminal_periods() {
+        let stock = ["Street repair. .", "10", "611,694", "47,576"].map(str::to_owned);
+        assert!(source_label_periods(
+            &stock,
+            &["Street repair..", "10", "611,694", "47,576"]
+        ));
+        for rejected in [
+            ["Streetrepair..", "10", "611,694", "47,576"],
+            ["Street repair...", "10", "611,694", "47,576"],
+            ["Street. repair.", "10", "611,694", "47,576"],
+            ["Street repair..", "10", "611.694", "47,576"],
+        ] {
+            assert!(!source_label_periods(&stock, &rejected));
+        }
     }
 
     #[test]

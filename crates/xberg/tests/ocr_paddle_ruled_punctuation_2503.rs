@@ -230,3 +230,37 @@ async fn paddle_recovers_exact_words_from_fused_9px_detections() {
     assert_eq!(candidate.content.trim(), rows);
     assert_eq!(page.content.trim(), rows);
 }
+
+#[tokio::test]
+#[ignore = "requires offline PP-OCRv6 Small and XBERG_2503_ORIGINAL_RULED_FIXTURES"]
+async fn paddle_plain_page_retains_rows_after_source_proven_label_token_recovery() {
+    let directory = std::env::var_os("XBERG_2503_ORIGINAL_RULED_FIXTURES").expect("original ruled fixture directory");
+    let image = std::fs::read(std::path::Path::new(&directory).join("jpg_9_grid_lead.jpg")).unwrap();
+    assert_eq!(
+        hex::encode(Sha256::digest(&image)),
+        "e2cb25fa92fdf4488b56c4a66c9c3c1a168621bc7664276c6cf98db418d4ed3c"
+    );
+    let before = extract_with_word_recovery(&image, "image/jpeg", true, false, false).await;
+    let after = extract_with_word_recovery(&image, "image/jpeg", true, true, true).await;
+    assert_eq!(before.tables.len(), 1);
+    assert_eq!(after.tables.len(), 1);
+    let mut cells = before.tables[0].cells.clone();
+    assert_eq!(cells.len(), 13);
+    assert_eq!(cells[12][0], "Street repair. .");
+    assert!(
+        before.pages.as_ref().unwrap()[0]
+            .content
+            .lines()
+            .any(|line| line == "Street repair..")
+    );
+
+    cells[12][0] = "Street repair..".to_owned();
+    assert_eq!(after.tables[0].cells, cells);
+    let [page] = after.pages.as_deref().unwrap() else {
+        panic!("one standalone page expected")
+    };
+    assert_eq!(page.tables[0].cells, cells);
+    let rows = cells.iter().map(|row| row.join(" ")).collect::<Vec<_>>().join("\n");
+    assert_eq!(after.content.trim(), rows);
+    assert_eq!(page.content.trim(), rows);
+}
