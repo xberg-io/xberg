@@ -89,7 +89,8 @@ def trial(
             rows.put(None)
 
         def sample() -> None:
-            samples.append((time.monotonic(), private_rss(child.pid)))
+            resident = private_rss(child.pid)
+            samples.append((time.monotonic(), resident))
 
         def poll() -> None:
             try:
@@ -148,10 +149,12 @@ def measure(
 ) -> dict[str, Any]:
     if samples:
         require(len(samples) >= 2 and samples[-1][0] >= end, "Missing Linux completion sample")
+        periodic = [value for t, value in samples[1:-1] if start <= t <= end]
+        require(periodic, "Missing in-window Linux extraction sample")
         baseline = samples[0][1]
         # The last read is synchronous while the worker waits for the report signal.
         completion = samples[-1][1]
-        peak = max(completion, *(value for t, value in samples[:-1] if t <= end))
+        peak = max(baseline, completion, *periodic)
         extras = {
             "window_ms": (end - start) * 1000,
             "completion_private_bytes": completion,

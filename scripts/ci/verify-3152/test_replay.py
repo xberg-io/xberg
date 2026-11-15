@@ -64,12 +64,9 @@ def test_removes_setup_library_dirs_from_worker_search() -> None:
     assert env["ORT_DYLIB_PATH"] == str(stage)
 
 
-@pytest.mark.parametrize("have_periodic_sample", [True, False])
-def test_completion_only_spike_exceeds_private_memory_budget(have_periodic_sample: bool) -> None:
+def test_completion_only_spike_exceeds_private_memory_budget() -> None:
     baseline = 10 * MIB
-    samples = [(0.0, baseline), (1.1, baseline + 90 * MIB)]
-    if have_periodic_sample:
-        samples.insert(1, (0.5, baseline))
+    samples = [(0.0, baseline), (0.5, baseline), (1.1, baseline + 90 * MIB)]
     completed = measure({}, {}, samples, start=0.1, end=1.0)
     assert completed["growth"] == 90 * MIB
     rows = [
@@ -91,6 +88,12 @@ def test_completion_only_spike_exceeds_private_memory_budget(have_periodic_sampl
     for row in rows:
         row["growth"] = 0
     assert evaluate(fixtures, rows)[1] == []
+
+
+@pytest.mark.parametrize("periodic", [[], [(1.05, 10)]], ids=["none", "after-extraction"])
+def test_missing_in_window_periodic_sample_is_rejected(periodic: list[tuple[float, int]]) -> None:
+    with pytest.raises(RuntimeError, match="Missing in-window Linux extraction sample"):
+        measure({}, {}, [(0.0, 10), *periodic, (1.1, 10)], start=0.1, end=1.0)
 
 
 def test_missing_completion_sample_is_rejected() -> None:
