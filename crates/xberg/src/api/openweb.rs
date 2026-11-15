@@ -25,7 +25,7 @@ fn openweb_config(
         .transpose()
         .map_err(|error| validation_error(format!("Failed to parse override JSON: {error}")))?;
     crate::core::config::request_security::resolve_caller_extraction_config(operator, caller.as_ref())
-        .map_err(validation_error)
+        .map_err(ApiError::caller_config)
 }
 
 async fn resolve_openweb_bytes(

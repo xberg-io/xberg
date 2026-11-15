@@ -266,8 +266,9 @@ pub type JobStatusResponse = JobStatus;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct CacheStatsResponse {
-    /// Cache directory path
-    #[cfg_attr(feature = "api", schema(example = "/tmp/xberg-cache"))]
+    /// Cache directory path. The server leaves it empty and omits it from `GET /cache/stats`
+    /// so clients do not learn its filesystem layout.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub directory: String,
     /// Total number of cache files
     pub total_files: usize,
@@ -288,8 +289,9 @@ pub struct CacheStatsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct CacheClearResponse {
-    /// Xberg-managed cache directory path
-    #[cfg_attr(feature = "api", schema(example = "/tmp/xberg-cache"))]
+    /// Xberg-managed cache directory path. The server leaves it empty and omits it from
+    /// `DELETE /cache/clear` so clients do not learn its filesystem layout.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub directory: String,
     /// Number of files removed
     pub removed_files: usize,

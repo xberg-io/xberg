@@ -13,6 +13,13 @@ use crate::error::{ApiStatusCategory, XbergError};
 
 use super::types::ErrorResponse;
 
+/// Placeholder for a filesystem path removed from an error message sent to a client.
+const REDACTED_PATH: &str = "<path>";
+
+/// Characters that may wrap a path inside a message token, such as quotes or a trailing colon.
+const LEADING_PATH_DELIMITERS: &[char] = &['\'', '"', '`', '(', '[', '{', '<'];
+const TRAILING_PATH_DELIMITERS: &[char] = &['\'', '"', '`', ')', ']', '}', '>', ',', ';', ':', '.'];
+
 /// Custom JSON extractor that returns JSON error responses instead of plain text.
 ///
 /// This wraps axum's `Json` extractor but uses `ApiError` as the rejection type,
@@ -101,18 +108,41 @@ pub struct ApiError {
 
 impl ApiError {
     /// Create a new API error.
+    ///
+    /// The client gets the error kind and its message with server filesystem paths replaced by
+    /// `<path>`; the full message is logged for server errors and for redacted client errors.
     pub(crate) fn new(status: StatusCode, error: XbergError) -> Self {
         let error_type = error.api_error_type();
+        let full_message = error.to_string();
+        let message = redact_paths(&full_message);
+        if status.is_server_error() {
+            tracing::error!(status = status.as_u16(), error_type, error = %full_message, "API request failed");
+        } else if message != full_message {
+            tracing::warn!(status = status.as_u16(), error_type, error = %full_message, "API request rejected");
+        }
 
+        Self::with_message(status, error_type, message)
+    }
+
+    fn with_message(status: StatusCode, error_type: &str, message: String) -> Self {
         Self {
             status,
             body: ErrorResponse {
                 error_type: error_type.to_string(),
-                message: error.to_string(),
+                message,
                 traceback: None,
                 status_code: status.as_u16(),
             },
         }
+    }
+
+    /// Create a validation error (400) for a caller config rejected at the trust boundary.
+    ///
+    /// Not path-redacted: these messages name config fields, some as JSON pointers such as
+    /// `/browser/proxy`, and never carry a server value.
+    pub(crate) fn caller_config(message: String) -> Self {
+        let error = XbergError::validation(message);
+        Self::with_message(StatusCode::BAD_REQUEST, error.api_error_type(), error.to_string())
     }
 
     /// Create a validation error (400).
@@ -146,6 +176,42 @@ impl ApiError {
     pub(crate) fn bad_gateway(error: XbergError) -> Self {
         Self::new(StatusCode::BAD_GATEWAY, error)
     }
+}
+
+/// Replace every filesystem path in `message` with [`REDACTED_PATH`].
+///
+/// A path is a whitespace-separated token (or the value after `=` in one), stripped of wrapping
+/// quotes and brackets, that is absolute (`/srv/models`), home-relative (`~/models`), a Windows
+/// drive or UNC path, or a `file://` URI. URLs, MIME types and relative names are kept, so the
+/// message still says what failed.
+fn redact_paths(message: &str) -> String {
+    let mut redacted = String::with_capacity(message.len());
+    for piece in message.split_inclusive(char::is_whitespace) {
+        let token = piece.trim_end_matches(char::is_whitespace);
+        let value_start = token.find('=').map_or(0, |index| index + 1);
+        let (prefix, value) = token.split_at(value_start);
+        let start = value.len() - value.trim_start_matches(LEADING_PATH_DELIMITERS).len();
+        let end = value.trim_end_matches(TRAILING_PATH_DELIMITERS).len().max(start);
+        if is_filesystem_path(&value[start..end]) {
+            redacted.push_str(prefix);
+            redacted.push_str(&value[..start]);
+            redacted.push_str(REDACTED_PATH);
+            redacted.push_str(&value[end..]);
+        } else {
+            redacted.push_str(token);
+        }
+        redacted.push_str(&piece[token.len()..]);
+    }
+    redacted
+}
+
+fn is_filesystem_path(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    let unix_absolute = bytes.first() == Some(&b'/') && bytes.len() > 1 && bytes[1] != b'/';
+    let windows_drive =
+        bytes.len() > 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && matches!(bytes[2], b'\\' | b'/');
+    let file_uri = value.len() > "file://".len() && value.starts_with("file://");
+    unix_absolute || windows_drive || file_uri || value.starts_with("~/") || value.starts_with("\\\\")
 }
 
 impl IntoResponse for ApiError {
@@ -243,6 +309,82 @@ mod tests {
 
         assert_eq!(other.status, StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(other.body.error_type, "Error");
+    }
+
+    #[test]
+    fn should_redact_server_paths_but_keep_error_kind_and_message() {
+        let cases = [
+            (
+                XbergError::parsing("Failed to open /srv/xberg/models/layout.onnx: permission denied"),
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "ParsingError",
+                "Parsing error: Failed to open <path>: permission denied",
+                "/srv/xberg/models",
+            ),
+            (
+                XbergError::Io(std::io::Error::other(
+                    "cannot read '/home/operator/.cache/xberg/ocr.bin'",
+                )),
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "IOError",
+                "IO error: cannot read '<path>'",
+                "/home/operator",
+            ),
+            (
+                XbergError::ocr("tessdata missing at C:\\xberg\\tessdata."),
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "OCRError",
+                "OCR error: tessdata missing at <path>.",
+                "xberg\\tessdata",
+            ),
+            (
+                XbergError::Other("cache_dir=/var/cache/xberg is full".to_string()),
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Error",
+                "cache_dir=<path> is full",
+                "/var/cache",
+            ),
+            (
+                XbergError::validation("Cannot read file:///etc/passwd or ~/secrets.txt (\\\\fileserver\\share)"),
+                StatusCode::BAD_REQUEST,
+                "ValidationError",
+                "Validation error: Cannot read <path> or <path> (<path>)",
+                "passwd",
+            ),
+        ];
+
+        for (error, status, error_type, message, leaked) in cases {
+            let api_error = ApiError::from(error);
+            assert_eq!(api_error.status, status, "{message}");
+            assert_eq!(api_error.body.error_type, error_type, "{message}");
+            assert_eq!(api_error.body.message, message);
+            assert!(!api_error.body.message.contains(leaked), "{leaked} leaked");
+        }
+    }
+
+    #[test]
+    fn should_keep_urls_mime_types_and_whitespace_when_redacting() {
+        for message in [
+            "Validation error: Local path and file:// URI extraction are disabled for the HTTP API.",
+            "Failed to fetch https://example.com/docs/report.pdf: HTTP 404",
+            "Unsupported format: application/x-unsupported-format",
+            "no paths here",
+        ] {
+            assert_eq!(redact_paths(message), message);
+        }
+        assert_eq!(redact_paths("a  /srv/x\tb\n"), "a  <path>\tb\n");
+    }
+
+    #[test]
+    fn should_keep_json_pointers_in_caller_config_rejections() {
+        let message = "Caller extraction config contains forbidden url.crawl setting: \
+                       invalid_config: untrusted caller may not set /browser/proxy";
+
+        let api_error = ApiError::caller_config(message.to_string());
+
+        assert_eq!(api_error.status, StatusCode::BAD_REQUEST);
+        assert_eq!(api_error.body.error_type, "ValidationError");
+        assert_eq!(api_error.body.message, format!("Validation error: {message}"));
     }
 
     #[test]

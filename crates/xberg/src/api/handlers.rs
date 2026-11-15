@@ -139,7 +139,7 @@ impl UnifiedExtractRequest {
         operator: &crate::core::config::ExtractionConfig,
     ) -> Result<crate::core::config::ExtractionConfig, ApiError> {
         crate::core::config::request_security::resolve_caller_extraction_config(operator, self.config.take().as_ref())
-            .map_err(|message| ApiError::validation(crate::error::XbergError::validation(message)))
+            .map_err(ApiError::caller_config)
     }
 
     fn resolve_input_configs(
@@ -164,10 +164,8 @@ fn resolve_input_config(
     let Some(mut config) = config else {
         return Ok(None);
     };
-    reject_caller_llm_env_credentials(effective, &config)
-        .map_err(|message| ApiError::validation(crate::error::XbergError::validation(message)))?;
-    merge_html_override(effective, &mut config)
-        .map_err(|message| ApiError::validation(crate::error::XbergError::validation(message)))?;
+    reject_caller_llm_env_credentials(effective, &config).map_err(ApiError::caller_config)?;
+    merge_html_override(effective, &mut config).map_err(ApiError::caller_config)?;
     let mut config = serde_json::from_value(config).map_err(|error| {
         ApiError::validation(crate::error::XbergError::validation(format!(
             "Invalid per-input configuration: {error}"
@@ -178,8 +176,7 @@ fn resolve_input_config(
 }
 
 fn validate_caller_config_value(config: &serde_json::Value) -> Result<(), ApiError> {
-    crate::core::config::request_security::validate_caller_extraction_config(config)
-        .map_err(|message| ApiError::validation(crate::error::XbergError::validation(message)))
+    crate::core::config::request_security::validate_caller_extraction_config(config).map_err(ApiError::caller_config)
 }
 
 /// Reject a request config that does not deserialize, at parse time rather than at merge time.
@@ -925,7 +922,7 @@ pub(crate) async fn cache_stats_handler() -> Result<Json<CacheStatsResponse>, Ap
     let stats = cache::get_cache_metadata(cache_dir_str).map_err(ApiError::internal)?;
 
     Ok(Json(CacheStatsResponse {
-        directory: cache_dir.to_string_lossy().to_string(),
+        directory: String::new(),
         total_files: stats.total_files,
         total_size_mb: stats.total_size_mb,
         available_space_mb: stats.available_space_mb,
@@ -967,7 +964,7 @@ pub(crate) async fn cache_clear_handler() -> Result<Json<CacheClearResponse>, Ap
     let (removed_files, freed_mb) = cache::clear_cache_directory(cache_dir_str).map_err(ApiError::internal)?;
 
     Ok(Json(CacheClearResponse {
-        directory: cache_dir.to_string_lossy().to_string(),
+        directory: String::new(),
         removed_files,
         freed_mb,
     }))
@@ -2319,6 +2316,32 @@ mod tests {
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(json["version"].is_string());
         assert!(!json["version"].as_str().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn should_omit_cache_directory_from_cache_stats_response() {
+        let Json(stats) = cache_stats_handler().await.expect("cache stats are readable");
+
+        let body = serde_json::to_value(&stats).expect("stats serialize");
+        let fields = body.as_object().expect("stats are an object");
+        assert!(!fields.contains_key("directory"), "{body}");
+        assert!(fields.contains_key("total_files"), "{body}");
+        let cache_dir = crate::cache_dir::resolve_cache_base();
+        assert!(!body.to_string().contains(&*cache_dir.to_string_lossy()), "{body}");
+    }
+
+    #[test]
+    fn should_omit_cache_directory_from_cache_clear_response() {
+        let response = CacheClearResponse {
+            directory: String::new(),
+            removed_files: 3,
+            freed_mb: 1.5,
+        };
+
+        assert_eq!(
+            serde_json::to_value(&response).expect("response serializes"),
+            serde_json::json!({"removed_files": 3, "freed_mb": 1.5})
+        );
     }
 
     #[tokio::test]
