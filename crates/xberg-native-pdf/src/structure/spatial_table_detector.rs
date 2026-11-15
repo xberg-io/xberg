@@ -1790,6 +1790,99 @@ fn detect_header_row_above(spans: &[TextSpan], row_ys: &[f32], col_xs: &[f32]) -
     Some(header_max_top + 1.0)
 }
 
+fn record_cell_token(cell: &TableCell) -> &str {
+    if let [span] = cell.spans.as_slice()
+        && is_data_value(span.text.trim())
+    {
+        return span.text.trim();
+    }
+    cell.text.trim()
+}
+
+fn continues_decimal_records(row: &TableRow, next: &TableRow) -> bool {
+    if row.cells.len() != next.cells.len() {
+        return false;
+    }
+    let is_decimal = |text: &str| text.contains('.') && is_data_value(text);
+    let decimal_count = row
+        .cells
+        .iter()
+        .filter(|cell| is_decimal(record_cell_token(cell)))
+        .count();
+    if decimal_count <= row.cells.len() / 2 {
+        return false;
+    }
+    row.cells.iter().zip(&next.cells).all(|(cell, following)| {
+        let text = record_cell_token(cell);
+        let next_text = record_cell_token(following);
+        if text.is_empty()
+            || next_text.is_empty()
+            || is_data_value(text) != is_data_value(next_text)
+            || is_decimal(text) != is_decimal(next_text)
+            || cell.colspan != 1
+            || cell.rowspan != 1
+            || following.colspan != 1
+            || following.rowspan != 1
+            || following.spans.is_empty()
+        {
+            return false;
+        }
+        cell.spans.first().is_some_and(|style| {
+            cell.spans.iter().chain(&following.spans).all(|span| {
+                !span.font_weight.is_bold() && span.font_name == style.font_name && span.font_size == style.font_size
+            })
+        })
+    })
+}
+
+fn decimal_point_x(cell: &TableCell) -> Option<f32> {
+    let [span] = cell.spans.as_slice() else {
+        return None;
+    };
+    if span.rotation_degrees != 0.0 || span.wmode != 0 || span.char_x_offsets.len() != span.text.chars().count() {
+        return None;
+    }
+    let mut points = span.text.chars().enumerate().filter(|(_, glyph)| *glyph == '.');
+    let (index, _) = points.next()?;
+    let x = span.char_x_offsets[index];
+    (points.next().is_none() && (span.bbox.left()..=span.bbox.right()).contains(&x)).then_some(x)
+}
+
+fn centered_decimal_labels(row: &TableRow, body: &TableRow, columns: &[ColumnCluster]) -> bool {
+    if row.cells.len() != columns.len() || body.cells.len() != columns.len() {
+        return false;
+    }
+    const ALIGNMENT_MARGIN: f32 = 0.12;
+    row.cells
+        .iter()
+        .zip(&body.cells)
+        .zip(columns)
+        .all(|((label, value), column)| {
+            let text = record_cell_token(label);
+            if !text.contains('.') || !is_data_value(text) {
+                return true;
+            }
+            if !is_data_value(label.text.trim()) || !is_data_value(value.text.trim()) {
+                return false;
+            }
+            let (Some(label_point), Some(value_point)) = (decimal_point_x(label), decimal_point_x(value)) else {
+                return false;
+            };
+            let (Some(label), Some(value)) = (label.bbox, value.bbox) else {
+                return false;
+            };
+            let margin = (column.x_max - column.x_min) * ALIGNMENT_MARGIN;
+            (label.center().x - column.x_center).abs() <= margin
+                && label.left() - column.x_min > margin
+                && column.x_max - label.right() > margin
+                && (value.right() - column.x_max).abs() <= margin
+                && value.center().x > column.x_center + margin
+                && value.left() - label.left() > margin
+                && value.right() - label.right() > margin
+                && (label_point - value_point).abs() > margin
+        })
+}
+
 fn detect_tables_in_cluster(
     spans: &[TextSpan],
     all_lines: &[crate::elements::PathContent],
@@ -1929,15 +2022,41 @@ fn detect_tables_in_cluster(
                 ));
                 let mut header_rows_detected = 0;
                 let table_width = cluster.bbox.width;
-                for r in 0..table.rows.len().min(3) {
-                    let row_bottom = grid.rows[r].y_min;
-                    let has_separator = cluster.lines.iter().any(|&idx| {
-                        let path = &all_lines[idx];
+                let long_rules_at = |row_bottom: f32| {
+                    cluster.lines.iter().map(|&idx| &all_lines[idx]).filter(move |path| {
                         let rendered = path.rendered_bbox();
                         path.is_horizontal_line(LINE_AXIS_TOL)
                             && rendered.width > table_width * 0.8
                             && (rendered.center().y - row_bottom).abs() < config.row_tolerance
-                    });
+                    })
+                };
+                let solid_rule_weight = |row_bottom| {
+                    long_rules_at(row_bottom)
+                        .filter(|path| source_headers::dark_solid_stroke(path))
+                        .map(|path| path.stroke_width)
+                        .filter(|width| width.is_finite() && *width > 0.0)
+                        .max_by(f32::total_cmp)
+                };
+                for r in 0..table.rows.len().min(3) {
+                    let row_bottom = grid.rows[r].y_min;
+                    let has_separator = long_rules_at(row_bottom).next().is_some();
+                    // A contrasting rule and centered labels distinguish this band from right-aligned records. ~keep
+                    if r > 0
+                        && table
+                            .rows
+                            .get(r + 1)
+                            .is_some_and(|next| continues_decimal_records(&table.rows[r], next))
+                    {
+                        const HEADER_RULE_WEIGHT_CONTRAST: f32 = 0.5;
+                        let header_boundary = solid_rule_weight(row_bottom)
+                            .zip(solid_rule_weight(grid.rows[r + 1].y_min))
+                            .is_some_and(|(header, body)| header - body >= HEADER_RULE_WEIGHT_CONTRAST);
+                        if !header_boundary
+                            || !centered_decimal_labels(&table.rows[r], &table.rows[r + 1], &grid.columns)
+                        {
+                            break;
+                        }
+                    }
                     if has_separator {
                         header_rows_detected = r + 1;
                     } else if r == 0 && table.rows[r].has_colspan() {
@@ -8725,6 +8844,219 @@ mod tests {
         assert!(
             !all_text.contains("caption"),
             "unaligned caption text must stay out of the table, got {all_text:?}"
+        );
+    }
+
+    const RIGHT_ALIGNED_DECIMAL_INK: [(f32, f32); 2] = [(28.0, 20.0); 2];
+    const CENTERED_LABEL_INK: [(f32, f32); 2] = [(15.0, 20.0), (28.0, 20.0)];
+
+    fn ruled_record_header_roles(
+        rows: &[[&str; 5]],
+        emphasized_after: Option<usize>,
+        grouped: bool,
+        decimal_ink: [(f32, f32); 2],
+        glyph_widths: bool,
+        shared_decimal_anchor: Option<f32>,
+    ) -> Vec<bool> {
+        let height = rows.len() as f32 * 20.0;
+        let mut lines: Vec<_> = (0..=rows.len())
+            .map(|row| make_h_line(100.0, 500.0 + row as f32 * 20.0, 250.0))
+            .collect();
+        if let Some(row) = emphasized_after {
+            lines[rows.len() - row - 1].stroke_width = 2.5;
+        }
+        lines.extend((0..=5).map(|column| {
+            let rule_height = if grouped && column == 3 { height - 21.0 } else { height };
+            make_v_line(100.0 + column as f32 * 50.0, 500.0, rule_height)
+        }));
+        let spans: Vec<_> = rows
+            .iter()
+            .enumerate()
+            .flat_map(|(row, values)| {
+                values
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, value)| !value.is_empty())
+                    .map(move |(column, value)| {
+                        let (offset, width) = if value.contains('.') && is_data_value(value) {
+                            decimal_ink[usize::from(row != 1)]
+                        } else {
+                            (5.0, 20.0)
+                        };
+                        let mut span = create_test_span(
+                            value,
+                            100.0 + column as f32 * 50.0 + offset,
+                            500.0 + height - row as f32 * 20.0 - 15.0,
+                            width,
+                            10.0,
+                        );
+                        if glyph_widths && value.contains('.') && is_data_value(value) {
+                            span.char_widths = vec![width / value.len() as f32; value.len()];
+                            span.char_x_offsets = (0..value.len())
+                                .map(|digit| span.bbox.x + digit as f32 * width / value.len() as f32)
+                                .collect();
+                            if let Some(anchor) = shared_decimal_anchor {
+                                let dot = value.find('.').expect("fixture decimal point");
+                                span.char_x_offsets[dot] = 100.0 + column as f32 * 50.0 + anchor;
+                                span.char_widths[0] += if row == 1 { -2.0 } else { 4.0 };
+                                span.char_widths[dot] += if row == 1 { 2.0 } else { -4.0 };
+                            }
+                        }
+                        span
+                    })
+            })
+            .collect();
+        let config = TableDetectionConfig::default();
+        let clusters = group_lines_into_clusters(&lines, &config);
+        let [cluster] = clusters.as_slice() else {
+            panic!("expected one ruled grid");
+        };
+        let tables = detect_tables_in_cluster(&spans, &lines, cluster, &config);
+        let [table] = tables.as_slice() else {
+            panic!("expected one table");
+        };
+        assert_eq!(table.rows.len(), rows.len());
+        if grouped {
+            assert_eq!(table.rows[0].cells[2].colspan, 2);
+        }
+        table.rows.iter().map(|row| row.is_header).collect()
+    }
+
+    #[test]
+    fn fully_ruled_decimal_records_are_body_rows() {
+        let rows = [
+            ["Year", "Code", "BI", "PD", "MP"],
+            ["1998", "AB", "0.924", "0.863", "0.985"],
+            ["1999", "AB", "0.930", "0.888", "0.988"],
+            ["2000", "AB", "0.937", "0.906", "1.001"],
+        ];
+        assert_eq!(
+            ruled_record_header_roles(&rows, None, false, RIGHT_ALIGNED_DECIMAL_INK, true, None),
+            [true, false, false, false]
+        );
+        assert_eq!(
+            ruled_record_header_roles(&rows, Some(1), false, RIGHT_ALIGNED_DECIMAL_INK, true, None),
+            [true, false, false, false]
+        );
+    }
+
+    #[test]
+    fn emphasized_divider_does_not_promote_a_recurring_text_labeled_record() {
+        let mut rows = [
+            ["Measure", "Statistic", "North", "South", "West"],
+            ["Latency", "p95", "0.924", "0.863", "0.985"],
+            ["Latency", "p99", "0.930", "0.888", "0.988"],
+            ["Latency", "max", "0.937", "0.906", "1.001"],
+        ];
+        assert_eq!(
+            ruled_record_header_roles(&rows, Some(1), false, RIGHT_ALIGNED_DECIMAL_INK, true, None),
+            [true, false, false, false]
+        );
+        rows[1][0] = "Throughput";
+        assert_eq!(
+            ruled_record_header_roles(&rows, Some(1), false, RIGHT_ALIGNED_DECIMAL_INK, true, None),
+            [true, false, false, false]
+        );
+    }
+
+    #[test]
+    fn ruled_numeric_leaf_labels_keep_a_second_header_row() {
+        let rows = [
+            ["Group", "Code", "North", "South", "West"],
+            ["Year", "Type", "2022", "2023", "2024"],
+            ["1998", "AB", "0.924", "0.863", "0.985"],
+            ["1999", "AB", "0.930", "0.888", "0.988"],
+            ["2000", "AB", "0.937", "0.906", "1.001"],
+        ];
+        assert_eq!(
+            ruled_record_header_roles(&rows, None, false, RIGHT_ALIGNED_DECIMAL_INK, true, None),
+            [true, true, false, false, false]
+        );
+    }
+
+    #[test]
+    fn ruled_decimal_leaf_labels_keep_an_independently_separated_header_row() {
+        let mut rows = [
+            ["Group", "Code", "Rates", "", "West"],
+            ["Version", "Build", "1.0", "1.1", "2.0"],
+            ["Latency", "p95", "0.924", "0.863", "0.985"],
+            ["Latency", "p99", "0.930", "0.888", "0.988"],
+            ["Latency", "max", "0.937", "0.906", "1.001"],
+        ];
+        assert_eq!(
+            ruled_record_header_roles(&rows, Some(1), true, CENTERED_LABEL_INK, true, None),
+            [true, true, false, false, false]
+        );
+        assert_eq!(
+            ruled_record_header_roles(&rows, None, true, CENTERED_LABEL_INK, true, None),
+            [true, false, false, false, false]
+        );
+        rows[3][0] = "Throughput";
+        assert_eq!(
+            ruled_record_header_roles(&rows, Some(1), true, CENTERED_LABEL_INK, true, None),
+            [true, true, false, false, false]
+        );
+        rows[0] = ["Group", "Code", "North", "South", "West"];
+        assert_eq!(
+            ruled_record_header_roles(&rows, Some(1), false, CENTERED_LABEL_INK, true, None),
+            [true, true, false, false, false]
+        );
+        assert_eq!(
+            ruled_record_header_roles(&rows, Some(1), false, RIGHT_ALIGNED_DECIMAL_INK, true, None),
+            [true, false, false, false, false]
+        );
+    }
+
+    fn assert_grouped_rates_record_roles(decimal_ink: [(f32, f32); 2], glyph_widths: bool) {
+        let rows = [
+            ["Group", "Code", "Rates", "", "West"],
+            ["Latency", "p50", "0.910", "0.850", "0.970"],
+            ["Latency", "p95", "0.924", "0.863", "0.985"],
+            ["Latency", "p99", "0.930", "0.888", "0.988"],
+            ["Latency", "max", "0.937", "0.906", "1.001"],
+        ];
+        assert_eq!(
+            ruled_record_header_roles(&rows, Some(1), true, decimal_ink, glyph_widths, None),
+            [true, false, false, false, false]
+        );
+    }
+
+    #[test]
+    fn grouped_rates_with_an_emphasized_first_record_keep_it_in_the_body() {
+        assert_grouped_rates_record_roles(RIGHT_ALIGNED_DECIMAL_INK, true);
+    }
+
+    #[test]
+    fn wide_decimal_record_sharing_right_edge_is_body() {
+        assert_grouped_rates_record_roles([(4.0, 44.0), (28.0, 20.0)], true);
+    }
+
+    #[test]
+    fn decimal_record_sharing_left_edge_is_body() {
+        assert_grouped_rates_record_roles([(15.0, 20.0), (15.0, 33.0)], true);
+    }
+
+    #[test]
+    fn decimal_record_spanning_column_width_is_body() {
+        assert_grouped_rates_record_roles([(-1.0, 52.0), (28.0, 20.0)], true);
+    }
+
+    #[test]
+    fn wide_raw_decimal_with_split_cell_text_is_body() {
+        assert_grouped_rates_record_roles([(4.0, 44.0), (28.0, 20.0)], false);
+    }
+
+    #[test]
+    fn decimal_aligned_records_remain_body_despite_different_ink_edges() {
+        let rows = [
+            ["Group", "Code", "North", "South", "West"],
+            ["Latency", "p50", "123.4", "123.4", "123.4"],
+            ["Latency", "p95", "1.23456", "1.23456", "1.23456"],
+            ["Latency", "p99", "1.34567", "1.34567", "1.34567"],
+        ];
+        assert_eq!(
+            ruled_record_header_roles(&rows, Some(1), false, [(13.0, 20.0), (21.0, 28.0)], true, Some(25.0)),
+            [true, false, false, false]
         );
     }
 

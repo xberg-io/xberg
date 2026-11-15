@@ -417,7 +417,7 @@ fn covering_fill(path: &PathContent, y: f32) -> bool {
 }
 
 /// Dash comes from `d` or ExtGState `/D`; zero-opacity strokes have no stroke colour. ~keep
-fn dark_solid_stroke(path: &PathContent) -> bool {
+pub(super) fn dark_solid_stroke(path: &PathContent) -> bool {
     path.dash_pattern.is_none()
         && path.stroke_width >= 0.0
         && path.stroke_color.is_some_and(|color| {

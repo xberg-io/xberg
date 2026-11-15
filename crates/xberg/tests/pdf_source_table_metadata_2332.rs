@@ -75,6 +75,14 @@ fn identical_ruled_tables_with_disjoint_source_bounds_reach_public_html() {
         );
     }
     assert_eq!(result.content.matches("<table").count(), 2);
+    assert_eq!(
+        result.content.matches("<th>").count(),
+        16,
+        "only the two column-label rows are headers"
+    );
+    for year in ["1998", "1999"] {
+        assert_eq!(result.content.matches(&format!("<td>{year}</td>")).count(), 2);
+    }
 }
 
 #[test]

@@ -535,7 +535,7 @@ impl PdfDocument {
         // spec-aligned positions instead of drifting prefix-sums. Runs last, on
         // the fully post-processed spans, so alignment sees the same text the ~keep
         // consumers do.
-        self.stamp_char_x_offsets(page_index, &mut spans);
+        self.stamp_char_x_offsets(page_index, &mut spans, false);
 
         Ok(spans)
     }
@@ -583,7 +583,13 @@ impl PdfDocument {
     /// spans (`rotation_degrees != 0`) have been mapped into the displayed frame
     /// (see `postprocess_spans`) and their glyphs run along a rotated axis, so a
     /// horizontal-x stamp would misalign — those individual spans are skipped.
-    fn stamp_char_x_offsets(&self, page_index: usize, spans: &mut [crate::layout::TextSpan]) {
+    fn stamp_char_x_offsets(&self, page_index: usize, spans: &mut [crate::layout::TextSpan], exact_decimals: bool) {
+        let is_decimal_word = |span: &crate::layout::TextSpan| {
+            span.text.contains('.') && span.text.chars().any(|glyph| glyph.is_ascii_digit())
+        };
+        if exact_decimals && !spans.iter().any(is_decimal_word) {
+            return;
+        }
         // Horizontal-x offsets only make sense in an unrotated frame; the 180°
         // mirror is the one rotation that leaves ALL spans in the displayed frame. ~keep
         if self.get_page_rotation(page_index).unwrap_or(0).rem_euclid(360) == 180 {
@@ -609,7 +615,7 @@ impl PdfDocument {
             // Rotated-content spans are in the displayed frame (mapped on 90/270)
             // and their glyphs run vertically; a horizontal-x stamp from the raw
             // chars would not correspond, so leave them to the prefix-sum path. ~keep
-            if span.rotation_degrees != 0.0 {
+            if span.rotation_degrees != 0.0 || (exact_decimals && !is_decimal_word(span)) {
                 continue;
             }
             // Start clean: any offsets carried over via struct-update from a
@@ -646,6 +652,40 @@ impl PdfDocument {
                     .then(a.cmp(&b))
             });
             let line: Vec<&crate::layout::TextChar> = idx.iter().map(|&i| &accurate[i as usize]).collect();
+
+            if exact_decimals {
+                // Skipping an in-span glyph can assign an overprinted point to the word. ~keep
+                let horizontal = span.bbox.left()..span.bbox.right();
+                let mut source = line
+                    .iter()
+                    .filter(|glyph| horizontal.contains(&glyph.origin_x))
+                    .peekable();
+                let Some(baseline) = source.peek().map(|glyph| glyph.origin_y) else {
+                    continue;
+                };
+                // Table word spans normalize orientation, so prove the frame from the raw glyphs. ~keep
+                const HORIZONTAL_BASELINE_TOLERANCE: f32 = 0.05;
+                let positions = glyphs
+                    .iter()
+                    .map(|glyph| {
+                        source
+                            .next()
+                            .filter(|item| {
+                                item.char == *glyph
+                                    && item.rotation_degrees == 0.0
+                                    && (item.origin_y - baseline).abs() <= HORIZONTAL_BASELINE_TOLERANCE
+                            })
+                            .map(|item| item.origin_x)
+                    })
+                    .collect::<Option<Vec<_>>>();
+                if let Some(positions) = positions
+                    && source.next().is_none()
+                    && positions.windows(2).all(|pair| pair[0] < pair[1])
+                {
+                    span.char_x_offsets = positions;
+                }
+                continue;
+            }
 
             // Greedy per-glyph alignment. Anchor the scan cursor at the accurate
             // char nearest this span's left edge, then walk the span's glyphs,
@@ -713,6 +753,10 @@ impl PdfDocument {
             }
             span.char_x_offsets = offs;
         }
+    }
+
+    pub(super) fn stamp_table_decimal_glyph_positions(&self, page_index: usize, spans: &mut [crate::layout::TextSpan]) {
+        self.stamp_char_x_offsets(page_index, spans, true);
     }
 
     /// Fold a one-char spacing-diacritic span into the following

@@ -214,3 +214,51 @@ fn test_fix_digit_logicalnot_decimal() {
         "1\u{00AC}  00"
     );
 }
+
+fn stamp_decimal_with_nearby_dot(extra_dot_x: u32) -> Vec<f32> {
+    let stream = format!(
+        "BT /F1 4 Tf 1 0 0 1 13 60 Tm (1) Tj 1 0 0 1 14 60 Tm (2) Tj \
+         1 0 0 1 16 60 Tm (3) Tj 1 0 0 1 25 60 Tm (.) Tj 1 0 0 1 29 60 Tm (4) Tj \
+         1 0 0 1 {extra_dot_x} 60 Tm (.) Tj ET\n"
+    );
+    let content = format!("<< /Length {} >>\nstream\n{stream}endstream", stream.len());
+    let pdf = super::pdf_fixtures::build_catalog_test_pdf(
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        &[
+            (3, b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>"),
+            (4, b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"),
+            (5, content.as_bytes()),
+        ],
+    );
+    let document = PdfDocument::from_bytes(pdf).expect("parse decimal glyph fixture");
+    let mut dots: Vec<_> = document
+        .extract_chars(0)
+        .unwrap()
+        .into_iter()
+        .filter(|glyph| glyph.char == '.')
+        .map(|glyph| glyph.origin_x)
+        .collect();
+    dots.sort_by(f32::total_cmp);
+    let mut expected_dots = [25.0, extra_dot_x as f32];
+    expected_dots.sort_by(f32::total_cmp);
+    assert_eq!(dots, expected_dots);
+    let mut span = crate::layout::TextSpan {
+        text: "123.4".to_owned(),
+        bbox: crate::geometry::Rect::new(13.0, 60.0, 20.0, 4.0),
+        font_size: 4.0,
+        ..Default::default()
+    };
+    document.stamp_table_decimal_glyph_positions(0, std::slice::from_mut(&mut span));
+    span.char_x_offsets
+}
+
+#[test]
+fn decimal_stamp_rejects_an_overprinted_dot_inside_the_span() {
+    assert!(stamp_decimal_with_nearby_dot(17).is_empty());
+}
+
+#[test]
+fn decimal_stamp_retains_the_unique_sequence_with_a_dot_outside_the_span() {
+    assert_eq!(stamp_decimal_with_nearby_dot(34), [13.0, 14.0, 16.0, 25.0, 29.0]);
+}
