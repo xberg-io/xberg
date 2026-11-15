@@ -55,13 +55,11 @@ static CITE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"#cite\(<([^>]+)>
 #[cfg(feature = "office")]
 static AT_CITE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(^|[\s(])@([A-Za-z][A-Za-z0-9_:.-]*)").unwrap());
 
-static KEYWORDS_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"keywords:\s*(?:"([^"]*)"|(\([^)]*\)))"#).unwrap());
+static KEYWORDS_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"keywords:\s*(?:"([^"]*)"|(\([^)]*\)))"#).unwrap());
 
 static QUOTED_ITEM_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""([^"]*)""#).unwrap());
 
-static INLINE_LINK_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"#?link\("([^"]*)"\)\[([^\]]*)\]"#).unwrap());
+static INLINE_LINK_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"#?link\("([^"]*)"\)\[([^\]]*)\]"#).unwrap());
 
 /// `ProcessingWarning::source` for every warning this extractor emits (#171).
 #[cfg(feature = "office")]

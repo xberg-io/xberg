@@ -1939,9 +1939,8 @@ fn urls_from_result(result: &ExtractedDocument) -> Vec<String> {
         );
     }
 
-    static TEXT_URL_RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r#"https?://[^\s<>"')\]]+"#).expect("static URL regex is valid")
-    });
+    static TEXT_URL_RE: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r#"https?://[^\s<>"')\]]+"#).expect("static URL regex is valid"));
     urls.extend(TEXT_URL_RE.find_iter(&result.content).map(|matched| {
         matched
             .as_str()

@@ -3,10 +3,10 @@
 //! This module handles XML parsing, metadata extraction from the `<head>` section,
 //! and recursive processing of `<outline>` elements in the `<body>` section.
 
+use crate::Result;
 use crate::extractors::security::SecurityBudget;
 use crate::text::utf8_validation;
 use crate::types::uri::ExtractedUri;
-use crate::Result;
 use ahash::AHashMap;
 use std::borrow::Cow;
 
