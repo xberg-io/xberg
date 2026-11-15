@@ -1404,11 +1404,11 @@ def test_standalone_sceptre_ort_ci_checks_its_independent_feature_closure() -> N
     assert selected[0][1] == "sceptre-ocr-ort", "Sceptre ORT leg must compile only its standalone closure"
     assert len(legs) == 8, "retain all seven existing feature legs alongside Sceptre ORT"
     steps = re.split(r"(?m)^(?=      - )", job)
-    checks = [step for step in steps if step.startswith("      - name: cargo check -p xberg --no-default-features")]
+    checks = [step for step in steps if step.startswith("      - name: cargo clippy -p xberg --no-default-features")]
     assert len(checks) == 1, "the standalone leg must use the actual narrow feature check"
     commands = re.findall(r"(?m)^        run: ([^\n]+)$", checks[0])
     assert commands == [
-        'cargo check --locked -p xberg --no-default-features --features "${{ matrix.features }}" --all-targets'
+        'cargo clippy --locked -p xberg --no-default-features --features "${{ matrix.features }}" --all-targets -- -D warnings'
     ], "standalone Sceptre ORT check must retain its locked independent command"
     conditions = re.findall(r"(?m)^        if: ([^\n]+)$", checks[0])
     assert conditions == ["matrix.name != 'email' && matrix.name != 'xml' && matrix.name != 'hwpx'"], (

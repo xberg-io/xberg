@@ -336,6 +336,12 @@ jobs:
         run: cargo check --locked -p xberg --no-default-features
         shell: bash
 
+      # `cargo publish` verifies the crate at default features under -D warnings, so an item
+      # only the full feature set uses must fail here before a release does. ~keep
+      - name: Clippy default features
+        run: cargo clippy --locked -p xberg --lib -- -D warnings
+        shell: bash
+
       - name: Check ocr-wasm backend
         run: cargo check --locked -p xberg --no-default-features --features ocr-wasm --lib
         shell: bash
@@ -630,9 +636,9 @@ jobs:
         with:
           dest-dir: crates/xberg-ffi
 
-      - name: cargo check -p xberg --no-default-features --features ${{ matrix.features }} --all-targets
+      - name: cargo clippy -p xberg --no-default-features --features ${{ matrix.features }} --all-targets
         if: matrix.name != 'email' && matrix.name != 'xml' && matrix.name != 'hwpx'
-        run: cargo check --locked -p xberg --no-default-features --features "${{ matrix.features }}" --all-targets
+        run: cargo clippy --locked -p xberg --no-default-features --features "${{ matrix.features }}" --all-targets -- -D warnings
         shell: bash
 
       - name: Install mise
