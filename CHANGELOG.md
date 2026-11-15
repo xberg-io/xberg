@@ -248,6 +248,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(rtf): Drop `\deleted` tracked-change text from extracted content.** `{\deleted 100}{\revised 200}` now extracts as `200` instead of `100200`. (#3164)
 
+- **(fictionbook): Fail extraction when a paragraph exceeds a security limit or cannot be parsed.**
+  These errors were discarded, so over-limit or malformed FictionBook paragraphs were silently accepted.
+
 - **(pdf): Improve paragraph reading order in scanned multi-column PDFs.** (#2331)
 
 - **(pdf): Keep adjacent tables separate when their columns align.** A rule or image spanning the gap keeps the table together. (#2332)

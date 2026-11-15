@@ -726,12 +726,7 @@ impl FictionBookExtractor {
                             _ => {}
                         }
                     } else if (tag == "p" || tag == "v") && in_body && !is_notes_body {
-                        let _ = Self::extract_paragraph_with_annotations(
-                            &mut reader,
-                            budget,
-                            &mut builder,
-                            &mut note_markers,
-                        );
+                        Self::extract_paragraph_with_annotations(&mut reader, budget, &mut builder, &mut note_markers)?;
                     } else if tag == "subtitle" && in_body && !is_notes_body {
                         match Self::extract_text_content(&mut reader, budget) {
                             Ok(text) if !text.is_empty() => {
@@ -1665,6 +1660,28 @@ mod tests {
             doc.metadata.title.as_deref(),
             Some("Проверка"),
             "title must be decoded from windows-1251"
+        );
+    }
+
+    /// A security-limit breach inside a paragraph must fail the extraction, not be dropped.
+    #[tokio::test]
+    async fn should_reject_a_fictionbook_paragraph_exceeding_security_limits() {
+        let fb2 = "<FictionBook><body><section><p>this paragraph text is longer than the entity limit</p></section></body></FictionBook>";
+        let config = ExtractionConfig {
+            security_limits: Some(crate::extractors::security::SecurityLimits {
+                max_entity_length: 8,
+                ..crate::extractors::security::SecurityLimits::default()
+            }),
+            ..Default::default()
+        };
+
+        let result = FictionBookExtractor::new()
+            .extract_content(fb2.as_bytes(), "application/x-fictionbook+xml", &config)
+            .await;
+
+        assert!(
+            result.is_err(),
+            "an over-limit paragraph must surface the security error"
         );
     }
 }
