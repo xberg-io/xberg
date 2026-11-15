@@ -192,7 +192,7 @@ impl<'doc> TextExtractor<'doc> {
             None => return Ok(()),
         };
 
-        if doc.xobject_text_free_cache.lock().unwrap().contains(&xobject_ref) {
+        if doc.xobject_text_free_cache.lock_or_recover().contains(&xobject_ref) {
             return Ok(());
         }
 
@@ -295,7 +295,7 @@ impl<'doc> TextExtractor<'doc> {
                         let has_xobject = res_dict.contains_key("XObject");
                         if !has_font && !has_xobject {
                             tracing::debug!(target: LOG_TARGET, "Skipping Form XObject '{}': no Font/XObject in Resources", name);
-                            doc.xobject_text_free_cache.lock().unwrap().insert(xobject_ref);
+                            doc.xobject_text_free_cache.lock_or_recover().insert(xobject_ref);
                             return Ok(());
                         }
                     }
@@ -308,7 +308,7 @@ impl<'doc> TextExtractor<'doc> {
                 }
 
                 self.xobject_decode_count += 1;
-                let cached_stream = { doc.xobject_stream_cache.lock().unwrap().get(&xobject_ref).cloned() };
+                let cached_stream = { doc.xobject_stream_cache.lock_or_recover().get(&xobject_ref).cloned() };
                 let stream_data = if let Some(cached) = cached_stream {
                     cached.as_ref().clone()
                 } else {
@@ -322,8 +322,7 @@ impl<'doc> TextExtractor<'doc> {
                                 doc.xobject_stream_cache_bytes
                                     .store(current + data.len(), std::sync::atomic::Ordering::Relaxed);
                                 doc.xobject_stream_cache
-                                    .lock()
-                                    .unwrap()
+                                    .lock_or_recover()
                                     .insert(xobject_ref, std::sync::Arc::new(data.clone()));
                             }
                             data
@@ -345,7 +344,7 @@ impl<'doc> TextExtractor<'doc> {
                         name,
                         stream_data.len()
                     );
-                    doc.xobject_text_free_cache.lock().unwrap().insert(xobject_ref);
+                    doc.xobject_text_free_cache.lock_or_recover().insert(xobject_ref);
                     return Ok(());
                 }
 
