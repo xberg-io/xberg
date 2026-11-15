@@ -190,6 +190,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **(api, mcp): Callers can no longer choose server paths or loosen operator limits.**
+  REST and MCP requests are rejected when their config names a server file, directory or model source
+  (`html_output.css_file`, `tree_sitter.cache_dir`, `ocr.tessdata_path`, model cache directories, custom model ids,
+  `concurrency`), so a request can no longer read a server file back through HTML output. `/extract` now merges the
+  request config over the server config instead of replacing it, and a request can only lower the server's security
+  limits, archive depth, timeouts and URL caps, never raise or remove them.
+
 - **(hwp): Cap the decompressed size of compressed HWP body-text sections.**
   Sections are now inflated under `security_limits.max_content_size` each and `max_archive_size` in total, so a small crafted `.hwp` can no longer expand without bound.
 

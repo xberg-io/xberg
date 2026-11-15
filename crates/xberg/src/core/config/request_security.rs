@@ -24,7 +24,45 @@ const LLM_LOCATIONS: &[(&str, &str)] = &[
     ("/captioning/llm", "captioning.llm"),
 ];
 
-/// Reject transport and credential settings supplied by an untrusted request.
+/// Server filesystem paths, model sources and process-global settings, as JSON pointers
+/// into an `ExtractionConfig` or `FileExtractionConfig`.
+const OPERATOR_OWNED_FIELDS: &[&str] = &[
+    "/html_output/css_file",
+    "/tree_sitter/cache_dir",
+    "/ocr/tessdata_path",
+    "/chunking/embedding/cache_dir",
+    "/chunking/embedding/model/model_id",
+    "/chunking/sparse_embedding/cache_dir",
+    "/chunking/sparse_embedding/model/model_id",
+    "/chunking/late_interaction/cache_dir",
+    "/chunking/late_interaction/model/model_id",
+    "/transcription/model_cache_dir",
+    "/redaction/findings_path",
+    "/concurrency/max_threads",
+    "/concurrency/max_concurrent_ocr",
+];
+
+/// Operator-owned fields of one OCR engine selection: the `ocr` section and each
+/// `ocr.pipeline.stages[i]`. `backend_options` is parsed by the backend, which accepts the
+/// dashed aliases too (candle OCR) and a nested `model` section (Sceptre).
+const OPERATOR_OWNED_OCR_ENGINE_FIELDS: &[&str] = &[
+    "/tesseract_config/tessdata_path",
+    "/paddle_ocr_settings/cache_dir",
+    "/paddle_ocr_config/cache_dir",
+    "/backend_options/cache_dir",
+    "/backend_options/cache-dir",
+    "/backend_options/model_path",
+    "/backend_options/model-path",
+    "/backend_options/model_id",
+    "/backend_options/model-id",
+    "/backend_options/model/detector_path",
+    "/backend_options/model/recognizer_path",
+    "/backend_options/model/cache_dir",
+    "/backend_options/model/registry_owner",
+];
+
+/// Reject transport, credential, filesystem and process-global settings supplied by an
+/// untrusted request.
 pub(crate) fn validate_caller_extraction_config(config: &Value) -> Result<(), String> {
     #[cfg(feature = "url-config-types")]
     if let Some(crawl) = config.pointer("/url/crawl") {
@@ -38,15 +76,146 @@ pub(crate) fn validate_caller_extraction_config(config: &Value) -> Result<(), St
         }
     }
 
+    reject_operator_owned_fields(config, "", OPERATOR_OWNED_FIELDS)?;
+    if let Some(ocr) = config.get("ocr") {
+        reject_operator_owned_fields(ocr, "ocr.", OPERATOR_OWNED_OCR_ENGINE_FIELDS)?;
+    }
+
     if let Some(stages) = config.pointer("/ocr/pipeline/stages").and_then(Value::as_array) {
         for (index, stage) in stages.iter().enumerate() {
             if let Some(llm) = stage.get("vlm_config") {
                 validate_llm_fields(llm, &format!("ocr.pipeline.stages[{index}].vlm_config"))?;
             }
+            reject_operator_owned_fields(
+                stage,
+                &format!("ocr.pipeline.stages[{index}]."),
+                OPERATOR_OWNED_OCR_ENGINE_FIELDS,
+            )?;
         }
     }
 
     Ok(())
+}
+
+fn reject_operator_owned_fields(value: &Value, prefix: &str, pointers: &[&str]) -> Result<(), String> {
+    for pointer in pointers {
+        if value.pointer(pointer).is_some_and(|field| !field.is_null()) {
+            let path = pointer.trim_start_matches('/').replace('/', ".");
+            return Err(format!("Caller extraction config may not set {prefix}{path}"));
+        }
+    }
+    Ok(())
+}
+
+/// Build the effective config for an untrusted request: validate the caller JSON, merge it
+/// over the operator config and re-apply the operator's policy to the result.
+pub(crate) fn resolve_caller_extraction_config(
+    operator: &super::ExtractionConfig,
+    caller: Option<&Value>,
+) -> Result<super::ExtractionConfig, String> {
+    if let Some(caller) = caller {
+        validate_caller_extraction_config(caller)?;
+    }
+    let caller_json = caller.map(Value::to_string);
+    let mut config = super::merge::build_config_from_json(operator, caller_json.as_deref())?;
+    adopt_operator_policy(&mut config, operator);
+    Ok(config)
+}
+
+/// Re-apply operator policy to a request config already merged over `operator`: crawl
+/// egress comes from the operator, and resource limits can only tighten.
+pub(crate) fn adopt_operator_policy(config: &mut super::ExtractionConfig, operator: &super::ExtractionConfig) {
+    adopt_operator_crawl_egress(config, operator);
+    tighten_security_limits(&mut config.security_limits, operator.security_limits.as_ref());
+    config.max_archive_depth = config.max_archive_depth.min(operator.max_archive_depth);
+    config.extraction_timeout_secs = stricter_cap(config.extraction_timeout_secs, operator.extraction_timeout_secs);
+    config.max_embedded_file_bytes = stricter_cap(config.max_embedded_file_bytes, operator.max_embedded_file_bytes);
+    tighten_url_limits(&mut config.url, &operator.url);
+    #[cfg(feature = "transcription-types")]
+    if let Some(transcription) = config.transcription.as_mut() {
+        tighten_transcription_limits(transcription, operator.transcription.as_ref());
+    }
+}
+
+/// Apply the policy of the request's effective config to a per-input override, which
+/// `ExtractionConfig::with_file_overrides` would otherwise let replace it.
+pub(crate) fn adopt_file_operator_policy(
+    config: &mut super::FileExtractionConfig,
+    effective: &super::ExtractionConfig,
+) {
+    adopt_file_operator_crawl_egress(config, effective);
+    if let Some(timeout) = config.timeout_secs {
+        config.timeout_secs = stricter_cap(Some(timeout), effective.extraction_timeout_secs);
+    }
+    if let Some(url) = config.url.as_mut() {
+        tighten_url_limits(url, &effective.url);
+    }
+    #[cfg(feature = "transcription-types")]
+    if let Some(transcription) = config.transcription.as_mut() {
+        tighten_transcription_limits(transcription, effective.transcription.as_ref());
+    }
+}
+
+/// The stricter of two optional caps, where `None` means unlimited.
+fn stricter_cap<T: Ord>(caller: Option<T>, operator: Option<T>) -> Option<T> {
+    match (caller, operator) {
+        (Some(caller), Some(operator)) => Some(caller.min(operator)),
+        (caller, operator) => caller.or(operator),
+    }
+}
+
+fn tighten_security_limits(
+    limits: &mut Option<crate::extractors::security::SecurityLimits>,
+    operator: Option<&crate::extractors::security::SecurityLimits>,
+) {
+    let Some(caller) = limits.as_mut() else {
+        *limits = operator.cloned();
+        return;
+    };
+    // `None` on the operator side means the defaults are in force, so they are the bound.
+    let crate::extractors::security::SecurityLimits {
+        max_archive_size,
+        max_compression_ratio,
+        max_files_in_archive,
+        max_nesting_depth,
+        max_entity_length,
+        max_content_size,
+        max_iterations,
+        max_xml_depth,
+        max_table_cells,
+        max_pages,
+    } = operator.cloned().unwrap_or_default();
+    caller.max_archive_size = caller.max_archive_size.min(max_archive_size);
+    caller.max_compression_ratio = caller.max_compression_ratio.min(max_compression_ratio);
+    caller.max_files_in_archive = caller.max_files_in_archive.min(max_files_in_archive);
+    caller.max_nesting_depth = caller.max_nesting_depth.min(max_nesting_depth);
+    caller.max_entity_length = caller.max_entity_length.min(max_entity_length);
+    caller.max_content_size = caller.max_content_size.min(max_content_size);
+    caller.max_iterations = caller.max_iterations.min(max_iterations);
+    caller.max_xml_depth = caller.max_xml_depth.min(max_xml_depth);
+    caller.max_table_cells = caller.max_table_cells.min(max_table_cells);
+    caller.max_pages = stricter_cap(caller.max_pages, max_pages);
+}
+
+fn tighten_url_limits(url: &mut super::UrlExtractionConfig, operator: &super::UrlExtractionConfig) {
+    url.max_document_urls_per_result =
+        stricter_cap(url.max_document_urls_per_result, operator.max_document_urls_per_result);
+    url.max_total_urls = stricter_cap(url.max_total_urls, operator.max_total_urls);
+    url.allow_local_file_inputs &= operator.allow_local_file_inputs;
+    url.allow_file_uris &= operator.allow_file_uris;
+}
+
+#[cfg(feature = "transcription-types")]
+fn tighten_transcription_limits(
+    transcription: &mut super::TranscriptionConfig,
+    operator: Option<&super::TranscriptionConfig>,
+) {
+    let operator = operator.cloned().unwrap_or_default();
+    transcription.max_duration_ms = stricter_cap(transcription.max_duration_ms, operator.max_duration_ms);
+    transcription.max_bytes = stricter_cap(transcription.max_bytes, operator.max_bytes);
+    transcription.timeout_ms = stricter_cap(transcription.timeout_ms, operator.timeout_ms);
+    transcription.allow_network &= operator.allow_network;
+    transcription.verify_hash |= operator.verify_hash;
 }
 
 fn validate_llm_fields(llm: &Value, path: &str) -> Result<(), String> {
@@ -131,7 +300,6 @@ mod tests {
         current
     }
 
-    #[cfg(feature = "url-config-types")]
     fn value_with_pointer(pointer: &str, leaf: Value) -> Value {
         pointer
             .split('/')
@@ -218,6 +386,126 @@ mod tests {
         });
 
         assert_eq!(validate_caller_extraction_config(&config), Ok(()));
+    }
+
+    #[test]
+    fn should_reject_caller_css_file() {
+        let config = serde_json::json!({"html_output": {"css_file": "/proc/self/environ"}});
+
+        assert_eq!(
+            validate_caller_extraction_config(&config),
+            Err("Caller extraction config may not set html_output.css_file".to_string())
+        );
+    }
+
+    #[test]
+    fn should_reject_caller_tree_sitter_cache_dir() {
+        let config = serde_json::json!({"tree_sitter": {"cache_dir": "/tmp/attacker-grammars"}});
+
+        assert_eq!(
+            validate_caller_extraction_config(&config),
+            Err("Caller extraction config may not set tree_sitter.cache_dir".to_string())
+        );
+    }
+
+    #[test]
+    fn should_reject_caller_tessdata_path() {
+        let config = serde_json::json!({"ocr": {"tessdata_path": "/tmp/attacker-tessdata"}});
+
+        assert_eq!(
+            validate_caller_extraction_config(&config),
+            Err("Caller extraction config may not set ocr.tessdata_path".to_string())
+        );
+    }
+
+    #[test]
+    fn should_reject_each_operator_owned_field_without_leaking_its_value() {
+        for pointer in OPERATOR_OWNED_FIELDS {
+            let secret = format!("/secret/for{pointer}");
+            let config = value_with_pointer(pointer, serde_json::json!(secret));
+
+            let error = validate_caller_extraction_config(&config).expect_err("operator-owned field must be rejected");
+
+            let path = pointer.trim_start_matches('/').replace('/', ".");
+            assert_eq!(error, format!("Caller extraction config may not set {path}"));
+            assert!(!error.contains(&secret), "rejection must not expose the field value");
+        }
+    }
+
+    #[test]
+    fn should_reject_operator_owned_ocr_engine_fields_in_ocr_and_each_pipeline_stage() {
+        for pointer in OPERATOR_OWNED_OCR_ENGINE_FIELDS {
+            let path = pointer.trim_start_matches('/').replace('/', ".");
+            let engine = value_with_pointer(pointer, serde_json::json!("/srv/models"));
+
+            let config = serde_json::json!({"ocr": engine.clone()});
+            assert_eq!(
+                validate_caller_extraction_config(&config),
+                Err(format!("Caller extraction config may not set ocr.{path}"))
+            );
+
+            let config = serde_json::json!({"ocr": {"pipeline": {"stages": [{"backend": "tesseract"}, engine]}}});
+            assert_eq!(
+                validate_caller_extraction_config(&config),
+                Err(format!(
+                    "Caller extraction config may not set ocr.pipeline.stages[1].{path}"
+                ))
+            );
+        }
+    }
+
+    #[test]
+    fn should_allow_null_operator_owned_fields_and_preset_models() {
+        for pointer in OPERATOR_OWNED_FIELDS {
+            assert_eq!(
+                validate_caller_extraction_config(&value_with_pointer(pointer, Value::Null)),
+                Ok(())
+            );
+        }
+        for pointer in OPERATOR_OWNED_OCR_ENGINE_FIELDS {
+            let config = serde_json::json!({"ocr": value_with_pointer(pointer, Value::Null)});
+            assert_eq!(validate_caller_extraction_config(&config), Ok(()));
+        }
+
+        let config = serde_json::json!({
+            "chunking": {"embedding": {"model": {"type": "preset", "name": "balanced"}}},
+            "ocr": {"backend": "tesseract", "language": ["eng"], "backend_options": {"mode": "accurate"}},
+            "tree_sitter": {"enabled": true},
+            "html_output": {"css": "body { color: red; }"}
+        });
+        assert_eq!(validate_caller_extraction_config(&config), Ok(()));
+    }
+
+    #[test]
+    fn should_cap_per_input_overrides_at_the_effective_request_config() {
+        let effective = crate::ExtractionConfig {
+            extraction_timeout_secs: Some(30),
+            url: super::super::UrlExtractionConfig {
+                allow_local_file_inputs: false,
+                allow_file_uris: false,
+                max_total_urls: Some(10),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut file = crate::FileExtractionConfig {
+            timeout_secs: Some(86_400),
+            url: Some(super::super::UrlExtractionConfig {
+                allow_local_file_inputs: true,
+                allow_file_uris: true,
+                max_total_urls: None,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        adopt_file_operator_policy(&mut file, &effective);
+
+        assert_eq!(file.timeout_secs, Some(30));
+        let url = file.url.expect("URL override stays present");
+        assert!(!url.allow_local_file_inputs);
+        assert!(!url.allow_file_uris);
+        assert_eq!(url.max_total_urls, Some(10));
     }
 
     #[test]

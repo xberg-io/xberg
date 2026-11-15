@@ -788,7 +788,7 @@ fn parse_extract_input(
     let mut input = serde_json::from_value::<crate::ExtractInput>(value)
         .map_err(|error| rmcp::ErrorData::invalid_params(format!("Invalid ExtractInput: {error}"), None))?;
     if let Some(config) = input.config.as_mut() {
-        crate::core::config::request_security::adopt_file_operator_crawl_egress(config, operator);
+        crate::core::config::request_security::adopt_file_operator_policy(config, operator);
     }
     Ok(input)
 }
@@ -1405,6 +1405,52 @@ mod tests {
         assert_eq!(
             crawl.custom_headers.get("x-caller-input").map(String::as_str),
             Some("input-value")
+        );
+    }
+
+    #[test]
+    fn should_reject_server_css_file_in_mcp_per_input_override() {
+        let value = serde_json::json!({
+            "kind": "bytes",
+            "data": [115, 97, 102, 101],
+            "mime_type": "text/plain",
+            "config": {"html_output": {"css_file": "/proc/self/environ"}}
+        });
+
+        let error =
+            parse_extract_input(value, &ExtractionConfig::default()).expect_err("server css_file must be rejected");
+
+        assert_eq!(
+            error.message,
+            "Caller extraction config may not set html_output.css_file"
+        );
+    }
+
+    #[test]
+    fn should_cap_mcp_per_input_timeout_at_request_timeout() {
+        let request = ExtractionConfig {
+            extraction_timeout_secs: Some(30),
+            ..Default::default()
+        };
+        let input_with_timeout = |timeout: u64| {
+            serde_json::json!({
+                "kind": "bytes",
+                "data": [115, 97, 102, 101],
+                "mime_type": "text/plain",
+                "config": {"timeout_secs": timeout}
+            })
+        };
+
+        let raised = parse_extract_input(input_with_timeout(86_400), &request).expect("timeout override parses");
+        assert_eq!(
+            raised.config.expect("per-input config is present").timeout_secs,
+            Some(30)
+        );
+
+        let lowered = parse_extract_input(input_with_timeout(5), &request).expect("timeout override parses");
+        assert_eq!(
+            lowered.config.expect("per-input config is present").timeout_secs,
+            Some(5)
         );
     }
 

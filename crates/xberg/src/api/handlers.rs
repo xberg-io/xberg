@@ -106,7 +106,8 @@ impl ApiExtractInput {
 #[derive(Debug)]
 pub(crate) struct UnifiedExtractRequest {
     inputs: Vec<ApiExtractInput>,
-    config: Option<crate::core::config::ExtractionConfig>,
+    /// Caller config as sent, kept as JSON so it merges over the operator config field by field.
+    config: Option<serde_json::Value>,
     output_format: Option<crate::core::config::OutputFormat>,
     pdf_passwords: Vec<String>,
     use_toon: bool,
@@ -114,16 +115,23 @@ pub(crate) struct UnifiedExtractRequest {
 }
 
 impl UnifiedExtractRequest {
-    fn adopt_operator_crawl_egress(&mut self, operator: &crate::core::config::ExtractionConfig) {
-        if let Some(config) = self.config.as_mut() {
-            crate::core::config::request_security::adopt_operator_crawl_egress(config, operator);
-        }
+    /// Merge the caller config over the operator config and apply the operator's policy.
+    fn resolve_config(
+        &mut self,
+        operator: &crate::core::config::ExtractionConfig,
+    ) -> Result<crate::core::config::ExtractionConfig, ApiError> {
+        crate::core::config::request_security::resolve_caller_extraction_config(operator, self.config.take().as_ref())
+            .map_err(|message| ApiError::validation(crate::error::XbergError::validation(message)))
+    }
+
+    /// Bound every per-input override by the request's effective config.
+    fn adopt_input_operator_policy(&mut self, effective: &crate::core::config::ExtractionConfig) {
         for input in &mut self.inputs {
             let config = match input {
                 ApiExtractInput::Bytes { config, .. } | ApiExtractInput::Uri { config, .. } => config,
             };
             if let Some(config) = config.as_mut() {
-                crate::core::config::request_security::adopt_file_operator_crawl_egress(config, operator);
+                crate::core::config::request_security::adopt_file_operator_policy(config, effective);
             }
         }
     }
@@ -132,6 +140,17 @@ impl UnifiedExtractRequest {
 fn validate_caller_config_value(config: &serde_json::Value) -> Result<(), ApiError> {
     crate::core::config::request_security::validate_caller_extraction_config(config)
         .map_err(|message| ApiError::validation(crate::error::XbergError::validation(message)))
+}
+
+/// Reject a request config that does not deserialize, at parse time rather than at merge time.
+fn check_request_config_shape(config: &serde_json::Value) -> Result<(), ApiError> {
+    serde_json::from_value::<crate::core::config::ExtractionConfig>(config.clone())
+        .map(drop)
+        .map_err(|e| {
+            ApiError::validation(crate::error::XbergError::validation(format!(
+                "Invalid extraction configuration: {e}"
+            )))
+        })
 }
 
 fn validate_input_config_values(inputs: &serde_json::Value) -> Result<(), ApiError> {
@@ -151,7 +170,7 @@ fn validate_input_config_values(inputs: &serde_json::Value) -> Result<(), ApiErr
 struct JsonUnifiedExtractRequest {
     inputs: Vec<JsonExtractInput>,
     #[serde(default)]
-    config: Option<crate::core::config::ExtractionConfig>,
+    config: Option<serde_json::Value>,
     #[serde(default)]
     format: Option<String>,
     #[serde(default = "default_include_image_data")]
@@ -249,8 +268,9 @@ async fn parse_json_extract_request(req: Request) -> Result<UnifiedExtractReques
             crate::error::XbergError::validation(format!("Invalid extraction request JSON: {e}")),
         )
     })?;
-    if let Some(config) = raw.get("config") {
+    if let Some(config) = raw.get("config").filter(|config| !config.is_null()) {
         validate_caller_config_value(config)?;
+        check_request_config_shape(config)?;
     }
     if let Some(inputs) = raw.get("inputs") {
         validate_input_config_values(inputs)?;
@@ -298,7 +318,7 @@ where
         })?;
 
     let mut inputs = Vec::new();
-    let mut config: Option<crate::core::config::ExtractionConfig> = None;
+    let mut config: Option<serde_json::Value> = None;
     let mut output_format = None;
     let mut pdf_passwords = Vec::new();
     let mut use_toon = false;
@@ -358,12 +378,8 @@ where
                     )))
                 })?;
                 validate_caller_config_value(&config_value)?;
-                config = Some(serde_json::from_str(&config_str).map_err(|e| {
-                    ApiError::validation(crate::error::XbergError::validation(format!(
-                        "Invalid extraction configuration: {}",
-                        e
-                    )))
-                })?);
+                check_request_config_shape(&config_value)?;
+                config = Some(config_value);
             }
             "output_format" => {
                 let format_str = field
@@ -742,10 +758,10 @@ pub(crate) async fn extract_handler(
     #[cfg(feature = "otel")]
     tracing::Span::current().record("files_count", request.inputs.len());
 
-    request.adopt_operator_crawl_egress(&state.default_config);
-    let mut final_config = request.config.unwrap_or_else(|| (*state.default_config).clone());
-    apply_multipart_config_fields(&mut final_config, request.output_format, request.pdf_passwords);
+    let mut final_config = request.resolve_config(&state.default_config)?;
     enforce_and_apply_api_uri_policy(&request.inputs, &mut final_config, api_allows_local_uri_inputs())?;
+    request.adopt_input_operator_policy(&final_config);
+    apply_multipart_config_fields(&mut final_config, request.output_format, request.pdf_passwords);
     let results = extract_unified_inputs(request.inputs, final_config).await?;
 
     if !request.include_image_data {
@@ -1330,14 +1346,14 @@ pub(crate) async fn extract_async_handler(
         )));
     }
 
-    request.adopt_operator_crawl_egress(&state.default_config);
-    let mut effective_config = request.config.unwrap_or_else(|| (*state.default_config).clone());
-    apply_multipart_config_fields(&mut effective_config, request.output_format, request.pdf_passwords);
+    let mut effective_config = request.resolve_config(&state.default_config)?;
     #[cfg(not(test))]
     let allow_local = api_allows_local_uri_inputs();
     #[cfg(test)]
     let allow_local = disallow_local.is_none() && api_allows_local_uri_inputs();
     enforce_and_apply_api_uri_policy(&request.inputs, &mut effective_config, allow_local)?;
+    request.adopt_input_operator_policy(&effective_config);
+    apply_multipart_config_fields(&mut effective_config, request.output_format, request.pdf_passwords);
     // Created after the last fallible step: a rejected submission must not hold a slot. ~keep
     let Some(job_id) = state.job_store.create_job() else {
         return Err(ApiError::new(
@@ -1640,10 +1656,12 @@ mod tests {
     }
 
     async fn extracted_mime_from_multipart(request: Request<Body>) -> String {
-        let parsed = UnifiedExtractRequest::from_request(request, &())
+        let mut parsed = UnifiedExtractRequest::from_request(request, &())
             .await
             .expect("multipart extraction request must parse");
-        let config = parsed.config.unwrap_or_default();
+        let config = parsed
+            .resolve_config(&crate::ExtractionConfig::default())
+            .expect("multipart config must resolve");
         let result = extract_unified_inputs(parsed.inputs, config)
             .await
             .expect("multipart input must extract");
@@ -1899,6 +1917,108 @@ mod tests {
         );
     }
 
+    async fn post_extract(router: Router, body: serde_json::Value) -> (StatusCode, serde_json::Value) {
+        let request = Request::builder()
+            .method("POST")
+            .uri("/extract")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&body).expect("request body serializes")))
+            .expect("valid request");
+        let response = router.oneshot(request).await.expect("router responds");
+        let status = response.status();
+        let body = to_bytes(response.into_body(), usize::MAX).await.expect("body reads");
+        (status, serde_json::from_slice(&body).expect("response is JSON"))
+    }
+
+    #[tokio::test]
+    async fn should_reject_server_css_file_in_extract_request_config() {
+        let router = crate::api::create_router(crate::ExtractionConfig::default());
+        let body = serde_json::json!({
+            "inputs": [{"text": "<p>safe</p>", "mime_type": "text/html"}],
+            "config": {"output_format": "html", "html_output": {"css_file": "/proc/self/environ"}}
+        });
+
+        let (status, error) = post_extract(router, body).await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            error["message"],
+            "Validation error: Caller extraction config may not set html_output.css_file"
+        );
+    }
+
+    #[tokio::test]
+    async fn should_reject_server_css_file_in_extract_per_input_config() {
+        let router = crate::api::create_router(crate::ExtractionConfig::default());
+        let body = serde_json::json!({
+            "inputs": [{
+                "text": "<p>safe</p>",
+                "mime_type": "text/html",
+                "config": {"html_output": {"css_file": "/proc/self/environ"}}
+            }]
+        });
+
+        let (status, error) = post_extract(router, body).await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            error["message"],
+            "Validation error: Caller extraction config may not set html_output.css_file"
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "html")]
+    async fn should_keep_operator_settings_when_extract_config_is_empty() {
+        let router = crate::api::create_router(crate::ExtractionConfig {
+            output_format: crate::core::config::OutputFormat::Markdown,
+            use_cache: false,
+            ..Default::default()
+        });
+        let body = serde_json::json!({
+            "inputs": [{"text": "<h1>Title</h1>", "mime_type": "text/html"}],
+            "config": {}
+        });
+
+        let (status, output) = post_extract(router, body).await;
+
+        assert_eq!(status, StatusCode::OK);
+        let content = output["results"][0]["content"].as_str().expect("content is a string");
+        assert!(
+            content.contains("# Title"),
+            "an empty caller config must keep the operator's Markdown output, got {content:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn should_merge_extract_config_over_operator_and_keep_operator_limits() {
+        let operator = crate::ExtractionConfig {
+            use_cache: false,
+            extraction_timeout_secs: Some(30),
+            max_archive_depth: 1,
+            ..Default::default()
+        };
+        let body = serde_json::json!({
+            "inputs": [{"text": "safe input"}],
+            "config": {"force_ocr": false, "extraction_timeout_secs": null, "max_archive_depth": 64}
+        });
+        let request = Request::builder()
+            .method("POST")
+            .uri("/extract")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&body).expect("request body serializes")))
+            .expect("valid request");
+        let mut parsed = UnifiedExtractRequest::from_request(request, &())
+            .await
+            .expect("request parses");
+
+        let config = parsed.resolve_config(&operator).expect("request config resolves");
+
+        assert!(!config.use_cache, "unspecified fields come from the operator config");
+        assert_eq!(config.extraction_timeout_secs, Some(30));
+        assert_eq!(config.max_archive_depth, 1);
+    }
+
     #[tokio::test]
     #[cfg(feature = "url-config-types")]
     async fn should_reject_request_level_crawl_egress_config_without_leaking_value() {
@@ -1944,11 +2064,14 @@ mod tests {
             .body(Body::from(serde_json::to_vec(&body).expect("request body serializes")))
             .expect("valid request");
 
-        let parsed = UnifiedExtractRequest::from_request(request, &())
+        let mut parsed = UnifiedExtractRequest::from_request(request, &())
             .await
             .expect("caller-owned crawl config must remain valid");
+        let config = parsed
+            .resolve_config(&crate::ExtractionConfig::default())
+            .expect("caller-owned crawl config must resolve");
 
-        assert_eq!(parsed.config.expect("config is present").url.crawl.max_depth, Some(2));
+        assert_eq!(config.url.crawl.max_depth, Some(2));
     }
 
     #[tokio::test]
@@ -1991,9 +2114,10 @@ mod tests {
         operator.url.crawl.document_output_dir = Some("/operator/documents".into());
         operator.url.crawl.warc_output = Some("/operator/archive.warc".into());
 
-        parsed.adopt_operator_crawl_egress(&operator);
+        let request_config = parsed.resolve_config(&operator).expect("request config resolves");
+        parsed.adopt_input_operator_policy(&request_config);
 
-        let request_crawl = &parsed.config.as_ref().expect("request config is present").url.crawl;
+        let request_crawl = &request_config.url.crawl;
         assert_operator_crawl_egress(request_crawl, &operator.url.crawl);
         assert_eq!(request_crawl.max_depth, Some(7));
         assert_eq!(
@@ -2024,11 +2148,7 @@ mod tests {
                 config.as_ref().expect("per-input config is present")
             }
         };
-        let resolved = parsed
-            .config
-            .as_ref()
-            .expect("request config is present")
-            .with_file_overrides(input_config);
+        let resolved = request_config.with_file_overrides(input_config);
         assert_operator_crawl_egress(&resolved.url.crawl, &operator.url.crawl);
         assert_eq!(resolved.url.crawl.max_depth, Some(3));
         assert_eq!(

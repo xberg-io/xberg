@@ -19,18 +19,13 @@ fn openweb_config(
     operator: &crate::core::config::ExtractionConfig,
     config_json: Option<&str>,
 ) -> Result<crate::core::config::ExtractionConfig, ApiError> {
-    use crate::core::config::{merge, request_security};
-
     let validation_error = |message| ApiError::validation(crate::error::XbergError::validation(message));
-    if let Some(json) = config_json {
-        let raw = serde_json::from_str(json)
-            .map_err(|error| validation_error(format!("Failed to parse override JSON: {error}")))?;
-        request_security::validate_caller_extraction_config(&raw).map_err(validation_error)?;
-    }
-
-    let mut config = merge::build_config_from_json(operator, config_json).map_err(validation_error)?;
-    request_security::adopt_operator_crawl_egress(&mut config, operator);
-    Ok(config)
+    let caller = config_json
+        .map(serde_json::from_str::<serde_json::Value>)
+        .transpose()
+        .map_err(|error| validation_error(format!("Failed to parse override JSON: {error}")))?;
+    crate::core::config::request_security::resolve_caller_extraction_config(operator, caller.as_ref())
+        .map_err(validation_error)
 }
 
 async fn resolve_openweb_bytes(
@@ -285,6 +280,33 @@ mod tests {
         .expect_err("caller transport settings must be rejected");
         assert_eq!(error.status, StatusCode::BAD_REQUEST);
         assert!(error.body.message.contains("ner.llm.load_env"), "{:?}", error.body);
+    }
+
+    #[test]
+    fn openweb_config_rejects_caller_tessdata_path() {
+        let error = openweb_config(
+            &crate::ExtractionConfig::default(),
+            Some(r#"{"ocr":{"tessdata_path":"/tmp/attacker-tessdata"}}"#),
+        )
+        .expect_err("caller tessdata_path must be rejected");
+
+        assert_eq!(error.status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            error.body.message,
+            "Validation error: Caller extraction config may not set ocr.tessdata_path"
+        );
+    }
+
+    #[test]
+    fn openweb_config_keeps_operator_timeout_when_caller_removes_it() {
+        let operator = crate::ExtractionConfig {
+            extraction_timeout_secs: Some(30),
+            ..Default::default()
+        };
+
+        let config = openweb_config(&operator, Some(r#"{"extraction_timeout_secs":null}"#)).unwrap();
+
+        assert_eq!(config.extraction_timeout_secs, Some(30));
     }
 
     #[test]
