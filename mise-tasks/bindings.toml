@@ -32,7 +32,7 @@ run = "python3 scripts/ci/python_archive_publication.py wait"
 
 ["python:publish:archive:test"]
 description = "Test Python archive publication and its bounded readiness gate"
-run = "uv run --frozen --only-dev python -m pytest scripts/ci/test_python_archive_publication.py -v"
+run = "uv run --frozen --only-dev --with PyYAML==6.0.3 python -m pytest scripts/ci/test_python_archive_publication.py -v"
 
 # ---- Go ----------------------------------------------------------------------------------------
 
