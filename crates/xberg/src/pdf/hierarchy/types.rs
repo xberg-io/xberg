@@ -49,7 +49,7 @@ pub struct SegmentData {
     /// Pre-assigned heading level from the PDF structure tree (1-6), or `None`
     /// when the heading level is unknown and must be inferred via font-size clustering.
     pub assigned_role: Option<u8>,
-    pub(crate) ocr_heading_spans: Option<Box<[crate::types::internal::OcrSourceSpan; 2]>>,
+    pub(crate) ocr_heading_spans: Option<Box<[crate::types::internal::OcrSourceSpan]>>,
 }
 
 impl SegmentData {

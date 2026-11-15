@@ -257,7 +257,7 @@ pub(super) async fn probe_anchored_occurrences(
     let (source, collapsed_only) = if let Some(source) = indexed::IndexedSource::load(&attempt) {
         (source, false)
     } else {
-        if heading_only || !selected.tables.is_empty() || !selected.formulas.is_empty() || read.dimensions.0 >= *width {
+        if !selected.tables.is_empty() || !selected.formulas.is_empty() || read.dimensions.0 >= *width {
             return Ok(());
         }
         // The checked scale-only hOCR frame determines lost detail. The render still owns its allocation. ~keep

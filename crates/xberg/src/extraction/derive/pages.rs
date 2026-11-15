@@ -214,7 +214,35 @@ fn canonical_heading_text(doc: &InternalDocument, index: usize) -> Option<String
     {
         return None;
     }
-    let [first, last] = element.ocr_source_spans.as_slice() else {
+    let pending = element.ocr_source_spans.as_slice();
+    if let [span] = pending {
+        let (expected, replacement, 1) = span.replacement.as_ref()? else {
+            return None;
+        };
+        let end = span.destination.checked_add(span.source.len())?;
+        let page_spans = || {
+            doc.elements
+                .iter()
+                .filter(|other| other.page == element.page)
+                .flat_map(|other| &other.ocr_source_spans)
+        };
+        if expected.is_empty()
+            || !expected.bytes().all(|byte| byte.is_ascii_punctuation())
+            || replacement.split_whitespace().count() < 2
+            || element.text.get(span.destination..end)? != expected
+            || page_spans().filter(|other| other.replacement.is_some()).count() != 1
+            || page_spans()
+                .filter(|other| other.occurrence == span.occurrence && other.owner == span.owner)
+                .count()
+                != 1
+        {
+            return None;
+        }
+        let mut text = element.text.clone();
+        text.replace_range(span.destination..end, replacement);
+        return Some(text);
+    }
+    let [first, last] = pending else {
         return None;
     };
     let (first_expected, first_new, 2) = first.replacement.as_ref()? else {

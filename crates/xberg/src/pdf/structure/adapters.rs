@@ -449,13 +449,14 @@ pub(crate) fn segments_from_ocr_pages(
                     let first = segments.next();
                     let pending = first
                         .filter(|segment| segments.peek().is_none() && segment.text == paragraph.text)
-                        .and_then(|_| <&[_; 2]>::try_from(paragraph.ocr_source_spans.as_slice()).ok())
+                        .map(|_| paragraph.ocr_source_spans.as_slice())
                         .filter(|spans| {
-                            spans
-                                .iter()
-                                .all(|span| span.replacement.as_ref().is_some_and(|(_, _, n)| *n == 2))
+                            (1..=2).contains(&spans.len())
+                                && spans
+                                    .iter()
+                                    .all(|span| span.replacement.as_ref().is_some_and(|(_, _, n)| *n == spans.len()))
                         })
-                        .map(|spans| Box::new(spans.clone()));
+                        .map(Box::from);
                     first
                         .into_iter()
                         .chain(segments)

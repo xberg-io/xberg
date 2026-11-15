@@ -329,3 +329,102 @@ async fn public_page_five_undersampled_line_keeps_competing_owner() {
             .replacen('=', "01. PRODUCTS", 1)
     );
 }
+
+#[tokio::test]
+#[ignore = "requires the exact archived page five"]
+async fn public_page_five_line_keeps_structured_output_exact() {
+    use xberg::OutputFormat;
+
+    let guide = std::path::PathBuf::from(std::env::var_os("XBERG_2502_PAGE5_ARCHIVE").unwrap());
+    assert_eq!(
+        hex::encode(Sha256::digest(std::fs::read(&guide).unwrap())),
+        "58c1d40e39ba494a4f7f4c301bccde1bb2ccc1b7a9d3050b9fe28b31c1a2ac9c"
+    );
+    let d = tempfile::tempdir().unwrap();
+    let model = xberg_tesseract::bundled_eng_traineddata().unwrap();
+    std::fs::write(d.path().join("eng.traineddata"), model).unwrap();
+    let active = std::sync::Arc::new(std::sync::Mutex::new(TraceBuffer::default()));
+    let writer = active.clone();
+    tracing_subscriber::fmt()
+        .with_env_filter("xberg::extractors::pdf::ocr::tall_source=trace,xberg::extraction::derive::pages=trace")
+        .with_ansi(false)
+        .with_writer(move || writer.lock().unwrap().clone())
+        .try_init()
+        .unwrap();
+    for output_format in [
+        OutputFormat::Markdown,
+        OutputFormat::Html,
+        OutputFormat::Djot,
+        OutputFormat::DocTags,
+    ] {
+        let mut config = ExtractionConfig {
+            use_cache: false,
+            output_format,
+            ocr: Some(OcrConfig {
+                tessdata_path: Some(d.path().to_path_buf()),
+                tesseract_config: Some(xberg::TesseractConfig {
+                    preprocessing: Some(xberg::ImagePreprocessingConfig {
+                        deskew: false,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+                backend_options: Some(serde_json::json!({})),
+                ..Default::default()
+            }),
+            pages: Some(serde_json::from_value(serde_json::json!({"extract_pages": true})).unwrap()),
+            ..Default::default()
+        };
+        let (mut stock, trace) = extract_arm(&guide, &config, &active).await;
+        assert_eq!(trace.matches("optional region OCR backend call").count(), 0);
+        config.ocr.as_mut().unwrap().backend_options = Some(serde_json::json!({
+            "source_region_recovery": true, "source_region_max_calls": 2
+        }));
+        let (live, trace) = extract_arm(&guide, &config, &active).await;
+        let calls = trace.matches("optional region OCR backend call").count();
+        println!("{} calls={calls}", config.output_format);
+        for line in trace
+            .lines()
+            .filter(|line| line.contains("canonical OCR heading") || line.contains("structured OCR selected"))
+        {
+            println!("{line}");
+        }
+        assert_eq!(calls, 2, "{}", config.output_format);
+        let corrected = |text: &str| {
+            assert_eq!(text.matches("= corey =").count(), 1);
+            let expected = match config.output_format {
+                OutputFormat::Markdown | OutputFormat::Djot => r"01\. PRODUCTS corey =",
+                _ => "01. PRODUCTS corey =",
+            };
+            text.replacen("= corey =", expected, 1)
+        };
+        stock.content = corrected(&stock.content);
+        let [page] = stock.pages.as_mut().unwrap().as_mut_slice() else {
+            panic!("exactly one page")
+        };
+        page.content = corrected(&page.content);
+        assert_eq!(stock.content, live.content, "{}", config.output_format);
+        let mut stock = serde_json::to_value(stock).unwrap();
+        let live = serde_json::to_value(live).unwrap();
+        if let Some(boundaries) = stock
+            .pointer_mut("/metadata/pages/boundaries")
+            .and_then(serde_json::Value::as_array_mut)
+        {
+            let [boundary] = boundaries.as_mut_slice() else {
+                panic!("exactly one page boundary")
+            };
+            assert_eq!(boundary["byte_start"], 0);
+            let added = match config.output_format {
+                OutputFormat::Markdown | OutputFormat::Djot => r"01\. PRODUCTS".len() - 1,
+                _ => "01. PRODUCTS".len() - 1,
+            };
+            boundary["byte_end"] = (boundary["byte_end"].as_u64().unwrap() + added as u64).into();
+        } else {
+            assert!(matches!(config.output_format, OutputFormat::DocTags));
+        }
+        for (key, value) in stock.as_object().unwrap() {
+            assert!(live.get(key) == Some(value), "{} changed {key}", config.output_format);
+        }
+        assert_eq!(stock.as_object().unwrap().len(), live.as_object().unwrap().len());
+    }
+}
