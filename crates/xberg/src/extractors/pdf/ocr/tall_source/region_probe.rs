@@ -521,25 +521,28 @@ async fn scan_full_line(
         let Some(mut reservation) = PairReservation::reserve(budget) else {
             return Ok(None);
         };
-        let Some([words, _]) = read_pair(attempt, source, backend, ocr, crop, column, Some(&mut reservation)).await?
+        let Some([primary, confirmation]) =
+            read_pair(attempt, source, backend, ocr, crop, column, Some(&mut reservation)).await?
         else {
             tracing::trace!(?owners, "full line OCR read pair declined");
             continue;
         };
-        let count = words.len();
-        let alphabetic = words.iter().all(|word| word.text.chars().all(char::is_alphabetic));
-        let same_band = words.windows(2).all(|pair| same_line(pair[0].bounds, pair[1].bounds));
-        if count <= group.len() || !alphabetic || !same_band {
+        let count = primary.len();
+        let alphabetic = primary.iter().all(|word| word.text.chars().all(char::is_alphabetic));
+        let covers_stock = [&primary, &confirmation]
+            .into_iter()
+            .all(|source| full_line_read_covers_stock(&words[indices.clone()], source));
+        if count <= group.len() || !alphabetic || !covers_stock {
             tracing::trace!(
                 ?owners,
                 count,
                 alphabetic,
-                same_band,
+                covers_stock,
                 "full line OCR source ownership declined"
             );
             continue;
         }
-        let mut replacement = words
+        let mut replacement = primary
             .iter()
             .map(|word| word.text.as_str())
             .collect::<Vec<_>>()
@@ -564,6 +567,30 @@ async fn scan_full_line(
         }
     }
     Ok((!selected.is_empty()).then_some(selected))
+}
+
+fn full_line_read_covers_stock(stock: &[RegionBox], source: &[RegionWord]) -> bool {
+    if stock.is_empty()
+        || stock.windows(2).any(|pair| pair[0].right > pair[1].left)
+        || !source.windows(2).all(|pair| same_line(pair[0].bounds, pair[1].bounds))
+    {
+        return false;
+    }
+    // Stock height may include unrelated ink. Require a shared baseline band and
+    // majority horizontal coverage from disjoint word intervals, allowing splits and joins. ~keep
+    stock.iter().all(|word| {
+        let covered: u32 = source
+            .iter()
+            .map(|candidate| candidate.bounds)
+            .filter(|candidate| candidate.top < word.bottom && word.top < candidate.bottom)
+            .map(|candidate| {
+                word.right
+                    .min(candidate.right)
+                    .saturating_sub(word.left.max(candidate.left))
+            })
+            .sum();
+        covered >= (word.right - word.left).div_ceil(2)
+    })
 }
 
 fn full_line_candidate(
@@ -692,6 +719,32 @@ pub(super) async fn read_pair(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn larger_line_read_must_cover_the_last_stock_owner() {
+        let bounds = |left, right| RegionBox {
+            left,
+            right,
+            top: 10,
+            bottom: 20,
+        };
+        let stock = [bounds(0, 20), bounds(24, 36), bounds(40, 52)];
+        let words = |ranges: &[(u32, u32)]| {
+            ranges
+                .iter()
+                .map(|&(left, right)| RegionWord {
+                    bounds: bounds(left, right),
+                    text: "word".to_owned(),
+                    confidence: 99.0,
+                })
+                .collect::<Vec<_>>()
+        };
+        let complete = words(&[(0, 8), (9, 16), (17, 36), (40, 52)]);
+        let missing_end = words(&[(0, 8), (9, 16), (17, 26), (27, 36)]);
+        assert!(full_line_read_covers_stock(&stock, &complete));
+        assert!(missing_end.len() > stock.len());
+        assert!(!full_line_read_covers_stock(&stock, &missing_end));
+    }
 
     #[test]
     fn anchored_edge_ink_refuses_a_component_shared_by_two_stock_words() {
