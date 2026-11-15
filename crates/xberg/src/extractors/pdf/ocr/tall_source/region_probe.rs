@@ -696,37 +696,83 @@ fn full_line_candidate(
 pub(super) fn page_panel_order(
     source: &IndexedSource,
     read: &crate::types::formats::RetainedHocrRead,
-) -> Option<[usize; 5]> {
-    if read.occurrences.len() > 1024 {
+    heading: [usize; 2],
+) -> Option<crate::types::internal::OcrPanelOrder> {
+    let projection = read.plain_document.as_ref()?;
+    let [first_id, last_id] = heading;
+    let mut windows = read
+        .occurrences
+        .windows(10)
+        .filter(|words| words[0].id == first_id && words[1].id == last_id);
+    let window = windows.next()?;
+    if windows.next().is_some()
+        || !window
+            .iter()
+            .all(|word| projection.ranges.iter().filter(|(id, _)| *id == word.id).count() == 1)
+    {
         return None;
     }
-    let projection = read.plain_document.as_ref()?;
-    let mut result = None;
-    for group in read.occurrences.windows(5) {
-        if !group.iter().all(|word| {
-            word.transcript_bytes == word.owner_bytes
-                && projection.ranges.iter().filter(|(id, _)| *id == word.id).count() == 1
-        }) {
-            continue;
-        }
-        let boxes = group
-            .iter()
-            .map(|word| source.native_bounds(read.dimensions, word.bounds))
-            .collect::<Option<Vec<_>>>()?;
-        let &[a, b, intruder, c, follower] = boxes.as_slice() else {
-            return None;
-        };
-        let Some(gutter) = interleaved_panel_gutter([a, b, intruder, c, follower]) else {
-            continue;
-        };
-        if source.has_panel_gutter(gutter) {
-            let ids = std::array::from_fn(|i| group[i].id);
-            if result.replace(ids).is_some() {
-                return None;
-            }
-        }
+    let [first, last, marker, title, label, panel @ ..] = window else {
+        return None;
+    };
+    if first.element != last.element
+        || marker.element != title.element
+        || first.element == marker.element
+        || first.transcript_bytes.start != first.owner_bytes.start
+        || last.transcript_bytes.end != last.owner_bytes.end
+        || marker.transcript_bytes.start != marker.owner_bytes.start
+        || title.transcript_bytes.end != title.owner_bytes.end
+        || label.transcript_bytes != label.owner_bytes
+        || !panel.iter().all(|word| word.transcript_bytes == word.owner_bytes)
+    {
+        return None;
     }
-    result
+    let boxes = window
+        .iter()
+        .map(|word| source.native_bounds(read.dimensions, word.bounds))
+        .collect::<Option<Vec<_>>>()?;
+    let &[a, b, _, title, label, p, q, r, s, t] = boxes.as_slice() else {
+        return None;
+    };
+    let gutter = bound_panel_gutter([a, b], title, label, [p, q, r, s, t])?;
+    source
+        .has_panel_gutter(gutter)
+        .then(|| crate::types::internal::OcrPanelOrder {
+            heading,
+            panel: std::array::from_fn(|i| panel[i].id),
+        })
+}
+
+fn bound_panel_gutter(
+    [first, last]: [RegionBox; 2],
+    title: RegionBox,
+    label: RegionBox,
+    panel: [RegionBox; 5],
+) -> Option<RegionBox> {
+    let mut gutter = interleaved_panel_gutter(panel)?;
+    let heading_bottom = first.bottom.max(last.bottom);
+    let heading_left = first.left.min(last.left);
+    let heading_right = first.right.max(last.right);
+    let overlap = heading_right
+        .min(title.right)
+        .saturating_sub(heading_left.max(title.left));
+    if heading_bottom > title.top
+        || overlap < (heading_right - heading_left).min(title.right - title.left).div_ceil(2)
+        || title.top - heading_bottom > (title.bottom - title.top).saturating_mul(2)
+        || title.bottom > label.top
+        || label.bottom > gutter.top
+        || label.left < gutter.left && label.right > gutter.right
+    {
+        return None;
+    }
+    if panel[0].right <= gutter.left {
+        gutter.left = gutter.left.max(label.right);
+    } else {
+        gutter.right = gutter.right.min(label.left);
+    }
+    let shared_left = heading_right <= gutter.left && title.right <= gutter.left;
+    let shared_right = heading_left >= gutter.right && title.left >= gutter.right;
+    (gutter.right.saturating_sub(gutter.left) >= 16 && (shared_left || shared_right)).then_some(gutter)
 }
 
 fn interleaved_panel_gutter([a, b, intruder, c, follower]: [RegionBox; 5]) -> Option<RegionBox> {
@@ -1044,6 +1090,13 @@ mod tests {
             bounds([374, 862, 770, 922]),
         ];
         assert!(interleaved_panel_gutter(panels).is_some());
+        let heading = [bounds([206, 157, 251, 171]), bounds([265, 157, 353, 171])];
+        let title = bounds([211, 231, 389, 282]);
+        let label = bounds([1649, 595, 1759, 609]);
+        assert!(bound_panel_gutter(heading, title, label, panels).is_some());
+        let unrelated = [bounds([206, 20, 251, 34]), bounds([265, 20, 353, 34])];
+        assert!(bound_panel_gutter(unrelated, title, label, panels).is_none());
+
         let mut bridging = panels;
         bridging[2].right = panels[3].left + 1;
         assert!(interleaved_panel_gutter(bridging).is_none());

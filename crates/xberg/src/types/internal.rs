@@ -558,9 +558,15 @@ pub(crate) struct OcrSourceSpan {
     pub(crate) occurrence: usize,
     pub(crate) replacement: Option<(String, String, usize)>,
     pub(crate) insertion: Option<OcrGapInsertion>,
-    pub(crate) panel_order: Option<[usize; 5]>,
+    pub(crate) panel_order: Option<OcrPanelOrder>,
     pub(crate) source: std::ops::Range<usize>,
     pub(crate) destination: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct OcrPanelOrder {
+    pub(crate) heading: [usize; 2],
+    pub(crate) panel: [usize; 5],
 }
 
 #[derive(Debug, Clone, PartialEq)]

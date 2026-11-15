@@ -422,6 +422,7 @@ fn plan_page_panel_order(
     spans: &crate::rendering::ElementSpans,
     page: &PageContent,
     page_index: usize,
+    verified_edits: &[FinalOcrEdit<'_>],
 ) -> Option<(std::ops::Range<usize>, usize, std::ops::Range<usize>, usize, String)> {
     let owners = || {
         doc.elements
@@ -430,23 +431,38 @@ fn plan_page_panel_order(
             .flat_map(|element| element.ocr_source_spans.iter().map(move |span| (element, span)))
     };
     let mut orders = owners().filter_map(|(_, span)| span.panel_order.as_ref());
-    let ids = orders.next()?;
-    if orders.next().is_some() || !page.tables.is_empty() {
+    let order = orders.next()?;
+    if orders.next().is_some() || !page.tables.is_empty() || verified_edits.len() != 2 {
         return None;
     }
-    let project = |id| {
+    let project = |id, complete| {
         let mut matches = owners().filter(|(_, span)| span.occurrence == id);
         let (element, span) = matches.next()?;
         if matches.next().is_some()
             || !element.annotations.is_empty()
-            || span.destination != 0
-            || span.source.len() != element.text.len()
+            || (complete && (span.destination != 0 || span.source.len() != element.text.len()))
         {
             return None;
         }
-        project_final_ocr_occurrence(doc, (text, spans), page, &element.id, 0..element.text.len())
+        let end = span.destination.checked_add(span.source.len())?;
+        project_final_ocr_occurrence(doc, (text, spans), page, &element.id, span.destination..end)
     };
-    let mapped = ids.iter().map(|&id| project(id)).collect::<Option<Vec<_>>>()?;
+    let mapped = order
+        .panel
+        .iter()
+        .map(|&id| project(id, true))
+        .collect::<Option<Vec<_>>>()?;
+    for id in order.heading {
+        let [doc_range, page_range] = project(id, false)?;
+        if doc_range.end > mapped[0][0].start
+            || page_range.end > mapped[0][1].start
+            || !verified_edits
+                .iter()
+                .any(|edit| edit.0 == doc_range && edit.1 == page_range)
+        {
+            return None;
+        }
+    }
     if mapped.windows(2).any(|pair| {
         text.get(pair[0][0].end..pair[1][0].start) != Some("\n\n")
             || page.content.get(pair[0][1].end..pair[1][1].start) != Some("\n\n")
@@ -483,6 +499,7 @@ pub(super) fn adopt_final_ocr_replacement(
     for (page_index, page) in pages.iter().enumerate() {
         let edits = plan_page_ocr_replacement(doc, text, spans, page).unwrap_or_default();
         let insertion = plan_page_ocr_insertion(doc, text, spans, page);
+        let order = plan_page_panel_order(doc, text, spans, page, page_index, &edits);
         all.extend(
             edits
                 .into_iter()
@@ -491,7 +508,7 @@ pub(super) fn adopt_final_ocr_replacement(
                     (document, page_index, page, expected, replacement.to_owned())
                 }),
         );
-        all.extend(plan_page_panel_order(doc, text, spans, page, page_index));
+        all.extend(order);
     }
     if all.is_empty() {
         return None;
@@ -777,6 +794,57 @@ fn ocr_gap_insertion_requires_complete_unique_anchors_in_both_views() {
     verify(duplicate, None, false);
     doc.elements[0].ocr_source_spans.pop();
     verify(doc, None, false);
+}
+
+#[cfg(all(test, feature = "pdf", feature = "ocr"))]
+#[test]
+fn panel_reorder_requires_recovery_of_its_own_heading() {
+    use crate::types::internal::{OcrPanelOrder, OcrSourceSpan};
+    let mut doc = InternalDocument::new("pdf");
+    for (index, text) in ["Near Head", "Far Head", "A", "B", "Left", "C", "Size"]
+        .into_iter()
+        .enumerate()
+    {
+        let mut element = InternalElement::text(ElementKind::Paragraph, text, 0).with_index(index as u32);
+        element.page = Some(1);
+        let ranges: Vec<_> = if let Some(space) = text.find(' ') {
+            vec![0..space, space + 1..text.len()]
+        } else {
+            std::iter::once(0..text.len()).collect()
+        };
+        for (word, range) in ranges.into_iter().enumerate() {
+            element.ocr_source_spans.push(OcrSourceSpan {
+                owner: element.id.clone(),
+                occurrence: index * 2 + word,
+                destination: range.start,
+                source: range,
+                replacement: None,
+                insertion: None,
+                panel_order: (index == 4).then_some(OcrPanelOrder {
+                    heading: [0, 1],
+                    panel: [4, 6, 8, 10, 12],
+                }),
+            });
+        }
+        doc.elements.push(element);
+    }
+    let verify = |mut doc: InternalDocument, heading: usize, should_reorder| {
+        let element = &mut doc.elements[heading];
+        for span in &mut element.ocr_source_spans {
+            span.replacement = Some((element.text[span.source.clone()].to_owned(), "New".to_owned(), 2));
+        }
+        let mut rendered = crate::rendering::render_plain_with_spans(&doc);
+        let mut pages: Vec<PageContent> = serde_json::from_value(serde_json::json!([
+            {"page_number": 1, "content": rendered.text}
+        ]))
+        .unwrap();
+        adopt_final_ocr_replacement(&mut doc, &mut rendered.text, &rendered.spans, &mut pages).unwrap();
+        assert!(rendered.text.contains("New New"));
+        assert_eq!(rendered.text.contains("B\n\nC\n\nLeft"), should_reorder);
+        assert_eq!(rendered.text, pages[0].content);
+    };
+    verify(doc.clone(), 0, true);
+    verify(doc, 1, false);
 }
 
 /// Give each page that has elements its part of the plain `content`. A page with no

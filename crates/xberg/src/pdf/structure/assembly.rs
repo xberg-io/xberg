@@ -2169,6 +2169,7 @@ mod tests {
                 occurrence: index,
                 replacement: Some((expected.to_owned(), replacement.to_owned(), 2)),
                 insertion: None,
+                panel_order: None,
                 source: range.clone(),
                 destination: range.start,
             }
