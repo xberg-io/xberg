@@ -1620,11 +1620,11 @@ mod tests {
         test_router_with_store(std::sync::Arc::new(crate::api::jobs::JobStore::new()))
     }
 
-    fn test_router_with_store(job_store: std::sync::Arc<crate::api::jobs::JobStore>) -> Router {
+    fn test_api_state(job_store: Arc<crate::api::jobs::JobStore>) -> ApiState {
         let extraction_service = crate::service::ExtractionServiceBuilder::new()
             .build()
             .expect("default extraction service configuration should be valid");
-        let state = ApiState {
+        ApiState {
             default_config: std::sync::Arc::new(crate::ExtractionConfig::default()),
             extraction_service: std::sync::Arc::new(std::sync::Mutex::new(extraction_service)),
             #[cfg(feature = "api")]
@@ -1633,7 +1633,10 @@ mod tests {
             job_timeout_secs: crate::core::ServerConfig::default().job_timeout_secs,
             #[cfg(feature = "prometheus")]
             prometheus_registry: crate::telemetry::init_prometheus(),
-        };
+        }
+    }
+
+    fn test_router_with_store(job_store: Arc<crate::api::jobs::JobStore>) -> Router {
         #[allow(unused_mut)]
         let mut router = Router::new()
             .route("/version", get(version_handler))
@@ -1646,7 +1649,7 @@ mod tests {
             .route("/extract-async", post(extract_async_handler))
             .route("/jobs/{job_id}", get(job_status_handler).delete(cancel_job_handler));
 
-        router.with_state(state)
+        router.with_state(test_api_state(job_store))
     }
 
     /// Build a `multipart/form-data` request carrying a single named text field.
@@ -2575,6 +2578,61 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
         assert_eq!(job_store.active_count(), crate::api::jobs::MAX_ACTIVE_JOBS);
+    }
+
+    #[cfg(feature = "api")]
+    #[tokio::test]
+    async fn should_reject_saturated_async_upload_before_converting_its_bytes() {
+        use crate::api::jobs::{JobStore, MAX_ACTIVE_JOBS, now_rfc3339};
+
+        struct Upload {
+            job_store: Arc<JobStore>,
+            job_id: String,
+        }
+
+        impl AsRef<[u8]> for Upload {
+            fn as_ref(&self) -> &[u8] {
+                b"Example"
+            }
+        }
+
+        impl Drop for Upload {
+            fn drop(&mut self) {
+                self.job_store.cancel(&self.job_id, now_rfc3339());
+            }
+        }
+
+        let job_store = Arc::new(JobStore::new());
+        for _ in 1..MAX_ACTIVE_JOBS {
+            job_store.create_job().expect("slot available");
+        }
+        // Copying these bytes into a core input drops the owner and frees a slot. ~keep
+        let data = Bytes::from_owner(Upload {
+            job_store: Arc::clone(&job_store),
+            job_id: job_store.create_job().expect("last slot available"),
+        });
+        assert_eq!(job_store.active_count(), MAX_ACTIVE_JOBS);
+
+        let request = UnifiedExtractRequest {
+            inputs: vec![ApiExtractInput::Bytes {
+                data,
+                mime_type: "text/plain".into(),
+                file_name: Some("example.txt".into()),
+                config: None,
+                use_layout_for_markdown: None,
+            }],
+            config: None,
+            output_format: None,
+            pdf_passwords: Vec::new(),
+            use_toon: false,
+            include_image_data: false,
+        };
+        let error = extract_async_handler(State(test_api_state(Arc::clone(&job_store))), None, request)
+            .await
+            .expect_err("admission must see the upload owner still holding the last slot");
+
+        assert_eq!(error.status, StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(job_store.active_count(), MAX_ACTIVE_JOBS - 1);
     }
 
     #[cfg(feature = "api")]

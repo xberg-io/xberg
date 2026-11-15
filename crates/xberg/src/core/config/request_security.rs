@@ -578,6 +578,22 @@ mod tests {
     }
 
     #[test]
+    fn should_reject_legacy_paddle_cache_dir_alias_at_both_ocr_levels() {
+        let engine = serde_json::json!({"backend": "paddleocr", "paddle_ocr_config": {"cacheDir": "model-cache"}});
+        let top_level = serde_json::json!({"ocr": engine.clone()});
+        let pipeline = serde_json::json!({"ocr": {"pipeline": {"stages": [engine]}}});
+
+        assert_eq!(
+            validate_caller_extraction_config(&top_level),
+            Err("Caller extraction config may not set ocr.paddle_ocr_config.cache_dir".to_string())
+        );
+        assert_eq!(
+            validate_caller_extraction_config(&pipeline),
+            Err("Caller extraction config may not set ocr.pipeline.stages[0].paddle_ocr_config.cache_dir".to_string())
+        );
+    }
+
+    #[test]
     fn should_allow_null_operator_owned_fields_and_preset_models() {
         for pointer in OPERATOR_OWNED_FIELDS {
             assert_eq!(
