@@ -159,7 +159,7 @@ fn visible_area_at_least(
 type RuleStyle = ([u32; 3], u32);
 
 /// Accept either visible group/leaf rules or a repeated schema with independent first-body shading.
-/// Both proofs share the role/path-count checks and matching visible leaf/body-rule veto. ~keep
+/// Regular decimal leaves under matching rules require independent group and alignment evidence. ~keep
 pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathContent], columns: usize) {
     let [groups, leaves, first_body, ..] = rows else {
         return;
@@ -173,11 +173,18 @@ pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathCon
             .into_iter()
             .any(|header| header)
         || !complete_source_band(first_body, columns, false)
-        || !complete_source_band(leaves, columns, true)
-        || !(grouped_header_rules(groups, leaves, &nearby)
-            || repeated_schema_over_shaded_body(groups, leaves, first_body, &nearby))
-        || body_repeats_the_header_rule(leaves, first_body, &nearby)
     {
+        return;
+    }
+    let repeating_rules = body_repeats_the_header_rule(leaves, first_body, &nearby);
+    let proven = if repeating_rules {
+        centered_decimal_leaf_band(groups, leaves, first_body, &nearby, columns)
+    } else {
+        complete_source_band(leaves, columns, true)
+            && (grouped_header_rules(groups, leaves, &nearby)
+                || repeated_schema_over_shaded_body(groups, leaves, first_body, &nearby))
+    };
+    if !proven {
         return;
     }
     for row in [groups, leaves] {
@@ -186,6 +193,38 @@ pub(super) fn retain_grouped_leaf_header(rows: &mut [TableRow], paths: &[PathCon
             cell.is_header = true;
         }
     }
+}
+
+fn centered_decimal_leaf_band(
+    groups: &TableRow,
+    leaves: &TableRow,
+    first_body: &TableRow,
+    paths: &[&PathContent],
+    columns: usize,
+) -> bool {
+    complete_source_band(leaves, columns, false)
+        && super::continues_decimal_records(leaves, first_body)
+        && super::group_covers_decimal_leaves(groups, leaves, |group, covered| {
+            let (Some(group_bounds), Some(first), Some(last)) = (
+                group.bbox,
+                covered.first().and_then(|cell| cell.bbox),
+                covered.last().and_then(|cell| cell.bbox),
+            ) else {
+                return false;
+            };
+            source_label(group, false)
+                && same_rule_position(group_bounds.left(), first.left())
+                && same_rule_position(group_bounds.right(), last.right())
+                && same_rule_position(group_bounds.y, first.bottom())
+                && visible_rule(paths, group_bounds.left(), group_bounds.right(), group_bounds.y)
+        })
+        && leaves.cells.iter().zip(&first_body.cells).all(|(leaf, body)| {
+            matches!((leaf.bbox, body.bbox), (Some(label), Some(value))
+                if same_rule_position(label.left(), value.left())
+                    && same_rule_position(label.right(), value.right())
+                    && same_rule_position(label.y, value.bottom())
+                    && super::centered_decimal_pair(leaf, body, label.left(), label.right()))
+        })
 }
 
 fn complete_source_band(row: &TableRow, columns: usize, bold: bool) -> bool {
@@ -316,8 +355,7 @@ fn uncovered_shading(paths: &[&PathContent]) -> Vec<Rect> {
 }
 
 /// In a grid ruled alike on every row, a rule under the leaf band says nothing about the header.
-/// The band is a header only when no rule of the same colour and weight also closes the first body
-/// row. Tables that rule every row at one weight get no retained header from this path. ~keep
+/// If the first body row repeats the rule, a retained header needs independent alignment evidence. ~keep
 fn body_repeats_the_header_rule(leaves: &TableRow, first_body: &TableRow, paths: &[&PathContent]) -> bool {
     let (Some(first), Some(last)) = (
         leaves.cells.first().and_then(|c| c.bbox),

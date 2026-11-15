@@ -528,3 +528,86 @@ fn insurance_image_rule_only_joins_tables_when_it_crosses_a_gutter() {
         }
     }
 }
+
+fn uniform_rule_decimal_table(centered_labels: bool) -> Vec<u8> {
+    use lopdf::{Document, Object, Stream, dictionary};
+    use std::fmt::Write as _;
+
+    let mut paint = String::from("0 G 1 w\n");
+    for y in (60..=160).step_by(20) {
+        writeln!(paint, "30 {y} m 280 {y} l S").unwrap();
+    }
+    for column in 0..=5 {
+        let x = 30 + column * 50;
+        let top = if column == 3 { 140 } else { 160 };
+        writeln!(paint, "{x} 60 m {x} {top} l S").unwrap();
+    }
+    let first_band = if centered_labels {
+        ["Version", "Build", "1.0", "1.1", "2.0"]
+    } else {
+        ["Latency", "p50", "0.910", "0.850", "0.970"]
+    };
+    paint.push_str("BT /F1 8 Tf\n");
+    for (row, cells) in [
+        ["Group", "Code", "Rates", "", "West"],
+        first_band,
+        ["Latency", "p95", "0.924", "0.863", "0.985"],
+        ["Throughput", "p99", "0.930", "0.888", "0.988"],
+        ["Latency", "max", "0.937", "0.906", "1.001"],
+    ]
+    .iter()
+    .enumerate()
+    {
+        let y = 145 - row * 20;
+        for (column, text) in cells.iter().enumerate().filter(|(_, text)| !text.is_empty()) {
+            let offset = if column < 2 || row == 0 {
+                3.0
+            } else if row == 1 && centered_labels {
+                19.44
+            } else {
+                28.0
+            };
+            let x = 30.0 + 50.0 * column as f32 + offset;
+            writeln!(paint, "1 0 0 1 {x} {y} Tm ({text}) Tj").unwrap();
+        }
+    }
+    paint.push_str("ET\n");
+    let mut pdf = Document::with_version("1.4");
+    let pages = pdf.new_object_id();
+    let font = pdf.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica" });
+    let stream = pdf.add_object(Stream::new(dictionary! {}, paint.into_bytes()));
+    let page = pdf.add_object(dictionary! {
+        "Type" => "Page", "Parent" => pages, "MediaBox" => Object::Array(vec![0.into(), 0.into(), 310.into(), 200.into()]),
+        "Contents" => stream, "Resources" => dictionary! { "Font" => dictionary! { "F1" => font } },
+    });
+    pdf.objects.insert(
+        pages,
+        dictionary! {
+            "Type" => "Pages", "Kids" => Object::Array(vec![page.into()]), "Count" => 1,
+        }
+        .into(),
+    );
+    let catalog = pdf.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+    pdf.trailer.set("Root", catalog);
+    let mut bytes = Vec::new();
+    pdf.save_to(&mut bytes).unwrap();
+    bytes
+}
+
+#[test]
+fn centered_decimal_leaf_labels_are_headers_under_uniform_rules() {
+    let config = parsebench_html_config();
+    for (centered, token, tag) in [(false, "0.910", "td"), (true, "1.0", "th")] {
+        let result =
+            extract_bytes_document_blocking(&uniform_rule_decimal_table(centered), "application/pdf", &config).unwrap();
+        assert_eq!(result.tables.len(), 1, "{}", result.content);
+        assert_eq!(result.tables[0].cells.len(), 5);
+        assert!(result.content.contains(r#"<th colspan="2">Rates</th>"#));
+        assert!(
+            result.content.contains(&format!("<{tag}>{token}</{tag}>")),
+            "{}",
+            result.content
+        );
+        assert!(result.content.contains("<td>0.924</td>"), "{}", result.content);
+    }
+}

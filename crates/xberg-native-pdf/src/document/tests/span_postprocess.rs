@@ -262,3 +262,40 @@ fn decimal_stamp_rejects_an_overprinted_dot_inside_the_span() {
 fn decimal_stamp_retains_the_unique_sequence_with_a_dot_outside_the_span() {
     assert_eq!(stamp_decimal_with_nearby_dot(34), [13.0, 14.0, 16.0, 25.0, 29.0]);
 }
+
+#[test]
+fn dense_decimal_baseline_leaves_unsearched_words_without_offsets() {
+    use std::fmt::Write as _;
+
+    let mut stream = String::from("BT /F1 8 Tf\n");
+    let mut spans = Vec::new();
+    for word in 0..64 {
+        let x = 10 + word * 20;
+        writeln!(stream, "1 0 0 1 {x} 60 Tm (1.0) Tj").unwrap();
+        spans.push(crate::layout::TextSpan {
+            text: "1.0".to_owned(),
+            bbox: crate::geometry::Rect::new(x as f32, 60.0, 15.0, 8.0),
+            font_size: 8.0,
+            char_x_offsets: vec![-1.0; 3],
+            ..Default::default()
+        });
+    }
+    stream.push_str("ET\n");
+    let content = format!("<< /Length {} >>\nstream\n{stream}endstream", stream.len());
+    let pdf = super::pdf_fixtures::build_catalog_test_pdf(
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        &[
+            (3, b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 1320 100] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>"),
+            (4, b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"),
+            (5, content.as_bytes()),
+        ],
+    );
+    let document = PdfDocument::from_bytes(pdf).unwrap();
+    assert_eq!(document.extract_chars(0).unwrap().len(), 64 * 3);
+    document.stamp_table_decimal_glyph_positions(0, &mut spans);
+    assert_eq!(spans[0].char_x_offsets.len(), 3);
+    assert_eq!(spans[0].char_x_offsets[0], 10.0);
+    assert!(spans[63].char_x_offsets.is_empty(), "unsearched word retains offsets");
+    assert_eq!(spans.iter().filter(|span| !span.char_x_offsets.is_empty()).count(), 32);
+}

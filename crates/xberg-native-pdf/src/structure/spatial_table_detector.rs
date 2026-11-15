@@ -1799,15 +1799,18 @@ fn record_cell_token(cell: &TableCell) -> &str {
     cell.text.trim()
 }
 
+fn is_decimal_record(text: &str) -> bool {
+    text.contains('.') && is_data_value(text)
+}
+
 fn continues_decimal_records(row: &TableRow, next: &TableRow) -> bool {
     if row.cells.len() != next.cells.len() {
         return false;
     }
-    let is_decimal = |text: &str| text.contains('.') && is_data_value(text);
     let decimal_count = row
         .cells
         .iter()
-        .filter(|cell| is_decimal(record_cell_token(cell)))
+        .filter(|cell| is_decimal_record(record_cell_token(cell)))
         .count();
     if decimal_count <= row.cells.len() / 2 {
         return false;
@@ -1818,7 +1821,7 @@ fn continues_decimal_records(row: &TableRow, next: &TableRow) -> bool {
         if text.is_empty()
             || next_text.is_empty()
             || is_data_value(text) != is_data_value(next_text)
-            || is_decimal(text) != is_decimal(next_text)
+            || is_decimal_record(text) != is_decimal_record(next_text)
             || cell.colspan != 1
             || cell.rowspan != 1
             || following.colspan != 1
@@ -1848,39 +1851,61 @@ fn decimal_point_x(cell: &TableCell) -> Option<f32> {
     (points.next().is_none() && (span.bbox.left()..=span.bbox.right()).contains(&x)).then_some(x)
 }
 
+fn group_covers_decimal_leaves(
+    group: &TableRow,
+    leaves: &TableRow,
+    owns: impl Fn(&TableCell, &[TableCell]) -> bool,
+) -> bool {
+    let mut start = 0;
+    for cell in &group.cells {
+        let end = start + cell.colspan as usize;
+        if cell.colspan > 1
+            && cell.rowspan == 1
+            && cell.text.chars().any(char::is_alphabetic)
+            && leaves.cells.get(start..end).is_some_and(|covered| {
+                covered.iter().all(|leaf| is_decimal_record(record_cell_token(leaf))) && owns(cell, covered)
+            })
+        {
+            return true;
+        }
+        start = end;
+    }
+    false
+}
+
 fn centered_decimal_labels(row: &TableRow, body: &TableRow, columns: &[ColumnCluster]) -> bool {
     if row.cells.len() != columns.len() || body.cells.len() != columns.len() {
         return false;
     }
-    const ALIGNMENT_MARGIN: f32 = 0.12;
     row.cells
         .iter()
         .zip(&body.cells)
         .zip(columns)
-        .all(|((label, value), column)| {
-            let text = record_cell_token(label);
-            if !text.contains('.') || !is_data_value(text) {
-                return true;
-            }
-            if !is_data_value(label.text.trim()) || !is_data_value(value.text.trim()) {
-                return false;
-            }
-            let (Some(label_point), Some(value_point)) = (decimal_point_x(label), decimal_point_x(value)) else {
-                return false;
-            };
-            let (Some(label), Some(value)) = (label.bbox, value.bbox) else {
-                return false;
-            };
-            let margin = (column.x_max - column.x_min) * ALIGNMENT_MARGIN;
-            (label.center().x - column.x_center).abs() <= margin
-                && label.left() - column.x_min > margin
-                && column.x_max - label.right() > margin
-                && (value.right() - column.x_max).abs() <= margin
-                && value.center().x > column.x_center + margin
-                && value.left() - label.left() > margin
-                && value.right() - label.right() > margin
-                && (label_point - value_point).abs() > margin
-        })
+        .all(|((label, value), column)| centered_decimal_pair(label, value, column.x_min, column.x_max))
+}
+
+fn centered_decimal_pair(label: &TableCell, value: &TableCell, left: f32, right: f32) -> bool {
+    if !is_decimal_record(record_cell_token(label)) {
+        return true;
+    }
+    if !is_data_value(label.text.trim()) || !is_data_value(value.text.trim()) {
+        return false;
+    }
+    let (Some(label_point), Some(value_point)) = (decimal_point_x(label), decimal_point_x(value)) else {
+        return false;
+    };
+    let (label, value) = (label.spans[0].bbox, value.spans[0].bbox);
+    const ALIGNMENT_MARGIN: f32 = 0.12;
+    let margin = (right - left) * ALIGNMENT_MARGIN;
+    let center = (left + right) / 2.0;
+    (label.center().x - center).abs() <= margin
+        && label.left() - left > margin
+        && right - label.right() > margin
+        && (value.right() - right).abs() <= margin
+        && value.center().x > center + margin
+        && value.left() - label.left() > margin
+        && value.right() - label.right() > margin
+        && (label_point - value_point).abs() > margin
 }
 
 fn detect_tables_in_cluster(
@@ -2040,7 +2065,8 @@ fn detect_tables_in_cluster(
                 for r in 0..table.rows.len().min(3) {
                     let row_bottom = grid.rows[r].y_min;
                     let has_separator = long_rules_at(row_bottom).next().is_some();
-                    // A contrasting rule and centered labels distinguish this band from right-aligned records. ~keep
+                    // A spanning heading over centered decimal leaves can establish a header
+                    // band even when the rules below the leaves and records have equal weight. ~keep
                     if r > 0
                         && table
                             .rows
@@ -2050,7 +2076,12 @@ fn detect_tables_in_cluster(
                         const HEADER_RULE_WEIGHT_CONTRAST: f32 = 0.5;
                         let header_boundary = solid_rule_weight(row_bottom)
                             .zip(solid_rule_weight(grid.rows[r + 1].y_min))
-                            .is_some_and(|(header, body)| header - body >= HEADER_RULE_WEIGHT_CONTRAST);
+                            .is_some_and(|(header, body)| {
+                                header - body >= HEADER_RULE_WEIGHT_CONTRAST
+                                    || (r == 1
+                                        && header == body
+                                        && group_covers_decimal_leaves(&table.rows[0], &table.rows[r], |_, _| true))
+                            });
                         if !header_boundary
                             || !centered_decimal_labels(&table.rows[r], &table.rows[r + 1], &grid.columns)
                         {
@@ -8989,7 +9020,7 @@ mod tests {
         );
         assert_eq!(
             ruled_record_header_roles(&rows, None, true, CENTERED_LABEL_INK, true, None),
-            [true, false, false, false, false]
+            [true, true, false, false, false]
         );
         rows[3][0] = "Throughput";
         assert_eq!(
@@ -8997,6 +9028,10 @@ mod tests {
             [true, true, false, false, false]
         );
         rows[0] = ["Group", "Code", "North", "South", "West"];
+        assert_eq!(
+            ruled_record_header_roles(&rows, None, false, CENTERED_LABEL_INK, true, None),
+            [true, false, false, false, false]
+        );
         assert_eq!(
             ruled_record_header_roles(&rows, Some(1), false, CENTERED_LABEL_INK, true, None),
             [true, true, false, false, false]

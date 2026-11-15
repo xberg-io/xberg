@@ -610,6 +610,10 @@ impl PdfDocument {
             crate::utils::safe_float_cmp(accurate[a as usize].origin_y, accurate[b as usize].origin_y)
         });
         let ys: Vec<f32> = by_y.iter().map(|&i| accurate[i as usize].origin_y).collect();
+        // Bound aggregate baseline scans for table evidence. Dense rows may otherwise
+        // revisit the same full glyph neighborhood for every decimal word. ~keep
+        const DECIMAL_CANDIDATES_PER_PAGE_GLYPH: usize = 32;
+        let mut decimal_candidates_left = accurate.len().saturating_mul(DECIMAL_CANDIDATES_PER_PAGE_GLYPH);
 
         for span in spans.iter_mut() {
             // Rotated-content spans are in the displayed frame (mapped on 90/270)
@@ -621,6 +625,9 @@ impl PdfDocument {
             // Start clean: any offsets carried over via struct-update from a
             // source span must not be trusted for this (possibly edited) text. ~keep
             span.char_x_offsets.clear();
+            if exact_decimals && decimal_candidates_left == 0 {
+                continue;
+            }
 
             let glyphs: Vec<char> = span.text.chars().collect();
             let n = glyphs.len();
@@ -639,10 +646,22 @@ impl PdfDocument {
             let bracket = baseline_tol + baseline_tol.abs() * 1e-6 + f32::EPSILON;
             let lo = ys.partition_point(|&y| y < span.bbox.y - bracket);
             let hi = ys.partition_point(|&y| y <= span.bbox.y + bracket);
+            if exact_decimals {
+                let Some(remaining) = decimal_candidates_left.checked_sub(hi - lo) else {
+                    decimal_candidates_left = 0;
+                    continue;
+                };
+                decimal_candidates_left = remaining;
+            }
+            let horizontal = span.bbox.left()..span.bbox.right();
             let mut idx: Vec<u32> = by_y[lo..hi]
                 .iter()
                 .copied()
-                .filter(|&i| (accurate[i as usize].origin_y - span.bbox.y).abs() <= baseline_tol)
+                .filter(|&i| {
+                    let glyph = &accurate[i as usize];
+                    (glyph.origin_y - span.bbox.y).abs() <= baseline_tol
+                        && (!exact_decimals || horizontal.contains(&glyph.origin_x))
+                })
                 .collect();
             if idx.is_empty() {
                 continue;
@@ -655,14 +674,8 @@ impl PdfDocument {
 
             if exact_decimals {
                 // Skipping an in-span glyph can assign an overprinted point to the word. ~keep
-                let horizontal = span.bbox.left()..span.bbox.right();
-                let mut source = line
-                    .iter()
-                    .filter(|glyph| horizontal.contains(&glyph.origin_x))
-                    .peekable();
-                let Some(baseline) = source.peek().map(|glyph| glyph.origin_y) else {
-                    continue;
-                };
+                let mut source = line.iter();
+                let baseline = line[0].origin_y;
                 // Table word spans normalize orientation, so prove the frame from the raw glyphs. ~keep
                 const HORIZONTAL_BASELINE_TOLERANCE: f32 = 0.05;
                 let positions = glyphs
