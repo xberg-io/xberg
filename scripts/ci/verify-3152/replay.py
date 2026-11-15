@@ -24,6 +24,7 @@ HERE = Path(__file__).resolve().parent
 SOURCE = "packages/csharp/src"
 MODES = ("path", "bytes", "factory")
 TRIALS = 3
+ORT_CORE = {"Linux": "libonnxruntime.so.1", "Windows": "onnxruntime.dll"}
 
 
 def require(condition: object, message: str) -> None:
@@ -146,14 +147,14 @@ def measure(
     end: float,
 ) -> dict[str, Any]:
     if samples:
-        require(
-            any(start <= t <= end for t, _ in samples[1:-1]),
-            "No in-window Linux sample. Rerun with a shorter sample interval",
-        )
+        require(len(samples) >= 2 and samples[-1][0] >= end, "Missing Linux completion sample")
         baseline = samples[0][1]
-        peak = max(value for t, value in samples if t <= end)
+        # The last read is synchronous while the worker waits for the report signal.
+        completion = samples[-1][1]
+        peak = max(completion, *(value for t, value in samples[:-1] if t <= end))
         extras = {
             "window_ms": (end - start) * 1000,
+            "completion_private_bytes": completion,
             "samples": [[round((t - start) * 1000, 3), n] for t, n in samples],
             "max_sample_gap_ms": max(b[0] - a[0] for a, b in pairwise(samples)) * 1000,
         }
@@ -178,6 +179,20 @@ def verify_binary(native: Path, receipt: dict[str, Any]) -> None:
             Path(name).name == name and digest(native.parent / name) == sha,
             f"Native dependency hash mismatch for {name}",
         )
+
+
+def verify_worker_ort(modules: list[str], staged: Path, expected_sha: str) -> dict[str, str] | None:
+    mapping = None
+    for module in modules:
+        path = Path(module)
+        name = path.name.lower()
+        if name != "onnxruntime.dll" and not re.fullmatch(r"libonnxruntime\.so(?:\.[0-9]+)*", name):
+            continue
+        require(path == staged, f"Worker mapped unexpected core ORT path: {path} (expected {staged})")
+        actual_sha = digest(path)
+        require(actual_sha == expected_sha, f"Worker core ORT digest mismatch: {path}")
+        mapping = {"path": str(path), "sha256": actual_sha}
+    return mapping
 
 
 def verify_cases(fixtures: dict[str, Any], rows: list[dict[str, Any]]) -> None:
@@ -223,6 +238,7 @@ def run_cases(
     fixtures: dict[str, Any],
     args: argparse.Namespace,
     env: dict[str, str],
+    ort: tuple[Path, str],
 ) -> list[dict[str, Any]]:
     results = []
     loaded = set()
@@ -247,6 +263,7 @@ def run_cases(
                 timeout=args.timeout,
                 runtime=args.runtime,
             )
+            row["ort_mapping"] = verify_worker_ort(row["modules"], *ort)
             for module in sorted(set(row["modules"]) - loaded):
                 path = Path(module)
                 require(path.is_absolute() and path.is_file(), f"Unresolved loaded module {module}")
@@ -258,6 +275,21 @@ def run_cases(
             output.write(json.dumps(row) + "\n")
             output.flush()
     return results
+
+
+def worker_env(repo: Path, staged_ort: Path, system: str) -> dict[str, str]:
+    env = os.environ.copy()
+    var = "PATH" if system == "Windows" else "LD_LIBRARY_PATH"
+    excluded = {(repo / "crates/xberg-node").resolve()}
+    if location := env.get("ORT_LIB_LOCATION"):
+        lib = Path(location).resolve()
+        excluded.update((lib, lib.with_name("bin")))
+    search = (part for part in env.get(var, "").split(os.pathsep) if part)
+    env[var] = os.pathsep.join(
+        [str(staged_ort.parent), *(part for part in search if Path(part).resolve() not in excluded)]
+    )
+    env["ORT_DYLIB_PATH"] = str(staged_ort)
+    return env
 
 
 def parse_args() -> argparse.Namespace:
@@ -320,9 +352,10 @@ def main() -> None:
     require(fixtures == json.loads((HERE / "fixtures.json").read_text()), "Fixture bytes changed")
     pdf(args.out / "fixtures" / "warm.pdf", 0)
     docx(args.out / "fixtures" / "warm.docx", 0)
-    ls_env = os.environ.copy()
-    var = "PATH" if system == "Windows" else "LD_LIBRARY_PATH"
-    ls_env[var] = os.pathsep.join(filter(None, (str(native.parent), ls_env.get(var))))
+    ort_name = ORT_CORE[system]
+    staged_ort = native.parent / ort_name
+    require(ort_name in receipt["closure"] and not staged_ort.is_symlink(), "Missing staged core ORT library")
+    ls_env = worker_env(repo, staged_ort, system)
     (args.out / "run.json").write_text(
         json.dumps(
             {
@@ -342,7 +375,7 @@ def main() -> None:
         )
     )
     command = [dotnet, "--fx-version", args.runtime, str(worker), str(native)]
-    results = run_cases(command, fixtures, args, ls_env)
+    results = run_cases(command, fixtures, args, ls_env, (staged_ort, receipt["closure"][ort_name]))
     verify_cases(fixtures, results)
     summary, failures = evaluate(fixtures, results)
     report = json.dumps({"cases": len(results), "comparisons": summary, "failures": failures}, indent=2)

@@ -8,9 +8,20 @@ import subprocess
 import sys
 from pathlib import Path
 
+from replay import ORT_CORE
+
 from fixtures import digest
 
 TARGETS = {"Linux": "x86_64-unknown-linux-gnu", "Windows": "x86_64-pc-windows-msvc"}
+
+
+def core_ort_source(lib_dir: Path, system: str) -> Path:
+    name = ORT_CORE[system]
+    candidates = (lib_dir / name, lib_dir.with_name("bin") / name) if system == "Windows" else (lib_dir / name,)
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    raise RuntimeError(f"Core ORT library {name} missing under {lib_dir.parent}")
 
 
 def main() -> None:
@@ -28,7 +39,10 @@ def main() -> None:
     staged = scratch / "native"
     staged.mkdir()
     build = ["cargo", "build", "--locked", "-p", "xberg-ffi", "--release", "--target", target]
-    env = {**os.environ, "CARGO_TARGET_DIR": str(scratch / "target")}
+    ort = core_ort_source(Path(os.environ["ORT_LIB_LOCATION"]), system)
+    staged_ort = staged / ORT_CORE[system]
+    shutil.copy2(ort, staged_ort)
+    env = {**os.environ, "CARGO_TARGET_DIR": str(scratch / "target"), "ORT_DYLIB_PATH": str(staged_ort)}
     receipt = {
         "revision": revision,
         "target": target,
@@ -45,6 +59,8 @@ def main() -> None:
             )
         },
         "build": build,
+        "ort_source": str(ort.resolve()),
+        "closure": {staged_ort.name: digest(staged_ort)},
         "rustc": subprocess.check_output(["rustc", "-vV"], text=True),
         "cargo": subprocess.check_output(["cargo", "--version"], text=True).strip(),
         "cargo_lock_sha256": digest(Path("Cargo.lock")),
@@ -71,17 +87,13 @@ def main() -> None:
     filename = "xberg_ffi.dll" if system == "Windows" else "libxberg_ffi.so"
     native = staged / filename
     shutil.copy2(scratch / "target" / target / "release" / filename, native)
-    ort = Path(os.environ["ORT_DYLIB_PATH"])
-    # Linux links to the soname. The setup action can export the full versioned filename.
-    ort_name = "onnxruntime.dll" if system == "Windows" else "libonnxruntime.so.1"
-    shutil.copy2(ort, staged / ort_name)
-    receipt.update(sha256=digest(native), closure={ort_name: digest(staged / ort_name)})
+    receipt["sha256"] = digest(native)
     receipt_path.write_text(json.dumps(receipt, indent=2), encoding="utf-8")
 
-    replay(scratch / "run", native, ort_name, receipt_path)
+    replay(scratch / "run", native, receipt_path)
 
 
-def replay(run: Path, native: Path, ort_name: str, receipt_path: Path) -> None:
+def replay(run: Path, native: Path, receipt_path: Path) -> None:
     try:
         subprocess.run(
             [
@@ -97,7 +109,6 @@ def replay(run: Path, native: Path, ort_name: str, receipt_path: Path) -> None:
                 "--out",
                 str(run),
             ],
-            env={**os.environ, "ORT_DYLIB_PATH": str(native.parent / ort_name)},
             check=True,
         )
     finally:
