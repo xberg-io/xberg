@@ -199,6 +199,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request config over the server config instead of replacing it, and a request can only lower the server's security
   limits, archive depth, timeouts and URL caps, never raise or remove them.
 
+- **(hwp): Cap the decompressed size of compressed HWP body-text sections.**
+  Sections are now inflated under `security_limits.max_content_size` each and `max_archive_size` in total, so a small crafted `.hwp` can no longer expand without bound. Both limits are configurable; a legitimate document whose sections exceed them is now rejected with a security error until the limits are raised.
+
+- **(archive): Bound nested-archive extraction by one budget instead of the full limits at every level.**
+  `max_archive_size` now caps decompressed bytes across all nesting levels of one archive, and `max_content_size`
+  caps the combined output of its extracted children. A nested archive that does not fit what is left is skipped
+  with a warning; children past the output cap are dropped with a warning.
+
 - **(deps): Upgrade `rmcp` to 3.9.0 to fix RUSTSEC-2026-0462.**
   Before 3.9.0 the Streamable HTTP clients read response bodies without a size limit; the `mcp` server feature, its lockfiles and the binding lockfiles now resolve the fixed release.
 
@@ -249,6 +257,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Archive count, size, and compression-ratio limits are checked before header validation or payload reads.
 
 ### Fixed
+
+- **Output is now stable between runs.** Heading levels, list indentation, OCR font names and `metadata.additional` key order no longer depend on hash iteration order; ties resolve to the lower heading level, the smaller indent and the lexically first font name, and `additional` serializes with sorted keys.
+
+- **(rtf): Drop `\deleted` tracked-change text from extracted content.** `{\deleted 100}{\revised 200}` now extracts as `200` instead of `100200`. (#3164)
+
+- **(fictionbook): Report security-limit violations inside paragraphs.**
+  They were discarded, so an over-limit FictionBook paragraph was silently accepted.
 
 - **(pdf): Improve paragraph reading order in scanned multi-column PDFs.** (#2331)
 
