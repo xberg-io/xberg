@@ -269,7 +269,13 @@ fn form_lzw_early_change_round_trips_across_code_widths() {
     assert!(late.len().min(early.len()) > 256 * 9 / 8);
     assert_ne!(late, early);
 
-    let params: &[(u32, &[u8])] = &[(6, b"<< /EarlyChange 0 >>"), (7, b"[null 6 0 R]")];
+    let params: &[(u32, &[u8])] = &[
+        (6, b"<< /EarlyChange 0 >>"),
+        (7, b"[null 6 0 R]"),
+        (8, b"0"),
+        (9, b"1"),
+        (10, b"<< /EarlyChange 8 0 R >>"),
+    ];
     for (encoded, decode_parms, chained) in [
         (&early, "", true),
         (&early, "/DecodeParms [null << /EarlyChange 1 >>]", true),
@@ -277,6 +283,9 @@ fn form_lzw_early_change_round_trips_across_code_widths() {
         (&late, "/DecodeParms 6 0 R", false),
         (&late, "/DecodeParms [null 6 0 R]", true),
         (&late, "/DecodeParms 7 0 R", true),
+        (&late, "/DecodeParms << /EarlyChange 8 0 R >>", false),
+        (&early, "/DecodeParms [null << /EarlyChange 9 0 R >>]", true),
+        (&late, "/DecodeParms [null 10 0 R]", true),
     ] {
         let (filters, data) = if chained {
             let mut hex: String = encoded.iter().map(|byte| format!("{byte:02x}")).collect();

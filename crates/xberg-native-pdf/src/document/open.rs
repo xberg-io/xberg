@@ -480,7 +480,7 @@ impl PdfDocument {
         let resolved_stream = match stream_obj {
             Object::Stream { dict, data } => {
                 if let Some(params) = dict.get("DecodeParms")
-                    && let Some(params) = self.resolve_form_decode_parms(params)?
+                    && let Some(params) = self.resolve_form_decode_parms(params, dict.get("Filter"))?
                 {
                     let mut dict = dict.clone();
                     dict.insert("DecodeParms".into(), params);
@@ -503,11 +503,29 @@ impl PdfDocument {
         )
     }
 
-    fn resolve_form_decode_parms(&self, params: &Object) -> Result<Option<Object>> {
+    fn resolve_form_decode_parms(&self, params: &Object, filters: Option<&Object>) -> Result<Option<Object>> {
+        let is_lzw_stage = |index| {
+            match filters {
+                Some(Object::Name(name)) if index == 0 => Some(name.as_str()),
+                Some(Object::Array(filters)) => filters.get(index).and_then(Object::as_name),
+                _ => None,
+            }
+            .is_some_and(crate::decoders::is_lzw_filter)
+        };
+        let needs_resolution = |stage: &Object, index| {
+            stage.as_reference().is_some()
+                || (is_lzw_stage(index)
+                    && stage
+                        .as_dict()
+                        .and_then(|dict| dict.get("EarlyChange"))
+                        .is_some_and(|value| value.as_reference().is_some()))
+        };
         let has_references = match params {
-            Object::Reference(_) => true,
-            Object::Array(stages) => stages.iter().any(|stage| stage.as_reference().is_some()),
-            _ => false,
+            Object::Array(stages) => stages
+                .iter()
+                .enumerate()
+                .any(|(index, stage)| needs_resolution(stage, index)),
+            _ => needs_resolution(params, 0),
         };
         if !has_references {
             return Ok(None);
@@ -516,19 +534,32 @@ impl PdfDocument {
         let mut resolved = self.resolve_object(params)?;
         match &mut resolved {
             Object::Array(stages) => {
-                for stage in stages {
+                for (index, stage) in stages.iter_mut().enumerate() {
                     if stage.as_reference().is_some() {
                         *stage = self.resolve_object(stage)?;
                     }
                     if !matches!(stage, Object::Dictionary(_) | Object::Null) {
                         return Err(Error::Decode("invalid Form filter-stage DecodeParms".into()));
                     }
+                    if is_lzw_stage(index) {
+                        self.resolve_form_early_change(stage)?;
+                    }
                 }
             }
+            Object::Dictionary(_) if is_lzw_stage(0) => self.resolve_form_early_change(&mut resolved)?,
             Object::Dictionary(_) | Object::Null => {}
             _ => return Err(Error::Decode("invalid indirect Form DecodeParms".into())),
         }
         Ok(Some(resolved))
+    }
+
+    fn resolve_form_early_change(&self, params: &mut Object) -> Result<()> {
+        if let Object::Dictionary(dict) = params
+            && let Some(value @ Object::Reference(_)) = dict.get_mut("EarlyChange")
+        {
+            *value = self.resolve_object(value)?;
+        }
+        Ok(())
     }
 
     fn decode_stream_with_encryption_and_expected_size(
