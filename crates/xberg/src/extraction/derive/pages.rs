@@ -2073,6 +2073,85 @@ mod plain_page_rerender_tests {
     }
 
     #[test]
+    fn an_adopted_ocr_document_takes_its_page_ranges_from_its_own_pages_not_from_renderer_spans() {
+        let mut doc = office_doc_with(vec![page(1, "one"), page(2, "two\nnote")], &[(1, "one")]);
+        doc.metadata.additional.insert(
+            super::super::ADOPTED_OCR_DOCUMENT_KEY.into(),
+            serde_json::Value::Bool(true),
+        );
+        let (content, pages) = derive_plain(&mut doc);
+        assert_eq!(content, "one");
+        assert_eq!(pages[1].content, "two\nnote");
+        assert_eq!(boundary_pages(&doc), vec![1]);
+        let warnings: Vec<&str> = doc
+            .processing_warnings
+            .iter()
+            .filter(|warning| warning.source == "page_boundaries")
+            .map(|warning| warning.message.as_ref())
+            .collect();
+        assert_eq!(
+            warnings,
+            [
+                "Page byte ranges of pages [2] were measured on a different rendering of the text \
+                 and could not be mapped onto the returned content, so they were omitted"
+            ]
+        );
+        assert!(
+            !doc.metadata
+                .additional
+                .contains_key(super::super::ADOPTED_OCR_DOCUMENT_KEY),
+            "the internal marker must not reach the result metadata"
+        );
+    }
+
+    #[test]
+    fn a_native_document_takes_its_page_ranges_from_renderer_spans() {
+        let mut doc = office_doc_with(vec![page(1, "one"), page(2, "two\nnote")], &[(1, "one")]);
+        derive_plain(&mut doc);
+        let warnings: Vec<&str> = doc
+            .processing_warnings
+            .iter()
+            .filter(|warning| warning.source == "page_boundaries")
+            .map(|warning| warning.message.as_ref())
+            .collect();
+        assert_eq!(
+            warnings,
+            ["Pages [2] have no text of their own in the returned content, so their page byte ranges were omitted"]
+        );
+    }
+
+    #[test]
+    fn a_range_that_cannot_be_verified_beside_a_diverging_page_is_omitted_with_a_warning() {
+        let content = "one\n\none";
+        let mut doc = doc_with(vec![page(1, "one"), page(2, "| x |")], &[]);
+        set_boundaries(&mut doc, &[(1, 0, 3), (2, 5, 8)]);
+        derive(&mut doc, content);
+        let boundaries = doc.metadata.pages.as_ref().and_then(|s| s.boundaries.as_ref()).unwrap();
+        let ranges: Vec<_> = boundaries
+            .iter()
+            .map(|b| (b.page_number, b.byte_start, b.byte_end))
+            .collect();
+        assert_eq!(
+            ranges,
+            [(2, 5, 8)],
+            "page 1 repeats in the content, so its range is unverified"
+        );
+        let warnings: Vec<&str> = doc
+            .processing_warnings
+            .iter()
+            .filter(|warning| warning.source == "page_boundaries")
+            .map(|warning| warning.message.as_ref())
+            .collect();
+        assert_eq!(
+            warnings,
+            [
+                "Page byte ranges of pages [1] were measured on a different rendering of the text \
+                 and could not be mapped onto the returned content, so they were omitted"
+            ]
+        );
+    }
+
+    #[test]
     fn a_retained_range_cannot_reuse_the_span_of_a_reconciled_page() {
         let mut doc = doc_with(vec![page(1, "one"), page(2, "one")], &[]);
         set_boundaries(&mut doc, &[(1, 0, 999), (2, 0, 3)]);
