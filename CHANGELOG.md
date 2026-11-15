@@ -241,6 +241,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **(pdf): Improve paragraph reading order in scanned multi-column PDFs.** (#2331)
+
 - **(pdf): Keep adjacent tables separate when their columns align.** A rule or image spanning the gap keeps the table together. (#2332)
 
 - **(ocr): Remove false short words and repeated texture reads from noisy scanned PDFs in Plain and Markdown output.** Legitimate text and raw OCR elements are preserved. (#2943)
