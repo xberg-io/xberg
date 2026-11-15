@@ -151,3 +151,10 @@ fn test_document_without_revisions_is_unchanged() {
     let (text, ..) = extract_text_from_rtf(rtf, true);
     assert_eq!(text.trim(), "Plain bold text", "got: {text:?}");
 }
+
+#[test]
+fn test_deleted_paragraph_break_adds_no_break() {
+    let rtf = r"{\rtf1\ansi A{\deleted X\par Y}B}";
+    let (text, ..) = extract_text_from_rtf(rtf, true);
+    assert_eq!(text.trim(), "AB", "got: {text:?}");
+}

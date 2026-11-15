@@ -577,7 +577,7 @@ impl TextParser {
             chars.next();
         }
         self.scope.expect_destination = false;
-        if self.scope.skip_depth > 0 {
+        if self.scope.skip_depth > 0 || self.is_deleted() {
             return;
         }
         self.dispatch_control_word("par", None, chars);
@@ -717,7 +717,8 @@ impl TextParser {
                 }
                 true
             }
-            "tab" | "line" | "bullet" | "lquote" | "rquote" | "ldblquote" | "rdblquote" | "endash" | "emdash" => true,
+            "tab" | "line" | "par" | "bullet" | "lquote" | "rquote" | "ldblquote" | "rdblquote" | "endash"
+            | "emdash" => true,
             _ => false,
         }
     }

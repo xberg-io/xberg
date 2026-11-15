@@ -125,3 +125,11 @@ fn should_not_count_deleted_text_in_span_offsets() {
         vec![(1, 2, true, false, false, false, 0)]
     );
 }
+
+#[test]
+fn should_keep_spans_aligned_after_deleted_paragraph_break() {
+    assert_eq!(
+        spans(r"{\rtf1 A{\deleted X\par Y}{\b B}}"),
+        vec![(1, 2, true, false, false, false, 0)]
+    );
+}

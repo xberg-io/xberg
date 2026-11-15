@@ -461,7 +461,8 @@ impl FormattingParser {
                     }
                     return;
                 }
-                "tab" | "line" | "bullet" | "lquote" | "rquote" | "ldblquote" | "rdblquote" | "endash" | "emdash" => {
+                "tab" | "line" | "par" | "bullet" | "lquote" | "rquote" | "ldblquote" | "rdblquote" | "endash"
+                | "emdash" => {
                     return;
                 }
                 _ => {}
