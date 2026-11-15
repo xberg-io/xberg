@@ -210,13 +210,13 @@ pub(crate) fn extract_gzip_with_bytes(bytes: &[u8], limits: &SecurityLimits) -> 
         total_size: size,
     };
 
-    let mut file_bytes = AHashMap::new();
-    file_bytes.insert(filename.clone(), decompressed.clone());
-
     let mut contents = AHashMap::new();
-    if let Ok(text) = String::from_utf8(decompressed) {
-        contents.insert(filename, text);
+    if let Ok(text) = std::str::from_utf8(&decompressed) {
+        contents.insert(filename.clone(), text.to_owned());
     }
+
+    let mut file_bytes = AHashMap::new();
+    file_bytes.insert(filename, decompressed);
 
     Ok((metadata, contents, file_bytes))
 }
