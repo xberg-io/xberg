@@ -1,13 +1,15 @@
 """Exercise the replay gates without running a native worker."""
 
+import json
 import os
 import tempfile
+from argparse import Namespace
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from ci import core_ort_source
-from replay import MODES, TRIALS, evaluate, measure, verify_worker_ort, worker_env
+from replay import MODES, TRIALS, evaluate, measure, run_cases, verify_worker_ort, worker_env
 
 from fixtures import MIB, digest
 
@@ -49,6 +51,53 @@ def test_checks_each_workers_mapped_core_path_and_digest() -> None:
             staged.write_bytes(b"changed")
             with pytest.raises(RuntimeError, match="core ORT digest mismatch"):
                 verify_worker_ort([str(staged)], staged, expected)
+
+
+def replay_module_inventory(tmp_path: Path, modules: list[str], system: str = "Linux") -> list[dict]:
+    staged = tmp_path / "libonnxruntime.so.1"
+    staged.write_bytes(b"core")
+    row = {"modules": [str(staged), *modules]}
+    args = Namespace(out=tmp_path, interval_ms=5, timeout=1, runtime="10.0.14")
+    with (
+        patch("replay.platform.system", return_value=system),
+        patch("replay.trial", return_value=row),
+        patch("replay.TRIALS", 1),
+        patch("replay.MODES", ("path",)),
+    ):
+        return run_cases([], {"fixture.pdf": {}}, args, {}, (staged, digest(staged)))
+
+
+def test_linux_jit_mapping_stays_in_raw_receipt_without_a_file_digest(tmp_path: Path) -> None:
+    jit = "/memfd:doublemapper (deleted)"
+    native = tmp_path / "libxberg_ffi.so"
+    native.write_bytes(b"ffi")
+    [row] = replay_module_inventory(tmp_path, [jit, str(native)])
+    assert jit in row["modules"]
+    assert row["ort_mapping"] == {
+        "path": str(tmp_path / "libonnxruntime.so.1"),
+        "sha256": digest(tmp_path / "libonnxruntime.so.1"),
+    }
+    inventory = [json.loads(line) for line in (tmp_path / "loaded-modules.jsonl").read_text().splitlines()]
+    assert {item["path"]: item["sha256"] for item in inventory} == {
+        str(native): digest(native),
+        row["ort_mapping"]["path"]: row["ort_mapping"]["sha256"],
+    }
+
+
+@pytest.mark.parametrize(
+    ("module", "system"),
+    [
+        ("/memfd:other (deleted)", "Linux"),
+        ("/memfd:doublemapper", "Linux"),
+        ("/memfd:doublemapper (deleted)", "Windows"),
+        ("/missing/libxberg_ffi.so", "Linux"),
+        ("/missing/libxberg_ffi.so (deleted)", "Linux"),
+    ],
+)
+def test_unresolved_module_inventory_still_fails_closed(tmp_path: Path, module: str, system: str) -> None:
+    with pytest.raises(RuntimeError, match="Unresolved loaded module") as error:
+        replay_module_inventory(tmp_path, [module], system)
+    assert str(error.value) == f"Unresolved loaded module {module}"
 
 
 def test_removes_setup_library_dirs_from_worker_search() -> None:
