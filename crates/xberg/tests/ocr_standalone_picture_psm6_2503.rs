@@ -19,6 +19,9 @@ const PICTURE_14PX_ROWS: &str = include_str!("fixtures/ocr_dot_leader_2503/14.ts
 const CLEAN_TABLE: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/clean_table.png");
 const PICTURE_20PX: &[u8] = include_bytes!("fixtures/ocr_dot_leader_2503/20.png");
 const PICTURE_20PX_ROWS: &str = include_str!("fixtures/ocr_dot_leader_2503/20.tsv");
+/// The shortest OCR leader run of the 11 px picture, measured per row as 9, 10, 9, 13, 10, 10, 8,
+/// 10, 9, 10, 10, 8; a renderer that drops dots from a leader falls below it.
+const MIN_LEADER_DOTS: usize = 8;
 const TINTED_SCAN: &[u8] = include_bytes!("fixtures/ocr/dot_leader_scan_2503/scan-200-tinted.pdf");
 
 fn config(psm: Option<i32>) -> ExtractionConfig {
@@ -172,10 +175,9 @@ fn assert_rows_are_own_lines(format: OutputFormat) {
         lines = djot_text.lines().collect();
         assert_eq!(lines.len(), 13, "header plus 12 parsed Djot paragraphs:\n{djot_text}");
 
-        // Each Djot row must keep its exact label and a run of at least three dots. The fixture
-        // does not record leader lengths. Compare values after treating commas as periods
-        // on both sides so an OCR separator misread cannot obscure a missing leader.
-        const MIN_LEADER_DOTS: usize = 3;
+        // Each Djot row must keep its exact label and a run of at least MIN_LEADER_DOTS dots.
+        // Compare values after treating commas as periods on both sides so an OCR separator
+        // misread cannot obscure a missing leader.
         let mut next = 0;
         for row in PICTURE_11PX_ROWS.lines() {
             let hits: Vec<(usize, usize)> = lines
@@ -203,9 +205,18 @@ fn assert_rows_are_own_lines(format: OutputFormat) {
         let mut kept = 0;
         let mut next = 0;
         for row in PICTURE_11PX_ROWS.lines() {
-            let Some(at) = lines.iter().position(|line| row_hit(line, row, false).is_some()) else {
+            let Some((at, leader)) = lines
+                .iter()
+                .enumerate()
+                .find_map(|(at, line)| row_hit(line, row, false).map(|leader| (at, leader)))
+            else {
                 continue;
             };
+            assert!(
+                leader >= MIN_LEADER_DOTS,
+                "row {row:?} has only {leader} leader dots:\n{}",
+                result.content
+            );
             assert!(at >= next, "row {row:?} is out of order:\n{}", result.content);
             kept += 1;
             next = at;
@@ -258,6 +269,19 @@ fn plain_keeps_the_rows_of_an_adopted_leader_picture_on_consecutive_lines() {
         "no blank line between rows:\n{}",
         result.content
     );
+    let mut kept = 0;
+    for row in PICTURE_11PX_ROWS.lines() {
+        let Some(leader) = result.content.lines().find_map(|line| row_hit(line, row, false)) else {
+            continue;
+        };
+        assert!(
+            leader >= MIN_LEADER_DOTS,
+            "row {row:?} has only {leader} leader dots:\n{}",
+            result.content
+        );
+        kept += 1;
+    }
+    assert!(kept >= 11, "{kept} of 12 rows kept whole:\n{}", result.content);
 }
 
 /// Rows of the 14 px picture that sit whole on one line; the block read joins "Pool repairs" into
