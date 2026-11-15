@@ -312,3 +312,22 @@ fn explicit_sparse_mode_publishes_stock_rows_in_plain_page_text() {
         assert_eq!(with_words.pages.unwrap()[0].content, pages[0].content);
     }
 }
+
+#[test]
+fn explicit_auto_mode_publishes_existing_table_rows_in_plain_page_text() {
+    const CLEAN: &[u8] = include_bytes!("fixtures/ocr_explicit_sparse_pages_2503/img_20_plain_nolead.png");
+    const ROWS: &str = include_str!("fixtures/ocr_explicit_sparse_pages_2503/rows.tsv");
+    let mut config = config(OutputFormat::Plain);
+    let ocr = config.ocr.as_mut().unwrap();
+    ocr.element_config = None;
+    ocr.tesseract_config.get_or_insert_default().psm = Some(3);
+    let doc = extract(CLEAN, &config);
+    assert_eq!(doc.metadata.additional["psm"], "3");
+    let expected = ROWS.replacen("Item", "ltem", 1).replace('\t', " ");
+    assert_eq!(doc.content.trim(), expected.trim());
+    assert_eq!(
+        doc.pages.unwrap()[0].content.trim(),
+        expected.trim(),
+        "published table rows on the page"
+    );
+}

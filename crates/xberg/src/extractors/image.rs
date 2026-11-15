@@ -1381,12 +1381,13 @@ fn is_implicit_horizontal_tesseract(config: &crate::core::config::OcrConfig) -> 
 }
 
 #[cfg(all(feature = "ocr", not(target_arch = "wasm32")))]
-fn sparse_table_page_text(
+fn tesseract_table_page_text(
     raw: &str,
     doc: &InternalDocument,
     source: &InternalDocument,
     output_format: &crate::core::config::OutputFormat,
     mime_type: &str,
+    psm: i32,
 ) -> Option<String> {
     use crate::core::config::OutputFormat;
     use crate::types::internal::ElementKind;
@@ -1409,7 +1410,7 @@ fn sparse_table_page_text(
             .get("psm")
             .and_then(serde_json::Value::as_str)
             .and_then(|psm| psm.parse().ok())
-            != Some(WHOLE_IMAGE_TESSERACT_PSM)
+            != Some(psm)
     {
         return None;
     }
@@ -3626,10 +3627,23 @@ impl ImageExtractor {
             } else {
                 let raw = ocr_extraction_result.content.trim();
                 #[cfg(not(target_arch = "wasm32"))]
-                let table_text = ocr_internal_document
-                    .as_ref()
-                    .filter(|_| standalone_tesseract.is_some() && !has_public_ocr_structure)
-                    .and_then(|source| sparse_table_page_text(raw, &doc, source, &config.output_format, mime_type));
+                let table_text = if has_public_ocr_structure {
+                    None
+                } else {
+                    let page_psm = if standalone_tesseract.is_some() {
+                        Some(WHOLE_IMAGE_TESSERACT_PSM)
+                    } else if table_tesseract.is_some()
+                        && !psm6_tesseract
+                        && config.output_format == crate::core::config::OutputFormat::Plain
+                    {
+                        Some(crate::ocr::types::PSMMode::Auto as i32)
+                    } else {
+                        None
+                    };
+                    page_psm.zip(ocr_internal_document.as_ref()).and_then(|(psm, source)| {
+                        tesseract_table_page_text(raw, &doc, source, &config.output_format, mime_type, psm)
+                    })
+                };
                 #[cfg(all(paddle_ocr, feature = "pdf", not(target_arch = "wasm32")))]
                 let table_text = if builtin_paddle && !has_public_ocr_structure {
                     table_text.or_else(|| paddle_table_page_text(raw, &doc, &config.output_format, mime_type))
