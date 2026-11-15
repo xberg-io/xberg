@@ -271,7 +271,11 @@ impl Object {
                             expected_filter_output_size,
                         );
                     }
-                    let decode_params = extract_decode_params(dict.get("DecodeParms"));
+                    let decode_parms = dict.get("DecodeParms");
+                    if let Some(limit) = byte_limit {
+                        return decode_bounded_form_filters(&decrypted_data, &filters, decode_parms, limit);
+                    }
+                    let decode_params = extract_decode_params(decode_parms);
 
                     if let Some(expected_size) = expected_filter_output_size {
                         crate::decoders::decode_stream_with_params_and_expected_size(
@@ -281,7 +285,7 @@ impl Object {
                             expected_size,
                         )
                     } else {
-                        decode_stream_filters(&decrypted_data, &filters, decode_params.as_ref(), byte_limit)
+                        crate::decoders::decode_stream_with_params(&decrypted_data, &filters, decode_params.as_ref())
                     }
                 }
             }
@@ -295,7 +299,7 @@ impl Object {
                     Ok(Vec::new())
                 } else {
                     let decode_params = extract_decode_params(dict.get("DecodeParms"));
-                    decode_stream_filters(&[], &filters, decode_params.as_ref(), byte_limit)
+                    crate::decoders::decode_stream_with_params(&[], &filters, decode_params.as_ref())
                 }
             }
             _ => Err(Error::InvalidObjectType {
@@ -314,26 +318,48 @@ fn valid_form_filter_entry(filter: Option<&Object>) -> bool {
     }
 }
 
-fn decode_stream_filters(
+fn decode_bounded_form_filters(
     data: &[u8],
     filters: &[String],
-    params: Option<&crate::decoders::DecodeParams>,
-    byte_limit: Option<usize>,
+    decode_parms: Option<&Object>,
+    limit: usize,
 ) -> Result<Vec<u8>> {
-    let Some(limit) = byte_limit else {
-        return crate::decoders::decode_stream_with_params(data, filters, params);
-    };
     let defaults = ParserOptions::default();
     let options = ParserOptions {
         // The decoder API reserves zero for an unlimited cap.
         max_decompressed_size: defaults.max_decompressed_size.min(limit.max(1)),
         ..defaults
     };
-    let decoded = crate::decoders::decode_complete_form_stream(data, filters, params, &options)?;
+    let predictors = extract_decode_params(decode_parms);
+    let early_changes = form_lzw_early_changes(filters, decode_parms)?;
+    let decoded =
+        crate::decoders::decode_complete_form_stream(data, filters, predictors.as_ref(), &options, &early_changes)?;
     if decoded.len() > limit {
         return Err(Error::Decode(format!("filtered stream exceeds {limit} bytes")));
     }
     Ok(decoded)
+}
+
+fn form_lzw_early_changes(filters: &[String], decode_parms: Option<&Object>) -> Result<Vec<bool>> {
+    filters
+        .iter()
+        .enumerate()
+        .map(|(index, filter)| {
+            if !crate::decoders::is_lzw_filter(filter) {
+                return Ok(true);
+            }
+            let parms = match decode_parms {
+                Some(Object::Array(stages)) => stages.get(index).and_then(Object::as_dict),
+                Some(Object::Dictionary(parms)) if index == 0 => Some(parms),
+                _ => None,
+            };
+            match parms.and_then(|parms| parms.get("EarlyChange")) {
+                None | Some(Object::Null | Object::Integer(1)) => Ok(true),
+                Some(Object::Integer(0)) => Ok(false),
+                _ => Err(Error::Decode("LZWDecode: EarlyChange must be 0 or 1".into())),
+            }
+        })
+        .collect()
 }
 
 /// Decrypts a stream's raw bytes before any filter is applied, or returns them unchanged

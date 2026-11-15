@@ -270,7 +270,7 @@ pub fn decode_stream_with_options(
         PredictorPlacement::AfterFilters(params),
         options,
         None,
-        false,
+        None,
     )
 }
 
@@ -279,6 +279,7 @@ pub(crate) fn decode_complete_form_stream(
     filters: &[String],
     params: Option<&DecodeParams>,
     options: &ParserOptions,
+    lzw_early_changes: &[bool],
 ) -> Result<Vec<u8>> {
     decode_stream_with_options_and_expected_size(
         data,
@@ -286,15 +287,15 @@ pub(crate) fn decode_complete_form_stream(
         PredictorPlacement::AfterFilters(params),
         Some(options),
         None,
-        true,
+        Some(lzw_early_changes),
     )
 }
 
-fn decode_complete_form_filter(filter: &str, input: &[u8], limit: usize) -> Result<Vec<u8>> {
+fn decode_complete_form_filter(filter: &str, input: &[u8], limit: usize, lzw_early_change: bool) -> Result<Vec<u8>> {
     let canonical = normalize_filter_name(filter)?;
     match canonical {
         "FlateDecode" => FlateDecoder::default().decode_complete(input, limit),
-        "LZWDecode" => lzw::decode_complete(input, limit),
+        "LZWDecode" => lzw::decode_complete(input, limit, lzw_early_change),
         "RunLengthDecode" => runlength::decode(input, limit, true),
         "ASCIIHexDecode" | "ASCII85Decode" => {
             let end: &[u8] = if canonical == "ASCIIHexDecode" { b">" } else { b"~>" };
@@ -317,6 +318,10 @@ enum PredictorPlacement<'a> {
     PerFilter(&'a [Option<DecodeParams>]),
 }
 
+pub(crate) fn is_lzw_filter(filter: &str) -> bool {
+    matches!(normalize_filter_name(filter), Ok("LZWDecode"))
+}
+
 pub(crate) fn supports_filter_predictor(filter: &str) -> bool {
     matches!(normalize_filter_name(filter), Ok("FlateDecode" | "LZWDecode"))
 }
@@ -327,7 +332,7 @@ fn decode_stream_with_options_and_expected_size(
     predictors: PredictorPlacement<'_>,
     options: Option<&ParserOptions>,
     expected_filter_output_size: Option<usize>,
-    complete_form: bool,
+    form_lzw_early_changes: Option<&[bool]>,
 ) -> Result<Vec<u8>> {
     let max_ratio = options
         .map(|o| o.max_decompression_ratio)
@@ -340,8 +345,9 @@ fn decode_stream_with_options_and_expected_size(
     let mut current = data.to_vec();
 
     for (filter_index, filter_name) in filters.iter().enumerate() {
-        current = if complete_form {
-            decode_complete_form_filter(filter_name, &current, max_size)?
+        current = if let Some(early_changes) = form_lzw_early_changes {
+            let early_change = early_changes.get(filter_index).copied().unwrap_or(true);
+            decode_complete_form_filter(filter_name, &current, max_size, early_change)?
         } else {
             create_decoder(filter_name)?.decode(&current, max_size)?
         };
@@ -436,7 +442,7 @@ pub(crate) fn decode_stream_with_params_and_expected_size(
         PredictorPlacement::AfterFilters(params),
         None,
         Some(expected_filter_output_size),
-        false,
+        None,
     )
 }
 
@@ -452,7 +458,7 @@ pub(crate) fn decode_stream_with_filter_predictors(
         PredictorPlacement::PerFilter(predictors),
         None,
         expected_filter_output_size,
-        false,
+        None,
     )
 }
 
@@ -474,7 +480,7 @@ mod tests {
             max_decompressed_size: content.len(),
             ..ParserOptions::default()
         };
-        let strict = |data| decode_complete_form_stream(data, &filters, None, &options);
+        let strict = |data| decode_complete_form_stream(data, &filters, None, &options, &[]);
         assert_eq!(strict(&compressed).unwrap(), content);
 
         let mut bad_checksum = compressed.clone();
@@ -491,12 +497,15 @@ mod tests {
         let lzw = weezl::encode::Encoder::with_tiff_size_switch(weezl::BitOrder::Msb, 8)
             .encode(b"q Q")
             .unwrap();
-        assert_eq!(decode_complete_form_filter("LZW", &lzw, 3).unwrap(), b"q Q");
-        assert!(decode_complete_form_filter("LZW", &lzw[..lzw.len() - 1], 3).is_err());
-        assert_eq!(decode_complete_form_filter("RL", b"\x02q Q\x80", 3).unwrap(), b"q Q");
-        assert!(decode_complete_form_filter("RL", b"\x02q Q", 3).is_err());
-        assert_eq!(decode_complete_form_filter("AHx", b"712051>", 3).unwrap(), b"q Q");
-        assert!(decode_complete_form_filter("AHx", b"712051", 3).is_err());
+        assert_eq!(decode_complete_form_filter("LZW", &lzw, 3, true).unwrap(), b"q Q");
+        assert!(decode_complete_form_filter("LZW", &lzw[..lzw.len() - 1], 3, true).is_err());
+        assert_eq!(
+            decode_complete_form_filter("RL", b"\x02q Q\x80", 3, true).unwrap(),
+            b"q Q"
+        );
+        assert!(decode_complete_form_filter("RL", b"\x02q Q", 3, true).is_err());
+        assert_eq!(decode_complete_form_filter("AHx", b"712051>", 3, true).unwrap(), b"q Q");
+        assert!(decode_complete_form_filter("AHx", b"712051", 3, true).is_err());
     }
 
     #[test]

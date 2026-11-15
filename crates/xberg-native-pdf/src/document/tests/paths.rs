@@ -229,7 +229,7 @@ fn form_extraction_reports_incomplete_decode_and_parse() {
 #[test]
 fn form_path_budget_allows_trailing_text_at_exact_fit() {
     use super::super::paths::FormPathBudget;
-    let content = "0 0 10 10 re f BT /F1 12 Tf (Caption) Tj ET";
+    let content = "0 0 10 10 re f BT /F1 12 Tf % ET is the text-block terminator\r\n(Caption) Tj ET";
     let form = format!(
         "<< /Type /XObject /Subtype /Form /BBox [0 0 10 10] /Length {} >>\nstream\n{content}\nendstream",
         content.len()
@@ -249,6 +249,51 @@ fn form_paint_reads_source_even_with_a_tolerant_cache_entry() {
         .unwrap()
         .insert(ObjectRef::new(5, 0), std::sync::Arc::new(b"".to_vec()));
     assert_eq!(doc.extract_paths(0).unwrap().len(), 2);
+}
+
+#[test]
+fn form_lzw_early_change_round_trips_across_code_widths() {
+    use super::super::paths::FormPathBudget;
+    use weezl::{BitOrder, encode::Encoder};
+
+    let mut content = String::from("0 0 10 10 re f BT /F1 12 Tf (");
+    for line in 0..150 {
+        use std::fmt::Write;
+        writeln!(content, "Line {line}: subtotal {}", line * 37).unwrap();
+    }
+    content.push_str(") Tj ET");
+    let late = Encoder::new(BitOrder::Msb, 8).encode(content.as_bytes()).unwrap();
+    let early = Encoder::with_tiff_size_switch(BitOrder::Msb, 8)
+        .encode(content.as_bytes())
+        .unwrap();
+    assert!(late.len().min(early.len()) > 256 * 9 / 8);
+    assert_ne!(late, early);
+
+    for (encoded, decode_parms) in [
+        (&early, ""),
+        (&early, "/DecodeParms [null << /EarlyChange 1 >>]"),
+        (&late, "/DecodeParms [null << /EarlyChange 0 >>]"),
+    ] {
+        let hex: String = encoded.iter().map(|byte| format!("{byte:02x}")).collect();
+        let form = format!(
+            "<< /Type /XObject /Subtype /Form /BBox [0 0 10 10] /Filter [/ASCIIHexDecode /LZWDecode] \
+             {decode_parms} /Length {} >>\nstream\n{hex}>\nendstream",
+            hex.len() + 1
+        );
+        let doc = page_with_xobject("/X1 Do", &form);
+        let form_ref = ObjectRef::new(5, 0);
+        let stream = doc.load_object(form_ref).unwrap();
+        let decoded = doc
+            .decode_form_stream_with_limit(&stream, form_ref, content.len())
+            .unwrap();
+        assert_eq!(decoded, content.as_bytes(), "{decode_parms}");
+        assert_eq!(
+            doc.extract_paths_with_form_budget(0, FormPathBudget::new(1, content.len(), 2))
+                .unwrap()
+                .len(),
+            2
+        );
+    }
 }
 
 /// One page that draws a curve and paints the XObject `/X1` (object 5, `x1` is its dictionary and stream).

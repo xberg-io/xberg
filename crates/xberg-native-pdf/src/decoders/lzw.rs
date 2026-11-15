@@ -21,7 +21,7 @@ pub struct LzwDecoder;
 
 impl StreamDecoder for LzwDecoder {
     fn decode(&self, input: &[u8], max_output_bytes: usize) -> Result<Vec<u8>> {
-        match decode_lzw_weezl(input, max_output_bytes, false) {
+        match decode_lzw_weezl(input, max_output_bytes, None) {
             WeezlAttempt::Recovered(data) => Ok(data),
             // A cap violation is not a "this decoder can't handle it" failure the custom
             // fallback might succeed at differently — it is a real property of the stream's
@@ -37,8 +37,8 @@ impl StreamDecoder for LzwDecoder {
     }
 }
 
-pub(super) fn decode_complete(input: &[u8], limit: usize) -> Result<Vec<u8>> {
-    match decode_lzw_weezl(input, limit, true) {
+pub(super) fn decode_complete(input: &[u8], limit: usize, early_change: bool) -> Result<Vec<u8>> {
+    match decode_lzw_weezl(input, limit, Some(early_change)) {
         WeezlAttempt::Recovered(data) => Ok(data),
         WeezlAttempt::CapExceeded(error) => Err(error),
         WeezlAttempt::Failed => Err(Error::Decode("LZWDecode: incomplete code stream".into())),
@@ -64,11 +64,12 @@ enum WeezlAttempt {
 /// chunks via `decode_bytes` rather than `Decoder::decode`'s single unbounded call so a
 /// dense LZW stream aborts mid-decode instead of materialising its full expansion before
 /// anything checks it (GH#1764).
-fn decode_lzw_weezl(input: &[u8], max_output_bytes: usize, complete: bool) -> WeezlAttempt {
+fn decode_lzw_weezl(input: &[u8], max_output_bytes: usize, complete_early_change: Option<bool>) -> WeezlAttempt {
     use weezl::{BitOrder, LzwStatus, decode::Decoder as WeezlDecoder};
 
     // PDF uses MSB bit order, 8-bit minimum code size ~keep
-    let mut decoder = if complete {
+    let complete = complete_early_change.is_some();
+    let mut decoder = if complete_early_change == Some(true) {
         WeezlDecoder::with_tiff_size_switch(BitOrder::Msb, 8)
     } else {
         WeezlDecoder::new(BitOrder::Msb, 8)

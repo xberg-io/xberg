@@ -2227,6 +2227,12 @@ pub fn parse_content_stream_images_only(data: &[u8]) -> Result<Vec<Operator>> {
 fn scan_to_et(data: &[u8]) -> Option<&[u8]> {
     let mut i = 0;
     while i + 1 < data.len() {
+        if data[i] == b'%' {
+            while i < data.len() && !matches!(data[i], b'\r' | b'\n') {
+                i += 1;
+            }
+            continue;
+        }
         if data[i] == b'E' && data[i + 1] == b'T' {
             let before_ok = i == 0 || data[i - 1].is_ascii_whitespace() || data[i - 1] == b')' || data[i - 1] == b'>';
             let after_ok = i + 2 >= data.len() || data[i + 2].is_ascii_whitespace() || data[i + 2] == b'%';
