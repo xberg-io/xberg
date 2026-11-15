@@ -423,3 +423,8 @@ fn full_line_crop_declines_competing_owner_or_table_overlap() {
         assert!(frozen_page_four_crop(None, &[overlap]).is_none());
     }
 }
+
+#[test]
+fn full_line_crop_declines_disconnected_same_band_ink_outside_stock() {
+    assert!(frozen_page_four_crop(Some(rect([794, 1630, 800, 1640])), &[]).is_none());
+}

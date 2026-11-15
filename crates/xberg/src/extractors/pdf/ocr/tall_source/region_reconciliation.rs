@@ -98,6 +98,11 @@ pub(super) fn select_full_line_crop(
         });
     }
     let band = band?;
+    if (band.left < stock.left && !edge_ink_connected(band, stock.left, band.left, &mut ink))
+        || (band.right > stock.right && !edge_ink_connected(band, stock.right - 1, band.right - 1, &mut ink))
+    {
+        return None;
+    }
     let (overlap, _) = band.overlap(stock);
     (stock.top <= band.top
         && band.bottom <= stock.bottom
@@ -107,6 +112,35 @@ pub(super) fn select_full_line_crop(
             .iter()
             .all(|&bounds| bounds.valid() && !band.intersects(bounds)))
     .then_some(band)
+}
+
+// Every extension pixel must connect to ink on the stock side of the same edge. ~keep
+fn edge_ink_connected(band: RegionBox, edge: u32, outer: u32, ink: &mut impl FnMut(u32, u32) -> bool) -> bool {
+    let left = outer.min(edge);
+    let right = outer.max(edge);
+    let mut outside = std::collections::HashSet::new();
+    let mut connected = Vec::new();
+    for y in band.top..band.bottom {
+        for x in left..=right {
+            if ink(x, y) {
+                if x == edge {
+                    connected.push((x, y));
+                } else {
+                    outside.insert((x, y));
+                }
+            }
+        }
+    }
+    while let Some((x, y)) = connected.pop() {
+        for next_x in x.saturating_sub(1)..=x + 1 {
+            for next_y in y.saturating_sub(1)..=y + 1 {
+                if outside.remove(&(next_x, next_y)) {
+                    connected.push((next_x, next_y));
+                }
+            }
+        }
+    }
+    outside.is_empty()
 }
 
 fn ink_row_bounds(mut ink: impl DoubleEndedIterator<Item = u32>) -> Option<(u32, u32)> {
