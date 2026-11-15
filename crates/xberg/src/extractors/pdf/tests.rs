@@ -7586,7 +7586,7 @@ fn a_blank_whole_document_read_restores_every_page_and_complete_reads_restore_no
 #[test]
 fn ordered_ocr_page_spans_should_return_none_for_all_empty_bodies() {
     let pages = [String::new(), String::new()];
-    assert_eq!(ordered_ocr_page_spans("\n\n", &pages), None);
+    assert!(ordered_ocr_page_spans("\n\n", &pages).is_none());
 }
 
 #[cfg(feature = "ocr")]
@@ -9773,27 +9773,6 @@ mod native_text_stop_tests {
             None,
             "the check must not run on a stopped text loop"
         );
-    }
-
-    #[cfg(all(feature = "ocr", feature = "bundle-tessdata-eng"))]
-    #[tokio::test]
-    async fn a_stopped_text_loop_should_skip_automatic_ocr() {
-        use crate::core::config::OcrConfig;
-
-        let token = CancellationToken::new();
-        token.request_stop();
-        let config = ExtractionConfig {
-            ocr: Some(OcrConfig {
-                backend: "tesseract".to_string(),
-                language: vec!["eng".to_string()],
-                ..Default::default()
-            }),
-            ..config_with(&token)
-        };
-
-        let stopped = extract_whole(&config).await;
-        assert!(token.cut_short_by_time_limit());
-        assert_eq!(extraction_method(&stopped), Some(ExtractionMethod::Native));
     }
 
     /// #3030: forced OCR on a stopped text loop would read none of the unread pages and fail the

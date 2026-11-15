@@ -557,22 +557,51 @@ fn qa_text_tr7_clip_only_leaves_the_page_unpainted() {
 
 #[test]
 fn clipping_text_modes_should_clip_the_next_fill_for_every_show_operator() {
+    const ROW_BYTES: usize = 100 * 4;
     let green = [0, 255, 0, 255];
     let white = [255, 255, 255, 255];
-    for operator in ["(M) Tj", "[(M)] TJ", "(M) '", "0 0 (M) \""] {
+    let black = [0, 0, 0, 255];
+    let reference = "BT /F1 60 Tf 20 25 Td (O) Tj ET";
+    let doc = PdfDocument::from_bytes(build_pdf_text(reference, "")).expect("PDF parses");
+    let pixels = render_with_pipeline(&doc, true);
+    let rows = pixels.chunks_exact(ROW_BYTES).enumerate();
+    let has_ink = |row: &[u8]| row.chunks_exact(4).any(|pixel| pixel == black);
+    let mut ink_rows = rows.filter(|(_, row)| has_ink(row));
+    let top = ink_rows.next();
+    let bottom = ink_rows.next_back();
+    let (top, _) = top.expect("reference glyph has an opaque row");
+    let (bottom, _) = bottom.expect("reference glyph spans multiple rows");
+    let row_start = ((top + bottom) / 2) * ROW_BYTES;
+    let row = &pixels[row_start..row_start + ROW_BYTES];
+    let row_pixels = row.chunks_exact(4);
+    let left = row_pixels.clone().position(|pixel| pixel == black);
+    let right = row_pixels.clone().rposition(|pixel| pixel == black);
+    let left = left.expect("left wall");
+    let right = right.expect("right wall");
+    let wall = row_pixels.skip(left).take_while(|pixel| *pixel == black);
+    let wall_width = wall.count();
+    let inside = row_start + (left + wall_width / 2) * 4;
+    let hole = row_start + ((left + right) / 2) * 4;
+    let reference_wall = &pixels[inside..inside + 4];
+    let reference_hole = &pixels[hole..hole + 4];
+    assert_eq!(reference_wall, &black);
+    assert_eq!(reference_hole, &white);
+
+    for operator in ["(O) Tj", "[(O)] TJ", "(O) '", "0 0 (O) \""] {
         for mode in [0, 4, 5, 6, 7] {
             let content = format!(
-                "BT 1 0 0 rg 0 0 1 RG /F1 40 Tf {mode} Tr 0 TL 10 30 Td {operator} ET\n\
+                "BT 1 0 0 rg 0 0 1 RG /F1 60 Tf {mode} Tr 0 TL 20 25 Td {operator} ET\n\
                  0 1 0 rg 0 0 100 100 re f"
             );
             let doc = PdfDocument::from_bytes(build_pdf_text(&content, "")).expect("PDF parses");
             let pixels = render_with_pipeline(&doc, true);
-            let expected_corner = if mode == 0 { green } else { white };
-            assert_eq!(&pixels[..4], &expected_corner, "Tr={mode}, {operator}, page corner");
-            assert!(
-                pixels.chunks_exact(4).any(|pixel| pixel == green),
-                "Tr={mode}, {operator}, the fill must be visible inside the glyph"
-            );
+            let background = if mode == 0 { green } else { white };
+            let corner = &pixels[..4];
+            assert_eq!(corner, &background, "Tr={mode}, {operator}, page corner");
+            let wall_pixel = &pixels[inside..inside + 4];
+            let hole_pixel = &pixels[hole..hole + 4];
+            assert_eq!(wall_pixel, &green, "Tr={mode}, {operator}, glyph wall");
+            assert_eq!(hole_pixel, &background, "Tr={mode}, {operator}, glyph hole");
         }
     }
 }
