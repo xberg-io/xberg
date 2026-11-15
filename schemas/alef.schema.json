@@ -377,6 +377,14 @@
           "description": "Affirms every configured capsule wrapper uses the exact native runtime instance ~keep\nand ownership contract that produced its pointer. ~keep",
           "type": "boolean"
         },
+        "split_bytes_disjoint_sources": {
+          "default": [],
+          "description": "Split-byte DTOs whose Bytes and Uri variants describe mutually exclusive sources.\nManaged extraction honors the source discriminator when both payload fields are populated.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "target_framework": {
           "type": [
             "string",
@@ -8733,7 +8741,7 @@
       "type": "object"
     }
   },
-  "$id": "https://github.com/xberg-io/alef/releases/download/v0.129.7/alef.schema.json",
+  "$id": "https://github.com/xberg-io/alef/releases/download/v0.129.8/alef.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "JSON Schema for the JSON representation of alef.toml.",
@@ -8865,6 +8873,6 @@
   ],
   "title": "Alef configuration",
   "type": "object",
-  "version": "0.129.7",
-  "x-alef-version": "0.129.7"
+  "version": "0.129.8",
+  "x-alef-version": "0.129.8"
 }

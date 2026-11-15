@@ -25,6 +25,50 @@ public class BytesTransportTests {
   }
 
   [Fact]
+  public async Task UriInputWithIncidentalBytesExtractsTheFile() {
+    string path = Path.GetTempFileName();
+    try {
+      await File.WriteAllTextAsync(path, "URI transport probe");
+      var input = new ExtractInput {
+        Kind = ExtractInputKind.Uri,
+        Uri = path,
+        Bytes = Encoding.UTF8.GetBytes("wrong payload"),
+        MimeType = "text/plain",
+        Filename = "probe.txt",
+      };
+      var result = await XbergConverter.ExtractAsync(
+          input, new ExtractionConfig { UseCache = false, DisableOcr = true });
+      Assert.Empty(result.Errors);
+      Assert.Equal("URI transport probe",
+                   Assert.Single(result.Results).Content.Trim());
+    } finally {
+      File.Delete(path);
+    }
+  }
+
+  [Fact]
+  public async Task BytesInputWithIncidentalUriExtractsTheBytes() {
+    string path = Path.GetTempFileName();
+    try {
+      await File.WriteAllTextAsync(path, "wrong file content");
+      var input = new ExtractInput {
+        Kind = ExtractInputKind.Bytes,
+        Uri = path,
+        Bytes = Encoding.UTF8.GetBytes("Bytes transport probe"),
+        MimeType = "text/plain",
+        Filename = "probe.txt",
+      };
+      var result = await XbergConverter.ExtractAsync(
+          input, new ExtractionConfig { UseCache = false, DisableOcr = true });
+      Assert.Empty(result.Errors);
+      Assert.Equal("Bytes transport probe",
+                   Assert.Single(result.Results).Content.Trim());
+    } finally {
+      File.Delete(path);
+    }
+  }
+
+  [Fact]
   public async Task ExternalRedactionAcceptsBytesWithoutMimeHint() {
     var input = new ExtractInput {
       Kind = ExtractInputKind.Bytes,
