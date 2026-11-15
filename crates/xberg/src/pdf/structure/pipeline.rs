@@ -6272,9 +6272,9 @@ fn overlap_loser(
 }
 
 /// One pass over the overlapping pairs of a page. The pass over the mixed native and layout pairs
-/// runs first: the preference decides them without the page text, so what they leave is the set of
-/// tables the output keeps. The pass over the same-origin pairs then counts words against that
-/// set, and a table that a later step removes never stands in for the words of another.
+/// runs first so the same-origin pass counts words against its surviving tables. Weak overlaps
+/// require identical Markdown and page-text evidence before either pass can remove a table.
+/// A table that a later step removes never stands in for the words of another.
 fn resolve_overlaps(
     tables: &[crate::types::Table],
     native_count: usize,
@@ -6303,65 +6303,59 @@ fn resolve_overlaps(
                 let area_b = (b.x1 - b.x0) * (b.y1 - b.y0);
                 let min_area = area_a.min(area_b);
 
-                if min_area > 0.0 && intersection > 0.0 && intersection / min_area <= 0.5 {
-                    if round.pass == OverlapPass::SameOrigin
-                        && j < native_count
-                        && tables[i].markdown == tables[j].markdown
-                    {
-                        let dropped = lower_content_table(tables, i, j);
-                        if evidence.holds_unprinted_words(tables, dropped, to_remove) == Some(false) {
-                            to_remove.insert(dropped);
-                            if dropped == i {
-                                break;
-                            }
-                        }
-                    }
+                let overlap = intersection / min_area;
+                if min_area <= 0.0 || intersection <= 0.0 || !overlap.is_finite() {
                     continue;
                 }
-                if min_area > 0.0 && intersection / min_area > 0.5 {
-                    let i_is_native = i < native_count;
-                    let j_is_native = j < native_count;
-                    let mixed_origin = i_is_native != j_is_native;
-                    let pair_pass = if mixed_origin {
-                        OverlapPass::Mixed
-                    } else {
-                        OverlapPass::SameOrigin
-                    };
-                    if pair_pass != round.pass {
+                let weak_overlap = overlap <= 0.5;
+                if weak_overlap && tables[i].markdown != tables[j].markdown {
+                    continue;
+                }
+                let i_is_native = i < native_count;
+                let j_is_native = j < native_count;
+                let mixed_origin = i_is_native != j_is_native;
+                let pair_pass = if mixed_origin {
+                    OverlapPass::Mixed
+                } else {
+                    OverlapPass::SameOrigin
+                };
+                if pair_pass != round.pass {
+                    continue;
+                }
+                if !weak_overlap
+                    && i_is_native
+                    && j_is_native
+                    && !boxes_near_coincident(a, b)
+                    && keeps_overlapping_native_pair(evidence, tables, (i, j), to_remove)
+                {
+                    continue;
+                }
+                let shares = (intersection / area_a, intersection / area_b);
+                let native_first = mixed_origin.then_some(i_is_native);
+                let loser = overlap_loser(
+                    tables,
+                    preference,
+                    protected_layout_children,
+                    (i, j),
+                    native_first,
+                    shares,
+                );
+                let Some(remove) = loser.or_else(|| weak_overlap.then(|| lower_content_table(tables, i, j))) else {
+                    continue;
+                };
+                if weak_overlap && evidence.holds_unprinted_words(tables, remove, to_remove) != Some(false) {
+                    continue;
+                }
+                if mixed_origin {
+                    let winner = if remove == i { j } else { i };
+                    if round.set_aside.contains(&(remove, winner)) {
                         continue;
                     }
-                    let near_coincident = boxes_near_coincident(a, b);
-                    if i < native_count
-                        && j < native_count
-                        && !near_coincident
-                        && keeps_overlapping_native_pair(evidence, tables, (i, j), to_remove)
-                    {
-                        continue;
-                    }
-                    let shares = (intersection / area_a, intersection / area_b);
-                    let native_first = mixed_origin.then_some(i_is_native);
-                    let loser = overlap_loser(
-                        tables,
-                        preference,
-                        protected_layout_children,
-                        (i, j),
-                        native_first,
-                        shares,
-                    );
-                    let Some(remove) = loser else {
-                        continue;
-                    };
-                    if mixed_origin {
-                        let winner = if remove == i { j } else { i };
-                        if round.set_aside.contains(&(remove, winner)) {
-                            continue;
-                        }
-                        round.mixed_losses.push((remove, winner));
-                    }
-                    to_remove.insert(remove);
-                    if remove == i {
-                        break;
-                    }
+                    round.mixed_losses.push((remove, winner));
+                }
+                to_remove.insert(remove);
+                if remove == i {
+                    break;
                 }
             }
         }

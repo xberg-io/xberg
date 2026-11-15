@@ -756,6 +756,57 @@ fn exact_dedup_second_review_rejected_enclosing_parent_cannot_protect_layout_coh
     }
 }
 
+fn weak_overlap_origin_fixture() -> ([crate::types::Table; 2], Vec<Vec<SegmentData>>, Vec<Vec<SegmentData>>) {
+    let left = cell_table(1, (0.0, 0.0, 100.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let right = cell_table(1, (60.0, 0.0, 160.0, 100.0), &[&["alpha", "1"], &["beta", "2"]]);
+    let mut shared = printed_cells(&[&right]);
+    for segment in &mut shared[0] {
+        segment.x += 5.0;
+    }
+    let mut independent = printed_cells(&[&left, &right]);
+    for segment in independent[0].iter_mut().skip(4) {
+        segment.x += 50.0;
+    }
+    ([left, right], shared, independent)
+}
+
+#[test]
+fn exact_dedup_mixed_origin_weak_overlap_honors_preference() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let ([native, layout], shared, independent) = weak_overlap_origin_fixture();
+    for (preference, winner) in [
+        (TableOverlapPreference::Native, &native),
+        (TableOverlapPreference::Layout, &layout),
+        (TableOverlapPreference::Content, &native),
+    ] {
+        let emit = |page: &[Vec<SegmentData>]| {
+            prepare_emitted_tables(std::slice::from_ref(&native), vec![layout.clone()], preference, page)
+        };
+        assert_eq!(emit(&independent).len(), 2, "{preference:?}");
+        assert_eq!(emit(&[]).len(), 2, "{preference:?}: no source evidence");
+        let emitted = emit(&shared);
+        assert_eq!(emitted.len(), 1, "{preference:?}");
+        assert_eq!(emitted[0].bounding_box.unwrap().x0, winner.bounding_box.unwrap().x0);
+    }
+}
+
+#[test]
+fn exact_dedup_layout_origin_weak_overlap_counts_printed_occurrences() {
+    use crate::core::config::layout::TableOverlapPreference;
+
+    let ([left, right], shared, independent) = weak_overlap_origin_fixture();
+    for layout in [vec![left.clone(), right.clone()], vec![right, left]] {
+        let emit = |page: &[Vec<SegmentData>]| {
+            prepare_emitted_tables(&[], layout.clone(), TableOverlapPreference::Content, page)
+        };
+        assert_eq!(emit(&independent).len(), 2);
+        let emitted = emit(&shared);
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].bounding_box.unwrap().x0, layout[0].bounding_box.unwrap().x0);
+    }
+}
+
 #[test]
 fn sparse_currency_affix_columns_merge_into_financial_values() {
     use crate::core::config::layout::TableOverlapPreference;
