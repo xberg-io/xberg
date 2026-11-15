@@ -387,18 +387,21 @@ pub struct EngineBuilder {
 
 impl EngineBuilder {
     /// Inject a [`CacheBackend`], overriding the [`NoopCache`] default.
+    #[must_use]
     pub fn with_cache_backend(mut self, cache: Arc<dyn CacheBackend>) -> Self {
         self.cache = Some(cache);
         self
     }
 
     /// Inject a [`ProgressSink`], overriding the [`NoopProgressSink`] default.
+    #[must_use]
     pub fn with_progress_sink(mut self, progress: Arc<dyn ProgressSink>) -> Self {
         self.progress = Some(progress);
         self
     }
 
     /// Finalize the builder into an [`Engine`].
+    #[must_use]
     pub fn build(self) -> Engine {
         let cache_enabled = self.cache.is_some();
         let inner = EngineInner {
