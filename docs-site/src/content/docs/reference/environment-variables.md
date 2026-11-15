@@ -167,6 +167,19 @@ export XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1
 
 **Security Warning**: Enabling this lets any client that can reach the server spend the server's LLM provider quota.
 
+### XBERG_MCP_ALLOW_LOCAL_URI_INPUTS
+
+**Type**: `Boolean` (`1`, `true`, or `yes` to enable; case-insensitive)
+**Default**: Disabled (unset)
+
+Allow the MCP server's HTTP transport to accept local file paths and `file://` URIs as extraction inputs and to run `detect_mime_type`. When unset, the HTTP transport rejects them and only accepts bytes and remote (`http`/`https`) URIs. The stdio transport always accepts local paths.
+
+```bash title="Allow Local File Inputs over MCP HTTP"
+export XBERG_MCP_ALLOW_LOCAL_URI_INPUTS=1
+```
+
+**Security Warning**: Enabling this lets MCP HTTP clients read files from the server's local filesystem. Leave disabled unless every client that can reach the server is trusted.
+
 ## Extraction Configuration
 
 These variables control document extraction behavior, including OCR, text chunking, and caching.

@@ -37,6 +37,13 @@ const EXTRACTION_TASK_TTL_MS: u64 = 15 * 60 * 1000;
 /// third-party hosts and can legitimately take longer than extraction.
 const CACHE_WARM_TASK_TTL_MS: u64 = 30 * 60 * 1000;
 
+/// Server environment variable that lets the MCP HTTP transport read local paths and `file://`
+/// URIs. The stdio transport always may.
+const MCP_ALLOW_LOCAL_URI_INPUTS_ENV: &str = "XBERG_MCP_ALLOW_LOCAL_URI_INPUTS";
+
+const LOCAL_URI_INPUTS_DISABLED: &str = "Local path and file:// URI inputs are disabled on the MCP HTTP transport. \
+     Set XBERG_MCP_ALLOW_LOCAL_URI_INPUTS=1 to enable server-side local file access.";
+
 #[cfg(any(
     test,
     paddle_ocr,
@@ -102,6 +109,9 @@ pub struct XbergMcp {
     /// SEP-2663 task store for tools in [`TASK_ELIGIBLE_TOOLS`]. Cheaply
     /// cloneable; all clones of an `XbergMcp` share the same task state.
     tasks: TaskManager,
+    /// Whether tools may read server-local paths and `file://` URIs: always on stdio, on the
+    /// HTTP transport only when the operator sets [`MCP_ALLOW_LOCAL_URI_INPUTS_ENV`].
+    allow_local_paths: bool,
 }
 
 impl Clone for XbergMcp {
@@ -117,6 +127,7 @@ impl Clone for XbergMcp {
             default_config: self.default_config.clone(),
             extraction_service: std::sync::Mutex::new(svc),
             tasks: self.tasks.clone(),
+            allow_local_paths: self.allow_local_paths,
         }
     }
 }
@@ -165,7 +176,32 @@ impl XbergMcp {
             default_config: std::sync::Arc::new(config),
             extraction_service: std::sync::Mutex::new(extraction_service),
             tasks: TaskManager::new(),
+            allow_local_paths: true,
         }
+    }
+
+    /// Set whether tools may read server-local paths and `file://` URIs.
+    #[cfg_attr(not(any(test, feature = "mcp-http")), allow(dead_code))]
+    pub(crate) fn with_local_paths(mut self, allow_local_paths: bool) -> Self {
+        self.allow_local_paths = allow_local_paths;
+        self
+    }
+
+    /// Without local access, disable local URLs for the request and its per-input overrides.
+    /// Runs before the inputs are parsed so their overrides inherit the disabled flags.
+    fn apply_local_path_policy(&self, config: &mut ExtractionConfig) {
+        if !self.allow_local_paths {
+            config.url.allow_local_file_inputs = false;
+            config.url.allow_file_uris = false;
+        }
+    }
+
+    fn reject_local_input(&self, input: &crate::ExtractInput) -> Result<(), rmcp::ErrorData> {
+        let is_local = input.kind == crate::ExtractInputKind::Uri && !input.uri.as_deref().is_some_and(is_remote_uri);
+        if is_local && !self.allow_local_paths {
+            return Err(rmcp::ErrorData::invalid_params(LOCAL_URI_INPUTS_DISABLED, None));
+        }
+        Ok(())
     }
 
     /// Extract content from bytes or a URI.
@@ -188,7 +224,9 @@ impl XbergMcp {
         let mut config =
             build_config(&self.default_config, params.config).map_err(|e| rmcp::ErrorData::invalid_params(e, None))?;
         apply_pdf_password(&mut config, params.pdf_password)?;
+        self.apply_local_path_policy(&mut config);
         let input = parse_extract_input(params.input, &config)?;
+        self.reject_local_input(&input)?;
 
         let output = crate::extract(input, &config).await.map_err(map_xberg_error_to_mcp)?;
         let response = format_extraction_result_for_wire(&output, use_toon);
@@ -217,11 +255,15 @@ impl XbergMcp {
         let mut config =
             build_config(&self.default_config, params.config).map_err(|e| rmcp::ErrorData::invalid_params(e, None))?;
         apply_pdf_password(&mut config, params.pdf_password)?;
+        self.apply_local_path_policy(&mut config);
         let inputs = params
             .inputs
             .into_iter()
             .map(|input| parse_batch_extract_input(input, &config))
             .collect::<Result<Vec<_>, _>>()?;
+        for options in &inputs {
+            self.reject_local_input(&options.input)?;
+        }
 
         let output = crate::extract_batch_with_input_options(inputs, &config)
             .await
@@ -247,6 +289,9 @@ impl XbergMcp {
         use super::errors::map_xberg_error_to_mcp;
         use crate::detect_mime_type;
 
+        if !self.allow_local_paths {
+            return Err(rmcp::ErrorData::invalid_params(LOCAL_URI_INPUTS_DISABLED, None));
+        }
         let mime_type = detect_mime_type(params.path.clone(), params.use_content).map_err(map_xberg_error_to_mcp)?;
 
         let dto = super::schema::DetectMimeTypeOutput {
@@ -772,6 +817,17 @@ impl XbergMcp {
     }
 }
 
+fn is_remote_uri(uri: &str) -> bool {
+    uri.starts_with("http://") || uri.starts_with("https://")
+}
+
+/// Whether the operator set [`MCP_ALLOW_LOCAL_URI_INPUTS_ENV`].
+#[cfg(feature = "mcp-http")]
+fn mcp_http_allows_local_paths() -> bool {
+    std::env::var(MCP_ALLOW_LOCAL_URI_INPUTS_ENV)
+        .is_ok_and(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+}
+
 /// Resolve the cache base directory.
 fn resolve_cache_base() -> std::path::PathBuf {
     crate::cache_dir::resolve_cache_base()
@@ -1217,8 +1273,13 @@ pub async fn start_mcp_server_http(
     use axum::Router;
     use std::net::SocketAddr;
 
+    let allow_local_paths = mcp_http_allows_local_paths();
     let http_service = StreamableHttpService::new(
-        || XbergMcp::new().map_err(|e| std::io::Error::other(e.to_string())),
+        move || {
+            XbergMcp::new()
+                .map(|server| server.with_local_paths(allow_local_paths))
+                .map_err(|e| std::io::Error::other(e.to_string()))
+        },
         LocalSessionManager::default().into(),
         build_streamable_http_config(extra_allowed_hosts),
     );
@@ -1279,8 +1340,9 @@ pub async fn start_mcp_server_http_with_config(
     use axum::Router;
     use std::net::SocketAddr;
 
+    let allow_local_paths = mcp_http_allows_local_paths();
     let http_service = StreamableHttpService::new(
-        move || Ok(XbergMcp::with_config(config.clone())),
+        move || Ok(XbergMcp::with_config(config.clone()).with_local_paths(allow_local_paths)),
         LocalSessionManager::default().into(),
         build_streamable_http_config(extra_allowed_hosts),
     );
@@ -1904,6 +1966,99 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(error.message, "use_layout_for_markdown must be a boolean");
+    }
+
+    fn http_server_without_local_paths() -> XbergMcp {
+        XbergMcp::with_config(ExtractionConfig::default()).with_local_paths(false)
+    }
+
+    #[tokio::test]
+    async fn should_reject_local_path_and_file_uri_on_http_transport_without_opt_in() {
+        let server = http_server_without_local_paths();
+
+        for uri in ["/etc/passwd", "file:///etc/passwd", "relative/report.pdf"] {
+            let params = crate::mcp::params::ExtractParams {
+                input: serde_json::json!({"kind": "uri", "uri": uri}),
+                config: None,
+                pdf_password: None,
+                response_format: None,
+            };
+            let error = server.extract(Parameters(params)).await.unwrap_err();
+            assert_eq!(error.code, rmcp::model::ErrorCode::INVALID_PARAMS, "{uri}");
+            assert_eq!(error.message, LOCAL_URI_INPUTS_DISABLED, "{uri}");
+
+            let params = crate::mcp::params::ExtractBatchParams {
+                inputs: vec![
+                    serde_json::json!({"kind": "bytes", "bytes": [65], "mime_type": "text/plain"}),
+                    serde_json::json!({"kind": "uri", "uri": uri}),
+                ],
+                config: None,
+                pdf_password: None,
+                response_format: None,
+            };
+            let error = server.extract_batch(Parameters(params)).await.unwrap_err();
+            assert_eq!(error.message, LOCAL_URI_INPUTS_DISABLED, "{uri}");
+        }
+    }
+
+    #[test]
+    fn should_reject_detect_mime_type_on_http_transport_without_opt_in() {
+        let params = crate::mcp::params::DetectMimeTypeParams {
+            path: "/etc/passwd".to_string(),
+            use_content: true,
+        };
+
+        let error = http_server_without_local_paths()
+            .detect_mime_type(Parameters(params))
+            .unwrap_err();
+
+        assert_eq!(error.code, rmcp::model::ErrorCode::INVALID_PARAMS);
+        assert_eq!(error.message, LOCAL_URI_INPUTS_DISABLED);
+    }
+
+    #[test]
+    fn should_accept_remote_inputs_on_http_transport_and_local_paths_on_stdio() {
+        let remote = crate::ExtractInput {
+            uri: Some("https://example.com/report.pdf".to_string()),
+            ..Default::default()
+        };
+        let local = crate::ExtractInput {
+            uri: Some("/srv/report.pdf".to_string()),
+            ..Default::default()
+        };
+
+        assert!(http_server_without_local_paths().reject_local_input(&remote).is_ok());
+        assert!(
+            http_server_without_local_paths()
+                .reject_local_input(&crate::ExtractInput::from_bytes(b"x".to_vec(), "text/plain", None))
+                .is_ok()
+        );
+        let stdio = XbergMcp::with_config(ExtractionConfig::default());
+        assert!(stdio.reject_local_input(&local).is_ok());
+        assert!(stdio.with_local_paths(true).reject_local_input(&local).is_ok());
+    }
+
+    #[test]
+    fn should_disable_local_url_flags_for_request_and_per_input_overrides_without_opt_in() {
+        let mut config = ExtractionConfig::default();
+        http_server_without_local_paths().apply_local_path_policy(&mut config);
+        assert!(!config.url.allow_local_file_inputs);
+        assert!(!config.url.allow_file_uris);
+
+        let value = serde_json::json!({
+            "kind": "uri",
+            "uri": "https://example.com/report.pdf",
+            "config": {"url": {"allow_local_file_inputs": true, "allow_file_uris": true}}
+        });
+        let input = parse_extract_input(value, &config).expect("remote input parses");
+        let url = input.config.and_then(|config| config.url).expect("per-input url config");
+        assert!(!url.allow_local_file_inputs);
+        assert!(!url.allow_file_uris);
+
+        let mut stdio_config = ExtractionConfig::default();
+        XbergMcp::with_config(ExtractionConfig::default()).apply_local_path_policy(&mut stdio_config);
+        assert!(stdio_config.url.allow_local_file_inputs);
+        assert!(stdio_config.url.allow_file_uris);
     }
 
     #[tokio::test]

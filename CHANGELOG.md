@@ -201,6 +201,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(api, mcp): A request can no longer run an LLM stage on the server's environment credentials.** A REST or MCP config that adds an LLM stage, or changes the model of the server's own, is rejected unless the operator sets `XBERG_ALLOW_CALLER_LLM_ENV_CREDENTIALS=1`; library and CLI behavior is unchanged.
 
+- **(mcp): The MCP HTTP transport no longer reads local files.** `extract` and `extract_batch` reject local paths and `file://` URIs and `detect_mime_type` is refused over HTTP unless the operator sets `XBERG_MCP_ALLOW_LOCAL_URI_INPUTS=1`; the stdio transport is unchanged.
+
 - **(hwp): Cap the decompressed size of compressed HWP body-text sections.**
   Sections are now inflated under `security_limits.max_content_size` each and `max_archive_size` in total, so a small crafted `.hwp` can no longer expand without bound. Both limits are configurable; a legitimate document whose sections exceed them is now rejected with a security error until the limits are raised.
 
