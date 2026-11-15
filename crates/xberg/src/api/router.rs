@@ -441,6 +441,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     #[allow(unsafe_code)]
     fn resolve_max_concurrent_requests_honors_env_and_defaults() {
         let original = std::env::var(MAX_CONCURRENT_REQUESTS_ENV).ok();

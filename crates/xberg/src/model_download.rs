@@ -2419,6 +2419,7 @@ mod download_deadline_tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn deadline_reads_env_override_and_aborts_a_hung_closure() {
         #[allow(unsafe_code)]
         unsafe {
