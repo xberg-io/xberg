@@ -122,7 +122,10 @@ fn should_clip_annotations_and_preserve_attribute_and_link_order() {
 fn should_not_count_deleted_text_in_span_offsets() {
     assert_eq!(
         spans(r"{\rtf1 A{\deleted XX}{\b B}}"),
-        vec![(1, 2, true, false, false, false, 0)]
+        vec![
+            (0, 1, false, false, false, false, 0),
+            (1, 2, true, false, false, false, 0),
+        ]
     );
 }
 
@@ -130,6 +133,9 @@ fn should_not_count_deleted_text_in_span_offsets() {
 fn should_keep_spans_aligned_after_deleted_paragraph_break() {
     assert_eq!(
         spans(r"{\rtf1 A{\deleted X\par Y}{\b B}}"),
-        vec![(1, 2, true, false, false, false, 0)]
+        vec![
+            (0, 1, false, false, false, false, 0),
+            (1, 2, true, false, false, false, 0),
+        ]
     );
 }

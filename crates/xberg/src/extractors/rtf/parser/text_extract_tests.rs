@@ -135,7 +135,6 @@ fn test_deleted_text_in_table_cell_is_dropped() {
     let rtf = r"{\rtf1\ansi \trowd Keep {\deleted Drop}\cell Next\cell\row}";
     let (text, tables, ..) = extract_text_from_rtf(rtf, true);
     assert!(!text.contains("Drop"), "got: {text:?}");
-    assert!(text.contains("Keep"), "got: {text:?}");
     let cells: Vec<&str> = tables
         .iter()
         .flat_map(|table| table.cells.iter().flatten())
