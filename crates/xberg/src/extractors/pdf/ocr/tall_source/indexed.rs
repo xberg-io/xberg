@@ -525,6 +525,34 @@ impl IndexedSource {
             .any(|&channel| channel < INK_THRESHOLD)
     }
 
+    pub(super) fn has_panel_gutter(&self, bounds: super::region_reconciliation::RegionBox) -> bool {
+        const MAX_SCAN: u32 = 256 * 1024;
+        const MIN_GUTTER: u32 = 16;
+        if bounds.right > self.width
+            || bounds.bottom > self.height
+            || bounds.top >= bounds.bottom
+            || bounds.left >= bounds.right
+            || (bounds.right - bounds.left).saturating_mul(bounds.bottom - bounds.top) > MAX_SCAN
+        {
+            return false;
+        }
+        let mut white_columns = 0;
+        for x in bounds.left..bounds.right {
+            if self
+                .rows(bounds.top..bounds.bottom)
+                .all(|row| self.white(row[x as usize]))
+            {
+                white_columns += 1;
+                if white_columns >= MIN_GUTTER {
+                    return true;
+                }
+            } else {
+                white_columns = 0;
+            }
+        }
+        false
+    }
+
     pub(super) fn panel_gap_label(
         &self,
         rows: Range<u32>,

@@ -1223,6 +1223,7 @@ fn document_hocr_receipt(
                     occurrence: occurrence.id,
                     replacement: None,
                     insertion: None,
+                    panel_order: None,
                     source: occurrence.element_bytes.clone(),
                     destination: occurrence.element_bytes.start,
                 });

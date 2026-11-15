@@ -693,6 +693,74 @@ fn full_line_candidate(
     Some((crop, source.source_line_column(crop)?))
 }
 
+pub(super) fn page_panel_order(
+    source: &IndexedSource,
+    read: &crate::types::formats::RetainedHocrRead,
+) -> Option<[usize; 5]> {
+    if read.occurrences.len() > 1024 {
+        return None;
+    }
+    let projection = read.plain_document.as_ref()?;
+    let mut result = None;
+    for group in read.occurrences.windows(5) {
+        if !group.iter().all(|word| {
+            word.transcript_bytes == word.owner_bytes
+                && projection.ranges.iter().filter(|(id, _)| *id == word.id).count() == 1
+        }) {
+            continue;
+        }
+        let boxes = group
+            .iter()
+            .map(|word| source.native_bounds(read.dimensions, word.bounds))
+            .collect::<Option<Vec<_>>>()?;
+        let &[a, b, intruder, c, follower] = boxes.as_slice() else {
+            return None;
+        };
+        let Some(gutter) = interleaved_panel_gutter([a, b, intruder, c, follower]) else {
+            continue;
+        };
+        if source.has_panel_gutter(gutter) {
+            let ids = std::array::from_fn(|i| group[i].id);
+            if result.replace(ids).is_some() {
+                return None;
+            }
+        }
+    }
+    result
+}
+
+fn interleaved_panel_gutter([a, b, intruder, c, follower]: [RegionBox; 5]) -> Option<RegionBox> {
+    let aligned = |x: RegionBox, y: RegionBox| {
+        x.right.min(y.right).saturating_sub(x.left.max(y.left)) * 2 >= (x.right - x.left).max(y.right - y.left)
+    };
+    let stacked =
+        |x: RegionBox, y: RegionBox| x.bottom <= y.top && y.top - x.bottom <= (x.bottom - x.top).min(y.bottom - y.top);
+    if !aligned(a, b)
+        || !aligned(b, c)
+        || !aligned(intruder, follower)
+        || !stacked(a, b)
+        || !stacked(b, c)
+        || !stacked(intruder, follower)
+        || intruder.top >= c.bottom
+        || c.top >= intruder.bottom
+    {
+        return None;
+    }
+    let (left_panel, right_panel) = if a.left > intruder.left {
+        ([intruder.right, follower.right, 0], [a.left, b.left, c.left])
+    } else {
+        ([a.right, b.right, c.right], [intruder.left, follower.left, u32::MAX])
+    };
+    let left = left_panel.into_iter().max()?;
+    let right = right_panel.into_iter().min()?;
+    (right.saturating_sub(left) >= 16).then_some(RegionBox {
+        left,
+        right,
+        top: a.top.min(intruder.top),
+        bottom: c.bottom.max(follower.bottom),
+    })
+}
+
 pub(super) async fn scan_owned_gap(
     attempt: &Attempt<'_>,
     source: &IndexedSource,
@@ -959,6 +1027,30 @@ async fn read_crop_pair(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn interleaved_panel_requires_two_disjoint_ordered_lanes() {
+        let bounds = |[left, top, right, bottom]: [u32; 4]| RegionBox {
+            left,
+            top,
+            right,
+            bottom,
+        };
+        let panels = [
+            bounds([1791, 684, 2017, 723]),
+            bounds([1790, 733, 2022, 764]),
+            bounds([422, 724, 727, 823]),
+            bounds([1790, 776, 1991, 856]),
+            bounds([374, 862, 770, 922]),
+        ];
+        assert!(interleaved_panel_gutter(panels).is_some());
+        let mut bridging = panels;
+        bridging[2].right = panels[3].left + 1;
+        assert!(interleaved_panel_gutter(bridging).is_none());
+        let mut ordered = panels;
+        ordered.swap(2, 3);
+        assert!(interleaved_panel_gutter(ordered).is_none());
+    }
 
     #[test]
     fn owned_gap_rejects_an_unrelated_right_lane_label_inside_the_same_panel() {

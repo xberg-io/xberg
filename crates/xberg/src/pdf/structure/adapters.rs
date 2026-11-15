@@ -3995,6 +3995,7 @@ mod occurrence_provenance_tests {
             occurrence: 42,
             replacement: None,
             insertion: None,
+            panel_order: None,
             source: 3..5,
             destination: 3,
         });

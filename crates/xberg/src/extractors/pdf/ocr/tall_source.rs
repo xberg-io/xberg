@@ -284,6 +284,24 @@ pub(super) async fn probe_anchored_occurrences(
             owner.insertion = Some(insertion);
         }
     }
+    if !heading_only
+        && edits.as_ref().is_some_and(|edits| edits.len() == 2)
+        && selected.tables.is_empty()
+        && selected.formulas.is_empty()
+        && let Some(ids) = region_probe::page_panel_order(&source, read)
+        && let Some(doc) = selected.ocr_internal_document.as_mut()
+    {
+        let mut matches = doc
+            .elements
+            .iter_mut()
+            .flat_map(|element| &mut element.ocr_source_spans)
+            .filter(|span| span.occurrence == ids[2]);
+        if let Some(owner) = matches.next()
+            && matches.next().is_none()
+        {
+            owner.panel_order = Some(ids);
+        }
+    }
     if let Some(edits) = edits
         && let Some(doc) = selected.ocr_internal_document.as_mut()
         && edits.iter().all(|(id, _, _)| {

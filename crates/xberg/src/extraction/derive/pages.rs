@@ -416,6 +416,53 @@ fn plan_page_ocr_insertion<'a>(
 }
 
 #[cfg(all(feature = "pdf", feature = "ocr"))]
+fn plan_page_panel_order(
+    doc: &InternalDocument,
+    text: &str,
+    spans: &crate::rendering::ElementSpans,
+    page: &PageContent,
+    page_index: usize,
+) -> Option<(std::ops::Range<usize>, usize, std::ops::Range<usize>, usize, String)> {
+    let owners = || {
+        doc.elements
+            .iter()
+            .filter(|element| element.page == Some(page.page_number))
+            .flat_map(|element| element.ocr_source_spans.iter().map(move |span| (element, span)))
+    };
+    let mut orders = owners().filter_map(|(_, span)| span.panel_order.as_ref());
+    let ids = orders.next()?;
+    if orders.next().is_some() || !page.tables.is_empty() {
+        return None;
+    }
+    let project = |id| {
+        let mut matches = owners().filter(|(_, span)| span.occurrence == id);
+        let (element, span) = matches.next()?;
+        if matches.next().is_some()
+            || !element.annotations.is_empty()
+            || span.destination != 0
+            || span.source.len() != element.text.len()
+        {
+            return None;
+        }
+        project_final_ocr_occurrence(doc, (text, spans), page, &element.id, 0..element.text.len())
+    };
+    let mapped = ids.iter().map(|&id| project(id)).collect::<Option<Vec<_>>>()?;
+    if mapped.windows(2).any(|pair| {
+        text.get(pair[0][0].end..pair[1][0].start) != Some("\n\n")
+            || page.content.get(pair[0][1].end..pair[1][1].start) != Some("\n\n")
+    }) {
+        return None;
+    }
+    let [_, _, left, right, _] = mapped.as_slice() else {
+        return None;
+    };
+    let document = left[0].start..right[0].end;
+    let page_bytes = left[1].start..right[1].end;
+    let replacement = format!("{}\n\n{}", text.get(right[0].clone())?, text.get(left[0].clone())?);
+    Some((document.clone(), page_index, page_bytes, document.len(), replacement))
+}
+
+#[cfg(all(feature = "pdf", feature = "ocr"))]
 pub(super) fn adopt_final_ocr_replacement(
     doc: &mut InternalDocument,
     text: &mut String,
@@ -427,7 +474,7 @@ pub(super) fn adopt_final_ocr_replacement(
             element
                 .ocr_source_spans
                 .iter()
-                .any(|span| span.replacement.is_some() || span.insertion.is_some())
+                .any(|span| span.replacement.is_some() || span.insertion.is_some() || span.panel_order.is_some())
         })
     {
         return None;
@@ -444,12 +491,16 @@ pub(super) fn adopt_final_ocr_replacement(
                     (document, page_index, page, expected, replacement.to_owned())
                 }),
         );
+        all.extend(plan_page_panel_order(doc, text, spans, page, page_index));
     }
     if all.is_empty() {
         return None;
     }
     all.sort_by_key(|(bytes, ..)| bytes.start);
-    if all.windows(2).any(|pair| pair[0].0.end > pair[1].0.start) {
+    if all
+        .windows(2)
+        .any(|pair| pair[0].0.end > pair[1].0.start || (pair[0].1 == pair[1].1 && pair[0].2.end > pair[1].2.start))
+    {
         return None;
     }
     if let Some(boundaries) = doc.metadata.pages.as_mut().and_then(|pages| pages.boundaries.as_mut()) {
@@ -577,6 +628,7 @@ fn ocr_edit_on_nonfinal_page_shifts_later_document_boundaries() {
         source: 0..2,
         destination: 0,
         insertion: None,
+        panel_order: None,
         replacement: Some(("wi".to_owned(), "View".to_owned(), 1)),
     });
     let mut second = InternalElement::text(ElementKind::Paragraph, "keep", 0).with_index(1);
@@ -622,6 +674,7 @@ fn full_ocr_line_groups_publish_together_or_keep_both_originals() {
                     occurrence: index * 3 + word,
                     destination: range.start,
                     insertion: None,
+                    panel_order: None,
                     replacement: Some((
                         line[range.clone()].to_owned(),
                         if word == 0 {
@@ -683,6 +736,7 @@ fn ocr_gap_insertion_requires_complete_unique_anchors_in_both_views() {
                 destination: bytes.start,
                 source: bytes,
                 insertion: None,
+                panel_order: None,
                 replacement: None,
             });
         }

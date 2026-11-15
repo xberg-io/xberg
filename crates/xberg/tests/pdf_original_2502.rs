@@ -137,7 +137,13 @@ async fn public_original_multipage_recovery() {
         }
         8 => {
             assert_eq!(text.matches("POP WAcES:").count(), 1);
-            text.replacen("POP WAcES:", "PDP IMAGES", 1)
+            let interleaved = "Simplified.\n\nAutomated.\n\nFPO\n\nAdaptive.\n\n974x744";
+            assert_eq!(text.matches(interleaved).count(), 1);
+            text.replacen("POP WAcES:", "PDP IMAGES", 1).replacen(
+                interleaved,
+                "Simplified.\n\nAutomated.\n\nAdaptive.\n\nFPO\n\n974x744",
+                1,
+            )
         }
         11 => {
             let before = "@ Hero\n\n@ Intro";
