@@ -1,19 +1,15 @@
 //! Vendored text embedding engine.
 //!
 //! Core inference pipeline for ONNX-based text embedding generation.
-//! Key design: `embed()` takes `&self` instead of `&mut self`, enabling
-//! concurrent inference from multiple threads without mutex contention.
-//!
-//! This is safe because `ort::Session::run()` takes `&mut self` purely as
-//! an API constraint — its internal `run_inner()` takes `&self`, and the
-//! ONNX Runtime C API (`OrtApi::Run`) is documented as thread-safe for
-//! concurrent calls on the same session.
+//! `embed()` takes `&self` so one engine can be shared via `Arc`; the session
+//! sits behind a mutex because `ort::Session::run()` takes `&mut self`.
 //!
 //! See ATTRIBUTIONS.md for original source attribution.
 
 use ndarray::{Array2, ArrayView, Dim, Dimension, IxDynImpl, s};
 use ort::session::Session;
 use ort::value::Value;
+use parking_lot::Mutex;
 use tokenizers::Tokenizer;
 /// Pooling strategy for extracting a single fixed-length vector from per-token embeddings.
 #[cfg_attr(alef, alef(skip))]
@@ -31,11 +27,11 @@ pub enum Pooling {
 #[cfg_attr(alef, alef(skip))]
 /// Text embedding model with thread-safe inference.
 ///
-/// The `embed()` method takes `&self` instead of `&mut self`, allowing it to
-/// be shared across threads via `Arc<EmbeddingEngine>` without mutex contention.
+/// The `embed()` method takes `&self`, allowing it to be shared across threads
+/// via `Arc<EmbeddingEngine>`; concurrent calls serialize on the session lock.
 pub struct EmbeddingEngine {
     tokenizer: Tokenizer,
-    session: Session,
+    session: Mutex<Session>,
     pooling: Pooling,
     need_token_type_ids: bool,
 }
@@ -47,7 +43,7 @@ impl EmbeddingEngine {
 
         Self {
             tokenizer,
-            session,
+            session: Mutex::new(session),
             pooling,
             need_token_type_ids,
         }
@@ -57,13 +53,6 @@ impl EmbeddingEngine {
     ///
     /// This method is **thread-safe** — multiple threads can call `embed()`
     /// concurrently on the same `EmbeddingEngine` instance.
-    ///
-    /// # Safety note
-    ///
-    /// Uses an internal unsafe cast because `ort::Session::run()` takes
-    /// `&mut self` despite performing no mutation (its `run_inner()` takes
-    /// `&self`). The ONNX Runtime C API is documented as thread-safe for
-    /// concurrent `Run()` calls on the same session.
     pub(crate) fn embed<S: AsRef<str>>(&self, texts: &[S], batch_size: usize) -> Result<Vec<Vec<f32>>, EmbedError> {
         if texts.is_empty() {
             return Ok(Vec::new());
@@ -129,14 +118,12 @@ impl EmbeddingEngine {
             session_inputs.push(("token_type_ids".into(), Value::from_array(type_ids_tensor)?.into()));
         }
 
-        #[allow(unsafe_code)]
-        let outputs = unsafe {
-            let session_ptr = &self.session as *const Session as *mut Session;
-            (*session_ptr).run(session_inputs)
+        let output_value = {
+            let mut session = self.session.lock();
+            let outputs = session.run(session_inputs).map_err(EmbedError::Ort)?;
+            outputs.into_iter().next().map(|(_, value)| value)
         }
-        .map_err(EmbedError::Ort)?;
-
-        let (_, output_value) = outputs.iter().next().ok_or(EmbedError::NoOutput)?;
+        .ok_or(EmbedError::NoOutput)?;
 
         let tensor: ArrayView<f32, Dim<IxDynImpl>> = output_value.try_extract_array().map_err(EmbedError::Ort)?;
 
@@ -163,11 +150,6 @@ impl EmbeddingEngine {
         Ok(embeddings)
     }
 }
-
-#[allow(unsafe_code)]
-unsafe impl Send for EmbeddingEngine {}
-#[allow(unsafe_code)]
-unsafe impl Sync for EmbeddingEngine {}
 
 /// CLS pooling — extract the first token's embedding.
 fn cls_pool(tensor: &ArrayView<f32, Dim<IxDynImpl>>) -> Result<Array2<f32>, EmbedError> {
@@ -299,6 +281,14 @@ impl std::error::Error for EmbedError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Engines are shared via `Arc` from a global cache, so they must be thread-safe
+    /// without a manual `unsafe impl`.
+    #[test]
+    fn embedding_engine_is_send_and_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<EmbeddingEngine>();
+    }
 
     /// Test normalization of a known vector produces unit vector (L2 norm ≈ 1.0).
     #[test]

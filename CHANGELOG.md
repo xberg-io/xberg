@@ -262,6 +262,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(rtf): Drop `\deleted` tracked-change text from extracted content.** `{\deleted 100}{\revised 200}` now extracts as `200` instead of `100200`. (#3164)
 
+- **(onnx): Concurrent ONNX inference no longer shares a session mutably.** Embedding, sparse-embedding, late-interaction, reranking, transcription and layout/auto-rotate ONNX sessions are now locked for each inference call instead of being mutated through a shared reference, which was undefined behavior under concurrent use. (#3166)
+
 - **(fictionbook): Report security-limit violations inside paragraphs.**
   They were discarded, so an over-limit FictionBook paragraph was silently accepted.
 

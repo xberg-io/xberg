@@ -6,12 +6,13 @@
 //! L2-normalized, then thresholded to keep only the non-zero terms.
 //!
 //! Like [`crate::embeddings::engine::EmbeddingEngine`], `embed()` takes `&self`
-//! so a single engine can serve concurrent callers via `Arc` — `ort::Session::run`
-//! is thread-safe despite its `&mut self` signature.
+//! so a single engine can serve concurrent callers via `Arc`; the session sits
+//! behind a mutex because `ort::Session::run` takes `&mut self`.
 
 use ndarray::{ArrayView, Axis, Dim, IxDynImpl};
 use ort::session::Session;
 use ort::value::Value;
+use parking_lot::Mutex;
 use tokenizers::Tokenizer;
 
 use super::SparseEmbedding;
@@ -47,7 +48,7 @@ impl From<ort::Error> for SparseEmbedError {
 #[cfg_attr(alef, alef(skip))]
 pub struct SparseEmbeddingEngine {
     tokenizer: Tokenizer,
-    session: Session,
+    session: Mutex<Session>,
     need_token_type_ids: bool,
 }
 
@@ -57,7 +58,7 @@ impl SparseEmbeddingEngine {
         let need_token_type_ids = session.inputs().iter().any(|input| input.name() == "token_type_ids");
         Self {
             tokenizer,
-            session,
+            session: Mutex::new(session),
             need_token_type_ids,
         }
     }
@@ -127,14 +128,12 @@ impl SparseEmbeddingEngine {
             session_inputs.push(("token_type_ids".into(), Value::from_array(type_ids_tensor)?.into()));
         }
 
-        #[allow(unsafe_code)]
-        let outputs = unsafe {
-            let session_ptr = &self.session as *const Session as *mut Session;
-            (*session_ptr).run(session_inputs)
+        let output_value = {
+            let mut session = self.session.lock();
+            let outputs = session.run(session_inputs).map_err(SparseEmbedError::Ort)?;
+            outputs.into_iter().next().map(|(_, value)| value)
         }
-        .map_err(SparseEmbedError::Ort)?;
-
-        let (_, output_value) = outputs.iter().next().ok_or(SparseEmbedError::NoOutput)?;
+        .ok_or(SparseEmbedError::NoOutput)?;
         let logits: ArrayView<f32, Dim<IxDynImpl>> = output_value.try_extract_array().map_err(SparseEmbedError::Ort)?;
         let logits = logits
             .into_dimensionality::<ndarray::Ix3>()
@@ -214,6 +213,12 @@ fn splade_pool(
 mod tests {
     use super::*;
     use ndarray::{Array2, Array3};
+
+    #[test]
+    fn sparse_embedding_engine_is_send_and_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<SparseEmbeddingEngine>();
+    }
 
     #[test]
     fn splade_pool_produces_normalized_sparse_vector() {

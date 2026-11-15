@@ -17,7 +17,8 @@ use std::path::Path;
 
 use ort::session::builder::GraphOptimizationLevel;
 use ort::session::{Session, SessionInputValue};
-use ort::value::{Tensor, TensorElementType, Value};
+use ort::value::{DynValue, Tensor, TensorElementType, Value};
+use parking_lot::Mutex;
 
 use crate::core::config::acceleration::AccelerationConfig;
 
@@ -98,7 +99,7 @@ impl OrtBackend {
 
         let input_names = session.inputs().iter().map(|i| i.name().to_string()).collect();
         Ok(Box::new(OrtSession {
-            session,
+            session: Mutex::new(session),
             input_names,
             #[cfg(all(test, feature = "layout-detection"))]
             profiling_enabled: super::recording::profile_prefix().is_some(),
@@ -168,7 +169,7 @@ impl InferenceBackend for OrtBackend {
 
 /// An ONNX Runtime session behind the neutral [`InferenceSession`] trait.
 pub struct OrtSession {
-    session: Session,
+    session: Mutex<Session>,
     #[cfg(all(test, feature = "layout-detection"))]
     profiling_enabled: bool,
     input_names: Vec<String>,
@@ -181,17 +182,20 @@ impl InferenceSession for OrtSession {
             .map(|(name, tensor)| Ok((Cow::Owned(name), tensor_to_input(tensor)?)))
             .collect::<Result<_, InferenceError>>()?;
 
-        // SAFETY: `ort::session::Session::run` takes `&mut self`, but ONNX
-        #[allow(unsafe_code)]
-        let outputs = unsafe {
-            let session_ptr = &self.session as *const Session as *mut Session;
-            (*session_ptr).run(ort_inputs)
-        }
-        .map_err(|e| InferenceError::Run(e.to_string()))?;
+        let outputs: Vec<(String, DynValue)> = {
+            let mut session = self.session.lock();
+            let outputs = session
+                .run(ort_inputs)
+                .map_err(|e| InferenceError::Run(e.to_string()))?;
+            outputs
+                .into_iter()
+                .map(|(name, value)| (name.to_string(), value))
+                .collect()
+        };
 
         let mut result = Vec::with_capacity(outputs.len());
-        for (name, value) in outputs.iter() {
-            result.push((name.to_string(), value_to_tensor(&value)?));
+        for (name, value) in outputs {
+            result.push((name, value_to_tensor(&value)?));
         }
         Ok(result)
     }
@@ -258,6 +262,7 @@ impl Drop for OrtSession {
     fn drop(&mut self) {
         if self.profiling_enabled {
             self.session
+                .get_mut()
                 .end_profiling()
                 .expect("finalized production parity profile");
         }

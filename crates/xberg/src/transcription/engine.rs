@@ -6,10 +6,9 @@
 //!
 //! # Thread safety
 //!
-//! `WhisperEngine` is `Send + Sync` — the `ort::Session::run()` API takes
-//! `&mut self` as an API-level constraint but its implementation delegates to
-//! `run_inner(&self)`, which is thread-safe per the ONNX Runtime documentation.
-//! We use the same `&self`-cast pattern established in `reranking/engine.rs`.
+//! `WhisperEngine` is `Send + Sync`. Each session sits behind its own mutex
+//! because `ort::Session::run()` takes `&mut self`; a lock is held for one
+//! `run` call at a time, never across decode steps or for two sessions at once.
 //!
 //! # Architecture
 //!
@@ -39,6 +38,7 @@ use ndarray::{Array2, Array3};
 use ort::session::Session;
 use ort::session::builder::GraphOptimizationLevel;
 use ort::value::Value;
+use parking_lot::Mutex;
 use thiserror::Error;
 use tokenizers::Tokenizer;
 
@@ -322,19 +322,14 @@ fn build_session(path: &std::path::Path) -> Result<Session, TranscriptionError> 
 /// Call [`WhisperEngine::transcribe`] to produce a transcript from PCM audio.
 #[cfg_attr(alef, alef(skip))]
 pub struct WhisperEngine {
-    encoder: Session,
-    decoder: Session,
-    decoder_with_past: Session,
+    encoder: Mutex<Session>,
+    decoder: Mutex<Session>,
+    decoder_with_past: Mutex<Session>,
     tokenizer: Tokenizer,
     special_tokens: SpecialTokens,
     mel_frontend: BatchLogMelSpectrogram,
     n_mels: u32,
 }
-
-#[allow(unsafe_code)]
-unsafe impl Send for WhisperEngine {}
-#[allow(unsafe_code)]
-unsafe impl Sync for WhisperEngine {}
 
 impl WhisperEngine {
     /// Load a Whisper engine from the given model paths.
@@ -395,9 +390,9 @@ impl WhisperEngine {
         .map_err(|e| TranscriptionError::MelSpec(e.to_string()))?;
 
         Ok(Self {
-            encoder,
-            decoder,
-            decoder_with_past,
+            encoder: Mutex::new(encoder),
+            decoder: Mutex::new(decoder),
+            decoder_with_past: Mutex::new(decoder_with_past),
             tokenizer,
             special_tokens,
             mel_frontend,
@@ -635,24 +630,20 @@ impl WhisperEngine {
 
         let mel_value: Value = Value::from_array(mel_nd)?.into();
 
-        #[allow(unsafe_code)]
-        let outputs = unsafe {
-            let ptr = &self.encoder as *const Session as *mut Session;
-            (*ptr).run(ort::inputs!["input_features" => mel_value])
-        }?;
-
-        let encoder_output_name = self
-            .encoder
-            .outputs()
-            .first()
-            .map(|o| o.name().to_string())
-            .unwrap_or_else(|| "last_hidden_state".to_string());
-
-        let hidden: Value = outputs
-            .into_iter()
-            .find(|(name, _)| *name == "last_hidden_state" || *name == encoder_output_name)
-            .map(|(_, v)| v)
-            .ok_or(TranscriptionError::NoOutput)?;
+        let hidden: Value = {
+            let mut encoder = self.encoder.lock();
+            let encoder_output_name = encoder
+                .outputs()
+                .first()
+                .map(|o| o.name().to_string())
+                .unwrap_or_else(|| "last_hidden_state".to_string());
+            let outputs = encoder.run(ort::inputs!["input_features" => mel_value])?;
+            outputs
+                .into_iter()
+                .find(|(name, _)| *name == "last_hidden_state" || *name == encoder_output_name)
+                .map(|(_, v)| v)
+        }
+        .ok_or(TranscriptionError::NoOutput)?;
 
         Ok(hidden)
     }
@@ -682,20 +673,8 @@ impl WhisperEngine {
     }
 
     fn decoder_io_names(&self) -> DecoderIoNames {
-        let dec_input_names: Vec<String> = self.decoder.inputs().iter().map(|i| i.name().to_string()).collect();
-        let dec_output_names: Vec<String> = self.decoder.outputs().iter().map(|o| o.name().to_string()).collect();
-        let dwp_input_names: Vec<String> = self
-            .decoder_with_past
-            .inputs()
-            .iter()
-            .map(|i| i.name().to_string())
-            .collect();
-        let dwp_output_names: Vec<String> = self
-            .decoder_with_past
-            .outputs()
-            .iter()
-            .map(|o| o.name().to_string())
-            .collect();
+        let (dec_input_names, dec_output_names) = session_io_names(&self.decoder.lock());
+        let (dwp_input_names, dwp_output_names) = session_io_names(&self.decoder_with_past.lock());
         tracing::debug!(?dec_input_names, ?dec_output_names, "Decoder I/O names");
         tracing::debug!(?dwp_input_names, ?dwp_output_names, "Decoder-with-past I/O names");
         DecoderIoNames {
@@ -723,7 +702,7 @@ impl WhisperEngine {
         prompt: Vec<i64>,
         encoder_hidden_states: &Value,
         names: &DecoderIoNames,
-    ) -> Result<ort::session::SessionOutputs<'_>, TranscriptionError> {
+    ) -> Result<Vec<(String, Value)>, TranscriptionError> {
         let input_ids =
             Array2::from_shape_vec((1, prompt.len()), prompt).map_err(|e| TranscriptionError::Shape(e.to_string()))?;
         let ids_value: Value = Value::from_array(input_ids)?.into();
@@ -732,14 +711,9 @@ impl WhisperEngine {
             "input_ids" => ids_value,
             &names.encoder_hidden_states_input => encoder_states,
         ];
-        #[allow(unsafe_code)]
-        let outputs = unsafe {
-            // SAFETY: The module's shared-session contract relies on ORT run delegating to run_inner(&self). ~keep
-            // Outputs stay tied to &self, so the session outlives their borrow. ~keep
-            let ptr = &self.decoder as *const Session as *mut Session;
-            (*ptr).run(inputs)
-        }?;
-        Ok(outputs)
+        let mut decoder = self.decoder.lock();
+        let outputs = decoder.run(inputs)?;
+        Ok(owned_outputs(outputs))
     }
 
     fn decode_with_past(
@@ -773,7 +747,7 @@ impl WhisperEngine {
         encoder_hidden_states: &Value,
         names: &DecoderIoNames,
         cache: &WhisperDecoderCache,
-    ) -> Result<ort::session::SessionOutputs<'_>, TranscriptionError> {
+    ) -> Result<Vec<(String, Value)>, TranscriptionError> {
         let last_id_arr = Array2::from_shape_vec((1, 1), vec![last_token as i64])
             .map_err(|e| TranscriptionError::Shape(e.to_string()))?;
         let ids_value: Value = Value::from_array(last_id_arr)?.into();
@@ -790,14 +764,9 @@ impl WhisperEngine {
             let kv_clone = clone_value_f32(kv_val)?;
             inputs.push((kv_name.as_str().into(), kv_clone.into()));
         }
-        #[allow(unsafe_code)]
-        let outputs = unsafe {
-            // SAFETY: The module's shared-session contract relies on ORT run delegating to run_inner(&self). ~keep
-            // Outputs stay tied to &self, so the session outlives their borrow. ~keep
-            let ptr = &self.decoder_with_past as *const Session as *mut Session;
-            (*ptr).run(inputs)
-        }?;
-        Ok(outputs)
+        let mut decoder_with_past = self.decoder_with_past.lock();
+        let outputs = decoder_with_past.run(inputs)?;
+        Ok(owned_outputs(outputs))
     }
 }
 
@@ -814,7 +783,7 @@ struct WhisperDecoderCache {
 }
 
 impl WhisperDecoderCache {
-    fn from_prompt(outputs: ort::session::SessionOutputs<'_>, logits_name: &str) -> Self {
+    fn from_prompt(outputs: Vec<(String, Value)>, logits_name: &str) -> Self {
         let mut encoder_kvs = Vec::new();
         let mut decoder_kvs = Vec::new();
         for (name, value) in decoder_cache_outputs(outputs, logits_name) {
@@ -831,22 +800,33 @@ impl WhisperDecoderCache {
     }
 }
 
-fn decoder_output_token(
-    outputs: &ort::session::SessionOutputs<'_>,
-    logits_name: &str,
-) -> Result<u32, TranscriptionError> {
-    let logits = outputs
-        .iter()
-        .find(|(name, _)| *name == logits_name)
-        .map(|(_, value)| value)
-        .ok_or(TranscriptionError::NoOutput)?;
-    greedy_argmax_last(&logits)
-}
-
-fn decoder_cache_outputs(outputs: ort::session::SessionOutputs<'_>, logits_name: &str) -> Vec<(String, Value)> {
+/// Detach run outputs from the session borrow so the session lock can be released.
+fn owned_outputs(outputs: ort::session::SessionOutputs<'_>) -> Vec<(String, Value)> {
     outputs
         .into_iter()
-        .filter(|(name, _)| *name != logits_name)
+        .map(|(name, value)| (name.to_string(), value))
+        .collect()
+}
+
+fn session_io_names(session: &Session) -> (Vec<String>, Vec<String>) {
+    let inputs = session.inputs().iter().map(|i| i.name().to_string()).collect();
+    let outputs = session.outputs().iter().map(|o| o.name().to_string()).collect();
+    (inputs, outputs)
+}
+
+fn decoder_output_token(outputs: &[(String, Value)], logits_name: &str) -> Result<u32, TranscriptionError> {
+    let logits = outputs
+        .iter()
+        .find(|(name, _)| name == logits_name)
+        .map(|(_, value)| value)
+        .ok_or(TranscriptionError::NoOutput)?;
+    greedy_argmax_last(logits)
+}
+
+fn decoder_cache_outputs(outputs: Vec<(String, Value)>, logits_name: &str) -> Vec<(String, Value)> {
+    outputs
+        .into_iter()
+        .filter(|(name, _)| name != logits_name)
         .map(|(name, value)| (name.replacen("present", "past_key_values", 1), value))
         .collect()
 }
@@ -971,6 +951,12 @@ fn clone_value_f32(value: &Value) -> Result<Value, TranscriptionError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn whisper_engine_is_send_and_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<WhisperEngine>();
+    }
 
     #[test]
     fn greedy_argmax_last_picks_highest() {
