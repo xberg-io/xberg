@@ -421,7 +421,7 @@ fn recursion_warnings(doc: &InternalDocument) -> Vec<&str> {
     doc.processing_warnings
         .iter()
         .filter(|warning| warning.source == "archive_recursive_extraction")
-        .map(|warning| warning.message.as_ref())
+        .map(|warning| &*warning.message)
         .collect()
 }
 
@@ -431,9 +431,9 @@ fn recursion_warnings(doc: &InternalDocument) -> Vec<&str> {
 #[tokio::test]
 async fn nested_archive_levels_share_one_decompression_budget() {
     let inner_text = vec![b'x'; 3000];
-    let level2 = stored_zip(&[("inner.txt", &inner_text)]);
-    let level1 = stored_zip(&[("level2.zip", &level2)]);
-    let root = stored_zip(&[("level1.zip", &level1)]);
+    let level2 = stored_zip(&[("inner.txt", inner_text.as_slice())]);
+    let level1 = stored_zip(&[("level2.zip", level2.as_slice())]);
+    let root = stored_zip(&[("level1.zip", level1.as_slice())]);
     let limit = 4096;
     assert!(
         level1.len() <= limit && level2.len() <= limit,
@@ -486,8 +486,8 @@ async fn nested_archive_levels_share_one_decompression_budget() {
 #[tokio::test]
 async fn sibling_nested_archives_share_one_decompression_budget() {
     let inner_text = vec![b'y'; 3000];
-    let nested = stored_zip(&[("inner.txt", &inner_text)]);
-    let root = stored_zip(&[("a.zip", &nested), ("b.zip", &nested)]);
+    let nested = stored_zip(&[("inner.txt", inner_text.as_slice())]);
+    let root = stored_zip(&[("a.zip", nested.as_slice()), ("b.zip", nested.as_slice())]);
     let limits = crate::extractors::security::SecurityLimits {
         max_archive_size: 10_000,
         ..Default::default()
@@ -510,12 +510,12 @@ async fn sibling_nested_archives_share_one_decompression_budget() {
 #[tokio::test]
 async fn accumulated_child_output_is_capped_by_max_content_size() {
     let note = vec![b'z'; 450];
-    let nested = stored_zip(&[("note.txt", &note)]);
+    let nested = stored_zip(&[("note.txt", note.as_slice())]);
     let root = stored_zip(&[
-        ("one.zip", &nested),
-        ("two.zip", &nested),
-        ("three.zip", &nested),
-        ("four.zip", &nested),
+        ("one.zip", nested.as_slice()),
+        ("two.zip", nested.as_slice()),
+        ("three.zip", nested.as_slice()),
+        ("four.zip", nested.as_slice()),
     ]);
     let max_content_size = 1000;
     let config = ExtractionConfig {
