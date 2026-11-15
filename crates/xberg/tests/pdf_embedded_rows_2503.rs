@@ -162,3 +162,71 @@ async fn embedded_html_preserves_stock_rows_and_native_heading() {
         assert_eq!(page.content.trim(), expected.trim(), "page, PSM {psm:?}");
     }
 }
+
+const PLAIN_96_STOCK: &str = "Item Count Budget Change
+
+Signal timing .......... 91 432,439 (1,764)
+Pool repairs ........... 69 384,044 614.44
+Snow removal......... 44 728,337 77,394
+Field lights ............ 61 229,955 (1,482)
+Parks and trails........ 65 540,252 399.47
+Water service......... 78 932,702 63,329
+Street repair.......... 23 257,117 (2,199)
+
+Library hours.......... 25. 791,403 702.23";
+
+const TINTED_96_STOCK: &str = "Item, Count Budget Change
+Pool repairs ........+.. 36 266,394 (524)
+Snow removal .......-. 82 6,661 702.45
+Field lights ..........2. 32 982,834 10,661
+Parks and trails ........ 56 9,110 (7,044)
+Water service ......... 22 889,401 604.38
+Street repair... 18 472,441 75,099
+Library hours .........+ 10 742,725 (845)
+Fleet fuel... eee eeee 89 493,633 830.40";
+
+#[tokio::test]
+#[ignore = "requires pinned 96 DPI reporter PDFs and English tessdata"]
+async fn embedded_html_keeps_owned_96_dpi_stock_rows() {
+    use sha2::{Digest, Sha256};
+
+    let fixtures = std::path::PathBuf::from(std::env::var_os("XBERG_2503_REPORTER_FIXTURES").unwrap());
+    const PLAIN_SHA: &str = "3ee1109e03ce48d718a2f33b05095f50fb121f3c43be9806889f31148c0f698d";
+    const TINTED_SHA: &str = "51d6cb0d6c62bd3b7a23dd3863ebc65e216dcb72569652c39df66863b3049ded";
+    let cases = [
+        ("pic_96_plain_lead.pdf", PLAIN_SHA, None, PLAIN_96_STOCK),
+        ("pic_96_plain_lead.pdf", PLAIN_SHA, Some(6), PLAIN_96_STOCK),
+        ("pic_96_tint_lead.pdf", TINTED_SHA, Some(6), TINTED_96_STOCK),
+    ];
+    for (fixture, digest, psm, stock) in cases {
+        let input = std::fs::read(fixtures.join(fixture)).unwrap();
+        assert_eq!(hex::encode(Sha256::digest(&input)), digest);
+        let mut config = serde_json::json!({
+            "use_cache": false,
+            "output_format": "html",
+            "ocr": {"backend": "tesseract", "language": ["eng"], "backend_options": {"use_cache": false}},
+            "pages": {"extract_pages": true}
+        });
+        if let Some(psm) = psm {
+            config["ocr"]["tesseract_config"] = serde_json::json!({"psm": psm});
+        }
+        let config: ExtractionConfig = serde_json::from_value(config).unwrap();
+        let batch = xberg::extract(ExtractInput::from_bytes(input, "application/pdf", None), &config)
+            .await
+            .unwrap();
+        assert!(batch.errors.is_empty(), "{:?}", batch.errors);
+        let [result] = batch.results.as_slice() else {
+            panic!("one result")
+        };
+        let [page] = result.pages.as_deref().unwrap() else {
+            panic!("one page");
+        };
+        let expected: String = std::iter::once(HEADING)
+            .chain(stock.lines().filter(|row| !row.is_empty()))
+            .map(|row| format!("<p>{row}</p>\n"))
+            .collect();
+        for text in [&result.content, &page.content] {
+            assert_eq!(text.trim(), expected.trim(), "{fixture}, PSM {psm:?}");
+        }
+    }
+}

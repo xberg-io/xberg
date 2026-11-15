@@ -50,6 +50,86 @@ pub(super) fn assemble_plain(document: &ExtractedDocument) -> Option<String> {
     assemble_words(document, MAX_PLAIN_WORDS)
 }
 
+pub(super) fn assemble_html(document: &ExtractedDocument) -> Option<String> {
+    assemble_plain(document).or_else(|| owns_stock_table_lines(document).then(|| document.content.clone()))
+}
+
+fn owns_stock_table_lines(document: &ExtractedDocument) -> bool {
+    let [table] = document.tables.as_slice() else {
+        return false;
+    };
+    let Some(bounds) = &table.bounding_box else {
+        return false;
+    };
+    let Some(elements) = &document.ocr_elements else {
+        return false;
+    };
+    let Some((header, body)) = table.cells.split_first() else {
+        return false;
+    };
+    if !document.processing_warnings.is_empty()
+        || document.content.len() > MAX_PLAIN_TEXT_BYTES
+        || document.content.split_whitespace().count() > MAX_PLAIN_WORDS
+        || table.cells.len() > MAX_PLAIN_WORDS
+        || body.len() < MIN_BODY_ROWS
+        || header.len() <= MIN_NUMERIC_COLUMNS
+    {
+        return false;
+    }
+
+    let mut lines = elements.iter().filter(|element| element.level == OcrElementLevel::Line);
+    let mut stock = document.content.lines().filter(|line| !line.trim().is_empty());
+    let mut previous = None;
+    // These are lines already emitted by the recognizer. Do not reorder or join fragments. ~keep
+    for (index, cells) in table.cells.iter().enumerate() {
+        let Some((line, text)) = lines.next().and_then(Word::from_element).zip(stock.next()) else {
+            return false;
+        };
+        if cells.len() != header.len()
+            || !line.text.split_whitespace().eq(text.split_whitespace())
+            || !line_inside_table(&line, bounds, previous.as_ref())
+            || !matches_stock_table_line(text, cells, index == 0)
+        {
+            return false;
+        }
+        previous = Some(line);
+    }
+    lines.next().is_none() && stock.next().is_none()
+}
+
+fn line_inside_table(
+    line: &Word<'_>,
+    bounds: &crate::types::extraction::BoundingBox,
+    previous: Option<&Word<'_>>,
+) -> bool {
+    bounds.x0 <= f64::from(line.left)
+        && f64::from(line.right) <= bounds.x1
+        && bounds.y0 <= f64::from(line.top)
+        && f64::from(line.bottom) <= bounds.y1
+        && previous.is_none_or(|prior| prior.top < line.top && prior.bottom < line.bottom)
+}
+
+fn matches_stock_table_line(text: &str, cells: &[String], header: bool) -> bool {
+    let mut words = text.split_whitespace();
+    if header {
+        return words.eq(cells.iter().flat_map(|cell| cell.split_whitespace()));
+    }
+    let (label, values) = cells.split_first().expect("validated table");
+    if !label.chars().any(char::is_alphabetic)
+        || !label.split_whitespace().all(|word| words.next() == Some(word))
+        || !values
+            .iter()
+            .rev()
+            .all(|value| numeric_literal(value) && words.next_back() == Some(value))
+    {
+        return false;
+    }
+    words.next().is_none_or(|leader| {
+        leader.bytes().filter(|&byte| byte == b'.').count() >= 3
+            && leader.bytes().all(|byte| matches!(byte, b'.' | b'+' | b'-'))
+    }) && words.next().is_none()
+}
+
 pub(super) fn assemble(document: &ExtractedDocument) -> Option<String> {
     if !document.processing_warnings.is_empty() {
         return None;
@@ -189,12 +269,15 @@ fn ledger_row(row: &[Word<'_>], header: &[Word<'_>]) -> bool {
             overlaps(value, &headings[index])
                 && !overlaps(value, &header[index])
                 && headings.get(index + 1).is_none_or(|next| !overlaps(value, next))
-                && value.text.bytes().any(|byte| byte.is_ascii_digit())
-                && value
-                    .text
-                    .bytes()
-                    .all(|byte| byte.is_ascii_digit() || b",.()+-%$".contains(&byte))
+                && numeric_literal(value.text)
         })
+}
+
+fn numeric_literal(text: &str) -> bool {
+    text.bytes().any(|byte| byte.is_ascii_digit())
+        && text
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || b",.()+-%$".contains(&byte))
 }
 
 fn overlaps(first: &Word<'_>, second: &Word<'_>) -> bool {

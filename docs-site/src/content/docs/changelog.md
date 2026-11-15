@@ -260,6 +260,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(tables): Preserve verified column headers above repeated groups of numeric data in PDF tables.** (#2332)
 - **(ocr): Avoid duplicate table rows in Plain and HTML for standalone images read with Tesseract PSM 3, while preserving detected dot leaders.** (#2503)
 - **(ocr): Keep verified Tesseract table rows together in Plain page text for standalone images read with PSM 3 or 11, and in HTML for images embedded in PDFs.** (#2503)
+- **(ocr): Preserve table row breaks in HTML when extracting embedded PDF images with Tesseract.** (#2503)
 - **(ocr): Preserve verified dot leaders and publish their rows once in Tesseract PSM 6 output for standalone images and full-page scans.** (#2503)
 
 - **(ocr): Add opt-in recovery for PaddleOCR ruled JPEG table cells.** The English PP-OCRv6 Small ONNX Runtime

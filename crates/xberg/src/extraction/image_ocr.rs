@@ -244,13 +244,10 @@ fn spawn_ocr_task(join_set: &mut tokio::task::JoinSet<OcrTaskResult>, task: Pend
         let mut ocr_result = backend.process_image(&image_data, &ocr_config).await;
         let assembled = if row_backend.is_some()
             && let Ok(result) = &mut ocr_result
-            && let Some(rows) = if matches!(
-                ocr_config.output_format,
-                Some(crate::core::config::OutputFormat::Plain | crate::core::config::OutputFormat::Html)
-            ) {
-                embedded_rows::assemble_plain(result)
-            } else {
-                embedded_rows::assemble(result)
+            && let Some(rows) = match ocr_config.output_format {
+                Some(crate::core::config::OutputFormat::Plain) => embedded_rows::assemble_plain(result),
+                Some(crate::core::config::OutputFormat::Html) => embedded_rows::assemble_html(result),
+                _ => embedded_rows::assemble(result),
             } {
             result.content = rows;
             true
