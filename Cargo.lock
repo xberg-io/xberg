@@ -11431,6 +11431,7 @@ dependencies = [
  "bytes",
  "cbc",
  "chrono",
+ "criterion",
  "encoding_rs",
  "fast_image_resize",
  "fax 0.3.0",
