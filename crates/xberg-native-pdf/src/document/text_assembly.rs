@@ -367,7 +367,7 @@ impl PdfDocument {
             let no_content_text = if self.page_cannot_have_text(page_dict) {
                 true
             } else {
-                match self.get_page_content_data(page_index) {
+                match self.cached_page_content(page_index) {
                     Ok(ref content_data) => !Self::may_contain_text(content_data),
                     Err(_) => false, // Can't read content stream — be conservative ~keep
                 }

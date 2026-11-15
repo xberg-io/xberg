@@ -707,7 +707,7 @@ impl PageRenderer {
             .map_or(0, |sidecar| sidecar.cmyk().len() + sidecar.spot_state().len());
         self.knockout_resources.canvas(pixmap.data().len() + retained_sidecar);
 
-        let content_data = doc.get_page_content_data(page_num)?;
+        let content_data = doc.cached_page_content(page_num)?;
 
         let operators = match parse_content_stream(&content_data) {
             Ok(ops) => ops,

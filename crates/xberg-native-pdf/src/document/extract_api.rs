@@ -172,7 +172,7 @@ impl PdfDocument {
             return Ok(Vec::new());
         }
 
-        let content_data = match self.get_page_content_data(page_index) {
+        let content_data = match self.cached_page_content(page_index) {
             Ok(data) => data,
             Err(error) => {
                 tracing::warn!(
@@ -866,7 +866,7 @@ impl PdfDocument {
         }
 
         // Get content stream data — skip page on decode failure (Annex I) ~keep
-        let content_data = match self.get_page_content_data(page_index) {
+        let content_data = match self.cached_page_content(page_index) {
             Ok(data) => data,
             Err(error) => {
                 tracing::warn!(
@@ -1077,7 +1077,7 @@ impl PdfDocument {
     /// surfacing their inks here would create plates that stay empty.
     pub fn get_page_inks_deep(&self, page_index: usize) -> Result<Vec<String>> {
         let resources = self.page_resources_for_inks(page_index)?;
-        let content_data = self.get_page_content_data(page_index)?;
+        let content_data = self.cached_page_content(page_index)?;
         let operators = crate::content::parser::parse_content_stream(&content_data)?;
 
         let mut ink_names: Vec<String> = Vec::new();
@@ -1329,7 +1329,7 @@ impl PdfDocument {
             reason: "Page is not a dictionary".to_string(),
         })?;
 
-        let content_data = match self.get_page_content_data(page_index) {
+        let content_data = match self.cached_page_content(page_index) {
             Ok(data) => data,
             Err(error) => {
                 tracing::warn!(
@@ -2179,7 +2179,7 @@ impl PdfDocument {
     /// only ever reads the bytes, and a single `extract_words` page touches
     /// this twice (once for spans, once for chars), so handing back the `Arc`
     /// avoids copying the decompressed stream on every call.
-    pub(super) fn cached_page_content(&self, page_index: usize) -> Result<std::sync::Arc<Vec<u8>>> {
+    pub(crate) fn cached_page_content(&self, page_index: usize) -> Result<std::sync::Arc<Vec<u8>>> {
         {
             let mut cache = self.page_content_cache.lock_or_recover();
             if let Some(data) = cache.get(&page_index) {

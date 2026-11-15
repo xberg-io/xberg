@@ -241,7 +241,7 @@ impl PdfDocument {
         // Probe content stream for text-showing operators. If we can't
         // read the content stream, be conservative and say yes (let
         // extraction try). ~keep
-        match self.get_page_content_data(page_index) {
+        match self.cached_page_content(page_index) {
             Ok(content_data) => Ok(Self::may_contain_text(&content_data)),
             Err(_) => Ok(true),
         }

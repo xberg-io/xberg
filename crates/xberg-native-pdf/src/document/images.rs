@@ -330,7 +330,7 @@ impl PdfDocument {
             reason: "Page is not a dictionary".to_string(),
         })?;
 
-        let content_data = self.get_page_content_data(page_index)?;
+        let content_data = self.cached_page_content(page_index)?;
 
         let resources = match page_dict.get("Resources") {
             Some(res) => {
@@ -732,7 +732,7 @@ impl PdfDocument {
             reason: "Page is not a dictionary".to_string(),
         })?;
 
-        let content_data = self.get_page_content_data(page_index)?;
+        let content_data = self.cached_page_content(page_index)?;
 
         let resources = match page_dict.get("Resources") {
             Some(res) => {

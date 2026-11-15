@@ -164,7 +164,7 @@ impl PdfDocument {
         })?;
 
         // Get content stream data — skip page on decode failure (Annex I) ~keep
-        let content_data = match self.get_page_content_data(page_index) {
+        let content_data = match self.cached_page_content(page_index) {
             Ok(data) => data,
             Err(error) => {
                 tracing::warn!(
