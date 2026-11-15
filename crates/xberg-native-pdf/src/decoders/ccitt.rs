@@ -57,19 +57,26 @@ pub struct CcittDecoded {
 /// undecodable) — the caller may then fall back.
 /// `BlackIs1` is NOT applied here; the caller owns that inversion.
 pub fn decode(data: &[u8], params: &CcittParams) -> Result<CcittDecoded> {
+    decode_with_cap(data, params, default_output_cap())
+}
+
+/// [`decode`] with an explicit output cap, enforced both on the declared `/Rows`
+/// reservation and on the bytes accumulated as rows are appended, so a stream with
+/// no `/Rows` cannot grow past it either.
+fn decode_with_cap(data: &[u8], params: &CcittParams, max_output_bytes: usize) -> Result<CcittDecoded> {
     let width = column_width(params)?;
     if width == 0 {
         return Err(Error::Decode("CCITT decode requires /Columns".to_string()));
     }
     if !params.is_group_4() {
-        return decode_g3(data, params);
+        return decode_g3(data, params, max_output_bytes);
     }
 
     let bytes_per_row = (width as usize).div_ceil(8);
     let mut reader = BitReader::new(data);
     let mut reference = transition_buffer(width)?;
     let mut current = transition_buffer(width)?;
-    let mut out = packed_output_buffer(bytes_per_row, params.rows)?;
+    let mut out = packed_output_buffer_with_cap(bytes_per_row, params.rows, max_output_bytes)?;
     let mut decoded_rows = 0usize;
     let mut byte_align = params.encoded_byte_align;
     let mut recovered = false;
@@ -112,6 +119,7 @@ pub fn decode(data: &[u8], params: &CcittParams) -> Result<CcittDecoded> {
             }
             RowStatus::Ok => {
                 append_transition_row(&mut out, &current, width as usize)?;
+                super::check_output_cap("CCITTFaxDecode", out.len(), max_output_bytes)?;
                 std::mem::swap(&mut reference, &mut current);
                 decoded_rows += 1;
             }
@@ -138,14 +146,14 @@ pub fn decode(data: &[u8], params: &CcittParams) -> Result<CcittDecoded> {
 /// tolerated whether or not `/EndOfLine` is declared; six consecutive EOLs is the
 /// return-to-control terminator. Shares the run tables, reference-line walk and
 /// recovery contract with the Group 4 path. `BlackIs1` is the caller's to apply.
-fn decode_g3(data: &[u8], params: &CcittParams) -> Result<CcittDecoded> {
+fn decode_g3(data: &[u8], params: &CcittParams, max_output_bytes: usize) -> Result<CcittDecoded> {
     let width = column_width(params)?;
     let two_dimensional = params.k > 0;
     let bytes_per_row = (width as usize).div_ceil(8);
     let mut reader = BitReader::new(data);
     let mut reference = transition_buffer(width)?;
     let mut current = transition_buffer(width)?;
-    let mut out = packed_output_buffer(bytes_per_row, params.rows)?;
+    let mut out = packed_output_buffer_with_cap(bytes_per_row, params.rows, max_output_bytes)?;
     let mut decoded_rows = 0usize;
     let mut byte_align = params.encoded_byte_align;
     let mut recovered = false;
@@ -196,6 +204,7 @@ fn decode_g3(data: &[u8], params: &CcittParams) -> Result<CcittDecoded> {
             }
             RowStatus::Ok => {
                 append_transition_row(&mut out, &current, width as usize)?;
+                super::check_output_cap("CCITTFaxDecode", out.len(), max_output_bytes)?;
                 std::mem::swap(&mut reference, &mut current);
                 decoded_rows += 1;
             }
@@ -224,7 +233,15 @@ fn column_width(params: &CcittParams) -> Result<u16> {
     })
 }
 
+fn default_output_cap() -> usize {
+    usize::try_from(super::flate::DEFAULT_MAX_DECOMPRESSED_BYTES).unwrap_or(usize::MAX)
+}
+
 fn packed_output_buffer(bytes_per_row: usize, rows: Option<u32>) -> Result<Vec<u8>> {
+    packed_output_buffer_with_cap(bytes_per_row, rows, default_output_cap())
+}
+
+fn packed_output_buffer_with_cap(bytes_per_row: usize, rows: Option<u32>, cap: usize) -> Result<Vec<u8>> {
     let Some(rows) = rows else {
         return Ok(Vec::new());
     };
@@ -233,7 +250,6 @@ fn packed_output_buffer(bytes_per_row: usize, rows: Option<u32>) -> Result<Vec<u
     let capacity = bytes_per_row
         .checked_mul(rows)
         .ok_or_else(|| Error::Decode("CCITT packed output size overflow".to_string()))?;
-    let cap = usize::try_from(super::flate::DEFAULT_MAX_DECOMPRESSED_BYTES).unwrap_or(usize::MAX);
     super::check_output_cap("CCITTFaxDecode", capacity, cap)?;
     let mut output = Vec::new();
     output
@@ -1005,6 +1021,27 @@ mod tests {
         };
         let result = p(params, "1");
         assert!(matches!(result, Err(Error::Decode(message)) if message.contains("safety limit")));
+    }
+
+    #[test]
+    fn accumulated_rows_are_capped_when_rows_is_absent() {
+        // Four all-white 8-wide rows (1 byte each): G4 codes each as V0 (`1`), G3 1-D as white run 8.
+        for (k, bits) in [(-1, "1 1 1 1"), (0, "10011 10011 10011 10011")] {
+            let params = CcittParams {
+                k,
+                columns: 8,
+                rows: None,
+                ..Default::default()
+            };
+            let stream = pack_bits(bits);
+            let err = decode_with_cap(&stream, &params, 3).err();
+            assert!(
+                matches!(&err, Some(Error::Decode(m)) if m.contains("safety limit")),
+                "k={k}: {err:?}"
+            );
+            let ok = decode_with_cap(&stream, &params, 4).unwrap();
+            assert_eq!((ok.rows_decoded, ok.data.len()), (4, 4), "k={k}");
+        }
     }
 
     #[test]
