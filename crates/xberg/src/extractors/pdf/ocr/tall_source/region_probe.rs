@@ -390,6 +390,27 @@ fn discover_collapsed_line(
     candidate
 }
 
+pub(super) fn collapsed_read_covers_ink(source: &IndexedSource, region: RegionBox, words: &[RegionWord]) -> bool {
+    if words.len() < 2 || !words.windows(2).all(|pair| same_line(pair[0].bounds, pair[1].bounds)) {
+        return false;
+    }
+    // Native antialiasing can leave foreground one sample outside a Tesseract box. ~keep
+    const BBOX_TOLERANCE: u32 = 1;
+    let covered: Vec<_> = words
+        .iter()
+        .map(|word| {
+            let bounds = word.bounds;
+            RegionBox {
+                left: bounds.left.saturating_sub(BBOX_TOLERANCE).max(region.left),
+                top: bounds.top.saturating_sub(BBOX_TOLERANCE).max(region.top),
+                right: bounds.right.saturating_add(BBOX_TOLERANCE).min(region.right),
+                bottom: bounds.bottom.saturating_add(BBOX_TOLERANCE).min(region.bottom),
+            }
+        })
+        .collect();
+    source.line_ink_fully_covered(region, &covered)
+}
+
 pub(super) async fn scan_collapsed_line(
     attempt: &Attempt<'_>,
     source: &IndexedSource,
@@ -410,9 +431,6 @@ pub(super) async fn scan_collapsed_line(
         return Ok(None);
     };
     let region = words[index];
-    let Some(ink) = source.line_ink_components(region) else {
-        return Ok(None);
-    };
     let Some(mut reservation) = PairReservation::reserve(budget) else {
         return Ok(None);
     };
@@ -430,17 +448,8 @@ pub(super) async fn scan_collapsed_line(
         tracing::trace!(page = attempt.page + 1, "undersampled line declined crop agreement");
         return Ok(None);
     };
-    let complete = |words: &[RegionWord]| {
-        words.len() >= 2
-            && words.windows(2).all(|pair| same_line(pair[0].bounds, pair[1].bounds))
-            && ink.iter().all(|run| {
-                words
-                    .iter()
-                    .any(|word| word.bounds.left < run.end && run.start < word.bounds.right)
-            })
-    };
-    let primary_complete = complete(&primary);
-    let check_complete = complete(&check);
+    let primary_complete = collapsed_read_covers_ink(source, region, &primary);
+    let check_complete = collapsed_read_covers_ink(source, region, &check);
     tracing::trace!(primary_complete, check_complete, counts = ?[primary.len(), check.len()],
         "undersampled line crop coverage");
     if !primary_complete
