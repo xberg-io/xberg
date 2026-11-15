@@ -199,7 +199,10 @@ COPY --from=builder /usr/local/lib/libheif* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libde265.so* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libaom.so* /usr/local/lib/
 COPY --from=builder /usr/local/lib/pkgconfig/libheif.pc /usr/local/lib/pkgconfig/libheif.pc
-RUN ldconfig && \
+# ldconfig keeps the first directory that holds a soname. aarch64-linux-gnu.conf sorts before
+# libc.conf (/usr/local/lib), so without a 00- entry the distro Leptonica from the tesseract-ocr
+# package wins on arm64 and Tesseract loads it instead of the built one.
+RUN echo /usr/local/lib >/etc/ld.so.conf.d/00-xberg-ocr.conf && ldconfig && \
     python3 /opt/xberg-ocr/verify-ocr-linux.py /usr/local && \
     tesseract --version >/tmp/ocr-version 2>&1 && grep -q '^tesseract 5\.5\.4$' /tmp/ocr-version && \
     tesseract --list-langs >/tmp/ocr-languages && grep -qx eng /tmp/ocr-languages && \
