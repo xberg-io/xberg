@@ -253,3 +253,121 @@ for name in names:
 print("bounded CMake source builders: expected=4 actual=4")
 PYTHON
 }
+
+verify_docker_archive_integrity() {
+	python3 - "$REPO_ROOT" "$1" <<'PYTHON'
+from pathlib import Path
+import re
+import sys
+
+root = Path(sys.argv[1])
+verifier = "scripts/ci/actions/setup-onnx-runtime/verify-archive.sh"
+manifests = {
+    "PDFIUM": ("scripts/pdfium-runtime-checksums.sha256", "pdfium-runtime-checksums.sha256", "bblanchon/pdfium-binaries"),
+    "ORT": ("scripts/ci/actions/setup-onnx-runtime/checksums.sha256", "onnxruntime-checksums.sha256", "microsoft/onnxruntime"),
+}
+archive_sets = {
+    "core": ("PDFIUM", "ORT"),
+    "full": ("PDFIUM", "ORT"),
+    "cli": ("PDFIUM",),
+    "musl-build": ("PDFIUM",),
+    "manylinux-node": ("ORT",),
+    "manylinux-rustler": ("ORT",),
+}
+variants = {name: (root / "docker" / f"Dockerfile.{name}").read_text() for name in archive_sets}
+ignore = (root / ".dockerignore").read_text()
+integrity = "/opt/xberg-integrity/"
+
+
+def verify_variant(name, text, allowlist):
+    commands = re.sub(r"\\\n[ \t]*", "", text)
+    instructions = [line for line in commands.splitlines() if not line.lstrip().startswith("#")]
+    runs = [line for line in instructions if line.startswith("RUN ")]
+    copies = [line.split()[1:] for line in instructions if line.startswith("COPY scripts/")]
+    assert not any("chromium-browser-snapshots" in line for line in instructions), (name, "snapshot endpoint")
+    # The separate manylinux bootstrap is outside the two converted musl bootstrap steps.
+    expected_rustup = int(name in ("manylinux-node", "manylinux-rustler"))
+    assert sum(line.count("sh.rustup.rs") for line in instructions) == expected_rustup, (name, "Rustup endpoint")
+
+    def verify_copy(source, target):
+        destinations = [copy[-1] for copy in copies if source in copy[:-1]]
+        destinations = [dest + Path(source).name if dest.endswith("/") else dest for dest in destinations]
+        assert destinations == [integrity + target], (name, source, "COPY source and destination")
+        assert (root / source).is_file(), source
+        assert allowlist.splitlines().count("!" + source) == 1, (name, source, "Docker allowlist")
+
+    verify_copy(verifier, "verify-archive.sh")
+    expected = archive_sets[name]
+    assert sum(line.count(integrity + "verify-archive.sh") for line in runs) == 2 * len(expected), (name, "verifier count")
+    for kind, (source, target, repository) in manifests.items():
+        archive = f'"${kind}_ARCHIVE"'
+        endpoint = f"https://github.com/{repository}/releases/download/"
+        downloads = [line for line in runs if endpoint in line and "curl " in line]
+        extracts = [line for line in runs if f"tar -xzf {archive}" in line]
+        count = int(kind in expected)
+        assert sum(line.count(endpoint) for line in downloads) == count, (name, kind, "archive download count")
+        assert sum(line.count(f"-o {archive}") for line in runs) == count, (name, kind, "archive output count")
+        assert sum(line.count(f"tar -xzf {archive}") for line in extracts) == count, (name, kind, "archive extract count")
+        if not count:
+            continue
+        verify_copy(source, target)
+        verify = f"bash {integrity}verify-archive.sh {archive} {integrity}{target}"
+        steps = [step.strip() for step in downloads[0].split("&&")]
+        checks = [step for step in steps if verify in step or step.startswith(("curl ", "tar -xzf "))]
+        assert (
+            len(checks) == 4
+            and checks[0] == verify + " --known"
+            and checks[1].startswith("curl ")
+            and endpoint in checks[1]
+            and checks[1].endswith(f"-o {archive}")
+            and checks[2] == verify
+            and checks[3].startswith(f"tar -xzf {archive} ")
+            and extracts == downloads
+        ), (name, kind, "preflight/download/verify/extract order")
+    return len(expected)
+
+
+def rustup_pins(text):
+    version = re.findall(r"^RUN RUSTUP_VERSION=(\d+\.\d+\.\d+) &&", text, re.M)
+    pins = re.findall(r"^\s*(x86_64|aarch64)\) RUSTUP_SHA256=([0-9a-f]{64}) ;;", text, re.M)
+    assert len(version) == 1 and len(pins) == 2 and {arch for arch, _ in pins} == {"x86_64", "aarch64"}, "Rustup pin inventory"
+    return version[0], sorted(pins)
+
+
+def verify_rustup(cli, musl):
+    assert rustup_pins(cli) == rustup_pins(musl), "CLI and musl Rustup pins differ"
+
+
+if sys.argv[2] == "negative":
+    core = variants["core"]
+    checked = (
+        (lambda: verify_variant("core", core.replace(" --known &&", " &&", 1), ignore), "preflight/download/verify/extract order"),
+        (lambda: verify_variant("core", core.replace('tar -xzf "$PDFIUM_ARCHIVE"', 'tar -xzf unverified.tgz', 1), ignore), "archive extract count"),
+        (lambda: verify_variant("core", core.replace("COPY " + verifier, "COPY scripts/other.sh", 1), ignore), "COPY source and destination"),
+        (lambda: verify_variant("core", core, ignore.replace("!" + verifier, verifier)), "Docker allowlist"),
+        (lambda: verify_variant("core", core + "\nRUN curl https://chromium-browser-snapshots.invalid\n", ignore), "snapshot endpoint"),
+        (lambda: verify_variant("cli", variants["cli"] + "\nRUN curl https://sh.rustup.rs\n", ignore), "Rustup endpoint"),
+        (lambda: verify_rustup(variants["cli"], variants["musl-build"].replace("RUSTUP_VERSION=1.29.3", "RUSTUP_VERSION=1.29.4")), "Rustup pins differ"),
+    )
+    for check, reason in checked:
+        try:
+            check()
+        except AssertionError as error:
+            assert reason in str(error), (reason, error)
+        else:
+            raise AssertionError(f"mutation passed: {reason}")
+    print(f"rejected {len(checked)} expected archive integrity regressions")
+else:
+    assert sum(verify_variant(name, text, ignore) for name, text in variants.items()) == 8
+    verify_rustup(variants["cli"], variants["musl-build"])
+    print("six Dockerfiles: eight verified archive chains and two matching musl Rustup pin sets")
+PYTHON
+}
+
+@test "Docker builders should verify every pinned PDFium and ONNX Runtime archive in order" {
+	verify_docker_archive_integrity stock
+}
+
+@test "Docker integrity checks should reject verification, allowlist, endpoint and Rustup pin regressions" {
+	verify_docker_archive_integrity negative
+}
