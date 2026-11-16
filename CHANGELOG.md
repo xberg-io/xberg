@@ -123,12 +123,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **(ocr): All-page PDF OCR failures now report an OCR error to Rust, FFI, and language bindings.** (#3175)
+- **Breaking (ocr): All-page PDF OCR failures now report an OCR error to Rust, FFI, and language bindings.** (#3175)
   Rust returns `XbergError::Ocr`, the raw FFI code is 1002, and bindings that expose exceptions use their OCR error
   class. Python callers that caught `PluginError` should catch `OcrError` for this case. REST retains `PluginError`
-  and HTTP 500. Batch extraction retains kind `plugin` and code 1008. The typed in-process error chain retains the
-  underlying backend error and its sources. Formatted diagnostics describe the cause types without including
-  underlying source messages.
+  and HTTP 500. Batch extraction retains kind `plugin` and code 1008. An aggregate error embedded in
+  `ocr_page_failures[].error` now starts with `OCR error:` in place of `Plugin error in 'ocr':`.
+  The typed in-process chain preserves the backend error and its sources. Generic source traversal and Debug
+  formatting can reveal their full messages. PDF page failure descriptions and the CLI's extraction error report
+  omit the aggregate's raw source messages.
 
 - **(mcp): Extraction responses omit empty error and crawl URL lists and a zero redirect count.** Clients can treat
   an absent field as an empty list or zero, respectively. (#2785)

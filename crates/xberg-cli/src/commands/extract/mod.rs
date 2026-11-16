@@ -256,7 +256,9 @@ fn extract_input_sync(
             // "Caused by:"), so asserting a specific diagnosis here ("ensure the resource is
             // readable and the format is supported") would misreport failures that have nothing
             // to do with readability or format support — an OCR backend crash, for example.
-            block_on_extract(input, config).with_context(|| format!("Failed to extract input '{uri}'"))?
+            block_on_extract(input, config)
+                .map_err(xberg::XbergError::into_cli_extraction_diagnostic)
+                .with_context(|| format!("Failed to extract input '{uri}'"))?
         }
         ExtractInputSource::Stdin => {
             let mime_type = mime_type.unwrap_or("text/plain");
@@ -270,6 +272,7 @@ fn extract_input_sync(
             // See the URI branch above: describe the attempted operation only. The real cause
             // (e.g. a genuinely wrong --mime-type) still surfaces via the preserved error chain.
             block_on_extract(ExtractInput::from_bytes(data, mime_type, None), config)
+                .map_err(xberg::XbergError::into_cli_extraction_diagnostic)
                 .with_context(|| format!("Failed to extract stdin input as MIME type '{mime_type}'"))?
         }
     };
@@ -337,6 +340,10 @@ mod tests {
             .expect_err("extracting a nonexistent file must fail");
         let rendered = format!("{err:?}");
 
+        assert!(
+            rendered.contains("Caused by:"),
+            "ordinary extraction errors retain their causes"
+        );
         assert!(
             !rendered.contains("Ensure the resource is readable and the format is supported"),
             "context must describe the attempted operation, not assert a (possibly false) \

@@ -6924,9 +6924,7 @@ pub(super) async fn extract_with_ocr_for_page(
                 #[cfg(not(feature = "pdf"))]
                 let (upright_data, upright_width, upright_height, correction_degrees) =
                     (Arc::clone(image_data), *width, *height, 0u32);
-                // A cancelled page still needs a `batch_ocr_results` entry -- see the ~keep
-                // comment on the sibling `JoinSet` branch above -- so this skips the backend
-                // call rather than breaking the loop.
+                // Route token cancellation through the same terminal result check as backend cancellation. ~keep
                 let ocr_result = if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
                     Err(crate::XbergError::Cancelled)
                 } else {
@@ -11253,10 +11251,10 @@ async fn run_ocr_pipeline_stages(
                 format!(" ({causes})")
             };
             Err(FailedOcrRun {
-                error: crate::XbergError::Parsing {
-                    message: format!("All OCR pipeline backends failed{detail}"),
-                    source: stage_failures.into_iter().next().map(|(_, error)| Box::new(error) as _),
-                },
+                error: crate::XbergError::ocr_pipeline_failure(
+                    format!("All OCR pipeline backends failed{detail}"),
+                    stage_failures.into_iter().next().map(|(_, error)| error),
+                ),
                 page_failures: Vec::new(),
                 unrecovered_glyphs_on_page_one,
             })
