@@ -426,7 +426,7 @@ api-jobs)
   run_api_cases
   ;;
 pdf-table-paint)
-  expected=17
+  expected=18
   table_module="pdf::structure::regions::table_recognition"
   for name in \
     native_tatr_vertical_span_stops_at_a_painted_rule \
@@ -440,7 +440,8 @@ pdf-table-paint)
     run_exact "$table_module::metadata_tests::$name" --lib
   done
   run_exact "$table_module::adjacent_span_tests::native_tatr_preserves_adjacent_spans_with_vertically_aligned_labels" --lib
-  run_exact "$table_module::adjacent_span_tests::native_tatr_adjacent_span_vetoes_a_rule_beyond_its_neighbor" --lib
+  run_exact "$table_module::adjacent_span_tests::native_tatr_adjacent_span_stops_expanding_at_a_contradicted_neighbor" --lib
+  run_exact "$table_module::adjacent_span_tests::native_tatr_adjacent_opening_accepts_a_shorter_neighbor" --lib
   for name in \
     narrow_track_glyph_ink_does_not_count_as_a_divider \
     staggered_flank_rules_do_not_prove_an_opening \

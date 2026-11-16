@@ -26,7 +26,7 @@ fn native_tatr_preserves_adjacent_spans_with_vertically_aligned_labels() {
 }
 
 #[test]
-fn native_tatr_adjacent_span_vetoes_a_rule_beyond_its_neighbor() {
+fn native_tatr_adjacent_span_stops_expanding_at_a_contradicted_neighbor() {
     let rows: &[&[&str]] = &[
         &["Region", "Country", "Code", "2024", ""],
         &["", "", "District", "Q1", "Q2"],
@@ -48,10 +48,35 @@ fn native_tatr_adjacent_span_vetoes_a_rule_beyond_its_neighbor() {
 
     let result = recognize_rows_with_paint(rows, 2, &spans, &rules, &[]);
     let grid = derived_grid(&result);
-    assert!(grid.cells.iter().all(|cell| cell.row_span == 1));
-    assert!(
-        grid.cells
-            .iter()
-            .any(|cell| cell.row == 1 && cell.content == "District")
+    let stubs: Vec<_> = grid
+        .cells
+        .iter()
+        .filter(|cell| cell.row < 2 && cell.col < 3 && !cell.content.is_empty())
+        .map(|cell| (cell.row_span, cell.content.as_str()))
+        .collect();
+    assert_eq!(stubs, [(2, "Region"), (2, "Country"), (1, "Code"), (1, "District")]);
+}
+
+#[test]
+fn native_tatr_adjacent_opening_accepts_a_shorter_neighbor() {
+    let rows: &[&[&str]] = &[
+        &["Region", "Country", "2024", ""],
+        &["", "", "H1", "H2"],
+        &["", "District", "Q1", "Q2"],
+        &["North", "US", "10", "12"],
+    ];
+    let spans = [[0.0, 0.0, 50.0, 80.0], [50.0, 0.0, 100.0, 40.0]];
+    let rules = [(20, 100, 200), (40, 50, 200), (60, 0, 200)];
+    let result = recognize_rows_with_paint(rows, 3, &spans, &rules, &[]);
+    let grid = derived_grid(&result);
+    let stubs: Vec<_> = grid
+        .cells
+        .iter()
+        .filter(|cell| cell.row < 3 && cell.col < 2 && !cell.content.is_empty())
+        .map(|cell| (cell.row, cell.col, cell.row_span, cell.content.as_str()))
+        .collect();
+    assert_eq!(
+        stubs,
+        [(0, 0, 3, "Region"), (0, 1, 2, "Country"), (2, 1, 1, "District")]
     );
 }

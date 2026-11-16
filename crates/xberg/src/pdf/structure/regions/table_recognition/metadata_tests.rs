@@ -256,20 +256,22 @@ fn native_tatr_preserves_adjacent_source_supported_rowspans() {
         [100.0, 0.0, 200.0, 20.0],
     ];
     let rules = [(20, 100, 200), (40, 0, 200)];
-    let result = recognize_rows_with_paint(rows, 2, &spans, &rules, &[(20, 21, 20, 21, 225)]);
-    let grid = derived_grid(&result);
-    let headers: Vec<_> = grid
-        .cells
-        .iter()
-        .filter(|cell| cell.row == 0)
-        .map(|cell| (cell.row_span, cell.col_span, cell.content.as_str()))
-        .collect();
-    assert_eq!(headers, [(2, 1, "Region"), (2, 1, "Code"), (1, 2, "2024")]);
-    let html = crate::rendering::render_html(&recognized_document(&result));
-    assert_eq!(html.matches("rowspan=\"2\"").count(), 2, "{html}");
-    assert_eq!(html.matches("colspan=\"2\"").count(), 1, "{html}");
-    for label in ["Region", "Code", "2024", "Q1", "Q2"] {
-        assert_eq!(html.matches(label).count(), 1, "{html}");
+    for fills in [&[][..], &[(20, 21, 20, 21, 225)][..]] {
+        let result = recognize_rows_with_paint(rows, 2, &spans, &rules, fills);
+        let grid = derived_grid(&result);
+        let headers: Vec<_> = grid
+            .cells
+            .iter()
+            .filter(|cell| cell.row == 0)
+            .map(|cell| (cell.row_span, cell.col_span, cell.content.as_str()))
+            .collect();
+        assert_eq!(headers, [(2, 1, "Region"), (2, 1, "Code"), (1, 2, "2024")]);
+        let html = crate::rendering::render_html(&recognized_document(&result));
+        assert_eq!(html.matches("rowspan=\"2\"").count(), 2, "{html}");
+        assert_eq!(html.matches("colspan=\"2\"").count(), 1, "{html}");
+        for label in ["Region", "Code", "2024", "Q1", "Q2"] {
+            assert_eq!(html.matches(label).count(), 1, "{html}");
+        }
     }
 
     let independent: &[&[&str]] = &[rows[0], &["", "District", "Q1", "Q2"], rows[2]];

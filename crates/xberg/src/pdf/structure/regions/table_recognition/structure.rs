@@ -156,13 +156,16 @@ impl SpanPaint<'_> {
         let mut track = center.track;
         for expand_left in [true, false] {
             let mut edge = if expand_left { left } else { right };
-            while let Some((start, end)) = self.adjacent_track(segment, edge, expand_left) {
-                if !self.has_clear_continuation(segment, start, end) {
-                    return false;
+            while let Some((start, end, rows)) = self.adjacent_track(segment, row, edge, expand_left) {
+                // Check this boundary before looking farther down for a bottom-aligned label. ~keep
+                if !self.has_clear_continuation(&(rows.start..row + 1), start, end)
+                    && !self.has_clear_continuation(&rows, start, end)
+                {
+                    break;
                 }
                 let Some(neighbor) = span_boundary_geometry(self.inference, self.crop, self.bands, (row, start, end))
                 else {
-                    return false;
+                    break;
                 };
                 if expand_left {
                     edge = start;
@@ -179,9 +182,10 @@ impl SpanPaint<'_> {
     fn adjacent_track(
         &self,
         segment: &std::ops::Range<usize>,
+        row: usize,
         edge: usize,
         expand_left: bool,
-    ) -> Option<(usize, usize)> {
+    ) -> Option<(usize, usize, std::ops::Range<usize>)> {
         let mut candidates = self
             .inference
             .structure
@@ -189,7 +193,8 @@ impl SpanPaint<'_> {
             .iter()
             .filter_map(|&(start, bottom, left, right)| {
                 let touches = if expand_left { right == edge } else { left == edge };
-                (start == segment.start && bottom >= segment.end && left < right && touches).then_some((left, right))
+                let rows = start.max(segment.start)..bottom.min(segment.end);
+                (rows.start < row && row < rows.end && left < right && touches).then_some((left, right, rows))
             });
         let track = candidates.next()?;
         candidates.all(|candidate| candidate == track).then_some(track)
@@ -211,7 +216,7 @@ impl SpanPaint<'_> {
         labels == 1
             && (segment.start + 1..segment.end).all(|row| {
                 span_boundary_geometry(self.inference, self.crop, self.bands, (row, left, right))
-                    .is_some_and(|geometry| geometry.has_visible_open_band(self.crop, self.words))
+                    .is_some_and(|geometry| geometry.has_open_background(self.crop, self.words))
             })
     }
 }
@@ -231,14 +236,14 @@ impl SpanBoundaryGeometry {
         has_tatr_rule_run(crop, track, band, |x, rows| column_visible(&masks, x, rows), |_| true)
     }
 
-    fn has_visible_open_band(&self, crop: &TatrCrop, words: &[&HocrWord]) -> bool {
+    fn has_open_background(&self, crop: &TatrCrop, words: &[&HocrWord]) -> bool {
         let band = tatr_rule_band(crop, self.band);
         let track = tatr_rule_track(crop, self.track);
         let shoulders = band.start.saturating_sub(1)..band.end + 1;
         let masks = word_masks(crop, words, &track, &shoulders);
-        let visible = track.clone().filter(|&x| column_visible(&masks, x, &shoulders)).count() as u32;
-        has_tatr_rule_coverage(visible, track.end.saturating_sub(track.start))
-            && band_has_open_background(crop, &track, &band, &masks)
+        // Label glyphs can overlap the wide search band. Check unmasked background
+        // here and require clear shoulders around the actual flank rule in the union. ~keep
+        band_has_open_background(crop, &track, &band, &masks)
     }
 
     fn has_open_track(&self, crop: &TatrCrop, words: &[&HocrWord]) -> bool {
