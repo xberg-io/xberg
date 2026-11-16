@@ -15,7 +15,7 @@ fn scanned_prose_rejoins_witnessed_line_end_hyphens() {
 
 #[test]
 fn scanned_lexical_wrap_keeps_hyphen_despite_closed_spelling() {
-    // The image-only page has a physical well-/known wrap and both spellings on separate lines. ~keep
+    // The open-/source wrap needs the independent page witness to preserve its hyphen. ~keep
     let pdf = include_bytes!("../../../fixtures/repros/scanned-dehyphenation/lexical-wrap.pdf");
     let result = extract_bytes_document_blocking(pdf, "application/pdf", &scan_config(Some(6)))
         .expect("OCR of the synthetic image-only PDF must succeed");
@@ -24,11 +24,11 @@ fn scanned_lexical_wrap_keeps_hyphen_despite_closed_spelling() {
     assert_eq!(pages.len(), 1);
     let text = pages[0].content.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(
-        text.contains("The printed paragraph ends with a well-known term and gives a clear example."),
+        text.contains("The printed paragraph ends with an open-source term and gives a clear example."),
         "the wrapped token must join with its lexical hyphen: {text}"
     );
-    assert!(text.contains("The witness spells it wellknown here."), "{text}");
-    assert!(text.contains("A separate well-known label is valid."), "{text}");
+    assert!(text.contains("The witness spells it opensource here."), "{text}");
+    assert!(text.contains("A separate open-source label is valid."), "{text}");
 }
 
 fn scan_config(psm: Option<i32>) -> ExtractionConfig {
