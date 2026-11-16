@@ -5081,7 +5081,7 @@ jobs:
 
   publish-packagist:
     name: Trigger Packagist update
-    needs: [prepare, php-extension, upload-php-pie-release, check-packagist]
+    needs: [prepare, check-php-pie, php-extension, upload-php-pie-release, check-packagist]
     if: >-
       ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.release_php == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-packagist.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
@@ -5091,9 +5091,14 @@ jobs:
         with:
           channel: Packagist
           needs: ${{ toJSON(needs) }}
+          # The PHP jobs skip legitimately only when the release already holds every PIE
+          # archive; skipped for any other reason (publish-crates failed) blocks Packagist. ~keep
+          succeeded: |
+            ${{ needs.check-php-pie.outputs.exists != 'true' && 'php-extension' || '' }}
+            ${{ needs.check-php-pie.outputs.exists != 'true' && 'upload-php-pie-release' || '' }}
           succeeded-or-skipped: |
-            php-extension
-            upload-php-pie-release
+            ${{ needs.check-php-pie.outputs.exists == 'true' && 'php-extension' || '' }}
+            ${{ needs.check-php-pie.outputs.exists == 'true' && 'upload-php-pie-release' || '' }}
 
       - uses: xberg-io/actions/publish-packagist@v1
         with:
@@ -5617,6 +5622,9 @@ jobs:
           multi-platform-ffi-dir: ffi-artifacts
           module-name: xberg
           ffi-lib-name: xberg_ffi
+          # The only job that writes the release body (finalize-release edits draft and
+          # prerelease flags only), and the append is guarded by a marker, so running beside
+          # the other uploads cannot lose or duplicate notes. ~keep
           update-release-notes: "true"
           update-existing: "true"
           dry-run: ${{ needs.prepare.outputs.dry_run }}
@@ -5730,13 +5738,13 @@ jobs:
   # The Windows counterpart of publish-homebrew-formula. There is deliberately no
   # `check-scoop` idempotency gate: the action rewrites the manifest in place and commits
   # only when the staged manifest differs from the bucket, so re-running a release is a
-  # no-op. It reads the Windows zip from the release rather than this run, so a skipped
-  # CLI upload (assets already there) does not skip it, and a missing zip fails it. ~keep
+  # no-op. It reads the Windows zip from the release rather than this run, so it also runs
+  # when the CLI upload was skipped because check-cli found every asset there. ~keep
   publish-scoop-manifest:
     name: Update Scoop manifest
-    needs: [prepare, upload-cli-release]
+    needs: [prepare, check-cli, upload-cli-release]
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_scoop == 'true' && needs.upload-cli-release.result != 'failure' && (needs.prepare.outputs.is_tag == 'true' || needs.prepare.outputs.dry_run == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_scoop == 'true' && (needs.prepare.outputs.is_tag == 'true' || needs.prepare.outputs.dry_run == 'true') && (needs.upload-cli-release.result == 'success' || (needs.upload-cli-release.result == 'skipped' && needs.prepare.outputs.dry_run != 'true' && needs.check-cli.outputs.assets_exist == 'true'))) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v3
@@ -6049,7 +6057,7 @@ jobs:
 
   cli-proxy:
     name: Publish CLI proxy package (npm)
-    needs: [prepare, check-cli]
+    needs: [prepare, check-cli, upload-cli-release]
     if: >-
       ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_cli == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-cli.outputs.npm_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
@@ -6057,6 +6065,15 @@ jobs:
       id-token: write
       contents: read
     steps:
+      - name: Require the CLI release assets the proxy downloads
+        uses: xberg-io/actions/require-job-results@v1
+        with:
+          channel: npm (xberg-cli)
+          needs: ${{ toJSON(needs) }}
+          # Skipped is accepted only when check-cli found every asset on the release. ~keep
+          succeeded: ${{ needs.check-cli.outputs.assets_exist != 'true' && 'upload-cli-release' || '' }}
+          succeeded-or-skipped: ${{ needs.check-cli.outputs.assets_exist == 'true' && 'upload-cli-release' || '' }}
+
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
