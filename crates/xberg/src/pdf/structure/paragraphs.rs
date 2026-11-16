@@ -1,6 +1,6 @@
 //! Utilities for splitting and analyzing PDF paragraphs.
 
-use super::types::PdfParagraph;
+use super::types::{PdfLine, PdfParagraph};
 
 mod accent;
 mod display_rows;
@@ -180,24 +180,30 @@ fn paragraphs_share_rotation(current: &PdfParagraph, next: &PdfParagraph) -> boo
     }
 }
 
-/// Whether `next`'s first baseline is close enough below `current`'s last
-/// baseline to be a wrapped continuation rather than a spatially distant block.
+/// Whether the boundary lines are close enough to form a wrapped continuation.
 ///
-/// Returns `true` when either paragraph lacks per-line geometry (`baseline_y`
-/// unset on the structure-tree path), preserving the prior behavior for inputs
-/// where a vertical distance cannot be computed.
+/// If either baseline is unknown, leave the decision to the other continuation signals.
 fn baselines_within_continuation_gap(current: &PdfParagraph, next: &PdfParagraph) -> bool {
-    let (Some(current_last), Some(next_first)) = (current.lines.last(), next.lines.first()) else {
+    let (Some(current_baseline), Some(next_baseline)) = (
+        current.lines.last().and_then(continuation_baseline),
+        next.lines.first().and_then(continuation_baseline),
+    ) else {
         return true;
     };
-    // No geometry available (e.g. synthesized paragraphs): fall back to allowing
-    // the merge, gated by the other continuation signals.
-    if current_last.baseline_y == 0.0 || next_first.baseline_y == 0.0 {
-        return true;
-    }
-    let gap = (current_last.baseline_y - next_first.baseline_y).abs();
+    let gap = (current_baseline - next_baseline).abs();
     let line_height = current.dominant_font_size.max(next.dominant_font_size).max(1.0);
     gap <= line_height * MAX_CONTINUATION_LINE_GAP_MULTIPLE
+}
+
+fn continuation_baseline(line: &PdfLine) -> Option<f32> {
+    // Text-only synthesis emits a zero baseline and zeroed segment geometry. ~keep
+    let has_position = line.baseline_y != 0.0
+        || line.segments.iter().any(|segment| {
+            [segment.x, segment.y, segment.width, segment.height]
+                .into_iter()
+                .any(|value| value.is_finite() && value != 0.0)
+        });
+    has_position.then_some(line.baseline_y)
 }
 
 /// Union of two optional block bounding boxes in `(left, bottom, right, top)`
@@ -837,6 +843,34 @@ mod tests {
         ];
         merge_continuation_paragraphs(&mut paragraphs);
         assert_eq!(paragraphs.len(), 1, "adjacent continuation lines should merge");
+    }
+
+    #[test]
+    fn continuation_merge_distinguishes_zero_baseline_from_missing_geometry() {
+        let origin = make_body_paragraph_at("continues on the zero baseline", 10.0, 0.0);
+        let distant = make_body_paragraph_at("The opening passage", 10.0, 90.0);
+        let nearby = make_body_paragraph_at("The opening passage", 10.0, 12.0);
+
+        for mut paragraphs in [
+            vec![distant.clone(), origin.clone()],
+            vec![origin.clone(), distant.clone()],
+        ] {
+            merge_continuation_paragraphs(&mut paragraphs);
+            assert_eq!(paragraphs.len(), 2, "distant positioned lines must remain separate");
+        }
+
+        let mut positioned = vec![nearby, origin];
+        merge_continuation_paragraphs(&mut positioned);
+        assert_eq!(positioned.len(), 1, "nearby lines may merge at the zero baseline");
+
+        let synthetic = text_to_paragraph("continues without a measured baseline", 10.0, false, false);
+        let mut unpositioned = vec![distant, synthetic];
+        merge_continuation_paragraphs(&mut unpositioned);
+        assert_eq!(
+            unpositioned.len(),
+            1,
+            "missing geometry must keep the continuation fallback"
+        );
     }
 
     fn indexed_display_row() -> PdfParagraph {
