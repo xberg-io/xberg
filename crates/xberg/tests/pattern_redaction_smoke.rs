@@ -231,10 +231,8 @@ async fn large_literal_sets_keep_overlap_priority_and_unicode_matches_in_metadat
         custom_patterns: vec![RedactionPattern::labeled("pattern", "kilo")],
         ..Default::default()
     };
-    let mut doc = ExtractedDocument {
-        content: "xabcde KILO C++".into(),
-        ..Default::default()
-    };
+    let mut doc = ExtractedDocument::default();
+    doc.content = "xabcde KILO C++".into();
     doc.metadata.title = Some("Kilo".into());
 
     let mut regex_control = doc.clone();

@@ -22,10 +22,12 @@ fn bench_literal_redaction(criterion: &mut Criterion) {
             ..Default::default()
         };
         let input = "Draft text for project-0001 and Project-0003. Public material.\n".repeat(128);
-        let mut probe = ExtractedDocument {
-            content: input.clone(),
-            ..Default::default()
+        let make_document = || {
+            let mut document = ExtractedDocument::default();
+            document.content = input.clone();
+            document
         };
+        let mut probe = make_document();
         runtime
             .block_on(redact(&mut probe, &config))
             .expect("redact benchmark probe");
@@ -34,10 +36,7 @@ fn bench_literal_redaction(criterion: &mut Criterion) {
         group.throughput(Throughput::Bytes(input.len() as u64));
         group.bench_with_input(BenchmarkId::from_parameter(count), &config, |bencher, config| {
             bencher.iter_batched(
-                || ExtractedDocument {
-                    content: input.clone(),
-                    ..Default::default()
-                },
+                make_document,
                 |mut document| {
                     runtime
                         .block_on(redact(&mut document, black_box(config)))
