@@ -103,6 +103,16 @@ fn download_file(
     }
 
     let directory = output_path.parent().ok_or("Missing language pack directory")?;
+    #[cfg(unix)]
+    let mut temporary = {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        // ~keep Match normal file creation so a shared tessdata cache respects the caller's umask.
+        tempfile::Builder::new()
+            .permissions(std::fs::Permissions::from_mode(0o666))
+            .tempfile_in(directory)?
+    };
+    #[cfg(not(unix))]
     let mut temporary = tempfile::NamedTempFile::new_in(directory)?;
     temporary.write_all(&bytes)?;
     match temporary.persist_noclobber(output_path) {
@@ -265,6 +275,12 @@ mod tests {
             assert!(created);
             assert_eq!(std::fs::read(&output_path).unwrap(), PAYLOAD);
             assert_eq!(output_path.parent().unwrap().read_dir().unwrap().count(), 1);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt as _;
+
+                assert_eq!(output_path.metadata().unwrap().permissions().mode() & 0o777, 0o640);
+            }
             return;
         }
 
@@ -291,8 +307,17 @@ mod tests {
     }
 
     fn proxy_child(proxy: &str, output_path: &std::path::Path) -> Child {
-        // ~keep A child isolates proxy environment changes from concurrently running tests.
-        let mut command = Command::new(std::env::current_exe().unwrap());
+        // ~keep A child isolates proxy environment and umask changes from other tests.
+        let test_binary = std::env::current_exe().unwrap();
+        #[cfg(unix)]
+        let mut command = {
+            let mut shell = Command::new("sh");
+            shell.args(["-c", r#"umask 027 && exec "$@""#, "tessdata-proxy-test"]);
+            shell.arg(test_binary);
+            shell
+        };
+        #[cfg(not(unix))]
+        let mut command = Command::new(test_binary);
         command.args(["--exact", TEST_NAME, "--nocapture"]);
         for name in ["HTTP_PROXY", "http_proxy"] {
             command.env(name, proxy);
