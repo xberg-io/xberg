@@ -3,6 +3,7 @@
 //! Extracts text directly from OLE/CFB compound documents without LibreOffice.
 
 use crate::Result;
+use crate::cancellation::check_cancelled;
 use crate::core::config::ExtractionConfig;
 use crate::core::mime::LEGACY_POWERPOINT_MIME_TYPE;
 use crate::extraction::ppt::PptSlideText;
@@ -77,9 +78,7 @@ async fn run_ppt_extraction(
 ) -> Result<crate::extraction::ppt::PptExtractionResult> {
     #[cfg(feature = "tokio-runtime")]
     if crate::core::batch_mode::is_batch_mode() {
-        if config.cancel_token.as_ref().map(|t| t.is_cancelled()).unwrap_or(false) {
-            return Err(crate::error::XbergError::Cancelled);
-        }
+        check_cancelled(config.cancel_token.as_ref())?;
         let content_owned = content.to_vec();
         let span = tracing::Span::current();
         tokio::task::spawn_blocking(move || -> crate::error::Result<_> {
@@ -94,9 +93,7 @@ async fn run_ppt_extraction(
 
     #[cfg(not(feature = "tokio-runtime"))]
     {
-        if config.cancel_token.as_ref().map(|t| t.is_cancelled()).unwrap_or(false) {
-            return Err(crate::error::XbergError::Cancelled);
-        }
+        check_cancelled(config.cancel_token.as_ref())?;
         crate::extraction::ppt::extract_ppt_text_with_options(content, include_master_slides, extract_images)
     }
 }

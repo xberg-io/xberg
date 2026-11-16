@@ -289,6 +289,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn check_cancelled_only_rejects_a_cancelled_token() {
+        let token = CancellationToken::new();
+        assert!(check_cancelled(None).is_ok());
+        assert!(check_cancelled(Some(&token)).is_ok());
+
+        token.cancel();
+        assert!(matches!(
+            check_cancelled(Some(&token)),
+            Err(crate::XbergError::Cancelled)
+        ));
+    }
+
+    #[test]
     fn test_new_token_is_not_cancelled() {
         let token = CancellationToken::new();
         assert!(!token.is_cancelled());

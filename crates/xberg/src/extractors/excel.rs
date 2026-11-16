@@ -1,6 +1,7 @@
 //! Excel spreadsheet extractor.
 
 use crate::Result;
+use crate::cancellation::check_cancelled;
 use crate::core::config::ExtractionConfig;
 use crate::extractors::security::SecurityBudget;
 use crate::plugins::{InternalDocumentExtractor, Plugin};
@@ -398,9 +399,7 @@ impl InternalDocumentExtractor for ExcelExtractor {
             #[cfg(feature = "tokio-runtime")]
             {
                 if crate::core::batch_mode::is_batch_mode() {
-                    if config.cancel_token.as_ref().map(|t| t.is_cancelled()).unwrap_or(false) {
-                        return Err(crate::error::XbergError::Cancelled);
-                    }
+                    check_cancelled(config.cancel_token.as_ref())?;
                     let content_owned = content.to_vec();
                     let extension_owned = extension.to_string();
                     let limits_owned = security_limits.clone();
@@ -417,9 +416,7 @@ impl InternalDocumentExtractor for ExcelExtractor {
             }
             #[cfg(not(feature = "tokio-runtime"))]
             {
-                if config.cancel_token.as_ref().map(|t| t.is_cancelled()).unwrap_or(false) {
-                    return Err(crate::error::XbergError::Cancelled);
-                }
+                check_cancelled(config.cancel_token.as_ref())?;
                 crate::extraction::excel::read_excel_bytes(content, extension, &security_limits)?
             }
         };
