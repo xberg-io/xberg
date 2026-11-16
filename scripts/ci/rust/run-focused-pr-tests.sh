@@ -426,7 +426,7 @@ api-jobs)
   run_api_cases
   ;;
 pdf-table-paint)
-  expected=8
+  expected=9
   table_module="pdf::structure::regions::table_recognition"
   for name in \
     native_tatr_vertical_span_stops_at_a_painted_rule \
@@ -439,6 +439,7 @@ pdf-table-paint)
     narrow_track_glyph_ink_does_not_count_as_a_divider \
     staggered_flank_rules_do_not_prove_an_opening \
     masked_divider_does_not_prove_an_opening \
+    glyph_ink_in_either_flank_does_not_prove_an_opening \
     aligned_flank_rules_require_at_least_eighteen_of_twenty_visible_columns; do
     run_exact "$table_module::structure::tests::$name" --lib
   done

@@ -144,16 +144,20 @@ impl SpanBoundaryGeometry {
 
     fn has_open_track(&self, crop: &TatrCrop, words: &[&HocrWord]) -> bool {
         const MIN_NEIGHBOR_RULE_PT: f32 = 10.0;
+        let band = tatr_rule_band(crop, self.band);
         let mut neighbors = [(self.table.0, self.track.0), (self.track.1, self.table.1)]
             .into_iter()
             .filter(|&(left, right)| right - left >= MIN_NEIGHBOR_RULE_PT)
-            .map(|track| tatr_rule_track(crop, track));
-        let Some(first) = neighbors.next() else {
+            .map(|track| {
+                let track = tatr_rule_track(crop, track);
+                let masks = word_masks(crop, words, &track, &band);
+                (track, masks)
+            });
+        let Some((first, first_masks)) = neighbors.next() else {
             return false;
         };
         let second = neighbors.next();
         let track = tatr_rule_track(crop, self.track);
-        let band = tatr_rule_band(crop, self.band);
         let masks = word_masks(crop, words, &track, &band);
         let clear = band.clone().all(|y| {
             track.clone().all(|x| {
@@ -170,16 +174,16 @@ impl SpanBoundaryGeometry {
                 crop,
                 first,
                 band.clone(),
-                |_, _| true,
+                |x, rows| column_visible(&first_masks, x, rows),
                 |rows| {
                     second.as_ref().map_or_else(
                         || visibly_open(rows.clone()),
-                        |second| {
+                        |(second, second_masks)| {
                             has_tatr_rule_run(
                                 crop,
                                 second.clone(),
                                 band.clone(),
-                                |_, _| true,
+                                |x, rows| column_visible(second_masks, x, rows),
                                 |other| {
                                     let overlap = rows.start.max(other.start)..rows.end.min(other.end);
                                     !overlap.is_empty() && visibly_open(overlap)
@@ -473,6 +477,28 @@ mod tests {
         let word = boundary_word(15, 20);
         assert!(!geometry.has_divider(&crop, &[&word]));
         assert!(!geometry.has_open_track(&crop, &[&word]));
+    }
+
+    #[test]
+    fn glyph_ink_in_either_flank_does_not_prove_an_opening() {
+        let geometry = SpanBoundaryGeometry {
+            table: (0.0, 50.0),
+            band: (8.0, 22.0),
+            track: (15.0, 35.0),
+        };
+        let aligned = boundary_crop(50, &[(15, 0, 15), (15, 35, 50)]);
+        assert!(geometry.has_open_track(&aligned, &[]));
+        for left in [0, 35] {
+            assert!(!geometry.has_open_track(&aligned, &[&boundary_word(left, 15)]));
+        }
+
+        let edge = SpanBoundaryGeometry {
+            track: (15.0, 50.0),
+            ..geometry
+        };
+        let one_flank = boundary_crop(50, &[(15, 0, 15)]);
+        assert!(edge.has_open_track(&one_flank, &[]));
+        assert!(!edge.has_open_track(&one_flank, &[&boundary_word(0, 15)]));
     }
 
     #[test]
