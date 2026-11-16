@@ -8,7 +8,7 @@ mod two_tables;
 
 use std::sync::Arc;
 
-use crate::cancellation::CancellationToken;
+use crate::cancellation::{CancellationToken, check_cancelled};
 use crate::core::config::{ExtractionConfig, OcrConfig, OcrQualityThresholds};
 #[cfg(auto_rotate)]
 use crate::doc_orientation::detector::tesseract_detector;
@@ -575,13 +575,6 @@ async fn requesting_page_down<T>(read: impl std::future::Future<Output = T>) -> 
 #[cfg(not(all(feature = "pdf", not(target_arch = "wasm32"))))]
 async fn requesting_page_down<T>(read: impl std::future::Future<Output = T>) -> T {
     read.await
-}
-
-fn check_cancelled(cancel: Option<&CancellationToken>) -> crate::Result<()> {
-    if cancel.is_some_and(CancellationToken::is_cancelled) {
-        return Err(crate::XbergError::Cancelled);
-    }
-    Ok(())
 }
 
 #[cfg(auto_rotate)]

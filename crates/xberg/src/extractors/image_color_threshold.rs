@@ -1,7 +1,7 @@
 //! Retry standalone images whose colored backgrounds may hide text from global Otsu.
 
 use super::{merge_primary_warnings_into_selected, usable_word_confidences};
-use crate::cancellation::CancellationToken;
+use crate::cancellation::{CancellationToken, check_cancelled};
 use crate::core::config::OcrConfig;
 use crate::extractors::security::SecurityLimits;
 use crate::plugins::OcrBackend;
@@ -84,13 +84,6 @@ pub(super) async fn retry(
         primary,
     )
     .await
-}
-
-fn check_cancelled(cancel: Option<&CancellationToken>) -> crate::Result<()> {
-    if cancel.is_some_and(CancellationToken::is_cancelled) {
-        return Err(crate::XbergError::Cancelled);
-    }
-    Ok(())
 }
 
 async fn retry_if_colored(

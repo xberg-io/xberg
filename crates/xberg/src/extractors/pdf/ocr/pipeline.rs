@@ -9703,10 +9703,7 @@ impl<'a> XObjectRecoveryContext<'a> {
     }
 
     pub(super) fn check_cancelled(&self) -> crate::Result<()> {
-        if self.cancel_token.is_some_and(|token| token.is_cancelled()) {
-            return Err(crate::XbergError::Cancelled);
-        }
-        Ok(())
+        crate::cancellation::check_cancelled(self.cancel_token)
     }
 }
 #[cfg(all(feature = "pdf", any(feature = "ocr", feature = "ocr-pipeline")))]

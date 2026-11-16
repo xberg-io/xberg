@@ -254,6 +254,13 @@ impl CancellationToken {
     }
 }
 
+pub(crate) fn check_cancelled(token: Option<&CancellationToken>) -> crate::Result<()> {
+    if token.is_some_and(CancellationToken::is_cancelled) {
+        return Err(crate::XbergError::Cancelled);
+    }
+    Ok(())
+}
+
 impl Serialize for CancellationToken {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

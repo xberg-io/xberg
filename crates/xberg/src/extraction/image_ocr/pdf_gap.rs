@@ -1,3 +1,4 @@
+use crate::cancellation::check_cancelled;
 use crate::core::config::{ExtractionConfig, OcrConfig, OcrStrategy, OutputFormat, VlmFallbackPolicy};
 use crate::extractors::security::SecurityLimits;
 use crate::plugins::OcrBackend;
@@ -185,7 +186,7 @@ pub(crate) async fn process(
     native: &str,
     warnings: &mut Vec<crate::types::ProcessingWarning>,
 ) -> crate::Result<(ExtractedImage, Option<String>)> {
-    check_cancelled(config)?;
+    check_cancelled(config.cancel_token.as_ref())?;
     let ocr = config.ocr.as_ref().expect("eligible explicit OCR configuration");
     let mut images = [image];
     let Some((index, bytes, mut primary_config)) = super::build_pending_ocr_tasks(&images, ocr, config).pop_front()
@@ -199,7 +200,7 @@ pub(crate) async fn process(
         ..Default::default()
     });
     let primary = backend.process_image(&bytes, &primary_config).await;
-    check_cancelled(config)?;
+    check_cancelled(config.cancel_token.as_ref())?;
     let addition = if let Ok(primary) = &primary {
         Box::pin(retry(
             &placement,
@@ -243,7 +244,7 @@ async fn retry(
         ..Default::default()
     });
     let result = backend.process_image(&placement.bytes, &config).await;
-    check_cancelled(extraction)?;
+    check_cancelled(extraction.cancel_token.as_ref())?;
     match result {
         Ok(result) => Ok(occurrences::insert(primary, &result, placement, native, psm)),
         Err(error) => {
@@ -252,13 +253,6 @@ async fn retry(
             Ok(None)
         }
     }
-}
-
-fn check_cancelled(config: &ExtractionConfig) -> crate::Result<()> {
-    if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
-        return Err(crate::XbergError::Cancelled);
-    }
-    Ok(())
 }
 
 pub(crate) fn native_anchor_text(
