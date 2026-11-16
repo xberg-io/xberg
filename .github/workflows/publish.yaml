@@ -4101,12 +4101,15 @@ jobs:
     # its checkout asserts the original triggering SHA, failing with "ref does not
     # point to expected commit". Ordering also removes a concurrent tag-push race.
     # `skipped` is accepted so a non-Swift release still tags the Go module. ~keep
-    needs: [prepare, upload-go-release, update-swift-package-manifest]
+    # A skipped Go upload is accepted when check-go found the archives already released, so a
+    # re-run can still tag; the tag script is a no-op when the tags already name the release
+    # commit and fails when they name another. ~keep
+    needs: [prepare, check-go, upload-go-release, update-swift-package-manifest]
     # dry-run releases must NEVER mint real remote tags; the tag script has no
     # dry-run awareness of its own, so this job is skipped entirely when dry_run
     # is true instead of trying to thread a flag through the script. ~keep
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.dry_run != 'true' && needs.upload-go-release.result == 'success' && (needs.update-swift-package-manifest.result == 'success' || needs.update-swift-package-manifest.result == 'skipped')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.dry_run != 'true' && (needs.upload-go-release.result == 'success' || (needs.upload-go-release.result == 'skipped' && needs.check-go.outputs.exists == 'true')) && (needs.update-swift-package-manifest.result == 'success' || needs.update-swift-package-manifest.result == 'skipped')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v3
@@ -4498,7 +4501,17 @@ jobs:
 
   publish-pypi:
     name: Publish to PyPI
-    needs: [prepare, python-wheels, python-wheels-musl, python-sdist, check-pypi, publish-crates, validate-versions, check-cratesio]
+    needs:
+      [
+        prepare,
+        python-wheels,
+        python-wheels-musl,
+        python-sdist,
+        check-pypi,
+        publish-crates,
+        validate-versions,
+        check-cratesio,
+      ]
     if: >-
       ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.release_python == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-pypi.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
