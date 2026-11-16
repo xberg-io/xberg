@@ -7011,21 +7011,12 @@ pub(super) async fn extract_with_ocr_for_page(
                 feature = "tokio-runtime",
                 not(target_arch = "wasm32")
             ))]
-            // The lazy PDF count comes from the complete source, including on multi-page scans. ~keep
-            if lazy_pdf_page_count == 1
-                && config.output_format == crate::core::config::OutputFormat::Html
-                && config.result_format == crate::types::ResultFormat::Unified
-                && !config.include_document_structure
-                && !has_layout_detections
-                && builtin_tesseract
-                && let Some(doc) = ocr_result.ocr_internal_document.as_ref()
-                && let [element] = doc.elements.as_slice()
-                && element
-                    .attributes
-                    .as_ref()
-                    .is_some_and(|attrs| attrs.contains_key(crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE))
-            {
-                owned_scan_rows = Some(element.text.clone());
+            // Only the complete source supplies this count. Detached and stored-scan calls omit
+            // the source, and layout-guided calls pass pre-rendered images, so they have zero. ~keep
+            if let Some(rows) = ocr_result.ocr_internal_document.as_ref().and_then(|doc| {
+                super::document::certified_scan_html_rows(config, lazy_pdf_page_count, builtin_tesseract, doc)
+            }) {
+                owned_scan_rows = Some(rows.to_owned());
             }
 
             #[cfg(all(

@@ -420,7 +420,9 @@ pdf-ocr)
   run_exact psm6_html_keeps_document_structure_flattened --test pdf_auto_dot_leader_rows_2503
   run_exact psm6_html_keeps_a_detached_scan_flattened_beside_native_text --test pdf_auto_dot_leader_rows_2503
   run_exact psm6_html_keeps_element_output_flattened --test pdf_auto_dot_leader_rows_2503
-  expected=$((expected + 5))
+  run_exact psm6_markdown_keeps_scan_rows_flattened --test pdf_auto_dot_leader_rows_2503
+  run_exact 'extractors::pdf::ocr::document::tests::certified_scan_html_rows_require_each_admission_condition' --lib
+  expected=$((expected + 7))
   ;;
 office-pages)
   expected=35

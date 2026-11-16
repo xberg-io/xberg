@@ -8,6 +8,7 @@
 mod helpers;
 
 use flate2::read::GzDecoder;
+use lopdf::dictionary;
 use sha2::{Digest, Sha256};
 use std::io::Read;
 use xberg::types::{ExtractionMethod, NodeContent, ResultFormat};
@@ -278,6 +279,29 @@ fn psm6_html_preserves_scan_rows_only_with_owned_columns() {
     }
 }
 
+#[test]
+fn psm6_markdown_keeps_scan_rows_flattened() {
+    let original = plain_scan();
+    let plain = extract_with_psm(&original, Some(6));
+    let rows = plain
+        .content
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .collect::<Vec<_>>();
+    assert_eq!(rows.len(), 13);
+    assert_eq!(rows[0], "Item Count Budget Change");
+    let flattened = rows.join(" ");
+
+    let markdown = extract_as(&original, Some(6), OutputFormat::Markdown);
+    assert!(markdown.metadata.ocr_used);
+    assert!(markdown.tables.is_empty());
+    let [page] = markdown.pages.as_deref().unwrap() else {
+        panic!("one source page");
+    };
+    assert_eq!(markdown.content.trim(), flattened);
+    assert_eq!(page.content.trim(), flattened);
+}
+
 const NATIVE_SENTENCE: &str = "This first page has a complete native sentence.";
 
 fn scan_with_sibling_page(bytes: &[u8], native_first_page: bool) -> Vec<u8> {
@@ -288,17 +312,14 @@ fn scan_with_sibling_page(bytes: &[u8], native_first_page: bool) -> Vec<u8> {
     let mut page = pdf.get_dictionary(original).unwrap().clone();
     let parent = page.get(b"Parent").unwrap().as_reference().unwrap();
     if native_first_page {
-        let font = pdf.add_object(lopdf::dictionary! {
+        let font = pdf.add_object(dictionary! {
             "Type" => "Font",
             "Subtype" => "Type1",
             "BaseFont" => "Helvetica",
         });
         let text = format!("BT /F1 12 Tf 24 700 Td ({NATIVE_SENTENCE}) Tj ET");
-        let contents = pdf.add_object(lopdf::Stream::new(lopdf::dictionary! {}, text.into_bytes()));
-        page.set(
-            "Resources",
-            lopdf::dictionary! { "Font" => lopdf::dictionary! { "F1" => font } },
-        );
+        let contents = pdf.add_object(lopdf::Stream::new(dictionary! {}, text.into_bytes()));
+        page.set("Resources", dictionary! { "Font" => dictionary! { "F1" => font } });
         page.set("Contents", contents);
     }
     let sibling = lopdf::Object::Reference(pdf.add_object(page));

@@ -2347,6 +2347,38 @@ pub(crate) fn merge_source_strip_frames(
     store_source_strip_frames(&mut doc.metadata, frames);
 }
 
+#[cfg(all(
+    feature = "pdf",
+    feature = "ocr",
+    feature = "tokio-runtime",
+    not(target_arch = "wasm32")
+))]
+pub(super) fn certified_scan_html_rows<'a>(
+    config: &ExtractionConfig,
+    lazy_pdf_page_count: usize,
+    builtin_tesseract: bool,
+    doc: &'a crate::types::internal::InternalDocument,
+) -> Option<&'a str> {
+    use crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE;
+
+    if lazy_pdf_page_count != 1
+        || config.output_format != crate::core::config::OutputFormat::Html
+        || config.result_format != crate::types::ResultFormat::Unified
+        || config.include_document_structure
+        || !builtin_tesseract
+    {
+        return None;
+    }
+    let [element] = doc.elements.as_slice() else {
+        return None;
+    };
+    element
+        .attributes
+        .as_ref()
+        .is_some_and(|attrs| attrs.contains_key(MARKDOWN_ROW_LINES_ATTRIBUTE))
+        .then_some(element.text.as_str())
+}
+
 #[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
 pub(super) fn certify_scan_html_paragraph(doc: &mut crate::types::internal::InternalDocument, rows: &str) {
     use crate::types::internal::{ElementKind, MARKDOWN_ROW_LINES_ATTRIBUTE};
@@ -5151,6 +5183,58 @@ mod tests {
         let mut builder = InternalDocumentBuilder::new("pdf");
         builder.push_paragraph(text, vec![], None, None);
         builder.build()
+    }
+
+    #[cfg(all(
+        feature = "pdf",
+        feature = "ocr",
+        feature = "tokio-runtime",
+        not(target_arch = "wasm32")
+    ))]
+    #[test]
+    fn certified_scan_html_rows_require_each_admission_condition() {
+        use crate::core::config::OutputFormat;
+        use crate::types::ResultFormat;
+        use crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE;
+
+        const ROWS: &str = "Item Count\nLibrary 11";
+        let mut marked = doc_with_paragraph(ROWS);
+        marked.elements[0]
+            .attributes
+            .get_or_insert_with(Default::default)
+            .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.into(), String::new());
+        let html = ExtractionConfig {
+            output_format: OutputFormat::Html,
+            ..Default::default()
+        };
+        assert_eq!(certified_scan_html_rows(&html, 1, true, &marked), Some(ROWS));
+
+        let mut markdown = html.clone();
+        markdown.output_format = OutputFormat::Markdown;
+        let mut element_based = html.clone();
+        element_based.result_format = ResultFormat::ElementBased;
+        let mut structured = html.clone();
+        structured.include_document_structure = true;
+        for (reason, config, pages, builtin) in [
+            ("detached raster", &html, 0, true),
+            ("multiple source pages", &html, 2, true),
+            ("replacement backend", &html, 1, false),
+            ("Markdown renderer", &markdown, 1, true),
+            ("element-based result", &element_based, 1, true),
+            ("document structure", &structured, 1, true),
+        ] {
+            assert_eq!(
+                certified_scan_html_rows(config, pages, builtin, &marked),
+                None,
+                "{reason}"
+            );
+        }
+
+        let unmarked = doc_with_paragraph(ROWS);
+        assert_eq!(certified_scan_html_rows(&html, 1, true, &unmarked), None);
+        let extra = marked.elements[0].clone();
+        marked.push_element(extra);
+        assert_eq!(certified_scan_html_rows(&html, 1, true, &marked), None);
     }
 
     /// GH#1622, direction 1: a heuristic-restructured document that dropped a word the
