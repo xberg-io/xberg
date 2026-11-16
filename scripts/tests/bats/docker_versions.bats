@@ -256,20 +256,17 @@ PYTHON
 
 verify_docker_archive_integrity() {
 	python3 - "$REPO_ROOT" "$1" <<'PYTHON'
-from itertools import groupby
+from collections import Counter
 from pathlib import Path
 import re
-import shlex
 import sys
-from urllib.parse import urlsplit
 
 root = Path(sys.argv[1])
 verifier = "scripts/ci/actions/setup-onnx-runtime/verify-archive.sh"
 manifests = {
-    "PDFIUM": ("scripts/pdfium-runtime-checksums.sha256", "pdfium-runtime-checksums.sha256", "bblanchon/pdfium-binaries"),
-    "ORT": ("scripts/ci/actions/setup-onnx-runtime/checksums.sha256", "onnxruntime-checksums.sha256", "microsoft/onnxruntime"),
+    "PDFIUM": ("scripts/pdfium-runtime-checksums.sha256", "pdfium-runtime-checksums.sha256"),
+    "ORT": ("scripts/ci/actions/setup-onnx-runtime/checksums.sha256", "onnxruntime-checksums.sha256"),
 }
-archive_names = {"PDFIUM": "pdfium", "ORT": "onnxruntime"}
 rustup_sha256 = {
     "musl": {
         "x86_64": "1552169aba2836777136ccff7a381e95c17233b5d8250cd5e10ae3cb971bfcfc",
@@ -291,27 +288,66 @@ archive_sets = {
 variants = {name: (root / "docker" / f"Dockerfile.{name}").read_text() for name in archive_sets}
 ignore = (root / ".dockerignore").read_text()
 integrity = "/opt/xberg-integrity/"
+archive_urls = {
+    "PDFIUM": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/${PDFIUM_VERSION}/${PDFIUM_ASSET}",
+    "ORT": "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/${ORT_ASSET}",
+}
+rustup_urls = {
+    "musl": "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${ARCH}-unknown-linux-musl/rustup-init",
+    "gnu": "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${TARGET}/rustup-init",
+}
+alpine_repository_urls = (
+    "https://dl-cdn.alpinelinux.org/alpine/edge/community",
+    "https://dl-cdn.alpinelinux.org/alpine/edge/main",
+)
+codec_urls = (
+    "https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz",
+    "https://storage.googleapis.com/aom-releases/libaom-3.15.2.tar.gz",
+    "https://github.com/strukturag/libheif/releases/download/v1.23.7/libheif-1.23.7.tar.gz",
+)
+epel = "https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm"
+source_label = "https://github.com/xberg-io/xberg"
+# Count duplicate literal URLs too, including both Alpine CLI package-install instructions.
+external_urls = {
+    "core": (*codec_urls, *archive_urls.values(), source_label),
+    "full": (*codec_urls, *archive_urls.values(), source_label),
+    "cli": (*alpine_repository_urls, rustup_urls["musl"], archive_urls["PDFIUM"], *alpine_repository_urls, source_label),
+    "musl-build": (*alpine_repository_urls, rustup_urls["musl"], archive_urls["PDFIUM"]),
+    "manylinux-node": (epel, *codec_urls, archive_urls["ORT"], rustup_urls["gnu"]),
+    "manylinux-rustler": (epel, *codec_urls, archive_urls["ORT"], rustup_urls["gnu"]),
+}
+literal_url = re.compile(r"""https?://[^\s"'<>`]*""", re.IGNORECASE)
+archive_reference = re.compile(r"pdfium|onnxruntime|ORT_(?:ASSET|ARCHIVE)", re.IGNORECASE)
+apk_ort_install = re.compile(
+    r"apk add --no-cache (?:[\w.+-]+ )*onnxruntime(?:-dev)?(?: [\w.+-]+)* "
+    + " ".join(f"--repository={re.escape(url)}" for url in alpine_repository_urls)
+)
 
 
-def curl_urls(run):
-    tokens = shlex.shlex(run.removeprefix("RUN "), posix=True, punctuation_chars=";&|")
-    tokens.whitespace_split = True
-    for separator, group in groupby(tokens, lambda token: bool(re.fullmatch(r"[;&|]+", token))):
-        if not separator and next(group) == "curl":
-            for argument in group:
-                url = argument.removeprefix("--url=")
-                if url.startswith(("http://", "https://")):
-                    yield url
+def is_alpine_package_install(name, instruction, urls):
+    if name not in ("cli", "musl-build") or tuple(urls) != alpine_repository_urls:
+        return False
+    if not instruction.startswith("RUN "):
+        return False
+    steps = instruction.removeprefix("RUN ").split("&&")
+    repository_steps = [step.strip() for step in steps if literal_url.search(step)]
+    return len(repository_steps) == 1 and apk_ort_install.fullmatch(repository_steps[0]) is not None
 
 
 def verify_variant(name, text, allowlist):
-    commands = re.sub(r"\\\n[ \t]*", "", text)
-    instructions = [line for line in commands.splitlines() if not line.lstrip().startswith("#")]
+    source_lines = [line for line in text.splitlines() if not line.lstrip().startswith("#")]
+    commands = re.sub(r"\\\n[ \t]*", "", "\n".join(source_lines))
+    instructions = [line.strip() for line in commands.splitlines() if line.strip()]
     runs = [line for line in instructions if line.startswith("RUN ")]
-    urls = [(line, url) for line in runs for url in curl_urls(line)]
+    url_uses = [(line, urls) for line in instructions if (urls := literal_url.findall(line))]
     copies = [line.split()[1:] for line in instructions if line.startswith("COPY scripts/")]
     assert not any("chromium-browser-snapshots" in line for line in instructions), (name, "snapshot endpoint")
     assert not any("sh.rustup.rs" in line for line in instructions), (name, "Rustup endpoint")
+    observed_urls = Counter(url for _, urls in url_uses for url in urls)
+    expected_urls = Counter(external_urls[name])
+    assert observed_urls == expected_urls, (
+        name, "external URL inventory", dict(observed_urls - expected_urls), dict(expected_urls - observed_urls)
+    )
 
     def verify_copy(source, target):
         destinations = [copy[-1] for copy in copies if source in copy[:-1]]
@@ -323,18 +359,11 @@ def verify_variant(name, text, allowlist):
     verify_copy(verifier, "verify-archive.sh")
     expected = archive_sets[name]
     assert sum(line.count(integrity + "verify-archive.sh") for line in runs) == 2 * len(expected), (name, "verifier count")
-    for kind, (source, target, repository) in manifests.items():
+    verified_runs = set()
+    for kind, (source, target) in manifests.items():
         archive = f'"${kind}_ARCHIVE"'
-        endpoint = f"https://github.com/{repository}/releases/download/"
-        archive_name = re.compile(
-            rf"(?:{archive_names[kind]}[\w.-]*\.(?:tgz|tar(?:\.\w+)?|zip)"
-            rf"|\$(?:\{{{kind}_(?:ASSET|ARCHIVE)\}}|{kind}_(?:ASSET|ARCHIVE)))",
-            re.IGNORECASE,
-        )
-        downloads = [
-            line for line, url in urls
-            if url.startswith(endpoint) or archive_name.fullmatch(urlsplit(url).path.rsplit("/", 1)[-1])
-        ]
+        endpoint = archive_urls[kind]
+        downloads = [line for line, urls in url_uses if endpoint in urls]
         extracts = [line for line in runs if f"tar -xzf {archive}" in line]
         count = int(kind in expected)
         assert len(downloads) == count, (name, kind, "archive download count")
@@ -356,6 +385,12 @@ def verify_variant(name, text, allowlist):
             and checks[3].startswith(f"tar -xzf {archive} ")
             and extracts == downloads
         ), (name, kind, "preflight/download/verify/extract order")
+        verified_runs.add(downloads[0])
+    for instruction, urls in url_uses:
+        if archive_reference.search(instruction):
+            assert instruction in verified_runs or is_alpine_package_install(name, instruction, urls), (
+                name, "archive URL outside verified chain", instruction
+            )
     return len(expected)
 
 
@@ -369,9 +404,8 @@ def rustup_pins(name, text, libc):
 
     assert dict(pins) == rustup_sha256[libc], (name, "Rustup digest mismatch")
 
-    target = "${TARGET}" if libc == "gnu" else "${ARCH}-unknown-linux-musl"
     selector = 'case "$TARGET" in' if libc == "gnu" else 'case "$ARCH" in'
-    endpoint = f"https://static.rust-lang.org/rustup/archive/${{RUSTUP_VERSION}}/{target}/rustup-init"
+    endpoint = rustup_urls[libc]
     steps = [step.strip() for step in runs[0].split("&&")]
     guard = [step for step in steps if step.startswith(selector)]
     assert len(guard) == 1 and "exit 1 ;;" in guard[0], (name, "Rustup target guard")
@@ -401,9 +435,36 @@ if sys.argv[2] == "negative":
         if name in ("manylinux-node", "manylinux-rustler") else text
         for name, text in variants.items()
     }
+    cli = variants["cli"]
+    mirror = "https://mirror.invalid/pdfium-linux-x64.tgz"
+    unreviewed_url_instructions = (
+        f"ADD {mirror} /tmp/p.tgz",
+        f"RUN wget -qO p.tgz {mirror} && tar -xzf p.tgz",
+        f"RUN if true; then curl {mirror}; fi",
+        f"RUN X=1 curl {mirror}",
+        f"RUN (curl {mirror} | tar -xz)",
+        "RUN curl https://mirror.invalid/get?id=42 -o pdfium.tgz",
+        "RUN curl https://mirror.invalid/get -o /usr/lib/libpdfium.so",
+    )
+    for instruction in unreviewed_url_instructions:
+        try:
+            verify_variant("cli", cli + "\n" + instruction + "\n", ignore)
+        except AssertionError as error:
+            assert "external URL inventory" in str(error), (instruction, error)
+        else:
+            raise AssertionError(f"mutation passed: {instruction}")
     checked = (
-        (lambda: verify_variant("cli", variants["cli"] + "\nRUN curl https://mirror.invalid/pdfium-linux-x64.tgz -o p.tgz && tar -xzf p.tgz\n", ignore), "archive download count"),
-        (lambda: verify_variant("core", core + "\nRUN true && curl --url=https://mirror.invalid/onnxruntime-linux-x64-1.24.2.tgz -o o.tgz\n", ignore), "archive download count"),
+        (lambda: verify_variant("cli", variants["cli"] + "\nRUN curl https://mirror.invalid/pdfium-linux-x64.tgz -o p.tgz && tar -xzf p.tgz\n", ignore), "external URL inventory"),
+        (lambda: verify_variant("core", core + "\nRUN true && curl --url=https://mirror.invalid/onnxruntime-linux-x64-1.24.2.tgz -o o.tgz\n", ignore), "external URL inventory"),
+        (
+            lambda: verify_variant(
+                "cli", cli.replace(
+                    f'LABEL org.opencontainers.image.source="{source_label}"',
+                    f'RUN echo "{source_label}" > /tmp/libpdfium.so',
+                ), ignore,
+            ),
+            "archive URL outside verified chain",
+        ),
         (lambda: verify_variant("core", core.replace(" --known &&", " &&", 1), ignore), "preflight/download/verify/extract order"),
         (lambda: verify_variant("core", core.replace('tar -xzf "$PDFIUM_ARCHIVE"', 'tar -xzf unverified.tgz', 1), ignore), "archive extract count"),
         (lambda: verify_variant("core", core.replace("COPY " + verifier, "COPY scripts/other.sh", 1), ignore), "COPY source and destination"),
@@ -421,11 +482,12 @@ if sys.argv[2] == "negative":
             assert reason in str(error), (reason, error)
         else:
             raise AssertionError(f"mutation passed: {reason}")
-    print(f"rejected {len(checked)} expected archive integrity regressions")
+    print(f"rejected {len(checked) + len(unreviewed_url_instructions)} expected archive integrity regressions")
 else:
     assert sum(verify_variant(name, text, ignore) for name, text in variants.items()) == 8
     verify_rustup(variants)
-    print("six Dockerfiles: eight verified archive chains and four verified Rustup bootstraps with audited GNU and musl pins")
+    assert sum(map(len, external_urls.values())) == 35
+    print("six Dockerfiles: 35 reviewed URLs, eight verified archive chains, four verified Rustup bootstraps")
 PYTHON
 }
 
