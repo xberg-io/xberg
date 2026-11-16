@@ -52,7 +52,7 @@ jobs:
         id: upload
         uses: actions/upload-artifact@v7
         with:
-          name: plugin-release-assets
+          name: plugin-release-assets-${{ github.run_attempt }}
           path: |
             dist/*-plugins-*.tar.gz
             dist/*-plugins-*.tar.gz.sha256
