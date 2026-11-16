@@ -12,6 +12,7 @@ from pathlib import Path
 from .catalog import file_binding, load_catalog
 from .contracts import (
     EVALUATOR_REVISION,
+    PLAN_SCHEMA_VERSION,
     ROLES,
     formula_model_paths,
     schedule,
@@ -141,7 +142,7 @@ def create_plan(root: Path, specification: Path, destination: Path) -> None:
     lock = snapshot(lock_path, assets, "requirements")
     producers = {role: _producer(spec[role], role, config, ort, models, assets=assets) for role in ROLES}
     plan = {
-        "schema_version": 1,
+        "schema_version": PLAN_SCHEMA_VERSION,
         "data_root": str(root.resolve()),
         "catalog": catalog,
         "config": config,

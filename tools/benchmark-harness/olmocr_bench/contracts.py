@@ -4,6 +4,7 @@ import hashlib
 import shutil
 from pathlib import Path
 
+PLAN_SCHEMA_VERSION = 2
 PDF_COUNT = 984
 RAW_TEST_COUNT = 5113
 TEST_COUNT = 6090

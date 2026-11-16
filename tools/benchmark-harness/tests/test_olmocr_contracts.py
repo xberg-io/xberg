@@ -3,6 +3,7 @@
 import hashlib
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -139,6 +140,14 @@ class ContractsTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "artifact changed"):
                 _contracts().verify_assets([asset])
 
+    def test_formula_model_pins_match_the_native_recognizer(self):
+        """The runner and the native model verifier require the same bytes."""
+        native = Path(__file__).parents[3] / "crates/xberg/src/formula_recognition/mod.rs"
+        table = native.read_text().split("const MODEL_FILES:", 1)[1].split("];", 1)[0]
+        pins = dict(re.findall(r'"([^"]+)",\s+"([0-9a-f]{64})"', table))
+        assert len(pins) == 4
+        assert pins == _contracts().FORMULA_MODEL_SHA256
+
     def test_snapshot_is_independent_of_mutable_producer(self):
         """Later Cargo builds cannot change a frozen executable."""
         with tempfile.TemporaryDirectory() as temporary:
@@ -169,7 +178,7 @@ class FormulaCacheTest(unittest.TestCase):
         names = ("image_resizer.onnx", "encoder.onnx", "decoder.onnx", "tokenizer.json")
         self.models = [self._bind(self.model_dir / name, name.encode()) for name in names]
         self.pins = {Path(row["file"]).name: row["sha256"] for row in self.models}
-        self.enterContext(patch.object(contracts, "FORMULA_MODEL_SHA256", self.pins, create=True))
+        self.enterContext(patch.object(contracts, "FORMULA_MODEL_SHA256", self.pins))
         self.pdf = self._bind(self.root / "synthetic.pdf", b"synthetic PDF identity")
         self.pdf["file"] = "synthetic.pdf"
         self.plan = {
@@ -236,6 +245,147 @@ class FormulaCacheTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "missing pinned RapidLaTeXOCR file"):
                 self._extract()
             invoke.assert_not_called()
+
+    def test_replaced_formula_link_or_staging_file_counts_as_fallback(self):
+        """A successful producer exit cannot hide a native formula download."""
+        for mutation in ("replacement", "wrong_target", "staging"):
+
+            def produce(*_args, env, mutation=mutation, **_kwargs):
+                cache = Path(env["XBERG_CACHE_DIR"]) / "formula-recognition"
+                link = cache / "decoder.onnx"
+                if mutation == "replacement":
+                    link.unlink()
+                    link.write_bytes(b"downloaded")
+                elif mutation == "wrong_target":
+                    link.unlink()
+                    link.symlink_to(self.model_dir / "encoder.onnx")
+                else:
+                    (cache / ".decoder.onnx.123.tmp").touch()
+                return subprocess.CompletedProcess([], 0, b'{"result":{"content":"diagnostic"}}', b"")
+
+            with self.subTest(mutation=mutation), patch.object(self.runner.subprocess, "run", side_effect=produce):
+                content, details = self._extract()
+                assert content == "diagnostic"
+                assert details["formula_cache_intact"] is False
+                assert details["model_fallback"] is True
+
+    def test_plan_verifier_cannot_admit_a_missing_formula_row(self):
+        """Plan verification must reject incomplete bindings before native calls."""
+        asset = self._bind(self.root / "config.json", json.dumps(_config()).encode())
+        pdfs = [{"id": str(index)} for index in range(984)]
+        plan = dict(
+            self.plan,
+            config=asset,
+            ort=asset,
+            requirements=asset,
+            python=asset,
+            catalog={"descriptor": asset, "pdfs": pdfs, "tests": [{}] * self.runner.TEST_COUNT},
+            renderer_manifest=asset,
+            evaluator_assets=[],
+            renderer_assets=[],
+            producers={},
+            cases=self.runner.schedule(pdfs),
+            repeats=1,
+        )
+        self.runner._verify(plan)
+        plan["models"] = self.models[1:]
+        with patch.object(self.runner.subprocess, "run") as invoke:
+            with self.assertRaisesRegex(ValueError, "exactly one pinned RapidLaTeXOCR image_resizer.onnx"):
+                self.runner._verify(plan)
+            invoke.assert_not_called()
+
+    def test_freeze_cannot_admit_a_missing_formula_row(self):
+        """Missing formula paths fail before other freeze work can publish a plan."""
+        config = self._bind(self.root / "config.json", json.dumps(_config()).encode())
+        spec = self.root / "spec.json"
+        spec.write_text(
+            json.dumps(
+                {
+                    "config": config["file"],
+                    "argv": self.plan["argv"],
+                    "models": [dict(row, revision="synthetic", license="synthetic") for row in self.models[1:]],
+                }
+            )
+        )
+        freeze = importlib.import_module("olmocr_bench.freeze")
+        destination = self.root / "plan.json"
+        with (
+            patch.object(freeze, "load_catalog", return_value={}),
+            patch.object(freeze, "_environment", return_value=({}, {})),
+            self.assertRaisesRegex(ValueError, "exactly one pinned RapidLaTeXOCR image_resizer.onnx"),
+        ):
+            freeze.create_plan(self.root, spec, destination)
+        assert not destination.exists()
+
+    def test_old_plan_is_rejected_with_refreeze_instruction(self):
+        """Legacy plans cannot silently skip the new qualification checks."""
+        plan = self.root / "old-plan.json"
+        plan.write_text('{"schema_version": 1}')
+        with self.assertRaisesRegex(ValueError, "expected plan schema 2; rerun freeze"):
+            self.runner._read_plan(plan)
+
+    def test_recognition_requires_positive_native_trace_and_matching_formula_page(self):
+        """Formula fields and TeX-looking source text alone do not prove inference."""
+        document = {"content": "$$x^2$$", "formulas": [{"page": 1, "latex": "x^2"}]}
+        trace = (
+            "2026-01-01T00:00:00Z INFO xberg::extractors::pdf: "
+            "recognized formulas from layout regions with no extracted formula text page=1 formulas=1"
+        )
+        assert self.runner._recognized_formula(document, trace)
+        assert self.runner._recognized_formula(document, trace.replace("INFO", "\x1b[32mINFO\x1b[0m"))
+        assert not self.runner._recognized_formula(document, "")
+        assert not self.runner._recognized_formula(document, trace.replace("page=1", "page=2"))
+        assert not self.runner._recognized_formula(document, trace.replace("formulas=1", "formulas=0"))
+        assert not self.runner._recognized_formula(document, trace.replace("xberg::extractors::pdf", "other"))
+        assert not self.runner._recognized_formula({"content": "$$x^2$$"}, trace)
+
+    def test_generate_retains_failed_math_coverage_and_preserves_prose_only_controls(self):
+        """A math case requires native evidence, while a prose-only pilot has no math gate."""
+        plan_path = self.root / "plan.json"
+        plan_path.write_text("{}")
+        pdfs = [
+            {"id": "native", "file": "bench_data/pdfs/arxiv_math/native.pdf", "sha256": self.pdf["sha256"]},
+            {"id": "scan", "file": "bench_data/pdfs/old_scans_math/scan.pdf", "sha256": self.pdf["sha256"]},
+        ]
+        with (
+            patch.object(self.runner, "_ready"),
+            patch.object(self.runner, "_verify"),
+            patch.object(self.runner, "verify_assets"),
+            patch.object(self.runner, "_read_plan") as read_plan,
+            patch.object(self.runner, "_extract") as extract,
+        ):
+            read_plan.return_value = {
+                "catalog": {"pdfs": pdfs},
+                "cases": self.runner.schedule(pdfs),
+                "data_root": str(self.root),
+            }
+            extract.side_effect = [
+                ("$$x^2$$", {"model_fallback": False, "recognized_formula": value})
+                for value in (True, False, False, False)
+            ]
+            output = self.root / "failed"
+            with self.assertRaisesRegex(
+                ValueError, "no native formula recognition witnessed in math cases for: candidate"
+            ):
+                self.runner.generate(plan_path, plan_path, output, 1)
+            report = json.loads((output / "generation.json").read_text())
+            assert report["healthy"] is False
+            assert report["math_coverage"]["baseline"]["arxiv_math"] == {"cases": 1, "recognized_cases": 1}
+            assert report["math_coverage"]["candidate"]["old_scans_math"] == {"cases": 1, "recognized_cases": 0}
+            assert len(report["rows"]) == 4
+            assert len((output / "generation.jsonl").read_text().splitlines()) == 4
+
+            prose = [dict(pdfs[0], file="bench_data/pdfs/old_scans/prose.pdf")]
+            read_plan.return_value = {
+                "catalog": {"pdfs": prose},
+                "cases": self.runner.schedule(prose),
+                "data_root": str(self.root),
+            }
+            extract.side_effect = None
+            extract.return_value = ("prose", {"model_fallback": False, "recognized_formula": False})
+            output = self.root / "prose"
+            self.runner.generate(plan_path, plan_path, output, 1)
+            assert json.loads((output / "generation.json").read_text())["healthy"] is True
 
 
 if __name__ == "__main__":
