@@ -74,7 +74,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [pdf-ocr, office-pages, api-jobs, nli]
+        suite: [pdf-ocr, office-pages, api-jobs, nli, pdf-table-paint]
         # ~keep The public test documents a suite reads. A suite that names some gets the test_documents
         # submodule, because the fetch action reads test_documents/corpus.lock.json from it.
         include:
@@ -127,8 +127,8 @@ jobs:
           install-args: cargo-deny
           cache: "false"
 
-      - name: Setup ONNX Runtime for NLI admission tests
-        if: matrix.suite == 'nli'
+      - name: Setup ONNX Runtime for NLI and PDF table tests
+        if: matrix.suite == 'nli' || matrix.suite == 'pdf-table-paint'
         uses: ./.github/actions/setup-onnx-runtime
         with:
           verify-linux-archive: "true"

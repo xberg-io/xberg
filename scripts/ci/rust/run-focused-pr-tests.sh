@@ -2,11 +2,12 @@
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
-suite="${1:?expected pdf-ocr, office-pages or api-jobs}"
+suite="${1:?expected pdf-ocr, office-pages, api-jobs or pdf-table-paint}"
 case "$suite" in
 pdf-ocr) features="pdf,ocr,tokio-runtime,bundle-tessdata-eng,layout-types" ;;
 office-pages) features="office,excel,tokio-runtime" ;;
 api-jobs) features="api,tokio-runtime" ;;
+pdf-table-paint) features="pdf,layout-detection" ;;
 *)
   printf 'Unknown focused test suite: %s\n' "$suite" >&2
   exit 2
@@ -423,6 +424,24 @@ office-pages)
 api-jobs)
   expected=4
   run_api_cases
+  ;;
+pdf-table-paint)
+  expected=8
+  table_module="pdf::structure::regions::table_recognition"
+  for name in \
+    native_tatr_vertical_span_stops_at_a_painted_rule \
+    native_tatr_vertical_span_survives_a_rule_outside_the_merged_track \
+    native_tatr_three_row_span_retains_only_the_source_supported_merge \
+    native_tatr_rowspan_resumes_after_a_track_divider_with_a_left_neighbor; do
+    run_exact "$table_module::metadata_tests::$name" --lib
+  done
+  for name in \
+    narrow_track_glyph_ink_does_not_count_as_a_divider \
+    staggered_flank_rules_do_not_prove_an_opening \
+    masked_divider_does_not_prove_an_opening \
+    aligned_flank_rules_require_at_least_eighteen_of_twenty_visible_columns; do
+    run_exact "$table_module::structure::tests::$name" --lib
+  done
   ;;
 esac
 if [ "$passed" -ne "$expected" ]; then

@@ -411,7 +411,14 @@ fn assemble_tatr_table(
         .iter()
         .map(|local_id| indexed_table_words[*local_id].0)
         .collect();
-    let grid = structure::apply_structure(&mut grid_output.grid, inference, crop, context.page_height);
+    let grid = structure::apply_structure(
+        &mut grid_output.grid,
+        &grid_output.source_row_bands,
+        &table_words,
+        inference,
+        crop,
+        context.page_height,
+    );
     let columns =
         (inference.structure.header_row_count > 0).then(|| grid_output.grid[usize::from(recovered.is_some())].clone());
     grid_output.markdown = render_grid_as_markdown(&grid_output.grid);
@@ -524,6 +531,7 @@ fn recover_ruled_parent(
         .collect::<Vec<_>>()
         .join(" ");
     output.grid.insert(0, row);
+    output.source_row_bands.insert(0, None);
     output.consumed_word_indices.extend(ids.into_iter().map(|(id, _)| id));
     Some(recovered)
 }
@@ -954,6 +962,7 @@ struct TatrGridOutput {
     consumed_bottom: Option<u32>,
     consumed_word_indices: Vec<usize>,
     model_grid_cell_count: usize,
+    source_row_bands: Vec<Option<(f32, f32)>>,
 }
 
 #[cfg(feature = "layout-detection")]
@@ -972,6 +981,7 @@ fn build_tatr_grid_table(
             consumed_bottom: None,
             consumed_word_indices: Vec::new(),
             model_grid_cell_count: 0,
+            source_row_bands: Vec::new(),
         };
     }
 
@@ -984,6 +994,7 @@ fn build_tatr_grid_table(
             consumed_bottom: None,
             consumed_word_indices: Vec::new(),
             model_grid_cell_count: 0,
+            source_row_bands: Vec::new(),
         };
     }
 
@@ -1034,6 +1045,14 @@ fn build_tatr_grid_table(
 
     separate_tatr_header_and_first_record(&mut cell_words, &converted_cells, words, &mut word_consumed, crop);
 
+    let source_row_bands = cell_words
+        .iter()
+        .map(|row| {
+            let mut centers = row.iter().flatten().map(|&(_, _, y)| y);
+            let first = centers.next()?;
+            Some(centers.fold((first, first), |(top, bottom), y| (top.min(y), bottom.max(y))))
+        })
+        .collect();
     let mut grid: Vec<Vec<String>> = Vec::with_capacity(num_rows);
     for row_cells in &cell_words {
         let mut grid_row = vec![String::new(); num_cols];
@@ -1068,6 +1087,7 @@ fn build_tatr_grid_table(
         consumed_bottom,
         consumed_word_indices,
         model_grid_cell_count: num_rows * num_cols,
+        source_row_bands,
     }
 }
 
@@ -1217,17 +1237,34 @@ fn continues_tatr_header_label(
 
 #[cfg(feature = "layout-detection")]
 fn has_tatr_source_separator(crop: &TatrCrop, left: f32, right: f32, header_y: f32, body_y: f32) -> bool {
-    let x = |value: f32| {
-        (value * crop.sx - crop.px_left as f32)
-            .round()
-            .clamp(0.0, crop.width as f32) as u32
-    };
-    let y = |value: f32| {
-        (value * crop.sy - crop.px_top as f32)
-            .ceil()
-            .clamp(0.0, crop.height as f32) as u32
-    };
-    let (left, right) = (x(left), x(right));
+    has_tatr_rule_in_band(crop, (left, right), (header_y, body_y))
+}
+
+#[cfg(feature = "layout-detection")]
+fn has_tatr_rule_in_band(crop: &TatrCrop, horizontal: (f32, f32), vertical: (f32, f32)) -> bool {
+    has_tatr_rule_run(
+        crop,
+        tatr_rule_track(crop, horizontal),
+        tatr_rule_band(crop, vertical),
+        |_, _| true,
+        |_| true,
+    )
+}
+
+#[cfg(feature = "layout-detection")]
+fn has_tatr_rule_coverage(covered: u32, width: u32) -> bool {
+    width > 0 && u64::from(covered) * 10 >= u64::from(width) * 9
+}
+
+#[cfg(feature = "layout-detection")]
+fn has_tatr_rule_run(
+    crop: &TatrCrop,
+    track: std::ops::Range<u32>,
+    band: std::ops::Range<u32>,
+    column_visible: impl Fn(u32, &std::ops::Range<u32>) -> bool,
+    accept: impl Fn(std::ops::Range<u32>) -> bool,
+) -> bool {
+    let (left, right) = (track.start, track.end);
     let width = right.saturating_sub(left);
     if width == 0 {
         return false;
@@ -1236,7 +1273,7 @@ fn has_tatr_source_separator(crop: &TatrCrop, left: f32, right: f32, header_y: f
         let mut run = 0;
         (left..right).any(|column| {
             run = if matches(column) { run + 1 } else { 0 };
-            run * 10 >= width * 9
+            has_tatr_rule_coverage(run, width)
         })
     };
     let is_rule_row =
@@ -1251,11 +1288,10 @@ fn has_tatr_source_separator(crop: &TatrCrop, left: f32, right: f32, header_y: f
             .all(|(&dark, light)| light.saturating_sub(dark) >= MIN_SHOULDER_CONTRAST)
     };
     let max_rule_height = (crop.sy * 2.0).ceil() as u32;
-    let start = y(header_y + 2.0).max(1);
-    let end = y(body_y - 2.0).min(crop.height.saturating_sub(1));
-    if start >= end {
+    if band.is_empty() {
         return false;
     }
+    let (start, end) = (band.start, band.end);
     let mut run_height = 0;
     for row in start.saturating_sub(1)..=end {
         if is_rule_row(row) {
@@ -1264,10 +1300,15 @@ fn has_tatr_source_separator(crop: &TatrCrop, left: f32, right: f32, header_y: f
             if row > start && run_height > 0 && run_height <= max_rule_height && row - run_height >= start {
                 let first = row - run_height;
                 // Vertical grid lines interrupt the shoulders while leaving the separator continuous. ~keep
-                let contrasted = (left..right)
-                    .filter(|&column| contrasts(column, first, first - 1) && contrasts(column, row - 1, row))
+                let rows = first..row;
+                let coverage = (left..right)
+                    .filter(|&column| {
+                        column_visible(column, &rows)
+                            && contrasts(column, first, first - 1)
+                            && contrasts(column, row - 1, row)
+                    })
                     .count() as u32;
-                if contrasted * 10 >= width * 9 {
+                if has_tatr_rule_coverage(coverage, width) && accept(rows) {
                     return true;
                 }
             }
@@ -1275,6 +1316,26 @@ fn has_tatr_source_separator(crop: &TatrCrop, left: f32, right: f32, header_y: f
         }
     }
     false
+}
+
+#[cfg(feature = "layout-detection")]
+fn tatr_rule_track(crop: &TatrCrop, horizontal: (f32, f32)) -> std::ops::Range<u32> {
+    let x = |value: f32| {
+        (value * crop.sx - crop.px_left as f32)
+            .round()
+            .clamp(0.0, crop.width as f32) as u32
+    };
+    x(horizontal.0)..x(horizontal.1)
+}
+
+#[cfg(feature = "layout-detection")]
+fn tatr_rule_band(crop: &TatrCrop, vertical: (f32, f32)) -> std::ops::Range<u32> {
+    let y = |value: f32| {
+        (value * crop.sy - crop.px_top as f32)
+            .ceil()
+            .clamp(0.0, crop.height as f32) as u32
+    };
+    y(vertical.0 + 2.0).max(1)..y(vertical.1 - 2.0).min(crop.height.saturating_sub(1))
 }
 
 #[cfg(feature = "layout-detection")]
@@ -2528,6 +2589,7 @@ mod tests {
             consumed_bottom: Some(10),
             consumed_word_indices: vec![0, 1, 2, 3, 4],
             model_grid_cell_count: 20,
+            source_row_bands: Vec::new(),
         };
 
         assert!(tatr_grid_is_credible(&output, 0, false));
@@ -2543,6 +2605,7 @@ mod tests {
             consumed_bottom: Some(10),
             consumed_word_indices: (0..5).collect(),
             model_grid_cell_count: 10,
+            source_row_bands: Vec::new(),
         };
 
         assert!(!tatr_grid_is_credible(&output, 0, false));
@@ -2556,6 +2619,7 @@ mod tests {
             consumed_bottom: Some(10),
             consumed_word_indices: (0..5).collect(),
             model_grid_cell_count: 10,
+            source_row_bands: Vec::new(),
         };
 
         assert!(tatr_grid_is_credible(&output, 0, true));
@@ -2575,6 +2639,7 @@ mod tests {
             consumed_bottom: Some(10),
             consumed_word_indices: (0..4).collect(),
             model_grid_cell_count: 15,
+            source_row_bands: Vec::new(),
         };
 
         assert!(tatr_grid_is_credible(&output, 0, false));
@@ -2591,6 +2656,7 @@ mod tests {
             consumed_bottom: Some(10),
             consumed_word_indices: (0..3).collect(),
             model_grid_cell_count: 6,
+            source_row_bands: Vec::new(),
         };
 
         assert!(tatr_grid_is_credible(&output, 0, false));

@@ -15,6 +15,15 @@ fn recognized(header_rows: usize, span: Option<[f32; 4]>) -> RecognizedTatrTable
 }
 
 fn recognize_rows(rows: &[&[&str]], header_rows: usize, span: Option<[f32; 4]>) -> RecognizedTatrTable {
+    recognize_rows_with_rules(rows, header_rows, span, &[])
+}
+
+fn recognize_rows_with_rules(
+    rows: &[&[&str]],
+    header_rows: usize,
+    span: Option<[f32; 4]>,
+    rules: &[(u32, u32, u32)],
+) -> RecognizedTatrTable {
     let cols = rows[0].len();
     let width = (cols * 50) as u32;
     let height = (rows.len() * 20) as u32;
@@ -66,7 +75,19 @@ fn recognize_rows(rows: &[&[&str]], header_rows: usize, span: Option<[f32; 4]>) 
             confidence: 99.0,
         })
         .collect();
-    let image = image::RgbImage::new(width, height);
+    let mut image = image::RgbImage::from_pixel(width, height, image::Rgb([255; 3]));
+    if !rules.is_empty() {
+        for word in &words {
+            for x in word.left + 2..word.left + word.width - 2 {
+                image.put_pixel(x, word.top + word.height - 1, image::Rgb([0; 3]));
+            }
+        }
+    }
+    for &(y, left, right) in rules {
+        for x in left..right {
+            image.put_pixel(x, y, image::Rgb([0; 3]));
+        }
+    }
     let page_result = crate::pdf::structure::types::PageLayoutResult {
         page_width_pts: width as f32,
         page_height_pts: page_height,
@@ -130,6 +151,92 @@ fn derived_grid(result: &RecognizedTatrTable) -> crate::types::TableGrid {
             _ => None,
         })
         .expect("derived TATR table")
+}
+
+#[test]
+fn native_tatr_vertical_span_stops_at_a_painted_rule() {
+    let rows: &[&[&str]] = &[
+        &["in millions", "2024", "2023"],
+        &["Credit Exposures", "$48,013", "$50,820"],
+        &["Industry", "", ""],
+        &["Funds", "13%", "13%"],
+    ];
+    for divider in [(20, 0, 150), (20, 50, 100)] {
+        let result = recognize_rows_with_rules(rows, 3, Some([50.0, 0.0, 100.0, 40.0]), &[divider]);
+        let grid = derived_grid(&result);
+        assert_eq!(result.table.cells[0], rows[0]);
+        assert_eq!(result.table.cells[1], rows[1]);
+        assert!(grid.cells.iter().all(|cell| cell.row_span == 1));
+        assert!(grid.cells.iter().all(|cell| cell.is_header == (cell.row == 0)));
+    }
+}
+
+#[test]
+fn native_tatr_vertical_span_survives_a_rule_outside_the_merged_track() {
+    let rows: &[&[&str]] = &[
+        &["North", "Region", "Code"],
+        &["South", "", "NY"],
+        &["East", "Coast", "MA"],
+    ];
+    let result = recognize_rows_with_rules(rows, 1, Some([50.0, 0.0, 100.0, 40.0]), &[(20, 100, 150)]);
+    let grid = derived_grid(&result);
+    let merged = grid.cells.iter().find(|cell| cell.content == "Region").unwrap();
+    assert_eq!((merged.row, merged.col, merged.row_span), (0, 1, 2));
+    assert!(merged.is_header);
+    assert!(grid.cells.iter().all(|cell| cell.row != 1 || cell.col != 1));
+}
+
+#[test]
+fn native_tatr_three_row_span_retains_only_the_source_supported_merge() {
+    let rows: &[&[&str]] = &[
+        &["North", "Region", "Code"],
+        &["South", "", "NY"],
+        &["East", "Coast", "MA"],
+    ];
+    let span = Some([50.0, 0.0, 100.0, 60.0]);
+    let supported = recognize_rows_with_rules(rows, 1, span, &[(20, 0, 50), (20, 100, 150), (40, 0, 150)]);
+    let one_neighbor = recognize_rows_with_rules(rows, 1, span, &[(20, 100, 150), (40, 0, 150)]);
+    let unknown = recognize_rows_with_rules(rows, 1, span, &[(40, 0, 150)]);
+    for (result, expected_span) in [(&supported, 2), (&one_neighbor, 1), (&unknown, 1)] {
+        let grid = derived_grid(result);
+        let track: Vec<_> = grid.cells.iter().filter(|cell| cell.col == 1).collect();
+        let expected = if expected_span == 2 {
+            vec![(0, 2, "Region"), (2, 1, "Coast")]
+        } else {
+            vec![(0, 1, "Region"), (1, 1, ""), (2, 1, "Coast")]
+        };
+        let actual: Vec<_> = track
+            .iter()
+            .map(|cell| (cell.row, cell.row_span, cell.content.as_str()))
+            .collect();
+        assert_eq!(actual, expected);
+        let html = crate::rendering::render_html(&recognized_document(result));
+        assert_eq!(
+            html.matches("rowspan=\"2\"").count(),
+            usize::from(expected_span == 2),
+            "{html}"
+        );
+        assert_eq!(html.matches("Region").count(), 1, "{html}");
+        assert_eq!(html.matches("Coast").count(), 1, "{html}");
+    }
+}
+
+#[test]
+fn native_tatr_rowspan_resumes_after_a_track_divider_with_a_left_neighbor() {
+    let rows: &[&[&str]] = &[
+        &["North", "Code", "Region"],
+        &["South", "NY", "Coast"],
+        &["East", "MA", ""],
+    ];
+    let span = Some([100.0, 0.0, 150.0, 60.0]);
+    let result = recognize_rows_with_rules(rows, 1, span, &[(20, 100, 150), (40, 0, 100)]);
+    let actual: Vec<_> = derived_grid(&result)
+        .cells
+        .into_iter()
+        .filter(|cell| cell.col == 2)
+        .map(|cell| (cell.row, cell.row_span, cell.content))
+        .collect();
+    assert_eq!(actual, [(0, 1, "Region".to_owned()), (1, 2, "Coast".to_owned())]);
 }
 
 #[test]
