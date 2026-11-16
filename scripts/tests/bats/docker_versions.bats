@@ -256,15 +256,29 @@ PYTHON
 
 verify_docker_archive_integrity() {
 	python3 - "$REPO_ROOT" "$1" <<'PYTHON'
+from itertools import groupby
 from pathlib import Path
 import re
+import shlex
 import sys
+from urllib.parse import urlsplit
 
 root = Path(sys.argv[1])
 verifier = "scripts/ci/actions/setup-onnx-runtime/verify-archive.sh"
 manifests = {
     "PDFIUM": ("scripts/pdfium-runtime-checksums.sha256", "pdfium-runtime-checksums.sha256", "bblanchon/pdfium-binaries"),
     "ORT": ("scripts/ci/actions/setup-onnx-runtime/checksums.sha256", "onnxruntime-checksums.sha256", "microsoft/onnxruntime"),
+}
+archive_names = {"PDFIUM": "pdfium", "ORT": "onnxruntime"}
+rustup_sha256 = {
+    "musl": {
+        "x86_64": "1552169aba2836777136ccff7a381e95c17233b5d8250cd5e10ae3cb971bfcfc",
+        "aarch64": "956deacdc27ab82ae7ac821d5d3e9e95e4795d476d17efe99743bb8531ca1031",
+    },
+    "gnu": {
+        "x86_64": "b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55",
+        "aarch64": "9f608c142e0e38a78957d0661ba1dfaf0b6fb37184cfaa4b9a0aa57af6184282",
+    },
 }
 archive_sets = {
     "core": ("PDFIUM", "ORT"),
@@ -279,10 +293,22 @@ ignore = (root / ".dockerignore").read_text()
 integrity = "/opt/xberg-integrity/"
 
 
+def curl_urls(run):
+    tokens = shlex.shlex(run.removeprefix("RUN "), posix=True, punctuation_chars=";&|")
+    tokens.whitespace_split = True
+    for separator, group in groupby(tokens, lambda token: bool(re.fullmatch(r"[;&|]+", token))):
+        if not separator and next(group) == "curl":
+            for argument in group:
+                url = argument.removeprefix("--url=")
+                if url.startswith(("http://", "https://")):
+                    yield url
+
+
 def verify_variant(name, text, allowlist):
     commands = re.sub(r"\\\n[ \t]*", "", text)
     instructions = [line for line in commands.splitlines() if not line.lstrip().startswith("#")]
     runs = [line for line in instructions if line.startswith("RUN ")]
+    urls = [(line, url) for line in runs for url in curl_urls(line)]
     copies = [line.split()[1:] for line in instructions if line.startswith("COPY scripts/")]
     assert not any("chromium-browser-snapshots" in line for line in instructions), (name, "snapshot endpoint")
     assert not any("sh.rustup.rs" in line for line in instructions), (name, "Rustup endpoint")
@@ -300,10 +326,18 @@ def verify_variant(name, text, allowlist):
     for kind, (source, target, repository) in manifests.items():
         archive = f'"${kind}_ARCHIVE"'
         endpoint = f"https://github.com/{repository}/releases/download/"
-        downloads = [line for line in runs if endpoint in line and "curl " in line]
+        archive_name = re.compile(
+            rf"(?:{archive_names[kind]}[\w.-]*\.(?:tgz|tar(?:\.\w+)?|zip)"
+            rf"|\$(?:\{{{kind}_(?:ASSET|ARCHIVE)\}}|{kind}_(?:ASSET|ARCHIVE)))",
+            re.IGNORECASE,
+        )
+        downloads = [
+            line for line, url in urls
+            if url.startswith(endpoint) or archive_name.fullmatch(urlsplit(url).path.rsplit("/", 1)[-1])
+        ]
         extracts = [line for line in runs if f"tar -xzf {archive}" in line]
         count = int(kind in expected)
-        assert sum(line.count(endpoint) for line in downloads) == count, (name, kind, "archive download count")
+        assert len(downloads) == count, (name, kind, "archive download count")
         assert sum(line.count(f"-o {archive}") for line in runs) == count, (name, kind, "archive output count")
         assert sum(line.count(f"tar -xzf {archive}") for line in extracts) == count, (name, kind, "archive extract count")
         if not count:
@@ -333,6 +367,8 @@ def rustup_pins(name, text, libc):
     pins = re.findall(rf"^\s*(x86_64|aarch64){suffix}\) RUSTUP_SHA256=([0-9a-f]{{64}}) ;;", text, re.M)
     assert version == ["1.29.3"] and len(pins) == 2 and {arch for arch, _ in pins} == {"x86_64", "aarch64"}, (name, "Rustup pin inventory")
 
+    assert dict(pins) == rustup_sha256[libc], (name, "Rustup digest mismatch")
+
     target = "${TARGET}" if libc == "gnu" else "${ARCH}-unknown-linux-musl"
     selector = 'case "$TARGET" in' if libc == "gnu" else 'case "$ARCH" in'
     endpoint = f"https://static.rust-lang.org/rustup/archive/${{RUSTUP_VERSION}}/{target}/rustup-init"
@@ -350,18 +386,24 @@ def rustup_pins(name, text, libc):
         and checked[4] == "rm rustup-init"
         and steps.index(guard[0]) < steps.index(checked[0])
     ), (name, "Rustup download/verify/execute order")
-    return sorted(pins)
 
 
 def verify_rustup(variants):
     for libc, names in (("musl", ("cli", "musl-build")), ("gnu", ("manylinux-node", "manylinux-rustler"))):
-        left, right = (rustup_pins(name, variants[name], libc) for name in names)
-        assert left == right, (libc, "Rustup pins differ")
+        for name in names:
+            rustup_pins(name, variants[name], libc)
 
 
 if sys.argv[2] == "negative":
     core = variants["core"]
+    wrong_gnu_digest = {
+        name: text.replace("RUSTUP_SHA256=b1c8", "RUSTUP_SHA256=a1c8", 1)
+        if name in ("manylinux-node", "manylinux-rustler") else text
+        for name, text in variants.items()
+    }
     checked = (
+        (lambda: verify_variant("cli", variants["cli"] + "\nRUN curl https://mirror.invalid/pdfium-linux-x64.tgz -o p.tgz && tar -xzf p.tgz\n", ignore), "archive download count"),
+        (lambda: verify_variant("core", core + "\nRUN true && curl --url=https://mirror.invalid/onnxruntime-linux-x64-1.24.2.tgz -o o.tgz\n", ignore), "archive download count"),
         (lambda: verify_variant("core", core.replace(" --known &&", " &&", 1), ignore), "preflight/download/verify/extract order"),
         (lambda: verify_variant("core", core.replace('tar -xzf "$PDFIUM_ARCHIVE"', 'tar -xzf unverified.tgz', 1), ignore), "archive extract count"),
         (lambda: verify_variant("core", core.replace("COPY " + verifier, "COPY scripts/other.sh", 1), ignore), "COPY source and destination"),
@@ -370,7 +412,7 @@ if sys.argv[2] == "negative":
         (lambda: verify_variant("manylinux-node", variants["manylinux-node"] + "\nRUN curl https://sh.rustup.rs\n", ignore), "Rustup endpoint"),
         (lambda: rustup_pins("manylinux-node", variants["manylinux-node"].replace('"$RUSTUP_SHA256" | sha256sum -c -', '"$RUSTUP_SHA256"', 1), "gnu"), "Rustup download/verify/execute order"),
         (lambda: rustup_pins("manylinux-node", variants["manylinux-node"].replace("RUSTUP_SHA256=9", "RUSTUP_SHA256=g", 1), "gnu"), "Rustup pin inventory"),
-        (lambda: verify_rustup(dict(variants, **{"manylinux-rustler": variants["manylinux-rustler"].replace("RUSTUP_SHA256=b1c8", "RUSTUP_SHA256=a1c8", 1)})), "Rustup pins differ"),
+        (lambda: verify_rustup(wrong_gnu_digest), "Rustup digest mismatch"),
     )
     for check, reason in checked:
         try:
@@ -383,7 +425,7 @@ if sys.argv[2] == "negative":
 else:
     assert sum(verify_variant(name, text, ignore) for name, text in variants.items()) == 8
     verify_rustup(variants)
-    print("six Dockerfiles: eight verified archive chains and four verified Rustup bootstraps with matching GNU and musl pins")
+    print("six Dockerfiles: eight verified archive chains and four verified Rustup bootstraps with audited GNU and musl pins")
 PYTHON
 }
 
