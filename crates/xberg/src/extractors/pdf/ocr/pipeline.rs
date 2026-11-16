@@ -6239,17 +6239,8 @@ pub(super) async fn extract_with_ocr_for_page(
             for (page_idx, image_data, width, height) in &encoded_batch {
                 let idx = *page_idx;
                 let cancel_token = config.cancel_token.clone();
-                // Every iteration must spawn exactly one task: the drain loop below and the
-                // `for offset in 0..batch_count` pass after it both index `batch_ocr_results`
-                // by position and `.expect()` a `Some` at every offset (#1620-style
-                // invariant), so a cancelled page still needs an entry -- it just skips the
-                // real OCR work to get it. ~keep
-                if cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
-                    let task = crate::engine::seams::inherit_progress(async move {
-                        PageRead::failed(idx, 0, (0, 0), crate::XbergError::Cancelled)
-                    });
-                    join_set.spawn(crate::core::extractor::cacheability::inherit(task));
-                    continue;
+                if cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
+                    return Err(crate::XbergError::Cancelled.into());
                 }
                 let backend_clone = std::sync::Arc::clone(&backend);
                 #[cfg(feature = "pdf")]
@@ -6756,6 +6747,9 @@ pub(super) async fn extract_with_ocr_for_page(
                     message: format!("OCR task panicked: {}", e),
                     plugin_name: "ocr".to_string(),
                 })?;
+                if matches!(&ocr_result, Err(crate::XbergError::Cancelled)) {
+                    return Err(crate::XbergError::Cancelled.into());
+                }
                 #[cfg(not(all(feature = "ocr", feature = "pdf", not(target_arch = "wasm32"))))]
                 let _ = (ordered_proof, detached_frame_read, number_frame);
                 #[cfg(all(feature = "pdf", feature = "ocr", not(target_arch = "wasm32")))]
@@ -6971,6 +6965,9 @@ pub(super) async fn extract_with_ocr_for_page(
                             .await
                     }
                 };
+                if matches!(&ocr_result, Err(crate::XbergError::Cancelled)) {
+                    return Err(crate::XbergError::Cancelled.into());
+                }
                 crate::engine::seams::emit_ocr_page(
                     page_index_offset + *page_idx + 1,
                     progress_total_pages,
@@ -8282,10 +8279,7 @@ pub(super) async fn extract_with_ocr_for_page(
         }
     }
 
-    // A cancelled run fails every page by design, which the #1444 guard below would report as
-    // a wholesale backend failure. Surface the cancellation itself so a caller can tell a
-    // cancelled extraction apart from a genuinely broken OCR backend. ~keep
-    if config.cancel_token.as_ref().is_some_and(|t| t.is_cancelled()) {
+    if config.cancel_token.as_ref().is_some_and(|token| token.is_cancelled()) {
         return Err(crate::XbergError::Cancelled.into());
     }
 
@@ -8297,31 +8291,24 @@ pub(super) async fn extract_with_ocr_for_page(
         && page_texts.iter().all(|text| text.trim().is_empty())
         && pages_with_recovered_xobject_payload.iter().all(|recovered| !recovered)
     {
-        let error = if page_backend_errors
-            .iter()
-            .all(|error| matches!(error, crate::XbergError::Cancelled))
-        {
-            crate::XbergError::Cancelled
+        let first_error = page_backend_errors
+            .into_iter()
+            .next()
+            .expect("at least one page failed");
+        let first_failure = describe_page_failure(&first_error);
+        let message = if pages_with_empty_xobject_retry.is_empty() {
+            format!(
+                "OCR failed on all {total_pages} page(s) and no text could be recovered from the pages' \
+                 embedded images; first failure: {first_failure}"
+            )
         } else {
-            let first_error = page_backend_errors
-                .into_iter()
-                .find(|error| !matches!(error, crate::XbergError::Cancelled))
-                .expect("a mixed all-page failure has at least one non-cancellation error");
-            let first_failure = describe_page_failure(&first_error);
-            let message = if pages_with_empty_xobject_retry.is_empty() {
-                format!(
-                    "OCR failed on all {total_pages} page(s) and no text could be recovered from the pages' \
-                     embedded images; first failure: {first_failure}"
-                )
-            } else {
-                format!(
-                    "OCR failed on all {total_pages} page(s); first failure: {first_failure}. The embedded-image \
-                     retry ran on {} of these page(s) and also returned no text.",
-                    pages_with_empty_xobject_retry.len()
-                )
-            };
-            crate::XbergError::all_page_ocr_failure(message, first_error)
+            format!(
+                "OCR failed on all {total_pages} page(s); first failure: {first_failure}. The embedded-image \
+                 retry ran on {} of these page(s) and also returned no text.",
+                pages_with_empty_xobject_retry.len()
+            )
         };
+        let error = crate::XbergError::all_page_ocr_failure(message, first_error);
         return Err(FailedOcrRun {
             error,
             page_failures,

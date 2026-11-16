@@ -1,5 +1,5 @@
 //! #2149: a failed OCR page keeps the typed variant chain of its backend error, and none of the
-//! source text. Drives a registered synthetic backend through the real PDF pipeline.
+//! source text in formatted diagnostics. The in-process chain retains the original errors.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -217,6 +217,24 @@ async fn all_pages_failing_keeps_the_cause_chain_everywhere() {
     let text = error.to_string();
     assert!(text.contains(CHAIN), "{text}");
     assert_clean("run error", &text);
+    let mut current = std::error::Error::source(&error);
+    let mut typed_operation = false;
+    let mut typed_io = false;
+    while let Some(source) = current {
+        if let Some(operation) = source.downcast_ref::<SyntheticOcrError>() {
+            assert!(operation.to_string().contains(PATH_SENTINEL));
+            typed_operation = true;
+        }
+        if let Some(io) = source.downcast_ref::<SyntheticIoError>() {
+            assert!(io.to_string().contains(SECRET_SENTINEL));
+            typed_io = true;
+        }
+        current = source.source();
+    }
+    assert!(
+        typed_operation && typed_io,
+        "the in-process chain must retain both typed sources"
+    );
     let traced = events.join("\n");
     assert!(traced.contains(CHAIN), "{traced}");
     assert_clean("trace", &traced);

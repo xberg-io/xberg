@@ -1793,16 +1793,21 @@ mod issue_217_fallback_tests {
     #[tokio::test]
     #[serial_test::serial]
     async fn pdf_ocr_failure_allows_extractor_fallback_but_backend_cancellation_is_terminal() {
-        use crate::core::config::OcrConfig;
+        use crate::core::config::{ConcurrencyConfig, OcrConfig};
         use crate::extractors::pdf::PdfExtractor;
+        use crate::extractors::pdf::ocr::build_minimal_two_page_pdf_with_sizes;
         use crate::plugins::{OcrBackend, OcrBackendType, register_ocr_backend, unregister_ocr_backend};
+        use std::sync::atomic::{AtomicUsize, Ordering};
 
         const PDF_MIME: &str = "application/pdf";
         const BACKEND: &str = "pdf-extractor-chain-ocr-backend";
         const FALLBACK_TEXT: &str = "The alternate PDF extractor read this document.";
 
+        static FALLBACK_CALLS: AtomicUsize = AtomicUsize::new(0);
+
         struct FailingBackend {
-            cancel: bool,
+            cancel_second_page: bool,
+            calls: Arc<AtomicUsize>,
         }
 
         impl Plugin for FailingBackend {
@@ -1829,10 +1834,14 @@ mod issue_217_fallback_tests {
                 true
             }
             async fn process_image(&self, _: &[u8], _: &OcrConfig) -> Result<ExtractedDocument> {
-                if self.cancel {
-                    Err(XbergError::Cancelled)
-                } else {
-                    Err(XbergError::ocr("the OCR backend failed"))
+                let call = self.calls.fetch_add(1, Ordering::SeqCst);
+                match (self.cancel_second_page, call) {
+                    (true, 0) => Ok(ExtractedDocument {
+                        content: "The OCR backend successfully read the first page.".into(),
+                        ..Default::default()
+                    }),
+                    (true, _) => Err(XbergError::Cancelled),
+                    (false, _) => Err(XbergError::ocr("the OCR backend failed")),
                 }
             }
         }
@@ -1844,6 +1853,7 @@ mod issue_217_fallback_tests {
                 name: "test-alternate-pdf-extractor",
                 priority: 0,
                 outcome: || {
+                    FALLBACK_CALLS.fetch_add(1, Ordering::SeqCst);
                     Ok(ExtractedDocument {
                         content: FALLBACK_TEXT.to_string(),
                         mime_type: Cow::Borrowed(PDF_MIME),
@@ -1856,11 +1866,15 @@ mod issue_217_fallback_tests {
 
         let dir = tempdir().unwrap();
         let path = dir.path().join("scanned.pdf");
-        let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(612.0, 792.0);
+        let pdf = build_minimal_two_page_pdf_with_sizes((612.0, 792.0), (504.0, 504.0));
         std::fs::write(&path, pdf).unwrap();
         let config = ExtractionConfig {
             force_ocr: true,
             use_cache: false,
+            concurrency: Some(ConcurrencyConfig {
+                max_threads: Some(1),
+                ..Default::default()
+            }),
             ocr: Some(OcrConfig {
                 backend: BACKEND.to_string(),
                 ..Default::default()
@@ -1868,14 +1882,23 @@ mod issue_217_fallback_tests {
             ..Default::default()
         };
 
-        for cancel in [false, true] {
-            register_ocr_backend(Arc::new(FailingBackend { cancel })).unwrap();
+        for cancel_second_page in [false, true] {
+            FALLBACK_CALLS.store(0, Ordering::SeqCst);
+            let calls = Arc::new(AtomicUsize::new(0));
+            register_ocr_backend(Arc::new(FailingBackend {
+                cancel_second_page,
+                calls: Arc::clone(&calls),
+            }))
+            .unwrap();
             let candidates = registry.get_candidates(&path, PDF_MIME);
             let result = extract_with_candidates(&path, PDF_MIME, &config, candidates).await;
             unregister_ocr_backend(BACKEND).unwrap();
-            if cancel {
+            assert_eq!(calls.load(Ordering::SeqCst), 2, "both source pages were attempted");
+            if cancel_second_page {
                 assert!(matches!(result, Err(XbergError::Cancelled)), "got: {result:?}");
+                assert_eq!(FALLBACK_CALLS.load(Ordering::SeqCst), 0);
             } else {
+                assert_eq!(FALLBACK_CALLS.load(Ordering::SeqCst), 1);
                 let result = result.expect("the alternate PDF extractor should handle the OCR failure");
                 assert_eq!(result.content, FALLBACK_TEXT);
                 assert!(

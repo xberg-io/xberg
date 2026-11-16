@@ -413,7 +413,11 @@ pdf-ocr)
   run_ink_probe_cases
   run_discarded_recovery_cases
   run_exact 'extractors::pdf::ocr::tests::tests::should_error_when_every_page_fails_and_nothing_can_be_recovered' --lib
-  expected=$((expected + 1))
+  run_exact 'core::extractor::file::issue_217_fallback_tests::pdf_ocr_failure_allows_extractor_fallback_but_backend_cancellation_is_terminal' --lib
+  run_exact 'extractors::pdf::tests::automatic_ocr_failure_with_no_native_text_returns_an_error' --lib
+  run_exact 'extractors::pdf::ocr::failed_page_record_tests::a_pipeline_whose_stages_all_fail_carries_every_page_record' --lib
+  run_exact 'extractors::pdf::ocr::page_failure_cause_tests::all_pages_failing_keeps_the_cause_chain_everywhere' --lib
+  expected=$((expected + 5))
   run_numeral_noise_cases
   expected=$((expected + 8))
   run_mixed_plain_cases

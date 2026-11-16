@@ -123,6 +123,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **(ocr): All-page PDF OCR failures now report an OCR error to Rust, FFI, and language bindings.** (#3175)
+  Rust returns `XbergError::Ocr`, the raw FFI code is 1002, and bindings that expose exceptions use their OCR error
+  class. Python callers that caught `PluginError` should catch `OcrError` for this case. REST retains `PluginError`
+  and HTTP 500. Batch extraction retains kind `plugin` and code 1008. The typed in-process error chain retains the
+  underlying backend error and its sources. Formatted diagnostics describe the cause types without including
+  underlying source messages.
+
 - **(mcp): Extraction responses omit empty error and crawl URL lists and a zero redirect count.** Clients can treat
   an absent field as an empty list or zero, respectively. (#2785)
 
@@ -268,12 +275,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **(ocr): Report each page's OCR progress once, even when a fallback backend or an image retry reads it again.** The event names the backend of the page's first read. (#3174)
 
-- **(ocr): Preserve cancellation and backend error sources when every PDF page fails OCR.** (#3175)
-  An all-page cancellation returns `XbergError::Cancelled`. When ordinary failures leave no recovered content,
-  the aggregate keeps the first non-cancellation backend error in its source chain. Rust callers receive
-  `XbergError::Ocr` with raw FFI code 1002 (previously `XbergError::Plugin` and code 1008). REST retains
-  `PluginError` and HTTP 500.
-  Batch extraction retains kind `plugin` and code 1008.
+- **(ocr): Stop PDF OCR on a typed cancellation from a backend.** (#3175)
+  The run returns `XbergError::Cancelled` before processing more page batches or falling back.
 
 - **Output is now stable between runs.** Heading levels, list indentation, OCR font names and `metadata.additional` key order no longer depend on hash iteration order; ties resolve to the lower heading level, the smaller indent and the lexically first font name, and `additional` serializes with sorted keys.
 
