@@ -260,6 +260,18 @@ jobs:
           registry: pypi
           package: xberg
           version: ${{ needs.prepare.outputs.version }}
+          # One wheel per python-wheels / python-wheels-musl leg plus the sdist. A version
+          # PyPI holds only part of (1.3.9: no Windows wheel, no sdist) reads as missing, so
+          # the builds re-run and publish-pypi uploads just the absent files. ~keep
+          required-files: |
+            *-macosx_*_arm64.whl
+            *-macosx_*_x86_64.whl
+            *-manylinux_*_aarch64.whl
+            *-manylinux_*_x86_64.whl
+            *-musllinux_*_aarch64.whl
+            *-musllinux_*_x86_64.whl
+            *-win_amd64.whl
+            *.tar.gz
 
   check-npm:
     name: Check npm for existing versions
