@@ -94,6 +94,7 @@ run_pdf_cases() {
   run_exact automatic_english_ocr_keeps_clean_khmer_and_rejects_hidden_and_wrong_mapped_khmer --test pdf_khmer_minority_2826
   run_exact mixed_ocr_keeps_khmer_between_english_and_rejects_unrelated_ink --test pdf_khmer_minority_2826
   run_exact every_native_page_keeps_a_range_that_selects_its_text --test plain_page_ranges_select_page_text
+  run_exact 'pdf::structure::paragraphs::tests::continuation_merge_distinguishes_zero_baseline_from_missing_geometry' --lib
   run_exact 'pdf::structure::paragraphs::tests::display_rows_tests::continuation_merge_keeps_indexed_display_rows_with_changed_source_literals' --lib
   run_exact 'embedded_psm6_cache_tests::cached_default_recovers_embedded_line_in_cold_and_warm_reads' --lib
   run_exact accepted_tinted_table_keeps_the_header_and_first_record_separate \
@@ -403,7 +404,7 @@ run_api_cases() {
 
 case "$suite" in
 pdf-ocr)
-  expected=117
+  expected=118
   check_mixed_decision_layer_handoffs
   run_pdf_cases
   run_retained_read_cases
