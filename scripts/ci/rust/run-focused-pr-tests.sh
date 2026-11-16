@@ -346,6 +346,8 @@ run_office_page_cases() {
     should_write_no_placeholder_for_a_picture_with_an_empty_description; do
     run_exact "extractors::docx::tests::$test_name" --lib
   done
+  run_exact 'extractors::docx::tests::should_queue_single_docx_parse_and_honor_cancellation_before_it_starts' --lib
+  run_exact 'extractors::docx::tests::should_match_single_extraction_in_batch_mode' --lib
   run_exact 'extractors::excel::tests::a_plain_sheet_page_starts_with_its_sheet_name' --lib
   run_exact 'rendering::plain::tests::render_plain_leaves_out_the_docx_style_name_of_a_heading' --lib
   local module='extraction::derive::pages::plain_page_rerender_tests'
@@ -417,7 +419,7 @@ pdf-ocr)
   run_mixed_plain_cases
   ;;
 office-pages)
-  expected=35
+  expected=37
   run_office_page_cases
   ;;
 api-jobs)
