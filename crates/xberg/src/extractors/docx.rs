@@ -1921,11 +1921,14 @@ mod tests {
 
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
     #[test]
-    #[should_panic(expected = "DOCX worker panic marker")]
     fn should_resume_a_blocking_docx_worker_panic() {
-        let runtime = tokio::runtime::Builder::new_current_thread().build().unwrap();
-        let task = runtime.spawn_blocking(|| -> Result<()> { panic!("DOCX worker panic marker") });
-        let _ = runtime.block_on(await_docx_blocking(task));
+        let panic = std::panic::catch_unwind(|| {
+            let runtime = tokio::runtime::Builder::new_current_thread().build().unwrap();
+            let task = runtime.spawn_blocking(|| -> Result<()> { panic!("DOCX worker panic marker") });
+            runtime.block_on(await_docx_blocking(task))
+        })
+        .expect_err("the DOCX worker's panic should reach the caller");
+        assert_eq!(panic.downcast_ref::<&str>().copied(), Some("DOCX worker panic marker"));
     }
 
     #[cfg(all(feature = "tokio-runtime", not(target_arch = "wasm32")))]
