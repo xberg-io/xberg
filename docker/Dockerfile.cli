@@ -15,9 +15,7 @@ ARG PDFIUM_VERSION=7678
 
 WORKDIR /build
 
-# Alpine's /bin/sh is busybox ash, which supports `-o pipefail`. Without it the
-# `curl ... | sh` rustup bootstrap below reports only sh's status, so a failed or
-# truncated download silently installs nothing. (hadolint DL4006)
+# Propagate failures through checksum and linkage diagnostic pipelines. ~keep
 SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 
 RUN apk add --no-cache \
@@ -29,8 +27,21 @@ RUN apk add --no-cache \
     --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
     --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main
 
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-    | sh -s -- -y --default-toolchain "${RUST_TOOLCHAIN}" --component rust-src
+# The pins come from the matching rustup-init.sha256 files in Rust's release archive. ~keep
+RUN RUSTUP_VERSION=1.29.3 && \
+    ARCH=$(uname -m) && \
+    case "$ARCH" in \
+        x86_64) RUSTUP_SHA256=1552169aba2836777136ccff7a381e95c17233b5d8250cd5e10ae3cb971bfcfc ;; \
+        aarch64) RUSTUP_SHA256=956deacdc27ab82ae7ac821d5d3e9e95e4795d476d17efe99743bb8531ca1031 ;; \
+        *) printf 'Unsupported Rustup architecture: %s\n' "$ARCH" >&2; exit 1 ;; \
+    esac && \
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL \
+        "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${ARCH}-unknown-linux-musl/rustup-init" \
+        -o rustup-init && \
+    printf '%s  rustup-init\n' "$RUSTUP_SHA256" | sha256sum -c - && \
+    chmod 0755 rustup-init && \
+    ./rustup-init -y --default-toolchain "${RUST_TOOLCHAIN}" --component rust-src && \
+    rm rustup-init
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 ENV RUSTFLAGS="-C target-feature=-crt-static"
