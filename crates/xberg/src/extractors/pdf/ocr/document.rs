@@ -2347,6 +2347,30 @@ pub(crate) fn merge_source_strip_frames(
     store_source_strip_frames(&mut doc.metadata, frames);
 }
 
+#[cfg(all(any(feature = "ocr", feature = "ocr-pipeline"), feature = "pdf"))]
+pub(super) fn certify_scan_html_paragraph(doc: &mut crate::types::internal::InternalDocument, rows: &str) {
+    use crate::types::internal::{ElementKind, MARKDOWN_ROW_LINES_ATTRIBUTE};
+
+    let [paragraph] = doc.elements.as_mut_slice() else {
+        return;
+    };
+    if !doc.tables.is_empty()
+        || paragraph.kind != ElementKind::Paragraph
+        || paragraph.layer != crate::types::ContentLayer::Body
+        || !paragraph.annotations.is_empty()
+        || !paragraph.ocr_source_spans.is_empty()
+        || !paragraph.text.split_whitespace().eq(rows.split_whitespace())
+    {
+        return;
+    }
+
+    paragraph.text = rows.to_owned();
+    paragraph
+        .attributes
+        .get_or_insert_with(Default::default)
+        .insert(MARKDOWN_ROW_LINES_ATTRIBUTE.to_string(), String::new());
+}
+
 /// Copy the payload fields that a page document already carried before the document-global
 /// restructuring heuristic (`heuristically_restructured_ocr_pages`, in `pipeline.rs`) rebuilt
 /// it: the heuristic's combined document has no notion of the backend's raw per-word OCR
@@ -2360,6 +2384,14 @@ pub(super) fn carry_page_ocr_payload_forward(
     existing: &crate::types::internal::InternalDocument,
     new_page_doc: &mut crate::types::internal::InternalDocument,
 ) {
+    if let [paragraph] = existing.elements.as_slice()
+        && paragraph
+            .attributes
+            .as_ref()
+            .is_some_and(|attrs| attrs.contains_key(crate::types::internal::MARKDOWN_ROW_LINES_ATTRIBUTE))
+    {
+        certify_scan_html_paragraph(new_page_doc, &paragraph.text);
+    }
     // Both rebuild paths skip cell-only tables. Final native yield and output still need them. ~keep
     new_page_doc.tables.extend(
         existing

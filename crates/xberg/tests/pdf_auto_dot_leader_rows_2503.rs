@@ -55,6 +55,10 @@ fn extract(bytes: &[u8]) -> ExtractedDocument {
 }
 
 fn extract_with_psm(bytes: &[u8], psm: Option<i32>) -> ExtractedDocument {
+    extract_as(bytes, psm, OutputFormat::Plain)
+}
+
+fn extract_as(bytes: &[u8], psm: Option<i32>, output_format: OutputFormat) -> ExtractedDocument {
     let models = tempfile::tempdir().unwrap();
     let english = xberg_tesseract::bundled_eng_traineddata().expect("bundled English");
     assert_eq!(
@@ -64,7 +68,7 @@ fn extract_with_psm(bytes: &[u8], psm: Option<i32>) -> ExtractedDocument {
     std::fs::write(models.path().join("eng.traineddata"), english).unwrap();
     let config = ExtractionConfig {
         use_cache: false,
-        output_format: OutputFormat::Plain,
+        output_format,
         ocr: Some(OcrConfig {
             tessdata_path: Some(models.path().to_path_buf()),
             tesseract_config: psm.map(|psm| xberg::types::TesseractConfig {
@@ -199,5 +203,55 @@ fn plain_200_dpi_psm6_keeps_source_leader_occurrences_in_order() {
         assert_eq!(rows[3], "Tree planting .......... 77 774,883 95,023");
         assert_eq!(rows[8], "Parks and trails ........ 56 86,301 600.09");
         assert_eq!(rows[12], "Fleet fuel. ..........., 53 562,485 54,237");
+    }
+}
+
+#[test]
+#[ignore = "requires the pinned #2432 scan and the shifted-heading control"]
+fn psm6_html_preserves_scan_rows_only_with_owned_columns() {
+    let pinned = |variable: &str, sha: &str| {
+        let bytes = std::fs::read(std::env::var_os(variable).expect(variable)).unwrap();
+        assert_eq!(hex::encode(Sha256::digest(&bytes)), sha);
+        bytes
+    };
+    let original = pinned(
+        "XBERG_2503_PLAIN_150_PDF",
+        "9f427df6284fe295ea131e46211844b24b0a8693b2c36da1ce004439148abc6c",
+    );
+    let shifted = pinned(
+        "XBERG_2503_PLAIN_150_SHIFTED_HEADER_PDF",
+        "5d6a45358a6824f9003ead2d6bb0aed701e98a4e72826511848c38819bc56b60",
+    );
+    let plain = extract_with_psm(&original, Some(6));
+    let control_plain = extract_with_psm(&shifted, Some(6));
+    assert_eq!(
+        plain.content, control_plain.content,
+        "the geometry control has identical stock text"
+    );
+    let stock = plain
+        .content
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .collect::<Vec<_>>();
+    assert_eq!(stock.len(), 13);
+    assert_eq!(stock[0], "Item Count Budget Change");
+    assert_eq!(stock[1], "Library hours .......... 11 481,115 (6,536)");
+    let paragraphs = stock
+        .iter()
+        .map(|line| format!("<p>{line}</p>"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let flattened = format!("<p>{}</p>", stock.join(" "));
+    for (input, expected) in [(&original, paragraphs), (&shifted, flattened)] {
+        let html = extract_as(input, Some(6), OutputFormat::Html);
+        assert!(
+            html.tables.is_empty(),
+            "the proof uses the stock lines without rebuilding a table"
+        );
+        let [page] = html.pages.as_deref().unwrap() else {
+            panic!("one source page");
+        };
+        assert_eq!(html.content.trim(), expected);
+        assert_eq!(page.content.trim(), expected);
     }
 }
