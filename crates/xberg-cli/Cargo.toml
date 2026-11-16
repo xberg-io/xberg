@@ -245,6 +245,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tree-sitter-language-pack = { workspace = true, features = ["dynamic-loading", "download", "serde"], optional = true }
 xberg = { workspace = true, features = ["tokio-runtime", "simd-utf8"] }
 
+[target.'cfg(all(target_os = "linux", target_env = "musl"))'.dependencies]
+mimalloc = { version = "0.1.52", default-features = false }
+
 [dev-dependencies]
 bytes = { workspace = true }
 tempfile = { workspace = true }
