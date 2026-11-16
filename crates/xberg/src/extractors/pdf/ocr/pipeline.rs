@@ -8320,10 +8320,7 @@ pub(super) async fn extract_with_ocr_for_page(
                     pages_with_empty_xobject_retry.len()
                 )
             };
-            crate::XbergError::Ocr {
-                message,
-                source: Some(Box::new(first_error)),
-            }
+            crate::XbergError::all_page_ocr_failure(message, first_error)
         };
         return Err(FailedOcrRun {
             error,

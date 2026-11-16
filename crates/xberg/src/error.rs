@@ -104,6 +104,10 @@ pub enum XbergError {
     },
 
     /// An OCR engine returned an error or produced unusable output.
+    ///
+    /// A PDF OCR run that aggregates ordinary failures across every page uses this variant
+    /// with the first backend error in its source chain. This aggregate uses raw FFI code
+    /// 1002. REST and batch extraction report it as a plugin failure for compatibility.
     #[error("OCR error: {message}")]
     #[cfg_attr(alef, alef(error_code = 1002))]
     Ocr {
@@ -352,6 +356,28 @@ impl XbergError {
     error_constructor!(transcription, Transcription);
 }
 
+/// Identifies the PDF OCR aggregate for legacy classification while retaining the backend
+/// error itself as the next link in the source chain. ~keep
+#[derive(Debug, Error)]
+#[error("{0}")]
+struct AllPageOcrFailure(#[source] XbergError);
+
+impl XbergError {
+    #[cfg(any(feature = "ocr", feature = "ocr-pipeline"))]
+    #[cfg_attr(alef, alef(skip))]
+    pub(crate) fn all_page_ocr_failure(message: String, first_error: Self) -> Self {
+        Self::Ocr {
+            message,
+            source: Some(Box::new(AllPageOcrFailure(first_error))),
+        }
+    }
+
+    #[cfg_attr(alef, alef(skip))]
+    pub(crate) fn is_all_page_ocr_failure(&self) -> bool {
+        matches!(self, Self::Ocr { source: Some(source), .. } if source.is::<AllPageOcrFailure>())
+    }
+}
+
 /// HTTP status category for [`XbergError`], used to select the REST API response status.
 ///
 /// This is not part of the public API: it exists solely so `api::error::ApiError`'s
@@ -399,6 +425,7 @@ impl XbergError {
         match self {
             XbergError::Validation { .. } => "ValidationError",
             XbergError::Parsing { .. } => "ParsingError",
+            XbergError::Ocr { .. } if self.is_all_page_ocr_failure() => "PluginError",
             XbergError::Ocr { .. } => "OCRError",
             XbergError::Io(_) => "IOError",
             XbergError::Cache { .. } => "CacheError",
@@ -427,6 +454,7 @@ impl XbergError {
     pub(crate) fn api_status_category(&self) -> ApiStatusCategory {
         match self {
             XbergError::Validation { .. } | XbergError::UnsupportedFormat(_) => ApiStatusCategory::Validation,
+            XbergError::Ocr { .. } if self.is_all_page_ocr_failure() => ApiStatusCategory::Internal,
             XbergError::Parsing { .. } | XbergError::Ocr { .. } => ApiStatusCategory::Unprocessable,
             _ => ApiStatusCategory::Internal,
         }
@@ -442,6 +470,7 @@ impl XbergError {
         match self {
             XbergError::Io(_) => "io",
             XbergError::Parsing { .. } => "parsing",
+            XbergError::Ocr { .. } if self.is_all_page_ocr_failure() => "plugin",
             XbergError::Ocr { .. } => "ocr",
             XbergError::Validation { .. } => "validation",
             XbergError::Cache { .. } => "cache",
@@ -463,15 +492,16 @@ impl XbergError {
 
     /// Returns the canonical numeric error code used in batch extraction error items.
     ///
-    /// These values match the stable FFI error codes declared on [`XbergError`]. This is the
-    /// single source of truth for
+    /// These values match the stable FFI error codes declared on [`XbergError`], with the
+    /// legacy plugin code retained for all-page OCR failures. This is the single source of truth for
     /// `core::config::extraction::types::ExtractionErrorItem::code`; do not duplicate this match
     /// elsewhere.
     #[cfg_attr(alef, alef(skip))]
-    pub(crate) const fn extraction_error_code(&self) -> u32 {
+    pub(crate) fn extraction_error_code(&self) -> u32 {
         match self {
             XbergError::Io(_) => 1000,
             XbergError::Parsing { .. } => 1001,
+            XbergError::Ocr { .. } if self.is_all_page_ocr_failure() => 1008,
             XbergError::Ocr { .. } => 1002,
             XbergError::Validation { .. } => 1003,
             XbergError::Cache { .. } => 1004,

@@ -4867,6 +4867,14 @@ async fn automatic_ocr_failure_with_no_native_text_returns_an_error() {
         .await
         .expect_err("a failed automatic OCR fallback with no native text must not report success");
 
+    assert_eq!(error.extraction_error_type(), "plugin");
+    assert_eq!(error.extraction_error_code(), 1008);
+    #[cfg(feature = "api")]
+    {
+        assert_eq!(error.api_error_type(), "PluginError");
+        assert_eq!(error.api_status_category(), crate::error::ApiStatusCategory::Internal);
+    }
+
     match error {
         crate::XbergError::Ocr { message, source } => {
             assert!(
@@ -4874,7 +4882,10 @@ async fn automatic_ocr_failure_with_no_native_text_returns_an_error() {
                 "the backend failure must propagate, got: {message}"
             );
             assert!(matches!(
-                source.and_then(|error| error.downcast::<crate::XbergError>().ok()).as_deref(),
+                source
+                    .as_deref()
+                    .and_then(|error| error.source())
+                    .and_then(|error| error.downcast_ref::<crate::XbergError>()),
                 Some(crate::XbergError::Plugin { plugin_name, message })
                     if plugin_name == BACKEND_NAME && message == FAILURE
             ));

@@ -11250,7 +11250,10 @@ Name: ___
                     "the aggregate failure must name the page count; got: {error}"
                 );
                 assert!(matches!(
-                    error.source().and_then(|source| source.downcast_ref::<crate::XbergError>()),
+                    error
+                        .source()
+                        .and_then(std::error::Error::source)
+                        .and_then(|source| source.downcast_ref::<crate::XbergError>()),
                     Some(crate::XbergError::Plugin { message, plugin_name })
                         if message == VLM_NO_CONTENT_ERROR && plugin_name == "ocr"
                 ));

@@ -429,6 +429,7 @@ async fn a_pipeline_whose_stages_all_fail_carries_every_page_record() {
         .error
         .source()
         .and_then(std::error::Error::source)
+        .and_then(std::error::Error::source)
         .and_then(|source| source.downcast_ref::<crate::XbergError>());
     assert!(matches!(
         page_error,

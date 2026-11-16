@@ -465,8 +465,9 @@ fn deserialize_extraction_cache_entry(
 ///   format that only handles some of its own sub-variants).
 /// - [`XbergError::Plugin`] — a third-party extractor's own reported failure. That
 ///   is a property of the plugin, not necessarily of the document.
+/// - An all-page OCR failure previously reported as a plugin failure.
 ///
-/// Every other variant is treated as a hard failure and is *not* retried with a
+/// Other errors are treated as hard failures and are *not* retried with a
 /// lower-priority extractor. In particular [`XbergError::Parsing`] — the variant
 /// an encrypted file or a corrupt archive surfaces as — means the document itself
 /// is the problem: every other extractor registered for the same MIME type would
@@ -475,7 +476,7 @@ fn deserialize_extraction_cache_entry(
 /// extractor's error swallowing the specific "wrong password" message from the
 /// primary one).
 fn is_extractor_fallback_eligible(error: &XbergError) -> bool {
-    matches!(error, XbergError::UnsupportedFormat(_) | XbergError::Plugin { .. })
+    matches!(error, XbergError::UnsupportedFormat(_) | XbergError::Plugin { .. }) || error.is_all_page_ocr_failure()
 }
 
 /// Reads the head of `path` for plain-text recovery, bounded by the content budget.
@@ -1649,6 +1650,7 @@ mod issue_217_fallback_tests {
         name: &'static str,
         priority: i32,
         outcome: fn() -> Result<ExtractedDocument>,
+        mime_types: &'static [&'static str],
     }
 
     impl Plugin for ScriptedExtractor {
@@ -1673,7 +1675,7 @@ mod issue_217_fallback_tests {
         }
 
         fn supported_mime_types(&self) -> &[&str] {
-            &[FALLBACK_MIME]
+            self.mime_types
         }
 
         fn priority(&self) -> i32 {
@@ -1721,6 +1723,7 @@ mod issue_217_fallback_tests {
                 name: "picky-217",
                 priority: 100,
                 outcome: unsupported_format_error,
+                mime_types: &[FALLBACK_MIME],
             }))
             .unwrap();
         registry
@@ -1728,6 +1731,7 @@ mod issue_217_fallback_tests {
                 name: "fallback-217",
                 priority: 50,
                 outcome: ok_result,
+                mime_types: &[FALLBACK_MIME],
             }))
             .unwrap();
 
@@ -1760,6 +1764,7 @@ mod issue_217_fallback_tests {
                 name: "hard-failure-217",
                 priority: 100,
                 outcome: parsing_error,
+                mime_types: &[FALLBACK_MIME],
             }))
             .unwrap();
         registry
@@ -1767,6 +1772,7 @@ mod issue_217_fallback_tests {
                 name: "never-reached-217",
                 priority: 50,
                 outcome: ok_result,
+                mime_types: &[FALLBACK_MIME],
             }))
             .unwrap();
 
@@ -1780,6 +1786,107 @@ mod issue_217_fallback_tests {
                 assert_eq!(message, "corrupt or encrypted content");
             }
             other => panic!("a hard failure must propagate directly, not cascade: {other:?}"),
+        }
+    }
+
+    #[cfg(all(feature = "pdf", feature = "ocr"))]
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn pdf_ocr_failure_allows_extractor_fallback_but_backend_cancellation_is_terminal() {
+        use crate::core::config::OcrConfig;
+        use crate::extractors::pdf::PdfExtractor;
+        use crate::plugins::{OcrBackend, OcrBackendType, register_ocr_backend, unregister_ocr_backend};
+
+        const PDF_MIME: &str = "application/pdf";
+        const BACKEND: &str = "pdf-extractor-chain-ocr-backend";
+        const FALLBACK_TEXT: &str = "The alternate PDF extractor read this document.";
+
+        struct FailingBackend {
+            cancel: bool,
+        }
+
+        impl Plugin for FailingBackend {
+            fn name(&self) -> &str {
+                BACKEND
+            }
+            fn version(&self) -> String {
+                "1.0.0".to_string()
+            }
+            fn initialize(&self) -> Result<()> {
+                Ok(())
+            }
+            fn shutdown(&self) -> Result<()> {
+                Ok(())
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl OcrBackend for FailingBackend {
+            fn backend_type(&self) -> OcrBackendType {
+                OcrBackendType::Custom
+            }
+            fn supports_language(&self, _: &str) -> bool {
+                true
+            }
+            async fn process_image(&self, _: &[u8], _: &OcrConfig) -> Result<ExtractedDocument> {
+                if self.cancel {
+                    Err(XbergError::Cancelled)
+                } else {
+                    Err(XbergError::ocr("the OCR backend failed"))
+                }
+            }
+        }
+
+        let mut registry = DocumentExtractorRegistry::new();
+        registry.register_internal(Arc::new(PdfExtractor::new())).unwrap();
+        registry
+            .register(Arc::new(ScriptedExtractor {
+                name: "test-alternate-pdf-extractor",
+                priority: 0,
+                outcome: || {
+                    Ok(ExtractedDocument {
+                        content: FALLBACK_TEXT.to_string(),
+                        mime_type: Cow::Borrowed(PDF_MIME),
+                        ..Default::default()
+                    })
+                },
+                mime_types: &[PDF_MIME],
+            }))
+            .unwrap();
+
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("scanned.pdf");
+        let pdf = crate::pdf::render::build_minimal_pdf_with_mediabox(612.0, 792.0);
+        std::fs::write(&path, pdf).unwrap();
+        let config = ExtractionConfig {
+            force_ocr: true,
+            use_cache: false,
+            ocr: Some(OcrConfig {
+                backend: BACKEND.to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        for cancel in [false, true] {
+            register_ocr_backend(Arc::new(FailingBackend { cancel })).unwrap();
+            let candidates = registry.get_candidates(&path, PDF_MIME);
+            let result = extract_with_candidates(&path, PDF_MIME, &config, candidates).await;
+            unregister_ocr_backend(BACKEND).unwrap();
+            if cancel {
+                assert!(matches!(result, Err(XbergError::Cancelled)), "got: {result:?}");
+            } else {
+                let result = result.expect("the alternate PDF extractor should handle the OCR failure");
+                assert_eq!(result.content, FALLBACK_TEXT);
+                assert!(
+                    result.processing_warnings.iter().any(|warning| {
+                        warning.source == "extractor-fallback"
+                            && warning.message.contains("test-alternate-pdf-extractor")
+                    }),
+                    "got: {:?}",
+                    result.processing_warnings
+                );
+            }
         }
     }
 
