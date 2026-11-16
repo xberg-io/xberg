@@ -16,8 +16,39 @@ mod pins;
 pub(super) use pins::TESSDATA_FAST_PACKS;
 use pins::{PinnedPack, TESSDATA_FAST_REVISION};
 
-const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
+const REQUEST_PHASE_TIMEOUT: Duration = Duration::from_secs(30);
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
+const RETRY_BACKOFF: [Duration; 2] = [Duration::from_secs(1), Duration::from_secs(2)];
 const MAX_TRAINEDDATA_BYTES: u64 = 64 * 1024 * 1024;
+
+#[derive(Debug, thiserror::Error)]
+enum DownloadError {
+    #[error("HTTP transfer failed: {0}")]
+    Request(#[from] ureq::Error),
+    #[error("SHA-256 mismatch: expected {expected}, got {actual}")]
+    Integrity { expected: String, actual: String },
+    #[error("language pack could not be published: {0}")]
+    Publish(#[from] std::io::Error),
+}
+
+impl DownloadError {
+    fn is_transient(&self) -> bool {
+        matches!(
+            self,
+            Self::Request(
+                ureq::Error::StatusCode(408 | 429 | 500..=599)
+                    | ureq::Error::ConnectionFailed
+                    | ureq::Error::HostNotFound
+                    | ureq::Error::Io(_)
+                    | ureq::Error::Timeout(_)
+            )
+        )
+    }
+
+    fn can_try_mirror(&self) -> bool {
+        matches!(self, Self::Request(error) if !matches!(error, ureq::Error::BodyExceedsLimit(_)))
+    }
+}
 
 fn pinned_pack(lang: &str) -> Option<&'static PinnedPack> {
     let index = TESSDATA_FAST_PACKS.binary_search_by(|entry| entry.0.cmp(lang)).ok()?;
@@ -56,28 +87,56 @@ pub(super) fn download_missing_language_pack(lang: &str, output_dir: &Path) -> R
             source_language(lang)
         ),
     ];
-    let agent = download_agent(DOWNLOAD_TIMEOUT);
-    let mut failures = Vec::new();
-    for url in &urls {
-        match download_file(&agent, url, &output_path, sha256, size) {
-            Ok(created) => return Ok(created),
-            Err(error) => {
-                tracing::warn!(lang, url, %error, "Tesseract language pack download failed");
-                failures.push(format!("{url}: {error}"));
-            }
-        }
-    }
-    Err(OcrError::TesseractInitializationFailed(format!(
-        "Failed to download pinned tessdata_fast language pack '{lang}': {}",
-        failures.join("; ")
-    )))
+    download_with_retries(
+        &download_agent(),
+        [&urls[0], &urls[1]],
+        &output_path,
+        sha256,
+        size,
+        std::thread::sleep,
+    )
+    .map_err(|error| {
+        OcrError::TesseractInitializationFailed(format!(
+            "Failed to download pinned tessdata_fast language pack '{lang}': {error}"
+        ))
+    })
 }
 
-fn download_agent(timeout: Duration) -> ureq::Agent {
+fn download_agent() -> ureq::Agent {
     ureq::Agent::config_builder()
-        .timeout_global(Some(timeout))
+        .timeout_resolve(Some(REQUEST_PHASE_TIMEOUT))
+        .timeout_connect(Some(REQUEST_PHASE_TIMEOUT))
+        .timeout_recv_response(Some(REQUEST_PHASE_TIMEOUT))
+        .timeout_per_read(Some(REQUEST_PHASE_TIMEOUT))
+        .timeout_global(Some(DOWNLOAD_TIMEOUT))
         .build()
         .into()
+}
+
+fn download_with_retries(
+    agent: &ureq::Agent,
+    [primary, mirror]: [&str; 2],
+    output_path: &Path,
+    sha256: &str,
+    size: u64,
+    mut sleep: impl FnMut(Duration),
+) -> Result<bool, DownloadError> {
+    let mut url = primary;
+    for (attempt, delay) in RETRY_BACKOFF.into_iter().enumerate() {
+        match download_file(agent, url, output_path, sha256, size) {
+            Ok(created) => return Ok(created),
+            Err(error) if error.is_transient() => {
+                tracing::warn!(url, attempt = attempt + 1, %error, "Retrying tessdata download");
+                sleep(delay);
+            }
+            Err(error) if attempt == 0 && error.can_try_mirror() => {
+                tracing::warn!(url, %error, "Trying the alternate tessdata endpoint");
+            }
+            Err(error) => return Err(error),
+        }
+        url = mirror;
+    }
+    download_file(agent, mirror, output_path, sha256, size)
 }
 
 /// Verify the response before atomically publishing it without replacing an existing pack.
@@ -87,10 +146,10 @@ fn download_file(
     output_path: &Path,
     expected_sha256: &str,
     max_bytes: u64,
-) -> Result<bool, Box<dyn std::error::Error>> {
+) -> Result<bool, DownloadError> {
     let response = agent.get(url).call()?;
     if response.status() != 200 {
-        return Err(format!("HTTP {}", response.status()).into());
+        return Err(ureq::Error::StatusCode(response.status().as_u16()).into());
     }
     let bytes = response
         .into_body()
@@ -99,10 +158,15 @@ fn download_file(
         .read_to_vec()?;
     let actual_sha256 = hex::encode(Sha256::digest(&bytes));
     if actual_sha256 != expected_sha256 {
-        return Err(format!("SHA-256 mismatch: expected {expected_sha256}, got {actual_sha256}").into());
+        return Err(DownloadError::Integrity {
+            expected: expected_sha256.to_owned(),
+            actual: actual_sha256,
+        });
     }
 
-    let directory = output_path.parent().ok_or("Missing language pack directory")?;
+    let directory = output_path
+        .parent()
+        .ok_or_else(|| std::io::Error::new(ErrorKind::InvalidInput, "missing language pack directory"))?;
     #[cfg(unix)]
     let mut temporary = {
         use std::os::unix::fs::PermissionsExt as _;
@@ -118,7 +182,7 @@ fn download_file(
     match temporary.persist_noclobber(output_path) {
         Ok(_) => Ok(true),
         Err(error) if error.error.kind() == ErrorKind::AlreadyExists && output_path.is_file() => Ok(false),
-        Err(error) => Err(error.into()),
+        Err(error) => Err(error.error.into()),
     }
 }
 
@@ -144,9 +208,9 @@ mod tests {
         use super::{TESSDATA_FAST_PACKS, pinned_pack};
         use crate::core::config_validation::TESSERACT_LANGUAGE_CODES;
 
-        assert_eq!(TESSDATA_FAST_PACKS.len(), TESSERACT_LANGUAGE_CODES.len());
+        let extra = ["chi_sim_vert", "chi_tra_vert", "deu_latf", "jpn_vert", "kor_vert"];
         assert!(TESSDATA_FAST_PACKS.windows(2).all(|pair| pair[0].0 < pair[1].0));
-        for lang in TESSERACT_LANGUAGE_CODES {
+        for lang in TESSERACT_LANGUAGE_CODES.iter().copied().chain(extra) {
             let (_, digest, size) = pinned_pack(lang).unwrap_or_else(|| panic!("missing pinned pack for {lang}"));
             assert_eq!(digest.len(), 64, "{lang}");
             assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()), "{lang}");
@@ -163,6 +227,77 @@ mod tests {
     }
 
     #[test]
+    fn a_cached_vertical_model_is_kept_without_reverification() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("jpn_vert.traineddata");
+        std::fs::write(&output, b"locally supplied vertical model").unwrap();
+        assert!(!super::download_missing_language_pack("jpn_vert", directory.path()).unwrap());
+        assert_eq!(std::fs::read(output).unwrap(), b"locally supplied vertical model");
+        assert_eq!(directory.path().read_dir().unwrap().count(), 1);
+    }
+
+    #[test]
+    fn transport_timeouts_allow_a_slow_bounded_transfer() {
+        let agent = download_agent();
+        let timeouts = agent.config().timeouts();
+        assert_eq!(timeouts.resolve, Some(Duration::from_secs(30)));
+        assert_eq!(timeouts.connect, Some(Duration::from_secs(30)));
+        assert_eq!(timeouts.recv_response, Some(Duration::from_secs(30)));
+        assert_eq!(agent.config().timeout_per_read(), Some(Duration::from_secs(30)));
+        assert_eq!(timeouts.global, Some(Duration::from_secs(600)));
+    }
+
+    #[test]
+    fn transient_statuses_back_off_and_stop_after_three_attempts() {
+        for final_status in [200, 503] {
+            let directory = tempfile::tempdir().unwrap();
+            let output = directory.path().join("eng.traineddata");
+            let (primary, first) = serve_test_statuses(&[503]);
+            let (mirror, retries) = serve_test_statuses(&[503, final_status]);
+            let mut backoffs = Vec::new();
+            let result = super::download_with_retries(
+                &local_agent(TIMEOUT),
+                [&primary, &mirror],
+                &output,
+                &payload_digest(),
+                PAYLOAD.len() as u64,
+                |delay| backoffs.push(delay),
+            );
+            first.join().unwrap();
+            retries.join().unwrap();
+            assert_eq!(backoffs, [Duration::from_secs(1), Duration::from_secs(2)]);
+            if final_status == 200 {
+                assert!(result.unwrap());
+                assert_eq!(std::fs::read(output).unwrap(), PAYLOAD);
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(super::DownloadError::Request(ureq::Error::StatusCode(503)))
+                ));
+                assert_eq!(directory.path().read_dir().unwrap().count(), 0);
+            }
+        }
+    }
+
+    #[test]
+    fn a_checksum_mismatch_never_reaches_the_mirror_or_backoff() {
+        let directory = tempfile::tempdir().unwrap();
+        let output = directory.path().join("eng.traineddata");
+        let (primary, server) = serve_test_payload(PAYLOAD);
+        let result = super::download_with_retries(
+            &local_agent(TIMEOUT),
+            [&primary, &primary],
+            &output,
+            &"0".repeat(64),
+            PAYLOAD.len() as u64,
+            |_| panic!("checksum mismatches cannot be retried"),
+        );
+        server.join().unwrap();
+        assert!(matches!(result, Err(super::DownloadError::Integrity { .. })));
+        assert_eq!(directory.path().read_dir().unwrap().count(), 0);
+    }
+
+    #[test]
     fn refuses_bad_checksum_before_publishing_download() {
         let directory = tempfile::tempdir().unwrap();
         let output = directory.path().join("eng.traineddata");
@@ -176,7 +311,7 @@ mod tests {
         );
         server.join().unwrap();
         let error = result.expect_err("digest mismatch must fail");
-        assert!(error.to_string().contains("SHA-256 mismatch"), "{error}");
+        assert!(matches!(error, super::DownloadError::Integrity { .. }), "{error}");
         assert_eq!(directory.path().read_dir().unwrap().count(), 0);
     }
 
@@ -219,7 +354,10 @@ mod tests {
         server.join().unwrap();
         let error = result.expect_err("stalled body must time out");
         assert!(
-            matches!(error.downcast_ref::<ureq::Error>(), Some(ureq::Error::Timeout(_))),
+            matches!(
+                error,
+                super::DownloadError::Request(ureq::Error::Timeout(ureq::Timeout::PerRead))
+            ),
             "{error}"
         );
         assert_eq!(directory.path().read_dir().unwrap().count(), 0);
@@ -228,13 +366,35 @@ mod tests {
     fn local_agent(timeout: Duration) -> ureq::Agent {
         ureq::Agent::config_builder()
             .proxy(None)
-            .timeout_global(Some(timeout))
+            .timeout_per_read(Some(timeout))
+            .timeout_global(Some(TIMEOUT))
             .build()
             .into()
     }
 
     fn payload_digest() -> String {
         hex::encode(Sha256::digest(PAYLOAD))
+    }
+
+    fn serve_test_statuses(statuses: &[u16]) -> (String, std::thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/eng.traineddata", listener.local_addr().unwrap());
+        let statuses = statuses.to_vec();
+        let server = std::thread::spawn(move || {
+            for status in statuses {
+                let mut stream = accept_with_deadline(&listener);
+                let _request = read_request(&stream);
+                let payload = if status == 200 { PAYLOAD } else { b"" };
+                write!(
+                    stream,
+                    "HTTP/1.1 {status} Test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    payload.len()
+                )
+                .unwrap();
+                stream.write_all(payload).unwrap();
+            }
+        });
+        (url, server)
     }
 
     fn serve_test_payload(payload: &'static [u8]) -> (String, std::thread::JoinHandle<()>) {
@@ -265,7 +425,7 @@ mod tests {
         if let Some(output_path) = std::env::var_os(CHILD_OUTPUT) {
             let output_path = std::path::PathBuf::from(output_path);
             let created = download_file(
-                &download_agent(TIMEOUT),
+                &download_agent(),
                 DOWNLOAD_URL,
                 &output_path,
                 &payload_digest(),

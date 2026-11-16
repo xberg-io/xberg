@@ -192,6 +192,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **(ocr): Verify runtime Tesseract language-pack downloads against pinned SHA-256 digests.** (#3168)
+  Automatic downloads use the pinned tessdata_fast catalog and retry transient failures within bounded timeouts.
+  Existing local packs remain in use. If an older install cached the 20-byte Fraktur link stub, remove
+  `<cache>/tessdata/frk.traineddata` so Xberg can download the full model.
+
 - **(api, mcp): Callers can no longer choose server paths or loosen operator limits.**
   REST and MCP requests are rejected when their config names a server file, directory or model source
   (`html_output.css_file`, `tree_sitter.cache_dir`, `ocr.tessdata_path`, model cache directories, custom model ids,
