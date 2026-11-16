@@ -51,6 +51,11 @@ async fn should_preserve_source_spacing_across_inline_rtf_groups() {
             "Account: 1234 56",
             "Account: 12*34* 56",
         ),
+        (
+            br"{\rtf1\ansi Hel{\b lo}{\i wor}ld caf{\i \'e9}s\par}",
+            "Helloworld cafés",
+            "Hel**lo***wor*ld caf*é*s",
+        ),
     ];
     for &(input, plain, markdown) in cases {
         for (output_format, expected) in [(OutputFormat::Plain, plain), (OutputFormat::Markdown, markdown)] {
