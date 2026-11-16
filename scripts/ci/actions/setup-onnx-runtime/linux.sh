@@ -60,9 +60,11 @@ download_ort_archive() {
 
 if [ "$verify_archive" = true ]; then
   archive_path="$extract_dir/$archive"
-  if [ -f "$archive_path" ]; then
-    bash "$script_dir/verify-archive.sh" "$archive_path" "$checksums"
-  else
+  if [ -f "$archive_path" ] && ! bash "$script_dir/verify-archive.sh" "$archive_path" "$checksums"; then
+    echo "Removing invalid cached ONNX Runtime archive: $archive" >&2
+    rm -f "$archive_path"
+  fi
+  if [ ! -f "$archive_path" ]; then
     download_ort_archive "$RUNNER_TEMP/$archive"
     mkdir -p "$extract_dir"
     mv "$RUNNER_TEMP/$archive" "$archive_path"

@@ -12,6 +12,74 @@ setup() {
 	xberg_stub curl 'printf "%s\n" "$*" >>"$XBERG_TRACE"; exit 93'
 }
 
+@test "ORT setup should restore only cache entries from the verified download generation" {
+	python3 - "$REPOSITORY_ROOT/.github/actions/setup-onnx-runtime/action.yml" <<'PYTHON'
+from pathlib import Path
+import re
+import sys
+
+action = Path(sys.argv[1]).read_text()
+assert action.count("id: cache-onnx") == 1
+block = action.split("id: cache-onnx", 1)[1].split("\n    - name:", 1)[0]
+key = re.findall(r"(?m)^\s+key: (onnx-v\d+-)", block)
+restores = re.findall(r"(?m)^\s+(onnx-v\d+-)", block.split("restore-keys: |", 1)[1])
+assert key == ["onnx-v4-"] and restores == ["onnx-v4-", "onnx-v4-"], (key, restores)
+PYTHON
+}
+
+@test "ORT setup should pin the release archives selected by action callers" {
+	python3 - "$REPOSITORY_ROOT" <<'PYTHON'
+from collections import Counter
+from pathlib import Path
+import re
+import sys
+
+root = Path(sys.argv[1])
+action_path = ".github/actions/setup-onnx-runtime"
+scripts = root / "scripts/ci/actions/setup-onnx-runtime"
+action = (root / action_path / "action.yml").read_text()
+default, = re.findall(r'(?m)^  ort-version:\n(?:    [^\n]*\n)*?    default: "([^"]+)"$', action)
+intel, = re.findall(r'(?m)^  ort_version="([^"]+)"$', (scripts / "macos.sh").read_text())
+versions = {default}
+callers = 0
+for workflow in (root / ".github/workflows").glob("*.y*ml"):
+    text = workflow.read_text()
+    env = re.findall(r"(?m)^\s+ORT_VERSION:[ \t]*([^\n]+)$", text)
+    uses = rf"(?m)^\s*(?:- )?uses: \./{re.escape(action_path)}[ \t]*$"
+    remaining = len(re.findall(uses, text))
+    for step in re.split(r"(?m)^      - ", text):
+        if not re.search(uses, step):
+            continue
+        callers += 1
+        remaining -= 1
+        pins = re.findall(r"(?m)^\s+ort-version:[ \t]*([^\n]+)$", step)
+        for pin in pins:
+            pin = pin.strip().strip("'\"")
+            if pin == '${{ env.ORT_VERSION }}':
+                assert env, workflow
+                versions.update(value.strip().strip("'\"") for value in env)
+            elif not (pin == intel and "matrix.target == 'x86_64-apple-darwin'" in step):
+                versions.add(pin)
+    assert remaining == 0, (workflow, remaining)
+assert callers > 1, callers
+assert all(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) for version in versions), versions
+
+manifest = Counter()
+for line in (scripts / "checksums.sha256").read_text().splitlines():
+    if line.strip() and not line.lstrip().startswith("#"):
+        digest, name = line.split()
+        assert re.fullmatch(r"[a-f0-9]{64}", digest), name
+        manifest[name] += 1
+expected = {f"onnxruntime-osx-x86_64-{intel}.tgz"}
+for version in versions:
+    for asset in ("linux-x64", "linux-aarch64", "osx-arm64", "win-x64", "win-arm64"):
+        ext = "zip" if asset.startswith("win-") else "tgz"
+        expected.add(f"onnxruntime-{asset}-{version}.{ext}")
+assert all(manifest[name] == 1 for name in expected), {name: manifest[name] for name in expected if manifest[name] != 1}
+print(f"{len(expected)} pinned archives checked across {callers} action call sites")
+PYTHON
+}
+
 runtime_root() {
 	printf '%s/onnxruntime/onnxruntime-linux-%s-1.24.2' "$RUNNER_TEMP" "$1"
 }
@@ -120,16 +188,34 @@ prepare_ort_archive() {
 	[[ "$second_root" == "$RUNNER_TEMP"/onnxruntime-verified.*/onnxruntime-linux-x64-9.9.9/lib ]]
 	[ "$second_root" != "$first_root" ]
 	xberg_assert_trace_empty
+}
+
+@test "Linux ORT verified archive mode should replace a corrupt cache with freshly verified bytes" {
+	prepare_ort_archive x64 9.9.9
+	cached_archive="$RUNNER_TEMP/onnxruntime/onnxruntime-linux-x64-9.9.9.tgz"
+	mkdir -p "$(dirname "$cached_archive")"
+	printf 'corrupt cache\n' >"$cached_archive"
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 9.9.9 output x64 system true
+	xberg_assert_status 0
+	xberg_assert_output_contains 'SHA-256 mismatch for onnxruntime-linux-x64-9.9.9.tgz'
+	xberg_assert_output_contains 'onnxruntime-linux-x64-9.9.9.tgz: SHA-256 verified'
+	[ "$(wc -l <"$XBERG_TRACE" | tr -d '[:space:]')" = 1 ]
+	grep -Fq 'releases/download/v9.9.9/onnxruntime-linux-x64-9.9.9.tgz' "$XBERG_TRACE"
+	cmp "$ORT_FIXTURE_ARCHIVE" "$cached_archive"
+	xberg_assert_file "$GITHUB_WORKSPACE/output/libonnxruntime.so" 'downloaded runtime'
 
 	printf 'corrupt cache\n' >"$cached_archive"
+	printf 'tampered download\n' >"$ORT_FIXTURE_ARCHIVE"
 	xberg_stub_exit tar 94
 	: >"$GITHUB_ENV"
-	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 9.9.9 output x64 system true
+	rm "$XBERG_TRACE"
+	run bash "$REPOSITORY_ROOT/scripts/ci/actions/setup-onnx-runtime/linux.sh" 9.9.9 rejected x64 system true
 	xberg_assert_status 1
-	xberg_assert_output_contains 'SHA-256 mismatch for onnxruntime-linux-x64-9.9.9.tgz'
-	xberg_assert_trace_empty
+	[ "$(wc -l <"$XBERG_TRACE" | tr -d '[:space:]')" = 1 ]
+	[ "$(grep -Fc 'SHA-256 mismatch for onnxruntime-linux-x64-9.9.9.tgz' <<<"$output")" = 2 ]
 	xberg_assert_github_env ''
-	xberg_assert_file "$GITHUB_WORKSPACE/output/libonnxruntime.so" 'downloaded runtime'
+	[ ! -e "$cached_archive" ]
+	[ ! -e "$GITHUB_WORKSPACE/rejected" ]
 }
 
 @test "Linux ORT setup should reject unsupported architecture before downloading or exporting" {
