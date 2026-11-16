@@ -192,7 +192,7 @@ volumes:
 
 ## Security
 
-Core and Full run as the non-root `xberg` system user created during the image build. The CLI image runs as `10001:10001` by default. It also supports an arbitrary non-root UID with group 0 for writes under the image's `/app` home and cache directories.
+Core and Full run as the non-root `xberg` system user created during the image build. The CLI image runs as `10001:10001` by default. An arbitrary non-root UID with group 0 can write to the pre-created `/app`, `/app/.xberg` and `/app/.xberg/huggingface` directories in a fresh CLI container.
 
 Use filesystem ownership or permissions to grant the effective container user read access to input mounts and write access to cache and output mounts. For hardened deployments, you can make the root filesystem read-only:
 
@@ -271,6 +271,8 @@ the build fails rather than defaulting to an empty value.
 A stripped-down image with only the CLI binary. The CLI home is `/app` and its cache is `/app/.xberg`. Remount an existing cache volume at `/app/.xberg` if it was mounted at `/root/.cache/xberg`.
 
 Grant `10001:10001` access to writable bind mounts, for example with `chown -R 10001:10001 /path/to/cache /path/to/output`. To write to a host-owned output directory, you can run the CLI with the host's non-root UID and group 0. For example, use `docker run --user "$(id -u):0"` when the host user owns the mounted output and any mounted cache. Bind mounts take their permissions from the host.
+
+Use the same UID for every writer to a persistent cache volume, or configure shared group ownership and write permissions throughout the cache, including nested directories. If different UIDs share a group, set the setgid bit on shared directories and use a group-writable umask such as `0002` for every writer. The usual `0022` umask can leave newly created directories writable only by their owner.
 
 ```bash title="Terminal"
 docker build -f docker/Dockerfile.cli --build-arg XBERG_BUILD_ID="$(git rev-parse HEAD)" -t xberg-cli .

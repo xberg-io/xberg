@@ -910,6 +910,28 @@ def test_cli_nonroot_paths(t: TestRunner) -> None:
             )
 
 
+def test_cli_extract_as_arbitrary_uid(t: TestRunner) -> None:
+    name = "Extract plain text as UID 12345 with group 0"
+    t.start(name)
+    result = t.docker_run(
+        "--name",
+        t.container_name(),
+        "--user",
+        "12345:0",
+        "-v",
+        f"{TEST_DOCS_DIR}:/data:ro",
+        t.image,
+        "extract",
+        "/data/text/contract.txt",
+    )
+    if result.returncode != 0:
+        t.fail_test(name, f"Exit code {result.returncode}: {result.stderr.strip()[:300]}")
+    elif "Test content for contract.txt file" in result.stdout:
+        t.pass_test()
+    else:
+        t.fail_test(name, f"Expected fixture text in stdout, got: {result.stdout[:300]}")
+
+
 def test_security_readonly(t: TestRunner) -> None:
     t.start("Security: Read-only volume enforcement")
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -1012,6 +1034,7 @@ def run_cli_tests(t: TestRunner) -> None:
     test_nonexistent_file(t)
     test_security_nonroot(t)
     test_cli_nonroot_paths(t)
+    test_cli_extract_as_arbitrary_uid(t)
 
 
 def run_core_full_tests(t: TestRunner) -> None:
