@@ -513,6 +513,7 @@ jobs:
     # time, so it is checked separately and needs no rebuild. ~keep
     outputs:
       exists: ${{ steps.check.outputs.exists == 'true' && steps.pypi.outputs.exists == 'true' }}
+      assets_exist: ${{ steps.check.outputs.exists }}
       npm_exists: ${{ steps.npm.outputs.exists }}
       pypi_exists: ${{ steps.pypi.outputs.exists }}
     steps:
@@ -3746,14 +3747,16 @@ jobs:
         if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.pinned.outputs.pinned == 'true' }}
         shell: bash
         env:
+          TAG: ${{ needs.prepare.outputs.tag }}
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
+          # HEAD may be the pre-pin commit; the branch must carry the pinned manifest. ~keep
           branch="refs/heads/release/swift/${VERSION}"
           if git ls-remote --exit-code origin "$branch" >/dev/null; then
             echo "$branch exists"
           else
-            git push origin "HEAD:${branch}"
+            git push origin "refs/tags/${TAG}^{commit}:${branch}"
           fi
 
   zig-package:
@@ -3939,15 +3942,17 @@ jobs:
 
   upload-cli-release:
     name: Upload CLI binaries to GitHub Release
-    needs: [prepare, cli-binaries, cli-binaries-musl, cli-binaries-binstall]
+    needs: [prepare, check-cli, cli-binaries, cli-binaries-musl, cli-binaries-binstall]
     # Requiring all three to succeed meant one failed matrix leg skipped this job
     # outright, publishing a release with NONE of the nine CLI archives: v1.2.0
     # shipped 12 assets and v1.2.1 shipped 54, both with zero `xberg-cli-*`, off a
     # single hung aarch64-musl link (#1638). A skipped job reports no failure, so
     # two releases went out before anyone noticed. Upload whatever did build, and
     # let the completeness step below fail the run on the shortfall. ~keep
+    # Skipped when every asset is already on the release: a rebuild for the PyPI proxy must not
+    # replace archives whose hashes Scoop, Homebrew and binstall already consumed. ~keep
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && (needs.cli-binaries.result == 'success' || needs.cli-binaries-musl.result == 'success' || needs.cli-binaries-binstall.result == 'success')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.is_tag == 'true' && (needs.check-cli.outputs.assets_exist != 'true' || needs.prepare.outputs.force_republish == 'true') && (needs.cli-binaries.result == 'success' || needs.cli-binaries-musl.result == 'success' || needs.cli-binaries-binstall.result == 'success')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v3
@@ -4461,7 +4466,10 @@ jobs:
   # silently degrades pip to a source build. Channels depend on publish-crates only when they
   # build or ship something that resolves the xberg crates from crates.io (python-sdist, the
   # Ruby gem, the PHP extension, the Elixir NIFs and Hex package), and accept it `skipped`,
-  # which is what a re-run with every crate already published produces. ~keep
+  # which is what a re-run with every crate already published produces; they also require
+  # check-cratesio and validate-versions, whose failure would skip publish-crates too. WASM is
+  # the one exception: wasm-bindings is continue-on-error by design, so publish-wasm keeps
+  # its success requirement in the `if:` and stays best-effort. ~keep
   publish-crates:
     name: Publish crates.io packages
     needs: [prepare, validate-versions, check-cratesio]
@@ -4490,7 +4498,7 @@ jobs:
 
   publish-pypi:
     name: Publish to PyPI
-    needs: [prepare, python-wheels, python-wheels-musl, python-sdist, check-pypi, publish-crates]
+    needs: [prepare, python-wheels, python-wheels-musl, python-sdist, check-pypi, publish-crates, validate-versions, check-cratesio]
     if: >-
       ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.release_python == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-pypi.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
@@ -4512,6 +4520,8 @@ jobs:
             python-wheels-musl
             ${{ needs.prepare.outputs.dry_run != 'true' && 'python-sdist' || '' }}
           succeeded-or-skipped: |
+            validate-versions
+            check-cratesio
             publish-crates
 
       - name: Checkout publication helpers
@@ -4648,7 +4658,7 @@ jobs:
 
   publish-rubygems:
     name: Publish Ruby gems
-    needs: [prepare, ruby-gem, check-rubygems, publish-crates]
+    needs: [prepare, ruby-gem, check-rubygems, publish-crates, validate-versions, check-cratesio]
     if: >-
       ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_ruby == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-rubygems.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
@@ -4664,6 +4674,8 @@ jobs:
           succeeded: |
             ruby-gem
           succeeded-or-skipped: |
+            validate-versions
+            check-cratesio
             publish-crates
 
       # Only the mise config, so setup-mise installs the locked Ruby. ~keep
@@ -4962,20 +4974,12 @@ jobs:
     name: Publish WASM package
     needs: [prepare, wasm-bindings, check-npm]
     if: >-
-      ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.release_wasm == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-npm.outputs.wasm_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
+      ${{ !inputs.plugins-only && (!cancelled() && needs.wasm-bindings.result == 'success' && needs.prepare.outputs.release_wasm == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-npm.outputs.wasm_exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
-      - name: Require the jobs this channel publishes from
-        uses: xberg-io/actions/require-job-results@v1
-        with:
-          channel: npm (WASM)
-          needs: ${{ toJSON(needs) }}
-          succeeded: |
-            wasm-bindings
-
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.ref }}
@@ -5064,7 +5068,7 @@ jobs:
 
   publish-packagist:
     name: Trigger Packagist update
-    needs: [prepare, upload-php-pie-release, check-packagist]
+    needs: [prepare, php-extension, upload-php-pie-release, check-packagist]
     if: >-
       ${{ !inputs.plugins-only && (!cancelled() && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.release_php == 'true' && needs.prepare.outputs.is_tag == 'true' && (needs.check-packagist.outputs.exists != 'true' || needs.prepare.outputs.force_republish == 'true')) }}
     runs-on: ubuntu-latest
@@ -5075,6 +5079,7 @@ jobs:
           channel: Packagist
           needs: ${{ toJSON(needs) }}
           succeeded-or-skipped: |
+            php-extension
             upload-php-pie-release
 
       - uses: xberg-io/actions/publish-packagist@v1
@@ -5326,7 +5331,7 @@ jobs:
 
   publish-hex:
     name: Publish Elixir Hex package
-    needs: [prepare, upload-elixir-release, check-hex, publish-crates]
+    needs: [prepare, upload-elixir-release, check-hex, publish-crates, validate-versions, check-cratesio]
     # Fetches its NIFs from the release (not run-artifacts), so it needs only the NIF upload,
     # or a skipped upload because the NIFs are already there; finalize also waits on every
     # other channel's upload, and one of those failing used to skip Hex. The Hex package's
@@ -5341,6 +5346,8 @@ jobs:
           channel: Hex
           needs: ${{ toJSON(needs) }}
           succeeded-or-skipped: |
+            validate-versions
+            check-cratesio
             upload-elixir-release
             publish-crates
 
